@@ -381,8 +381,8 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
 
         supportedVersions.clear();
         int futureMetadataVersion = UNKNOWN;
-        for (final Map.Entry<MemberInfo, Subscription> entry : subscriptions.entrySet()) {
-            final String consumerId = entry.getKey().memberId;
+        for (final Map.Entry<String, Subscription> entry : subscriptions.entrySet()) {
+            final String consumerId = entry.getKey();
             final Subscription subscription = entry.getValue();
 
             final SubscriptionInfo info = SubscriptionInfo.decode(subscription.userData());

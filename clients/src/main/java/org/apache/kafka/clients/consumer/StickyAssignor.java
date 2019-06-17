@@ -225,7 +225,7 @@ public class StickyAssignor extends AbstractPartitionAssignor {
 
     @Override
     public Map<String, List<TopicPartition>> assign(Map<String, Integer> partitionsPerTopic,
-                                                    Map<MemberInfo, Subscription> subscriptions) {
+                                                    Map<String, Subscription> subscriptions) {
 
         Map<String, List<TopicPartition>> currentAssignment = new HashMap<>();
         Map<TopicPartition, ConsumerGenerationPair> prevAssignment = new HashMap<>();
@@ -245,8 +245,8 @@ public class StickyAssignor extends AbstractPartitionAssignor {
                 partition2AllPotentialConsumers.put(new TopicPartition(entry.getKey(), i), new ArrayList<>());
         }
 
-        for (Entry<MemberInfo, Subscription> entry: subscriptions.entrySet()) {
-            String consumerId = entry.getKey().memberId;
+        for (Entry<String, Subscription> entry: subscriptions.entrySet()) {
+            String consumerId = entry.getKey();
             consumer2AllPotentialPartitions.put(consumerId, new ArrayList<>());
             entry.getValue().topics().stream().filter(topic -> partitionsPerTopic.get(topic) != null).forEach(topic -> {
                 for (int i = 0; i < partitionsPerTopic.get(topic); ++i) {
@@ -274,8 +274,7 @@ public class StickyAssignor extends AbstractPartitionAssignor {
         List<TopicPartition> unassignedPartitions = new ArrayList<>(sortedPartitions);
         for (Iterator<Map.Entry<String, List<TopicPartition>>> it = currentAssignment.entrySet().iterator(); it.hasNext();) {
             Map.Entry<String, List<TopicPartition>> entry = it.next();
-            MemberInfo memberInfo = new MemberInfo(entry.getKey(), Optional.empty());
-            if (!subscriptions.containsKey(memberInfo)) {
+            if (!subscriptions.containsKey(entry.getKey())) {
                 // if a consumer that existed before (and had some partition assignments) is now removed, remove it from currentAssignment
                 for (TopicPartition topicPartition: entry.getValue())
                     currentPartitionConsumer.remove(topicPartition);
@@ -288,7 +287,7 @@ public class StickyAssignor extends AbstractPartitionAssignor {
                         // if this topic partition of this consumer no longer exists remove it from currentAssignment of the consumer
                         partitionIter.remove();
                         currentPartitionConsumer.remove(partition);
-                    } else if (!subscriptions.get(memberInfo).topics().contains(partition.topic())) {
+                    } else if (!subscriptions.get(entry.getKey()).topics().contains(partition.topic())) {
                         // if this partition cannot remain assigned to its current consumer because the consumer
                         // is no longer subscribed to its topic remove it from currentAssignment of the consumer
                         partitionIter.remove();
@@ -313,7 +312,7 @@ public class StickyAssignor extends AbstractPartitionAssignor {
         return currentAssignment;
     }
 
-    private void prepopulateCurrentAssignments(Map<MemberInfo, Subscription> subscriptions,
+    private void prepopulateCurrentAssignments(Map<String, Subscription> subscriptions,
                                                Map<String, List<TopicPartition>> currentAssignment,
                                                Map<TopicPartition, ConsumerGenerationPair> prevAssignment) {
         // we need to process subscriptions' user data with each consumer's reported generation in mind
@@ -322,8 +321,8 @@ public class StickyAssignor extends AbstractPartitionAssignor {
 
         // for each partition we create a sorted map of its consumers by generation
         Map<TopicPartition, TreeMap<Integer, String>> sortedPartitionConsumersByGeneration = new HashMap<>();
-        for (Map.Entry<MemberInfo, Subscription> subscriptionEntry: subscriptions.entrySet()) {
-            String memberId = subscriptionEntry.getKey().memberId;
+        for (Map.Entry<String, Subscription> subscriptionEntry: subscriptions.entrySet()) {
+            String memberId = subscriptionEntry.getKey();
             ByteBuffer userData = subscriptionEntry.getValue().userData();
             if (userData == null || !userData.hasRemaining()) continue;
             ConsumerUserData consumerUserData = deserializeTopicPartitionAssignment(userData);

@@ -60,8 +60,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import static java.time.Duration.ofMillis;
 import static java.util.Arrays.asList;
-import static org.apache.kafka.clients.consumer.internals.PartitionAssignor.dynamicMember;
-import static org.apache.kafka.clients.consumer.internals.PartitionAssignor.MemberInfo;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.not;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -148,7 +146,7 @@ public class StreamsPartitionAssignorTest {
         EasyMock.replay(taskManager);
     }
 
-    private Map<MemberInfo, PartitionAssignor.Subscription> subscriptions;
+    private Map<String, PartitionAssignor.Subscription> subscriptions;
 
     @Before
     public void setUp() {
@@ -237,16 +235,13 @@ public class StreamsPartitionAssignorTest {
 
         partitionAssignor.setInternalTopicManager(new MockInternalTopicManager(streamsConfig, mockClientSupplier.restoreConsumer));
 
-        subscriptions.put(
-                dynamicMember("consumer10"),
+        subscriptions.put("consumer10",
                 new PartitionAssignor.Subscription(topics,
                         new SubscriptionInfo(uuid1, prevTasks10, standbyTasks10, userEndPoint).encode()));
-        subscriptions.put(
-                dynamicMember("consumer11"),
+        subscriptions.put("consumer11",
                 new PartitionAssignor.Subscription(topics,
                         new SubscriptionInfo(uuid1, prevTasks11, standbyTasks11, userEndPoint).encode()));
-        subscriptions.put(
-                dynamicMember("consumer20"),
+        subscriptions.put("consumer20",
                 new PartitionAssignor.Subscription(topics,
                         new SubscriptionInfo(uuid2, prevTasks20, standbyTasks20, userEndPoint).encode()));
 
@@ -324,10 +319,10 @@ public class StreamsPartitionAssignorTest {
 
         partitionAssignor.setInternalTopicManager(new MockInternalTopicManager(streamsConfig, mockClientSupplier.restoreConsumer));
 
-        subscriptions.put(dynamicMember("consumer10"),
+        subscriptions.put("consumer10",
                           new PartitionAssignor.Subscription(topics,
                                   new SubscriptionInfo(uuid1, new HashSet<>(), new HashSet<>(), userEndPoint).encode()));
-        subscriptions.put(dynamicMember("consumer11"),
+        subscriptions.put("consumer11",
                           new PartitionAssignor.Subscription(topics,
                                   new SubscriptionInfo(uuid1, new HashSet<>(), new HashSet<>(), userEndPoint).encode()));
 
@@ -369,8 +364,7 @@ public class StreamsPartitionAssignorTest {
         partitionAssignor.setInternalTopicManager(new MockInternalTopicManager(streamsConfig, mockClientSupplier.restoreConsumer));
 
         // will throw exception if it fails
-        subscriptions.put(
-                dynamicMember("consumer10"),
+        subscriptions.put("consumer10",
                 new PartitionAssignor.Subscription(topics,
                         new SubscriptionInfo(uuid1, emptyTasks, emptyTasks, userEndPoint).encode()
         ));
@@ -404,7 +398,7 @@ public class StreamsPartitionAssignorTest {
         mockTaskManager(prevTasks10, standbyTasks10, uuid1, builder);
         configurePartitionAssignor(Collections.emptyMap());
 
-        subscriptions.put(dynamicMember("consumer10"),
+        subscriptions.put("consumer10",
                 new PartitionAssignor.Subscription(topics,
                         new SubscriptionInfo(uuid1, prevTasks10, standbyTasks10, userEndPoint).encode()
                 ));
@@ -460,13 +454,13 @@ public class StreamsPartitionAssignorTest {
 
         partitionAssignor.setInternalTopicManager(new MockInternalTopicManager(streamsConfig, mockClientSupplier.restoreConsumer));
 
-        subscriptions.put(dynamicMember("consumer10"),
+        subscriptions.put("consumer10",
                 new PartitionAssignor.Subscription(topics,
                         new SubscriptionInfo(uuid1, prevTasks10, emptyTasks, userEndPoint).encode()));
-        subscriptions.put(dynamicMember("consumer11"),
+        subscriptions.put("consumer11",
                 new PartitionAssignor.Subscription(topics,
                         new SubscriptionInfo(uuid1, prevTasks11, emptyTasks, userEndPoint).encode()));
-        subscriptions.put(dynamicMember("consumer20"),
+        subscriptions.put("consumer20",
                 new PartitionAssignor.Subscription(topics,
                         new SubscriptionInfo(uuid2, prevTasks20, emptyTasks, userEndPoint).encode()));
 
@@ -526,13 +520,13 @@ public class StreamsPartitionAssignorTest {
 
         partitionAssignor.setInternalTopicManager(new MockInternalTopicManager(streamsConfig, mockClientSupplier.restoreConsumer));
 
-        subscriptions.put(dynamicMember("consumer10"),
+        subscriptions.put("consumer10",
                 new PartitionAssignor.Subscription(topics,
                         new SubscriptionInfo(uuid1, emptyTasks, emptyTasks, userEndPoint).encode()));
-        subscriptions.put(dynamicMember("consumer11"),
+        subscriptions.put("consumer11",
                 new PartitionAssignor.Subscription(topics,
                         new SubscriptionInfo(uuid1, emptyTasks, emptyTasks, userEndPoint).encode()));
-        subscriptions.put(dynamicMember("consumer20"),
+        subscriptions.put("consumer20",
                 new PartitionAssignor.Subscription(topics,
                         new SubscriptionInfo(uuid2, emptyTasks, emptyTasks, userEndPoint).encode()));
 
@@ -614,13 +608,13 @@ public class StreamsPartitionAssignorTest {
 
         partitionAssignor.setInternalTopicManager(new MockInternalTopicManager(streamsConfig, mockClientSupplier.restoreConsumer));
 
-        subscriptions.put(dynamicMember("consumer10"),
+        subscriptions.put("consumer10",
                 new PartitionAssignor.Subscription(topics,
                         new SubscriptionInfo(uuid1, prevTasks00, standbyTasks01, userEndPoint).encode()));
-        subscriptions.put(dynamicMember("consumer11"),
+        subscriptions.put("consumer11",
                 new PartitionAssignor.Subscription(topics,
                         new SubscriptionInfo(uuid1, prevTasks01, standbyTasks02, userEndPoint).encode()));
-        subscriptions.put(dynamicMember("consumer20"),
+        subscriptions.put("consumer20",
                 new PartitionAssignor.Subscription(topics,
                         new SubscriptionInfo(uuid2, prevTasks02, standbyTasks00, "any:9097").encode()));
 
@@ -709,8 +703,7 @@ public class StreamsPartitionAssignorTest {
         final MockInternalTopicManager internalTopicManager = new MockInternalTopicManager(streamsConfig, mockClientSupplier.restoreConsumer);
         partitionAssignor.setInternalTopicManager(internalTopicManager);
 
-        subscriptions.put(
-                dynamicMember("consumer10"),
+        subscriptions.put("consumer10",
                 new PartitionAssignor.Subscription(topics,
                         new SubscriptionInfo(uuid1, emptyTasks, emptyTasks, userEndPoint).encode())
         );
@@ -744,8 +737,7 @@ public class StreamsPartitionAssignorTest {
         final MockInternalTopicManager internalTopicManager = new MockInternalTopicManager(streamsConfig, mockClientSupplier.restoreConsumer);
         partitionAssignor.setInternalTopicManager(internalTopicManager);
 
-        subscriptions.put(
-                dynamicMember("consumer10"),
+        subscriptions.put("consumer10",
                 new PartitionAssignor.Subscription(topics,
                         new SubscriptionInfo(uuid1, emptyTasks, emptyTasks, userEndPoint).encode())
         );
@@ -797,8 +789,7 @@ public class StreamsPartitionAssignorTest {
             mockClientSupplier.restoreConsumer);
         partitionAssignor.setInternalTopicManager(mockInternalTopicManager);
 
-        subscriptions.put(
-                dynamicMember(client),
+        subscriptions.put(client,
                 new PartitionAssignor.Subscription(
                         asList("topic1", "topic3"),
                         new SubscriptionInfo(uuid, emptyTasks, emptyTasks, userEndPoint).encode())
@@ -871,8 +862,7 @@ public class StreamsPartitionAssignorTest {
 
         partitionAssignor.setInternalTopicManager(new MockInternalTopicManager(streamsConfig, mockClientSupplier.restoreConsumer));
 
-        subscriptions.put(
-                dynamicMember("consumer1"),
+        subscriptions.put("consumer1",
                 new PartitionAssignor.Subscription(topics,
                         new SubscriptionInfo(uuid1, emptyTasks, emptyTasks, userEndPoint).encode())
         );
@@ -970,8 +960,7 @@ public class StreamsPartitionAssignorTest {
             mockClientSupplier.restoreConsumer);
         partitionAssignor.setInternalTopicManager(mockInternalTopicManager);
 
-        subscriptions.put(
-                dynamicMember(client),
+        subscriptions.put(client,
                 new PartitionAssignor.Subscription(
                         Collections.singletonList("unknownTopic"),
                         new SubscriptionInfo(uuid, emptyTasks, emptyTasks, userEndPoint).encode())
@@ -1025,14 +1014,12 @@ public class StreamsPartitionAssignorTest {
             streamsConfig,
             mockClientSupplier.restoreConsumer));
 
-        subscriptions.put(
-                dynamicMember("consumer1"),
+        subscriptions.put("consumer1",
                 new PartitionAssignor.Subscription(
                         Collections.singletonList("topic1"),
                         new SubscriptionInfo(uuid, emptyTasks, emptyTasks, userEndPoint).encode())
         );
-        subscriptions.put(
-                dynamicMember("consumer2"),
+        subscriptions.put("consumer2",
                 new PartitionAssignor.Subscription(
                         Collections.singletonList("topic1"),
                         new SubscriptionInfo(UUID.randomUUID(), emptyTasks, emptyTasks, "other:9090").encode())
@@ -1121,14 +1108,12 @@ public class StreamsPartitionAssignorTest {
 
     private void shouldReturnLowestAssignmentVersionForDifferentSubscriptionVersions(final int smallestVersion,
                                                                                      final int otherVersion) {
-        subscriptions.put(
-                dynamicMember("consumer1"),
+        subscriptions.put("consumer1",
                 new PartitionAssignor.Subscription(
                         Collections.singletonList("topic1"),
                         new SubscriptionInfo(smallestVersion, UUID.randomUUID(), emptyTasks, emptyTasks, null).encode())
         );
-        subscriptions.put(
-                dynamicMember("consumer2"),
+        subscriptions.put("consumer2",
                 new PartitionAssignor.Subscription(
                         Collections.singletonList("topic1"),
                         new SubscriptionInfo(otherVersion, UUID.randomUUID(), emptyTasks, emptyTasks, null).encode()
@@ -1214,14 +1199,12 @@ public class StreamsPartitionAssignorTest {
             }
         };
 
-        subscriptions.put(
-                dynamicMember("consumer1"),
+        subscriptions.put("consumer1",
                 new PartitionAssignor.Subscription(
                         Collections.singletonList("topic1"),
                         new SubscriptionInfo(UUID.randomUUID(), activeTasks, standbyTasks, null).encode())
         );
-        subscriptions.put(
-                dynamicMember("future-consumer"),
+        subscriptions.put("future-consumer",
                 new PartitionAssignor.Subscription(
                         Collections.singletonList("topic1"),
                         encodeFutureSubscription())
@@ -1268,14 +1251,12 @@ public class StreamsPartitionAssignorTest {
     }
 
     private void shouldThrowIfPreVersionProbingSubscriptionAndFutureSubscriptionIsMixed(final int oldVersion) {
-        subscriptions.put(
-                dynamicMember("consumer1"),
+        subscriptions.put("consumer1",
                 new PartitionAssignor.Subscription(
                         Collections.singletonList("topic1"),
                         new SubscriptionInfo(oldVersion, UUID.randomUUID(), emptyTasks, emptyTasks, null).encode())
         );
-        subscriptions.put(
-                dynamicMember("future-consumer"),
+        subscriptions.put("future-consumer",
                 new PartitionAssignor.Subscription(
                         Collections.singletonList("topic1"),
                         encodeFutureSubscription())

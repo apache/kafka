@@ -61,17 +61,20 @@ public class RoundRobinAssignor extends AbstractPartitionAssignor {
 
     @Override
     public Map<String, List<TopicPartition>> assign(Map<String, Integer> partitionsPerTopic,
-                                                    Map<MemberInfo, Subscription> subscriptions) {
+                                                    Map<String, Subscription> subscriptions) {
         Map<String, List<TopicPartition>> assignment = new HashMap<>();
-        for (MemberInfo memberInfo : subscriptions.keySet()) {
-            assignment.put(memberInfo.memberId, new ArrayList<>());
+        List<MemberInfo> memberInfoList = new ArrayList<>();
+        for (Map.Entry<String, Subscription> memberSubscription : subscriptions.entrySet()) {
+            assignment.put(memberSubscription.getKey(), new ArrayList<>());
+            memberInfoList.add(new MemberInfo(memberSubscription.getKey(),
+                                              memberSubscription.getValue().groupInstanceId()));
         }
 
-        CircularIterator<MemberInfo> assigner = new CircularIterator<>(Utils.sorted(subscriptions.keySet()));
+        CircularIterator<MemberInfo> assigner = new CircularIterator<>(Utils.sorted(memberInfoList));
 
         for (TopicPartition partition : allPartitionsSorted(partitionsPerTopic, subscriptions)) {
             final String topic = partition.topic();
-            while (!subscriptions.get(assigner.peek()).topics().contains(topic))
+            while (!subscriptions.get(assigner.peek().memberId).topics().contains(topic))
                 assigner.next();
             assignment.get(assigner.next().memberId).add(partition);
         }
@@ -79,7 +82,7 @@ public class RoundRobinAssignor extends AbstractPartitionAssignor {
     }
 
     private List<TopicPartition> allPartitionsSorted(Map<String, Integer> partitionsPerTopic,
-                                                     Map<MemberInfo, Subscription> subscriptions) {
+                                                     Map<String, Subscription> subscriptions) {
         SortedSet<String> topics = new TreeSet<>();
         for (Subscription subscription : subscriptions.values())
             topics.addAll(subscription.topics());

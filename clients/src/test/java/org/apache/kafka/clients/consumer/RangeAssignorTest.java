@@ -44,7 +44,7 @@ public class RangeAssignorTest {
         Map<String, Integer> partitionsPerTopic = new HashMap<>();
 
         Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic,
-                Collections.singletonMap(memberInfo, new Subscription(Collections.emptyList())));
+                Collections.singletonMap(consumerId, new Subscription(Collections.emptyList())));
 
         assertEquals(Collections.singleton(consumerId), assignment.keySet());
         assertTrue(assignment.get(consumerId).isEmpty());
@@ -54,7 +54,7 @@ public class RangeAssignorTest {
     public void testOneConsumerNonexistentTopic() {
         Map<String, Integer> partitionsPerTopic = new HashMap<>();
         Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic,
-                Collections.singletonMap(memberInfo, new Subscription(topics(topic))));
+                Collections.singletonMap(consumerId, new Subscription(topics(topic))));
         assertEquals(Collections.singleton(consumerId), assignment.keySet());
         assertTrue(assignment.get(consumerId).isEmpty());
     }
@@ -65,7 +65,7 @@ public class RangeAssignorTest {
         partitionsPerTopic.put(topic, 3);
 
         Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic,
-                Collections.singletonMap(memberInfo, new Subscription(topics(topic))));
+                Collections.singletonMap(consumerId, new Subscription(topics(topic))));
 
         assertEquals(Collections.singleton(consumerId), assignment.keySet());
         assertAssignment(partitions(tp(topic, 0), tp(topic, 1), tp(topic, 2)), assignment.get(consumerId));
@@ -80,7 +80,7 @@ public class RangeAssignorTest {
         partitionsPerTopic.put(otherTopic, 3);
 
         Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic,
-                Collections.singletonMap(memberInfo, new Subscription(topics(topic))));
+                Collections.singletonMap(consumerId, new Subscription(topics(topic))));
         assertEquals(Collections.singleton(consumerId), assignment.keySet());
         assertAssignment(partitions(tp(topic, 0), tp(topic, 1), tp(topic, 2)), assignment.get(consumerId));
     }
@@ -95,7 +95,7 @@ public class RangeAssignorTest {
         partitionsPerTopic.put(topic2, 2);
 
         Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic,
-                Collections.singletonMap(memberInfo, new Subscription(topics(topic1, topic2))));
+                Collections.singletonMap(consumerId, new Subscription(topics(topic1, topic2))));
 
         assertEquals(Collections.singleton(consumerId), assignment.keySet());
         assertAssignment(partitions(tp(topic1, 0), tp(topic2, 0), tp(topic2, 1)), assignment.get(consumerId));
@@ -110,9 +110,9 @@ public class RangeAssignorTest {
         Map<String, Integer> partitionsPerTopic = new HashMap<>();
         partitionsPerTopic.put(topic, 1);
 
-        Map<MemberInfo, Subscription> consumers = new HashMap<>();
-        consumers.put(dynamicMember(consumer1), new Subscription(topics(topic)));
-        consumers.put(dynamicMember(consumer2), new Subscription(topics(topic)));
+        Map<String, Subscription> consumers = new HashMap<>();
+        consumers.put(consumer1, new Subscription(topics(topic)));
+        consumers.put(consumer2, new Subscription(topics(topic)));
 
         Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic, consumers);
         assertAssignment(partitions(tp(topic, 0)), assignment.get(consumer1));
@@ -129,9 +129,9 @@ public class RangeAssignorTest {
         Map<String, Integer> partitionsPerTopic = new HashMap<>();
         partitionsPerTopic.put(topic, 2);
 
-        Map<MemberInfo, Subscription> consumers = new HashMap<>();
-        consumers.put(dynamicMember(consumer1), new Subscription(topics(topic)));
-        consumers.put(dynamicMember(consumer2), new Subscription(topics(topic)));
+        Map<String, Subscription> consumers = new HashMap<>();
+        consumers.put(consumer1, new Subscription(topics(topic)));
+        consumers.put(consumer2, new Subscription(topics(topic)));
 
         Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic, consumers);
         assertAssignment(partitions(tp(topic, 0)), assignment.get(consumer1));
@@ -150,10 +150,10 @@ public class RangeAssignorTest {
         partitionsPerTopic.put(topic1, 3);
         partitionsPerTopic.put(topic2, 2);
 
-        Map<MemberInfo, Subscription> consumers = new HashMap<>();
-        consumers.put(dynamicMember(consumer1), new Subscription(topics(topic1)));
-        consumers.put(dynamicMember(consumer2), new Subscription(topics(topic1, topic2)));
-        consumers.put(dynamicMember(consumer3), new Subscription(topics(topic1)));
+        Map<String, Subscription> consumers = new HashMap<>();
+        consumers.put(consumer1, new Subscription(topics(topic1)));
+        consumers.put(consumer2, new Subscription(topics(topic1, topic2)));
+        consumers.put(consumer3, new Subscription(topics(topic1)));
 
         Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic, consumers);
         assertAssignment(partitions(tp(topic1, 0)), assignment.get(consumer1));
@@ -172,9 +172,9 @@ public class RangeAssignorTest {
         partitionsPerTopic.put(topic1, 3);
         partitionsPerTopic.put(topic2, 3);
 
-        Map<MemberInfo, Subscription> consumers = new HashMap<>();
-        consumers.put(dynamicMember(consumer1), new Subscription(topics(topic1, topic2)));
-        consumers.put(dynamicMember(consumer2), new Subscription(topics(topic1, topic2)));
+        Map<String, Subscription> consumers = new HashMap<>();
+        consumers.put(consumer1, new Subscription(topics(topic1, topic2)));
+        consumers.put(consumer2, new Subscription(topics(topic1, topic2)));
 
         Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic, consumers);
         assertAssignment(partitions(tp(topic1, 0), tp(topic1, 1), tp(topic2, 0), tp(topic2, 1)), assignment.get(consumer1));

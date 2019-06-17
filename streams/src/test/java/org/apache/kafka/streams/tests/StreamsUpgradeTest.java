@@ -187,7 +187,7 @@ public class StreamsUpgradeTest {
                                               final Map<String, Subscription> subscriptions) {
             Map<String, Assignment> assignment = null;
 
-            final Map<MemberInfo, Subscription> downgradedSubscriptions = new HashMap<>();
+            final Map<String, Subscription> downgradedSubscriptions = new HashMap<>();
             for (final Subscription subscription : subscriptions.values()) {
                 final SubscriptionInfo info = SubscriptionInfo.decode(subscription.userData());
                 if (info.version() < SubscriptionInfo.LATEST_SUPPORTED_VERSION + 1) {
@@ -201,7 +201,7 @@ public class StreamsUpgradeTest {
             if (assignment != null) {
                 bumpSupportedVersion = supportedVersions.size() == 1 && supportedVersions.iterator().next() == SubscriptionInfo.LATEST_SUPPORTED_VERSION + 1;
             } else {
-                for (final Map.Entry<MemberInfo, Subscription> entry : subscriptions.entrySet()) {
+                for (final Map.Entry<String, Subscription> entry : subscriptions.entrySet()) {
                     final Subscription subscription = entry.getValue();
 
                     final SubscriptionInfo info = SubscriptionInfo.decode(subscription.userData()

@@ -27,8 +27,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
-import static org.apache.kafka.clients.consumer.internals.PartitionAssignor.MemberInfo;
-import static org.apache.kafka.clients.consumer.internals.PartitionAssignor.dynamicMember;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
@@ -37,14 +35,13 @@ public class RoundRobinAssignorTest {
     private RoundRobinAssignor assignor = new RoundRobinAssignor();
     private String topic = "topic";
     private String consumerId = "consumer";
-    private MemberInfo memberInfo = dynamicMember(consumerId);
 
     @Test
     public void testOneConsumerNoTopic() {
         Map<String, Integer> partitionsPerTopic = new HashMap<>();
 
         Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic,
-                Collections.singletonMap(memberInfo, new Subscription(Collections.emptyList())));
+                Collections.singletonMap(consumerId, new Subscription(Collections.emptyList())));
         assertEquals(Collections.singleton(consumerId), assignment.keySet());
         assertTrue(assignment.get(consumerId).isEmpty());
     }
@@ -53,7 +50,7 @@ public class RoundRobinAssignorTest {
     public void testOneConsumerNonexistentTopic() {
         Map<String, Integer> partitionsPerTopic = new HashMap<>();
         Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic,
-                Collections.singletonMap(memberInfo, new Subscription(topics(topic))));
+                Collections.singletonMap(consumerId, new Subscription(topics(topic))));
 
         assertEquals(Collections.singleton(consumerId), assignment.keySet());
         assertTrue(assignment.get(consumerId).isEmpty());
@@ -65,7 +62,7 @@ public class RoundRobinAssignorTest {
         partitionsPerTopic.put(topic, 3);
 
         Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic,
-                Collections.singletonMap(dynamicMember(consumerId),
+                Collections.singletonMap(consumerId,
                         new Subscription(topics(topic))));
         assertEquals(partitions(tp(topic, 0), tp(topic, 1), tp(topic, 2)), assignment.get(consumerId));
     }
@@ -79,7 +76,7 @@ public class RoundRobinAssignorTest {
         partitionsPerTopic.put(otherTopic, 3);
 
         Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic,
-                Collections.singletonMap(memberInfo, new Subscription(topics(topic))));
+                Collections.singletonMap(consumerId, new Subscription(topics(topic))));
         assertEquals(partitions(tp(topic, 0), tp(topic, 1), tp(topic, 2)), assignment.get(consumerId));
     }
 
@@ -93,7 +90,7 @@ public class RoundRobinAssignorTest {
         partitionsPerTopic.put(topic2, 2);
 
         Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic,
-                Collections.singletonMap(memberInfo, new Subscription(topics(topic1, topic2))));
+                Collections.singletonMap(consumerId, new Subscription(topics(topic1, topic2))));
         assertEquals(partitions(tp(topic1, 0), tp(topic2, 0), tp(topic2, 1)), assignment.get(consumerId));
     }
 
@@ -105,11 +102,9 @@ public class RoundRobinAssignorTest {
         Map<String, Integer> partitionsPerTopic = new HashMap<>();
         partitionsPerTopic.put(topic, 1);
 
-        Map<MemberInfo, Subscription> consumers = new HashMap<>();
-        consumers.put(dynamicMember(consumer1),
-                new Subscription(topics(topic)));
-        consumers.put(dynamicMember(consumer2),
-                new Subscription(topics(topic)));
+        Map<String, Subscription> consumers = new HashMap<>();
+        consumers.put(consumer1, new Subscription(topics(topic)));
+        consumers.put(consumer2, new Subscription(topics(topic)));
 
         Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic, consumers);
         assertEquals(partitions(tp(topic, 0)), assignment.get(consumer1));
@@ -124,11 +119,9 @@ public class RoundRobinAssignorTest {
         Map<String, Integer> partitionsPerTopic = new HashMap<>();
         partitionsPerTopic.put(topic, 2);
 
-        Map<MemberInfo, Subscription> consumers = new HashMap<>();
-        consumers.put(dynamicMember(consumer1),
-                new Subscription(topics(topic)));
-        consumers.put(dynamicMember(consumer2),
-                new Subscription(topics(topic)));
+        Map<String, Subscription> consumers = new HashMap<>();
+        consumers.put(consumer1, new Subscription(topics(topic)));
+        consumers.put(consumer2, new Subscription(topics(topic)));
 
         Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic, consumers);
         assertEquals(partitions(tp(topic, 0)), assignment.get(consumer1));
@@ -147,11 +140,11 @@ public class RoundRobinAssignorTest {
         partitionsPerTopic.put(topic1, 3);
         partitionsPerTopic.put(topic2, 2);
 
-        Map<MemberInfo, Subscription> consumers = new HashMap<>();
+        Map<String, Subscription> consumers = new HashMap<>();
 
-        consumers.put(dynamicMember(consumer1), new Subscription(topics(topic1)));
-        consumers.put(dynamicMember(consumer2), new Subscription(topics(topic1, topic2)));
-        consumers.put(dynamicMember(consumer3), new Subscription(topics(topic1)));
+        consumers.put(consumer1, new Subscription(topics(topic1)));
+        consumers.put(consumer2, new Subscription(topics(topic1, topic2)));
+        consumers.put(consumer3, new Subscription(topics(topic1)));
 
         Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic, consumers);
         assertEquals(partitions(tp(topic1, 0)), assignment.get(consumer1));
@@ -170,9 +163,9 @@ public class RoundRobinAssignorTest {
         partitionsPerTopic.put(topic1, 3);
         partitionsPerTopic.put(topic2, 3);
 
-        Map<MemberInfo, Subscription> consumers = new HashMap<>();
-        consumers.put(dynamicMember(consumer1), new Subscription(topics(topic1, topic2)));
-        consumers.put(dynamicMember(consumer2), new Subscription(topics(topic1, topic2)));
+        Map<String, Subscription> consumers = new HashMap<>();
+        consumers.put(consumer1, new Subscription(topics(topic1, topic2)));
+        consumers.put(consumer2, new Subscription(topics(topic1, topic2)));
 
         Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic, consumers);
         assertEquals(partitions(tp(topic1, 0), tp(topic1, 2), tp(topic2, 1)), assignment.get(consumer1));
@@ -194,10 +187,15 @@ public class RoundRobinAssignorTest {
         partitionsPerTopic.put(topic1, 3);
         partitionsPerTopic.put(topic2, 3);
 
-        Map<MemberInfo, Subscription> consumers = new HashMap<>();
-        consumers.put(new MemberInfo(consumer1, Optional.of(instance1)), new Subscription(topics(topic1, topic2)));
-        consumers.put(new MemberInfo(consumer2, Optional.of(instance2)), new Subscription(topics(topic1, topic2)));
-
+        Map<String, Subscription> consumers = new HashMap<>();
+        consumers.put(consumer1, new Subscription(topics(topic1, topic2),
+                                                  null,
+                                                  Collections.emptyList(),
+                                                  Optional.of(instance1)));
+        consumers.put(consumer2, new Subscription(topics(topic1, topic2),
+                                                  null,
+                                                  Collections.emptyList(),
+                                                  Optional.of(instance2)));
         Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic, consumers);
         assertEquals(partitions(tp(topic1, 0), tp(topic1, 2), tp(topic2, 1)), assignment.get(consumer1));
         assertEquals(partitions(tp(topic1, 1), tp(topic2, 0), tp(topic2, 2)), assignment.get(consumer2));
@@ -217,11 +215,12 @@ public class RoundRobinAssignorTest {
         partitionsPerTopic.put(topic1, 3);
         partitionsPerTopic.put(topic2, 3);
 
-        Map<MemberInfo, Subscription> consumers = new HashMap<>();
-        consumers.put(new MemberInfo(consumer1, Optional.of(instance1)),
-                new Subscription(topics(topic1, topic2)));
-        consumers.put(dynamicMember(consumer2),
-                new Subscription(topics(topic1, topic2)));
+        Map<String, Subscription> consumers = new HashMap<>();
+        consumers.put(consumer1, new Subscription(topics(topic1, topic2),
+                                                  null,
+                                                  Collections.emptyList(),
+                                                  Optional.of(instance1)));
+        consumers.put(consumer2, new Subscription(topics(topic1, topic2)));
 
         Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic, consumers);
         assertEquals(partitions(tp(topic1, 0), tp(topic1, 2), tp(topic2, 1)), assignment.get(consumer1));
