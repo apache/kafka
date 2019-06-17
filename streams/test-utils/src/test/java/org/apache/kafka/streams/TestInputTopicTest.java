@@ -146,17 +146,17 @@ public class TestInputTopicTest {
         inputTopic.pipeInput("Hello", baseTime);
         //TestRecord <> actual = outputTopic.readRecord();
         //assertThat(actual.headers(), is(equalTo(baseTime)));
-        assertThat(outputTopic.readRecord(), is(equalTo(new TestRecord<Long, String>(baseTime, null,"Hello"))));
+        assertThat(outputTopic.readRecord(), is(equalTo(new TestRecord<Long, String>(null,"Hello", baseTime))));
 
         inputTopic.pipeInput(2L, "Kafka", ++baseTime);
-        assertThat(outputTopic.readRecord(), is(equalTo(new TestRecord<Long, String>(baseTime, 2L,"Kafka"))));
+        assertThat(outputTopic.readRecord(), is(equalTo(new TestRecord<Long, String>(2L,"Kafka", baseTime))));
 
         final List<String> inputList = Arrays.asList("Advancing", "time");
         //Feed list of words to inputTopic and no kafka key, timestamp advancing from basetime
         baseTime = 10;
         inputTopic.pipeValueList(inputList, baseTime, advance);
-        assertThat(outputTopic.readRecord(), is(equalTo(new TestRecord<Long, String>(baseTime, null,"Advancing"))));
-        assertThat(outputTopic.readRecord(), is(equalTo(new TestRecord<Long, String>(baseTime + advance, null,"time"))));
+        assertThat(outputTopic.readRecord(), is(equalTo(new TestRecord<Long, String>(null,"Advancing", baseTime))));
+        assertThat(outputTopic.readRecord(), is(equalTo(new TestRecord<Long, String>(null,"time", baseTime + advance))));
     }
 
     @Test
@@ -176,7 +176,7 @@ public class TestInputTopicTest {
                 hasProperty("value", equalTo("Hello")),
                 hasProperty("headers", equalTo(headers))));
         inputTopic.pipeInput(2L, "Kafka", headers, ++baseTime);
-        assertThat(outputTopic.readRecord(), is(equalTo(new TestRecord<Long, String>(baseTime, 2L, "Kafka", headers))));
+        assertThat(outputTopic.readRecord(), is(equalTo(new TestRecord<Long, String>(2L, "Kafka", headers, baseTime))));
     }
 
     @Test
@@ -184,15 +184,15 @@ public class TestInputTopicTest {
         final long baseTime = 3;
         final long advance = 2;
         final TestInputTopic<Long, String> inputTopic = testDriver.createInputTopic(INPUT_TOPIC, longSerde, stringSerde);
-        inputTopic.configureTiming(baseTime);
+        inputTopic.configureTiming(baseTime, 0);
         final TestOutputTopic<Long, String> outputTopic = testDriver.createOutputTopic(OUTPUT_TOPIC, longSerde, stringSerde);
         inputTopic.pipeInput(1L, "Hello");
-        assertThat(outputTopic.readRecord(), is(equalTo(new TestRecord<Long, String>(baseTime, 1L,"Hello"))));
+        assertThat(outputTopic.readRecord(), is(equalTo(new TestRecord<Long, String>(1L,"Hello", baseTime))));
         inputTopic.pipeInput(2L, "World");
-        assertThat(outputTopic.readRecord(), is(equalTo(new TestRecord<Long, String>(baseTime, 2L,"World"))));
+        assertThat(outputTopic.readRecord(), is(equalTo(new TestRecord<Long, String>(2L,"World", baseTime))));
         inputTopic.advanceTimeMs(advance);
         inputTopic.pipeInput(3L, "Kafka");
-        assertThat(outputTopic.readRecord(), is(equalTo(new TestRecord<Long, String>(baseTime+advance, 3L,"Kafka"))));
+        assertThat(outputTopic.readRecord(), is(equalTo(new TestRecord<Long, String>(3L,"Kafka", baseTime+advance))));
     }
 
 
@@ -204,9 +204,9 @@ public class TestInputTopicTest {
         inputTopic.configureTiming(baseTime, advance);
         final TestOutputTopic<Long, String> outputTopic = testDriver.createOutputTopic(OUTPUT_TOPIC, longSerde, stringSerde);
         inputTopic.pipeInput("Hello");
-        assertThat(outputTopic.readRecord(), is(equalTo(new TestRecord<Long, String>(baseTime, null,"Hello"))));
+        assertThat(outputTopic.readRecord(), is(equalTo(new TestRecord<Long, String>(null,"Hello", baseTime))));
         inputTopic.pipeInput(2L, "Kafka");
-        assertThat(outputTopic.readRecord(), is(equalTo(new TestRecord<Long, String>(baseTime + advance, 2L,"Kafka"))));
+        assertThat(outputTopic.readRecord(), is(equalTo(new TestRecord<Long, String>(2L,"Kafka", baseTime+advance))));
     }
 
 

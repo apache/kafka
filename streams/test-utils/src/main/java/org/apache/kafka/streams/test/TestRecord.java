@@ -58,13 +58,13 @@ public class TestRecord<K, V> {
     /**
      * Creates a record with a specified timestamp to be sent to a specified topic and partition
      * 
-     * @param timestamp The timestamp of the record, in milliseconds since epoch. If null,
-     *                  the timestamp is assigned using System.currentTimeMillis() or internally tracked time.
      * @param key The key that will be included in the record
      * @param value The record contents
      * @param headers the headers that will be included in the record
+     * @param timestamp The timestamp of the record, in milliseconds since epoch. If null,
+     *                  the timestamp is assigned using System.currentTimeMillis() or internally tracked time.
      */
-    public TestRecord(Long timestamp, K key, V value, Headers headers) {
+    public TestRecord(final K key, V value, final Headers headers, final Long timestamp) {
         if (timestamp != null && timestamp < 0)
             throw new IllegalArgumentException(
                     String.format("Invalid timestamp: %d. Timestamp should always be non-negative or null.", timestamp));
@@ -77,13 +77,13 @@ public class TestRecord<K, V> {
     /**
      * Creates a record with a specified timestamp to be sent to a specified topic and partition
      *
-     * @param timestamp The timestamp of the record, in milliseconds since epoch. If null,
-     *                  the timestamp is assigned using System.currentTimeMillis() or internally tracked time.
      * @param key The key that will be included in the record
      * @param value The record contents
+     * @param timestamp The timestamp of the record, in milliseconds since epoch. If null,
+     *                  the timestamp is assigned using System.currentTimeMillis() or internally tracked time.
      */
-    public TestRecord(Long timestamp, K key, V value) {
-        this(timestamp, key, value, null);
+    public TestRecord(final K key, final V value, final Long timestamp) {
+        this(key, value, null, timestamp);
     }
 
     /**
@@ -93,8 +93,8 @@ public class TestRecord<K, V> {
      * @param value The record contents
      * @param headers The headers that will be included in the record
      */
-    public TestRecord(K key, V value, Headers headers) {
-        this(null, key, value, headers);
+    public TestRecord(final K key, final V value, final Headers headers) {
+        this(key, value, headers, null);
     }
     
     /**
@@ -103,8 +103,8 @@ public class TestRecord<K, V> {
      * @param key The key that will be included in the record
      * @param value The record contents
      */
-    public TestRecord(K key, V value) {
-        this(null, key, value, null);
+    public TestRecord(final K key, final V value) {
+        this(key, value, null, null);
     }
 
     /**
@@ -112,8 +112,8 @@ public class TestRecord<K, V> {
      *
      * @param value The record contents
      */
-    public TestRecord(V value) {
-        this(null, null, value, null);
+    public TestRecord(final V value) {
+        this(null, value, null, null);
     }
 
     /**
@@ -121,8 +121,8 @@ public class TestRecord<K, V> {
      *
      * @param record The record contents
      */
-    public TestRecord(ConsumerRecord<K, V> record) {
-        this(record.timestamp(), record.key(), record.value(), record.headers());
+    public TestRecord(final ConsumerRecord<K, V> record) {
+        this(record.key(), record.value(), record.headers(), record.timestamp());
     }
 
     /**
@@ -130,8 +130,8 @@ public class TestRecord<K, V> {
      *
      * @param record The record contents
      */
-    public TestRecord(ProducerRecord<K, V> record) {
-        this(record.timestamp(), record.key(), record.value(), record.headers());
+    public TestRecord(final ProducerRecord<K, V> record) {
+        this(record.key(), record.value(), record.headers(), record.timestamp());
     }
 
     /**

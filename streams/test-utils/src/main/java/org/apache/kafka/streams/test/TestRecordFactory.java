@@ -151,10 +151,10 @@ public class TestRecordFactory<K, V> {
                                    final long timestampMs) {
         Objects.requireNonNull(headers, "headers cannot be null.");
         return new TestRecord<>(
-                timestampMs,
                 key,
                 value,
-                headers);
+                headers,
+                timestampMs);
     }
 
 

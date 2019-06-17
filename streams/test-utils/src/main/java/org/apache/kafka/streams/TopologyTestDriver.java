@@ -627,25 +627,26 @@ public class TopologyTestDriver implements Closeable {
         }
         final K key = keyDeserializer.deserialize(record.topic(), record.key());
         final V value = valueDeserializer.deserialize(record.topic(), record.value());
-        return new TestRecord<>(record.timestamp(), key, value, record.headers());
+        return new TestRecord<>(key, value, record.headers(), record.timestamp());
     }
 
     /**
      * Serialize an input recond and send on the specified topic to the topology and then
      * commit the messages.
      *
-     * @param record             TestRecord to be send
-     * @param keySerializer the key serializer
+     * @param record          TestRecord to be send
+     * @param keySerializer   the key serializer
      * @param valueSerializer the value serializer
      */
     @SuppressWarnings("WeakerAccess")
     <K, V> void pipeRecord(final String topic,
-                    final TestRecord<K, V> record,
-                                          final Serializer<K> keySerializer,
-                                          final Serializer<V> valueSerializer) {
+                           final TestRecord<K, V> record,
+                           final Serializer<K> keySerializer,
+                           final Serializer<V> valueSerializer,
+                           final long timestamp) {
         final byte[] serializedKey = keySerializer.serialize(topic, record.headers(), record.key());
         final byte[] serializedValue = valueSerializer.serialize(topic, record.headers(), record.value());
-        pipeRecord(topic, record.timestamp(), serializedKey, serializedValue, record.headers());
+        pipeRecord(topic, timestamp, serializedKey, serializedValue, record.headers());
     }
 
     final long getQueueSize(final String topic) {

@@ -54,10 +54,13 @@ import java.util.stream.Collectors;
 
 public class TestInputTopic<K, V> {
     private final TopologyTestDriver driver;
-    private final TestRecordFactory<K, V> factory;
     private final String topic;
     private final Serializer<K> keySerializer;
     private final Serializer<V> valueSerializer;
+
+    //Timing
+    private long timeMs;
+    private long advanceMs;
 
     /**
      * Create a test input topic to pipe messages in.
@@ -74,42 +77,31 @@ public class TestInputTopic<K, V> {
                           final String topicName,
                           final Serde<K> keySerde,
                           final Serde<V> valueSerde) {
-        this(driver, topicName, new TestRecordFactory<>(topicName), keySerde.serializer(), valueSerde.serializer());
+        this(driver, topicName, keySerde.serializer(), valueSerde.serializer());
     }
 
     /**
      * Create a test input topic to pipe messages in.
-     * Uses provided factory, Validate inputs
+     * Validate inputs
      *
      * @param driver    TopologyTestDriver to use
      * @param topicName the topic name used
-     * @param factory   TestRecordFactory to use
+     * @param keySerializer   the key serializer
+     * @param valueSerializer the value serializer
      */
     @SuppressWarnings("WeakerAccess")
     protected TestInputTopic(final TopologyTestDriver driver,
                              final String topicName,
-                             final TestRecordFactory<K, V> factory,
                              final Serializer<K> keySerializer,
                              final Serializer<V> valueSerializer) {
         Objects.requireNonNull(driver, "TopologyTestDriver cannot be null");
         Objects.requireNonNull(topicName, "topicName cannot be null");
-        Objects.requireNonNull(factory, "TestRecordFactory cannot be null");
         Objects.requireNonNull(keySerializer, "keySerializer cannot be null");
         Objects.requireNonNull(valueSerializer, "valueSerializer cannot be null");
         this.driver = driver;
         this.topic = topicName;
-        this.factory = factory;
         this.keySerializer=keySerializer;
         this.valueSerializer=valueSerializer;
-    }
-
-    public void configureTiming(final long startTimestampMs) {
-        factory.configureTiming(startTimestampMs);
-    }
-
-    public void configureTiming(final long startTimestampMs,
-                          final long autoAdvanceMs) {
-        factory.configureTiming(startTimestampMs,autoAdvanceMs);
     }
 
 
@@ -120,11 +112,31 @@ public class TestInputTopic<K, V> {
      */
     @SuppressWarnings({"WeakerAccess", "unused"})
     public void advanceTimeMs(final long advanceMs) {
-        factory.advanceTimeMs(advanceMs);
+        if (advanceMs < 0) {
+            throw new IllegalArgumentException("advanceMs must be positive");
+        }
+        timeMs += advanceMs;
+    }
+
+    public void configureTiming(final long startTimestampMs,
+                                final long autoAdvanceMs) {
+        timeMs = startTimestampMs;
+        if (autoAdvanceMs < 0) {
+            throw new IllegalArgumentException("advanceMs must be positive");
+        }
+        advanceMs = autoAdvanceMs;
+    }
+
+    private long getTimestampAndAdvanced() {
+        final long timestamp = timeMs;
+        timeMs += advanceMs;
+        return timestamp;
     }
 
     public void pipeInput(final TestRecord<K, V> record) {
-        driver.pipeRecord(topic, record, keySerializer, valueSerializer);
+        //if record timestamp not set get timestamp and advance
+        long timestamp = record.timestamp() == null ? getTimestampAndAdvanced() : record.timestamp();
+        driver.pipeRecord(topic, record, keySerializer, valueSerializer, timestamp);
     }
 
     /**
@@ -134,7 +146,7 @@ public class TestInputTopic<K, V> {
      */
     @SuppressWarnings({"WeakerAccess", "unused"})
     public void pipeInput(final V value) {
-        pipeInput(factory.create(value));
+        pipeInput(new TestRecord<>(value));
     }
 
     /**
@@ -145,7 +157,7 @@ public class TestInputTopic<K, V> {
      */
     @SuppressWarnings({"WeakerAccess", "unused"})
     public void pipeInput(final K key, final V value) {
-        pipeInput(factory.create(key, value));
+        pipeInput(new TestRecord<>(key, value));
     }
 
     /**
@@ -158,7 +170,7 @@ public class TestInputTopic<K, V> {
     @SuppressWarnings({"WeakerAccess", "unused"})
     public void pipeInput(final V value,
                           final long timestampMs) {
-        pipeInput(factory.create(value, timestampMs));
+        pipeInput(new TestRecord<>(null, value, timestampMs));
     }
 
     /**
@@ -173,7 +185,7 @@ public class TestInputTopic<K, V> {
     public void pipeInput(final K key,
                           final V value,
                           final long timestampMs) {
-        pipeInput(factory.create(key, value, timestampMs));
+        pipeInput(new TestRecord<>(key, value, timestampMs));
     }
 
     /**
@@ -188,7 +200,7 @@ public class TestInputTopic<K, V> {
     public void pipeInput(final K key,
                           final V value,
                           final Headers headers) {
-        pipeInput(factory.create(key, value, headers));
+        pipeInput(new TestRecord<>(key, value, headers));
     }
 
 
@@ -206,7 +218,7 @@ public class TestInputTopic<K, V> {
                           final V value,
                           final Headers headers,
                           final long timestampMs) {
-        pipeInput(factory.create(key, value, headers, timestampMs));
+        pipeInput(new TestRecord<>(key, value, headers, timestampMs));
     }
 
     /**
@@ -230,8 +242,9 @@ public class TestInputTopic<K, V> {
      */
     @SuppressWarnings({"WeakerAccess", "unused"})
     public void pipeKeyValueList(final List<KeyValue<K, V>> keyValues) {
-            pipeRecordList(factory.create(keyValues));
-
+        for (final KeyValue<K, V> keyValue : keyValues) {
+            pipeInput(keyValue.key, keyValue.value);
+        }
     }
 
     /**
@@ -242,8 +255,9 @@ public class TestInputTopic<K, V> {
      */
     @SuppressWarnings({"WeakerAccess", "unused"})
     public void pipeValueList(final List<V> values) {
-        final List<KeyValue<K, V>> keyValues = values.stream().map(v -> new KeyValue<K, V>(null, v)).collect(Collectors.toList());
-        pipeKeyValueList(keyValues);
+        for (final V value : values) {
+            pipeInput(value);
+        }
     }
 
     /**
@@ -258,7 +272,11 @@ public class TestInputTopic<K, V> {
     public void pipeKeyValueList(final List<KeyValue<K, V>> keyValues,
                                  final long startTimestamp,
                                  final long advanceMs) {
-        pipeRecordList(factory.create(keyValues, startTimestamp, advanceMs));
+        long timeMs = startTimestamp;
+        for (final KeyValue<K, V> keyValue : keyValues) {
+            pipeInput(keyValue.key, keyValue.value, timeMs);
+            timeMs += advanceMs;
+        }
     }
 
     /**
@@ -273,8 +291,11 @@ public class TestInputTopic<K, V> {
     public void pipeValueList(final List<V> values,
                               final long startTimestamp,
                               final long advanceMs) {
-        final List<KeyValue<K, V>> keyValues = values.stream().map(v -> new KeyValue<K, V>(null, v)).collect(Collectors.toList());
-        pipeKeyValueList(keyValues, startTimestamp, advanceMs);
+        long timeMs = startTimestamp;
+        for (final V value : values) {
+            pipeInput(value, timeMs);
+            timeMs += advanceMs;
+        }
     }
 
     @Override
