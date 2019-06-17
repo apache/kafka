@@ -1776,6 +1776,10 @@ project(':remote-storage-managers:hdfs') {
     compile project(':core')
 
     testCompile libs.junit
+    testCompile group: 'org.apache.hadoop', name: 'hadoop-minicluster', version: '3.1.2'
+    testCompile project(':core')
+    testCompile project(':core').sourceSets.test.output
+    testCompile project(':clients').sourceSets.test.output
     testRuntime libs.slf4jlog4j
   }
 

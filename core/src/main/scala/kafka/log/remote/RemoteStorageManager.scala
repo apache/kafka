@@ -16,6 +16,8 @@
  */
 package kafka.log.remote
 
+import java.io.IOException
+
 import kafka.log.LogSegment
 import org.apache.kafka.common.record.Records
 import org.apache.kafka.common.{Configurable, TopicPartition}
@@ -32,7 +34,8 @@ trait RemoteStorageManager extends Configurable with AutoCloseable {
    * @param logSegment
    * @return
    */
-  def copyLogSegment(topicPartition: TopicPartition, logSegment: LogSegment): (RDI, Seq[RemoteLogIndexEntry])
+  @throws(classOf[IOException])
+  def copyLogSegment(topicPartition: TopicPartition, logSegment: LogSegment): Seq[RemoteLogIndexEntry]
 
   /**
    * Cancels the unfinished LogSegment copying of this given topic-partition
@@ -45,15 +48,16 @@ trait RemoteStorageManager extends Configurable with AutoCloseable {
    * List the remote log segment files of the specified topicPartition
    * The RLM of a follower uses this method to find out the remote data
    */
+  @throws(classOf[IOException])
   def listRemoteSegments(topicPartition: TopicPartition): Seq[RemoteLogSegmentInfo]
 
   /**
-   * Called by the RLM of a follower to retrieve RemoteLogIndex entries
-   * of the new remote log segment
+   * Called by the RLM to retrieve the RemoteLogIndex entries of the specified remoteLogSegment.
    *
    * @param remoteLogSegment
    * @return
    */
+  @throws(classOf[IOException])
   def getRemoteLogIndexEntries(remoteLogSegment: RemoteLogSegmentInfo): Seq[RemoteLogIndexEntry]
 
   /**
@@ -62,17 +66,22 @@ trait RemoteStorageManager extends Configurable with AutoCloseable {
    * @param remoteLogSegment
    * @return
    */
+  @throws(classOf[IOException])
   def deleteLogSegment(remoteLogSegment: RemoteLogSegmentInfo): Boolean
 
   /**
-   * Read topic partition data from remote storage, starting from the given offset.
+   * Read up to maxBytes data from remote storage, starting from the 1st batch that
+   * is greater than or equals to the startOffset.
    *
-   * @param remoteLocation
+   * Will read at least one batch, if the 1st batch size is larger than maxBytes.
+   *
+   * @param remoteLogIndexEntry The first remoteLogIndexEntry that remoteLogIndexEntry.lastOffset >= startOffset
    * @param maxBytes
-   * @param offset
+   * @param startOffset
    * @return
    */
-  def read(remoteLocation: RDI, maxBytes: Int, offset: Long): Records
+  @throws(classOf[IOException])
+  def read(remoteLogIndexEntry: RemoteLogIndexEntry, maxBytes: Int, startOffset: Long): Records
 
   /**
    * stops all the threads and closes the instance.

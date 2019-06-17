@@ -138,6 +138,15 @@ public class FileLogInputStream implements LogInputStream<FileLogInputStream.Fil
             return loadBatchHeader().maxTimestamp();
         }
 
+        public long firstTimestamp() {
+            RecordBatch batch = loadBatchHeader();
+            if (batch instanceof DefaultRecordBatch) {
+                return ((DefaultRecordBatch) batch).firstTimestamp();
+            } else {
+                return RecordBatch.NO_TIMESTAMP;
+            }
+        }
+
         public int position() {
             return position;
         }

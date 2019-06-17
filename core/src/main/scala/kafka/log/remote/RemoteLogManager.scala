@@ -87,11 +87,7 @@ class RemoteLogManager(logManager: LogManager) extends Configurable with Closeab
 
             //todo-satish Not all LogSegments on different replicas are same. So, we need to avoid duplicating log-segments in remote
             // tier with similar offset ranges.
-            val tuple = remoteStorageManager.copyLogSegment(tp, segment)
-            //todo-satish need to explore whether the above should return RDI as each RemoteLogIndexEntry has RDI. That
-            // can be optimized not to have RDI value for each entry.
-            val rdi = tuple._1
-            val entries = tuple._2
+            val entries = remoteStorageManager.copyLogSegment(tp, segment)
             val file = segment.log.file()
             val fileName = file.getName
             val prefix = fileName.substring(0, fileName.indexOf("."))
@@ -204,9 +200,8 @@ class RemoteLogManager(logManager: LogManager) extends Configurable with Closeab
   def read(fetchMaxByes: Int, hardMaxBytesLimit: Boolean, tp: TopicPartition, fetchInfo: PartitionData): LogReadResult = {
     //todo get the nearest offset from indexes.
     val offsetPosition = remoteOffsetIndexes.floorEntry(fetchInfo.fetchOffset).getValue.lookup(fetchInfo.fetchOffset)
-    // todo get rdi from RemoteLogIndex
-    val rdi: RDI = null
-    remoteStorageManager.read(rdi, fetchInfo.maxBytes, fetchInfo.fetchOffset)
+    //todo read RemoteLogIndexEntry
+    remoteStorageManager.read(null, fetchInfo.maxBytes, fetchInfo.fetchOffset)
     null
   }
 

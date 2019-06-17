@@ -17,6 +17,7 @@
 package kafka.log.remote
 
 import java.nio.ByteBuffer
+import java.nio.channels.FileChannel
 import java.util
 import java.util.zip.CRC32
 
@@ -86,8 +87,7 @@ object RemoteLogIndexEntry {
   def apply (firstOffset: Long, lastOffset: Long, firstTimeStamp: Long, lastTimeStamp: Long,
              dataLength: Int, rdi: Array[Byte]): RemoteLogIndexEntry = {
 
-    val entryLength = (4 // crc - int
-        + 8 // firstOffset - long
+    val length = (8 // firstOffset - long
         + 8 // lastOffset - long
         + 8 // firstTimestamp - long
         + 8 // lastTimestamp - long
@@ -95,7 +95,7 @@ object RemoteLogIndexEntry {
         + 2 // rdiLength - short
         + rdi.length)
 
-    val buffer = ByteBuffer.allocate(entryLength)
+    val buffer = ByteBuffer.allocate(length)
     buffer.putLong(firstOffset)
     buffer.putLong(lastOffset)
     buffer.putLong(firstTimeStamp)
@@ -111,5 +111,58 @@ object RemoteLogIndexEntry {
 
     val entry = RemoteLogIndexEntry(0, crc, firstOffset, lastOffset, firstTimeStamp, lastTimeStamp, dataLength, rdi)
     entry
+  }
+
+  def parseEntry(ch: FileChannel, position: Long): RemoteLogIndexEntry = {
+    val magicBuffer = ByteBuffer.allocate(2)
+    val readCt = ch.read(magicBuffer, position)
+    if (readCt > 0) {
+      magicBuffer.flip()
+      val magic = magicBuffer.getShort
+      magic match {
+        case 0 =>
+          val valBuffer = ByteBuffer.allocate(4)
+          val nextPos = position + 2
+          ch.read(valBuffer, nextPos)
+          valBuffer.flip()
+          val length = valBuffer.getShort
+
+          val valueBuffer = ByteBuffer.allocate(length)
+          ch.read(valueBuffer, nextPos + 2)
+          valueBuffer.flip()
+
+          val crc = valueBuffer.getInt
+          val firstOffset = valueBuffer.getLong
+          val lastOffset = valueBuffer.getLong
+          val firstTimestamp = valueBuffer.getLong
+          val lastTimestamp = valueBuffer.getLong
+          val dataLength = valueBuffer.getInt
+          val rdiLength = valueBuffer.getShort
+          val rdiBuffer = ByteBuffer.allocate(rdiLength)
+          valueBuffer.get(rdiBuffer.array())
+          RemoteLogIndexEntry(magic, crc, firstOffset, lastOffset, firstTimestamp, lastTimestamp, dataLength,
+            rdiBuffer.array())
+        case _ =>
+          // TODO: Throw Custom Exceptions?
+          throw new RuntimeException("magic version " + magic + " is not supported")
+      }
+    } else {
+      // TODO: log
+      println("Reached limit of the file")
+      null
+    }
+  }
+
+  def readAll(ch: FileChannel): Seq[RemoteLogIndexEntry] = {
+    var index = Seq[RemoteLogIndexEntry]()
+
+    var pos = 0L;
+    while (pos < ch.size()) {
+      val entry = parseEntry(ch, pos)
+      index = index :+ entry
+      pos += entry.entryLength + 4;
+    }
+
+    index
   }
 }

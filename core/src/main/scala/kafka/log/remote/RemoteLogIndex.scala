@@ -17,7 +17,6 @@
 package kafka.log.remote
 
 import java.io.{Closeable, File}
-import java.nio.ByteBuffer
 import java.nio.channels.FileChannel
 import java.nio.file.{Files, StandardOpenOption}
 import java.util.concurrent.locks.ReentrantLock
@@ -65,47 +64,9 @@ class RemoteLogIndex(val startOffset: Long, @volatile var file: File) extends Lo
 
   def flush(): Unit = maybeChannel.foreach(_.force(true))
 
-  private def parseEntry(ch: FileChannel, position: Long): RemoteLogIndexEntry = {
-    val magicBuffer = ByteBuffer.allocate(2)
-    val readCt = ch.read(magicBuffer, position)
-    if (readCt > 0) {
-      magicBuffer.flip()
-      val magic = magicBuffer.getShort
-      magic match {
-        case 0 =>
-          val valBuffer = ByteBuffer.allocate(4)
-          val nextPos = position + 2
-          ch.read(valBuffer, nextPos)
-          valBuffer.flip()
-          val length = valBuffer.getShort
-
-          val valueBuffer = ByteBuffer.allocate(length)
-          ch.read(valueBuffer, nextPos + 2)
-          valueBuffer.flip()
-
-          val crc = valueBuffer.getInt
-          val firstOffset = valueBuffer.getLong
-          val lastOffset = valueBuffer.getLong
-          val firstTimestamp = valueBuffer.getLong
-          val lastTimestamp = valueBuffer.getLong
-          val dataLength = valueBuffer.getInt
-          val rdiLength = valueBuffer.getShort
-          val rdiBuffer = ByteBuffer.allocate(rdiLength)
-          valueBuffer.get(rdiBuffer.array())
-          RemoteLogIndexEntry(magic, crc, firstOffset, lastOffset, firstTimestamp, lastTimestamp, dataLength,
-            rdiBuffer.array())
-        case _ =>
-          throw new RuntimeException("magic version " + magic + " is not supported")
-      }
-    } else {
-      println("Reached limit of the file")
-      null
-    }
-  }
-
   def entry(position: Long): Option[RemoteLogIndexEntry] = {
     inLock(lock) {
-        Option(parseEntry(channel(), position))
+        Option(RemoteLogIndexEntry.parseEntry(channel(), position))
     }
   }
 
