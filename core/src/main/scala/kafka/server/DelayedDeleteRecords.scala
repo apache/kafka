@@ -74,7 +74,7 @@ class DelayedDeleteRecords(delayMs: Long,
       if (status.acksPending) {
         val (lowWatermarkReached, error, lw) = replicaManager.getPartition(topicPartition) match {
           case HostedPartition.Online(partition) =>
-            partition.leaderReplicaIfLocal match {
+            partition.leaderLogIfLocal match {
               case Some(_) =>
                 val leaderLW = partition.lowWatermarkIfLeader
                 (leaderLW >= status.requiredOffset, Errors.NONE, leaderLW)

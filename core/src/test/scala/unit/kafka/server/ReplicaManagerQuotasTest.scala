@@ -149,7 +149,7 @@ class ReplicaManagerQuotasTest {
   def testCompleteInDelayedFetchWithReplicaThrottling(): Unit = {
     // Set up DelayedFetch where there is data to return to a follower replica, either in-sync or out of sync
     def setupDelayedFetch(isReplicaInSync: Boolean): DelayedFetch = {
-      val endOffsetMetadata = new LogOffsetMetadata(messageOffset = 100L, segmentBaseOffset = 0L, relativePositionInSegment = 500)
+      val endOffsetMetadata = LogOffsetMetadata(messageOffset = 100L, segmentBaseOffset = 0L, relativePositionInSegment = 500)
       val partition: Partition = EasyMock.createMock(classOf[Partition])
 
       val offsetSnapshot = LogOffsetSnapshot(
@@ -170,7 +170,7 @@ class ReplicaManagerQuotasTest {
       EasyMock.replay(replicaManager, partition)
 
       val tp = new TopicPartition("t1", 0)
-      val fetchPartitionStatus = FetchPartitionStatus(new LogOffsetMetadata(messageOffset = 50L, segmentBaseOffset = 0L,
+      val fetchPartitionStatus = FetchPartitionStatus(LogOffsetMetadata(messageOffset = 50L, segmentBaseOffset = 0L,
          relativePositionInSegment = 250), new PartitionData(50, 0, 1, Optional.empty()))
       val fetchMetadata = FetchMetadata(fetchMinBytes = 1,
         fetchMaxBytes = 1000,
@@ -198,7 +198,9 @@ class ReplicaManagerQuotasTest {
     val log: Log = createNiceMock(classOf[Log])
     expect(log.logStartOffset).andReturn(0L).anyTimes()
     expect(log.logEndOffset).andReturn(20L).anyTimes()
-    expect(log.logEndOffsetMetadata).andReturn(new LogOffsetMetadata(20L)).anyTimes()
+    expect(log.highWatermark).andReturn(5).anyTimes()
+    expect(log.lastStableOffset).andReturn(5).anyTimes()
+    expect(log.logEndOffsetMetadata).andReturn(LogOffsetMetadata(20L)).anyTimes()
 
     //if we ask for len 1 return a message
     expect(log.read(anyObject(),
@@ -207,7 +209,7 @@ class ReplicaManagerQuotasTest {
       minOneMessage = anyBoolean(),
       includeAbortedTxns = EasyMock.eq(false))).andReturn(
       FetchDataInfo(
-        new LogOffsetMetadata(0L, 0L, 0),
+        LogOffsetMetadata(0L, 0L, 0),
         MemoryRecords.withRecords(CompressionType.NONE, record)
       )).anyTimes()
 
@@ -218,7 +220,7 @@ class ReplicaManagerQuotasTest {
       minOneMessage = anyBoolean(),
       includeAbortedTxns = EasyMock.eq(false))).andReturn(
       FetchDataInfo(
-        new LogOffsetMetadata(0L, 0L, 0),
+        LogOffsetMetadata(0L, 0L, 0),
         MemoryRecords.EMPTY
       )).anyTimes()
     replay(log)
@@ -231,25 +233,25 @@ class ReplicaManagerQuotasTest {
     expect(logManager.liveLogDirs).andReturn(Array.empty[File]).anyTimes()
     replay(logManager)
 
+    val leaderBrokerId = configs.head.brokerId
     replicaManager = new ReplicaManager(configs.head, metrics, time, zkClient, scheduler, logManager,
       new AtomicBoolean(false), QuotaFactory.instantiate(configs.head, metrics, time, ""),
-      new BrokerTopicStats, new MetadataCache(configs.head.brokerId), new LogDirFailureChannel(configs.head.logDirs.size))
+      new BrokerTopicStats, new MetadataCache(leaderBrokerId), new LogDirFailureChannel(configs.head.logDirs.size))
 
     //create the two replicas
     for ((p, _) <- fetchInfo) {
       val partition = replicaManager.createPartition(p)
-      val leaderReplica = new Replica(configs.head.brokerId, p, time, 0, Some(log))
-      leaderReplica.highWatermark = 5
-      partition.leaderReplicaIdOpt = Some(leaderReplica.brokerId)
-      val followerReplica = new Replica(configs.last.brokerId, p, time, 0, Some(log))
-      val allReplicas = Set(leaderReplica, followerReplica)
-      allReplicas.foreach(partition.addReplicaIfNotExists)
+      log.highWatermark = 5
+      partition.leaderReplicaIdOpt = Some(leaderBrokerId)
+      partition.setLog(log, isFutureLog = false)
+
+      val followerReplica = new Replica(configs.last.brokerId, p)
+      val allReplicas : Set[Int] = Set(leaderBrokerId, followerReplica.brokerId)
+      partition.addReplicaIfNotExists(followerReplica)
       if (bothReplicasInSync) {
         partition.inSyncReplicas = allReplicas
-        followerReplica.highWatermark = 5
       } else {
-        partition.inSyncReplicas = Set(leaderReplica)
-        followerReplica.highWatermark = 0
+        partition.inSyncReplicas = Set(leaderBrokerId)
       }
     }
   }

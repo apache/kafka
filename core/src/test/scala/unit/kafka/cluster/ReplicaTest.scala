@@ -19,9 +19,8 @@ package kafka.cluster
 import java.util.Properties
 
 import kafka.log.{Log, LogConfig, LogManager}
-import kafka.server.{BrokerTopicStats, LogDirFailureChannel, LogOffsetMetadata}
+import kafka.server.{BrokerTopicStats, LogDirFailureChannel}
 import kafka.utils.{MockTime, TestUtils}
-import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.OffsetOutOfRangeException
 import org.apache.kafka.common.utils.Utils
 import org.junit.{After, Before, Test}
@@ -34,7 +33,6 @@ class ReplicaTest {
   val time = new MockTime()
   val brokerTopicStats = new BrokerTopicStats
   var log: Log = _
-  var replica: Replica = _
 
   @Before
   def setup(): Unit = {
@@ -53,11 +51,6 @@ class ReplicaTest {
       maxProducerIdExpirationMs = 60 * 60 * 1000,
       producerIdExpirationCheckIntervalMs = LogManager.ProducerIdExpirationCheckIntervalMs,
       logDirFailureChannel = new LogDirFailureChannel(10))
-
-    replica = new Replica(brokerId = 0,
-      topicPartition = new TopicPartition("foo", 0),
-      time = time,
-      log = Some(log))
   }
 
   @After
@@ -70,13 +63,9 @@ class ReplicaTest {
   @Test
   def testSegmentDeletionWithHighWatermarkInitialization(): Unit = {
     val initialHighWatermark = 25L
-    replica = new Replica(brokerId = 0,
-      topicPartition = new TopicPartition("foo", 0),
-      time = time,
-      initialHighWatermarkValue = initialHighWatermark,
-      log = Some(log))
+    log.highWatermark = initialHighWatermark
 
-    assertEquals(initialHighWatermark, replica.highWatermark)
+    assertEquals(initialHighWatermark, log.highWatermark)
 
     val expiredTimestamp = time.milliseconds() - 1000
     for (i <- 0 until 100) {
@@ -87,7 +76,7 @@ class ReplicaTest {
     val initialNumSegments = log.numberOfSegments
     log.deleteOldSegments()
     assertTrue(log.numberOfSegments < initialNumSegments)
-    assertTrue(replica.logStartOffset <= initialHighWatermark)
+    assertTrue(log.logStartOffset <= initialHighWatermark)
   }
 
   @Test
@@ -100,25 +89,25 @@ class ReplicaTest {
 
     // ensure we have at least a few segments so the test case is not trivial
     assertTrue(log.numberOfSegments > 5)
-    assertEquals(0L, replica.highWatermark)
-    assertEquals(0L, replica.logStartOffset)
-    assertEquals(100L, replica.logEndOffset)
+    assertEquals(0L, log.highWatermark)
+    assertEquals(0L, log.logStartOffset)
+    assertEquals(100L, log.logEndOffset)
 
     for (hw <- 0 to 100) {
-      replica.highWatermark = hw
-      assertEquals(hw, replica.highWatermark)
+      log.highWatermark = hw
+      assertEquals(hw, log.highWatermark)
       log.deleteOldSegments()
-      assertTrue(replica.logStartOffset <= hw)
+      assertTrue(log.logStartOffset <= hw)
 
       // verify that all segments up to the high watermark have been deleted
 
       log.logSegments.headOption.foreach { segment =>
         assertTrue(segment.baseOffset <= hw)
-        assertTrue(segment.baseOffset >= replica.logStartOffset)
+        assertTrue(segment.baseOffset >= log.logStartOffset)
       }
       log.logSegments.tail.foreach { segment =>
         assertTrue(segment.baseOffset > hw)
-        assertTrue(segment.baseOffset >= replica.logStartOffset)
+        assertTrue(segment.baseOffset >= log.logStartOffset)
       }
     }
 
@@ -134,8 +123,7 @@ class ReplicaTest {
       log.appendAsLeader(records, leaderEpoch = 0)
     }
 
-    replica.highWatermark = 25L
-    replica.maybeIncrementLogStartOffset(26L)
+    log.highWatermark = 25L
+    log.maybeIncrementLogStartOffset(26L)
   }
-
 }

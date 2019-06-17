@@ -54,8 +54,8 @@ class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Loggin
     defaultReplicationFactor = defaultReplicationFactor
     ).map(KafkaConfig.fromProps)
 
-  private var numPartitions = 1
-  private var defaultReplicationFactor = 1.toShort
+  private val numPartitions = 1
+  private val defaultReplicationFactor = 1.toShort
 
   private var topicService: AdminClientTopicService = _
   private var adminClient: JAdminClient = _

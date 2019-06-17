@@ -33,6 +33,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 
 import static org.apache.kafka.clients.consumer.internals.ConsumerProtocol.CONSUMER_PROTOCOL_HEADER_SCHEMA;
@@ -44,6 +45,7 @@ import static org.apache.kafka.clients.consumer.internals.ConsumerProtocol.USER_
 import static org.apache.kafka.clients.consumer.internals.ConsumerProtocol.VERSION_KEY_NAME;
 import static org.apache.kafka.common.protocol.CommonFields.ERROR_CODE;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
@@ -51,46 +53,64 @@ public class ConsumerProtocolTest {
 
     private final TopicPartition tp1 = new TopicPartition("foo", 1);
     private final TopicPartition tp2 = new TopicPartition("bar", 2);
+    private final Optional<String> groupInstanceId = Optional.of("instance.id");
 
     @Test
     public void serializeDeserializeMetadata() {
         Subscription subscription = new Subscription(Arrays.asList("foo", "bar"));
         ByteBuffer buffer = ConsumerProtocol.serializeSubscription(subscription);
-        Subscription parsedSubscription = ConsumerProtocol.deserializeSubscription(buffer);
+        Subscription parsedSubscription = ConsumerProtocol.deserializeSubscription(buffer, Optional.empty());
         assertEquals(subscription.topics(), parsedSubscription.topics());
         assertEquals(0, parsedSubscription.userData().limit());
+        assertFalse(parsedSubscription.groupInstanceId().isPresent());
+    }
+
+    @Test
+    public void serializeDeserializeMetadataAndGroupInstanceId() {
+        Subscription subscription = new Subscription(Arrays.asList("foo", "bar"));
+        ByteBuffer buffer = ConsumerProtocol.serializeSubscription(subscription);
+
+        Subscription parsedSubscription = ConsumerProtocol.deserializeSubscription(buffer, groupInstanceId);
+        assertEquals(subscription.topics(), parsedSubscription.topics());
+        assertEquals(groupInstanceId, parsedSubscription.groupInstanceId());
     }
 
     @Test
     public void serializeDeserializeNullSubscriptionUserData() {
         Subscription subscription = new Subscription(Arrays.asList("foo", "bar"), null);
         ByteBuffer buffer = ConsumerProtocol.serializeSubscription(subscription);
-        Subscription parsedSubscription = ConsumerProtocol.deserializeSubscription(buffer);
+        Subscription parsedSubscription = ConsumerProtocol.deserializeSubscription(buffer, Optional.empty());
         assertEquals(subscription.topics(), parsedSubscription.topics());
         assertNull(parsedSubscription.userData());
+        assertFalse(parsedSubscription.groupInstanceId().isPresent());
     }
 
     @Test
     public void deserializeOldSubscriptionVersion() {
         Subscription subscription = new Subscription((short) 0, Arrays.asList("foo", "bar"), null);
         ByteBuffer buffer = ConsumerProtocol.serializeSubscription(subscription);
-        Subscription parsedSubscription = ConsumerProtocol.deserializeSubscription(buffer);
+        Subscription parsedSubscription = ConsumerProtocol.deserializeSubscription(buffer, groupInstanceId);
         assertEquals(parsedSubscription.topics(), parsedSubscription.topics());
         assertNull(parsedSubscription.userData());
         assertTrue(parsedSubscription.ownedPartitions().isEmpty());
+        assertEquals(groupInstanceId, parsedSubscription.groupInstanceId());
     }
 
     @Test
     public void deserializeNewSubscriptionWithOldVersion() {
-        Subscription subscription = new Subscription((short) 1, Arrays.asList("foo", "bar"), null, Collections.singletonList(tp2));
+        Subscription subscription = new Subscription((short) 1,
+                                                     Arrays.asList("foo", "bar"),
+                                                     null, Collections.singletonList(tp2),
+                                                     Optional.empty());
         ByteBuffer buffer = ConsumerProtocol.serializeSubscription(subscription);
         // ignore the version assuming it is the old byte code, as it will blindly deserialize as V0
         Struct header = CONSUMER_PROTOCOL_HEADER_SCHEMA.read(buffer);
         header.getShort(VERSION_KEY_NAME);
-        Subscription parsedSubscription = ConsumerProtocol.deserializeSubscriptionV0(buffer);
+        Subscription parsedSubscription = ConsumerProtocol.deserializeSubscriptionV0(buffer, Optional.empty());
         assertEquals(subscription.topics(), parsedSubscription.topics());
         assertNull(parsedSubscription.userData());
         assertTrue(parsedSubscription.ownedPartitions().isEmpty());
+        assertFalse(parsedSubscription.groupInstanceId().isPresent());
     }
 
     @Test
@@ -121,9 +141,10 @@ public class ConsumerProtocolTest {
 
         buffer.flip();
 
-        Subscription subscription = ConsumerProtocol.deserializeSubscription(buffer);
-        assertEquals(Collections.singletonList("topic"), subscription.topics());
-        assertEquals(Collections.singletonList(tp2), subscription.ownedPartitions());
+        Subscription parsedSubscription = ConsumerProtocol.deserializeSubscription(buffer, groupInstanceId);
+        assertEquals(Collections.singletonList("topic"), parsedSubscription.topics());
+        assertEquals(Collections.singletonList(tp2), parsedSubscription.ownedPartitions());
+        assertEquals(groupInstanceId, parsedSubscription.groupInstanceId());
     }
 
     @Test

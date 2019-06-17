@@ -642,6 +642,9 @@ class GroupCoordinator(val brokerId: Int,
             // the latest group generation information from the JoinResponse.
             // So let's return a REBALANCE_IN_PROGRESS to let consumer handle it gracefully.
             responseCallback(offsetMetadata.mapValues(_ => Errors.REBALANCE_IN_PROGRESS))
+
+          case _ =>
+            throw new RuntimeException(s"Logic error: unexpected group state ${group.currentState}")
         }
       }
     }

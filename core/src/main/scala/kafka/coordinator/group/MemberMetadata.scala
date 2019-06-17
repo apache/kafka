@@ -20,7 +20,6 @@ package kafka.coordinator.group
 import java.util
 
 import kafka.utils.nonthreadsafe
-import org.apache.kafka.common.protocol.Errors
 
 case class MemberSummary(memberId: String,
                          groupInstanceId: Option[String],
