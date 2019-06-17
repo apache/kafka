@@ -17,7 +17,6 @@ class TestSeparateInterbrokerListener(ProduceConsumeValidateTest):
         super(TestSeparateInterbrokerListener, self).__init__(test_context=test_context)
 
     def setUp(self):
-        self.logger.warn('setUp()')
         self.topic = 'test_topic'
         self.zk = ZookeeperService(self.test_context, num_nodes=1)
         self.kafka = KafkaService(self.test_context, num_nodes=3, zk=self.zk, topics={self.topic: {
@@ -87,7 +86,6 @@ class TestSeparateInterbrokerListener(ProduceConsumeValidateTest):
         Close dedicated {{broker_protocol}} listener via rolling restart.
         Ensure we can produce and consume via {{client_protocol}} listener throughout.
         """
-        self.logger.warn('Starting test')
         client_protocol = SecurityConfig.SASL_SSL
         client_sasl_mechanism = SecurityConfig.SASL_MECHANISM_GSSAPI
 
@@ -97,7 +95,6 @@ class TestSeparateInterbrokerListener(ProduceConsumeValidateTest):
         self.kafka.interbroker_sasl_mechanism = broker_sasl_mechanism
 
         self.kafka.start()
-        self.logger.info("Kafka started with separate interbroker listener. Starting produce/consume loop and rolling restart")
         # create producer and consumer via client security protocol
         self.create_producer_and_consumer()
 
