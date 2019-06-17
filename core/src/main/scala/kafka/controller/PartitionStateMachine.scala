@@ -460,9 +460,7 @@ class ZkPartitionStateMachine(config: KafkaConfig,
   ): Seq[(TopicPartition, Option[LeaderAndIsr], Boolean)] = {
     val (partitionsWithNoLiveInSyncReplicas, partitionsWithLiveInSyncReplicas) = leaderAndIsrs.partition {
       case (partition, leaderAndIsr) =>
-        val liveInSyncReplicas = leaderAndIsr
-          .isr
-          .filter(replica => controllerContext.isReplicaOnline(replica, partition))
+        val liveInSyncReplicas = leaderAndIsr.isr.filter(controllerContext.isReplicaOnline(_, partition))
         liveInSyncReplicas.isEmpty
     }
 
