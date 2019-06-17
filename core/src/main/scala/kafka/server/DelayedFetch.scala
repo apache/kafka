@@ -68,7 +68,7 @@ class DelayedFetch(delayMs: Long,
   /**
     * Keep track of the first high watermark we encounter during this fetch for each partition
     */
-  val seenHighWatermarks: mutable.Map[TopicPartition, Long] = mutable.Map()
+  private[this] val seenHighWatermarks: mutable.Map[TopicPartition, Long] = mutable.Map()
 
   /**
    * The operation can be completed if:
