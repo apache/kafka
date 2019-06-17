@@ -40,10 +40,9 @@ public abstract class AbstractNotifyingBatchingRestoreCallback implements Batchi
 
 
     /**
-     * @see StateRestoreListener#onRestoreStart(TopicPartition, String, long, long)
-     *
      * This method does nothing by default; if desired, subclasses should override it with custom functionality.
      *
+     * @see StateRestoreListener#onRestoreStart(TopicPartition, String, long, long)
      */
     @Override
     public void onRestoreStart(final TopicPartition topicPartition,
@@ -55,10 +54,9 @@ public abstract class AbstractNotifyingBatchingRestoreCallback implements Batchi
 
 
     /**
-     * @see StateRestoreListener#onBatchRestored(TopicPartition, String, long, long)
-     *
      * This method does nothing by default; if desired, subclasses should override it with custom functionality.
      *
+     * @see StateRestoreListener#onBatchRestored(TopicPartition, String, long, long)
      */
     @Override
     public void onBatchRestored(final TopicPartition topicPartition,
@@ -69,10 +67,9 @@ public abstract class AbstractNotifyingBatchingRestoreCallback implements Batchi
     }
 
     /**
-     * @see StateRestoreListener#onRestoreEnd(TopicPartition, String, long)
-     *
      * This method does nothing by default; if desired, subclasses should override it with custom functionality.
      *
+     * @see StateRestoreListener#onRestoreEnd(TopicPartition, String, long)
      */
     @Override
     public void onRestoreEnd(final TopicPartition topicPartition,

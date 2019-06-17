@@ -48,10 +48,12 @@ import static org.apache.kafka.connect.runtime.distributed.WorkerCoordinator.Lea
 
 /**
  * An assignor that computes a distribution of connectors and tasks according to the incremental
- * cooperative strategy for rebalancing. {@see
- * https://cwiki.apache.org/confluence/display/KAFKA/KIP-415%3A+Incremental+Cooperative
- * +Rebalancing+in+Kafka+Connect} for a description of the assignment policy.
- *
+ * cooperative strategy for rebalancing.
+ * <p>
+ * See <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-415%3A+Incremental+Cooperative+Rebalancing+in+Kafka+Connect">
+ * KIP-415: Incremental Cooperative Rebalancing in Kafka Connect</a>
+ * for a description of the assignment policy.
+ * <p>
  * Note that this class is NOT thread-safe.
  */
 public class IncrementalCooperativeAssignor implements ConnectAssignor {
@@ -131,8 +133,10 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
 
     /**
      * Performs task assignment based on the incremental cooperative connect protocol.
+     * <p>
      * Read more on the design and implementation in:
-     * {@see https://cwiki.apache.org/confluence/display/KAFKA/KIP-415%3A+Incremental+Cooperative+Rebalancing+in+Kafka+Connect}
+     * <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-415%3A+Incremental+Cooperative+Rebalancing+in+Kafka+Connect">
+     *   KIP-415: Incremental Cooperative Rebalancing in Kafka Connect</a>
      *
      * @param leaderId the ID of the group leader
      * @param maxOffset the latest known offset of the configuration topic
