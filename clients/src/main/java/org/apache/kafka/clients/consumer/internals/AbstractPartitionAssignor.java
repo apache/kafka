@@ -129,5 +129,12 @@ public abstract class AbstractPartitionAssignor implements PartitionAssignor {
         public int hashCode() {
             return memberId.hashCode();
         }
+
+        @Override
+        public String toString() {
+            return "MemberInfo [member.id: " + memberId
+                    + ", group.instance.id: " + groupInstanceId.orElse("{}")
+                    + "]";
+        }
     }
 }

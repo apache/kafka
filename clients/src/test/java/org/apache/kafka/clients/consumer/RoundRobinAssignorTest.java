@@ -16,10 +16,12 @@
  */
 package org.apache.kafka.clients.consumer;
 
+import org.apache.kafka.clients.consumer.internals.AbstractPartitionAssignor.MemberInfo;
 import org.apache.kafka.clients.consumer.internals.PartitionAssignor.Subscription;
 import org.apache.kafka.common.TopicPartition;
 import org.junit.Test;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
@@ -62,8 +64,7 @@ public class RoundRobinAssignorTest {
         partitionsPerTopic.put(topic, 3);
 
         Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic,
-                Collections.singletonMap(consumerId,
-                        new Subscription(topics(topic))));
+                Collections.singletonMap(consumerId, new Subscription(topics(topic))));
         assertEquals(partitions(tp(topic, 0), tp(topic, 1), tp(topic, 2)), assignment.get(consumerId));
     }
 
@@ -224,6 +225,59 @@ public class RoundRobinAssignorTest {
         Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic, consumers);
         assertEquals(partitions(tp(topic1, 0), tp(topic1, 2), tp(topic2, 1)), assignment.get(consumer1));
         assertEquals(partitions(tp(topic1, 1), tp(topic2, 0), tp(topic2, 2)), assignment.get(consumer2));
+    }
+
+    @Test
+    public void testStaticMemberAssignmentPersistent() {
+        // Have 3 static members instance1, instance2, instance3 to be persistent
+        // across generations. Their assignment shall be the same.
+        String topic1 = "topic1";
+        String topic2 = "topic2";
+        String consumer1 = "consumer1";
+        String instance1 = "instance1";
+        String consumer2 = "consumer2";
+        String instance2 = "instance2";
+        String consumer3 = "consumer3";
+        String instance3 = "instance3";
+
+        List<MemberInfo> staticMemberInfos = new ArrayList<>();
+        staticMemberInfos.add(new MemberInfo(consumer1, Optional.of(instance1)));
+        staticMemberInfos.add(new MemberInfo(consumer2, Optional.of(instance2)));
+        staticMemberInfos.add(new MemberInfo(consumer3, Optional.of(instance3)));
+
+        // Consumer 4 is a dynamic member.
+        String consumer4 = "consumer4";
+
+        Map<String, Integer> partitionsPerTopic = new HashMap<>();
+        partitionsPerTopic.put(topic1, 3);
+        partitionsPerTopic.put(topic2, 3);
+        Map<String, Subscription> consumers = new HashMap<>();
+        for (MemberInfo m : staticMemberInfos) {
+            consumers.put(m.memberId, new Subscription(topics(topic1, topic2),
+                                                       null,
+                                                       Collections.emptyList(),
+                                                       m.groupInstanceId));
+        }
+        consumers.put(consumer4, new Subscription(topics(topic1, topic2)));
+
+        Map<String, List<TopicPartition>> expectedAssignment = new HashMap<>();
+        expectedAssignment.put(consumer1, partitions(tp(topic1, 0), tp(topic2, 1)));
+        expectedAssignment.put(consumer2, partitions(tp(topic1, 1), tp(topic2, 2)));
+        expectedAssignment.put(consumer3, partitions(tp(topic1, 2)));
+        expectedAssignment.put(consumer4, partitions(tp(topic2, 0)));
+
+        Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic, consumers);
+        assertEquals(expectedAssignment, assignment);
+
+        // Replace dynamic member 4 with a new dynamic member 5.
+        consumers.remove(consumer4);
+        String consumer5 = "consumer5";
+        consumers.put(consumer5, new Subscription(topics(topic1, topic2)));
+
+        expectedAssignment.remove(consumer4);
+        expectedAssignment.put(consumer5, partitions(tp(topic2, 0)));
+        assignment = assignor.assign(partitionsPerTopic, consumers);
+        assertEquals(expectedAssignment, assignment);
     }
 
     private static List<String> topics(String... topics) {

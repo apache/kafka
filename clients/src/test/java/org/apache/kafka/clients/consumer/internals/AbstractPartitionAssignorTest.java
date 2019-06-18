@@ -20,9 +20,12 @@ import org.apache.kafka.clients.consumer.internals.AbstractPartitionAssignor.Mem
 import org.apache.kafka.common.utils.Utils;
 import org.junit.Test;
 
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
+import java.util.Random;
 
 import static org.junit.Assert.assertEquals;
 
@@ -56,5 +59,31 @@ public class AbstractPartitionAssignorTest {
 
         List<MemberInfo> memberInfoList = Arrays.asList(m1, m2, m3);
         assertEquals(Arrays.asList(m3, m2, m1), Utils.sorted(memberInfoList));
+    }
+
+    @Test
+    public void testMergeSortManyMemberInfo() {
+        Random rand = new Random();
+        int bound = 2;
+        List<MemberInfo> memberInfoList = new ArrayList<>();
+        List<MemberInfo> staticMemberList = new ArrayList<>();
+        List<MemberInfo> dynamicMemberList = new ArrayList<>();
+        for (int i = 0; i < 100; i++) {
+            // Need to make sure all the ids are defined as 3-digits otherwise
+            // the comparison result will break.
+            String id = Integer.toString(i + 100);
+            Optional<String> groupInstanceId = rand.nextInt(bound) < bound / 2 ?
+                                                       Optional.of(id) : Optional.empty();
+            MemberInfo m = new MemberInfo(id, groupInstanceId);
+            memberInfoList.add(m);
+            if (m.groupInstanceId.isPresent()) {
+                staticMemberList.add(m);
+            } else {
+                dynamicMemberList.add(m);
+            }
+        }
+        staticMemberList.addAll(dynamicMemberList);
+        Collections.shuffle(memberInfoList);
+        assertEquals(staticMemberList, Utils.sorted(memberInfoList));
     }
 }
