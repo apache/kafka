@@ -179,8 +179,7 @@ public class ConsumerProtocol {
         }
     }
 
-    public static PartitionAssignor.Subscription deserializeSubscriptionV0(ByteBuffer buffer,
-                                                                           Optional<String> groupInstanceId) {
+    public static PartitionAssignor.Subscription buildSubscriptionV0(ByteBuffer buffer, Optional<String> groupInstanceId) {
         Struct struct = SUBSCRIPTION_V0.read(buffer);
         ByteBuffer userData = struct.getBytes(USER_DATA_KEY_NAME);
         List<String> topics = new ArrayList<>();
@@ -193,8 +192,7 @@ public class ConsumerProtocol {
                                                   groupInstanceId);
     }
 
-    public static PartitionAssignor.Subscription deserializeSubscriptionV1(ByteBuffer buffer,
-                                                                           Optional<String> groupInstanceId) {
+    public static PartitionAssignor.Subscription buildSubscriptionV1(ByteBuffer buffer, Optional<String> groupInstanceId) {
         Struct struct = SUBSCRIPTION_V1.read(buffer);
         ByteBuffer userData = struct.getBytes(USER_DATA_KEY_NAME);
         List<String> topics = new ArrayList<>();
@@ -217,8 +215,7 @@ public class ConsumerProtocol {
                                                   groupInstanceId);
     }
 
-    public static PartitionAssignor.Subscription deserializeSubscription(ByteBuffer buffer,
-                                                                         Optional<String> groupInstanceId) {
+    public static PartitionAssignor.Subscription buildSubscription(ByteBuffer buffer, Optional<String> groupInstanceId) {
         Struct header = CONSUMER_PROTOCOL_HEADER_SCHEMA.read(buffer);
         Short version = header.getShort(VERSION_KEY_NAME);
 
@@ -227,14 +224,14 @@ public class ConsumerProtocol {
 
         switch (version) {
             case CONSUMER_PROTOCOL_V0:
-                return deserializeSubscriptionV0(buffer, groupInstanceId);
+                return buildSubscriptionV0(buffer, groupInstanceId);
 
             case CONSUMER_PROTOCOL_V1:
-                return deserializeSubscriptionV1(buffer, groupInstanceId);
+                return buildSubscriptionV1(buffer, groupInstanceId);
 
             // assume all higher versions can be parsed as V1
             default:
-                return deserializeSubscriptionV1(buffer, groupInstanceId);
+                return buildSubscriptionV1(buffer, groupInstanceId);
         }
     }
 
