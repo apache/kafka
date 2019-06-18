@@ -82,6 +82,7 @@ import org.apache.kafka.common.record.SimpleRecord;
 import org.apache.kafka.common.requests.CreateAclsRequest.AclCreation;
 import org.apache.kafka.common.requests.CreateAclsResponse.AclCreationResponse;
 import org.apache.kafka.common.requests.CreatePartitionsRequest.PartitionDetails;
+import org.apache.kafka.common.requests.CreateTopicsRequest.Builder;
 import org.apache.kafka.common.requests.DeleteAclsResponse.AclDeletionResult;
 import org.apache.kafka.common.requests.DeleteAclsResponse.AclFilterResponse;
 import org.apache.kafka.common.requests.FindCoordinatorRequest.CoordinatorType;
@@ -120,6 +121,7 @@ import static org.apache.kafka.common.requests.FetchMetadata.INVALID_SESSION_ID;
 import static org.apache.kafka.test.TestUtils.toBuffer;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -642,6 +644,28 @@ public class RequestResponseTest {
     @Test(expected = UnsupportedVersionException.class)
     public void testCreateTopicRequestV0FailsIfValidateOnly() {
         createCreateTopicRequest(0, true);
+    }
+
+    @Test
+    public void testCreateTopicRequestV3FailsIfNoPartitionsOrReplicas() {
+        final UnsupportedVersionException exception = assertThrows(
+            UnsupportedVersionException.class, () -> {
+                CreateTopicsRequestData data = new CreateTopicsRequestData()
+                    .setTimeoutMs(123)
+                    .setValidateOnly(false);
+                data.topics().add(new CreatableTopic().
+                    setName("foo").
+                    setNumPartitions(CreateTopicsRequest.NO_NUM_PARTITIONS).
+                    setReplicationFactor((short) 1));
+                data.topics().add(new CreatableTopic().
+                    setName("bar").
+                    setNumPartitions(1).
+                    setReplicationFactor(CreateTopicsRequest.NO_REPLICATION_FACTOR));
+
+                new Builder(data).build((short) 3);
+            });
+        assertTrue(exception.getMessage().contains("supported in CreateTopicRequest version 4+"));
+        assertTrue(exception.getMessage().contains("[foo, bar]"));
     }
 
     @Test

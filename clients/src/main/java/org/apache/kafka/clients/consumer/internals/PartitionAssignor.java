@@ -24,6 +24,7 @@ import java.nio.ByteBuffer;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 
 import static org.apache.kafka.clients.consumer.internals.ConsumerProtocol.CONSUMER_PROTOCOL_V0;
@@ -130,12 +131,17 @@ public interface PartitionAssignor {
         private final List<String> topics;
         private final ByteBuffer userData;
         private final List<TopicPartition> ownedPartitions;
+        private Optional<String> groupInstanceId;
 
-        Subscription(Short version, List<String> topics, ByteBuffer userData, List<TopicPartition> ownedPartitions) {
+        Subscription(Short version,
+                     List<String> topics,
+                     ByteBuffer userData,
+                     List<TopicPartition> ownedPartitions) {
             this.version = version;
             this.topics = topics;
             this.userData = userData;
             this.ownedPartitions = ownedPartitions;
+            this.groupInstanceId = Optional.empty();
 
             if (version < CONSUMER_PROTOCOL_V0)
                 throw new SchemaException("Unsupported subscription version: " + version);
@@ -176,13 +182,21 @@ public interface PartitionAssignor {
             return userData;
         }
 
+        public void setGroupInstanceId(Optional<String> groupInstanceId) {
+            this.groupInstanceId = groupInstanceId;
+        }
+
+        public Optional<String> groupInstanceId() {
+            return groupInstanceId;
+        }
+
         @Override
         public String toString() {
             return "Subscription(" +
                     "version=" + version +
                     ", topics=" + topics +
                     ", ownedPartitions=" + ownedPartitions +
-                    ')';
+                    ", group.instance.id=" + groupInstanceId + ")";
         }
     }
 

@@ -31,6 +31,7 @@ import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.Optional;
 
 import static org.apache.kafka.clients.consumer.internals.ConsumerProtocol.CONSUMER_PROTOCOL_HEADER_SCHEMA;
 import static org.apache.kafka.clients.consumer.internals.ConsumerProtocol.OWNED_PARTITIONS_KEY_NAME;
@@ -42,6 +43,7 @@ import static org.apache.kafka.clients.consumer.internals.ConsumerProtocol.VERSI
 import static org.apache.kafka.common.protocol.CommonFields.ERROR_CODE;
 import static org.apache.kafka.test.TestUtils.toSet;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
@@ -49,6 +51,7 @@ public class ConsumerProtocolTest {
 
     private final TopicPartition tp1 = new TopicPartition("foo", 1);
     private final TopicPartition tp2 = new TopicPartition("bar", 2);
+    private final Optional<String> groupInstanceId = Optional.of("instance.id");
 
     @Test
     public void serializeDeserializeMetadata() {
@@ -57,6 +60,19 @@ public class ConsumerProtocolTest {
         Subscription parsedSubscription = ConsumerProtocol.deserializeSubscription(buffer);
         assertEquals(subscription.topics(), parsedSubscription.topics());
         assertEquals(0, parsedSubscription.userData().limit());
+        assertFalse(parsedSubscription.groupInstanceId().isPresent());
+    }
+
+    @Test
+    public void serializeDeserializeMetadataAndGroupInstanceId() {
+        Subscription subscription = new Subscription(Arrays.asList("foo", "bar"));
+        ByteBuffer buffer = ConsumerProtocol.serializeSubscription(subscription);
+
+        Subscription parsedSubscription = ConsumerProtocol.deserializeSubscription(buffer);
+        parsedSubscription.setGroupInstanceId(groupInstanceId);
+        assertEquals(subscription.topics(), parsedSubscription.topics());
+        assertEquals(0, parsedSubscription.userData().limit());
+        assertEquals(groupInstanceId, parsedSubscription.groupInstanceId());
     }
 
     @Test
@@ -89,6 +105,7 @@ public class ConsumerProtocolTest {
         assertEquals(subscription.topics(), parsedSubscription.topics());
         assertNull(parsedSubscription.userData());
         assertTrue(parsedSubscription.ownedPartitions().isEmpty());
+        assertFalse(parsedSubscription.groupInstanceId().isPresent());
     }
 
     @Test
@@ -120,8 +137,10 @@ public class ConsumerProtocolTest {
         buffer.flip();
 
         Subscription subscription = ConsumerProtocol.deserializeSubscription(buffer);
+        subscription.setGroupInstanceId(groupInstanceId);
         assertEquals(Collections.singletonList("topic"), subscription.topics());
         assertEquals(Collections.singletonList(tp2), subscription.ownedPartitions());
+        assertEquals(groupInstanceId, subscription.groupInstanceId());
     }
 
     @Test

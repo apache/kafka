@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import org.apache.kafka.clients.GroupRebalanceConfig;
 import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.common.Node;
@@ -104,14 +105,30 @@ public class AbstractCoordinatorTest {
                 logContext, new ClusterResourceListeners());
 
         this.mockClient = new MockClient(mockTime, metadata);
-        this.consumerClient = new ConsumerNetworkClient(logContext, mockClient, metadata, mockTime,
-                retryBackoffMs, REQUEST_TIMEOUT_MS, HEARTBEAT_INTERVAL_MS);
+        this.consumerClient = new ConsumerNetworkClient(logContext,
+                                                        mockClient,
+                                                        metadata,
+                                                        mockTime,
+                                                        retryBackoffMs,
+                                                        REQUEST_TIMEOUT_MS,
+                                                        HEARTBEAT_INTERVAL_MS);
         Metrics metrics = new Metrics();
 
         mockClient.updateMetadata(TestUtils.metadataUpdateWith(1, emptyMap()));
         this.node = metadata.fetch().nodes().get(0);
         this.coordinatorNode = new Node(Integer.MAX_VALUE - node.id(), node.host(), node.port());
-        this.coordinator = new DummyCoordinator(consumerClient, metrics, mockTime, rebalanceTimeoutMs, retryBackoffMs, groupInstanceId);
+
+        GroupRebalanceConfig rebalanceConfig = new GroupRebalanceConfig(SESSION_TIMEOUT_MS,
+                                                                        rebalanceTimeoutMs,
+                                                                        HEARTBEAT_INTERVAL_MS,
+                                                                        GROUP_ID,
+                                                                        groupInstanceId,
+                                                                        retryBackoffMs,
+                                                                        !groupInstanceId.isPresent());
+        this.coordinator = new DummyCoordinator(rebalanceConfig,
+                                                consumerClient,
+                                                metrics,
+                                                mockTime);
     }
 
     @Test
@@ -850,14 +867,11 @@ public class AbstractCoordinatorTest {
         private int onJoinCompleteInvokes = 0;
         private boolean wakeupOnJoinComplete = false;
 
-        public DummyCoordinator(ConsumerNetworkClient client,
+        public DummyCoordinator(GroupRebalanceConfig rebalanceConfig,
+                                ConsumerNetworkClient client,
                                 Metrics metrics,
-                                Time time,
-                                int rebalanceTimeoutMs,
-                                int retryBackoffMs,
-                                Optional<String> groupInstanceId) {
-            super(new LogContext(), client, GROUP_ID, groupInstanceId, rebalanceTimeoutMs,
-                    SESSION_TIMEOUT_MS, HEARTBEAT_INTERVAL_MS, metrics, METRIC_GROUP_PREFIX, time, retryBackoffMs, !groupInstanceId.isPresent());
+                                Time time) {
+            super(rebalanceConfig, new LogContext(), client, metrics, METRIC_GROUP_PREFIX, time);
         }
 
         @Override

@@ -18,8 +18,11 @@ package kafka.utils
 
 import org.junit.Assert._
 import java.util.concurrent.atomic._
-import org.junit.{Test, After, Before}
+import kafka.log.{Log, LogConfig, LogManager, ProducerStateManager}
+import kafka.server.{BrokerTopicStats, LogDirFailureChannel}
+import org.junit.{After, Before, Test}
 import kafka.utils.TestUtils.retry
+import java.util.Properties
 
 class SchedulerTest {
 
@@ -107,4 +110,23 @@ class SchedulerTest {
     mockTime.sleep(1)
     assertEquals(2, counter1.get())
   }
+
+  @Test
+  def testUnscheduleProducerTask(): Unit = {
+    val tmpDir = TestUtils.tempDir()
+    val logDir = TestUtils.randomPartitionLogDir(tmpDir)
+    val logConfig = LogConfig(new Properties())
+    val brokerTopicStats = new BrokerTopicStats
+    val recoveryPoint = 0L
+    val maxProducerIdExpirationMs = 60 * 60 * 1000
+    val topicPartition = Log.parseTopicPartitionName(logDir)
+    val producerStateManager = new ProducerStateManager(topicPartition, logDir, maxProducerIdExpirationMs)
+    val log = new Log(logDir, logConfig, logStartOffset = 0, recoveryPoint = recoveryPoint, scheduler,
+      brokerTopicStats, mockTime, maxProducerIdExpirationMs, LogManager.ProducerIdExpirationCheckIntervalMs,
+      topicPartition, producerStateManager, new LogDirFailureChannel(10))
+    assertTrue(scheduler.taskRunning(log.producerExpireCheck))
+    log.close()
+    assertTrue(!(scheduler.taskRunning(log.producerExpireCheck)))
+  }
+
 }

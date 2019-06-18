@@ -17,6 +17,7 @@
 
 package org.apache.kafka.clients.admin;
 
+import java.util.Optional;
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableReplicaAssignment;
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopic;
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreateableTopicConfig;
@@ -31,9 +32,13 @@ import java.util.Map.Entry;
  * A new topic to be created via {@link AdminClient#createTopics(Collection)}.
  */
 public class NewTopic {
+
+    private static final int NO_PARTITIONS = -1;
+    private static final short NO_REPLICATION_FACTOR = -1;
+
     private final String name;
-    private final int numPartitions;
-    private final short replicationFactor;
+    private final Optional<Integer> numPartitions;
+    private final Optional<Short> replicationFactor;
     private final Map<Integer, List<Integer>> replicasAssignments;
     private Map<String, String> configs = null;
 
@@ -41,6 +46,15 @@ public class NewTopic {
      * A new topic with the specified replication factor and number of partitions.
      */
     public NewTopic(String name, int numPartitions, short replicationFactor) {
+        this(name, Optional.of(numPartitions), Optional.of(replicationFactor));
+    }
+
+    /**
+     * A new topic that optionally defaults {@code numPartitions} and {@code replicationFactor} to
+     * the broker configurations for {@code num.partitions} and {@code default.replication.factor}
+     * respectively.
+     */
+    public NewTopic(String name, Optional<Integer> numPartitions, Optional<Short> replicationFactor) {
         this.name = name;
         this.numPartitions = numPartitions;
         this.replicationFactor = replicationFactor;
@@ -56,8 +70,8 @@ public class NewTopic {
      */
     public NewTopic(String name, Map<Integer, List<Integer>> replicasAssignments) {
         this.name = name;
-        this.numPartitions = -1;
-        this.replicationFactor = -1;
+        this.numPartitions = Optional.empty();
+        this.replicationFactor = Optional.empty();
         this.replicasAssignments = Collections.unmodifiableMap(replicasAssignments);
     }
 
@@ -72,14 +86,14 @@ public class NewTopic {
      * The number of partitions for the new topic or -1 if a replica assignment has been specified.
      */
     public int numPartitions() {
-        return numPartitions;
+        return numPartitions.orElse(NO_PARTITIONS);
     }
 
     /**
      * The replication factor for the new topic or -1 if a replica assignment has been specified.
      */
     public short replicationFactor() {
-        return replicationFactor;
+        return replicationFactor.orElse(NO_REPLICATION_FACTOR);
     }
 
     /**
@@ -111,8 +125,8 @@ public class NewTopic {
     CreatableTopic convertToCreatableTopic() {
         CreatableTopic creatableTopic = new CreatableTopic().
             setName(name).
-            setNumPartitions(numPartitions).
-            setReplicationFactor(replicationFactor);
+            setNumPartitions(numPartitions.orElse(NO_PARTITIONS)).
+            setReplicationFactor(replicationFactor.orElse(NO_REPLICATION_FACTOR));
         if (replicasAssignments != null) {
             for (Entry<Integer, List<Integer>> entry : replicasAssignments.entrySet()) {
                 creatableTopic.assignments().add(
@@ -136,8 +150,8 @@ public class NewTopic {
     public String toString() {
         StringBuilder bld = new StringBuilder();
         bld.append("(name=").append(name).
-                append(", numPartitions=").append(numPartitions).
-                append(", replicationFactor=").append(replicationFactor).
+                append(", numPartitions=").append(numPartitions.map(String::valueOf).orElse("default")).
+                append(", replicationFactor=").append(replicationFactor.map(String::valueOf).orElse("default")).
                 append(", replicasAssignments=").append(replicasAssignments).
                 append(", configs=").append(configs).
                 append(")");

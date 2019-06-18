@@ -510,7 +510,7 @@ class KafkaApisTest {
   }
 
   @Test
-  def testJoinGroupProtocolsOrder: Unit = {
+  def testJoinGroupProtocolsOrder(): Unit = {
     val protocols = List(
       new JoinGroupRequestProtocol().setName("first").setMetadata("first".getBytes()),
       new JoinGroupRequestProtocol().setName("second").setMetadata("second".getBytes())
