@@ -120,7 +120,7 @@ public class RecordBatchIterationBenchmark {
         return builder.build().buffer();
     }
 
-    //@Benchmark
+    @Benchmark
     public void measureIteratorForBatchWithSingleMessage(Blackhole bh) throws IOException {
         for (RecordBatch batch : MemoryRecords.readableRecords(singleBatchBuffer.duplicate()).batches()) {
             try (CloseableIterator<Record> iterator = batch.streamingIterator(bufferSupplier)) {
@@ -131,7 +131,6 @@ public class RecordBatchIterationBenchmark {
     }
 
     @OperationsPerInvocation(value = batchCount)
-    @Fork(jvmArgsAppend = "-Xmx2048m")
     @Benchmark
     public void measureStreamingIteratorForVariableBatchSize(Blackhole bh) throws IOException {
         for (int i = 0; i < batchCount; ++i) {
@@ -145,7 +144,6 @@ public class RecordBatchIterationBenchmark {
     }
 
     @OperationsPerInvocation(value = batchCount)
-    @Fork(jvmArgsAppend = "-Xmx2048m")
     @Benchmark
     public void measureSkipIteratorForVariableBatchSize(Blackhole bh) throws IOException {
         for (int i = 0; i < batchCount; ++i) {
