@@ -141,7 +141,6 @@ public class RoundRobinAssignorTest {
         partitionsPerTopic.put(topic2, 2);
 
         Map<String, Subscription> consumers = new HashMap<>();
-
         consumers.put(consumer1, new Subscription(topics(topic1)));
         consumers.put(consumer2, new Subscription(topics(topic1, topic2)));
         consumers.put(consumer3, new Subscription(topics(topic1)));

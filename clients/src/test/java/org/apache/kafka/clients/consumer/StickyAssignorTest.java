@@ -140,7 +140,6 @@ public class StickyAssignorTest {
         Map<String, Integer> partitionsPerTopic = new HashMap<>();
         partitionsPerTopic.put(topic, 1);
 
-        subscriptions = new HashMap<>();
         subscriptions.put(consumer1, new Subscription(topics(topic)));
         subscriptions.put(consumer2, new Subscription(topics(topic)));
 

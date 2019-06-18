@@ -322,7 +322,7 @@ public class StickyAssignor extends AbstractPartitionAssignor {
         // for each partition we create a sorted map of its consumers by generation
         Map<TopicPartition, TreeMap<Integer, String>> sortedPartitionConsumersByGeneration = new HashMap<>();
         for (Map.Entry<String, Subscription> subscriptionEntry: subscriptions.entrySet()) {
-            String memberId = subscriptionEntry.getKey();
+            String consumer = subscriptionEntry.getKey();
             ByteBuffer userData = subscriptionEntry.getValue().userData();
             if (userData == null || !userData.hasRemaining()) continue;
             ConsumerUserData consumerUserData = deserializeTopicPartitionAssignment(userData);
@@ -336,10 +336,10 @@ public class StickyAssignor extends AbstractPartitionAssignor {
                         log.warn("Partition '{}' is assigned to multiple consumers following sticky assignment generation {}.",
                                 partition, consumerUserData.generation);
                     } else
-                        consumers.put(consumerUserData.generation.orElse(DEFAULT_GENERATION), memberId);
+                        consumers.put(consumerUserData.generation.orElse(DEFAULT_GENERATION), consumer);
                 } else {
                     TreeMap<Integer, String> sortedConsumers = new TreeMap<>();
-                    sortedConsumers.put(consumerUserData.generation.orElse(DEFAULT_GENERATION), memberId);
+                    sortedConsumers.put(consumerUserData.generation.orElse(DEFAULT_GENERATION), consumer);
                     sortedPartitionConsumersByGeneration.put(partition, sortedConsumers);
                 }
             }

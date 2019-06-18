@@ -56,6 +56,8 @@ import java.util.TreeSet;
  * <li><code>C1: [t1p0]</code>
  * <li><code>C2: [t1p1, t2p0, t2p1, t2p2]</code>
  * </ul>
+ *
+ * After the introduction of static membership, we could leverage <link>group.instance.id</link>
  */
 public class RoundRobinAssignor extends AbstractPartitionAssignor {
 
