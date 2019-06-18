@@ -271,7 +271,7 @@ public class FetchSessionHandler {
 
     private String partitionsToLogString(Collection<TopicPartition> partitions) {
         if (!log.isTraceEnabled()) {
-            return String.format("%d partition(s)", partitions.size());
+            return partitions.size() + "partition(s)";
         }
         return "(" + Utils.join(partitions, ", ") + ")";
     }
@@ -348,11 +348,10 @@ public class FetchSessionHandler {
         if (!log.isTraceEnabled()) {
             int implied = sessionPartitions.size() - response.responseData().size();
             if (implied > 0) {
-                return String.format(" with %d response partition(s), %d implied partition(s)",
-                    response.responseData().size(), implied);
+                return " with " + response.responseData().size() + " response partition(s), " + implied +
+                " implied partition(s)";
             } else {
-                return String.format(" with %d response partition(s)",
-                    response.responseData().size());
+                return " with " + response.responseData().size() + " response partition(s)";
             }
         }
         StringBuilder bld = new StringBuilder();
