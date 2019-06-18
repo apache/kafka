@@ -293,8 +293,8 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         switch (protocol) {
             case EAGER:
                 if (!ownedPartitions.isEmpty()) {
-                    throw new IllegalStateException("Coordinator has some partitions are not revoked with " +
-                        protocol + " protocol, it is likely that the previous rebalance did not complete due to some errors");
+                    log.info("Coordinator has owned partitions {} that are not revoked with {} protocol, " +
+                        "it is likely client is woken up before a previous pending rebalance completes its callback", ownedPartitions, protocol);
                 }
 
                 log.info("Setting newly assigned partitions: {}", Utils.join(assignedPartitions, ", "));
@@ -310,7 +310,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             case COOPERATIVE:
                 assignAndRevoke(listener, assignedPartitions, ownedPartitions);
 
-                if (assignment.error() == ConsumerProtocol.Errors.NEED_REJOIN) {
+                if (assignment.error() == ConsumerProtocol.AssignmentError.NEED_REJOIN) {
                     requestRejoin();
                 }
 
@@ -564,7 +564,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         // if revocations are triggered, tell everyone to re-join immediately.
         if (revocationsNeeded) {
             for (final Assignment assignment : assignments.values()) {
-                assignment.setError(ConsumerProtocol.Errors.NEED_REJOIN);
+                assignment.setError(ConsumerProtocol.AssignmentError.NEED_REJOIN);
             }
         }
     }
