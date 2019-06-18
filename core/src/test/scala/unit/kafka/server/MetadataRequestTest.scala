@@ -248,7 +248,7 @@ class MetadataRequestTest extends BaseRequestTest {
     data
   }
 
-  @Test
+
   def testReplicaDownResponse() {
     val replicaDownTopic = "replicaDown"
     val replicaCount = 3
