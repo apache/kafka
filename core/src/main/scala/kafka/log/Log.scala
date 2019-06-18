@@ -333,7 +333,7 @@ class Log(@volatile var dir: File,
     },
     tags)
 
-  scheduler.schedule(name = "PeriodicProducerExpirationCheck", fun = () => {
+  val producerExpireCheck = scheduler.schedule(name = "PeriodicProducerExpirationCheck", fun = () => {
     lock synchronized {
       producerStateManager.removeExpiredProducers(time.milliseconds)
     }
@@ -762,6 +762,7 @@ class Log(@volatile var dir: File,
     debug("Closing log")
     lock synchronized {
       checkIfMemoryMappedBufferClosed()
+      producerExpireCheck.cancel(true)
       maybeHandleIOException(s"Error while renaming dir for $topicPartition in dir ${dir.getParent}") {
         // We take a snapshot at the last written offset to hopefully avoid the need to scan the log
         // after restarting and to ensure that we cannot inadvertently hit the upgrade optimization
