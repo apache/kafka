@@ -20,6 +20,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.CorruptRecordException;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.record.MemoryRecords.RecordFilter.BatchRetention;
+import org.apache.kafka.common.utils.ByteBufferOutputStream;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.test.TestUtils;
 import org.junit.Test;
@@ -76,7 +77,7 @@ public class MemoryRecordsTest {
 
         ByteBuffer buffer = ByteBuffer.allocate(1024);
 
-        MemoryRecordsBuilder builder = new MemoryRecordsBuilder(buffer, magic, compression,
+        MemoryRecordsBuilder builder = new MemoryRecordsBuilder(new ByteBufferOutputStream(buffer), magic, compression,
                 TimestampType.CREATE_TIME, firstOffset, logAppendTime, pid, epoch, firstSequence, false, false,
                 partitionLeaderEpoch, buffer.limit());
 

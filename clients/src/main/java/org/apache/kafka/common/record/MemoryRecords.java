@@ -529,9 +529,9 @@ public class MemoryRecords extends AbstractRecords {
                                                boolean isTransactional,
                                                boolean isControlBatch,
                                                int partitionLeaderEpoch) {
-        return new MemoryRecordsBuilder(buffer, magic, compressionType, timestampType, baseOffset,
-                logAppendTime, producerId, producerEpoch, baseSequence, isTransactional, isControlBatch, partitionLeaderEpoch,
-                buffer.remaining());
+        return new MemoryRecordsBuilder(new ByteBufferOutputStream(buffer), magic, compressionType,
+                timestampType, baseOffset, logAppendTime, producerId, producerEpoch, baseSequence,
+                isTransactional, isControlBatch, partitionLeaderEpoch, buffer.remaining());
     }
 
     public static MemoryRecords withRecords(CompressionType compressionType, SimpleRecord... records) {
@@ -656,10 +656,10 @@ public class MemoryRecords extends AbstractRecords {
                                                    EndTransactionMarker marker) {
         boolean isTransactional = true;
         boolean isControlBatch = true;
-        MemoryRecordsBuilder builder = new MemoryRecordsBuilder(buffer, RecordBatch.CURRENT_MAGIC_VALUE, CompressionType.NONE,
-                TimestampType.CREATE_TIME, initialOffset, timestamp, producerId, producerEpoch,
-                RecordBatch.NO_SEQUENCE, isTransactional, isControlBatch, partitionLeaderEpoch,
-                buffer.capacity());
+        MemoryRecordsBuilder builder = new MemoryRecordsBuilder(new ByteBufferOutputStream(buffer),
+                RecordBatch.CURRENT_MAGIC_VALUE, CompressionType.NONE, TimestampType.CREATE_TIME,
+                initialOffset, timestamp, producerId, producerEpoch, RecordBatch.NO_SEQUENCE, isTransactional,
+                isControlBatch, partitionLeaderEpoch, buffer.capacity());
         builder.appendEndTxnMarker(timestamp, marker);
         builder.close();
     }
