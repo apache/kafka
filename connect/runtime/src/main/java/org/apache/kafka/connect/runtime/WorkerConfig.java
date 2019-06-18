@@ -212,7 +212,7 @@ public class WorkerConfig extends AbstractConfig {
             + "<code>ConnectRestExtension</code> allows you to inject into Connect's REST API user defined resources like filters. "
             + "Typically used to add custom capability like logging, security, etc. ";
 
-    public static final String CONNECTOR_CLIENT_POLICY_CLASS_CONFIG = "client.config.policy";
+    public static final String CONNECTOR_CLIENT_POLICY_CLASS_CONFIG = "connector.client.config.override.policy";
     public static final String CONNECTOR_CLIENT_POLICY_CLASS_DOC =
         "Class name or alias of implementation of <code>ConnectorClientConfigOverridePolicy</code>. Defines what client configurations can be "
         + "overriden by the connector. The default implementation is `None`. The other possible policies in the framework include `All` "

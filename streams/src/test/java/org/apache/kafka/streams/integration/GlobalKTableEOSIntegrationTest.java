@@ -53,6 +53,7 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.Properties;
+import java.util.concurrent.atomic.AtomicInteger;
 
 @Category({IntegrationTest.class})
 public class GlobalKTableEOSIntegrationTest {
@@ -68,7 +69,7 @@ public class GlobalKTableEOSIntegrationTest {
     public static final EmbeddedKafkaCluster CLUSTER =
             new EmbeddedKafkaCluster(NUM_BROKERS, BROKER_CONFIG);
 
-    private static volatile int testNo = 0;
+    private static volatile AtomicInteger testNo = new AtomicInteger(0);
     private final MockTime mockTime = CLUSTER.time;
     private final KeyValueMapper<String, Long, Long> keyMapper = (key, value) -> value;
     private final ValueJoiner<Long, String, String> joiner = (value1, value2) -> value1 + "+" + value2;
@@ -85,11 +86,10 @@ public class GlobalKTableEOSIntegrationTest {
 
     @Before
     public void before() throws Exception {
-        testNo++;
         builder = new StreamsBuilder();
         createTopics();
         streamsConfiguration = new Properties();
-        final String applicationId = "globalTableTopic-table-eos-test-" + testNo;
+        final String applicationId = "globalTableTopic-table-eos-test-" + testNo.incrementAndGet();
         streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, applicationId);
         streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         streamsConfiguration.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");

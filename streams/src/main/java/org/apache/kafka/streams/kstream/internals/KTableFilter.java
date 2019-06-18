@@ -61,6 +61,19 @@ class KTableFilter<K, V> implements KTableProcessorSupplier<K, V, V> {
         return newValue;
     }
 
+    private ValueAndTimestamp<V> computeValue(final K key, final ValueAndTimestamp<V> valueAndTimestamp) {
+        ValueAndTimestamp<V> newValueAndTimestamp = null;
+
+        if (valueAndTimestamp != null) {
+            final V value = valueAndTimestamp.value();
+            if (filterNot ^ predicate.test(key, value)) {
+                newValueAndTimestamp = valueAndTimestamp;
+            }
+        }
+
+        return newValueAndTimestamp;
+    }
+
 
     private class KTableFilterProcessor extends AbstractProcessor<K, Change<V>> {
         private TimestampedKeyValueStore<K, V> store;
@@ -135,7 +148,7 @@ class KTableFilter<K, V> implements KTableProcessorSupplier<K, V, V> {
         }
 
         @Override
-        public V get(final K key) {
+        public ValueAndTimestamp<V> get(final K key) {
             return computeValue(key, parentGetter.get(key));
         }
 

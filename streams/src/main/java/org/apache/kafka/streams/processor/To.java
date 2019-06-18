@@ -88,4 +88,5 @@ public class To {
     public int hashCode() {
         throw new UnsupportedOperationException("To is unsafe for use in Hash collections");
     }
+
 }

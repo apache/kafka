@@ -22,45 +22,55 @@ import static org.junit.Assert.assertEquals;
 
 public class NamedInternalTest {
 
-    private static final String TEST_VALUE  = "default-value";
+    private static final String TEST_PREFIX = "prefix-";
+    private static final String TEST_VALUE = "default-value";
     private static final String TEST_SUFFIX = "-suffix";
+
+    private static class TestNameProvider implements InternalNameProvider {
+        int index = 0;
+
+        @Override
+        public String newProcessorName(final String prefix) {
+            return prefix + "PROCESSOR-" + index++;
+        }
+
+        @Override
+        public String newStoreName(final String prefix) {
+            return prefix + "STORE-"  + index++;
+        }
+
+    }
 
     @Test
     public void shouldSuffixNameOrReturnProviderValue() {
         final String name = "foo";
+        final TestNameProvider provider = new TestNameProvider();
+
         assertEquals(
-                name + TEST_SUFFIX,
-                NamedInternal.with(name).suffixWithOrElseGet(TEST_SUFFIX, () -> TEST_VALUE)
+            name + TEST_SUFFIX,
+            NamedInternal.with(name).suffixWithOrElseGet(TEST_SUFFIX, provider, TEST_PREFIX)
         );
+
+        // 1, not 0, indicates that the named call still burned an index number.
         assertEquals(
-                TEST_VALUE,
-                NamedInternal.with(null).suffixWithOrElseGet(TEST_SUFFIX, () -> TEST_VALUE)
+            "prefix-PROCESSOR-1",
+            NamedInternal.with(null).suffixWithOrElseGet(TEST_SUFFIX, provider, TEST_PREFIX)
         );
     }
 
     @Test
     public void shouldGenerateWithPrefixGivenEmptyName() {
         final String prefix = "KSTREAM-MAP-";
-        assertEquals(prefix + "PROCESSOR-NAME", NamedInternal.with(null).orElseGenerateWithPrefix(
-                new InternalNameProvider() {
-                    @Override
-                    public String newProcessorName(final String prefix) {
-                        return prefix + "PROCESSOR-NAME";
-                    }
-
-                    @Override
-                    public String newStoreName(final String prefix) {
-                        return null;
-                    }
-                },
-                prefix)
+        assertEquals(prefix + "PROCESSOR-0", NamedInternal.with(null).orElseGenerateWithPrefix(
+            new TestNameProvider(),
+            prefix)
         );
     }
 
     @Test
     public void shouldNotGenerateWithPrefixGivenValidName() {
         final String validName = "validName";
-        assertEquals(validName, NamedInternal.with(validName).orElseGenerateWithPrefix(null, "KSTREAM-MAP-")
+        assertEquals(validName, NamedInternal.with(validName).orElseGenerateWithPrefix(new TestNameProvider(), "KSTREAM-MAP-")
         );
     }
 }

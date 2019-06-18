@@ -129,6 +129,10 @@ public class Metadata implements Closeable {
         return Math.max(timeToExpire, timeToAllowUpdate(nowMs));
     }
 
+    public long metadataExpireMs() {
+        return this.metadataExpireMs;
+    }
+
     /**
      * Request an update of the current cluster metadata info, return the current updateVersion before the update
      */
@@ -173,7 +177,7 @@ public class Metadata implements Closeable {
             }
             return true;
         } else {
-            log.debug("Not replacing existing epoch {} with new epoch {}", oldEpoch, epoch);
+            log.debug("Not replacing existing epoch {} with new epoch {} for partition {}", oldEpoch, epoch, topicPartition);
             return false;
         }
     }

@@ -38,6 +38,8 @@ import org.junit.Test;
 import org.rocksdb.BlockBasedTableConfig;
 import org.rocksdb.BloomFilter;
 import org.rocksdb.Filter;
+import org.rocksdb.Cache;
+import org.rocksdb.LRUCache;
 import org.rocksdb.Options;
 
 import java.io.File;
@@ -489,11 +491,13 @@ public class RocksDBStoreTest {
 
         static boolean bloomFiltersSet;
         static Filter filter;
+        static Cache cache;
 
         @Override
         public void setConfig(final String storeName, final Options options, final Map<String, Object> configs) {
             final BlockBasedTableConfig tableConfig = new BlockBasedTableConfig();
-            tableConfig.setBlockCacheSize(50 * 1024 * 1024L);
+            cache = new LRUCache(50 * 1024 * 1024L);
+            tableConfig.setBlockCache(cache);
             tableConfig.setBlockSize(4096L);
             if (enableBloomFilters) {
                 filter = new BloomFilter();
@@ -513,6 +517,7 @@ public class RocksDBStoreTest {
             if (filter != null) {
                 filter.close();
             }
+            cache.close();
         }
     }
 

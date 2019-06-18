@@ -211,7 +211,7 @@ class ProducerStateManagerTest {
     val producerAppendInfo = new ProducerAppendInfo(partition, producerId, ProducerStateEntry.empty(producerId), ValidationType.Full)
     producerAppendInfo.append(producerEpoch, seq, seq, time.milliseconds(), offset, offset, isTransactional = true)
 
-    val logOffsetMetadata = new LogOffsetMetadata(messageOffset = offset, segmentBaseOffset = 990000L,
+    val logOffsetMetadata = LogOffsetMetadata(messageOffset = offset, segmentBaseOffset = 990000L,
       relativePositionInSegment = 234224)
     producerAppendInfo.maybeCacheTxnFirstOffsetMetadata(logOffsetMetadata)
     stateManager.update(producerAppendInfo)
@@ -283,7 +283,7 @@ class ProducerStateManagerTest {
 
     // use some other offset to simulate a follower append where the log offset metadata won't typically
     // match any of the transaction first offsets
-    val logOffsetMetadata = new LogOffsetMetadata(messageOffset = offset - 23429, segmentBaseOffset = 990000L,
+    val logOffsetMetadata = LogOffsetMetadata(messageOffset = offset - 23429, segmentBaseOffset = 990000L,
       relativePositionInSegment = 234224)
     producerAppendInfo.maybeCacheTxnFirstOffsetMetadata(logOffsetMetadata)
     stateManager.update(producerAppendInfo)

@@ -24,7 +24,7 @@ import org.slf4j.LoggerFactory;
 import java.util.Map;
 
 /**
- * Allows all client configurations to be overridden via the connector configs by setting {@code client.config.policy} to {@code All}
+ * Allows all client configurations to be overridden via the connector configs by setting {@code connector.client.config.override.policy} to {@code All}
  */
 public class AllConnectorClientConfigOverridePolicy extends AbstractConnectorClientConfigOverridePolicy {
     private static final Logger log = LoggerFactory.getLogger(AllConnectorClientConfigOverridePolicy.class);

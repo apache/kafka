@@ -78,7 +78,8 @@ class LogOffsetTest extends BaseRequestTest {
       log.appendAsLeader(TestUtils.singletonRecords(value = Integer.toString(42).getBytes()), leaderEpoch = 0)
     log.flush()
 
-    log.onHighWatermarkIncremented(log.logEndOffset)
+    log.highWatermarkMetadata = LogOffsetMetadata(log.logEndOffset)
+    log.highWatermark = log.logEndOffset
     log.maybeIncrementLogStartOffset(3)
     log.deleteOldSegments()
 

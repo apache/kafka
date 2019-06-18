@@ -17,6 +17,7 @@
 package org.apache.kafka.clients;
 
 import org.apache.kafka.common.Cluster;
+import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
@@ -36,6 +37,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
+import static org.apache.kafka.test.TestUtils.assertOptional;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
@@ -437,4 +439,25 @@ public class MetadataTest {
         assertNull(metadata.getAndClearMetadataException());
     }
 
+    @Test
+    public void testNodeIfOffline() {
+        Map<String, Integer> partitionCounts = new HashMap<>();
+        partitionCounts.put("topic-1", 1);
+        Node node0 = new Node(0, "localhost", 9092);
+        Node node1 = new Node(1, "localhost", 9093);
+
+        MetadataResponse metadataResponse = TestUtils.metadataUpdateWith("dummy", 2, Collections.emptyMap(), partitionCounts, _tp -> 99,
+            (error, partition, leader, leaderEpoch, replicas, isr, offlineReplicas) ->
+                new MetadataResponse.PartitionMetadata(error, partition, node0, leaderEpoch,
+                    Collections.singletonList(node0), Collections.emptyList(), Collections.singletonList(node1)));
+        metadata.update(emptyMetadataResponse(), 0L);
+        metadata.update(metadataResponse, 10L);
+
+        TopicPartition tp = new TopicPartition("topic-1", 0);
+
+        assertOptional(metadata.fetch().nodeIfOnline(tp, 0), node -> assertEquals(node.id(), 0));
+        assertFalse(metadata.fetch().nodeIfOnline(tp, 1).isPresent());
+        assertEquals(metadata.fetch().nodeById(0).id(), 0);
+        assertEquals(metadata.fetch().nodeById(1).id(), 1);
+    }
 }

@@ -32,6 +32,7 @@ import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.To;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
+import org.apache.kafka.streams.processor.internals.metrics.ThreadMetrics;
 import org.apache.kafka.streams.processor.internals.ToInternal;
 import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.apache.kafka.streams.state.KeyValueIterator;
@@ -92,6 +93,8 @@ public class KStreamSessionWindowAggregateProcessorTest {
         final File stateDir = TestUtils.tempDirectory();
         metrics = new Metrics();
         final MockStreamsMetrics metrics = new MockStreamsMetrics(KStreamSessionWindowAggregateProcessorTest.this.metrics);
+        ThreadMetrics.skipRecordSensor(metrics);
+
         context = new InternalMockProcessorContext(
             stateDir,
             Serdes.String(),
@@ -299,8 +302,8 @@ public class KStreamSessionWindowAggregateProcessorTest {
         context.setTime(GAP_MS + 1);
         processor.process("a", "1");
         processor.process("a", "2");
-        final long t0 = getter.get(new Windowed<>("a", new SessionWindow(0, 0)));
-        final long t1 = getter.get(new Windowed<>("a", new SessionWindow(GAP_MS + 1, GAP_MS + 1)));
+        final long t0 = getter.get(new Windowed<>("a", new SessionWindow(0, 0))).value();
+        final long t1 = getter.get(new Windowed<>("a", new SessionWindow(GAP_MS + 1, GAP_MS + 1))).value();
         assertEquals(1L, t0);
         assertEquals(2L, t1);
     }

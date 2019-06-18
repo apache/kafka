@@ -32,6 +32,8 @@ import scala.collection.JavaConverters._
 
 object ControllerEventManager {
   val ControllerEventThreadName = "controller-event-thread"
+  val EventQueueTimeMetricName = "EventQueueTimeMs"
+  val EventQueueSizeMetricName = "EventQueueSize"
 }
 
 trait ControllerEventProcessor {
@@ -70,17 +72,18 @@ class ControllerEventManager(controllerId: Int,
                              processor: ControllerEventProcessor,
                              time: Time,
                              rateAndTimeMetrics: Map[ControllerState, KafkaTimer]) extends KafkaMetricsGroup {
+  import ControllerEventManager._
 
   @volatile private var _state: ControllerState = ControllerState.Idle
   private val putLock = new ReentrantLock()
   private val queue = new LinkedBlockingQueue[QueuedEvent]
   // Visible for test
-  private[controller] val thread = new ControllerEventThread(ControllerEventManager.ControllerEventThreadName)
+  private[controller] val thread = new ControllerEventThread(ControllerEventThreadName)
 
-  private val eventQueueTimeHist = newHistogram("EventQueueTimeMs")
+  private val eventQueueTimeHist = newHistogram(EventQueueTimeMetricName)
 
   newGauge(
-    "EventQueueSize",
+    EventQueueSizeMetricName,
     new Gauge[Int] {
       def value: Int = {
         queue.size()
@@ -93,9 +96,14 @@ class ControllerEventManager(controllerId: Int,
   def start(): Unit = thread.start()
 
   def close(): Unit = {
-    thread.initiateShutdown()
-    clearAndPut(ShutdownEventThread)
-    thread.awaitShutdown()
+    try {
+      thread.initiateShutdown()
+      clearAndPut(ShutdownEventThread)
+      thread.awaitShutdown()
+    } finally {
+      removeMetric(EventQueueTimeMetricName)
+      removeMetric(EventQueueSizeMetricName)
+    }
   }
 
   def put(event: ControllerEvent): QueuedEvent = inLock(putLock) {

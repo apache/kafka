@@ -43,9 +43,10 @@ import static java.time.Duration.ofMillis;
 import static org.junit.Assert.assertEquals;
 
 public class KStreamKStreamLeftJoinTest {
-    final private String topic1 = "topic1";
-    final private String topic2 = "topic2";
+    private final static String[] EMPTY = new String[0];
 
+    private final String topic1 = "topic1";
+    private final String topic2 = "topic2";
     private final Consumed<Integer, String> consumed = Consumed.with(Serdes.Integer(), Serdes.String());
     private final ConsumerRecordFactory<Integer, String> recordFactory =
         new ConsumerRecordFactory<>(new IntegerSerializer(), new StringSerializer(), 0L);
@@ -201,7 +202,7 @@ public class KStreamKStreamLeftJoinTest {
         for (int i = 0; i < expectedKeys.length; i++) {
             driver.pipeInput(recordFactory.create(topic2, expectedKeys[i], "b" + expectedKeys[i], time + i));
         }
-        processor.checkAndClearProcessResult();
+        processor.checkAndClearProcessResult(EMPTY);
 
         // push four items with larger timestamp to the primary stream; this should produce four full-join items
         // w1 = { 0:A0 (ts: 0), 1:A1 (ts: 0) }

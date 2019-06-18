@@ -16,19 +16,19 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
+import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
+import org.apache.kafka.streams.processor.internals.metrics.ThreadMetrics;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Objects;
-
-import static org.apache.kafka.streams.state.ValueAndTimestamp.getValueOrNull;
 
 public class KTableSource<K, V> implements ProcessorSupplier<K, V> {
     private static final Logger LOG = LoggerFactory.getLogger(KTableSource.class);
@@ -72,12 +72,14 @@ public class KTableSource<K, V> implements ProcessorSupplier<K, V> {
         private TimestampedKeyValueStore<K, V> store;
         private TimestampedTupleForwarder<K, V> tupleForwarder;
         private StreamsMetricsImpl metrics;
+        private Sensor skippedRecordsSensor;
 
         @SuppressWarnings("unchecked")
         @Override
         public void init(final ProcessorContext context) {
             super.init(context);
             metrics = (StreamsMetricsImpl) context.metrics();
+            skippedRecordsSensor = ThreadMetrics.skipRecordSensor(metrics);
             if (queryableName != null) {
                 store = (TimestampedKeyValueStore<K, V>) context.getStateStore(queryableName);
                 tupleForwarder = new TimestampedTupleForwarder<>(
@@ -96,13 +98,22 @@ public class KTableSource<K, V> implements ProcessorSupplier<K, V> {
                     "Skipping record due to null key. topic=[{}] partition=[{}] offset=[{}]",
                     context().topic(), context().partition(), context().offset()
                 );
-                metrics.skippedRecordsSensor().record();
+                skippedRecordsSensor.record();
                 return;
             }
 
             if (queryableName != null) {
-                final ValueAndTimestamp<V> oldValueAndTimestamp = sendOldValues ? store.get(key) : null;
-                final V oldValue = getValueOrNull(oldValueAndTimestamp);
+                final ValueAndTimestamp<V> oldValueAndTimestamp = store.get(key);
+                final V oldValue;
+                if (oldValueAndTimestamp != null) {
+                    oldValue = oldValueAndTimestamp.value();
+                    if (context().timestamp() < oldValueAndTimestamp.timestamp()) {
+                        LOG.warn("Detected out-of-order KTable update for {} at offset {}, partition {}.",
+                            store.name(), context().offset(), context().partition());
+                    }
+                } else {
+                    oldValue = null;
+                }
                 store.put(key, ValueAndTimestamp.make(value, context().timestamp()));
                 tupleForwarder.maybeForward(key, value, oldValue);
             } else {

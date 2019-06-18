@@ -16,7 +16,9 @@
  */
 package org.apache.kafka.clients.consumer;
 
+import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.ClientRequest;
+import org.apache.kafka.clients.GroupRebalanceConfig;
 import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.clients.consumer.internals.ConsumerCoordinator;
@@ -26,7 +28,6 @@ import org.apache.kafka.clients.consumer.internals.ConsumerMetrics;
 import org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient;
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
 import org.apache.kafka.clients.consumer.internals.Fetcher;
-import org.apache.kafka.clients.consumer.internals.Heartbeat;
 import org.apache.kafka.clients.consumer.internals.PartitionAssignor;
 import org.apache.kafka.clients.consumer.internals.SubscriptionState;
 import org.apache.kafka.common.Cluster;
@@ -207,6 +208,16 @@ public class KafkaConsumerTest {
         config.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
         config.put(ConsumerConfig.RECEIVE_BUFFER_CONFIG, -2);
         new KafkaConsumer<>(config, new ByteArrayDeserializer(), new ByteArrayDeserializer());
+    }
+
+    @Test
+    public void shouldIgnoreGroupInstanceIdForEmptyGroupId() {
+        Map<String, Object> config = new HashMap<>();
+        config.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
+        config.put(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG, "instance_id");
+        KafkaConsumer<byte[], byte[]> consumer = new KafkaConsumer<>(
+                config, new ByteArrayDeserializer(), new ByteArrayDeserializer());
+        consumer.close();
     }
 
     @Test
@@ -1681,7 +1692,7 @@ public class KafkaConsumerTest {
                 assertTrue(protocolIterator.hasNext());
 
                 ByteBuffer protocolMetadata = ByteBuffer.wrap(protocolIterator.next().metadata());
-                PartitionAssignor.Subscription subscription = ConsumerProtocol.deserializeSubscription(protocolMetadata);
+                PartitionAssignor.Subscription subscription = ConsumerProtocol.buildSubscription(protocolMetadata, Optional.empty());
                 return subscribedTopics.equals(new HashSet<>(subscription.topics()));
             }
         }, joinGroupFollowerResponse(assignor, 1, "memberId", "leaderId", Errors.NONE), coordinator);
@@ -1884,26 +1895,25 @@ public class KafkaConsumerTest {
         ConsumerNetworkClient consumerClient = new ConsumerNetworkClient(loggerFactory, client, metadata, time,
                 retryBackoffMs, requestTimeoutMs, heartbeatIntervalMs);
 
-        Heartbeat heartbeat = new Heartbeat(time, sessionTimeoutMs, heartbeatIntervalMs, rebalanceTimeoutMs, retryBackoffMs);
-        ConsumerCoordinator consumerCoordinator = new ConsumerCoordinator(
-                loggerFactory,
-                consumerClient,
-                groupId,
-                groupInstanceId,
-                rebalanceTimeoutMs,
-                sessionTimeoutMs,
-                heartbeat,
-                assignors,
-                metadata,
-                subscription,
-                metrics,
-                metricGroupPrefix,
-                time,
-                retryBackoffMs,
-                autoCommitEnabled,
-                autoCommitIntervalMs,
-                interceptors);
-
+        GroupRebalanceConfig rebalanceConfig = new GroupRebalanceConfig(sessionTimeoutMs,
+                                                                        rebalanceTimeoutMs,
+                                                                        heartbeatIntervalMs,
+                                                                        groupId,
+                                                                        groupInstanceId,
+                                                                        retryBackoffMs,
+                                                                        true);
+        ConsumerCoordinator consumerCoordinator = new ConsumerCoordinator(rebalanceConfig,
+                                                                          loggerFactory,
+                                                                          consumerClient,
+                                                                          assignors,
+                                                                          metadata,
+                                                                          subscription,
+                                                                          metrics,
+                                                                          metricGroupPrefix,
+                                                                          time,
+                                                                          autoCommitEnabled,
+                                                                          autoCommitIntervalMs,
+                                                                          interceptors);
         Fetcher<String, String> fetcher = new Fetcher<>(
                 loggerFactory,
                 consumerClient,
@@ -1913,6 +1923,7 @@ public class KafkaConsumerTest {
                 fetchSize,
                 maxPollRecords,
                 checkCrcs,
+                "",
                 keyDeserializer,
                 valueDeserializer,
                 metadata,
@@ -1922,7 +1933,8 @@ public class KafkaConsumerTest {
                 time,
                 retryBackoffMs,
                 requestTimeoutMs,
-                IsolationLevel.READ_UNCOMMITTED);
+                IsolationLevel.READ_UNCOMMITTED,
+                new ApiVersions());
 
         return new KafkaConsumer<>(
                 loggerFactory,

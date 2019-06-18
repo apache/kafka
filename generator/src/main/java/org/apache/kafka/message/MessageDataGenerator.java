@@ -928,7 +928,11 @@ public final class MessageDataGenerator {
         } else if (field.type().isBytes()) {
             buffer.printf("if (%s.length != 0) {%n", field.camelCaseName());
         } else if (field.type().isString()) {
-            buffer.printf("if (%s.equals(%s)) {%n", field.camelCaseName(), fieldDefault(field));
+            if (fieldDefault(field).equals("null")) {
+                buffer.printf("if (%s != null) {%n", field.camelCaseName());
+            } else {
+                buffer.printf("if (!%s.equals(%s)) {%n", field.camelCaseName(), fieldDefault(field));
+            }
         } else if (field.type() instanceof FieldType.BoolFieldType) {
             buffer.printf("if (%s%s) {%n",
                 fieldDefault(field).equals("true") ? "!" : "",

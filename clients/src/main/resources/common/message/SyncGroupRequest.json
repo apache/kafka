@@ -18,7 +18,8 @@
   "type": "request",
   "name": "SyncGroupRequest",
   // Versions 1 and 2 are the same as version 0.
-  "validVersions": "0-2",
+  // Starting from version 3, we add a new field called groupInstanceId to indicate member identity across restarts.
+  "validVersions": "0-3",
   "fields": [
     { "name": "GroupId", "type": "string", "versions": "0+", "entityType": "groupId",
       "about": "The unique group identifier." },
@@ -26,6 +27,9 @@
       "about": "The generation of the group." },
     { "name": "MemberId", "type": "string", "versions": "0+",
       "about": "The member ID assigned by the group." },
+    { "name": "GroupInstanceId", "type": "string", "versions": "3+", 
+      "nullableVersions": "3+", "default": "null",
+      "about": "The unique identifier of the consumer instance provided by end user." },
     { "name": "Assignments", "type": "[]SyncGroupRequestAssignment", "versions": "0+",
       "about": "Each assignment.", "fields": [
       { "name": "MemberId", "type": "string", "versions": "0+",

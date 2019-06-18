@@ -16,7 +16,7 @@ Running Kafka:
 
     > ./bin/kafka-server-start.sh ./config/server.properties &> /tmp/kafka.log &
 
-Then, we want to run a Trogdor Agent, plus a Trogdor broker.
+Then, we want to run a Trogdor Agent, plus a Trogdor Coordinator.
 
 To run the Trogdor Agent:
 
@@ -124,6 +124,27 @@ ProcessStopFault stops a process by sending it a SIGSTOP signal.  When the fault
 
 ### NetworkPartitionFault
 NetworkPartitionFault sets up an artificial network partition between one or more sets of nodes.  Currently, this is implemented using iptables.  The iptables rules are set up on the outbound traffic from the affected nodes.  Therefore, the affected nodes should still be reachable from outside the cluster.
+
+External Processes
+========================================
+Trogdor supports running arbitrary commands in external processes. This is a generic way to run any configurable command in the Trogdor framework - be it a Python program, bash script, docker image, etc.
+
+### ExternalCommandWorker
+ExternalCommandWorker starts an external command defined by the ExternalCommandSpec. It essentially allows you to run any command on any Trogdor agent node.
+The worker communicates with the external process via its stdin, stdout and stderr in a JSON protocol. It uses stdout for any actionable communication and only logs what it sees in stderr.
+On startup the worker will first send a message describing the workload to the external process in this format:
+```
+{"id":<task ID string>, "workload":<configured workload JSON object>}
+```
+and will then listen for messages from the external process, again in a JSON format.
+Said JSON can contain the following fields:
+- status: If the object contains this field, the status of the worker will be set to the given value.
+- error: If the object contains this field, the error of the worker will be set to the given value. Once an error occurs, the external process will be terminated.
+- log: If the object contains this field, a log message will be issued with this text.
+An example:
+```json
+{"log": "Finished successfully.", "status": {"p99ProduceLatency": "100ms", "messagesSent": 10000}}
+```
 
 Exec Mode
 ========================================

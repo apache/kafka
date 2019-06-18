@@ -44,6 +44,7 @@ import org.junit.Test;
 import java.time.Duration;
 import java.util.Collections;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -379,10 +380,44 @@ public class ConsumerNetworkClientTest {
         assertEquals(0, consumerClient.pendingRequestCount(node));
     }
 
+    @Test
+    public void testTrySend() {
+        final AtomicBoolean isReady = new AtomicBoolean();
+        final AtomicInteger checkCount = new AtomicInteger();
+        client = new MockClient(time, metadata) {
+            @Override
+            public boolean ready(Node node, long now) {
+                checkCount.incrementAndGet();
+                if (isReady.get())
+                    return super.ready(node, now);
+                else
+                    return false;
+            }
+        };
+        consumerClient = new ConsumerNetworkClient(new LogContext(), client, metadata, time, 100, 10, Integer.MAX_VALUE);
+        consumerClient.send(node, heartbeat());
+        consumerClient.send(node, heartbeat());
+        assertEquals(2, consumerClient.pendingRequestCount(node));
+        assertEquals(0, client.inFlightRequestCount(node.idString()));
+
+        consumerClient.trySend(time.milliseconds());
+        // only check one time when the node doesn't ready
+        assertEquals(1, checkCount.getAndSet(0));
+        assertEquals(2, consumerClient.pendingRequestCount(node));
+        assertEquals(0, client.inFlightRequestCount(node.idString()));
+
+        isReady.set(true);
+        consumerClient.trySend(time.milliseconds());
+        // check node ready or not for every request
+        assertEquals(2, checkCount.getAndSet(0));
+        assertEquals(2, consumerClient.pendingRequestCount(node));
+        assertEquals(2, client.inFlightRequestCount(node.idString()));
+    }
+
     private HeartbeatRequest.Builder heartbeat() {
         return new HeartbeatRequest.Builder(new HeartbeatRequestData()
                 .setGroupId("group")
-                .setGenerationid(1)
+                .setGenerationId(1)
                 .setMemberId("memberId"));
     }
 

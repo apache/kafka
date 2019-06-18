@@ -29,12 +29,9 @@ import java.util.Map;
 
 import static org.junit.Assert.assertEquals;
 
-@SuppressWarnings("WeakerAccess")
 public class MockProcessor<K, V> extends AbstractProcessor<K, V> {
 
     public final ArrayList<String> processed = new ArrayList<>();
-    public final ArrayList<K> processedKeys = new ArrayList<>();
-    public final ArrayList<V> processedValues = new ArrayList<>();
     public final Map<K, ValueAndTimestamp<V>> lastValueAndTimestampPerKey = new HashMap<>();
 
     public final ArrayList<Long> punctuatedStreamTime = new ArrayList<>();
@@ -79,23 +76,24 @@ public class MockProcessor<K, V> extends AbstractProcessor<K, V> {
 
     @Override
     public void process(final K key, final V value) {
-        processedKeys.add(key);
-        processedValues.add(value);
         if (value != null) {
             lastValueAndTimestampPerKey.put(key, ValueAndTimestamp.make(value, context().timestamp()));
         } else {
             lastValueAndTimestampPerKey.remove(key);
         }
-        processed.add(
-            (key == null ? "null" : key) +
-            ":" + (value == null ? "null" : value) +
-            " (ts: " + context().timestamp() + ")"
-        );
+
+        processed.add(makeRecord(key, value, context().timestamp()));
 
         if (commitRequested) {
             context().commit();
             commitRequested = false;
         }
+    }
+
+    public static String makeRecord(final Object key, final Object value, final long timestamp) {
+        return (key == null ? "null" : key) +
+            ":" + (value == null ? "null" : value) +
+            " (ts: " + timestamp + ")";
     }
 
     public void checkAndClearProcessResult(final String... expected) {

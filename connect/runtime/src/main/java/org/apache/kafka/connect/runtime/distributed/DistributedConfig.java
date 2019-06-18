@@ -39,13 +39,13 @@ public class DistributedConfig extends WorkerConfig {
     /**
      * <code>group.id</code>
      */
-    public static final String GROUP_ID_CONFIG = "group.id";
+    public static final String GROUP_ID_CONFIG = CommonClientConfigs.GROUP_ID_CONFIG;
     private static final String GROUP_ID_DOC = "A unique string that identifies the Connect cluster group this worker belongs to.";
 
     /**
      * <code>session.timeout.ms</code>
      */
-    public static final String SESSION_TIMEOUT_MS_CONFIG = "session.timeout.ms";
+    public static final String SESSION_TIMEOUT_MS_CONFIG = CommonClientConfigs.SESSION_TIMEOUT_MS_CONFIG;
     private static final String SESSION_TIMEOUT_MS_DOC = "The timeout used to detect worker failures. " +
             "The worker sends periodic heartbeats to indicate its liveness to the broker. If no heartbeats are " +
             "received by the broker before the expiration of this session timeout, then the broker will remove the " +
@@ -56,7 +56,7 @@ public class DistributedConfig extends WorkerConfig {
     /**
      * <code>heartbeat.interval.ms</code>
      */
-    public static final String HEARTBEAT_INTERVAL_MS_CONFIG = "heartbeat.interval.ms";
+    public static final String HEARTBEAT_INTERVAL_MS_CONFIG = CommonClientConfigs.HEARTBEAT_INTERVAL_MS_CONFIG;
     private static final String HEARTBEAT_INTERVAL_MS_DOC = "The expected time between heartbeats to the group " +
             "coordinator when using Kafka's group management facilities. Heartbeats are used to ensure that the " +
             "worker's session stays active and to facilitate rebalancing when new members join or leave the group. " +
@@ -66,11 +66,8 @@ public class DistributedConfig extends WorkerConfig {
     /**
      * <code>rebalance.timeout.ms</code>
      */
-    public static final String REBALANCE_TIMEOUT_MS_CONFIG = "rebalance.timeout.ms";
-    private static final String REBALANCE_TIMEOUT_MS_DOC = "The maximum allowed time for each worker to join the group " +
-            "once a rebalance has begun. This is basically a limit on the amount of time needed for all tasks to " +
-            "flush any pending data and commit offsets. If the timeout is exceeded, then the worker will be removed " +
-            "from the group, which will cause offset commit failures.";
+    public static final String REBALANCE_TIMEOUT_MS_CONFIG = CommonClientConfigs.REBALANCE_TIMEOUT_MS_CONFIG;
+    private static final String REBALANCE_TIMEOUT_MS_DOC = CommonClientConfigs.REBALANCE_TIMEOUT_MS_DOC;
 
     /**
      * <code>worker.sync.timeout.ms</code>
