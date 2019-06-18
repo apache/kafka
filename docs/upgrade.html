@@ -19,14 +19,32 @@
 
 <script id="upgrade-template" type="text/x-handlebars-template">
 
+<h5><a id="upgrade_240_notable" href="#upgrade_240_notable">Notable changes in 2.4.0</a></h5>
+<ul>
+    <li>The <code>bin/kafka-preferred-replica-election.sh</code> command line tool has been deprecated. It has been replaced by <code>bin/kafka-leader-election.sh</code>.</li>
+    <li>The methods <code>electPreferredLeaders</code> in the Java <code>AdminClient</code> class have been deprecated in favor of the methods <code>electLeaders</code>.</li>
+    <li>Scala code leveraging the <code>NewTopic(String, int, short)</code> constructor with literal values will need to explicitly call <code>toShort</code> on the second literal.</li>
+</ul>
+
 <h4><a id="upgrade_2_3_0" href="#upgrade_2_3_0">Upgrading from 0.8.x, 0.9.x, 0.10.0.x, 0.10.1.x, 0.10.2.x, 0.11.0.x, 1.0.x, 1.1.x, 2.0.x or 2.1.x or 2.2.x to 2.3.0</a></h4>
 
 <!-- TODO core-team -->
 
 <h5><a id="upgrade_230_notable" href="#upgrade_230_notable">Notable changes in 2.3.0</a></h5>
 <ul>
+    <li> We are introducing a new rebalancing protocol for Kafka Connect based on
+        <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-415%3A+Incremental+Cooperative+Rebalancing+in+Kafka+Connect">incremental cooperative rebalancing</a>.
+        The new protocol does not require stopping all the tasks during a rebalancing phase between Connect workers. Instead, only the tasks that need to be exchanged
+        between workers are stopped and they are started in a follow up rebalance. The new Connect protocol is enabled by default beginning with 2.3.0.
+        For more details on how it works and how to enable the old behavior of eager rebalancing, checkout
+        <a href="/{{version}}/documentation/#connect_administration">incremental cooperative rebalancing design</a>.
+    </li>
+    <li> We are introducing static membership towards consumer user. This feature reduces unnecessary rebalances during normal application upgrades or rolling bounces.
+        For more details on how to use it, checkout <a href="/{{version}}/design/#static_membership">static membership design</a>.
+    </li>
     <li> Kafka Streams DSL switches its used store types. While this change is mainly transparent to users, there are some corner cases that may require code changes.
-	See the <a href="/{{version}}/documentation/streams/upgrade-guide#streams_api_changes_230">Kafka Streams upgrade section</a> for more details.</li>
+        See the <a href="/{{version}}/documentation/streams/upgrade-guide#streams_api_changes_230">Kafka Streams upgrade section</a> for more details.
+    </li>
 </ul>
 
 <h4><a id="upgrade_2_2_0" href="#upgrade_2_2_0">Upgrading from 0.8.x, 0.9.x, 0.10.0.x, 0.10.1.x, 0.10.2.x, 0.11.0.x, 1.0.x, 1.1.x, 2.0.x or 2.1.x to 2.2.0</a></h4>
@@ -70,21 +88,6 @@
         the newer Java clients must be used.
     </li>
 </ol>
-
-<h5><a id="upgrade_240_notable" href="#upgrade_240_notable">Notable changes in 2.4.0</a></h5>
-<ul>
-    <li>The <code>bin/kafka-preferred-replica-election.sh</code> command line tool has been deprecated. It has been replaced by <code>bin/kafka-leader-election.sh</code>.</li>
-    <li>The methods <code>electPreferredLeaders</code> in the Java <code>AdminClient</code> class have been deprecated in favor of the methods <code>electLeaders</code>.</li>
-    <li>Scala code leveraging the <code>NewTopic(String, int, short)</code> constructor with literal values will need to explicitly call <code>toShort</code> on the second literal.</li>
-</ul>
-
-<h5><a id="upgrade_230_notable" href="#upgrade_230_notable">Notable changes in 2.3.0</a></h5>
-<ul>
-    <li>
-        We are introducing static membership towards consumer user. This feature reduces unnecessary rebalances during normal application upgrades or rolling bounces.
-        For more details on how to use it, checkout <a href="/{{version}}/design/#static_membership">static membership design</a>.
-    </li>
-</ul>
 
 <h5><a id="upgrade_220_notable" href="#upgrade_220_notable">Notable changes in 2.2.0</a></h5>
 <ul>
