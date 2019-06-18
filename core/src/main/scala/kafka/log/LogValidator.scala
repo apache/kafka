@@ -312,7 +312,7 @@ private[kafka] object LogValidator extends Logging {
       // if we are on version 2 and beyond, and we know we are going for in place assignment,
       // then we can optimize the iterator to skip key / value / headers since they would not be used at all
       val recordsIterator = if (inPlaceAssignment && firstBatch.magic() >= RecordBatch.MAGIC_VALUE_V2)
-        batch.skipKeyValueIterator()
+        batch.skipKeyValueIterator(BufferSupplier.NO_CACHING)
       else
         batch.streamingIterator(BufferSupplier.NO_CACHING)
 

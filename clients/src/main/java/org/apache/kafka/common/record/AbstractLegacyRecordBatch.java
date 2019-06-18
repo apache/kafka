@@ -227,7 +227,7 @@ public abstract class AbstractLegacyRecordBatch extends AbstractRecordBatch impl
         return iterator(BufferSupplier.NO_CACHING);
     }
 
-    private CloseableIterator<Record> iterator(BufferSupplier bufferSupplier) {
+    CloseableIterator<Record> iterator(BufferSupplier bufferSupplier) {
         if (isCompressed())
             return new DeepRecordsIterator(this, false, Integer.MAX_VALUE, bufferSupplier);
 
@@ -509,8 +509,8 @@ public abstract class AbstractLegacyRecordBatch extends AbstractRecordBatch impl
          * @return An iterator over the records contained within this batch
          */
         @Override
-        public CloseableIterator<Record> skipKeyValueIterator() {
-            return CloseableIterator.wrapAsCloseable(iterator());
+        public CloseableIterator<Record> skipKeyValueIterator(BufferSupplier bufferSupplier) {
+            return CloseableIterator.wrapAsCloseable(iterator(bufferSupplier));
         }
 
         @Override

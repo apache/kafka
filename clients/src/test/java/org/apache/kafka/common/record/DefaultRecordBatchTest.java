@@ -388,7 +388,7 @@ public class DefaultRecordBatchTest {
             new SimpleRecord(9999L, "abc".getBytes(), "0".getBytes(), headers)
             );
         DefaultRecordBatch batch = new DefaultRecordBatch(records.buffer());
-        try (CloseableIterator<Record> streamingIterator = batch.skipKeyValueIterator()) {
+        try (CloseableIterator<Record> streamingIterator = batch.skipKeyValueIterator(BufferSupplier.NO_CACHING)) {
             assertEquals(Arrays.asList(
                 new PartialDefaultRecord(9, (byte) 0, 0L, 1L, -1, 1, 1),
                 new PartialDefaultRecord(9, (byte) 0, 1L, 2L, -1, 1, 1),

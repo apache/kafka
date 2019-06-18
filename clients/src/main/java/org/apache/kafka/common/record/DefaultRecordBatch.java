@@ -335,7 +335,7 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
     }
 
     @Override
-    public CloseableIterator<Record> skipKeyValueIterator() {
+    public CloseableIterator<Record> skipKeyValueIterator(BufferSupplier bufferSupplier) {
         if (count() == 0) {
             return CloseableIterator.wrapAsCloseable(Collections.emptyIterator());
         }
@@ -350,7 +350,7 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
 
         // we define this to be a closable iterator so that caller (i.e. the log validator) needs to close it
         // while we can save memory footprint of not decompressing the full record set ahead of time
-        return compressedIterator(BufferSupplier.NO_CACHING, true);
+        return compressedIterator(bufferSupplier, true);
     }
 
     @Override

@@ -21,6 +21,7 @@ import org.apache.kafka.common.record.BufferSupplier;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.MemoryRecordsBuilder;
+import org.apache.kafka.common.record.MutableRecordBatch;
 import org.apache.kafka.common.record.Record;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.TimestampType;
@@ -50,14 +51,14 @@ import static org.apache.kafka.common.record.RecordBatch.CURRENT_MAGIC_VALUE;
 public class RecordBatchIterationBenchmark {
 
     private final Random random = new Random(0);
-    private final int batchCount = 5000;
-    private final int maxBatchSize = 10;
+    private final int batchCount = 1000;
+    private final int maxBatchSize = 200;
 
     public enum Bytes {
         RANDOM, ONES
     }
 
-    @Param(value = {"LZ4", "SNAPPY", "NONE"})
+    @Param(value = {"LZ4", "SNAPPY", "GZIP", "ZSTD", "NONE"})
     private CompressionType compressionType = CompressionType.NONE;
 
     @Param(value = {"1", "2"})
@@ -119,7 +120,7 @@ public class RecordBatchIterationBenchmark {
         return builder.build().buffer();
     }
 
-    @Benchmark
+    //@Benchmark
     public void measureIteratorForBatchWithSingleMessage(Blackhole bh) throws IOException {
         for (RecordBatch batch : MemoryRecords.readableRecords(singleBatchBuffer.duplicate()).batches()) {
             try (CloseableIterator<Record> iterator = batch.streamingIterator(bufferSupplier)) {
@@ -130,6 +131,7 @@ public class RecordBatchIterationBenchmark {
     }
 
     @OperationsPerInvocation(value = batchCount)
+    @Fork(jvmArgsAppend = "-Xmx2048m")
     @Benchmark
     public void measureStreamingIteratorForVariableBatchSize(Blackhole bh) throws IOException {
         for (int i = 0; i < batchCount; ++i) {
@@ -142,4 +144,17 @@ public class RecordBatchIterationBenchmark {
         }
     }
 
+    @OperationsPerInvocation(value = batchCount)
+    @Fork(jvmArgsAppend = "-Xmx2048m")
+    @Benchmark
+    public void measureSkipIteratorForVariableBatchSize(Blackhole bh) throws IOException {
+        for (int i = 0; i < batchCount; ++i) {
+            for (MutableRecordBatch batch : MemoryRecords.readableRecords(batchBuffers[i].duplicate()).batches()) {
+                try (CloseableIterator<Record> iterator = batch.skipKeyValueIterator(bufferSupplier)) {
+                    while (iterator.hasNext())
+                        bh.consume(iterator.next());
+                }
+            }
+        }
+    }
 }

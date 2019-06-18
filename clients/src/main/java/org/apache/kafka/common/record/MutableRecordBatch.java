@@ -63,5 +63,5 @@ public interface MutableRecordBatch extends RecordBatch {
      *
      * @return The closeable iterator
      */
-    CloseableIterator<Record> skipKeyValueIterator();
+    CloseableIterator<Record> skipKeyValueIterator(BufferSupplier bufferSupplier);
 }
