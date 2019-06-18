@@ -125,11 +125,11 @@ class DelayedFetchTest extends EasyMockSupport {
 
   @Test
   def testCompleteWhenFollowerLaggingHW(): Unit = {
-    // No HW from the follower
+    // No HW from the follower, should complete
     resetAll
     testCompleteWhenFollowerLaggingHW(None, delayedFetch => {
-      assertFalse(delayedFetch.tryComplete())
-      assertFalse(delayedFetch.isCompleted)
+      assertTrue(delayedFetch.tryComplete())
+      assertTrue(delayedFetch.isCompleted)
     })
 
     // A higher HW from the follower (shouldn't actually be possible)
@@ -152,60 +152,6 @@ class DelayedFetchTest extends EasyMockSupport {
       assertTrue(delayedFetch.tryComplete())
       assertTrue(delayedFetch.isCompleted)
     })
-  }
-
-  @Test
-  def testCompleteWhenHWChanges {
-    val topicPartition = new TopicPartition("topic", 0)
-    val fetchOffset = 500L
-    val logStartOffset = 0L
-    val currentLeaderEpoch = Optional.of[Integer](10)
-    val replicaId = 1
-
-    val fetchStatus = FetchPartitionStatus(
-      startOffsetMetadata = LogOffsetMetadata(fetchOffset),
-      fetchInfo = new FetchRequest.PartitionData(fetchOffset, logStartOffset, maxBytes, currentLeaderEpoch))
-    val fetchMetadata = buildFetchMetadata(replicaId, topicPartition, fetchStatus)
-
-    var fetchResultOpt: Option[FetchPartitionData] = None
-    def callback(responses: Seq[(TopicPartition, FetchPartitionData)]): Unit = {
-      fetchResultOpt = Some(responses.head._2)
-    }
-
-    val delayedFetch = new DelayedFetch(
-      delayMs = 500,
-      fetchMetadata = fetchMetadata,
-      replicaManager = replicaManager,
-      quota = replicaQuota,
-      clientMetadata = None,
-      responseCallback = callback,
-      _ => None)
-
-    val partition: Partition = mock(classOf[Partition])
-
-    EasyMock.expect(replicaManager.getPartitionOrException(topicPartition, expectLeader = true))
-      .andReturn(partition).anyTimes()
-
-    // The HW changes between calls
-    EasyMock.expect(partition.fetchOffsetSnapshot(currentLeaderEpoch, fetchOnlyFromLeader = true))
-      .andReturn(
-        LogOffsetSnapshot(
-          logStartOffset = 0,
-          logEndOffset = new LogOffsetMetadata(500L),
-          highWatermark = new LogOffsetMetadata(480L),
-          lastStableOffset = new LogOffsetMetadata(400L)))
-      .andReturn(
-        LogOffsetSnapshot(
-          logStartOffset = 0,
-          logEndOffset = new LogOffsetMetadata(500L),
-          highWatermark = new LogOffsetMetadata(490L),
-          lastStableOffset = new LogOffsetMetadata(400L)))
-
-    expectReadFromReplica(replicaId, topicPartition, fetchStatus.fetchInfo)
-
-    replayAll()
-    assertFalse(delayedFetch.tryComplete())
-    assertTrue(delayedFetch.tryComplete())
   }
 
   private def buildFetchMetadata(replicaId: Int,

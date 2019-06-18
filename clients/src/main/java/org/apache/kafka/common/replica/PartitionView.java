@@ -17,6 +17,8 @@
 package org.apache.kafka.common.replica;
 
 import java.util.Collections;
+import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 
 /**
@@ -25,16 +27,47 @@ import java.util.Set;
 public interface PartitionView {
     Set<ReplicaView> replicas();
 
+    Optional<ReplicaView> leader();
+
     class DefaultPartitionView implements PartitionView {
         private final Set<ReplicaView> replicas;
+        private final Optional<ReplicaView> leader;
 
-        public DefaultPartitionView(Set<ReplicaView> replicas) {
+        public DefaultPartitionView(Set<ReplicaView> replicas, Optional<ReplicaView> leader) {
             this.replicas = Collections.unmodifiableSet(replicas);
+            this.leader = leader;
         }
 
         @Override
         public Set<ReplicaView> replicas() {
             return replicas;
+        }
+
+        @Override
+        public Optional<ReplicaView> leader() {
+            return leader;
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+            DefaultPartitionView that = (DefaultPartitionView) o;
+            return Objects.equals(replicas, that.replicas) &&
+                    Objects.equals(leader, that.leader);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(replicas, leader);
+        }
+
+        @Override
+        public String toString() {
+            return "DefaultPartitionView{" +
+                    "replicas=" + replicas +
+                    ", leader=" + leader +
+                    '}';
         }
     }
 }

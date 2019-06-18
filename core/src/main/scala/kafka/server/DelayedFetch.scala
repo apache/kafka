@@ -80,7 +80,6 @@ class DelayedFetch(delayMs: Long,
    * Case E: The partition is in an offline log directory on this broker
    * Case F: This broker is the leader, but the requested epoch is now fenced
    * Case G: The high watermark on this broker has changed within a FetchSession, need to propagate to follower (KIP-392)
-   * Case H: The high watermark on this broker has changed during this request, need to propagate to followers (KIP-392)
    * Upon completion, should return whatever data is available for each valid partition
    */
   override def tryComplete(): Boolean = {
@@ -124,18 +123,14 @@ class DelayedFetch(delayMs: Long,
               }
             }
 
-            // Case G check HW from follower against latest from leader
-            val followerHW = followerHighwatermarks.apply(topicPartition)
-            followerHW.foreach(hw => if (offsetSnapshot.highWatermark.messageOffset > hw) return forceComplete())
-
-            // Case H check HW during this DelayedFetch against latest from leader
-            seenHighWatermarks.get(topicPartition) match {
-              case Some(offset) => if (fetchMetadata.isFromFollower && offset != offsetSnapshot.highWatermark.messageOffset) {
-                debug(s"Satisfying fetch $fetchMetadata immediately since the high watermark changed.")
+            if (fetchMetadata.isFromFollower) {
+              // Case G check if the follower has the correct HW from the leader
+              val followerHW = followerHighwatermarks(topicPartition)
+              if (followerHW.isEmpty || followerHW.exists(hw => offsetSnapshot.highWatermark.messageOffset > hw)) {
                 return forceComplete()
               }
-              case None => seenHighWatermarks.update(topicPartition, offsetSnapshot.highWatermark.messageOffset)
             }
+
           }
         } catch {
           case _: KafkaStorageException => // Case E

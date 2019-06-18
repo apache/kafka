@@ -19,16 +19,13 @@ package org.apache.kafka.common.replica;
 import org.apache.kafka.common.Node;
 
 import java.util.Comparator;
+import java.util.Objects;
 import java.util.Optional;
 
 /**
  * View of a replica used by {@link ReplicaSelector} to determine a preferred replica.
  */
 public interface ReplicaView {
-    /**
-     * Is this replica the leader of its partition
-     */
-    boolean isLeader();
 
     /**
      * The endpoint information for this replica (hostname, port, rack, etc)
@@ -56,21 +53,14 @@ public interface ReplicaView {
     }
 
     class DefaultReplicaView implements ReplicaView {
-        private final boolean isLeader;
         private final Node endpoint;
         private final long logEndOffset;
         private final Optional<Long> lastCaughtUpTimeMs;
 
-        public DefaultReplicaView(boolean isLeader, Node endpoint, long logEndOffset, Optional<Long> lastCaughtUpTimeMs) {
-            this.isLeader = isLeader;
+        public DefaultReplicaView(Node endpoint, long logEndOffset, Optional<Long> lastCaughtUpTimeMs) {
             this.endpoint = endpoint;
             this.logEndOffset = logEndOffset;
             this.lastCaughtUpTimeMs = lastCaughtUpTimeMs;
-        }
-
-        @Override
-        public boolean isLeader() {
-            return isLeader;
         }
 
         @Override
@@ -86,6 +76,30 @@ public interface ReplicaView {
         @Override
         public Optional<Long> lastCaughtUpTimeMs() {
             return lastCaughtUpTimeMs;
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+            DefaultReplicaView that = (DefaultReplicaView) o;
+            return logEndOffset == that.logEndOffset &&
+                    Objects.equals(endpoint, that.endpoint) &&
+                    Objects.equals(lastCaughtUpTimeMs, that.lastCaughtUpTimeMs);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(endpoint, logEndOffset, lastCaughtUpTimeMs);
+        }
+
+        @Override
+        public String toString() {
+            return "DefaultReplicaView{" +
+                    "endpoint=" + endpoint +
+                    ", logEndOffset=" + logEndOffset +
+                    ", lastCaughtUpTimeMs=" + lastCaughtUpTimeMs +
+                    '}';
         }
     }
 }

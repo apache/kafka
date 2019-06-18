@@ -1048,8 +1048,8 @@ class ReplicaManager(val config: KafkaConfig,
         val replicaInfoSet: Set[ReplicaView] = partition.allReplicas
           // Exclude replicas that don't have the requested offset (whether or not if they're in the ISR)
           .filter(replica => replica.logEndOffset > fetchOffset)
+          .filter(replica => replica.logStartOffset <= fetchOffset)
           .map(replica => new DefaultReplicaView(
-            partition.leaderReplicaIdOpt.exists(leaderId => leaderId.equals(replica.brokerId)),
             replicaEndpoints.getOrElse(replica.brokerId, Node.noNode()),
             replica.logEndOffset,
             if (replica.lastCaughtUpTimeMs == 0) {
@@ -1058,7 +1058,10 @@ class ReplicaManager(val config: KafkaConfig,
               util.Optional.of(long2Long(replica.lastCaughtUpTimeMs))
             }
           ))
-        val partitionInfo = new DefaultPartitionView(replicaInfoSet.asJava)
+        val leaderReplica: Option[ReplicaView] = replicaInfoSet.find(
+          replicaView => partition.leaderReplicaIdOpt.exists(leaderId => leaderId.equals(replicaView.endpoint().id())))
+
+        val partitionInfo = new DefaultPartitionView(replicaInfoSet.asJava, leaderReplica.asJava)
         replicaSelector.select(tp, clientMetadata, partitionInfo).asScala
           .filter(!_.endpoint.isEmpty)
           .map(_.endpoint.id)

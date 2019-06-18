@@ -31,7 +31,6 @@ import java.util.stream.Stream;
 import static org.apache.kafka.test.TestUtils.assertOptional;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
 
 public class ReplicaSelectorTest {
     @Test
@@ -39,19 +38,17 @@ public class ReplicaSelectorTest {
         TopicPartition tp = new TopicPartition("test", 0);
 
         Set<ReplicaView> replicaViewSet = replicaInfoSet();
-        PartitionView partitionView = partitionInfo(replicaViewSet);
+        ReplicaView leader = replicaViewSet.iterator().next();
+        PartitionView partitionView = partitionInfo(replicaViewSet, leader);
 
         ReplicaSelector selector = new LeaderReplicaSelector();
         Optional<ReplicaView> selected;
 
         ClientMetadata metadata = metadata("doesnt-matter");
         selected = selector.select(tp, metadata, partitionView);
-        assertOptional(selected, replicaInfo -> {
-            assertTrue(replicaInfo.isLeader());
-            assertEquals(replicaInfo.endpoint().id(), 0);
-        });
+        assertOptional(selected, replicaInfo -> assertEquals(replicaInfo, leader));
 
-        selected = selector.select(tp, metadata, partitionInfo(Collections.emptySet()));
+        selected = selector.select(tp, metadata, partitionInfo(Collections.emptySet(), null));
         assertFalse(selected.isPresent());
     }
 
@@ -60,7 +57,8 @@ public class ReplicaSelectorTest {
         TopicPartition tp = new TopicPartition("test", 0);
 
         Set<ReplicaView> replicaViewSet = replicaInfoSet();
-        PartitionView partitionView = partitionInfo(replicaViewSet);
+        ReplicaView leader = replicaViewSet.iterator().next();
+        PartitionView partitionView = partitionInfo(replicaViewSet, leader);
 
         ReplicaSelector selector = new RackAwareReplicaSelector();
         Optional<ReplicaView> selected = selector.select(tp, metadata("rack-b"), partitionView);
@@ -71,13 +69,13 @@ public class ReplicaSelectorTest {
 
         selected = selector.select(tp, metadata("not-a-rack"), partitionView);
         assertOptional(selected, replicaInfo -> {
-            assertTrue("Expect leader when we can't find any nodes in given rack", replicaInfo.isLeader());
+            assertEquals("Expect leader when we can't find any nodes in given rack", replicaInfo, leader);
         });
 
         selected = selector.select(tp, metadata("rack-a"), partitionView);
         assertOptional(selected, replicaInfo -> {
             assertEquals("Expect replica to be in rack-a", replicaInfo.endpoint().rack(), "rack-a");
-            assertTrue("Expect the leader since it's in rack-a", replicaInfo.isLeader());
+            assertEquals("Expect the leader since it's in rack-a", replicaInfo, leader);
         });
 
 
@@ -85,22 +83,16 @@ public class ReplicaSelectorTest {
 
     static Set<ReplicaView> replicaInfoSet() {
         return Stream.of(
-                replicaInfo(new Node(0, "host0", 1234, "rack-a"), true, 4, 10),
-                replicaInfo(new Node(1, "host1", 1234, "rack-a"), false, 2, 5),
-                replicaInfo(new Node(2, "host2", 1234, "rack-b"), false, 3, 7),
-                replicaInfo(new Node(3, "host3", 1234, "rack-b"), false, 4, 8)
+                replicaInfo(new Node(0, "host0", 1234, "rack-a"), 4, 10),
+                replicaInfo(new Node(1, "host1", 1234, "rack-a"), 2, 5),
+                replicaInfo(new Node(2, "host2", 1234, "rack-b"), 3, 7),
+                replicaInfo(new Node(3, "host3", 1234, "rack-b"), 4, 8)
 
         ).collect(Collectors.toSet());
     }
 
-    static ReplicaView replicaInfo(Node node, boolean isLeader, long logOffset, long lastCaughtUpTimeMs) {
+    static ReplicaView replicaInfo(Node node, long logOffset, long lastCaughtUpTimeMs) {
         return new ReplicaView() {
-
-            @Override
-            public boolean isLeader() {
-                return isLeader;
-            }
-
             @Override
             public Node endpoint() {
                 return node;
@@ -118,8 +110,18 @@ public class ReplicaSelectorTest {
         };
     }
 
-    static PartitionView partitionInfo(Set<ReplicaView> replicaViewSet) {
-        return () -> replicaViewSet;
+    static PartitionView partitionInfo(Set<ReplicaView> replicaViewSet, ReplicaView leader) {
+        return new PartitionView() {
+            @Override
+            public Set<ReplicaView> replicas() {
+                return replicaViewSet;
+            }
+
+            @Override
+            public Optional<ReplicaView> leader() {
+                return Optional.ofNullable(leader);
+            }
+        };
     }
 
     static ClientMetadata metadata(String rack) {

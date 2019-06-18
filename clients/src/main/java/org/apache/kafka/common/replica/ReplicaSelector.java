@@ -46,11 +46,4 @@ public interface ReplicaSelector extends Configurable, Closeable {
     default void configure(Map<String, ?> configs) {
         // No-op by default
     }
-
-    /**
-     * Helper method to find the leader among the replicas for this partition
-     */
-    static Optional<ReplicaView> findLeader(PartitionView partitionView) {
-        return partitionView.replicas().stream().filter(ReplicaView::isLeader).findFirst();
-    }
 }
