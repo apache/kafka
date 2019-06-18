@@ -34,6 +34,7 @@ import org.apache.kafka.common.errors.{KafkaStorageException, LogDirNotFoundExce
 import scala.collection.JavaConverters._
 import scala.collection._
 import scala.collection.mutable.ArrayBuffer
+import scala.util.{Failure, Success, Try}
 
 /**
  * The entry point to the kafka log management subsystem. The log manager is responsible for log creation, retrieval, and cleaning.
@@ -691,48 +692,67 @@ class LogManager(logDirs: Seq[File],
           else
             nextLogDir().getAbsolutePath
         }
-        if (!isLogDirOnline(logDir))
-          throw new KafkaStorageException(s"Can not create log for $topicPartition because log directory $logDir is offline")
 
-        try {
-          val dir = {
-            if (isFuture)
-              new File(logDir, Log.logFutureDirName(topicPartition))
-            else
-              new File(logDir, Log.logDirName(topicPartition))
-          }
-          Files.createDirectories(dir.toPath)
-
-          val log = Log(
-            dir = dir,
-            config = config,
-            logStartOffset = 0L,
-            recoveryPoint = 0L,
-            maxProducerIdExpirationMs = maxPidExpirationMs,
-            producerIdExpirationCheckIntervalMs = LogManager.ProducerIdExpirationCheckIntervalMs,
-            scheduler = scheduler,
-            time = time,
-            brokerTopicStats = brokerTopicStats,
-            logDirFailureChannel = logDirFailureChannel)
-
+        val logDirName = {
           if (isFuture)
-            futureLogs.put(topicPartition, log)
+            Log.logFutureDirName(topicPartition)
           else
-            currentLogs.put(topicPartition, log)
-
-          info(s"Created log for partition $topicPartition in $logDir with properties " +
-            s"{${config.originals.asScala.mkString(", ")}}.")
-          // Remove the preferred log dir since it has already been satisfied
-          preferredLogDirs.remove(topicPartition)
-
-          log
-        } catch {
-          case e: IOException =>
-            val msg = s"Error while creating log for $topicPartition in dir $logDir"
-            logDirFailureChannel.maybeAddOfflineLogDir(logDir, msg, e)
-            throw new KafkaStorageException(msg, e)
+            Log.logDirName(topicPartition)
         }
+
+        val dir = createLogDirectory(logDir, logDirName)
+          .recoverWith {
+            case e: KafkaStorageException =>
+              // If the next log directory, try the other ones before failing
+              _liveLogDirs.asScala
+                .map(_.getAbsolutePath)
+                .filter(_ != logDir)
+                .map(createLogDirectory(_, logDirName))
+                .find(_.isSuccess)
+                .getOrElse(Failure(e))
+          }
+          .get // If Failure, will throw
+
+        val log = Log(
+          dir = dir,
+          config = config,
+          logStartOffset = 0L,
+          recoveryPoint = 0L,
+          maxProducerIdExpirationMs = maxPidExpirationMs,
+          producerIdExpirationCheckIntervalMs = LogManager.ProducerIdExpirationCheckIntervalMs,
+          scheduler = scheduler,
+          time = time,
+          brokerTopicStats = brokerTopicStats,
+          logDirFailureChannel = logDirFailureChannel)
+
+        if (isFuture)
+          futureLogs.put(topicPartition, log)
+        else
+          currentLogs.put(topicPartition, log)
+
+        info(s"Created log for partition $topicPartition in $logDir with properties " + s"{${config.originals.asScala.mkString(", ")}}.")
+        // Remove the preferred log dir since it has already been satisfied
+        preferredLogDirs.remove(topicPartition)
+
+        log
       }
+    }
+  }
+
+  private def createLogDirectory(logDir: String, logDirName: String): Try[File] = {
+    if (isLogDirOnline(logDir)) {
+      val dir = new File(logDir, logDirName)
+      try {
+        Files.createDirectories(dir.toPath)
+        Success(dir)
+      } catch {
+        case e: IOException =>
+          val msg = s"Error while creating log for $logDirName in dir $logDir"
+          logDirFailureChannel.maybeAddOfflineLogDir(logDir, msg, e)
+          Failure(new KafkaStorageException(msg, e))
+      }
+    } else {
+      Failure(new KafkaStorageException(s"Can not create log $logDirName because log directory $logDir is offline"))
     }
   }
 

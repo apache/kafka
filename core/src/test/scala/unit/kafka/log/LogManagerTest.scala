@@ -18,6 +18,7 @@
 package kafka.log
 
 import java.io._
+import java.nio.file.Files
 import java.util.{Collections, Properties}
 
 import kafka.server.FetchDataInfo
@@ -91,6 +92,33 @@ class LogManagerTest {
 
     val log = logManager.getOrCreateLog(new TopicPartition(name, 0), logConfig, isNew = true)
     val logFile = new File(logDir, name + "-0")
+    assertTrue(logFile.exists)
+    log.appendAsLeader(TestUtils.singletonRecords("test".getBytes()), leaderEpoch = 0)
+  }
+
+  @Test
+  def testCreateLogWithLogDirFallback() {
+
+    // Configure a number of directories that will fail, and one that won't
+    // making it unlikely that the good log directory will be first choice.
+    val dirs = (0 to 100)
+      .map(_.toString)
+      .map(logDir.toPath.resolve(_).toFile)
+    val goodDir = dirs(88)
+
+    logManager.shutdown()
+    logManager = createLogManager(dirs)
+    logManager.startup()
+
+    // To simulate disk failure, delete log directories and replace them with files
+    // so that Files.createDirectories will fail.
+    dirs.filter(_ != goodDir).foreach { dir =>
+      Utils.delete(dir)
+      Files.createFile(dir.toPath)
+    }
+
+    val log = logManager.getOrCreateLog(new TopicPartition(name, 0), logConfig, isNew = true)
+    val logFile = new File(goodDir, name + "-0")
     assertTrue(logFile.exists)
     log.appendAsLeader(TestUtils.singletonRecords("test".getBytes()), leaderEpoch = 0)
   }
