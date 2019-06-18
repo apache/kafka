@@ -167,20 +167,20 @@ public class ConsumerProtocolTest {
         Assignment parsedAssignment = ConsumerProtocol.deserializeAssignment(buffer);
         assertEquals(toSet(partitions), toSet(parsedAssignment.partitions()));
         assertNull(parsedAssignment.userData());
-        assertEquals(Errors.NONE, parsedAssignment.error());
+        assertEquals(ConsumerProtocol.AssignmentError.NONE, parsedAssignment.error());
     }
 
     @Test
     public void deserializeNewAssignmentWithOldVersion() {
         List<TopicPartition> partitions = Collections.singletonList(tp1);
-        ByteBuffer buffer = ConsumerProtocol.serializeAssignment(new Assignment((short) 1, partitions, null, Errors.NEED_REJOIN));
+        ByteBuffer buffer = ConsumerProtocol.serializeAssignment(new Assignment((short) 1, partitions, null, ConsumerProtocol.AssignmentError.NEED_REJOIN));
         // ignore the version assuming it is the old byte code, as it will blindly deserialize as 0
         Struct header = CONSUMER_PROTOCOL_HEADER_SCHEMA.read(buffer);
         header.getShort(VERSION_KEY_NAME);
         Assignment parsedAssignment = ConsumerProtocol.deserializeAssignmentV0(buffer);
         assertEquals(toSet(partitions), toSet(parsedAssignment.partitions()));
         assertNull(parsedAssignment.userData());
-        assertEquals(Errors.NONE, parsedAssignment.error());
+        assertEquals(ConsumerProtocol.AssignmentError.NONE, parsedAssignment.error());
     }
 
     @Test
@@ -200,7 +200,7 @@ public class ConsumerProtocolTest {
                         .set(ConsumerProtocol.TOPIC_KEY_NAME, tp1.topic())
                         .set(ConsumerProtocol.PARTITIONS_KEY_NAME, new Object[]{tp1.partition()})});
         assignmentV100.set(USER_DATA_KEY_NAME, ByteBuffer.wrap(new byte[0]));
-        assignmentV100.set(ERROR_CODE.name, Errors.NEED_REJOIN.code());
+        assignmentV100.set(ERROR_CODE.name, ConsumerProtocol.AssignmentError.NEED_REJOIN.code());
         assignmentV100.set("foo", "bar");
 
         Struct headerV100 = new Struct(CONSUMER_PROTOCOL_HEADER_SCHEMA);
@@ -214,6 +214,6 @@ public class ConsumerProtocolTest {
 
         PartitionAssignor.Assignment assignment = ConsumerProtocol.deserializeAssignment(buffer);
         assertEquals(toSet(Collections.singletonList(tp1)), toSet(assignment.partitions()));
-        assertEquals(Errors.NEED_REJOIN, assignment.error());
+        assertEquals(ConsumerProtocol.AssignmentError.NEED_REJOIN, assignment.error());
     }
 }

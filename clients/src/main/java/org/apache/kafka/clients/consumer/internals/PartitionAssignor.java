@@ -202,7 +202,7 @@ public interface PartitionAssignor {
 
     class Assignment {
         private final Short version;
-        private final List<TopicPartition> partitions;
+        private List<TopicPartition> partitions;
         private final ByteBuffer userData;
         private ConsumerProtocol.AssignmentError error;
 
@@ -223,10 +223,6 @@ public interface PartitionAssignor {
             this(version, partitions, userData, ConsumerProtocol.AssignmentError.NONE);
         }
 
-        public Assignment(List<TopicPartition> partitions, ByteBuffer userData, ConsumerProtocol.AssignmentError error) {
-            this(CONSUMER_PROTOCOL_V1, partitions, userData, error);
-        }
-
         public Assignment(List<TopicPartition> partitions, ByteBuffer userData) {
             this(CONSUMER_PROTOCOL_V1, partitions, userData);
         }
@@ -245,6 +241,10 @@ public interface PartitionAssignor {
 
         public ConsumerProtocol.AssignmentError error() {
             return error;
+        }
+
+        public void updatePartitions(List<TopicPartition> partitions) {
+            this.partitions = partitions;
         }
 
         public void setError(ConsumerProtocol.AssignmentError error) {

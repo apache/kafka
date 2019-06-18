@@ -548,7 +548,11 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             assignedPartitions.addAll(assignment.partitions());
 
             // update the assignment if the partition is owned by another different owner
-            if (assignment.partitions().removeIf(tp -> ownedPartitions.containsKey(tp) && !entry.getKey().equals(ownedPartitions.get(tp)))) {
+            List<TopicPartition> updatedPartitions = assignment.partitions().stream()
+                .filter(tp -> ownedPartitions.containsKey(tp) && !entry.getKey().equals(ownedPartitions.get(tp)))
+                .collect(Collectors.toList());
+            if (!updatedPartitions.equals(assignment.partitions())) {
+                assignment.updatePartitions(updatedPartitions);
                 revocationsNeeded = true;
             }
         }
@@ -577,14 +581,25 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         // execute the user's callback before rebalance
         ConsumerRebalanceListener listener = subscriptions.rebalanceListener();
 
-        Set<TopicPartition> revoked = subscriptions.assignedPartitions();
-        log.info("Revoking previously assigned partitions {}", revoked);
-        try {
-            listener.onPartitionsRevoked(revoked);
-        } catch (WakeupException | InterruptException e) {
-            throw e;
-        } catch (Exception e) {
-            log.error("User provided listener {} failed on partition revocation", listener.getClass().getName(), e);
+        switch (protocol) {
+            case EAGER:
+                Set<TopicPartition> revokedPartitions = new HashSet<>(subscriptions.assignedPartitions());
+                log.info("Revoking previously assigned partitions {}", revokedPartitions);
+                try {
+                    listener.onPartitionsRevoked(revokedPartitions);
+                } catch (WakeupException | InterruptException e) {
+                    throw e;
+                } catch (Exception e) {
+                    log.error("User provided listener {} failed on partition revocation", listener.getClass().getName(), e);
+                }
+
+                // also clear the assigned partitions since all have been revoked
+                subscriptions.assignFromSubscribed(Collections.emptySet());
+
+                break;
+
+            case COOPERATIVE:
+                break;
         }
 
         isLeader = false;
