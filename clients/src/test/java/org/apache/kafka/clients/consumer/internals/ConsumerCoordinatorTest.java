@@ -549,13 +549,8 @@ public class ConsumerCoordinatorTest {
         final Collection<TopicPartition> revoked = getRevoked(owned, newAssignment);
         final Collection<TopicPartition> assigned = getAdded(owned, newAssignment);
 
-        int revokeCount = 1;
+        final int revokeCount = 2;
         final int addCount = 1;
-
-        // with eager protocol we will call revoke on the old assignment as well
-        if (protocol == PartitionAssignor.RebalanceProtocol.EAGER) {
-            revokeCount += 1;
-        }
 
         assertFalse(coordinator.rejoinNeededOrPending());
         assertEquals(toSet(newAssignment), subscriptions.assignedPartitions());
@@ -600,11 +595,13 @@ public class ConsumerCoordinatorTest {
 
         coordinator.poll(time.timer(Long.MAX_VALUE));
 
+        final int revokeCount = protocol == PartitionAssignor.RebalanceProtocol.EAGER ? 1 : 2;
+
         assertFalse(coordinator.rejoinNeededOrPending());
         assertEquals(2, subscriptions.numAssignedPartitions());
         assertEquals(2, subscriptions.groupSubscription().size());
         assertEquals(2, subscriptions.subscription().size());
-        assertEquals(1, rebalanceListener.revokedCount);
+        assertEquals(revokeCount, rebalanceListener.revokedCount);
         assertEquals(getRevoked(owned, assigned), rebalanceListener.revoked);
         assertEquals(1, rebalanceListener.assignedCount);
         assertEquals(getAdded(owned, assigned), rebalanceListener.assigned);
@@ -1313,9 +1310,11 @@ public class ConsumerCoordinatorTest {
         client.prepareResponse(syncGroupResponse(assigned, Errors.NONE));
         coordinator.joinGroupIfNeeded(time.timer(Long.MAX_VALUE));
 
+        final int revokeCount = protocol == PartitionAssignor.RebalanceProtocol.EAGER ? 1 : 2;
+
         assertFalse(coordinator.rejoinNeededOrPending());
         assertEquals(toSet(assigned), subscriptions.assignedPartitions());
-        assertEquals(1, rebalanceListener.revokedCount);
+        assertEquals(revokeCount, rebalanceListener.revokedCount);
         assertEquals(getRevoked(owned, assigned), rebalanceListener.revoked);
         assertEquals(1, rebalanceListener.assignedCount);
         assertEquals(getAdded(owned, assigned), rebalanceListener.assigned);
@@ -2539,11 +2538,12 @@ public class ConsumerCoordinatorTest {
     }
 
     private static class MockRebalanceListener implements ConsumerRebalanceListener {
+        public Collection<TopicPartition> lost;
         public Collection<TopicPartition> revoked;
         public Collection<TopicPartition> assigned;
+        public int lostCount = 0;
         public int revokedCount = 0;
         public int assignedCount = 0;
-
 
         @Override
         public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
@@ -2557,5 +2557,10 @@ public class ConsumerCoordinatorTest {
             revokedCount++;
         }
 
+        @Override
+        public void onPartitionsLost(Collection<TopicPartition> partitions) {
+            this.lost = partitions;
+            lostCount++;
+        }
     }
 }

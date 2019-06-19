@@ -266,53 +266,53 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         }
     }
 
-    private void maybeLosePartitions(final String rootCause, final Predicate<TopicPartition> predicate) {
-        Set<TopicPartition> ownedPartitions = new HashSet<>(subscriptions.assignedPartitions());
-
-        if (subscriptions.partitionsAutoAssigned() && !ownedPartitions.isEmpty()) {
-            Set<TopicPartition> lostPartitions = metadataSnapshot == null ? ownedPartitions :
-                ownedPartitions.stream().filter(predicate).collect(Collectors.toSet());
-
-            log.info("Lost previously assigned partitions {} due to {}", lostPartitions, rootCause);
-
-            ConsumerRebalanceListener listener = subscriptions.rebalanceListener();
-            try {
-                listener.onPartitionsLost(lostPartitions);
-            } catch (WakeupException | InterruptException e) {
-                throw e;
-            } catch (Exception e) {
-                log.error("User provided listener {} failed on partition being lost", listener.getClass().getName(), e);
-            }
-
-            Set<TopicPartition> leftPartitions = new HashSet<>(ownedPartitions);
-            leftPartitions.removeAll(lostPartitions);
-
-            subscriptions.assignFromSubscribed(leftPartitions);
-        }
-    }
-
     private void maybeRevokePartitions(final Predicate<TopicPartition> predicate) {
         Set<TopicPartition> ownedPartitions = new HashSet<>(subscriptions.assignedPartitions());
 
-        if (subscriptions.partitionsAutoAssigned() && !ownedPartitions.isEmpty()) {
-            Set<TopicPartition> revokedPartitions = metadataSnapshot == null ? ownedPartitions :
+        Set<TopicPartition> revokedPartitions = metadataSnapshot == null ? ownedPartitions :
+            ownedPartitions.stream().filter(predicate).collect(Collectors.toSet());
+
+        log.info("Revoke previously assigned partitions {}", revokedPartitions);
+
+        ConsumerRebalanceListener listener = subscriptions.rebalanceListener();
+        try {
+            listener.onPartitionsRevoked(revokedPartitions);
+        } catch (WakeupException | InterruptException e) {
+            throw e;
+        } catch (Exception e) {
+            log.error("User provided listener {} failed on partition being revocation", listener.getClass().getName(), e);
+        }
+
+        Set<TopicPartition> leftPartitions = new HashSet<>(ownedPartitions);
+        leftPartitions.removeAll(revokedPartitions);
+
+        subscriptions.assignFromSubscribed(leftPartitions);
+    }
+
+    private void maybeLosePartitions(final String rootCause, final Predicate<TopicPartition> predicate) {
+        if (subscriptions.partitionsAutoAssigned()) {
+            Set<TopicPartition> ownedPartitions = new HashSet<>(subscriptions.assignedPartitions());
+
+            Set<TopicPartition> lostPartitions = metadataSnapshot == null ? ownedPartitions :
                 ownedPartitions.stream().filter(predicate).collect(Collectors.toSet());
 
-            log.info("Revoke previously assigned partitions {}", revokedPartitions);
+            if (!lostPartitions.isEmpty()) {
+                log.info("Lost previously assigned partitions {} due to {}", lostPartitions, rootCause);
 
-            ConsumerRebalanceListener listener = subscriptions.rebalanceListener();
-            try {
-                listener.onPartitionsRevoked(revokedPartitions);
-            } catch (WakeupException | InterruptException e) {
-                throw e;
-            } catch (Exception e) {
-                log.error("User provided listener {} failed on partition being revocation", listener.getClass().getName(), e);
+                ConsumerRebalanceListener listener = subscriptions.rebalanceListener();
+                try {
+                    listener.onPartitionsLost(lostPartitions);
+                } catch (WakeupException | InterruptException e) {
+                    throw e;
+                } catch (Exception e) {
+                    log.error("User provided listener {} failed on partition being lost", listener.getClass().getName(), e);
+                }
+
+                Set<TopicPartition> leftPartitions = new HashSet<>(ownedPartitions);
+                leftPartitions.removeAll(lostPartitions);
+
+                subscriptions.assignFromSubscribed(leftPartitions);
             }
-
-            Set<TopicPartition> leftPartitions = new HashSet<>(ownedPartitions);
-            leftPartitions.removeAll(revokedPartitions);
-
-            subscriptions.assignFromSubscribed(leftPartitions);
         }
     }
 
