@@ -1039,13 +1039,13 @@ class ReplicaManager(val config: KafkaConfig,
   def findPreferredReadReplica(tp: TopicPartition, clientMetadata: ClientMetadata, replicaId: Int, fetchOffset: Long): Option[Int] = {
     val partition = getPartitionOrException(tp, expectLeader = false)
 
-    if (partition.leaderReplicaIfLocal.isDefined) {
+    if (partition.isLeader) {
       if (Request.isValidBrokerId(replicaId)) {
         // Don't look up preferred for follower fetches via normal replication
         Option.empty
       } else {
         val replicaEndpoints = metadataCache.getPartitionReplicaEndpoints(tp.topic(), tp.partition(), new ListenerName(clientMetadata.listenerName))
-        val replicaInfoSet: Set[ReplicaView] = partition.allReplicas
+        val replicaInfoSet: Set[ReplicaView] = partition.allReplicaIds.flatMap(partition.getReplica)
           // Exclude replicas that don't have the requested offset (whether or not if they're in the ISR)
           .filter(replica => replica.logEndOffset > fetchOffset)
           .filter(replica => replica.logStartOffset <= fetchOffset)

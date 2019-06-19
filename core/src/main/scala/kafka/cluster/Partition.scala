@@ -1039,17 +1039,18 @@ class Partition(val topicPartition: TopicPartition,
   }
 
   def fetchOffsetSnapshot(currentLeaderEpoch: Optional[Integer],
-                          fetchOnlyFromLeader: Boolean): LogOffsetSnapshot = inReadLock(leaderIsrUpdateLock) {
+                          fetchOnlyFromLeader: Boolean,
+                          fullOffsetSnapshot: Boolean = false): LogOffsetSnapshot = inReadLock(leaderIsrUpdateLock) {
     // decide whether to only fetch from leader
     val localLog = localLogWithEpochOrException(currentLeaderEpoch, fetchOnlyFromLeader)
-    localLog.offsetSnapshot
+    localLog.offsetSnapshot(fullOffsetSnapshot)
   }
 
   def fetchOffsetSnapshotOrError(currentLeaderEpoch: Optional[Integer],
                                  fetchOnlyFromLeader: Boolean): Either[LogOffsetSnapshot, Errors] = {
     inReadLock(leaderIsrUpdateLock) {
       getLocalLog(currentLeaderEpoch, fetchOnlyFromLeader)
-        .left.map(_.offsetSnapshot)
+        .left.map(_.offsetSnapshot(false))
     }
   }
 

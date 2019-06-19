@@ -92,7 +92,8 @@ class DelayedFetch(delayMs: Long,
           if (fetchOffset != LogOffsetMetadata.UnknownOffsetMetadata) {
             val partition = replicaManager.getPartitionOrException(topicPartition,
               expectLeader = fetchMetadata.fetchOnlyLeader)
-            val offsetSnapshot = partition.fetchOffsetSnapshot(fetchLeaderEpoch, fetchMetadata.fetchOnlyLeader)
+            val offsetSnapshot = partition.fetchOffsetSnapshot(fetchLeaderEpoch, fetchMetadata.fetchOnlyLeader, true)
+
 
             val endOffset = fetchMetadata.fetchIsolation match {
               case FetchLogEnd => offsetSnapshot.logEndOffset
@@ -100,30 +101,26 @@ class DelayedFetch(delayMs: Long,
               case FetchTxnCommitted => offsetSnapshot.lastStableOffset
             }
 
-            // Case C can only be checked on a leader
-            val onFollower = fetchOffset.messageOffsetOnly || endOffset.messageOffsetOnly
-            if (!onFollower) {
-              // Go directly to the check for Case D if the message offsets are the same. If the log segment
-              // has just rolled, then the high watermark offset will remain the same but be on the old segment,
-              // which would incorrectly be seen as an instance of Case C.
-              if (endOffset.messageOffset != fetchOffset.messageOffset) {
-                if (endOffset.onOlderSegment(fetchOffset)) {
-                  // Case C, this can happen when the new fetch operation is on a truncated leader
-                  debug(s"Satisfying fetch $fetchMetadata since it is fetching later segments of partition $topicPartition.")
+            // Go directly to the check for Case D if the message offsets are the same. If the log segment
+            // has just rolled, then the high watermark offset will remain the same but be on the old segment,
+            // which would incorrectly be seen as an instance of Case C.
+            if (endOffset.messageOffset != fetchOffset.messageOffset) {
+              if (endOffset.onOlderSegment(fetchOffset)) {
+                // Case C, this can happen when the new fetch operation is on a truncated leader
+                debug(s"Satisfying fetch $fetchMetadata since it is fetching later segments of partition $topicPartition.")
+                return forceComplete()
+              } else if (fetchOffset.onOlderSegment(endOffset)) {
+                // Case C, this can happen when the fetch operation is falling behind the current segment
+                // or the partition has just rolled a new segment
+                debug(s"Satisfying fetch $fetchMetadata immediately since it is fetching older segments.")
+                // We will not force complete the fetch request if a replica should be throttled.
+                if (!replicaManager.shouldLeaderThrottle(quota, topicPartition, fetchMetadata.replicaId))
                   return forceComplete()
-                } else if (fetchOffset.onOlderSegment(endOffset)) {
-                  // Case C, this can happen when the fetch operation is falling behind the current segment
-                  // or the partition has just rolled a new segment
-                  debug(s"Satisfying fetch $fetchMetadata immediately since it is fetching older segments.")
-                  // We will not force complete the fetch request if a replica should be throttled.
-                  if (!replicaManager.shouldLeaderThrottle(quota, topicPartition, fetchMetadata.replicaId))
-                    return forceComplete()
-                } else if (fetchOffset.messageOffset < endOffset.messageOffset) {
-                  // we take the partition fetch size as upper bound when accumulating the bytes (skip if a throttled partition)
-                  val bytesAvailable = math.min(endOffset.positionDiff(fetchOffset), fetchStatus.fetchInfo.maxBytes)
-                  if (!replicaManager.shouldLeaderThrottle(quota, topicPartition, fetchMetadata.replicaId))
-                    accumulatedSize += bytesAvailable
-                }
+              } else if (fetchOffset.messageOffset < endOffset.messageOffset) {
+                // we take the partition fetch size as upper bound when accumulating the bytes (skip if a throttled partition)
+                val bytesAvailable = math.min(endOffset.positionDiff(fetchOffset), fetchStatus.fetchInfo.maxBytes)
+                if (!replicaManager.shouldLeaderThrottle(quota, topicPartition, fetchMetadata.replicaId))
+                  accumulatedSize += bytesAvailable
               }
             }
 

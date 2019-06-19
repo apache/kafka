@@ -357,12 +357,47 @@ class Log(@volatile var dir: File,
 
   def lastStableOffsetLag: Long = highWatermark - lastStableOffset
 
-  def offsetSnapshot: LogOffsetSnapshot = {
+  def fullOffsetSnapshot: LogOffsetSnapshot = {
+    val hw: LogOffsetMetadata = if (_highWatermarkMetadata.messageOffsetOnly) {
+      val fullOffset = convertToOffsetMetadataOrThrow(_highWatermarkMetadata.messageOffset,
+        "Could not load offset metadata for high watermark")
+      lock.synchronized {
+        _highWatermarkMetadata = fullOffset
+      }
+      fullOffset
+    } else {
+      _highWatermarkMetadata
+    }
+
+    val lso: LogOffsetMetadata = if (firstUnstableOffset.exists(_.messageOffsetOnly)) {
+      val fullOffset = convertToOffsetMetadataOrThrow(firstUnstableOffset.get.messageOffset,
+        "Could not load offset metadata for last stable offset")
+      lock.synchronized {
+        firstUnstableOffset = Some(fullOffset)
+      }
+      lastStableOffsetMetadata
+    } else {
+      lastStableOffsetMetadata
+    }
+
     LogOffsetSnapshot(
-      logStartOffset = logStartOffset,
-      logEndOffset = logEndOffsetMetadata,
-      highWatermark =  highWatermarkMetadata,
-      lastStableOffset = lastStableOffsetMetadata)
+      logStartOffset,
+      logEndOffsetMetadata,
+      hw,
+      lso
+    )
+  }
+
+  def offsetSnapshot(full: Boolean = false): LogOffsetSnapshot = {
+    if (full) {
+      fullOffsetSnapshot
+    } else {
+      LogOffsetSnapshot(
+        logStartOffset = logStartOffset,
+        logEndOffset = logEndOffsetMetadata,
+        highWatermark =  highWatermarkMetadata,
+        lastStableOffset = lastStableOffsetMetadata)
+    }
   }
 
   private val tags = {
@@ -1511,6 +1546,18 @@ class Log(@volatile var dir: File,
       case _: OffsetOutOfRangeException => None
     }
   }
+
+  /**
+    * Given a message offset, find its corresponding offset metadata in the log.
+    * If the message offset is out of range, throw an OffsetOutOfRangeException
+    */
+  def convertToOffsetMetadataOrThrow(offset: Long, message: String): LogOffsetMetadata = {
+    convertToOffsetMetadata(offset) match {
+      case Some(offsetMetadata) => offsetMetadata
+      case None => throw new OffsetOutOfRangeException(s"$message $offset")
+    }
+  }
+
 
   /**
    * Delete any log segments matching the given predicate function,
