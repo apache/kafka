@@ -1,6 +1,6 @@
 import time
 
-from ducktape.mark import parametrize
+from ducktape.mark import parametrize, ignore
 from ducktape.mark.resource import cluster
 from kafkatest.services.console_consumer import ConsoleConsumer
 from kafkatest.services.kafka import KafkaService
@@ -45,18 +45,19 @@ class TestSeparateInterbrokerListener(ProduceConsumeValidateTest):
             time.sleep(10)
 
     @cluster(num_nodes=9)
-    @parametrize(broker_protocol=SecurityConfig.SASL_SSL, broker_sasl_mechanism=SecurityConfig.SASL_MECHANISM_GSSAPI)
-    @parametrize(broker_protocol=SecurityConfig.SASL_SSL, broker_sasl_mechanism=SecurityConfig.SASL_MECHANISM_PLAIN)
-    @parametrize(broker_protocol=SecurityConfig.SASL_PLAINTEXT,
+    @parametrize(client_protocol=SecurityConfig.SASL_SSL, broker_protocol=SecurityConfig.SASL_SSL,
+                 broker_sasl_mechanism=SecurityConfig.SASL_MECHANISM_GSSAPI)
+    @parametrize(client_protocol=SecurityConfig.SASL_SSL, broker_protocol=SecurityConfig.SASL_SSL,
                  broker_sasl_mechanism=SecurityConfig.SASL_MECHANISM_PLAIN)
-    def test_enable_separate_interbroker_listener(self, broker_protocol, broker_sasl_mechanism):
+    @parametrize(client_protocol=SecurityConfig.SSL, broker_protocol=SecurityConfig.SASL_SSL,
+                 broker_sasl_mechanism=SecurityConfig.SASL_MECHANISM_GSSAPI)
+    def test_enable_separate_interbroker_listener(self, client_protocol, broker_protocol, broker_sasl_mechanism):
         """
         Start with a cluster that has a single {{client_protocol}} listener.
         Start producer and consumer on the {{client_protocol}} listener.
         Open a SECURED dedicated interbroker port via rolling upgrade.
         Ensure we can produce and consume via {{client_protocol}} port throughout.
         """
-        client_protocol = SecurityConfig.SASL_SSL
         client_sasl_mechanism = SecurityConfig.SASL_MECHANISM_GSSAPI
 
         self.kafka.security_protocol = client_protocol
@@ -74,11 +75,13 @@ class TestSeparateInterbrokerListener(ProduceConsumeValidateTest):
             self.roll_in_interbroker_listener, broker_protocol, broker_sasl_mechanism, True)
 
     @cluster(num_nodes=9)
-    @parametrize(broker_protocol=SecurityConfig.SASL_SSL, broker_sasl_mechanism=SecurityConfig.SASL_MECHANISM_GSSAPI)
-    @parametrize(broker_protocol=SecurityConfig.SASL_SSL, broker_sasl_mechanism=SecurityConfig.SASL_MECHANISM_PLAIN)
-    @parametrize(broker_protocol=SecurityConfig.SASL_PLAINTEXT,
+    @parametrize(client_protocol=SecurityConfig.SASL_SSL, broker_protocol=SecurityConfig.SASL_SSL,
+                 broker_sasl_mechanism=SecurityConfig.SASL_MECHANISM_GSSAPI)
+    @parametrize(client_protocol=SecurityConfig.SASL_SSL, broker_protocol=SecurityConfig.SASL_SSL,
                  broker_sasl_mechanism=SecurityConfig.SASL_MECHANISM_PLAIN)
-    def test_disable_separate_interbroker_listener(self, broker_protocol, broker_sasl_mechanism):
+    @parametrize(client_protocol=SecurityConfig.SSL, broker_protocol=SecurityConfig.SASL_SSL,
+                 broker_sasl_mechanism=SecurityConfig.SASL_MECHANISM_GSSAPI)
+    def test_disable_separate_interbroker_listener(self, client_protocol, broker_protocol, broker_sasl_mechanism):
         """
         Start with a cluster that has two listeners, one on {{client_protocol}}, another on {{broker_protocol}}.
         Even if protocols are the same, it's still two listeners, interbroker listener is a dedicated one.
@@ -86,7 +89,6 @@ class TestSeparateInterbrokerListener(ProduceConsumeValidateTest):
         Close dedicated {{broker_protocol}} listener via rolling restart.
         Ensure we can produce and consume via {{client_protocol}} listener throughout.
         """
-        client_protocol = SecurityConfig.SASL_SSL
         client_sasl_mechanism = SecurityConfig.SASL_MECHANISM_GSSAPI
 
         self.kafka.security_protocol = client_protocol
