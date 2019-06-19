@@ -25,6 +25,7 @@ import java.util.Arrays;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.is;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
 
@@ -55,6 +56,7 @@ public class BufferValueTest {
         final BufferValue bufferValue = new BufferValue(priorValue, oldValue, null, null);
         assertSame(priorValue, bufferValue.priorValue());
         assertSame(oldValue, bufferValue.oldValue());
+        assertNotEquals(bufferValue.priorValue(), bufferValue.oldValue());
     }
 
     @Test
@@ -64,6 +66,7 @@ public class BufferValueTest {
         final BufferValue bufferValue = new BufferValue(priorValue, oldValue, null, null);
         assertNull(bufferValue.priorValue());
         assertSame(oldValue, bufferValue.oldValue());
+        assertNotEquals(bufferValue.priorValue(), bufferValue.oldValue());
     }
 
     @Test
@@ -73,6 +76,7 @@ public class BufferValueTest {
         final BufferValue bufferValue = new BufferValue(priorValue, oldValue, null, null);
         assertSame(priorValue, bufferValue.priorValue());
         assertNull(bufferValue.oldValue());
+        assertNotEquals(bufferValue.priorValue(), bufferValue.oldValue());
     }
 
     @Test
