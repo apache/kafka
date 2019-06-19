@@ -1045,23 +1045,30 @@ class ReplicaManager(val config: KafkaConfig,
         Option.empty
       } else {
         val replicaEndpoints = metadataCache.getPartitionReplicaEndpoints(tp.topic(), tp.partition(), new ListenerName(clientMetadata.listenerName))
-        val replicaInfoSet: Set[ReplicaView] = partition.allReplicaIds.flatMap(partition.getReplica)
-          // Exclude replicas that don't have the requested offset (whether or not if they're in the ISR)
-          .filter(replica => replica.logEndOffset > fetchOffset)
-          .filter(replica => replica.logStartOffset <= fetchOffset)
-          .map(replica => new DefaultReplicaView(
-            replicaEndpoints.getOrElse(replica.brokerId, Node.noNode()),
-            replica.logEndOffset,
-            if (replica.lastCaughtUpTimeMs == 0) {
-              util.Optional.empty()
-            } else {
-              util.Optional.of(long2Long(replica.lastCaughtUpTimeMs))
-            }
-          ))
-        val leaderReplica: Option[ReplicaView] = replicaInfoSet.find(
-          replicaView => partition.leaderReplicaIdOpt.exists(leaderId => leaderId.equals(replicaView.endpoint().id())))
+        val replicaInfoSet: util.Set[ReplicaView] = {
+          val tmpSet: Set[ReplicaView] = partition.remoteReplicas
+            // Exclude replicas that don't have the requested offset (whether or not if they're in the ISR)
+            .filter(replica => replica.logEndOffset > fetchOffset)
+            .filter(replica => replica.logStartOffset <= fetchOffset)
+            .map(replica => new DefaultReplicaView(
+              replicaEndpoints.getOrElse(replica.brokerId, Node.noNode()),
+              replica.logEndOffset,
+              if (replica.lastCaughtUpTimeMs == 0) {
+                util.Optional.empty()
+              } else {
+                util.Optional.of(long2Long(replica.lastCaughtUpTimeMs))
+              }
+            ))
+          tmpSet.asJava
+        }
 
-        val partitionInfo = new DefaultPartitionView(replicaInfoSet.asJava, leaderReplica.asJava)
+        val leaderReplica: Option[ReplicaView] = partition.leaderReplicaIdOpt
+          .map(replicaId => replicaEndpoints.getOrElse(replicaId, Node.noNode()))
+          .map(leaderNode => new DefaultReplicaView(leaderNode, partition.localLogOrException.logEndOffset, None.asJava))
+
+        leaderReplica.foreach(replicaInfoSet.add)
+
+        val partitionInfo = new DefaultPartitionView(replicaInfoSet, leaderReplica.asJava)
         replicaSelector.select(tp, clientMetadata, partitionInfo).asScala
           .filter(!_.endpoint.isEmpty)
           .map(_.endpoint.id)

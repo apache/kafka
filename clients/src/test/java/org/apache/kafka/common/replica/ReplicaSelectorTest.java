@@ -23,6 +23,8 @@ import org.junit.Test;
 
 import java.net.InetAddress;
 import java.util.Collections;
+import java.util.HashSet;
+import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -37,9 +39,9 @@ public class ReplicaSelectorTest {
     public void testLeaderSelector() {
         TopicPartition tp = new TopicPartition("test", 0);
 
-        Set<ReplicaView> replicaViewSet = replicaInfoSet();
-        ReplicaView leader = replicaViewSet.iterator().next();
-        PartitionView partitionView = partitionInfo(replicaViewSet, leader);
+        List<ReplicaView> replicaViewSet = replicaInfoSet();
+        ReplicaView leader = replicaViewSet.get(0);
+        PartitionView partitionView = partitionInfo(new HashSet<>(replicaViewSet), leader);
 
         ReplicaSelector selector = new LeaderReplicaSelector();
         Optional<ReplicaView> selected;
@@ -56,9 +58,9 @@ public class ReplicaSelectorTest {
     public void testSameRackSelector() {
         TopicPartition tp = new TopicPartition("test", 0);
 
-        Set<ReplicaView> replicaViewSet = replicaInfoSet();
-        ReplicaView leader = replicaViewSet.iterator().next();
-        PartitionView partitionView = partitionInfo(replicaViewSet, leader);
+        List<ReplicaView> replicaViewSet = replicaInfoSet();
+        ReplicaView leader = replicaViewSet.get(0);
+        PartitionView partitionView = partitionInfo(new HashSet<>(replicaViewSet), leader);
 
         ReplicaSelector selector = new RackAwareReplicaSelector();
         Optional<ReplicaView> selected = selector.select(tp, metadata("rack-b"), partitionView);
@@ -81,14 +83,14 @@ public class ReplicaSelectorTest {
 
     }
 
-    static Set<ReplicaView> replicaInfoSet() {
+    static List<ReplicaView> replicaInfoSet() {
         return Stream.of(
                 replicaInfo(new Node(0, "host0", 1234, "rack-a"), 4, 10),
                 replicaInfo(new Node(1, "host1", 1234, "rack-a"), 2, 5),
                 replicaInfo(new Node(2, "host2", 1234, "rack-b"), 3, 7),
                 replicaInfo(new Node(3, "host3", 1234, "rack-b"), 4, 8)
 
-        ).collect(Collectors.toSet());
+        ).collect(Collectors.toList());
     }
 
     static ReplicaView replicaInfo(Node node, long logOffset, long lastCaughtUpTimeMs) {
