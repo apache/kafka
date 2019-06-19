@@ -572,6 +572,15 @@ class Log(@volatile var dir: File,
       activeSegment.resizeIndexes(config.maxIndexSize)
       nextOffset
     } else {
+       if (logSegments.isEmpty) {
+          addSegment(LogSegment.open(dir = dir,
+            baseOffset = 0,
+            config,
+            time = time,
+            fileAlreadyExists = false,
+            initFileSize = this.initFileSize,
+            preallocate = false))
+       }
       0
     }
   }
