@@ -167,21 +167,25 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         //   2. if there are multiple protocols that are commonly supported, select the one with the highest id (i.e. the
         //      id number indicates how advanced the protocol is).
         // we know there are at least one assignor in the list, no need to double check for NPE
-        List<RebalanceProtocol> supportedProtocols = new ArrayList<>(assignors.get(0).supportedProtocols());
+        if (!assignors.isEmpty()) {
+            List<RebalanceProtocol> supportedProtocols = new ArrayList<>(assignors.get(0).supportedProtocols());
 
-        for (PartitionAssignor assignor : assignors) {
-            supportedProtocols.retainAll(assignor.supportedProtocols());
+            for (PartitionAssignor assignor : assignors) {
+                supportedProtocols.retainAll(assignor.supportedProtocols());
+            }
+
+            if (supportedProtocols.isEmpty()) {
+                throw new IllegalArgumentException("Specified assignors " +
+                    assignors.stream().map(PartitionAssignor::name).collect(Collectors.toSet()) +
+                    " do not have commonly supported rebalance protocol");
+            }
+
+            Collections.sort(supportedProtocols);
+
+            protocol = supportedProtocols.get(supportedProtocols.size() - 1);
+        } else {
+            protocol = null;
         }
-
-        if (supportedProtocols.isEmpty()) {
-            throw new IllegalArgumentException("Specified assignors " +
-                assignors.stream().map(PartitionAssignor::name).collect(Collectors.toSet()) +
-                " do not have commonly supported rebalance protocol");
-        }
-
-        Collections.sort(supportedProtocols);
-
-        protocol = supportedProtocols.get(supportedProtocols.size() - 1);
 
         this.metadata.requestUpdate();
     }
