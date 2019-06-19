@@ -18,9 +18,9 @@ package org.apache.kafka.clients;
 
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.InvalidMetadataException;
 import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
@@ -65,8 +65,8 @@ public class Metadata implements Closeable {
     private int requestVersion; // bumped on every new topic addition
     private long lastRefreshMs;
     private long lastSuccessfulRefreshMs;
-    private AuthenticationException authenticationException;
-    private KafkaException metadataException;
+    private KafkaException fatalException;
+    private KafkaException recoverableException;
     private MetadataCache cache = MetadataCache.empty();
     private boolean needUpdate;
     private final ClusterResourceListeners clusterResourceListeners;
@@ -129,6 +129,10 @@ public class Metadata implements Closeable {
         return Math.max(timeToExpire, timeToAllowUpdate(nowMs));
     }
 
+    public long metadataExpireMs() {
+        return this.metadataExpireMs;
+    }
+
     /**
      * Request an update of the current cluster metadata info, return the current updateVersion before the update
      */
@@ -173,7 +177,7 @@ public class Metadata implements Closeable {
             }
             return true;
         } else {
-            log.debug("Not replacing existing epoch {} with new epoch {}", oldEpoch, epoch);
+            log.debug("Not replacing existing epoch {} with new epoch {} for partition {}", oldEpoch, epoch, topicPartition);
             return false;
         }
     }
@@ -201,25 +205,13 @@ public class Metadata implements Closeable {
     }
 
     /**
-     * If any non-retriable authentication exceptions were encountered during
-     * metadata update, clear and return the exception.
+     * If any non-retriable exceptions were encountered during metadata update, clear and return the exception.
      */
-    public synchronized AuthenticationException getAndClearAuthenticationException() {
-        if (authenticationException != null) {
-            AuthenticationException exception = authenticationException;
-            authenticationException = null;
-            return exception;
-        } else
-            return null;
-    }
-
-    synchronized KafkaException getAndClearMetadataException() {
-        if (this.metadataException != null) {
-            KafkaException metadataException = this.metadataException;
-            this.metadataException = null;
-            return metadataException;
-        } else
-            return null;
+    public synchronized KafkaException getAndClearMetadataException() {
+        KafkaException metadataException = Optional.ofNullable(fatalException).orElse(recoverableException);
+        fatalException = null;
+        recoverableException = null;
+        return metadataException;
     }
 
     public synchronized void bootstrap(List<InetSocketAddress> addresses, long now) {
@@ -280,7 +272,7 @@ public class Metadata implements Closeable {
 
     private void maybeSetMetadataError(Cluster cluster) {
         // if we encounter any invalid topics, cache the exception to later throw to the user
-        metadataException = null;
+        recoverableException = null;
         checkInvalidTopics(cluster);
         checkUnauthorizedTopics(cluster);
     }
@@ -288,14 +280,16 @@ public class Metadata implements Closeable {
     private void checkInvalidTopics(Cluster cluster) {
         if (!cluster.invalidTopics().isEmpty()) {
             log.error("Metadata response reported invalid topics {}", cluster.invalidTopics());
-            metadataException = new InvalidTopicException(cluster.invalidTopics());
+            // We may be able to recover from this exception if metadata for this topic is no longer needed
+            recoverableException = new InvalidTopicException(cluster.invalidTopics());
         }
     }
 
     private void checkUnauthorizedTopics(Cluster cluster) {
         if (!cluster.unauthorizedTopics().isEmpty()) {
             log.error("Topic authorization failed for topics {}", cluster.unauthorizedTopics());
-            metadataException = new TopicAuthorizationException(new HashSet<>(cluster.unauthorizedTopics()));
+            // We may be able to recover from this exception if metadata for this topic is no longer needed
+            recoverableException = new TopicAuthorizationException(new HashSet<>(cluster.unauthorizedTopics()));
         }
     }
 
@@ -314,6 +308,8 @@ public class Metadata implements Closeable {
                 if (metadata.isInternal())
                     internalTopics.add(metadata.topic());
                 for (MetadataResponse.PartitionMetadata partitionMetadata : metadata.partitionMetadata()) {
+
+                    // Even if the partition's metadata includes an error, we need to handle the update to catch new epochs
                     updatePartitionInfo(metadata.topic(), partitionMetadata, partitionInfo -> {
                         int epoch = partitionMetadata.leaderEpoch().orElse(RecordBatch.NO_PARTITION_LEADER_EPOCH);
                         partitions.add(new MetadataCache.PartitionInfoAndEpoch(partitionInfo, epoch));
@@ -358,17 +354,13 @@ public class Metadata implements Closeable {
                 }
             }
         } else {
-            // Old cluster format (no epochs)
-            lastSeenLeaderEpochs.clear();
+            // Handle old cluster formats as well as error responses where leader and epoch are missing
+            lastSeenLeaderEpochs.remove(tp);
             partitionInfoConsumer.accept(MetadataResponse.partitionMetaToInfo(topic, partitionMetadata));
         }
     }
 
     public synchronized void maybeThrowException() {
-        AuthenticationException authenticationException = getAndClearAuthenticationException();
-        if (authenticationException != null)
-            throw authenticationException;
-
         KafkaException metadataException = getAndClearMetadataException();
         if (metadataException != null)
             throw metadataException;
@@ -378,9 +370,9 @@ public class Metadata implements Closeable {
      * Record an attempt to update the metadata that failed. We need to keep track of this
      * to avoid retrying immediately.
      */
-    public synchronized void failedUpdate(long now, AuthenticationException authenticationException) {
+    public synchronized void failedUpdate(long now, KafkaException fatalException) {
         this.lastRefreshMs = now;
-        this.authenticationException = authenticationException;
+        this.fatalException = fatalException;
     }
 
     /**
@@ -444,4 +436,55 @@ public class Metadata implements Closeable {
         }
     }
 
+    public synchronized LeaderAndEpoch leaderAndEpoch(TopicPartition tp) {
+        return partitionInfoIfCurrent(tp)
+                .map(infoAndEpoch -> {
+                    Node leader = infoAndEpoch.partitionInfo().leader();
+                    return new LeaderAndEpoch(leader == null ? Node.noNode() : leader, Optional.of(infoAndEpoch.epoch()));
+                })
+                .orElse(new LeaderAndEpoch(Node.noNode(), lastSeenLeaderEpoch(tp)));
+    }
+
+    public static class LeaderAndEpoch {
+
+        public static final LeaderAndEpoch NO_LEADER_OR_EPOCH = new LeaderAndEpoch(Node.noNode(), Optional.empty());
+
+        public final Node leader;
+        public final Optional<Integer> epoch;
+
+        public LeaderAndEpoch(Node leader, Optional<Integer> epoch) {
+            this.leader = Objects.requireNonNull(leader);
+            this.epoch = Objects.requireNonNull(epoch);
+        }
+
+        public static LeaderAndEpoch noLeaderOrEpoch() {
+            return NO_LEADER_OR_EPOCH;
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+
+            LeaderAndEpoch that = (LeaderAndEpoch) o;
+
+            if (!leader.equals(that.leader)) return false;
+            return epoch.equals(that.epoch);
+        }
+
+        @Override
+        public int hashCode() {
+            int result = leader.hashCode();
+            result = 31 * result + epoch.hashCode();
+            return result;
+        }
+
+        @Override
+        public String toString() {
+            return "LeaderAndEpoch{" +
+                    "leader=" + leader +
+                    ", epoch=" + epoch.map(Number::toString).orElse("absent") +
+                    '}';
+        }
+    }
 }

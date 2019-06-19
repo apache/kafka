@@ -27,11 +27,11 @@ import org.apache.kafka.common.utils.Utils;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 import static org.apache.kafka.common.protocol.CommonFields.PARTITION_ID;
 import static org.apache.kafka.common.protocol.CommonFields.TOPIC_NAME;
@@ -71,10 +71,10 @@ public class StopReplicaRequest extends AbstractControlRequest {
 
     public static class Builder extends AbstractControlRequest.Builder<StopReplicaRequest> {
         private final boolean deletePartitions;
-        private final Set<TopicPartition> partitions;
+        private final Collection<TopicPartition> partitions;
 
         public Builder(short version, int controllerId, int controllerEpoch, long brokerEpoch, boolean deletePartitions,
-                       Set<TopicPartition> partitions) {
+                       Collection<TopicPartition> partitions) {
             super(ApiKeys.STOP_REPLICA, version, controllerId, controllerEpoch, brokerEpoch);
             this.deletePartitions = deletePartitions;
             this.partitions = partitions;
@@ -101,10 +101,10 @@ public class StopReplicaRequest extends AbstractControlRequest {
     }
 
     private final boolean deletePartitions;
-    private final Set<TopicPartition> partitions;
+    private final Collection<TopicPartition> partitions;
 
     private StopReplicaRequest(int controllerId, int controllerEpoch, long brokerEpoch, boolean deletePartitions,
-                               Set<TopicPartition> partitions, short version) {
+                               Collection<TopicPartition> partitions, short version) {
         super(ApiKeys.STOP_REPLICA, version, controllerId, controllerEpoch, brokerEpoch);
         this.deletePartitions = deletePartitions;
         this.partitions = partitions;
@@ -158,7 +158,7 @@ public class StopReplicaRequest extends AbstractControlRequest {
         return deletePartitions;
     }
 
-    public Set<TopicPartition> partitions() {
+    public Collection<TopicPartition> partitions() {
         return partitions;
     }
 

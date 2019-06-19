@@ -486,25 +486,43 @@ public class KStreamImplTest {
     }
 
     @Test
-    public void shouldNotAllowNullTransformSupplierOnTransform() {
+    public void shouldNotAllowNullTransformerSupplierOnTransform() {
         final Exception e = assertThrows(NullPointerException.class, () -> testStream.transform(null));
         assertEquals("transformerSupplier can't be null", e.getMessage());
     }
 
     @Test
-    public void shouldNotAllowNullTransformSupplierOnFlatTransform() {
+    public void shouldNotAllowNullTransformerSupplierOnFlatTransform() {
         final Exception e = assertThrows(NullPointerException.class, () -> testStream.flatTransform(null));
         assertEquals("transformerSupplier can't be null", e.getMessage());
     }
 
-    @Test(expected = NullPointerException.class)
-    public void shouldNotAllowNullTransformSupplierOnTransformValues() {
-        testStream.transformValues((ValueTransformerSupplier) null);
+    @Test
+    public void shouldNotAllowNullValueTransformerWithKeySupplierOnTransformValues() {
+        final Exception e =
+            assertThrows(NullPointerException.class, () -> testStream.transformValues((ValueTransformerWithKeySupplier) null));
+        assertEquals("valueTransformerSupplier can't be null", e.getMessage());
     }
 
-    @Test(expected = NullPointerException.class)
-    public void shouldNotAllowNullTransformSupplierOnTransformValuesWithKey() {
-        testStream.transformValues((ValueTransformerWithKeySupplier) null);
+    @Test
+    public void shouldNotAllowNullValueTransformerSupplierOnTransformValues() {
+        final Exception e =
+            assertThrows(NullPointerException.class, () -> testStream.transformValues((ValueTransformerSupplier) null));
+        assertEquals("valueTransformerSupplier can't be null", e.getMessage());
+    }
+
+    @Test
+    public void shouldNotAllowNullValueTransformerWithKeySupplierOnFlatTransformValues() {
+        final Exception e =
+            assertThrows(NullPointerException.class, () -> testStream.flatTransformValues((ValueTransformerWithKeySupplier) null));
+        assertEquals("valueTransformerSupplier can't be null", e.getMessage());
+    }
+
+    @Test
+    public void shouldNotAllowNullValueTransformerSupplierOnFlatTransformValues() {
+        final Exception e =
+            assertThrows(NullPointerException.class, () -> testStream.flatTransformValues((ValueTransformerSupplier) null));
+        assertEquals("valueTransformerSupplier can't be null", e.getMessage());
     }
 
     @Test(expected = NullPointerException.class)
@@ -677,17 +695,17 @@ public class KStreamImplTest {
         merged.process(processorSupplier);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
-            driver.pipeInput(recordFactory.create(topic1, "A", "aa"));
-            driver.pipeInput(recordFactory.create(topic2, "B", "bb"));
-            driver.pipeInput(recordFactory.create(topic3, "C", "cc"));
-            driver.pipeInput(recordFactory.create(topic4, "D", "dd"));
-            driver.pipeInput(recordFactory.create(topic4, "E", "ee"));
-            driver.pipeInput(recordFactory.create(topic3, "F", "ff"));
-            driver.pipeInput(recordFactory.create(topic2, "G", "gg"));
-            driver.pipeInput(recordFactory.create(topic1, "H", "hh"));
+            driver.pipeInput(recordFactory.create(topic1, "A", "aa", 1L));
+            driver.pipeInput(recordFactory.create(topic2, "B", "bb", 9L));
+            driver.pipeInput(recordFactory.create(topic3, "C", "cc", 2L));
+            driver.pipeInput(recordFactory.create(topic4, "D", "dd", 8L));
+            driver.pipeInput(recordFactory.create(topic4, "E", "ee", 3L));
+            driver.pipeInput(recordFactory.create(topic3, "F", "ff", 7L));
+            driver.pipeInput(recordFactory.create(topic2, "G", "gg", 4L));
+            driver.pipeInput(recordFactory.create(topic1, "H", "hh", 6L));
         }
 
-        assertEquals(asList("A:aa (ts: 0)", "B:bb (ts: 0)", "C:cc (ts: 0)", "D:dd (ts: 0)", "E:ee (ts: 0)", "F:ff (ts: 0)", "G:gg (ts: 0)", "H:hh (ts: 0)"),
+        assertEquals(asList("A:aa (ts: 1)", "B:bb (ts: 9)", "C:cc (ts: 2)", "D:dd (ts: 8)", "E:ee (ts: 3)", "F:ff (ts: 7)", "G:gg (ts: 4)", "H:hh (ts: 6)"),
                      processorSupplier.theCapturedProcessor().processed);
     }
 
@@ -698,14 +716,14 @@ public class KStreamImplTest {
         pattern2Source.process(processorSupplier);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
-            driver.pipeInput(recordFactory.create("topic-3", "A", "aa"));
-            driver.pipeInput(recordFactory.create("topic-4", "B", "bb"));
-            driver.pipeInput(recordFactory.create("topic-5", "C", "cc"));
-            driver.pipeInput(recordFactory.create("topic-6", "D", "dd"));
-            driver.pipeInput(recordFactory.create("topic-7", "E", "ee"));
+            driver.pipeInput(recordFactory.create("topic-3", "A", "aa", 1L));
+            driver.pipeInput(recordFactory.create("topic-4", "B", "bb", 5L));
+            driver.pipeInput(recordFactory.create("topic-5", "C", "cc", 10L));
+            driver.pipeInput(recordFactory.create("topic-6", "D", "dd", 8L));
+            driver.pipeInput(recordFactory.create("topic-7", "E", "ee", 3L));
         }
 
-        assertEquals(asList("A:aa (ts: 0)", "B:bb (ts: 0)", "C:cc (ts: 0)", "D:dd (ts: 0)", "E:ee (ts: 0)"),
+        assertEquals(asList("A:aa (ts: 1)", "B:bb (ts: 5)", "C:cc (ts: 10)", "D:dd (ts: 8)", "E:ee (ts: 3)"),
                 processorSupplier.theCapturedProcessor().processed);
     }
 
@@ -721,14 +739,14 @@ public class KStreamImplTest {
         merged.process(processorSupplier);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
-            driver.pipeInput(recordFactory.create("topic-3", "A", "aa"));
-            driver.pipeInput(recordFactory.create("topic-4", "B", "bb"));
-            driver.pipeInput(recordFactory.create("topic-A", "C", "cc"));
-            driver.pipeInput(recordFactory.create("topic-Z", "D", "dd"));
-            driver.pipeInput(recordFactory.create(topic3, "E", "ee"));
+            driver.pipeInput(recordFactory.create("topic-3", "A", "aa", 1L));
+            driver.pipeInput(recordFactory.create("topic-4", "B", "bb", 5L));
+            driver.pipeInput(recordFactory.create("topic-A", "C", "cc", 10L));
+            driver.pipeInput(recordFactory.create("topic-Z", "D", "dd", 8L));
+            driver.pipeInput(recordFactory.create(topic3, "E", "ee", 3L));
         }
 
-        assertEquals(asList("A:aa (ts: 0)", "B:bb (ts: 0)", "C:cc (ts: 0)", "D:dd (ts: 0)", "E:ee (ts: 0)"),
+        assertEquals(asList("A:aa (ts: 1)", "B:bb (ts: 5)", "C:cc (ts: 10)", "D:dd (ts: 8)", "E:ee (ts: 3)"),
                 processorSupplier.theCapturedProcessor().processed);
     }
 }

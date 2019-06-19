@@ -139,7 +139,7 @@ class StreamsBrokerBounceTest(Test):
             # need to iterate over topic_list_generator as kafka.list_topics()
             # returns a python generator so values are fetched lazily
             # so we can't just compare directly we must iterate over what's returned
-            topic_list_generator = self.kafka.list_topics("placeholder", node)
+            topic_list_generator = self.kafka.list_topics(node=node)
             for topic in topic_list_generator:
                 if topic in expected_topic_set:
                     match_count += 1

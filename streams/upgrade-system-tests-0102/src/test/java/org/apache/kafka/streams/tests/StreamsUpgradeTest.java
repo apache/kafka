@@ -30,13 +30,10 @@ import java.util.Properties;
 
 public class StreamsUpgradeTest {
 
-    /**
-     * This test cannot be executed, as long as Kafka 0.10.2.2 is not released
-     */
     @SuppressWarnings("unchecked")
     public static void main(final String[] args) throws Exception {
         if (args.length < 2) {
-            System.err.println("StreamsUpgradeTest requires three argument (kafka-url, properties-file) but only " + args.length + " provided: "
+            System.err.println("StreamsUpgradeTest requires two argument (kafka-url, properties-file) but only " + args.length + " provided: "
                 + (args.length > 0 ? args[0] : ""));
         }
         final String kafka = args[0];
@@ -80,7 +77,7 @@ public class StreamsUpgradeTest {
 
                     @Override
                     public void init(final ProcessorContext context) {
-                        System.out.println("initializing processor: topic=data taskId=" + context.taskId());
+                        System.out.println("[0.10.2] initializing processor: topic=data taskId=" + context.taskId());
                         numRecordsProcessed = 0;
                     }
 

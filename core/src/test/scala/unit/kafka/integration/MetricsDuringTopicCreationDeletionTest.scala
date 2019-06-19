@@ -21,6 +21,7 @@ import java.util.Properties
 import kafka.server.KafkaConfig
 import kafka.utils.{Logging, TestUtils}
 import scala.collection.JavaConverters.mapAsScalaMapConverter
+import org.scalatest.Assertions.fail
 
 import org.junit.{Before, Test}
 import com.yammer.metrics.Metrics

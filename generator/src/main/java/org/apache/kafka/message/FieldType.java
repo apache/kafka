@@ -23,7 +23,7 @@ public interface FieldType {
     String STRUCT_PREFIX = "[]";
 
     final class BoolFieldType implements FieldType {
-        private static final BoolFieldType INSTANCE = new BoolFieldType();
+        static final BoolFieldType INSTANCE = new BoolFieldType();
         private static final String NAME = "bool";
 
         @Override
@@ -38,7 +38,7 @@ public interface FieldType {
     }
 
     final class Int8FieldType implements FieldType {
-        private static final Int8FieldType INSTANCE = new Int8FieldType();
+        static final Int8FieldType INSTANCE = new Int8FieldType();
         private static final String NAME = "int8";
 
         @Override
@@ -53,7 +53,7 @@ public interface FieldType {
     }
 
     final class Int16FieldType implements FieldType {
-        private static final Int16FieldType INSTANCE = new Int16FieldType();
+        static final Int16FieldType INSTANCE = new Int16FieldType();
         private static final String NAME = "int16";
 
         @Override
@@ -68,7 +68,7 @@ public interface FieldType {
     }
 
     final class Int32FieldType implements FieldType {
-        private static final Int32FieldType INSTANCE = new Int32FieldType();
+        static final Int32FieldType INSTANCE = new Int32FieldType();
         private static final String NAME = "int32";
 
         @Override
@@ -83,7 +83,7 @@ public interface FieldType {
     }
 
     final class Int64FieldType implements FieldType {
-        private static final Int64FieldType INSTANCE = new Int64FieldType();
+        static final Int64FieldType INSTANCE = new Int64FieldType();
         private static final String NAME = "int64";
 
         @Override
@@ -98,7 +98,7 @@ public interface FieldType {
     }
 
     final class StringFieldType implements FieldType {
-        private static final StringFieldType INSTANCE = new StringFieldType();
+        static final StringFieldType INSTANCE = new StringFieldType();
         private static final String NAME = "string";
 
         @Override
@@ -118,7 +118,7 @@ public interface FieldType {
     }
 
     final class BytesFieldType implements FieldType {
-        private static final BytesFieldType INSTANCE = new BytesFieldType();
+        static final BytesFieldType INSTANCE = new BytesFieldType();
         private static final String NAME = "bytes";
 
         @Override

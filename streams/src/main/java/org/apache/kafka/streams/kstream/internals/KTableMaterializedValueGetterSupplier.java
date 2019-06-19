@@ -14,14 +14,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.streams.processor.ProcessorContext;
-import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.TimestampedKeyValueStore;
+import org.apache.kafka.streams.state.ValueAndTimestamp;
 
 public class KTableMaterializedValueGetterSupplier<K, V> implements KTableValueGetterSupplier<K, V> {
-
     private final String storeName;
 
     KTableMaterializedValueGetterSupplier(final String storeName) {
@@ -38,21 +37,20 @@ public class KTableMaterializedValueGetterSupplier<K, V> implements KTableValueG
     }
 
     private class KTableMaterializedValueGetter implements KTableValueGetter<K, V> {
-        private KeyValueStore<K, V> store;
+        private TimestampedKeyValueStore<K, V> store;
 
         @SuppressWarnings("unchecked")
         @Override
         public void init(final ProcessorContext context) {
-            store = (KeyValueStore<K, V>) context.getStateStore(storeName);
+            store = (TimestampedKeyValueStore<K, V>) context.getStateStore(storeName);
         }
 
         @Override
-        public V get(final K key) {
+        public ValueAndTimestamp<V> get(final K key) {
             return store.get(key);
         }
 
         @Override
-        public void close() {
-        }
+        public void close() {}
     }
 }

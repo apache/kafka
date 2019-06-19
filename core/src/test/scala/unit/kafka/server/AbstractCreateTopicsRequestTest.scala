@@ -33,7 +33,7 @@ import scala.collection.JavaConverters._
 
 class AbstractCreateTopicsRequestTest extends BaseRequestTest {
 
-  override def propertyOverrides(properties: Properties): Unit =
+  override def brokerPropertyOverrides(properties: Properties): Unit =
     properties.put(KafkaConfig.AutoCreateTopicsEnableProp, false.toString)
 
   def topicsReq(topics: Seq[CreatableTopic],
@@ -41,7 +41,7 @@ class AbstractCreateTopicsRequestTest extends BaseRequestTest {
                 validateOnly: Boolean = false) = {
     val req = new CreateTopicsRequestData()
     req.setTimeoutMs(timeout)
-    req.setTopics(new CreatableTopicSet(topics.asJava.iterator()))
+    req.setTopics(new CreatableTopicCollection(topics.asJava.iterator()))
     req.setValidateOnly(validateOnly)
     new CreateTopicsRequest.Builder(req).build()
   }
@@ -68,7 +68,7 @@ class AbstractCreateTopicsRequestTest extends BaseRequestTest {
       topic.setReplicationFactor(1.toShort)
     }
     if (config != null) {
-      val effectiveConfigs = new CreateableTopicConfigSet()
+      val effectiveConfigs = new CreateableTopicConfigCollection()
       config.foreach {
         case (name, value) => {
           effectiveConfigs.add(new CreateableTopicConfig().setName(name).setValue(value))
@@ -77,7 +77,7 @@ class AbstractCreateTopicsRequestTest extends BaseRequestTest {
       topic.setConfigs(effectiveConfigs)
     }
     if (assignment != null) {
-      val effectiveAssignments = new CreatableReplicaAssignmentSet()
+      val effectiveAssignments = new CreatableReplicaAssignmentCollection()
       assignment.foreach {
         case (partitionIndex, brokerIdList) => {
           val effectiveAssignment = new CreatableReplicaAssignment()
@@ -124,8 +124,18 @@ class AbstractCreateTopicsRequestTest extends BaseRequestTest {
         else {
           assertNotNull("The topic should be created", metadataForTopic)
           assertEquals(Errors.NONE, metadataForTopic.error)
-          assertEquals("The topic should have the correct number of partitions", partitions, metadataForTopic.partitionMetadata.size)
-          assertEquals("The topic should have the correct replication factor", replication, metadataForTopic.partitionMetadata.asScala.head.replicas.size)
+          if (partitions == -1) {
+            assertEquals("The topic should have the default number of partitions", configs.head.numPartitions, metadataForTopic.partitionMetadata.size)
+          } else {
+            assertEquals("The topic should have the correct number of partitions", partitions, metadataForTopic.partitionMetadata.size)
+          }
+
+          if (replication == -1) {
+            assertEquals("The topic should have the default replication factor",
+              configs.head.defaultReplicationFactor, metadataForTopic.partitionMetadata.asScala.head.replicas.size)
+          } else {
+            assertEquals("The topic should have the correct replication factor", replication, metadataForTopic.partitionMetadata.asScala.head.replicas.size)
+          }
         }
       }
 

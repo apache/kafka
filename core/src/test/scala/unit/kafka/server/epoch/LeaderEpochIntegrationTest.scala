@@ -145,7 +145,7 @@ class LeaderEpochIntegrationTest extends ZooKeeperTestHarness with Logging {
 
     brokers += createServer(fromProps(createBrokerConfig(101, zkConnect)))
 
-    def leo() = brokers(1).replicaManager.localReplica(tp).get.logEndOffset
+    def leo() = brokers(1).replicaManager.localLog(tp).get.logEndOffset
 
     TestUtils.createTopic(zkClient, tp.topic, Map(tp.partition -> Seq(101)), brokers)
     producer = createProducer(getBrokerListStrFromServers(brokers), acks = -1)
@@ -279,8 +279,9 @@ class LeaderEpochIntegrationTest extends ZooKeeperTestHarness with Logging {
     def leaderOffsetsFor(partitions: Map[TopicPartition, Int]): Map[TopicPartition, EpochEndOffset] = {
       val partitionData = partitions.mapValues(
         new OffsetsForLeaderEpochRequest.PartitionData(Optional.empty(), _))
-      val request = new OffsetsForLeaderEpochRequest.Builder(ApiKeys.OFFSET_FOR_LEADER_EPOCH.latestVersion,
-        partitionData.asJava)
+
+      val request = OffsetsForLeaderEpochRequest.Builder.forFollower(
+        ApiKeys.OFFSET_FOR_LEADER_EPOCH.latestVersion, partitionData.asJava, 1)
       val response = sender.sendRequest(request)
       response.responseBody.asInstanceOf[OffsetsForLeaderEpochResponse].responses.asScala
     }

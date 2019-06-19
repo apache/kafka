@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.streams.integration;
 
-import java.time.Duration;
+import kafka.tools.StreamsResetter;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.ConsumerGroupDescription;
@@ -39,10 +39,8 @@ import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.KStream;
-import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.streams.kstream.TimeWindows;
-import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestUtils;
@@ -56,6 +54,7 @@ import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileWriter;
 import java.text.SimpleDateFormat;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Calendar;
@@ -64,8 +63,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.ExecutionException;
-
-import kafka.tools.StreamsResetter;
 
 import static java.time.Duration.ofMillis;
 import static org.hamcrest.CoreMatchers.equalTo;
@@ -156,7 +153,6 @@ public abstract class AbstractResetIntegrationTest {
         streamsConfig.put(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, 100);
         streamsConfig.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         streamsConfig.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, "" + STREAMS_CONSUMER_TIMEOUT);
-        streamsConfig.put(IntegrationTestUtils.INTERNAL_LEAVE_GROUP_ON_CLOSE, true);
         streamsConfig.putAll(commonClientConfig);
     }
 
@@ -172,7 +168,7 @@ public abstract class AbstractResetIntegrationTest {
 
     private static final long STREAMS_CONSUMER_TIMEOUT = 2000L;
     private static final long CLEANUP_CONSUMER_TIMEOUT = 2000L;
-    private static final int TIMEOUT_MULTIPLIER = 5;
+    private static final int TIMEOUT_MULTIPLIER = 15;
 
     private class ConsumerGroupInactiveCondition implements TestCondition {
         @Override
@@ -224,7 +220,7 @@ public abstract class AbstractResetIntegrationTest {
         }
     }
 
-    void shouldNotAllowToResetWhileStreamsIsRunning() throws Exception {
+    void shouldNotAllowToResetWhileStreamsIsRunning() {
         appID = testId + "-not-reset-during-runtime";
         final String[] parameters = new String[] {
             "--application-id", appID,
@@ -391,7 +387,6 @@ public abstract class AbstractResetIntegrationTest {
         final File resetFile = File.createTempFile("reset", ".csv");
         try (final BufferedWriter writer = new BufferedWriter(new FileWriter(resetFile))) {
             writer.write(INPUT_TOPIC + ",0,1");
-            writer.close();
         }
 
         streams = new KafkaStreams(setupTopologyWithoutIntermediateUserTopic(), streamsConfig);
@@ -435,7 +430,6 @@ public abstract class AbstractResetIntegrationTest {
         final File resetFile = File.createTempFile("reset", ".csv");
         try (final BufferedWriter writer = new BufferedWriter(new FileWriter(resetFile))) {
             writer.write(INPUT_TOPIC + ",0,1");
-            writer.close();
         }
 
         streams = new KafkaStreams(setupTopologyWithoutIntermediateUserTopic(), streamsConfig);
@@ -483,7 +477,6 @@ public abstract class AbstractResetIntegrationTest {
         final File resetFile = File.createTempFile("reset", ".csv");
         try (final BufferedWriter writer = new BufferedWriter(new FileWriter(resetFile))) {
             writer.write(INPUT_TOPIC + ",0,1");
-            writer.close();
         }
 
         streams = new KafkaStreams(setupTopologyWithoutIntermediateUserTopic(), streamsConfig);
@@ -515,12 +508,7 @@ public abstract class AbstractResetIntegrationTest {
         final KStream<Long, String> input = builder.stream(INPUT_TOPIC);
 
         // use map to trigger internal re-partitioning before groupByKey
-        input.map(new KeyValueMapper<Long, String, KeyValue<Long, String>>() {
-            @Override
-            public KeyValue<Long, String> apply(final Long key, final String value) {
-                return new KeyValue<>(key, value);
-            }
-        })
+        input.map(KeyValue::new)
             .groupByKey()
             .count()
             .toStream()
@@ -531,12 +519,7 @@ public abstract class AbstractResetIntegrationTest {
             .windowedBy(TimeWindows.of(ofMillis(35)).advanceBy(ofMillis(10)))
             .count()
             .toStream()
-            .map(new KeyValueMapper<Windowed<Long>, Long, KeyValue<Long, Long>>() {
-                @Override
-                public KeyValue<Long, Long> apply(final Windowed<Long> key, final Long value) {
-                    return new KeyValue<>(key.window().start() + key.window().end(), value);
-                }
-            })
+            .map((key, value) -> new KeyValue<>(key.window().start() + key.window().end(), value))
             .to(outputTopic2, Produced.with(Serdes.Long(), Serdes.Long()));
 
         return builder.build();
@@ -548,12 +531,8 @@ public abstract class AbstractResetIntegrationTest {
         final KStream<Long, String> input = builder.stream(INPUT_TOPIC);
 
         // use map to trigger internal re-partitioning before groupByKey
-        input.map(new KeyValueMapper<Long, String, KeyValue<Long, Long>>() {
-            @Override
-            public KeyValue<Long, Long> apply(final Long key, final String value) {
-                return new KeyValue<>(key, key);
-            }
-        }).to(OUTPUT_TOPIC, Produced.with(Serdes.Long(), Serdes.Long()));
+        input.map((key, value) -> new KeyValue<>(key, key))
+            .to(OUTPUT_TOPIC, Produced.with(Serdes.Long(), Serdes.Long()));
 
         return builder.build();
     }
@@ -591,7 +570,7 @@ public abstract class AbstractResetIntegrationTest {
             parameterList.add(resetScenarioArg);
         }
 
-        final String[] parameters = parameterList.toArray(new String[parameterList.size()]);
+        final String[] parameters = parameterList.toArray(new String[0]);
 
         final Properties cleanUpConfig = new Properties();
         cleanUpConfig.put(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, 100);

@@ -21,10 +21,11 @@ import java.util.concurrent.CountDownLatch
 import java.util.concurrent.atomic.AtomicInteger
 
 import com.yammer.metrics.Metrics
-import com.yammer.metrics.core.Timer
+import com.yammer.metrics.core.{Histogram, MetricName, Timer}
 import kafka.utils.TestUtils
+import org.apache.kafka.common.utils.MockTime
+import org.junit.Assert.{assertEquals, assertTrue, fail}
 import org.junit.{After, Test}
-import org.junit.Assert.{assertEquals, fail}
 
 import scala.collection.JavaConverters._
 
@@ -39,36 +40,103 @@ class ControllerEventManagerTest {
   }
 
   @Test
+  def testMetricsCleanedOnClose(): Unit = {
+    val time = new MockTime()
+    val controllerStats = new ControllerStats
+    val eventProcessor = new ControllerEventProcessor {
+      override def process(event: ControllerEvent): Unit = {}
+      override def preempt(event: ControllerEvent): Unit = {}
+    }
+
+    def allEventManagerMetrics: Set[MetricName] = {
+      Metrics.defaultRegistry.allMetrics.asScala.keySet
+        .filter(_.getMBeanName.startsWith("kafka.controller:type=ControllerEventManager"))
+        .toSet
+    }
+
+    controllerEventManager = new ControllerEventManager(0, eventProcessor,
+      time, controllerStats.rateAndTimeMetrics)
+    controllerEventManager.start()
+    assertTrue(allEventManagerMetrics.nonEmpty)
+
+    controllerEventManager.close()
+    assertTrue(allEventManagerMetrics.isEmpty)
+  }
+
+  @Test
+  def testEventQueueTime(): Unit = {
+    val metricName = "kafka.controller:type=ControllerEventManager,name=EventQueueTimeMs"
+    val controllerStats = new ControllerStats
+    val time = new MockTime()
+    val latch = new CountDownLatch(1)
+
+    val eventProcessor = new ControllerEventProcessor {
+      override def process(event: ControllerEvent): Unit = {
+        latch.await()
+        time.sleep(500)
+      }
+      override def preempt(event: ControllerEvent): Unit = {}
+    }
+
+    // The metric should not already exist
+    assertTrue(Metrics.defaultRegistry.allMetrics.asScala.filterKeys(_.getMBeanName == metricName).values.isEmpty)
+
+    controllerEventManager = new ControllerEventManager(0, eventProcessor,
+      time, controllerStats.rateAndTimeMetrics)
+    controllerEventManager.start()
+
+    controllerEventManager.put(TopicChange)
+    controllerEventManager.put(TopicChange)
+    latch.countDown()
+
+    val queueTimeHistogram = Metrics.defaultRegistry.allMetrics.asScala.filterKeys(_.getMBeanName == metricName).values.headOption
+      .getOrElse(fail(s"Unable to find metric $metricName")).asInstanceOf[Histogram]
+
+    TestUtils.waitUntilTrue(() => controllerEventManager.isEmpty,
+      "Timed out waiting for processing of all events")
+
+    assertEquals(2, queueTimeHistogram.count)
+    assertEquals(0, queueTimeHistogram.min, 0.01)
+    assertEquals(500, queueTimeHistogram.max, 0.01)
+  }
+
+  @Test
   def testSuccessfulEvent(): Unit = {
-    check("kafka.controller:type=ControllerStats,name=AutoLeaderBalanceRateAndTimeMs", ControllerState.AutoLeaderBalance,
-      () => Unit)
+    check("kafka.controller:type=ControllerStats,name=AutoLeaderBalanceRateAndTimeMs",
+      AutoPreferredReplicaLeaderElection, () => Unit)
   }
 
   @Test
   def testEventThatThrowsException(): Unit = {
-    check("kafka.controller:type=ControllerStats,name=LeaderElectionRateAndTimeMs", ControllerState.BrokerChange,
-      () => throw new NullPointerException)
+    check("kafka.controller:type=ControllerStats,name=LeaderElectionRateAndTimeMs",
+      BrokerChange, () => throw new NullPointerException)
   }
 
-  private def check(metricName: String, controllerState: ControllerState, process: () => Unit): Unit = {
+  private def check(metricName: String,
+                    event: ControllerEvent,
+                    func: () => Unit): Unit = {
     val controllerStats = new ControllerStats
     val eventProcessedListenerCount = new AtomicInteger
-    controllerEventManager = new ControllerEventManager(0, controllerStats.rateAndTimeMetrics,
-      _ => eventProcessedListenerCount.incrementAndGet, () => ())
+    val latch = new CountDownLatch(1)
+    val eventProcessor = new ControllerEventProcessor {
+      override def process(event: ControllerEvent): Unit = {
+        // Only return from `process()` once we have checked `controllerEventManager.state`
+        latch.await()
+        eventProcessedListenerCount.incrementAndGet()
+        func()
+      }
+      override def preempt(event: ControllerEvent): Unit = {}
+    }
+
+    controllerEventManager = new ControllerEventManager(0, eventProcessor,
+      new MockTime(), controllerStats.rateAndTimeMetrics)
     controllerEventManager.start()
 
     val initialTimerCount = timer(metricName).count
 
-    // Only return from `process()` once we have checked `controllerEventManager.state`
-    val latch = new CountDownLatch(1)
-    val eventMock = ControllerTestUtils.createMockControllerEvent(controllerState, { () =>
-      latch.await()
-      process()
-    })
-
-    controllerEventManager.put(eventMock)
-    TestUtils.waitUntilTrue(() => controllerEventManager.state == controllerState,
-      s"Controller state is not $controllerState")
+    controllerEventManager.put(event)
+    TestUtils.waitUntilTrue(() => controllerEventManager.state == event.state,
+      s"Controller state is not ${event.state}")
     latch.countDown()
 
     TestUtils.waitUntilTrue(() => controllerEventManager.state == ControllerState.Idle,

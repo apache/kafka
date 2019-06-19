@@ -38,11 +38,11 @@ class LogOffsetTest extends BaseRequestTest {
 
   private lazy val time = new MockTime
 
-  protected override def numBrokers = 1
+  override def brokerCount = 1
 
   protected override def brokerTime(brokerId: Int) = time
 
-  protected override def propertyOverrides(props: Properties): Unit = {
+  protected override def brokerPropertyOverrides(props: Properties): Unit = {
     props.put("log.flush.interval.messages", "1")
     props.put("num.partitions", "20")
     props.put("log.retention.hours", "10")
@@ -78,7 +78,8 @@ class LogOffsetTest extends BaseRequestTest {
       log.appendAsLeader(TestUtils.singletonRecords(value = Integer.toString(42).getBytes()), leaderEpoch = 0)
     log.flush()
 
-    log.onHighWatermarkIncremented(log.logEndOffset)
+    log.highWatermarkMetadata = LogOffsetMetadata(log.logEndOffset)
+    log.highWatermark = log.logEndOffset
     log.maybeIncrementLogStartOffset(3)
     log.deleteOldSegments()
 

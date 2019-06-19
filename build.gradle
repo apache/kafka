@@ -26,16 +26,17 @@ buildscript {
     }
   }
   apply from: file('gradle/buildscript.gradle'), to: buildscript
+  apply from: "$rootDir/gradle/dependencies.gradle"
 
   dependencies {
     // For Apache Rat plugin to ignore non-Git files
-    classpath "org.ajoberstar:grgit:1.9.3"
-    classpath 'com.github.ben-manes:gradle-versions-plugin:0.20.0'
-    classpath 'org.scoverage:gradle-scoverage:2.5.0'
-    classpath 'com.github.jengelman.gradle.plugins:shadow:4.0.3'
-    classpath 'org.owasp:dependency-check-gradle:4.0.2'
-    classpath "com.diffplug.spotless:spotless-plugin-gradle:3.17.0"
-    classpath "gradle.plugin.com.github.spotbugs:spotbugs-gradle-plugin:1.6.9"
+    classpath "org.ajoberstar.grgit:grgit-core:$versions.grgit"
+    classpath "com.github.ben-manes:gradle-versions-plugin:$versions.gradleVersionsPlugin"
+    classpath "org.scoverage:gradle-scoverage:$versions.scoveragePlugin"
+    classpath "com.github.jengelman.gradle.plugins:shadow:$versions.shadowPlugin"
+    classpath "org.owasp:dependency-check-gradle:$versions.owaspDepCheckPlugin"
+    classpath "com.diffplug.spotless:spotless-plugin-gradle:$versions.spotlessPlugin"
+    classpath "gradle.plugin.com.github.spotbugs:spotbugs-gradle-plugin:$versions.spotbugsPlugin"
   }
 }
 
@@ -43,11 +44,10 @@ apply plugin: "com.diffplug.gradle.spotless"
 spotless {
   scala {
     target 'streams/**/*.scala'
-    scalafmt('1.5.1').configFile('checkstyle/.scalafmt.conf')
+    scalafmt("$versions.scalafmt").configFile('checkstyle/.scalafmt.conf')
   }
 }
 
-apply from: "$rootDir/gradle/dependencies.gradle"
 
 allprojects {
 
@@ -91,7 +91,7 @@ allprojects {
 }
 
 ext {
-  gradleVersion = "5.1.1"
+  gradleVersion = "$versions.gradle"
   minJavaVersion = "8"
   buildVersionFileName = "kafka-version.properties"
 
@@ -120,7 +120,7 @@ if (file('.git').exists()) {
   rat {
     // Exclude everything under the directory that git should be ignoring via .gitignore or that isn't checked in. These
     // restrict us only to files that are checked in or are staged.
-    def repo = Grgit.open(project.getRootDir())
+    def repo = Grgit.open(currentDir: project.getRootDir())
     excludes = new ArrayList<String>(repo.clean(ignore: false, directories: true, dryRun: true))
     // And some of the files that we have checked in should also be excluded from this check
     excludes.addAll([
@@ -189,11 +189,11 @@ subprojects {
                   pom.project {
                       name 'Apache Kafka'
                       packaging 'jar'
-                      url 'http://kafka.apache.org'
+                      url 'https://kafka.apache.org'
                       licenses {
                           license {
                               name 'The Apache Software License, Version 2.0'
-                              url 'http://www.apache.org/licenses/LICENSE-2.0.txt'
+                              url 'https://www.apache.org/licenses/LICENSE-2.0.txt'
                               distribution 'repo'
                           }
                       }
@@ -432,7 +432,7 @@ subprojects {
   checkstyle {
     configFile = new File(rootDir, "checkstyle/checkstyle.xml")
     configProperties = checkstyleConfigProperties("import-control.xml")
-    toolVersion = '8.10'
+    toolVersion = "$versions.checkstyle"
   }
 
   configure(checkstyleMain) {
@@ -448,7 +448,7 @@ subprojects {
   test.dependsOn('checkstyleMain', 'checkstyleTest')
 
   spotbugs {
-    toolVersion = '3.1.8'
+    toolVersion = "$versions.spotbugs"
     excludeFilter = file("$rootDir/gradle/spotbugs-exclude.xml")
     ignoreFailures = false
   }
@@ -467,7 +467,7 @@ subprojects {
     apply plugin: "jacoco"
 
     jacoco {
-      toolVersion = "0.8.2"
+      toolVersion = "$versions.jacoco"
     }
 
     // NOTE: Jacoco Gradle plugin does not support "offline instrumentation" this means that classes mocked by PowerMock
@@ -604,8 +604,25 @@ for ( sv in availableScalaVersions ) {
   }
 }
 
-def connectPkgs = ['connect:api', 'connect:runtime', 'connect:transforms', 'connect:json', 'connect:file', 'connect:basic-auth-extension']
-def pkgs = ['clients', 'examples', 'log4j-appender', 'tools', 'streams', 'streams:streams-scala', 'streams:test-utils', 'streams:examples'] + connectPkgs
+def connectPkgs = [
+    'connect:api',
+    'connect:basic-auth-extension',
+    'connect:file',
+    'connect:json',
+    'connect:runtime',
+    'connect:transforms'
+]
+
+def pkgs = [
+    'clients',
+    'examples',
+    'log4j-appender',
+    'streams',
+    'streams:examples',
+    'streams:streams-scala',
+    'streams:test-utils',
+    'tools'
+] + connectPkgs
 
 /** Create one task per default Scala version */
 def withDefScalaVersions(taskName) {
@@ -638,9 +655,12 @@ project(':core') {
   dependencies {
     compile project(':clients')
     compile libs.jacksonDatabind
+    compile libs.jacksonModuleScala
+    compile libs.jacksonDataformatCsv
     compile libs.jacksonJDK8Datatypes
     compile libs.joptSimple
     compile libs.metrics
+    compile libs.scalaJava8Compat
     compile libs.scalaLibrary
     // only needed transitively, but set it explicitly to ensure it has the same version as scala-library
     compile libs.scalaReflect
@@ -920,6 +940,7 @@ project(':clients') {
     compile libs.lz4
     compile libs.snappy
     compile libs.slf4jApi
+
     compileOnly libs.jacksonDatabind // for SASL/OAUTHBEARER bearer token parsing
     compileOnly libs.jacksonJDK8Datatypes
 
@@ -1101,6 +1122,8 @@ project(':streams') {
     testCompile libs.log4j
     testCompile libs.junit
     testCompile libs.easymock
+    testCompile libs.powermockJunit4
+    testCompile libs.powermockEasymock
     testCompile libs.bcpkix
     testCompile libs.hamcrest
 
@@ -1342,6 +1365,18 @@ project(':streams:upgrade-system-tests-21') {
   }
 }
 
+project(':streams:upgrade-system-tests-22') {
+  archivesBaseName = "kafka-streams-upgrade-system-tests-22"
+
+  dependencies {
+    testCompile libs.kafkaStreams_22
+  }
+
+  systemTestLibs {
+    dependsOn testJar
+  }
+}
+
 project(':jmh-benchmarks') {
 
   apply plugin: 'com.github.johnrengelman.shadow'
@@ -1418,7 +1453,11 @@ project(':connect:api') {
 
   javadoc {
     include "**/org/apache/kafka/connect/**" // needed for the `javadocAll` task
-    options.links "http://docs.oracle.com/javase/7/docs/api/"
+    // The URL structure was changed to include the locale after Java 8
+    if (JavaVersion.current().isJava11Compatible())
+      options.links "https://docs.oracle.com/en/java/javase/${JavaVersion.current().majorVersion}/docs/api/"
+    else
+      options.links "https://docs.oracle.com/javase/8/docs/api/"
   }
 
   tasks.create(name: "copyDependantLibs", type: Copy) {
@@ -1546,6 +1585,7 @@ project(':connect:runtime') {
     testCompile libs.junit
     testCompile libs.powermockJunit4
     testCompile libs.powermockEasymock
+    testCompile libs.mockitoCore
     testCompile libs.httpclient
 
     testCompile project(':clients').sourceSets.test.output
@@ -1697,5 +1737,9 @@ task aggregatedJavadoc(type: Javadoc) {
   classpath = files(projectsWithJavadoc.collect { it.sourceSets.main.compileClasspath })
   includes = projectsWithJavadoc.collectMany { it.javadoc.getIncludes() }
   excludes = projectsWithJavadoc.collectMany { it.javadoc.getExcludes() }
-  options.links "http://docs.oracle.com/javase/7/docs/api/"
+  // The URL structure was changed to include the locale after Java 8
+  if (JavaVersion.current().isJava11Compatible())
+    options.links "https://docs.oracle.com/en/java/javase/${JavaVersion.current().majorVersion}/docs/api/"
+  else
+    options.links "https://docs.oracle.com/javase/8/docs/api/"
 }

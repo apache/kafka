@@ -32,8 +32,8 @@ import scala.collection.JavaConverters._
 class CreateTopicsRequestWithPolicyTest extends AbstractCreateTopicsRequestTest {
   import CreateTopicsRequestWithPolicyTest._
 
-  override def propertyOverrides(properties: Properties): Unit = {
-    super.propertyOverrides(properties)
+  override def brokerPropertyOverrides(properties: Properties): Unit = {
+    super.brokerPropertyOverrides(properties)
     properties.put(KafkaConfig.CreateTopicPolicyClassNameProp, classOf[Policy].getName)
   }
 
@@ -94,14 +94,19 @@ class CreateTopicsRequestWithPolicyTest extends AbstractCreateTopicsRequestTest 
         Some("Topic 'existing-topic' already exists."))))
 
     validateErrorCreateTopicsRequests(topicsReq(Seq(topicReq("error-replication",
-      numPartitions = 10, replicationFactor = numBrokers + 1)), validateOnly = true),
+      numPartitions = 10, replicationFactor = brokerCount + 1)), validateOnly = true),
       Map("error-replication" -> error(Errors.INVALID_REPLICATION_FACTOR,
         Some("Replication factor: 4 larger than available brokers: 3."))))
 
     validateErrorCreateTopicsRequests(topicsReq(Seq(topicReq("error-replication2",
-      numPartitions = 10, replicationFactor = -1)), validateOnly = true),
+      numPartitions = 10, replicationFactor = -2)), validateOnly = true),
       Map("error-replication2" -> error(Errors.INVALID_REPLICATION_FACTOR,
         Some("Replication factor must be larger than 0."))))
+
+    validateErrorCreateTopicsRequests(topicsReq(Seq(topicReq("error-partitions",
+      numPartitions = -2, replicationFactor = 1)), validateOnly = true),
+      Map("error-partitions" -> error(Errors.INVALID_PARTITIONS,
+        Some("Number of partitions must be larger than 0."))))
   }
 
 }

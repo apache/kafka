@@ -43,6 +43,13 @@ class CreateTopicsRequestTest extends AbstractCreateTopicsRequestTest {
       topicReq("topic10", numPartitions = 5, replicationFactor = 2),
       topicReq("topic11", assignment = Map(0 -> List(0, 1), 1 -> List(1, 0), 2 -> List(1, 2)))),
       validateOnly = true))
+    // Defaults
+    validateValidCreateTopicsRequests(topicsReq(Seq(
+      topicReq("topic12", replicationFactor = -1, numPartitions = -1))))
+    validateValidCreateTopicsRequests(topicsReq(Seq(
+      topicReq("topic13", replicationFactor = 2, numPartitions = -1))))
+    validateValidCreateTopicsRequests(topicsReq(Seq(
+      topicReq("topic14", replicationFactor = -1, numPartitions = 2))))
   }
 
   @Test
@@ -52,10 +59,10 @@ class CreateTopicsRequestTest extends AbstractCreateTopicsRequestTest {
     // Basic
     validateErrorCreateTopicsRequests(topicsReq(Seq(topicReq(existingTopic))),
       Map(existingTopic -> error(Errors.TOPIC_ALREADY_EXISTS, Some("Topic 'existing-topic' already exists."))))
-    validateErrorCreateTopicsRequests(topicsReq(Seq(topicReq("error-partitions", numPartitions = -1))),
+    validateErrorCreateTopicsRequests(topicsReq(Seq(topicReq("error-partitions", numPartitions = -2))),
       Map("error-partitions" -> error(Errors.INVALID_PARTITIONS)), checkErrorMessage = false)
     validateErrorCreateTopicsRequests(topicsReq(Seq(topicReq("error-replication",
-      replicationFactor = numBrokers + 1))),
+      replicationFactor = brokerCount + 1))),
       Map("error-replication" -> error(Errors.INVALID_REPLICATION_FACTOR)), checkErrorMessage = false)
     validateErrorCreateTopicsRequests(topicsReq(Seq(topicReq("error-config",
       config=Map("not.a.property" -> "error")))),
@@ -70,8 +77,8 @@ class CreateTopicsRequestTest extends AbstractCreateTopicsRequestTest {
     // Partial
     validateErrorCreateTopicsRequests(topicsReq(Seq(
       topicReq(existingTopic),
-      topicReq("partial-partitions", numPartitions = -1),
-      topicReq("partial-replication", replicationFactor=numBrokers + 1),
+      topicReq("partial-partitions", numPartitions = -2),
+      topicReq("partial-replication", replicationFactor=brokerCount + 1),
       topicReq("partial-assignment", assignment=Map(0 -> List(0, 1), 1 -> List(0))),
       topicReq("partial-none"))),
       Map(

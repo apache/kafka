@@ -72,21 +72,20 @@ class HighwatermarkPersistenceTest {
       var fooPartition0Hw = hwmFor(replicaManager, topic, 0)
       assertEquals(0L, fooPartition0Hw)
       val tp0 = new TopicPartition(topic, 0)
-      val partition0 = replicaManager.getOrCreatePartition(tp0)
+      val partition0 = replicaManager.createPartition(tp0)
       // create leader and follower replicas
       val log0 = logManagers.head.getOrCreateLog(new TopicPartition(topic, 0), LogConfig())
-      val leaderReplicaPartition0 = new Replica(configs.head.brokerId, tp0, time, 0, Some(log0))
-      partition0.addReplicaIfNotExists(leaderReplicaPartition0)
-      val followerReplicaPartition0 = new Replica(configs.last.brokerId, tp0, time)
+      partition0.setLog(log0, isFutureLog = false)
+      val followerReplicaPartition0 = new Replica(configs.last.brokerId, tp0)
       partition0.addReplicaIfNotExists(followerReplicaPartition0)
       replicaManager.checkpointHighWatermarks()
       fooPartition0Hw = hwmFor(replicaManager, topic, 0)
-      assertEquals(leaderReplicaPartition0.highWatermark.messageOffset, fooPartition0Hw)
+      assertEquals(log0.highWatermark, fooPartition0Hw)
       // set the high watermark for local replica
-      partition0.localReplica.get.highWatermark = new LogOffsetMetadata(5L)
+      partition0.localLogOrException.highWatermark = 5L
       replicaManager.checkpointHighWatermarks()
       fooPartition0Hw = hwmFor(replicaManager, topic, 0)
-      assertEquals(leaderReplicaPartition0.highWatermark.messageOffset, fooPartition0Hw)
+      assertEquals(log0.highWatermark, fooPartition0Hw)
       EasyMock.verify(zkClient)
     } finally {
       // shutdown the replica manager upon test completion
@@ -117,38 +116,36 @@ class HighwatermarkPersistenceTest {
       var topic1Partition0Hw = hwmFor(replicaManager, topic1, 0)
       assertEquals(0L, topic1Partition0Hw)
       val t1p0 = new TopicPartition(topic1, 0)
-      val topic1Partition0 = replicaManager.getOrCreatePartition(t1p0)
+      val topic1Partition0 = replicaManager.createPartition(t1p0)
       // create leader log
       val topic1Log0 = logManagers.head.getOrCreateLog(t1p0, LogConfig())
       // create a local replica for topic1
-      val leaderReplicaTopic1Partition0 = new Replica(configs.head.brokerId, t1p0, time, 0, Some(topic1Log0))
-      topic1Partition0.addReplicaIfNotExists(leaderReplicaTopic1Partition0)
+      topic1Partition0.setLog(topic1Log0, isFutureLog = false)
       replicaManager.checkpointHighWatermarks()
       topic1Partition0Hw = hwmFor(replicaManager, topic1, 0)
-      assertEquals(leaderReplicaTopic1Partition0.highWatermark.messageOffset, topic1Partition0Hw)
+      assertEquals(topic1Log0.highWatermark, topic1Partition0Hw)
       // set the high watermark for local replica
-      topic1Partition0.localReplica.get.highWatermark = new LogOffsetMetadata(5L)
+      topic1Partition0.localLogOrException.highWatermark = 5L
       replicaManager.checkpointHighWatermarks()
       topic1Partition0Hw = hwmFor(replicaManager, topic1, 0)
-      assertEquals(5L, leaderReplicaTopic1Partition0.highWatermark.messageOffset)
+      assertEquals(5L, topic1Log0.highWatermark)
       assertEquals(5L, topic1Partition0Hw)
       // add another partition and set highwatermark
       val t2p0 = new TopicPartition(topic2, 0)
-      val topic2Partition0 = replicaManager.getOrCreatePartition(t2p0)
+      val topic2Partition0 = replicaManager.createPartition(t2p0)
       // create leader log
       val topic2Log0 = logManagers.head.getOrCreateLog(t2p0, LogConfig())
       // create a local replica for topic2
-      val leaderReplicaTopic2Partition0 =  new Replica(configs.head.brokerId, t2p0, time, 0, Some(topic2Log0))
-      topic2Partition0.addReplicaIfNotExists(leaderReplicaTopic2Partition0)
+      topic2Partition0.setLog(topic2Log0, isFutureLog = false)
       replicaManager.checkpointHighWatermarks()
       var topic2Partition0Hw = hwmFor(replicaManager, topic2, 0)
-      assertEquals(leaderReplicaTopic2Partition0.highWatermark.messageOffset, topic2Partition0Hw)
+      assertEquals(topic2Log0.highWatermark, topic2Partition0Hw)
       // set the highwatermark for local replica
-      topic2Partition0.localReplica.get.highWatermark = new LogOffsetMetadata(15L)
-      assertEquals(15L, leaderReplicaTopic2Partition0.highWatermark.messageOffset)
+      topic2Partition0.localLogOrException.highWatermark = 15L
+      assertEquals(15L, topic2Log0.highWatermark)
       // change the highwatermark for topic1
-      topic1Partition0.localReplica.get.highWatermark = new LogOffsetMetadata(10L)
-      assertEquals(10L, leaderReplicaTopic1Partition0.highWatermark.messageOffset)
+      topic1Partition0.localLogOrException.highWatermark = 10L
+      assertEquals(10L, topic1Log0.highWatermark)
       replicaManager.checkpointHighWatermarks()
       // verify checkpointed hw for topic 2
       topic2Partition0Hw = hwmFor(replicaManager, topic2, 0)
@@ -169,5 +166,4 @@ class HighwatermarkPersistenceTest {
     replicaManager.highWatermarkCheckpoints(new File(replicaManager.config.logDirs.head).getAbsolutePath).read.getOrElse(
       new TopicPartition(topic, partition), 0L)
   }
-
 }

@@ -387,7 +387,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
             output += line
         return output
 
-    def list_topics(self, topic, node=None):
+    def list_topics(self, topic=None, node=None):
         if node is None:
             node = self.nodes[0]
         cmd = "%s --zookeeper %s --list" % \
@@ -403,6 +403,18 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         cmd = "%s --zookeeper %s --entity-name %s --entity-type topics --alter --add-config message.format.version=%s" % \
               (self.path.script("kafka-configs.sh", node), self.zk_connect_setting(), topic, msg_format_version)
         self.logger.info("Running alter message format command...\n%s" % cmd)
+        node.account.ssh(cmd)
+
+    def set_unclean_leader_election(self, topic, value=True, node=None):
+        if node is None:
+            node = self.nodes[0]
+        if value is True:
+            self.logger.info("Enabling unclean leader election for topic %s", topic)
+        else:
+            self.logger.info("Disabling unclean leader election for topic %s", topic)
+        cmd = "%s --zookeeper %s --entity-name %s --entity-type topics --alter --add-config unclean.leader.election.enable=%s" % \
+              (self.path.script("kafka-configs.sh", node), self.zk_connect_setting(), topic, str(value).lower())
+        self.logger.info("Running alter unclean leader command...\n%s" % cmd)
         node.account.ssh(cmd)
 
     def parse_describe_topic(self, topic_description):

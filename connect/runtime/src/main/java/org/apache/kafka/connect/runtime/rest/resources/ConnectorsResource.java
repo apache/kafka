@@ -17,9 +17,11 @@
 package org.apache.kafka.connect.runtime.rest.resources;
 
 import com.fasterxml.jackson.core.type.TypeReference;
+
+import javax.ws.rs.core.HttpHeaders;
+import org.apache.kafka.connect.errors.NotFoundException;
 import org.apache.kafka.connect.runtime.ConnectorConfig;
 import org.apache.kafka.connect.runtime.Herder;
-import org.apache.kafka.connect.runtime.HerderProvider;
 import org.apache.kafka.connect.runtime.WorkerConfig;
 import org.apache.kafka.connect.runtime.distributed.RebalanceNeededException;
 import org.apache.kafka.connect.runtime.distributed.RequestTargetException;
@@ -45,11 +47,14 @@ import javax.ws.rs.Path;
 import javax.ws.rs.PathParam;
 import javax.ws.rs.Produces;
 import javax.ws.rs.QueryParam;
+import javax.ws.rs.core.Context;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 import javax.ws.rs.core.UriBuilder;
+import javax.ws.rs.core.UriInfo;
+
 import java.net.URI;
-import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
@@ -66,34 +71,59 @@ public class ConnectorsResource {
     // session timeout to complete, during which we cannot serve some requests. Ideally we could reduce this, but
     // we need to consider all possible scenarios this could fail. It might be ok to fail with a timeout in rare cases,
     // but currently a worker simply leaving the group can take this long as well.
-    private static final long REQUEST_TIMEOUT_MS = 90 * 1000;
+    public static final long REQUEST_TIMEOUT_MS = 90 * 1000;
 
-    private final HerderProvider herderProvider;
+    private final Herder herder;
     private final WorkerConfig config;
     @javax.ws.rs.core.Context
     private ServletContext context;
 
-    public ConnectorsResource(HerderProvider herder, WorkerConfig config) {
-        this.herderProvider = herder;
+    public ConnectorsResource(Herder herder, WorkerConfig config) {
+        this.herder = herder;
         this.config = config;
-    }
-
-    private Herder herder() {
-        return herderProvider.get();
     }
 
     @GET
     @Path("/")
-    public Collection<String> listConnectors(final @QueryParam("forward") Boolean forward) throws Throwable {
-        FutureCallback<Collection<String>> cb = new FutureCallback<>();
-        herder().connectors(cb);
-        return completeOrForwardRequest(cb, "/connectors", "GET", null, new TypeReference<Collection<String>>() {
-        }, forward);
+    public Response listConnectors(
+        final @Context UriInfo uriInfo,
+        final @Context HttpHeaders headers
+    ) throws Throwable {
+        if (uriInfo.getQueryParameters().containsKey("expand")) {
+            Map<String, Map<String, Object>> out = new HashMap<>();
+            for (String connector : herder.connectors()) {
+                try {
+                    Map<String, Object> connectorExpansions = new HashMap<>();
+                    for (String expansion : uriInfo.getQueryParameters().get("expand")) {
+                        switch (expansion) {
+                            case "status":
+                                connectorExpansions.put("status", herder.connectorStatus(connector));
+                                break;
+                            case "info":
+                                connectorExpansions.put("info", herder.connectorInfo(connector));
+                                break;
+                            default:
+                                log.info("Ignoring unknown expanion type {}", expansion);
+                        }
+                    }
+                    out.put(connector, connectorExpansions);
+                } catch (NotFoundException e) {
+                    // this likely means that a connector has been removed while we look its info up
+                    // we can just not include this connector in the return entity
+                    log.debug("Unable to get connector info for {} on this worker", connector);
+                }
+
+            }
+            return Response.ok(out).build();
+        } else {
+            return Response.ok(herder.connectors()).build();
+        }
     }
 
     @POST
     @Path("/")
     public Response createConnector(final @QueryParam("forward") Boolean forward,
+                                    final @Context HttpHeaders headers,
                                     final CreateConnectorRequest createRequest) throws Throwable {
         // Trim leading and trailing whitespaces from the connector name, replace null with empty string
         // if no name element present to keep validation within validator (NonEmptyStringWithoutControlChars
@@ -104,8 +134,8 @@ public class ConnectorsResource {
         checkAndPutConnectorConfigName(name, configs);
 
         FutureCallback<Herder.Created<ConnectorInfo>> cb = new FutureCallback<>();
-        herder().putConnectorConfig(name, configs, false, cb);
-        Herder.Created<ConnectorInfo> info = completeOrForwardRequest(cb, "/connectors", "POST", createRequest,
+        herder.putConnectorConfig(name, configs, false, cb);
+        Herder.Created<ConnectorInfo> info = completeOrForwardRequest(cb, "/connectors", "POST", headers, createRequest,
                 new TypeReference<ConnectorInfo>() { }, new CreatedConnectorInfoTranslator(), forward);
 
         URI location = UriBuilder.fromUri("/connectors").path(name).build();
@@ -115,38 +145,41 @@ public class ConnectorsResource {
     @GET
     @Path("/{connector}")
     public ConnectorInfo getConnector(final @PathParam("connector") String connector,
+                                      final @Context HttpHeaders headers,
                                       final @QueryParam("forward") Boolean forward) throws Throwable {
         FutureCallback<ConnectorInfo> cb = new FutureCallback<>();
-        herder().connectorInfo(connector, cb);
-        return completeOrForwardRequest(cb, "/connectors/" + connector, "GET", null, forward);
+        herder.connectorInfo(connector, cb);
+        return completeOrForwardRequest(cb, "/connectors/" + connector, "GET", headers, null, forward);
     }
 
     @GET
     @Path("/{connector}/config")
     public Map<String, String> getConnectorConfig(final @PathParam("connector") String connector,
+                                                  final @Context HttpHeaders headers,
                                                   final @QueryParam("forward") Boolean forward) throws Throwable {
         FutureCallback<Map<String, String>> cb = new FutureCallback<>();
-        herder().connectorConfig(connector, cb);
-        return completeOrForwardRequest(cb, "/connectors/" + connector + "/config", "GET", null, forward);
+        herder.connectorConfig(connector, cb);
+        return completeOrForwardRequest(cb, "/connectors/" + connector + "/config", "GET", headers, null, forward);
     }
 
     @GET
     @Path("/{connector}/status")
     public ConnectorStateInfo getConnectorStatus(final @PathParam("connector") String connector) throws Throwable {
-        return herder().connectorStatus(connector);
+        return herder.connectorStatus(connector);
     }
 
     @PUT
     @Path("/{connector}/config")
     public Response putConnectorConfig(final @PathParam("connector") String connector,
+                                       final @Context HttpHeaders headers,
                                        final @QueryParam("forward") Boolean forward,
                                        final Map<String, String> connectorConfig) throws Throwable {
         FutureCallback<Herder.Created<ConnectorInfo>> cb = new FutureCallback<>();
         checkAndPutConnectorConfigName(connector, connectorConfig);
 
-        herder().putConnectorConfig(connector, connectorConfig, true, cb);
+        herder.putConnectorConfig(connector, connectorConfig, true, cb);
         Herder.Created<ConnectorInfo> createdInfo = completeOrForwardRequest(cb, "/connectors/" + connector + "/config",
-                "PUT", connectorConfig, new TypeReference<ConnectorInfo>() { }, new CreatedConnectorInfoTranslator(), forward);
+                "PUT", headers, connectorConfig, new TypeReference<ConnectorInfo>() { }, new CreatedConnectorInfoTranslator(), forward);
         Response.ResponseBuilder response;
         if (createdInfo.created()) {
             URI location = UriBuilder.fromUri("/connectors").path(connector).build();
@@ -160,71 +193,77 @@ public class ConnectorsResource {
     @POST
     @Path("/{connector}/restart")
     public void restartConnector(final @PathParam("connector") String connector,
+                                 final @Context HttpHeaders headers,
                                  final @QueryParam("forward") Boolean forward) throws Throwable {
         FutureCallback<Void> cb = new FutureCallback<>();
-        herder().restartConnector(connector, cb);
-        completeOrForwardRequest(cb, "/connectors/" + connector + "/restart", "POST", null, forward);
+        herder.restartConnector(connector, cb);
+        completeOrForwardRequest(cb, "/connectors/" + connector + "/restart", "POST", headers, null, forward);
     }
 
     @PUT
     @Path("/{connector}/pause")
-    public Response pauseConnector(@PathParam("connector") String connector) {
-        herder().pauseConnector(connector);
+    public Response pauseConnector(@PathParam("connector") String connector, final @Context HttpHeaders headers) {
+        herder.pauseConnector(connector);
         return Response.accepted().build();
     }
 
     @PUT
     @Path("/{connector}/resume")
     public Response resumeConnector(@PathParam("connector") String connector) {
-        herder().resumeConnector(connector);
+        herder.resumeConnector(connector);
         return Response.accepted().build();
     }
 
     @GET
     @Path("/{connector}/tasks")
     public List<TaskInfo> getTaskConfigs(final @PathParam("connector") String connector,
+                                         final @Context HttpHeaders headers,
                                          final @QueryParam("forward") Boolean forward) throws Throwable {
         FutureCallback<List<TaskInfo>> cb = new FutureCallback<>();
-        herder().taskConfigs(connector, cb);
-        return completeOrForwardRequest(cb, "/connectors/" + connector + "/tasks", "GET", null, new TypeReference<List<TaskInfo>>() {
+        herder.taskConfigs(connector, cb);
+        return completeOrForwardRequest(cb, "/connectors/" + connector + "/tasks", "GET", headers, null, new TypeReference<List<TaskInfo>>() {
         }, forward);
     }
 
     @POST
     @Path("/{connector}/tasks")
     public void putTaskConfigs(final @PathParam("connector") String connector,
+                               final @Context HttpHeaders headers,
                                final @QueryParam("forward") Boolean forward,
                                final List<Map<String, String>> taskConfigs) throws Throwable {
         FutureCallback<Void> cb = new FutureCallback<>();
-        herder().putTaskConfigs(connector, taskConfigs, cb);
-        completeOrForwardRequest(cb, "/connectors/" + connector + "/tasks", "POST", taskConfigs, forward);
+        herder.putTaskConfigs(connector, taskConfigs, cb);
+        completeOrForwardRequest(cb, "/connectors/" + connector + "/tasks", "POST", headers, taskConfigs, forward);
     }
 
     @GET
     @Path("/{connector}/tasks/{task}/status")
     public ConnectorStateInfo.TaskState getTaskStatus(final @PathParam("connector") String connector,
+                                                      final @Context HttpHeaders headers,
                                                       final @PathParam("task") Integer task) throws Throwable {
-        return herder().taskStatus(new ConnectorTaskId(connector, task));
+        return herder.taskStatus(new ConnectorTaskId(connector, task));
     }
 
     @POST
     @Path("/{connector}/tasks/{task}/restart")
     public void restartTask(final @PathParam("connector") String connector,
                             final @PathParam("task") Integer task,
+                            final @Context HttpHeaders headers,
                             final @QueryParam("forward") Boolean forward) throws Throwable {
         FutureCallback<Void> cb = new FutureCallback<>();
         ConnectorTaskId taskId = new ConnectorTaskId(connector, task);
-        herder().restartTask(taskId, cb);
-        completeOrForwardRequest(cb, "/connectors/" + connector + "/tasks/" + task + "/restart", "POST", null, forward);
+        herder.restartTask(taskId, cb);
+        completeOrForwardRequest(cb, "/connectors/" + connector + "/tasks/" + task + "/restart", "POST", headers, null, forward);
     }
 
     @DELETE
     @Path("/{connector}")
     public void destroyConnector(final @PathParam("connector") String connector,
+                                 final @Context HttpHeaders headers,
                                  final @QueryParam("forward") Boolean forward) throws Throwable {
         FutureCallback<Herder.Created<ConnectorInfo>> cb = new FutureCallback<>();
-        herder().deleteConnectorConfig(connector, cb);
-        completeOrForwardRequest(cb, "/connectors/" + connector, "DELETE", null, forward);
+        herder.deleteConnectorConfig(connector, cb);
+        completeOrForwardRequest(cb, "/connectors/" + connector, "DELETE", headers, null, forward);
     }
 
     // Check whether the connector name from the url matches the one (if there is one) provided in the connectorconfig
@@ -244,6 +283,7 @@ public class ConnectorsResource {
     private <T, U> T completeOrForwardRequest(FutureCallback<T> cb,
                                               String path,
                                               String method,
+                                              HttpHeaders headers,
                                               Object body,
                                               TypeReference<U> resultType,
                                               Translator<T, U> translator,
@@ -266,7 +306,7 @@ public class ConnectorsResource {
                             .build()
                             .toString();
                     log.debug("Forwarding request {} {} {}", forwardUrl, method, body);
-                    return translator.translate(RestClient.httpRequest(forwardUrl, method, body, resultType, config));
+                    return translator.translate(RestClient.httpRequest(forwardUrl, method, headers, body, resultType, config));
                 } else {
                     // we should find the right target for the query within two hops, so if
                     // we don't, it probably means that a rebalance has taken place.
@@ -288,14 +328,14 @@ public class ConnectorsResource {
         }
     }
 
-    private <T> T completeOrForwardRequest(FutureCallback<T> cb, String path, String method, Object body,
+    private <T> T completeOrForwardRequest(FutureCallback<T> cb, String path, String method, HttpHeaders headers, Object body,
                                            TypeReference<T> resultType, Boolean forward) throws Throwable {
-        return completeOrForwardRequest(cb, path, method, body, resultType, new IdentityTranslator<T>(), forward);
+        return completeOrForwardRequest(cb, path, method, headers, body, resultType, new IdentityTranslator<T>(), forward);
     }
 
-    private <T> T completeOrForwardRequest(FutureCallback<T> cb, String path, String method,
+    private <T> T completeOrForwardRequest(FutureCallback<T> cb, String path, String method, HttpHeaders headers,
                                            Object body, Boolean forward) throws Throwable {
-        return completeOrForwardRequest(cb, path, method, body, null, new IdentityTranslator<T>(), forward);
+        return completeOrForwardRequest(cb, path, method, headers, body, null, new IdentityTranslator<T>(), forward);
     }
 
     private interface Translator<T, U> {

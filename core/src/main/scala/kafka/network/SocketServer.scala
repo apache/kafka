@@ -599,7 +599,7 @@ private[kafka] class Acceptor(val endPoint: EndPoint,
 
     try {
       serverChannel.socket.bind(socketAddress)
-      info(s"Awaiting socket connections on s${socketAddress.getHostString}:${serverChannel.socket.getLocalPort}.")
+      info(s"Awaiting socket connections on ${socketAddress.getHostString}:${serverChannel.socket.getLocalPort}.")
     } catch {
       case e: SocketException =>
         throw new KafkaException(s"Socket server failed to bind to ${socketAddress.getHostString}:$port: ${e.getMessage}.", e)
@@ -1228,7 +1228,7 @@ class ConnectionQuotas(config: KafkaConfig, time: Time) extends Logging {
 
   class ListenerConnectionQuota(lock: Object, listener: ListenerName) extends ListenerReconfigurable {
     @volatile private var _maxConnections = Int.MaxValue
-    private val listenerPropName = s"${listener.configPrefix}${KafkaConfig.MaxConnectionsProp}"
+
     def maxConnections: Int = _maxConnections
 
     override def listenerName(): ListenerName = listener

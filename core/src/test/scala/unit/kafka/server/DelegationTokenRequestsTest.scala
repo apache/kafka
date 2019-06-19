@@ -26,6 +26,7 @@ import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.SecurityUtils
 import org.junit.Assert._
 import org.junit.{After, Before, Test}
+import org.scalatest.Assertions.intercept
 
 import scala.collection.JavaConverters._
 import scala.concurrent.ExecutionException
@@ -38,7 +39,7 @@ class DelegationTokenRequestsTest extends BaseRequestTest with SaslSetup {
   protected override val clientSaslProperties = Some(kafkaClientSaslProperties(kafkaClientSaslMechanism))
   var adminClient: AdminClient = null
 
-  override def numBrokers = 1
+  override def brokerCount = 1
 
   @Before
   override def setUp(): Unit = {
@@ -47,11 +48,11 @@ class DelegationTokenRequestsTest extends BaseRequestTest with SaslSetup {
   }
 
   override def generateConfigs = {
-    val props = TestUtils.createBrokerConfigs(numBrokers, zkConnect,
+    val props = TestUtils.createBrokerConfigs(brokerCount, zkConnect,
       enableControlledShutdown = false,
       interBrokerSecurityProtocol = Some(securityProtocol),
       trustStoreFile = trustStoreFile, saslProperties = serverSaslProperties, enableToken = true)
-    props.foreach(propertyOverrides)
+    props.foreach(brokerPropertyOverrides)
     props.map(KafkaConfig.fromProps)
   }
 

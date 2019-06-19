@@ -20,7 +20,6 @@ import signal
 import time
 
 import requests
-from ducktape.cluster.remoteaccount import RemoteCommandError
 from ducktape.errors import DucktapeError
 from ducktape.services.service import Service
 from ducktape.utils.util import wait_until
@@ -107,12 +106,12 @@ class ConnectServiceBase(KafkaPathResolverMixin, Service):
 
     def listening(self, node):
         try:
-            cmd = "nc -z %s %s" % (node.account.hostname, self.CONNECT_REST_PORT)
-            node.account.ssh_output(cmd, allow_fail=False)
-            self.logger.debug("Connect worker started accepting connections at: '%s:%s')", node.account.hostname,
+            self.list_connectors(node)
+            self.logger.debug("Connect worker started serving REST at: '%s:%s')", node.account.hostname,
                               self.CONNECT_REST_PORT)
             return True
-        except (RemoteCommandError, ValueError) as e:
+        except requests.exceptions.ConnectionError:
+            self.logger.debug("REST resources are not loaded yet")
             return False
 
     def start(self, mode=STARTUP_MODE_LISTEN):
@@ -240,7 +239,7 @@ class ConnectServiceBase(KafkaPathResolverMixin, Service):
     def _rest_with_retry(self, path, body=None, node=None, method="GET", retries=40, retry_backoff=.25):
         """
         Invokes a REST API with retries for errors that may occur during normal operation (notably 409 CONFLICT
-        responses that can occur due to rebalancing).
+        responses that can occur due to rebalancing or 404 when the connect resources are not initialized yet).
         """
         exception_to_throw = None
         for i in range(0, retries + 1):
@@ -248,7 +247,7 @@ class ConnectServiceBase(KafkaPathResolverMixin, Service):
                 return self._rest(path, body, node, method)
             except ConnectRestError as e:
                 exception_to_throw = e
-                if e.status != 409:
+                if e.status != 409 and e.status != 404:
                     break
                 time.sleep(retry_backoff)
         raise exception_to_throw

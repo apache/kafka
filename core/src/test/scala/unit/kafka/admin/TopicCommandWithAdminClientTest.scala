@@ -28,9 +28,13 @@ import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.clients.admin.{ListTopicsOptions, NewTopic, AdminClient => JAdminClient}
 import org.apache.kafka.common.config.{ConfigException, ConfigResource, TopicConfig}
 import org.apache.kafka.common.internals.Topic
+import org.apache.kafka.common.network.ListenerName
+import org.apache.kafka.common.protocol.Errors
+import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.junit.Assert.{assertEquals, assertFalse, assertTrue}
-import org.junit.{After, Before, Rule, Test}
 import org.junit.rules.TestName
+import org.junit.{After, Before, Rule, Test}
+import org.scalatest.Assertions.{fail, intercept}
 
 import scala.collection.JavaConverters._
 import scala.concurrent.ExecutionException
@@ -45,8 +49,13 @@ class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Loggin
   override def generateConfigs: Seq[KafkaConfig] = TestUtils.createBrokerConfigs(
     numConfigs = 6,
     zkConnect = zkConnect,
-    rackInfo = Map(0 -> "rack1", 1 -> "rack2", 2 -> "rack2", 3 -> "rack1", 4 -> "rack3", 5 -> "rack3"
-    )).map(KafkaConfig.fromProps)
+    rackInfo = Map(0 -> "rack1", 1 -> "rack2", 2 -> "rack2", 3 -> "rack1", 4 -> "rack3", 5 -> "rack3"),
+    numPartitions = numPartitions,
+    defaultReplicationFactor = defaultReplicationFactor
+    ).map(KafkaConfig.fromProps)
+
+  private val numPartitions = 1
+  private val defaultReplicationFactor = 1.toShort
 
   private var topicService: AdminClientTopicService = _
   private var adminClient: JAdminClient = _
@@ -152,6 +161,52 @@ class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Loggin
   }
 
   @Test
+  def testCreateWithDefaults(): Unit = {
+    createAndWaitTopic(new TopicCommandOptions(
+      Array("--topic", testTopicName)))
+
+    val partitions = adminClient
+      .describeTopics(Collections.singletonList(testTopicName))
+      .all()
+      .get()
+      .get(testTopicName)
+      .partitions()
+    assertEquals(partitions.size(), numPartitions)
+    assertEquals(partitions.get(0).replicas().size(), defaultReplicationFactor)
+  }
+
+  @Test
+  def testCreateWithDefaultReplication(): Unit = {
+    createAndWaitTopic(new TopicCommandOptions(
+      Array("--topic", testTopicName, "--partitions", "2")))
+
+    val partitions = adminClient
+      .describeTopics(Collections.singletonList(testTopicName))
+      .all()
+      .get()
+      .get(testTopicName)
+      .partitions()
+    assertEquals(partitions.size(), 2)
+    assertEquals(partitions.get(0).replicas().size(), defaultReplicationFactor)
+  }
+
+  @Test
+  def testCreateWithDefaultPartitions(): Unit = {
+    createAndWaitTopic(new TopicCommandOptions(
+      Array("--topic", testTopicName, "--replication-factor", "2")))
+
+    val partitions = adminClient
+      .describeTopics(Collections.singletonList(testTopicName))
+      .all()
+      .get()
+      .get(testTopicName)
+      .partitions()
+
+    assertEquals(partitions.size(), numPartitions)
+    assertEquals(partitions.get(0).replicas().size(), 2)
+  }
+
+  @Test
   def testCreateWithConfigs(): Unit = {
     val configResource = new ConfigResource(ConfigResource.Type.TOPIC, testTopicName)
     createAndWaitTopic(new TopicCommandOptions(
@@ -207,7 +262,7 @@ class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Loggin
 
   @Test
   def testCreateWithNegativeReplicationFactor(): Unit = {
-    intercept[ExecutionException] {
+    intercept[IllegalArgumentException] {
       topicService.createTopic(new TopicCommandOptions(
         Array("--partitions", "2", "--replication-factor", "-1", "--topic", testTopicName)))
     }
@@ -237,17 +292,17 @@ class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Loggin
 
   @Test
   def testCreateWithNegativePartitionCount(): Unit = {
-    intercept[ExecutionException] {
+    intercept[IllegalArgumentException] {
       topicService.createTopic(new TopicCommandOptions(
         Array("--partitions", "-1", "--replication-factor", "1", "--topic", testTopicName)))
     }
   }
 
   @Test
-  def testCreateWithUnspecifiedPartitionCount(): Unit = {
-    assertExitCode(1,
-      () => topicService.createTopic(new TopicCommandOptions(
-        Array("--replication-factor", "1", "--topic", testTopicName))))
+  def testCreateWithUnspecifiedReplicationFactorAndPartitionsWithZkClient(): Unit = {
+    assertExitCode(1, () =>
+      new TopicCommandOptions(Array("--create", "--zookeeper", "zk", "--topic", testTopicName)).checkArgs()
+    )
   }
 
   @Test
@@ -277,9 +332,9 @@ class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Loggin
     val topic2 = "kafka.testTopic2"
     val topic3 = "oooof.testTopic1"
     adminClient.createTopics(
-      List(new NewTopic(topic1, 2, 2),
-        new NewTopic(topic2, 2, 2),
-        new NewTopic(topic3, 2, 2)).asJavaCollection)
+      List(new NewTopic(topic1, 2, 2.toShort),
+        new NewTopic(topic2, 2, 2.toShort),
+        new NewTopic(topic3, 2, 2.toShort)).asJavaCollection)
       .all().get()
     waitForTopicCreated(topic1)
     waitForTopicCreated(topic2)
@@ -297,8 +352,8 @@ class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Loggin
   def testListTopicsWithExcludeInternal(): Unit = {
     val topic1 = "kafka.testTopic1"
     adminClient.createTopics(
-      List(new NewTopic(topic1, 2, 2),
-        new NewTopic(Topic.GROUP_METADATA_TOPIC_NAME, 2, 2)).asJavaCollection)
+      List(new NewTopic(topic1, 2, 2.toShort),
+        new NewTopic(Topic.GROUP_METADATA_TOPIC_NAME, 2, 2.toShort)).asJavaCollection)
       .all().get()
     waitForTopicCreated(topic1)
 
@@ -312,7 +367,7 @@ class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Loggin
   @Test
   def testAlterPartitionCount(): Unit = {
     adminClient.createTopics(
-      List(new NewTopic(testTopicName, 2, 2)).asJavaCollection).all().get()
+      List(new NewTopic(testTopicName, 2, 2.toShort)).asJavaCollection).all().get()
     waitForTopicCreated(testTopicName)
 
     topicService.alterTopic(new TopicCommandOptions(
@@ -325,7 +380,7 @@ class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Loggin
   @Test
   def testAlterAssignment(): Unit = {
     adminClient.createTopics(
-      Collections.singletonList(new NewTopic(testTopicName, 2, 2))).all().get()
+      Collections.singletonList(new NewTopic(testTopicName, 2, 2.toShort))).all().get()
     waitForTopicCreated(testTopicName)
 
     topicService.alterTopic(new TopicCommandOptions(
@@ -339,7 +394,7 @@ class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Loggin
   @Test
   def testAlterAssignmentWithMoreAssignmentThanPartitions(): Unit = {
     adminClient.createTopics(
-      List(new NewTopic(testTopicName, 2, 2)).asJavaCollection).all().get()
+      List(new NewTopic(testTopicName, 2, 2.toShort)).asJavaCollection).all().get()
     waitForTopicCreated(testTopicName)
 
     intercept[ExecutionException] {
@@ -351,7 +406,7 @@ class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Loggin
   @Test
   def testAlterAssignmentWithMorePartitionsThanAssignment(): Unit = {
     adminClient.createTopics(
-      List(new NewTopic(testTopicName, 2, 2)).asJavaCollection).all().get()
+      List(new NewTopic(testTopicName, 2, 2.toShort)).asJavaCollection).all().get()
     waitForTopicCreated(testTopicName)
 
     intercept[ExecutionException] {
@@ -465,7 +520,7 @@ class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Loggin
     val deletePath = DeleteTopicsTopicZNode.path(testTopicName)
     assertFalse("Delete path for topic shouldn't exist before deletion.", zkClient.pathExists(deletePath))
     topicService.deleteTopic(deleteOpts)
-    assertTrue("Delete path for topic should exist after deletion.", zkClient.pathExists(deletePath))
+    TestUtils.verifyTopicDeletion(zkClient, testTopicName, 1, servers)
   }
 
   @Test
@@ -483,7 +538,7 @@ class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Loggin
     val deleteOffsetTopicPath = DeleteTopicsTopicZNode.path(Topic.GROUP_METADATA_TOPIC_NAME)
     assertFalse("Delete path for topic shouldn't exist before deletion.", zkClient.pathExists(deleteOffsetTopicPath))
     topicService.deleteTopic(deleteOffsetTopicOpts)
-    assertTrue("Delete path for topic should exist after deletion.", zkClient.pathExists(deleteOffsetTopicPath))
+    TestUtils.verifyTopicDeletion(zkClient, Topic.GROUP_METADATA_TOPIC_NAME, 1, servers)
   }
 
   @Test
@@ -498,7 +553,7 @@ class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Loggin
   @Test
   def testDescribe(): Unit = {
     adminClient.createTopics(
-      Collections.singletonList(new NewTopic(testTopicName, 2, 2))).all().get()
+      Collections.singletonList(new NewTopic(testTopicName, 2, 2.toShort))).all().get()
     waitForTopicCreated(testTopicName)
 
     val output = TestUtils.grabConsoleOutput(
@@ -511,13 +566,39 @@ class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Loggin
   @Test
   def testDescribeUnavailablePartitions(): Unit = {
     adminClient.createTopics(
-      Collections.singletonList(new NewTopic(testTopicName, 6, 1))).all().get()
+      Collections.singletonList(new NewTopic(testTopicName, 6, 1.toShort))).all().get()
     waitForTopicCreated(testTopicName)
 
     try {
+      // check which partition is on broker 0 which we'll kill
+      val testTopicDescription = adminClient.describeTopics(Collections.singletonList(testTopicName))
+        .all().get().asScala(testTopicName)
+      val partitionOnBroker0 = testTopicDescription.partitions().asScala.find(_.leader().id() == 0).get.partition()
+
       killBroker(0)
+
+      // wait until the topic metadata for the test topic is propagated to each alive broker
+      TestUtils.waitUntilTrue(() => {
+        servers
+          .filterNot(_.config.brokerId == 0)
+          .foldLeft(true) {
+            (result, server) => {
+              val topicMetadatas = server.dataPlaneRequestProcessor.metadataCache
+                .getTopicMetadata(Set(testTopicName), ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT))
+              val testPartitionMetadata = topicMetadatas.find(_.topic().equals(testTopicName)).get.partitionMetadata().asScala.find(_.partition() == partitionOnBroker0)
+              testPartitionMetadata match {
+                case None => fail(s"Partition metadata is not found in metadata cache")
+                case Some(metadata) => {
+                  result && metadata.error() == Errors.LEADER_NOT_AVAILABLE
+                }
+              }
+            }
+          }
+      }, s"Partition metadata for $testTopicName is not propagated")
+
+      // grab the console output and assert
       val output = TestUtils.grabConsoleOutput(
-        topicService.describeTopic(new TopicCommandOptions(Array("--topic", testTopicName, "--unavailable-partitions"))))
+          topicService.describeTopic(new TopicCommandOptions(Array("--topic", testTopicName, "--unavailable-partitions"))))
       val rows = output.split("\n")
       assertTrue(rows(0).startsWith(s"\tTopic: $testTopicName"))
       assertTrue(rows(0).endsWith("Leader: none\tReplicas: 0\tIsr: "))
@@ -529,11 +610,13 @@ class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Loggin
   @Test
   def testDescribeUnderReplicatedPartitions(): Unit = {
     adminClient.createTopics(
-      Collections.singletonList(new NewTopic(testTopicName, 1, 6))).all().get()
+      Collections.singletonList(new NewTopic(testTopicName, 1, 6.toShort))).all().get()
     waitForTopicCreated(testTopicName)
 
     try {
       killBroker(0)
+      val aliveServers = servers.filterNot(_.config.brokerId == 0)
+      TestUtils.waitUntilMetadataIsPropagated(aliveServers, testTopicName, 0)
       val output = TestUtils.grabConsoleOutput(
         topicService.describeTopic(new TopicCommandOptions(Array("--under-replicated-partitions"))))
       val rows = output.split("\n")
@@ -549,15 +632,39 @@ class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Loggin
     configMap.put(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, "6")
 
     adminClient.createTopics(
-      Collections.singletonList(new NewTopic(testTopicName, 1, 6).configs(configMap))).all().get()
+      Collections.singletonList(new NewTopic(testTopicName, 1, 6.toShort).configs(configMap))).all().get()
     waitForTopicCreated(testTopicName)
 
     try {
       killBroker(0)
+      val aliveServers = servers.filterNot(_.config.brokerId == 0)
+      TestUtils.waitUntilMetadataIsPropagated(aliveServers, testTopicName, 0)
       val output = TestUtils.grabConsoleOutput(
         topicService.describeTopic(new TopicCommandOptions(Array("--under-min-isr-partitions"))))
       val rows = output.split("\n")
       assertTrue(rows(0).startsWith(s"\tTopic: $testTopicName"))
+    } finally {
+      restartDeadBrokers()
+    }
+  }
+
+  @Test
+  def testDescribeAtMinIsrPartitions(): Unit = {
+    val configMap = new java.util.HashMap[String, String]()
+    configMap.put(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, "4")
+
+    adminClient.createTopics(
+      Collections.singletonList(new NewTopic(testTopicName, 1, 6.toShort).configs(configMap))).all().get()
+    waitForTopicCreated(testTopicName)
+
+    try {
+      killBroker(0)
+      killBroker(1)
+      val output = TestUtils.grabConsoleOutput(
+        topicService.describeTopic(new TopicCommandOptions(Array("--at-min-isr-partitions"))))
+      val rows = output.split("\n")
+      assertTrue(rows(0).startsWith(s"\tTopic: $testTopicName"))
+      assertEquals(1, rows.length);
     } finally {
       restartDeadBrokers()
     }
@@ -584,8 +691,8 @@ class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Loggin
 
     adminClient.createTopics(
       java.util.Arrays.asList(
-        new NewTopic(underMinIsrTopic, 1, 6).configs(configMap),
-        new NewTopic(notUnderMinIsrTopic, 1, 6),
+        new NewTopic(underMinIsrTopic, 1, 6.toShort).configs(configMap),
+        new NewTopic(notUnderMinIsrTopic, 1, 6.toShort),
         new NewTopic(offlineTopic, Collections.singletonMap(0, Collections.singletonList(0))),
         new NewTopic(fullyReplicatedTopic, Collections.singletonMap(0, java.util.Arrays.asList(1, 2, 3))))).all().get()
 
@@ -596,6 +703,8 @@ class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Loggin
 
     try {
       killBroker(0)
+      val aliveServers = servers.filterNot(_.config.brokerId == 0)
+      TestUtils.waitUntilMetadataIsPropagated(aliveServers, underMinIsrTopic, 0)
       val output = TestUtils.grabConsoleOutput(
         topicService.describeTopic(new TopicCommandOptions(Array("--under-min-isr-partitions"))))
       val rows = output.split("\n")
