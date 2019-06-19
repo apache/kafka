@@ -97,32 +97,21 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
                  use_separate_interbroker_listener=False):
         """
         :param context: test context
-        :param zk: zookeeper service reference
-        :type zk: ZookeeperService
-        :param topics: which topics to create automatically
-        :type topics: dict
-        :param security_protocol: security protocol for clients to use
-        :type security_protocol: str
-        :param interbroker_security_protocol: security protocol to use for broker-to-broker communication
-        :type interbroker_security_protocol: str
-        :param client_sasl_mechanism: sasl mechanism for clients to use
-        :type client_sasl_mechanism: str
-        :param interbroker_sasl_mechanism: sasl mechanism to use for broker-to-broker communication
-        :type interbroker_sasl_mechanism: str
-        :param authorizer_class_name: which authorizer class to use
-        :type authorizer_class_name: str
-        :param version: which kafka version to use. Defaults to "dev" branch
-        :type version: str
-        :param jmx_object_names
-        :param jmx_attributes
-        :param zk_connect_timeout
-        :type zk_connect_timeout: int
-        :param zk_session_timeout
-        :type zk_session_timeout: int
-        :param server_prop_overides: overrides for kafka.properties file
-        :type server_prop_overides: dict
-        :param zk_chroot
-        :param use_separate_interbroker_listener - if set, will use a separate interbroker listener,
+        :param ZookeeperService zk:
+        :param dict topics: which topics to create automatically
+        :param str security_protocol: security protocol for clients to use
+        :param str interbroker_security_protocol: security protocol to use for broker-to-broker communication
+        :param str client_sasl_mechanism: sasl mechanism for clients to use
+        :param str interbroker_sasl_mechanism: sasl mechanism to use for broker-to-broker communication
+        :param str authorizer_class_name: which authorizer class to use
+        :param str version: which kafka version to use. Defaults to "dev" branch
+        :param jmx_object_names:
+        :param jmx_attributes:
+        :param int zk_connect_timeout:
+        :param int zk_session_timeout:
+        :param dict server_prop_overides: overrides for kafka.properties file
+        :param zk_chroot:
+        :param bool use_separate_interbroker_listener - if set, will use a separate interbroker listener,
         with security protocol set to interbroker_security_protocol value. If set, requires
         interbroker_security_protocol to be provided.
         Normally port name is the same as its security protocol, so setting security_protocol and
@@ -130,7 +119,6 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         and broker-to-broker communication will go over that port. This parameter allows
         you to add an interbroker listener with the same security protocol as a client listener, but running on a
         separate port.
-        :type use_separate_interbroker_listener: bool
         """
         Service.__init__(self, context, num_nodes)
         JmxMixin.__init__(self, num_nodes=num_nodes, jmx_object_names=jmx_object_names, jmx_attributes=(jmx_attributes or []),
