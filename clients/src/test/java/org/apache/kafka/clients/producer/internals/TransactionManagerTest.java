@@ -33,6 +33,7 @@ import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.errors.TransactionalIdAuthorizationException;
 import org.apache.kafka.common.errors.UnsupportedForMessageFormatException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
+import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.message.InitProducerIdResponseData;
 import org.apache.kafka.common.metrics.MetricConfig;
@@ -40,9 +41,11 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.MemoryRecords;
+import org.apache.kafka.common.record.MemoryRecordsBuilder;
 import org.apache.kafka.common.record.MutableRecordBatch;
 import org.apache.kafka.common.record.Record;
 import org.apache.kafka.common.record.RecordBatch;
+import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.requests.AddOffsetsToTxnRequest;
 import org.apache.kafka.common.requests.AddOffsetsToTxnResponse;
 import org.apache.kafka.common.requests.AddPartitionsToTxnRequest;
@@ -65,6 +68,7 @@ import org.apache.kafka.test.TestUtils;
 import org.junit.Before;
 import org.junit.Test;
 
+import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
@@ -73,6 +77,7 @@ import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.OptionalInt;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
@@ -85,8 +90,8 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.assertThrows;
+import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 public class TransactionManagerTest {
@@ -579,6 +584,164 @@ public class TransactionManagerTest {
         assertEquals((int) transactionManager.sequenceNumber(tp0), 0);
         transactionManager.incrementSequenceNumber(tp0, 3);
         assertEquals((int) transactionManager.sequenceNumber(tp0), 3);
+    }
+
+    @Test
+    public void testResetSequenceNumbersAfterUnknownProducerId() {
+        final long producerId = 13131L;
+        final short epoch = 1;
+        ProducerIdAndEpoch producerIdAndEpoch = new ProducerIdAndEpoch(producerId, epoch);
+
+        TransactionManager transactionManager = new TransactionManager();
+        transactionManager.setProducerIdAndEpoch(producerIdAndEpoch);
+
+        ProducerBatch b1 = writeIdempotentBatchWithValue(transactionManager, tp0, "1");
+        ProducerBatch b2 = writeIdempotentBatchWithValue(transactionManager, tp0, "2");
+        ProducerBatch b3 = writeIdempotentBatchWithValue(transactionManager, tp0, "3");
+        ProducerBatch b4 = writeIdempotentBatchWithValue(transactionManager, tp0, "4");
+        ProducerBatch b5 = writeIdempotentBatchWithValue(transactionManager, tp0, "5");
+        assertEquals(5, transactionManager.sequenceNumber(tp0).intValue());
+
+        // First batch succeeds
+        long b1AppendTime = time.milliseconds();
+        ProduceResponse.PartitionResponse b1Response = new ProduceResponse.PartitionResponse(
+                Errors.NONE, 500L, b1AppendTime, 0L);
+        b1.done(500L, b1AppendTime, null);
+        transactionManager.handleCompletedBatch(b1, b1Response);
+
+        // Retention caused log start offset to jump forward. We set sequence numbers back to 0
+        ProduceResponse.PartitionResponse b2Response = new ProduceResponse.PartitionResponse(
+                Errors.UNKNOWN_PRODUCER_ID, -1, -1, 600L);
+        assertTrue(transactionManager.canRetry(b2Response, b2));
+        assertEquals(4, transactionManager.sequenceNumber(tp0).intValue());
+        assertEquals(0, b2.baseSequence());
+        assertEquals(1, b3.baseSequence());
+        assertEquals(2, b4.baseSequence());
+        assertEquals(3, b5.baseSequence());
+    }
+
+    @Test
+    public void testAdjustSequenceNumbersAfterFatalError() {
+        final long producerId = 13131L;
+        final short epoch = 1;
+        ProducerIdAndEpoch producerIdAndEpoch = new ProducerIdAndEpoch(producerId, epoch);
+
+        TransactionManager transactionManager = new TransactionManager();
+        transactionManager.setProducerIdAndEpoch(producerIdAndEpoch);
+
+        ProducerBatch b1 = writeIdempotentBatchWithValue(transactionManager, tp0, "1");
+        ProducerBatch b2 = writeIdempotentBatchWithValue(transactionManager, tp0, "2");
+        ProducerBatch b3 = writeIdempotentBatchWithValue(transactionManager, tp0, "3");
+        ProducerBatch b4 = writeIdempotentBatchWithValue(transactionManager, tp0, "4");
+        ProducerBatch b5 = writeIdempotentBatchWithValue(transactionManager, tp0, "5");
+        assertEquals(5, transactionManager.sequenceNumber(tp0).intValue());
+
+        // First batch succeeds
+        long b1AppendTime = time.milliseconds();
+        ProduceResponse.PartitionResponse b1Response = new ProduceResponse.PartitionResponse(
+                Errors.NONE, 500L, b1AppendTime, 0L);
+        b1.done(500L, b1AppendTime, null);
+        transactionManager.handleCompletedBatch(b1, b1Response);
+
+        // Second batch fails with a fatal error. Sequence numbers are adjusted by one for remaining
+        // inflight batches.
+        ProduceResponse.PartitionResponse b2Response = new ProduceResponse.PartitionResponse(
+                Errors.MESSAGE_TOO_LARGE, -1, -1, 0L);
+        assertFalse(transactionManager.canRetry(b2Response, b2));
+
+        b2.done(-1L, -1L, Errors.MESSAGE_TOO_LARGE.exception());
+        transactionManager.handleFailedBatch(b2, Errors.MESSAGE_TOO_LARGE.exception(), true);
+        assertEquals(4, transactionManager.sequenceNumber(tp0).intValue());
+        assertEquals(1, b3.baseSequence());
+        assertEquals(2, b4.baseSequence());
+        assertEquals(3, b5.baseSequence());
+
+        // The remaining batches are doomed to fail, but they can be retried. Expected
+        // sequence numbers should remain the same.
+        ProduceResponse.PartitionResponse b3Response = new ProduceResponse.PartitionResponse(
+                Errors.OUT_OF_ORDER_SEQUENCE_NUMBER, -1, -1, 0L);
+        assertTrue(transactionManager.canRetry(b3Response, b3));
+        assertEquals(4, transactionManager.sequenceNumber(tp0).intValue());
+        assertEquals(1, b3.baseSequence());
+        assertEquals(2, b4.baseSequence());
+        assertEquals(3, b5.baseSequence());
+    }
+
+    @Test
+    public void testBatchFailureAfterProducerReset() {
+        // This tests a scenario where the producerId is reset while pending requests are still inflight.
+        // The returned responses should not update internal state.
+
+        final long producerId = 13131L;
+        final short epoch = 1;
+        ProducerIdAndEpoch producerIdAndEpoch = new ProducerIdAndEpoch(producerId, epoch);
+        TransactionManager transactionManager = new TransactionManager();
+        transactionManager.setProducerIdAndEpoch(producerIdAndEpoch);
+
+        ProducerBatch b1 = writeIdempotentBatchWithValue(transactionManager, tp0, "1");
+
+        ProducerIdAndEpoch updatedProducerIdAndEpoch = new ProducerIdAndEpoch(producerId + 1, epoch);
+        transactionManager.resetProducerId();
+        transactionManager.setProducerIdAndEpoch(updatedProducerIdAndEpoch);
+
+        ProducerBatch b2 = writeIdempotentBatchWithValue(transactionManager, tp0, "2");
+        assertEquals(1, transactionManager.sequenceNumber(tp0).intValue());
+
+        ProduceResponse.PartitionResponse b1Response = new ProduceResponse.PartitionResponse(
+                Errors.UNKNOWN_PRODUCER_ID, -1, -1, 400L);
+        assertFalse(transactionManager.canRetry(b1Response, b1));
+        transactionManager.handleFailedBatch(b1, Errors.UNKNOWN_PRODUCER_ID.exception(), true);
+
+        assertEquals(1, transactionManager.sequenceNumber(tp0).intValue());
+        assertEquals(b2, transactionManager.nextBatchBySequence(tp0));
+    }
+
+    @Test
+    public void testBatchCompletedAfterProducerReset() {
+        final long producerId = 13131L;
+        final short epoch = 1;
+        ProducerIdAndEpoch producerIdAndEpoch = new ProducerIdAndEpoch(producerId, epoch);
+        TransactionManager transactionManager = new TransactionManager();
+        transactionManager.setProducerIdAndEpoch(producerIdAndEpoch);
+
+        ProducerBatch b1 = writeIdempotentBatchWithValue(transactionManager, tp0, "1");
+
+        // The producerId might be reset due to a failure on another partition
+        ProducerIdAndEpoch updatedProducerIdAndEpoch = new ProducerIdAndEpoch(producerId + 1, epoch);
+        transactionManager.resetProducerId();
+        transactionManager.setProducerIdAndEpoch(updatedProducerIdAndEpoch);
+
+        ProducerBatch b2 = writeIdempotentBatchWithValue(transactionManager, tp0, "2");
+        assertEquals(1, transactionManager.sequenceNumber(tp0).intValue());
+
+        // If the request returns successfully, we should ignore the response and not update any state
+        ProduceResponse.PartitionResponse b1Response = new ProduceResponse.PartitionResponse(
+                Errors.NONE, 500L, time.milliseconds(), 0L);
+        transactionManager.handleCompletedBatch(b1, b1Response);
+
+        assertEquals(1, transactionManager.sequenceNumber(tp0).intValue());
+        assertEquals(b2, transactionManager.nextBatchBySequence(tp0));
+    }
+
+    private ProducerBatch writeIdempotentBatchWithValue(TransactionManager manager,
+                                                        TopicPartition tp,
+                                                        String value) {
+        int seq = manager.sequenceNumber(tp);
+        manager.incrementSequenceNumber(tp, 1);
+        ProducerBatch batch = batchWithValue(tp, value);
+        batch.setProducerState(manager.producerIdAndEpoch(), seq, false);
+        manager.addInFlightBatch(batch);
+        batch.close();
+        return batch;
+    }
+
+    private ProducerBatch batchWithValue(TopicPartition tp, String value) {
+        MemoryRecordsBuilder builder = MemoryRecords.builder(ByteBuffer.allocate(64),
+                CompressionType.NONE, TimestampType.CREATE_TIME, 0L);
+        long currentTimeMs = time.milliseconds();
+        ProducerBatch batch = new ProducerBatch(tp, builder, currentTimeMs);
+        batch.tryAppend(currentTimeMs, new byte[0], value.getBytes(), new Header[0], null, currentTimeMs);
+        return batch;
     }
 
     @Test
@@ -2272,30 +2435,121 @@ public class TransactionManagerTest {
     }
 
     @Test
-    public void testShouldResetProducerStateAfterResolvingSequences() {
-        // Create a TransactionManager without a transactionalId to test
-        // shouldResetProducerStateAfterResolvingSequences.
+    public void testResetProducerIdAfterWithoutPendingInflightRequests() {
         TransactionManager manager = new TransactionManager(logContext, null, transactionTimeoutMs,
             DEFAULT_RETRY_BACKOFF_MS);
-        assertFalse(manager.shouldResetProducerStateAfterResolvingSequences());
+        long producerId = 15L;
+        short epoch = 5;
+        ProducerIdAndEpoch producerIdAndEpoch = new ProducerIdAndEpoch(producerId, epoch);
+        manager.setProducerIdAndEpoch(producerIdAndEpoch);
+
+        // Nothing to resolve, so no reset is needed
+        manager.resetProducerIdIfNeeded();
+        assertEquals(producerIdAndEpoch, manager.producerIdAndEpoch());
+
         TopicPartition tp0 = new TopicPartition("foo", 0);
-        TopicPartition tp1 = new TopicPartition("foo", 1);
         assertEquals(Integer.valueOf(0), manager.sequenceNumber(tp0));
-        assertEquals(Integer.valueOf(0), manager.sequenceNumber(tp1));
 
-        manager.incrementSequenceNumber(tp0, 1);
-        manager.incrementSequenceNumber(tp1, 1);
-        manager.maybeUpdateLastAckedSequence(tp0, 0);
-        manager.maybeUpdateLastAckedSequence(tp1, 0);
-        manager.markSequenceUnresolved(tp0);
-        manager.markSequenceUnresolved(tp1);
-        assertFalse(manager.shouldResetProducerStateAfterResolvingSequences());
+        ProducerBatch b1 = writeIdempotentBatchWithValue(manager, tp0, "1");
+        assertEquals(Integer.valueOf(1), manager.sequenceNumber(tp0));
+        manager.handleCompletedBatch(b1, new ProduceResponse.PartitionResponse(
+                Errors.NONE, 500L, time.milliseconds(), 0L));
+        assertEquals(OptionalInt.of(0), manager.lastAckedSequence(tp0));
 
-        manager.maybeUpdateLastAckedSequence(tp0, 5);
-        manager.incrementSequenceNumber(tp0, 1);
+        // Marking sequence numbers unresolved without inflight requests is basically a no-op.
         manager.markSequenceUnresolved(tp0);
-        manager.markSequenceUnresolved(tp1);
-        assertTrue(manager.shouldResetProducerStateAfterResolvingSequences());
+        manager.resetProducerIdIfNeeded();
+        assertEquals(producerIdAndEpoch, manager.producerIdAndEpoch());
+        assertFalse(manager.hasUnresolvedSequences());
+
+        // We have a new batch which fails with a timeout
+        ProducerBatch b2 = writeIdempotentBatchWithValue(manager, tp0, "2");
+        assertEquals(Integer.valueOf(2), manager.sequenceNumber(tp0));
+        manager.markSequenceUnresolved(tp0);
+        manager.handleFailedBatch(b2, new TimeoutException(), false);
+        assertTrue(manager.hasUnresolvedSequences());
+
+        // We only had one inflight batch, so we should be able to clear the unresolved status
+        // and reset the producerId
+        manager.resetProducerIdIfNeeded();
+        assertFalse(manager.hasUnresolvedSequences());
+        assertFalse(manager.hasProducerId());
+    }
+
+    @Test
+    public void testNoProducerIdResetAfterLastInFlightBatchSucceeds() {
+        TransactionManager manager = new TransactionManager(logContext, null, transactionTimeoutMs,
+                DEFAULT_RETRY_BACKOFF_MS);
+        long producerId = 15L;
+        short epoch = 5;
+        ProducerIdAndEpoch producerIdAndEpoch = new ProducerIdAndEpoch(producerId, epoch);
+        manager.setProducerIdAndEpoch(producerIdAndEpoch);
+
+        TopicPartition tp0 = new TopicPartition("foo", 0);
+        ProducerBatch b1 = writeIdempotentBatchWithValue(manager, tp0, "1");
+        ProducerBatch b2 = writeIdempotentBatchWithValue(manager, tp0, "2");
+        ProducerBatch b3 = writeIdempotentBatchWithValue(manager, tp0, "3");
+        assertEquals(3, manager.sequenceNumber(tp0).intValue());
+
+        // The first batch fails with a timeout
+        manager.markSequenceUnresolved(tp0);
+        manager.handleFailedBatch(b1, new TimeoutException(), false);
+        assertTrue(manager.hasUnresolvedSequences());
+
+        // The reset should not occur until sequence numbers have been resolved
+        manager.resetProducerIdIfNeeded();
+        assertEquals(producerIdAndEpoch, manager.producerIdAndEpoch());
+        assertTrue(manager.hasUnresolvedSequences());
+
+        // The second batch fails as well with a timeout
+        manager.handleFailedBatch(b2, new TimeoutException(), false);
+        manager.resetProducerIdIfNeeded();
+        assertEquals(producerIdAndEpoch, manager.producerIdAndEpoch());
+        assertTrue(manager.hasUnresolvedSequences());
+
+        // The third batch succeeds, which should resolve the sequence number without
+        // requiring a producerId reset.
+        manager.handleCompletedBatch(b3, new ProduceResponse.PartitionResponse(
+                Errors.NONE, 500L, time.milliseconds(), 0L));
+        manager.resetProducerIdIfNeeded();
+        assertEquals(producerIdAndEpoch, manager.producerIdAndEpoch());
+        assertFalse(manager.hasUnresolvedSequences());
+        assertEquals(3, manager.sequenceNumber(tp0).intValue());
+    }
+
+    @Test
+    public void testProducerIdResetAfterLastInFlightBatchFails() {
+        TransactionManager manager = new TransactionManager(logContext, null, transactionTimeoutMs,
+                DEFAULT_RETRY_BACKOFF_MS);
+        long producerId = 15L;
+        short epoch = 5;
+        ProducerIdAndEpoch producerIdAndEpoch = new ProducerIdAndEpoch(producerId, epoch);
+        manager.setProducerIdAndEpoch(producerIdAndEpoch);
+
+        TopicPartition tp0 = new TopicPartition("foo", 0);
+        ProducerBatch b1 = writeIdempotentBatchWithValue(manager, tp0, "1");
+        ProducerBatch b2 = writeIdempotentBatchWithValue(manager, tp0, "2");
+        ProducerBatch b3 = writeIdempotentBatchWithValue(manager, tp0, "3");
+        assertEquals(Integer.valueOf(3), manager.sequenceNumber(tp0));
+
+        // The first batch fails with a timeout
+        manager.markSequenceUnresolved(tp0);
+        manager.handleFailedBatch(b1, new TimeoutException(), false);
+        assertTrue(manager.hasUnresolvedSequences());
+
+        // The second batch succeeds, but sequence numbers are still not resolved
+        manager.handleCompletedBatch(b2, new ProduceResponse.PartitionResponse(
+                Errors.NONE, 500L, time.milliseconds(), 0L));
+        manager.resetProducerIdIfNeeded();
+        assertEquals(producerIdAndEpoch, manager.producerIdAndEpoch());
+        assertTrue(manager.hasUnresolvedSequences());
+
+        // When the last inflight batch fails, we have to reset the producerId
+        manager.handleFailedBatch(b3, new TimeoutException(), false);
+        manager.resetProducerIdIfNeeded();
+        assertFalse(manager.hasProducerId());
+        assertFalse(manager.hasUnresolvedSequences());
+        assertEquals(0, manager.sequenceNumber(tp0).intValue());
     }
 
     @Test

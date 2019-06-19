@@ -159,7 +159,7 @@ public final class InMemoryTimeOrderedKeyValueBuffer<K, V> implements TimeOrdere
         this.storeName = storeName;
         this.loggingEnabled = loggingEnabled;
         this.keySerde = keySerde;
-        this.valueSerde = FullChangeSerde.castOrWrap(valueSerde);
+        this.valueSerde = FullChangeSerde.wrap(valueSerde);
     }
 
     @Override
@@ -176,7 +176,7 @@ public final class InMemoryTimeOrderedKeyValueBuffer<K, V> implements TimeOrdere
     @Override
     public void setSerdesIfNull(final Serde<K> keySerde, final Serde<V> valueSerde) {
         this.keySerde = this.keySerde == null ? keySerde : this.keySerde;
-        this.valueSerde = this.valueSerde == null ? FullChangeSerde.castOrWrap(valueSerde) : this.valueSerde;
+        this.valueSerde = this.valueSerde == null ? FullChangeSerde.wrap(valueSerde) : this.valueSerde;
     }
 
     @Override
@@ -296,21 +296,26 @@ public final class InMemoryTimeOrderedKeyValueBuffer<K, V> implements TimeOrdere
                     final byte[] changelogValue = new byte[record.value().length - 8];
                     timeAndValue.get(changelogValue);
 
+                    final Change<byte[]> change = requireNonNull(FullChangeSerde.decomposeLegacyFormat(changelogValue));
+
+                    final ProcessorRecordContext recordContext = new ProcessorRecordContext(
+                        record.timestamp(),
+                        record.offset(),
+                        record.partition(),
+                        record.topic(),
+                        record.headers()
+                    );
+
                     cleanPut(
                         time,
                         key,
                         new BufferValue(
-                            new ContextualRecord(
-                                changelogValue,
-                                new ProcessorRecordContext(
-                                    record.timestamp(),
-                                    record.offset(),
-                                    record.partition(),
-                                    record.topic(),
-                                    record.headers()
-                                )
-                            ),
-                            inferPriorValue(key, changelogValue)
+                            index.containsKey(key)
+                                ? internalPriorValueForBuffered(key)
+                                : change.oldValue,
+                            change.oldValue,
+                            change.newValue,
+                            recordContext
                         )
                     );
                 } else if (V_1_CHANGELOG_HEADERS.lastHeader("v").equals(record.headers().lastHeader("v"))) {
@@ -321,7 +326,20 @@ public final class InMemoryTimeOrderedKeyValueBuffer<K, V> implements TimeOrdere
                     timeAndValue.get(changelogValue);
 
                     final ContextualRecord contextualRecord = ContextualRecord.deserialize(ByteBuffer.wrap(changelogValue));
-                    cleanPut(time, key, new BufferValue(contextualRecord, inferPriorValue(key, contextualRecord.value())));
+                    final Change<byte[]> change = requireNonNull(FullChangeSerde.decomposeLegacyFormat(contextualRecord.value()));
+
+                    cleanPut(
+                        time,
+                        key,
+                        new BufferValue(
+                            index.containsKey(key)
+                                ? internalPriorValueForBuffered(key)
+                                : change.oldValue,
+                            change.oldValue,
+                            change.newValue,
+                            contextualRecord.recordContext()
+                        )
+                    );
                 } else if (V_2_CHANGELOG_HEADERS.lastHeader("v").equals(record.headers().lastHeader("v"))) {
                     // in this case, the changelog value is a serialized BufferValue
 
@@ -346,13 +364,6 @@ public final class InMemoryTimeOrderedKeyValueBuffer<K, V> implements TimeOrdere
         updateBufferMetrics();
     }
 
-    private byte[] inferPriorValue(final Bytes key, final byte[] serializedChange) {
-        return index.containsKey(key)
-            ? internalPriorValueForBuffered(key)
-            : FullChangeSerde.extractOldValuePart(ByteBuffer.wrap(serializedChange));
-    }
-
-
     @Override
     public void evictWhile(final Supplier<Boolean> predicate,
                            final Consumer<Eviction<K, V>> callback) {
@@ -375,9 +386,11 @@ public final class InMemoryTimeOrderedKeyValueBuffer<K, V> implements TimeOrdere
                 }
                 final K key = keySerde.deserializer().deserialize(changelogTopic, next.getKey().key().get());
                 final BufferValue bufferValue = next.getValue();
-                final ContextualRecord record = bufferValue.record();
-                final Change<V> value = valueSerde.deserializer().deserialize(changelogTopic, record.value());
-                callback.accept(new Eviction<>(key, value, record.recordContext()));
+                final Change<V> value = valueSerde.deserializeParts(
+                    changelogTopic,
+                    new Change<>(bufferValue.newValue(), bufferValue.oldValue())
+                );
+                callback.accept(new Eviction<>(key, value, bufferValue.context()));
 
                 delegate.remove();
                 index.remove(next.getKey().key());
@@ -442,7 +455,7 @@ public final class InMemoryTimeOrderedKeyValueBuffer<K, V> implements TimeOrdere
         requireNonNull(recordContext, "recordContext cannot be null");
 
         final Bytes serializedKey = Bytes.wrap(keySerde.serializer().serialize(changelogTopic, key));
-        final byte[] serializedValue = valueSerde.serializer().serialize(changelogTopic, value);
+        final Change<byte[]> serialChange = valueSerde.serializeParts(changelogTopic, value);
 
         final BufferValue buffered = getBuffered(serializedKey);
         final byte[] serializedPriorValue;
@@ -453,7 +466,11 @@ public final class InMemoryTimeOrderedKeyValueBuffer<K, V> implements TimeOrdere
             serializedPriorValue = buffered.priorValue();
         }
 
-        cleanPut(time, serializedKey, new BufferValue(new ContextualRecord(serializedValue, recordContext), serializedPriorValue));
+        cleanPut(
+            time,
+            serializedKey,
+            new BufferValue(serializedPriorValue, serialChange.oldValue, serialChange.newValue, recordContext)
+        );
         dirtyKeys.add(serializedKey);
         updateBufferMetrics();
     }
@@ -504,7 +521,7 @@ public final class InMemoryTimeOrderedKeyValueBuffer<K, V> implements TimeOrdere
         size += 8; // buffer time
         size += key.get().length;
         if (value != null) {
-            size += value.sizeBytes();
+            size += value.residentMemorySizeEstimate();
         }
         return size;
     }

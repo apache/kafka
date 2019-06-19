@@ -15,14 +15,13 @@
  * limitations under the License.
  */
 
-package integration.kafka.api
+package kafka.api
 
 import java.lang.{Boolean => JBoolean}
 import java.time.Duration
 import java.util
 import java.util.Collections
 
-import kafka.api.IntegrationTestHarness
 import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.admin.NewTopic

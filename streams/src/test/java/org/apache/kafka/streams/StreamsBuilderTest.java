@@ -705,6 +705,35 @@ public class StreamsBuilderTest {
         assertSpecifiedNameForOperation(topology, "KSTREAM-SOURCE-0000000000", STREAM_OPERATION_NAME);
     }
 
+    @Test
+    @SuppressWarnings("unchecked")
+    public void shouldUseSpecifiedNameForToStream() {
+        builder.table(STREAM_TOPIC)
+                .toStream(Named.as("to-stream"));
+
+        builder.build();
+        final ProcessorTopology topology = builder.internalTopologyBuilder.rewriteTopology(new StreamsConfig(props)).build();
+        assertSpecifiedNameForOperation(topology,
+                "KSTREAM-SOURCE-0000000001",
+                "KTABLE-SOURCE-0000000002",
+                "to-stream");
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    public void shouldUseSpecifiedNameForToStreamWithMapper() {
+        builder.table(STREAM_TOPIC)
+                .toStream(KeyValue::pair, Named.as("to-stream"));
+
+        builder.build();
+        final ProcessorTopology topology = builder.internalTopologyBuilder.rewriteTopology(new StreamsConfig(props)).build();
+        assertSpecifiedNameForOperation(topology,
+                "KSTREAM-SOURCE-0000000001",
+                "KTABLE-SOURCE-0000000002",
+                "to-stream",
+                "KSTREAM-KEY-SELECT-0000000004");
+    }
+
     private static void assertSpecifiedNameForOperation(final ProcessorTopology topology, final String... expected) {
         final List<ProcessorNode> processors = topology.processors();
         assertEquals("Invalid number of expected processors", expected.length, processors.size());
