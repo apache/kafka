@@ -1442,7 +1442,7 @@ public class DistributedHerderTest {
         // Reading to end of log times out
         configBackingStore.refresh(EasyMock.anyLong(), EasyMock.anyObject(TimeUnit.class));
         EasyMock.expectLastCall().andThrow(new TimeoutException());
-        member.maybeLeaveGroup();
+        member.maybeLeaveGroup("test join leader catch up fails");
         EasyMock.expectLastCall();
         PowerMock.expectPrivate(herder, "backoff", DistributedConfig.WORKER_UNSYNC_BACKOFF_MS_DEFAULT);
         member.requestRejoin();
