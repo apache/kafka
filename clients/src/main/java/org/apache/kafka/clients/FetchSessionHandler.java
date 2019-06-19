@@ -348,8 +348,8 @@ public class FetchSessionHandler {
         if (!log.isTraceEnabled()) {
             int implied = sessionPartitions.size() - response.responseData().size();
             if (implied > 0) {
-                return " with " + response.responseData().size() + " response partition(s), " + implied +
-                " implied partition(s)";
+                return " with " + response.responseData().size() + " response partition(s), " + implied
+                        + " implied partition(s)";
             } else {
                 return " with " + response.responseData().size() + " response partition(s)";
             }
