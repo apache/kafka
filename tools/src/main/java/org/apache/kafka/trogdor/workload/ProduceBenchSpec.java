@@ -71,6 +71,8 @@ public class ProduceBenchSpec extends TaskSpec {
     private final Map<String, String> commonClientConf;
     private final TopicsSpec activeTopics;
     private final TopicsSpec inactiveTopics;
+    private final boolean noKeyNoPartition;
+    private final boolean noFlushOnThrottle;
 
     @JsonCreator
     public ProduceBenchSpec(@JsonProperty("startMs") long startMs,
@@ -86,7 +88,9 @@ public class ProduceBenchSpec extends TaskSpec {
                          @JsonProperty("commonClientConf") Map<String, String> commonClientConf,
                          @JsonProperty("adminClientConf") Map<String, String> adminClientConf,
                          @JsonProperty("activeTopics") TopicsSpec activeTopics,
-                         @JsonProperty("inactiveTopics") TopicsSpec inactiveTopics) {
+                         @JsonProperty("inactiveTopics") TopicsSpec inactiveTopics,
+                         @JsonProperty("noKeyNoPartition") boolean noKeyNoPartition, 
+                         @JsonProperty("noFlushOnThrottle") boolean noFlushOnThrottle) {
         super(startMs, durationMs);
         this.producerNode = (producerNode == null) ? "" : producerNode;
         this.bootstrapServers = (bootstrapServers == null) ? "" : bootstrapServers;
@@ -104,6 +108,8 @@ public class ProduceBenchSpec extends TaskSpec {
             TopicsSpec.EMPTY : activeTopics.immutableCopy();
         this.inactiveTopics = (inactiveTopics == null) ?
             TopicsSpec.EMPTY : inactiveTopics.immutableCopy();
+        this.noKeyNoPartition = noKeyNoPartition;
+        this.noFlushOnThrottle = noFlushOnThrottle;
     }
 
     @JsonProperty
@@ -164,6 +170,16 @@ public class ProduceBenchSpec extends TaskSpec {
     @JsonProperty
     public TopicsSpec inactiveTopics() {
         return inactiveTopics;
+    }
+
+    @JsonProperty
+    public boolean noKeyNoPartition() {
+        return noKeyNoPartition;
+    }
+
+    @JsonProperty
+    public boolean noFlushOnThrottle() {
+        return noFlushOnThrottle;
     }
 
     @Override
