@@ -3747,8 +3747,8 @@ class LogTest {
     val logDir = new File(tmpDir, dirName)
     logDir.mkdirs()
     val logConfig = LogTest.createLogConfig()
-    // There was a regression in 2.2.1 which threw an NPE
     val log = createLog(logDir, logConfig)
+    assertEquals(1, log.numberOfSegments)
   }
 
   private def allAbortedTransactions(log: Log) = log.logSegments.flatMap(_.txnIndex.allAbortedTxns)
