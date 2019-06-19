@@ -246,5 +246,5 @@ class TestSecurityRollingUpgrade(ProduceConsumeValidateTest):
 
         # run produce/consume/validate loop while disabling a separate interbroker listener via rolling restart
         self.run_produce_consume_validate(
-            self.remove_separate_broker_listener, client_protocol, client_sasl_mechanism, False)
+            self.remove_separate_broker_listener, client_protocol, client_sasl_mechanism)
 
