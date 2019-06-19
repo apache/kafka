@@ -111,6 +111,8 @@ abstract class AbstractFetcherManager[T <: AbstractFetcherThread](val name: Stri
 
   // Visibility for testing
   private[server] def getFetcherId(broker: BrokerEndPoint, topic: String, partitionId: Int): Int = {
+    Utils.abs(31 * topic.hashCode() + partitionId) % numFetchers
+    /*
     lock synchronized {
       val topicPartition = new TopicPartition(topic, partitionId)
       if (!FetcherIdManager.tpFetcherIdMap.contains(topicPartition)) {
@@ -127,7 +129,9 @@ abstract class AbstractFetcherManager[T <: AbstractFetcherThread](val name: Stri
 
       debug("topicPartition=" + topicPartition + ", fetcherId=" + FetcherIdManager.tpFetcherIdMap.get(topicPartition).get)
       FetcherIdManager.tpFetcherIdMap.get(topicPartition).get
+
     }
+    */
   }
 
   // This method is only needed by ReplicaAlterDirManager
