@@ -85,15 +85,15 @@ public class ReplicaSelectorTest {
 
     static List<ReplicaView> replicaInfoSet() {
         return Stream.of(
-                replicaInfo(new Node(0, "host0", 1234, "rack-a"), 4, 10),
+                replicaInfo(new Node(0, "host0", 1234, "rack-a"), 4, 0),
                 replicaInfo(new Node(1, "host1", 1234, "rack-a"), 2, 5),
-                replicaInfo(new Node(2, "host2", 1234, "rack-b"), 3, 7),
-                replicaInfo(new Node(3, "host3", 1234, "rack-b"), 4, 8)
+                replicaInfo(new Node(2, "host2", 1234, "rack-b"), 3, 3),
+                replicaInfo(new Node(3, "host3", 1234, "rack-b"), 4, 2)
 
         ).collect(Collectors.toList());
     }
 
-    static ReplicaView replicaInfo(Node node, long logOffset, long lastCaughtUpTimeMs) {
+    static ReplicaView replicaInfo(Node node, long logOffset, long timeSinceLastCaughtUpMs) {
         return new ReplicaView() {
             @Override
             public Node endpoint() {
@@ -105,9 +105,12 @@ public class ReplicaSelectorTest {
                 return logOffset;
             }
 
+            /**
+             * The number of milliseconds (if any) since the last time this replica was caught up to the high watermark.
+             */
             @Override
-            public Optional<Long> lastCaughtUpTimeMs() {
-                return Optional.of(lastCaughtUpTimeMs);
+            public long timeSinceLastCaughtUpMs() {
+                return timeSinceLastCaughtUpMs;
             }
         };
     }

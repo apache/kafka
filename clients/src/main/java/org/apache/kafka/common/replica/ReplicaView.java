@@ -20,7 +20,6 @@ import org.apache.kafka.common.Node;
 
 import java.util.Comparator;
 import java.util.Objects;
-import java.util.Optional;
 
 /**
  * View of a replica used by {@link ReplicaSelector} to determine a preferred replica.
@@ -40,27 +39,27 @@ public interface ReplicaView {
     /**
      * The number of milliseconds (if any) since the last time this replica was caught up to the high watermark.
      */
-    Optional<Long> lastCaughtUpTimeMs();
+    long timeSinceLastCaughtUpMs();
 
     /**
      * Comparator for ReplicaView that returns in the order of "most caught up". This is used for deterministic
      * selection of a replica when there is a tie from a selector.
      */
     static Comparator<ReplicaView> comparator() {
-        return Comparator.comparing(ReplicaView::logEndOffset)
-            .thenComparing(replicaView -> replicaView.lastCaughtUpTimeMs().orElse(-1L))
+        return Comparator.comparingLong(ReplicaView::logEndOffset)
+            .thenComparing(Comparator.comparingLong(ReplicaView::timeSinceLastCaughtUpMs).reversed())
             .thenComparing(replicaInfo -> replicaInfo.endpoint().id());
     }
 
     class DefaultReplicaView implements ReplicaView {
         private final Node endpoint;
         private final long logEndOffset;
-        private final Optional<Long> lastCaughtUpTimeMs;
+        private final long timeSinceLastCaughtUpMs;
 
-        public DefaultReplicaView(Node endpoint, long logEndOffset, Optional<Long> lastCaughtUpTimeMs) {
+        public DefaultReplicaView(Node endpoint, long logEndOffset, long timeSinceLastCaughtUpMs) {
             this.endpoint = endpoint;
             this.logEndOffset = logEndOffset;
-            this.lastCaughtUpTimeMs = lastCaughtUpTimeMs;
+            this.timeSinceLastCaughtUpMs = timeSinceLastCaughtUpMs;
         }
 
         @Override
@@ -74,8 +73,8 @@ public interface ReplicaView {
         }
 
         @Override
-        public Optional<Long> lastCaughtUpTimeMs() {
-            return lastCaughtUpTimeMs;
+        public long timeSinceLastCaughtUpMs() {
+            return timeSinceLastCaughtUpMs;
         }
 
         @Override
@@ -85,12 +84,12 @@ public interface ReplicaView {
             DefaultReplicaView that = (DefaultReplicaView) o;
             return logEndOffset == that.logEndOffset &&
                     Objects.equals(endpoint, that.endpoint) &&
-                    Objects.equals(lastCaughtUpTimeMs, that.lastCaughtUpTimeMs);
+                    Objects.equals(timeSinceLastCaughtUpMs, that.timeSinceLastCaughtUpMs);
         }
 
         @Override
         public int hashCode() {
-            return Objects.hash(endpoint, logEndOffset, lastCaughtUpTimeMs);
+            return Objects.hash(endpoint, logEndOffset, timeSinceLastCaughtUpMs);
         }
 
         @Override
@@ -98,7 +97,7 @@ public interface ReplicaView {
             return "DefaultReplicaView{" +
                     "endpoint=" + endpoint +
                     ", logEndOffset=" + logEndOffset +
-                    ", lastCaughtUpTimeMs=" + lastCaughtUpTimeMs +
+                    ", timeSinceLastCaughtUpMs=" + timeSinceLastCaughtUpMs +
                     '}';
         }
     }
