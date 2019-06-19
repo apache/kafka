@@ -125,7 +125,7 @@ public interface ConsumerRebalanceListener {
 
     /**
      * A callback method the user can implement to provide handling of cleaning up resources for partitions that have already
-     * been re-assigned to other consumers. This method will be called during normal execution as the owned partitions would
+     * been re-assigned to other consumers. This method will not be called during normal execution as the owned partitions would
      * first be revoked by calling the {@link ConsumerRebalanceListener#onPartitionsRevoked} first, before being re-assigned
      * to other consumers. However, when the consumer is being kicked out of the group and hence were not aware when the new
      * group is formed without itself, this function will then be called when the consumer finally be notified about the
