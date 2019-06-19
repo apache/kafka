@@ -13,14 +13,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import time
 from ducktape.tests.test import Test
-from ducktape.utils.util import wait_until
 from kafkatest.services.kafka import KafkaService
 from kafkatest.services.streams import StreamsNamedRepartitionTopicService
 from kafkatest.services.verifiable_producer import VerifiableProducer
 from kafkatest.services.zookeeper import ZookeeperService
-
+from kafkatest.tests.streams.utils import verify_stopped, stop_processors, verify_running
 
 class StreamsNamedRepartitionTopicTest(Test):
     """
@@ -32,6 +30,7 @@ class StreamsNamedRepartitionTopicTest(Test):
     input_topic = 'inputTopic'
     aggregation_topic = 'aggregationTopic'
     pattern = 'AGGREGATED'
+    stopped_message = 'NAMED_REPARTITION_TEST Streams Stopped'
 
     def __init__(self, test_context):
         super(StreamsNamedRepartitionTopicTest, self).__init__(test_context)
@@ -66,42 +65,24 @@ class StreamsNamedRepartitionTopicTest(Test):
         for processor in processors:
             processor.CLEAN_NODE_ENABLED = False
             self.set_topics(processor)
-            self.verify_running(processor, 'REBALANCING -> RUNNING')
+            verify_running(processor, 'REBALANCING -> RUNNING')
 
         self.verify_processing(processors)
 
         # do rolling upgrade
         for processor in processors:
-            self.verify_stopped(processor)
+            verify_stopped(processor, self.stopped_message)
             #  will tell app to add operations before repartition topic
             processor.ADD_ADDITIONAL_OPS = 'true'
-            self.verify_running(processor, 'UPDATED Topology')
+            verify_running(processor, 'UPDATED Topology')
 
         self.verify_processing(processors)
 
-        self.stop_processors(processors)
+        stop_processors(processors, self.stopped_message)
 
         self.producer.stop()
         self.kafka.stop()
         self.zookeeper.stop()
-
-    @staticmethod
-    def verify_running(processor, message):
-        node = processor.node
-        with node.account.monitor_log(processor.STDOUT_FILE) as monitor:
-            processor.start()
-            monitor.wait_until(message,
-                               timeout_sec=60,
-                               err_msg="Never saw '%s' message " % message + str(processor.node.account))
-
-    @staticmethod
-    def verify_stopped(processor):
-        node = processor.node
-        with node.account.monitor_log(processor.STDOUT_FILE) as monitor:
-            processor.stop()
-            monitor.wait_until('NAMED_REPARTITION_TEST Streams Stopped',
-                               timeout_sec=60,
-                               err_msg="'NAMED_REPARTITION_TEST Streams Stopped' message" + str(processor.node.account))
 
     def verify_processing(self, processors):
         for processor in processors:
@@ -109,10 +90,6 @@ class StreamsNamedRepartitionTopicTest(Test):
                 monitor.wait_until(self.pattern,
                                    timeout_sec=60,
                                    err_msg="Never saw processing of %s " % self.pattern + str(processor.node.account))
-
-    def stop_processors(self, processors):
-        for processor in processors:
-            self.verify_stopped(processor)
 
     def set_topics(self, processor):
         processor.INPUT_TOPIC = self.input_topic

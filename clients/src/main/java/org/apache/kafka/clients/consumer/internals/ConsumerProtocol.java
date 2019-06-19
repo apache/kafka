@@ -30,8 +30,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
-import static org.apache.kafka.common.protocol.CommonFields.ERROR_CODE;
-
 /**
  * ConsumerProtocol contains the schemas for consumer subscriptions and assignments for use with
  * Kafka's generalized group management protocol. Below is the version 1 format:
@@ -54,7 +52,22 @@ import static org.apache.kafka.common.protocol.CommonFields.ERROR_CODE;
  *   ErrorCode          => [int16]
  * </pre>
  *
- * Older versioned formats can be inferred by reading the code below.
+ * Version 0 format:
+ *
+ * <pre>
+ * Subscription => Version Topics
+ *   Version    => Int16
+ *   Topics     => [String]
+ *   UserData   => Bytes
+ *
+ * Assignment => Version TopicPartitions
+ *   Version            => int16
+ *   AssignedPartitions => [Topic Partitions]
+ *     Topic            => String
+ *     Partitions       => [int32]
+ *   UserData           => Bytes
+ * </pre>
+ *
  *
  * The current implementation assumes that future versions will not break compatibility. When
  * it encounters a newer version, it parses it using the current format. This basically means
@@ -71,6 +84,8 @@ public class ConsumerProtocol {
     public static final String OWNED_PARTITIONS_KEY_NAME = "owned_partitions";
     public static final String TOPIC_PARTITIONS_KEY_NAME = "topic_partitions";
     public static final String USER_DATA_KEY_NAME = "user_data";
+
+    public static final Field.Int16 ERROR_CODE = new Field.Int16("error_code", "Assignment error code");
 
     public static final short CONSUMER_PROTOCOL_V0 = 0;
     public static final short CONSUMER_PROTOCOL_V1 = 1;
@@ -104,13 +119,13 @@ public class ConsumerProtocol {
         new Field(USER_DATA_KEY_NAME, Type.NULLABLE_BYTES),
         ERROR_CODE);
 
-    public enum Errors {
+    public enum AssignmentError {
         NONE(0),
         NEED_REJOIN(1);
 
         private final short code;
 
-        Errors(final int code) {
+        AssignmentError(final int code) {
             this.code = (short) code;
         }
 
@@ -118,7 +133,7 @@ public class ConsumerProtocol {
             return code;
         }
 
-        public static Errors fromCode(final short code) {
+        public static AssignmentError fromCode(final short code) {
             switch (code) {
                 case 0:
                     return NONE;
@@ -258,7 +273,7 @@ public class ConsumerProtocol {
             topicAssignments.add(topicAssignment);
         }
         struct.set(TOPIC_PARTITIONS_KEY_NAME, topicAssignments.toArray());
-        struct.set(ERROR_CODE.name, assignment.error().code);
+        struct.set(ERROR_CODE, assignment.error().code);
 
         ByteBuffer buffer = ByteBuffer.allocate(CONSUMER_PROTOCOL_HEADER_V1.sizeOf() + ASSIGNMENT_V1.sizeOf(struct));
         CONSUMER_PROTOCOL_HEADER_V1.writeTo(buffer);
@@ -307,7 +322,7 @@ public class ConsumerProtocol {
             }
         }
 
-        Errors error = Errors.fromCode(struct.get(ERROR_CODE));
+        AssignmentError error = AssignmentError.fromCode(struct.get(ERROR_CODE));
 
         return new PartitionAssignor.Assignment(CONSUMER_PROTOCOL_V1, partitions, userData, error);
     }

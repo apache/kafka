@@ -113,7 +113,7 @@ class LogDirFailureTest extends IntegrationTestHarness {
     // so that ReplicaFetcherThread on the follower will get response from leader immediately
     val anotherPartitionWithTheSameLeader = (1 until partitionNum).find { i =>
       leaderServer.replicaManager.nonOfflinePartition(new TopicPartition(topic, i))
-        .flatMap(_.leaderReplicaIfLocal).isDefined
+        .flatMap(_.leaderLogIfLocal).isDefined
     }.get
     val record = new ProducerRecord[Array[Byte], Array[Byte]](topic, anotherPartitionWithTheSameLeader, topic.getBytes, "message".getBytes)
     // When producer.send(...).get returns, it is guaranteed that ReplicaFetcherThread on the follower
@@ -145,8 +145,8 @@ class LogDirFailureTest extends IntegrationTestHarness {
     TestUtils.consumeRecords(consumer, 1)
 
     // Make log directory of the partition on the leader broker inaccessible by replacing it with a file
-    val replica = leaderServer.replicaManager.localReplicaOrException(partition)
-    val logDir = replica.log.get.dir.getParentFile
+    val localLog = leaderServer.replicaManager.localLogOrException(partition)
+    val logDir = localLog.dir.getParentFile
     CoreUtils.swallow(Utils.delete(logDir), this)
     logDir.createNewFile()
     assertTrue(logDir.isFile)
@@ -164,7 +164,7 @@ class LogDirFailureTest extends IntegrationTestHarness {
 
     // Wait for ReplicaHighWatermarkCheckpoint to happen so that the log directory of the topic will be offline
     TestUtils.waitUntilTrue(() => !leaderServer.logManager.isLogDirOnline(logDir.getAbsolutePath), "Expected log directory offline", 3000L)
-    assertTrue(leaderServer.replicaManager.localReplica(partition).isEmpty)
+    assertTrue(leaderServer.replicaManager.localLog(partition).isEmpty)
 
     // The second send() should fail due to either KafkaStorageException or NotLeaderForPartitionException
     try {

@@ -20,7 +20,7 @@ package kafka.log
 import java.io.File
 import java.util.Properties
 
-import kafka.server.{BrokerTopicStats, LogDirFailureChannel}
+import kafka.server.{BrokerTopicStats, LogDirFailureChannel, LogOffsetMetadata}
 import kafka.utils._
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.record._
@@ -218,7 +218,7 @@ class LogCleanerManagerTest extends Logging {
     log.appendAsLeader(records, leaderEpoch = 0)
     log.roll()
     log.appendAsLeader(records, leaderEpoch = 0)
-    log.onHighWatermarkIncremented(2L)
+    log.highWatermarkMetadata = LogOffsetMetadata(2L)
 
     // simulate cleanup thread working on the log partition
     val deletableLog = cleanerManager.pauseCleaningForNonCompactedPartitions()
@@ -403,7 +403,7 @@ class LogCleanerManagerTest extends Logging {
     log.appendAsLeader(MemoryRecords.withTransactionalRecords(CompressionType.NONE, producerId, producerEpoch, sequence + 2,
       new SimpleRecord(time.milliseconds(), "3".getBytes, "c".getBytes)), leaderEpoch = 0)
     log.roll()
-    log.onHighWatermarkIncremented(3L)
+    log.highWatermarkMetadata = LogOffsetMetadata(3L)
 
     time.sleep(compactionLag + 1)
     // although the compaction lag has been exceeded, the undecided data should not be cleaned
@@ -415,7 +415,7 @@ class LogCleanerManagerTest extends Logging {
     log.appendAsLeader(MemoryRecords.withEndTransactionMarker(time.milliseconds(), producerId, producerEpoch,
       new EndTransactionMarker(ControlRecordType.ABORT, 15)), leaderEpoch = 0, isFromClient = false)
     log.roll()
-    log.onHighWatermarkIncremented(4L)
+    log.highWatermarkMetadata = LogOffsetMetadata(4L)
 
     // the first segment should now become cleanable immediately
     cleanableOffsets = LogCleanerManager.cleanableOffsets(log, topicPartition,

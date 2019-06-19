@@ -49,6 +49,8 @@ object LeaderElectionCommand extends Logging {
       "This tool attempts to elect a new leader for a set of topic partitions. The type of elections supported are preferred replicas and unclean replicas."
     )
 
+    validate(commandOptions)
+
     val electionType = commandOptions.options.valueOf(commandOptions.electionType)
 
     val jsonFileTopicPartitions = Option(commandOptions.options.valueOf(commandOptions.pathToJsonFile)).map { path  =>
@@ -64,7 +66,8 @@ object LeaderElectionCommand extends Logging {
     }
 
     /* Note: No need to look at --all-topic-partitions as we want this to be None if it is use.
-     * Jopt-Simple should be validating that this option required if the --topic and --path-to-json-file
+     * The validate function should be checking that this option is required if the --topic and --path-to-json-file
+     * are not specified.
      */
     val topicPartitions = jsonFileTopicPartitions.orElse(singleTopicPartition)
 
@@ -107,7 +110,7 @@ object LeaderElectionCommand extends Logging {
               )
             }
             partitions.toSet
-          case None => throw new AdminOperationException("Replica election data is missing \"partition\" field")
+          case None => throw new AdminOperationException("Replica election data is missing \"partitions\" field")
         }
       case None => throw new AdminOperationException("Replica election data is empty")
     }
@@ -175,6 +178,55 @@ object LeaderElectionCommand extends Logging {
       throw rootException
     }
   }
+
+  private[this] def validate(commandOptions: LeaderElectionCommandOptions): Unit = {
+    // required options: --bootstrap-server and --election-type
+    var missingOptions = List.empty[String]
+    if (!commandOptions.options.has(commandOptions.bootstrapServer)) {
+      missingOptions = commandOptions.bootstrapServer.options().get(0) :: missingOptions
+    }
+
+    if (!commandOptions.options.has(commandOptions.electionType)) {
+      missingOptions = commandOptions.electionType.options().get(0) :: missingOptions
+    }
+
+    if (missingOptions.nonEmpty) {
+      throw new AdminCommandFailedException(s"Missing required option(s): ${missingOptions.mkString(", ")}")
+    }
+
+    // One and only one is required: --topic, --all-topic-partitions or --path-to-json-file
+    val mutuallyExclusiveOptions = Seq(
+      commandOptions.topic,
+      commandOptions.allTopicPartitions,
+      commandOptions.pathToJsonFile
+    )
+
+    mutuallyExclusiveOptions.count(commandOptions.options.has) match {
+      case 1 => // This is the only correct configuration, don't throw an exception
+      case _ =>
+        throw new AdminCommandFailedException(
+          "One and only one of the following options is required: " +
+          s"${mutuallyExclusiveOptions.map(_.options.get(0)).mkString(", ")}"
+        )
+    }
+
+    // --partition if and only if --topic is used
+    (
+      commandOptions.options.has(commandOptions.topic),
+      commandOptions.options.has(commandOptions.partition)
+    ) match {
+      case (true, false) =>
+        throw new AdminCommandFailedException(
+          s"Missing required option(s): ${commandOptions.partition.options.get(0)}"
+        )
+      case (false, true) =>
+        throw new AdminCommandFailedException(
+          s"Option ${commandOptions.partition.options.get(0)} is only allowed if " +
+          s"${commandOptions.topic.options.get(0)} is used"
+        )
+      case _ => // Ignore; we have a valid configuration
+    }
+  }
 }
 
 private final class LeaderElectionCommandOptions(args: Array[String]) extends CommandDefaultOptions(args) {
@@ -183,7 +235,6 @@ private final class LeaderElectionCommandOptions(args: Array[String]) extends Co
       "bootstrap-server",
       "A hostname and port for the broker to connect to, in the form host:port. Multiple comma separated URLs can be given. REQUIRED.")
     .withRequiredArg
-    .required
     .describedAs("host:port")
     .ofType(classOf[String])
   val adminClientConfig = parser
@@ -206,15 +257,14 @@ private final class LeaderElectionCommandOptions(args: Array[String]) extends Co
     .accepts(
       "topic",
       "Name of topic for which to perform an election. Not allowed if --path-to-json-file or --all-topic-partitions is specified.")
-    .availableUnless("path-to-json-file")
     .withRequiredArg
     .describedAs("topic name")
     .ofType(classOf[String])
+
   val partition = parser
     .accepts(
       "partition",
       "Partition id for which to perform an election. REQUIRED if --topic is specified.")
-    .requiredIf("topic")
     .withRequiredArg
     .describedAs("partition id")
     .ofType(classOf[Integer])
@@ -223,14 +273,12 @@ private final class LeaderElectionCommandOptions(args: Array[String]) extends Co
     .accepts(
       "all-topic-partitions",
       "Perform election on all of the eligible topic partitions based on the type of election (see the --election-type flag). Not allowed if --topic or --path-to-json-file is specified.")
-    .requiredUnless("path-to-json-file", "topic")
 
   val electionType = parser
     .accepts(
       "election-type",
       "Type of election to attempt. Possible values are \"preferred\" for preferred leader election or \"unclean\" for unclean leader election. If preferred election is selection, the election is only performed if the current leader is not the preferred leader for the topic partition. If unclean election is selected, the election is only performed if there are no leader for the topic partition. REQUIRED.")
     .withRequiredArg
-    .required
     .describedAs("election type")
     .withValuesConvertedBy(ElectionTypeConverter)
 

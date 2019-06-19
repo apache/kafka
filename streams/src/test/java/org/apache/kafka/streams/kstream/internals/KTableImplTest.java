@@ -351,7 +351,7 @@ public class KTableImplTest {
 
     @Test(expected = NullPointerException.class)
     public void shouldNotAllowNullSelectorOnToStream() {
-        table.toStream(null);
+        table.toStream((KeyValueMapper) null);
     }
 
     @Test(expected = NullPointerException.class)

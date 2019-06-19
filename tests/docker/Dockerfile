@@ -40,6 +40,7 @@ RUN pip install --upgrade cffi virtualenv pyasn1 boto3 pycrypto pywinrm ipaddres
 COPY ./ssh-config /root/.ssh/config
 # NOTE: The paramiko library supports the PEM-format private key, but does not support the RFC4716 format.
 RUN ssh-keygen -m PEM -q -t rsa -N '' -f /root/.ssh/id_rsa && cp -f /root/.ssh/id_rsa.pub /root/.ssh/authorized_keys
+RUN echo 'PermitUserEnvironment yes' >> /etc/ssh/sshd_config
 
 # Install binary test dependencies.
 # we use the same versions as in vagrant/base.sh
@@ -76,7 +77,7 @@ RUN apt-get install fuse
 RUN cd /opt && git clone -q  https://github.com/confluentinc/kibosh.git && cd "/opt/kibosh" && git reset --hard $KIBOSH_VERSION && mkdir "/opt/kibosh/build" && cd "/opt/kibosh/build" && ../configure && make -j 2
 
 # Set up the ducker user.
-RUN useradd -ms /bin/bash ducker && mkdir -p /home/ducker/ && rsync -aiq /root/.ssh/ /home/ducker/.ssh && chown -R ducker /home/ducker/ /mnt/ /var/log/ && echo 'ducker ALL=(ALL) NOPASSWD: ALL' >> /etc/sudoers
+RUN useradd -ms /bin/bash ducker && mkdir -p /home/ducker/ && rsync -aiq /root/.ssh/ /home/ducker/.ssh && chown -R ducker /home/ducker/ /mnt/ /var/log/ && echo "PATH=$(runuser -l ducker -c 'echo $PATH'):$JAVA_HOME/bin" >> /home/ducker/.ssh/environment && echo 'PATH=$PATH:'"$JAVA_HOME/bin" >> /home/ducker/.profile && echo 'ducker ALL=(ALL) NOPASSWD: ALL' >> /etc/sudoers
 USER ducker
 
 CMD sudo service ssh start && tail -f /dev/null
