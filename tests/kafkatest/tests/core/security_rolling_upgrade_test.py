@@ -172,7 +172,7 @@ class TestSecurityRollingUpgrade(ProduceConsumeValidateTest):
         # Create secured producer and consumer on client listener
         self.create_producer_and_consumer()
 
-        # Roll in separate interbroker listener using the same {{protocol}}. Add ACLs. Disable PLAINTEXT.
+        # Roll in separate interbroker listener using the same protocol as the client one. Add ACLs. Disable PLAINTEXT.
         # Ensure we can produce and consume throughout
         self.run_produce_consume_validate(self.roll_in_secured_settings, protocol, protocol, True)
 
@@ -226,11 +226,10 @@ class TestSecurityRollingUpgrade(ProduceConsumeValidateTest):
     @cluster(num_nodes=9)
     def test_disable_separate_interbroker_listener(self):
         """
-        Start with a cluster that has two listeners, one on {{client_protocol}}, another on {{broker_protocol}}.
-        Even if protocols are the same, it's still two listeners, interbroker listener is a dedicated one.
-        Start producer and consumer on {{client_protocol}} listener.
-        Close dedicated {{broker_protocol}} listener via rolling restart.
-        Ensure we can produce and consume via {{client_protocol}} listener throughout.
+        Start with a cluster that has two listeners, one on SSL (clients), another on SASL_SSL (broker-to-broker).
+        Start producer and consumer on SSL listener.
+        Close dedicated interbroker listener via rolling restart.
+        Ensure we can produce and consume via SSL listener throughout.
         """
         client_protocol = SecurityConfig.SSL
         client_sasl_mechanism = SecurityConfig.SASL_MECHANISM_GSSAPI
