@@ -425,6 +425,104 @@ public class MemoryRecords extends AbstractRecords {
         return new MemoryRecords(buffer);
     }
 
+    public static class Builder {
+        // attributes without default value
+        private final ByteBuffer buffer;
+
+        // attritube with default value
+        private byte magic = RecordBatch.CURRENT_MAGIC_VALUE;
+        private CompressionType compressionType = CompressionType.NONE;
+        private TimestampType timestampType = TimestampType.CREATE_TIME;
+        private long baseOffset = 0L;
+        private long logAppendTime = RecordBatch.NO_TIMESTAMP;
+        private long producerId = RecordBatch.NO_PRODUCER_ID;
+        private short producerEpoch = RecordBatch.NO_PRODUCER_EPOCH;
+        private int baseSequence = RecordBatch.NO_SEQUENCE;
+        private boolean isTransactional = false;
+        private boolean isControlBatch = false;
+        private int partitionLeaderEpoch = RecordBatch.NO_PARTITION_LEADER_EPOCH;
+
+        // attribute without default value, but decided dynamically
+        private int writeLimit = -1;
+
+        public Builder(ByteBuffer buffer) {
+            this.buffer = buffer;
+        }
+
+        public Builder magic(byte magic) {
+            this.magic = magic;
+            return this;
+        }
+
+        public Builder compressionType(CompressionType compressionType) {
+            this.compressionType = compressionType;
+            return this;
+        }
+
+        public Builder timestampType(TimestampType timestampType) {
+            this.timestampType = timestampType;
+
+            if (timestampType == TimestampType.LOG_APPEND_TIME) {
+                logAppendTime = System.currentTimeMillis();
+            } else {
+                logAppendTime = RecordBatch.NO_TIMESTAMP;
+            }
+
+            return this;
+        }
+
+        public Builder baseOffset(long baseOffset) {
+            this.baseOffset = baseOffset;
+            return this;
+        }
+
+        public Builder logAppendTime(long logAppendTime) {
+            this.logAppendTime = logAppendTime;
+            return this;
+        }
+
+        public Builder producerState(long producerId, short producerEpoch, int baseSequence) {
+            this.producerId = producerId;
+            this.producerEpoch = producerEpoch;
+            this.baseSequence = baseSequence;
+            return this;
+        }
+
+        public Builder transaction(boolean isTransactional) {
+            this.isTransactional = isTransactional;
+            return this;
+        }
+
+        public Builder controlBatch(boolean isControlBatch) {
+            this.isControlBatch = isControlBatch;
+            return this;
+        }
+
+        public Builder partitionLeaderEpoch(int partitionLeaderEpoch) {
+            this.partitionLeaderEpoch = partitionLeaderEpoch;
+            return this;
+        }
+
+        public Builder writeLimit(int writeLimit) {
+            this.writeLimit = writeLimit;
+            return this;
+        }
+
+        public MemoryRecordsBuilder build() {
+            if (writeLimit < 0) {
+                writeLimit = buffer.remaining();
+            }
+
+            return new MemoryRecordsBuilder(new ByteBufferOutputStream(buffer),
+                    magic, compressionType, timestampType, baseOffset, logAppendTime,
+                    producerId, producerEpoch, baseSequence, isTransactional, isControlBatch, partitionLeaderEpoch, writeLimit);
+        }
+    }
+
+    public static Builder builder(ByteBuffer buffer) {
+        return new Builder(buffer);
+    }
+
     public static MemoryRecordsBuilder builder(ByteBuffer buffer,
                                                CompressionType compressionType,
                                                TimestampType timestampType,
