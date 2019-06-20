@@ -160,6 +160,10 @@ public abstract class AbstractResponse extends AbstractRequestResponse {
                 return new ElectLeadersResponse(struct, version);
             case INCREMENTAL_ALTER_CONFIGS:
                 return new IncrementalAlterConfigsResponse(struct, version);
+            case ALTER_PARTITION_REASSIGNMENTS:
+                return new AlterPartitionReassignmentsResponse(struct, version);
+            case LIST_PARTITION_REASSIGNMENTS:
+                return new ListPartitionReassignmentsResponse(struct, version);
             default:
                 throw new AssertionError(String.format("ApiKey %s is not currently handled in `parseResponse`, the " +
                         "code should be updated to do so.", apiKey));

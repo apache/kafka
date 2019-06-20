@@ -33,6 +33,8 @@ import org.apache.kafka.common.ElectionType
 import org.apache.kafka.common.KafkaException
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.{BrokerNotAvailableException, ControllerMovedException, StaleBrokerEpochException}
+import org.apache.kafka.common.message.AlterPartitionReassignmentsRequestData.ReassignablePartition
+import org.apache.kafka.common.message.ListPartitionReassignmentsResponseData.OngoingPartitionReassignment
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{AbstractControlRequest, AbstractResponse, ApiError, LeaderAndIsrResponse}
@@ -1582,6 +1584,20 @@ class KafkaController(val config: KafkaConfig,
         callback(results)
       }
     }
+  }
+
+  def alterPartitionReassignments(timeoutMs: Int,
+                                  reassignments: Map[TopicPartition, ReassignablePartition],
+                                  callback: Map[TopicPartition, ApiError] => Unit): Unit = {
+    callback(reassignments.map {
+      case (topicPartition, _) =>
+        topicPartition -> new ApiError(Errors.UNSUPPORTED_VERSION)
+    })
+  }
+
+  def listPartitionReassignments(timeoutMs: Int,
+                                 callback: Try[Map[TopicPartition, OngoingPartitionReassignment]] => Unit): Unit = {
+    callback(Failure(Errors.UNSUPPORTED_VERSION.exception()))
   }
 
   private def processControllerChange(): Unit = {
