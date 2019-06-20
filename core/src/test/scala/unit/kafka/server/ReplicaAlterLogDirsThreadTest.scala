@@ -398,7 +398,8 @@ class ReplicaAlterLogDirsThreadTest {
       EasyMock.capture(responseCallback),
       EasyMock.anyObject(),
       EasyMock.anyObject(),
-      EasyMock.anyObject()))
+      EasyMock.anyObject(),
+      EasyMock.anyBoolean()))
       .andAnswer(new IAnswer[Unit] {
         override def answer(): Unit = {
           responseCallback.getValue.apply(Seq.empty[(TopicPartition, FetchPartitionData)])
@@ -634,7 +635,8 @@ class ReplicaAlterLogDirsThreadTest {
       EasyMock.capture(responseCallback),
       EasyMock.anyObject(),
       EasyMock.anyObject(),
-      EasyMock.anyObject()))
+      EasyMock.anyObject(),
+      EasyMock.anyBoolean()))
       .andAnswer(new IAnswer[Unit] {
         override def answer(): Unit = {
           responseCallback.getValue.apply(Seq.empty[(TopicPartition, FetchPartitionData)])

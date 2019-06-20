@@ -164,7 +164,9 @@ class DelayedFetchTest extends EasyMockSupport {
       fetchIsolation = FetchLogEnd,
       isFromFollower = true,
       replicaId = replicaId,
-      fetchPartitionStatus = Seq((topicPartition, fetchStatus)))
+      fetchPartitionStatus = Seq((topicPartition, fetchStatus)),
+      hasFetchSession = true
+    )
   }
 
   private def expectReadFromReplicaWithError(replicaId: Int,

@@ -43,7 +43,8 @@ case class FetchMetadata(fetchMinBytes: Int,
                          fetchIsolation: FetchIsolation,
                          isFromFollower: Boolean,
                          replicaId: Int,
-                         fetchPartitionStatus: Seq[(TopicPartition, FetchPartitionStatus)]) {
+                         fetchPartitionStatus: Seq[(TopicPartition, FetchPartitionStatus)],
+                         hasFetchSession: Boolean) {
 
   override def toString = "FetchMetadata(minBytes=" + fetchMinBytes + ", " +
     "maxBytes=" + fetchMaxBytes + ", " +
@@ -119,7 +120,7 @@ class DelayedFetch(delayMs: Long,
               }
             }
 
-            if (fetchMetadata.isFromFollower) {
+            if (fetchMetadata.isFromFollower && fetchMetadata.hasFetchSession) {
               // Case G check if the follower has the correct HW from the leader
               val followerHW = followerHighwatermarks(topicPartition)
               if (followerHW.isEmpty || followerHW.exists(hw => offsetSnapshot.highWatermark.messageOffset > hw)) {

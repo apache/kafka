@@ -514,7 +514,8 @@ class ReplicaManagerTest {
         fetchInfos = Seq(tp -> validFetchPartitionData),
         isolationLevel = IsolationLevel.READ_UNCOMMITTED,
         responseCallback = callback,
-        clientMetadata = None
+        clientMetadata = None,
+        hasFetchSession = true
       )
 
       assertTrue(successfulFetch.isDefined)
@@ -536,7 +537,8 @@ class ReplicaManagerTest {
         fetchInfos = Seq(tp -> invalidFetchPartitionData),
         isolationLevel = IsolationLevel.READ_UNCOMMITTED,
         responseCallback = callback,
-        clientMetadata = None
+        clientMetadata = None,
+        hasFetchSession = true
       )
 
       assertTrue(successfulFetch.isDefined)
@@ -616,7 +618,8 @@ class ReplicaManagerTest {
           tp1 -> new PartitionData(1, 0, 100000, Optional.empty())),
         responseCallback = fetchCallback,
         isolationLevel = IsolationLevel.READ_UNCOMMITTED,
-        clientMetadata = None
+        clientMetadata = None,
+        hasFetchSession = true
       )
       val tp0Log = replicaManager.localLog(tp0)
       assertTrue(tp0Log.isDefined)
@@ -1061,7 +1064,8 @@ class ReplicaManagerTest {
       fetchInfos = Seq(partition -> partitionData),
       responseCallback = fetchCallback,
       isolationLevel = isolationLevel,
-      clientMetadata = clientMetadata
+      clientMetadata = clientMetadata,
+      hasFetchSession = true
     )
 
     result

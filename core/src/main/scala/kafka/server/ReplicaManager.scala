@@ -831,7 +831,8 @@ class ReplicaManager(val config: KafkaConfig,
                     responseCallback: Seq[(TopicPartition, FetchPartitionData)] => Unit,
                     isolationLevel: IsolationLevel,
                     clientMetadata: Option[ClientMetadata],
-                    followerHighWatermarks: TopicPartition => Option[Long] = _ => None) {
+                    followerHighWatermarks: TopicPartition => Option[Long] = _ => None,
+                    hasFetchSession: Boolean) {
     val isFromFollower = Request.isValidBrokerId(replicaId)
 
     val fetchIsolation = if (isFromFollower || replicaId == Request.FutureLocalReplicaId)
@@ -889,7 +890,7 @@ class ReplicaManager(val config: KafkaConfig,
         })
       }
       val fetchMetadata = FetchMetadata(fetchMinBytes, fetchMaxBytes, hardMaxBytesLimit, isFromFollower,
-        fetchIsolation, isFromFollower, replicaId, fetchPartitionStatus)
+        fetchIsolation, isFromFollower, replicaId, fetchPartitionStatus, hasFetchSession)
       val delayedFetch = new DelayedFetch(timeout, fetchMetadata, this, quota, clientMetadata,
         responseCallback, followerHighWatermarks)
 
