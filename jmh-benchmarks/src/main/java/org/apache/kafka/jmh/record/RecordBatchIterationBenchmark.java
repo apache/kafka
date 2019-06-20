@@ -58,7 +58,7 @@ public class RecordBatchIterationBenchmark {
     }
 
     @Param(value = {"10", "50", "200", "500"})
-    private final int maxBatchSize = 200;
+    private int maxBatchSize = 200;
 
     @Param(value = {"LZ4", "SNAPPY", "GZIP", "ZSTD", "NONE"})
     private CompressionType compressionType = CompressionType.NONE;
