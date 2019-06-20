@@ -184,7 +184,6 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
 
     # this is required for backwards compatibility - there are a lot of tests that set this property explicitly
     # meaning 'use one of the existing listeners that match given security protocol, do not use custom listener'
-    # TODO: update clients to use constructor or setup_interbroker_listener() and get rid of this property setter
     @interbroker_security_protocol.setter
     def interbroker_security_protocol(self, security_protocol):
         self.setup_interbroker_listener(security_protocol, use_separate_listener=False)
