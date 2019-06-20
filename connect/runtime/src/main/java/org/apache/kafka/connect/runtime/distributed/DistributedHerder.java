@@ -977,7 +977,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
             // in case reading the log takes too long, leave the group to ensure a quick rebalance (although by default we should be out of the group already)
             // and back off to avoid a tight loop of rejoin-attempt-to-catch-up-leave
             log.warn("Didn't reach end of config log quickly enough", e);
-            member.maybeLeaveGroup();
+            member.maybeLeaveGroup("taking too long to read the log");
             backoff(workerUnsyncBackoffMs);
             return false;
         }
