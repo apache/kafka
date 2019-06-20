@@ -16,7 +16,7 @@
 from kafkatest.services.trogdor.task_spec import TaskSpec
 
 
-class NetworkDegradeFaultSpec(TaskSpec):
+class DegradedNetworkFaultSpec(TaskSpec):
     """
     The specification for a network degradation fault.
 
@@ -32,6 +32,6 @@ class NetworkDegradeFaultSpec(TaskSpec):
         :param node_latencies:  A dict of node name to desired latency
         :param network_device:  The name of the network device
         """
-        super(NetworkDegradeFaultSpec, self).__init__(start_ms, duration_ms)
+        super(DegradedNetworkFaultSpec, self).__init__(start_ms, duration_ms)
         self.message["class"] = "org.apache.kafka.trogdor.fault.DegradedNetworkFaultSpec"
         self.message["nodeSpecs"] = node_specs
