@@ -50,6 +50,7 @@ import org.apache.kafka.common.utils.Time
 
 import scala.collection.JavaConverters._
 import scala.collection._
+import scala.collection.mutable.ArrayBuffer
 
 /*
  * Result metadata of a log append operation on the log
@@ -385,6 +386,17 @@ class ReplicaManager(val config: KafkaConfig,
               responseMap.put(topicPartition, Errors.KAFKA_STORAGE_ERROR)
           }
         }
+
+        // for all the partitions that the current broker stops being a replica of
+        // find those that the broker is no longer a leader of so we can safely remove
+        // the metrics bytesIn, bytesOut and messagesIn
+        val leaderTopicSet = leaderPartitionsIterator.map(partition => partition.topic).toSet
+        for (topicPartition <- partitions) {
+          val topic = topicPartition.topic()
+          if (!leaderTopicSet.contains(topic))
+            brokerTopicStats.removeOldLeaderMetrics(topic)
+        }
+
         (responseMap, Errors.NONE)
       }
     }
@@ -1118,6 +1130,21 @@ class ReplicaManager(val config: KafkaConfig,
             highWatermarkCheckpoints)
         else
           Set.empty[Partition]
+
+        // in all of the partitions that the current broker is now a follower of
+        // add all the topics in a list as candidate to remove metrics
+        val topicCandidates: Set[String] = Set()
+        partitionsBecomeFollower.foreach(partition => topicCandidates + partition.topic)
+
+        // now iterate through all the partitions which the broker is a leader of
+        // and remove any topic that is found since the current broker still needs to update its metrics
+        // for those topics
+        partitionsBecomeLeader.foreach(partition =>
+          if (topicCandidates contains partition.topic) topicCandidates - partition.topic
+        )
+
+        // now remove all the metrics of topics that the current broker IS NO LONGER a leader of
+        topicCandidates.foreach(topic => brokerTopicStats.removeOldLeaderMetrics(topic))
 
         leaderAndIsrRequest.partitionStates.asScala.keys.foreach { topicPartition =>
           /*

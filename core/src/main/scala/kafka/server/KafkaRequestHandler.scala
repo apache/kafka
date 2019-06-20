@@ -218,6 +218,15 @@ class BrokerTopicStats {
     }
   }
 
+  // This method only remove bytesIn, bytesOut, and messagesIn metrics
+  // of a leader that becomes a follower
+  def removeOldLeaderMetrics(topic: String) {
+    val topicMetrics = topicStats(topic)
+    topicMetrics.removeMetric(BrokerTopicStats.MessagesInPerSec, topicMetrics.tags)
+    topicMetrics.removeMetric(BrokerTopicStats.BytesInPerSec, topicMetrics.tags)
+    topicMetrics.removeMetric(BrokerTopicStats.BytesOutPerSec, topicMetrics.tags)
+  }
+
   def removeMetrics(topic: String) {
     val metrics = stats.remove(topic)
     if (metrics != null)
