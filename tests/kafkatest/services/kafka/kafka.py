@@ -200,7 +200,6 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
             # close dedicated interbroker port, so it's not dangling in 'listeners' and 'advertised.listeners'
             self.close_port(KafkaService.INTERBROKER_LISTENER_NAME)
             self.interbroker_listener = self.port_mappings[security_protocol]
-        self.interbroker_listener.open = True
 
     @property
     def security_config(self):
