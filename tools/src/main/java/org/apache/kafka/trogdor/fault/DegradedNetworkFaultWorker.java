@@ -58,7 +58,11 @@ public class DegradedNetworkFaultWorker implements TaskWorker {
         DegradedNetworkFaultSpec.NodeDegradeSpec nodeSpec = nodeSpecs.get(curNode.name());
         if (nodeSpec != null) {
             for (String device : devicesForSpec(nodeSpec)) {
-                enableTrafficControl(platform, device, nodeSpec.getLatencyMs());
+                if (nodeSpec.latencyMs() < 0) {
+                    throw new RuntimeException("Expected a positive value for latencyMs, but got " + nodeSpec.latencyMs());
+                } else {
+                    enableTrafficControl(platform, device, nodeSpec.latencyMs());
+                }
             }
         }
         this.status.update(new TextNode("enabled traffic control " + id));
@@ -80,14 +84,14 @@ public class DegradedNetworkFaultWorker implements TaskWorker {
 
     private Set<String> devicesForSpec(DegradedNetworkFaultSpec.NodeDegradeSpec nodeSpec) throws Exception {
         Set<String> devices = new HashSet<>();
-        if (nodeSpec.getNetworkDevice().isEmpty()) {
+        if (nodeSpec.networkDevice().isEmpty()) {
             for (NetworkInterface networkInterface : Collections.list(NetworkInterface.getNetworkInterfaces())) {
                 if (!networkInterface.isLoopback()) {
                     devices.add(networkInterface.getName());
                 }
             }
         } else {
-            devices.add(nodeSpec.getNetworkDevice());
+            devices.add(nodeSpec.networkDevice());
         }
         return devices;
     }

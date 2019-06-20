@@ -34,18 +34,18 @@ public class DegradedNetworkFaultSpec extends TaskSpec {
 
         public NodeDegradeSpec(
                 @JsonProperty("networkDevice") String networkDevice,
-                @JsonProperty("latencyMs") Integer latencyMs) {
+                @JsonProperty("latencyMs") int latencyMs) {
             this.networkDevice = networkDevice == null ? "" : networkDevice;
             this.latencyMs = latencyMs;
         }
 
         @JsonProperty
-        public String getNetworkDevice() {
+        public String networkDevice() {
             return networkDevice;
         }
 
         @JsonProperty
-        public Integer getLatencyMs() {
+        public Integer latencyMs() {
             return latencyMs;
         }
     }
@@ -71,7 +71,7 @@ public class DegradedNetworkFaultSpec extends TaskSpec {
     }
 
     @JsonProperty
-    public Map<String, NodeDegradeSpec> getNodeSpecs() {
+    public Map<String, NodeDegradeSpec> nodeSpecs() {
         return nodeSpecs;
     }
 }
