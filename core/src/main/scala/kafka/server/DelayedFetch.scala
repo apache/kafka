@@ -66,11 +66,6 @@ class DelayedFetch(delayMs: Long,
   extends DelayedOperation(delayMs) {
 
   /**
-    * Keep track of the first high watermark we encounter during this fetch for each partition
-    */
-  private[this] val seenHighWatermarks: mutable.Map[TopicPartition, Long] = mutable.Map()
-
-  /**
    * The operation can be completed if:
    *
    * Case A: This broker is no longer the leader for some partitions it tries to fetch

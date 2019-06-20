@@ -1046,18 +1046,16 @@ class ReplicaManager(val config: KafkaConfig,
       } else {
         val replicaEndpoints = metadataCache.getPartitionReplicaEndpoints(tp.topic(), tp.partition(), new ListenerName(clientMetadata.listenerName))
         val now = time.milliseconds
-        val replicaInfoSet: util.Set[ReplicaView] = {
-          val tmpSet: Set[ReplicaView] = partition.remoteReplicas
-            // Exclude replicas that don't have the requested offset (whether or not if they're in the ISR)
-            .filter(replica => replica.logEndOffset > fetchOffset)
-            .filter(replica => replica.logStartOffset <= fetchOffset)
-            .map(replica => new DefaultReplicaView(
-              replicaEndpoints.getOrElse(replica.brokerId, Node.noNode()),
-              replica.logEndOffset,
-              now - replica.lastCaughtUpTimeMs
-            ))
-          tmpSet.asJava
-        }
+        val replicaInfoSet: mutable.Set[ReplicaView] = partition.allReplicaIds.flatMap(partition.getReplica)
+          // Exclude replicas that don't have the requested offset (whether or not if they're in the ISR)
+          .filter(replica => replica.logEndOffset > fetchOffset)
+          .filter(replica => replica.logStartOffset <= fetchOffset)
+          .map(replica => new DefaultReplicaView(
+            replicaEndpoints.getOrElse(replica.brokerId, Node.noNode()),
+            replica.logEndOffset,
+            now - replica.lastCaughtUpTimeMs
+          ))
+
 
         val leaderReplica: Option[ReplicaView] = partition.leaderReplicaIdOpt
           .map(replicaId => replicaEndpoints.getOrElse(replicaId, Node.noNode()))
@@ -1065,7 +1063,7 @@ class ReplicaManager(val config: KafkaConfig,
 
         leaderReplica.foreach(replicaInfoSet.add)
 
-        val partitionInfo = new DefaultPartitionView(replicaInfoSet, leaderReplica.asJava)
+        val partitionInfo = new DefaultPartitionView(replicaInfoSet.asJava, leaderReplica.asJava)
         replicaSelector.select(tp, clientMetadata, partitionInfo).asScala
           .filter(!_.endpoint.isEmpty)
           .map(_.endpoint.id)
