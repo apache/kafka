@@ -1272,9 +1272,12 @@ project(':support-metrics-client') {
     compile libs.httpmime
     compile libs.slf4jlog4j
     compile project(':clients')
-    compile project(':core')
+    // projects that require the KafkaSubmitter have to add the Core dependency explicitly, typically
+    // they only need ConfluentSubmitter
+    compileOnly project(':core')
     compile project(':support-metrics-common')
 
+    testCompile project(':core')
     testCompile project(':core').sourceSets.test.output
     testCompile project(':clients').sourceSets.test.output // for org.apache.kafka.test.IntegrationTest
     testCompile project(':support-metrics-common').sourceSets.test.output // for io.confluent.support.metrics.common.kafka.EmbeddedKafkaCluster
@@ -1351,8 +1354,11 @@ project(':support-metrics-common') {
     compile libs.httpmime
     compile libs.slf4jlog4j
     compile project(':clients')
-    compile project(':core')
+    // projects that require the KafkaSubmitter have to add the Core dependency explicitly, typically
+    // they only need ConfluentSubmitter
+    compileOnly project(':core')
 
+    testCompile project(':core')
     testCompile project(':core').sourceSets.test.output
     testCompile project(':clients').sourceSets.test.output // for org.apache.kafka.test.IntegrationTest
     testCompile libs.junit
