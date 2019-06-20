@@ -1193,8 +1193,8 @@ class LogValidatorTest {
     MemoryRecords.readableRecords(buf.slice())
   }
 
-  private def createIncontinuousOffsetRecords(magicValue: Byte,
-                                              codec: CompressionType): MemoryRecords = {
+  private def createDiscontinuousOffsetRecords(magicValue: Byte,
+                                               codec: CompressionType): MemoryRecords = {
     val buf = ByteBuffer.allocate(512)
     val builder = MemoryRecords.builder(buf, magicValue, codec, TimestampType.CREATE_TIME, 0L)
     builder.appendWithOffset(0, RecordBatch.NO_TIMESTAMP, null, "hello".getBytes)

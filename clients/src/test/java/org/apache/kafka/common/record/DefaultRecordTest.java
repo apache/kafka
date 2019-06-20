@@ -35,12 +35,11 @@ import static org.junit.Assert.assertNotNull;
 
 public class DefaultRecordTest {
 
-    private ByteBuffer skipBuffer;
+    private byte[] skipArray;
 
     @Before
     public void setUp() {
-        skipBuffer = ByteBuffer.allocate(64);
-        skipBuffer.limit(0);
+        skipArray = new byte[64];
     }
 
     @Test
@@ -181,7 +180,7 @@ public class DefaultRecordTest {
 
         buf.flip();
         DataInputStream inputStream = new DataInputStream(new ByteBufferInputStream(buf));
-        DefaultRecord.readPartiallyFrom(inputStream, skipBuffer, 0L, 0L, RecordBatch.NO_SEQUENCE, null);
+        DefaultRecord.readPartiallyFrom(inputStream, skipArray, 0L, 0L, RecordBatch.NO_SEQUENCE, null);
     }
 
     @Test(expected = InvalidRecordException.class)
@@ -224,7 +223,7 @@ public class DefaultRecordTest {
 
         buf.flip();
         DataInputStream inputStream = new DataInputStream(new ByteBufferInputStream(buf));
-        DefaultRecord.readPartiallyFrom(inputStream, skipBuffer, 0L, 0L, RecordBatch.NO_SEQUENCE, null);
+        DefaultRecord.readPartiallyFrom(inputStream, skipArray, 0L, 0L, RecordBatch.NO_SEQUENCE, null);
     }
 
     @Test(expected = InvalidRecordException.class)
@@ -267,7 +266,7 @@ public class DefaultRecordTest {
 
         buf.flip();
         DataInputStream inputStream = new DataInputStream(new ByteBufferInputStream(buf));
-        DefaultRecord.readPartiallyFrom(inputStream, skipBuffer, 0L, 0L, RecordBatch.NO_SEQUENCE, null);
+        DefaultRecord.readPartiallyFrom(inputStream, skipArray, 0L, 0L, RecordBatch.NO_SEQUENCE, null);
     }
 
     @Test(expected = StringIndexOutOfBoundsException.class)
@@ -312,7 +311,7 @@ public class DefaultRecordTest {
 
         buf.flip();
         DataInputStream inputStream = new DataInputStream(new ByteBufferInputStream(buf));
-        DefaultRecord.readPartiallyFrom(inputStream, skipBuffer, 0L, 0L, RecordBatch.NO_SEQUENCE, null);
+        DefaultRecord.readPartiallyFrom(inputStream, skipArray, 0L, 0L, RecordBatch.NO_SEQUENCE, null);
     }
 
     @Test(expected = InvalidRecordException.class)
@@ -357,7 +356,7 @@ public class DefaultRecordTest {
 
         buf.flip();
         DataInputStream inputStream = new DataInputStream(new ByteBufferInputStream(buf));
-        DefaultRecord.readPartiallyFrom(inputStream, skipBuffer, 0L, 0L, RecordBatch.NO_SEQUENCE, null);
+        DefaultRecord.readPartiallyFrom(inputStream, skipArray, 0L, 0L, RecordBatch.NO_SEQUENCE, null);
     }
 
     @Test(expected = InvalidRecordException.class)
@@ -406,7 +405,7 @@ public class DefaultRecordTest {
 
         buf.flip();
         DataInputStream inputStream = new DataInputStream(new ByteBufferInputStream(buf));
-        DefaultRecord.readPartiallyFrom(inputStream, skipBuffer, 0L, 0L, RecordBatch.NO_SEQUENCE, null);
+        DefaultRecord.readPartiallyFrom(inputStream, skipArray, 0L, 0L, RecordBatch.NO_SEQUENCE, null);
     }
 
     @Test(expected = InvalidRecordException.class)

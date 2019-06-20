@@ -132,7 +132,7 @@ private[kafka] object LogValidator extends Logging {
   private def validateRecord(batch: RecordBatch, record: Record, now: Long, timestampType: TimestampType,
                              timestampDiffMaxMs: Long, compactedTopic: Boolean): Unit = {
     if (!record.hasMagic(batch.magic))
-      throw new InvalidRecordException(s"Log record $record'sZ magic does not match outer magic ${batch.magic}")
+      throw new InvalidRecordException(s"Log record $record's magic does not match outer magic ${batch.magic}")
 
     // verify the record-level CRC only if this is one of the deep entries of a compressed message
     // set for magic v0 and v1. For non-compressed messages, there is no inner record for magic v0 and v1,
@@ -297,7 +297,7 @@ private[kafka] object LogValidator extends Logging {
     // No in place assignment situation 2 and 3: we only need to check for the first batch because:
     //  1. For most cases (compressed records, v2, for example), there's only one batch anyways.
     //  2. For cases that there may be multiple batches, all batches' magic should be the same.
-    if (firstBatch.magic() != toMagic || toMagic == RecordBatch.MAGIC_VALUE_V0)
+    if (firstBatch.magic != toMagic || toMagic == RecordBatch.MAGIC_VALUE_V0)
       inPlaceAssignment = false
 
     // Do not compress control records unless they are written compressed
@@ -311,31 +311,33 @@ private[kafka] object LogValidator extends Logging {
 
       // if we are on version 2 and beyond, and we know we are going for in place assignment,
       // then we can optimize the iterator to skip key / value / headers since they would not be used at all
-      val recordsIterator = if (inPlaceAssignment && firstBatch.magic() >= RecordBatch.MAGIC_VALUE_V2)
+      val recordsIterator = if (inPlaceAssignment && firstBatch.magic >= RecordBatch.MAGIC_VALUE_V2)
         batch.skipKeyValueIterator(BufferSupplier.NO_CACHING)
       else
         batch.streamingIterator(BufferSupplier.NO_CACHING)
 
-      for (record <- batch.asScala) {
-        if (sourceCodec != NoCompressionCodec && record.isCompressed)
-          throw new InvalidRecordException("Compressed outer record should not have an inner record with a " +
-            s"compression attribute set: $record")
-        validateRecord(batch, record, now, timestampType, timestampDiffMaxMs, compactedTopic)
+      try {
+        for (record <- batch.asScala) {
+          if (sourceCodec != NoCompressionCodec && record.isCompressed)
+            throw new InvalidRecordException("Compressed outer record should not have an inner record with a " +
+              s"compression attribute set: $record")
+          validateRecord(batch, record, now, timestampType, timestampDiffMaxMs, compactedTopic)
 
-        uncompressedSizeInBytes += record.sizeInBytes()
-        if (batch.magic > RecordBatch.MAGIC_VALUE_V0 && toMagic > RecordBatch.MAGIC_VALUE_V0) {
-          // inner records offset should always be continuous
-          val expectedOffset = expectedInnerOffset.getAndIncrement()
-          if (record.offset != expectedOffset)
-            throw new InvalidRecordException(s"Inner record $record inside the compressed record batch does not have incremental offsets, expected offset is $expectedOffset")
-          if (record.timestamp > maxTimestamp)
-            maxTimestamp = record.timestamp
+          uncompressedSizeInBytes += record.sizeInBytes()
+          if (batch.magic > RecordBatch.MAGIC_VALUE_V0 && toMagic > RecordBatch.MAGIC_VALUE_V0) {
+            // inner records offset should always be continuous
+            val expectedOffset = expectedInnerOffset.getAndIncrement()
+            if (record.offset != expectedOffset)
+              throw new InvalidRecordException(s"Inner record $record inside the compressed record batch does not have incremental offsets, expected offset is $expectedOffset")
+            if (record.timestamp > maxTimestamp)
+              maxTimestamp = record.timestamp
+          }
+
+          validatedRecords += record
         }
-
-        validatedRecords += record
+      } finally {
+        recordsIterator.close()
       }
-
-      recordsIterator.close()
     }
 
     if (!inPlaceAssignment) {

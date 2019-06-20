@@ -51,12 +51,14 @@ import static org.apache.kafka.common.record.RecordBatch.CURRENT_MAGIC_VALUE;
 public class RecordBatchIterationBenchmark {
 
     private final Random random = new Random(0);
-    private final int batchCount = 1000;
-    private final int maxBatchSize = 200;
+    private final int batchCount = 100;
 
     public enum Bytes {
         RANDOM, ONES
     }
+
+    @Param(value = {"10", "50", "200", "500"})
+    private final int maxBatchSize = 200;
 
     @Param(value = {"LZ4", "SNAPPY", "GZIP", "ZSTD", "NONE"})
     private CompressionType compressionType = CompressionType.NONE;
@@ -65,7 +67,7 @@ public class RecordBatchIterationBenchmark {
     private byte messageVersion = CURRENT_MAGIC_VALUE;
 
     @Param(value = {"100", "1000", "10000", "100000"})
-    private int messageSize = 100;
+    private int messageSize = 1000;
 
     @Param(value = {"RANDOM", "ONES"})
     private Bytes bytes = Bytes.RANDOM;

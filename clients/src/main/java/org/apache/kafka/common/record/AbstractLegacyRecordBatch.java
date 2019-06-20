@@ -504,13 +504,13 @@ public abstract class AbstractLegacyRecordBatch extends AbstractRecordBatch impl
         }
 
         /**
-         * LegacyRecordBatch does not implement this iterator and would hence fallback into the normal iterator.
+         * LegacyRecordBatch does not implement this iterator and would hence fallback to the normal iterator.
          *
          * @return An iterator over the records contained within this batch
          */
         @Override
         public CloseableIterator<Record> skipKeyValueIterator(BufferSupplier bufferSupplier) {
-            return CloseableIterator.wrapAsCloseable(iterator(bufferSupplier));
+            return CloseableIterator.wrap(iterator(bufferSupplier));
         }
 
         @Override

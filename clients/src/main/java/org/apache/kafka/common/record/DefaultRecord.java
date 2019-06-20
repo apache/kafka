@@ -373,7 +373,7 @@ public class DefaultRecord implements Record {
     }
 
     public static PartialDefaultRecord readPartiallyFrom(DataInput input,
-                                                         ByteBuffer skipBuffer,
+                                                         byte[] skipArray,
                                                          long baseOffset,
                                                          long baseTimestamp,
                                                          int baseSequence,
@@ -381,37 +381,38 @@ public class DefaultRecord implements Record {
         int sizeOfBodyInBytes = ByteUtils.readVarint(input);
         int totalSizeInBytes = ByteUtils.sizeOfVarint(sizeOfBodyInBytes) + sizeOfBodyInBytes;
 
-        return readPartiallyFrom(input, skipBuffer, totalSizeInBytes, sizeOfBodyInBytes, baseOffset, baseTimestamp,
+        return readPartiallyFrom(input, skipArray, totalSizeInBytes, sizeOfBodyInBytes, baseOffset, baseTimestamp,
             baseSequence, logAppendTime);
     }
 
     private static PartialDefaultRecord readPartiallyFrom(DataInput input,
-                                                          ByteBuffer skipBuffer,
+                                                          byte[] skipArray,
                                                           int sizeInBytes,
                                                           int sizeOfBodyInBytes,
                                                           long baseOffset,
                                                           long baseTimestamp,
                                                           int baseSequence,
                                                           Long logAppendTime) throws IOException {
+        ByteBuffer skipBuffer = ByteBuffer.wrap(skipArray);
+        // set its limit to 0 to indicate no bytes readable yet
+        skipBuffer.limit(0);
+
         try {
             // reading the attributes / timestamp / offset and key-size does not require
             // any byte array allocation and therefore we can just read them straight-forwardly
-            byte attributes = input.readByte();
-            int bytesRead = 1;
-            long timestampDelta = ByteUtils.readVarlong(input);
+            IntRef bytesRemaining = PrimitiveRef.ofInt(sizeOfBodyInBytes);
+
+            byte attributes = readByte(skipBuffer, input, bytesRemaining);
+            long timestampDelta = readVarLong(skipBuffer, input, bytesRemaining);
             long timestamp = baseTimestamp + timestampDelta;
             if (logAppendTime != null)
                 timestamp = logAppendTime;
-            bytesRead += ByteUtils.sizeOfVarlong(timestampDelta);
 
-            int offsetDelta = ByteUtils.readVarint(input);
-            bytesRead += ByteUtils.sizeOfVarint(offsetDelta);
+            int offsetDelta = readVarInt(skipBuffer, input, bytesRemaining);
             long offset = baseOffset + offsetDelta;
             int sequence = baseSequence >= 0 ?
                 DefaultRecordBatch.incrementSequence(baseSequence, offsetDelta) :
                 RecordBatch.NO_SEQUENCE;
-
-            IntRef bytesRemaining = PrimitiveRef.ofInt(sizeOfBodyInBytes - bytesRead);
 
             // first skip key
             int keySize = skipLengthDelimitedField(skipBuffer, input, bytesRemaining);
@@ -420,7 +421,9 @@ public class DefaultRecord implements Record {
             int valueSize = skipLengthDelimitedField(skipBuffer, input, bytesRemaining);
 
             // then skip header
-            int numHeaders = readNumHeaders(skipBuffer, input, bytesRemaining);
+            int numHeaders = readVarInt(skipBuffer, input, bytesRemaining);
+            if (numHeaders < 0)
+                throw new InvalidRecordException("Found invalid number of record headers " + numHeaders);
             for (int i = 0; i < numHeaders; i++) {
                 int headerKeySize = skipLengthDelimitedField(skipBuffer, input, bytesRemaining);
                 if (headerKeySize < 0)
@@ -432,7 +435,7 @@ public class DefaultRecord implements Record {
 
             if (bytesRemaining.value > 0 || skipBuffer.remaining() > 0)
                 throw new InvalidRecordException("Invalid record size: expected to read " + sizeOfBodyInBytes +
-                    " bytes in record payload, but after " + bytesRead + " bytes read, there are still " + bytesRemaining.value + " bytes remaining");
+                    " bytes in record payload, but there are still bytes remaining");
 
             return new PartialDefaultRecord(sizeInBytes, attributes, offset, timestamp, sequence, keySize, valueSize);
         } catch (BufferUnderflowException | IllegalArgumentException e) {
@@ -440,7 +443,41 @@ public class DefaultRecord implements Record {
         }
     }
 
-    private static int readNumHeaders(ByteBuffer buffer, DataInput input, IntRef bytesRemaining) throws IOException {
+    private static byte readByte(ByteBuffer buffer, DataInput input, IntRef bytesRemaining) throws IOException {
+        boolean needMore = false;
+
+        while (true) {
+            if (needMore) {
+                readMore(buffer, input, bytesRemaining);
+                needMore = false;
+            }
+
+            if (buffer.remaining() < 1 && bytesRemaining.value > 0) {
+                needMore = true;
+            } else {
+                return buffer.get();
+            }
+        }
+    }
+
+    private static long readVarLong(ByteBuffer buffer, DataInput input, IntRef bytesRemaining) throws IOException {
+        boolean needMore = false;
+
+        while (true) {
+            if (needMore) {
+                readMore(buffer, input, bytesRemaining);
+                needMore = false;
+            }
+
+            if (buffer.remaining() < 10 && bytesRemaining.value > 0) {
+                needMore = true;
+            } else {
+                return ByteUtils.readVarlong(buffer);
+            }
+        }
+    }
+
+    private static int readVarInt(ByteBuffer buffer, DataInput input, IntRef bytesRemaining) throws IOException {
         boolean needMore = false;
 
         while (true) {
@@ -452,11 +489,7 @@ public class DefaultRecord implements Record {
             if (buffer.remaining() < 5 && bytesRemaining.value > 0) {
                 needMore = true;
             } else {
-                int numHeaders = ByteUtils.readVarint(buffer);
-                if (numHeaders < 0)
-                    throw new InvalidRecordException("Found invalid number of record headers " + numHeaders);
-
-                return numHeaders;
+                return ByteUtils.readVarint(buffer);
             }
         }
     }

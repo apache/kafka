@@ -261,34 +261,19 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
 
         if (skipKeyValue) {
             // this buffer is used to skip length delimited fields like key, value, headers
-            byte[] array = new byte[MAX_SKIP_BUFFER_SIZE];
-            ByteBuffer skipBuffer = ByteBuffer.wrap(array);
-            // set its limit to 0 to indicate no bytes readable yet
-            skipBuffer.limit(0);
+            byte[] skipArray = new byte[MAX_SKIP_BUFFER_SIZE];
 
             return new StreamRecordIterator(inputStream) {
                 @Override
-                protected Record readNext(long baseOffset, long firstTimestamp, int baseSequence, Long logAppendTime) {
-                    try {
-                        return DefaultRecord.readPartiallyFrom(inputStream, skipBuffer, baseOffset, firstTimestamp, baseSequence, logAppendTime);
-                    } catch (EOFException e) {
-                        throw new InvalidRecordException("Incorrect declared batch size, premature EOF reached");
-                    } catch (IOException e) {
-                        throw new KafkaException("Failed to decompress record stream", e);
-                    }
+                protected Record doReadRecord(long baseOffset, long firstTimestamp, int baseSequence, Long logAppendTime) throws IOException {
+                    return DefaultRecord.readPartiallyFrom(inputStream, skipArray, baseOffset, firstTimestamp, baseSequence, logAppendTime);
                 }
             };
         } else {
             return new StreamRecordIterator(inputStream) {
                 @Override
-                protected Record readNext(long baseOffset, long firstTimestamp, int baseSequence, Long logAppendTime) {
-                    try {
-                        return DefaultRecord.readFrom(inputStream, baseOffset, firstTimestamp, baseSequence, logAppendTime);
-                    } catch (EOFException e) {
-                        throw new InvalidRecordException("Incorrect declared batch size, premature EOF reached");
-                    } catch (IOException e) {
-                        throw new KafkaException("Failed to decompress record stream", e);
-                    }
+                protected Record doReadRecord(long baseOffset, long firstTimestamp, int baseSequence, Long logAppendTime) throws IOException {
+                    return DefaultRecord.readFrom(inputStream, baseOffset, firstTimestamp, baseSequence, logAppendTime);
                 }
             };
         }
@@ -337,7 +322,7 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
     @Override
     public CloseableIterator<Record> skipKeyValueIterator(BufferSupplier bufferSupplier) {
         if (count() == 0) {
-            return CloseableIterator.wrapAsCloseable(Collections.emptyIterator());
+            return CloseableIterator.wrap(Collections.emptyIterator());
         }
 
         /*
@@ -618,6 +603,19 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
         StreamRecordIterator(DataInputStream inputStream) {
             super();
             this.inputStream = inputStream;
+        }
+
+        abstract Record doReadRecord(long baseOffset, long firstTimestamp, int baseSequence, Long logAppendTime) throws IOException;
+
+        @Override
+        protected Record readNext(long baseOffset, long firstTimestamp, int baseSequence, Long logAppendTime) {
+            try {
+                return doReadRecord(baseOffset, firstTimestamp, baseSequence, logAppendTime);
+            } catch (EOFException e) {
+                throw new InvalidRecordException("Incorrect declared batch size, premature EOF reached");
+            } catch (IOException e) {
+                throw new KafkaException("Failed to decompress record stream", e);
+            }
         }
 
         @Override
