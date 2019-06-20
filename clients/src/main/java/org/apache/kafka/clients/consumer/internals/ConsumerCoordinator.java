@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import org.apache.kafka.clients.GroupRebalanceConfig;
 import org.apache.kafka.clients.consumer.CommitFailedException;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
@@ -74,6 +75,7 @@ import java.util.stream.Collectors;
  * This class manages the coordination process with the consumer coordinator.
  */
 public final class ConsumerCoordinator extends AbstractCoordinator {
+    private final GroupRebalanceConfig rebalanceConfig;
     private final Logger log;
     private final List<PartitionAssignor> assignors;
     private final ConsumerMetadata metadata;
@@ -120,36 +122,25 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     /**
      * Initialize the coordination manager.
      */
-    public ConsumerCoordinator(LogContext logContext,
+    public ConsumerCoordinator(GroupRebalanceConfig rebalanceConfig,
+                               LogContext logContext,
                                ConsumerNetworkClient client,
-                               String groupId,
-                               Optional<String> groupInstanceId,
-                               int rebalanceTimeoutMs,
-                               int sessionTimeoutMs,
-                               Heartbeat heartbeat,
                                List<PartitionAssignor> assignors,
                                ConsumerMetadata metadata,
                                SubscriptionState subscriptions,
                                Metrics metrics,
                                String metricGrpPrefix,
                                Time time,
-                               long retryBackoffMs,
                                boolean autoCommitEnabled,
                                int autoCommitIntervalMs,
-                               ConsumerInterceptors<?, ?> interceptors,
-                               boolean leaveGroupOnClose) {
-        super(logContext,
+                               ConsumerInterceptors<?, ?> interceptors) {
+        super(rebalanceConfig,
+              logContext,
               client,
-              groupId,
-              groupInstanceId,
-              rebalanceTimeoutMs,
-              sessionTimeoutMs,
-              heartbeat,
               metrics,
               metricGrpPrefix,
-              time,
-              retryBackoffMs,
-              leaveGroupOnClose);
+              time);
+        this.rebalanceConfig = rebalanceConfig;
         this.log = logContext.logger(ConsumerCoordinator.class);
         this.metadata = metadata;
         this.metadataSnapshot = new MetadataSnapshot(subscriptions, metadata.fetch(), metadata.updateVersion());
@@ -398,9 +389,10 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
         Set<String> allSubscribedTopics = new HashSet<>();
         Map<String, Subscription> subscriptions = new HashMap<>();
-        for (JoinGroupResponseData.JoinGroupResponseMember memberSubScription : allSubscriptions) {
-            Subscription subscription = ConsumerProtocol.deserializeSubscription(ByteBuffer.wrap(memberSubScription.metadata()));
-            subscriptions.put(memberSubScription.memberId(), subscription);
+        for (JoinGroupResponseData.JoinGroupResponseMember memberSubscription : allSubscriptions) {
+            Subscription subscription = ConsumerProtocol.buildSubscription(ByteBuffer.wrap(memberSubscription.metadata()),
+                                                                           Optional.ofNullable(memberSubscription.groupInstanceId()));
+            subscriptions.put(memberSubscription.memberId(), subscription);
             allSubscribedTopics.addAll(subscription.topics());
         }
 
@@ -459,7 +451,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     @Override
     protected void onJoinPrepare(int generation, String memberId) {
         // commit offsets prior to rebalance if auto-commit enabled
-        maybeAutoCommitOffsetsSync(time.timer(rebalanceTimeoutMs));
+        maybeAutoCommitOffsetsSync(time.timer(rebalanceConfig.rebalanceTimeoutMs));
 
         // execute the user's callback before rebalance
         ConsumerRebalanceListener listener = subscriptions.rebalanceListener();
@@ -558,7 +550,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                 } else if (!future.isRetriable()) {
                     throw future.exception();
                 } else {
-                    timer.sleep(retryBackoffMs);
+                    timer.sleep(rebalanceConfig.retryBackoffMs);
                 }
             } else {
                 return null;
@@ -585,8 +577,9 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     // visible for testing
     void invokeCompletedOffsetCommitCallbacks() {
         if (asyncCommitFenced.get()) {
-            throw new FencedInstanceIdException("Get fenced exception for group.instance.id: " +
-                    groupInstanceId.orElse("unset_instance_id") + ", current member.id is " + memberId());
+            throw new FencedInstanceIdException("Get fenced exception for group.instance.id "
+                + rebalanceConfig.groupInstanceId.orElse("unset_instance_id")
+                + ", current member.id is " + memberId());
         }
         while (true) {
             OffsetCommitCompletion completion = completedOffsetCommits.poll();
@@ -698,7 +691,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             if (future.failed() && !future.isRetriable())
                 throw future.exception();
 
-            timer.sleep(retryBackoffMs);
+            timer.sleep(rebalanceConfig.retryBackoffMs);
         } while (timer.notExpired());
 
         return false;
@@ -723,7 +716,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                 if (exception instanceof RetriableException) {
                     log.debug("Asynchronous auto-commit of offsets {} failed due to retriable error: {}", offsets,
                         exception);
-                    nextAutoCommitTimer.updateAndReset(retryBackoffMs);
+                    nextAutoCommitTimer.updateAndReset(rebalanceConfig.retryBackoffMs);
                 } else {
                     log.warn("Asynchronous auto-commit of offsets {} failed: {}", offsets, exception.getMessage());
                 }
@@ -813,10 +806,10 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
         OffsetCommitRequest.Builder builder = new OffsetCommitRequest.Builder(
                 new OffsetCommitRequestData()
-                        .setGroupId(this.groupId)
+                        .setGroupId(this.rebalanceConfig.groupId)
                         .setGenerationId(generation.generationId)
                         .setMemberId(generation.memberId)
-                        .setGroupInstanceId(groupInstanceId.orElse(null))
+                        .setGroupInstanceId(rebalanceConfig.groupInstanceId.orElse(null))
                         .setTopics(new ArrayList<>(requestTopicDataMap.values()))
         );
 
@@ -857,7 +850,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                         }
 
                         if (error == Errors.GROUP_AUTHORIZATION_FAILED) {
-                            future.raise(new GroupAuthorizationException(groupId));
+                            future.raise(new GroupAuthorizationException(rebalanceConfig.groupId));
                             return;
                         } else if (error == Errors.TOPIC_AUTHORIZATION_FAILED) {
                             unauthorizedTopics.add(tp.topic());
@@ -881,10 +874,20 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                             log.error("Received fatal exception: group.instance.id gets fenced");
                             future.raise(error);
                             return;
+                        } else if (error == Errors.REBALANCE_IN_PROGRESS) {
+                            /* Consumer never tries to commit offset in between join-group and sync-group,
+                             * and hence on broker-side it is not expected to see a commit offset request
+                             * during CompletingRebalance phase; if it ever happens then broker would return
+                             * this error. In this case we should just treat as a fatal CommitFailed exception.
+                             * However, we do not need to reset generations and just request re-join, such that
+                             * if the caller decides to proceed and poll, it would still try to proceed and re-join normally.
+                             */
+                            requestRejoin();
+                            future.raise(new CommitFailedException());
+                            return;
                         } else if (error == Errors.UNKNOWN_MEMBER_ID
-                                || error == Errors.ILLEGAL_GENERATION
-                                || error == Errors.REBALANCE_IN_PROGRESS) {
-                            // need to re-join group
+                                || error == Errors.ILLEGAL_GENERATION) {
+                            // need to reset generation and re-join group
                             resetGeneration();
                             future.raise(new CommitFailedException());
                             return;
@@ -919,7 +922,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
         log.debug("Fetching committed offsets for partitions: {}", partitions);
         // construct the request
-        OffsetFetchRequest.Builder requestBuilder = new OffsetFetchRequest.Builder(this.groupId,
+        OffsetFetchRequest.Builder requestBuilder = new OffsetFetchRequest.Builder(this.rebalanceConfig.groupId,
                 new ArrayList<>(partitions));
 
         // send the request with a callback
@@ -942,13 +945,14 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                     markCoordinatorUnknown();
                     future.raise(error);
                 } else if (error == Errors.GROUP_AUTHORIZATION_FAILED) {
-                    future.raise(new GroupAuthorizationException(groupId));
+                    future.raise(new GroupAuthorizationException(rebalanceConfig.groupId));
                 } else {
                     future.raise(new KafkaException("Unexpected error in fetch offset response: " + error.message()));
                 }
                 return;
             }
 
+            Set<String> unauthorizedTopics = null;
             Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>(response.responseData().size());
             for (Map.Entry<TopicPartition, OffsetFetchResponse.PartitionData> entry : response.responseData().entrySet()) {
                 TopicPartition tp = entry.getKey();
@@ -959,11 +963,17 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
                     if (error == Errors.UNKNOWN_TOPIC_OR_PARTITION) {
                         future.raise(new KafkaException("Topic or Partition " + tp + " does not exist"));
+                        return;
+                    } else if (error == Errors.TOPIC_AUTHORIZATION_FAILED) {
+                        if (unauthorizedTopics == null) {
+                            unauthorizedTopics = new HashSet<>();
+                        }
+                        unauthorizedTopics.add(tp.topic());
                     } else {
                         future.raise(new KafkaException("Unexpected error in fetch offset response for partition " +
                             tp + ": " + error.message()));
+                        return;
                     }
-                    return;
                 } else if (data.offset >= 0) {
                     // record the position with the offset (-1 indicates no committed offset to fetch)
                     offsets.put(tp, new OffsetAndMetadata(data.offset, data.leaderEpoch, data.metadata));
@@ -972,7 +982,11 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                 }
             }
 
-            future.complete(offsets);
+            if (unauthorizedTopics != null) {
+                future.raise(new TopicAuthorizationException(unauthorizedTopics));
+            } else {
+                future.complete(offsets);
+            }
         }
     }
 

@@ -23,9 +23,13 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.AuthenticationException;
+import org.apache.kafka.common.errors.ClusterAuthorizationException;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
+import org.apache.kafka.common.errors.OutOfOrderSequenceException;
 import org.apache.kafka.common.errors.ProducerFencedException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
+import org.apache.kafka.common.errors.TransactionalIdAuthorizationException;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.FindCoordinatorRequestData;
 import org.apache.kafka.common.message.InitProducerIdRequestData;
 import org.apache.kafka.common.protocol.Errors;
@@ -62,6 +66,10 @@ import java.util.OptionalInt;
 import java.util.OptionalLong;
 import java.util.PriorityQueue;
 import java.util.Set;
+import java.util.SortedSet;
+import java.util.TreeSet;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Consumer;
 import java.util.function.Supplier;
 
 import static org.apache.kafka.common.record.RecordBatch.NO_PRODUCER_EPOCH;
@@ -133,7 +141,7 @@ public class TransactionManager {
         // we continue to order batches by the sequence numbers even when the responses come back out of order during
         // leader failover. We add a batch to the queue when it is drained, and remove it when the batch completes
         // (either successfully or through a fatal failure).
-        private PriorityQueue<ProducerBatch> inflightBatchesBySequence;
+        private SortedSet<ProducerBatch> inflightBatchesBySequence;
 
         // We keep track of the last acknowledged offset on a per partition basis in order to disambiguate UnknownProducer
         // responses which are due to the retention period elapsing, and those which are due to actual lost data.
@@ -143,8 +151,18 @@ public class TransactionManager {
             this.nextSequence = 0;
             this.lastAckedSequence = NO_LAST_ACKED_SEQUENCE_NUMBER;
             this.lastAckedOffset = ProduceResponse.INVALID_OFFSET;
-            this.inflightBatchesBySequence = new PriorityQueue<>(5, Comparator.comparingInt(ProducerBatch::baseSequence));
+            this.inflightBatchesBySequence = new TreeSet<>(Comparator.comparingInt(ProducerBatch::baseSequence));
         }
+
+        public void resetSequenceNumbers(Consumer<ProducerBatch> resetSequence) {
+            TreeSet<ProducerBatch> newInflights = new TreeSet<>(Comparator.comparingInt(ProducerBatch::baseSequence));
+            for (ProducerBatch inflightBatch : inflightBatchesBySequence) {
+                resetSequence.accept(inflightBatch);
+                newInflights.add(inflightBatch);
+            }
+            inflightBatchesBySequence = newInflights;
+        }
+
     }
 
     private final TopicPartitionBookkeeper topicPartitionBookkeeper;
@@ -459,6 +477,12 @@ public class TransactionManager {
         this.partitionsWithUnresolvedSequences.clear();
     }
 
+    synchronized void resetProducerIdIfNeeded() {
+        if (shouldResetProducerStateAfterResolvingSequences())
+            // Check if the previous run expired batches which requires a reset of the producer state.
+            resetProducerId();
+    }
+
     /**
      * Returns the next sequence number to be written to the given TopicPartition.
      */
@@ -479,7 +503,7 @@ public class TransactionManager {
     synchronized void addInFlightBatch(ProducerBatch batch) {
         if (!batch.hasSequence())
             throw new IllegalStateException("Can't track batch for partition " + batch.topicPartition + " when sequence is not set.");
-        topicPartitionBookkeeper.getPartition(batch.topicPartition).inflightBatchesBySequence.offer(batch);
+        topicPartitionBookkeeper.getPartition(batch.topicPartition).inflightBatchesBySequence.add(batch);
     }
 
     /**
@@ -493,26 +517,25 @@ public class TransactionManager {
         if (!hasInflightBatches(topicPartition))
             return RecordBatch.NO_SEQUENCE;
 
-        ProducerBatch first = topicPartitionBookkeeper.getPartition(topicPartition).inflightBatchesBySequence.peek();
-        if (first == null)
+        SortedSet<ProducerBatch> inflightBatches = topicPartitionBookkeeper.getPartition(topicPartition).inflightBatchesBySequence;
+        if (inflightBatches.isEmpty())
             return RecordBatch.NO_SEQUENCE;
-
-        return first.baseSequence();
+        else
+            return inflightBatches.first().baseSequence();
     }
 
     synchronized ProducerBatch nextBatchBySequence(TopicPartition topicPartition) {
-        PriorityQueue<ProducerBatch> queue = topicPartitionBookkeeper.getPartition(topicPartition).inflightBatchesBySequence;
-        return queue.peek();
+        SortedSet<ProducerBatch> queue = topicPartitionBookkeeper.getPartition(topicPartition).inflightBatchesBySequence;
+        return queue.isEmpty() ? null : queue.first();
     }
 
     synchronized void removeInFlightBatch(ProducerBatch batch) {
         if (hasInflightBatches(batch.topicPartition)) {
-            PriorityQueue<ProducerBatch> queue = topicPartitionBookkeeper.getPartition(batch.topicPartition).inflightBatchesBySequence;
-            queue.remove(batch);
+            topicPartitionBookkeeper.getPartition(batch.topicPartition).inflightBatchesBySequence.remove(batch);
         }
     }
 
-    synchronized void maybeUpdateLastAckedSequence(TopicPartition topicPartition, int sequence) {
+    private void maybeUpdateLastAckedSequence(TopicPartition topicPartition, int sequence) {
         if (sequence > lastAckedSequence(topicPartition).orElse(NO_LAST_ACKED_SEQUENCE_NUMBER))
             topicPartitionBookkeeper.getPartition(topicPartition).lastAckedSequence = sequence;
     }
@@ -525,7 +548,7 @@ public class TransactionManager {
         return topicPartitionBookkeeper.lastAckedOffset(topicPartition);
     }
 
-    synchronized void updateLastAckedOffset(ProduceResponse.PartitionResponse response, ProducerBatch batch) {
+    private void updateLastAckedOffset(ProduceResponse.PartitionResponse response, ProducerBatch batch) {
         if (response.baseOffset == ProduceResponse.INVALID_OFFSET)
             return;
         long lastOffset = response.baseOffset + batch.recordCount - 1;
@@ -543,12 +566,66 @@ public class TransactionManager {
         }
     }
 
+    public synchronized void handleCompletedBatch(ProducerBatch batch, ProduceResponse.PartitionResponse response) {
+        if (!hasProducerIdAndEpoch(batch.producerId(), batch.producerEpoch())) {
+            log.debug("Ignoring completed batch {} with producer id {}, epoch {}, and sequence number {} " +
+                            "since the producerId has been reset internally", batch, batch.producerId(),
+                    batch.producerEpoch(), batch.baseSequence());
+            return;
+        }
+
+        maybeUpdateLastAckedSequence(batch.topicPartition, batch.baseSequence() + batch.recordCount - 1);
+        log.debug("ProducerId: {}; Set last ack'd sequence number for topic-partition {} to {}",
+                batch.producerId(),
+                batch.topicPartition,
+                lastAckedSequence(batch.topicPartition).orElse(-1));
+
+        updateLastAckedOffset(response, batch);
+        removeInFlightBatch(batch);
+    }
+
+    private void maybeTransitionToErrorState(RuntimeException exception) {
+        if (exception instanceof ClusterAuthorizationException
+                || exception instanceof TransactionalIdAuthorizationException
+                || exception instanceof ProducerFencedException
+                || exception instanceof UnsupportedVersionException) {
+            transitionToFatalError(exception);
+        } else if (isTransactional()) {
+            transitionToAbortableError(exception);
+        }
+    }
+
+    public synchronized void handleFailedBatch(ProducerBatch batch, RuntimeException exception, boolean adjustSequenceNumbers) {
+        maybeTransitionToErrorState(exception);
+
+        if (!hasProducerIdAndEpoch(batch.producerId(), batch.producerEpoch())) {
+            log.debug("Ignoring failed batch {} with producer id {}, epoch {}, and sequence number {} " +
+                    "since the producerId has been reset internally", batch, batch.producerId(),
+                    batch.producerEpoch(), batch.baseSequence(), exception);
+            return;
+        }
+
+        if (exception instanceof OutOfOrderSequenceException && !isTransactional()) {
+            log.error("The broker returned {} for topic-partition {} with producerId {}, epoch {}, and sequence number {}",
+                    exception, batch.topicPartition, batch.producerId(), batch.producerEpoch(), batch.baseSequence());
+
+            // Reset the producerId since we have hit an irrecoverable exception and cannot make any guarantees
+            // about the previously committed message. Note that this will discard the producer id and sequence
+            // numbers for all existing partitions.
+            resetProducerId();
+        } else {
+            removeInFlightBatch(batch);
+            if (adjustSequenceNumbers)
+                adjustSequencesDueToFailedBatch(batch);
+        }
+    }
+
     // If a batch is failed fatally, the sequence numbers for future batches bound for the partition must be adjusted
     // so that they don't fail with the OutOfOrderSequenceException.
     //
     // This method must only be called when we know that the batch is question has been unequivocally failed by the broker,
     // ie. it has received a confirmed fatal status code like 'Message Too Large' or something similar.
-    synchronized void adjustSequencesDueToFailedBatch(ProducerBatch batch) {
+    private void adjustSequencesDueToFailedBatch(ProducerBatch batch) {
         if (!topicPartitionBookkeeper.contains(batch.topicPartition))
             // Sequence numbers are not being tracked for this partition. This could happen if the producer id was just
             // reset due to a previous OutOfOrderSequenceException.
@@ -558,38 +635,39 @@ public class TransactionManager {
         int currentSequence = sequenceNumber(batch.topicPartition);
         currentSequence -= batch.recordCount;
         if (currentSequence < 0)
-            throw new IllegalStateException("Sequence number for partition " + batch.topicPartition + " is going to become negative : " + currentSequence);
+            throw new IllegalStateException("Sequence number for partition " + batch.topicPartition + " is going to become negative: " + currentSequence);
 
         setNextSequence(batch.topicPartition, currentSequence);
 
-        for (ProducerBatch inFlightBatch : topicPartitionBookkeeper.getPartition(batch.topicPartition).inflightBatchesBySequence) {
+        topicPartitionBookkeeper.getPartition(batch.topicPartition).resetSequenceNumbers(inFlightBatch -> {
             if (inFlightBatch.baseSequence() < batch.baseSequence())
-                continue;
+                return;
+
             int newSequence = inFlightBatch.baseSequence() - batch.recordCount;
             if (newSequence < 0)
                 throw new IllegalStateException("Sequence number for batch with sequence " + inFlightBatch.baseSequence()
-                        + " for partition " + batch.topicPartition + " is going to become negative :" + newSequence);
+                        + " for partition " + batch.topicPartition + " is going to become negative: " + newSequence);
 
             log.info("Resetting sequence number of batch with current sequence {} for partition {} to {}", inFlightBatch.baseSequence(), batch.topicPartition, newSequence);
             inFlightBatch.resetProducerState(new ProducerIdAndEpoch(inFlightBatch.producerId(), inFlightBatch.producerEpoch()), newSequence, inFlightBatch.isTransactional());
-        }
+
+        });
     }
 
-    private synchronized void startSequencesAtBeginning(TopicPartition topicPartition) {
-        int sequence = 0;
-        for (ProducerBatch inFlightBatch : topicPartitionBookkeeper.getPartition(topicPartition).inflightBatchesBySequence) {
+    private void startSequencesAtBeginning(TopicPartition topicPartition) {
+        final AtomicInteger sequence = new AtomicInteger(0);
+        topicPartitionBookkeeper.getPartition(topicPartition).resetSequenceNumbers(inFlightBatch -> {
             log.info("Resetting sequence number of batch with current sequence {} for partition {} to {}",
-                    inFlightBatch.baseSequence(), inFlightBatch.topicPartition, sequence);
+                    inFlightBatch.baseSequence(), inFlightBatch.topicPartition, sequence.get());
             inFlightBatch.resetProducerState(new ProducerIdAndEpoch(inFlightBatch.producerId(),
-                    inFlightBatch.producerEpoch()), sequence, inFlightBatch.isTransactional());
-
-            sequence += inFlightBatch.recordCount;
-        }
-        setNextSequence(topicPartition, sequence);
+                    inFlightBatch.producerEpoch()), sequence.get(), inFlightBatch.isTransactional());
+            sequence.getAndAdd(inFlightBatch.recordCount);
+        });
+        setNextSequence(topicPartition, sequence.get());
         topicPartitionBookkeeper.getPartition(topicPartition).lastAckedSequence = NO_LAST_ACKED_SEQUENCE_NUMBER;
     }
 
-    private synchronized boolean hasInflightBatches(TopicPartition topicPartition) {
+    private boolean hasInflightBatches(TopicPartition topicPartition) {
         return topicPartitionBookkeeper.contains(topicPartition)
                 && !topicPartitionBookkeeper.getPartition(topicPartition).inflightBatchesBySequence.isEmpty();
     }
@@ -609,7 +687,7 @@ public class TransactionManager {
 
     // Checks if there are any partitions with unresolved partitions which may now be resolved. Returns true if
     // the producer id needs a reset, false otherwise.
-    synchronized boolean shouldResetProducerStateAfterResolvingSequences() {
+    private boolean shouldResetProducerStateAfterResolvingSequences() {
         if (isTransactional())
             // We should not reset producer state if we are transactional. We will transition to a fatal error instead.
             return false;
@@ -634,11 +712,11 @@ public class TransactionManager {
         return false;
     }
 
-    private synchronized boolean isNextSequence(TopicPartition topicPartition, int sequence) {
+    private boolean isNextSequence(TopicPartition topicPartition, int sequence) {
         return sequence - lastAckedSequence(topicPartition).orElse(NO_LAST_ACKED_SEQUENCE_NUMBER) == 1;
     }
 
-    private synchronized void setNextSequence(TopicPartition topicPartition, int sequence) {
+    private void setNextSequence(TopicPartition topicPartition, int sequence) {
         topicPartitionBookkeeper.getPartition(topicPartition).nextSequence = sequence;
     }
 
@@ -755,7 +833,7 @@ public class TransactionManager {
     }
 
     synchronized boolean canRetry(ProduceResponse.PartitionResponse response, ProducerBatch batch) {
-        if (!hasProducerId(batch.producerId()))
+        if (!hasProducerIdAndEpoch(batch.producerId(), batch.producerEpoch()))
             return false;
 
         Errors error = response.error;
@@ -807,7 +885,7 @@ public class TransactionManager {
         transitionTo(target, null);
     }
 
-    private synchronized void transitionTo(State target, RuntimeException error) {
+    private void transitionTo(State target, RuntimeException error) {
         if (!currentState.isTransitionValid(currentState, target)) {
             String idString = transactionalId == null ?  "" : "TransactionalId " + transactionalId + ": ";
             throw new KafkaException(idString + "Invalid transition attempted from state "
@@ -865,7 +943,7 @@ public class TransactionManager {
         pendingRequests.add(requestHandler);
     }
 
-    private synchronized void lookupCoordinator(FindCoordinatorRequest.CoordinatorType type, String coordinatorKey) {
+    private void lookupCoordinator(FindCoordinatorRequest.CoordinatorType type, String coordinatorKey) {
         switch (type) {
             case GROUP:
                 consumerGroupCoordinator = null;
@@ -884,7 +962,7 @@ public class TransactionManager {
         enqueueRequest(new FindCoordinatorHandler(builder));
     }
 
-    private synchronized void completeTransaction() {
+    private void completeTransaction() {
         transitionTo(State.READY);
         lastError = null;
         transactionStarted = false;
@@ -893,7 +971,7 @@ public class TransactionManager {
         partitionsInTransaction.clear();
     }
 
-    private synchronized TxnRequestHandler addPartitionsToTransactionHandler() {
+    private TxnRequestHandler addPartitionsToTransactionHandler() {
         pendingPartitionsInTransaction.addAll(newPartitionsInTransaction);
         newPartitionsInTransaction.clear();
         AddPartitionsToTxnRequest.Builder builder = new AddPartitionsToTxnRequest.Builder(transactionalId,

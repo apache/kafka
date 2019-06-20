@@ -200,6 +200,10 @@ The following options should be set with a `-P` switch, for example `./gradlew -
 * `testLoggingEvents`: unit test events to be logged, separated by comma. For example `./gradlew -PtestLoggingEvents=started,passed,skipped,failed test`.
 * `xmlSpotBugsReport`: enable XML reports for spotBugs. This also disables HTML reports as only one can be enabled at a time.
 
+### Running system tests ###
+
+See [tests/README.md](tests/README.md).
+
 ### Running in Vagrant ###
 
 See [vagrant/README.md](vagrant/README.md).

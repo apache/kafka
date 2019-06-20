@@ -21,19 +21,15 @@ import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serializer;
 
 import java.nio.ByteBuffer;
-import java.util.Map;
 
 import static java.util.Objects.requireNonNull;
 
-public final class FullChangeSerde<T> implements Serde<Change<T>> {
+public final class FullChangeSerde<T> {
     private final Serde<T> inner;
 
-    @SuppressWarnings("unchecked")
-    public static <T> FullChangeSerde<T> castOrWrap(final Serde<T> serde) {
+    public static <T> FullChangeSerde<T> wrap(final Serde<T> serde) {
         if (serde == null) {
             return null;
-        } else if (serde instanceof FullChangeSerde) {
-            return (FullChangeSerde<T>) serde;
         } else {
             return new FullChangeSerde<>(serde);
         }
@@ -47,98 +43,81 @@ public final class FullChangeSerde<T> implements Serde<Change<T>> {
         return inner;
     }
 
-    @Override
-    public void configure(final Map<String, ?> configs, final boolean isKey) {
-        inner.configure(configs, isKey);
+    public Change<byte[]> serializeParts(final String topic, final Change<T> data) {
+        if (data == null) {
+            return null;
+        }
+        final Serializer<T> innerSerializer = innerSerde().serializer();
+        final byte[] oldBytes = data.oldValue == null ? null : innerSerializer.serialize(topic, data.oldValue);
+        final byte[] newBytes = data.newValue == null ? null : innerSerializer.serialize(topic, data.newValue);
+        return new Change<>(newBytes, oldBytes);
     }
 
-    @Override
-    public void close() {
-        inner.close();
+
+    public Change<T> deserializeParts(final String topic, final Change<byte[]> serialChange) {
+        if (serialChange == null) {
+            return null;
+        }
+        final Deserializer<T> innerDeserializer = innerSerde().deserializer();
+
+        final T oldValue =
+            serialChange.oldValue == null ? null : innerDeserializer.deserialize(topic, serialChange.oldValue);
+        final T newValue =
+            serialChange.newValue == null ? null : innerDeserializer.deserialize(topic, serialChange.newValue);
+
+        return new Change<>(newValue, oldValue);
     }
 
-    @Override
-    public Serializer<Change<T>> serializer() {
-        final Serializer<T> innerSerializer = inner.serializer();
+    /**
+     * We used to serialize a Change into a single byte[]. Now, we don't anymore, but we still keep this logic here
+     * so that we can produce the legacy format to test that we can still deserialize it.
+     */
+    public static byte[] mergeChangeArraysIntoSingleLegacyFormattedArray(final Change<byte[]> serialChange) {
+        if (serialChange == null) {
+            return null;
+        }
 
-        return new Serializer<Change<T>>() {
-            @Override
-            public void configure(final Map<String, ?> configs, final boolean isKey) {
-                innerSerializer.configure(configs, isKey);
-            }
+        final int oldSize = serialChange.oldValue == null ? -1 : serialChange.oldValue.length;
+        final int newSize = serialChange.newValue == null ? -1 : serialChange.newValue.length;
 
-            @Override
-            public byte[] serialize(final String topic, final Change<T> data) {
-                if (data == null) {
-                    return null;
-                }
-                final byte[] oldBytes = data.oldValue == null ? null : innerSerializer.serialize(topic, data.oldValue);
-                final int oldSize = oldBytes == null ? -1 : oldBytes.length;
-                final byte[] newBytes = data.newValue == null ? null : innerSerializer.serialize(topic, data.newValue);
-                final int newSize = newBytes == null ? -1 : newBytes.length;
+        final ByteBuffer buffer = ByteBuffer.allocate(Integer.BYTES * 2 + Math.max(0, oldSize) + Math.max(0, newSize));
 
-                final ByteBuffer buffer = ByteBuffer.wrap(
-                    new byte[4 + (oldSize == -1 ? 0 : oldSize) + 4 + (newSize == -1 ? 0 : newSize)]
-                );
-                buffer.putInt(oldSize);
-                if (oldBytes != null) {
-                    buffer.put(oldBytes);
-                }
-                buffer.putInt(newSize);
-                if (newBytes != null) {
-                    buffer.put(newBytes);
-                }
-                return buffer.array();
-            }
 
-            @Override
-            public void close() {
-                innerSerializer.close();
-            }
-        };
+        buffer.putInt(oldSize);
+        if (serialChange.oldValue != null) {
+            buffer.put(serialChange.oldValue);
+        }
+
+        buffer.putInt(newSize);
+        if (serialChange.newValue != null) {
+            buffer.put(serialChange.newValue);
+        }
+        return buffer.array();
     }
 
-    @Override
-    public Deserializer<Change<T>> deserializer() {
-        final Deserializer<T> innerDeserializer = inner.deserializer();
-        return new Deserializer<Change<T>>() {
-            @Override
-            public void configure(final Map<String, ?> configs, final boolean isKey) {
-                innerDeserializer.configure(configs, isKey);
-            }
+    /**
+     * We used to serialize a Change into a single byte[]. Now, we don't anymore, but we still
+     * need to be able to read it (so that we can load the state store from previously-written changelog records).
+     */
+    public static Change<byte[]> decomposeLegacyFormattedArrayIntoChangeArrays(final byte[] data) {
+        if (data == null) {
+            return null;
+        }
+        final ByteBuffer buffer = ByteBuffer.wrap(data);
 
-            @Override
-            public Change<T> deserialize(final String topic, final byte[] data) {
-                if (data == null) {
-                    return null;
-                }
-                final ByteBuffer buffer = ByteBuffer.wrap(data);
-
-                final byte[] oldBytes = extractOldValuePart(buffer);
-                final T oldValue = oldBytes == null ? null : innerDeserializer.deserialize(topic, oldBytes);
-
-                final int newSize = buffer.getInt();
-                final byte[] newBytes = newSize == -1 ? null : new byte[newSize];
-                if (newBytes != null) {
-                    buffer.get(newBytes);
-                }
-                final T newValue = newBytes == null ? null : innerDeserializer.deserialize(topic, newBytes);
-                return new Change<>(newValue, oldValue);
-            }
-
-            @Override
-            public void close() {
-                innerDeserializer.close();
-            }
-        };
-    }
-
-    public static byte[] extractOldValuePart(final ByteBuffer buffer) {
         final int oldSize = buffer.getInt();
         final byte[] oldBytes = oldSize == -1 ? null : new byte[oldSize];
         if (oldBytes != null) {
             buffer.get(oldBytes);
         }
-        return oldBytes;
+
+        final int newSize = buffer.getInt();
+        final byte[] newBytes = newSize == -1 ? null : new byte[newSize];
+        if (newBytes != null) {
+            buffer.get(newBytes);
+        }
+
+        return new Change<>(newBytes, oldBytes);
     }
+
 }

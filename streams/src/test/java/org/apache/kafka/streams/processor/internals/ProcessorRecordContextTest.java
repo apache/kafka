@@ -37,7 +37,7 @@ public class ProcessorRecordContextTest {
             null
         );
 
-        assertEquals(MIN_SIZE, context.sizeBytes());
+        assertEquals(MIN_SIZE, context.residentMemorySizeEstimate());
     }
 
     @Test
@@ -50,7 +50,7 @@ public class ProcessorRecordContextTest {
             new RecordHeaders()
         );
 
-        assertEquals(MIN_SIZE, context.sizeBytes());
+        assertEquals(MIN_SIZE, context.residentMemorySizeEstimate());
     }
 
     @Test
@@ -63,7 +63,7 @@ public class ProcessorRecordContextTest {
             null
         );
 
-        assertEquals(MIN_SIZE + 5L, context.sizeBytes());
+        assertEquals(MIN_SIZE + 5L, context.residentMemorySizeEstimate());
     }
 
     @Test
@@ -78,7 +78,7 @@ public class ProcessorRecordContextTest {
             headers
         );
 
-        assertEquals(MIN_SIZE + 10L + 12L, context.sizeBytes());
+        assertEquals(MIN_SIZE + 10L + 12L, context.residentMemorySizeEstimate());
     }
 
     @Test
@@ -93,6 +93,6 @@ public class ProcessorRecordContextTest {
             headers
         );
 
-        assertEquals(MIN_SIZE + 10L, context.sizeBytes());
+        assertEquals(MIN_SIZE + 10L, context.residentMemorySizeEstimate());
     }
 }

@@ -17,7 +17,7 @@
 package kafka.utils
 
 import scala.collection.mutable.PriorityQueue
-import java.util.concurrent.TimeUnit
+import java.util.concurrent.{Delayed, ScheduledFuture, TimeUnit}
 
 import org.apache.kafka.common.utils.Time
 
@@ -71,11 +71,14 @@ class MockScheduler(val time: Time) extends Scheduler {
     }
   }
   
-  def schedule(name: String, fun: () => Unit, delay: Long = 0, period: Long = -1, unit: TimeUnit = TimeUnit.MILLISECONDS) {
+  def schedule(name: String, fun: () => Unit, delay: Long = 0, period: Long = -1, unit: TimeUnit = TimeUnit.MILLISECONDS): ScheduledFuture[Unit] = {
+    var task : MockTask = null
     this synchronized {
-      tasks += MockTask(name, fun, time.milliseconds + delay, period = period)
+      task = MockTask(name, fun, time.milliseconds + delay, period = period, time=time)
+      tasks += task
       tick()
     }
+    task
   }
 
   def clear(): Unit = {
@@ -86,7 +89,7 @@ class MockScheduler(val time: Time) extends Scheduler {
   
 }
 
-case class MockTask(name: String, fun: () => Unit, var nextExecution: Long, period: Long) extends Ordered[MockTask] {
+case class MockTask(name: String, fun: () => Unit, var nextExecution: Long, period: Long, time: Time) extends ScheduledFuture[Unit] {
   def periodic = period >= 0
   def compare(t: MockTask): Int = {
     if(t.nextExecution == nextExecution)
@@ -95,5 +98,43 @@ case class MockTask(name: String, fun: () => Unit, var nextExecution: Long, peri
       -1
     else
       1
+  }
+
+  /**
+    * Not used, so not not fully implemented
+    */
+  def cancel(mayInterruptIfRunning: Boolean) : Boolean = {
+    false
+  }
+
+  def get() {
+  }
+
+  def get(timeout: Long, unit: TimeUnit){
+  }
+
+  def isCancelled: Boolean = {
+    false
+  }
+
+  def isDone: Boolean = {
+    false
+  }
+
+  def getDelay(unit: TimeUnit): Long = {
+    this synchronized {
+      time.milliseconds - nextExecution
+    }
+  }
+
+  def compareTo(o : Delayed) : Int = {
+    this.getDelay(TimeUnit.MILLISECONDS).compareTo(o.getDelay(TimeUnit.MILLISECONDS))
+  }
+}
+object MockTask {
+  implicit def MockTaskOrdering : Ordering[MockTask] = new Ordering[MockTask] {
+    def compare(x: MockTask, y: MockTask): Int = {
+      x.compare(y)
+    }
   }
 }

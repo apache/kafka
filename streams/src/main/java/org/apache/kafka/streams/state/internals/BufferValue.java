@@ -16,60 +16,136 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
+
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.Objects;
 
 public final class BufferValue {
-    private final ContextualRecord record;
+    private static final int NULL_VALUE_SENTINEL = -1;
+    private static final int OLD_PREV_DUPLICATE_VALUE_SENTINEL = -2;
     private final byte[] priorValue;
+    private final byte[] oldValue;
+    private final byte[] newValue;
+    private final ProcessorRecordContext recordContext;
 
-    BufferValue(final ContextualRecord record,
-                final byte[] priorValue) {
-        this.record = record;
-        this.priorValue = priorValue;
-    }
+    BufferValue(final byte[] priorValue,
+                final byte[] oldValue,
+                final byte[] newValue,
+                final ProcessorRecordContext recordContext) {
+        this.oldValue = oldValue;
+        this.newValue = newValue;
+        this.recordContext = recordContext;
 
-    ContextualRecord record() {
-        return record;
+        // This de-duplicates the prior and old references.
+        // If they were already the same reference, the comparison is trivially fast, so we don't specifically check
+        // for that case.
+        if (Arrays.equals(priorValue, oldValue)) {
+            this.priorValue = oldValue;
+        } else {
+            this.priorValue = priorValue;
+        }
     }
 
     byte[] priorValue() {
         return priorValue;
     }
 
-    static BufferValue deserialize(final ByteBuffer buffer) {
-        final ContextualRecord record = ContextualRecord.deserialize(buffer);
+    byte[] oldValue() {
+        return oldValue;
+    }
 
-        final int priorValueLength = buffer.getInt();
-        if (priorValueLength == -1) {
-            return new BufferValue(record, null);
+    byte[] newValue() {
+        return newValue;
+    }
+
+    ProcessorRecordContext context() {
+        return recordContext;
+    }
+
+    static BufferValue deserialize(final ByteBuffer buffer) {
+        final ProcessorRecordContext context = ProcessorRecordContext.deserialize(buffer);
+
+        final byte[] priorValue = extractValue(buffer);
+
+        final byte[] oldValue;
+        final int oldValueLength = buffer.getInt();
+        if (oldValueLength == NULL_VALUE_SENTINEL) {
+            oldValue = null;
+        } else if (oldValueLength == OLD_PREV_DUPLICATE_VALUE_SENTINEL) {
+            oldValue = priorValue;
         } else {
-            final byte[] priorValue = new byte[priorValueLength];
-            buffer.get(priorValue);
-            return new BufferValue(record, priorValue);
+            oldValue = new byte[oldValueLength];
+            buffer.get(oldValue);
+        }
+
+        final byte[] newValue = extractValue(buffer);
+
+        return new BufferValue(priorValue, oldValue, newValue, context);
+    }
+
+    private static byte[] extractValue(final ByteBuffer buffer) {
+        final int valueLength = buffer.getInt();
+        if (valueLength == NULL_VALUE_SENTINEL) {
+            return null;
+        } else {
+            final byte[] value = new byte[valueLength];
+            buffer.get(value);
+            return value;
         }
     }
 
     ByteBuffer serialize(final int endPadding) {
 
-        final int sizeOfPriorValueLength = Integer.BYTES;
+        final int sizeOfValueLength = Integer.BYTES;
+
         final int sizeOfPriorValue = priorValue == null ? 0 : priorValue.length;
+        final int sizeOfOldValue = oldValue == null || priorValue == oldValue ? 0 : oldValue.length;
+        final int sizeOfNewValue = newValue == null ? 0 : newValue.length;
 
-        final ByteBuffer buffer = record.serialize(sizeOfPriorValueLength + sizeOfPriorValue + endPadding);
+        final byte[] serializedContext = recordContext.serialize();
 
-        if (priorValue == null) {
-            buffer.putInt(-1);
+        final ByteBuffer buffer = ByteBuffer.allocate(
+            serializedContext.length
+                + sizeOfValueLength + sizeOfPriorValue
+                + sizeOfValueLength + sizeOfOldValue
+                + sizeOfValueLength + sizeOfNewValue
+                + endPadding
+        );
+
+        buffer.put(serializedContext);
+
+        addValue(buffer, priorValue);
+
+        if (oldValue == null) {
+            buffer.putInt(NULL_VALUE_SENTINEL);
+        } else if (priorValue == oldValue) {
+            buffer.putInt(OLD_PREV_DUPLICATE_VALUE_SENTINEL);
         } else {
-            buffer.putInt(priorValue.length);
-            buffer.put(priorValue);
+            buffer.putInt(sizeOfOldValue);
+            buffer.put(oldValue);
         }
+
+        addValue(buffer, newValue);
 
         return buffer;
     }
 
-    long sizeBytes() {
-        return (priorValue == null ? 0 : priorValue.length) + record.sizeBytes();
+    private static void addValue(final ByteBuffer buffer, final byte[] value) {
+        if (value == null) {
+            buffer.putInt(NULL_VALUE_SENTINEL);
+        } else {
+            buffer.putInt(value.length);
+            buffer.put(value);
+        }
+    }
+
+    long residentMemorySizeEstimate() {
+        return (priorValue == null ? 0 : priorValue.length)
+            + (oldValue == null || priorValue == oldValue ? 0 : oldValue.length)
+            + (newValue == null ? 0 : newValue.length)
+            + recordContext.residentMemorySizeEstimate();
     }
 
     @Override
@@ -77,22 +153,28 @@ public final class BufferValue {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
         final BufferValue that = (BufferValue) o;
-        return Objects.equals(record, that.record) &&
-            Arrays.equals(priorValue, that.priorValue);
+        return Arrays.equals(priorValue, that.priorValue) &&
+            Arrays.equals(oldValue, that.oldValue) &&
+            Arrays.equals(newValue, that.newValue) &&
+            Objects.equals(recordContext, that.recordContext);
     }
 
     @Override
     public int hashCode() {
-        int result = Objects.hash(record);
+        int result = Objects.hash(recordContext);
         result = 31 * result + Arrays.hashCode(priorValue);
+        result = 31 * result + Arrays.hashCode(oldValue);
+        result = 31 * result + Arrays.hashCode(newValue);
         return result;
     }
 
     @Override
     public String toString() {
         return "BufferValue{" +
-            "record=" + record +
-            ", priorValue=" + Arrays.toString(priorValue) +
+            "priorValue=" + Arrays.toString(priorValue) +
+            ", oldValue=" + Arrays.toString(oldValue) +
+            ", newValue=" + Arrays.toString(newValue) +
+            ", recordContext=" + recordContext +
             '}';
     }
 }
