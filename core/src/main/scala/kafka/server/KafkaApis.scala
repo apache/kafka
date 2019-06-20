@@ -594,7 +594,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       None
     }
 
-    val hasFetchSession = fetchRequest.metadata.sessionId != JFetchMetadata.INVALID_SESSION_ID
+    val hasFetchSession = !fetchRequest.metadata.equals(JFetchMetadata.LEGACY)
 
     def errorResponse[T >: MemoryRecords <: BaseRecords](error: Errors): FetchResponse.PartitionData[T] = {
       new FetchResponse.PartitionData[T](error, FetchResponse.INVALID_HIGHWATERMARK, FetchResponse.INVALID_LAST_STABLE_OFFSET,
