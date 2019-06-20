@@ -16,28 +16,27 @@
  */
 package kafka.log.remote
 
-import java.io.{Closeable, File}
+import java.io.Closeable
 import java.nio.file.{Files, Path}
 import java.util
 import java.util.concurrent._
 
 import kafka.log._
-import kafka.server.LogReadResult
+import kafka.server.{FetchDataInfo, LogReadResult}
+import kafka.utils.Logging
 import org.apache.kafka.common.requests.FetchRequest.PartitionData
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.common.{Configurable, TopicPartition}
 
 import scala.collection.JavaConverters._
-import scala.collection.Set
+import scala.collection.{JavaConverters, Set}
 
-class RemoteLogManager(logManager: LogManager) extends Configurable with Closeable {
+class RemoteLogManager(logManager: LogManager) extends Logging with Configurable with Closeable {
   private var remoteStorageManager: RemoteStorageManager = _
+  private var rlmFollower: RLMFollower = _
+  private var rlmIndexer: RLMIndexer = _
 
   private val watchedSegments: BlockingQueue[LogSegmentEntry] = new LinkedBlockingQueue[LogSegmentEntry]()
-
-  private val remoteLogIndexes: ConcurrentNavigableMap[Long, RemoteLogIndex] = new ConcurrentSkipListMap[Long, RemoteLogIndex]()
-  private val remoteOffsetIndexes: ConcurrentNavigableMap[Long, OffsetIndex] = new ConcurrentSkipListMap[Long, OffsetIndex]()
-  private val remoteTimeIndexes: ConcurrentNavigableMap[Long, TimeIndex] = new ConcurrentSkipListMap[Long, TimeIndex]()
 
   private val polledDirs: util.Map[TopicPartition, Path] = new ConcurrentHashMap[TopicPartition, Path]()
   private val maxOffsets: util.Map[TopicPartition, Long] = new ConcurrentHashMap[TopicPartition, Long]()
@@ -68,6 +67,7 @@ class RemoteLogManager(logManager: LogManager) extends Configurable with Closeab
       }
     })
   }
+
   private val pollerExecutorService: ScheduledExecutorService = Executors.newSingleThreadScheduledExecutor()
   //todo time intervals should be made configurable with default values
   pollerExecutorService.scheduleWithFixedDelay(pollerDirsRunnable, 30, 30, TimeUnit.SECONDS)
@@ -90,46 +90,20 @@ class RemoteLogManager(logManager: LogManager) extends Configurable with Closeab
             val entries = remoteStorageManager.copyLogSegment(tp, segment)
             val file = segment.log.file()
             val fileName = file.getName
-            val prefix = fileName.substring(0, fileName.indexOf("."))
-            buildIndexes(entries, file, prefix)
+            val baseOffsetStr = fileName.substring(0, fileName.indexOf("."))
+            rlmIndexer.maybeBuildIndexes(tp, entries, file, baseOffsetStr)
           } catch {
             case ex: InterruptedException => throw ex
-            case _: Throwable => //todo-satish log the message here for failed log copying and add them again in pending segments.
-              if (segmentEntry != null) watchedSegments.put(segmentEntry)
+            case ex: Throwable => //todo-satish log the message here for failed log copying
+              logger.warn("Error occured while building indexes in RLM leader", ex)
           }
         }
       } catch {
-        case _: InterruptedException => // log the interrupted error
+        case ex: InterruptedException => // log the interrupted error
+          logger.info("Current thread is interrupted with ", ex)
       }
     }
   })
-
-  private def buildIndexes(entries: Seq[RemoteLogIndexEntry], parentDir: File, prefix: String) = {
-    val startOffset = prefix.toLong
-    val remoteLogIndex = new RemoteLogIndex(startOffset, new File(parentDir, prefix + ".remoteLogIndex"))
-    val remoteTimeIndex = new TimeIndex(new File(parentDir, prefix + ".remoteTimeIndex"), startOffset)
-    val remoteOffsetIndex = new OffsetIndex(new File(parentDir, prefix + ".remoteOffsetIndex"), startOffset)
-    var position: Integer = 0
-    var minOffset: Long = 0
-    var minTimeStamp: Long = 0
-
-    entries.foreach(entry => {
-      if (entry.firstOffset < minOffset) minOffset = entry.firstOffset
-      if (entry.firstTimeStamp < minTimeStamp) minTimeStamp = entry.firstTimeStamp
-      remoteLogIndex.append(entry)
-      position += 16 + entry.entryLength
-      remoteOffsetIndex.append(entry.firstOffset, position)
-      remoteTimeIndex.maybeAppend(entry.firstTimeStamp, position.toLong)
-    })
-
-    remoteLogIndex.flush()
-    remoteOffsetIndex.flush()
-    remoteTimeIndex.flush()
-
-    remoteLogIndexes.put(minOffset, remoteLogIndex)
-    remoteOffsetIndexes.put(minOffset, remoteOffsetIndex)
-    remoteTimeIndexes.put(minTimeStamp, remoteTimeIndex)
-  }
 
   /**
    * Configure this class with the given key-value pairs
@@ -139,7 +113,9 @@ class RemoteLogManager(logManager: LogManager) extends Configurable with Closeab
       .getDeclaredConstructor().newInstance().asInstanceOf[RemoteStorageManager]
     //todo-satish filter configs with remote storage manager having key with prefix "remote.log.storage.manager.prop"
     remoteStorageManager.configure(configs)
+    rlmIndexer = new RLMIndexer(remoteStorageManager, logManager)
     //    remoteStorageManager.configure(configs.filterKeys( key => key.startsWith("remote.log.storage.manager")).)
+    rlmFollower = new RLMFollower(remoteStorageManager, logManager, rlmIndexer)
   }
 
   /**
@@ -147,7 +123,11 @@ class RemoteLogManager(logManager: LogManager) extends Configurable with Closeab
    * Segments to remote storage. RLM updates local index files once a
    * Log Segment in a TopicPartition is copied to Remote Storage
    */
-  def addPartitions(topicPartitions: Set[TopicPartition]): Boolean = {
+  def handleLeaderPartitions(topicPartitions: Set[TopicPartition]): Boolean = {
+
+    // stop begin followers as they become leaders.
+    rlmFollower.removeFollowers(JavaConverters.asJavaCollection(topicPartitions))
+
     topicPartitions.foreach(tp =>
       logManager.getLog(tp).foreach(log => {
         val segments: util.List[LogSegmentEntry] = new util.ArrayList[LogSegmentEntry]()
@@ -171,7 +151,9 @@ class RemoteLogManager(logManager: LogManager) extends Configurable with Closeab
   /**
    * Stops copy of LogSegment if TopicPartition ownership is moved from a broker.
    */
-  def removePartitions(topicPartitions: Set[TopicPartition]): Boolean = {
+  def handleFollowerPartitions(topicPartitions: Set[TopicPartition]): Boolean = {
+
+    // remove these partitions as they become followers
     topicPartitions.foreach(tp => {
       logManager.getLog(tp).foreach(log => log.logSegments
         .foreach(logSegment => {
@@ -184,6 +166,9 @@ class RemoteLogManager(logManager: LogManager) extends Configurable with Closeab
     topicPartitions.foreach(tp => {
       polledDirs.remove(tp)
     })
+
+    //these partitions become followers
+    rlmFollower.addFollowers(JavaConverters.asJavaCollection(topicPartitions))
 
     true
   }
@@ -198,10 +183,10 @@ class RemoteLogManager(logManager: LogManager) extends Configurable with Closeab
    * @return
    */
   def read(fetchMaxByes: Int, hardMaxBytesLimit: Boolean, tp: TopicPartition, fetchInfo: PartitionData): LogReadResult = {
-    //todo get the nearest offset from indexes.
-    val offsetPosition = remoteOffsetIndexes.floorEntry(fetchInfo.fetchOffset).getValue.lookup(fetchInfo.fetchOffset)
-    //todo read RemoteLogIndexEntry
-    remoteStorageManager.read(null, fetchInfo.maxBytes, fetchInfo.fetchOffset)
+    val offset = fetchInfo.fetchOffset
+    val entry = rlmIndexer.lookupEntryForOffset(tp, offset).getOrElse(throw new RuntimeException)
+    //todo need to get other information to build the expected LogReadResult
+    val records = remoteStorageManager.read(entry, fetchInfo.maxBytes, offset)
     null
   }
 
@@ -210,9 +195,6 @@ class RemoteLogManager(logManager: LogManager) extends Configurable with Closeab
    */
   def close() = {
     Utils.closeQuietly(remoteStorageManager, "RemoteLogStorageManager")
-    remoteLogIndexes.values().forEach(x => Utils.closeQuietly(x, "RemoteLogIndex"))
-    remoteOffsetIndexes.values().forEach(x => Utils.closeQuietly(x, "RemoteOffsetIndex"))
-    remoteTimeIndexes.values().forEach(x => Utils.closeQuietly(x, "RemoteTimeIndex"))
     executorService.shutdownNow()
     pollerExecutorService.shutdownNow()
   }

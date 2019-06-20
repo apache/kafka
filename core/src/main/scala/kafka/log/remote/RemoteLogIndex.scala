@@ -17,6 +17,7 @@
 package kafka.log.remote
 
 import java.io.{Closeable, File}
+import java.nio.ByteBuffer
 import java.nio.channels.FileChannel
 import java.nio.file.{Files, StandardOpenOption}
 import java.util.concurrent.locks.ReentrantLock
@@ -35,44 +36,90 @@ import org.apache.kafka.common.utils.Utils
  * read/write the entries. Need to add methods to fetch remote log offset for a given offset/timestamp.
  *
  */
-class RemoteLogIndex(val startOffset: Long, @volatile var file: File) extends Logging with Closeable {
+class RemoteLogIndex(@volatile var file: File, val startOffset: Long) extends Logging with Closeable {
 
   @volatile private var maybeChannel: Option[FileChannel] = None
-  private var lastOffset: Option[Long] = None
 
   protected val lock = new ReentrantLock
 
   if (file.exists)
     openChannel()
 
-  def append(entries: Seq[RemoteLogIndexEntry]): Unit = {
-    entries.foreach(entry => append(entry))
-    flush()
+  private def loadLastOffset(): Option[Long] = {
+    val curPos = channel().position()
+    if (curPos > 0) {
+      channel().position(curPos - 8)
+      val buffer = ByteBuffer.allocate(8)
+      channel().read(buffer)
+      buffer.flip()
+      val lastEntryPos = buffer.getLong()
+      lookupEntry(lastEntryPos).map(x => x.lastOffset)
+    } else None
   }
 
-  def append(entry: RemoteLogIndexEntry): Unit = {
+  private var _lastOffset: Option[Long] = loadLastOffset()
+
+  def append(entries: Seq[RemoteLogIndexEntry]): Seq[Long] = {
+    val positions: Seq[Long] = entries.map(entry => append(entry))
+    flush()
+    positions
+  }
+
+  /**
+   * Appends the given entry and returns the position of that entry on the index.
+   *
+   * @param entry
+   * @return the position of the added entry into this index.
+   */
+  def append(entry: RemoteLogIndexEntry): Long = {
     inLock(lock) {
-      lastOffset.foreach { offset =>
+      _lastOffset.foreach { offset =>
         if (offset >= entry.lastOffset)
           throw new IllegalArgumentException(s"The last offset of appended log entry must increase sequentially, but " +
             s"${entry.lastOffset} is not greater than current last offset $offset of index ${file.getAbsolutePath}")
       }
-      lastOffset = Some(entry.lastOffset)
+
+      def maybeResetPosition(): Long = {
+        val curPos = channel().position()
+        if (curPos > 0) {
+          channel().position(curPos - 8)
+        }
+        channel().position()
+      }
+
+      val entryPos: Long = maybeResetPosition()
       Utils.writeFully(channel(), entry.asBuffer)
+
+      //todo this is a temporary change, will have a better way
+      //For now, writing the last entry position to read the last entry from the end
+      //it has issues like incomplete copies incase of non-graceful broker shutdown etc may create issues while reloading
+      //this will be enhanced like other local index files to handle different scenarios
+      val buffer: ByteBuffer = ByteBuffer.allocate(8).putLong(entryPos)
+      buffer.flip()
+      Utils.writeFully(channel(), buffer)
+
+      _lastOffset = Some(entry.lastOffset)
+
+      entryPos
     }
+  }
+
+  def lastOffset(): Option[Long] = {
+    _lastOffset
   }
 
   def flush(): Unit = maybeChannel.foreach(_.force(true))
 
-  def entry(position: Long): Option[RemoteLogIndexEntry] = {
+  def lookupEntry(position: Long): Option[RemoteLogIndexEntry] = {
     inLock(lock) {
         Option(RemoteLogIndexEntry.parseEntry(channel(), position))
     }
   }
 
-  def position(): Long = {
+  def nextEntryPosition(): Long = {
     inLock(lock) {
-      channel().position()
+      val position = channel().position()
+      if (position > 0) position - 8 else position
     }
   }
 
@@ -107,7 +154,7 @@ class RemoteLogIndex(val startOffset: Long, @volatile var file: File) extends Lo
    */
   def reset(): Unit = {
     maybeChannel.foreach(_.truncate(0))
-    lastOffset = None
+    _lastOffset = None
   }
 
   def close(): Unit = {
@@ -115,4 +162,17 @@ class RemoteLogIndex(val startOffset: Long, @volatile var file: File) extends Lo
     maybeChannel = None
   }
 
+}
+
+object RemoteLogIndex {
+  val SUFFIX = ".remoteLogIndex"
+
+  def offsetFromFileName(fileName: String): Long = {
+    if (!fileName.endsWith(SUFFIX)) throw new IllegalArgumentException("file name should end with " + SUFFIX)
+    fileName.substring(0, fileName.lastIndexOf('.')).toLong
+  }
+
+  def open(file: File): RemoteLogIndex = {
+    new RemoteLogIndex(file, offsetFromFileName(file.getName))
+  }
 }

@@ -30,9 +30,9 @@ import kafka.server.checkpoints.OffsetCheckpointFile
 import kafka.server.{BrokerState, RecoveringFromUncleanShutdown, _}
 import kafka.utils._
 import kafka.zk.KafkaZkClient
-import org.apache.kafka.common.{KafkaException, TopicPartition}
-import org.apache.kafka.common.utils.Time
 import org.apache.kafka.common.errors.{KafkaStorageException, LogDirNotFoundException}
+import org.apache.kafka.common.utils.Time
+import org.apache.kafka.common.{KafkaException, TopicPartition}
 
 import scala.collection.JavaConverters._
 import scala.collection._
@@ -66,7 +66,7 @@ class LogManager(logDirs: Seq[File],
                  brokerTopicStats: BrokerTopicStats,
                  logDirFailureChannel: LogDirFailureChannel,
                  time: Time,
-                 remoteLogManagerConfig:RemoteLogManagerConfig = RemoteLogManagerConfig(remoteLogStorageEnable = false, null, 0L, 0L))
+                 remoteLogManagerConfig: RemoteLogManagerConfig = RemoteLogManagerConfig(remoteLogStorageEnable = false, null, 0L, 0L))
   extends Logging with KafkaMetricsGroup {
 
   import LogManager._
@@ -88,7 +88,7 @@ class LogManager(logDirs: Seq[File],
   @volatile private var numRecoveryThreadsPerDataDir = recoveryThreadsPerDataDir
 
   def createRemoteLogManager(remoteLogManagerConfig: RemoteLogManagerConfig): Option[RemoteLogManager] = {
-    if(remoteLogManagerConfig.remoteLogStorageEnable) {
+    if (remoteLogManagerConfig.remoteLogStorageEnable) {
       val remoteLogManager: RemoteLogManager = new RemoteLogManager(this)
       //todo:satish pass configs
       remoteLogManager.configure(Collections.emptyMap())
@@ -133,7 +133,7 @@ class LogManager(logDirs: Seq[File],
 
   // public, so we can access this from kafka.admin.DeleteTopicTest
   val cleaner: LogCleaner =
-    if(cleanerConfig.enableCleaner)
+    if (cleanerConfig.enableCleaner)
       new LogCleaner(cleanerConfig, liveLogDirs, currentLogs, logDirFailureChannel, time = time)
     else
       null
@@ -158,11 +158,11 @@ class LogManager(logDirs: Seq[File],
   def onLeadershipChange(partitionsBecomeLeader: Set[Partition], partitionsBecomeFollower: Set[Partition]) = {
     // todo:satish make respective changes in remote log tasks
     _remoteLogManager.foreach((rlm: RemoteLogManager) => {
-      rlm.removePartitions(partitionsBecomeFollower.map( x=> x.topicPartition))
+      rlm.handleFollowerPartitions(partitionsBecomeFollower.map(x => x.topicPartition))
     })
 
     _remoteLogManager.foreach((rlm: RemoteLogManager) => {
-      rlm.addPartitions(partitionsBecomeLeader.map( x=> x.topicPartition))
+      rlm.handleLeaderPartitions(partitionsBecomeLeader.map(x => x.topicPartition))
     })
   }
 
@@ -923,7 +923,7 @@ class LogManager(logDirs: Seq[File],
    * data directories by fewest partitions.
    */
   private def nextLogDirs(): List[File] = {
-    if(_liveLogDirs.size == 1) {
+    if (_liveLogDirs.size == 1) {
       List(_liveLogDirs.peek())
     } else {
       // count the number of logs in each parent directory (including 0 for empty directories

@@ -16,26 +16,23 @@
  */
 package unit.kafka.log
 
-import java.io.File
-
 import kafka.log.remote.{RemoteLogIndex, RemoteLogIndexEntry}
 import kafka.utils.TestUtils
 import org.junit.Assert._
 import org.junit.{After, Before, Test}
 import org.scalatest.junit.JUnitSuite
+import unit.kafka.log.RemoteLogIndexTest.generateEntries
 
 import scala.collection.mutable.ListBuffer
 import scala.util.Random
 
 class RemoteLogIndexTest extends JUnitSuite {
-  var file: File = _
   var index: RemoteLogIndex = _
-  val offset = 0L
 
   @Before
   def setup(): Unit = {
-    file = TestUtils.tempFile()
-    index = new RemoteLogIndex(offset, file)
+    val file = TestUtils.tempFile()
+    index = new RemoteLogIndex(file, 0)
   }
 
   @After
@@ -44,50 +41,42 @@ class RemoteLogIndexTest extends JUnitSuite {
   }
 
   @Test
-  def testAppendParseEntries() = {
-    val entries = appendEntries(1)
-    var entry: Option[RemoteLogIndexEntry] = None
-    var size = 0
-    var position: Long = 0
-    do {
-      entry = index.entry(position)
-      position = index.position()
-      println("position: " + index.position() + " :: entry : " + entry)
-      size += 1
-    } while (entry.isDefined)
-    assertEquals(entries.size, size - 1)
-  }
-
-  @Test
   def testIndexPosition() = {
-    println("position: " + index.position())
-
-    val entries = appendEntries(10)
-    println("after adding an entry, position: " + index.position())
-    assertEquals(10, entries.size)
-    val position = index.position()
-    val newEntries = appendEntries(1, 15000L)
-    index.flush()
-    println("after adding one more entry, position: " + index.position())
-
-    val entry = index.entry(position)
-
-    assertEquals(newEntries.last, entry.get)
+    println("position: " + index.nextEntryPosition())
+    val entriesCt = 10
+    val entries = generateEntries(entriesCt)
+    val positions = index.append(entries)
+    var i: Integer = 0
+    while (i < entries.size) {
+      println("######### " + i)
+      assertEquals(entries(i), index.lookupEntry(positions(i)).get)
+      i += 1
+    }
+    println("after adding few entries, position: " + index.nextEntryPosition())
   }
 
-  private def appendEntries(numEntries: Int, baseOffset: Long = 1000): Seq[RemoteLogIndexEntry] = {
+
+}
+
+object RemoteLogIndexTest {
+
+  def generateEntries(numEntries: Int, offsetStep: Integer = 100, baseOffset: Long = 1000): Seq[RemoteLogIndexEntry] = {
+    require(offsetStep > 1, "offsetStep should be greater than 1")
+    require(baseOffset >= 0, " base offset can not be negative")
+
     val entries = new ListBuffer[RemoteLogIndexEntry]
-    val baseTimestamp = System.currentTimeMillis()
-    val rdi = "rdi://foo/bar"
+    val rdi = "rdi://foo/bar/" + System.currentTimeMillis()
     val rdiBytes = rdi.getBytes
+    var firstOffset = baseOffset
+    var firstTimestamp: Long = baseOffset + 10L
     for (i <- 1 to numEntries) {
-      val firstOffset = baseOffset + (i * 100)
-      val lastOffset = firstOffset + 99
-      val firstTimestamp = baseTimestamp + (100 * i)
-      val lastTimestamp = firstTimestamp + 10
+      val lastOffset = firstOffset + 2
+      val lastTimestamp = firstTimestamp + 1
       val dataLength = Math.abs(new Random().nextInt())
       val entry: RemoteLogIndexEntry = RemoteLogIndexEntry(firstOffset, lastOffset, firstTimestamp, lastTimestamp, dataLength, rdiBytes)
-      index.append(entry)
+      firstOffset += offsetStep
+      firstTimestamp += 1
+
       entries += entry
     }
 
