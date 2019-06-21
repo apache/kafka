@@ -14,23 +14,23 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common.record;
+package org.apache.kafka.common.utils;
 
-
-abstract class AbstractRecordBatch implements RecordBatch {
-    @Override
-    public boolean hasProducerId() {
-        return RecordBatch.NO_PRODUCER_ID < producerId();
+/**
+ * Primitive reference used to pass primitive typed values as parameter-by-reference.
+ *
+ * This is cheaper than using Atomic references.
+ */
+public class PrimitiveRef {
+    public static IntRef ofInt(int value) {
+        return new IntRef(value);
     }
 
-    @Override
-    public long nextOffset() {
-        return lastOffset() + 1;
-    }
+    public static class IntRef {
+        public int value;
 
-    @Override
-    public boolean isCompressed() {
-        return compressionType() != CompressionType.NONE;
+        IntRef(int value) {
+            this.value = value;
+        }
     }
-
 }
