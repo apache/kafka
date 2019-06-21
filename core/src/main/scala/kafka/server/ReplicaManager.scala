@@ -378,12 +378,8 @@ class ReplicaManager(val config: KafkaConfig,
         // for all the partitions that the current broker stops being a replica of
         // find those that the broker is no longer a leader of so we can safely remove
         // the metrics bytesIn, bytesOut and messagesIn
-        val leaderTopicSet = leaderPartitionsIterator.map(partition => partition.topic).toSet
-        for (topicPartition <- partitions) {
-          val topic = topicPartition.topic()
-          if (!leaderTopicSet.contains(topic))
-            brokerTopicStats.removeOldLeaderMetrics(topic)
-        }
+        val leaderTopicSet = leaderPartitionsIterator.map(_.topic).toSet
+        partitions.map(_.topic).diff(leaderTopicSet).foreach(brokerTopicStats.removeOldLeaderMetrics)
 
         for (topicPartition <- partitions){
           try {
@@ -1131,20 +1127,14 @@ class ReplicaManager(val config: KafkaConfig,
         else
           Set.empty[Partition]
 
-        // in all of the partitions that the current broker is now a follower of
-        // add all the topics in a list as candidate to remove metrics
-        val topicCandidates = mutable.Set[String]()
-        partitionsBecomeFollower.foreach(partition => topicCandidates.add(partition.topic))
-
-        // now iterate through all the partitions which the broker is a leader of
+        // iterate through all the partitions which the broker is a leader of
         // and remove any topic that is found since the current broker still needs to update its metrics
         // for those topics
-        partitionsBecomeLeader.foreach(partition =>
-          if (topicCandidates contains partition.topic) topicCandidates.remove(partition.topic)
-        )
-
-        // now remove all the metrics of topics that the current broker IS NO LONGER a leader of
-        topicCandidates.foreach(topic => brokerTopicStats.removeOldLeaderMetrics(topic))
+        // in all of the partitions that the current broker is now a follower of
+        // add all the topics in a list as candidate to remove metrics
+        // and finally remove all the metrics of topics that the current broker IS NO LONGER a leader of
+        val topicNotToInclude = leaderPartitionsIterator.map(_.topic).toSet
+        partitionsBecomeFollower.map(_.topic).diff(topicNotToInclude).foreach(brokerTopicStats.removeOldLeaderMetrics)
 
         leaderAndIsrRequest.partitionStates.asScala.keys.foreach { topicPartition =>
           /*
