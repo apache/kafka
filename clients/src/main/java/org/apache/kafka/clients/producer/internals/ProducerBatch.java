@@ -29,7 +29,6 @@ import org.apache.kafka.common.record.MemoryRecordsBuilder;
 import org.apache.kafka.common.record.MutableRecordBatch;
 import org.apache.kafka.common.record.Record;
 import org.apache.kafka.common.record.RecordBatch;
-import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.requests.ProduceResponse;
 import org.apache.kafka.common.utils.Time;
 import org.slf4j.Logger;
@@ -298,8 +297,7 @@ public final class ProducerBatch {
         // Note that we intentionally do not set producer state (producerId, epoch, sequence, and isTransactional)
         // for the newly created batch. This will be set when the batch is dequeued for sending (which is consistent
         // with how normal batches are handled).
-        MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, magic(), recordsBuilder.compressionType(),
-                TimestampType.CREATE_TIME, 0L);
+        MemoryRecordsBuilder builder = MemoryRecords.builder(buffer).magic(magic()).compressionType(recordsBuilder.compressionType()).build();
         return new ProducerBatch(topicPartition, builder, this.createdMs, true);
     }
 

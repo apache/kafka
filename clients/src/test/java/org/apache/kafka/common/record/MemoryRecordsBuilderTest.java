@@ -495,8 +495,8 @@ public class MemoryRecordsBuilderTest {
     @Test
     public void convertV2ToV1UsingMixedCreateAndLogAppendTime() {
         ByteBuffer buffer = ByteBuffer.allocate(512);
-        MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, RecordBatch.MAGIC_VALUE_V2,
-                compressionType, TimestampType.LOG_APPEND_TIME, 0L);
+        MemoryRecordsBuilder builder = MemoryRecords.builder(buffer)
+                .magic(RecordBatch.MAGIC_VALUE_V2).compressionType(compressionType).timestampType(TimestampType.LOG_APPEND_TIME).build();
         builder.append(10L, "1".getBytes(), "a".getBytes());
         builder.close();
 
@@ -507,8 +507,7 @@ public class MemoryRecordsBuilderTest {
 
         int position = buffer.position();
 
-        builder = MemoryRecords.builder(buffer, RecordBatch.MAGIC_VALUE_V2, compressionType,
-                TimestampType.CREATE_TIME, 1L);
+        builder = MemoryRecords.builder(buffer).magic(RecordBatch.MAGIC_VALUE_V2).compressionType(compressionType).baseOffset(1L).build();
         builder.append(12L, "2".getBytes(), "b".getBytes());
         builder.append(13L, "3".getBytes(), "c".getBytes());
         builder.close();
@@ -560,13 +559,12 @@ public class MemoryRecordsBuilderTest {
         assumeAtLeastV2OrNotZstd(RecordBatch.MAGIC_VALUE_V1);
 
         ByteBuffer buffer = ByteBuffer.allocate(512);
-        MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, RecordBatch.MAGIC_VALUE_V0,
-                compressionType, TimestampType.NO_TIMESTAMP_TYPE, 0L);
+        MemoryRecordsBuilder builder = MemoryRecords.builder(buffer)
+                .magic(RecordBatch.MAGIC_VALUE_V0).compressionType(compressionType).timestampType(TimestampType.NO_TIMESTAMP_TYPE).build();
         builder.append(RecordBatch.NO_TIMESTAMP, "1".getBytes(), "a".getBytes());
         builder.close();
 
-        builder = MemoryRecords.builder(buffer, RecordBatch.MAGIC_VALUE_V2, compressionType,
-                TimestampType.CREATE_TIME, 1L);
+        builder = MemoryRecords.builder(buffer).magic(RecordBatch.MAGIC_VALUE_V2).compressionType(compressionType).baseOffset(1L).build();
         builder.append(11L, "2".getBytes(), "b".getBytes());
         builder.append(12L, "3".getBytes(), "c".getBytes());
         builder.close();

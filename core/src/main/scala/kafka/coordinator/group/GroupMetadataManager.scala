@@ -207,7 +207,7 @@ class GroupMetadataManager(brokerId: Int,
         val records = {
           val buffer = ByteBuffer.allocate(AbstractRecords.estimateSizeInBytes(magicValue, compressionType,
             Seq(new SimpleRecord(timestamp, key, value)).asJava))
-          val builder = MemoryRecords.builder(buffer, magicValue, compressionType, timestampType, 0L)
+          val builder = MemoryRecords.builder(buffer).magic(magicValue).compressionType(compressionType).timestampType(timestampType).build();
           builder.append(timestamp, key, value)
           builder.build()
         }

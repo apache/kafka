@@ -1170,7 +1170,7 @@ class LogValidatorTest {
                             timestamp: Long = RecordBatch.NO_TIMESTAMP,
                             codec: CompressionType): MemoryRecords = {
     val buf = ByteBuffer.allocate(512)
-    val builder = MemoryRecords.builder(buf, magicValue, codec, TimestampType.CREATE_TIME, 0L)
+    val builder = MemoryRecords.builder(buf).magic(magicValue).compressionType(codec).build();
     builder.appendWithOffset(0, timestamp, null, "hello".getBytes)
     builder.appendWithOffset(1, timestamp, null, "there".getBytes)
     builder.appendWithOffset(2, timestamp, null, "beautiful".getBytes)
@@ -1181,10 +1181,10 @@ class LogValidatorTest {
                                       timestamp: Long = RecordBatch.NO_TIMESTAMP,
                                       codec: CompressionType): MemoryRecords = {
     val buf = ByteBuffer.allocate(2048)
-    var builder = MemoryRecords.builder(buf, magicValue, codec, TimestampType.CREATE_TIME, 0L)
+    var builder = MemoryRecords.builder(buf).magic(magicValue).compressionType(codec).build();
     builder.append(10L, "1".getBytes(), "a".getBytes())
     builder.close()
-    builder = MemoryRecords.builder(buf, magicValue, codec, TimestampType.CREATE_TIME, 1L)
+    builder = MemoryRecords.builder(buf).magic(magicValue).compressionType(codec).baseOffset(1L).build();
     builder.append(11L, "2".getBytes(), "b".getBytes())
     builder.append(12L, "3".getBytes(), "c".getBytes())
     builder.close()
@@ -1196,7 +1196,7 @@ class LogValidatorTest {
   private def createDiscontinuousOffsetRecords(magicValue: Byte,
                                                codec: CompressionType): MemoryRecords = {
     val buf = ByteBuffer.allocate(512)
-    val builder = MemoryRecords.builder(buf, magicValue, codec, TimestampType.CREATE_TIME, 0L)
+    val builder = MemoryRecords.builder(buf).magic(magicValue).compressionType(codec).build()
     builder.appendWithOffset(0, RecordBatch.NO_TIMESTAMP, null, "hello".getBytes)
     builder.appendWithOffset(2, RecordBatch.NO_TIMESTAMP, null, "there".getBytes)
     builder.appendWithOffset(3, RecordBatch.NO_TIMESTAMP, null, "beautiful".getBytes)
@@ -1223,8 +1223,7 @@ class LogValidatorTest {
         id.toString.getBytes))
 
     val buffer = ByteBuffer.allocate(math.min(math.max(records.map(_.sizeInBytes()).sum / 2, 1024), 1 << 16))
-    val builder = MemoryRecords.builder(buffer, batchMagicValue, codec,
-      TimestampType.CREATE_TIME, 0L)
+    val builder = MemoryRecords.builder(buffer).magic(batchMagicValue).compressionType(codec).build()
 
     var offset = 1234567
     records.foreach { record =>

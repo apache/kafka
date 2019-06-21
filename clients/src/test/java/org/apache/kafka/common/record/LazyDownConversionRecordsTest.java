@@ -122,20 +122,17 @@ public class LazyDownConversionRecordsTest {
             assertEquals("incorrect test setup", offsets.size(), records.size());
 
             ByteBuffer buffer = ByteBuffer.allocate(1024);
-            MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, RecordBatch.CURRENT_MAGIC_VALUE, compressionType,
-                    TimestampType.CREATE_TIME, 0L);
+            MemoryRecordsBuilder builder = MemoryRecords.builder(buffer).compressionType(compressionType).build();
             for (int i = 0; i < 3; i++)
                 builder.appendWithOffset(offsets.get(i), records.get(i));
             builder.close();
 
-            builder = MemoryRecords.builder(buffer, RecordBatch.CURRENT_MAGIC_VALUE, compressionType, TimestampType.CREATE_TIME,
-                    0L);
+            builder = MemoryRecords.builder(buffer).compressionType(compressionType).build();
             for (int i = 3; i < 6; i++)
                 builder.appendWithOffset(offsets.get(i), records.get(i));
             builder.close();
 
-            builder = MemoryRecords.builder(buffer, RecordBatch.CURRENT_MAGIC_VALUE, compressionType, TimestampType.CREATE_TIME,
-                    0L);
+            builder = MemoryRecords.builder(buffer).compressionType(compressionType).build();
             for (int i = 6; i < 10; i++)
                 builder.appendWithOffset(offsets.get(i), records.get(i));
             builder.close();

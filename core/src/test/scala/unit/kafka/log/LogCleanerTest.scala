@@ -1573,7 +1573,7 @@ class LogCleanerTest {
         kv._2.toString.getBytes))
 
     val buffer = ByteBuffer.allocate(math.min(math.max(records.map(_.sizeInBytes()).sum / 2, 1024), 1 << 16))
-    val builder = MemoryRecords.builder(buffer, RecordBatch.MAGIC_VALUE_V1, codec, TimestampType.CREATE_TIME, initialOffset)
+    val builder = MemoryRecords.builder(buffer).magic(RecordBatch.MAGIC_VALUE_V1).compressionType(codec).baseOffset(initialOffset).build();
 
     var offset = initialOffset
     records.foreach { record =>

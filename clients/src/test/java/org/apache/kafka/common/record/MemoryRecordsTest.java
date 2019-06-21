@@ -159,8 +159,7 @@ public class MemoryRecordsTest {
     @Test
     public void testHasRoomForMethod() {
         assumeAtLeastV2OrNotZstd();
-        MemoryRecordsBuilder builder = MemoryRecords.builder(ByteBuffer.allocate(1024), magic, compression,
-                TimestampType.CREATE_TIME, 0L);
+        MemoryRecordsBuilder builder = MemoryRecords.builder(ByteBuffer.allocate(1024)).magic(magic).compressionType(compression).build();
         builder.append(0L, "a".getBytes(), "1".getBytes());
         assertTrue(builder.hasRoomFor(1L, "b".getBytes(), "2".getBytes(), Record.EMPTY_HEADERS));
         builder.close();
@@ -170,8 +169,7 @@ public class MemoryRecordsTest {
     @Test
     public void testHasRoomForMethodWithHeaders() {
         if (magic >= RecordBatch.MAGIC_VALUE_V2) {
-            MemoryRecordsBuilder builder = MemoryRecords.builder(ByteBuffer.allocate(100), magic, compression,
-                    TimestampType.CREATE_TIME, 0L);
+            MemoryRecordsBuilder builder = MemoryRecords.builder(ByteBuffer.allocate(100)).magic(magic).compressionType(compression).build();
             RecordHeaders headers = new RecordHeaders();
             headers.add("hello", "world.world".getBytes());
             headers.add("hello", "world.world".getBytes());
@@ -449,22 +447,22 @@ public class MemoryRecordsTest {
         assumeTrue(compression != CompressionType.NONE || magic >= MAGIC_VALUE_V2);
 
         ByteBuffer buffer = ByteBuffer.allocate(2048);
-        MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, magic, compression, TimestampType.CREATE_TIME, 0L);
+        MemoryRecordsBuilder builder = MemoryRecords.builder(buffer).magic(magic).compressionType(compression).build();
         builder.append(10L, "1".getBytes(), "a".getBytes());
         builder.close();
 
-        builder = MemoryRecords.builder(buffer, magic, compression, TimestampType.CREATE_TIME, 1L);
+        builder = MemoryRecords.builder(buffer).magic(magic).compressionType(compression).baseOffset(1L).build();
         builder.append(11L, "2".getBytes(), "b".getBytes());
         builder.append(12L, "3".getBytes(), "c".getBytes());
         builder.close();
 
-        builder = MemoryRecords.builder(buffer, magic, compression, TimestampType.CREATE_TIME, 3L);
+        builder = MemoryRecords.builder(buffer).magic(magic).compressionType(compression).baseOffset(3L).build();
         builder.append(13L, "4".getBytes(), "d".getBytes());
         builder.append(20L, "5".getBytes(), "e".getBytes());
         builder.append(15L, "6".getBytes(), "f".getBytes());
         builder.close();
 
-        builder = MemoryRecords.builder(buffer, magic, compression, TimestampType.CREATE_TIME, 6L);
+        builder = MemoryRecords.builder(buffer).magic(magic).compressionType(compression).baseOffset(6L).build();
         builder.append(16L, "7".getBytes(), "g".getBytes());
         builder.close();
 
@@ -502,8 +500,7 @@ public class MemoryRecordsTest {
         ByteBuffer buffer = ByteBuffer.allocate(2048);
 
         // create a batch with some offset gaps to simulate a compacted batch
-        MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, magic, compression,
-                TimestampType.CREATE_TIME, 0L);
+        MemoryRecordsBuilder builder = MemoryRecords.builder(buffer).magic(magic).compressionType(compression).build();
         builder.appendWithOffset(5L, 10L, null, "a".getBytes());
         builder.appendWithOffset(8L, 11L, "1".getBytes(), "b".getBytes());
         builder.appendWithOffset(10L, 12L, null, "c".getBytes());
@@ -548,7 +545,7 @@ public class MemoryRecordsTest {
             ByteBuffer buffer = ByteBuffer.allocate(2048);
 
             // non-idempotent, non-transactional
-            MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, magic, compression, TimestampType.CREATE_TIME, 0L);
+            MemoryRecordsBuilder builder = MemoryRecords.builder(buffer).magic(magic).compressionType(compression).build();
             builder.append(10L, null, "a".getBytes());
             builder.append(11L, "1".getBytes(), "b".getBytes());
             builder.append(12L, null, "c".getBytes());
@@ -642,23 +639,23 @@ public class MemoryRecordsTest {
         assumeAtLeastV2OrNotZstd();
 
         ByteBuffer buffer = ByteBuffer.allocate(1024);
-        MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, magic, compression, TimestampType.CREATE_TIME, 0L);
+        MemoryRecordsBuilder builder = MemoryRecords.builder(buffer).magic(magic).compressionType(compression).build();
         builder.append(10L, null, "a".getBytes());
         builder.close();
 
-        builder = MemoryRecords.builder(buffer, magic, compression, TimestampType.CREATE_TIME, 1L);
+        builder = MemoryRecords.builder(buffer).magic(magic).compressionType(compression).baseOffset(1L).build();
         builder.append(11L, "1".getBytes(), new byte[128]);
         builder.append(12L, "2".getBytes(), "c".getBytes());
         builder.append(13L, null, "d".getBytes());
         builder.close();
 
-        builder = MemoryRecords.builder(buffer, magic, compression, TimestampType.CREATE_TIME, 4L);
+        builder = MemoryRecords.builder(buffer).magic(magic).compressionType(compression).baseOffset(4L).build();
         builder.append(14L, null, "e".getBytes());
         builder.append(15L, "5".getBytes(), "f".getBytes());
         builder.append(16L, "6".getBytes(), "g".getBytes());
         builder.close();
 
-        builder = MemoryRecords.builder(buffer, magic, compression, TimestampType.CREATE_TIME, 7L);
+        builder = MemoryRecords.builder(buffer).magic(magic).compressionType(compression).baseOffset(7L).build();
         builder.append(17L, "7".getBytes(), new byte[128]);
         builder.close();
 
@@ -726,22 +723,22 @@ public class MemoryRecordsTest {
         assumeAtLeastV2OrNotZstd();
 
         ByteBuffer buffer = ByteBuffer.allocate(2048);
-        MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, magic, compression, TimestampType.CREATE_TIME, 0L);
+        MemoryRecordsBuilder builder = MemoryRecords.builder(buffer).magic(magic).compressionType(compression).build();
         builder.append(10L, null, "a".getBytes());
         builder.close();
 
-        builder = MemoryRecords.builder(buffer, magic, compression, TimestampType.CREATE_TIME, 1L);
+        builder = MemoryRecords.builder(buffer).magic(magic).compressionType(compression).baseOffset(1L).build();
         builder.append(11L, "1".getBytes(), "b".getBytes());
         builder.append(12L, null, "c".getBytes());
         builder.close();
 
-        builder = MemoryRecords.builder(buffer, magic, compression, TimestampType.CREATE_TIME, 3L);
+        builder = MemoryRecords.builder(buffer).magic(magic).compressionType(compression).baseOffset(3L).build();
         builder.append(13L, null, "d".getBytes());
         builder.append(20L, "4".getBytes(), "e".getBytes());
         builder.append(15L, "5".getBytes(), "f".getBytes());
         builder.close();
 
-        builder = MemoryRecords.builder(buffer, magic, compression, TimestampType.CREATE_TIME, 6L);
+        builder = MemoryRecords.builder(buffer).magic(magic).compressionType(compression).baseOffset(6L).build();
         builder.append(16L, "6".getBytes(), "g".getBytes());
         builder.close();
 

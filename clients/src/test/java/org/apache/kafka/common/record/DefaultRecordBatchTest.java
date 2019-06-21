@@ -75,8 +75,7 @@ public class DefaultRecordBatchTest {
     public void buildDefaultRecordBatch() {
         ByteBuffer buffer = ByteBuffer.allocate(2048);
 
-        MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, RecordBatch.MAGIC_VALUE_V2, CompressionType.NONE,
-                TimestampType.CREATE_TIME, 1234567L);
+        MemoryRecordsBuilder builder = MemoryRecords.builder(buffer).magic(RecordBatch.MAGIC_VALUE_V2).baseOffset(1234567L).build();
         builder.appendWithOffset(1234567, 1L, "a".getBytes(), "v".getBytes());
         builder.appendWithOffset(1234568, 2L, "b".getBytes(), "v".getBytes());
 
@@ -412,7 +411,7 @@ public class DefaultRecordBatchTest {
     private static DefaultRecordBatch recordsWithInvalidRecordCount(Byte magicValue, long timestamp,
                                               CompressionType codec, int invalidCount) {
         ByteBuffer buf = ByteBuffer.allocate(512);
-        MemoryRecordsBuilder builder = MemoryRecords.builder(buf, magicValue, codec, TimestampType.CREATE_TIME, 0L);
+        MemoryRecordsBuilder builder = MemoryRecords.builder(buf).magic(magicValue).compressionType(codec).build();
         builder.appendWithOffset(0, timestamp, null, "hello".getBytes());
         builder.appendWithOffset(1, timestamp, null, "there".getBytes());
         builder.appendWithOffset(2, timestamp, null, "beautiful".getBytes());

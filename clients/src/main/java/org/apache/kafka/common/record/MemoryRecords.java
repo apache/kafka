@@ -39,7 +39,7 @@ import java.util.Objects;
 /**
  * A {@link Records} implementation backed by a ByteBuffer. This is used only for reading or
  * modifying in-place an existing buffer of record batches. To create a new buffer see {@link MemoryRecordsBuilder},
- * or one of the {@link #builder(ByteBuffer, byte, CompressionType, TimestampType, long)} variants.
+ * or {@link #builder(ByteBuffer)}.
  */
 public class MemoryRecords extends AbstractRecords {
     private static final Logger log = LoggerFactory.getLogger(MemoryRecords.class);
@@ -531,19 +531,6 @@ public class MemoryRecords extends AbstractRecords {
                                                          int baseSequence) {
         return builder(buffer, RecordBatch.CURRENT_MAGIC_VALUE, compressionType, TimestampType.CREATE_TIME,
                 baseOffset, System.currentTimeMillis(), producerId, producerEpoch, baseSequence);
-    }
-
-    public static MemoryRecordsBuilder builder(ByteBuffer buffer,
-                                               byte magic,
-                                               CompressionType compressionType,
-                                               TimestampType timestampType,
-                                               long baseOffset) {
-        long logAppendTime = RecordBatch.NO_TIMESTAMP;
-        if (timestampType == TimestampType.LOG_APPEND_TIME)
-            logAppendTime = System.currentTimeMillis();
-        return builder(buffer, magic, compressionType, timestampType, baseOffset, logAppendTime,
-                RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, RecordBatch.NO_SEQUENCE, false,
-                RecordBatch.NO_PARTITION_LEADER_EPOCH);
     }
 
     public static MemoryRecordsBuilder builder(ByteBuffer buffer,

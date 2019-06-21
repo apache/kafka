@@ -24,7 +24,6 @@ import org.apache.kafka.common.record.MemoryRecordsBuilder;
 import org.apache.kafka.common.record.MutableRecordBatch;
 import org.apache.kafka.common.record.Record;
 import org.apache.kafka.common.record.RecordBatch;
-import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.utils.CloseableIterator;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.Fork;
@@ -105,7 +104,7 @@ public class RecordBatchIterationBenchmark {
         );
 
         final MemoryRecordsBuilder builder =
-            MemoryRecords.builder(buf, messageVersion, compressionType, TimestampType.CREATE_TIME, startingOffset);
+            MemoryRecords.builder(buf).magic(messageVersion).compressionType(compressionType).baseOffset(startingOffset).build();
 
         for (int i = 0; i < batchSize; ++i) {
             switch (bytes) {

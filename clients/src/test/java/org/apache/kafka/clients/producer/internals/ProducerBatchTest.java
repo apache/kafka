@@ -140,8 +140,7 @@ public class ProducerBatchTest {
     @Test
     public void testAppendedChecksumMagicV0AndV1() {
         for (byte magic : Arrays.asList(MAGIC_VALUE_V0, MAGIC_VALUE_V1)) {
-            MemoryRecordsBuilder builder = MemoryRecords.builder(ByteBuffer.allocate(128), magic,
-                    CompressionType.NONE, TimestampType.CREATE_TIME, 0L);
+            MemoryRecordsBuilder builder = MemoryRecords.builder(ByteBuffer.allocate(128)).magic(magic).build();
             ProducerBatch batch = new ProducerBatch(new TopicPartition("topic", 1), builder, now);
             byte[] key = "hi".getBytes();
             byte[] value = "there".getBytes();
@@ -157,12 +156,7 @@ public class ProducerBatchTest {
     @Test
     public void testSplitPreservesHeaders() {
         for (CompressionType compressionType : CompressionType.values()) {
-            MemoryRecordsBuilder builder = MemoryRecords.builder(
-                    ByteBuffer.allocate(1024),
-                    MAGIC_VALUE_V2,
-                    compressionType,
-                    TimestampType.CREATE_TIME,
-                    0L);
+            MemoryRecordsBuilder builder = MemoryRecords.builder(ByteBuffer.allocate(1024)).magic(MAGIC_VALUE_V2).compressionType(compressionType).build();
             ProducerBatch batch = new ProducerBatch(new TopicPartition("topic", 1), builder, now);
             Header header = new RecordHeader("header-key", "header-value".getBytes());
 
@@ -199,8 +193,7 @@ public class ProducerBatchTest {
                 if (compressionType == CompressionType.ZSTD && magic < MAGIC_VALUE_V2)
                     continue;
 
-                MemoryRecordsBuilder builder = MemoryRecords.builder(ByteBuffer.allocate(1024), magic,
-                        compressionType, TimestampType.CREATE_TIME, 0L);
+                MemoryRecordsBuilder builder = MemoryRecords.builder(ByteBuffer.allocate(1024)).magic(magic).compressionType(compressionType).build();
 
                 ProducerBatch batch = new ProducerBatch(new TopicPartition("topic", 1), builder, now);
                 while (true) {

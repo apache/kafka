@@ -79,8 +79,7 @@ public class ProduceRequestTest {
     @Test
     public void testBuildWithOldMessageFormat() {
         ByteBuffer buffer = ByteBuffer.allocate(256);
-        MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, RecordBatch.MAGIC_VALUE_V1, CompressionType.NONE,
-                TimestampType.CREATE_TIME, 0L);
+        MemoryRecordsBuilder builder = MemoryRecords.builder(buffer).magic(RecordBatch.MAGIC_VALUE_V1).build();
         builder.append(10L, null, "a".getBytes());
         Map<TopicPartition, MemoryRecords> produceData = new HashMap<>();
         produceData.put(new TopicPartition("test", 0), builder.build());
@@ -94,8 +93,7 @@ public class ProduceRequestTest {
     @Test
     public void testBuildWithCurrentMessageFormat() {
         ByteBuffer buffer = ByteBuffer.allocate(256);
-        MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, RecordBatch.CURRENT_MAGIC_VALUE,
-                CompressionType.NONE, TimestampType.CREATE_TIME, 0L);
+        MemoryRecordsBuilder builder = MemoryRecords.builder(buffer).build();
         builder.append(10L, null, "a".getBytes());
         Map<TopicPartition, MemoryRecords> produceData = new HashMap<>();
         produceData.put(new TopicPartition("test", 0), builder.build());
@@ -137,8 +135,7 @@ public class ProduceRequestTest {
     @Test
     public void testV3AndAboveCannotUseMagicV0() {
         ByteBuffer buffer = ByteBuffer.allocate(256);
-        MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, RecordBatch.MAGIC_VALUE_V0, CompressionType.NONE,
-                TimestampType.NO_TIMESTAMP_TYPE, 0L);
+        MemoryRecordsBuilder builder = MemoryRecords.builder(buffer).magic(RecordBatch.MAGIC_VALUE_V0).timestampType(TimestampType.NO_TIMESTAMP_TYPE).build();
         builder.append(10L, null, "a".getBytes());
 
         Map<TopicPartition, MemoryRecords> produceData = new HashMap<>();
@@ -150,8 +147,7 @@ public class ProduceRequestTest {
     @Test
     public void testV3AndAboveCannotUseMagicV1() {
         ByteBuffer buffer = ByteBuffer.allocate(256);
-        MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, RecordBatch.MAGIC_VALUE_V1, CompressionType.NONE,
-                TimestampType.CREATE_TIME, 0L);
+        MemoryRecordsBuilder builder = MemoryRecords.builder(buffer).magic(RecordBatch.MAGIC_VALUE_V1).build();
         builder.append(10L, null, "a".getBytes());
 
         Map<TopicPartition, MemoryRecords> produceData = new HashMap<>();
@@ -163,8 +159,7 @@ public class ProduceRequestTest {
     @Test
     public void testV6AndBelowCannotUseZStdCompression() {
         ByteBuffer buffer = ByteBuffer.allocate(256);
-        MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, RecordBatch.MAGIC_VALUE_V2, CompressionType.ZSTD,
-            TimestampType.CREATE_TIME, 0L);
+        MemoryRecordsBuilder builder = MemoryRecords.builder(buffer).magic(RecordBatch.MAGIC_VALUE_V2).compressionType(CompressionType.ZSTD).build();
         builder.append(10L, null, "a".getBytes());
 
         Map<TopicPartition, MemoryRecords> produceData = new HashMap<>();
