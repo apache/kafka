@@ -170,10 +170,9 @@ class BrokerTopicMetrics(name: Option[String]) extends KafkaMetricsGroup {
   val produceMessageConversionsRate = newMeter(BrokerTopicStats.ProduceMessageConversionsPerSec, "requests", TimeUnit.SECONDS, tags)
 
   def removeMetricHelper(metricType: String, tags: scala.collection.Map[String, String]): Unit = {
-    if (metricTypeMap.contains(metricType)) {
-      metricTypeMap.remove(metricType)
+    val metric: Metric = metricTypeMap.remove(metricType)
+    if (metric != null)
       removeMetric(metricType, tags)
-    }
   }
 
   def close() {
