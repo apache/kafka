@@ -33,14 +33,6 @@ public class MemberDescription {
     private final String host;
     private final MemberAssignment assignment;
 
-    @Deprecated
-    public MemberDescription(String memberId,
-                             String clientId,
-                             String host,
-                             MemberAssignment assignment) {
-        this(memberId, Optional.empty(), clientId, host, assignment);
-    }
-
     public MemberDescription(String memberId,
                              Optional<String> groupInstanceId,
                              String clientId,
