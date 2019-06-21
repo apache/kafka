@@ -104,8 +104,12 @@ public class DefaultRecordBatchTest {
 
         ByteBuffer buffer = ByteBuffer.allocate(2048);
 
-        MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, RecordBatch.MAGIC_VALUE_V2, CompressionType.NONE,
-                TimestampType.CREATE_TIME, 1234567L, RecordBatch.NO_TIMESTAMP, pid, epoch, baseSequence);
+        MemoryRecordsBuilder builder = MemoryRecords.builder(buffer)
+                .magic(RecordBatch.MAGIC_VALUE_V2)
+                .baseOffset(1234567L)
+                .logAppendTime(RecordBatch.NO_TIMESTAMP)
+                .producerState(pid, epoch, baseSequence)
+                .build();
         builder.appendWithOffset(1234567, 1L, "a".getBytes(), "v".getBytes());
         builder.appendWithOffset(1234568, 2L, "b".getBytes(), "v".getBytes());
 
@@ -133,8 +137,12 @@ public class DefaultRecordBatchTest {
         int baseSequence = Integer.MAX_VALUE - 1;
         ByteBuffer buffer = ByteBuffer.allocate(2048);
 
-        MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, RecordBatch.MAGIC_VALUE_V2, CompressionType.NONE,
-                TimestampType.CREATE_TIME, 1234567L, RecordBatch.NO_TIMESTAMP, pid, epoch, baseSequence);
+        MemoryRecordsBuilder builder = MemoryRecords.builder(buffer)
+                .magic(RecordBatch.MAGIC_VALUE_V2)
+                .baseOffset(1234567L)
+                .logAppendTime(RecordBatch.NO_TIMESTAMP)
+                .producerState(pid, epoch, baseSequence)
+                .build();
         builder.appendWithOffset(1234567, 1L, "a".getBytes(), "v".getBytes());
         builder.appendWithOffset(1234568, 2L, "b".getBytes(), "v".getBytes());
         builder.appendWithOffset(1234569, 3L, "c".getBytes(), "v".getBytes());

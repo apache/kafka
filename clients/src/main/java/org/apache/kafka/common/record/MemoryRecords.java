@@ -529,21 +529,12 @@ public class MemoryRecords extends AbstractRecords {
                                                          long producerId,
                                                          short producerEpoch,
                                                          int baseSequence) {
-        return builder(buffer, RecordBatch.CURRENT_MAGIC_VALUE, compressionType, TimestampType.CREATE_TIME,
-                baseOffset, System.currentTimeMillis(), producerId, producerEpoch, baseSequence);
-    }
-
-    public static MemoryRecordsBuilder builder(ByteBuffer buffer,
-                                               byte magic,
-                                               CompressionType compressionType,
-                                               TimestampType timestampType,
-                                               long baseOffset,
-                                               long logAppendTime,
-                                               long producerId,
-                                               short producerEpoch,
-                                               int baseSequence) {
-        return builder(buffer, magic, compressionType, timestampType, baseOffset, logAppendTime,
-                producerId, producerEpoch, baseSequence, false, RecordBatch.NO_PARTITION_LEADER_EPOCH);
+        return builder(buffer)
+                .compressionType(compressionType)
+                .baseOffset(baseOffset)
+                .logAppendTime(System.currentTimeMillis())
+                .producerState(producerId, producerEpoch, baseSequence)
+                .build();
     }
 
     public static MemoryRecordsBuilder builder(ByteBuffer buffer,

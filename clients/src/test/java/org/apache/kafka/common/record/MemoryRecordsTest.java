@@ -560,8 +560,13 @@ public class MemoryRecordsTest {
             long pid1 = 23L;
             short epoch1 = 5;
             int baseSequence1 = 10;
-            builder = MemoryRecords.builder(buffer, magic, compression, TimestampType.CREATE_TIME, 3L,
-                    RecordBatch.NO_TIMESTAMP, pid1, epoch1, baseSequence1);
+            builder = MemoryRecords.builder(buffer)
+                    .magic(magic)
+                    .compressionType(compression)
+                    .baseOffset(3L)
+                    .logAppendTime(RecordBatch.NO_TIMESTAMP)
+                    .producerState(pid1, epoch1, baseSequence1)
+                    .build();
             builder.append(13L, null, "d".getBytes());
             builder.append(14L, "4".getBytes(), "e".getBytes());
             builder.append(15L, "5".getBytes(), "f".getBytes());
@@ -844,19 +849,36 @@ public class MemoryRecordsTest {
         long logAppendTime = System.currentTimeMillis();
 
         ByteBuffer buffer = ByteBuffer.allocate(2048);
-        MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, magic, compression,
-                TimestampType.LOG_APPEND_TIME, 0L, logAppendTime, pid, epoch, firstSequence);
+        MemoryRecordsBuilder builder = MemoryRecords.builder(buffer)
+                .magic(magic)
+                .compressionType(compression)
+                .timestampType(TimestampType.LOG_APPEND_TIME)
+                .logAppendTime(logAppendTime)
+                .producerState(pid, epoch, firstSequence)
+                .build();
         builder.append(10L, null, "a".getBytes());
         builder.close();
 
-        builder = MemoryRecords.builder(buffer, magic, compression, TimestampType.LOG_APPEND_TIME, 1L, logAppendTime,
-                pid, epoch, firstSequence);
+        builder = MemoryRecords.builder(buffer)
+                .magic(magic)
+                .compressionType(compression)
+                .timestampType(TimestampType.LOG_APPEND_TIME)
+                .baseOffset(1L)
+                .logAppendTime(logAppendTime)
+                .producerState(pid, epoch, firstSequence)
+                .build();
         builder.append(11L, "1".getBytes(), "b".getBytes());
         builder.append(12L, null, "c".getBytes());
         builder.close();
 
-        builder = MemoryRecords.builder(buffer, magic, compression, TimestampType.LOG_APPEND_TIME, 3L, logAppendTime,
-                pid, epoch, firstSequence);
+        builder = MemoryRecords.builder(buffer)
+                .magic(magic)
+                .compressionType(compression)
+                .timestampType(TimestampType.LOG_APPEND_TIME)
+                .baseOffset(3L)
+                .logAppendTime(logAppendTime)
+                .producerState(pid, epoch, firstSequence)
+                .build();
         builder.append(13L, null, "d".getBytes());
         builder.append(14L, "4".getBytes(), "e".getBytes());
         builder.append(15L, "5".getBytes(), "f".getBytes());
@@ -888,8 +910,13 @@ public class MemoryRecordsTest {
         assumeAtLeastV2OrNotZstd();
 
         ByteBuffer buffer = ByteBuffer.allocate(2048);
-        MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, magic, compression,
-                TimestampType.LOG_APPEND_TIME, 0L, logAppendTime, pid, epoch, firstSequence);
+        MemoryRecordsBuilder builder = MemoryRecords.builder(buffer)
+                .magic(magic)
+                .compressionType(compression)
+                .timestampType(TimestampType.LOG_APPEND_TIME)
+                .logAppendTime(logAppendTime)
+                .producerState(pid, epoch, firstSequence)
+                .build();
         builder.append(10L, null, "abc".getBytes());
         builder.close();
 

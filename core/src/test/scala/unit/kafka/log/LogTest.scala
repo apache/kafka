@@ -1208,32 +1208,51 @@ class LogTest {
     val buffer = ByteBuffer.allocate(512)
 
     // pid1 seq = 0
-    var builder = MemoryRecords.builder(buffer, RecordBatch.CURRENT_MAGIC_VALUE, CompressionType.NONE,
-      TimestampType.LOG_APPEND_TIME, 0L, mockTime.milliseconds(), pid1, epoch, 0)
+    var builder = MemoryRecords.builder(buffer)
+        .timestampType(TimestampType.LOG_APPEND_TIME)
+        .logAppendTime(mockTime.milliseconds())
+        .producerState(pid1, epoch, 0)
+        .build()
     builder.append(new SimpleRecord("key".getBytes, "value".getBytes))
     builder.close()
 
     // pid2 seq = 0
-    builder = MemoryRecords.builder(buffer, RecordBatch.CURRENT_MAGIC_VALUE, CompressionType.NONE,
-      TimestampType.LOG_APPEND_TIME, 1L, mockTime.milliseconds(), pid2, epoch, 0)
+    builder = MemoryRecords.builder(buffer)
+        .timestampType(TimestampType.LOG_APPEND_TIME)
+        .baseOffset(1L)
+        .logAppendTime(mockTime.milliseconds())
+        .producerState(pid2, epoch, 0)
+        .build()
     builder.append(new SimpleRecord("key".getBytes, "value".getBytes))
     builder.close()
 
     // pid1 seq = 1
-    builder = MemoryRecords.builder(buffer, RecordBatch.CURRENT_MAGIC_VALUE, CompressionType.NONE,
-      TimestampType.LOG_APPEND_TIME, 2L, mockTime.milliseconds(), pid1, epoch, 1)
+    builder = MemoryRecords.builder(buffer)
+        .timestampType(TimestampType.LOG_APPEND_TIME)
+        .baseOffset(2L)
+        .logAppendTime(mockTime.milliseconds())
+        .producerState(pid1, epoch, 1)
+        .build()
     builder.append(new SimpleRecord("key".getBytes, "value".getBytes))
     builder.close()
 
     // pid2 seq = 1
-    builder = MemoryRecords.builder(buffer, RecordBatch.CURRENT_MAGIC_VALUE, CompressionType.NONE,
-      TimestampType.LOG_APPEND_TIME, 3L, mockTime.milliseconds(), pid2, epoch, 1)
+    builder = MemoryRecords.builder(buffer)
+        .timestampType(TimestampType.LOG_APPEND_TIME)
+        .baseOffset(3L)
+        .logAppendTime(mockTime.milliseconds())
+        .producerState(pid2, epoch, 1)
+        .build()
     builder.append(new SimpleRecord("key".getBytes, "value".getBytes))
     builder.close()
 
     // // pid1 seq = 1 (duplicate)
-    builder = MemoryRecords.builder(buffer, RecordBatch.CURRENT_MAGIC_VALUE, CompressionType.NONE,
-      TimestampType.LOG_APPEND_TIME, 4L, mockTime.milliseconds(), pid1, epoch, 1)
+    builder = MemoryRecords.builder(buffer)
+      .timestampType(TimestampType.LOG_APPEND_TIME)
+      .baseOffset(4L)
+      .logAppendTime(mockTime.milliseconds())
+      .producerState(pid1, epoch, 1)
+      .build()
     builder.append(new SimpleRecord("key".getBytes, "value".getBytes))
     builder.close()
 
