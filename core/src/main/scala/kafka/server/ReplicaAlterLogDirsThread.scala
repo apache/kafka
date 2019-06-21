@@ -124,18 +124,13 @@ class ReplicaAlterLogDirsThread(name: String,
   }
 
   override protected def fetchEarliestOffsetFromLeader(topicPartition: TopicPartition, leaderEpoch: Int): Long = {
-    val offsetSnapshot = offsetSnapshotFromCurrentReplica(topicPartition, leaderEpoch)
-    offsetSnapshot.logStartOffset
+    val partition = replicaMgr.getPartitionOrException(topicPartition, expectLeader = false)
+    partition.localLogOrException.logStartOffset
   }
 
   override protected def fetchLatestOffsetFromLeader(topicPartition: TopicPartition, leaderEpoch: Int): Long = {
-    val offsetSnapshot = offsetSnapshotFromCurrentReplica(topicPartition, leaderEpoch)
-    offsetSnapshot.logEndOffset.messageOffset
-  }
-
-  private def offsetSnapshotFromCurrentReplica(topicPartition: TopicPartition, leaderEpoch: Int): LogOffsetSnapshot = {
     val partition = replicaMgr.getPartitionOrException(topicPartition, expectLeader = false)
-    partition.fetchOffsetSnapshot(Optional.of[Integer](leaderEpoch), fetchOnlyFromLeader = false)
+    partition.localLogOrException.logEndOffset
   }
 
   /**

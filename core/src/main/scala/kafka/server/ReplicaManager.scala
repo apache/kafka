@@ -17,7 +17,6 @@
 package kafka.server
 
 import java.io.File
-import java.util
 import java.util.Optional
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicLong}
@@ -934,10 +933,8 @@ class ReplicaManager(val config: KafkaConfig,
         val fetchTimeMs = time.milliseconds
 
         // If we are the leader, determine the preferred read-replica
-        val preferredReadReplica = clientMetadata match {
-          case Some(metadata) => findPreferredReadReplica(tp, metadata, replicaId, fetchInfo.fetchOffset)
-          case None => None
-        }
+        val preferredReadReplica = clientMetadata.flatMap(
+          metadata => findPreferredReadReplica(tp, metadata, replicaId, fetchInfo.fetchOffset))
 
         if (preferredReadReplica.isDefined && !preferredReadReplica.contains(localBrokerId)) {
           // If the a preferred read-replica is set and is not this replica (the leader), skip the read
@@ -1037,7 +1034,14 @@ class ReplicaManager(val config: KafkaConfig,
     result
   }
 
-  def findPreferredReadReplica(tp: TopicPartition, clientMetadata: ClientMetadata, replicaId: Int, fetchOffset: Long): Option[Int] = {
+  /**
+    * Using the configured [[ReplicaSelector]], determine the preferred read replica for a partition given the
+    * client metadata, the requested offset, and the current set of replicas
+    */
+  def findPreferredReadReplica(tp: TopicPartition,
+                               clientMetadata: ClientMetadata,
+                               replicaId: Int,
+                               fetchOffset: Long): Option[Int] = {
     val partition = getPartitionOrException(tp, expectLeader = false)
 
     if (partition.isLeader) {
@@ -1049,14 +1053,13 @@ class ReplicaManager(val config: KafkaConfig,
         val now = time.milliseconds
         val replicaInfoSet: mutable.Set[ReplicaView] = partition.allReplicaIds.flatMap(partition.getReplica)
           // Exclude replicas that don't have the requested offset (whether or not if they're in the ISR)
-          .filter(replica => replica.logEndOffset > fetchOffset)
+          .filter(replica => replica.logEndOffset >= fetchOffset)
           .filter(replica => replica.logStartOffset <= fetchOffset)
           .map(replica => new DefaultReplicaView(
             replicaEndpoints.getOrElse(replica.brokerId, Node.noNode()),
             replica.logEndOffset,
             now - replica.lastCaughtUpTimeMs
           ))
-
 
         val leaderReplica: Option[ReplicaView] = partition.leaderReplicaIdOpt
           .map(replicaId => replicaEndpoints.getOrElse(replicaId, Node.noNode()))

@@ -3648,7 +3648,7 @@ class LogTest {
   }
 
   @Test
-  def testFullOffsetSnapshot() {
+  def testOffsetSnapshot() {
     val logConfig = LogTest.createLogConfig(segmentBytes = 1024 * 1024 * 5)
     val log = createLog(logDir, logConfig)
 
@@ -3660,20 +3660,17 @@ class LogTest {
 
 
     log.highWatermark = 2L
-    var offsets: LogOffsetSnapshot = log.offsetSnapshot()
-    assertTrue(offsets.highWatermark.messageOffsetOnly)
+    var offsets: LogOffsetSnapshot = log.offsetSnapshot
+    assertEquals(offsets.highWatermark.messageOffset, 2L)
+    assertFalse(offsets.highWatermark.messageOffsetOnly)
 
-    log.highWatermark = 2L
-    offsets = log.offsetSnapshot(false)
-    assertTrue(offsets.highWatermark.messageOffsetOnly)
-
-    log.highWatermark = 2L
-    offsets = log.offsetSnapshot(true)
+    offsets = log.offsetSnapshot
+    assertEquals(offsets.highWatermark.messageOffset, 2L)
     assertFalse(offsets.highWatermark.messageOffsetOnly)
 
     try {
       log.highWatermark = 100L
-      offsets = log.offsetSnapshot(true)
+      offsets = log.offsetSnapshot
       fail("Should have thrown")
     } catch {
       case e: OffsetOutOfRangeException => // pass

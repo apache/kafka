@@ -64,7 +64,7 @@ class DelayedFetchTest extends EasyMockSupport {
 
     EasyMock.expect(replicaManager.getPartitionOrException(topicPartition, expectLeader = true))
         .andReturn(partition)
-    EasyMock.expect(partition.fetchOffsetSnapshot(currentLeaderEpoch, fetchOnlyFromLeader = true, fullOffsetSnapshot = true))
+    EasyMock.expect(partition.fetchOffsetSnapshot(currentLeaderEpoch, fetchOnlyFromLeader = true))
         .andThrow(new FencedLeaderEpochException("Requested epoch has been fenced"))
 
     expectReadFromReplicaWithError(replicaId, topicPartition, fetchStatus.fetchInfo, Errors.FENCED_LEADER_EPOCH)
@@ -79,7 +79,7 @@ class DelayedFetchTest extends EasyMockSupport {
     assertEquals(Errors.FENCED_LEADER_EPOCH, fetchResult.error)
   }
 
-  def testCompleteWhenFollowerLaggingHW(followerHW: Option[Long], checkResult: DelayedFetch => Unit): Unit = {
+  def checkCompleteWhenFollowerLaggingHW(followerHW: Option[Long], checkResult: DelayedFetch => Unit): Unit = {
     val topicPartition = new TopicPartition("topic", 0)
     val fetchOffset = 500L
     val logStartOffset = 0L
@@ -109,7 +109,7 @@ class DelayedFetchTest extends EasyMockSupport {
 
     EasyMock.expect(replicaManager.getPartitionOrException(topicPartition, expectLeader = true))
       .andReturn(partition)
-    EasyMock.expect(partition.fetchOffsetSnapshot(currentLeaderEpoch, fetchOnlyFromLeader = true, fullOffsetSnapshot = true))
+    EasyMock.expect(partition.fetchOffsetSnapshot(currentLeaderEpoch, fetchOnlyFromLeader = true))
       .andReturn(
         LogOffsetSnapshot(
           logStartOffset = 0,
@@ -127,28 +127,28 @@ class DelayedFetchTest extends EasyMockSupport {
   def testCompleteWhenFollowerLaggingHW(): Unit = {
     // No HW from the follower, should complete
     resetAll
-    testCompleteWhenFollowerLaggingHW(None, delayedFetch => {
+    checkCompleteWhenFollowerLaggingHW(None, delayedFetch => {
       assertTrue(delayedFetch.tryComplete())
       assertTrue(delayedFetch.isCompleted)
     })
 
     // A higher HW from the follower (shouldn't actually be possible)
     resetAll
-    testCompleteWhenFollowerLaggingHW(Some(500), delayedFetch => {
+    checkCompleteWhenFollowerLaggingHW(Some(500), delayedFetch => {
       assertFalse(delayedFetch.tryComplete())
       assertFalse(delayedFetch.isCompleted)
     })
 
     // An equal HW from follower
     resetAll
-    testCompleteWhenFollowerLaggingHW(Some(480), delayedFetch => {
+    checkCompleteWhenFollowerLaggingHW(Some(480), delayedFetch => {
       assertFalse(delayedFetch.tryComplete())
       assertFalse(delayedFetch.isCompleted)
     })
 
     // A lower HW from follower, should complete the fetch
     resetAll
-    testCompleteWhenFollowerLaggingHW(Some(470), delayedFetch => {
+    checkCompleteWhenFollowerLaggingHW(Some(470), delayedFetch => {
       assertTrue(delayedFetch.tryComplete())
       assertTrue(delayedFetch.isCompleted)
     })

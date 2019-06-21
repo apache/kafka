@@ -88,7 +88,7 @@ class DelayedFetch(delayMs: Long,
           if (fetchOffset != LogOffsetMetadata.UnknownOffsetMetadata) {
             val partition = replicaManager.getPartitionOrException(topicPartition,
               expectLeader = fetchMetadata.fetchOnlyLeader)
-            val offsetSnapshot = partition.fetchOffsetSnapshot(fetchLeaderEpoch, fetchMetadata.fetchOnlyLeader, true)
+            val offsetSnapshot = partition.fetchOffsetSnapshot(fetchLeaderEpoch, fetchMetadata.fetchOnlyLeader)
 
 
             val endOffset = fetchMetadata.fetchIsolation match {

@@ -357,27 +357,30 @@ class Log(@volatile var dir: File,
 
   def lastStableOffsetLag: Long = highWatermark - lastStableOffset
 
-  def fullOffsetSnapshot: LogOffsetSnapshot = {
-    val hw: LogOffsetMetadata = if (_highWatermarkMetadata.messageOffsetOnly) {
-      val fullOffset = convertToOffsetMetadataOrThrow(_highWatermarkMetadata.messageOffset,
-        "Could not load offset metadata for high watermark")
-      lock.synchronized {
+  /**
+    * Fully materialize and return an offset snapshot including segment position info. This method will update
+    * the LogOffsetMetadata for the high watermark and log start offset if they are message-only. Throws an
+    * offset out of range error if the segment info cannot be loaded.
+    */
+  def offsetSnapshot: LogOffsetSnapshot = {
+    val hw: LogOffsetMetadata = lock.synchronized {
+      if (_highWatermarkMetadata.messageOffsetOnly) {
+        val fullOffset = convertToOffsetMetadataOrThrow(_highWatermarkMetadata.messageOffset)
         _highWatermarkMetadata = fullOffset
+        fullOffset
+      } else {
+        _highWatermarkMetadata
       }
-      fullOffset
-    } else {
-      _highWatermarkMetadata
     }
 
-    val lso: LogOffsetMetadata = if (firstUnstableOffset.exists(_.messageOffsetOnly)) {
-      val fullOffset = convertToOffsetMetadataOrThrow(firstUnstableOffset.get.messageOffset,
-        "Could not load offset metadata for last stable offset")
-      lock.synchronized {
+    val lso: LogOffsetMetadata = lock.synchronized {
+      if (firstUnstableOffset.exists(_.messageOffsetOnly)) {
+        val fullOffset = convertToOffsetMetadataOrThrow(firstUnstableOffset.get.messageOffset)
         firstUnstableOffset = Some(fullOffset)
+        lastStableOffsetMetadata
+      } else {
+        lastStableOffsetMetadata
       }
-      lastStableOffsetMetadata
-    } else {
-      lastStableOffsetMetadata
     }
 
     LogOffsetSnapshot(
@@ -386,18 +389,6 @@ class Log(@volatile var dir: File,
       hw,
       lso
     )
-  }
-
-  def offsetSnapshot(full: Boolean = false): LogOffsetSnapshot = {
-    if (full) {
-      fullOffsetSnapshot
-    } else {
-      LogOffsetSnapshot(
-        logStartOffset = logStartOffset,
-        logEndOffset = logEndOffsetMetadata,
-        highWatermark =  highWatermarkMetadata,
-        lastStableOffset = lastStableOffsetMetadata)
-    }
   }
 
   private val tags = {
@@ -1536,12 +1527,7 @@ class Log(@volatile var dir: File,
    */
   def convertToOffsetMetadata(offset: Long): Option[LogOffsetMetadata] = {
     try {
-      val fetchDataInfo = read(offset,
-        maxLength = 1,
-        maxOffset = None,
-        minOneMessage = false,
-        includeAbortedTxns = false)
-      Some(fetchDataInfo.fetchOffsetMetadata)
+      Some(convertToOffsetMetadataOrThrow(offset))
     } catch {
       case _: OffsetOutOfRangeException => None
     }
@@ -1551,11 +1537,13 @@ class Log(@volatile var dir: File,
     * Given a message offset, find its corresponding offset metadata in the log.
     * If the message offset is out of range, throw an OffsetOutOfRangeException
     */
-  def convertToOffsetMetadataOrThrow(offset: Long, message: String): LogOffsetMetadata = {
-    convertToOffsetMetadata(offset) match {
-      case Some(offsetMetadata) => offsetMetadata
-      case None => throw new OffsetOutOfRangeException(s"$message $offset")
-    }
+  def convertToOffsetMetadataOrThrow(offset: Long): LogOffsetMetadata = {
+    val fetchDataInfo = read(offset,
+      maxLength = 1,
+      maxOffset = None,
+      minOneMessage = false,
+      includeAbortedTxns = false)
+    fetchDataInfo.fetchOffsetMetadata
   }
 
 
