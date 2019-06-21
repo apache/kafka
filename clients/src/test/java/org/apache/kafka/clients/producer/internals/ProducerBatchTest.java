@@ -50,8 +50,7 @@ public class ProducerBatchTest {
 
     private final long now = 1488748346917L;
 
-    private final MemoryRecordsBuilder memoryRecordsBuilder = MemoryRecords.builder(ByteBuffer.allocate(128),
-            CompressionType.NONE, TimestampType.CREATE_TIME, 128);
+    private final MemoryRecordsBuilder memoryRecordsBuilder = MemoryRecords.builder(ByteBuffer.allocate(128)).baseOffset(128L).build();
 
     @Test
     public void testChecksumNullForMagicV2() {

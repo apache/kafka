@@ -523,13 +523,6 @@ public class MemoryRecords extends AbstractRecords {
         return new Builder(buffer);
     }
 
-    public static MemoryRecordsBuilder builder(ByteBuffer buffer,
-                                               CompressionType compressionType,
-                                               TimestampType timestampType,
-                                               long baseOffset) {
-        return builder(buffer, RecordBatch.CURRENT_MAGIC_VALUE, compressionType, timestampType, baseOffset);
-    }
-
     public static MemoryRecordsBuilder idempotentBuilder(ByteBuffer buffer,
                                                          CompressionType compressionType,
                                                          long baseOffset,

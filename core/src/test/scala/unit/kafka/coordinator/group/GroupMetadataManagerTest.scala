@@ -524,7 +524,7 @@ class GroupMetadataManagerTest {
   }
 
   private def appendConsumerOffsetCommit(buffer: ByteBuffer, baseOffset: Long, offsets: Map[TopicPartition, Long]) = {
-    val builder = MemoryRecords.builder(buffer, CompressionType.NONE, TimestampType.LOG_APPEND_TIME, baseOffset)
+    val builder = MemoryRecords.builder(buffer).timestampType(TimestampType.LOG_APPEND_TIME).baseOffset(baseOffset).build();
     val commitRecords = createCommittedOffsetRecords(offsets)
     commitRecords.foreach(builder.append)
     builder.build()
