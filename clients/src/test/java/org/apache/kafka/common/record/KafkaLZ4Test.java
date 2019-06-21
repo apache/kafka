@@ -47,11 +47,12 @@ public class KafkaLZ4Test {
 
     private final static Random RANDOM = new Random(0);
 
-    private final boolean useBrokenFlagDescriptorChecksum;
+    private final int magic;
+    private final Integer compressionLevel;
+    private final Integer blockSize;
     private final boolean ignoreFlagDescriptorChecksum;
-    private final byte[] payload;
     private final boolean close;
-    private final boolean blockChecksum;
+    private final byte[] payload;
 
     static class Payload {
         String name;
@@ -71,7 +72,7 @@ public class KafkaLZ4Test {
         }
     }
 
-    @Parameters(name = "{index} useBrokenFlagDescriptorChecksum={0}, ignoreFlagDescriptorChecksum={1}, blockChecksum={2}, close={3}, payload={4}")
+    @Parameters(name = "{index} magic={0}, compressionLevel={1}, blockSize={2}, ignoreFlagDescriptorChecksum={3}, close={4}, payload={5}")
     public static Collection<Object[]> data() {
         List<Payload> payloads = new ArrayList<>();
 
@@ -90,21 +91,24 @@ public class KafkaLZ4Test {
 
         List<Object[]> values = new ArrayList<>();
         for (Payload payload : payloads)
-            for (boolean broken : Arrays.asList(false, true))
-                for (boolean ignore : Arrays.asList(false, true))
-                    for (boolean blockChecksum : Arrays.asList(false, true))
-                        for (boolean close : Arrays.asList(false, true))
-                            values.add(new Object[]{broken, ignore, blockChecksum, close, payload});
+            // TODO: Add a way to get available magic values, compression levels, and block sizes.
+            for (int magic : Arrays.asList(RecordBatch.MAGIC_VALUE_V0, RecordBatch.MAGIC_VALUE_V1, RecordBatch.MAGIC_VALUE_V2))
+                for (Integer compressionLevel = 1; compressionLevel < 17 + 1; ++compressionLevel)
+                    for (Integer blockSize = 4; blockSize < 7 + 1; ++blockSize)
+                        for (boolean ignore : Arrays.asList(false, true))
+                            for (boolean close : Arrays.asList(false, true))
+                                values.add(new Object[]{magic, compressionLevel, blockSize, ignore, close, payload});
         return values;
     }
 
-    public KafkaLZ4Test(boolean useBrokenFlagDescriptorChecksum, boolean ignoreFlagDescriptorChecksum,
-                        boolean blockChecksum, boolean close, Payload payload) {
-        this.useBrokenFlagDescriptorChecksum = useBrokenFlagDescriptorChecksum;
+    public KafkaLZ4Test(int magic, Integer compressionLevel, Integer blockSize, boolean ignoreFlagDescriptorChecksum,
+                        boolean close, Payload payload) {
+        this.magic = magic;
+        this.compressionLevel = compressionLevel;
+        this.blockSize = blockSize;
         this.ignoreFlagDescriptorChecksum = ignoreFlagDescriptorChecksum;
-        this.payload = payload.payload;
         this.close = close;
-        this.blockChecksum = blockChecksum;
+        this.payload = payload.payload;
     }
 
     @Test
@@ -143,7 +147,7 @@ public class KafkaLZ4Test {
 
     @Test
     public void testBadBlockSize() throws Exception {
-        if (!close || (useBrokenFlagDescriptorChecksum && !ignoreFlagDescriptorChecksum))
+        if (!close || (useBrokenFlagDescriptorChecksum() && !ignoreFlagDescriptorChecksum))
             return;
 
         byte[] compressed = compressedBytes();
@@ -156,8 +160,6 @@ public class KafkaLZ4Test {
         IOException e = assertThrows(IOException.class, () -> testDecompression(buffer));
         assertThat(e.getMessage(), CoreMatchers.containsString("exceeded max"));
     }
-
-
 
     @Test
     public void testCompression() throws Exception {
@@ -209,7 +211,7 @@ public class KafkaLZ4Test {
 
         // Initial implementation of checksum incorrectly applied to full header
         // including magic bytes
-        if (this.useBrokenFlagDescriptorChecksum) {
+        if (useBrokenFlagDescriptorChecksum()) {
             off = 0;
             len = offset;
         }
@@ -279,7 +281,7 @@ public class KafkaLZ4Test {
 
     @Test
     public void testSkip() throws Exception {
-        if (!close || (useBrokenFlagDescriptorChecksum && !ignoreFlagDescriptorChecksum)) return;
+        if (!close || (useBrokenFlagDescriptorChecksum() && !ignoreFlagDescriptorChecksum)) return;
 
         final KafkaLZ4BlockInputStream in = makeInputStream(ByteBuffer.wrap(compressedBytes()));
 
@@ -318,7 +320,7 @@ public class KafkaLZ4Test {
             assertEquals(this.payload.length, pos);
             assertArrayEquals(this.payload, testPayload);
         } catch (IOException e) {
-            if (!ignoreFlagDescriptorChecksum && useBrokenFlagDescriptorChecksum) {
+            if (!ignoreFlagDescriptorChecksum && useBrokenFlagDescriptorChecksum()) {
                 assertEquals(KafkaLZ4BlockInputStream.DESCRIPTOR_HASH_MISMATCH, e.getMessage());
                 error = e;
             } else if (!close) {
@@ -328,18 +330,13 @@ public class KafkaLZ4Test {
                 throw e;
             }
         }
-        if (!ignoreFlagDescriptorChecksum && useBrokenFlagDescriptorChecksum) assertNotNull(error);
+        if (!ignoreFlagDescriptorChecksum && useBrokenFlagDescriptorChecksum()) assertNotNull(error);
         if (!close) assertNotNull(error);
     }
 
     private byte[] compressedBytes() throws IOException {
         ByteArrayOutputStream output = new ByteArrayOutputStream();
-        KafkaLZ4BlockOutputStream lz4 = new KafkaLZ4BlockOutputStream(
-            output,
-            KafkaLZ4BlockOutputStream.BLOCKSIZE_64KB,
-            blockChecksum,
-            useBrokenFlagDescriptorChecksum
-        );
+        KafkaLZ4BlockOutputStream lz4 = KafkaLZ4BlockOutputStream.of(output, this.magic, this.compressionLevel, this.blockSize);
         lz4.write(this.payload, 0, this.payload.length);
         if (this.close) {
             lz4.close();
@@ -347,5 +344,9 @@ public class KafkaLZ4Test {
             lz4.flush();
         }
         return output.toByteArray();
+    }
+
+    private boolean useBrokenFlagDescriptorChecksum() {
+        return magic == RecordBatch.MAGIC_VALUE_V0;
     }
 }

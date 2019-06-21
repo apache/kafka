@@ -98,7 +98,7 @@ public enum CompressionType {
         @Override
         public OutputStream wrapForOutput(ByteBufferOutputStream buffer, byte messageVersion) {
             try {
-                return new KafkaLZ4BlockOutputStream(buffer, messageVersion == RecordBatch.MAGIC_VALUE_V0);
+                return KafkaLZ4BlockOutputStream.of(buffer, messageVersion, null, null);
             } catch (Throwable e) {
                 throw new KafkaException(e);
             }

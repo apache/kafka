@@ -16,35 +16,39 @@
  */
 package org.apache.kafka.common.record;
 
-import java.io.IOException;
-import java.io.OutputStream;
-
-import org.apache.kafka.common.utils.ByteUtils;
-
 import net.jpountz.lz4.LZ4Compressor;
 import net.jpountz.lz4.LZ4Factory;
 import net.jpountz.xxhash.XXHash32;
 import net.jpountz.xxhash.XXHashFactory;
+import org.apache.kafka.common.utils.ByteUtils;
+
+import java.io.IOException;
+import java.io.OutputStream;
+import java.util.Arrays;
+import java.util.HashSet;
+import java.util.Set;
 
 /**
  * A partial implementation of the v1.5.1 LZ4 Frame format.
  *
  * @see <a href="https://github.com/lz4/lz4/wiki/lz4_Frame_format.md">LZ4 Frame Format</a>
- *
+ * <p>
  * This class is not thread-safe.
  */
 public final class KafkaLZ4BlockOutputStream extends OutputStream {
 
     public static final int MAGIC = 0x184D2204;
-    public static final int LZ4_MAX_HEADER_LENGTH = 19;
     public static final int LZ4_FRAME_INCOMPRESSIBLE_MASK = 0x80000000;
 
     public static final String CLOSED_STREAM = "The stream is already closed";
 
-    public static final int BLOCKSIZE_64KB = 4;
-    public static final int BLOCKSIZE_256KB = 5;
-    public static final int BLOCKSIZE_1MB = 6;
-    public static final int BLOCKSIZE_4MB = 7;
+    private static final int BLOCKSIZE_64KB = 4;
+    private static final int BLOCKSIZE_256KB = 5;
+    private static final int BLOCKSIZE_1MB = 6;
+    private static final int BLOCKSIZE_4MB = 7;
+    private static final Set<Integer> AVAILABLE_BLOCKSIZES = new HashSet<>(
+        Arrays.asList(BLOCKSIZE_64KB, BLOCKSIZE_256KB, BLOCKSIZE_1MB, BLOCKSIZE_4MB)
+    );
 
     private final LZ4Compressor compressor;
     private final XXHash32 checksum;
@@ -61,22 +65,20 @@ public final class KafkaLZ4BlockOutputStream extends OutputStream {
     /**
      * Create a new {@link OutputStream} that will compress data using the LZ4 algorithm.
      *
-     * @param out The output stream to compress
-     * @param blockSize Default: 4. The block size used during compression. 4=64kb, 5=256kb, 6=1mb, 7=4mb. All other
-     *            values will generate an exception
-     * @param blockChecksum Default: false. When true, a XXHash32 checksum is computed and appended to the stream for
-     *            every block of data
+     * @param out                             The output stream to compress.
+     * @param compressor                      The compressor to use.
+     * @param bd                              The block descriptor to use.
      * @param useBrokenFlagDescriptorChecksum Default: false. When true, writes an incorrect FrameDescriptor checksum
-     *            compatible with older kafka clients.
+     *                                        compatible with older kafka clients.
      * @throws IOException
      */
-    public KafkaLZ4BlockOutputStream(OutputStream out, int blockSize, boolean blockChecksum, boolean useBrokenFlagDescriptorChecksum) throws IOException {
+    private KafkaLZ4BlockOutputStream(OutputStream out, LZ4Compressor compressor, BD bd, boolean useBrokenFlagDescriptorChecksum) throws IOException {
         this.out = out;
-        compressor = LZ4Factory.fastestInstance().fastCompressor();
+        this.compressor = compressor;
         checksum = XXHashFactory.fastestInstance().hash32();
         this.useBrokenFlagDescriptorChecksum = useBrokenFlagDescriptorChecksum;
-        bd = new BD(blockSize);
-        flg = new FLG(blockChecksum);
+        this.bd = bd;
+        flg = new FLG();
         bufferOffset = 0;
         maxBlockSize = bd.getBlockMaximumSize();
         buffer = new byte[maxBlockSize];
@@ -86,43 +88,26 @@ public final class KafkaLZ4BlockOutputStream extends OutputStream {
     }
 
     /**
-     * Create a new {@link OutputStream} that will compress data using the LZ4 algorithm.
+     * Create a new {@link OutputStream} that will compress data using the LZ4 algorithm with the specified buffer size and compression level.
      *
-     * @param out The output stream to compress
-     * @param blockSize Default: 4. The block size used during compression. 4=64kb, 5=256kb, 6=1mb, 7=4mb. All other
-     *            values will generate an exception
-     * @param blockChecksum Default: false. When true, a XXHash32 checksum is computed and appended to the stream for
-     *            every block of data
+     * @param out              The output stream to compress.
+     * @param magic            The message version.
+     * @param compressionLevel The compression level to use. If null, it falls back to the default level.
+     * @param blockSize        The buffer size to use. 4=64kb, 5=256kb, 6=1mb, 7=4mb. All other values will raise an exception.
+     *                         If null, it falls back to the default block size, 4.
+     * @throws IllegalArgumentException
      * @throws IOException
      */
-    public KafkaLZ4BlockOutputStream(OutputStream out, int blockSize, boolean blockChecksum) throws IOException {
-        this(out, blockSize, blockChecksum, false);
-    }
+    public static KafkaLZ4BlockOutputStream of(OutputStream out, int magic, Integer compressionLevel, Integer blockSize) throws IOException {
+        BD bd = blockSize == null ? new BD() : new BD(blockSize);
 
-    /**
-     * Create a new {@link OutputStream} that will compress data using the LZ4 algorithm.
-     *
-     * @param out The stream to compress
-     * @param blockSize Default: 4. The block size used during compression. 4=64kb, 5=256kb, 6=1mb, 7=4mb. All other
-     *            values will generate an exception
-     * @throws IOException
-     */
-    public KafkaLZ4BlockOutputStream(OutputStream out, int blockSize) throws IOException {
-        this(out, blockSize, false, false);
-    }
-
-    /**
-     * Create a new {@link OutputStream} that will compress data using the LZ4 algorithm.
-     *
-     * @param out The output stream to compress
-     * @throws IOException
-     */
-    public KafkaLZ4BlockOutputStream(OutputStream out) throws IOException {
-        this(out, BLOCKSIZE_64KB);
-    }
-
-    public KafkaLZ4BlockOutputStream(OutputStream out, boolean useBrokenHC) throws IOException {
-        this(out, BLOCKSIZE_64KB, false, useBrokenHC);
+        if (magic < RecordBatch.MAGIC_VALUE_V2) {
+            return new KafkaLZ4BlockOutputStream(out, LZ4Factory.fastestInstance().fastCompressor(), bd, magic == RecordBatch.MAGIC_VALUE_V0);
+        } else {
+            LZ4Compressor compressor =
+                compressionLevel == null ? LZ4Factory.fastestInstance().highCompressor() : LZ4Factory.fastestInstance().highCompressor(compressionLevel);
+            return new KafkaLZ4BlockOutputStream(out, compressor, bd, false);
+        }
     }
 
     /**
@@ -369,6 +354,9 @@ public final class KafkaLZ4BlockOutputStream extends OutputStream {
         }
     }
 
+    /**
+     * Block Descriptor: specifies the block(buffer) size used during compression. 4=64kb, 5=256kb, 6=1mb, 7=4mb. All other values will raise an exception.
+     */
     public static class BD {
 
         private final int reserved2;
@@ -402,8 +390,8 @@ public final class KafkaLZ4BlockOutputStream extends OutputStream {
             if (reserved2 != 0) {
                 throw new RuntimeException("Reserved2 field must be 0");
             }
-            if (blockSizeValue < 4 || blockSizeValue > 7) {
-                throw new RuntimeException("Block size value must be between 4 and 7");
+            if (!AVAILABLE_BLOCKSIZES.contains(blockSizeValue)) {
+                throw new RuntimeException("Unsupported block size: " + blockSizeValue);
             }
             if (reserved3 != 0) {
                 throw new RuntimeException("Reserved3 field must be 0");
