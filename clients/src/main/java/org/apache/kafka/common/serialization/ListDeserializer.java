@@ -22,13 +22,26 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 public class ListDeserializer<T> implements Deserializer<List<T>> {
 
     private final Deserializer<T> deserializer;
+    private final Integer primitiveSize;
+
+    private Map<Class, Integer> primitiveDeserializers = Stream.of(new Object[][]{
+            {LongDeserializer.class, 8},
+            {IntegerDeserializer.class, 4},
+            {ShortDeserializer.class, 2},
+            {FloatDeserializer.class, 4},
+            {DoubleDeserializer.class, 8},
+            {BytesDeserializer.class, 1}
+    }).collect(Collectors.toMap(e -> (Class) e[0], e -> (Integer) e[1]));
 
     public ListDeserializer(Deserializer<T> deserializer) {
         this.deserializer = deserializer;
+        this.primitiveSize = primitiveDeserializers.get(deserializer.getClass());
     }
 
     @Override
@@ -45,7 +58,8 @@ public class ListDeserializer<T> implements Deserializer<List<T>> {
             final int size = dis.readInt();
             List<T> deserializedList = new ArrayList<>(size);
             for (int i = 0; i < size; i++) {
-                byte[] payload = new byte[dis.readInt()];
+                byte[] payload;
+                payload = new byte[primitiveSize == null ? dis.readInt() : primitiveSize];
                 dis.read(payload);
                 deserializedList.add(deserializer.deserialize(topic, payload));
             }

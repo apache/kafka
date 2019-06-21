@@ -19,15 +19,26 @@ package org.apache.kafka.common.serialization;
 import java.io.ByteArrayOutputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 
 public class ListSerializer<T> implements Serializer<List<T>> {
 
     private final Serializer<T> serializer;
+    private final Boolean isPrimitive;
+
+    private List<Class> primitiveSerializers = Arrays.asList(
+            LongSerializer.class,
+            IntegerSerializer.class,
+            ShortSerializer.class,
+            FloatSerializer.class,
+            DoubleSerializer.class,
+            BytesSerializer.class);
 
     public ListSerializer(Serializer<T> serializer) {
         this.serializer = serializer;
+        this.isPrimitive = primitiveSerializers.contains(serializer.getClass());
     }
 
     @Override
@@ -46,7 +57,9 @@ public class ListSerializer<T> implements Serializer<List<T>> {
             out.writeInt(size);
             for (T entry : data) {
                 final byte[] bytes = serializer.serialize(topic, entry);
-                out.writeInt(bytes.length);
+                if (!isPrimitive) {
+                    out.writeInt(bytes.length);
+                }
                 out.write(bytes);
             }
             return baos.toByteArray();
