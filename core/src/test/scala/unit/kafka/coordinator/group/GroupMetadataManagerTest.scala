@@ -546,9 +546,15 @@ class GroupMetadataManagerTest {
 
   private def completeTransactionalOffsetCommit(buffer: ByteBuffer, producerId: Long, producerEpoch: Short, baseOffset: Long,
                                                 isCommit: Boolean): Int = {
-    val builder = MemoryRecords.builder(buffer, RecordBatch.MAGIC_VALUE_V2, CompressionType.NONE,
-      TimestampType.LOG_APPEND_TIME, baseOffset, time.milliseconds(), producerId, producerEpoch, 0, true, true,
-      RecordBatch.NO_PARTITION_LEADER_EPOCH)
+    val builder = MemoryRecords.builder(buffer)
+      .magic(RecordBatch.MAGIC_VALUE_V2)
+      .timestampType(TimestampType.LOG_APPEND_TIME)
+      .baseOffset(baseOffset)
+      .logAppendTime(time.milliseconds())
+      .producerState(producerId, producerEpoch, 0)
+      .transaction(true)
+      .controlBatch(true)
+      .build()
     val controlRecordType = if (isCommit) ControlRecordType.COMMIT else ControlRecordType.ABORT
     builder.appendEndTxnMarker(time.milliseconds(), new EndTransactionMarker(controlRecordType, 0))
     builder.build()

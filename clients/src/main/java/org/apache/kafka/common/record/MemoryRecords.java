@@ -537,23 +537,6 @@ public class MemoryRecords extends AbstractRecords {
                 .build();
     }
 
-    public static MemoryRecordsBuilder builder(ByteBuffer buffer,
-                                               byte magic,
-                                               CompressionType compressionType,
-                                               TimestampType timestampType,
-                                               long baseOffset,
-                                               long logAppendTime,
-                                               long producerId,
-                                               short producerEpoch,
-                                               int baseSequence,
-                                               boolean isTransactional,
-                                               boolean isControlBatch,
-                                               int partitionLeaderEpoch) {
-        return new MemoryRecordsBuilder(new ByteBufferOutputStream(buffer), magic, compressionType,
-                timestampType, baseOffset, logAppendTime, producerId, producerEpoch, baseSequence,
-                isTransactional, isControlBatch, partitionLeaderEpoch, buffer.remaining());
-    }
-
     public static MemoryRecords withRecords(CompressionType compressionType, SimpleRecord... records) {
         return withRecords(RecordBatch.CURRENT_MAGIC_VALUE, compressionType, records);
     }
