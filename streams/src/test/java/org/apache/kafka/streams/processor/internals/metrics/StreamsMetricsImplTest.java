@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.processor.internals.metrics;
 
-
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.MetricConfig;
@@ -35,8 +34,15 @@ import java.util.concurrent.TimeUnit;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.PROCESSOR_NODE_METRICS_GROUP;
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addAmountRateMetricToSensor;
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addAmountRateAndTotalMetricsToSensor;
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addAvgAndTotalMetricsToSensor;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addAvgMaxLatency;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addInvocationRateAndCount;
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addTotalMetricToSensor;
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addValueMetricToSensor;
+import static org.hamcrest.CoreMatchers.is;
+import static org.hamcrest.CoreMatchers.notNullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.greaterThan;
@@ -48,6 +54,14 @@ public class StreamsMetricsImplTest extends EasyMockSupport {
     private final static String SENSOR_PREFIX_DELIMITER = ".";
     private final static String SENSOR_NAME_DELIMITER = ".s.";
     private final static String INTERNAL_PREFIX = "internal";
+
+    private final Metrics metrics = new Metrics();
+    private final Sensor sensor = metrics.sensor("dummy");
+    private final String metricNamePrefix = "metric";
+    private final String group = "group";
+    private final Map<String, String> tags = mkMap(mkEntry("tag", "value"));
+    private final String description1 = "description number one";
+    private final String description2 = "description number two";
 
     @Test
     public void shouldGetThreadLevelSensor() {
@@ -230,6 +244,111 @@ public class StreamsMetricsImplTest extends EasyMockSupport {
             assertEquals(i, Math.round(totalMetric.measurable().measure(config, time.milliseconds())));
             sensor.record(latency, time.milliseconds());
         }
+    }
 
+    @Test
+    public void shouldAddAmountRateAndSum() {
+        final MockTime time = new MockTime(0);
+
+        addAmountRateAndTotalMetricsToSensor(sensor, group, tags, metricNamePrefix, description1, description2);
+
+        verifyAmountRateMetric(metrics, sensor, description1, time);
+        verifySumMetric(metrics, sensor, description2, time, 60);
+        assertThat(metrics.metrics().size(), equalTo(2 + 1)); // one metric is added automatically in the constructor of Metrics
+    }
+
+    @Test
+    public void shouldAddSum() {
+        final MockTime time = new MockTime(0);
+
+        addTotalMetricToSensor(sensor, group, tags, metricNamePrefix, description1);
+
+        verifySumMetric(metrics, sensor, description1, time, 0);
+        assertThat(metrics.metrics().size(), equalTo(1 + 1)); // one metric is added automatically in the constructor of Metrics
+    }
+
+    @Test
+    public void shouldAddAmountRate() {
+        final MockTime time = new MockTime(0);
+
+        addAmountRateMetricToSensor(sensor, group, tags, metricNamePrefix, description1);
+
+        verifyAmountRateMetric(metrics, sensor, description1, time);
+        assertThat(metrics.metrics().size(), equalTo(1 + 1)); // one metric is added automatically in the constructor of Metrics
+    }
+
+    @Test
+    public void shouldAddValue() {
+        final MockTime time = new MockTime(0);
+
+        addValueMetricToSensor(sensor, group, tags, metricNamePrefix, description1);
+
+        final KafkaMetric ratioMetric = metrics.metric(new MetricName(metricNamePrefix, group, description1, tags));
+        assertThat(ratioMetric, is(notNullValue()));
+        final MetricConfig metricConfig = new MetricConfig();
+        final double value1 = 42.0;
+        sensor.record(value1);
+        assertThat(ratioMetric.measurable().measure(metricConfig, time.milliseconds()), equalTo(42.0));
+        final double value2 = 18.0;
+        sensor.record(value2);
+        assertThat(ratioMetric.measurable().measure(metricConfig, time.milliseconds()), equalTo(18.0));
+        assertThat(metrics.metrics().size(), equalTo(1 + 1)); // one metric is added automatically in the constructor of Metrics
+    }
+
+    @Test
+    public void shouldAddAvgAndTotalMetricsToSensor() {
+        final MockTime time = new MockTime(0);
+
+        addAvgAndTotalMetricsToSensor(sensor, group, tags, metricNamePrefix, description1, description2);
+
+        verifyAvgMetric(metrics, sensor, description1, time);
+        verifySumMetric(metrics, sensor, description2, time, 60.0);
+        assertThat(metrics.metrics().size(), equalTo(2 + 1)); // one metric is added automatically in the constructor of Metrics
+    }
+
+    private void verifySumMetric(final Metrics metrics,
+                                 final Sensor sensor,
+                                 final String description,
+                                 final MockTime time,
+                                 final double initialValue) {
+        final KafkaMetric metric = metrics
+            .metric(new MetricName(metricNamePrefix + "-total", group, description, tags));
+        assertThat(metric, is(notNullValue()));
+        assertThat(metric.metricName().description(), equalTo(description));
+        final double value1 = 42.0;
+        sensor.record(value1, time.milliseconds());
+        final double value2 = 18.0;
+        sensor.record(value2, time.milliseconds());
+        assertThat(metric.measurable().measure(new MetricConfig(), time.milliseconds()),
+                   equalTo(initialValue + value1 + value2));
+    }
+
+    private void verifyAmountRateMetric(final Metrics metrics,
+                                        final Sensor sensor,
+                                        final String description,
+                                        final MockTime time) {
+        final KafkaMetric rateMetric = metrics
+            .metric(new MetricName(metricNamePrefix + "-rate", group, description, tags));
+        assertThat(rateMetric, is(notNullValue()));
+        final double value1 = 42.0;
+        sensor.record(value1, time.milliseconds());
+        final double value2 = 18.0;
+        sensor.record(value2, time.milliseconds());
+        time.sleep(30000);
+        assertThat(rateMetric.measurable().measure(new MetricConfig(), time.milliseconds()), equalTo(2.0));
+    }
+
+    private void verifyAvgMetric(final Metrics metrics,
+                                 final Sensor sensor,
+                                 final String description,
+                                 final MockTime time) {
+        final KafkaMetric avgMetric = metrics
+            .metric(new MetricName(metricNamePrefix + "-avg", group, description, tags));
+        assertThat(avgMetric, is(notNullValue()));
+        final double value1 = 42.0;
+        sensor.record(value1, time.milliseconds());
+        final double value2 = 18.0;
+        sensor.record(value2, time.milliseconds());
+        assertThat(avgMetric.measurable().measure(new MetricConfig(), time.milliseconds()), equalTo(30.0));
     }
 }
