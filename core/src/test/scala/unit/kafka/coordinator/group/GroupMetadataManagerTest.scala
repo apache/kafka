@@ -533,7 +533,11 @@ class GroupMetadataManagerTest {
 
   private def appendTransactionalOffsetCommits(buffer: ByteBuffer, producerId: Long, producerEpoch: Short,
                                                baseOffset: Long, offsets: Map[TopicPartition, Long]): Int = {
-    val builder = MemoryRecords.builder(buffer, CompressionType.NONE, baseOffset, producerId, producerEpoch, 0, true)
+    val builder = MemoryRecords.builder(buffer)
+      .baseOffset(baseOffset)
+      .producerState(producerId, producerEpoch, 0)
+      .transaction(true)
+      .build()
     val commitRecords = createCommittedOffsetRecords(offsets)
     commitRecords.foreach(builder.append)
     builder.build()

@@ -974,8 +974,11 @@ class PartitionTest {
     val baseSequence = 0
     val isTransactional = true
     val buf = ByteBuffer.allocate(DefaultRecordBatch.sizeInBytes(records.asJava))
-    val builder = MemoryRecords.builder(buf, CompressionType.NONE, baseOffset, producerId,
-      producerEpoch, baseSequence, isTransactional)
+    val builder = MemoryRecords.builder(buf)
+      .baseOffset(baseOffset)
+      .producerState(producerId, producerEpoch, baseSequence)
+      .transaction(isTransactional)
+      .build()
     records.foreach(builder.append)
     builder.build()
   }
