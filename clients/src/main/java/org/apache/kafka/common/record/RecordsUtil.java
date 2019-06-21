@@ -110,8 +110,13 @@ public class RecordsUtil {
         final TimestampType timestampType = batch.timestampType();
         long logAppendTime = timestampType == TimestampType.LOG_APPEND_TIME ? batch.maxTimestamp() : RecordBatch.NO_TIMESTAMP;
 
-        MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, magic, batch.compressionType(),
-                timestampType, recordBatchAndRecords.baseOffset, logAppendTime);
+        MemoryRecordsBuilder builder = MemoryRecords.builder(buffer)
+                .magic(magic)
+                .compressionType(batch.compressionType())
+                .timestampType(timestampType)
+                .baseOffset(recordBatchAndRecords.baseOffset)
+                .logAppendTime(logAppendTime)
+                .build();
         for (Record record : recordBatchAndRecords.records) {
             // Down-convert this record. Ignore headers when down-converting to V0 and V1 since they are not supported
             if (magic > RecordBatch.MAGIC_VALUE_V1)
