@@ -642,37 +642,42 @@ public class SslTransportLayer implements TransportLayer {
     */
     @Override
     public int write(ByteBuffer src) throws IOException {
-        int written = 0;
         if (state == State.CLOSING)
             throw closingException();
         if (state != State.READY)
-            return written;
-
+            return 0;
         if (!flush(netWriteBuffer))
-            return written;
+            return 0;
 
-        netWriteBuffer.clear();
-        SSLEngineResult wrapResult = sslEngine.wrap(src, netWriteBuffer);
-        netWriteBuffer.flip();
-
-        //handle ssl renegotiation
-        if (wrapResult.getHandshakeStatus() != HandshakeStatus.NOT_HANDSHAKING && wrapResult.getStatus() == Status.OK)
-            throw renegotiationException();
-
-        if (wrapResult.getStatus() == Status.OK) {
-            written = wrapResult.bytesConsumed();
-            flush(netWriteBuffer);
-        } else if (wrapResult.getStatus() == Status.BUFFER_OVERFLOW) {
-            int currentNetWriteBufferSize = netWriteBufferSize();
-            netWriteBuffer.compact();
-            netWriteBuffer = Utils.ensureCapacity(netWriteBuffer, currentNetWriteBufferSize);
+        int written = 0;
+        while (src.remaining() != 0) {
+            netWriteBuffer.clear();
+            SSLEngineResult wrapResult = sslEngine.wrap(src, netWriteBuffer);
             netWriteBuffer.flip();
-            if (netWriteBuffer.limit() >= currentNetWriteBufferSize)
-                throw new IllegalStateException("SSL BUFFER_OVERFLOW when available data size (" + netWriteBuffer.limit() + ") >= network buffer size (" + currentNetWriteBufferSize + ")");
-        } else if (wrapResult.getStatus() == Status.BUFFER_UNDERFLOW) {
-            throw new IllegalStateException("SSL BUFFER_UNDERFLOW during write");
-        } else if (wrapResult.getStatus() == Status.CLOSED) {
-            throw new EOFException();
+
+            //handle ssl renegotiation
+            if (wrapResult.getHandshakeStatus() != HandshakeStatus.NOT_HANDSHAKING && wrapResult.getStatus() == Status.OK)
+                throw renegotiationException();
+
+            if (wrapResult.getStatus() == Status.OK) {
+                written += wrapResult.bytesConsumed();
+                if (!flush(netWriteBuffer)) {
+                    // break if socketChannel can't accept all data in netWriteBuffer
+                    break;
+                }
+                // otherwise, we are safe to go to next iteration.
+            } else if (wrapResult.getStatus() == Status.BUFFER_OVERFLOW) {
+                int currentNetWriteBufferSize = netWriteBufferSize();
+                netWriteBuffer.compact();
+                netWriteBuffer = Utils.ensureCapacity(netWriteBuffer, currentNetWriteBufferSize);
+                netWriteBuffer.flip();
+                if (netWriteBuffer.limit() >= currentNetWriteBufferSize) throw new IllegalStateException(
+                    "SSL BUFFER_OVERFLOW when available data size (" + netWriteBuffer.limit() + ") >= network buffer size (" + currentNetWriteBufferSize + ")");
+            } else if (wrapResult.getStatus() == Status.BUFFER_UNDERFLOW) {
+                throw new IllegalStateException("SSL BUFFER_UNDERFLOW during write");
+            } else if (wrapResult.getStatus() == Status.CLOSED) {
+                throw new EOFException();
+            }
         }
         return written;
     }
