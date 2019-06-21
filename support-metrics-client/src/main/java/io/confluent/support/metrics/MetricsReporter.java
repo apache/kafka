@@ -20,8 +20,9 @@ import io.confluent.support.metrics.collectors.CollectorFactory;
 import io.confluent.support.metrics.common.Collector;
 import io.confluent.support.metrics.common.CollectorType;
 import io.confluent.support.metrics.common.kafka.KafkaUtilities;
-import io.confluent.support.metrics.common.kafka.ZkClientProvider;
 import io.confluent.support.metrics.common.time.TimeUtils;
+import io.confluent.support.metrics.submitters.KafkaSubmitter;
+import io.confluent.support.metrics.submitters.Submitter;
 import io.confluent.support.metrics.tools.KafkaServerZkClientProvider;
 import kafka.server.KafkaServer;
 
@@ -38,6 +39,7 @@ public class MetricsReporter extends BaseMetricsReporter {
   private final KafkaServer server;
   private final Runtime serverRuntime;
   private final KafkaSupportConfig kafkaSupportConfig;
+  private final KafkaUtilities kafkaUtilities;
   private final KafkaServerZkClientProvider zkClientProvider;
 
   public MetricsReporter(String threadName,
@@ -65,18 +67,24 @@ public class MetricsReporter extends BaseMetricsReporter {
                          KafkaSupportConfig kafkaSupportConfig,
                          Runtime serverRuntime,
                          KafkaUtilities kafkaUtilities) {
-    super(threadName, isDaemon, kafkaSupportConfig, kafkaUtilities, null, true);
+    super(threadName, isDaemon, kafkaSupportConfig, null, true);
     this.server = server;
     this.serverRuntime = serverRuntime;
     this.kafkaSupportConfig = kafkaSupportConfig;
+    this.kafkaUtilities = kafkaUtilities;
     this.zkClientProvider = new KafkaServerZkClientProvider(server);
     Objects.requireNonNull(server, "Kafka Server can't be null");
     Objects.requireNonNull(serverRuntime, "serverRuntime can't be null");
   }
 
   @Override
-  protected ZkClientProvider zkClientProvider() {
-    return zkClientProvider;
+  protected Submitter createKafkaSubmitter(String supportTopic) {
+    return new KafkaSubmitter(zkClientProvider, supportTopic);
+  }
+
+  protected boolean kafkaSubmitterReady(String supportTopic) {
+    return kafkaUtilities.createAndVerifyTopic(zkClientProvider.zkClient(), supportTopic,
+        SUPPORT_TOPIC_PARTITIONS, SUPPORT_TOPIC_REPLICATION, RETENTION_MS);
   }
 
   @Override

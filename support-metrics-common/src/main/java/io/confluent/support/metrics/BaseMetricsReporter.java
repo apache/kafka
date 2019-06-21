@@ -23,14 +23,11 @@ import java.io.IOException;
 import java.util.Objects;
 
 import io.confluent.support.metrics.common.Collector;
-import io.confluent.support.metrics.common.kafka.KafkaUtilities;
-import io.confluent.support.metrics.common.kafka.ZkClientProvider;
 import io.confluent.support.metrics.serde.AvroSerializer;
 import io.confluent.support.metrics.submitters.ConfluentSubmitter;
-import io.confluent.support.metrics.submitters.KafkaSubmitter;
 import io.confluent.support.metrics.submitters.ResponseHandler;
+import io.confluent.support.metrics.submitters.Submitter;
 import io.confluent.support.metrics.utils.Jitter;
-import io.confluent.support.metrics.utils.StringUtils;
 
 /**
  * Periodically reports metrics collected from a Kafka broker.
@@ -48,7 +45,7 @@ public abstract class BaseMetricsReporter extends Thread implements Closeable {
    * Default "retention.ms" setting (i.e. time-based retention) of the support metrics topic. Used
    * when creating the topic in case it doesn't exist yet.
    */
-  private static final long RETENTION_MS = 365 * 24 * 60 * 60 * 1000L;
+  protected static final long RETENTION_MS = 365 * 24 * 60 * 60 * 1000L;
 
   /**
    * Default replication factor of the support metrics topic. Used when creating the topic in case
@@ -60,7 +57,7 @@ public abstract class BaseMetricsReporter extends Thread implements Closeable {
    * Default number of partitions of the support metrics topic. Used when creating the topic in case
    * it doesn't exist yet.
    */
-  private static final int SUPPORT_TOPIC_PARTITIONS = 1;
+  protected static final int SUPPORT_TOPIC_PARTITIONS = 1;
 
   /**
    * Length of the wait period we give the server to start up completely (in a different thread)
@@ -72,11 +69,10 @@ public abstract class BaseMetricsReporter extends Thread implements Closeable {
   private String customerId;
   private long reportIntervalMs;
   private String supportTopic;
-  private KafkaSubmitter kafkaSubmitter;
-  private ConfluentSubmitter confluentSubmitter;
+  private Submitter kafkaSubmitter;
+  private Submitter confluentSubmitter;
   private Collector metricsCollector;
   private final AvroSerializer encoder = new AvroSerializer();
-  protected final KafkaUtilities kafkaUtilities;
   protected final BaseSupportConfig supportConfig;
   private final ResponseHandler responseHandler;
   private volatile boolean isClosing = false;
@@ -84,30 +80,24 @@ public abstract class BaseMetricsReporter extends Thread implements Closeable {
   public BaseMetricsReporter(String threadName,
                              boolean isDaemon,
                              BaseSupportConfig serverConfiguration) {
-    this(threadName, isDaemon, serverConfiguration,  new KafkaUtilities(), null, true);
+    this(threadName, isDaemon, serverConfiguration, null, true);
   }
 
   /**
    * @param supportConfig The properties this server was created from, plus extra Proactive Support
    *     (PS) one Note that Kafka does not understand PS properties, hence server->KafkaConfig()
    *     does not contain any of them, necessitating passing this extra argument to the API.
-   * @param kafkaUtilities      An instance of {@link KafkaUtilities} that will be used to perform
    * @param responseHandler Http Response Handler
    * @param enableSettlingTime Enable settling time before starting metrics
    */
   public BaseMetricsReporter(String threadName,
                              boolean isDaemon,
                              BaseSupportConfig supportConfig,
-                             KafkaUtilities kafkaUtilities,
                              ResponseHandler responseHandler,
                              boolean enableSettlingTime) {
     super(threadName);
     setDaemon(isDaemon);
     Objects.requireNonNull(supportConfig, "supportConfig can't be null");
-    if (!StringUtils.isNullOrBlank(supportConfig.getKafkaTopic())) {
-      Objects.requireNonNull(kafkaUtilities, "kafkaUtilities can't be null");
-    }
-    this.kafkaUtilities = kafkaUtilities;
     this.supportConfig = supportConfig;
     this.responseHandler = responseHandler;
     this.enableSettlingTime = enableSettlingTime;
@@ -122,7 +112,7 @@ public abstract class BaseMetricsReporter extends Thread implements Closeable {
     supportTopic = supportConfig.getKafkaTopic();
 
     if (!supportTopic.isEmpty()) {
-      kafkaSubmitter = new KafkaSubmitter(zkClientProvider(), supportTopic);
+      kafkaSubmitter = createKafkaSubmitter(supportTopic);
     } else {
       kafkaSubmitter = null;
     }
@@ -143,7 +133,9 @@ public abstract class BaseMetricsReporter extends Thread implements Closeable {
     }
   }
 
-  protected abstract ZkClientProvider zkClientProvider();
+  protected abstract Submitter createKafkaSubmitter(String supportTopic);
+
+  protected abstract boolean kafkaSubmitterReady(String supportTopic);
 
   protected abstract Collector metricsCollector();
 
@@ -227,9 +219,7 @@ public abstract class BaseMetricsReporter extends Thread implements Closeable {
       if (sendToKafkaEnabled() && encodedMetricsRecord != null) {
         // attempt to create the topic. If failures occur, try again in the next round, however
         // the current batch of metrics will be lost.
-        if (kafkaUtilities.createAndVerifyTopic(zkClientProvider().zkClient(), supportTopic,
-            SUPPORT_TOPIC_PARTITIONS, SUPPORT_TOPIC_REPLICATION, RETENTION_MS
-        )) {
+        if (kafkaSubmitterReady(supportTopic)) {
           kafkaSubmitter.submit(encodedMetricsRecord);
         }
       }
