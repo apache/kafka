@@ -254,39 +254,42 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     }
 
     private void maybeAssignPartitions(final Set<TopicPartition> assignedPartitions) {
-        log.info("Setting newly assigned partitions: {}", Utils.join(assignedPartitions, ", "));
+        if (!assignedPartitions.isEmpty()) {
+            log.info("Setting newly assigned partitions: {}", Utils.join(assignedPartitions, ", "));
 
-        ConsumerRebalanceListener listener = subscriptions.rebalanceListener();
-        try {
-            listener.onPartitionsAssigned(assignedPartitions);
-        } catch (WakeupException | InterruptException e) {
-            throw e;
-        } catch (Exception e) {
-            log.error("User provided listener {} failed on partition assignment", listener.getClass().getName(), e);
+            ConsumerRebalanceListener listener = subscriptions.rebalanceListener();
+            try {
+                listener.onPartitionsAssigned(assignedPartitions);
+            } catch (WakeupException | InterruptException e) {
+                throw e;
+            } catch (Exception e) {
+                log.error("User provided listener {} failed on partition assignment", listener.getClass().getName(), e);
+            }
         }
     }
 
     private void maybeRevokePartitions(final Predicate<TopicPartition> predicate) {
         Set<TopicPartition> ownedPartitions = new HashSet<>(subscriptions.assignedPartitions());
 
-        Set<TopicPartition> revokedPartitions = metadataSnapshot == null ? ownedPartitions :
-            ownedPartitions.stream().filter(predicate).collect(Collectors.toSet());
+        Set<TopicPartition> revokedPartitions = ownedPartitions.stream().filter(predicate).collect(Collectors.toSet());
 
-        log.info("Revoke previously assigned partitions {}", revokedPartitions);
+        if (!revokedPartitions.isEmpty()) {
+            log.info("Revoke previously assigned partitions {}", revokedPartitions);
 
-        ConsumerRebalanceListener listener = subscriptions.rebalanceListener();
-        try {
-            listener.onPartitionsRevoked(revokedPartitions);
-        } catch (WakeupException | InterruptException e) {
-            throw e;
-        } catch (Exception e) {
-            log.error("User provided listener {} failed on partition being revocation", listener.getClass().getName(), e);
+            ConsumerRebalanceListener listener = subscriptions.rebalanceListener();
+            try {
+                listener.onPartitionsRevoked(revokedPartitions);
+            } catch (WakeupException | InterruptException e) {
+                throw e;
+            } catch (Exception e) {
+                log.error("User provided listener {} failed on partition being revocation", listener.getClass().getName(), e);
+            }
+
+            Set<TopicPartition> leftPartitions = new HashSet<>(ownedPartitions);
+            leftPartitions.removeAll(revokedPartitions);
+
+            subscriptions.assignFromSubscribed(leftPartitions);
         }
-
-        Set<TopicPartition> leftPartitions = new HashSet<>(ownedPartitions);
-        leftPartitions.removeAll(revokedPartitions);
-
-        subscriptions.assignFromSubscribed(leftPartitions);
     }
 
     private void maybeLosePartitions(final String rootCause, final Predicate<TopicPartition> predicate) {
@@ -362,6 +365,8 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                     log.info("Coordinator has owned partitions {} that are not revoked with {} protocol, " +
                         "it is likely client is woken up before a previous pending rebalance completes its callback", ownedPartitions, protocol);
                 }
+
+                // TODO: after refactored the error handling, we need to exclude owned partitions from assigned partitions
 
                 maybeAssignPartitions(assignedPartitions);
                 break;

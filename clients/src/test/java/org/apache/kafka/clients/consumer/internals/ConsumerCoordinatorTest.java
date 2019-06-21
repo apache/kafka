@@ -486,8 +486,8 @@ public class ConsumerCoordinatorTest {
         assertFalse(coordinator.rejoinNeededOrPending());
         assertEquals(toSet(assigned), subscriptions.assignedPartitions());
         assertEquals(subscription, subscriptions.groupSubscription());
-        assertEquals(1, rebalanceListener.revokedCount);
-        assertEquals(getRevoked(owned, assigned), rebalanceListener.revoked);
+        assertEquals(0, rebalanceListener.revokedCount);
+        assertNull(rebalanceListener.revoked);
         assertEquals(1, rebalanceListener.assignedCount);
         assertEquals(getAdded(owned, assigned), rebalanceListener.assigned);
     }
@@ -549,14 +549,13 @@ public class ConsumerCoordinatorTest {
         final Collection<TopicPartition> revoked = getRevoked(owned, newAssignment);
         final Collection<TopicPartition> assigned = getAdded(owned, newAssignment);
 
-        final int revokeCount = 2;
         final int addCount = 1;
 
         assertFalse(coordinator.rejoinNeededOrPending());
         assertEquals(toSet(newAssignment), subscriptions.assignedPartitions());
         assertEquals(toSet(newSubscription), subscriptions.groupSubscription());
-        assertEquals(revokeCount, rebalanceListener.revokedCount);
-        assertEquals(revoked, rebalanceListener.revoked);
+        assertEquals(0, rebalanceListener.revokedCount);
+        assertNull(rebalanceListener.revoked);
         assertEquals(addCount, rebalanceListener.assignedCount);
         assertEquals(assigned, rebalanceListener.assigned);
     }
@@ -595,14 +594,13 @@ public class ConsumerCoordinatorTest {
 
         coordinator.poll(time.timer(Long.MAX_VALUE));
 
-        final int revokeCount = protocol == PartitionAssignor.RebalanceProtocol.EAGER ? 1 : 2;
-
         assertFalse(coordinator.rejoinNeededOrPending());
         assertEquals(2, subscriptions.numAssignedPartitions());
         assertEquals(2, subscriptions.groupSubscription().size());
         assertEquals(2, subscriptions.subscription().size());
-        assertEquals(revokeCount, rebalanceListener.revokedCount);
-        assertEquals(getRevoked(owned, assigned), rebalanceListener.revoked);
+        // callback not triggered at all since there's nothing to be revoked
+        assertEquals(0, rebalanceListener.revokedCount);
+        assertNull(rebalanceListener.revoked);
         assertEquals(1, rebalanceListener.assignedCount);
         assertEquals(getAdded(owned, assigned), rebalanceListener.assigned);
     }
@@ -612,7 +610,6 @@ public class ConsumerCoordinatorTest {
         final String consumerId = "leader";
         final List<TopicPartition> owned = Collections.emptyList();
         final List<TopicPartition> oldAssigned = Arrays.asList(t1p);
-
 
         subscriptions.subscribe(Pattern.compile(".*"), rebalanceListener);
         client.updateMetadata(TestUtils.metadataUpdateWith(1, singletonMap(topic1, 1)));
@@ -646,8 +643,9 @@ public class ConsumerCoordinatorTest {
         assertFalse(coordinator.rejoinNeededOrPending());
         assertEquals(singleton(topic1), subscriptions.subscription());
         assertEquals(toSet(oldAssigned), subscriptions.assignedPartitions());
-        assertEquals(1, rebalanceListener.revokedCount);
-        assertEquals(getRevoked(owned, oldAssigned), rebalanceListener.revoked);
+        // nothing to be revoked and hence no callback triggered
+        assertEquals(0, rebalanceListener.revokedCount);
+        assertNull(rebalanceListener.revoked);
         assertEquals(1, rebalanceListener.assignedCount);
         assertEquals(getAdded(owned, oldAssigned), rebalanceListener.assigned);
 
@@ -676,11 +674,13 @@ public class ConsumerCoordinatorTest {
 
         coordinator.poll(time.timer(Long.MAX_VALUE));
 
+        Collection<TopicPartition> revoked = getRevoked(oldAssigned, newAssigned);
+
         assertFalse(coordinator.rejoinNeededOrPending());
         assertEquals(toSet(updatedSubscription), subscriptions.subscription());
         assertEquals(toSet(newAssigned), subscriptions.assignedPartitions());
-        assertEquals(2, rebalanceListener.revokedCount);
-        assertEquals(getRevoked(oldAssigned, newAssigned), rebalanceListener.revoked);
+        assertEquals(revoked.isEmpty() ? 0 : 1, rebalanceListener.revokedCount);
+        assertEquals(revoked.isEmpty() ? null : revoked, rebalanceListener.revoked);
         assertEquals(2, rebalanceListener.assignedCount);
         assertEquals(getAdded(oldAssigned, newAssigned), rebalanceListener.assigned);
     }
@@ -762,8 +762,8 @@ public class ConsumerCoordinatorTest {
 
         assertFalse(coordinator.rejoinNeededOrPending());
         assertEquals(toSet(assigned), subscriptions.assignedPartitions());
-        assertEquals(1, rebalanceListener.revokedCount);
-        assertEquals(getRevoked(owned, assigned), rebalanceListener.revoked);
+        assertEquals(0, rebalanceListener.revokedCount);
+        assertNull(rebalanceListener.revoked);
         assertEquals(1, rebalanceListener.assignedCount);
         assertEquals(getAdded(owned, assigned), rebalanceListener.assigned);
     }
@@ -797,8 +797,8 @@ public class ConsumerCoordinatorTest {
         assertFalse(coordinator.rejoinNeededOrPending());
         assertEquals(toSet(assigned), subscriptions.assignedPartitions());
         assertEquals(subscription, subscriptions.groupSubscription());
-        assertEquals(1, rebalanceListener.revokedCount);
-        assertEquals(getRevoked(owned, assigned), rebalanceListener.revoked);
+        assertEquals(0, rebalanceListener.revokedCount);
+        assertNull(rebalanceListener.revoked);
         assertEquals(1, rebalanceListener.assignedCount);
         assertEquals(getAdded(owned, assigned), rebalanceListener.assigned);
     }
@@ -867,8 +867,8 @@ public class ConsumerCoordinatorTest {
         assertFalse(coordinator.rejoinNeededOrPending());
         assertEquals(assigned.size(), subscriptions.numAssignedPartitions());
         assertEquals(subscription, subscriptions.subscription());
-        assertEquals(1, rebalanceListener.revokedCount);
-        assertEquals(getRevoked(owned, assigned), rebalanceListener.revoked);
+        assertEquals(0, rebalanceListener.revokedCount);
+        assertNull(rebalanceListener.revoked);
         assertEquals(1, rebalanceListener.assignedCount);
         assertEquals(getAdded(owned, assigned), rebalanceListener.assigned);
     }
@@ -1173,8 +1173,8 @@ public class ConsumerCoordinatorTest {
         coordinator.poll(time.timer(Long.MAX_VALUE));
 
         assertFalse(coordinator.rejoinNeededOrPending());
-        assertEquals(1, rebalanceListener.revokedCount);
-        assertEquals(2, rebalanceListener.assignedCount);
+        assertEquals(0, rebalanceListener.revokedCount);
+        assertEquals(protocol == PartitionAssignor.RebalanceProtocol.EAGER ? 2 : 1, rebalanceListener.assignedCount);
     }
 
     @Test
@@ -1213,7 +1213,8 @@ public class ConsumerCoordinatorTest {
         client.prepareResponse(syncGroupResponse(Collections.emptyList(), Errors.NONE));
         coordinator.poll(time.timer(Long.MAX_VALUE));
         assertFalse(coordinator.rejoinNeededOrPending());
-        assertEquals(Collections.emptySet(), rebalanceListener.assigned);
+        // callback not triggered since there's nothing to be assigned
+        assertNull(rebalanceListener.assigned);
         assertTrue("Metadata refresh not requested for unavailable partitions", metadata.updateRequested());
 
         Map<String, Errors> topicErrors = new HashMap<>();
@@ -1275,8 +1276,8 @@ public class ConsumerCoordinatorTest {
         // join the group once
         joinAsFollowerAndReceiveAssignment("consumer", coordinator, assigned);
 
-        assertEquals(1, rebalanceListener.revokedCount);
-        assertEquals(getRevoked(owned, assigned), rebalanceListener.revoked);
+        assertEquals(0, rebalanceListener.revokedCount);
+        assertNull(rebalanceListener.revoked);
         assertEquals(1, rebalanceListener.assignedCount);
         assertEquals(getAdded(owned, assigned), rebalanceListener.assigned);
 
@@ -1288,10 +1289,12 @@ public class ConsumerCoordinatorTest {
         client.prepareResponse(syncGroupResponse(assigned, Errors.NONE));
         coordinator.joinGroupIfNeeded(time.timer(Long.MAX_VALUE));
 
-        assertEquals(2, rebalanceListener.revokedCount);
-        assertEquals(getRevoked(assigned, assigned), rebalanceListener.revoked);
-        assertEquals(2, rebalanceListener.assignedCount);
-        assertEquals(getAdded(assigned, assigned), rebalanceListener.assigned);
+        Collection<TopicPartition> revoked = getRevoked(assigned, assigned);
+        Collection<TopicPartition> added = getAdded(assigned, assigned);
+        assertEquals(revoked.isEmpty() ? 0 : 1, rebalanceListener.revokedCount);
+        assertEquals(revoked.isEmpty() ? null : revoked, rebalanceListener.revoked);
+        assertEquals(added.isEmpty() ? 1 : 2, rebalanceListener.assignedCount);
+        assertEquals(added.isEmpty() ? null : added, rebalanceListener.assigned);
     }
 
     @Test
@@ -1314,8 +1317,9 @@ public class ConsumerCoordinatorTest {
 
         assertFalse(coordinator.rejoinNeededOrPending());
         assertEquals(toSet(assigned), subscriptions.assignedPartitions());
-        assertEquals(revokeCount, rebalanceListener.revokedCount);
-        assertEquals(getRevoked(owned, assigned), rebalanceListener.revoked);
+        // nothing to be revoked hence callback not triggered
+        assertEquals(0, rebalanceListener.revokedCount);
+        assertNull(rebalanceListener.revoked);
         assertEquals(1, rebalanceListener.assignedCount);
         assertEquals(getAdded(owned, assigned), rebalanceListener.assigned);
     }
