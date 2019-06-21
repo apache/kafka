@@ -112,6 +112,7 @@ class SecurityConfig(TemplateRenderer):
 
     def __init__(self, context, security_protocol=None, interbroker_security_protocol=None,
                  client_sasl_mechanism=SASL_MECHANISM_GSSAPI, interbroker_sasl_mechanism=SASL_MECHANISM_GSSAPI,
+                 client_listener_overrides={}, interbroker_listener_overrides={},
                  zk_sasl=False, template_props="", static_jaas_conf=True, jaas_override_variables=None):
         """
         Initialize the security properties for the node and copy
@@ -140,6 +141,8 @@ class SecurityConfig(TemplateRenderer):
         if interbroker_security_protocol is None:
             interbroker_security_protocol = security_protocol
         self.interbroker_security_protocol = interbroker_security_protocol
+        self.client_listener_overrides = client_listener_overrides
+        self.interbroker_listener_overrides = interbroker_listener_overrides
         self.has_sasl = self.is_sasl(security_protocol) or self.is_sasl(interbroker_security_protocol) or zk_sasl
         self.has_ssl = self.is_ssl(security_protocol) or self.is_ssl(interbroker_security_protocol)
         self.zk_sasl = zk_sasl
@@ -156,6 +159,7 @@ class SecurityConfig(TemplateRenderer):
             'sasl.mechanism.inter.broker.protocol' : interbroker_sasl_mechanism,
             'sasl.kerberos.service.name' : 'kafka'
         }
+        self.properties.update(self.client_listener_overrides)
         self.jaas_override_variables = jaas_override_variables or {}
 
     def client_config(self, template_props="", node=None, jaas_override_variables=None):
@@ -167,6 +171,7 @@ class SecurityConfig(TemplateRenderer):
         static_jaas_conf = node is None or (self.has_sasl and self.has_ssl)
         return SecurityConfig(self.context, self.security_protocol,
                               client_sasl_mechanism=self.client_sasl_mechanism,
+                              client_listener_overrides=self.client_listener_overrides,
                               template_props=template_props,
                               static_jaas_conf=static_jaas_conf,
                               jaas_override_variables=jaas_override_variables)
@@ -185,20 +190,24 @@ class SecurityConfig(TemplateRenderer):
         jaas_conf_file = "jaas.conf"
         java_version = node.account.ssh_capture("java -version")
 
-        jaas_conf = self.render_jaas_config(
-            jaas_conf_file,
-            {
-                'node': node,
-                'is_ibm_jdk': any('IBM' in line for line in java_version),
-                'SecurityConfig': SecurityConfig,
-                'client_sasl_mechanism': self.client_sasl_mechanism,
-                'enabled_sasl_mechanisms': self.enabled_sasl_mechanisms
-            }
-        )
+        jaas_conf = None
+        if 'sasl.jaas.config' not in self.properties:
+            jaas_conf = self.render_jaas_config(
+                jaas_conf_file,
+                {
+                    'node': node,
+                    'is_ibm_jdk': any('IBM' in line for line in java_version),
+                    'SecurityConfig': SecurityConfig,
+                    'client_sasl_mechanism': self.client_sasl_mechanism,
+                    'enabled_sasl_mechanisms': self.enabled_sasl_mechanisms
+                }
+            )
+        else:
+            jaas_conf = self.properties['sasl.jaas.config']
 
         if self.static_jaas_conf:
             node.account.create_file(SecurityConfig.JAAS_CONF_PATH, jaas_conf)
-        else:
+        elif 'sasl.jaas.config' not in self.properties:
             self.properties['sasl.jaas.config'] = jaas_conf.replace("\n", " \\\n")
         if self.has_sasl_kerberos:
             node.account.copy_to(MiniKdc.LOCAL_KEYTAB_FILE, SecurityConfig.KEYTAB_PATH)

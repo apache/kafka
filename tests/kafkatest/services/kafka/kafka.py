@@ -92,6 +92,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
 
     def __init__(self, context, num_nodes, zk, security_protocol=SecurityConfig.PLAINTEXT, interbroker_security_protocol=SecurityConfig.PLAINTEXT,
                  client_sasl_mechanism=SecurityConfig.SASL_MECHANISM_GSSAPI, interbroker_sasl_mechanism=SecurityConfig.SASL_MECHANISM_GSSAPI,
+                 client_listener_overrides={}, interbroker_listener_overrides={},
                  authorizer_class_name=None, topics=None, version=DEV_BRANCH, jmx_object_names=None,
                  jmx_attributes=None, zk_connect_timeout=5000, zk_session_timeout=6000, server_prop_overides=None, zk_chroot=None,
                  use_separate_interbroker_listener=False):
@@ -128,6 +129,8 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
 
         self.security_protocol = security_protocol
         self.client_sasl_mechanism = client_sasl_mechanism
+        self.client_listener_overrides = client_listener_overrides
+        self.interbroker_listener_overrides = interbroker_listener_overrides
         self.topics = topics
         self.minikdc = None
         self.authorizer_class_name = authorizer_class_name
@@ -286,7 +289,9 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
 
         #load template configs as dictionary
         config_template = self.render('kafka.properties', node=node, broker_id=self.idx(node),
-                                 security_config=self.security_config, num_nodes=self.num_nodes)
+                                 security_config=self.security_config, num_nodes=self.num_nodes,
+                                 client_listener_overrides=self.client_listener_overrides,
+                                 interbroker_listener_overrides=self.interbroker_listener_overrides)
 
         configs = dict( l.rstrip().split('=', 1) for l in config_template.split('\n')
                         if not l.startswith("#") and "=" in l )
