@@ -133,6 +133,7 @@ public class RecordBatchIterationBenchmark {
     }
 
     @OperationsPerInvocation(value = batchCount)
+    @Fork(jvmArgsAppend = "-Xmx8g")
     @Benchmark
     public void measureStreamingIteratorForVariableBatchSize(Blackhole bh) throws IOException {
         for (int i = 0; i < batchCount; ++i) {
@@ -146,6 +147,7 @@ public class RecordBatchIterationBenchmark {
     }
 
     @OperationsPerInvocation(value = batchCount)
+    @Fork(jvmArgsAppend = "-Xmx8g")
     @Benchmark
     public void measureSkipIteratorForVariableBatchSize(Blackhole bh) throws IOException {
         for (int i = 0; i < batchCount; ++i) {

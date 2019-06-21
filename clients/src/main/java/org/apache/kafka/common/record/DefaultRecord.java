@@ -444,54 +444,27 @@ public class DefaultRecord implements Record {
     }
 
     private static byte readByte(ByteBuffer buffer, DataInput input, IntRef bytesRemaining) throws IOException {
-        boolean needMore = false;
-
-        while (true) {
-            if (needMore) {
-                readMore(buffer, input, bytesRemaining);
-                needMore = false;
-            }
-
-            if (buffer.remaining() < 1 && bytesRemaining.value > 0) {
-                needMore = true;
-            } else {
-                return buffer.get();
-            }
+        if (buffer.remaining() < 1 && bytesRemaining.value > 0) {
+            readMore(buffer, input, bytesRemaining);
         }
+
+        return buffer.get();
     }
 
     private static long readVarLong(ByteBuffer buffer, DataInput input, IntRef bytesRemaining) throws IOException {
-        boolean needMore = false;
-
-        while (true) {
-            if (needMore) {
-                readMore(buffer, input, bytesRemaining);
-                needMore = false;
-            }
-
-            if (buffer.remaining() < 10 && bytesRemaining.value > 0) {
-                needMore = true;
-            } else {
-                return ByteUtils.readVarlong(buffer);
-            }
+        if (buffer.remaining() < 10 && bytesRemaining.value > 0) {
+            readMore(buffer, input, bytesRemaining);
         }
+
+        return ByteUtils.readVarlong(buffer);
     }
 
     private static int readVarInt(ByteBuffer buffer, DataInput input, IntRef bytesRemaining) throws IOException {
-        boolean needMore = false;
-
-        while (true) {
-            if (needMore) {
-                readMore(buffer, input, bytesRemaining);
-                needMore = false;
-            }
-
-            if (buffer.remaining() < 5 && bytesRemaining.value > 0) {
-                needMore = true;
-            } else {
-                return ByteUtils.readVarint(buffer);
-            }
+        if (buffer.remaining() < 5 && bytesRemaining.value > 0) {
+            readMore(buffer, input, bytesRemaining);
         }
+
+        return ByteUtils.readVarint(buffer);
     }
 
     private static int skipLengthDelimitedField(ByteBuffer buffer, DataInput input, IntRef bytesRemaining) throws IOException {
