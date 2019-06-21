@@ -109,7 +109,7 @@ public class SerializationTest {
     @Test
     public void listSerdeShouldRoundtripInput() {
         List<Integer> testData = Arrays.asList(1, 2, 3);
-        Serde<List<Integer>> listSerde = Serdes.ListSerde(Serdes.Integer());
+        Serde<List<Integer>> listSerde = Serdes.ListSerde(ArrayList.class, Serdes.Integer());
         assertEquals("Should get the original " + List.class +
                         " after serialization and deserialization", testData,
                 listSerde.deserializer().deserialize(topic, listSerde.serializer().serialize(topic, testData)));
@@ -118,7 +118,7 @@ public class SerializationTest {
     @Test
     public void listSerdeShouldReturnNull() {
         List<Integer> testData = Arrays.asList();
-        Serde<List<Integer>> listSerde = Serdes.ListSerde(Serdes.Integer());
+        Serde<List<Integer>> listSerde = Serdes.ListSerde(ArrayList.class, Serdes.Integer());
         assertEquals("Should get null after serialization and deserialization on an empty list", null,
                 listSerde.deserializer().deserialize(topic, listSerde.serializer().serialize(topic, testData)));
     }

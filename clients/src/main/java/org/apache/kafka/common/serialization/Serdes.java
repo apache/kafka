@@ -126,10 +126,11 @@ public class Serdes {
         }
     }
 
-    static public final class ListSerde<T> extends WrapperSerde<List<T>> {
-        public ListSerde(Serde<T> serde) {
-            super(new ListSerializer(serde.serializer()), new ListDeserializer<>(serde.deserializer()));
-        }
+    /*
+     * A serde for nullable {@code List} type
+     */
+    public static <T> Serde<List<T>> ListSerde(Class listClass, Serde<T> innerSerde) {
+        return new ListSerde<T>(listClass, innerSerde);
     }
 
     @SuppressWarnings("unchecked")

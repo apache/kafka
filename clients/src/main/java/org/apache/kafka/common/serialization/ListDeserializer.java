@@ -19,7 +19,7 @@ package org.apache.kafka.common.serialization;
 import java.io.ByteArrayInputStream;
 import java.io.DataInputStream;
 import java.io.IOException;
-import java.util.ArrayList;
+import java.lang.reflect.Constructor;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -27,6 +27,7 @@ import java.util.stream.Stream;
 
 public class ListDeserializer<T> implements Deserializer<List<T>> {
 
+    private final Class listClass;
     private final Deserializer<T> deserializer;
     private final Integer primitiveSize;
 
@@ -39,7 +40,8 @@ public class ListDeserializer<T> implements Deserializer<List<T>> {
             {BytesDeserializer.class, 1}
     }).collect(Collectors.toMap(e -> (Class) e[0], e -> (Integer) e[1]));
 
-    public ListDeserializer(Deserializer<T> deserializer) {
+    public ListDeserializer(Class listClass, Deserializer<T> deserializer) {
+        this.listClass = listClass;
         this.deserializer = deserializer;
         this.primitiveSize = primitiveDeserializers.get(deserializer.getClass());
     }
@@ -49,6 +51,15 @@ public class ListDeserializer<T> implements Deserializer<List<T>> {
         deserializer.configure(configs, isKey);
     }
 
+    private List<T> getListInstance(int listSize) {
+        try {
+            Constructor<?> listConstructor = listClass.getConstructor(Integer.TYPE);
+            return (List<T>) listConstructor.newInstance(listSize);
+        } catch (Exception e) {
+            throw new RuntimeException("Could not construct a list instance of \"" + listClass.getCanonicalName() + "\"", e);
+        }
+    }
+
     @Override
     public List<T> deserialize(String topic, byte[] data) {
         if (data == null || data.length == 0) {
@@ -56,7 +67,7 @@ public class ListDeserializer<T> implements Deserializer<List<T>> {
         }
         try (final DataInputStream dis = new DataInputStream(new ByteArrayInputStream(data))) {
             final int size = dis.readInt();
-            List<T> deserializedList = new ArrayList<>(size);
+            List<T> deserializedList = getListInstance(size);
             for (int i = 0; i < size; i++) {
                 byte[] payload;
                 payload = new byte[primitiveSize == null ? dis.readInt() : primitiveSize];
