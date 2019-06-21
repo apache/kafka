@@ -23,7 +23,7 @@ import kafka.metrics.KafkaMetricsGroup
 import java.util.concurrent.{CountDownLatch, TimeUnit}
 import java.util.concurrent.atomic.AtomicInteger
 
-import com.yammer.metrics.core.Meter
+import com.yammer.metrics.core.{Meter, Metric}
 import org.apache.kafka.common.internals.FatalExitError
 import org.apache.kafka.common.utils.{KafkaThread, Time}
 
@@ -146,9 +146,15 @@ class BrokerTopicMetrics(name: Option[String]) extends KafkaMetricsGroup {
     case Some(topic) => Map("topic" -> topic)
   }
 
-  val messagesInRate = newMeter(BrokerTopicStats.MessagesInPerSec, "messages", TimeUnit.SECONDS, tags)
-  val bytesInRate = newMeter(BrokerTopicStats.BytesInPerSec, "bytes", TimeUnit.SECONDS, tags)
-  val bytesOutRate = newMeter(BrokerTopicStats.BytesOutPerSec, "bytes", TimeUnit.SECONDS, tags)
+  private val metricTypeMap = new Pool[String, Meter]
+
+  def messagesInRate = metricTypeMap.getAndMaybePut(
+  BrokerTopicStats.MessagesInPerSec, newMeter(BrokerTopicStats.MessagesInPerSec, "messages", TimeUnit.SECONDS, tags))
+  def bytesInRate = metricTypeMap.getAndMaybePut(
+    BrokerTopicStats.BytesInPerSec, newMeter(BrokerTopicStats.BytesInPerSec, "bytes", TimeUnit.SECONDS, tags))
+  def bytesOutRate = metricTypeMap.getAndMaybePut(
+    BrokerTopicStats.BytesOutPerSec, newMeter(BrokerTopicStats.BytesOutPerSec, "bytes", TimeUnit.SECONDS, tags))
+
   val bytesRejectedRate = newMeter(BrokerTopicStats.BytesRejectedPerSec, "bytes", TimeUnit.SECONDS, tags)
   private[server] val replicationBytesInRate =
     if (name.isEmpty) Some(newMeter(BrokerTopicStats.ReplicationBytesInPerSec, "bytes", TimeUnit.SECONDS, tags))
@@ -163,10 +169,17 @@ class BrokerTopicMetrics(name: Option[String]) extends KafkaMetricsGroup {
   val fetchMessageConversionsRate = newMeter(BrokerTopicStats.FetchMessageConversionsPerSec, "requests", TimeUnit.SECONDS, tags)
   val produceMessageConversionsRate = newMeter(BrokerTopicStats.ProduceMessageConversionsPerSec, "requests", TimeUnit.SECONDS, tags)
 
+  def removeMetricHelper(metricType: String, tags: scala.collection.Map[String, String]): Unit = {
+    if (metricTypeMap.contains(metricType)) {
+      metricTypeMap.remove(metricType)
+      removeMetric(metricType, tags)
+    }
+  }
+
   def close() {
-    removeMetric(BrokerTopicStats.MessagesInPerSec, tags)
-    removeMetric(BrokerTopicStats.BytesInPerSec, tags)
-    removeMetric(BrokerTopicStats.BytesOutPerSec, tags)
+    removeMetricHelper(BrokerTopicStats.MessagesInPerSec, tags)
+    removeMetricHelper(BrokerTopicStats.BytesInPerSec, tags)
+    removeMetricHelper(BrokerTopicStats.BytesOutPerSec, tags)
     removeMetric(BrokerTopicStats.BytesRejectedPerSec, tags)
     if (replicationBytesInRate.isDefined)
       removeMetric(BrokerTopicStats.ReplicationBytesInPerSec, tags)
@@ -222,9 +235,9 @@ class BrokerTopicStats {
   // of a leader that becomes a follower
   def removeOldLeaderMetrics(topic: String) {
     val topicMetrics = topicStats(topic)
-    topicMetrics.removeMetric(BrokerTopicStats.MessagesInPerSec, topicMetrics.tags)
-    topicMetrics.removeMetric(BrokerTopicStats.BytesInPerSec, topicMetrics.tags)
-    topicMetrics.removeMetric(BrokerTopicStats.BytesOutPerSec, topicMetrics.tags)
+    topicMetrics.removeMetricHelper(BrokerTopicStats.MessagesInPerSec, topicMetrics.tags)
+    topicMetrics.removeMetricHelper(BrokerTopicStats.BytesInPerSec, topicMetrics.tags)
+    topicMetrics.removeMetricHelper(BrokerTopicStats.BytesOutPerSec, topicMetrics.tags)
   }
 
   def removeMetrics(topic: String) {
