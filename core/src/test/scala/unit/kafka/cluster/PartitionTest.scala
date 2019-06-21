@@ -223,8 +223,10 @@ class PartitionTest {
     // Write to the future replica as if the log had been compacted, and do not roll the segment
 
     val buffer = ByteBuffer.allocate(1024)
-    val builder = MemoryRecords.builder(buffer, RecordBatch.CURRENT_MAGIC_VALUE, CompressionType.NONE,
-      TimestampType.CREATE_TIME, 0L, RecordBatch.NO_TIMESTAMP, 0)
+    val builder = MemoryRecords.builder(buffer)
+      .logAppendTime(RecordBatch.NO_TIMESTAMP)
+      .partitionLeaderEpoch(0)
+      .build()
     builder.appendWithOffset(2L, new SimpleRecord("k1".getBytes, "v3".getBytes))
     builder.appendWithOffset(5L, new SimpleRecord("k2".getBytes, "v6".getBytes))
     builder.appendWithOffset(6L, new SimpleRecord("k3".getBytes, "v7".getBytes))
@@ -916,9 +918,11 @@ class PartitionTest {
         new SimpleRecord("k1".getBytes, "v1".getBytes),
         new SimpleRecord("k2".getBytes, "v2".getBytes))
       val buf = ByteBuffer.allocate(DefaultRecordBatch.sizeInBytes(records.asJava))
-      val builder = MemoryRecords.builder(
-        buf, RecordBatch.CURRENT_MAGIC_VALUE, CompressionType.NONE, TimestampType.CREATE_TIME,
-        baseOffset, time.milliseconds, 0)
+      val builder = MemoryRecords.builder(buf)
+        .baseOffset(baseOffset)
+        .logAppendTime(time.milliseconds)
+        .partitionLeaderEpoch(0)
+        .build()
       records.foreach(builder.append)
       builder.build()
     }
@@ -952,9 +956,12 @@ class PartitionTest {
 
   def createRecords(records: Iterable[SimpleRecord], baseOffset: Long, partitionLeaderEpoch: Int = 0): MemoryRecords = {
     val buf = ByteBuffer.allocate(DefaultRecordBatch.sizeInBytes(records.asJava))
-    val builder = MemoryRecords.builder(
-      buf, RecordBatch.CURRENT_MAGIC_VALUE, CompressionType.NONE, TimestampType.LOG_APPEND_TIME,
-      baseOffset, time.milliseconds, partitionLeaderEpoch)
+    val builder = MemoryRecords.builder(buf)
+      .timestampType(TimestampType.LOG_APPEND_TIME)
+      .baseOffset(baseOffset)
+      .logAppendTime(time.milliseconds)
+      .partitionLeaderEpoch(partitionLeaderEpoch)
+      .build()
     records.foreach(builder.append)
     builder.build()
   }

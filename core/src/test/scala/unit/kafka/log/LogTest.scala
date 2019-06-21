@@ -3213,8 +3213,13 @@ class LogTest {
     val records = Seq(new SimpleRecord(timestamp, key, value))
 
     val buf = ByteBuffer.allocate(DefaultRecordBatch.sizeInBytes(records.asJava))
-    val builder = MemoryRecords.builder(buf, magicValue, codec, TimestampType.CREATE_TIME, offset,
-      System.currentTimeMillis, leaderEpoch)
+    val builder = MemoryRecords.builder(buf)
+      .magic(magicValue)
+      .compressionType(codec)
+      .baseOffset(offset)
+      .logAppendTime(System.currentTimeMillis)
+      .partitionLeaderEpoch(leaderEpoch)
+      .build()
     records.foreach(builder.append)
     builder.build()
   }

@@ -226,8 +226,12 @@ public class MemoryRecordsTest {
             int partitionLeaderEpoch = 67;
 
             ByteBuffer buffer = ByteBuffer.allocate(2048);
-            MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, magic, compression, TimestampType.CREATE_TIME,
-                    0L, RecordBatch.NO_TIMESTAMP, partitionLeaderEpoch);
+            MemoryRecordsBuilder builder = MemoryRecords.builder(buffer)
+                    .magic(magic)
+                    .compressionType(compression)
+                    .logAppendTime(RecordBatch.NO_TIMESTAMP)
+                    .partitionLeaderEpoch(partitionLeaderEpoch)
+                    .build();
             builder.append(10L, null, "a".getBytes());
             builder.append(11L, "1".getBytes(), "b".getBytes());
             builder.append(12L, null, "c".getBytes());

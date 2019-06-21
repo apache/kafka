@@ -233,9 +233,10 @@ public class FetcherTest {
         subscriptions.seek(tp0, 0);
 
         ByteBuffer buffer = ByteBuffer.allocate(1024);
-        MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, RecordBatch.MAGIC_VALUE_V0,
-                CompressionType.NONE, TimestampType.CREATE_TIME, 0L, System.currentTimeMillis(),
-                RecordBatch.NO_PARTITION_LEADER_EPOCH);
+        MemoryRecordsBuilder builder = MemoryRecords.builder(buffer)
+                .magic(RecordBatch.MAGIC_VALUE_V0)
+                .logAppendTime(System.currentTimeMillis())
+                .build();
         builder.append(0L, "key".getBytes(), "1".getBytes());
         builder.append(0L, "key".getBytes(), "2".getBytes());
         MemoryRecords records = builder.build();
@@ -266,23 +267,30 @@ public class FetcherTest {
         Integer partitionLeaderEpoch = 1;
 
         ByteBuffer buffer = ByteBuffer.allocate(1024);
-        MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, RecordBatch.CURRENT_MAGIC_VALUE,
-                CompressionType.NONE, TimestampType.CREATE_TIME, 0L, System.currentTimeMillis(),
-                partitionLeaderEpoch);
+        MemoryRecordsBuilder builder = MemoryRecords.builder(buffer)
+                .logAppendTime(System.currentTimeMillis())
+                .partitionLeaderEpoch(partitionLeaderEpoch)
+                .build();
         builder.append(0L, "key".getBytes(), partitionLeaderEpoch.toString().getBytes());
         builder.append(0L, "key".getBytes(), partitionLeaderEpoch.toString().getBytes());
         builder.close();
 
         partitionLeaderEpoch += 7;
 
-        builder = MemoryRecords.builder(buffer, RecordBatch.CURRENT_MAGIC_VALUE, CompressionType.NONE,
-                TimestampType.CREATE_TIME, 2L, System.currentTimeMillis(), partitionLeaderEpoch);
+        builder = MemoryRecords.builder(buffer)
+                .baseOffset(2L)
+                .logAppendTime(System.currentTimeMillis())
+                .partitionLeaderEpoch(partitionLeaderEpoch)
+                .build();
         builder.append(0L, "key".getBytes(), partitionLeaderEpoch.toString().getBytes());
         builder.close();
 
         partitionLeaderEpoch += 5;
-        builder = MemoryRecords.builder(buffer, RecordBatch.CURRENT_MAGIC_VALUE, CompressionType.NONE,
-                TimestampType.CREATE_TIME, 3L, System.currentTimeMillis(), partitionLeaderEpoch);
+        builder = MemoryRecords.builder(buffer)
+                .baseOffset(3L)
+                .logAppendTime(System.currentTimeMillis())
+                .partitionLeaderEpoch(partitionLeaderEpoch)
+                .build();
         builder.append(0L, "key".getBytes(), partitionLeaderEpoch.toString().getBytes());
         builder.append(0L, "key".getBytes(), partitionLeaderEpoch.toString().getBytes());
         builder.append(0L, "key".getBytes(), partitionLeaderEpoch.toString().getBytes());

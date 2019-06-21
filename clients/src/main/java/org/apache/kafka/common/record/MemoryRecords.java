@@ -534,17 +534,6 @@ public class MemoryRecords extends AbstractRecords {
     }
 
     public static MemoryRecordsBuilder builder(ByteBuffer buffer,
-                                               byte magic,
-                                               CompressionType compressionType,
-                                               TimestampType timestampType,
-                                               long baseOffset,
-                                               long logAppendTime,
-                                               int partitionLeaderEpoch) {
-        return builder(buffer, magic, compressionType, timestampType, baseOffset, logAppendTime,
-                RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, RecordBatch.NO_SEQUENCE, false, partitionLeaderEpoch);
-    }
-
-    public static MemoryRecordsBuilder builder(ByteBuffer buffer,
                                                CompressionType compressionType,
                                                long baseOffset,
                                                long producerId,

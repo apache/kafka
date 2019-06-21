@@ -429,8 +429,12 @@ public class FileRecordsTest {
                                               long offset,
                                               int leaderEpoch) throws IOException {
         ByteBuffer buffer = ByteBuffer.allocate(128);
-        MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, recordVersion.value,
-                CompressionType.NONE, TimestampType.CREATE_TIME, offset, timestamp, leaderEpoch);
+        MemoryRecordsBuilder builder = MemoryRecords.builder(buffer)
+                .magic(recordVersion.value)
+                .baseOffset(offset)
+                .logAppendTime(timestamp)
+                .partitionLeaderEpoch(leaderEpoch)
+                .build();
         builder.append(new SimpleRecord(timestamp, new byte[0], new byte[0]));
         fileRecords.append(builder.build());
     }
