@@ -1137,23 +1137,46 @@ class LogTest {
     val epoch: Short = 0
     val buffer = ByteBuffer.allocate(512)
 
-    var builder = MemoryRecords.builder(buffer, RecordBatch.MAGIC_VALUE_V2, CompressionType.NONE,
-      TimestampType.LOG_APPEND_TIME, 0L, mockTime.milliseconds(), 1L, epoch, 0, false, 0)
+    var builder = MemoryRecords.builder(buffer)
+      .magic(RecordBatch.MAGIC_VALUE_V2)
+      .timestampType(TimestampType.LOG_APPEND_TIME)
+      .logAppendTime(mockTime.milliseconds())
+      .producerState(1L, epoch, 0)
+      .partitionLeaderEpoch(0)
+      .build()
     builder.append(new SimpleRecord("key".getBytes, "value".getBytes))
     builder.close()
 
-    builder = MemoryRecords.builder(buffer, RecordBatch.MAGIC_VALUE_V2, CompressionType.NONE,
-      TimestampType.LOG_APPEND_TIME, 1L, mockTime.milliseconds(), 2L, epoch, 0, false, 0)
+    builder = MemoryRecords.builder(buffer)
+      .magic(RecordBatch.MAGIC_VALUE_V2)
+      .timestampType(TimestampType.LOG_APPEND_TIME)
+      .baseOffset(1L)
+      .logAppendTime(mockTime.milliseconds())
+      .producerState(2L, epoch, 0)
+      .partitionLeaderEpoch(0)
+      .build()
     builder.append(new SimpleRecord("key".getBytes, "value".getBytes))
     builder.close()
 
-    builder = MemoryRecords.builder(buffer, RecordBatch.MAGIC_VALUE_V2, CompressionType.NONE,
-      TimestampType.LOG_APPEND_TIME, 2L, mockTime.milliseconds(), 3L, epoch, 0, false, 0)
+    builder = MemoryRecords.builder(buffer)
+      .magic(RecordBatch.MAGIC_VALUE_V2)
+      .timestampType(TimestampType.LOG_APPEND_TIME)
+      .baseOffset(2L)
+      .logAppendTime(mockTime.milliseconds())
+      .producerState(3L, epoch, 0)
+      .partitionLeaderEpoch(0)
+      .build()
     builder.append(new SimpleRecord("key".getBytes, "value".getBytes))
     builder.close()
 
-    builder = MemoryRecords.builder(buffer, RecordBatch.MAGIC_VALUE_V2, CompressionType.NONE,
-      TimestampType.LOG_APPEND_TIME, 3L, mockTime.milliseconds(), 4L, epoch, 0, false, 0)
+    builder = MemoryRecords.builder(buffer)
+      .magic(RecordBatch.MAGIC_VALUE_V2)
+      .timestampType(TimestampType.LOG_APPEND_TIME)
+      .baseOffset(3L)
+      .logAppendTime(mockTime.milliseconds())
+      .producerState(4L, epoch, 0)
+      .partitionLeaderEpoch(0)
+      .build()
     builder.append(new SimpleRecord("key".getBytes, "value".getBytes))
     builder.close()
 
@@ -2107,9 +2130,14 @@ class LogTest {
     val appendOffsets = Seq(0L, 1L, 3L, 2L, 4L)
     val buffer = ByteBuffer.allocate(512)
     for (offset <- appendOffsets) {
-      val builder = MemoryRecords.builder(buffer, RecordBatch.MAGIC_VALUE_V2, CompressionType.NONE,
-                                          TimestampType.LOG_APPEND_TIME, offset, mockTime.milliseconds(),
-                                          1L, 0, 0, false, 0)
+      val builder = MemoryRecords.builder(buffer)
+        .magic(RecordBatch.MAGIC_VALUE_V2)
+        .timestampType(TimestampType.LOG_APPEND_TIME)
+        .baseOffset(offset)
+        .logAppendTime(mockTime.milliseconds())
+        .producerState(1L, 0, 0)
+        .partitionLeaderEpoch(0)
+        .build()
       builder.append(new SimpleRecord("key".getBytes, "value".getBytes))
       builder.close()
     }
@@ -3814,8 +3842,13 @@ class LogTest {
                                           leaderEpoch: Int = 0): (Long, Int) => Unit = {
     var sequence = 0
     (offset: Long, numRecords: Int) => {
-      val builder = MemoryRecords.builder(buffer, RecordBatch.CURRENT_MAGIC_VALUE, CompressionType.NONE, TimestampType.CREATE_TIME,
-        offset, System.currentTimeMillis(), producerId, producerEpoch, sequence, true, leaderEpoch)
+      val builder = MemoryRecords.builder(buffer)
+        .baseOffset(offset)
+        .logAppendTime(System.currentTimeMillis())
+        .producerState(producerId, producerEpoch, sequence)
+        .transaction(true)
+        .partitionLeaderEpoch(leaderEpoch)
+        .build()
       for (seq <- sequence until sequence + numRecords) {
         val record = new SimpleRecord(s"$seq".getBytes)
         builder.append(record)

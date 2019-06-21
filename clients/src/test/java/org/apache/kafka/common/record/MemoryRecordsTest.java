@@ -263,9 +263,14 @@ public class MemoryRecordsTest {
                 int partitionLeaderEpoch = 293;
                 int numRecords = 2;
 
-                MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, magic, compression, TimestampType.CREATE_TIME,
-                        baseOffset, RecordBatch.NO_TIMESTAMP, producerId, producerEpoch, baseSequence, isTransactional,
-                        partitionLeaderEpoch);
+                MemoryRecordsBuilder builder = MemoryRecords.builder(buffer)
+                        .magic(magic)
+                        .compressionType(compression)
+                        .baseOffset(baseOffset)
+                        .producerState(producerId, producerEpoch, baseSequence)
+                        .transaction(isTransactional)
+                        .partitionLeaderEpoch(partitionLeaderEpoch)
+                        .build();
                 builder.append(11L, "2".getBytes(), "b".getBytes());
                 builder.append(12L, "3".getBytes(), "c".getBytes());
                 builder.close();
@@ -576,8 +581,13 @@ public class MemoryRecordsTest {
             long pid2 = 99384L;
             short epoch2 = 234;
             int baseSequence2 = 15;
-            builder = MemoryRecords.builder(buffer, magic, compression, TimestampType.CREATE_TIME, 3L,
-                    RecordBatch.NO_TIMESTAMP, pid2, epoch2, baseSequence2, true, RecordBatch.NO_PARTITION_LEADER_EPOCH);
+            builder = MemoryRecords.builder(buffer)
+                    .magic(magic)
+                    .compressionType(compression)
+                    .baseOffset(3L)
+                    .producerState(pid2, epoch2, baseSequence2)
+                    .transaction(true)
+                    .build();
             builder.append(16L, "6".getBytes(), "g".getBytes());
             builder.append(17L, "7".getBytes(), "h".getBytes());
             builder.append(18L, null, "i".getBytes());

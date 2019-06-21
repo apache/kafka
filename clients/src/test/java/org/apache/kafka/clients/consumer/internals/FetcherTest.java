@@ -3102,9 +3102,12 @@ public class FetcherTest {
     }
 
     private int appendTransactionalRecords(ByteBuffer buffer, long pid, long baseOffset, int baseSequence, SimpleRecord... records) {
-        MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, RecordBatch.CURRENT_MAGIC_VALUE, CompressionType.NONE,
-                TimestampType.CREATE_TIME, baseOffset, time.milliseconds(), pid, (short) 0, baseSequence, true,
-                RecordBatch.NO_PARTITION_LEADER_EPOCH);
+        MemoryRecordsBuilder builder = MemoryRecords.builder(buffer)
+                .baseOffset(baseOffset)
+                .logAppendTime(time.milliseconds())
+                .producerState(pid, (short) 0, baseSequence)
+                .transaction(true)
+                .build();
 
         for (SimpleRecord record : records) {
             builder.append(record);
@@ -3213,19 +3216,7 @@ public class FetcherTest {
     @Test
     public void testSubscriptionPositionUpdatedWithEpoch() {
         // Create some records that include a leader epoch (1)
-        MemoryRecordsBuilder builder = MemoryRecords.builder(
-                ByteBuffer.allocate(1024),
-                RecordBatch.CURRENT_MAGIC_VALUE,
-                CompressionType.NONE,
-                TimestampType.CREATE_TIME,
-                0L,
-                RecordBatch.NO_TIMESTAMP,
-                RecordBatch.NO_PRODUCER_ID,
-                RecordBatch.NO_PRODUCER_EPOCH,
-                RecordBatch.NO_SEQUENCE,
-                false,
-                1
-        );
+        MemoryRecordsBuilder builder = MemoryRecords.builder(ByteBuffer.allocate(1024)).partitionLeaderEpoch(1).build();
         builder.appendWithOffset(0L, 0L, "key".getBytes(), "value-1".getBytes());
         builder.appendWithOffset(1L, 0L, "key".getBytes(), "value-2".getBytes());
         builder.appendWithOffset(2L, 0L, "key".getBytes(), "value-3".getBytes());
@@ -3434,19 +3425,8 @@ public class FetcherTest {
     @Test
     public void testTruncationDetected() {
         // Create some records that include a leader epoch (1)
-        MemoryRecordsBuilder builder = MemoryRecords.builder(
-                ByteBuffer.allocate(1024),
-                RecordBatch.CURRENT_MAGIC_VALUE,
-                CompressionType.NONE,
-                TimestampType.CREATE_TIME,
-                0L,
-                RecordBatch.NO_TIMESTAMP,
-                RecordBatch.NO_PRODUCER_ID,
-                RecordBatch.NO_PRODUCER_EPOCH,
-                RecordBatch.NO_SEQUENCE,
-                false,
-                1 // record epoch is earlier than the leader epoch on the client
-        );
+        // record epoch is earlier than the leader epoch on the client
+        MemoryRecordsBuilder builder = MemoryRecords.builder(ByteBuffer.allocate(1024)).partitionLeaderEpoch(1).build();
         builder.appendWithOffset(0L, 0L, "key".getBytes(), "value-1".getBytes());
         builder.appendWithOffset(1L, 0L, "key".getBytes(), "value-2".getBytes());
         builder.appendWithOffset(2L, 0L, "key".getBytes(), "value-3".getBytes());

@@ -333,8 +333,14 @@ class GroupMetadataManager(brokerId: Int,
           if (isTxnOffsetCommit && magicValue < RecordBatch.MAGIC_VALUE_V2)
             throw Errors.UNSUPPORTED_FOR_MESSAGE_FORMAT.exception("Attempting to make a transaction offset commit with an invalid magic: " + magicValue)
 
-          val builder = MemoryRecords.builder(buffer, magicValue, compressionType, timestampType, 0L, time.milliseconds(),
-            producerId, producerEpoch, 0, isTxnOffsetCommit, RecordBatch.NO_PARTITION_LEADER_EPOCH)
+          val builder = MemoryRecords.builder(buffer)
+              .magic(magicValue)
+              .compressionType(compressionType)
+              .timestampType(timestampType)
+              .logAppendTime(time.milliseconds())
+              .producerState(producerId, producerEpoch, 0)
+              .transaction(isTxnOffsetCommit)
+              .build()
 
           records.foreach(builder.append)
           val entries = Map(offsetTopicPartition -> builder.build())

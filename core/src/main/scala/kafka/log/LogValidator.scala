@@ -165,8 +165,15 @@ private[kafka] object LogValidator extends Logging {
     }
 
     val newBuffer = ByteBuffer.allocate(sizeInBytesAfterConversion)
-    val builder = MemoryRecords.builder(newBuffer, toMagicValue, CompressionType.NONE, timestampType,
-      offsetCounter.value, now, producerId, producerEpoch, sequence, isTransactional, partitionLeaderEpoch)
+    val builder = MemoryRecords.builder(newBuffer)
+      .magic(toMagicValue)
+      .timestampType(timestampType)
+      .baseOffset(offsetCounter.value)
+      .logAppendTime(now)
+      .producerState(producerId, producerEpoch, sequence)
+      .transaction(isTransactional)
+      .partitionLeaderEpoch(partitionLeaderEpoch)
+      .build()
 
     val firstBatch = getFirstBatchAndMaybeValidateNoMoreBatches(records, NoCompressionCodec)
 
@@ -395,9 +402,16 @@ private[kafka] object LogValidator extends Logging {
     val estimatedSize = AbstractRecords.estimateSizeInBytes(magic, offsetCounter.value, compressionType,
       validatedRecords.asJava)
     val buffer = ByteBuffer.allocate(estimatedSize)
-    val builder = MemoryRecords.builder(buffer, magic, compressionType, timestampType, offsetCounter.value,
-      logAppendTime, producerId, producerEpoch, baseSequence, isTransactional, partitionLeaderEpoch)
-
+    val builder = MemoryRecords.builder(buffer)
+        .magic(magic)
+        .compressionType(compressionType)
+        .timestampType(timestampType)
+        .baseOffset(offsetCounter.value)
+        .logAppendTime(logAppendTime)
+        .producerState(producerId, producerEpoch, baseSequence)
+        .transaction(isTransactional)
+        .partitionLeaderEpoch(partitionLeaderEpoch)
+        .build()
     validatedRecords.foreach { record =>
       builder.appendWithOffset(offsetCounter.getAndIncrement(), record)
     }

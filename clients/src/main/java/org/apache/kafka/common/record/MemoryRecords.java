@@ -547,21 +547,6 @@ public class MemoryRecords extends AbstractRecords {
                                                short producerEpoch,
                                                int baseSequence,
                                                boolean isTransactional,
-                                               int partitionLeaderEpoch) {
-        return builder(buffer, magic, compressionType, timestampType, baseOffset,
-                logAppendTime, producerId, producerEpoch, baseSequence, isTransactional, false, partitionLeaderEpoch);
-    }
-
-    public static MemoryRecordsBuilder builder(ByteBuffer buffer,
-                                               byte magic,
-                                               CompressionType compressionType,
-                                               TimestampType timestampType,
-                                               long baseOffset,
-                                               long logAppendTime,
-                                               long producerId,
-                                               short producerEpoch,
-                                               int baseSequence,
-                                               boolean isTransactional,
                                                boolean isControlBatch,
                                                int partitionLeaderEpoch) {
         return new MemoryRecordsBuilder(new ByteBufferOutputStream(buffer), magic, compressionType,
