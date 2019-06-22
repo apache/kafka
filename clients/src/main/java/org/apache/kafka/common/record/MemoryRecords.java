@@ -619,13 +619,18 @@ public class MemoryRecords extends AbstractRecords {
         if (records.length == 0)
             return MemoryRecords.EMPTY;
         int sizeEstimate = AbstractRecords.estimateSizeInBytes(magic, compressionType, Arrays.asList(records));
-        ByteBufferOutputStream bufferStream = new ByteBufferOutputStream(sizeEstimate);
-        long logAppendTime = RecordBatch.NO_TIMESTAMP;
-        if (timestampType == TimestampType.LOG_APPEND_TIME)
-            logAppendTime = System.currentTimeMillis();
-        MemoryRecordsBuilder builder = new MemoryRecordsBuilder(bufferStream, magic, compressionType, timestampType,
-                initialOffset, logAppendTime, producerId, producerEpoch, baseSequence, isTransactional, false,
-                partitionLeaderEpoch, sizeEstimate);
+        MemoryRecordsBuilder builder = MemoryRecords.builder(ByteBuffer.allocate(sizeEstimate))
+                .magic(magic)
+                .compressionType(compressionType)
+                .timestampType(timestampType)
+                .baseOffset(initialOffset)
+                .logAppendTime(timestampType == TimestampType.LOG_APPEND_TIME ? System.currentTimeMillis() : RecordBatch.NO_TIMESTAMP)
+                .producerState(producerId, producerEpoch, baseSequence)
+                .transaction(isTransactional)
+                .controlBatch(false)
+                .partitionLeaderEpoch(partitionLeaderEpoch)
+                .writeLimit(sizeEstimate)
+                .build();
         for (SimpleRecord record : records)
             builder.append(record);
         return builder.build();
