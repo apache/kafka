@@ -763,8 +763,17 @@ class KafkaController(val config: KafkaConfig,
   }
 
   private def areReplicasInIsr(partition: TopicPartition, replicas: Seq[Int]): Boolean = {
-    zkClient.getTopicPartitionStates(Seq(partition)).get(partition).exists { leaderIsrAndControllerEpoch =>
-      replicas.forall(leaderIsrAndControllerEpoch.leaderAndIsr.isr.contains)
+    def areReplicasInCachedIsr: Boolean = {
+      controllerContext.partitionLeadershipInfo.get(partition).exists { leaderIsrAndControllerEpoch =>
+        replicas.forall(leaderIsrAndControllerEpoch.leaderAndIsr.isr.contains)
+      }
+    }
+
+    if (areReplicasInCachedIsr)
+      true
+    else {
+      updateLeaderAndIsrCache(Seq(partition))
+      areReplicasInCachedIsr
     }
   }
 
@@ -1784,6 +1793,7 @@ case class LeaderIsrAndControllerEpoch(leaderAndIsr: LeaderAndIsr, controllerEpo
     leaderAndIsrInfo.append("(Leader:" + leaderAndIsr.leader)
     leaderAndIsrInfo.append(",ISR:" + leaderAndIsr.isr.mkString(","))
     leaderAndIsrInfo.append(",LeaderEpoch:" + leaderAndIsr.leaderEpoch)
+    leaderAndIsrInfo.append(",ZkVersion:" + leaderAndIsr.zkVersion + ")")
     leaderAndIsrInfo.append(",ControllerEpoch:" + controllerEpoch + ")")
     leaderAndIsrInfo.toString()
   }
