@@ -20,7 +20,6 @@ import java.nio.ByteBuffer
 
 import kafka.api.{ApiVersion, KAFKA_2_1_IV0}
 import kafka.common.LongRef
-import kafka.message.{CompressionCodec, NoCompressionCodec, ZStdCompressionCodec}
 import kafka.utils.Logging
 import org.apache.kafka.common.errors.{InvalidTimestampException, UnsupportedCompressionTypeException, UnsupportedForMessageFormatException}
 import org.apache.kafka.common.record.{AbstractRecords, CompressionType, InvalidRecordException, MemoryRecords, Record, RecordBatch, RecordConversionStats, TimestampType, BufferSupplier}
@@ -50,8 +49,8 @@ private[kafka] object LogValidator extends Logging {
                                                       offsetCounter: LongRef,
                                                       time: Time,
                                                       now: Long,
-                                                      sourceCodec: CompressionCodec,
-                                                      targetCodec: CompressionCodec,
+                                                      sourceType: CompressionType,
+                                                      targetType: CompressionType,
                                                       compactedTopic: Boolean,
                                                       magic: Byte,
                                                       timestampType: TimestampType,
@@ -59,7 +58,7 @@ private[kafka] object LogValidator extends Logging {
                                                       partitionLeaderEpoch: Int,
                                                       isFromClient: Boolean,
                                                       interBrokerProtocolVersion: ApiVersion): ValidationAndOffsetAssignResult = {
-    if (sourceCodec == NoCompressionCodec && targetCodec == NoCompressionCodec) {
+    if (sourceType == CompressionType.NONE && targetType == CompressionType.NONE) {
       // check the magic value
       if (!records.hasMatchingMagic(magic))
         convertAndAssignOffsetsNonCompressed(records, offsetCounter, compactedTopic, time, now, timestampType,
@@ -69,12 +68,12 @@ private[kafka] object LogValidator extends Logging {
         assignOffsetsNonCompressed(records, offsetCounter, now, compactedTopic, timestampType, timestampDiffMaxMs,
           partitionLeaderEpoch, isFromClient, magic)
     } else {
-      validateMessagesAndAssignOffsetsCompressed(records, offsetCounter, time, now, sourceCodec, targetCodec, compactedTopic,
+      validateMessagesAndAssignOffsetsCompressed(records, offsetCounter, time, now, sourceType, targetType, compactedTopic,
         magic, timestampType, timestampDiffMaxMs, partitionLeaderEpoch, isFromClient, interBrokerProtocolVersion)
     }
   }
 
-  private[kafka] def getFirstBatchAndMaybeValidateNoMoreBatches(records: MemoryRecords, sourceCodec: CompressionCodec): RecordBatch = {
+  private[kafka] def getFirstBatchAndMaybeValidateNoMoreBatches(records: MemoryRecords, sourceType: CompressionType): RecordBatch = {
     val batchIterator = records.batches.iterator
 
     if (!batchIterator.hasNext) {
@@ -84,7 +83,7 @@ private[kafka] object LogValidator extends Logging {
     val batch = batchIterator.next()
 
     // if the format is v2 and beyond, or if the messages are compressed, we should check there's only one batch.
-    if (batch.magic() >= RecordBatch.MAGIC_VALUE_V2 || sourceCodec != NoCompressionCodec) {
+    if (batch.magic() >= RecordBatch.MAGIC_VALUE_V2 || sourceType != CompressionType.NONE) {
       if (batchIterator.hasNext) {
         throw new InvalidRecordException("Compressed outer record has more than one batch")
       }
@@ -175,7 +174,7 @@ private[kafka] object LogValidator extends Logging {
       .partitionLeaderEpoch(partitionLeaderEpoch)
       .build()
 
-    val firstBatch = getFirstBatchAndMaybeValidateNoMoreBatches(records, NoCompressionCodec)
+    val firstBatch = getFirstBatchAndMaybeValidateNoMoreBatches(records, CompressionType.NONE)
 
     for (batch <- records.batches.asScala) {
       validateBatch(firstBatch, batch, isFromClient, toMagicValue)
@@ -212,7 +211,7 @@ private[kafka] object LogValidator extends Logging {
     var offsetOfMaxTimestamp = -1L
     val initialOffset = offsetCounter.value
 
-    val firstBatch = getFirstBatchAndMaybeValidateNoMoreBatches(records, NoCompressionCodec)
+    val firstBatch = getFirstBatchAndMaybeValidateNoMoreBatches(records, CompressionType.NONE)
 
     for (batch <- records.batches.asScala) {
       validateBatch(firstBatch, batch, isFromClient, magic)
@@ -265,7 +264,7 @@ private[kafka] object LogValidator extends Logging {
 
   /**
    * We cannot do in place assignment in one of the following situations:
-   * 1. Source and target compression codec are different
+   * 1. Source and target compression type are different
    * 2. When the target magic is not equal to batches' magic, meaning format conversion is needed.
    * 3. When the target magic is equal to V0, meaning absolute offsets need to be re-assigned.
    */
@@ -273,8 +272,8 @@ private[kafka] object LogValidator extends Logging {
                                                  offsetCounter: LongRef,
                                                  time: Time,
                                                  now: Long,
-                                                 sourceCodec: CompressionCodec,
-                                                 targetCodec: CompressionCodec,
+                                                 sourceType: CompressionType,
+                                                 targetType: CompressionType,
                                                  compactedTopic: Boolean,
                                                  toMagic: Byte,
                                                  timestampType: TimestampType,
@@ -283,12 +282,12 @@ private[kafka] object LogValidator extends Logging {
                                                  isFromClient: Boolean,
                                                  interBrokerProtocolVersion: ApiVersion): ValidationAndOffsetAssignResult = {
 
-    if (targetCodec == ZStdCompressionCodec && interBrokerProtocolVersion < KAFKA_2_1_IV0)
+    if (targetType == CompressionType.ZSTD && interBrokerProtocolVersion < KAFKA_2_1_IV0)
       throw new UnsupportedCompressionTypeException("Produce requests to inter.broker.protocol.version < 2.1 broker " +
         "are not allowed to use ZStandard compression")
 
     // No in place assignment situation 1
-    var inPlaceAssignment = sourceCodec == targetCodec
+    var inPlaceAssignment = sourceType == targetType
 
     var maxTimestamp = RecordBatch.NO_TIMESTAMP
     val expectedInnerOffset = new LongRef(0)
@@ -299,7 +298,7 @@ private[kafka] object LogValidator extends Logging {
     // Assume there's only one batch with compressed memory records; otherwise, return InvalidRecordException
     // One exception though is that with format smaller than v2, if sourceCodec is noCompression, then each batch is actually
     // a single record so we'd need to special handle it by creating a single wrapper batch that includes all the records
-    val firstBatch = getFirstBatchAndMaybeValidateNoMoreBatches(records, sourceCodec)
+    val firstBatch = getFirstBatchAndMaybeValidateNoMoreBatches(records, sourceType)
 
     // No in place assignment situation 2 and 3: we only need to check for the first batch because:
     //  1. For most cases (compressed records, v2, for example), there's only one batch anyways.
@@ -308,7 +307,7 @@ private[kafka] object LogValidator extends Logging {
       inPlaceAssignment = false
 
     // Do not compress control records unless they are written compressed
-    if (sourceCodec == NoCompressionCodec && firstBatch.isControlBatch)
+    if (sourceType == CompressionType.NONE && firstBatch.isControlBatch)
       inPlaceAssignment = true
 
     val batches = records.batches.asScala
@@ -325,7 +324,7 @@ private[kafka] object LogValidator extends Logging {
 
       try {
         for (record <- batch.asScala) {
-          if (sourceCodec != NoCompressionCodec && record.isCompressed)
+          if (sourceType != CompressionType.NONE && record.isCompressed)
             throw new InvalidRecordException("Compressed outer record should not have an inner record with a " +
               s"compression attribute set: $record")
           validateRecord(batch, record, now, timestampType, timestampDiffMaxMs, compactedTopic)
@@ -355,7 +354,7 @@ private[kafka] object LogValidator extends Logging {
         val first = records.batches.asScala.head
         (first.producerId, first.producerEpoch, first.baseSequence, first.isTransactional)
       }
-      buildRecordsAndAssignOffsets(toMagic, offsetCounter, time, timestampType, CompressionType.forId(targetCodec.codec), now,
+      buildRecordsAndAssignOffsets(toMagic, offsetCounter, time, timestampType, targetType, now,
         validatedRecords, producerId, producerEpoch, sequence, isTransactional, partitionLeaderEpoch, isFromClient,
         uncompressedSizeInBytes)
     } else {

@@ -80,18 +80,18 @@ class BrokerCompressionTest(messageCompression: String, brokerCompression: Strin
   @Test
   def testGetTargetCompressionCodec() {
     if (brokerCompression.equals(ProducerCompressionCodec.name)) {
-      // if broker-size compression is 'producer', returns the used compression codec.
-      for (compressionCodec <- CompressionType.values.map(compressionType => CompressionCodec.getCompressionCodec(compressionType.id))) {
-        assertEquals(BrokerCompressionCodec.getTargetCompressionCodec(brokerCompression, compressionCodec), compressionCodec)
+      // if broker-size compression is 'producer', returns the used compression type.
+      for (compressionType <- CompressionType.values) {
+        assertEquals(BrokerCompressionCodec.getTargetCompressionType(brokerCompression, compressionType), compressionType)
       }
     } else {
-      for (compressionCodec <- CompressionType.values.map(compressionType => CompressionCodec.getCompressionCodec(compressionType.id))) {
+      for (compressionType <- CompressionType.values) {
         if (brokerCompression.equals(UncompressedCodec.name)) {
-          // if broker-size compression is 'uncompressed', returns 'NoCompressionCodec'.
-          assertEquals(BrokerCompressionCodec.getTargetCompressionCodec(brokerCompression, compressionCodec), NoCompressionCodec)
+          // if broker-size compression is 'uncompressed', returns CompressionType#NONE.
+          assertEquals(BrokerCompressionCodec.getTargetCompressionType(brokerCompression, compressionType), CompressionType.NONE)
         } else {
-          // anything else, returns broker-size compression codec.
-          assertEquals(BrokerCompressionCodec.getTargetCompressionCodec(brokerCompression, compressionCodec), CompressionCodec.getCompressionCodec(brokerCompression))
+          // anything else, returns broker-size compression type.
+          assertEquals(BrokerCompressionCodec.getTargetCompressionType(brokerCompression, compressionType), CompressionType.forId(CompressionCodec.getCompressionCodec(brokerCompression).codec))
         }
       }
     }

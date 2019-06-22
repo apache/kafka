@@ -20,6 +20,7 @@ package kafka.message
 import java.util.Locale
 
 import kafka.common.UnknownCodecException
+import org.apache.kafka.common.record.CompressionType
 
 object CompressionCodec {
   def getCompressionCodec(codec: Int): CompressionCodec = {
@@ -58,11 +59,14 @@ object BrokerCompressionCodec {
     }
   }
 
-  def getTargetCompressionCodec(compressionType: String, producerCompression: CompressionCodec): CompressionCodec = {
+  def getTargetCompressionType(compressionType: String, producerCompression: CompressionType): CompressionType = {
     if (ProducerCompressionCodec.name.equals(compressionType))
       producerCompression
     else
-      getCompressionCodec(compressionType)
+      if (UncompressedCodec.name.equals(compressionType))
+        CompressionType.NONE
+      else
+        CompressionType.forName(compressionType)
   }
 }
 

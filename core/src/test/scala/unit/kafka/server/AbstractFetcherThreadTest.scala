@@ -24,7 +24,6 @@ import java.util.concurrent.atomic.AtomicInteger
 import com.yammer.metrics.Metrics
 import kafka.cluster.BrokerEndPoint
 import kafka.log.LogAppendInfo
-import kafka.message.NoCompressionCodec
 import kafka.server.AbstractFetcherThread.ResultWithPartitions
 import kafka.utils.TestUtils
 import org.apache.kafka.common.KafkaException
@@ -876,8 +875,8 @@ class AbstractFetcherThreadTest {
         logAppendTime = Time.SYSTEM.milliseconds(),
         logStartOffset = state.logStartOffset,
         recordConversionStats = RecordConversionStats.EMPTY,
-        sourceCodec = NoCompressionCodec,
-        targetCodec = NoCompressionCodec,
+        sourceType = CompressionType.NONE,
+        targetType = CompressionType.NONE,
         shallowCount = batches.size,
         validBytes = partitionData.records.sizeInBytes,
         offsetsMonotonic = true,
