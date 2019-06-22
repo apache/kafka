@@ -186,8 +186,7 @@ public class TestInputTopicTest {
     public void testStartTimestampMs() {
         final long baseTime = testBaseTime.toEpochMilli();
         final long advance = 2000;
-        final TestInputTopic<Long, String> inputTopic = testDriver.createInputTopic(INPUT_TOPIC, longSerde, stringSerde);
-        inputTopic.configureTiming(testBaseTime, Duration.ZERO);
+        final TestInputTopic<Long, String> inputTopic = testDriver.createInputTopic(INPUT_TOPIC, longSerde, stringSerde, testBaseTime, Duration.ZERO);
         final TestOutputTopic<Long, String> outputTopic = testDriver.createOutputTopic(OUTPUT_TOPIC, longSerde, stringSerde);
         inputTopic.pipeInput(1L, "Hello");
         assertThat(outputTopic.readRecord(), is(equalTo(new TestRecord<Long, String>(1L,"Hello", baseTime))));
@@ -203,8 +202,7 @@ public class TestInputTopicTest {
     public void testTimestampMsAutoAdvance() {
         final long baseTime = testBaseTime.toEpochMilli();
         final long advance = 2000;
-        final TestInputTopic<Long, String> inputTopic = testDriver.createInputTopic( INPUT_TOPIC, longSerde, stringSerde);
-        inputTopic.configureTiming(testBaseTime, Duration.ofMillis(advance));
+        final TestInputTopic<Long, String> inputTopic = testDriver.createInputTopic( INPUT_TOPIC, longSerde, stringSerde, testBaseTime, Duration.ofMillis(advance));
         final TestOutputTopic<Long, String> outputTopic = testDriver.createOutputTopic(OUTPUT_TOPIC, longSerde, stringSerde);
         inputTopic.pipeInput("Hello");
         assertThat(outputTopic.readRecord(), is(equalTo(new TestRecord<Long, String>(null,"Hello", baseTime))));

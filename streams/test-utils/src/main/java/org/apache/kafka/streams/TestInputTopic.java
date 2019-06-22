@@ -56,8 +56,8 @@ public class TestInputTopic<K, V> {
     private final Serializer<V> valueSerializer;
 
     //Timing
-    private Instant currentTime = Instant.now();
-    private Duration advanceDuration = Duration.ZERO;
+    private Instant currentTime;
+    private final Duration advanceDuration;
 
     /**
      * Create a test input topic to pipe messages in.
@@ -69,12 +69,31 @@ public class TestInputTopic<K, V> {
      * @param keySerde   the key serializer
      * @param valueSerde the value serializer
      */
-    @SuppressWarnings({"WeakerAccess", "unused"})
-    public TestInputTopic(final TopologyTestDriver driver,
+    TestInputTopic(final TopologyTestDriver driver,
                           final String topicName,
                           final Serde<K> keySerde,
                           final Serde<V> valueSerde) {
-        this(driver, topicName, keySerde.serializer(), valueSerde.serializer());
+        this(driver, topicName, keySerde, valueSerde, Instant.now(), Duration.ZERO);
+    }
+
+    /**
+     * Create a test input topic to pipe messages in.
+     * Uses provided startTimestamp and autoAdvance duration for timestamp generation
+     *
+     * @param driver     TopologyTestDriver to use
+     * @param topicName  the topic name used
+     * @param keySerde   the key serializer
+     * @param valueSerde the value serializer
+     * @param startTimestamp the initial timestamp for records
+     * @param autoAdvance the time increment per record
+     */
+    TestInputTopic(final TopologyTestDriver driver,
+                          final String topicName,
+                          final Serde<K> keySerde,
+                          final Serde<V> valueSerde,
+                          final Instant startTimestamp,
+                          final Duration autoAdvance) {
+        this(driver, topicName, keySerde.serializer(), valueSerde.serializer(), startTimestamp, autoAdvance);
     }
 
 
@@ -86,20 +105,31 @@ public class TestInputTopic<K, V> {
      * @param topicName the topic name used
      * @param keySerializer   the key serializer
      * @param valueSerializer the value serializer
+     * @param startTimestamp the initial timestamp for records
+     * @param autoAdvance the time increment per record
      */
-    @SuppressWarnings("WeakerAccess")
-    protected TestInputTopic(final TopologyTestDriver driver,
+    TestInputTopic(final TopologyTestDriver driver,
                              final String topicName,
                              final Serializer<K> keySerializer,
-                             final Serializer<V> valueSerializer) {
+                             final Serializer<V> valueSerializer,
+                             final Instant startTimestamp,
+                             final Duration autoAdvance) {
         Objects.requireNonNull(driver, "TopologyTestDriver cannot be null");
         Objects.requireNonNull(topicName, "topicName cannot be null");
         Objects.requireNonNull(keySerializer, "keySerializer cannot be null");
         Objects.requireNonNull(valueSerializer, "valueSerializer cannot be null");
+        Objects.requireNonNull(startTimestamp, "startTimestamp cannot be null");
+        Objects.requireNonNull(autoAdvance, "autoAdvance cannot be null");
         this.driver = driver;
         this.topic = topicName;
         this.keySerializer=keySerializer;
         this.valueSerializer=valueSerializer;
+        this.currentTime = startTimestamp;
+        if (autoAdvance.isNegative()) {
+            throw new IllegalArgumentException("autoAdvance must be positive");
+        }
+        this.advanceDuration = autoAdvance;
+
     }
 
 
@@ -114,15 +144,6 @@ public class TestInputTopic<K, V> {
             throw new IllegalArgumentException("advance must be positive");
         }
         currentTime = currentTime.plus(advance);
-    }
-
-    public void configureTiming(final Instant startTimestamp,
-                                final Duration autoAdvance) {
-        currentTime = startTimestamp;
-        if (autoAdvance.isNegative()) {
-            throw new IllegalArgumentException("advance must be positive");
-        }
-        advanceDuration = autoAdvance;
     }
 
     private long getTimestampAndAdvanced() {

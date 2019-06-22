@@ -80,6 +80,7 @@ import org.slf4j.LoggerFactory;
 import java.io.Closeable;
 import java.io.IOException;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -580,6 +581,14 @@ public class TopologyTestDriver implements Closeable {
                                                               final Serde<K> keySerde,
                                                               final Serde<V> valueSerde) {
         return new TestInputTopic<K, V>(this, topicName, keySerde, valueSerde);
+    }
+
+    public final <K, V> TestInputTopic<K, V> createInputTopic(final String topicName,
+                                                              final Serde<K> keySerde,
+                                                              final Serde<V> valueSerde,
+                                                              final Instant startTimestamp,
+                                                              final Duration autoAdvance) {
+        return new TestInputTopic<K, V>(this, topicName, keySerde, valueSerde, startTimestamp, autoAdvance);
     }
 
     public final <K, V> TestOutputTopic<K, V> createOutputTopic(final String topicName,

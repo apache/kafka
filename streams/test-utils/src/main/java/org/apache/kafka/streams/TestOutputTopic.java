@@ -67,8 +67,7 @@ public class TestOutputTopic<K, V> {
      * @param keySerde   the key deserializer
      * @param valueSerde the value deserializer
      */
-    @SuppressWarnings({"WeakerAccess", "unused"})
-    public TestOutputTopic(final TopologyTestDriver driver,
+    TestOutputTopic(final TopologyTestDriver driver,
                            final String topicName,
                            final Serde<K> keySerde,
                            final Serde<V> valueSerde) {
@@ -83,8 +82,7 @@ public class TestOutputTopic<K, V> {
      * @param keyDeserializer   the key deserializer
      * @param valueDeserializer the value deserializer
      */
-    @SuppressWarnings({"WeakerAccess", "unused"})
-    public TestOutputTopic(final TopologyTestDriver driver,
+    TestOutputTopic(final TopologyTestDriver driver,
                            final String topicName,
                            final Deserializer<K> keyDeserializer,
                            final Deserializer<V> valueDeserializer) {
