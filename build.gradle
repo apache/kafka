@@ -401,7 +401,6 @@ subprojects {
       "-language:postfixOps",
       "-language:implicitConversions",
       "-language:existentials",
-      "-Xlint:by-name-right-associative",
       "-Xlint:delayedinit-select",
       "-Xlint:doc-detached",
       "-Xlint:missing-interpolator",
@@ -412,14 +411,22 @@ subprojects {
       "-Xlint:poly-implicit-overload",
       "-Xlint:private-shadow",
       "-Xlint:stars-align",
-      "-Xlint:type-parameter-shadow",
-      "-Xlint:unsound-match"
+      "-Xlint:type-parameter-shadow"
     ]
 
     if (versions.baseScala != '2.11') {
       scalaCompileOptions.additionalParameters += [
         "-Xlint:constant",
         "-Xlint:unused"
+      ]
+    }
+    
+  // these options are valid for Scala versions < 2.13 only
+  // Scala 2.13 removes them, see https://github.com/scala/scala/pull/6502 and https://github.com/scala/scala/pull/5969
+    if (versions.baseScala in ['2.11','2.12']) {
+      scalaCompileOptions.additionalParameters += [
+        "-Xlint:by-name-right-associative",
+        "-Xlint:unsound-match"
       ]
     }
 
