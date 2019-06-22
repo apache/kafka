@@ -31,6 +31,8 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
+import java.time.Duration;
+import java.time.Instant;
 import java.util.Arrays;
 import java.util.LinkedList;
 import java.util.List;
@@ -62,6 +64,7 @@ public class TestInputTopicTest {
             mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, "TestInputTopicTest"),
             mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy:1234")
     ));
+    private final Instant testBaseTime = Instant.parse("2019-06-01T10:00:00Z");
 
     @Before
     public void setup() {
@@ -181,16 +184,16 @@ public class TestInputTopicTest {
 
     @Test
     public void testStartTimestampMs() {
-        final long baseTime = 3;
-        final long advance = 2;
+        final long baseTime = testBaseTime.toEpochMilli();
+        final long advance = 2000;
         final TestInputTopic<Long, String> inputTopic = testDriver.createInputTopic(INPUT_TOPIC, longSerde, stringSerde);
-        inputTopic.configureTiming(baseTime, 0);
+        inputTopic.configureTiming(testBaseTime, Duration.ZERO);
         final TestOutputTopic<Long, String> outputTopic = testDriver.createOutputTopic(OUTPUT_TOPIC, longSerde, stringSerde);
         inputTopic.pipeInput(1L, "Hello");
         assertThat(outputTopic.readRecord(), is(equalTo(new TestRecord<Long, String>(1L,"Hello", baseTime))));
         inputTopic.pipeInput(2L, "World");
         assertThat(outputTopic.readRecord(), is(equalTo(new TestRecord<Long, String>(2L,"World", baseTime))));
-        inputTopic.advanceTimeMs(advance);
+        inputTopic.advanceTime(Duration.ofMillis(advance));
         inputTopic.pipeInput(3L, "Kafka");
         assertThat(outputTopic.readRecord(), is(equalTo(new TestRecord<Long, String>(3L,"Kafka", baseTime+advance))));
     }
@@ -198,10 +201,10 @@ public class TestInputTopicTest {
 
     @Test
     public void testTimestampMsAutoAdvance() {
-        final long baseTime = 3;
-        final long advance = 2;
+        final long baseTime = testBaseTime.toEpochMilli();
+        final long advance = 2000;
         final TestInputTopic<Long, String> inputTopic = testDriver.createInputTopic( INPUT_TOPIC, longSerde, stringSerde);
-        inputTopic.configureTiming(baseTime, advance);
+        inputTopic.configureTiming(testBaseTime, Duration.ofMillis(advance));
         final TestOutputTopic<Long, String> outputTopic = testDriver.createOutputTopic(OUTPUT_TOPIC, longSerde, stringSerde);
         inputTopic.pipeInput("Hello");
         assertThat(outputTopic.readRecord(), is(equalTo(new TestRecord<Long, String>(null,"Hello", baseTime))));

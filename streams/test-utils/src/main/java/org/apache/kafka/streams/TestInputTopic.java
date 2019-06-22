@@ -16,19 +16,16 @@
  */
 package org.apache.kafka.streams;
 
-import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serializer;
-import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.test.ConsumerRecordFactory;
 import org.apache.kafka.streams.test.TestRecord;
-import org.apache.kafka.streams.test.TestRecordFactory;
 
+import java.time.Duration;
+import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
-import java.util.stream.Collectors;
 
 /**
  * TestInputTopic is used to pipe records to topic in {@link TopologyTestDriver}.
@@ -59,8 +56,8 @@ public class TestInputTopic<K, V> {
     private final Serializer<V> valueSerializer;
 
     //Timing
-    private long timeMs;
-    private long advanceMs;
+    private Instant currentTime = Instant.now();
+    private Duration advanceDuration = Duration.ZERO;
 
     /**
      * Create a test input topic to pipe messages in.
@@ -79,6 +76,7 @@ public class TestInputTopic<K, V> {
                           final Serde<V> valueSerde) {
         this(driver, topicName, keySerde.serializer(), valueSerde.serializer());
     }
+
 
     /**
      * Create a test input topic to pipe messages in.
@@ -108,31 +106,37 @@ public class TestInputTopic<K, V> {
     /**
      * Advances the internally tracked time.
      *
-     * @param advanceMs the amount of time to advance
+     * @param advance the duration of time to advance
      */
     @SuppressWarnings({"WeakerAccess", "unused"})
-    public void advanceTimeMs(final long advanceMs) {
-        if (advanceMs < 0) {
-            throw new IllegalArgumentException("advanceMs must be positive");
+    public void advanceTime(final Duration advance) {
+        if (advance.isNegative()) {
+            throw new IllegalArgumentException("advance must be positive");
         }
-        timeMs += advanceMs;
+        currentTime = currentTime.plus(advance);
     }
 
-    public void configureTiming(final long startTimestampMs,
-                                final long autoAdvanceMs) {
-        timeMs = startTimestampMs;
-        if (autoAdvanceMs < 0) {
-            throw new IllegalArgumentException("advanceMs must be positive");
+    public void configureTiming(final Instant startTimestamp,
+                                final Duration autoAdvance) {
+        currentTime = startTimestamp;
+        if (autoAdvance.isNegative()) {
+            throw new IllegalArgumentException("advance must be positive");
         }
-        advanceMs = autoAdvanceMs;
+        advanceDuration = autoAdvance;
     }
 
     private long getTimestampAndAdvanced() {
-        final long timestamp = timeMs;
-        timeMs += advanceMs;
+        final long timestamp = currentTime.toEpochMilli();
+        currentTime = currentTime.plus(advanceDuration);
         return timestamp;
     }
 
+    /**
+     * Send an input message with the given record on the topic and then commit the messages.
+     *
+     * @param record the record to sent
+     */
+    @SuppressWarnings({"WeakerAccess", "unused"})
     public void pipeInput(final TestRecord<K, V> record) {
         //if record timestamp not set get timestamp and advance
         long timestamp = record.timestamp() == null ? getTimestampAndAdvanced() : record.timestamp();
