@@ -77,6 +77,25 @@ class BrokerCompressionTest(messageCompression: String, brokerCompression: Strin
       assertEquals("Compression at offset 0 should produce " + messageCompressionCode.name, messageCompressionCode.codec, readBatch(0).compressionType.id)
   }
 
+  @Test
+  def testGetTargetCompressionCodec() {
+    if (brokerCompression.equals(ProducerCompressionCodec.name)) {
+      // if broker-size compression is 'producer', returns the used compression codec.
+      for (compressionCodec <- CompressionType.values.map(compressionType => CompressionCodec.getCompressionCodec(compressionType.id))) {
+        assertEquals(BrokerCompressionCodec.getTargetCompressionCodec(brokerCompression, compressionCodec), compressionCodec)
+      }
+    } else {
+      for (compressionCodec <- CompressionType.values.map(compressionType => CompressionCodec.getCompressionCodec(compressionType.id))) {
+        if (brokerCompression.equals(UncompressedCodec.name)) {
+          // if broker-size compression is 'uncompressed', returns 'NoCompressionCodec'.
+          assertEquals(BrokerCompressionCodec.getTargetCompressionCodec(brokerCompression, compressionCodec), NoCompressionCodec)
+        } else {
+          // anything else, returns broker-size compression codec.
+          assertEquals(BrokerCompressionCodec.getTargetCompressionCodec(brokerCompression, compressionCodec), CompressionCodec.getCompressionCodec(brokerCompression))
+        }
+      }
+    }
+  }
 }
 
 object BrokerCompressionTest {
