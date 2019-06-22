@@ -249,9 +249,10 @@ public class MemoryRecords extends AbstractRecords {
                 originalBatch.baseOffset() : retainedRecords.get(0).offset();
 
         MemoryRecordsBuilder builder = new MemoryRecordsBuilder(bufferOutputStream, magic,
-                originalBatch.compressionType(), timestampType, baseOffset, logAppendTime, originalBatch.producerId(),
-                originalBatch.producerEpoch(), originalBatch.baseSequence(), originalBatch.isTransactional(),
-                originalBatch.isControlBatch(), originalBatch.partitionLeaderEpoch(), bufferOutputStream.limit());
+                CompressionConfig.of(originalBatch.compressionType()), timestampType, baseOffset, logAppendTime,
+                originalBatch.producerId(), originalBatch.producerEpoch(), originalBatch.baseSequence(),
+                originalBatch.isTransactional(), originalBatch.isControlBatch(), originalBatch.partitionLeaderEpoch(),
+                bufferOutputStream.limit());
 
         for (Record record : retainedRecords)
             builder.append(record);
@@ -432,6 +433,8 @@ public class MemoryRecords extends AbstractRecords {
         // attritube with default value
         private byte magic = RecordBatch.CURRENT_MAGIC_VALUE;
         private CompressionType compressionType = CompressionType.NONE;
+        private Integer compressionLevel = null;
+        private Integer compressionBufferSize = null;
         private TimestampType timestampType = TimestampType.CREATE_TIME;
         private long baseOffset = 0L;
         private long logAppendTime = RecordBatch.NO_TIMESTAMP;
@@ -456,6 +459,23 @@ public class MemoryRecords extends AbstractRecords {
 
         public Builder compressionType(CompressionType compressionType) {
             this.compressionType = compressionType;
+            return this;
+        }
+
+        public Builder compressionLevel(Integer compressionLevel) {
+            this.compressionLevel = compressionLevel;
+            return this;
+        }
+
+        public Builder compressionBufferSize(Integer compressionBufferSize) {
+            this.compressionBufferSize = compressionBufferSize;
+            return this;
+        }
+
+        public Builder compressionConfig(CompressionConfig compressionConfig) {
+            this.compressionType = compressionConfig.getType();
+            this.compressionLevel = compressionConfig.getLevel();
+            this.compressionBufferSize = compressionConfig.getBufferSize();
             return this;
         }
 
@@ -514,8 +534,9 @@ public class MemoryRecords extends AbstractRecords {
             }
 
             return new MemoryRecordsBuilder(new ByteBufferOutputStream(buffer),
-                    magic, compressionType, timestampType, baseOffset, logAppendTime,
-                    producerId, producerEpoch, baseSequence, isTransactional, isControlBatch, partitionLeaderEpoch, writeLimit);
+                    magic, CompressionConfig.of(compressionType, compressionLevel, compressionBufferSize),
+                    timestampType, baseOffset, logAppendTime, producerId, producerEpoch, baseSequence,
+                    isTransactional, isControlBatch, partitionLeaderEpoch, writeLimit);
         }
     }
 

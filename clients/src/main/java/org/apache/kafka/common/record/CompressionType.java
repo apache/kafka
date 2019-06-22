@@ -36,7 +36,7 @@ import java.util.zip.GZIPInputStream;
 public enum CompressionType {
     NONE(0, "none", 1.0f) {
         @Override
-        public OutputStream wrapForOutput(ByteBufferOutputStream buffer, byte messageVersion) {
+        public OutputStream wrapForOutput(ByteBufferOutputStream buffer, byte messageVersion, Integer level, Integer blockSize) {
             return buffer;
         }
 
@@ -48,12 +48,12 @@ public enum CompressionType {
 
     GZIP(1, "gzip", 1.0f) {
         @Override
-        public OutputStream wrapForOutput(ByteBufferOutputStream buffer, byte messageVersion) {
+        public OutputStream wrapForOutput(ByteBufferOutputStream buffer, byte messageVersion, Integer level, Integer blockSize) {
             try {
                 // Set input buffer (uncompressed) to 16 KB (none by default) and output buffer (compressed) to
                 // 8 KB (0.5 KB by default) to ensure reasonable performance in cases where the caller passes a small
                 // number of bytes to write (potentially a single byte)
-                return new BufferedOutputStream(GZipOutputStream.of(buffer, null, null), 16 * 1024);
+                return new BufferedOutputStream(GZipOutputStream.of(buffer, level, blockSize), 16 * 1024);
             } catch (Exception e) {
                 throw new KafkaException(e);
             }
@@ -75,9 +75,14 @@ public enum CompressionType {
 
     SNAPPY(2, "snappy", 1.0f) {
         @Override
-        public OutputStream wrapForOutput(ByteBufferOutputStream buffer, byte messageVersion) {
+        public OutputStream wrapForOutput(ByteBufferOutputStream buffer, byte messageVersion, Integer level, Integer blockSize) {
             try {
-                return (OutputStream) SnappyConstructors.OUTPUT.invoke(buffer);
+                // Snappy does not support compression level; so given parameter is ignored.
+                if (blockSize == null) {
+                    return (OutputStream) SnappyConstructors.OUTPUT_WITHOUT_BLOCK_SIZE.invoke(buffer);
+                } else {
+                    return (OutputStream) SnappyConstructors.OUTPUT_WITH_BLOCK_SIZE.invoke(buffer, blockSize);
+                }
             } catch (Throwable e) {
                 throw new KafkaException(e);
             }
@@ -95,9 +100,9 @@ public enum CompressionType {
 
     LZ4(3, "lz4", 1.0f) {
         @Override
-        public OutputStream wrapForOutput(ByteBufferOutputStream buffer, byte messageVersion) {
+        public OutputStream wrapForOutput(ByteBufferOutputStream buffer, byte messageVersion, Integer level, Integer blockSize) {
             try {
-                return KafkaLZ4BlockOutputStream.of(buffer, messageVersion, null, null);
+                return KafkaLZ4BlockOutputStream.of(buffer, messageVersion, level, blockSize);
             } catch (Throwable e) {
                 throw new KafkaException(e);
             }
@@ -107,7 +112,7 @@ public enum CompressionType {
         public InputStream wrapForInput(ByteBuffer inputBuffer, byte messageVersion, BufferSupplier decompressionBufferSupplier) {
             try {
                 return new KafkaLZ4BlockInputStream(inputBuffer, decompressionBufferSupplier,
-                                                    messageVersion == RecordBatch.MAGIC_VALUE_V0);
+                        messageVersion == RecordBatch.MAGIC_VALUE_V0);
             } catch (Throwable e) {
                 throw new KafkaException(e);
             }
@@ -116,9 +121,14 @@ public enum CompressionType {
 
     ZSTD(4, "zstd", 1.0f) {
         @Override
-        public OutputStream wrapForOutput(ByteBufferOutputStream buffer, byte messageVersion) {
+        public OutputStream wrapForOutput(ByteBufferOutputStream buffer, byte messageVersion, Integer level, Integer blockSize) {
             try {
-                return (OutputStream) ZstdConstructors.OUTPUT.invoke(buffer);
+                // Zstd does not support block size configuration; so given parameter is ignored.
+                if (level == null) {
+                    return (OutputStream) ZstdConstructors.OUTPUT_WITHOUT_LEVEL.invoke(buffer);
+                } else {
+                    return (OutputStream) ZstdConstructors.OUTPUT_WITH_LEVEL.invoke(buffer, level);
+                }
             } catch (Throwable e) {
                 throw new KafkaException(e);
             }
@@ -145,14 +155,17 @@ public enum CompressionType {
     }
 
     /**
-     * Wrap bufferStream with an OutputStream that will compress data with this CompressionType.
-     *
+     * Wrap bufferStream with an OutputStream that will compress data with this CompressionType with given buffer size and compression level.
+     * <p>
      * Note: Unlike {@link #wrapForInput}, {@link #wrapForOutput} cannot take {@link ByteBuffer}s directly.
      * Currently, {@link MemoryRecordsBuilder#writeDefaultBatchHeader()} and {@link MemoryRecordsBuilder#writeLegacyCompressedWrapperHeader()}
      * write to the underlying buffer in the given {@link ByteBufferOutputStream} after the compressed data has been written.
      * In the event that the buffer needs to be expanded while writing the data, access to the underlying buffer needs to be preserved.
+     *
+     * @param level     The compression level to use. If null, it falls back to the default level.
+     * @param blockSize The buffer size to use during compression. If null, it falls back to the default block size.
      */
-    public abstract OutputStream wrapForOutput(ByteBufferOutputStream bufferStream, byte messageVersion);
+    public abstract OutputStream wrapForOutput(ByteBufferOutputStream bufferStream, byte messageVersion, Integer level, Integer blockSize);
 
     /**
      * Wrap buffer with an InputStream that will decompress data with this CompressionType.
@@ -209,15 +222,19 @@ public enum CompressionType {
     private static class SnappyConstructors {
         static final MethodHandle INPUT = findConstructor("org.xerial.snappy.SnappyInputStream",
                 MethodType.methodType(void.class, InputStream.class));
-        static final MethodHandle OUTPUT = findConstructor("org.xerial.snappy.SnappyOutputStream",
+        static final MethodHandle OUTPUT_WITHOUT_BLOCK_SIZE = findConstructor("org.xerial.snappy.SnappyOutputStream",
                 MethodType.methodType(void.class, OutputStream.class));
+        static final MethodHandle OUTPUT_WITH_BLOCK_SIZE = findConstructor("org.xerial.snappy.SnappyOutputStream",
+                MethodType.methodType(void.class, OutputStream.class, int.class));
     }
 
     private static class ZstdConstructors {
         static final MethodHandle INPUT = findConstructor("com.github.luben.zstd.ZstdInputStream",
-            MethodType.methodType(void.class, InputStream.class));
-        static final MethodHandle OUTPUT = findConstructor("com.github.luben.zstd.ZstdOutputStream",
-            MethodType.methodType(void.class, OutputStream.class));
+                MethodType.methodType(void.class, InputStream.class));
+        static final MethodHandle OUTPUT_WITHOUT_LEVEL = findConstructor("com.github.luben.zstd.ZstdOutputStream",
+                MethodType.methodType(void.class, OutputStream.class));
+        static final MethodHandle OUTPUT_WITH_LEVEL = findConstructor("com.github.luben.zstd.ZstdOutputStream",
+                MethodType.methodType(void.class, OutputStream.class, int.class));
     }
 
     private static MethodHandle findConstructor(String className, MethodType methodType) {
