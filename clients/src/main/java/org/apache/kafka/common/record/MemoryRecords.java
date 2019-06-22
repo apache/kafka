@@ -657,12 +657,15 @@ public class MemoryRecords extends AbstractRecords {
     public static void writeEndTransactionalMarker(ByteBuffer buffer, long initialOffset, long timestamp,
                                                    int partitionLeaderEpoch, long producerId, short producerEpoch,
                                                    EndTransactionMarker marker) {
-        boolean isTransactional = true;
-        boolean isControlBatch = true;
-        MemoryRecordsBuilder builder = new MemoryRecordsBuilder(new ByteBufferOutputStream(buffer),
-                RecordBatch.CURRENT_MAGIC_VALUE, CompressionType.NONE, TimestampType.CREATE_TIME,
-                initialOffset, timestamp, producerId, producerEpoch, RecordBatch.NO_SEQUENCE, isTransactional,
-                isControlBatch, partitionLeaderEpoch, buffer.capacity());
+        MemoryRecordsBuilder builder = builder(buffer)
+                .baseOffset(initialOffset)
+                .logAppendTime(timestamp)
+                .producerState(producerId, producerEpoch, RecordBatch.NO_SEQUENCE)
+                .transaction(true)
+                .controlBatch(true)
+                .partitionLeaderEpoch(partitionLeaderEpoch)
+                .writeLimit(buffer.capacity())
+                .build();
         builder.appendEndTxnMarker(timestamp, marker);
         builder.close();
     }
