@@ -80,7 +80,7 @@ public interface PartitionAssignor {
     }
 
     /**
-     * Indicate which rebalance protocol this assignor can would work with;
+     * Indicate which rebalance protocol this assignor works with;
      * By default it should always work with {@link RebalanceProtocol#EAGER}.
      */
     default List<RebalanceProtocol> supportedProtocols() {
@@ -88,7 +88,7 @@ public interface PartitionAssignor {
     }
 
     /**
-     * Return the version of the assignor which indicate how the user metadata encodings
+     * Return the version of the assignor which indicates how the user metadata encodings
      * and the assignment algorithm gets evolved.
      */
     default short version() {
@@ -131,18 +131,17 @@ public interface PartitionAssignor {
         private final List<String> topics;
         private final ByteBuffer userData;
         private final List<TopicPartition> ownedPartitions;
-        private final Optional<String> groupInstanceId;
+        private Optional<String> groupInstanceId;
 
         Subscription(Short version,
                      List<String> topics,
                      ByteBuffer userData,
-                     List<TopicPartition> ownedPartitions,
-                     Optional<String> groupInstanceId) {
+                     List<TopicPartition> ownedPartitions) {
             this.version = version;
             this.topics = topics;
             this.userData = userData;
             this.ownedPartitions = ownedPartitions;
-            this.groupInstanceId = groupInstanceId;
+            this.groupInstanceId = Optional.empty();
 
             if (version < CONSUMER_PROTOCOL_V0)
                 throw new SchemaException("Unsupported subscription version: " + version);
@@ -152,14 +151,11 @@ public interface PartitionAssignor {
         }
 
         Subscription(Short version, List<String> topics, ByteBuffer userData) {
-            this(version, topics, userData, Collections.emptyList(), Optional.empty());
+            this(version, topics, userData, Collections.emptyList());
         }
 
-        public Subscription(List<String> topics,
-                            ByteBuffer userData,
-                            List<TopicPartition> ownedPartitions,
-                            Optional<String> groupInstanceId) {
-            this(CONSUMER_PROTOCOL_V1, topics, userData, ownedPartitions, groupInstanceId);
+        public Subscription(List<String> topics, ByteBuffer userData, List<TopicPartition> ownedPartitions) {
+            this(CONSUMER_PROTOCOL_V1, topics, userData, ownedPartitions);
         }
 
         public Subscription(List<String> topics, ByteBuffer userData) {
@@ -186,6 +182,10 @@ public interface PartitionAssignor {
             return userData;
         }
 
+        public void setGroupInstanceId(Optional<String> groupInstanceId) {
+            this.groupInstanceId = groupInstanceId;
+        }
+
         public Optional<String> groupInstanceId() {
             return groupInstanceId;
         }
@@ -202,11 +202,11 @@ public interface PartitionAssignor {
 
     class Assignment {
         private final Short version;
-        private final List<TopicPartition> partitions;
+        private List<TopicPartition> partitions;
         private final ByteBuffer userData;
-        private final ConsumerProtocol.Errors error;
+        private ConsumerProtocol.AssignmentError error;
 
-        Assignment(Short version, List<TopicPartition> partitions, ByteBuffer userData, ConsumerProtocol.Errors error) {
+        Assignment(Short version, List<TopicPartition> partitions, ByteBuffer userData, ConsumerProtocol.AssignmentError error) {
             this.version = version;
             this.partitions = partitions;
             this.userData = userData;
@@ -215,16 +215,12 @@ public interface PartitionAssignor {
             if (version < CONSUMER_PROTOCOL_V0)
                 throw new SchemaException("Unsupported subscription version: " + version);
 
-            if (version < CONSUMER_PROTOCOL_V1 && error != ConsumerProtocol.Errors.NONE)
+            if (version < CONSUMER_PROTOCOL_V1 && error != ConsumerProtocol.AssignmentError.NONE)
                 throw new IllegalArgumentException("Assignment version smaller than 1 should not have error code.");
         }
 
         Assignment(Short version, List<TopicPartition> partitions, ByteBuffer userData) {
-            this(version, partitions, userData, ConsumerProtocol.Errors.NONE);
-        }
-
-        public Assignment(List<TopicPartition> partitions, ByteBuffer userData, ConsumerProtocol.Errors error) {
-            this(CONSUMER_PROTOCOL_V1, partitions, userData, error);
+            this(version, partitions, userData, ConsumerProtocol.AssignmentError.NONE);
         }
 
         public Assignment(List<TopicPartition> partitions, ByteBuffer userData) {
@@ -243,8 +239,16 @@ public interface PartitionAssignor {
             return partitions;
         }
 
-        public ConsumerProtocol.Errors error() {
+        public ConsumerProtocol.AssignmentError error() {
             return error;
+        }
+
+        public void updatePartitions(List<TopicPartition> partitions) {
+            this.partitions = partitions;
+        }
+
+        public void setError(ConsumerProtocol.AssignmentError error) {
+            this.error = error;
         }
 
         public ByteBuffer userData() {
