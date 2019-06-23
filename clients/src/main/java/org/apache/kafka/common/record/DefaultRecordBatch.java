@@ -262,11 +262,14 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
         if (skipKeyValue) {
             // this buffer is used to skip length delimited fields like key, value, headers
             byte[] skipArray = new byte[MAX_SKIP_BUFFER_SIZE];
+            ByteBuffer skipBuffer = ByteBuffer.wrap(skipArray);
+            // set its limit to 0 to indicate no bytes readable yet
+            skipBuffer.limit(0);
 
             return new StreamRecordIterator(inputStream) {
                 @Override
                 protected Record doReadRecord(long baseOffset, long firstTimestamp, int baseSequence, Long logAppendTime) throws IOException {
-                    return DefaultRecord.readPartiallyFrom(inputStream, skipArray, baseOffset, firstTimestamp, baseSequence, logAppendTime);
+                    return DefaultRecord.readPartiallyFrom(inputStream, skipBuffer, baseOffset, firstTimestamp, baseSequence, logAppendTime);
                 }
             };
         } else {

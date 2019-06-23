@@ -57,19 +57,20 @@ public class RecordBatchIterationBenchmark {
         RANDOM, ONES
     }
 
-    @Param(value = {"10", "50", "200", "500"})
+    //@Param(value = {"10", "50", "200", "500"})
     private int maxBatchSize = 200;
 
-    @Param(value = {"LZ4", "SNAPPY", "GZIP", "ZSTD", "NONE"})
+    //@Param(value = {"LZ4", "SNAPPY", "GZIP", "ZSTD", "NONE"})
+    @Param(value = {"LZ4", "ZSTD"})
     private CompressionType compressionType = CompressionType.NONE;
 
-    @Param(value = {"1", "2"})
+    //@Param(value = {"1", "2"})
     private byte messageVersion = CURRENT_MAGIC_VALUE;
 
     @Param(value = {"100", "1000", "10000", "100000"})
     private int messageSize = 1000;
 
-    @Param(value = {"RANDOM", "ONES"})
+    //@Param(value = {"RANDOM", "ONES"})
     private Bytes bytes = Bytes.RANDOM;
 
     // zero starting offset is much faster for v1 batches, but that will almost never happen
@@ -122,7 +123,7 @@ public class RecordBatchIterationBenchmark {
         return builder.build().buffer();
     }
 
-    @Benchmark
+    //@Benchmark
     public void measureIteratorForBatchWithSingleMessage(Blackhole bh) throws IOException {
         for (RecordBatch batch : MemoryRecords.readableRecords(singleBatchBuffer.duplicate()).batches()) {
             try (CloseableIterator<Record> iterator = batch.streamingIterator(bufferSupplier)) {

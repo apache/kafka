@@ -1193,16 +1193,6 @@ class LogValidatorTest {
     MemoryRecords.readableRecords(buf.slice())
   }
 
-  private def createDiscontinuousOffsetRecords(magicValue: Byte,
-                                               codec: CompressionType): MemoryRecords = {
-    val buf = ByteBuffer.allocate(512)
-    val builder = MemoryRecords.builder(buf, magicValue, codec, TimestampType.CREATE_TIME, 0L)
-    builder.appendWithOffset(0, RecordBatch.NO_TIMESTAMP, null, "hello".getBytes)
-    builder.appendWithOffset(2, RecordBatch.NO_TIMESTAMP, null, "there".getBytes)
-    builder.appendWithOffset(3, RecordBatch.NO_TIMESTAMP, null, "beautiful".getBytes)
-    builder.build()
-  }
-
   /* check that offsets are assigned consecutively from the given base offset */
   def checkOffsets(records: MemoryRecords, baseOffset: Long) {
     assertTrue("Message set should not be empty", records.records.asScala.nonEmpty)

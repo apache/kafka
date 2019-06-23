@@ -35,11 +35,12 @@ import static org.junit.Assert.assertNotNull;
 
 public class DefaultRecordTest {
 
-    private byte[] skipArray;
+    //private byte[] skipArray;
+    private ByteBuffer skipArray;
 
     @Before
     public void setUp() {
-        skipArray = new byte[64];
+        skipArray = ByteBuffer.allocate(64);//new byte[64];
     }
 
     @Test

@@ -373,7 +373,7 @@ public class DefaultRecord implements Record {
     }
 
     public static PartialDefaultRecord readPartiallyFrom(DataInput input,
-                                                         byte[] skipArray,
+                                                         ByteBuffer skipBuffer,
                                                          long baseOffset,
                                                          long baseTimestamp,
                                                          int baseSequence,
@@ -381,22 +381,18 @@ public class DefaultRecord implements Record {
         int sizeOfBodyInBytes = ByteUtils.readVarint(input);
         int totalSizeInBytes = ByteUtils.sizeOfVarint(sizeOfBodyInBytes) + sizeOfBodyInBytes;
 
-        return readPartiallyFrom(input, skipArray, totalSizeInBytes, sizeOfBodyInBytes, baseOffset, baseTimestamp,
+        return readPartiallyFrom(input, skipBuffer, totalSizeInBytes, sizeOfBodyInBytes, baseOffset, baseTimestamp,
             baseSequence, logAppendTime);
     }
 
     private static PartialDefaultRecord readPartiallyFrom(DataInput input,
-                                                          byte[] skipArray,
+                                                          ByteBuffer skipBuffer,
                                                           int sizeInBytes,
                                                           int sizeOfBodyInBytes,
                                                           long baseOffset,
                                                           long baseTimestamp,
                                                           int baseSequence,
                                                           Long logAppendTime) throws IOException {
-        ByteBuffer skipBuffer = ByteBuffer.wrap(skipArray);
-        // set its limit to 0 to indicate no bytes readable yet
-        skipBuffer.limit(0);
-
         try {
             // reading the attributes / timestamp / offset and key-size does not require
             // any byte array allocation and therefore we can just read them straight-forwardly
