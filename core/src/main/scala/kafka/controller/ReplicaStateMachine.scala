@@ -267,26 +267,13 @@ class ZkReplicaStateMachine(config: KafkaConfig,
     }
   }
 
-  private def collectCurrentLeaderAndIsrsForReplica(replicaId: Int,
-                                                    partitions: Seq[TopicPartition]): Map[TopicPartition, LeaderAndIsr] = {
-
-    val leaderAndIsrs = mutable.Buffer.empty[(TopicPartition, LeaderAndIsr)]
-    for (partition <- partitions) {
-      controllerContext.partitionLeadershipInfo.get(partition)
-        .filter(_.leaderAndIsr.isr.contains(replicaId))
-        .foreach { leaderAndIsrControllerEpoch =>
-          leaderAndIsrs.append((partition, leaderAndIsrControllerEpoch.leaderAndIsr))
-        }
-    }
-    leaderAndIsrs.toMap
-  }
-
   /**
    * Repeatedly attempt to remove a replica from the isr of multiple partitions until there are no more remaining partitions
    * to retry.
    * @param replicaId The replica being removed from isr of multiple partitions
    * @param partitions The partitions from which we're trying to remove the replica from isr
-   * @return The updated LeaderIsrAndControllerEpochs of all partitions for which we successfully removed the replica from isr.
+   * @return The updated LeaderIsrAndControllerEpochs of all partitions which either didn't include replicaId
+   *         already or which replicaId was successfully removed from
    */
   private def removeReplicasFromIsr(
     replicaId: Int,
@@ -299,11 +286,29 @@ class ZkReplicaStateMachine(config: KafkaConfig,
       logFailedStateChange(replica, currentState, OfflineReplica, exception)
     }
 
-    var results = Map.empty[TopicPartition, LeaderIsrAndControllerEpoch]
+    def stateChangeFailedException(tp: TopicPartition, reason: String): StateChangeFailedException = {
+      new StateChangeFailedException(s"Failed to change state of replica $replicaId for partition $tp: $reason")
+    }
+
+    var results = Map.newBuilder[TopicPartition, LeaderIsrAndControllerEpoch]
     var remaining = partitions
     while (remaining.nonEmpty) {
-      val leaderAndIsrs = collectCurrentLeaderAndIsrsForReplica(replicaId, partitions)
-      val (finishedRemoval, removalsToRetry) = doRemoveReplicasFromIsr(replicaId, leaderAndIsrs)
+      val leaderAndIsrs = Map.newBuilder[TopicPartition, LeaderAndIsr]
+      for (partition <- remaining) {
+        controllerContext.partitionLeadershipInfo.get(partition) match {
+          case Some(leaderIsrAndControllerEpoch) =>
+            val leaderAndIsr = leaderIsrAndControllerEpoch.leaderAndIsr
+            if (leaderAndIsr.isr.contains(replicaId))
+              leaderAndIsrs += partition -> leaderAndIsr
+            else
+              results += partition -> leaderIsrAndControllerEpoch
+          case None =>
+            val exception = stateChangeFailedException(partition, "No leader and ISR information is available")
+            logFailedOfflineStateChange(partition, exception)
+        }
+      }
+
+      val (finishedRemoval, removalsToRetry) = doRemoveReplicasFromIsr(replicaId, leaderAndIsrs.result())
       remaining = removalsToRetry
 
       finishedRemoval.foreach {
@@ -315,10 +320,6 @@ class ZkReplicaStateMachine(config: KafkaConfig,
       }
 
       if (remaining.nonEmpty) {
-        def stateChangeFailedException(tp: TopicPartition, reason: String): StateChangeFailedException = {
-          new StateChangeFailedException(s"Failed to change state of replica $replicaId for partition $tp: $reason")
-        }
-
         val partitionsFailingUpdate = util.maybeUpdateLeaderAndIsr(remaining, stateChangeFailedException)
         remaining = remaining.filter { tp =>
           partitionsFailingUpdate.get(tp) match {
@@ -331,7 +332,7 @@ class ZkReplicaStateMachine(config: KafkaConfig,
         }
       }
     }
-    results
+    results.result()
   }
 
   /**
