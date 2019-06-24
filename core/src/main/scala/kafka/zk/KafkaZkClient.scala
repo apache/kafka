@@ -38,8 +38,8 @@ import org.apache.zookeeper.KeeperException.{Code, NodeExistsException}
 import org.apache.zookeeper.OpResult.{CreateResult, ErrorResult, SetDataResult}
 import org.apache.zookeeper.data.{ACL, Stat}
 import org.apache.zookeeper.{CreateMode, KeeperException, ZooKeeper}
-import scala.collection.Seq
 import scala.collection.breakOut
+import scala.collection.{Map, Seq}
 import scala.collection.mutable
 
 /**

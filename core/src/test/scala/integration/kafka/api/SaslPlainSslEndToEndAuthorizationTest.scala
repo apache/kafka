@@ -21,6 +21,8 @@ import javax.security.auth.callback._
 import javax.security.auth.Subject
 import javax.security.auth.login.AppConfigurationEntry
 
+import scala.collection.Seq
+
 import kafka.server.KafkaConfig
 import kafka.utils.{TestUtils}
 import kafka.utils.JaasTestUtils._

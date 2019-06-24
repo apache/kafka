@@ -23,6 +23,7 @@ import org.apache.kafka.common.resource.PatternType.LITERAL
 import org.junit.{After, Before, Test}
 
 import scala.collection.mutable.ArrayBuffer
+import scala.collection.Seq
 
 class ZkNodeChangeNotificationListenerTest extends ZooKeeperTestHarness {
 

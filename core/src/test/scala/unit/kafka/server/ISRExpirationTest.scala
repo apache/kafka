@@ -30,6 +30,7 @@ import org.easymock.EasyMock
 import org.junit.Assert._
 import org.junit.{After, Before, Test}
 
+import scala.collection.Seq
 import scala.collection.mutable.{HashMap, Map}
 
 class IsrExpirationTest {
