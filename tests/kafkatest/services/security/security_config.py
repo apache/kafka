@@ -18,6 +18,7 @@ import subprocess
 from tempfile import mkdtemp
 from shutil import rmtree
 from ducktape.template import TemplateRenderer
+from kafkatest.services.kafka import ListenerConfig
 from kafkatest.services.security.minikdc import MiniKdc
 import itertools
 
@@ -112,8 +113,8 @@ class SecurityConfig(TemplateRenderer):
 
     def __init__(self, context, security_protocol=None, interbroker_security_protocol=None,
                  client_sasl_mechanism=SASL_MECHANISM_GSSAPI, interbroker_sasl_mechanism=SASL_MECHANISM_GSSAPI,
-                 client_listener_overrides={}, interbroker_listener_overrides={},
-                 zk_sasl=False, template_props="", static_jaas_conf=True, jaas_override_variables=None):
+                 zk_sasl=False, template_props="", static_jaas_conf=True, jaas_override_variables=None,
+                 listener_config=ListenerConfig()):
         """
         Initialize the security properties for the node and copy
         keystore and truststore to the remote node if the transport protocol 
@@ -141,12 +142,11 @@ class SecurityConfig(TemplateRenderer):
         if interbroker_security_protocol is None:
             interbroker_security_protocol = security_protocol
         self.interbroker_security_protocol = interbroker_security_protocol
-        self.client_listener_overrides = client_listener_overrides
-        self.interbroker_listener_overrides = interbroker_listener_overrides
         self.has_sasl = self.is_sasl(security_protocol) or self.is_sasl(interbroker_security_protocol) or zk_sasl
         self.has_ssl = self.is_ssl(security_protocol) or self.is_ssl(interbroker_security_protocol)
         self.zk_sasl = zk_sasl
         self.static_jaas_conf = static_jaas_conf
+        self.listener_config = listener_config
         self.properties = {
             'security.protocol' : security_protocol,
             'ssl.keystore.location' : SecurityConfig.KEYSTORE_PATH,
@@ -159,7 +159,7 @@ class SecurityConfig(TemplateRenderer):
             'sasl.mechanism.inter.broker.protocol' : interbroker_sasl_mechanism,
             'sasl.kerberos.service.name' : 'kafka'
         }
-        self.properties.update(self.client_listener_overrides)
+        self.properties.update(self.listener_config.client_listener_overrides)
         self.jaas_override_variables = jaas_override_variables or {}
 
     def client_config(self, template_props="", node=None, jaas_override_variables=None):
@@ -171,10 +171,10 @@ class SecurityConfig(TemplateRenderer):
         static_jaas_conf = node is None or (self.has_sasl and self.has_ssl)
         return SecurityConfig(self.context, self.security_protocol,
                               client_sasl_mechanism=self.client_sasl_mechanism,
-                              client_listener_overrides=self.client_listener_overrides,
                               template_props=template_props,
                               static_jaas_conf=static_jaas_conf,
-                              jaas_override_variables=jaas_override_variables)
+                              jaas_override_variables=jaas_override_variables,
+                              listener_config=self.listener_config)
 
     def enable_security_protocol(self, security_protocol):
         self.has_sasl = self.has_sasl or self.is_sasl(security_protocol)

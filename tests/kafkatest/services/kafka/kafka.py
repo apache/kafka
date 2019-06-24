@@ -50,6 +50,27 @@ class KafkaListener:
     def listener_security_protocol(self):
         return "%s:%s" % (self.name, self.security_protocol)
 
+class ListenerConfig:
+
+    def __init__(self, use_separate_interbroker_listener=False,
+                 client_listener_overrides={}, interbroker_listener_overrides={}):
+        """
+        :param bool use_separate_interbroker_listener - if set, will use a separate interbroker listener,
+        with security protocol set to interbroker_security_protocol value. If set, requires
+        interbroker_security_protocol to be provided.
+        Normally port name is the same as its security protocol, so setting security_protocol and
+        interbroker_security_protocol to the same value will lead to a single port being open and both client
+        and broker-to-broker communication will go over that port. This parameter allows
+        you to add an interbroker listener with the same security protocol as a client listener, but running on a
+        separate port.
+        :param dict client_listener_overrides - non-prefixed listener config overrides for named client listener
+        (for example 'sasl.jaas.config', 'ssl.keystore.location', 'sasl.login.callback.handler.class', etc).
+        :param dict interbroker_listener_overrides - non-prefixed listener config overrides for named interbroker
+        listener (for example 'sasl.jaas.config', 'ssl.keystore.location', 'sasl.login.callback.handler.class', etc).
+        """
+        self.use_separate_interbroker_listener = use_separate_interbroker_listener
+        self.client_listener_overrides = client_listener_overrides
+        self.interbroker_listener_overrides = interbroker_listener_overrides
 
 class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
     PERSISTENT_ROOT = "/mnt/kafka"
@@ -92,10 +113,9 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
 
     def __init__(self, context, num_nodes, zk, security_protocol=SecurityConfig.PLAINTEXT, interbroker_security_protocol=SecurityConfig.PLAINTEXT,
                  client_sasl_mechanism=SecurityConfig.SASL_MECHANISM_GSSAPI, interbroker_sasl_mechanism=SecurityConfig.SASL_MECHANISM_GSSAPI,
-                 client_listener_overrides={}, interbroker_listener_overrides={},
                  authorizer_class_name=None, topics=None, version=DEV_BRANCH, jmx_object_names=None,
                  jmx_attributes=None, zk_connect_timeout=5000, zk_session_timeout=6000, server_prop_overides=None, zk_chroot=None,
-                 use_separate_interbroker_listener=False):
+                 listener_config=ListenerConfig()):
         """
         :param context: test context
         :param ZookeeperService zk:
@@ -112,14 +132,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         :param int zk_session_timeout:
         :param dict server_prop_overides: overrides for kafka.properties file
         :param zk_chroot:
-        :param bool use_separate_interbroker_listener - if set, will use a separate interbroker listener,
-        with security protocol set to interbroker_security_protocol value. If set, requires
-        interbroker_security_protocol to be provided.
-        Normally port name is the same as its security protocol, so setting security_protocol and
-        interbroker_security_protocol to the same value will lead to a single port being open and both client
-        and broker-to-broker communication will go over that port. This parameter allows
-        you to add an interbroker listener with the same security protocol as a client listener, but running on a
-        separate port.
+        :param ListenerConfig listener_config: listener config to use
         """
         Service.__init__(self, context, num_nodes)
         JmxMixin.__init__(self, num_nodes=num_nodes, jmx_object_names=jmx_object_names, jmx_attributes=(jmx_attributes or []),
@@ -129,8 +142,6 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
 
         self.security_protocol = security_protocol
         self.client_sasl_mechanism = client_sasl_mechanism
-        self.client_listener_overrides = client_listener_overrides
-        self.interbroker_listener_overrides = interbroker_listener_overrides
         self.topics = topics
         self.minikdc = None
         self.authorizer_class_name = authorizer_class_name
@@ -141,6 +152,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
             self.server_prop_overides = server_prop_overides
         self.log_level = "DEBUG"
         self.zk_chroot = zk_chroot
+        self.listener_config = listener_config
 
         #
         # In a heavily loaded and not very fast machine, it is
@@ -170,7 +182,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         }
 
         self.interbroker_listener = None
-        self.setup_interbroker_listener(interbroker_security_protocol, use_separate_interbroker_listener)
+        self.setup_interbroker_listener(interbroker_security_protocol, self.listener_config.use_separate_interbroker_listener)
         self.interbroker_sasl_mechanism = interbroker_sasl_mechanism
 
         for node in self.nodes:
@@ -192,9 +204,9 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         self.setup_interbroker_listener(security_protocol, use_separate_listener=False)
 
     def setup_interbroker_listener(self, security_protocol, use_separate_listener=False):
-        self.use_separate_interbroker_listener = use_separate_listener
+        self.listener_config.use_separate_interbroker_listener = use_separate_listener
 
-        if self.use_separate_interbroker_listener:
+        if self.listener_config.use_separate_interbroker_listener:
             # do not close existing port here since it is not used exclusively for interbroker communication
             self.interbroker_listener = self.port_mappings[KafkaService.INTERBROKER_LISTENER_NAME]
             self.interbroker_listener.security_protocol = security_protocol
@@ -209,8 +221,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
                                 zk_sasl=self.zk.zk_sasl,
                                 client_sasl_mechanism=self.client_sasl_mechanism,
                                 interbroker_sasl_mechanism=self.interbroker_sasl_mechanism,
-                                client_listener_overrides=self.client_listener_overrides,
-                                interbroker_listener_overrides=self.interbroker_listener_overrides)
+                                listener_config=self.listener_config)
         for port in self.port_mappings.values():
             if port.open:
                 config.enable_security_protocol(port.security_protocol)
@@ -292,8 +303,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         #load template configs as dictionary
         config_template = self.render('kafka.properties', node=node, broker_id=self.idx(node),
                                  security_config=self.security_config, num_nodes=self.num_nodes,
-                                 client_listener_overrides=self.client_listener_overrides,
-                                 interbroker_listener_overrides=self.interbroker_listener_overrides)
+                                 listener_config=self.listener_config)
 
         configs = dict( l.rstrip().split('=', 1) for l in config_template.split('\n')
                         if not l.startswith("#") and "=" in l )
