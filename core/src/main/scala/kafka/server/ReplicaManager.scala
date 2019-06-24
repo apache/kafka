@@ -50,7 +50,6 @@ import org.apache.kafka.common.utils.Time
 
 import scala.collection.JavaConverters._
 import scala.collection.{Map, Seq, Set, mutable}
-import scala.collection.compat._
 
 /*
  * Result metadata of a log append operation on the log
@@ -1569,7 +1568,7 @@ class ReplicaManager(val config: KafkaConfig,
       if (expectedLeaders.nonEmpty) {
         val watchKeys = expectedLeaders.iterator.map {
           case (tp, _) => TopicPartitionOperationKey(tp)
-        }.to(Seq)
+        }.toIndexedSeq
 
         delayedElectLeaderPurgatory.tryCompleteElseWatch(
           new DelayedElectLeader(

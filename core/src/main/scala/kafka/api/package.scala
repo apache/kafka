@@ -19,7 +19,6 @@ package kafka
 import org.apache.kafka.common.ElectionType
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.requests.ElectLeadersRequest
-import scala.collection.compat._
 import scala.collection.JavaConverters._
 
 package object api {
@@ -32,7 +31,7 @@ package object api {
           topicPartition.partitionId.asScala.map { partitionId =>
             new TopicPartition(topicPartition.topic, partitionId)
           }
-        }.to(Set)
+        }.toSet
       }
     }
 
