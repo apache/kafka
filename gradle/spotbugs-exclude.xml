@@ -76,7 +76,9 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
             NM_METHOD_NAMING_CONVENTION: Method names should start with a lower case letter.
             EC_NULL_ARG: Call to equals(null)
             NP_ALWAYS_NULL: Null pointer dereference
-            MS_CANNOT_BE_FINAL: Field isn't final and can't be protected from malicious code -->
+            MS_CANNOT_BE_FINAL: Field isn't final and can't be protected from malicious code
+            IC_INIT_CIRCULARITY: Initialization circularity
+            SE_NO_SUITABLE_CONSTRUCTOR: Class is Serializable but its superclass doesn't define a void constructor -->
         <Source name="~.*\.scala" />
         <Or>
             <Bug pattern="NP_LOAD_OF_KNOWN_NULL_VALUE"/>
@@ -96,6 +98,8 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
             <Bug pattern="EC_NULL_ARG"/>
             <Bug pattern="NP_ALWAYS_NULL"/>
             <Bug pattern="MS_CANNOT_BE_FINAL"/>
+            <Bug pattern="IC_INIT_CIRCULARITY"/>
+            <Bug pattern="SE_NO_SUITABLE_CONSTRUCTOR"/>
         </Or>
     </Match>
 
