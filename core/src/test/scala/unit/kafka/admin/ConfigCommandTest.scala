@@ -249,11 +249,56 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
     ))
   }
 
+  @Test
+  def testNoSpecifiedEntityOptionWithDescribeBrokersInZKIsAllowed(): Unit = {
+    val optsList = List("--zookeeper", "localhost:9092",
+      "--entity-type", EntityType.Broker,
+      "--describe"
+    )
+
+    new ConfigCommandOptions(optsList.toArray).checkArgs()
+  }
+
+  @Test(expected = classOf[IllegalArgumentException])
+  def testNoSpecifiedEntityOptionWithDescribeBrokersInBootstrapServerIsNotAllowed(): Unit = {
+    val optsList = List("--bootstrap-server", "localhost:9092",
+      "--entity-type", EntityType.Broker,
+      "--describe"
+    )
+
+    new ConfigCommandOptions(optsList.toArray).checkArgs()
+  }
+
+  @Test(expected = classOf[IllegalArgumentException])
+  def testEntityDefaultOptionWithDescribeBrokerLoggerIsNotAllowed(): Unit = {
+    val node = new Node(1, "localhost", 9092)
+    val optsList = List("--bootstrap-server", "localhost:9092",
+      "--entity-type", EntityType.BrokerLogger,
+      "--entity-default",
+      "--describe"
+    )
+
+    new ConfigCommandOptions(optsList.toArray).checkArgs()
+  }
+
+  @Test(expected = classOf[IllegalArgumentException])
+  def testEntityDefaultOptionWithAlterBrokerLoggerIsNotAllowed(): Unit = {
+    val node = new Node(1, "localhost", 9092)
+    val optsList = List("--bootstrap-server", "localhost:9092",
+      "--entity-type", EntityType.BrokerLogger,
+      "--entity-default",
+      "--alter",
+      "--add-config", "kafka.log.LogCleaner=DEBUG"
+    )
+
+    new ConfigCommandOptions(optsList.toArray).checkArgs()
+  }
+
   @Test(expected = classOf[InvalidConfigurationException])
   def shouldRaiseInvalidConfigurationExceptionWhenAddingInvalidBrokerLoggerConfig(): Unit = {
     val node = new Node(1, "localhost", 9092)
-    // we want to alter kafka.log.LogCleaner, kafka.server.ReplicaManager and kafka.server.KafkaApi
-    // yet, we only get one logger returned
+    // verifyAlterBrokerLoggerConfig tries to alter kafka.log.LogCleaner, kafka.server.ReplicaManager and kafka.server.KafkaApi
+    // yet, we make it so DescribeConfigs returns only one logger, implying that kafka.server.ReplicaManager and kafka.log.LogCleaner are invalid
     verifyAlterBrokerLoggerConfig(node, "1", "1", List(
       new ConfigEntry("kafka.server.KafkaApi", "INFO")
     ))
@@ -313,7 +358,7 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
   def verifyAlterBrokerLoggerConfig(node: Node, resourceName: String, entityName: String,
                                     describeConfigEntries: List[ConfigEntry]): Unit = {
     val optsList = List("--bootstrap-server", "localhost:9092",
-      "--entity-type", "brokers",
+      "--entity-type", EntityType.BrokerLogger,
       "--alter",
       "--entity-name", entityName,
       "--add-config", "kafka.log.LogCleaner=DEBUG",

@@ -1888,11 +1888,11 @@ public class KafkaAdminClient extends AdminClient {
             case STATIC_BROKER_CONFIG:
                 configSource = ConfigEntry.ConfigSource.STATIC_BROKER_CONFIG;
                 break;
-            case DEFAULT_CONFIG:
-                configSource = ConfigEntry.ConfigSource.DEFAULT_CONFIG;
-                break;
             case DYNAMIC_BROKER_LOGGER_CONFIG:
                 configSource = ConfigEntry.ConfigSource.DYNAMIC_BROKER_LOGGER_CONFIG;
+                break;
+            case DEFAULT_CONFIG:
+                configSource = ConfigEntry.ConfigSource.DEFAULT_CONFIG;
                 break;
             default:
                 throw new IllegalArgumentException("Unexpected config source " + source);

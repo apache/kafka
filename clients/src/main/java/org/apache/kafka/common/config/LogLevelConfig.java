@@ -64,14 +64,8 @@ public class LogLevelConfig {
      */
     public static final String TRACE_LOG_LEVEL = "TRACE";
 
-    /**
-     * The <code>ALL</code> has the lowest possible rank and is intended to turn on all logging.
-     */
-    public static final String ALL_LOG_LEVEL = "ALL";
-
     public static final Set<String> VALID_LOG_LEVELS = new HashSet<>(Arrays.asList(
-            ALL_LOG_LEVEL, FATAL_LOG_LEVEL, ERROR_LOG_LEVEL,
-            WARN_LOG_LEVEL, INFO_LOG_LEVEL, DEBUG_LOG_LEVEL,
-            TRACE_LOG_LEVEL
+            FATAL_LOG_LEVEL, ERROR_LOG_LEVEL, WARN_LOG_LEVEL,
+            INFO_LOG_LEVEL, DEBUG_LOG_LEVEL, TRACE_LOG_LEVEL
     ));
 }

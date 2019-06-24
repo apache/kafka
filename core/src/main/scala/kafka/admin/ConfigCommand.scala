@@ -274,14 +274,12 @@ object ConfigCommand extends Config {
     val adminClient = JAdminClient.create(props)
     val entityName = if (opts.options.has(opts.entityName))
       opts.options.valueOf(opts.entityName)
-    else if (opts.options.has(opts.entityDefault))
+    else // default entity
       ""
-    else
-      throw new IllegalArgumentException("At least one of --entity-name or --entity-default must be specified with --bootstrap-server")
 
     val entityTypes = opts.options.valuesOf(opts.entityType).asScala
     if (entityTypes.size != 1)
-      throw new IllegalArgumentException("Exactly one --entity-type must be specified with --bootstrap-server")
+      throw new IllegalArgumentException(s"Exactly one --entity-type (out of ${EntityType.brokerSupportedTypes.mkString(",")}) must be specified with --bootstrap-server")
 
     try {
       if (opts.options.has(opts.alterOpt))
@@ -368,6 +366,9 @@ object ConfigCommand extends Config {
       .toSeq
   }
 
+  /**
+    * Returns all the valid broker logger configurations
+    */
   private def brokerLoggerConfigs(adminClient: Admin, entityName: String): Seq[ConfigEntry] = {
     val configResource = new ConfigResource(ConfigResource.Type.BROKER_LOGGER, entityName)
     val configs = adminClient.describeConfigs(Collections.singleton(configResource)).all.get(30, TimeUnit.SECONDS)
@@ -508,7 +509,7 @@ object ConfigCommand extends Config {
       .ofType(classOf[String])
     val alterOpt = parser.accepts("alter", "Alter the configuration for the entity.")
     val describeOpt = parser.accepts("describe", "List configs for the given entity.")
-    val entityType = parser.accepts("entity-type", "Type of entity (topics/clients/users/brokers)")
+    val entityType = parser.accepts("entity-type", "Type of entity (topics/clients/users/brokers/broker-loggers)")
             .withRequiredArg
             .ofType(classOf[String])
     val entityName = parser.accepts("entity-name", "Name of entity (topic name/client id/user principal name/broker id)")
@@ -539,31 +540,11 @@ object ConfigCommand extends Config {
       val actions = Seq(alterOpt, describeOpt).count(options.has _)
       if(actions != 1)
         CommandLineUtils.printUsageAndDie(parser, "Command must include exactly one action: --describe, --alter")
-
       // check required args
       CommandLineUtils.checkInvalidArgs(parser, options, alterOpt, Set(describeOpt))
       CommandLineUtils.checkInvalidArgs(parser, options, describeOpt, Set(alterOpt, addConfig, deleteConfig))
+
       val entityTypeVals = options.valuesOf(entityType).asScala
-
-      if (!options.has(bootstrapServerOpt) && !options.has(zkConnectOpt))
-        throw new IllegalArgumentException("One of the required --bootstrap-server or --zookeeper arguments must be specified")
-      else if (options.has(bootstrapServerOpt) && options.has(zkConnectOpt))
-        throw new IllegalArgumentException("Only one of --bootstrap-server or --zookeeper must be specified")
-      if (entityTypeVals.contains(EntityType.Client) || entityTypeVals.contains(EntityType.Topic) || entityTypeVals.contains(EntityType.User))
-        CommandLineUtils.checkRequiredArgs(parser, options, zkConnectOpt, entityType)
-      if(options.has(alterOpt)) {
-        if (entityTypeVals.contains(EntityType.User) || entityTypeVals.contains(EntityType.Client) || entityTypeVals.contains(EntityType.Broker)) {
-          if (!options.has(entityName) && !options.has(entityDefault))
-            throw new IllegalArgumentException("--entity-name or --entity-default must be specified with --alter of users, clients or brokers")
-        } else if (!options.has(entityName))
-            throw new IllegalArgumentException(s"--entity-name must be specified with --alter of $entityTypeVals")
-
-        val isAddConfigPresent: Boolean = options.has(addConfig)
-        val isDeleteConfigPresent: Boolean = options.has(deleteConfig)
-        if(! isAddConfigPresent && ! isDeleteConfigPresent)
-          throw new IllegalArgumentException("At least one of --add-config or --delete-config must be specified with --alter")
-      }
-
       val (allowedEntityTypes, connectOptString) = if (options.has(bootstrapServerOpt))
         (EntityType.brokerSupportedTypes, "--bootstrap-server")
       else
@@ -571,12 +552,38 @@ object ConfigCommand extends Config {
 
       entityTypeVals.foreach(entityTypeVal =>
         if (!allowedEntityTypes.contains(entityTypeVal))
-          throw new IllegalArgumentException(s"Invalid entity-type $entityTypeVal, --entity-type must be one of $allowedEntityTypes with the $connectOptString argument")
+          throw new IllegalArgumentException(s"Invalid entity-type $entityTypeVal, --entity-type must be one of ${allowedEntityTypes.mkString(",")} with the $connectOptString argument")
       )
       if (entityTypeVals.isEmpty)
         throw new IllegalArgumentException("At least one --entity-type must be specified")
       else if (entityTypeVals.size > 1 && !entityTypeVals.toSet.equals(Set(EntityType.User, EntityType.Client)))
         throw new IllegalArgumentException(s"Only '${EntityType.User}' and '${EntityType.Client}' entity types may be specified together")
+
+      if (!options.has(bootstrapServerOpt) && !options.has(zkConnectOpt))
+        throw new IllegalArgumentException("One of the required --bootstrap-server or --zookeeper arguments must be specified")
+      else if (options.has(bootstrapServerOpt) && options.has(zkConnectOpt))
+        throw new IllegalArgumentException("Only one of --bootstrap-server or --zookeeper must be specified")
+      else if (options.has(bootstrapServerOpt) && !options.has(entityName) && !options.has(entityDefault))
+        throw new IllegalArgumentException(s"At least one of --entity-name or --entity-default must be specified with --bootstrap-server")
+
+      if (entityTypeVals.contains(EntityType.Client) || entityTypeVals.contains(EntityType.Topic) || entityTypeVals.contains(EntityType.User))
+        CommandLineUtils.checkRequiredArgs(parser, options, zkConnectOpt, entityType)
+
+      if (options.has(describeOpt) && entityTypeVals.contains(EntityType.BrokerLogger) && !options.has(entityName))
+        throw new IllegalArgumentException(s"--entity-name must be specified with --describe of ${entityTypeVals.mkString(",")}")
+
+      if (options.has(alterOpt)) {
+        if (entityTypeVals.contains(EntityType.User) || entityTypeVals.contains(EntityType.Client) || entityTypeVals.contains(EntityType.Broker)) {
+          if (!options.has(entityName) && !options.has(entityDefault))
+            throw new IllegalArgumentException("--entity-name or --entity-default must be specified with --alter of users, clients or brokers")
+        } else if (!options.has(entityName))
+          throw new IllegalArgumentException(s"--entity-name must be specified with --alter of ${entityTypeVals.mkString(",")}")
+
+        val isAddConfigPresent: Boolean = options.has(addConfig)
+        val isDeleteConfigPresent: Boolean = options.has(deleteConfig)
+        if(! isAddConfigPresent && ! isDeleteConfigPresent)
+          throw new IllegalArgumentException("At least one of --add-config or --delete-config must be specified with --alter")
+      }
     }
   }
 
