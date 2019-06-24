@@ -104,7 +104,7 @@ case class LogConfig(props: java.util.Map[_, _], overriddenConfigs: Set[String] 
   def randomSegmentJitter: Long =
     if (segmentJitterMs == 0) 0 else Utils.abs(scala.util.Random.nextInt()) % math.min(segmentJitterMs, segmentMs)
 
-  def maxSegmentMs :Long = {
+  def maxSegmentMs: Long = {
     if (compact && maxCompactionLagMs > 0) math.min(maxCompactionLagMs, segmentMs)
     else segmentMs
   }
