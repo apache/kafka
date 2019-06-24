@@ -54,6 +54,7 @@ import org.apache.kafka.common.requests.TxnOffsetCommitRequest;
 import org.apache.kafka.common.requests.TxnOffsetCommitRequest.CommittedOffset;
 import org.apache.kafka.common.requests.TxnOffsetCommitResponse;
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.PrimitiveRef;
 import org.slf4j.Logger;
 
 import java.util.ArrayList;
@@ -68,7 +69,6 @@ import java.util.PriorityQueue;
 import java.util.Set;
 import java.util.SortedSet;
 import java.util.TreeSet;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
@@ -655,15 +655,15 @@ public class TransactionManager {
     }
 
     private void startSequencesAtBeginning(TopicPartition topicPartition) {
-        final AtomicInteger sequence = new AtomicInteger(0);
+        final PrimitiveRef.IntRef sequence = PrimitiveRef.ofInt(0);
         topicPartitionBookkeeper.getPartition(topicPartition).resetSequenceNumbers(inFlightBatch -> {
             log.info("Resetting sequence number of batch with current sequence {} for partition {} to {}",
-                    inFlightBatch.baseSequence(), inFlightBatch.topicPartition, sequence.get());
+                    inFlightBatch.baseSequence(), inFlightBatch.topicPartition, sequence.value);
             inFlightBatch.resetProducerState(new ProducerIdAndEpoch(inFlightBatch.producerId(),
-                    inFlightBatch.producerEpoch()), sequence.get(), inFlightBatch.isTransactional());
-            sequence.getAndAdd(inFlightBatch.recordCount);
+                    inFlightBatch.producerEpoch()), sequence.value, inFlightBatch.isTransactional());
+            sequence.value += inFlightBatch.recordCount;
         });
-        setNextSequence(topicPartition, sequence.get());
+        setNextSequence(topicPartition, sequence.value);
         topicPartitionBookkeeper.getPartition(topicPartition).lastAckedSequence = NO_LAST_ACKED_SEQUENCE_NUMBER;
     }
 

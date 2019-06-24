@@ -911,7 +911,7 @@ public class ConsumerCoordinatorTest {
                         leaveRequest.data().groupId().equals(groupId);
             }
         }, new LeaveGroupResponse(new LeaveGroupResponseData().setErrorCode(Errors.NONE.code())));
-        coordinator.maybeLeaveGroup();
+        coordinator.maybeLeaveGroup("test maybe leave group");
         assertTrue(received.get());
 
         AbstractCoordinator.Generation generation = coordinator.generation();
@@ -949,7 +949,7 @@ public class ConsumerCoordinatorTest {
             }
         }, new LeaveGroupResponse(new LeaveGroupResponseData().setErrorCode(Errors.NONE.code())));
 
-        coordinator.maybeLeaveGroup();
+        coordinator.maybeLeaveGroup("pending member leaves");
         assertTrue(received.get());
     }
 
@@ -1579,7 +1579,7 @@ public class ConsumerCoordinatorTest {
         client.prepareResponse(new LeaveGroupResponse(new LeaveGroupResponseData()
                 .setErrorCode(Errors.NONE.code())));
         subscriptions.unsubscribe();
-        coordinator.maybeLeaveGroup();
+        coordinator.maybeLeaveGroup("test commit after leave");
         subscriptions.assignFromUser(singleton(t1p));
 
         // the client should not reuse generation/memberId from auto-subscribed generation
