@@ -576,8 +576,7 @@ object ConsumerGroupCommand extends Logging {
 
     private def getPartitionsToReset(groupId: String): Seq[TopicPartition] = {
       if (opts.options.has(opts.allTopicsOpt)) {
-        val allTopicPartitions = getCommittedOffsets(groupId).keys.toSeq
-        allTopicPartitions
+        getCommittedOffsets(groupId).keys.toSeq
       } else if (opts.options.has(opts.topicOpt)) {
         val topics = opts.options.valuesOf(opts.topicOpt).asScala
         parseTopicPartitionsToReset(groupId, topics)
