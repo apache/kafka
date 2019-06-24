@@ -42,7 +42,6 @@ import org.apache.zookeeper.KeeperException.Code
 
 import scala.collection.JavaConverters._
 import scala.collection.{Map, Seq, Set, immutable, mutable}
-import scala.collection.compat._
 import scala.util.{Failure, Try}
 
 sealed trait ElectionTrigger
@@ -1506,7 +1505,7 @@ class KafkaController(val config: KafkaConfig,
   ): Unit = {
     callback(
       partitionsFromAdminClientOpt.fold(Map.empty[TopicPartition, Either[ApiError, Int]]) { partitions =>
-        partitions.iterator.map(partition => partition -> Left(new ApiError(Errors.NOT_CONTROLLER, null))).to(Map)
+        partitions.iterator.map(partition => partition -> Left(new ApiError(Errors.NOT_CONTROLLER, null))).toMap
       }
     )
   }
@@ -1519,7 +1518,7 @@ class KafkaController(val config: KafkaConfig,
   ): Unit = {
     if (!isActive) {
       callback(partitionsFromAdminClientOpt.fold(Map.empty[TopicPartition, Either[ApiError, Int]]) { partitions =>
-        partitions.iterator.map(partition => partition -> Left(new ApiError(Errors.NOT_CONTROLLER, null))).to(Map)
+        partitions.iterator.map(partition => partition -> Left(new ApiError(Errors.NOT_CONTROLLER, null))).toMap
       })
     } else {
       // We need to register the watcher if the path doesn't exist in order to detect future preferred replica

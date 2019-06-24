@@ -27,7 +27,6 @@ import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.ControllerMovedException
 import org.apache.zookeeper.KeeperException.Code
 import scala.collection.{Seq, mutable}
-import scala.collection.compat._
 
 abstract class ReplicaStateMachine(controllerContext: ControllerContext) extends Logging {
   /**
@@ -345,7 +344,7 @@ class ZkReplicaStateMachine(config: KafkaConfig,
           )
           Option(partition -> Left(exception))
         } else None
-      }.to(Map)
+      }.toMap
 
     val leaderIsrAndControllerEpochs: Map[TopicPartition, Either[Exception, LeaderIsrAndControllerEpoch]] =
       (leaderAndIsrsWithoutReplica ++ finishedPartitions).map { case (partition, result: Either[Exception, LeaderAndIsr]) =>
@@ -381,7 +380,7 @@ class ZkReplicaStateMachine(config: KafkaConfig,
       zkClient.getTopicPartitionStatesRaw(partitions)
     } catch {
       case e: Exception =>
-        return (partitions.iterator.map(_ -> Left(e)).to(Map), Seq.empty)
+        return (partitions.iterator.map(_ -> Left(e)).toMap, Seq.empty)
     }
 
     val partitionsWithNoLeaderAndIsrInZk = mutable.Buffer.empty[TopicPartition]
