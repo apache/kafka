@@ -20,6 +20,8 @@ import org.apache.kafka.common.config.ConfigChangeCallback;
 import org.apache.kafka.common.config.ConfigData;
 import org.apache.kafka.common.config.provider.ConfigProvider;
 import org.easymock.EasyMock;
+import static org.easymock.EasyMock.anyObject;
+import static org.easymock.EasyMock.eq;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -84,8 +86,7 @@ public class WorkerConfigTransformerTest {
     @Test
     public void testReplaceVariableWithTTLAndScheduleRestart() {
         EasyMock.expect(worker.herder()).andReturn(herder);
-        EasyMock.expect(herder.restartConnector(1L, MY_CONNECTOR, null)).andReturn(requestId);
-
+        EasyMock.expect(herder.restartConnector(eq(1L), eq(MY_CONNECTOR), anyObject())).andReturn(requestId);
         replayAll();
 
         Map<String, String> result = configTransformer.transform(MY_CONNECTOR, Collections.singletonMap(MY_KEY, "${test:testPath:testKeyWithTTL}"));
@@ -95,13 +96,13 @@ public class WorkerConfigTransformerTest {
     @Test
     public void testReplaceVariableWithTTLFirstCancelThenScheduleRestart() {
         EasyMock.expect(worker.herder()).andReturn(herder);
-        EasyMock.expect(herder.restartConnector(1L, MY_CONNECTOR, null)).andReturn(requestId);
+        EasyMock.expect(herder.restartConnector(eq(1L), eq(MY_CONNECTOR),  anyObject())).andReturn(requestId);
 
         EasyMock.expect(worker.herder()).andReturn(herder);
         EasyMock.expectLastCall();
         requestId.cancel();
         EasyMock.expectLastCall();
-        EasyMock.expect(herder.restartConnector(10L, MY_CONNECTOR, null)).andReturn(requestId);
+        EasyMock.expect(herder.restartConnector(eq(10L), eq(MY_CONNECTOR), anyObject())).andReturn(requestId);
 
         replayAll();
 

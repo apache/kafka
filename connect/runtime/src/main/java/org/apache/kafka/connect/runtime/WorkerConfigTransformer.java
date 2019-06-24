@@ -21,6 +21,7 @@ import org.apache.kafka.common.config.provider.ConfigProvider;
 import org.apache.kafka.common.config.ConfigTransformer;
 import org.apache.kafka.common.config.ConfigTransformerResult;
 import org.apache.kafka.connect.runtime.Herder.ConfigReloadAction;
+import org.apache.kafka.connect.util.FutureCallback;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -86,7 +87,8 @@ public class WorkerConfigTransformer {
             }
         }
         log.info("Scheduling a restart of connector {} in {} ms", connectorName, ttl);
-        HerderRequest request = worker.herder().restartConnector(ttl, connectorName, null);
+        FutureCallback<Void> cb = new FutureCallback<>();
+        HerderRequest request = worker.herder().restartConnector(ttl, connectorName, cb);
         connectorRequests.put(path, request);
     }
 }
