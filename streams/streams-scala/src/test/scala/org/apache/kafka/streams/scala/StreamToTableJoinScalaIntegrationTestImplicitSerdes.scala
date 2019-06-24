@@ -49,9 +49,9 @@ class StreamToTableJoinScalaIntegrationTestImplicitSerdes extends StreamToTableJ
 
     val builder = new StreamsBuilder()
 
-    val userClicksStream: KStream[String, Long] = builder.stream(userClicksTopic)
+    val userClicksStream: KStream[String, Long] = builder.stream[String, Long](userClicksTopic)
 
-    val userRegionsTable: KTable[String, String] = builder.table(userRegionsTopic)
+    val userRegionsTable: KTable[String, String] = builder.table[String, String](userRegionsTopic)
 
     // Compute the total per region by summing the individual click counts per region.
     val clicksPerRegion: KTable[String, Long] =
@@ -92,9 +92,9 @@ class StreamToTableJoinScalaIntegrationTestImplicitSerdes extends StreamToTableJ
 
     val builder = new StreamsBuilder()
 
-    val userClicksStream: KStream[String, Long] = builder.stream(userClicksTopic)
+    val userClicksStream: KStream[String, Long] = builder.stream[String, Long](userClicksTopic)
 
-    val userRegionsTable: KTable[String, String] = builder.table(userRegionsTopic)
+    val userRegionsTable: KTable[String, String] = builder.table[String, String](userRegionsTopic)
 
     // Compute the total per region by summing the individual click counts per region.
     val clicksPerRegion: KTable[String, Long] =
