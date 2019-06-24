@@ -50,10 +50,10 @@ object CoreUtils {
   private val logger = Logger(getClass)
 
   /**
-   * Return the smallest element in `traversable` if it is not empty. Otherwise return `ifEmpty`.
+   * Return the smallest element in `iterable` if it is not empty. Otherwise return `ifEmpty`.
    */
-  def min[A, B >: A](traversable: TraversableOnce[A], ifEmpty: A)(implicit cmp: Ordering[B]): A =
-    if (traversable.isEmpty) ifEmpty else traversable.min(cmp)
+  def min[A, B >: A](iterable: Iterable[A], ifEmpty: A)(implicit cmp: Ordering[B]): A =
+    if (iterable.isEmpty) ifEmpty else iterable.min(cmp)
 
   /**
    * Wrap the given function in a java.lang.Runnable
