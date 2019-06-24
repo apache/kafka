@@ -28,7 +28,7 @@ import kafka.utils.{CommandDefaultOptions, CommandLineUtils, Exit, PasswordEncod
 import kafka.utils.Implicits._
 import kafka.zk.{AdminZkClient, KafkaZkClient}
 import org.apache.kafka.clients.CommonClientConfigs
-import org.apache.kafka.clients.admin.{AlterConfigsOptions, ConfigEntry, DescribeConfigsOptions, AdminClient => JAdminClient, Config => JConfig}
+import org.apache.kafka.clients.admin.{AdminClientConfig, AlterConfigsOptions, ConfigEntry, DescribeConfigsOptions, AdminClient => JAdminClient, Config => JConfig}
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.config.types.Password
 import org.apache.kafka.common.errors.InvalidConfigurationException
@@ -249,6 +249,19 @@ object ConfigCommand extends Config {
       if (props.containsKey(LogConfig.MessageFormatVersionProp)) {
         println(s"WARNING: The configuration ${LogConfig.MessageFormatVersionProp}=${props.getProperty(LogConfig.MessageFormatVersionProp)} is specified. " +
           s"This configuration will be ignored if the version is newer than the inter.broker.protocol.version specified in the broker.")
+      }
+    }
+    resolveVariableConfigs(opts, props)
+  }
+
+  private[admin] def resolveVariableConfigs(opts: ConfigCommandOptions, propsOriginal: Properties): Properties = {
+    val props = new Properties
+    propsOriginal.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, opts.options.valueOf(opts.bootstrapServerOpt))
+    val config = new AdminClientConfig(propsOriginal)
+    val resolvedProps = config.originals
+    for ((key, value) <- resolvedProps.asScala) {
+      if (!key.startsWith("config.provider") && key != CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG){
+        props.put(key, value)
       }
     }
     props
