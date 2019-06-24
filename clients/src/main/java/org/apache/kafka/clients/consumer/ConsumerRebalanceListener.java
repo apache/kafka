@@ -47,10 +47,20 @@ import org.apache.kafka.common.TopicPartition;
  * This callback will only execute in the user thread as part of the {@link Consumer#poll(java.time.Duration) poll(long)} call
  * whenever partition assignment changes.
  * <p>
- * It is guaranteed that all consumer processes will invoke {@link #onPartitionsRevoked(Collection) onPartitionsRevoked} prior to
- * any process invoking {@link #onPartitionsAssigned(Collection) onPartitionsAssigned}. So if offsets or other state is saved in the
+ * It is guaranteed that for any partition, if a partition is reassigned from one consumer to another, then the old consumer will
+ * always invoke {@link #onPartitionsRevoked(Collection) onPartitionsRevoked} for that partition prior to the new consumer
+ * invoking {@link #onPartitionsAssigned(Collection) onPartitionsAssigned} for the same partition. So if offsets or other state is saved in the
  * {@link #onPartitionsRevoked(Collection) onPartitionsRevoked} call it is guaranteed to be saved by the time the process taking over that
  * partition has their {@link #onPartitionsAssigned(Collection) onPartitionsAssigned} callback called to load the state.
+ * <p>
+ * In addition, a third {@link #onPartitionsLost(Collection)} callback will be invoked when the partition previously owned by the consumer
+ * are lost. It is different to the {@link #onPartitionsRevoked(Collection)} function such that the latter is invoked when a partition is revoked
+ * from the consumer during a rebalance event, while the former is invoked when a partition is lost not during a rebalance event, but due to
+ * an exceptional event, such as a consumer finding out it is no longer part of the consumer group, or that some of its assigned partitions no longer
+ * exist due to administrative operations like delete topics. Users then could implement these two functions differently (by default,
+ * {@link #onPartitionsLost(Collection)} will be calling {@link #onPartitionsRevoked(Collection)} directly); for example, in the
+ * {@link #onPartitionsLost(Collection)} we would not need to store the offsets since we know these partitions are no longer owned by the consumer
+ * at that time.
  * <p>
  * Here is pseudo-code for a callback implementation for saving offsets:
  * <pre>
@@ -66,6 +76,10 @@ import org.apache.kafka.common.TopicPartition;
  *           // save the offsets in an external store using some custom code not described here
  *           for(TopicPartition partition: partitions)
  *              saveOffsetInExternalStore(consumer.position(partition));
+ *       }
+ *
+ *       public void onPartitionsLost(Collection<TopicPartition> partitions) {
+ *           // do not need to save the offsets since these partitions are probably owned by other consumers already
  *       }
  *
  *       public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
@@ -126,13 +140,16 @@ public interface ConsumerRebalanceListener {
     /**
      * A callback method the user can implement to provide handling of cleaning up resources for partitions that have already
      * been re-assigned to other consumers. This method will not be called during normal execution as the owned partitions would
-     * first be revoked by calling the {@link ConsumerRebalanceListener#onPartitionsRevoked} first, before being re-assigned
-     * to other consumers. However, when the consumer is being kicked out of the group and hence were not aware when the new
-     * group is formed without itself, this function will then be called when the consumer finally be notified about the
-     * partitions that have already been emigrated to other consumers.
+     * first be revoked by calling the {@link ConsumerRebalanceListener#onPartitionsRevoked}, before being re-assigned
+     * to other consumers during a rebalance event. However, during exceptional scenarios when the consumer realized that it
+     * does not own this partition any longer, i.e. not revoked via a normal rebalance event, then this method would be invoked.
+     *
+     * For example, if a consumer is kicked out of the group in the previous generation and hence were not aware when the new
+     * group is formed and partitions assigned to other members; later when it finally be notified about the illegal generation
+     * error and are going to reset its generation and re-join, this function will be called.
      *
      * By default it will just trigger {@link ConsumerRebalanceListener#onPartitionsRevoked}; for advanced users who want to distinguish
-     * the handling logic of revoked partitions v.s. emigrated partitions, they can override the default implementation.
+     * the handling logic of revoked partitions v.s. lost partitions, they can override the default implementation.
      *
      * It is possible
      * for a {@link org.apache.kafka.common.errors.WakeupException} or {@link org.apache.kafka.common.errors.InterruptException}
