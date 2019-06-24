@@ -103,7 +103,7 @@ class ControllerEventManagerTest {
   @Test
   def testSuccessfulEvent(): Unit = {
     check("kafka.controller:type=ControllerStats,name=AutoLeaderBalanceRateAndTimeMs",
-      AutoPreferredReplicaLeaderElection, () => Unit)
+      AutoPreferredReplicaLeaderElection, () => ())
   }
 
   @Test
