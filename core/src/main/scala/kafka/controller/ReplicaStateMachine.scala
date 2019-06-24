@@ -387,9 +387,9 @@ class ZkReplicaStateMachine(config: KafkaConfig,
     val partitionsWithNoLeaderAndIsrInZk = mutable.Buffer.empty[TopicPartition]
     val result = mutable.Map.empty[TopicPartition, Either[Exception, LeaderAndIsr]]
 
-    getDataResponses.foreach { getDataResponse =>
+    getDataResponses.foreach[Unit] { getDataResponse =>
       val partition = getDataResponse.ctx.get.asInstanceOf[TopicPartition]
-      val _: Unit = if (getDataResponse.resultCode == Code.OK) {
+      if (getDataResponse.resultCode == Code.OK) {
         TopicPartitionStateZNode.decode(getDataResponse.data, getDataResponse.stat) match {
           case None =>
             partitionsWithNoLeaderAndIsrInZk += partition
