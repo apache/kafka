@@ -43,8 +43,8 @@ import org.apache.zookeeper.data.{ACL, Stat}
 import scala.beans.BeanProperty
 import scala.collection.JavaConverters._
 import scala.collection.mutable.ArrayBuffer
-import scala.collection.{Seq, breakOut}
 import scala.collection.{Map, Seq}
+import scala.collection.compat._
 import scala.util.{Failure, Success, Try}
 
 // This file contains objects for encoding/decoding data stored in ZooKeeper nodes (znodes).
@@ -406,9 +406,9 @@ object ReassignPartitionsZNode {
 
   def decode(bytes: Array[Byte]): Either[JsonProcessingException, collection.Map[TopicPartition, Seq[Int]]] =
     Json.parseBytesAs[PartitionAssignment](bytes).right.map { partitionAssignment =>
-      partitionAssignment.partitions.asScala.map { replicaAssignment =>
+      partitionAssignment.partitions.asScala.iterator.map { replicaAssignment =>
         new TopicPartition(replicaAssignment.topic, replicaAssignment.partition) -> replicaAssignment.replicas.asScala
-      }(breakOut)
+      }.to(Map)
     }
 }
 

@@ -1087,7 +1087,7 @@ class SocketServerTest {
 
     def acceptorStackTraces: scala.collection.Map[Thread, String] = {
       Thread.getAllStackTraces.asScala.filterKeys(_.getName.contains("kafka-socket-acceptor"))
-        .mapValues(_.toList.mkString("\n"))
+        .mapValues(_.toList.mkString("\n")).toMap
     }
 
     def acceptorBlocked: Boolean = {
