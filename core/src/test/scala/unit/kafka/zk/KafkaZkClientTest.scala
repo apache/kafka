@@ -849,7 +849,7 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
       topicPartition20 -> LeaderAndIsr(leader = 0, leaderEpoch = 2, isr = List(3, 4), zkVersion = 0))
 
     checkUpdateLeaderAndIsrResult(
-      leaderIsrs(state = 2, zkVersion = 2).filterKeys{_ == topicPartition10},
+      leaderIsrs(state = 2, zkVersion = 2).filterKeys{_ == topicPartition10}.toMap,
       ArrayBuffer(topicPartition11),
       Map(
         topicPartition20 -> (classOf[NoNodeException], "KeeperErrorCode = NoNode for /brokers/topics/topic2/partitions/0/state")),
