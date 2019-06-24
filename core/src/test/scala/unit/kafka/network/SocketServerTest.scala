@@ -1068,7 +1068,7 @@ class SocketServerTest {
 
       testableSelector.operationCounts.clear()
       testableSelector.addFailure(SelectorOperation.Poll,
-          Some(new RuntimeException("ControlThrowable exception during poll()") with ControlThrowable))
+          Some(new ControlThrowable() {}))
       testableSelector.waitForOperations(SelectorOperation.Poll, 1)
 
       testableSelector.waitForOperations(SelectorOperation.CloseSelector, 1)
@@ -1247,7 +1247,7 @@ class SocketServerTest {
         extends Selector(config.socketRequestMaxBytes, config.connectionsMaxIdleMs, config.failedAuthenticationDelayMs,
             metrics, time, "socket-server", metricTags.asJava, false, true, channelBuilder, MemoryPool.NONE, new LogContext()) {
 
-    val failures = mutable.Map[SelectorOperation, Exception]()
+    val failures = mutable.Map[SelectorOperation, Throwable]()
     val operationCounts = mutable.Map[SelectorOperation, Int]().withDefaultValue(0)
     val allChannels = mutable.Set[String]()
     val allLocallyClosedChannels = mutable.Set[String]()
@@ -1283,7 +1283,7 @@ class SocketServerTest {
     @volatile var pollTimeoutOverride: Option[Long] = None
     @volatile var pollCallback: () => Unit = () => {}
 
-    def addFailure(operation: SelectorOperation, exception: Option[Exception] = None) {
+    def addFailure(operation: SelectorOperation, exception: Option[Throwable] = None) {
       failures += operation ->
         exception.getOrElse(new IllegalStateException(s"Test exception during $operation"))
     }
