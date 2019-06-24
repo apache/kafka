@@ -284,7 +284,7 @@ public class StreamsResetter {
                                   OptionSpec<T> option) {
         Set<OptionSpec<?>> invalidOptions = new HashSet<>(allOptions);
         invalidOptions.remove(option);
-        CommandLineUtils.checkInvalidArgs(optionParser, options, option, JavaConverters.asScalaSet(invalidOptions));
+        CommandLineUtils.checkInvalidArgs(optionParser, options, option, JavaConverters.asScalaSetConverter(invalidOptions).asScala());
     }
 
     private int maybeResetInputAndSeekToEndIntermediateTopicOffsets(final Map consumerConfig,
