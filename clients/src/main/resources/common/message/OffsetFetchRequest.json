@@ -23,7 +23,8 @@
   // for all topics should be fetched.
   //
   // Version 3, 4, and 5 are the same as version 2.
-  "validVersions": "0-5",
+  // Version 6 adds wait pending transaction functionality when the flag sets to true.
+  "validVersions": "0-6",
   "fields": [
     { "name": "GroupId", "type": "string", "versions": "0+", "entityType": "groupId",
       "about": "The group to fetch offsets for." },
@@ -33,6 +34,8 @@
         "about": "The topic name."},
       { "name": "PartitionIndexes", "type": "[]int32", "versions": "0+",
         "about": "The partition indexes we would like to fetch offsets for." }
-    ]}
+    ]},
+    { "name": "WaitTransaction", "type": "boolean", "versions": "6+",
+      "default": "false", "about": "Whether to wait for pending transaction." }
   ]
 }
