@@ -71,8 +71,8 @@ public class ProduceBenchSpec extends TaskSpec {
     private final Map<String, String> commonClientConf;
     private final TopicsSpec activeTopics;
     private final TopicsSpec inactiveTopics;
-    private final boolean noKeyNoPartition;
-    private final boolean noFlushOnThrottle;
+    private final boolean manualPartition;
+    private final boolean skipFlush;
 
     @JsonCreator
     public ProduceBenchSpec(@JsonProperty("startMs") long startMs,
@@ -89,8 +89,8 @@ public class ProduceBenchSpec extends TaskSpec {
                          @JsonProperty("adminClientConf") Map<String, String> adminClientConf,
                          @JsonProperty("activeTopics") TopicsSpec activeTopics,
                          @JsonProperty("inactiveTopics") TopicsSpec inactiveTopics,
-                         @JsonProperty("noKeyNoPartition") boolean noKeyNoPartition, 
-                         @JsonProperty("noFlushOnThrottle") boolean noFlushOnThrottle) {
+                         @JsonProperty("manualPartition") boolean manualPartition, 
+                         @JsonProperty("skipFlush") boolean skipFlush) {
         super(startMs, durationMs);
         this.producerNode = (producerNode == null) ? "" : producerNode;
         this.bootstrapServers = (bootstrapServers == null) ? "" : bootstrapServers;
@@ -108,8 +108,8 @@ public class ProduceBenchSpec extends TaskSpec {
             TopicsSpec.EMPTY : activeTopics.immutableCopy();
         this.inactiveTopics = (inactiveTopics == null) ?
             TopicsSpec.EMPTY : inactiveTopics.immutableCopy();
-        this.noKeyNoPartition = noKeyNoPartition;
-        this.noFlushOnThrottle = noFlushOnThrottle;
+        this.manualPartition = manualPartition;
+        this.skipFlush = skipFlush;
     }
 
     @JsonProperty
@@ -173,13 +173,13 @@ public class ProduceBenchSpec extends TaskSpec {
     }
 
     @JsonProperty
-    public boolean noKeyNoPartition() {
-        return noKeyNoPartition;
+    public boolean manualPartition() {
+        return manualPartition;
     }
 
     @JsonProperty
-    public boolean noFlushOnThrottle() {
-        return noFlushOnThrottle;
+    public boolean skipFlush() {
+        return skipFlush;
     }
 
     @Override

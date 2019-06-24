@@ -214,7 +214,7 @@ public class ProduceBenchWorker implements TaskWorker {
             this.producer = new KafkaProducer<>(props, new ByteArraySerializer(), new ByteArraySerializer());
             this.keys = new PayloadIterator(spec.keyGenerator());
             this.values = new PayloadIterator(spec.valueGenerator());
-            if (spec.noFlushOnThrottle()) {
+            if (spec.skipFlush()) {
                 this.throttle = new Throttle(perPeriod, THROTTLE_PERIOD_MS);
             } else {
                 this.throttle = new SendRecordsThrottle(perPeriod, producer);
@@ -294,9 +294,9 @@ public class ProduceBenchWorker implements TaskWorker {
 
             TopicPartition partition = partitionsIterator.next();
             ProducerRecord<byte[], byte[]> record;
-            if (spec.noKeyNoPartition()) {
+            if (spec.manualPartition()) {
                 record = new ProducerRecord<>(
-                    partition.topic(), values.next());
+                    partition.topic(), keys.next(), values.next());
             } else {
                 record = new ProducerRecord<>(
                     partition.topic(), partition.partition(), keys.next(), values.next());
