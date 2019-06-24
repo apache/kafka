@@ -28,6 +28,7 @@ import org.apache.kafka.common.requests.ListOffsetRequest
 import org.apache.kafka.common.serialization.ByteArrayDeserializer
 
 import scala.collection.JavaConverters._
+import scala.collection.Seq
 
 object GetOffsetShell {
 

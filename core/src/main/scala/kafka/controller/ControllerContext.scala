@@ -20,7 +20,7 @@ package kafka.controller
 import kafka.cluster.Broker
 import org.apache.kafka.common.TopicPartition
 
-import scala.collection.{Seq, Set, mutable}
+import scala.collection.{Map, Seq, Set, mutable}
 
 class ControllerContext {
   val stats = new ControllerStats
