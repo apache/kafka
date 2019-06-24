@@ -38,9 +38,8 @@ import org.apache.zookeeper.KeeperException.{Code, NodeExistsException}
 import org.apache.zookeeper.OpResult.{CreateResult, ErrorResult, SetDataResult}
 import org.apache.zookeeper.data.{ACL, Stat}
 import org.apache.zookeeper.{CreateMode, KeeperException, ZooKeeper}
-import scala.collection.breakOut
-import scala.collection.{Map, Seq}
-import scala.collection.mutable
+import scala.collection.{Map, Seq, mutable}
+import scala.collection.compat._
 
 /**
  * Provides higher level Kafka-specific operations on top of the pipelined [[kafka.zookeeper.ZooKeeperClient]].
@@ -261,11 +260,11 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
     } catch {
       case e: ControllerMovedException => throw e
       case e: Exception =>
-        return UpdateLeaderAndIsrResult(leaderAndIsrs.keys.map(_ -> Left(e))(breakOut), Seq.empty)
+        return UpdateLeaderAndIsrResult(leaderAndIsrs.keys.iterator.map(_ -> Left(e)).to(Map), Seq.empty)
     }
 
     val updatesToRetry = mutable.Buffer.empty[TopicPartition]
-    val finished: Map[TopicPartition, Either[Exception, LeaderAndIsr]] = setDataResponses.flatMap { setDataResponse =>
+    val finished = setDataResponses.iterator.flatMap { setDataResponse =>
       val partition = setDataResponse.ctx.get.asInstanceOf[TopicPartition]
       setDataResponse.resultCode match {
         case Code.OK =>
@@ -278,7 +277,7 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
         case _ =>
           Some(partition -> Left(setDataResponse.resultException.get))
       }
-    }(breakOut)
+    }.to(Map)
 
     UpdateLeaderAndIsrResult(finished, updatesToRetry)
   }
@@ -1626,7 +1625,7 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
     retryRequestsUntilConnected(createRequests, expectedControllerEpochZkVersion)
   }
 
-  private def createTopicPartitions(topics: Seq[String], expectedControllerEpochZkVersion: Int):Seq[CreateResponse] = {
+  private def createTopicPartitions(topics: Seq[String], expectedControllerEpochZkVersion: Int): Seq[CreateResponse] = {
     val createRequests = topics.map { topic =>
       val path = TopicPartitionsZNode.path(topic)
       CreateRequest(path, null, defaultAcls(path), CreateMode.PERSISTENT, Some(topic))
@@ -1635,9 +1634,9 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
   }
 
   private def getTopicConfigs(topics: Set[String]): Seq[GetDataResponse] = {
-    val getDataRequests: Seq[GetDataRequest] = topics.map { topic =>
+    val getDataRequests: Seq[GetDataRequest] = topics.iterator.map { topic =>
       GetDataRequest(ConfigEntityZNode.path(ConfigType.Topic, topic), ctx = Some(topic))
-    }(breakOut)
+    }.to(Seq)
 
     retryRequestsUntilConnected(getDataRequests)
   }

@@ -46,7 +46,7 @@ import org.apache.kafka.common.utils.{Time, Utils}
 
 import scala.collection.JavaConverters._
 import scala.collection._
-import scala.collection.mutable.ListBuffer
+import scala.collection.mutable.ArrayBuffer
 
 class GroupMetadataManager(brokerId: Int,
                            interBrokerProtocolVersion: ApiVersion,
@@ -312,7 +312,7 @@ class GroupMetadataManager(brokerId: Int,
     // construct the message set to append
     if (filteredOffsetMetadata.isEmpty) {
       // compute the final error codes for the commit response
-      val commitStatus = offsetMetadata.mapValues(_ => Errors.OFFSET_METADATA_TOO_LARGE)
+      val commitStatus = offsetMetadata.map { case (k, v) => k -> Errors.OFFSET_METADATA_TOO_LARGE }
       responseCallback(commitStatus)
       None
     } else {

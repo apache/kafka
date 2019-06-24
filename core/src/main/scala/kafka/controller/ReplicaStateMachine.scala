@@ -26,8 +26,8 @@ import kafka.zk.TopicPartitionStateZNode
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.ControllerMovedException
 import org.apache.zookeeper.KeeperException.Code
-import scala.collection.breakOut
 import scala.collection.{Seq, mutable}
+import scala.collection.compat._
 
 abstract class ReplicaStateMachine(controllerContext: ControllerContext) extends Logging {
   /**
@@ -337,7 +337,7 @@ class ZkReplicaStateMachine(config: KafkaConfig,
     )
 
     val exceptionsForPartitionsWithNoLeaderAndIsrInZk: Map[TopicPartition, Either[Exception, LeaderIsrAndControllerEpoch]] =
-      partitionsWithNoLeaderAndIsrInZk.flatMap { partition =>
+      partitionsWithNoLeaderAndIsrInZk.iterator.flatMap { partition =>
         if (!controllerContext.isTopicQueuedUpForDeletion(partition.topic)) {
           val exception = new StateChangeFailedException(
             s"Failed to change state of replica $replicaId for partition $partition since the leader and isr " +
@@ -345,7 +345,7 @@ class ZkReplicaStateMachine(config: KafkaConfig,
           )
           Option(partition -> Left(exception))
         } else None
-      }(breakOut)
+      }.to(Map)
 
     val leaderIsrAndControllerEpochs: Map[TopicPartition, Either[Exception, LeaderIsrAndControllerEpoch]] =
       (leaderAndIsrsWithoutReplica ++ finishedPartitions).map { case (partition, result: Either[Exception, LeaderAndIsr]) =>
@@ -381,7 +381,7 @@ class ZkReplicaStateMachine(config: KafkaConfig,
       zkClient.getTopicPartitionStatesRaw(partitions)
     } catch {
       case e: Exception =>
-        return (partitions.map(_ -> Left(e))(breakOut), Seq.empty)
+        return (partitions.iterator.map(_ -> Left(e)).to(Map), Seq.empty)
     }
 
     val partitionsWithNoLeaderAndIsrInZk = mutable.Buffer.empty[TopicPartition]
