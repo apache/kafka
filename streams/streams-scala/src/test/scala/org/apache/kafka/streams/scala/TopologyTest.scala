@@ -25,29 +25,12 @@ import java.util.{Locale, Properties}
 import java.util.regex.Pattern
 
 import org.apache.kafka.common.serialization.{Serdes => SerdesJ}
-import org.apache.kafka.streams.kstream.{
-  Aggregator,
-  ForeachAction,
-  Initializer,
-  JoinWindows,
-  KeyValueMapper,
-  Predicate,
-  Reducer,
-  Transformer,
-  TransformerSupplier,
-  ValueJoiner,
-  ValueMapper,
-  Joined => JoinedJ,
-  KGroupedStream => KGroupedStreamJ,
-  KStream => KStreamJ,
-  KTable => KTableJ,
-  Materialized => MaterializedJ
-}
+import org.apache.kafka.streams.kstream.{Aggregator, ForeachAction, Initializer, JoinWindows, KeyValueMapper, Predicate, Reducer, Transformer, TransformerSupplier, ValueJoiner, ValueMapper, Joined => JoinedJ, KGroupedStream => KGroupedStreamJ, KStream => KStreamJ, KTable => KTableJ, Materialized => MaterializedJ}
 import org.apache.kafka.streams.processor.{AbstractProcessor, ProcessorContext, ProcessorSupplier}
 import org.apache.kafka.streams.scala.ImplicitConversions._
 import org.apache.kafka.streams.scala.Serdes._
 import org.apache.kafka.streams.scala.kstream._
-import org.apache.kafka.streams.{StreamsBuilder => StreamsBuilderJ, _}
+import org.apache.kafka.streams.{KeyValue, StreamsConfig, TopologyDescription, StreamsBuilder => StreamsBuilderJ}
 import org.junit.Assert._
 import org.junit._
 
@@ -103,7 +86,7 @@ class TopologyTest {
     // build the Scala topology
     def getTopologyScala: TopologyDescription = {
 
-      import Serdes._
+      import org.apache.kafka.streams.scala.Serdes._
 
       val streamBuilder = new StreamsBuilder
       val textLines = streamBuilder.stream[String, String](inputTopic)
@@ -230,12 +213,12 @@ class TopologyTest {
           .transform(new TransformerSupplier[String, String, KeyValue[String, String]] {
             override def get(): Transformer[String, String, KeyValue[String, String]] =
               new Transformer[String, String, KeyValue[String, String]] {
-                override def init(context: ProcessorContext): Unit = Unit
+                override def init(context: ProcessorContext): Unit = ()
 
                 override def transform(key: String, value: String): KeyValue[String, String] =
                   new KeyValue(key, value.toLowerCase)
 
-                override def close(): Unit = Unit
+                override def close(): Unit = ()
               }
           })
           .groupBy((_, v) => v)
@@ -254,12 +237,12 @@ class TopologyTest {
         .transform(new TransformerSupplier[String, String, KeyValue[String, String]] {
           override def get(): Transformer[String, String, KeyValue[String, String]] =
             new Transformer[String, String, KeyValue[String, String]] {
-              override def init(context: ProcessorContext): Unit = Unit
+              override def init(context: ProcessorContext): Unit = ()
 
               override def transform(key: String, value: String): KeyValue[String, String] =
                 new KeyValue(key, value.toLowerCase)
 
-              override def close(): Unit = Unit
+              override def close(): Unit = ()
             }
         })
 
@@ -385,7 +368,7 @@ class TopologyTest {
         .mapValues[String](valueMapper)
         .process(processorSupplier)
 
-      val stream2 = mappedStream.groupByKey
+      val stream2: KStreamJ[String, Integer] = mappedStream.groupByKey
         .aggregate(initializer, aggregator, MaterializedJ.`with`(Serdes.String, SerdesJ.Integer))
         .toStream
       stream2.to(AGGREGATION_TOPIC, Produced.`with`(Serdes.String, SerdesJ.Integer))
@@ -407,7 +390,7 @@ class TopologyTest {
         .filter(new Predicate[String, String] {
           override def test(key: String, value: String): Boolean = key == "A"
         })
-        .join(stream2,
+        .join[Integer, String](stream2,
               valueJoiner2,
               JoinWindows.of(Duration.ofMillis(5000)),
               JoinedJ.`with`(Serdes.String, Serdes.String, SerdesJ.Integer))
