@@ -37,6 +37,9 @@ import org.apache.kafka.common.message.ControlledShutdownRequestData;
 import org.apache.kafka.common.message.ControlledShutdownResponseData.RemainingPartition;
 import org.apache.kafka.common.message.ControlledShutdownResponseData.RemainingPartitionCollection;
 import org.apache.kafka.common.message.ControlledShutdownResponseData;
+import org.apache.kafka.common.message.CreateDelegationTokenRequestData;
+import org.apache.kafka.common.message.CreateDelegationTokenRequestData.CreatableRenewers;
+import org.apache.kafka.common.message.CreateDelegationTokenResponseData;
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableReplicaAssignment;
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopic;
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreateableTopicConfig;
@@ -1484,15 +1487,30 @@ public class RequestResponseTest {
     }
 
     private CreateDelegationTokenRequest createCreateTokenRequest() {
-        List<KafkaPrincipal> renewers = new ArrayList<>();
-        renewers.add(SecurityUtils.parseKafkaPrincipal("User:user1"));
-        renewers.add(SecurityUtils.parseKafkaPrincipal("User:user2"));
-        return new CreateDelegationTokenRequest.Builder(renewers, System.currentTimeMillis()).build();
+        List<CreatableRenewers> renewers = new ArrayList<>();
+        renewers.add(new CreatableRenewers()
+                .setPrincipalType("User")
+                .setPrincipalName("user1"));
+        renewers.add(new CreatableRenewers()
+                .setPrincipalType("User")
+                .setPrincipalName("user2"));
+        return new CreateDelegationTokenRequest.Builder(new CreateDelegationTokenRequestData()
+                .setRenewers(renewers)
+                .setMaxLifetimeMs(System.currentTimeMillis())).build();
     }
 
     private CreateDelegationTokenResponse createCreateTokenResponse() {
-        return new CreateDelegationTokenResponse(20, Errors.NONE, SecurityUtils.parseKafkaPrincipal("User:user1"), System.currentTimeMillis(),
-            System.currentTimeMillis(), System.currentTimeMillis(), "token1", ByteBuffer.wrap("test".getBytes()));
+        CreateDelegationTokenResponseData data = new CreateDelegationTokenResponseData()
+                .setThrottleTimeMs(20)
+                .setErrorCode(Errors.NONE.code())
+                .setPrincipalType("User")
+                .setPrincipalName("user1")
+                .setIssueTimestampMs(System.currentTimeMillis())
+                .setExpiryTimestampMs(System.currentTimeMillis())
+                .setMaxTimestampMs(System.currentTimeMillis())
+                .setTokenId("token1")
+                .setHmac("test".getBytes());
+        return new CreateDelegationTokenResponse(data);
     }
 
     private RenewDelegationTokenRequest createRenewTokenRequest() {
