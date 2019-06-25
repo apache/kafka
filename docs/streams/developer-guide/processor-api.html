@@ -326,7 +326,7 @@
                     <p class="last">If the changelog is disabled then the attached state store is no longer fault tolerant and it can&#8217;t have any <a class="reference internal" href="config-streams.html#streams-developer-guide-standby-replicas"><span class="std std-ref">standby replicas</span></a>.</p>
                 </div>
                 <p>Here is an example for enabling fault tolerance, with additional changelog-topic configuration:
-                    You can add any log config from <a class="reference external" href="https://github.com/apache/kafka/blob/1.0/core/src/main/scala/kafka/log/LogConfig.scala#L103">kafka.log.LogConfig</a>.
+                    You can add any log config from <a class="reference external" href="https://github.com/apache/kafka/blob/trunk/core/src/main/scala/kafka/log/LogConfig.scala">kafka.log.LogConfig</a>.
                     Unrecognized configs will be ignored.</p>
                 <div class="highlight-java"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">org.apache.kafka.streams.state.StoreBuilder</span><span class="o">;</span>
 <span class="kn">import</span> <span class="nn">org.apache.kafka.streams.state.Stores</span><span class="o">;</span>
