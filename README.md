@@ -66,8 +66,7 @@ Generate coverage for a single module, i.e.:
 
     ./gradlew clients:reportCoverage
 
-### Generating an API compatibility report between trunk and your local branch ###
-*Note that the branches need to be local.*
+### Generating an API compatibility report between the latest release and your local branch ###
 
     ./gradlew apiCompatibilityReport
 
@@ -82,8 +81,7 @@ incompatibility.
 
     ./gradlew apiCompatibilityReport -PfailOnBinaryIncompatibility=false -PfailOnSourceIncompatibility=true
 
-It is often a requirement to control the build outcome based on version differences. Usually it is allowed to do
-binary incompatible changes in major releases but this kind of compatibility should be kept in minor and patch 
+It is allowed to do incompatible changes in major releases but compatibility should be kept in minor and patch
 (maintenance) releases. This is called [semantic versioning](https://semver.org/spec/v2.0.0.html).
 This can be controlled the following way:
 

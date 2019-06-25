@@ -62,6 +62,7 @@ versions += [
   checkstyle: "8.20",
   commonsCli: "1.4",
   gradle: "6.5",
+  gradleDownloadTask: "3.4.3",
   gradleVersionsPlugin: "0.28.0",
   grgit: "4.0.1",
   httpclient: "4.5.11",

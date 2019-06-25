@@ -38,8 +38,9 @@ buildscript {
     classpath "com.diffplug.spotless:spotless-plugin-gradle:$versions.spotlessPlugin"
     classpath "gradle.plugin.com.github.spotbugs.snom:spotbugs-gradle-plugin:$versions.spotbugsPlugin"
     classpath "org.gradle:test-retry-gradle-plugin:$versions.testRetryPlugin"
-    // For the japicmp lib, required here for intellij
+    // Required here ONLY for intellij as it won't resolve classes used in compatibility.gradle
     classpath "com.github.siom79.japicmp:japicmp:$versions.japicmp"
+    classpath "de.undercouch:gradle-download-task:$versions.gradleDownloadTask"
   }
 }
 

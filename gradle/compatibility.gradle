@@ -22,10 +22,13 @@ buildscript {
     }
   }
   dependencies {
-    classpath "org.ajoberstar:grgit:1.9.3"
-    classpath "com.github.siom79.japicmp:japicmp:0.13.0"
+    classpath "org.ajoberstar.grgit:grgit-core:$versions.grgit"
+    classpath "com.github.siom79.japicmp:japicmp:$versions.japicmp"
+    classpath 'de.undercouch:gradle-download-task:3.4.3'
   }
 }
+
+apply plugin: 'de.undercouch.download'
 
 
 import japicmp.cli.CliParser
@@ -43,11 +46,20 @@ import japicmp.versioning.SemanticVersion
 import org.ajoberstar.grgit.Grgit
 import org.apache.tools.ant.DirectoryScanner
 
+import java.nio.file.Paths
+
 def rootRepo = Grgit.open(dir: rootProject.rootDir)
-def source = project.hasProperty('source') ? project.source : latestRelease
-def target = project.hasProperty('target') ? project.target : rootRepo.branch.current.name
+String source = project.hasProperty('source') ? project.source : latestReleaseVersion
+String target = project.hasProperty('target') ? project.target : rootRepo.branch.current.name
+
+def archivesLocation = project.hasProperty('archivesLocation') ? project.archivesLocation : 'https://s3-us-west-2.amazonaws.com/kafka-packages'
 def useRootAsSource = rootRepo.branch.current.name == source
 def useRootAsTarget = rootRepo.branch.current.name == target
+def artifactNames = new ArrayList<String>()
+def sourceScalaVersion = project.hasProperty('sourceScalaVersion') ? project.sourceScalaVersion : resolveScalaVersion(source, (String) versions.baseScala)
+def targetScalaVersion = project.hasProperty('targetScalaVersion') ? project.targetScalaVersion : resolveScalaVersion(target, (String) versions.baseScala)
+def sourceArchiveName = resolveArchiveName(source, sourceScalaVersion)
+def targetArchiveName = resolveArchiveName(target, targetScalaVersion)
 def sourceArtifactsPath = "$buildDir/tmp/compatibility/source.artifacts"
 def targetArtifactsPath = "$buildDir/tmp/compatibility/target.artifacts"
 def sourceWorkspace = useRootAsSource ? rootProject.rootDir.path : "$buildDir/tmp/compatibility/source"
@@ -58,49 +70,56 @@ def repoExcludes = new ArrayList<String>(rootRepo.clean(ignore: false, directori
 
 static def collectArtifactJars(String workspace, String extraExcludes = "") {
   String includesPattern = '**/build/libs/kafka-*.jar **/build/libs/connect-*.jar'
-  String excludesPattern = '**/build/libs/*-javadoc.jar **/build/libs/*-sources.jar **/build/libs/*-test.jar ' +
+  String excludesPattern = '**/build/libs/*-javadoc.jar **/build/libs/*-scaladoc.jar **/build/libs/*-sources.jar **/build/libs/*-test.jar ' +
           "**/build/libs/*-system-tests-*.jar **/build/libs/*-examples*.jar **/build/tmp/compatibility/* $extraExcludes"
   return new FileNameFinder().getFileNames(workspace, includesPattern, excludesPattern)
 }
 
-/**
- * Checks if the given parameter is a version number and at least 2.0.0
- * @param reference can be an arbitrary git reference or a version number
- * @return true in case the parameter can be interpreted as a version, false otherwise
- */
-static def isDownloadableVersion(String reference) {
-  def semver = Version.getSemanticVersion(reference)
-  return semver.present && semver.get().major >= 2 && !reference.endsWith('-SNAPSHOT')
+static boolean canResolveFromUrl(String url, String reference, String scalaVersion) {
+  def archiveName = resolveArchiveName(reference, scalaVersion)
+  return new URI("$url/$archiveName").toURL().openConnection().contentLength > -1
 }
 
 /**
- * Resolves the given list of archive names with a given version and saves their path to the given file.
- * Paths are separated by new lines.
- * @param archiveNames
- * @param reference
- * @param outFile
+ * Resolves the archive name of a given version, like kafka_2.11-1.1.0.tgz.
+ * @param version
+ * @return
  */
-def resolveToFile(List archiveNames, String reference, File outFile) {
-  def ba = resolveDependencies(reference, archiveNames)
-  if (outFile.exists()) {
-    outFile.delete()
-  }
-  outFile.createNewFile()
-  outFile.write(ba.join("\n"))
+static String resolveArchiveName(String version, String scalaVersion) {
+  return "kafka_$scalaVersion-${version}.tgz"
 }
 
-def resolveDependencies(String version, List archiveNames) {
-  Configuration config = project.getConfigurations().create("download")
-  try {
-    config.setTransitive(false)
-    archiveNames.each {
-      println("org.apache.kafka:$it:$version")
-      project.getDependencies().add(config.getName(), "org.apache.kafka:$it:$version")
+static String resolveScalaVersion(String version, String defaultScalaVersion) {
+  def semverOpt = Version.getSemanticVersion(version)
+
+  if (!semverOpt.present)
+    return defaultScalaVersion
+
+  if (semverOpt.get().major == 0 || semverOpt.get().major == 1)
+    return "2.11"
+  else
+    return "2.12"
+}
+
+/**
+ * Takes a compressed archive, decompresses it to a given location on the workspace and collects the paths of the
+ * some given artifacts.
+ */
+List<String> decompressBinaries(List artifactNames, File downloadedArchive, String reference, String workspace) {
+  def artifacts = artifactNames.collect { "$it-${reference}.jar".toString() }
+  def artifactLocations = new ArrayList()
+  copy {
+    from tarTree(downloadedArchive.getAbsolutePath())
+    include "/**/libs/**"
+    eachFile { FileCopyDetails fcd ->
+      logger.debug("Decompressing ${fcd.path}")
+      if (artifacts.contains(fcd.name)) {
+        artifactLocations.add(Paths.get(workspace, fcd.path).toAbsolutePath().toString())
+      }
     }
-    return config.getFiles().collect { it.path }
-  } finally {
-    project.configurations.remove(config)
+    into workspace
   }
+  return artifactLocations
 }
 
 /**
@@ -204,6 +223,59 @@ task buildTargetBranch(type: GradleBuild, dependsOn: checkoutTargetBranch) {
   }
 }
 
+task initArtifactNames {
+  doLast {
+    // Collect the archive names, so we can resolve them from the given url.
+    // Also exclude some projects that either meta (connect), test or example
+    artifactNames = allprojects
+            .findAll{ it != project.rootProject \
+                && it.name != 'connect' \
+                && it.name != 'generator' \
+                && it.name != 'jmh-benchmarks' \
+                && !it.name.contains('system-tests') \
+                && !it.name.contains('examples') }
+    .collect{ it.archivesBaseName }
+  }
+}
+
+/**
+ * Downloads an archive, decompresses it and collects the required artifacts
+ */
+task resolveSourceArtifactsFromUrl(dependsOn: initArtifactNames) {
+  inputs.property('source', source)
+  inputs.property('sourceArchiveName', sourceArchiveName)
+  inputs.property('archivesLocation', archivesLocation)
+  outputs.file(sourceArtifactsPath)
+  doLast {
+    download {
+      src "$archivesLocation/$sourceArchiveName"
+      dest "$sourceWorkspace/$sourceArchiveName"
+      overwrite false
+    }
+    List<String> interestedJars = decompressBinaries(artifactNames, file("$sourceWorkspace/$sourceArchiveName"), source, sourceWorkspace)
+    file(sourceArtifactsPath).write(interestedJars.join("\n"))
+  }
+}
+
+/**
+ * Downloads an archive, decompresses it and collects the required artifacts
+ */
+task resolveTargetArtifactsFromUrl(dependsOn: initArtifactNames) {
+  inputs.property('target', target)
+  inputs.property('targetArchiveName', targetArchiveName)
+  inputs.property('archivesLocation', archivesLocation)
+  outputs.file(targetArtifactsPath)
+  doLast {
+    download {
+      src "$archivesLocation/$targetArchiveName"
+      dest "$targetWorkspace/$targetArchiveName"
+      overwrite false
+    }
+    List<String> interestedJars = decompressBinaries(artifactNames, file("$targetWorkspace/$targetArchiveName"), target, targetWorkspace)
+    file(targetArtifactsPath).write(interestedJars.join("\n"))
+  }
+}
+
 /**
  * Collects the archive names of the project and then tries to download them. In case
  * the provided source and target references are not actual versions that can't be
@@ -219,35 +291,21 @@ task collectArtifacts {
   afterEvaluate {
     // Compute that which one can be downloaded and which one needs to be built
     def buildTasks = []
-    if (!isDownloadableVersion(source)) {
+
+    if (canResolveFromUrl(archivesLocation, source, sourceScalaVersion)) {
+      buildTasks.add(resolveSourceArtifactsFromUrl)
+    } else {
       buildTasks.add(buildSourceBranch)
     }
-    if (!isDownloadableVersion(target)) {
+
+    if (canResolveFromUrl(archivesLocation, target, targetScalaVersion)) {
+      buildTasks.add(resolveTargetArtifactsFromUrl)
+    } else {
       buildTasks.add(buildTargetBranch)
     }
+
     dependsOn = buildTasks
     logger.info("Added dependencies: $buildTasks")
-  }
-
-  doLast {
-    // Collect the archive names, so we can resolve them by group:artifact:version,
-    // like org.apache.kafka:kafka-clients:2.0.0
-    // Also exclude some projects that either meta (connect), test or example
-    def archiveNames = allprojects
-            .findAll{ it != rootProject \
-                      && it.name != 'connect' \
-                      && it.name != 'generator' \
-                      && it.name != 'jmh-benchmarks' \
-                      && !it.name.contains('system-tests') \
-                      && !it.name.contains('examples') }
-            .collect{ it.archivesBaseName }
-    // Resolve only if we don't build
-    if (!dependsOn.contains(buildSourceBranch)) {
-      resolveToFile(archiveNames, source, file(sourceArtifactsPath))
-    }
-    if (!dependsOn.contains(buildTargetBranch)) {
-      resolveToFile(archiveNames, target, file(targetArtifactsPath))
-    }
   }
 }
 
@@ -310,9 +368,9 @@ def getArguments(Project project, List<String> sourceArtifacts, List<String> tar
   // There is an --error-on-semantic-incompatibility flag in japicmp but it doesn't seem to work,
   // hence the workaround.
   if (failOnSemanticIncompatibility) {
-    def targetVersion = Version.getSemanticVersion(version).get()
-    def latestReleaseVersion = Version.getSemanticVersion(latestRelease).get()
-    def changeType = latestReleaseVersion.computeChangeType(targetVersion).get()
+    def targetVersion = Version.getSemanticVersion((String) version).get()
+    def latestSemanticVersion = Version.getSemanticVersion(latestReleaseVersion).get()
+    def changeType = latestSemanticVersion.computeChangeType(targetVersion).get()
     if (changeType == SemanticVersion.ChangeType.MINOR || changeType == SemanticVersion.ChangeType.PATCH) {
       args = args + ["--error-on-binary-incompatibility"]
     }
@@ -321,7 +379,7 @@ def getArguments(Project project, List<String> sourceArtifacts, List<String> tar
   return args
 }
 
-def generateHtmlOutput(Options options, List<JApiClass> jApiClasses) {
+static def generateHtmlOutput(Options options, List<JApiClass> jApiClasses) {
   XmlOutputGeneratorOptions xmlOutputGeneratorOptions = new XmlOutputGeneratorOptions()
   xmlOutputGeneratorOptions.setCreateSchemaFile(true)
   xmlOutputGeneratorOptions.setSemanticVersioningInformation(new SemverOut(options, jApiClasses).generate())
@@ -339,11 +397,11 @@ def generateHtmlOutput(Options options, List<JApiClass> jApiClasses) {
   }
 }
 
-def createReport(String[] args) {
+static def createReport(String[] args) {
   CliParser cliParser = new CliParser()
   Options options = cliParser.parse(args)
   JarArchiveComparator jarArchiveComparator = new JarArchiveComparator(JarArchiveComparatorOptions.of(options))
-  List<JApiClass> jApiClasses = jarArchiveComparator.compare(options.getOldArchives(), options.getNewArchives())
+  List<JApiClass> jApiClasses = jarArchiveComparator.compare(options.oldArchives, options.newArchives)
   generateHtmlOutput(options, jApiClasses)
 }
 
@@ -367,6 +425,7 @@ task apiCompatibilityReport(dependsOn: collectArtifacts) {
 
   inputs.property('source', source)
   inputs.property('target', target)
+  inputs.property('archivesLocation', archivesLocation)
   outputs.file(reportFile)
 
   if (source == target) {
