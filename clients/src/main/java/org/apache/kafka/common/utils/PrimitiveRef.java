@@ -1,10 +1,10 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -13,15 +13,24 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
-*/
-package kafka.common
+ */
+package org.apache.kafka.common.utils;
 
 /**
- * Usage of this class is discouraged. Use org.apache.kafka.common.KafkaException instead.
+ * Primitive reference used to pass primitive typed values as parameter-by-reference.
  *
- * This class will be removed once kafka.security.auth classes are removed.
+ * This is cheaper than using Atomic references.
  */
-class KafkaException(message: String, t: Throwable) extends RuntimeException(message, t) {
-  def this(message: String) = this(message, null)
-  def this(t: Throwable) = this("", t)
+public class PrimitiveRef {
+    public static IntRef ofInt(int value) {
+        return new IntRef(value);
+    }
+
+    public static class IntRef {
+        public int value;
+
+        IntRef(int value) {
+            this.value = value;
+        }
+    }
 }

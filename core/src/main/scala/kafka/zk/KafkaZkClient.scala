@@ -45,12 +45,10 @@ import scala.collection.mutable
 /**
  * Provides higher level Kafka-specific operations on top of the pipelined [[kafka.zookeeper.ZooKeeperClient]].
  *
- * This performs better than [[kafka.utils.ZkUtils]] and should replace it completely, eventually.
- *
  * Implementation note: this class includes methods for various components (Controller, Configs, Old Consumer, etc.)
- * and returns instances of classes from the calling packages in some cases. This is not ideal, but it makes it
- * easier to quickly migrate away from `ZkUtils`. We should revisit this once the migration is completed and tests are
- * in place. We should also consider whether a monolithic [[kafka.zk.ZkData]] is the way to go.
+ * and returns instances of classes from the calling packages in some cases. This is not ideal, but it made it
+ * easier to migrate away from `ZkUtils` (since removed). We should revisit this. We should also consider whether a
+ * monolithic [[kafka.zk.ZkData]] is the way to go.
  */
 class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boolean, time: Time) extends AutoCloseable with
   Logging with KafkaMetricsGroup {

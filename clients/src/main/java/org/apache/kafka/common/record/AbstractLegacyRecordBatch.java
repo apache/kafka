@@ -227,7 +227,7 @@ public abstract class AbstractLegacyRecordBatch extends AbstractRecordBatch impl
         return iterator(BufferSupplier.NO_CACHING);
     }
 
-    private CloseableIterator<Record> iterator(BufferSupplier bufferSupplier) {
+    CloseableIterator<Record> iterator(BufferSupplier bufferSupplier) {
         if (isCompressed())
             return new DeepRecordsIterator(this, false, Integer.MAX_VALUE, bufferSupplier);
 
@@ -501,6 +501,16 @@ public abstract class AbstractLegacyRecordBatch extends AbstractRecordBatch impl
             buffer.putLong(LOG_OVERHEAD + LegacyRecord.TIMESTAMP_OFFSET, timestamp);
             long crc = record.computeChecksum();
             ByteUtils.writeUnsignedInt(buffer, LOG_OVERHEAD + LegacyRecord.CRC_OFFSET, crc);
+        }
+
+        /**
+         * LegacyRecordBatch does not implement this iterator and would hence fallback to the normal iterator.
+         *
+         * @return An iterator over the records contained within this batch
+         */
+        @Override
+        public CloseableIterator<Record> skipKeyValueIterator(BufferSupplier bufferSupplier) {
+            return CloseableIterator.wrap(iterator(bufferSupplier));
         }
 
         @Override

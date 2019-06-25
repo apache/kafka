@@ -418,7 +418,7 @@ public class MemoryRecordsBuilder implements AutoCloseable {
                 appendDefaultRecord(offset, timestamp, key, value, headers);
                 return null;
             } else {
-                return appendLegacyRecord(offset, timestamp, key, value);
+                return appendLegacyRecord(offset, timestamp, key, value, magic);
             }
         } catch (IOException e) {
             throw new KafkaException("I/O exception when writing to the append stream, closing", e);
@@ -632,7 +632,7 @@ public class MemoryRecordsBuilder implements AutoCloseable {
         recordWritten(offset, timestamp, sizeInBytes);
     }
 
-    private long appendLegacyRecord(long offset, long timestamp, ByteBuffer key, ByteBuffer value) throws IOException {
+    private long appendLegacyRecord(long offset, long timestamp, ByteBuffer key, ByteBuffer value, byte magic) throws IOException {
         ensureOpenForRecordAppend();
         if (compressionType == CompressionType.NONE && timestampType == TimestampType.LOG_APPEND_TIME)
             timestamp = logAppendTime;
