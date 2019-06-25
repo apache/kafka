@@ -18,6 +18,7 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.protocol.types.Struct;
 
+import java.nio.BufferOverflowException;
 import java.nio.ByteBuffer;
 
 public abstract class AbstractRequestResponse {
@@ -26,9 +27,16 @@ public abstract class AbstractRequestResponse {
      */
     public static ByteBuffer serialize(Struct headerStruct, Struct bodyStruct) {
         ByteBuffer buffer = ByteBuffer.allocate(headerStruct.sizeOf() + bodyStruct.sizeOf());
+        serializeTo(headerStruct, bodyStruct, buffer);
+        return buffer;
+    }
+
+    public static void serializeTo(Struct headerStruct, Struct bodyStruct, ByteBuffer buffer) {
+        if (buffer.remaining() < headerStruct.sizeOf() + bodyStruct.sizeOf()) {
+            throw new BufferOverflowException();
+        }
         headerStruct.writeTo(buffer);
         bodyStruct.writeTo(buffer);
         buffer.rewind();
-        return buffer;
     }
 }
