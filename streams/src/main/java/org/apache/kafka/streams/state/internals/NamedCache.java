@@ -17,7 +17,9 @@
 package org.apache.kafka.streams.state.internals;
 
 import java.util.Arrays;
+import java.util.Comparator;
 import java.util.NavigableMap;
+import java.util.concurrent.ConcurrentNavigableMap;
 import java.util.concurrent.ConcurrentSkipListMap;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.metrics.Sensor;
@@ -276,9 +278,21 @@ class NamedCache {
     }
 
     synchronized Iterator<Map.Entry<Bytes, LRUNode>> subMapPrefixIterator(final Bytes prefix) {
-        final byte[] prefixEnd = Arrays.copyOf(prefix.get(), prefix.get().length + 1);
-        prefixEnd[prefixEnd.length-1] = (byte)0xFF;
-        return cache.subMap(prefix, new Bytes(prefixEnd)).entrySet().iterator();
+        final Bytes prefixEnd = Bytes.increment(prefix);
+        final Comparator<? super Bytes> comparator = cache.comparator();
+
+        //We currently don't set a comparator for the map in this class, so the comparator will always be null.
+        final int result = comparator==null ? prefix.compareTo(prefixEnd) : comparator.compare(prefix, prefixEnd);
+
+        final NavigableMap<Bytes, LRUNode> subMapResults;
+        if (result > 0) {
+            //Prefix increment would cause a wrap-around. Get the submap from toKey to the end of the map
+            subMapResults = cache.tailMap(prefix, true);
+        } else {
+            subMapResults = cache.subMap(prefix, true, prefixEnd, false);
+        }
+
+        return subMapResults.entrySet().iterator();
     }
 
     synchronized LRUCacheEntry first() {

@@ -17,7 +17,9 @@
 package org.apache.kafka.streams.state.internals;
 
 import java.util.Arrays;
+import java.util.Comparator;
 import java.util.List;
+import java.util.NavigableMap;
 import java.util.concurrent.ConcurrentNavigableMap;
 import java.util.concurrent.ConcurrentSkipListMap;
 import org.apache.kafka.common.utils.Bytes;
@@ -136,12 +138,23 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
 
     @Override
     public KeyValueIterator<Bytes, byte[]> prefixScan(final Bytes prefix) {
-        final byte[] prefixEnd = Arrays.copyOf(prefix.get(), prefix.get().length + 1);
-        prefixEnd[prefixEnd.length-1] = (byte)0xFF;
+        final Bytes prefixEnd = Bytes.increment(prefix);
+        final Comparator<? super Bytes> comparator = map.comparator();
+
+        //We currently don't set a comparator for the map in this class, so the comparator will always be null.
+        final int result = comparator==null ? prefix.compareTo(prefixEnd) : comparator.compare(prefix, prefixEnd);
+
+        final ConcurrentNavigableMap<Bytes, byte[]> subMapResults;
+        if (result > 0) {
+            //Prefix increment would cause a wrap-around. Get the submap from toKey to the end of the map
+            subMapResults = map.tailMap(prefix, true);
+        } else {
+            subMapResults = map.subMap(prefix, true, prefixEnd, false);
+        }
 
         return new DelegatingPeekingKeyValueIterator<>(
                 name,
-                new InMemoryKeyValueIterator(map.subMap(prefix, true, new Bytes(prefixEnd), true).entrySet().iterator()));
+                new InMemoryKeyValueIterator(subMapResults.entrySet().iterator()));
     }
 
     @Override

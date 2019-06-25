@@ -21,9 +21,13 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.state.KeyValueIterator;
 
 import java.util.Arrays;
+import java.util.Comparator;
 import java.util.Iterator;
 import java.util.Map;
+import java.util.NavigableMap;
 import java.util.TreeMap;
+import java.util.concurrent.ConcurrentNavigableMap;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -59,13 +63,23 @@ public class MemoryNavigableLRUCache extends MemoryLRUCache {
 
     @Override
     public KeyValueIterator<Bytes, byte[]> prefixScan(final Bytes prefix) {
-        final byte[] prefixEnd = Arrays.copyOf(prefix.get(), prefix.get().length + 1);
-        prefixEnd[prefixEnd.length-1] = (byte)0xFF;
-
+        final Bytes prefixEnd = Bytes.increment(prefix);
         final TreeMap<Bytes, byte[]> treeMap = toTreeMap();
+        final Comparator<? super Bytes> comparator = treeMap.comparator();
+
+        //We currently don't set a comparator for the treeMap, so the comparator will always be null.
+        final int result = comparator==null ? prefix.compareTo(prefixEnd) : comparator.compare(prefix, prefixEnd);
+
+        final NavigableMap<Bytes, byte[]> subMapResults;
+        if (result > 0) {
+            //Prefix increment would cause a wrap-around. Get the submap from toKey to the end of the map
+            subMapResults = treeMap.tailMap(prefix, true);
+        } else {
+            subMapResults = treeMap.subMap(prefix, true, prefixEnd, false);
+        }
+
         return new DelegatingPeekingKeyValueIterator<>(name(),
-                new MemoryNavigableLRUCache.CacheIterator(treeMap.navigableKeySet()
-                        .subSet(prefix, true, new Bytes(prefixEnd), true).iterator(), treeMap));
+                new MemoryNavigableLRUCache.CacheIterator(subMapResults.navigableKeySet().iterator(), subMapResults));
     }
 
     private synchronized TreeMap<Bytes, byte[]> toTreeMap() {

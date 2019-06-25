@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.common.utils;
 
+import org.apache.kafka.common.serialization.Serdes;
+
 import java.io.Serializable;
 import java.util.Arrays;
 import java.util.Comparator;
@@ -141,7 +143,31 @@ public class Bytes implements Comparable<Bytes> {
     }
 
     /**
-     * A byte array comparator based on lexicographic ordering.
+     * Increment the underlying byte array by adding 1.
+     *
+     * @param input - The byte array to increment
+     * @return A new copy of the incremented byte array.
+     */
+    public static Bytes increment(Bytes input) {
+        byte[] inputArr = input.get();
+        byte[] ret = new byte[inputArr.length+1];
+        int carry = 1;
+        for(int i = inputArr.length-1; i >= 0; i--) {
+            if (inputArr[i] == (byte)0xFF && carry == 1) {
+                ret[i] = (byte)0x00;
+            } else {
+                ret[i] = (byte)(inputArr[i] + carry);
+                carry = 0;
+            }
+        }
+        if (carry == 0)
+            return wrap(Arrays.copyOf(ret, inputArr.length));
+        ret[0] = 1;
+        return wrap(ret);
+    }
+
+    /**
+     * A byte array comparator based on lexicograpic ordering.
      */
     public final static ByteArrayComparator BYTES_LEXICO_COMPARATOR = new LexicographicByteArrayComparator();
 
