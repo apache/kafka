@@ -18,8 +18,8 @@
 package kafka.metrics
 
 import java.util.Properties
-import javax.management.ObjectName
 
+import javax.management.ObjectName
 import com.yammer.metrics.Metrics
 import com.yammer.metrics.core.{Meter, MetricPredicate}
 import org.junit.Test
@@ -110,10 +110,15 @@ class MetricsTest extends KafkaServerTestHarness with Logging {
         logSize.map(_ > 0).getOrElse(false))
     }
 
+    // Consume messages to make bytesOut tick
+    TestUtils.consumeTopicRecords(servers, topic, nMessages)
     val initialReplicationBytesIn = meterCount(replicationBytesIn)
     val initialReplicationBytesOut = meterCount(replicationBytesOut)
     val initialBytesIn = meterCount(bytesIn)
-//    val initialBytesOut = meterCount(bytesOut)
+    val initialBytesOut = meterCount(bytesOut)
+
+    // BytesOut doesn't include replication, so it shouldn't have changed
+    assertEquals(initialBytesOut, meterCount(bytesOut))
 
     // Produce a few messages to make the metrics tick
     TestUtils.generateAndProduceMessages(servers, topic, nMessages)
@@ -121,13 +126,49 @@ class MetricsTest extends KafkaServerTestHarness with Logging {
     assertTrue(meterCount(replicationBytesIn) > initialReplicationBytesIn)
     assertTrue(meterCount(replicationBytesOut) > initialReplicationBytesOut)
     assertTrue(meterCount(bytesIn) > initialBytesIn)
-    // BytesOut doesn't include replication, so it shouldn't have changed
-//    assertEquals(initialBytesOut, meterCount(bytesOut))
 
     // Consume messages to make bytesOut tick
-    TestUtils.consumeTopicRecords(servers, topic, nMessages * 2)
+    TestUtils.consumeTopicRecords(servers, topic, nMessages)
 
-    assertTrue(meterCount(bytesOut) > 0)
+    assertTrue(meterCount(bytesOut) > initialBytesOut)
+  }
+
+  @Test
+  def testOldLeaderLostMetrics(): Unit = {
+    val topic = "leaked-metric-test"
+
+    createTopic(topic, 2, 2)
+    TestUtils.makeLeaderForPartition(zkClient, topic, immutable.Map(0 -> 0, 1 -> 1), 1)
+    // Produce a few messages to make the metrics tick
+    TestUtils.generateAndProduceMessages(servers, topic, nMessages)
+    // Consume messages to make bytesOut tick
+    TestUtils.consumeTopicRecords(servers, topic, nMessages)
+
+    servers.foreach { s =>
+      assertTrue(s.brokerTopicStats.topicStats(topic).metricTypeMap.contains(BrokerTopicStats.BytesInPerSec))
+      assertTrue(s.brokerTopicStats.topicStats(topic).metricTypeMap.contains(BrokerTopicStats.BytesOutPerSec))
+      assertTrue(s.brokerTopicStats.topicStats(topic).metricTypeMap.contains(BrokerTopicStats.MessagesInPerSec))
+    }
+
+    // change the leader of all partitions
+    TestUtils.makeLeaderForPartition(zkClient, topic, immutable.Map(0 -> 1, 1 -> 1), 1)
+
+    for (s <- servers) {
+      println(s.config.brokerId)
+      println(s.brokerTopicStats.topicStats(topic).tags)
+      println(s.brokerTopicStats.topicStats(topic).metricTypeMap)
+    }
+
+    for (s <- servers) {
+      if (s.config.brokerId == 0) {
+        assertTrue(s.brokerTopicStats.topicStats(topic).metricTypeMap.isEmpty)
+      } else {
+        assertTrue(s.brokerTopicStats.topicStats(topic).metricTypeMap.contains(BrokerTopicStats.BytesInPerSec))
+        assertTrue(s.brokerTopicStats.topicStats(topic).metricTypeMap.contains(BrokerTopicStats.BytesOutPerSec))
+        assertTrue(s.brokerTopicStats.topicStats(topic).metricTypeMap.contains(BrokerTopicStats.MessagesInPerSec))
+      }
+    }
+
   }
 
   @Test

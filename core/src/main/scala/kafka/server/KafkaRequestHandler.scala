@@ -146,10 +146,14 @@ class BrokerTopicMetrics(name: Option[String]) extends KafkaMetricsGroup {
     case Some(topic) => Map("topic" -> topic)
   }
 
-  private val metricTypeMap = new Pool[String, Meter]
+  // visible for testing
+  private[kafka] val metricTypeMap = new Pool[String, Meter]
 
-  def messagesInRate = metricTypeMap.getAndMaybePut(
+  def messagesInRate = {
+    println(s"initialized ${tags}")
+    metricTypeMap.getAndMaybePut(
   BrokerTopicStats.MessagesInPerSec, newMeter(BrokerTopicStats.MessagesInPerSec, "messages", TimeUnit.SECONDS, tags))
+  }
   def bytesInRate = metricTypeMap.getAndMaybePut(
     BrokerTopicStats.BytesInPerSec, newMeter(BrokerTopicStats.BytesInPerSec, "bytes", TimeUnit.SECONDS, tags))
   def bytesOutRate = metricTypeMap.getAndMaybePut(
@@ -170,7 +174,8 @@ class BrokerTopicMetrics(name: Option[String]) extends KafkaMetricsGroup {
   val produceMessageConversionsRate = newMeter(BrokerTopicStats.ProduceMessageConversionsPerSec, "requests", TimeUnit.SECONDS, tags)
 
   def removeMetricHelper(metricType: String, tags: scala.collection.Map[String, String]): Unit = {
-    val metric: Metric = metricTypeMap.remove(metricType)
+    val metric: Meter = metricTypeMap.remove(metricType)
+    println(s"removed ${tags}, ${metricTypeMap.contains(metricType)}, ${metricTypeMap}")
     if (metric != null)
       removeMetric(metricType, tags)
   }
