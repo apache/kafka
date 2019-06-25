@@ -18,8 +18,8 @@ import subprocess
 from tempfile import mkdtemp
 from shutil import rmtree
 from ducktape.template import TemplateRenderer
-from kafkatest.services.kafka.kafka import ListenerConfig
 from kafkatest.services.security.minikdc import MiniKdc
+from kafkatest.services.kafka.listener_config import ListenerConfig
 import itertools
 
 

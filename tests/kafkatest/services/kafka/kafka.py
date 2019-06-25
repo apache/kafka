@@ -27,6 +27,7 @@ from ducktape.cluster.remoteaccount import RemoteCommandError
 from config import KafkaConfig
 from kafkatest.directory_layout.kafka_path import KafkaPathResolverMixin
 from kafkatest.services.kafka import config_property
+from kafkatest.services.kafka.listener_config import ListenerConfig
 from kafkatest.services.monitor.jmx import JmxMixin
 from kafkatest.services.security.minikdc import MiniKdc
 from kafkatest.services.security.security_config import SecurityConfig
@@ -49,28 +50,6 @@ class KafkaListener:
 
     def listener_security_protocol(self):
         return "%s:%s" % (self.name, self.security_protocol)
-
-class ListenerConfig:
-
-    def __init__(self, use_separate_interbroker_listener=False,
-                 client_listener_overrides={}, interbroker_listener_overrides={}):
-        """
-        :param bool use_separate_interbroker_listener - if set, will use a separate interbroker listener,
-        with security protocol set to interbroker_security_protocol value. If set, requires
-        interbroker_security_protocol to be provided.
-        Normally port name is the same as its security protocol, so setting security_protocol and
-        interbroker_security_protocol to the same value will lead to a single port being open and both client
-        and broker-to-broker communication will go over that port. This parameter allows
-        you to add an interbroker listener with the same security protocol as a client listener, but running on a
-        separate port.
-        :param dict client_listener_overrides - non-prefixed listener config overrides for named client listener
-        (for example 'sasl.jaas.config', 'ssl.keystore.location', 'sasl.login.callback.handler.class', etc).
-        :param dict interbroker_listener_overrides - non-prefixed listener config overrides for named interbroker
-        listener (for example 'sasl.jaas.config', 'ssl.keystore.location', 'sasl.login.callback.handler.class', etc).
-        """
-        self.use_separate_interbroker_listener = use_separate_interbroker_listener
-        self.client_listener_overrides = client_listener_overrides
-        self.interbroker_listener_overrides = interbroker_listener_overrides
 
 class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
     PERSISTENT_ROOT = "/mnt/kafka"
