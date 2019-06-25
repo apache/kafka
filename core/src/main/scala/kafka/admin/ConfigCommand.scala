@@ -57,6 +57,8 @@ import scala.collection._
 object ConfigCommand extends Config {
 
   val DefaultScramIterations = 4096
+  val ConfigProvider = "config.provider"
+  val DefaultBootstrapServersConfig = "localhost:1"
   // Dynamic broker configs can only be updated using the new AdminClient once brokers have started
   // so that configs may be fully validated. Prior to starting brokers, updates may be performed using
   // ZooKeeper for bootstrapping. This allows all password configs to be stored encrypted in ZK,
@@ -256,11 +258,15 @@ object ConfigCommand extends Config {
 
   private[admin] def resolveVariableConfigs(opts: ConfigCommandOptions, propsOriginal: Properties): Properties = {
     val props = new Properties
-    propsOriginal.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, opts.options.valueOf(opts.bootstrapServerOpt))
+    var bootstrapConfigDefault = false
+    if (!propsOriginal.containsKey(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG)) {
+      propsOriginal.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, DefaultBootstrapServersConfig)
+      bootstrapConfigDefault = true
+    }
     val config = new AdminClientConfig(propsOriginal)
     val resolvedProps = config.originals
     for ((key, value) <- resolvedProps.asScala) {
-      if (!key.startsWith("config.provider") && key != CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG){
+      if (!key.startsWith(ConfigProvider) && (bootstrapConfigDefault && key != CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG)) {
         props.put(key, value)
       }
     }

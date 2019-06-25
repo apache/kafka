@@ -134,6 +134,15 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
       "--delete-config", "a"))
     createOpts.checkArgs()
 
+    // For alter add config verify variable values are resolved
+    createOpts = new ConfigCommandOptions(Array("--zookeeper", zkConnect,
+      "--entity-name", "x",
+      "--entity-type", entityType,
+      "--alter",
+      "--add-config", "config.providers=file,config.providers.file.class=org.apache.kafka.common.config.provider.MockFileConfigProvider,a=${file:path:a},c=d",
+      "--delete-config", "a"))
+    createOpts.checkArgs()
+
     val addedProps = ConfigCommand.parseConfigsToBeAdded(createOpts)
     assertEquals(2, addedProps.size())
     assertEquals("b", addedProps.getProperty("a"))
