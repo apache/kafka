@@ -155,20 +155,15 @@ class MetricsTest extends KafkaServerTestHarness with Logging {
     // Consume messages to make bytesOut tick
     TestUtils.consumeTopicRecords(servers, topic, nMessages)
 
-    // testing if the node that stops being the leader of any partitions loses the metrics
-    assertEquals(mockMetricsRegistry0.allMetrics.keySet.asScala
-      .count(_.getMBeanName.endsWith(s"name=BytesInPerSec,topic=${topic}")), 1)
-    assertEquals(mockMetricsRegistry0.allMetrics.keySet.asScala
-      .count(_.getMBeanName.endsWith(s"name=BytesOutPerSec,topic=${topic}")), 1)
-    assertEquals(mockMetricsRegistry0.allMetrics.keySet.asScala
-      .count(_.getMBeanName.endsWith(s"name=MessagesInPerSec,topic=${topic}")), 1)
+    val metricsToTest = List("BytesInPerSec", "BytesOutPerSec", "MessagesInPerSec")
 
-    assertEquals(mockMetricsRegistry1.allMetrics.keySet.asScala
-      .count(_.getMBeanName.endsWith(s"name=BytesInPerSec,topic=${topic}")), 0)
-    assertEquals(mockMetricsRegistry1.allMetrics.keySet.asScala
-      .count(_.getMBeanName.endsWith(s"name=BytesOutPerSec,topic=${topic}")), 0)
-    assertEquals(mockMetricsRegistry1.allMetrics.keySet.asScala
-      .count(_.getMBeanName.endsWith(s"name=MessagesInPerSec,topic=${topic}")), 0)
+    // testing if the node that stops being the leader of any partitions loses the metrics
+    for (metric <- metricsToTest) {
+      assertEquals(mockMetricsRegistry0.allMetrics.keySet.asScala
+        .count(_.getMBeanName.endsWith(s"name=${metric},topic=${topic}")), 1)
+      assertEquals(mockMetricsRegistry1.allMetrics.keySet.asScala
+        .count(_.getMBeanName.endsWith(s"name=${metric},topic=${topic}")), 0)
+    }
 
     // change the leader so 2 nodes are both leaders of both partitions again
     // so that we can test if migrated leader has the metrics again
@@ -180,19 +175,12 @@ class MetricsTest extends KafkaServerTestHarness with Logging {
     // Consume messages to make bytesOut tick
     TestUtils.consumeTopicRecords(servers, topic, nMessages)
 
-    assertEquals(mockMetricsRegistry0.allMetrics.keySet.asScala
-      .count(_.getMBeanName.endsWith(s"name=BytesInPerSec,topic=${topic}")), 1)
-    assertEquals(mockMetricsRegistry0.allMetrics.keySet.asScala
-      .count(_.getMBeanName.endsWith(s"name=BytesOutPerSec,topic=${topic}")), 1)
-    assertEquals(mockMetricsRegistry0.allMetrics.keySet.asScala
-      .count(_.getMBeanName.endsWith(s"name=MessagesInPerSec,topic=${topic}")), 1)
-
-    assertEquals(mockMetricsRegistry1.allMetrics.keySet.asScala
-      .count(_.getMBeanName.endsWith(s"name=BytesInPerSec,topic=${topic}")), 1)
-    assertEquals(mockMetricsRegistry1.allMetrics.keySet.asScala
-      .count(_.getMBeanName.endsWith(s"name=BytesOutPerSec,topic=${topic}")), 1)
-    assertEquals(mockMetricsRegistry1.allMetrics.keySet.asScala
-      .count(_.getMBeanName.endsWith(s"name=MessagesInPerSec,topic=${topic}")), 1)
+    for (metric <- metricsToTest) {
+      assertEquals(mockMetricsRegistry0.allMetrics.keySet.asScala
+        .count(_.getMBeanName.endsWith(s"name=${metric},topic=${topic}")), 1)
+      assertEquals(mockMetricsRegistry1.allMetrics.keySet.asScala
+        .count(_.getMBeanName.endsWith(s"name=${metric},topic=${topic}")), 1)
+    }
   }
 
   @Test
