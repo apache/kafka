@@ -18,6 +18,7 @@
 package kafka.controller
 
 import kafka.cluster.Broker
+import kafka.zk.Assignment
 import org.apache.kafka.common.TopicPartition
 
 import scala.collection.{Seq, Set, mutable}
@@ -32,9 +33,9 @@ class ControllerContext {
   var epochZkVersion: Int = KafkaController.InitialControllerEpochZkVersion
 
   var allTopics: Set[String] = Set.empty
-  val partitionAssignments = mutable.Map.empty[String, mutable.Map[Int, Seq[Int]]]
+  val partitionAssignments = mutable.Map.empty[String, mutable.Map[Int, Assignment]]
   val partitionLeadershipInfo = mutable.Map.empty[TopicPartition, LeaderIsrAndControllerEpoch]
-  val partitionsBeingReassigned = mutable.Map.empty[TopicPartition, ReassignedPartitionsContext]
+  val partitionsBeingReassigned = mutable.Set.empty[TopicPartition]
   val partitionStates = mutable.Map.empty[TopicPartition, PartitionState]
   val replicaStates = mutable.Map.empty[PartitionAndReplica, ReplicaState]
   val replicasOnOfflineDirs: mutable.Map[Int, Set[TopicPartition]] = mutable.Map.empty
@@ -64,7 +65,7 @@ class ControllerContext {
   val topicsIneligibleForDeletion = mutable.Set.empty[String]
 
 
-  def partitionReplicaAssignment(topicPartition: TopicPartition): Seq[Int] = {
+  def partitionReplicaAssignment(topicPartition: TopicPartition): Assignment = {
     partitionAssignments.getOrElse(topicPartition.topic, mutable.Map.empty)
       .getOrElse(topicPartition.partition, Seq.empty)
   }
@@ -80,12 +81,12 @@ class ControllerContext {
     replicaStates.clear()
   }
 
-  def updatePartitionReplicaAssignment(topicPartition: TopicPartition, newReplicas: Seq[Int]): Unit = {
+  def updatePartitionReplicaAssignment(topicPartition: TopicPartition, newReplicas: Assignment): Unit = {
     partitionAssignments.getOrElseUpdate(topicPartition.topic, mutable.Map.empty)
       .put(topicPartition.partition, newReplicas)
   }
 
-  def partitionReplicaAssignmentForTopic(topic : String): Map[TopicPartition, Seq[Int]] = {
+  def partitionReplicaAssignmentForTopic(topic : String): Map[TopicPartition, Assignment] = {
     partitionAssignments.getOrElse(topic, Map.empty).map {
       case (partition, replicas) => (new TopicPartition(topic, partition), replicas)
     }.toMap
@@ -131,7 +132,7 @@ class ControllerContext {
   def partitionsOnBroker(brokerId: Int): Set[TopicPartition] = {
     partitionAssignments.flatMap {
       case (topic, topicReplicaAssignment) => topicReplicaAssignment.filter {
-        case (_, replicas) => replicas.contains(brokerId)
+        case (_, replicas) => replicas.brokers.contains(brokerId)
       }.map {
         case (partition, _) => new TopicPartition(topic, partition)
       }
@@ -150,7 +151,7 @@ class ControllerContext {
     brokerIds.flatMap { brokerId =>
       partitionAssignments.flatMap {
         case (topic, topicReplicaAssignment) => topicReplicaAssignment.collect {
-          case (partition, replicas)  if replicas.contains(brokerId) =>
+          case (partition, replicas)  if replicas.brokers.contains(brokerId) =>
             PartitionAndReplica(new TopicPartition(topic, partition), brokerId)
         }
       }
@@ -159,7 +160,7 @@ class ControllerContext {
 
   def replicasForTopic(topic: String): Set[PartitionAndReplica] = {
     partitionAssignments.getOrElse(topic, mutable.Map.empty).flatMap {
-      case (partition, replicas) => replicas.map(r => PartitionAndReplica(new TopicPartition(topic, partition), r))
+      case (partition, replicas) => replicas.brokers.map(r => PartitionAndReplica(new TopicPartition(topic, partition), r))
     }.toSet
   }
 
@@ -186,7 +187,7 @@ class ControllerContext {
     for ((topic, partitionReplicas) <- partitionAssignments;
          (partitionId, replicas) <- partitionReplicas) {
       val partition = new TopicPartition(topic, partitionId)
-      for (replica <- replicas) {
+      for (replica <- replicas.brokers) {
         val partitionAndReplica = PartitionAndReplica(partition, replica)
         if (isReplicaOnline(replica, partition))
           onlineReplicas.add(partitionAndReplica)
@@ -332,4 +333,64 @@ class ControllerContext {
   private def isValidPartitionStateTransition(partition: TopicPartition, targetState: PartitionState): Boolean =
     targetState.validPreviousStates.contains(partitionStates(partition))
 
+  /**
+    * For all partitions being reassigned, check if the target replicas
+    *
+    * Check if we can remove any target replicas.
+    * We can remove a target replica when it joins the
+    *
+    * For partitions with target replicas, check if the target replicas have been
+    * fully replicated.
+    *
+    * Remove replicas that are finished from the partitionsBeingReassigned set,
+    * and update their entries in the partitionAssignments map.
+    *
+    *
+    * @return
+    */
+  def checkPartitionsBeingReassigned(): mutable.Map[TopicPartition, Assignment] = {
+    var changed = mutable.Map[TopicPartition, Assignment]()
+    val toRemove = partitionsBeingReassigned.filter {
+      case topicPartition =>
+        val newAssignment = recalculatePartitionAssignment(topicPartition)
+        if (!newAssignment.equals(partitionReplicaAssignment(topicPartition))) {
+          updatePartitionReplicaAssignment(topicPartition, newAssignment)
+          changed.put(topicPartition, newAssignment)
+        }
+        newAssignment.targetBrokers.isEmpty
+    }
+    partitionsBeingReassigned --= toRemove
+    changed
+  }
+
+  def checkPartitionBeingReassigned(topicPartition: TopicPartition): Option[Assignment] = {
+    val newAssignment = recalculatePartitionAssignment(topicPartition)
+    if (newAssignment.equals(partitionReplicaAssignment(topicPartition))) {
+      None
+    } else {
+      if (newAssignment.targetBrokers.isEmpty) {
+        partitionsBeingReassigned.remove(topicPartition)
+      }
+      updatePartitionReplicaAssignment(topicPartition, newAssignment)
+      Some(newAssignment)
+    }
+  }
+
+  private def recalculatePartitionAssignment(topicPartition: TopicPartition): Assignment = {
+    val prevAssignment = partitionReplicaAssignment(topicPartition)
+    var newBrokers = mutable.Set() ++= prevAssignment.brokers
+    var newTargetBrokers = mutable.Set() ++= prevAssignment.targetBrokers.getOrElse(Seq())
+    newTargetBrokers --= prevAssignment.brokers
+    partitionLeadershipInfo.get(topicPartition).foreach {
+      case leadershipInfo => {
+        newTargetBrokers --= leadershipInfo.leaderAndIsr.isr
+        newBrokers ++= leadershipInfo.leaderAndIsr.isr
+      }
+    }
+    if (newTargetBrokers.size > 0) {
+      Assignment(newBrokers.toSeq, Some(newTargetBrokers.toSeq))
+    } else {
+      Assignment(newBrokers.toSeq, None)
+    }
+  }
 }

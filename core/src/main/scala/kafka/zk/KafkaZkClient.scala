@@ -506,6 +506,18 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
   }
 
   /**
+    * Sets the topic znode with the given assignment.
+    * @param topic the topic whose assignment is being set.
+    * @param expectedControllerEpochZkVersion expected controller epoch zkVersion.
+    * @param assignment the partition to replica mapping to set for the given topic
+    * @return SetDataResponse
+    */
+  def setTopicAssignment(topic: String, expectedControllerEpochZkVersion: Int = ZkVersion.MatchAnyVersion, assignment: Map[TopicPartition, Assignment]) = {
+    val setDataResponse = setTopicAssignmentRaw(topic, expectedControllerEpochZkVersion, assignment)
+    setDataResponse.maybeThrow
+  }
+
+  /**
    * Sets the topic znode with the given assignment.
    * @param topic the topic whose assignment is being set.
    * @param assignment the partition to replica mapping to set for the given topic
