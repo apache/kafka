@@ -650,7 +650,8 @@ class KafkaController(val config: KafkaConfig,
     electionType: ElectionType,
     electionTrigger: ElectionTrigger
   ): Map[TopicPartition, Either[Throwable, LeaderAndIsr]] = {
-    info(s"Starting replica leader election ($electionType) for partitions ${partitions.mkString(",")} triggered by $electionTrigger")
+    info(s"Starting replica leader election ($electionType) for partitions " +
+      s"${partitions.mkString(",")} triggered by $electionTrigger")
     try {
       val strategy = electionType match {
         case ElectionType.PREFERRED => PreferredReplicaPartitionLeaderElectionStrategy
@@ -659,6 +660,12 @@ class KafkaController(val config: KafkaConfig,
            * triggered by the admin client
            */
           OfflinePartitionLeaderElectionStrategy(allowUnclean = electionTrigger == AdminClientTriggered)
+      }
+
+      // If the request is triggered administratively, ensure we have the latest
+      // Leader/ISR state before beginning the election.
+      if (electionTrigger == AdminClientTriggered || electionTrigger == ZkTriggered) {
+        updateLeaderAndIsrCache(partitions.toSeq)
       }
 
       val results = partitionStateMachine.handleStateChanges(

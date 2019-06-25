@@ -24,7 +24,6 @@ import kafka.zk.KafkaZkClient
 import kafka.zk.KafkaZkClient.UpdateLeaderAndIsrResult
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.ControllerMovedException
-import scala.collection.mutable
 
 abstract class ReplicaStateMachine(controllerContext: ControllerContext) extends Logging {
   /**
@@ -290,7 +289,7 @@ class ZkReplicaStateMachine(config: KafkaConfig,
       new StateChangeFailedException(s"Failed to change state of replica $replicaId for partition $tp: $reason")
     }
 
-    var results = Map.newBuilder[TopicPartition, LeaderIsrAndControllerEpoch]
+    val results = Map.newBuilder[TopicPartition, LeaderIsrAndControllerEpoch]
     var remaining = partitions
     while (remaining.nonEmpty) {
       val leaderAndIsrs = Map.newBuilder[TopicPartition, LeaderAndIsr]
