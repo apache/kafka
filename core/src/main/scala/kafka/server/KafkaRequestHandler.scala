@@ -23,7 +23,7 @@ import kafka.metrics.KafkaMetricsGroup
 import java.util.concurrent.{CountDownLatch, TimeUnit}
 import java.util.concurrent.atomic.AtomicInteger
 
-import com.yammer.metrics.core.{Meter, Metric}
+import com.yammer.metrics.core.{Meter, Metric, MetricsRegistry}
 import org.apache.kafka.common.internals.FatalExitError
 import org.apache.kafka.common.utils.{KafkaThread, Time}
 
@@ -140,41 +140,51 @@ class KafkaRequestHandlerPool(val brokerId: Int,
   }
 }
 
-class BrokerTopicMetrics(name: Option[String]) extends KafkaMetricsGroup {
+class BrokerTopicMetrics(name: Option[String], metricsRegistry: Option[MetricsRegistry] = None) extends KafkaMetricsGroup {
   val tags: scala.collection.Map[String, String] = name match {
     case None => Map.empty
     case Some(topic) => Map("topic" -> topic)
   }
 
-  // visible for testing
-  private[kafka] val metricTypeMap = new Pool[String, Meter]
+  private val metricTypeMap = new Pool[String, Meter]
 
   def messagesInRate = metricTypeMap.getAndMaybePut(
-    BrokerTopicStats.MessagesInPerSec, newMeter(BrokerTopicStats.MessagesInPerSec, "messages", TimeUnit.SECONDS, tags))
+    BrokerTopicStats.MessagesInPerSec, newMeterHelper(BrokerTopicStats.MessagesInPerSec, "messages", TimeUnit.SECONDS, tags))
 
   def bytesInRate = metricTypeMap.getAndMaybePut(
-    BrokerTopicStats.BytesInPerSec, newMeter(BrokerTopicStats.BytesInPerSec, "bytes", TimeUnit.SECONDS, tags))
+    BrokerTopicStats.BytesInPerSec, newMeterHelper(BrokerTopicStats.BytesInPerSec, "bytes", TimeUnit.SECONDS, tags))
   def bytesOutRate = metricTypeMap.getAndMaybePut(
-    BrokerTopicStats.BytesOutPerSec, newMeter(BrokerTopicStats.BytesOutPerSec, "bytes", TimeUnit.SECONDS, tags))
+    BrokerTopicStats.BytesOutPerSec, newMeterHelper(BrokerTopicStats.BytesOutPerSec, "bytes", TimeUnit.SECONDS, tags))
 
-  val bytesRejectedRate = newMeter(BrokerTopicStats.BytesRejectedPerSec, "bytes", TimeUnit.SECONDS, tags)
+  val bytesRejectedRate = newMeterHelper(BrokerTopicStats.BytesRejectedPerSec, "bytes", TimeUnit.SECONDS, tags)
   private[server] val replicationBytesInRate =
-    if (name.isEmpty) Some(newMeter(BrokerTopicStats.ReplicationBytesInPerSec, "bytes", TimeUnit.SECONDS, tags))
+    if (name.isEmpty) Some(newMeterHelper(BrokerTopicStats.ReplicationBytesInPerSec, "bytes", TimeUnit.SECONDS, tags))
     else None
   private[server] val replicationBytesOutRate =
-    if (name.isEmpty) Some(newMeter(BrokerTopicStats.ReplicationBytesOutPerSec, "bytes", TimeUnit.SECONDS, tags))
+    if (name.isEmpty) Some(newMeterHelper(BrokerTopicStats.ReplicationBytesOutPerSec, "bytes", TimeUnit.SECONDS, tags))
     else None
-  val failedProduceRequestRate = newMeter(BrokerTopicStats.FailedProduceRequestsPerSec, "requests", TimeUnit.SECONDS, tags)
-  val failedFetchRequestRate = newMeter(BrokerTopicStats.FailedFetchRequestsPerSec, "requests", TimeUnit.SECONDS, tags)
-  val totalProduceRequestRate = newMeter(BrokerTopicStats.TotalProduceRequestsPerSec, "requests", TimeUnit.SECONDS, tags)
-  val totalFetchRequestRate = newMeter(BrokerTopicStats.TotalFetchRequestsPerSec, "requests", TimeUnit.SECONDS, tags)
-  val fetchMessageConversionsRate = newMeter(BrokerTopicStats.FetchMessageConversionsPerSec, "requests", TimeUnit.SECONDS, tags)
-  val produceMessageConversionsRate = newMeter(BrokerTopicStats.ProduceMessageConversionsPerSec, "requests", TimeUnit.SECONDS, tags)
+  val failedProduceRequestRate = newMeterHelper(BrokerTopicStats.FailedProduceRequestsPerSec, "requests", TimeUnit.SECONDS, tags)
+  val failedFetchRequestRate = newMeterHelper(BrokerTopicStats.FailedFetchRequestsPerSec, "requests", TimeUnit.SECONDS, tags)
+  val totalProduceRequestRate = newMeterHelper(BrokerTopicStats.TotalProduceRequestsPerSec, "requests", TimeUnit.SECONDS, tags)
+  val totalFetchRequestRate = newMeterHelper(BrokerTopicStats.TotalFetchRequestsPerSec, "requests", TimeUnit.SECONDS, tags)
+  val fetchMessageConversionsRate = newMeterHelper(BrokerTopicStats.FetchMessageConversionsPerSec, "requests", TimeUnit.SECONDS, tags)
+  val produceMessageConversionsRate = newMeterHelper(BrokerTopicStats.ProduceMessageConversionsPerSec, "requests", TimeUnit.SECONDS, tags)
+
+  def newMeterHelper(name: String, eventType: String, timeUnit: TimeUnit, tags: scala.collection.Map[String, String] = Map.empty): Meter = {
+    metricsRegistry match {
+      case Some(registry) => registry.newMeter(metricName(name, tags), eventType, timeUnit)
+      case None => newMeter(name, eventType, timeUnit, tags)
+    }
+  }
 
   def removeMetricHelper(metricType: String, tags: scala.collection.Map[String, String]): Unit = {
     val metric: Meter = metricTypeMap.remove(metricType)
-    if (metric != null)
-      removeMetric(metricType, tags)
+    if (metric != null) {
+      metricsRegistry match {
+        case Some(registry) => registry.removeMetric(metricName(metricType, tags))
+        case None => removeMetric(metricType, tags)
+      }
+    }
   }
 
   def close() {
@@ -214,8 +224,15 @@ object BrokerTopicStats {
 class BrokerTopicStats {
   import BrokerTopicStats._
 
-  private val stats = new Pool[String, BrokerTopicMetrics](Some(valueFactory))
-  val allTopicsStats = new BrokerTopicMetrics(None)
+  private var stats = new Pool[String, BrokerTopicMetrics](Some(valueFactory))
+  var allTopicsStats = new BrokerTopicMetrics(None)
+
+  // only visible for testing
+  private[kafka] def updateMetricsRegistry(metricsRegistry: MetricsRegistry) = {
+    // reassign stats using new valueFactory with new metricsRegistry
+    stats = new Pool[String, BrokerTopicMetrics](Some((k: String) => new BrokerTopicMetrics(Some(k), Some(metricsRegistry))))
+    allTopicsStats = new BrokerTopicMetrics(None, Some(metricsRegistry))
+  }
 
   def topicStats(topic: String): BrokerTopicMetrics =
     stats.getAndMaybePut(topic)

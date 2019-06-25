@@ -21,7 +21,7 @@ import java.util.Properties
 
 import javax.management.ObjectName
 import com.yammer.metrics.Metrics
-import com.yammer.metrics.core.{Meter, MetricPredicate}
+import com.yammer.metrics.core.{Meter, MetricPredicate, MetricsRegistry}
 import org.junit.Test
 import org.junit.Assert._
 import kafka.integration.KafkaServerTestHarness
@@ -136,39 +136,63 @@ class MetricsTest extends KafkaServerTestHarness with Logging {
   @Test
   def testOldLeaderLostMetrics(): Unit = {
     val topic = "leaked-metric-test"
+    val tp0 = new TopicPartition(topic, 0)
+    val tp1 = new TopicPartition(topic, 1)
 
-    createTopic(topic, 2, 2)
-    TestUtils.makeLeaderForPartition(zkClient, topic, immutable.Map(0 -> 0, 1 -> 1), 1)
+    val mockMetricsRegistry0 = new MetricsRegistry()
+    val mockMetricsRegistry1 = new MetricsRegistry()
+
+    // use two different metrics registries for testing
+    servers(0).brokerTopicStats.updateMetricsRegistry(mockMetricsRegistry0)
+    servers(1).brokerTopicStats.updateMetricsRegistry(mockMetricsRegistry1)
+
+    TestUtils.createTopic(zkClient, topic, Map(0 -> List(0, 1), 1 -> List(1, 0)), servers)
+    // change the leader of all partitions
+    zkClient.createPartitionReassignment(Predef.Map(tp0 -> Seq(0), tp1 -> Seq(0)))
+    TestUtils.awaitLeaderChange(servers, tp1, 1)
     // Produce a few messages to make the metrics tick
     TestUtils.generateAndProduceMessages(servers, topic, nMessages)
     // Consume messages to make bytesOut tick
     TestUtils.consumeTopicRecords(servers, topic, nMessages)
 
-    servers.foreach { s =>
-      assertTrue(s.brokerTopicStats.topicStats(topic).metricTypeMap.contains(BrokerTopicStats.BytesInPerSec))
-      assertTrue(s.brokerTopicStats.topicStats(topic).metricTypeMap.contains(BrokerTopicStats.BytesOutPerSec))
-      assertTrue(s.brokerTopicStats.topicStats(topic).metricTypeMap.contains(BrokerTopicStats.MessagesInPerSec))
-    }
+    // testing if the node that stops being the leader of any partitions loses the metrics
+    assertEquals(mockMetricsRegistry0.allMetrics.keySet.asScala
+      .count(_.getMBeanName.endsWith(s"name=BytesInPerSec,topic=${topic}")), 1)
+    assertEquals(mockMetricsRegistry0.allMetrics.keySet.asScala
+      .count(_.getMBeanName.endsWith(s"name=BytesOutPerSec,topic=${topic}")), 1)
+    assertEquals(mockMetricsRegistry0.allMetrics.keySet.asScala
+      .count(_.getMBeanName.endsWith(s"name=MessagesInPerSec,topic=${topic}")), 1)
 
+    assertEquals(mockMetricsRegistry1.allMetrics.keySet.asScala
+      .count(_.getMBeanName.endsWith(s"name=BytesInPerSec,topic=${topic}")), 0)
+    assertEquals(mockMetricsRegistry1.allMetrics.keySet.asScala
+      .count(_.getMBeanName.endsWith(s"name=BytesOutPerSec,topic=${topic}")), 0)
+    assertEquals(mockMetricsRegistry1.allMetrics.keySet.asScala
+      .count(_.getMBeanName.endsWith(s"name=MessagesInPerSec,topic=${topic}")), 0)
+
+    // change the leader so 2 nodes are both leaders of both partitions again
+    // so that we can test if migrated leader has the metrics again
     // change the leader of all partitions
-    TestUtils.makeLeaderForPartition(zkClient, topic, immutable.Map(0 -> 1, 1 -> 1), 1)
+    zkClient.createPartitionReassignment(Predef.Map(tp0 -> Seq(0), tp1 -> Seq(1)))
+    TestUtils.awaitLeaderChange(servers, tp1, 0)
+    // Produce a few messages to make the metrics tick
+    TestUtils.generateAndProduceMessages(servers, topic, nMessages)
+    // Consume messages to make bytesOut tick
+    TestUtils.consumeTopicRecords(servers, topic, nMessages)
 
-    for (s <- servers) {
-      println(s.config.brokerId)
-      println(s.brokerTopicStats.topicStats(topic).tags)
-      println(s.brokerTopicStats.topicStats(topic).metricTypeMap)
-    }
+    assertEquals(mockMetricsRegistry0.allMetrics.keySet.asScala
+      .count(_.getMBeanName.endsWith(s"name=BytesInPerSec,topic=${topic}")), 1)
+    assertEquals(mockMetricsRegistry0.allMetrics.keySet.asScala
+      .count(_.getMBeanName.endsWith(s"name=BytesOutPerSec,topic=${topic}")), 1)
+    assertEquals(mockMetricsRegistry0.allMetrics.keySet.asScala
+      .count(_.getMBeanName.endsWith(s"name=MessagesInPerSec,topic=${topic}")), 1)
 
-    for (s <- servers) {
-      if (s.config.brokerId == 0) {
-        assertTrue(s.brokerTopicStats.topicStats(topic).metricTypeMap.isEmpty)
-      } else {
-        assertTrue(s.brokerTopicStats.topicStats(topic).metricTypeMap.contains(BrokerTopicStats.BytesInPerSec))
-        assertTrue(s.brokerTopicStats.topicStats(topic).metricTypeMap.contains(BrokerTopicStats.BytesOutPerSec))
-        assertTrue(s.brokerTopicStats.topicStats(topic).metricTypeMap.contains(BrokerTopicStats.MessagesInPerSec))
-      }
-    }
-
+    assertEquals(mockMetricsRegistry1.allMetrics.keySet.asScala
+      .count(_.getMBeanName.endsWith(s"name=BytesInPerSec,topic=${topic}")), 1)
+    assertEquals(mockMetricsRegistry1.allMetrics.keySet.asScala
+      .count(_.getMBeanName.endsWith(s"name=BytesOutPerSec,topic=${topic}")), 1)
+    assertEquals(mockMetricsRegistry1.allMetrics.keySet.asScala
+      .count(_.getMBeanName.endsWith(s"name=MessagesInPerSec,topic=${topic}")), 1)
   }
 
   @Test
