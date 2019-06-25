@@ -30,7 +30,7 @@ public class Change<T> {
 
     @Override
     public String toString() {
-        return "(" + String.valueOf(newValue) + "<-" + String.valueOf(oldValue) + ")";
+        return "(" + newValue + "<-" + oldValue + ")";
     }
 
     @Override
