@@ -37,19 +37,18 @@ public class RackAwareReplicaSelector implements ReplicaSelector {
                     .filter(replicaInfo -> clientMetadata.rackId().equals(replicaInfo.endpoint().rack()))
                     .collect(Collectors.toSet());
             if (sameRackReplicas.isEmpty()) {
-                return partitionView.leader();
+                return Optional.of(partitionView.leader());
             } else {
-                Optional<ReplicaView> leaderIfSameRack = partitionView.leader().filter(sameRackReplicas::contains);
-                if (leaderIfSameRack.isPresent()) {
+                if (sameRackReplicas.contains(partitionView.leader())) {
                     // Use the leader if it's in this rack
-                    return leaderIfSameRack;
+                    return Optional.of(partitionView.leader());
                 } else {
                     // Otherwise, get the most caught-up replica
                     return sameRackReplicas.stream().max(ReplicaView.comparator());
                 }
             }
         } else {
-            return partitionView.leader();
+            return Optional.of(partitionView.leader());
         }
     }
 }

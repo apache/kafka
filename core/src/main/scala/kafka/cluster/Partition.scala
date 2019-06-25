@@ -552,7 +552,7 @@ class Partition(val topicPartition: TopicPartition,
 
       if (isNewLeader) {
         // construct the high watermark metadata for the new leader replica
-        leaderLog.maybeFetchHighWatermarkOffsetMetadata()
+        leaderLog.initializeHighWatermarkOffsetMetadata()
         // mark local replica as the leader after converting hw
         leaderReplicaIdOpt = Some(localBrokerId)
         // reset log end offset for remote replicas

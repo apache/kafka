@@ -49,9 +49,6 @@ public class ReplicaSelectorTest {
         ClientMetadata metadata = metadata("doesnt-matter");
         selected = selector.select(tp, metadata, partitionView);
         assertOptional(selected, replicaInfo -> assertEquals(replicaInfo, leader));
-
-        selected = selector.select(tp, metadata, partitionInfo(Collections.emptySet(), null));
-        assertFalse(selected.isPresent());
     }
 
     @Test
@@ -94,67 +91,15 @@ public class ReplicaSelectorTest {
     }
 
     static ReplicaView replicaInfo(Node node, long logOffset, long timeSinceLastCaughtUpMs) {
-        return new ReplicaView() {
-            @Override
-            public Node endpoint() {
-                return node;
-            }
-
-            @Override
-            public long logEndOffset() {
-                return logOffset;
-            }
-
-            /**
-             * The number of milliseconds (if any) since the last time this replica was caught up to the high watermark.
-             */
-            @Override
-            public long timeSinceLastCaughtUpMs() {
-                return timeSinceLastCaughtUpMs;
-            }
-        };
+        return new ReplicaView.DefaultReplicaView(node, logOffset, timeSinceLastCaughtUpMs);
     }
 
     static PartitionView partitionInfo(Set<ReplicaView> replicaViewSet, ReplicaView leader) {
-        return new PartitionView() {
-            @Override
-            public Set<ReplicaView> replicas() {
-                return replicaViewSet;
-            }
-
-            @Override
-            public Optional<ReplicaView> leader() {
-                return Optional.ofNullable(leader);
-            }
-        };
+        return new PartitionView.DefaultPartitionView(replicaViewSet, leader);
     }
 
     static ClientMetadata metadata(String rack) {
-        return new ClientMetadata() {
-            @Override
-            public String rackId() {
-                return rack;
-            }
-
-            @Override
-            public String clientId() {
-                return "test-client";
-            }
-
-            @Override
-            public InetAddress clientAddress() {
-                return InetAddress.getLoopbackAddress();
-            }
-
-            @Override
-            public KafkaPrincipal principal() {
-                return KafkaPrincipal.ANONYMOUS;
-            }
-
-            @Override
-            public String listenerName() {
-                return "test";
-            }
-        };
+        return new ClientMetadata.DefaultClientMetadata(rack, "test-client",
+                InetAddress.getLoopbackAddress(), KafkaPrincipal.ANONYMOUS, "TEST");
     }
 }

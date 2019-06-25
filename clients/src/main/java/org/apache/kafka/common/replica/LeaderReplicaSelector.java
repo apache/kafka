@@ -28,6 +28,6 @@ public class LeaderReplicaSelector implements ReplicaSelector {
     public Optional<ReplicaView> select(TopicPartition topicPartition,
                                         ClientMetadata clientMetadata,
                                         PartitionView partitionView) {
-        return partitionView.leader();
+        return Optional.of(partitionView.leader());
     }
 }

@@ -18,7 +18,6 @@ package org.apache.kafka.common.replica;
 
 import java.util.Collections;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.Set;
 
 /**
@@ -27,13 +26,13 @@ import java.util.Set;
 public interface PartitionView {
     Set<ReplicaView> replicas();
 
-    Optional<ReplicaView> leader();
+    ReplicaView leader();
 
     class DefaultPartitionView implements PartitionView {
         private final Set<ReplicaView> replicas;
-        private final Optional<ReplicaView> leader;
+        private final ReplicaView leader;
 
-        public DefaultPartitionView(Set<ReplicaView> replicas, Optional<ReplicaView> leader) {
+        public DefaultPartitionView(Set<ReplicaView> replicas, ReplicaView leader) {
             this.replicas = Collections.unmodifiableSet(replicas);
             this.leader = leader;
         }
@@ -44,7 +43,7 @@ public interface PartitionView {
         }
 
         @Override
-        public Optional<ReplicaView> leader() {
+        public ReplicaView leader() {
             return leader;
         }
 

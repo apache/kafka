@@ -25,7 +25,7 @@ import org.apache.kafka.common.errors._
 import org.apache.kafka.common.replica.ClientMetadata
 import org.apache.kafka.common.requests.FetchRequest.PartitionData
 
-import scala.collection.{mutable, _}
+import scala.collection._
 
 case class FetchPartitionStatus(startOffsetMetadata: LogOffsetMetadata, fetchInfo: PartitionData) {
 
@@ -89,7 +89,6 @@ class DelayedFetch(delayMs: Long,
             val partition = replicaManager.getPartitionOrException(topicPartition,
               expectLeader = fetchMetadata.fetchOnlyLeader)
             val offsetSnapshot = partition.fetchOffsetSnapshot(fetchLeaderEpoch, fetchMetadata.fetchOnlyLeader)
-
 
             val endOffset = fetchMetadata.fetchIsolation match {
               case FetchLogEnd => offsetSnapshot.logEndOffset

@@ -19,6 +19,7 @@ package org.apache.kafka.common.replica;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 
 import java.net.InetAddress;
+import java.util.Objects;
 
 /**
  * Holder for all the client metadata required to determine a preferred replica.
@@ -90,6 +91,34 @@ public interface ClientMetadata {
         @Override
         public String listenerName() {
             return listenerName;
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+            DefaultClientMetadata that = (DefaultClientMetadata) o;
+            return Objects.equals(rackId, that.rackId) &&
+                    Objects.equals(clientId, that.clientId) &&
+                    Objects.equals(clientAddress, that.clientAddress) &&
+                    Objects.equals(principal, that.principal) &&
+                    Objects.equals(listenerName, that.listenerName);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(rackId, clientId, clientAddress, principal, listenerName);
+        }
+
+        @Override
+        public String toString() {
+            return "DefaultClientMetadata{" +
+                    "rackId='" + rackId + '\'' +
+                    ", clientId='" + clientId + '\'' +
+                    ", clientAddress=" + clientAddress +
+                    ", principal=" + principal +
+                    ", listenerName='" + listenerName + '\'' +
+                    '}';
         }
     }
 }

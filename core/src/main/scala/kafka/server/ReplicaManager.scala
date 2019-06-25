@@ -1061,16 +1061,21 @@ class ReplicaManager(val config: KafkaConfig,
             now - replica.lastCaughtUpTimeMs
           ))
 
-        val leaderReplica: Option[ReplicaView] = partition.leaderReplicaIdOpt
-          .map(replicaId => replicaEndpoints.getOrElse(replicaId, Node.noNode()))
-          .map(leaderNode => new DefaultReplicaView(leaderNode, partition.localLogOrException.logEndOffset, 0L))
+        if (partition.leaderReplicaIdOpt.isDefined) {
+          val leaderReplica: ReplicaView = partition.leaderReplicaIdOpt
+            .map(replicaId => replicaEndpoints.getOrElse(replicaId, Node.noNode()))
+            .map(leaderNode => new DefaultReplicaView(leaderNode, partition.localLogOrException.logEndOffset, 0L))
+            .get
 
-        leaderReplica.foreach(replicaInfoSet.add)
+          replicaInfoSet.add(leaderReplica)
 
-        val partitionInfo = new DefaultPartitionView(replicaInfoSet.asJava, leaderReplica.asJava)
-        replicaSelector.select(tp, clientMetadata, partitionInfo).asScala
-          .filter(!_.endpoint.isEmpty)
-          .map(_.endpoint.id)
+          val partitionInfo = new DefaultPartitionView(replicaInfoSet.asJava, leaderReplica)
+          replicaSelector.select(tp, clientMetadata, partitionInfo).asScala
+            .filter(!_.endpoint.isEmpty)
+            .map(_.endpoint.id)
+        } else {
+          None
+        }
       }
     } else {
       None
@@ -1608,9 +1613,7 @@ class ReplicaManager(val config: KafkaConfig,
   }
 
   protected def createReplicaSelector(): ReplicaSelector = {
-    val tmpReplicaSelector: ReplicaSelector = Option(config.replicaSelectorClassName).filter(_.nonEmpty).map { replicaSelectorClassName =>
-      CoreUtils.createObject[ReplicaSelector](replicaSelectorClassName)
-    }.getOrElse(new LeaderReplicaSelector())
+    val tmpReplicaSelector: ReplicaSelector = CoreUtils.createObject[ReplicaSelector](config.replicaSelectorClassName)
     tmpReplicaSelector.configure(config.originals())
     tmpReplicaSelector
   }

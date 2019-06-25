@@ -38,6 +38,7 @@ public interface ReplicaView {
 
     /**
      * The number of milliseconds (if any) since the last time this replica was caught up to the high watermark.
+     * For a leader replica, this is always zero.
      */
     long timeSinceLastCaughtUpMs();
 

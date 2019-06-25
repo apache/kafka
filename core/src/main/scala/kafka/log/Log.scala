@@ -328,7 +328,7 @@ class Log(@volatile var dir: File,
    * Convert hw to local offset metadata by reading the log at the hw offset.
    * If the hw offset is out of range, return the first offset of the first log segment as the offset metadata.
    */
-  def maybeFetchHighWatermarkOffsetMetadata(): Unit = {
+  def initializeHighWatermarkOffsetMetadata(): Unit = {
     if (highWatermarkMetadata.messageOffsetOnly) {
       highWatermarkMetadata = convertToOffsetMetadata(highWatermark).getOrElse {
         convertToOffsetMetadata(logStartOffset).getOrElse {
@@ -363,24 +363,24 @@ class Log(@volatile var dir: File,
     * offset out of range error if the segment info cannot be loaded.
     */
   def offsetSnapshot: LogOffsetSnapshot = {
-    val hw: LogOffsetMetadata = lock.synchronized {
-      if (_highWatermarkMetadata.messageOffsetOnly) {
+    val hw: LogOffsetMetadata = if (_highWatermarkMetadata.messageOffsetOnly) {
+      lock.synchronized {
         val fullOffset = convertToOffsetMetadataOrThrow(_highWatermarkMetadata.messageOffset)
         _highWatermarkMetadata = fullOffset
-        fullOffset
-      } else {
-        _highWatermarkMetadata
       }
+      _highWatermarkMetadata
+    } else {
+      _highWatermarkMetadata
     }
 
-    val lso: LogOffsetMetadata = lock.synchronized {
-      if (firstUnstableOffset.exists(_.messageOffsetOnly)) {
+    val lso: LogOffsetMetadata = if (firstUnstableOffset.exists(_.messageOffsetOnly)) {
+      lock.synchronized {
         val fullOffset = convertToOffsetMetadataOrThrow(firstUnstableOffset.get.messageOffset)
         firstUnstableOffset = Some(fullOffset)
-        lastStableOffsetMetadata
-      } else {
-        lastStableOffsetMetadata
       }
+      lastStableOffsetMetadata
+    } else {
+      lastStableOffsetMetadata
     }
 
     LogOffsetSnapshot(
@@ -1554,7 +1554,6 @@ class Log(@volatile var dir: File,
       includeAbortedTxns = false)
     fetchDataInfo.fetchOffsetMetadata
   }
-
 
   /**
    * Delete any log segments matching the given predicate function,
