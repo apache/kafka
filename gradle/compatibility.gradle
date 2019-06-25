@@ -60,10 +60,13 @@ def sourceScalaVersion = project.hasProperty('sourceScalaVersion') ? project.sou
 def targetScalaVersion = project.hasProperty('targetScalaVersion') ? project.targetScalaVersion : resolveScalaVersion(target, (String) versions.baseScala)
 def sourceArchiveName = resolveArchiveName(source, sourceScalaVersion)
 def targetArchiveName = resolveArchiveName(target, targetScalaVersion)
-def sourceArtifactsPath = "$buildDir/tmp/compatibility/source.artifacts"
-def targetArtifactsPath = "$buildDir/tmp/compatibility/target.artifacts"
-def sourceWorkspace = useRootAsSource ? rootProject.rootDir.path : "$buildDir/tmp/compatibility/source"
-def targetWorkspace = useRootAsTarget ? rootProject.rootDir.path : "$buildDir/tmp/compatibility/target"
+def compatibilityWorkingDir = Paths.get("$buildDir", "tmp", "compatibility").toString()
+def sourceArtifactsPath = Paths.get(compatibilityWorkingDir, "source.artifacts").toString()
+def targetArtifactsPath = Paths.get(compatibilityWorkingDir, "target.artifacts").toString()
+def releasedSourceWorkspace = useRootAsSource ? rootProject.rootDir.path : Paths.get(compatibilityWorkingDir, "releasedSource").toString()
+def releasedTargetWorkspace = useRootAsSource ? rootProject.rootDir.path : Paths.get(compatibilityWorkingDir, "releasedTarget").toString()
+def sourceWorkspace = useRootAsSource ? rootProject.rootDir.path : Paths.get(compatibilityWorkingDir, "source").toString()
+def targetWorkspace = useRootAsTarget ? rootProject.rootDir.path : Paths.get(compatibilityWorkingDir, "target").toString()
 
 // We won't copy stuff that is excluded by git itself
 def repoExcludes = new ArrayList<String>(rootRepo.clean(ignore: false, directories: true, dryRun: true))
@@ -249,10 +252,10 @@ task resolveSourceArtifactsFromUrl(dependsOn: initArtifactNames) {
   doLast {
     download {
       src "$archivesLocation/$sourceArchiveName"
-      dest "$sourceWorkspace/$sourceArchiveName"
+      dest "$releasedSourceWorkspace/$sourceArchiveName"
       overwrite false
     }
-    List<String> interestedJars = decompressBinaries(artifactNames, file("$sourceWorkspace/$sourceArchiveName"), source, sourceWorkspace)
+    List<String> interestedJars = decompressBinaries(artifactNames, file("$releasedSourceWorkspace/$sourceArchiveName"), source, releasedSourceWorkspace)
     file(sourceArtifactsPath).write(interestedJars.join("\n"))
   }
 }
@@ -268,10 +271,10 @@ task resolveTargetArtifactsFromUrl(dependsOn: initArtifactNames) {
   doLast {
     download {
       src "$archivesLocation/$targetArchiveName"
-      dest "$targetWorkspace/$targetArchiveName"
+      dest "$releasedTargetWorkspace/$targetArchiveName"
       overwrite false
     }
-    List<String> interestedJars = decompressBinaries(artifactNames, file("$targetWorkspace/$targetArchiveName"), target, targetWorkspace)
+    List<String> interestedJars = decompressBinaries(artifactNames, file("$releasedTargetWorkspace/$targetArchiveName"), target, releasedTargetWorkspace)
     file(targetArtifactsPath).write(interestedJars.join("\n"))
   }
 }
