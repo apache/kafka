@@ -1201,7 +1201,7 @@ class Partition(val topicPartition: TopicPartition,
     partitionString.append("Topic: " + topic)
     partitionString.append("; Partition: " + partitionId)
     partitionString.append("; Leader: " + leaderReplicaIdOpt)
-    partitionString.append("; AllReplicas: " + remoteReplicasMap.keys.mkString(","))
+    partitionString.append("; AllReplicas: " + allReplicaIds.mkString(","))
     partitionString.append("; InSyncReplicas: " + inSyncReplicas.mkString(","))
     partitionString.toString
   }

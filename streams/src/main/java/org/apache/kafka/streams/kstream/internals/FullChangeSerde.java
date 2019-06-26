@@ -72,7 +72,7 @@ public final class FullChangeSerde<T> {
      * We used to serialize a Change into a single byte[]. Now, we don't anymore, but we still keep this logic here
      * so that we can produce the legacy format to test that we can still deserialize it.
      */
-    public static byte[] composeLegacyFormat(final Change<byte[]> serialChange) {
+    public static byte[] mergeChangeArraysIntoSingleLegacyFormattedArray(final Change<byte[]> serialChange) {
         if (serialChange == null) {
             return null;
         }
@@ -99,7 +99,7 @@ public final class FullChangeSerde<T> {
      * We used to serialize a Change into a single byte[]. Now, we don't anymore, but we still
      * need to be able to read it (so that we can load the state store from previously-written changelog records).
      */
-    public static Change<byte[]> decomposeLegacyFormat(final byte[] data) {
+    public static Change<byte[]> decomposeLegacyFormattedArrayIntoChangeArrays(final byte[] data) {
         if (data == null) {
             return null;
         }
