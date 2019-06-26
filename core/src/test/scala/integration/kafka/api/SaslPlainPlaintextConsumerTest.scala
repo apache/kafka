@@ -53,7 +53,7 @@ class SaslPlainPlaintextConsumerTest extends BaseConsumerTest with SaslSetup {
   }
 
   /**
-   * Checks that everyone can access ZkUtils.SecureZkRootPaths and ZkUtils.SensitiveZkRootPaths
+   * Checks that everyone can access ZkData.SecureZkRootPaths and ZkData.SensitiveZkRootPaths
    * when zookeeper.set.acl=false, even if ZooKeeper is SASL-enabled.
    */
   @Test

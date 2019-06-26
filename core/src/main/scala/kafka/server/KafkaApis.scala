@@ -2337,25 +2337,26 @@ class KafkaApis(val requestChannel: RequestChannel,
       trace("Sending create token response for correlation id %d to client %s."
         .format(request.header.correlationId, request.header.clientId))
       sendResponseMaybeThrottle(request, requestThrottleMs =>
-        new CreateDelegationTokenResponse(requestThrottleMs, createResult.error, request.session.principal, createResult.issueTimestamp,
+        CreateDelegationTokenResponse.prepareResponse(requestThrottleMs, createResult.error, request.session.principal, createResult.issueTimestamp,
           createResult.expiryTimestamp, createResult.maxTimestamp, createResult.tokenId, ByteBuffer.wrap(createResult.hmac)))
     }
 
     if (!allowTokenRequests(request))
       sendResponseMaybeThrottle(request, requestThrottleMs =>
-        new CreateDelegationTokenResponse(requestThrottleMs, Errors.DELEGATION_TOKEN_REQUEST_NOT_ALLOWED, request.session.principal))
+        CreateDelegationTokenResponse.prepareResponse(requestThrottleMs, Errors.DELEGATION_TOKEN_REQUEST_NOT_ALLOWED, request.session.principal))
     else {
-      val renewerList = createTokenRequest.renewers().asScala.toList
+      val renewerList = createTokenRequest.data.renewers.asScala.toList.map(entry =>
+        new KafkaPrincipal(entry.principalType, entry.principalName))
 
-      if (renewerList.exists(principal =>  principal.getPrincipalType != KafkaPrincipal.USER_TYPE)) {
+      if (renewerList.exists(principal => principal.getPrincipalType != KafkaPrincipal.USER_TYPE)) {
         sendResponseMaybeThrottle(request, requestThrottleMs =>
-          new CreateDelegationTokenResponse(requestThrottleMs, Errors.INVALID_PRINCIPAL_TYPE, request.session.principal))
+          CreateDelegationTokenResponse.prepareResponse(requestThrottleMs, Errors.INVALID_PRINCIPAL_TYPE, request.session.principal))
       }
       else {
         tokenManager.createToken(
           request.session.principal,
-          createTokenRequest.renewers().asScala.toList,
-          createTokenRequest.maxLifeTime(),
+          renewerList,
+          createTokenRequest.data.maxLifetimeMs,
           sendResponseCallback
         )
       }
