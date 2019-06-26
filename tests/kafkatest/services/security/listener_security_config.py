@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-class ListenerConfig:
+class ListenerSecurityConfig:
 
     def __init__(self, use_separate_interbroker_listener=False,
                  client_listener_overrides={}, interbroker_listener_overrides={}):
