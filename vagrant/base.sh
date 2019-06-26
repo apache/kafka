@@ -130,7 +130,7 @@ chmod a+rw /opt/kafka-1.1.1
 get_kafka 2.0.1 2.12
 chmod a+rw /opt/kafka-2.0.1
 get_kafka 2.1.1 2.12
-chmod a+rw /opt/kafka-2.1.0
+chmod a+rw /opt/kafka-2.1.1
 
 
 # For EC2 nodes, we want to use /mnt, which should have the local disk. On local
