@@ -1267,9 +1267,8 @@ class ReplicaManager(val config: KafkaConfig,
                             correlationId: Int,
                             responseMap: mutable.Map[TopicPartition, Errors],
                             highWatermarkCheckpoints: OffsetCheckpoints) : Set[Partition] = {
-    def partitionsInfoString(partitions: Iterable[Partition]): String = {
+    def partitionsInfoString(partitions: Iterable[Partition]): String =
       partitions.map(p => s"${p.topicPartition} with leader ${partitionStates(p).basePartitionState.leader}").mkString(", ")
-    }
 
     stateChangeLogger.info(s"Handling LeaderAndIsr request correlationId $correlationId from controller $controllerId " +
       s"epoch $controllerEpoch starting the become-follower transition for ${partitionStates.size} partitions (${partitionsInfoString(partitionStates.keys)})")
@@ -1366,7 +1365,7 @@ class ReplicaManager(val config: KafkaConfig,
     }
 
     stateChangeLogger.info(s"Completed LeaderAndIsr request correlationId $correlationId from controller $controllerId " +
-      s"epoch $controllerEpoch for the become-follower transition for ${partitionStates.size} partitions")
+      s"epoch $controllerEpoch for the become-follower transition for ${partitionStates.size} partitions ${partitionsInfoString(partitionStates.keys)}")
 
     partitionsToMakeFollower
   }
