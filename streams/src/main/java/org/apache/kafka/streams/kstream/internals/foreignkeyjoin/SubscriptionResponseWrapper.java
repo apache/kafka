@@ -19,17 +19,28 @@ package org.apache.kafka.streams.kstream.internals.foreignkeyjoin;
 public class SubscriptionResponseWrapper<FV> {
     final private long[] originalValueHash;
     final private FV foreignValue;
+    final private boolean propagate;
 
     public SubscriptionResponseWrapper(long[] originalValueHash, FV foreignValue) {
+        this(originalValueHash, foreignValue, false);
+    }
+
+    public SubscriptionResponseWrapper(long[] originalValueHash, FV foreignValue, boolean propagate) {
         this.originalValueHash = originalValueHash;
         this.foreignValue = foreignValue;
+        this.propagate = propagate;
+    }
+
+    public long[] getOriginalValueHash() {
+        return originalValueHash;
     }
 
     public FV getForeignValue() {
         return foreignValue;
     }
 
-    public long[] getOriginalValueHash() {
-        return originalValueHash;
+    public boolean isPropagate() {
+        return propagate;
     }
+
 }

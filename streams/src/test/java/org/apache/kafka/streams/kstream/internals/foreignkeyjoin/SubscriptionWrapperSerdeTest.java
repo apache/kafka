@@ -19,8 +19,7 @@ package org.apache.kafka.streams.kstream.internals.foreignkeyjoin;
 import org.apache.kafka.common.utils.Murmur3;
 import org.junit.Test;
 
-import static org.junit.Assert.assertArrayEquals;
-import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.*;
 
 
 public class SubscriptionWrapperSerdeTest {
@@ -30,11 +29,11 @@ public class SubscriptionWrapperSerdeTest {
     public void serdeTest() {
         SubscriptionWrapperSerde swSerde = new SubscriptionWrapperSerde();
         long[] hashedValue = Murmur3.hash128(new byte[]{(byte)(0xFF), (byte)(0xAA), (byte)(0x00), (byte)(0x19)});
-        SubscriptionWrapper wrapper = new SubscriptionWrapper(hashedValue, false);
+        SubscriptionWrapper wrapper = new SubscriptionWrapper(hashedValue, SubscriptionWrapper.Instruction.DELETE_KEY_AND_PROPAGATE);
         byte[] serialized = swSerde.serializer().serialize(null, wrapper);
         SubscriptionWrapper deserialized = (SubscriptionWrapper)swSerde.deserializer().deserialize(null, serialized);
 
-        assertFalse(deserialized.isPropagate());
+        assertEquals(deserialized.getInstruction(), SubscriptionWrapper.Instruction.DELETE_KEY_AND_PROPAGATE);
         assertArrayEquals(hashedValue, deserialized.getHash());
     }
 }

@@ -67,13 +67,14 @@ public class SubscriptionResponseWrapperSerde<V> implements Serde<SubscriptionRe
 
         @Override
         public byte[] serialize(String topic, SubscriptionResponseWrapper<V> data) {
-            //{16-bytes Hash}{n-bytes serialized data}
+            //{16-bytes Hash}{1-byte propagate boolean}{n-bytes serialized data}
             byte[] serializedData = serializer.serialize(topic, data.getForeignValue());
             int length = (serializedData == null ? 0 : serializedData.length);
-            final ByteBuffer buf = ByteBuffer.allocate(16 + length);
+            final ByteBuffer buf = ByteBuffer.allocate(17 + length);
             long[] elem = data.getOriginalValueHash();
             buf.putLong(elem[0]);
             buf.putLong(elem[1]);
+            buf.put((byte) (data.isPropagate() ? 1 : 0 ));
             if (serializedData != null)
                 buf.put(serializedData);
             return buf.array();
@@ -99,16 +100,23 @@ public class SubscriptionResponseWrapperSerde<V> implements Serde<SubscriptionRe
 
         @Override
         public SubscriptionResponseWrapper<V> deserialize(String topic, byte[] data) {
-            //{16-bytes Hash}{n-bytes serialized data}
+            //{16-bytes Hash}{1-byte propagate boolean}{n-bytes serialized data}
+            final int size = 17;
             final ByteBuffer buf = ByteBuffer.wrap(data);
             final long[] hash = new long[2];
             hash[0] = buf.getLong();
             hash[1] = buf.getLong();
-            final byte[] serializedValue = (data.length == 16 ? null : new byte[data.length - 16]);
+
+            boolean propagate = false;
+            if (buf.get() == 0x01) {
+                propagate = true;
+            }
+
+            final byte[] serializedValue = (data.length == size ? null : new byte[data.length - size]);
             if (serializedValue != null)
-                buf.get(serializedValue, 0, data.length-16);
+                buf.get(serializedValue, 0, data.length-size);
             V value = deserializer.deserialize(topic, serializedValue);
-            return new SubscriptionResponseWrapper<>(hash, value);
+            return new SubscriptionResponseWrapper<>(hash, value, propagate);
         }
 
         @Override

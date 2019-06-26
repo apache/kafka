@@ -26,6 +26,7 @@ import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
+import org.apache.kafka.streams.state.ValueAndTimestamp;
 
 public class SubscriptionResolverJoinProcessorSupplier<K, V, VO, VR> implements ProcessorSupplier<K, SubscriptionResponseWrapper<VO>> {
     private final KTableValueGetterSupplier<K, V> valueGetterSupplier;
@@ -55,17 +56,18 @@ public class SubscriptionResolverJoinProcessorSupplier<K, V, VO, VR> implements 
 
             @Override
             public void process(K key, SubscriptionResponseWrapper<VO> value) {
-                final V currentValue = valueGetter.get(key).value();
+                final ValueAndTimestamp<V> currentValueWithTimestamp = valueGetter.get(key);
+
+                //final V currentValue = currentValueWithTimestamp.value();
                 //We are unable to access the actual source topic name for the valueSerializer at runtime, without
                 //tightly coupling to KTableRepartitionProcessorSupplier.
                 //While we can use the source topic from where the events came from, we shouldn't serialize against it
                 //as it causes problems with the confluent schema registry, which requires each topic have only a single
                 //registered schema.
                 String dummySerializationTopic = context().topic() + "-join-resolver";
-                long[] currentHash = (currentValue == null ?
+                long[] currentHash = (currentValueWithTimestamp == null ?
                         Murmur3.hash128(new byte[]{}):
-
-                        Murmur3.hash128(valueSerializer.serialize(dummySerializationTopic, currentValue)));
+                        Murmur3.hash128(valueSerializer.serialize(dummySerializationTopic, currentValueWithTimestamp.value())));
 
                 final long[] messageHash = value.getOriginalValueHash();
 
@@ -74,8 +76,10 @@ public class SubscriptionResolverJoinProcessorSupplier<K, V, VO, VR> implements 
                     final VO otherValue = value.getForeignValue();
                     //Inner Join
                     VR result = null;
-                    if (otherValue != null && currentValue != null) {
-                        result = joiner.apply(currentValue, otherValue);
+                    if (value.isPropagate()) {
+                        result = null;
+                    } else if (otherValue != null && currentValueWithTimestamp != null) {
+                        result = joiner.apply(currentValueWithTimestamp.value(), otherValue);
                     }
                     context().forward(key, result);
                 }

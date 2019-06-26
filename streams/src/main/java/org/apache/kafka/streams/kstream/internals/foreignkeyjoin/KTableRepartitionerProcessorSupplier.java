@@ -27,8 +27,7 @@ import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 
-import java.security.NoSuchAlgorithmException;
-import java.util.Random;
+import static org.apache.kafka.streams.kstream.internals.foreignkeyjoin.SubscriptionWrapper.Instruction.*;
 
 public class KTableRepartitionerProcessorSupplier<K, KO, V> implements ProcessorSupplier<K, Change<V>> {
 
@@ -60,6 +59,16 @@ public class KTableRepartitionerProcessorSupplier<K, KO, V> implements Processor
                     Murmur3.hash128(new byte[]{}):
                     Murmur3.hash128(valueSerializer.serialize(context().topic(), change.newValue)));
 
+            //DELETE_KEY_NO_PROPAGATE
+              //Send nothing. Do not propagate.
+            //DELETE_KEY_AND_PROPAGATE
+              //Send (k, null)
+            //PROPAGATE_NULL_IF_NO_FK_VAL_AVAILABLE (changing foreign key, but FK+Val may not exist)
+              //Send (k, fk-val) OR
+              //Send (k, null) if fk-val does not exist
+            //PROPAGATE_ONLY_IF_FK_VAL_AVAILABLE (first time ever sending key)
+              //Send (k, fk-val) only if fk-val exists.
+
             if (change.oldValue != null) {
                 final KO oldForeignKey = mapper.apply(change.oldValue);
                 final CombinedKey<KO, K> combinedOldKey = new CombinedKey<>(oldForeignKey, key);
@@ -70,22 +79,28 @@ public class KTableRepartitionerProcessorSupplier<K, KO, V> implements Processor
                     //Requires equal to be defined...
                     if (oldForeignKey.equals(extractedNewForeignKey)) {
                         //Same foreign key. Just propagate onwards.
-                        context().forward(combinedNewKey, new SubscriptionWrapper(currentHash, true));
+                        context().forward(combinedNewKey, new SubscriptionWrapper(currentHash, PROPAGATE_NULL_IF_NO_FK_VAL_AVAILABLE));
                     } else {
                         //Different Foreign Key - delete the old key value and propagate the new one.
-                        //Note that we indicate that we don't want to propagate the delete to the join output.
-                        //The downstream processor to delete it from the local state store, but not propagate it.
-                        context().forward(combinedOldKey, new SubscriptionWrapper(nullHash, false));
-                        context().forward(combinedNewKey, new SubscriptionWrapper(currentHash, true));
+
+                        //Delete it from the oldKey's state store
+                        context().forward(combinedOldKey, new SubscriptionWrapper(nullHash, DELETE_KEY_NO_PROPAGATE));
+                        // Add to the newKey's state store. Additionally, propagate null if no FK is found there,
+                        // since we must "unset" any output set by the previous FK-join. This is true for both INNER
+                        // and LEFT join.
+                        context().forward(combinedNewKey, new SubscriptionWrapper(currentHash, PROPAGATE_NULL_IF_NO_FK_VAL_AVAILABLE));
                     }
                 } else {
-                    //A propagatable delete. Set hash to null instead of using the null hash code.
-                    context().forward(combinedOldKey, new SubscriptionWrapper(nullHash, true));
+                    //A simple propagatable delete. Delete from the state store and propagate the delete onwards.
+                    context().forward(combinedOldKey, new SubscriptionWrapper(nullHash, DELETE_KEY_AND_PROPAGATE));
                 }
             } else if (change.newValue != null) {
+                //change.oldValue is null, which means it was deleted at least once before, or it is brand new.
+                //In either case, we only need to propagate if the FK_VAL is available, as the null from the delete would
+                //have been propagated otherwise.
                 final KO extractedForeignKeyValue = mapper.apply(change.newValue);
                 final CombinedKey<KO, K> newCombinedKeyValue = new CombinedKey<>(extractedForeignKeyValue, key);
-                context().forward(newCombinedKeyValue, new SubscriptionWrapper(currentHash, true));
+                context().forward(newCombinedKeyValue, new SubscriptionWrapper(currentHash, PROPAGATE_ONLY_IF_FK_VAL_AVAILABLE));
             }
         }
 

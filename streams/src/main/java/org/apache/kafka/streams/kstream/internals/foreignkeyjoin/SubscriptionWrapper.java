@@ -17,19 +17,50 @@
 package org.apache.kafka.streams.kstream.internals.foreignkeyjoin;
 
 public class SubscriptionWrapper {
-    final private boolean propagate;
     final private long[] hash;
+    final private Instruction instruction;
 
-    public SubscriptionWrapper(long[] hash, boolean propagate ) {
-        this.propagate = propagate;
+    public enum Instruction {
+        DELETE_KEY_NO_PROPAGATE((byte)0x00),
+        //Send nothing. Do not propagate.
+        DELETE_KEY_AND_PROPAGATE((byte)0x01),
+        //Send (k, null)
+        PROPAGATE_NULL_IF_NO_FK_VAL_AVAILABLE((byte)0x02), //(changing foreign key, but FK+Val may not exist)
+        //Send (k, fk-val) OR
+        //Send (k, null) if fk-val does not exist
+        PROPAGATE_ONLY_IF_FK_VAL_AVAILABLE((byte)0x03); //(first time ever sending key)
+        //Send (k, fk-val) only if fk-val exists.
+
+        private byte value;
+        Instruction(byte value) {
+            this.value = value;
+        }
+
+        public byte getByte() {
+            return value;
+        }
+
+        public static Instruction fromValue(byte value) {
+            for (Instruction i: values()) {
+                if (i.value == value) {
+                    return i;
+                }
+            }
+            throw new IllegalArgumentException("Unknown instruction byte value = " + value);
+        }
+    }
+
+    public SubscriptionWrapper(long[] hash, Instruction instruction ) {
+        this.instruction = instruction;
         this.hash = hash;
     }
 
-    public boolean isPropagate() {
-        return propagate;
+    public Instruction getInstruction() {
+        return instruction;
     }
 
     public long[] getHash() {
         return hash;
     }
 }
+

@@ -35,6 +35,8 @@ import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import static org.apache.kafka.streams.kstream.internals.foreignkeyjoin.SubscriptionWrapper.Instruction.*;
+
 public class ForeignKeySingleLookupProcessorSupplier<K, KO, VO>
         implements ProcessorSupplier<CombinedKey<KO, K>, SubscriptionWrapper> {
     private static final Logger LOG = LoggerFactory.getLogger(ForeignKeySingleLookupProcessorSupplier.class);
@@ -88,17 +90,33 @@ public class ForeignKeySingleLookupProcessorSupplier<K, KO, VO>
                     store.put(key, ValueAndTimestamp.make(value, context().timestamp()));
                 }
 
-
                 ValueAndTimestamp<VO> foreignValueAndTime = foreignValues.get(foreignKey);
-                if (foreignValueAndTime == null) {
+                if (value.getInstruction() == DELETE_KEY_NO_PROPAGATE) {
                     return;
-                }
-
-                //Propagate valid requests for the foreign event data as well as deletions.
-                if ((value.getHash() != null && foreignValueAndTime.value() != null) ||
-                    (value.getHash() == null && value.isPropagate())) {
-                    final SubscriptionResponseWrapper<VO> newValue = new SubscriptionResponseWrapper<>(value.getHash(), foreignValueAndTime.value());
+                } else if (value.getInstruction() == DELETE_KEY_AND_PROPAGATE) {
+                    final SubscriptionResponseWrapper<VO> newValue = new SubscriptionResponseWrapper<>(value.getHash(), null);
                     context().forward(key.getPrimaryKey(), newValue, To.all().withTimestamp(context().timestamp()));
+                    return;
+                } else if (value.getInstruction() == PROPAGATE_NULL_IF_NO_FK_VAL_AVAILABLE) {
+                    if (foreignValueAndTime == null) {
+                        //This one needs to go through regardless of LEFT or INNER join, since the extracted FK was
+                        //changed and there is no match for it. We must propagate the (key, null) to ensure that the
+                        //downstream consumers are alerted to this fact.
+                        final SubscriptionResponseWrapper<VO> newValue = new SubscriptionResponseWrapper<>(value.getHash(), null, true);
+                        context().forward(key.getPrimaryKey(), newValue, To.all().withTimestamp(context().timestamp()));
+                        return;
+                    } else {
+                        final SubscriptionResponseWrapper<VO> newValue = new SubscriptionResponseWrapper<>(value.getHash(), foreignValueAndTime.value());
+                        context().forward(key.getPrimaryKey(), newValue, To.all().withTimestamp(context().timestamp()));
+                        return;
+                    }
+
+                } else if (value.getInstruction() == PROPAGATE_ONLY_IF_FK_VAL_AVAILABLE) {
+                    if (foreignValueAndTime != null) {
+                        final SubscriptionResponseWrapper<VO> newValue = new SubscriptionResponseWrapper<>(value.getHash(), foreignValueAndTime.value());
+                        context().forward(key.getPrimaryKey(), newValue, To.all().withTimestamp(context().timestamp()));
+                        return;
+                    }
                 }
             }
         };

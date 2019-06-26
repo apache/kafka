@@ -76,6 +76,7 @@ public class KTableKTablePrefixScanProcessorSupplier<K, KO, VO> implements Proce
             final CombinedKey<KO, K> prefixKey = new CombinedKey<>(key);
             //Perform the prefixScan and propagate the results
             final KeyValueIterator<CombinedKey<KO, K>, ValueAndTimestamp<SubscriptionWrapper>> prefixScanResults = prefixValueGetter.prefixScan(prefixKey);
+            //TODO - handle going from (f-key,val)->(f-key,null). Must update output in inner join scenario to be nulled as well.
             while (prefixScanResults.hasNext()) {
                 final KeyValue<CombinedKey<KO, K>, ValueAndTimestamp<SubscriptionWrapper>> scanResult = prefixScanResults.next();
                 context().forward(scanResult.key.getPrimaryKey(), new SubscriptionResponseWrapper<>(scanResult.value.value().getHash(), value.newValue));

@@ -23,6 +23,9 @@ import org.apache.kafka.common.serialization.Serializer;
 import java.nio.ByteBuffer;
 import java.util.Map;
 
+import static org.apache.kafka.streams.kstream.internals.foreignkeyjoin.SubscriptionWrapper.Instruction.DELETE_KEY_AND_PROPAGATE;
+import static org.apache.kafka.streams.kstream.internals.foreignkeyjoin.SubscriptionWrapper.Instruction.DELETE_KEY_NO_PROPAGATE;
+
 public class SubscriptionWrapperSerde implements Serde {
     private final SubscriptionWrapperSerializer serializer;
     private final SubscriptionWrapperDeserializer deserializer;
@@ -74,7 +77,7 @@ public class SubscriptionWrapperSerde implements Serde {
             long[] elem = data.getHash();
             buf.putLong(elem[0]);
             buf.putLong(elem[1]);
-            buf.put((byte) (data.isPropagate() ? 1 : 0 ));
+            buf.put(data.getInstruction().getByte());
             return buf.array();
         }
 
@@ -97,11 +100,8 @@ public class SubscriptionWrapperSerde implements Serde {
             final long[] hash = new long[2];
             hash[0] = buf.getLong();
             hash[1] = buf.getLong();
-            boolean propagate = true;
-            if (buf.get(16) == 0x00) {
-                propagate = false;
-            }
-            return new SubscriptionWrapper(hash, propagate);
+            byte instruction = buf.get(16);
+            return new SubscriptionWrapper(hash, SubscriptionWrapper.Instruction.fromValue(instruction));
         }
 
         @Override
