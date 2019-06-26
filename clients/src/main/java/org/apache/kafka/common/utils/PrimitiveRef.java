@@ -14,24 +14,23 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common.network;
-
-import java.nio.ByteBuffer;
+package org.apache.kafka.common.utils;
 
 /**
- * A size delimited Send that consists of a 4 byte network-ordered size N followed by N bytes of content
+ * Primitive reference used to pass primitive typed values as parameter-by-reference.
+ *
+ * This is cheaper than using Atomic references.
  */
-public class NetworkSend extends ByteBufferSend {
-
-    public NetworkSend(String destination, ByteBuffer buffer) {
-        super(destination, sizeBuffer(buffer.remaining()), buffer);
+public class PrimitiveRef {
+    public static IntRef ofInt(int value) {
+        return new IntRef(value);
     }
 
-    private static ByteBuffer sizeBuffer(int size) {
-        ByteBuffer sizeBuffer = ByteBuffer.allocate(4);
-        sizeBuffer.putInt(size);
-        sizeBuffer.rewind();
-        return sizeBuffer;
-    }
+    public static class IntRef {
+        public int value;
 
+        IntRef(int value) {
+            this.value = value;
+        }
+    }
 }

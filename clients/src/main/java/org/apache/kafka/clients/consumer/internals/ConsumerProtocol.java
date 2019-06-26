@@ -27,12 +27,8 @@ import org.apache.kafka.common.utils.CollectionUtils;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
-
-import static org.apache.kafka.common.protocol.CommonFields.ERROR_CODE;
 
 /**
  * ConsumerProtocol contains the schemas for consumer subscriptions and assignments for use with
@@ -56,7 +52,22 @@ import static org.apache.kafka.common.protocol.CommonFields.ERROR_CODE;
  *   ErrorCode          => [int16]
  * </pre>
  *
- * Older versioned formats can be inferred by reading the code below.
+ * Version 0 format:
+ *
+ * <pre>
+ * Subscription => Version Topics
+ *   Version    => Int16
+ *   Topics     => [String]
+ *   UserData   => Bytes
+ *
+ * Assignment => Version TopicPartitions
+ *   Version            => int16
+ *   AssignedPartitions => [Topic Partitions]
+ *     Topic            => String
+ *     Partitions       => [int32]
+ *   UserData           => Bytes
+ * </pre>
+ *
  *
  * The current implementation assumes that future versions will not break compatibility. When
  * it encounters a newer version, it parses it using the current format. This basically means
@@ -73,6 +84,8 @@ public class ConsumerProtocol {
     public static final String OWNED_PARTITIONS_KEY_NAME = "owned_partitions";
     public static final String TOPIC_PARTITIONS_KEY_NAME = "topic_partitions";
     public static final String USER_DATA_KEY_NAME = "user_data";
+
+    public static final Field.Int16 ERROR_CODE = new Field.Int16("error_code", "Assignment error code");
 
     public static final short CONSUMER_PROTOCOL_V0 = 0;
     public static final short CONSUMER_PROTOCOL_V1 = 1;
@@ -106,13 +119,13 @@ public class ConsumerProtocol {
         new Field(USER_DATA_KEY_NAME, Type.NULLABLE_BYTES),
         ERROR_CODE);
 
-    public enum Errors {
+    public enum AssignmentError {
         NONE(0),
         NEED_REJOIN(1);
 
         private final short code;
 
-        Errors(final int code) {
+        AssignmentError(final int code) {
             this.code = (short) code;
         }
 
@@ -120,7 +133,7 @@ public class ConsumerProtocol {
             return code;
         }
 
-        public static Errors fromCode(final short code) {
+        public static AssignmentError fromCode(final short code) {
             switch (code) {
                 case 0:
                     return NONE;
@@ -179,20 +192,17 @@ public class ConsumerProtocol {
         }
     }
 
-    public static PartitionAssignor.Subscription buildSubscriptionV0(ByteBuffer buffer, Optional<String> groupInstanceId) {
+    public static PartitionAssignor.Subscription deserializeSubscriptionV0(ByteBuffer buffer) {
         Struct struct = SUBSCRIPTION_V0.read(buffer);
         ByteBuffer userData = struct.getBytes(USER_DATA_KEY_NAME);
         List<String> topics = new ArrayList<>();
         for (Object topicObj : struct.getArray(TOPICS_KEY_NAME))
             topics.add((String) topicObj);
-        return new PartitionAssignor.Subscription(CONSUMER_PROTOCOL_V0,
-                                                  topics,
-                                                  userData,
-                                                  Collections.emptyList(),
-                                                  groupInstanceId);
+
+        return new PartitionAssignor.Subscription(CONSUMER_PROTOCOL_V0, topics, userData);
     }
 
-    public static PartitionAssignor.Subscription buildSubscriptionV1(ByteBuffer buffer, Optional<String> groupInstanceId) {
+    public static PartitionAssignor.Subscription deserializeSubscriptionV1(ByteBuffer buffer) {
         Struct struct = SUBSCRIPTION_V1.read(buffer);
         ByteBuffer userData = struct.getBytes(USER_DATA_KEY_NAME);
         List<String> topics = new ArrayList<>();
@@ -208,14 +218,10 @@ public class ConsumerProtocol {
             }
         }
 
-        return new PartitionAssignor.Subscription(CONSUMER_PROTOCOL_V1,
-                                                  topics,
-                                                  userData,
-                                                  ownedPartitions,
-                                                  groupInstanceId);
+        return new PartitionAssignor.Subscription(CONSUMER_PROTOCOL_V1, topics, userData, ownedPartitions);
     }
 
-    public static PartitionAssignor.Subscription buildSubscription(ByteBuffer buffer, Optional<String> groupInstanceId) {
+    public static PartitionAssignor.Subscription deserializeSubscription(ByteBuffer buffer) {
         Struct header = CONSUMER_PROTOCOL_HEADER_SCHEMA.read(buffer);
         Short version = header.getShort(VERSION_KEY_NAME);
 
@@ -224,14 +230,14 @@ public class ConsumerProtocol {
 
         switch (version) {
             case CONSUMER_PROTOCOL_V0:
-                return buildSubscriptionV0(buffer, groupInstanceId);
+                return deserializeSubscriptionV0(buffer);
 
             case CONSUMER_PROTOCOL_V1:
-                return buildSubscriptionV1(buffer, groupInstanceId);
+                return deserializeSubscriptionV1(buffer);
 
             // assume all higher versions can be parsed as V1
             default:
-                return buildSubscriptionV1(buffer, groupInstanceId);
+                return deserializeSubscriptionV1(buffer);
         }
     }
 
@@ -267,7 +273,7 @@ public class ConsumerProtocol {
             topicAssignments.add(topicAssignment);
         }
         struct.set(TOPIC_PARTITIONS_KEY_NAME, topicAssignments.toArray());
-        struct.set(ERROR_CODE.name, assignment.error().code);
+        struct.set(ERROR_CODE, assignment.error().code);
 
         ByteBuffer buffer = ByteBuffer.allocate(CONSUMER_PROTOCOL_HEADER_V1.sizeOf() + ASSIGNMENT_V1.sizeOf(struct));
         CONSUMER_PROTOCOL_HEADER_V1.writeTo(buffer);
@@ -316,7 +322,7 @@ public class ConsumerProtocol {
             }
         }
 
-        Errors error = Errors.fromCode(struct.get(ERROR_CODE));
+        AssignmentError error = AssignmentError.fromCode(struct.get(ERROR_CODE));
 
         return new PartitionAssignor.Assignment(CONSUMER_PROTOCOL_V1, partitions, userData, error);
     }

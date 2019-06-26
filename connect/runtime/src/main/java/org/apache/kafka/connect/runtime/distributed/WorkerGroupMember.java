@@ -183,8 +183,8 @@ public class WorkerGroupMember {
         coordinator.requestRejoin();
     }
 
-    public void maybeLeaveGroup() {
-        coordinator.maybeLeaveGroup();
+    public void maybeLeaveGroup(String leaveReason) {
+        coordinator.maybeLeaveGroup(leaveReason);
     }
 
     public String ownerUrl(String connector) {

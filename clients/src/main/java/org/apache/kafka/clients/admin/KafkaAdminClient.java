@@ -61,6 +61,9 @@ import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
+import org.apache.kafka.common.message.CreateDelegationTokenRequestData;
+import org.apache.kafka.common.message.CreateDelegationTokenRequestData.CreatableRenewers;
+import org.apache.kafka.common.message.CreateDelegationTokenResponseData;
 import org.apache.kafka.common.message.CreateTopicsRequestData;
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopicCollection;
 import org.apache.kafka.common.message.CreateTopicsResponseData.CreatableTopicResult;
@@ -138,6 +141,7 @@ import org.apache.kafka.common.requests.OffsetFetchRequest;
 import org.apache.kafka.common.requests.OffsetFetchResponse;
 import org.apache.kafka.common.requests.RenewDelegationTokenRequest;
 import org.apache.kafka.common.requests.RenewDelegationTokenResponse;
+import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.security.token.delegation.DelegationToken;
 import org.apache.kafka.common.security.token.delegation.TokenInformation;
 import org.apache.kafka.common.utils.AppInfoParser;
@@ -2389,12 +2393,21 @@ public class KafkaAdminClient extends AdminClient {
     public CreateDelegationTokenResult createDelegationToken(final CreateDelegationTokenOptions options) {
         final KafkaFutureImpl<DelegationToken> delegationTokenFuture = new KafkaFutureImpl<>();
         final long now = time.milliseconds();
+        List<CreatableRenewers> renewers = new ArrayList<>();
+        for (KafkaPrincipal principal : options.renewers()) {
+            renewers.add(new CreatableRenewers()
+                    .setPrincipalName(principal.getName())
+                    .setPrincipalType(principal.getPrincipalType()));
+        }
         runnable.call(new Call("createDelegationToken", calcDeadlineMs(now, options.timeoutMs()),
             new LeastLoadedNodeProvider()) {
 
             @Override
-            AbstractRequest.Builder createRequest(int timeoutMs) {
-                return new CreateDelegationTokenRequest.Builder(options.renewers(), options.maxlifeTimeMs());
+            AbstractRequest.Builder<CreateDelegationTokenRequest> createRequest(int timeoutMs) {
+                return new CreateDelegationTokenRequest.Builder(
+                        new CreateDelegationTokenRequestData()
+                            .setRenewers(renewers)
+                            .setMaxLifetimeMs(options.maxlifeTimeMs()));
             }
 
             @Override
@@ -2403,9 +2416,10 @@ public class KafkaAdminClient extends AdminClient {
                 if (response.hasError()) {
                     delegationTokenFuture.completeExceptionally(response.error().exception());
                 } else {
-                    TokenInformation tokenInfo =  new TokenInformation(response.tokenId(), response.owner(),
-                        options.renewers(), response.issueTimestamp(), response.maxTimestamp(), response.expiryTimestamp());
-                    DelegationToken token = new DelegationToken(tokenInfo, response.hmacBytes());
+                    CreateDelegationTokenResponseData data = response.data();
+                    TokenInformation tokenInfo =  new TokenInformation(data.tokenId(), new KafkaPrincipal(data.principalType(), data.principalName()),
+                        options.renewers(), data.issueTimestampMs(), data.maxTimestampMs(), data.expiryTimestampMs());
+                    DelegationToken token = new DelegationToken(tokenInfo, data.hmac());
                     delegationTokenFuture.complete(token);
                 }
             }
