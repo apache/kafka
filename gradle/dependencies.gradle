@@ -22,7 +22,7 @@ ext {
   libs = [:]
   
   // Enabled by default when commands like `testAll` are invoked
-  defaultScalaVersions = [ '2.11', '2.12', '2.13' ]
+  defaultScalaVersions = [ '2.11', '2.12' ]
   // Available if -PscalaVersion is used. This is useful when we want to support a Scala version that has
   // a higher minimum Java requirement than Kafka. This was previously the case for Scala 2.12 and Java 7.
   availableScalaVersions = [ '2.11', '2.12', '2.13' ]
