@@ -807,8 +807,7 @@ class SocketServerTest {
     def requestMetricMeters = YammerMetrics
       .defaultRegistry
       .allMetrics.asScala
-      .filterKeys(k => k.getType == "RequestMetrics")
-      .collect { case (k, metric: Meter) => (k.toString, metric.count) }
+      .collect { case (k, metric: Meter) if k.getType == "RequestMetrics" => (k.toString, metric.count) }
 
     assertEquals(nonZeroMeters, requestMetricMeters.filter { case (_, value) => value != 0 })
     server.shutdown()
@@ -822,7 +821,7 @@ class SocketServerTest {
     val nonZeroMetricNamesAndValues = YammerMetrics
       .defaultRegistry
       .allMetrics.asScala
-      .filterKeys(k => k.getName.endsWith("IdlePercent") || k.getName.endsWith("NetworkProcessorAvgIdlePercent"))
+      .filter { case (k, _) => k.getName.endsWith("IdlePercent") || k.getName.endsWith("NetworkProcessorAvgIdlePercent") }
       .collect { case (k, metric: Gauge[_]) => (k, metric.value().asInstanceOf[Double]) }
       .filter { case (_, value) => value != 0.0 && !value.equals(Double.NaN) }
 
