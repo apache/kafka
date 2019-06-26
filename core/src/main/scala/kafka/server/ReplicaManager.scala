@@ -338,7 +338,7 @@ class ReplicaManager(val config: KafkaConfig,
   }
 
   def stopReplica(topicPartition: TopicPartition, deletePartition: Boolean)  = {
-    stateChangeLogger.info(s"Handling stop replica (delete=$deletePartition) for partition $topicPartition")
+    stateChangeLogger.trace(s"Handling stop replica (delete=$deletePartition) for partition $topicPartition")
 
     if (deletePartition) {
       getPartition(topicPartition) match {
@@ -380,6 +380,9 @@ class ReplicaManager(val config: KafkaConfig,
         // First stop fetchers for all partitions, then stop the corresponding replicas
         replicaFetcherManager.removeFetcherForPartitions(partitions)
         replicaAlterLogDirsManager.removeFetcherForPartitions(partitions)
+
+        var stopReplicaCount = partitions.size
+        stateChangeLogger.info(s"Handling stop replica (delete=${stopReplicaRequest.deletePartitions}) for ${stopReplicaCount} partitions (${partitions.mkString(", ")})")
         for (topicPartition <- partitions){
           try {
             stopReplica(topicPartition, stopReplicaRequest.deletePartitions)
@@ -389,8 +392,10 @@ class ReplicaManager(val config: KafkaConfig,
               stateChangeLogger.error(s"Ignoring stop replica (delete=${stopReplicaRequest.deletePartitions}) for " +
                 s"partition $topicPartition due to storage exception", e)
               responseMap.put(topicPartition, Errors.KAFKA_STORAGE_ERROR)
+              stopReplicaCount -= 1
           }
         }
+        stateChangeLogger.info(s"Sucessfully handled stop replica (delete=${stopReplicaRequest.deletePartitions}) for ${stopReplicaCount} partitions")
         (responseMap, Errors.NONE)
       }
     }
