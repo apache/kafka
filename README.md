@@ -87,10 +87,12 @@ This can be controlled the following way:
 
     ./gradlew apiCompatibilityReport -PfailOnSemanticIncompatibility=true
 
-### Generating an API compatibility report between branches  ###
-*Note that the branches need to be local.*
+### Generating an API compatibility report between releases  ###
 
      ./gradlew apiCompatibilityReport -Psource=1.1.0 -Ptarget=1.1.1
+
+### Generating an API compatibility report between a release and a local branch ###
+
      ./gradlew apiCompatibilityReport -Psource=2.0.0 -Ptarget=my-patch-branch
     
 ### Building a binary release gzipped tar ball ###
