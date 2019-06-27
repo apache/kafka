@@ -18,6 +18,9 @@ package org.apache.kafka.common.utils;
 
 /**
  * This class was taken from Hive org.apache.hive.common.util;
+ * https://github.com/apache/hive/blob/master/storage-api/src/java/org/apache/hive/common/util/Murmur3.java
+ * Commit: dffa3a16588bc8e95b9d0ab5af295a74e06ef702
+ *
  *
  * Murmur3 is successor to Murmur2 fast non-crytographic hash algorithms.
  *

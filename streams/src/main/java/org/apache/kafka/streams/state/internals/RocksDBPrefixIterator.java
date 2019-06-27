@@ -45,7 +45,7 @@ class RocksDBPrefixIterator extends RocksDbIterator {
         final byte[] rawNextKey = super.peekNextKey().get();
         for (int i = 0; i < rawPrefix.length; i++) {
             if (i == rawNextKey.length) {
-                throw new ArrayIndexOutOfBoundsException("Unexpected RocksDB Key Value. Should have been skipped with seek.");
+                throw new IllegalStateException("Unexpected RocksDB Key Value. Should have been skipped with seek.");
             }
             if (rawNextKey[i] != rawPrefix[i]) {
                 return false;

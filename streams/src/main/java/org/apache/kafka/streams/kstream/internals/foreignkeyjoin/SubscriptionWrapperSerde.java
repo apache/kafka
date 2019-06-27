@@ -23,9 +23,6 @@ import org.apache.kafka.common.serialization.Serializer;
 import java.nio.ByteBuffer;
 import java.util.Map;
 
-import static org.apache.kafka.streams.kstream.internals.foreignkeyjoin.SubscriptionWrapper.Instruction.DELETE_KEY_AND_PROPAGATE;
-import static org.apache.kafka.streams.kstream.internals.foreignkeyjoin.SubscriptionWrapper.Instruction.DELETE_KEY_NO_PROPAGATE;
-
 public class SubscriptionWrapperSerde implements Serde {
     private final SubscriptionWrapperSerializer serializer;
     private final SubscriptionWrapperDeserializer deserializer;
