@@ -2121,7 +2121,8 @@ public interface KTable<K, V> {
 
     /**
      *
-     * A many:1 join with the other table. The foreignKeyExtractor selects the key to join with the other table.
+     * Join records of this [[KTable]] with another [[KTable]]'s records using non-windowed inner join. Records from this
+     * table are joined according to the result of keyExtractor on the other KTable.
      *
      * @param other the table containing the records to be joined on. Keyed by KO
      * @param foreignKeyExtractor extracts the key (KO) from this table's value (V)
@@ -2139,7 +2140,8 @@ public interface KTable<K, V> {
 
     /**
      *
-     * A many:1 join with the other table. The foreignKeyExtractor selects the key to join with the other table.
+     * Join records of this [[KTable]] with another [[KTable]]'s records using non-windowed left join. Records from this
+     * table are joined according to the result of keyExtractor on the other KTable.
      *
      * @param other the table containing the records to be joined on. Keyed by KO
      * @param foreignKeyExtractor extracts the key (KO) from this table's value (V)
