@@ -18,7 +18,7 @@ package org.apache.kafka.streams.scala
 
 import java.util.Properties
 
-import org.apache.kafka.streams._
+import org.apache.kafka.streams.{KafkaStreams, KeyValue, StreamsConfig}
 import org.apache.kafka.streams.scala.ImplicitConversions._
 import org.apache.kafka.streams.scala.kstream._
 import org.apache.kafka.streams.scala.utils.StreamToTableJoinScalaIntegrationTestBase
@@ -49,9 +49,9 @@ class StreamToTableJoinScalaIntegrationTestImplicitSerdes extends StreamToTableJ
 
     val builder = new StreamsBuilder()
 
-    val userClicksStream: KStream[String, Long] = builder.stream[String, Long](userClicksTopic)
+    val userClicksStream: KStream[String, Long] = builder.stream(userClicksTopic)
 
-    val userRegionsTable: KTable[String, String] = builder.table[String, String](userRegionsTopic)
+    val userRegionsTable: KTable[String, String] = builder.table(userRegionsTopic)
 
     // Compute the total per region by summing the individual click counts per region.
     val clicksPerRegion: KTable[String, Long] =
@@ -92,9 +92,9 @@ class StreamToTableJoinScalaIntegrationTestImplicitSerdes extends StreamToTableJ
 
     val builder = new StreamsBuilder()
 
-    val userClicksStream: KStream[String, Long] = builder.stream[String, Long](userClicksTopic)
+    val userClicksStream: KStream[String, Long] = builder.stream(userClicksTopic)
 
-    val userRegionsTable: KTable[String, String] = builder.table[String, String](userRegionsTopic)
+    val userRegionsTable: KTable[String, String] = builder.table(userRegionsTopic)
 
     // Compute the total per region by summing the individual click counts per region.
     val clicksPerRegion: KTable[String, Long] =
