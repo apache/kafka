@@ -113,6 +113,26 @@ public final class Stores {
     }
 
     /**
+     * Create a persistent {@link KeyValueBytesStoreSupplier} where the entries have an underlying TTL.
+     * <p>
+     * This store supplier can be passed into a {@link #keyValueStoreBuilder(KeyValueBytesStoreSupplier, Serde, Serde)}.
+     * If you have no need for the keys have a TTL, you should use
+     * {@link #persistentTimestampedKeyValueStore(String)} to create a store supplier instead.
+     * If you want to create a {@link TimestampedKeyValueStore} you should use
+     * {@link #persistentTimestampedKeyValueStore(String)} to create a store supplier instead.
+     *
+     * @param name  name of the store (cannot be {@code null})
+     * @param ttlInSeconds  TTL value in seconds
+     *
+     * @return an instance of a {@link KeyValueBytesStoreSupplier} that can be used
+     * to build a persistent key-value store
+     */
+    public static KeyValueBytesStoreSupplier persistentKeyValueTtlStore(final String name, final int ttlInSeconds) {
+        Objects.requireNonNull(name, "name cannot be null");
+        return new RocksDbKeyValueBytesStoreSupplier(name, ttlInSeconds);
+    }
+
+    /**
      * Create an in-memory {@link KeyValueBytesStoreSupplier}.
      * <p>
      * This store supplier can be passed into a {@link #keyValueStoreBuilder(KeyValueBytesStoreSupplier, Serde, Serde)}
@@ -453,6 +473,27 @@ public final class Stores {
                                                                                                       final Serde<V> valueSerde) {
         Objects.requireNonNull(supplier, "supplier cannot be null");
         return new TimestampedKeyValueStoreBuilder<>(supplier, keySerde, valueSerde, Time.SYSTEM);
+    }
+
+    /**
+     * Creates a {@link StoreBuilder} that can be used to build a {@link KeyValueStore} with a TTL.
+     * <p>
+     * The provided supplier should <strong>not</strong> be a supplier for
+     * {@link TimestampedKeyValueStore TimestampedKeyValueStores}, and the underlying supplier <strong>should</strong>
+     * be a PersistentKeyValueStore with a TTL.
+     *
+     * @param supplier      a {@link KeyValueBytesStoreSupplier} (cannot be {@code null})
+     * @param keySerde      the key serde to use
+     * @param valueSerde    the value serde to use; if the serialized bytes is {@code null} for put operations,
+     *                      it is treated as delete
+     * @param <K>           key type
+     * @param <V>           value type
+     * @return an instance of a {@link StoreBuilder} that can build a {@link KeyValueStore} w/ an underlying TTL
+     */
+    public static <K, V> StoreBuilder<KeyValueStore<K, V>> keyValueTtlStoreBuilder(final KeyValueBytesStoreSupplier supplier,
+                                                                                final Serde<K> keySerde,
+                                                                                final Serde<V> valueSerde) {
+        return keyValueStoreBuilder(supplier, keySerde, valueSerde);
     }
 
     /**

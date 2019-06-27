@@ -78,7 +78,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BulkLoadingSt
     private static final long BLOCK_CACHE_SIZE = 50 * 1024 * 1024L;
     private static final long BLOCK_SIZE = 4096L;
     private static final int MAX_WRITE_BUFFERS = 3;
-    private static final String DB_FILE_DIR = "rocksdb";
+    protected static final String DB_FILE_DIR = "rocksdb";
 
     final String name;
     private final String parentDir;
