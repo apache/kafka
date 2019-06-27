@@ -31,17 +31,18 @@ object Log4jController {
 
   /**
     * Returns a map of the log4j loggers and their assigned log level.
-    * If a logger does not have a log level assigned, we return the string "null" for that logger
+    * If a logger does not have a log level assigned, we return the root logger's log level
     */
   def loggers: mutable.Map[String, String] = {
     val logs = new mutable.HashMap[String, String]()
-    logs.put(ROOT_LOGGER, existingLogger(ROOT_LOGGER).getLevel.toString)
+    val rootLoggerLvl = existingLogger(ROOT_LOGGER).getLevel.toString
+    logs.put(ROOT_LOGGER, rootLoggerLvl)
 
     val loggers = LogManager.getCurrentLoggers
     while (loggers.hasMoreElements) {
       val logger = loggers.nextElement().asInstanceOf[Logger]
       if (logger != null) {
-        val level = if (logger.getLevel != null) logger.getLevel.toString else "null"
+        val level = if (logger.getLevel != null) logger.getLevel.toString else rootLoggerLvl
         logs.put(logger.getName, level)
       }
     }
@@ -98,7 +99,8 @@ class Log4jController extends Log4jControllerMBean {
       val level = log.getLevel
       if (level != null)
         log.getLevel.toString
-      else "Null log level."
+      else
+        Log4jController.existingLogger(Log4jController.ROOT_LOGGER).getLevel.toString
     }
     else "No such logger."
   }
