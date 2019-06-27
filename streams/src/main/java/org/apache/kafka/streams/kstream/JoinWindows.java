@@ -222,7 +222,7 @@ public final class JoinWindows extends Windows<Window> {
      *
      * @param afterWindowEnd The grace period to admit late-arriving events to a window.
      * @return this updated builder
-     * @throws IllegalArgumentException if the {@code afterWindowEnd} is negative of can't be represented as {@code long milliseconds}
+     * @throws IllegalArgumentException if the {@code afterWindowEnd} is negative or can't be represented as {@code long milliseconds}
      */
     @SuppressWarnings("deprecation") // removing segments from Windows will fix this
     public JoinWindows grace(final Duration afterWindowEnd) throws IllegalArgumentException {

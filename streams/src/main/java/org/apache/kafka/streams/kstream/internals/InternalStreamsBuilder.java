@@ -186,19 +186,19 @@ public class InternalStreamsBuilder implements InternalNameProvider {
         addGraphNode(root, new StateStoreNode(builder));
     }
 
+    @SuppressWarnings("unchecked")
     public synchronized void addGlobalStore(final StoreBuilder<KeyValueStore> storeBuilder,
                                             final String sourceName,
                                             final String topic,
                                             final ConsumedInternal consumed,
                                             final String processorName,
                                             final ProcessorSupplier stateUpdateSupplier) {
-
+        final ProcessorParameters parameters = new ProcessorParameters(stateUpdateSupplier, processorName);
         final StreamsGraphNode globalStoreNode = new GlobalStoreNode(storeBuilder,
                                                                      sourceName,
                                                                      topic,
                                                                      consumed,
-                                                                     processorName,
-                                                                     stateUpdateSupplier);
+                                                                     parameters);
 
         addGraphNode(root, globalStoreNode);
     }

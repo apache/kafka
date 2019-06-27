@@ -18,39 +18,31 @@
 package org.apache.kafka.streams.kstream.internals.graph;
 
 import org.apache.kafka.streams.kstream.internals.ConsumedInternal;
-import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 
 public class GlobalStoreNode extends StateStoreNode {
 
-
     private final String sourceName;
     private final String topic;
     private final ConsumedInternal consumed;
-    private final String processorName;
-    private final ProcessorSupplier stateUpdateSupplier;
-
+    private final ProcessorParameters parameters;
 
     public GlobalStoreNode(final StoreBuilder<KeyValueStore> storeBuilder,
                            final String sourceName,
                            final String topic,
                            final ConsumedInternal consumed,
-                           final String processorName,
-                           final ProcessorSupplier stateUpdateSupplier) {
+                           final ProcessorParameters parameters) {
 
         super(storeBuilder);
         this.sourceName = sourceName;
         this.topic = topic;
         this.consumed = consumed;
-        this.processorName = processorName;
-        this.stateUpdateSupplier = stateUpdateSupplier;
+        this.parameters = parameters;
     }
 
-
     @Override
-    @SuppressWarnings("unchecked")
     public void writeToTopology(final InternalTopologyBuilder topologyBuilder) {
         storeBuilder.withLoggingDisabled();
         topologyBuilder.addGlobalStore(storeBuilder,
@@ -59,18 +51,17 @@ public class GlobalStoreNode extends StateStoreNode {
                                        consumed.keyDeserializer(),
                                        consumed.valueDeserializer(),
                                        topic,
-                                       processorName,
-                                       stateUpdateSupplier);
+                                       parameters.processorName(),
+                                       parameters.processorSupplier());
 
     }
-
 
     @Override
     public String toString() {
         return "GlobalStoreNode{" +
                "sourceName='" + sourceName + '\'' +
                ", topic='" + topic + '\'' +
-               ", processorName='" + processorName + '\'' +
+               ", processorName='" + parameters.processorName() + '\'' +
                "} ";
     }
 }
