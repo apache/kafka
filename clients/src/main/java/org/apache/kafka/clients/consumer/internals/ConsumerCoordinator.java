@@ -71,7 +71,6 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
 /**
@@ -273,17 +272,9 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         return null;
     }
 
-    private Exception maybeRevokePartitions(final Predicate<TopicPartition> predicate) {
-        Set<TopicPartition> ownedPartitions = new HashSet<>(subscriptions.assignedPartitions());
-
-        Set<TopicPartition> revokedPartitions = ownedPartitions.stream().filter(predicate).collect(Collectors.toSet());
-
+    private Exception maybeRevokePartitions(final Set<TopicPartition> revokedPartitions) {
         if (!revokedPartitions.isEmpty()) {
             log.info("Revoke previously assigned partitions {}", revokedPartitions);
-
-            Set<TopicPartition> leftPartitions = new HashSet<>(ownedPartitions);
-            leftPartitions.removeAll(revokedPartitions);
-            subscriptions.assignFromSubscribed(leftPartitions);
 
             ConsumerRebalanceListener listener = subscriptions.rebalanceListener();
             try {
@@ -300,30 +291,19 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         return null;
     }
 
-    private Exception maybeLostPartitions(final String rootCause, final Predicate<TopicPartition> predicate) {
-        if (subscriptions.partitionsAutoAssigned()) {
-            Set<TopicPartition> ownedPartitions = new HashSet<>(subscriptions.assignedPartitions());
+    private Exception maybeLostPartitions(final String rootCause, final Set<TopicPartition> lostPartitions) {
+        if (subscriptions.partitionsAutoAssigned() && !lostPartitions.isEmpty()) {
+            log.info("Lost previously assigned partitions {} due to {}", lostPartitions, rootCause);
 
-            Set<TopicPartition> lostPartitions = metadataSnapshot == null ? ownedPartitions :
-                ownedPartitions.stream().filter(predicate).collect(Collectors.toSet());
-
-            if (!lostPartitions.isEmpty()) {
-                log.info("Lost previously assigned partitions {} due to {}", lostPartitions, rootCause);
-
-                Set<TopicPartition> leftPartitions = new HashSet<>(ownedPartitions);
-                leftPartitions.removeAll(lostPartitions);
-                subscriptions.assignFromSubscribed(leftPartitions);
-
-                ConsumerRebalanceListener listener = subscriptions.rebalanceListener();
-                try {
-                    listener.onPartitionsLost(lostPartitions);
-                } catch (WakeupException | InterruptException e) {
-                    throw e;
-                } catch (Exception e) {
-                    log.error("User provided listener {} failed on partition being lost of {}",
-                        listener.getClass().getName(), lostPartitions, e);
-                    return e;
-                }
+            ConsumerRebalanceListener listener = subscriptions.rebalanceListener();
+            try {
+                listener.onPartitionsLost(lostPartitions);
+            } catch (WakeupException | InterruptException e) {
+                throw e;
+            } catch (Exception e) {
+                log.error("User provided listener {} failed on partition being lost of {}",
+                    listener.getClass().getName(), lostPartitions, e);
+                return e;
             }
         }
 
@@ -371,6 +351,8 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
         // execute the user's callback after rebalance
         final AtomicReference<Exception> firstException = new AtomicReference<>(null);
+        Set<TopicPartition> addedPartitions = new HashSet<>(assignedPartitions);
+        addedPartitions.removeAll(ownedPartitions);
         switch (protocol) {
             case EAGER:
                 if (!ownedPartitions.isEmpty()) {
@@ -378,16 +360,13 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                         "it is likely client is woken up before a previous pending rebalance completes its callback", ownedPartitions, protocol);
                 }
 
-                // TODO: after refactored the error handling, we need to exclude owned partitions from assigned partitions
-
-                firstException.compareAndSet(null, maybeAssignPartitions(assignedPartitions));
+                // assign partitions that are not yet owned
+                firstException.compareAndSet(null, maybeAssignPartitions(addedPartitions));
 
                 break;
 
             case COOPERATIVE:
-                Set<TopicPartition> addedPartitions = new HashSet<>(assignedPartitions);
                 Set<TopicPartition> revokedPartitions = new HashSet<>(ownedPartitions);
-                addedPartitions.removeAll(ownedPartitions);
                 revokedPartitions.removeAll(assignedPartitions);
 
                 log.info("Updating with newly assigned partitions: {}, compare with already owned partitions: {}, " +
@@ -401,7 +380,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                 firstException.compareAndSet(null, maybeAssignPartitions(addedPartitions));
 
                 // revoked partitions that was previously owned but no longer assigned
-                firstException.compareAndSet(null, maybeRevokePartitions(tp -> !assignedPartitions.contains(tp)));
+                firstException.compareAndSet(null, maybeRevokePartitions(revokedPartitions));
 
                 // request re-join based on leader communicated error code
                 if (assignment.error() == ConsumerProtocol.AssignmentError.NEED_REJOIN) {
@@ -647,16 +626,31 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         maybeAutoCommitOffsetsSync(time.timer(rebalanceConfig.rebalanceTimeoutMs));
 
         // execute the user's callback before rebalance
+        final Set<TopicPartition> revokedPartitions;
         final AtomicReference<Exception> firstException = new AtomicReference<>(null);
         switch (protocol) {
             case EAGER:
                 // revoke all partitions
-                firstException.compareAndSet(null, maybeRevokePartitions(tp -> true));
+                revokedPartitions = new HashSet<>(subscriptions.assignedPartitions());
+                subscriptions.assignFromSubscribed(Collections.emptySet());
+
+                firstException.compareAndSet(null, maybeRevokePartitions(revokedPartitions));
                 break;
 
             case COOPERATIVE:
                 // only revoke those partitions that are not in the subscription any more.
-                firstException.compareAndSet(null, maybeRevokePartitions(tp -> !subscriptions.subscription().contains(tp.topic())));
+                Set<TopicPartition> ownedPartitions = new HashSet<>(subscriptions.assignedPartitions());
+                revokedPartitions = ownedPartitions.stream()
+                    .filter(tp -> !subscriptions.subscription().contains(tp.topic()))
+                    .collect(Collectors.toSet());
+
+                if (!revokedPartitions.isEmpty()) {
+                    ownedPartitions.removeAll(revokedPartitions);
+                    subscriptions.assignFromSubscribed(ownedPartitions);
+
+                    firstException.compareAndSet(null, maybeRevokePartitions(revokedPartitions));
+                }
+
                 break;
         }
 
@@ -670,8 +664,11 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
     @Override
     public void resetGeneration(String errorMessage) {
-        // revoke all partitions
-        Exception e = maybeLostPartitions(errorMessage, tp -> true);
+        // lost all partitions
+        Set<TopicPartition> lostPartitions = new HashSet<>(subscriptions.assignedPartitions());
+        subscriptions.assignFromSubscribed(Collections.emptySet());
+
+        Exception e = maybeLostPartitions(errorMessage, lostPartitions);
         super.resetGeneration(errorMessage);
 
         if (e != null) {
@@ -686,11 +683,21 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
         // we need to rejoin if we performed the assignment and metadata has changed
         if (assignmentSnapshot != null && !assignmentSnapshot.matches(metadataSnapshot)) {
-            Exception e = maybeLostPartitions("topic metadata has changed and therefore some topics may not exist any more",
-                tp -> !metadataSnapshot.partitionsPerTopic().containsKey(tp.topic()));
+            Set<TopicPartition> ownedPartitions = new HashSet<>(subscriptions.assignedPartitions());
+            Set<TopicPartition> lostPartitions = ownedPartitions.stream()
+                .filter(tp -> !metadataSnapshot.partitionsPerTopic().containsKey(tp.topic()))
+                .collect(Collectors.toSet());
 
-            if (e != null) {
-                throw new KafkaException("User rebalance callback throws an error", e);
+            if (!lostPartitions.isEmpty()) {
+                ownedPartitions.removeAll(lostPartitions);
+                subscriptions.assignFromSubscribed(ownedPartitions);
+
+                Exception e = maybeLostPartitions("topic metadata has changed and therefore some topics may not exist any more",
+                    lostPartitions);
+
+                if (e != null) {
+                    throw new KafkaException("User rebalance callback throws an error", e);
+                }
             }
 
             return true;
