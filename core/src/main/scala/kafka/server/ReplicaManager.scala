@@ -1074,6 +1074,7 @@ class ReplicaManager(val config: KafkaConfig,
           val partitionInfo = new DefaultPartitionView(replicaInfoSet.asJava, leaderReplica)
           replicaSelector.select(tp, clientMetadata, partitionInfo).asScala
             .filter(!_.endpoint.isEmpty)
+            .filter(!_.equals(leaderReplica))
             .map(_.endpoint.id)
         } else {
           None
