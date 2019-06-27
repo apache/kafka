@@ -96,7 +96,6 @@ public class TestInputTopic<K, V> {
         this(driver, topicName, keySerde.serializer(), valueSerde.serializer(), startTimestamp, autoAdvance);
     }
 
-
     /**
      * Create a test input topic to pipe messages in.
      * Validate inputs
@@ -132,7 +131,6 @@ public class TestInputTopic<K, V> {
 
     }
 
-
     /**
      * Advances the internally tracked time.
      *
@@ -146,8 +144,8 @@ public class TestInputTopic<K, V> {
         currentTime = currentTime.plus(advance);
     }
 
-    private long getTimestampAndAdvanced() {
-        final long timestamp = currentTime.toEpochMilli();
+    private Instant getTimestampAndAdvanced() {
+        final Instant timestamp = currentTime;
         currentTime = currentTime.plus(advanceDuration);
         return timestamp;
     }
@@ -160,7 +158,7 @@ public class TestInputTopic<K, V> {
     @SuppressWarnings({"WeakerAccess", "unused"})
     public void pipeInput(final TestRecord<K, V> record) {
         //if record timestamp not set get timestamp and advance
-        long timestamp = record.timestamp() == null ? getTimestampAndAdvanced() : record.timestamp();
+        Instant timestamp = (record.getRecordTime() == null) ? getTimestampAndAdvanced() : record.getRecordTime();
         driver.pipeRecord(topic, record, keySerializer, valueSerializer, timestamp);
     }
 
@@ -193,9 +191,23 @@ public class TestInputTopic<K, V> {
      * @param timestampMs the record timestamp
      */
     @SuppressWarnings({"WeakerAccess", "unused"})
+    @Deprecated
     public void pipeInput(final V value,
                           final long timestampMs) {
         pipeInput(new TestRecord<>(null, value, timestampMs));
+    }
+
+    /**
+     * Send an input message with the given key and timestamp on the topic and then commit the messages.
+     * Does not auto advance internally tracked time.
+     *
+     * @param value       the record value
+     * @param timestamp the record timestamp
+     */
+    @SuppressWarnings({"WeakerAccess", "unused"})
+    public void pipeInput(final V value,
+                          final Instant timestamp) {
+        pipeInput(new TestRecord<>(null, value, timestamp));
     }
 
     /**
@@ -207,6 +219,7 @@ public class TestInputTopic<K, V> {
      * @param timestampMs the record timestamp
      */
     @SuppressWarnings({"WeakerAccess", "unused"})
+    @Deprecated
     public void pipeInput(final K key,
                           final V value,
                           final long timestampMs) {
@@ -214,36 +227,18 @@ public class TestInputTopic<K, V> {
     }
 
     /**
-     * Send an input message with the given key, value and headers on the topic and then commit the messages.
-     * The timestamp will be generated based on the constructor provided start time and time will auto advance.
-     *
-     * @param key     the record key
-     * @param value   the record value
-     * @param headers the record headers
-     */
-    @SuppressWarnings({"WeakerAccess", "unused"})
-    public void pipeInput(final K key,
-                          final V value,
-                          final Headers headers) {
-        pipeInput(new TestRecord<>(key, value, headers));
-    }
-
-
-    /**
-     * Send an input message with the given key, value, timestamp and headers on the topic and then commit the messages.
+     * Send an input message with the given key, value and timestamp on the topic and then commit the messages.
      * Does not auto advance internally tracked time.
      *
      * @param key         the record key
      * @param value       the record value
-     * @param headers     the record headers
-     * @param timestampMs the record timestamp
+     * @param timestamp the record timestamp
      */
     @SuppressWarnings({"WeakerAccess", "unused"})
     public void pipeInput(final K key,
                           final V value,
-                          final Headers headers,
-                          final long timestampMs) {
-        pipeInput(new TestRecord<>(key, value, headers, timestampMs));
+                          final Instant timestamp) {
+        pipeInput(new TestRecord<>(key, value, timestamp));
     }
 
     /**
@@ -291,16 +286,16 @@ public class TestInputTopic<K, V> {
      *
      * @param keyValues      the list of KeyValue records
      * @param startTimestamp the timestamp for the first generated record
-     * @param advanceMs      the time difference between two consecutive generated records
+     * @param advance        the time difference between two consecutive generated records
      */
     @SuppressWarnings({"WeakerAccess", "unused"})
     public void pipeKeyValueList(final List<KeyValue<K, V>> keyValues,
-                                 final long startTimestamp,
-                                 final long advanceMs) {
-        long timeMs = startTimestamp;
+                                 final Instant startTimestamp,
+                                 final Duration advance) {
+        Instant recordTime = startTimestamp;
         for (final KeyValue<K, V> keyValue : keyValues) {
-            pipeInput(keyValue.key, keyValue.value, timeMs);
-            timeMs += advanceMs;
+            pipeInput(keyValue.key, keyValue.value, recordTime);
+            recordTime = recordTime.plus(advance);
         }
     }
 
@@ -310,16 +305,16 @@ public class TestInputTopic<K, V> {
      *
      * @param values         the list of KeyValue records
      * @param startTimestamp the timestamp for the first generated record
-     * @param advanceMs      the time difference between two consecutive generated records
+     * @param advance        the time difference between two consecutive generated records
      */
     @SuppressWarnings({"WeakerAccess", "unused"})
     public void pipeValueList(final List<V> values,
-                              final long startTimestamp,
-                              final long advanceMs) {
-        long timeMs = startTimestamp;
+                              final Instant startTimestamp,
+                              final Duration advance) {
+        Instant recordTime = startTimestamp;
         for (final V value : values) {
-            pipeInput(value, timeMs);
-            timeMs += advanceMs;
+            pipeInput(value, recordTime);
+            recordTime = recordTime.plus(advance);
         }
     }
 

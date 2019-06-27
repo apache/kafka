@@ -90,6 +90,7 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
+import java.util.Objects;
 import java.util.Properties;
 import java.util.Queue;
 import java.util.Set;
@@ -240,6 +241,21 @@ public class TopologyTestDriver implements Closeable {
                               final long initialWallClockTimeMs) {
         this(topology.internalTopologyBuilder, config, initialWallClockTimeMs);
     }
+
+    /**
+     * Create a new test diver instance.
+     *
+     * @param topology               the topology to be tested
+     * @param config                 the configuration for the topology
+     * @param initialWallClockTime   the initial value of internally mocked wall-clock time
+     */
+    @SuppressWarnings("WeakerAccess")
+    public TopologyTestDriver(final Topology topology,
+                              final Properties config,
+                              final Instant initialWallClockTime) {
+        this(topology.internalTopologyBuilder, config, initialWallClockTime == null ? System.currentTimeMillis() : initialWallClockTime.toEpochMilli());
+    }
+
 
     /**
      * Create a new test diver instance.
@@ -517,8 +533,27 @@ public class TopologyTestDriver implements Closeable {
      * @param advanceMs the amount of time to advance wall-clock time in milliseconds
      */
     @SuppressWarnings("WeakerAccess")
+    @Deprecated
     public void advanceWallClockTime(final long advanceMs) {
         mockWallClockTime.sleep(advanceMs);
+        if (task != null) {
+            task.maybePunctuateSystemTime();
+            task.commit();
+        }
+        captureOutputRecords();
+    }
+
+    /**
+     * Advances the internally mocked wall-clock time.
+     * This might trigger a {@link PunctuationType#WALL_CLOCK_TIME wall-clock} type
+     * {@link ProcessorContext#schedule(Duration, PunctuationType, Punctuator) punctuations}.
+     *
+     * @param advance the amount of time to advance wall-clock time
+     */
+    @SuppressWarnings("WeakerAccess")
+    public void advanceWallClockTime(final Duration advance) {
+        Objects.requireNonNull(advance, "advance cannot be null");
+        mockWallClockTime.sleep(advance.toMillis());
         if (task != null) {
             task.maybePunctuateSystemTime();
             task.commit();
@@ -643,18 +678,21 @@ public class TopologyTestDriver implements Closeable {
      * Serialize an input recond and send on the specified topic to the topology and then
      * commit the messages.
      *
+     * @param topic           the name of the topic
      * @param record          TestRecord to be send
      * @param keySerializer   the key serializer
      * @param valueSerializer the value serializer
+     * @param time            timestamp to override the record timestamp
      */
     @SuppressWarnings("WeakerAccess")
     <K, V> void pipeRecord(final String topic,
                            final TestRecord<K, V> record,
                            final Serializer<K> keySerializer,
                            final Serializer<V> valueSerializer,
-                           final long timestamp) {
+                           final Instant time) {
         final byte[] serializedKey = keySerializer.serialize(topic, record.headers(), record.key());
         final byte[] serializedValue = valueSerializer.serialize(topic, record.headers(), record.value());
+        long timestamp = time != null ? time.toEpochMilli() : record.timestamp();
         pipeRecord(topic, timestamp, serializedKey, serializedValue, record.headers());
     }
 

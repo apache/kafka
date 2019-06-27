@@ -195,11 +195,11 @@ public class TestOutputTopic<K, V> {
         return output;
     }
 
-    final long getQueueSize() {
+    public final long getQueueSize() {
         return driver.getQueueSize(topic);
     }
 
-    final boolean isEmpty() {
+    public final boolean isEmpty() {
         return getQueueSize() == 0;
     };
 

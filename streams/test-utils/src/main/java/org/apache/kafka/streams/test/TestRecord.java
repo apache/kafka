@@ -22,6 +22,8 @@ import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 
+import java.time.Instant;
+
 /**
  * TODO
  *
@@ -53,10 +55,28 @@ public class TestRecord<K, V> {
     private final Headers headers;
     private final K key;
     private final V value;
-    private final Long timestamp;
+    private final Instant recordTime;
+
 
     /**
-     * Creates a record with a specified timestamp to be sent to a specified topic and partition
+     * Creates a record with a specified Instant
+     *
+     * @param key The key that will be included in the record
+     * @param value The record contents
+     * @param headers the headers that will be included in the record
+     * @param recordTime The timestamp of the record as Instant. If null,
+     *                  the timestamp is assigned using Instant.now() or internally tracked time.
+     */
+    public TestRecord(final K key, V value, final Headers headers, final Instant recordTime) {
+        this.key = key;
+        this.value = value;
+        this.recordTime = recordTime;
+        this.headers = new RecordHeaders(headers);
+    }
+
+
+    /**
+     * Creates a record with a specified timestamp
      * 
      * @param key The key that will be included in the record
      * @param value The record contents
@@ -65,17 +85,32 @@ public class TestRecord<K, V> {
      *                  the timestamp is assigned using System.currentTimeMillis() or internally tracked time.
      */
     public TestRecord(final K key, V value, final Headers headers, final Long timestamp) {
-        if (timestamp != null && timestamp < 0)
-            throw new IllegalArgumentException(
-                    String.format("Invalid timestamp: %d. Timestamp should always be non-negative or null.", timestamp));
+        if (timestamp != null) {
+            if (timestamp < 0)
+                throw new IllegalArgumentException(
+                        String.format("Invalid timestamp: %d. Timestamp should always be non-negative or null.", timestamp));
+            this.recordTime = Instant.ofEpochMilli(timestamp);
+        } else
+            this.recordTime = null;
         this.key = key;
         this.value = value;
-        this.timestamp = timestamp;
         this.headers = new RecordHeaders(headers);
     }
 
     /**
-     * Creates a record with a specified timestamp to be sent to a specified topic and partition
+     * Creates a record with a specified Instant
+     *
+     * @param key The key that will be included in the record
+     * @param value The record contents
+     * @param recordTime The timestamp of the record as Instant. If null,
+     *                  the timestamp is assigned using Instant.now() or internally tracked time.
+     */
+    public TestRecord(final K key, V value, final Instant recordTime) {
+        this(key, value, null, recordTime);
+    }
+
+    /**
+     * Creates a record with a specified timestamp
      *
      * @param key The key that will be included in the record
      * @param value The record contents
@@ -87,24 +122,30 @@ public class TestRecord<K, V> {
     }
 
     /**
-     * Creates a record to be sent to a specified topic and partition
+     * Creates a record
      *
      * @param key The key that will be included in the record
      * @param value The record contents
      * @param headers The headers that will be included in the record
      */
     public TestRecord(final K key, final V value, final Headers headers) {
-        this(key, value, headers, null);
+        this.key = key;
+        this.value = value;
+        this.headers = new RecordHeaders(headers);
+        this.recordTime = null;
     }
     
     /**
-     * Creates a record to be sent to a specified topic and partition
+     * Creates a record
      *
      * @param key The key that will be included in the record
      * @param value The record contents
      */
     public TestRecord(final K key, final V value) {
-        this(key, value, null, null);
+        this.key = key;
+        this.value = value;
+        this.headers = new RecordHeaders();
+        this.recordTime = null;
     }
 
     /**
@@ -113,7 +154,7 @@ public class TestRecord<K, V> {
      * @param value The record contents
      */
     public TestRecord(final V value) {
-        this(null, value, null, null);
+        this(null, value);
     }
 
     /**
@@ -160,7 +201,7 @@ public class TestRecord<K, V> {
      * @return The timestamp, which is in milliseconds since epoch.
      */
     public Long timestamp() {
-        return timestamp;
+        return this.recordTime == null ? null : this.recordTime.toEpochMilli();
     }
 
     public Headers getHeaders() {
@@ -175,8 +216,8 @@ public class TestRecord<K, V> {
         return value;
     }
 
-    public Long getTimestamp() {
-        return timestamp;
+    public Instant getRecordTime() {
+        return recordTime;
     }
 
     @Override
@@ -184,9 +225,9 @@ public class TestRecord<K, V> {
         String headers = this.headers == null ? "null" : this.headers.toString();
         String key = this.key == null ? "null" : this.key.toString();
         String value = this.value == null ? "null" : this.value.toString();
-        String timestamp = this.timestamp == null ? "null" : this.timestamp.toString();
+        String recordTime = this.recordTime == null ? "null" : this.recordTime.toString();
         return "TestRecord(headers=" + headers + ", key=" + key + ", value=" + value +
-            ", timestamp=" + timestamp + ")";
+            ", recordTime=" + recordTime + ")";
     }
 
     @Override
@@ -204,7 +245,7 @@ public class TestRecord<K, V> {
             return false;
         else if (value != null ? !value.equals(that.value) : that.value != null) 
             return false;
-        else if (timestamp != null ? !timestamp.equals(that.timestamp) : that.timestamp != null)
+        else if (recordTime != null ? !recordTime.equals(that.recordTime) : that.recordTime != null)
             return false;
 
         return true;
@@ -215,7 +256,7 @@ public class TestRecord<K, V> {
         int result = headers != null ? headers.hashCode() : 0;
         result = 31 * result + (key != null ? key.hashCode() : 0);
         result = 31 * result + (value != null ? value.hashCode() : 0);
-        result = 31 * result + (timestamp != null ? timestamp.hashCode() : 0);
+        result = 31 * result + (recordTime != null ? recordTime.hashCode() : 0);
         return result;
     }
 }

@@ -143,12 +143,9 @@ public class TestInputTopicTest {
     @Test
     public void testTimestampMs() {
         long baseTime = 3;
-        final long advance = 2;
         final TestInputTopic<Long, String> inputTopic = testDriver.createInputTopic( INPUT_TOPIC, longSerde, stringSerde);
         final TestOutputTopic<Long, String> outputTopic = testDriver.createOutputTopic(OUTPUT_TOPIC, longSerde, stringSerde);
         inputTopic.pipeInput("Hello", baseTime);
-        //TestRecord <> actual = outputTopic.readRecord();
-        //assertThat(actual.headers(), is(equalTo(baseTime)));
         assertThat(outputTopic.readRecord(), is(equalTo(new TestRecord<Long, String>(null,"Hello", baseTime))));
 
         inputTopic.pipeInput(2L, "Kafka", ++baseTime);
@@ -156,8 +153,9 @@ public class TestInputTopicTest {
 
         final List<String> inputList = Arrays.asList("Advancing", "time");
         //Feed list of words to inputTopic and no kafka key, timestamp advancing from basetime
-        baseTime = 10;
-        inputTopic.pipeValueList(inputList, baseTime, advance);
+        final long advance = 2000;
+        baseTime = testBaseTime.toEpochMilli();
+        inputTopic.pipeValueList(inputList, testBaseTime, Duration.ofMillis(advance));
         assertThat(outputTopic.readRecord(), is(equalTo(new TestRecord<Long, String>(null,"Advancing", baseTime))));
         assertThat(outputTopic.readRecord(), is(equalTo(new TestRecord<Long, String>(null,"time", baseTime + advance))));
     }
@@ -173,41 +171,40 @@ public class TestInputTopicTest {
                 });
         final TestInputTopic<Long, String> inputTopic = testDriver.createInputTopic( INPUT_TOPIC, longSerde, stringSerde);
         final TestOutputTopic<Long, String> outputTopic = testDriver.createOutputTopic(OUTPUT_TOPIC, longSerde, stringSerde);
-        inputTopic.pipeInput(1L, "Hello", headers);
+        inputTopic.pipeInput(new TestRecord<Long, String>(1L, "Hello", headers));
         assertThat(outputTopic.readRecord(), allOf(
                 hasProperty("key", equalTo(1L)),
                 hasProperty("value", equalTo("Hello")),
                 hasProperty("headers", equalTo(headers))));
-        inputTopic.pipeInput(2L, "Kafka", headers, ++baseTime);
+        inputTopic.pipeInput(new TestRecord<Long, String>(2L, "Kafka", headers, ++baseTime));
         assertThat(outputTopic.readRecord(), is(equalTo(new TestRecord<Long, String>(2L, "Kafka", headers, baseTime))));
     }
 
     @Test
-    public void testStartTimestampMs() {
+    public void testStartTimestamp() {
         final long baseTime = testBaseTime.toEpochMilli();
-        final long advance = 2000;
+        final Duration advance = Duration.ofSeconds(2);
         final TestInputTopic<Long, String> inputTopic = testDriver.createInputTopic(INPUT_TOPIC, longSerde, stringSerde, testBaseTime, Duration.ZERO);
         final TestOutputTopic<Long, String> outputTopic = testDriver.createOutputTopic(OUTPUT_TOPIC, longSerde, stringSerde);
         inputTopic.pipeInput(1L, "Hello");
-        assertThat(outputTopic.readRecord(), is(equalTo(new TestRecord<Long, String>(1L,"Hello", baseTime))));
+        assertThat(outputTopic.readRecord(), is(equalTo(new TestRecord<Long, String>(1L,"Hello", testBaseTime))));
         inputTopic.pipeInput(2L, "World");
-        assertThat(outputTopic.readRecord(), is(equalTo(new TestRecord<Long, String>(2L,"World", baseTime))));
-        inputTopic.advanceTime(Duration.ofMillis(advance));
+        assertThat(outputTopic.readRecord(), is(equalTo(new TestRecord<Long, String>(2L,"World", testBaseTime.toEpochMilli()))));
+        inputTopic.advanceTime(advance);
         inputTopic.pipeInput(3L, "Kafka");
-        assertThat(outputTopic.readRecord(), is(equalTo(new TestRecord<Long, String>(3L,"Kafka", baseTime+advance))));
+        assertThat(outputTopic.readRecord(), is(equalTo(new TestRecord<Long, String>(3L,"Kafka", testBaseTime.plus(advance)))));
     }
 
 
     @Test
-    public void testTimestampMsAutoAdvance() {
-        final long baseTime = testBaseTime.toEpochMilli();
-        final long advance = 2000;
-        final TestInputTopic<Long, String> inputTopic = testDriver.createInputTopic( INPUT_TOPIC, longSerde, stringSerde, testBaseTime, Duration.ofMillis(advance));
+    public void testTimestampAutoAdvance() {
+        final Duration advance = Duration.ofSeconds(2);
+        final TestInputTopic<Long, String> inputTopic = testDriver.createInputTopic( INPUT_TOPIC, longSerde, stringSerde, testBaseTime, advance);
         final TestOutputTopic<Long, String> outputTopic = testDriver.createOutputTopic(OUTPUT_TOPIC, longSerde, stringSerde);
         inputTopic.pipeInput("Hello");
-        assertThat(outputTopic.readRecord(), is(equalTo(new TestRecord<Long, String>(null,"Hello", baseTime))));
+        assertThat(outputTopic.readRecord(), is(equalTo(new TestRecord<Long, String>(null,"Hello", testBaseTime))));
         inputTopic.pipeInput(2L, "Kafka");
-        assertThat(outputTopic.readRecord(), is(equalTo(new TestRecord<Long, String>(2L,"Kafka", baseTime+advance))));
+        assertThat(outputTopic.readRecord(), is(equalTo(new TestRecord<Long, String>(2L,"Kafka", testBaseTime.plus(advance)))));
     }
 
 
