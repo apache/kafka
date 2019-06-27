@@ -280,6 +280,77 @@ public class RoundRobinAssignorTest {
         assertEquals(expectedAssignment, assignment);
     }
 
+    @Test
+    public void testStaticMemberAssignmentPersistentAfterMemberIdChanges() {
+        String topic1 = "topic1";
+        String topic2 = "topic2";
+        String consumer1 = "consumer1";
+        String instance1 = "instance1";
+        String consumer2 = "consumer2";
+        String instance2 = "instance2";
+        String consumer3 = "consumer3";
+        String instance3 = "instance3";
+        Map<String, String> memberIdToInstanceId = new HashMap<>();
+        memberIdToInstanceId.put(consumer1, instance1);
+        memberIdToInstanceId.put(consumer2, instance2);
+        memberIdToInstanceId.put(consumer3, instance3);
+
+        List<String> memberIdList = Arrays.asList(consumer1, consumer2, consumer3);
+        Map<String, List<TopicPartition>> staticAssignment =
+            checkStaticAssignment(topic1, topic2, memberIdList, memberIdToInstanceId);
+        memberIdToInstanceId.clear();
+
+        // Now switch the member.id fields for each member info, the assignment should
+        // stay the same as last time.
+        String consumer4 = "consumer4";
+        String consumer5 = "consumer5";
+        memberIdToInstanceId.put(consumer4, instance1);
+        memberIdToInstanceId.put(consumer5, instance2);
+        memberIdToInstanceId.put(consumer1, instance3);
+        memberIdList = Arrays.asList(consumer4, consumer5, consumer1);
+        Map<String, List<TopicPartition>> newStaticAssignment =
+            checkStaticAssignment(topic1, topic2, memberIdList, memberIdToInstanceId);
+
+        assertEquals(staticAssignment, newStaticAssignment);
+    }
+
+    private Map<String, List<TopicPartition>> checkStaticAssignment(String topic1,
+                                                                    String topic2,
+                                                                    List<String> memberIdList,
+                                                                    Map<String, String> memberIdToInstanceId) {
+        List<MemberInfo> staticMemberInfos = new ArrayList<>();
+        for (Map.Entry<String, String> entry : memberIdToInstanceId.entrySet()) {
+            staticMemberInfos.add(new MemberInfo(entry.getKey(), Optional.of(entry.getValue())));
+        }
+
+        Map<String, Integer> partitionsPerTopic = new HashMap<>();
+        partitionsPerTopic.put(topic1, 3);
+        partitionsPerTopic.put(topic2, 3);
+        Map<String, Subscription> consumers = new HashMap<>();
+        for (MemberInfo m : staticMemberInfos) {
+            consumers.put(m.memberId, new Subscription(topics(topic1, topic2),
+                                                       null,
+                                                       Collections.emptyList(),
+                                                       m.groupInstanceId));
+        }
+
+        Map<String, List<TopicPartition>> expectedInstanceAssignment = new HashMap<>();
+        for (int i = 0; i < memberIdList.size(); i++) {
+            expectedInstanceAssignment.put(memberIdToInstanceId.get(memberIdList.get(i)),
+                                           partitions(tp(topic1, i), tp(topic2, i)));
+        }
+
+        Map<String, List<TopicPartition>> assignmentByMemberId =
+            assignor.assign(partitionsPerTopic, consumers);
+        Map<String, List<TopicPartition>> assignmentByInstanceId = new HashMap<>();
+        for (String memberId : memberIdList) {
+            assignmentByInstanceId.put(memberIdToInstanceId.get(memberId),
+                                       assignmentByMemberId.get(memberId));
+        }
+        assertEquals(expectedInstanceAssignment, assignmentByInstanceId);
+        return assignmentByInstanceId;
+    }
+
     private static List<String> topics(String... topics) {
         return Arrays.asList(topics);
     }
