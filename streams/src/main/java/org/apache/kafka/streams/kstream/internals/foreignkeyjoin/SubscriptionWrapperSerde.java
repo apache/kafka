@@ -39,7 +39,7 @@ public class SubscriptionWrapperSerde implements Serde {
     }
 
     @Override
-    public void configure(Map configs, boolean isKey) {
+    public void configure(final Map configs, final boolean isKey) {
 
     }
 
@@ -58,20 +58,20 @@ public class SubscriptionWrapperSerde implements Serde {
         return deserializer;
     }
 
-    public class SubscriptionWrapperSerializer implements Serializer<SubscriptionWrapper> {
+    private static class SubscriptionWrapperSerializer implements Serializer<SubscriptionWrapper> {
         public SubscriptionWrapperSerializer() {
         }
 
         @Override
-        public void configure(Map configs, boolean isKey) {
+        public void configure(final Map configs, final boolean isKey) {
             //Do nothing
         }
 
         @Override
-        public byte[] serialize(String topic, SubscriptionWrapper data) {
+        public byte[] serialize(final String topic, final SubscriptionWrapper data) {
             //{16-bytes Hash}{1-byte boolean propagate}
             final ByteBuffer buf = ByteBuffer.allocate(17);
-            long[] elem = data.getHash();
+            final long[] elem = data.getHash();
             buf.putLong(elem[0]);
             buf.putLong(elem[1]);
             buf.put(data.getInstruction().getByte());
@@ -84,20 +84,20 @@ public class SubscriptionWrapperSerde implements Serde {
         }
     }
 
-    public class SubscriptionWrapperDeserializer implements Deserializer<SubscriptionWrapper> {
+    private static class SubscriptionWrapperDeserializer implements Deserializer<SubscriptionWrapper> {
         @Override
-        public void configure(Map<String, ?> configs, boolean isKey) {
+        public void configure(final Map<String, ?> configs, final boolean isKey) {
             //Do nothing
         }
 
         @Override
-        public SubscriptionWrapper deserialize(String topic, byte[] data) {
+        public SubscriptionWrapper deserialize(final String topic, final byte[] data) {
             //{16-bytes Hash}{1-byte boolean propagate}
             final ByteBuffer buf = ByteBuffer.wrap(data);
             final long[] hash = new long[2];
             hash[0] = buf.getLong();
             hash[1] = buf.getLong();
-            byte instruction = buf.get(16);
+            final byte instruction = buf.get(16);
             return new SubscriptionWrapper(hash, SubscriptionWrapper.Instruction.fromValue(instruction));
         }
 

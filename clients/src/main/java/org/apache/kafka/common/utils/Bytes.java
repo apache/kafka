@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.common.utils;
 
-import org.apache.kafka.common.serialization.Serdes;
-
 import java.io.Serializable;
 import java.util.Arrays;
 import java.util.Comparator;
@@ -150,13 +148,13 @@ public class Bytes implements Comparable<Bytes> {
      */
     public static Bytes increment(Bytes input) {
         byte[] inputArr = input.get();
-        byte[] ret = new byte[inputArr.length+1];
+        byte[] ret = new byte[inputArr.length + 1];
         int carry = 1;
-        for(int i = inputArr.length-1; i >= 0; i--) {
-            if (inputArr[i] == (byte)0xFF && carry == 1) {
-                ret[i] = (byte)0x00;
+        for (int i = inputArr.length - 1; i >= 0; i--) {
+            if (inputArr[i] == (byte) 0xFF && carry == 1) {
+                ret[i] = (byte) 0x00;
             } else {
-                ret[i] = (byte)(inputArr[i] + carry);
+                ret[i] = (byte) (inputArr[i] + carry);
                 carry = 0;
             }
         }

@@ -1,4 +1,4 @@
-<?xml version="1.0"?>
+
 
 <!DOCTYPE suppressions PUBLIC
         "-//Puppy Crawl//DTD Suppressions 1.1//EN"
@@ -61,6 +61,8 @@
 
     <suppress checks="(JavaNCSS|CyclomaticComplexity|MethodLength)"
               files="CoordinatorClient.java"/>
+    <suppress checks="(UnnecessaryParentheses|BooleanExpressionComplexity|CyclomaticComplexity|WhitespaceAfter|LocalVariableName)"
+              files="Murmur3.java"/>
 
     <!-- clients tests -->
     <suppress checks="ClassDataAbstractionCoupling"
@@ -77,6 +79,9 @@
 
     <suppress checks="NPathComplexity"
               files="MemoryRecordsTest|MetricsTest"/>
+
+    <suppress checks="(WhitespaceAround|LocalVariableName|ImportControl|AvoidStarImport)"
+              files="Murmur3Test.java"/>
 
     <!-- Connect -->
     <suppress checks="ClassFanOutComplexity"
@@ -134,7 +139,7 @@
               files="(TopologyBuilder|KafkaStreams|KStreamImpl|KTableImpl|StreamThread|StreamTask).java"/>
 
     <suppress checks="MethodLength"
-              files="StreamsPartitionAssignor.java"/>
+              files="(KTableImpl|StreamsPartitionAssignor.java)"/>
 
     <suppress checks="ParameterNumber"
               files="StreamTask.java"/>

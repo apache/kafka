@@ -139,7 +139,7 @@ public class TimestampedKeyValueStoreBuilder<K, V>
         }
 
         @Override
-        public KeyValueIterator<Bytes, byte[]> prefixScan(Bytes prefix) {
+        public KeyValueIterator<Bytes, byte[]> prefixScan(final Bytes prefix) {
             return wrapped.prefixScan(prefix);
         }
 

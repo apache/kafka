@@ -34,7 +34,7 @@ public class SubscriptionResponseWrapperSerde<V> implements Serde<SubscriptionRe
     }
 
     @Override
-    public void configure(Map configs, boolean isKey) {
+    public void configure(final Map configs, final boolean isKey) {
 
     }
 
@@ -53,25 +53,25 @@ public class SubscriptionResponseWrapperSerde<V> implements Serde<SubscriptionRe
         return deserializer;
     }
 
-    public class SubscriptionResponseWrapperSerializer<V> implements Serializer<SubscriptionResponseWrapper<V>> {
+    private static class SubscriptionResponseWrapperSerializer<V> implements Serializer<SubscriptionResponseWrapper<V>> {
         private final Serializer<V> serializer;
 
-        public SubscriptionResponseWrapperSerializer(Serializer<V> serializer) {
+        public SubscriptionResponseWrapperSerializer(final Serializer<V> serializer) {
             this.serializer = serializer;
         }
 
         @Override
-        public void configure(Map configs, boolean isKey) {
+        public void configure(final Map configs, final boolean isKey) {
             //Do nothing
         }
 
         @Override
-        public byte[] serialize(String topic, SubscriptionResponseWrapper<V> data) {
+        public byte[] serialize(final String topic, final SubscriptionResponseWrapper<V> data) {
             //{16-bytes Hash}{n-bytes serialized data}
-            byte[] serializedData = serializer.serialize(topic, data.getForeignValue());
-            int length = (serializedData == null ? 0 : serializedData.length);
+            final byte[] serializedData = serializer.serialize(topic, data.getForeignValue());
+            final int length = serializedData == null ? 0 : serializedData.length;
             final ByteBuffer buf = ByteBuffer.allocate(16 + length);
-            long[] elem = data.getOriginalValueHash();
+            final long[] elem = data.getOriginalValueHash();
             buf.putLong(elem[0]);
             buf.putLong(elem[1]);
             if (serializedData != null)
@@ -85,30 +85,30 @@ public class SubscriptionResponseWrapperSerde<V> implements Serde<SubscriptionRe
         }
     }
 
-    public class SubscriptionResponseWrapperDeserializer<V> implements Deserializer<SubscriptionResponseWrapper<V>> {
+    private static class SubscriptionResponseWrapperDeserializer<V> implements Deserializer<SubscriptionResponseWrapper<V>> {
         final private Deserializer<V> deserializer;
 
-        public SubscriptionResponseWrapperDeserializer(Deserializer<V> deserializer) {
+        public SubscriptionResponseWrapperDeserializer(final Deserializer<V> deserializer) {
             this.deserializer = deserializer;
         }
 
         @Override
-        public void configure(Map<String, ?> configs, boolean isKey) {
+        public void configure(final Map<String, ?> configs, final boolean isKey) {
             //Do nothing
         }
 
         @Override
-        public SubscriptionResponseWrapper<V> deserialize(String topic, byte[] data) {
+        public SubscriptionResponseWrapper<V> deserialize(final String topic, final byte[] data) {
             //{16-bytes Hash}{n-bytes serialized data}
             final int size = 16;
             final ByteBuffer buf = ByteBuffer.wrap(data);
             final long[] hash = new long[2];
             hash[0] = buf.getLong();
             hash[1] = buf.getLong();
-            final byte[] serializedValue = (data.length == size ? null : new byte[data.length - size]);
+            final byte[] serializedValue = data.length == size ? null : new byte[data.length - size];
             if (serializedValue != null)
-                buf.get(serializedValue, 0, data.length-size);
-            V value = deserializer.deserialize(topic, serializedValue);
+                buf.get(serializedValue, 0, data.length - size);
+            final V value = deserializer.deserialize(topic, serializedValue);
             return new SubscriptionResponseWrapper<>(hash, value);
         }
 

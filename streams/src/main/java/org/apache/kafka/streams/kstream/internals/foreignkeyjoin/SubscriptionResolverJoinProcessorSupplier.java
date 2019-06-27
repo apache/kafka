@@ -48,7 +48,7 @@ public class SubscriptionResolverJoinProcessorSupplier<K, V, VO, VR> implements 
     public Processor<K, SubscriptionResponseWrapper<VO>> get() {
         return new AbstractProcessor<K, SubscriptionResponseWrapper<VO>>() {
 
-            private KTableValueGetter<K,V> valueGetter;
+            private KTableValueGetter<K, V> valueGetter;
 
             @Override
             public void init(final ProcessorContext context) {
@@ -58,7 +58,7 @@ public class SubscriptionResolverJoinProcessorSupplier<K, V, VO, VR> implements 
             }
 
             @Override
-            public void process(K key, SubscriptionResponseWrapper<VO> value) {
+            public void process(final K key, final SubscriptionResponseWrapper<VO> value) {
                 final ValueAndTimestamp<V> currentValueWithTimestamp = valueGetter.get(key);
 
                 //final V currentValue = currentValueWithTimestamp.value();
@@ -67,16 +67,16 @@ public class SubscriptionResolverJoinProcessorSupplier<K, V, VO, VR> implements 
                 //While we can use the source topic from where the events came from, we shouldn't serialize against it
                 //as it causes problems with the confluent schema registry, which requires each topic have only a single
                 //registered schema.
-                String dummySerializationTopic = context().topic() + "-join-resolver";
-                long[] currentHash = (currentValueWithTimestamp == null ?
-                        Murmur3.hash128(new byte[]{}):
-                        Murmur3.hash128(valueSerializer.serialize(dummySerializationTopic, currentValueWithTimestamp.value())));
+                final String dummySerializationTopic = context().topic() + "-join-resolver";
+                final long[] currentHash = currentValueWithTimestamp == null ?
+                        Murmur3.hash128(new byte[]{}) :
+                        Murmur3.hash128(valueSerializer.serialize(dummySerializationTopic, currentValueWithTimestamp.value()));
 
                 final long[] messageHash = value.getOriginalValueHash();
 
                 //If this value doesn't match the current value from the original table, it is stale and should be discarded.
                 if (java.util.Arrays.equals(messageHash, currentHash)) {
-                    VR result;
+                    final VR result;
 
                     if (value.getForeignValue() == null && !leftJoin ||
                             leftJoin && currentValueWithTimestamp == null && value.getForeignValue() == null) {

@@ -212,8 +212,7 @@ public class RocksDBTimestampedStore extends RocksDBStore implements Timestamped
          * @throws UnsupportedOperationException
          */
         @Override
-        public KeyValueIterator<Bytes, byte[]> prefix(Bytes prefix) {
-            //TODO - Bellemare - Test this to ensure it works
+        public KeyValueIterator<Bytes, byte[]> prefix(final Bytes prefix) {
             return new RocksDBDualCFPrefixIterator(
                     name,
                     db.newIterator(newColumnFamily),

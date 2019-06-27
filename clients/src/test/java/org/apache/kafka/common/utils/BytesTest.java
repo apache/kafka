@@ -29,16 +29,16 @@ public class BytesTest {
 
     @Test
     public void testIncrement() {
-        byte[] input = new byte[]{(byte)0xAB, (byte)0xCD, (byte)0xFF};
-        byte[] expected = new byte[]{(byte)0xAB, (byte)0xCE, (byte)0x00};
+        byte[] input = new byte[]{(byte) 0xAB, (byte) 0xCD, (byte) 0xFF};
+        byte[] expected = new byte[]{(byte) 0xAB, (byte) 0xCE, (byte) 0x00};
         Bytes output = Bytes.increment(Bytes.wrap(input));
         assertArrayEquals(output.get(), expected);
     }
 
     @Test
     public void testIncrementUpperBoundary() {
-        byte[] input = new byte[]{(byte)0xFF, (byte)0xFF, (byte)0xFF};
-        byte[] expected = new byte[]{(byte)0x01, (byte)0x00, (byte)0x00, (byte)0x00};
+        byte[] input = new byte[]{(byte) 0xFF, (byte) 0xFF, (byte) 0xFF};
+        byte[] expected = new byte[]{(byte) 0x01, (byte) 0x00, (byte) 0x00, (byte) 0x00};
         Bytes output = Bytes.increment(Bytes.wrap(input));
         assertArrayEquals(output.get(), expected);
     }
@@ -46,27 +46,27 @@ public class BytesTest {
     @Test
     public void testIncrementBoundaryWithSubmap() {
         final NavigableMap<Bytes, byte[]> map = new TreeMap<>();
-        Bytes key1 = Bytes.wrap(new byte[]{(byte)0xFF});
-        byte[] val = new byte[]{(byte)0x00};
+        Bytes key1 = Bytes.wrap(new byte[]{(byte) 0xFF});
+        byte[] val = new byte[]{(byte) 0x00};
         map.put(key1, val);
 
-        Bytes key2 = Bytes.wrap(new byte[]{(byte)0xFF, (byte)0xAA});
+        Bytes key2 = Bytes.wrap(new byte[]{(byte) 0xFF, (byte) 0xAA});
         map.put(key2, val);
 
-        Bytes key3 = Bytes.wrap(new byte[]{(byte)0xFF, (byte)0xFF, (byte)0xFF, (byte)0xFF, (byte)0xFF});
+        Bytes key3 = Bytes.wrap(new byte[]{(byte) 0xFF, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF});
         map.put(key3, val);
 
-        Bytes key4 = Bytes.wrap(new byte[]{(byte)0x00, (byte)0x01});
+        Bytes key4 = Bytes.wrap(new byte[]{(byte) 0x00, (byte) 0x01});
         map.put(key4, val);
 
-        Bytes key5 = Bytes.wrap(new byte[]{(byte)0x00, (byte)0x00, (byte)0x00, (byte)0x01});
+        Bytes key5 = Bytes.wrap(new byte[]{(byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x01});
         map.put(key5, val);
 
         Bytes prefix = key1;
         Bytes prefixEnd = Bytes.increment(prefix);
 
-        Comparator comparator = map.comparator();
-        final int result = comparator==null ? prefix.compareTo(prefixEnd) : comparator.compare(prefix, prefixEnd);
+        Comparator<? super Bytes> comparator = map.comparator();
+        final int result = comparator == null ? prefix.compareTo(prefixEnd) : comparator.compare(prefix, prefixEnd);
         NavigableMap<Bytes, byte[]> subMapResults;
         if (result > 0) {
             //Prefix increment would cause a wrap-around. Get the submap from toKey to the end of the map
@@ -86,27 +86,27 @@ public class BytesTest {
     @Test
     public void testIncrementWithSubmap() {
         final NavigableMap<Bytes, byte[]> map = new TreeMap<>();
-        Bytes key1 = Bytes.wrap(new byte[]{(byte)0xAA});
-        byte[] val = new byte[]{(byte)0x00};
+        Bytes key1 = Bytes.wrap(new byte[]{(byte) 0xAA});
+        byte[] val = new byte[]{(byte) 0x00};
         map.put(key1, val);
 
-        Bytes key2 = Bytes.wrap(new byte[]{(byte)0xAA, (byte)0xAA});
+        Bytes key2 = Bytes.wrap(new byte[]{(byte) 0xAA, (byte) 0xAA});
         map.put(key2, val);
 
-        Bytes key3 = Bytes.wrap(new byte[]{(byte)0xAA, (byte)0x00, (byte)0xFF, (byte)0xFF, (byte)0xFF});
+        Bytes key3 = Bytes.wrap(new byte[]{(byte) 0xAA, (byte) 0x00, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF});
         map.put(key3, val);
 
-        Bytes key4 = Bytes.wrap(new byte[]{(byte)0xAB, (byte)0x00});
+        Bytes key4 = Bytes.wrap(new byte[]{(byte) 0xAB, (byte) 0x00});
         map.put(key4, val);
 
-        Bytes key5 = Bytes.wrap(new byte[]{(byte)0x00, (byte)0x00, (byte)0x00, (byte)0x01});
+        Bytes key5 = Bytes.wrap(new byte[]{(byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x01});
         map.put(key5, val);
 
         Bytes prefix = key1;
         Bytes prefixEnd = Bytes.increment(prefix);
 
-        Comparator comparator = map.comparator();
-        final int result = comparator==null ? prefix.compareTo(prefixEnd) : comparator.compare(prefix, prefixEnd);
+        Comparator<? super Bytes> comparator = map.comparator();
+        final int result = comparator == null ? prefix.compareTo(prefixEnd) : comparator.compare(prefix, prefixEnd);
         NavigableMap<Bytes, byte[]> subMapResults;
         if (result > 0) {
             //Prefix increment would cause a wrap-around. Get the submap from toKey to the end of the map

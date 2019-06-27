@@ -19,19 +19,19 @@ package org.apache.kafka.streams.kstream.internals.foreignkeyjoin;
 import org.apache.kafka.common.utils.Murmur3;
 import org.junit.Test;
 
-import static org.junit.Assert.*;
-
+import static org.junit.Assert.assertArrayEquals;
+import static org.junit.Assert.assertEquals;
 
 public class SubscriptionWrapperSerdeTest {
 
     @Test
     @SuppressWarnings("unchecked")
     public void serdeTest() {
-        SubscriptionWrapperSerde swSerde = new SubscriptionWrapperSerde();
-        long[] hashedValue = Murmur3.hash128(new byte[]{(byte)(0xFF), (byte)(0xAA), (byte)(0x00), (byte)(0x19)});
-        SubscriptionWrapper wrapper = new SubscriptionWrapper(hashedValue, SubscriptionWrapper.Instruction.DELETE_KEY_AND_PROPAGATE);
-        byte[] serialized = swSerde.serializer().serialize(null, wrapper);
-        SubscriptionWrapper deserialized = (SubscriptionWrapper)swSerde.deserializer().deserialize(null, serialized);
+        final SubscriptionWrapperSerde swSerde = new SubscriptionWrapperSerde();
+        final long[] hashedValue = Murmur3.hash128(new byte[] {(byte) 0xFF, (byte) 0xAA, (byte) 0x00, (byte) 0x19});
+        final SubscriptionWrapper wrapper = new SubscriptionWrapper(hashedValue, SubscriptionWrapper.Instruction.DELETE_KEY_AND_PROPAGATE);
+        final byte[] serialized = swSerde.serializer().serialize(null, wrapper);
+        final SubscriptionWrapper deserialized = (SubscriptionWrapper) swSerde.deserializer().deserialize(null, serialized);
 
         assertEquals(deserialized.getInstruction(), SubscriptionWrapper.Instruction.DELETE_KEY_AND_PROPAGATE);
         assertArrayEquals(hashedValue, deserialized.getHash());

@@ -33,7 +33,9 @@ import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import static org.apache.kafka.streams.kstream.internals.foreignkeyjoin.SubscriptionWrapper.Instruction.*;
+import static org.apache.kafka.streams.kstream.internals.foreignkeyjoin.SubscriptionWrapper.Instruction.DELETE_KEY_AND_PROPAGATE;
+import static org.apache.kafka.streams.kstream.internals.foreignkeyjoin.SubscriptionWrapper.Instruction.PROPAGATE_NULL_IF_NO_FK_VAL_AVAILABLE;
+import static org.apache.kafka.streams.kstream.internals.foreignkeyjoin.SubscriptionWrapper.Instruction.PROPAGATE_ONLY_IF_FK_VAL_AVAILABLE;
 
 public class ForeignKeySingleLookupProcessorSupplier<K, KO, VO>
         implements ProcessorSupplier<CombinedKey<KO, K>, SubscriptionWrapper> {
@@ -70,7 +72,7 @@ public class ForeignKeySingleLookupProcessorSupplier<K, KO, VO>
 
             @Override
             public void process(final CombinedKey<KO, K> key, final SubscriptionWrapper value) {
-                KO foreignKey = key.getForeignKey();
+                final KO foreignKey = key.getForeignKey();
                 if (foreignKey == null) {
                     LOG.warn(
                             "Skipping record due to null foreign key. value=[{}] topic=[{}] partition=[{}] offset=[{}]",
@@ -88,7 +90,7 @@ public class ForeignKeySingleLookupProcessorSupplier<K, KO, VO>
                     store.put(key, ValueAndTimestamp.make(value, context().timestamp()));
                 }
 
-                ValueAndTimestamp<VO> foreignValueAndTime = foreignValues.get(foreignKey);
+                final ValueAndTimestamp<VO> foreignValueAndTime = foreignValues.get(foreignKey);
 
                 //Do nothing with DELETE_KEY_NO_PROPAGATE, so it's not checked in the instruction list below.
                 if (value.getInstruction() == DELETE_KEY_AND_PROPAGATE) {

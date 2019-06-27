@@ -27,7 +27,6 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
-import org.apache.kafka.common.utils.Murmur3;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
@@ -52,16 +51,12 @@ import org.junit.experimental.categories.Category;
 
 import java.io.IOException;
 import java.util.Arrays;
-import java.util.HashMap;
 import java.util.HashSet;
-import java.util.LinkedList;
 import java.util.List;
-import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
 
-import static org.hamcrest.CoreMatchers.equalTo;
-import static org.junit.Assert.*;
+import static org.junit.Assert.assertEquals;
 
 @Category({IntegrationTest.class})
 public class KTableKTableForeignKeyInnerJoinMultiIntegrationTest {
@@ -80,9 +75,9 @@ public class KTableKTableForeignKeyInnerJoinMultiIntegrationTest {
     private KafkaStreams streamsThree;
     private final static Properties CONSUMER_CONFIG = new Properties();
 
-    private final static Properties producerConfigOne = new Properties();
-    private final static Properties producerConfigTwo = new Properties();
-    private final static Properties producerConfigThree = new Properties();
+    private final static Properties PRODUCER_CONFIG_1 = new Properties();
+    private final static Properties PRODUCER_CONFIG_2 = new Properties();
+    private final static Properties PRODUCER_CONFIG_3 = new Properties();
 
     @BeforeClass
     public static void beforeTest() throws Exception {
@@ -92,23 +87,23 @@ public class KTableKTableForeignKeyInnerJoinMultiIntegrationTest {
         CLUSTER.createTopic(TABLE_3, 3, 1);
         CLUSTER.createTopic(OUTPUT, 3, 1);
 
-        producerConfigOne.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
-        producerConfigOne.put(ProducerConfig.ACKS_CONFIG, "all");
-        producerConfigOne.put(ProducerConfig.RETRIES_CONFIG, 0);
-        producerConfigOne.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, IntegerSerializer.class);
-        producerConfigOne.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, FloatSerializer.class);
+        PRODUCER_CONFIG_1.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
+        PRODUCER_CONFIG_1.put(ProducerConfig.ACKS_CONFIG, "all");
+        PRODUCER_CONFIG_1.put(ProducerConfig.RETRIES_CONFIG, 0);
+        PRODUCER_CONFIG_1.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, IntegerSerializer.class);
+        PRODUCER_CONFIG_1.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, FloatSerializer.class);
 
-        producerConfigTwo.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
-        producerConfigTwo.put(ProducerConfig.ACKS_CONFIG, "all");
-        producerConfigTwo.put(ProducerConfig.RETRIES_CONFIG, 0);
-        producerConfigTwo.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
-        producerConfigTwo.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, LongSerializer.class);
+        PRODUCER_CONFIG_2.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
+        PRODUCER_CONFIG_2.put(ProducerConfig.ACKS_CONFIG, "all");
+        PRODUCER_CONFIG_2.put(ProducerConfig.RETRIES_CONFIG, 0);
+        PRODUCER_CONFIG_2.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
+        PRODUCER_CONFIG_2.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, LongSerializer.class);
 
-        producerConfigThree.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
-        producerConfigThree.put(ProducerConfig.ACKS_CONFIG, "all");
-        producerConfigThree.put(ProducerConfig.RETRIES_CONFIG, 0);
-        producerConfigThree.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, IntegerSerializer.class);
-        producerConfigThree.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
+        PRODUCER_CONFIG_3.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
+        PRODUCER_CONFIG_3.put(ProducerConfig.ACKS_CONFIG, "all");
+        PRODUCER_CONFIG_3.put(ProducerConfig.RETRIES_CONFIG, 0);
+        PRODUCER_CONFIG_3.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, IntegerSerializer.class);
+        PRODUCER_CONFIG_3.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
 
         streamsConfig = new Properties();
         streamsConfig.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
@@ -143,9 +138,9 @@ public class KTableKTableForeignKeyInnerJoinMultiIntegrationTest {
                 new KeyValue<>(10, "waffle")
         );
 
-        IntegrationTestUtils.produceKeyValuesSynchronously(TABLE_1, table1, producerConfigOne, MOCK_TIME);
-        IntegrationTestUtils.produceKeyValuesSynchronously(TABLE_2, table2, producerConfigTwo, MOCK_TIME);
-        IntegrationTestUtils.produceKeyValuesSynchronously(TABLE_3, table3, producerConfigThree, MOCK_TIME);
+        IntegrationTestUtils.produceKeyValuesSynchronously(TABLE_1, table1, PRODUCER_CONFIG_1, MOCK_TIME);
+        IntegrationTestUtils.produceKeyValuesSynchronously(TABLE_2, table2, PRODUCER_CONFIG_2, MOCK_TIME);
+        IntegrationTestUtils.produceKeyValuesSynchronously(TABLE_3, table3, PRODUCER_CONFIG_3, MOCK_TIME);
 
         CONSUMER_CONFIG.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         CONSUMER_CONFIG.put(ConsumerConfig.GROUP_ID_CONFIG, "ktable-ktable-consumer");
@@ -181,7 +176,7 @@ public class KTableKTableForeignKeyInnerJoinMultiIntegrationTest {
 
     @Test
     public void shouldInnerJoinMultiPartitionQueryable() throws Exception {
-        Set<KeyValue<Integer, String>> expectedOne = new HashSet<>();
+        final Set<KeyValue<Integer, String>> expectedOne = new HashSet<>();
         expectedOne.add(new KeyValue<>(1, "value1=1.33,value2=10,value3=waffle"));
 
         verifyKTableKTableJoin(JoinType.INNER, expectedOne, true);
@@ -189,7 +184,7 @@ public class KTableKTableForeignKeyInnerJoinMultiIntegrationTest {
 
     private void verifyKTableKTableJoin(final JoinType joinType,
                                         final Set<KeyValue<Integer, String>> expectedResult,
-                                        boolean verifyQueryableState) throws Exception {
+                                        final boolean verifyQueryableState) throws Exception {
         final String queryableName = verifyQueryableState ? joinType + "-store1" : null;
         final String queryableNameTwo = verifyQueryableState ? joinType + "-store2" : null;
         streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, joinType + queryableName);
@@ -206,7 +201,7 @@ public class KTableKTableForeignKeyInnerJoinMultiIntegrationTest {
                 OUTPUT,
                 expectedResult.size()));
 
-        assertThat(result, equalTo(expectedResult));
+        assertEquals(expectedResult, result);
     }
 
     private KafkaStreams prepareTopology(final String queryableName, final String queryableNameTwo) {
@@ -216,7 +211,7 @@ public class KTableKTableForeignKeyInnerJoinMultiIntegrationTest {
         final KTable<String, Long> table2 = builder.table(TABLE_2, Consumed.with(Serdes.String(), Serdes.Long()));
         final KTable<Integer, String> table3 = builder.table(TABLE_3, Consumed.with(Serdes.Integer(), Serdes.String()));
 
-        Materialized<Integer, String, KeyValueStore<Bytes, byte[]>> materialized;
+        final Materialized<Integer, String, KeyValueStore<Bytes, byte[]>> materialized;
         if (queryableName != null) {
             materialized = Materialized.<Integer, String, KeyValueStore<Bytes, byte[]>>as(queryableName)
                     .withKeySerde(Serdes.Integer())
@@ -226,7 +221,7 @@ public class KTableKTableForeignKeyInnerJoinMultiIntegrationTest {
             throw new RuntimeException("Current implementation of joinOnForeignKey requires a materialized store");
         }
 
-        Materialized<Integer, String, KeyValueStore<Bytes, byte[]>> materializedTwo;
+        final Materialized<Integer, String, KeyValueStore<Bytes, byte[]>> materializedTwo;
         if (queryableNameTwo != null) {
             materializedTwo = Materialized.<Integer, String, KeyValueStore<Bytes, byte[]>>as(queryableNameTwo)
                     .withKeySerde(Serdes.Integer())
@@ -236,8 +231,8 @@ public class KTableKTableForeignKeyInnerJoinMultiIntegrationTest {
             throw new RuntimeException("Current implementation of joinOnForeignKey requires a materialized store");
         }
 
-        ValueMapper<Float, String> tableOneKeyExtractor = (value) -> Integer.toString((int)value.floatValue());
-        ValueMapper<String, Integer> joinedTableKeyExtractor = (value) -> {
+        final ValueMapper<Float, String> tableOneKeyExtractor = value -> Integer.toString((int) value.floatValue());
+        final ValueMapper<String, Integer> joinedTableKeyExtractor = value -> {
             //Hardwired to return the desired foreign key as a test shortcut
             if (value.contains("value2=10"))
                 return 10;
@@ -245,8 +240,8 @@ public class KTableKTableForeignKeyInnerJoinMultiIntegrationTest {
                 return 0;
         };
 
-        ValueJoiner<Float, Long, String> joiner = (value1, value2) -> "value1=" + value1 + ",value2=" + value2;
-        ValueJoiner<String, String, String> joinerTwo = (value1, value2) -> value1 + ",value3=" + value2;
+        final ValueJoiner<Float, Long, String> joiner = (value1, value2) -> "value1=" + value1 + ",value2=" + value2;
+        final ValueJoiner<String, String, String> joinerTwo = (value1, value2) -> value1 + ",value3=" + value2;
 
         table1.join(table2, tableOneKeyExtractor, joiner, materialized)
               .join(table3, joinedTableKeyExtractor, joinerTwo, materializedTwo)

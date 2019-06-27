@@ -20,35 +20,33 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Murmur3;
 import org.junit.Test;
 
-import static junit.framework.TestCase.assertEquals;
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertArrayEquals;
-import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.assertNull;
 
 public class SubscriptionResponseWrapperSerdeTest {
 
     @Test
     @SuppressWarnings("unchecked")
-    public void nullForeignKeyTest(){
-        long[] hashedValue = Murmur3.hash128(new byte[]{(byte)(0x01), (byte)(0x9A), (byte)(0xFF), (byte)(0x00)});
-        SubscriptionResponseWrapper<String> srw = new SubscriptionResponseWrapper<>(hashedValue, null);
-        SubscriptionResponseWrapperSerde srwSerde = new SubscriptionResponseWrapperSerde(Serdes.String().serializer(), Serdes.String().deserializer());
-
-        byte[] serResponse = srwSerde.serializer().serialize(null, srw);
-        SubscriptionResponseWrapper<String> result = (SubscriptionResponseWrapper<String>)srwSerde.deserializer().deserialize(null, serResponse);
+    public void nullForeignKeyTest() {
+        final long[] hashedValue = Murmur3.hash128(new byte[] {(byte) 0x01, (byte) 0x9A, (byte) 0xFF, (byte) 0x00});
+        final SubscriptionResponseWrapper<String> srw = new SubscriptionResponseWrapper<>(hashedValue, null);
+        final SubscriptionResponseWrapperSerde srwSerde = new SubscriptionResponseWrapperSerde(Serdes.String().serializer(), Serdes.String().deserializer());
+        final byte[] serResponse = srwSerde.serializer().serialize(null, srw);
+        final SubscriptionResponseWrapper<String> result = (SubscriptionResponseWrapper<String>) srwSerde.deserializer().deserialize(null, serResponse);
 
         assertArrayEquals(hashedValue, result.getOriginalValueHash());
-        assertEquals(null, result.getForeignValue());
+        assertNull(result.getForeignValue());
     }
 
     @Test
     @SuppressWarnings("unchecked")
-    public void nonNullForeignKeyTest(){
-        long[] hashedValue = Murmur3.hash128(new byte[]{(byte)(0x01), (byte)(0x9A), (byte)(0xFF), (byte)(0x00)});
-        SubscriptionResponseWrapper<String> srw = new SubscriptionResponseWrapper<>(hashedValue, "foreignKey");
-        SubscriptionResponseWrapperSerde srwSerde = new SubscriptionResponseWrapperSerde(Serdes.String().serializer(), Serdes.String().deserializer());
-
-        byte[] serResponse = srwSerde.serializer().serialize(null, srw);
-        SubscriptionResponseWrapper<String> result = (SubscriptionResponseWrapper<String>)srwSerde.deserializer().deserialize(null, serResponse);
+    public void nonNullForeignKeyTest() {
+        final long[] hashedValue = Murmur3.hash128(new byte[] {(byte) 0x01, (byte) 0x9A, (byte) 0xFF, (byte) 0x00});
+        final SubscriptionResponseWrapper<String> srw = new SubscriptionResponseWrapper<>(hashedValue, "foreignKey");
+        final SubscriptionResponseWrapperSerde srwSerde = new SubscriptionResponseWrapperSerde(Serdes.String().serializer(), Serdes.String().deserializer());
+        final byte[] serResponse = srwSerde.serializer().serialize(null, srw);
+        final SubscriptionResponseWrapper<String> result = (SubscriptionResponseWrapper<String>) srwSerde.deserializer().deserialize(null, serResponse);
 
         assertArrayEquals(hashedValue, result.getOriginalValueHash());
         assertEquals("foreignKey", result.getForeignValue());

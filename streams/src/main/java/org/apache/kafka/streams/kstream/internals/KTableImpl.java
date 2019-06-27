@@ -56,8 +56,6 @@ import org.apache.kafka.streams.kstream.internals.suppress.KTableSuppressProcess
 import org.apache.kafka.streams.kstream.internals.suppress.NamedSuppressed;
 import org.apache.kafka.streams.kstream.internals.suppress.SuppressedInternal;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
-import org.apache.kafka.streams.processor.StateStore;
-import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
@@ -1023,7 +1021,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
         builder.addGraphNode(joinerParentNodes, fkSinkAndResolveNode);
         builder.addGraphNode(fkSinkAndResolveNode, outputTableNode);
 
-        return new KTableImpl<K,V,VR>(
+        return new KTableImpl<K, V, VR>(
                 outputProcessorName,
                 keySerde,
                 materializedInternal.valueSerde(),

@@ -549,7 +549,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BulkLoadingSt
         }
 
         @Override
-        public KeyValueIterator<Bytes, byte[]> prefix(Bytes prefix) {
+        public KeyValueIterator<Bytes, byte[]> prefix(final Bytes prefix) {
             return new RocksDBPrefixIterator(
                 name,
                 db.newIterator(columnFamily),

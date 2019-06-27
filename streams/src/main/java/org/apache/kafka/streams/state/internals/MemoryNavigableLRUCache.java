@@ -20,13 +20,11 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.state.KeyValueIterator;
 
-import java.util.Arrays;
 import java.util.Comparator;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.NavigableMap;
 import java.util.TreeMap;
-import java.util.concurrent.ConcurrentNavigableMap;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -68,7 +66,7 @@ public class MemoryNavigableLRUCache extends MemoryLRUCache {
         final Comparator<? super Bytes> comparator = treeMap.comparator();
 
         //We currently don't set a comparator for the treeMap, so the comparator will always be null.
-        final int result = comparator==null ? prefix.compareTo(prefixEnd) : comparator.compare(prefix, prefixEnd);
+        final int result = comparator == null ? prefix.compareTo(prefixEnd) : comparator.compare(prefix, prefixEnd);
 
         final NavigableMap<Bytes, byte[]> subMapResults;
         if (result > 0) {

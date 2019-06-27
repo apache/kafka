@@ -35,7 +35,7 @@ public class CombinedKeyForeignKeyPartitioner<KO, K, V> implements StreamPartiti
 
     @Override
     public Integer partition(final String topic, final CombinedKey<KO, K> key, final V value, final int numPartitions) {
-        byte[] keyBytes = keySerde.getForeignKeySerializer().serialize(topic, key.getForeignKey());
+        final byte[] keyBytes = keySerde.getForeignKeySerializer().serialize(topic, key.getForeignKey());
         //TODO - Evaluate breaking this out of the DefaultPartitioner Producer into an accessible function.
         return Utils.toPositive(Utils.murmur2(keyBytes)) % numPartitions;
     }

@@ -26,7 +26,10 @@ import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 
-import static org.apache.kafka.streams.kstream.internals.foreignkeyjoin.SubscriptionWrapper.Instruction.*;
+import static org.apache.kafka.streams.kstream.internals.foreignkeyjoin.SubscriptionWrapper.Instruction.DELETE_KEY_NO_PROPAGATE;
+import static org.apache.kafka.streams.kstream.internals.foreignkeyjoin.SubscriptionWrapper.Instruction.DELETE_KEY_AND_PROPAGATE;
+import static org.apache.kafka.streams.kstream.internals.foreignkeyjoin.SubscriptionWrapper.Instruction.PROPAGATE_NULL_IF_NO_FK_VAL_AVAILABLE;
+import static org.apache.kafka.streams.kstream.internals.foreignkeyjoin.SubscriptionWrapper.Instruction.PROPAGATE_ONLY_IF_FK_VAL_AVAILABLE;
 
 public class KTableRepartitionerProcessorSupplier<K, KO, V> implements ProcessorSupplier<K, Change<V>> {
 
@@ -36,7 +39,7 @@ public class KTableRepartitionerProcessorSupplier<K, KO, V> implements Processor
 
     public KTableRepartitionerProcessorSupplier(final ValueMapper<V, KO> extractor,
                                                 final Serializer<V> valueSerializer,
-                                                boolean leftJoin) {
+                                                final boolean leftJoin) {
         this.mapper = extractor;
         this.valueSerializer = valueSerializer;
         this.leftJoin = leftJoin;
@@ -56,10 +59,10 @@ public class KTableRepartitionerProcessorSupplier<K, KO, V> implements Processor
 
         @Override
         public void process(final K key, final Change<V> change) {
-            long[] nullHash = Murmur3.hash128(new byte[]{});
-            long[] currentHash = (change.newValue == null ?
-                    Murmur3.hash128(new byte[]{}):
-                    Murmur3.hash128(valueSerializer.serialize(context().topic(), change.newValue)));
+            final long[] nullHash = Murmur3.hash128(new byte[]{});
+            final long[] currentHash = change.newValue == null ?
+                    Murmur3.hash128(new byte[]{}) :
+                    Murmur3.hash128(valueSerializer.serialize(context().topic(), change.newValue));
 
             if (change.oldValue != null) {
                 final KO oldForeignKey = mapper.apply(change.oldValue);
@@ -92,7 +95,7 @@ public class KTableRepartitionerProcessorSupplier<K, KO, V> implements Processor
                 //have been propagated otherwise.
                 final KO extractedForeignKeyValue = mapper.apply(change.newValue);
                 final CombinedKey<KO, K> newCombinedKeyValue = new CombinedKey<>(extractedForeignKeyValue, key);
-                SubscriptionWrapper.Instruction instruction;
+                final SubscriptionWrapper.Instruction instruction;
                 if (leftJoin) {
                     //Want to send info even if RHS is null.
                     instruction = PROPAGATE_NULL_IF_NO_FK_VAL_AVAILABLE;

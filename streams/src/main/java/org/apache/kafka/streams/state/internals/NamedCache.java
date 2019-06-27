@@ -16,10 +16,8 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import java.util.Arrays;
 import java.util.Comparator;
 import java.util.NavigableMap;
-import java.util.concurrent.ConcurrentNavigableMap;
 import java.util.concurrent.ConcurrentSkipListMap;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.metrics.Sensor;
@@ -282,7 +280,7 @@ class NamedCache {
         final Comparator<? super Bytes> comparator = cache.comparator();
 
         //We currently don't set a comparator for the map in this class, so the comparator will always be null.
-        final int result = comparator==null ? prefix.compareTo(prefixEnd) : comparator.compare(prefix, prefixEnd);
+        final int result = comparator == null ? prefix.compareTo(prefixEnd) : comparator.compare(prefix, prefixEnd);
 
         final NavigableMap<Bytes, LRUNode> subMapResults;
         if (result > 0) {

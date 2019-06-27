@@ -62,8 +62,10 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
 
-import static org.hamcrest.CoreMatchers.equalTo;
-import static org.junit.Assert.*;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.assertArrayEquals;
+
 
 @Category({IntegrationTest.class})
 public class KTableKTableForeignKeyJoinIntegrationTest {
@@ -75,16 +77,16 @@ public class KTableKTableForeignKeyJoinIntegrationTest {
     private final static String LEFT_TABLE = "left_table";
     private final static String RIGHT_TABLE = "right_table";
     private final static String OUTPUT = "output-";
-    private static Properties STREAMS_CONFIG;
+    private static Properties streamsConfig;
     private KafkaStreams streams;
     private KafkaStreams streamsTwo;
     private KafkaStreams streamsThree;
-    private final static Properties CONSUMER_CONFIG = new Properties();
+    private static final  Properties CONSUMER_CONFIG = new Properties();
     private static final Properties LEFT_PROD_CONF = new Properties();
     private static final Properties RIGHT_PROD_CONF = new Properties();
 
     @BeforeClass
-    public static void beforeTest() throws Exception {
+    public static void beforeTest() {
         //Use multiple partitions to ensure distribution of keys.
         LEFT_PROD_CONF.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         LEFT_PROD_CONF.put(ProducerConfig.ACKS_CONFIG, "all");
@@ -98,12 +100,12 @@ public class KTableKTableForeignKeyJoinIntegrationTest {
         RIGHT_PROD_CONF.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
         RIGHT_PROD_CONF.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, LongSerializer.class);
 
-        STREAMS_CONFIG = new Properties();
-        STREAMS_CONFIG.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
-        STREAMS_CONFIG.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
-        STREAMS_CONFIG.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
-        STREAMS_CONFIG.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0);
-        STREAMS_CONFIG.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100);
+        streamsConfig = new Properties();
+        streamsConfig.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
+        streamsConfig.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+        streamsConfig.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
+        streamsConfig.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0);
+        streamsConfig.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100);
 
         CONSUMER_CONFIG.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         CONSUMER_CONFIG.put(ConsumerConfig.GROUP_ID_CONFIG, "ktable-ktable-consumer");
@@ -121,7 +123,7 @@ public class KTableKTableForeignKeyJoinIntegrationTest {
         CLUSTER.createTopic(RIGHT_TABLE, 3, 1);
         CLUSTER.createTopic(OUTPUT, 3, 1);
 
-        IntegrationTestUtils.purgeLocalStreamsState(STREAMS_CONFIG);
+        IntegrationTestUtils.purgeLocalStreamsState(streamsConfig);
     }
 
     @After
@@ -138,7 +140,7 @@ public class KTableKTableForeignKeyJoinIntegrationTest {
             streamsThree.close();
             streamsThree = null;
         }
-        IntegrationTestUtils.purgeLocalStreamsState(STREAMS_CONFIG);
+        IntegrationTestUtils.purgeLocalStreamsState(streamsConfig);
     }
 
     @Test
@@ -146,7 +148,7 @@ public class KTableKTableForeignKeyJoinIntegrationTest {
         final List<KeyValue<String, Long>> rightTableEvents = Arrays.asList(new KeyValue<>("1", 10L), new KeyValue<>("2", 20L)); //partition 0
         IntegrationTestUtils.produceKeyValuesSynchronously(RIGHT_TABLE, rightTableEvents, RIGHT_PROD_CONF, MOCK_TIME);
 
-        final String currentMethodName = new Object(){}
+        final String currentMethodName = new Object() { }
                 .getClass()
                 .getEnclosingMethod()
                 .getName();
@@ -188,7 +190,7 @@ public class KTableKTableForeignKeyJoinIntegrationTest {
         final List<KeyValue<String, Long>> rightTableEvents = Arrays.asList(new KeyValue<>("1", 10L), new KeyValue<>("2", 20L)); //partition 0
         IntegrationTestUtils.produceKeyValuesSynchronously(RIGHT_TABLE, rightTableEvents, RIGHT_PROD_CONF, MOCK_TIME);
 
-        final String currentMethodName = new Object(){}
+        final String currentMethodName = new Object() { }
                 .getClass()
                 .getEnclosingMethod()
                 .getName();
@@ -232,7 +234,7 @@ public class KTableKTableForeignKeyJoinIntegrationTest {
                 new KeyValue<>(2, 1.77f),
                 new KeyValue<>(3, 3.77f));
         IntegrationTestUtils.produceKeyValuesSynchronously(LEFT_TABLE, leftTableEvents, LEFT_PROD_CONF, MOCK_TIME);
-        final String currentMethodName = new Object(){}
+        final String currentMethodName = new Object() { }
                 .getClass()
                 .getEnclosingMethod()
                 .getName();
@@ -249,7 +251,6 @@ public class KTableKTableForeignKeyJoinIntegrationTest {
         expected.add(new KeyValue<>(1, "value1=1.33,value2=10"));   //Will be deleted.
         expected.add(new KeyValue<>(2, "value1=1.77,value2=10"));   //Will be deleted.
         expected.add(new KeyValue<>(3, "value1=3.77,value2=30"));   //Will not be deleted.
-        //final HashSet<KeyValue<Integer, String>> expected = new HashSet<>(buildExpectedResults(leftTableEvents, rightTableEvents, false));
 
         final Set<KeyValue<Integer, String>> result = new HashSet<>(IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(
                 CONSUMER_CONFIG,
@@ -283,7 +284,7 @@ public class KTableKTableForeignKeyJoinIntegrationTest {
                 new KeyValue<>(2, 1.77f),
                 new KeyValue<>(3, 3.77f));
         IntegrationTestUtils.produceKeyValuesSynchronously(LEFT_TABLE, leftTableEvents, LEFT_PROD_CONF, MOCK_TIME);
-        final String currentMethodName = new Object(){}
+        final String currentMethodName = new Object() { }
                 .getClass()
                 .getEnclosingMethod()
                 .getName();
@@ -335,11 +336,11 @@ public class KTableKTableForeignKeyJoinIntegrationTest {
         //There is no matching extracted foreign-key of 8 anywhere. Should not produce any output for INNER JOIN, only
         //because the state is transitioning from oldValue=null -> newValue=8.33.
         List<KeyValue<Integer, Float>> leftTableEvents = Arrays.asList(new KeyValue<>(1, 8.33f));
-        List<KeyValue<String, Long>> rightTableEvents = Arrays.asList(new KeyValue<>("1", 10L)); //partition 0
+        final List<KeyValue<String, Long>> rightTableEvents = Arrays.asList(new KeyValue<>("1", 10L)); //partition 0
         IntegrationTestUtils.produceKeyValuesSynchronously(LEFT_TABLE, leftTableEvents, LEFT_PROD_CONF, MOCK_TIME);
         IntegrationTestUtils.produceKeyValuesSynchronously(RIGHT_TABLE, rightTableEvents, RIGHT_PROD_CONF, MOCK_TIME);
 
-        String currentMethodName = new Object(){}
+        final String currentMethodName = new Object() { }
                 .getClass()
                 .getEnclosingMethod()
                 .getName();
@@ -350,7 +351,7 @@ public class KTableKTableForeignKeyJoinIntegrationTest {
         leftTableEvents = Arrays.asList(new KeyValue<>(1, 18.00f));
         IntegrationTestUtils.produceKeyValuesSynchronously(LEFT_TABLE, leftTableEvents, LEFT_PROD_CONF, MOCK_TIME);
 
-        List<KeyValue<Integer, String>> expected = new LinkedList<>();
+        final List<KeyValue<Integer, String>> expected = new LinkedList<>();
         expected.add(new KeyValue<>(1, null));
 
         final List<KeyValue<Integer, String>> result = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(
@@ -372,7 +373,7 @@ public class KTableKTableForeignKeyJoinIntegrationTest {
         //Now set the LHS event FK to match the rightTableEvents key-value.
         leftTableEvents = Arrays.asList(new KeyValue<>(1, 1.11f));
 
-        List<KeyValue<Integer, String>> expected3 = new LinkedList<>();
+        final List<KeyValue<Integer, String>> expected3 = new LinkedList<>();
         expected3.add(new KeyValue<>(1, "value1=1.11,value2=10"));
 
         IntegrationTestUtils.produceKeyValuesSynchronously(LEFT_TABLE, leftTableEvents, LEFT_PROD_CONF, MOCK_TIME);
@@ -393,17 +394,17 @@ public class KTableKTableForeignKeyJoinIntegrationTest {
         //There is no matching extracted foreign-key of 8 anywhere.
         //However, it will still run the join function since this is LEFT join.
         List<KeyValue<Integer, Float>> leftTableEvents = Arrays.asList(new KeyValue<>(1, 8.33f));
-        List<KeyValue<String, Long>> rightTableEvents = Arrays.asList(new KeyValue<>("1", 10L)); //partition 0
+        final List<KeyValue<String, Long>> rightTableEvents = Arrays.asList(new KeyValue<>("1", 10L)); //partition 0
         IntegrationTestUtils.produceKeyValuesSynchronously(LEFT_TABLE, leftTableEvents, LEFT_PROD_CONF, MOCK_TIME);
         IntegrationTestUtils.produceKeyValuesSynchronously(RIGHT_TABLE, rightTableEvents, RIGHT_PROD_CONF, MOCK_TIME);
 
-        String currentMethodName = new Object(){}
+        final String currentMethodName = new Object() { }
                 .getClass()
                 .getEnclosingMethod()
                 .getName();
         createAndStartStreamsApplication(currentMethodName, true);
 
-        List<KeyValue<Integer, String>> expected = new LinkedList<>();
+        final List<KeyValue<Integer, String>> expected = new LinkedList<>();
         expected.add(new KeyValue<>(1, "value1=8.33,value2=null"));
         final List<KeyValue<Integer, String>> result = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(
                 CONSUMER_CONFIG,
@@ -416,7 +417,7 @@ public class KTableKTableForeignKeyJoinIntegrationTest {
         leftTableEvents = Arrays.asList(new KeyValue<>(1, 18.0f));
         IntegrationTestUtils.produceKeyValuesSynchronously(LEFT_TABLE, leftTableEvents, LEFT_PROD_CONF, MOCK_TIME);
 
-        List<KeyValue<Integer, String>> expected2 = new LinkedList<>();
+        final List<KeyValue<Integer, String>> expected2 = new LinkedList<>();
         expected2.add(new KeyValue<>(1, "value1=18.0,value2=null"));
         final List<KeyValue<Integer, String>> result2 = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(
                 CONSUMER_CONFIG,
@@ -428,7 +429,7 @@ public class KTableKTableForeignKeyJoinIntegrationTest {
         leftTableEvents = Arrays.asList(new KeyValue<>(1, 1.11f));
         IntegrationTestUtils.produceKeyValuesSynchronously(LEFT_TABLE, leftTableEvents, LEFT_PROD_CONF, MOCK_TIME);
 
-        List<KeyValue<Integer, String>> expected3 = new LinkedList<>();
+        final List<KeyValue<Integer, String>> expected3 = new LinkedList<>();
         expected3.add(new KeyValue<>(1, "value1=1.11,value2=10"));
         final List<KeyValue<Integer, String>> result3 = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(
                 CONSUMER_CONFIG,
@@ -469,12 +470,12 @@ public class KTableKTableForeignKeyJoinIntegrationTest {
         IntegrationTestUtils.produceKeyValuesSynchronously(LEFT_TABLE, leftTableEvents, LEFT_PROD_CONF, MOCK_TIME);
         IntegrationTestUtils.produceKeyValuesSynchronously(RIGHT_TABLE, rightTableEvents, RIGHT_PROD_CONF, MOCK_TIME);
 
-        Set<KeyValue<Integer, String>> expected = new HashSet<>();
+        final Set<KeyValue<Integer, String>> expected = new HashSet<>();
         expected.add(new KeyValue<>(1, "value1=1.33,value2=10"));
         expected.add(new KeyValue<>(2, "value1=2.22,value2=20"));
         expected.add(new KeyValue<>(5, "value1=2.22,value2=20"));
 
-        String currentMethodName = new Object(){}
+        final String currentMethodName = new Object() { }
                 .getClass()
                 .getEnclosingMethod()
                 .getName();
@@ -503,9 +504,9 @@ public class KTableKTableForeignKeyJoinIntegrationTest {
         );
 
         IntegrationTestUtils.produceKeyValuesSynchronously(LEFT_TABLE, table1ForeignKeyChange, LEFT_PROD_CONF, MOCK_TIME);
-        final List<KeyValue<Integer, String>> resultTwo = IntegrationTestUtils.readKeyValues(OUTPUT, CONSUMER_CONFIG, 15*1000L, Integer.MAX_VALUE);
+        final List<KeyValue<Integer, String>> resultTwo = IntegrationTestUtils.readKeyValues(OUTPUT, CONSUMER_CONFIG, 15 * 1000L, Integer.MAX_VALUE);
 
-        List<KeyValue<Integer, String>> expectedTwo = new LinkedList<>();
+        final List<KeyValue<Integer, String>> expectedTwo = new LinkedList<>();
         expectedTwo.add(new KeyValue<>(3, "value1=1.11,value2=10"));
         assertArrayEquals(resultTwo.toArray(), expectedTwo.toArray());
 
@@ -540,11 +541,11 @@ public class KTableKTableForeignKeyJoinIntegrationTest {
         IntegrationTestUtils.produceKeyValuesSynchronously(LEFT_TABLE, leftTableEvents, LEFT_PROD_CONF, MOCK_TIME);
         IntegrationTestUtils.produceKeyValuesSynchronously(RIGHT_TABLE, rightTableEvents, RIGHT_PROD_CONF, MOCK_TIME);
 
-        Set<KeyValue<Integer, String>> expected = new HashSet<>();
+        final Set<KeyValue<Integer, String>> expected = new HashSet<>();
         expected.add(new KeyValue<>(1, "value1=1.33,value2=10"));
         expected.add(new KeyValue<>(2, "value1=2.22,value2=20"));
 
-        String currentMethodName = new Object(){}
+        final String currentMethodName = new Object() { }
                 .getClass()
                 .getEnclosingMethod()
                 .getName();
@@ -573,9 +574,9 @@ public class KTableKTableForeignKeyJoinIntegrationTest {
         );
 
         IntegrationTestUtils.produceKeyValuesSynchronously(LEFT_TABLE, table1ForeignKeyChange, LEFT_PROD_CONF, MOCK_TIME);
-        final List<KeyValue<Integer, String>> resultTwo = IntegrationTestUtils.readKeyValues(OUTPUT, CONSUMER_CONFIG, 15*1000L, Integer.MAX_VALUE);
+        final List<KeyValue<Integer, String>> resultTwo = IntegrationTestUtils.readKeyValues(OUTPUT, CONSUMER_CONFIG, 15 * 1000L, Integer.MAX_VALUE);
 
-        List<KeyValue<Integer, String>> expectedTwo = new LinkedList<>();
+        final List<KeyValue<Integer, String>> expectedTwo = new LinkedList<>();
         expectedTwo.add(new KeyValue<>(3, "value1=1.11,value2=10"));
 
         assertArrayEquals(resultTwo.toArray(), expectedTwo.toArray());
@@ -587,8 +588,8 @@ public class KTableKTableForeignKeyJoinIntegrationTest {
         validateQueryableStoresContainExpectedKeyValues(expMatResults, currentMethodName);
     }
 
-    private void createAndStartStreamsApplication(String queryableStoreName, boolean leftJoin) {
-        STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, "ktable-ktable-joinOnForeignKey-" + queryableStoreName);
+    private void createAndStartStreamsApplication(final String queryableStoreName, final boolean leftJoin) {
+        streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, "ktable-ktable-joinOnForeignKey-" + queryableStoreName);
         streams = prepareTopology(queryableStoreName, leftJoin);
         streamsTwo = prepareTopology(queryableStoreName, leftJoin);
         streamsThree = prepareTopology(queryableStoreName, leftJoin);
@@ -601,28 +602,7 @@ public class KTableKTableForeignKeyJoinIntegrationTest {
     // Do not change unless you want to change all the test results as well.
     private ValueJoiner<Float, Long, String> joiner = (value1, value2) -> "value1=" + value1 + ",value2=" + value2;
     //Do not change. See above comment.
-    private ValueMapper<Float, String> tableOneKeyExtractor = (value) -> Integer.toString((int)value.floatValue());
-
-
-
-//    private List<KeyValue<Integer,String>> buildExpectedResults(List<KeyValue<Integer,Float>> leftTable,
-//                                                                List<KeyValue<String,Long>> rightTable,
-//                                                                boolean leftJoin) {
-//        HashMap<String, Long> rightHashMap = new HashMap<>();
-//        for (KeyValue<String, Long> rightElem: rightTable) {
-//            rightHashMap.put(rightElem.key, rightElem.value);
-//        }
-//
-//        List<KeyValue<Integer,String>> expected = new LinkedList<>();
-//        for (KeyValue<Integer,Float> leftElem: leftTable) {
-//            String extractedKey = tableOneKeyExtractor.apply(leftElem.value);
-//            Long rightResult = rightHashMap.get(extractedKey);
-//            if (rightResult != null || leftJoin) {
-//                expected.add(new KeyValue<>(leftElem.key, joiner.apply(leftElem.value, rightResult)));
-//            }
-//        }
-//        return expected;
-//    }
+    private ValueMapper<Float, String> tableOneKeyExtractor = value -> Integer.toString((int) value.floatValue());
 
     private void validateQueryableStoresContainExpectedKeyValues(final Set<KeyValue<Integer, String>> expectedResult,
                                                                  final String queryableStoreName) {
@@ -637,15 +617,15 @@ public class KTableKTableForeignKeyJoinIntegrationTest {
 
         // store only keeps last set of values, not entire stream of value changes
         final Map<Integer, String> expectedInStore = new HashMap<>();
-        for (KeyValue<Integer, String> expected : expectedResult) {
+        for (final KeyValue<Integer, String> expected : expectedResult) {
             expectedInStore.put(expected.key, expected.value);
         }
 
         // depending on partition assignment, the values will be in one of the three stream clients.
-        for (Map.Entry<Integer, String> expected : expectedInStore.entrySet()) {
-            String one = myJoinStoreOne.get(expected.getKey());
-            String two = myJoinStoreTwo.get(expected.getKey());
-            String three = myJoinStoreThree.get(expected.getKey());
+        for (final Map.Entry<Integer, String> expected : expectedInStore.entrySet()) {
+            final String one = myJoinStoreOne.get(expected.getKey());
+            final String two = myJoinStoreTwo.get(expected.getKey());
+            final String three = myJoinStoreThree.get(expected.getKey());
 
             String result;
             if (one != null)
@@ -664,7 +644,7 @@ public class KTableKTableForeignKeyJoinIntegrationTest {
         final KeyValueIterator<Integer, String> allTwo = myJoinStoreTwo.all();
         final KeyValueIterator<Integer, String> allThree = myJoinStoreThree.all();
 
-        List<KeyValue<Integer, String>> all = new LinkedList<>();
+        final List<KeyValue<Integer, String>> all = new LinkedList<>();
 
         while (allOne.hasNext()) {
             all.add(allOne.next());
@@ -679,18 +659,18 @@ public class KTableKTableForeignKeyJoinIntegrationTest {
         allTwo.close();
         allThree.close();
 
-        for (KeyValue<Integer, String> elem : all) {
+        for (final KeyValue<Integer, String> elem : all) {
             assertTrue(expectedResult.contains(elem));
         }
     }
 
-    private KafkaStreams prepareTopology(final String queryableStoreName, boolean leftJoin) {
+    private KafkaStreams prepareTopology(final String queryableStoreName, final boolean leftJoin) {
         final StreamsBuilder builder = new StreamsBuilder();
 
         final KTable<Integer, Float> left = builder.table(LEFT_TABLE, Consumed.with(Serdes.Integer(), Serdes.Float()));
         final KTable<String, Long> right = builder.table(RIGHT_TABLE, Consumed.with(Serdes.String(), Serdes.Long()));
 
-        Materialized<Integer, String, KeyValueStore<Bytes, byte[]>> materialized;
+        final Materialized<Integer, String, KeyValueStore<Bytes, byte[]>> materialized;
         if (queryableStoreName != null) {
             materialized = Materialized.<Integer, String, KeyValueStore<Bytes, byte[]>>as(queryableStoreName)
                     .withKeySerde(Serdes.Integer())
@@ -709,6 +689,6 @@ public class KTableKTableForeignKeyJoinIntegrationTest {
                 .toStream()
                 .to(OUTPUT, Produced.with(Serdes.Integer(), Serdes.String()));
 
-        return new KafkaStreams(builder.build(), STREAMS_CONFIG);
+        return new KafkaStreams(builder.build(), streamsConfig);
     }
 }

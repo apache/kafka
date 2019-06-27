@@ -30,7 +30,10 @@ import org.junit.Test;
 import java.util.HashSet;
 import java.util.Set;
 
-import static org.junit.Assert.*;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertArrayEquals;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.assertFalse;
 
 public class MergedSortedCacheKeyValueBytesStoreIteratorTest {
 
@@ -72,26 +75,26 @@ public class MergedSortedCacheKeyValueBytesStoreIteratorTest {
 
     @Test
     public void shouldIterateOverPrefix() {
-        final byte[][] storeBytes = {{(byte)0x00, (byte)0xFF}, {(byte)0x00, (byte)0xFE, (byte)0x00}, {(byte)0xAA, (byte)0xFE}};
-        final byte[][] cacheBytes = {{(byte)0x00, (byte)0x90}, {(byte)0x12, (byte)0x34}, {(byte)0x5A, (byte)0x00}};
+        final byte[][] storeBytes = {{(byte) 0x00, (byte) 0xFF}, {(byte) 0x00, (byte) 0xFE, (byte) 0x00}, {(byte) 0xAA, (byte) 0xFE}};
+        final byte[][] cacheBytes = {{(byte) 0x00, (byte) 0x90}, {(byte) 0x12, (byte) 0x34}, {(byte) 0x5A, (byte) 0x00}};
 
-        for (byte[] sb : storeBytes) {
+        for (final byte[] sb : storeBytes) {
             store.put(Bytes.wrap(sb), sb);
         }
-        for (byte[] cb: cacheBytes) {
+        for (final byte[] cb: cacheBytes) {
             cache.put(namespace, Bytes.wrap(cb), new LRUCacheEntry(cb));
         }
 
-        final Bytes prefix = Bytes.wrap(new byte[]{(byte)0x00});
+        final Bytes prefix = Bytes.wrap(new byte[]{(byte) 0x00});
         final KeyValueIterator<Bytes, byte[]> storeIterator = new DelegatingPeekingKeyValueIterator<>("store", store.prefixScan(prefix));
         final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = cache.prefix(namespace, prefix);
 
         final MergedSortedCacheKeyValueBytesStoreIterator iterator = new MergedSortedCacheKeyValueBytesStoreIterator(cacheIterator, storeIterator);
 
         final Set<Bytes> expected = new HashSet<>();
-        expected.add(Bytes.wrap(new byte[] {(byte)0x00, (byte)0xFF}));
-        expected.add(Bytes.wrap(new byte[] {(byte)0x00, (byte)0xFE, (byte)0x00}));
-        expected.add(Bytes.wrap(new byte[] {(byte)0x00, (byte)0x90}));
+        expected.add(Bytes.wrap(new byte[] {(byte) 0x00, (byte) 0xFF}));
+        expected.add(Bytes.wrap(new byte[] {(byte) 0x00, (byte) 0xFE, (byte) 0x00}));
+        expected.add(Bytes.wrap(new byte[] {(byte) 0x00, (byte) 0x90}));
 
         int size = 0;
         while (iterator.hasNext()) {

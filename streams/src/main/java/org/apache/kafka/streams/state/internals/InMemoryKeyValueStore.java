@@ -16,10 +16,8 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import java.util.Arrays;
 import java.util.Comparator;
 import java.util.List;
-import java.util.NavigableMap;
 import java.util.concurrent.ConcurrentNavigableMap;
 import java.util.concurrent.ConcurrentSkipListMap;
 import org.apache.kafka.common.utils.Bytes;
@@ -142,7 +140,7 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
         final Comparator<? super Bytes> comparator = map.comparator();
 
         //We currently don't set a comparator for the map in this class, so the comparator will always be null.
-        final int result = comparator==null ? prefix.compareTo(prefixEnd) : comparator.compare(prefix, prefixEnd);
+        final int result = comparator == null ? prefix.compareTo(prefixEnd) : comparator.compare(prefix, prefixEnd);
 
         final ConcurrentNavigableMap<Bytes, byte[]> subMapResults;
         if (result > 0) {

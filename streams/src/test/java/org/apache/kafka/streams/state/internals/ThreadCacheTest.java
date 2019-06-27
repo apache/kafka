@@ -290,21 +290,21 @@ public class ThreadCacheTest {
     public void shouldPerformByteUpperBoundPrefixScan() {
         final ThreadCache cache = new ThreadCache(logContext, 10000L, new MockStreamsMetrics(new Metrics()));
 
-        Bytes key = Bytes.wrap(new byte[]{(byte)0xFF});
-        Bytes key2 = Bytes.wrap(new byte[]{(byte)0xFF, (byte)0x00});
-        Bytes key3 = Bytes.wrap(new byte[]{(byte)0x00});
-        byte[] value = new byte[]{0x00};
+        final Bytes key = Bytes.wrap(new byte[]{(byte) 0xFF});
+        final Bytes key2 = Bytes.wrap(new byte[]{(byte) 0xFF, (byte) 0x00});
+        final Bytes key3 = Bytes.wrap(new byte[]{(byte) 0x00});
+        final byte[] value = new byte[]{0x00};
         cache.put(namespace, key, dirtyEntry(value));
         cache.put(namespace, key2, dirtyEntry(value));
         cache.put(namespace, key3, dirtyEntry(value));
 
         final ThreadCache.MemoryLRUCacheBytesIterator iterator = cache.prefix(namespace, key);
-        HashMap<Bytes, byte[]> expected = new HashMap<>();
+        final HashMap<Bytes, byte[]> expected = new HashMap<>();
         expected.put(key, value);
         expected.put(key2, value);
-        HashMap<Bytes, byte[]> actual = new HashMap<>();
+        final HashMap<Bytes, byte[]> actual = new HashMap<>();
         while (iterator.hasNext()) {
-            KeyValue<Bytes, LRUCacheEntry> elem = iterator.next();
+            final KeyValue<Bytes, LRUCacheEntry> elem = iterator.next();
             actual.put(elem.key, elem.value.value());
         }
         assertEquals(expected, actual);

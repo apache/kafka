@@ -66,13 +66,13 @@ public abstract class AbstractByteStoreTest {
 
     @Test
     public void doDefaultComparatorPrefixScan() {
-        byte[] value = new byte[]{0x00};
+        final byte[] value = new byte[]{0x00};
 
-        Bytes key = Bytes.wrap(new byte[]{(byte)0xFF});
-        Bytes key2 = Bytes.wrap(new byte[]{(byte)0xFF, (byte)0x00});
-        Bytes key3 = Bytes.wrap(new byte[]{(byte)0xFF, (byte)0xFF, (byte)0xFF, (byte)0xFF, (byte)0xFF, (byte)0xFF});
-        Bytes key4 = Bytes.wrap(new byte[]{(byte)0x01, (byte)0xFF});
-        Bytes key5 = Bytes.wrap(new byte[]{(byte)0x00});
+        final Bytes key = Bytes.wrap(new byte[]{(byte) 0xFF});
+        final Bytes key2 = Bytes.wrap(new byte[]{(byte) 0xFF, (byte) 0x00});
+        final Bytes key3 = Bytes.wrap(new byte[]{(byte) 0xFF, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF});
+        final Bytes key4 = Bytes.wrap(new byte[]{(byte) 0x01, (byte) 0xFF});
+        final Bytes key5 = Bytes.wrap(new byte[]{(byte) 0x00});
 
         store.put(key, value);
         store.put(key2, value);
