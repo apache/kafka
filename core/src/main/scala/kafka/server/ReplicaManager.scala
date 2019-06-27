@@ -81,7 +81,8 @@ case class LogDeleteRecordsResult(requestedOffset: Long, lowWatermark: Long, exc
  * @param readSize amount of data that was read from the log i.e. size of the fetch
  * @param isReadFromLogEnd true if the request read up to the log end offset snapshot
  *                         when the read was initiated, false otherwise
- * @param error Exception if error encountered while reading from the log
+ * @param preferredReadReplica the preferred read replica to be used for future fetches
+ * @param exception Exception if error encountered while reading from the log
  */
 case class LogReadResult(info: FetchDataInfo,
                          highWatermark: Long,
@@ -817,8 +818,9 @@ class ReplicaManager(val config: KafkaConfig,
   }
 
   /**
-   * Fetch messages from the leader replica, and wait until enough data can be fetched and return;
-   * the callback function will be triggered either when timeout or required fetch info is satisfied
+   * Fetch messages from a replica, and wait until enough data can be fetched and return;
+   * the callback function will be triggered either when timeout or required fetch info is satisfied.
+   * Consumers may fetch from any replica, but followers can only fetch from the leader.
    */
   def fetchMessages(timeout: Long,
                     replicaId: Int,
@@ -939,7 +941,7 @@ class ReplicaManager(val config: KafkaConfig,
           metadata => findPreferredReadReplica(tp, metadata, replicaId, fetchInfo.fetchOffset))
 
         if (preferredReadReplica.isDefined && !preferredReadReplica.contains(localBrokerId)) {
-          // If the a preferred read-replica is set and is not this replica (the leader), skip the read
+          // If a preferred read-replica is set and is not this replica (the leader), skip the read
           val offsetSnapshot: LogOffsetSnapshot = partition.fetchOffsetSnapshot(fetchInfo.currentLeaderEpoch, false)
           LogReadResult(info = FetchDataInfo(LogOffsetMetadata.UnknownOffsetMetadata, MemoryRecords.EMPTY),
             highWatermark = offsetSnapshot.highWatermark.messageOffset,
@@ -1053,7 +1055,7 @@ class ReplicaManager(val config: KafkaConfig,
       } else {
         val replicaEndpoints = metadataCache.getPartitionReplicaEndpoints(tp.topic(), tp.partition(), new ListenerName(clientMetadata.listenerName))
         val now = time.milliseconds
-        val replicaInfoSet: mutable.Set[ReplicaView] = partition.allReplicaIds.flatMap(partition.getReplica)
+        var replicaInfoSet: Set[ReplicaView] = partition.remoteReplicas
           // Exclude replicas that don't have the requested offset (whether or not if they're in the ISR)
           .filter(replica => replica.logEndOffset >= fetchOffset)
           .filter(replica => replica.logStartOffset <= fetchOffset)
@@ -1068,8 +1070,7 @@ class ReplicaManager(val config: KafkaConfig,
             .map(replicaId => replicaEndpoints.getOrElse(replicaId, Node.noNode()))
             .map(leaderNode => new DefaultReplicaView(leaderNode, partition.localLogOrException.logEndOffset, 0L))
             .get
-
-          replicaInfoSet.add(leaderReplica)
+          replicaInfoSet ++= Set(leaderReplica)
 
           val partitionInfo = new DefaultPartitionView(replicaInfoSet.asJava, leaderReplica)
           replicaSelector.select(tp, clientMetadata, partitionInfo).asScala

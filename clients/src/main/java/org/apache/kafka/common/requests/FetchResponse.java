@@ -144,6 +144,7 @@ public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
             LOG_START_OFFSET,
             new Field(ABORTED_TRANSACTIONS_KEY_NAME, ArrayOf.nullable(FETCH_RESPONSE_ABORTED_TRANSACTION_V4)));
 
+    // Introduced in V11 to support read from followers (KIP-392)
     private static final Schema FETCH_RESPONSE_PARTITION_HEADER_V6 = new Schema(
             PARTITION_ID,
             ERROR_CODE,
@@ -207,6 +208,7 @@ public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
     // V10 bumped up to indicate ZStandard capability. (see KIP-110)
     private static final Schema FETCH_RESPONSE_V10 = FETCH_RESPONSE_V9;
 
+    // V11 added preferred read replica for each partition response to support read from followers (KIP-392)
     private static final Schema FETCH_RESPONSE_V11 = new Schema(
             THROTTLE_TIME_MS,
             ERROR_CODE,

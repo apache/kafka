@@ -359,11 +359,11 @@ class Log(@volatile var dir: File,
 
   /**
     * Fully materialize and return an offset snapshot including segment position info. This method will update
-    * the LogOffsetMetadata for the high watermark and log start offset if they are message-only. Throws an
+    * the LogOffsetMetadata for the high watermark and last stable offset if they are message-only. Throws an
     * offset out of range error if the segment info cannot be loaded.
     */
   def offsetSnapshot: LogOffsetSnapshot = {
-    val hw: LogOffsetMetadata = if (_highWatermarkMetadata.messageOffsetOnly) {
+    val highWatermark: LogOffsetMetadata = if (_highWatermarkMetadata.messageOffsetOnly) {
       lock.synchronized {
         val fullOffset = convertToOffsetMetadataOrThrow(_highWatermarkMetadata.messageOffset)
         _highWatermarkMetadata = fullOffset
@@ -373,7 +373,7 @@ class Log(@volatile var dir: File,
       _highWatermarkMetadata
     }
 
-    val lso: LogOffsetMetadata = if (firstUnstableOffset.exists(_.messageOffsetOnly)) {
+    val lastStable: LogOffsetMetadata = if (firstUnstableOffset.exists(_.messageOffsetOnly)) {
       lock.synchronized {
         val fullOffset = convertToOffsetMetadataOrThrow(firstUnstableOffset.get.messageOffset)
         firstUnstableOffset = Some(fullOffset)
@@ -386,8 +386,8 @@ class Log(@volatile var dir: File,
     LogOffsetSnapshot(
       logStartOffset,
       logEndOffsetMetadata,
-      hw,
-      lso
+      highWatermark,
+      lastStable
     )
   }
 

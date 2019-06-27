@@ -51,7 +51,8 @@ case class FetchMetadata(fetchMinBytes: Int,
     "onlyLeader=" + fetchOnlyLeader + ", " +
     "fetchIsolation=" + fetchIsolation + ", " +
     "replicaId=" + replicaId + ", " +
-    "partitionStatus=" + fetchPartitionStatus + ")"
+    "partitionStatus=" + fetchPartitionStatus + ", " +
+    "hasFetchSession=" + hasFetchSession + ")"
 }
 /**
  * A delayed fetch operation that can be created by the replica manager and watched

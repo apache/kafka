@@ -208,7 +208,9 @@ class MetadataCache(brokerId: Int) extends Logging {
             case None =>
               Node.noNode()
           }}).toMap
-        .filter(pair => !pair._2.isEmpty)
+        .filter(pair => pair match {
+          case (_, node) => !node.isEmpty
+        })
     }).getOrElse(Map.empty[Int, Node])
   }
 
