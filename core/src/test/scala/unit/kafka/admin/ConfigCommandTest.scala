@@ -115,14 +115,14 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
 
     // Should parse correctly
     var createOpts = new ConfigCommandOptions(Array(connectOpts._1, connectOpts._2,
-      "--entity-name", "x",
+      "--entity-name", "1",
       "--entity-type", entityType,
       "--describe"))
     createOpts.checkArgs()
 
     // For --alter and added config
     createOpts = new ConfigCommandOptions(Array(connectOpts._1, connectOpts._2,
-      "--entity-name", "x",
+      "--entity-name", "1",
       "--entity-type", entityType,
       "--alter",
       "--add-config", "a=b,c=d"))
@@ -130,7 +130,7 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
 
     // For alter and deleted config
     createOpts = new ConfigCommandOptions(Array(connectOpts._1, connectOpts._2,
-      "--entity-name", "x",
+      "--entity-name", "1",
       "--entity-type", entityType,
       "--alter",
       "--delete-config", "a,b,c"))
@@ -138,7 +138,7 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
 
     // For alter and both added, deleted config
     createOpts = new ConfigCommandOptions(Array(connectOpts._1, connectOpts._2,
-      "--entity-name", "x",
+      "--entity-name", "1",
       "--entity-type", entityType,
       "--alter",
       "--add-config", "a=b,c=d",
@@ -155,7 +155,7 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
     assertEquals("a", deletedProps.head)
 
     createOpts = new ConfigCommandOptions(Array(connectOpts._1, connectOpts._2,
-      "--entity-name", "x",
+      "--entity-name", "1",
       "--entity-type", entityType,
       "--alter",
       "--add-config", "a=b,c=,d=e,f="))
@@ -173,6 +173,13 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
   def shouldFailIfUnrecognisedEntityType(): Unit = {
     val createOpts = new ConfigCommandOptions(Array("--zookeeper", zkConnect,
       "--entity-name", "client", "--entity-type", "not-recognised", "--alter", "--add-config", "a=b,c=d"))
+    ConfigCommand.alterConfig(null, createOpts, new DummyAdminZkClient(zkClient))
+  }
+
+  @Test(expected = classOf[IllegalArgumentException])
+  def shouldFailIfBrokerEntityTypeIsNotAnInteger(): Unit = {
+    val createOpts = new ConfigCommandOptions(Array("--zookeeper", zkConnect,
+      "--entity-name", "A", "--entity-type", "brokers", "--alter", "--add-config", "a=b,c=d"))
     ConfigCommand.alterConfig(null, createOpts, new DummyAdminZkClient(zkClient))
   }
 
