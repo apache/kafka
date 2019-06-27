@@ -535,12 +535,7 @@ public class TopologyTestDriver implements Closeable {
     @SuppressWarnings("WeakerAccess")
     @Deprecated
     public void advanceWallClockTime(final long advanceMs) {
-        mockWallClockTime.sleep(advanceMs);
-        if (task != null) {
-            task.maybePunctuateSystemTime();
-            task.commit();
-        }
-        captureOutputRecords();
+        advanceWallClockTime(Duration.ofMillis(advanceMs));
     }
 
     /**
@@ -692,7 +687,7 @@ public class TopologyTestDriver implements Closeable {
                            final Instant time) {
         final byte[] serializedKey = keySerializer.serialize(topic, record.headers(), record.key());
         final byte[] serializedValue = valueSerializer.serialize(topic, record.headers(), record.value());
-        long timestamp = time != null ? time.toEpochMilli() : record.timestamp();
+        long timestamp = (time != null) ? time.toEpochMilli() : record.timestamp();
         pipeRecord(topic, timestamp, serializedKey, serializedValue, record.headers());
     }
 
