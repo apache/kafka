@@ -138,7 +138,7 @@ public interface ConsumerRebalanceListener {
     void onPartitionsAssigned(Collection<TopicPartition> partitions);
 
     /**
-     * A callback method the user can implement to provide handling of cleaning up resources for partitions that have already
+     * A callback method you can implement to provide handling of cleaning up resources for partitions that have already
      * been re-assigned to other consumers. This method will not be called during normal execution as the owned partitions would
      * first be revoked by calling the {@link ConsumerRebalanceListener#onPartitionsRevoked}, before being re-assigned
      * to other consumers during a rebalance event. However, during exceptional scenarios when the consumer realized that it
