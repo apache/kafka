@@ -51,8 +51,8 @@ public class WordCountDemoTest {
         //Create Actual Stream Processing pipeline
         WordCountDemo.createWordCountStream(builder);
         testDriver = new TopologyTestDriver(builder.build(), WordCountDemo.getStreamsConfig());
-        inputTopic = new TestInputTopic<>(testDriver, WordCountDemo.INPUT_TOPIC, new Serdes.StringSerde(), new Serdes.StringSerde());
-        outputTopic = new TestOutputTopic<>(testDriver, WordCountDemo.OUTPUT_TOPIC, new Serdes.StringSerde(), new Serdes.LongSerde());
+        inputTopic = testDriver.createInputTopic(WordCountDemo.INPUT_TOPIC, new Serdes.StringSerde(), new Serdes.StringSerde());
+        outputTopic = testDriver.createOutputTopic(WordCountDemo.OUTPUT_TOPIC, new Serdes.StringSerde(), new Serdes.LongSerde());
     }
 
     @After
@@ -77,7 +77,7 @@ public class WordCountDemoTest {
         //Read and validate output to match word as key and count as value
         assertThat(outputTopic.readKeyValue(), equalTo(new KeyValue<>("hello", 1L)));
         //No more output in topic
-        assertNull(outputTopic.readRecord());
+        assertThat(outputTopic.isEmpty(), is(true));
     }
 
     /**
