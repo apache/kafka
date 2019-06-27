@@ -91,32 +91,25 @@ public class ForeignKeySingleLookupProcessorSupplier<K, KO, VO>
                 }
 
                 ValueAndTimestamp<VO> foreignValueAndTime = foreignValues.get(foreignKey);
-                if (value.getInstruction() == DELETE_KEY_NO_PROPAGATE) {
-                    return;
-                } else if (value.getInstruction() == DELETE_KEY_AND_PROPAGATE) {
+
+                //Do nothing with DELETE_KEY_NO_PROPAGATE, so it's not checked in the instruction list below.
+                if (value.getInstruction() == DELETE_KEY_AND_PROPAGATE) {
                     final SubscriptionResponseWrapper<VO> newValue = new SubscriptionResponseWrapper<>(value.getHash(), null);
                     context().forward(key.getPrimaryKey(), newValue, To.all().withTimestamp(context().timestamp()));
-                    return;
                 } else if (value.getInstruction() == PROPAGATE_NULL_IF_NO_FK_VAL_AVAILABLE) {
-                    if (foreignValueAndTime == null) {
-                        //This one needs to go through regardless of LEFT or INNER join, since the extracted FK was
-                        //changed and there is no match for it. We must propagate the (key, null) to ensure that the
-                        //downstream consumers are alerted to this fact.
-                        final SubscriptionResponseWrapper<VO> newValue = new SubscriptionResponseWrapper<>(value.getHash(), null, true);
-                        context().forward(key.getPrimaryKey(), newValue, To.all().withTimestamp(context().timestamp()));
-                        return;
-                    } else {
-                        final SubscriptionResponseWrapper<VO> newValue = new SubscriptionResponseWrapper<>(value.getHash(), foreignValueAndTime.value());
-                        context().forward(key.getPrimaryKey(), newValue, To.all().withTimestamp(context().timestamp()));
-                        return;
-                    }
-
-                } else if (value.getInstruction() == PROPAGATE_ONLY_IF_FK_VAL_AVAILABLE) {
+                    VO valueToSend = null;
+                    //This one needs to go through regardless of LEFT or INNER join, since the extracted FK was
+                    //changed and there is no match for it. We must propagate the (key, null) to ensure that the
+                    //downstream consumers are alerted to this fact.
                     if (foreignValueAndTime != null) {
-                        final SubscriptionResponseWrapper<VO> newValue = new SubscriptionResponseWrapper<>(value.getHash(), foreignValueAndTime.value());
-                        context().forward(key.getPrimaryKey(), newValue, To.all().withTimestamp(context().timestamp()));
-                        return;
+                        //Get the value if it's available, as per instruction.
+                        valueToSend = foreignValueAndTime.value();
                     }
+                    final SubscriptionResponseWrapper<VO> newValue = new SubscriptionResponseWrapper<>(value.getHash(), valueToSend);
+                    context().forward(key.getPrimaryKey(), newValue, To.all().withTimestamp(context().timestamp()));
+                } else if (value.getInstruction() == PROPAGATE_ONLY_IF_FK_VAL_AVAILABLE && foreignValueAndTime != null) {
+                    final SubscriptionResponseWrapper<VO> newValue = new SubscriptionResponseWrapper<>(value.getHash(), foreignValueAndTime.value());
+                    context().forward(key.getPrimaryKey(), newValue, To.all().withTimestamp(context().timestamp()));
                 }
             }
         };

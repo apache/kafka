@@ -838,14 +838,28 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
         Objects.requireNonNull(joiner, "joiner can't be null");
         Objects.requireNonNull(materialized, "materialized can't be null");
 
-        return doJoinOnForeignKey(other, foreignKeyExtractor, joiner, new MaterializedInternal<>(materialized));
+        return doJoinOnForeignKey(other, foreignKeyExtractor, joiner, new MaterializedInternal<>(materialized), false);
+    }
+
+    @Override
+    public <VR, KO, VO> KTable<K, VR> leftJoin(final KTable<KO, VO> other,
+                                               final ValueMapper<V, KO> foreignKeyExtractor,
+                                               final ValueJoiner<V, VO, VR> joiner,
+                                               final Materialized<K, VR, KeyValueStore<Bytes, byte[]>> materialized) {
+        Objects.requireNonNull(other, "other can't be null");
+        Objects.requireNonNull(foreignKeyExtractor, "foreignKeyExtractor can't be null");
+        Objects.requireNonNull(joiner, "joiner can't be null");
+        Objects.requireNonNull(materialized, "materialized can't be null");
+
+        return doJoinOnForeignKey(other, foreignKeyExtractor, joiner, new MaterializedInternal<>(materialized), true);
     }
 
     @SuppressWarnings("unchecked")
     private <VR, KO, VO> KTable<K, VR> doJoinOnForeignKey(final KTable<KO, VO> other,
                                                           final ValueMapper<V, KO> foreignKeyExtractor,
                                                           final ValueJoiner<V, VO, VR> joiner,
-                                                          final MaterializedInternal<K, VR, KeyValueStore<Bytes, byte[]>> materializedInternal) {
+                                                          final MaterializedInternal<K, VR, KeyValueStore<Bytes, byte[]>> materializedInternal,
+                                                          final boolean leftJoin) {
         //Old values are a useful optimization. The old values from the other table are compared to the new values,
         //such that identical values do not cause a prefixScan. PrefixScan and propagation can be expensive and should
         //not be done needlessly.
@@ -864,7 +878,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
 
         // repartition original => intermediate topic
         final KTableRepartitionerProcessorSupplier<K, KO, V> repartitionProcessor =
-                new KTableRepartitionerProcessorSupplier<>(foreignKeyExtractor, valSerde.serializer());
+                new KTableRepartitionerProcessorSupplier<>(foreignKeyExtractor, valSerde.serializer(), leftJoin);
 
         final CombinedKeySerde<KO, K> combinedKeySerde = new CombinedKeySerde<>(((KTableImpl<KO, VO, ?>) other).keySerde(), keySerde);
 
@@ -899,7 +913,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
         //Create the processor to resolve the subscription updates.
         final KTableValueGetterSupplier<K, V> thisKTableValueGetterSupplier = this.valueGetterSupplier();
 
-        final SubscriptionResolverJoinProcessorSupplier<K, V, VO, VR> resolverProcessor = new SubscriptionResolverJoinProcessorSupplier<>(thisKTableValueGetterSupplier, valueSerde().serializer(), joiner);
+        final SubscriptionResolverJoinProcessorSupplier<K, V, VO, VR> resolverProcessor = new SubscriptionResolverJoinProcessorSupplier<>(thisKTableValueGetterSupplier, valueSerde().serializer(), joiner, leftJoin);
         final String resolverProcessorName = builder.newProcessorName(KTableImpl.SOURCE_NAME + "resolver");
 
         final KTableSource<K, VR> outputProcessor = new KTableSource<>(materializedInternal.storeName(), materializedInternal.queryableStoreName());

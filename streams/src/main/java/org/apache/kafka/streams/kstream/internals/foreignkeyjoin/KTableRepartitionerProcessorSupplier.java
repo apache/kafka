@@ -19,7 +19,6 @@ package org.apache.kafka.streams.kstream.internals.foreignkeyjoin;
 
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Murmur3;
-import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.kstream.ValueMapper;
 import org.apache.kafka.streams.kstream.internals.Change;
 import org.apache.kafka.streams.processor.AbstractProcessor;
@@ -33,11 +32,14 @@ public class KTableRepartitionerProcessorSupplier<K, KO, V> implements Processor
 
     private final ValueMapper<V, KO> mapper;
     private final Serializer<V> valueSerializer;
+    private final boolean leftJoin;
 
     public KTableRepartitionerProcessorSupplier(final ValueMapper<V, KO> extractor,
-                                                final Serializer<V> valueSerializer) {
+                                                final Serializer<V> valueSerializer,
+                                                boolean leftJoin) {
         this.mapper = extractor;
         this.valueSerializer = valueSerializer;
+        this.leftJoin = leftJoin;
     }
 
     @Override
@@ -58,16 +60,6 @@ public class KTableRepartitionerProcessorSupplier<K, KO, V> implements Processor
             long[] currentHash = (change.newValue == null ?
                     Murmur3.hash128(new byte[]{}):
                     Murmur3.hash128(valueSerializer.serialize(context().topic(), change.newValue)));
-
-            //DELETE_KEY_NO_PROPAGATE
-              //Send nothing. Do not propagate.
-            //DELETE_KEY_AND_PROPAGATE
-              //Send (k, null)
-            //PROPAGATE_NULL_IF_NO_FK_VAL_AVAILABLE (changing foreign key, but FK+Val may not exist)
-              //Send (k, fk-val) OR
-              //Send (k, null) if fk-val does not exist
-            //PROPAGATE_ONLY_IF_FK_VAL_AVAILABLE (first time ever sending key)
-              //Send (k, fk-val) only if fk-val exists.
 
             if (change.oldValue != null) {
                 final KO oldForeignKey = mapper.apply(change.oldValue);
@@ -100,7 +92,14 @@ public class KTableRepartitionerProcessorSupplier<K, KO, V> implements Processor
                 //have been propagated otherwise.
                 final KO extractedForeignKeyValue = mapper.apply(change.newValue);
                 final CombinedKey<KO, K> newCombinedKeyValue = new CombinedKey<>(extractedForeignKeyValue, key);
-                context().forward(newCombinedKeyValue, new SubscriptionWrapper(currentHash, PROPAGATE_ONLY_IF_FK_VAL_AVAILABLE));
+                SubscriptionWrapper.Instruction instruction;
+                if (leftJoin) {
+                    //Want to send info even if RHS is null.
+                    instruction = PROPAGATE_NULL_IF_NO_FK_VAL_AVAILABLE;
+                } else {
+                    instruction = PROPAGATE_ONLY_IF_FK_VAL_AVAILABLE;
+                }
+                context().forward(newCombinedKeyValue, new SubscriptionWrapper(currentHash, instruction));
             }
         }
 

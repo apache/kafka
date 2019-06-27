@@ -32,13 +32,16 @@ public class SubscriptionResolverJoinProcessorSupplier<K, V, VO, VR> implements 
     private final KTableValueGetterSupplier<K, V> valueGetterSupplier;
     private final Serializer<V> valueSerializer;
     private final ValueJoiner<V, VO, VR> joiner;
+    private final boolean leftJoin;
 
     public SubscriptionResolverJoinProcessorSupplier(final KTableValueGetterSupplier<K, V> valueGetterSupplier,
                                                      final Serializer<V> valueSerializer,
-                                                     final ValueJoiner<V, VO, VR> joiner) {
+                                                     final ValueJoiner<V, VO, VR> joiner,
+                                                     final boolean leftJoin) {
         this.valueGetterSupplier = valueGetterSupplier;
         this.valueSerializer = valueSerializer;
         this.joiner = joiner;
+        this.leftJoin = leftJoin;
     }
 
     @Override
@@ -73,13 +76,13 @@ public class SubscriptionResolverJoinProcessorSupplier<K, V, VO, VR> implements 
 
                 //If this value doesn't match the current value from the original table, it is stale and should be discarded.
                 if (java.util.Arrays.equals(messageHash, currentHash)) {
-                    final VO otherValue = value.getForeignValue();
-                    //Inner Join
-                    VR result = null;
-                    if (value.isPropagate()) {
-                        result = null;
-                    } else if (otherValue != null && currentValueWithTimestamp != null) {
-                        result = joiner.apply(currentValueWithTimestamp.value(), otherValue);
+                    VR result;
+
+                    if (value.getForeignValue() == null && !leftJoin ||
+                            leftJoin && currentValueWithTimestamp == null && value.getForeignValue() == null) {
+                        result = null; //Emit tombstone
+                    } else {
+                        result = joiner.apply(currentValueWithTimestamp == null ? null : currentValueWithTimestamp.value(), value.getForeignValue());
                     }
                     context().forward(key, result);
                 }
