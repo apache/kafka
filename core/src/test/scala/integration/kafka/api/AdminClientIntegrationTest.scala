@@ -24,12 +24,13 @@ import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger}
 import java.util.concurrent.{CountDownLatch, ExecutionException, TimeUnit}
 import java.util.{Collections, Properties}
 import java.{time, util}
+
 import kafka.log.LogConfig
 import kafka.security.auth.{Cluster, Group, Topic}
 import kafka.server.{Defaults, KafkaConfig, KafkaServer}
 import kafka.utils.Implicits._
 import kafka.utils.TestUtils._
-import kafka.utils.{Log4jController, Logging, TestUtils}
+import kafka.utils.{Logging, TestUtils}
 import kafka.zk.KafkaZkClient
 import org.apache.kafka.clients.admin._
 import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer}
@@ -49,6 +50,7 @@ import org.junit.Assert._
 import org.junit.rules.Timeout
 import org.junit.{After, Before, Rule, Test}
 import org.scalatest.Assertions.intercept
+
 import scala.collection.JavaConverters._
 import scala.collection.Seq
 import scala.compat.java8.OptionConverters._
@@ -69,6 +71,7 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
 
   var client: Admin = null
   var brokerLoggerConfigResource: ConfigResource = null
+  var changedBrokerLoggers = scala.collection.mutable.Set[String]()
 
   val topic = "topic"
   val partition = 0
@@ -83,6 +86,7 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
 
   @After
   override def tearDown(): Unit = {
+    teardownBrokerLoggers()
     if (client != null)
       Utils.closeQuietly(client, "AdminClient")
     super.tearDown()
@@ -1852,7 +1856,7 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
       new AlterConfigOp(new ConfigEntry("root", newRootLogLevel), AlterConfigOp.OpType.SET)
     ).asJavaCollection
     // Test validateOnly does not change anything
-    client.incrementalAlterConfigs(Map(brokerLoggerConfigResource -> alterRootLoggerEntry).asJava, new AlterConfigsOptions().validateOnly(true)).values.get(brokerLoggerConfigResource).get()
+    alterBrokerLoggers(alterRootLoggerEntry, validateOnly = true)
     val validatedLoggerConfig = describeBrokerLoggers()
     assertEquals(initialRootLogLevel, validatedLoggerConfig.get("root").value())
     assertEquals(initialRootLogLevel, validatedLoggerConfig.get("kafka.controller.KafkaController").value())
@@ -1861,7 +1865,7 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
     assertEquals(initialRootLogLevel, validatedLoggerConfig.get("kafka.zookeeper.ZooKeeperClient").value())
 
     // test that we can change them and unset loggers still use the root's log level
-    client.incrementalAlterConfigs(Map(brokerLoggerConfigResource -> alterRootLoggerEntry).asJava).values.get(brokerLoggerConfigResource).get()
+    alterBrokerLoggers(alterRootLoggerEntry)
     val changedRootLoggerConfig = describeBrokerLoggers()
     assertEquals(newRootLogLevel, changedRootLoggerConfig.get("root").value())
     assertEquals(newRootLogLevel, changedRootLoggerConfig.get("kafka.controller.KafkaController").value())
@@ -1873,7 +1877,7 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
     val alterZKLoggerEntry = Seq(
       new AlterConfigOp(new ConfigEntry("kafka.zookeeper.ZooKeeperClient", LogLevelConfig.ERROR_LOG_LEVEL), AlterConfigOp.OpType.SET)
     ).asJavaCollection
-    client.incrementalAlterConfigs(Map(brokerLoggerConfigResource -> alterZKLoggerEntry).asJava).values.get(brokerLoggerConfigResource).get()
+    alterBrokerLoggers(alterZKLoggerEntry)
     val changedZKLoggerConfig = describeBrokerLoggers()
     assertEquals(LogLevelConfig.ERROR_LOG_LEVEL, changedZKLoggerConfig.get("kafka.zookeeper.ZooKeeperClient").value())
 
@@ -1884,7 +1888,7 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
       new AlterConfigOp(new ConfigEntry("kafka.server.ReplicaManager", LogLevelConfig.TRACE_LOG_LEVEL), AlterConfigOp.OpType.SET),
       new AlterConfigOp(new ConfigEntry("kafka.zookeeper.ZooKeeperClient", ""), AlterConfigOp.OpType.DELETE) // should reset to the root logger level
     ).asJavaCollection
-    client.incrementalAlterConfigs(Map(brokerLoggerConfigResource -> alterLogLevelsEntries).asJava).values.get(brokerLoggerConfigResource).get()
+    alterBrokerLoggers(alterLogLevelsEntries)
     val alteredLoggerConfig = describeBrokerLoggers()
     assertEquals(newRootLogLevel, alteredLoggerConfig.get("root").value())
     assertEquals(LogLevelConfig.INFO_LOG_LEVEL, alteredLoggerConfig.get("kafka.controller.KafkaController").value())
@@ -1910,32 +1914,28 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
       new AlterConfigOp(new ConfigEntry("kafka.server.KafkaRequestHandler", LogLevelConfig.INFO_LOG_LEVEL), AlterConfigOp.OpType.SET), // valid
       new AlterConfigOp(new ConfigEntry("kafka.network.SocketServer", LogLevelConfig.ERROR_LOG_LEVEL), AlterConfigOp.OpType.APPEND) // append is not supported
     ).asJavaCollection
-    val appendAlterResult = client.incrementalAlterConfigs(Map(brokerLoggerConfig -> appendLogLevelEntries).asJava)
-    assertTrue(intercept[ExecutionException](appendAlterResult.values.get(brokerLoggerConfig).get).getCause.isInstanceOf[InvalidRequestException])
+    assertTrue(intercept[ExecutionException](alterBrokerLoggers(appendLogLevelEntries)).getCause.isInstanceOf[InvalidRequestException])
     assertLogLevelDidNotChange()
 
     val subtractLogLevelEntries = Seq(
       new AlterConfigOp(new ConfigEntry("kafka.server.KafkaRequestHandler", LogLevelConfig.INFO_LOG_LEVEL), AlterConfigOp.OpType.SET), // valid
       new AlterConfigOp(new ConfigEntry("kafka.network.SocketServer", LogLevelConfig.ERROR_LOG_LEVEL), AlterConfigOp.OpType.SUBTRACT) // subtract is not supported
     ).asJavaCollection
-    val subtractAlterResult = client.incrementalAlterConfigs(Map(brokerLoggerConfig -> subtractLogLevelEntries).asJava)
-    assertTrue(intercept[ExecutionException](subtractAlterResult.values.get(brokerLoggerConfig).get).getCause.isInstanceOf[InvalidRequestException])
+    assertTrue(intercept[ExecutionException](alterBrokerLoggers(subtractLogLevelEntries)).getCause.isInstanceOf[InvalidRequestException])
     assertLogLevelDidNotChange()
 
     val invalidLogLevelLogLevelEntries = Seq(
       new AlterConfigOp(new ConfigEntry("kafka.server.KafkaRequestHandler", LogLevelConfig.INFO_LOG_LEVEL), AlterConfigOp.OpType.SET), // valid
       new AlterConfigOp(new ConfigEntry("kafka.network.SocketServer", "OFF"), AlterConfigOp.OpType.SET) // OFF is not a valid log level
     ).asJavaCollection
-    val invalidLogLevelAlterResult = client.incrementalAlterConfigs(Map(brokerLoggerConfig -> invalidLogLevelLogLevelEntries).asJava)
-    assertTrue(intercept[ExecutionException](invalidLogLevelAlterResult.values.get(brokerLoggerConfig).get).getCause.isInstanceOf[InvalidRequestException])
+    assertTrue(intercept[ExecutionException](alterBrokerLoggers(invalidLogLevelLogLevelEntries)).getCause.isInstanceOf[InvalidRequestException])
     assertLogLevelDidNotChange()
 
     val invalidLoggerNameLogLevelEntries = Seq(
       new AlterConfigOp(new ConfigEntry("kafka.server.KafkaRequestHandler", LogLevelConfig.INFO_LOG_LEVEL), AlterConfigOp.OpType.SET), // valid
       new AlterConfigOp(new ConfigEntry("Some Other LogCleaner", LogLevelConfig.ERROR_LOG_LEVEL), AlterConfigOp.OpType.SET) // invalid logger name is not supported
     ).asJavaCollection
-    val invalidLoggerNameAlterResult = client.incrementalAlterConfigs(Map(brokerLoggerConfig -> invalidLoggerNameLogLevelEntries).asJava)
-    assertTrue(intercept[ExecutionException](invalidLoggerNameAlterResult.values.get(brokerLoggerConfig).get).getCause.isInstanceOf[InvalidRequestException])
+    assertTrue(intercept[ExecutionException](alterBrokerLoggers(invalidLoggerNameLogLevelEntries)).getCause.isInstanceOf[InvalidRequestException])
     assertLogLevelDidNotChange()
   }
 
@@ -1955,8 +1955,37 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
     assertTrue(intercept[ExecutionException](alterResult.values.get(brokerLoggerConfig).get).getCause.isInstanceOf[InvalidRequestException])
   }
 
+  def alterBrokerLoggers(entries: util.Collection[AlterConfigOp], validateOnly: Boolean = false): Unit = {
+    if (!validateOnly) {
+      for (entry <- entries.asScala)
+        changedBrokerLoggers.add(entry.configEntry().name())
+    }
+
+    client.incrementalAlterConfigs(Map(brokerLoggerConfigResource -> entries).asJava, new AlterConfigsOptions().validateOnly(validateOnly))
+      .values.get(brokerLoggerConfigResource).get()
+  }
+
   def describeBrokerLoggers(): Config =
     client.describeConfigs(Collections.singletonList(brokerLoggerConfigResource)).values.get(brokerLoggerConfigResource).get()
+
+  /**
+    * Due to the way tests are ran, changing a logger's log level persists across test classes.
+    * We need to clean up the changes done while testing.
+    */
+  def teardownBrokerLoggers(): Unit = {
+    if (changedBrokerLoggers.nonEmpty) {
+      // clean up changed loggers in the JVM
+      val validLoggers = describeBrokerLoggers().entries().asScala.map(_.name).toSet
+      // fail the command if any of the configured broker loggers do not exist
+      val resetBrokerLoggersEntries = changedBrokerLoggers
+        .intersect(validLoggers)
+        .map { logger => new AlterConfigOp(new ConfigEntry(logger, ""), AlterConfigOp.OpType.DELETE) }
+        .asJavaCollection
+      alterBrokerLoggers(resetBrokerLoggersEntries)
+
+      changedBrokerLoggers.clear()
+    }
+  }
 }
 
 object AdminClientIntegrationTest {
