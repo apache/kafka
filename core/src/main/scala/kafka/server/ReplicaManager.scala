@@ -867,12 +867,14 @@ class ReplicaManager(val config: KafkaConfig,
       bytesReadable = bytesReadable + logReadResult.info.records.sizeInBytes
       logReadResultMap.put(topicPartition, logReadResult)
     }
+    val numPartitionsWithoutCachedHW = fetchInfos.flatMap(info => followerHighWatermarks(info._1)).size
 
     // respond immediately if 1) fetch request does not want to wait
     //                        2) fetch request does not require any data
     //                        3) has enough data to respond
     //                        4) some error happens while reading data
-    if (timeout <= 0 || fetchInfos.isEmpty || bytesReadable >= fetchMinBytes || errorReadingData) {
+    //                        5) there are no cached HW for the follower
+    if (timeout <= 0 || fetchInfos.isEmpty || bytesReadable >= fetchMinBytes || errorReadingData || numPartitionsWithoutCachedHW == 0) {
       val fetchPartitionData = logReadResults.map { case (tp, result) =>
 
         tp -> FetchPartitionData(result.error, result.highWatermark, result.leaderLogStartOffset, result.info.records,
