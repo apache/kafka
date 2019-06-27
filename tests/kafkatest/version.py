@@ -49,6 +49,9 @@ class KafkaVersion(LooseVersion):
         else:
             return LooseVersion.__str__(self)
 
+    def supports_named_listeners(self):
+        return self >= V_0_10_2_0
+
 
 def get_version(node=None):
     """Return the version attached to the given node.
