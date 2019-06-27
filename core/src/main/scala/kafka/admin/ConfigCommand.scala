@@ -566,6 +566,14 @@ object ConfigCommand extends Config {
       else if (options.has(bootstrapServerOpt) && !options.has(entityName) && !options.has(entityDefault))
         throw new IllegalArgumentException(s"At least one of --entity-name or --entity-default must be specified with --bootstrap-server")
 
+      if (options.has(entityName) && (entityTypeVals.contains(EntityType.Broker) || entityTypeVals.contains(EntityType.BrokerLogger))) {
+        val brokerId = options.valueOf(entityName)
+        try brokerId.toInt catch {
+          case _: NumberFormatException =>
+            throw new IllegalArgumentException(s"The entity name for ${entityTypeVals.head} must be a valid integer broker id , but it is: $brokerId")
+        }
+      }
+
       if (entityTypeVals.contains(EntityType.Client) || entityTypeVals.contains(EntityType.Topic) || entityTypeVals.contains(EntityType.User))
         CommandLineUtils.checkRequiredArgs(parser, options, zkConnectOpt, entityType)
 
