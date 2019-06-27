@@ -1078,7 +1078,7 @@ object GroupMetadataManager {
     val schemaOpt = MESSAGE_TYPE_SCHEMAS.get(version)
     schemaOpt match {
       case Some(schema) => schema
-      case _ => throw new KafkaException("Unknown offset schema version " + version)
+      case _ => throw new KafkaException("Unknown message key schema version " + version)
     }
   }
 

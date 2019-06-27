@@ -273,12 +273,7 @@ public class KafkaAdminClient extends AdminClient {
      * @return      The list value.
      */
     static <K, V> List<V> getOrCreateListValue(Map<K, List<V>> map, K key) {
-        List<V> list = map.get(key);
-        if (list != null)
-            return list;
-        list = new LinkedList<>();
-        map.put(key, list);
-        return list;
+        return map.computeIfAbsent(key, k -> new LinkedList<>());
     }
 
     /**
