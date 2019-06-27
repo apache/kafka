@@ -19,10 +19,10 @@ package kafka.admin
 import java.util
 import java.util.Properties
 
-import kafka.admin.ConfigCommand.{ConfigCommandOptions, EntityType}
+import kafka.admin.ConfigCommand.ConfigCommandOptions
 import kafka.api.ApiVersion
 import kafka.cluster.{Broker, EndPoint}
-import kafka.server.{ConfigEntityName, KafkaConfig}
+import kafka.server.{ConfigEntityName, ConfigType, KafkaConfig}
 import kafka.utils.{Exit, Logging}
 import kafka.zk.{AdminZkClient, BrokerInfo, KafkaZkClient, ZooKeeperTestHarness}
 import org.apache.kafka.clients.admin._
@@ -252,7 +252,7 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
   @Test
   def testNoSpecifiedEntityOptionWithDescribeBrokersInZKIsAllowed(): Unit = {
     val optsList = List("--zookeeper", "localhost:9092",
-      "--entity-type", EntityType.Broker,
+      "--entity-type", ConfigType.Broker,
       "--describe"
     )
 
@@ -262,7 +262,7 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
   @Test(expected = classOf[IllegalArgumentException])
   def testNoSpecifiedEntityOptionWithDescribeBrokersInBootstrapServerIsNotAllowed(): Unit = {
     val optsList = List("--bootstrap-server", "localhost:9092",
-      "--entity-type", EntityType.Broker,
+      "--entity-type", ConfigType.Broker,
       "--describe"
     )
 
@@ -273,7 +273,7 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
   def testEntityDefaultOptionWithDescribeBrokerLoggerIsNotAllowed(): Unit = {
     val node = new Node(1, "localhost", 9092)
     val optsList = List("--bootstrap-server", "localhost:9092",
-      "--entity-type", EntityType.BrokerLogger,
+      "--entity-type", ConfigCommand.BrokerLoggerConfigType,
       "--entity-default",
       "--describe"
     )
@@ -285,7 +285,7 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
   def testEntityDefaultOptionWithAlterBrokerLoggerIsNotAllowed(): Unit = {
     val node = new Node(1, "localhost", 9092)
     val optsList = List("--bootstrap-server", "localhost:9092",
-      "--entity-type", EntityType.BrokerLogger,
+      "--entity-type", ConfigCommand.BrokerLoggerConfigType,
       "--entity-default",
       "--alter",
       "--add-config", "kafka.log.LogCleaner=DEBUG"
@@ -350,7 +350,7 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
       }
     }
     EasyMock.replay(alterResult, describeResult)
-    ConfigCommand.alterBrokerConfig(mockAdminClient, alterOpts, EntityType.Broker, resourceName)
+    ConfigCommand.alterBrokerConfig(mockAdminClient, alterOpts, ConfigType.Broker, resourceName)
     assertEquals(Map("message.max.bytes" -> "10", "num.io.threads" -> "5"), brokerConfigs.toMap)
     EasyMock.reset(alterResult, describeResult)
   }
@@ -358,7 +358,7 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
   def verifyAlterBrokerLoggerConfig(node: Node, resourceName: String, entityName: String,
                                     describeConfigEntries: List[ConfigEntry]): Unit = {
     val optsList = List("--bootstrap-server", "localhost:9092",
-      "--entity-type", EntityType.BrokerLogger,
+      "--entity-type", ConfigCommand.BrokerLoggerConfigType,
       "--alter",
       "--entity-name", entityName,
       "--add-config", "kafka.log.LogCleaner=DEBUG",
@@ -405,7 +405,7 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
       }
     }
     EasyMock.replay(alterResult, describeResult)
-    ConfigCommand.alterBrokerConfig(mockAdminClient, alterOpts, EntityType.BrokerLogger, resourceName)
+    ConfigCommand.alterBrokerConfig(mockAdminClient, alterOpts, ConfigCommand.BrokerLoggerConfigType, resourceName)
     assertTrue(alteredConfigs)
     EasyMock.reset(alterResult, describeResult)
   }
