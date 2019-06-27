@@ -72,6 +72,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -774,6 +775,10 @@ public abstract class AbstractCoordinator implements Closeable {
     protected synchronized String memberId() {
         return generation == null ? JoinGroupRequest.UNKNOWN_MEMBER_ID :
                 generation.memberId;
+    }
+
+    protected Optional<String> groupInstanceId() {
+        return rebalanceConfig.groupInstanceId;
     }
 
     /**

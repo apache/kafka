@@ -588,7 +588,6 @@ public class SubscriptionState {
                 .collect(collector);
     }
 
-
     public synchronized void resetMissingPositions() {
         final Set<TopicPartition> partitionsWithNoOffsets = new HashSet<>();
         assignment.stream().forEach(state -> {

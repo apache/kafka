@@ -21,6 +21,8 @@ import org.apache.kafka.clients.ClientDnsLookup;
 import org.apache.kafka.clients.ClientUtils;
 import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.clients.NetworkClient;
+import org.apache.kafka.clients.consumer.Consumer;
+import org.apache.kafka.clients.consumer.EosConsumerStateAccessor;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetCommitCallback;
@@ -622,6 +624,13 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         sender.wakeup();
         result.await(maxBlockTimeMs, TimeUnit.MILLISECONDS);
     }
+
+    public void initTransactions(Consumer<byte[], byte[]> consumer) {
+        EosConsumerStateAccessor accessor = new EosConsumerStateAccessor(consumer);
+
+        initTransactions();
+    }
+
 
     /**
      * Should be called before the start of each new transaction. Note that prior to the first invocation

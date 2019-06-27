@@ -566,7 +566,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
 
     private final Logger log;
     private final String clientId;
-    private String groupId;
+    final String groupId;
     private final ConsumerCoordinator coordinator;
     private final Deserializer<K> keyDeserializer;
     private final Deserializer<V> valueDeserializer;
@@ -2305,4 +2305,21 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     String getClientId() {
         return clientId;
     }
+
+    String memberId() {
+        return coordinator.memberId();
+    }
+
+    int generationId() {
+        return coordinator.generationId();
+    }
+
+    Optional<String> groupInstanceId() {
+        return coordinator.groupInstanceId();
+    }
+
+    void fullOffsetFetch(final long timeout) {
+        coordinator.fetchCommittedOffsets(subscriptions.assignedPartitions(), time.timer(timeout));
+    }
+
 }

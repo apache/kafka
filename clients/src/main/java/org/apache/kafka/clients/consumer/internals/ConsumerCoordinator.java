@@ -1158,7 +1158,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         }
     }
 
-    private static class MetadataSnapshot {
+    static class MetadataSnapshot {
         private final int version;
         private final Map<String, Integer> partitionsPerTopic;
 
@@ -1195,5 +1195,17 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     /* test-only classes below */
     RebalanceProtocol getProtocol() {
         return protocol;
+    }
+
+    public String memberId() {
+        return super.memberId();
+    }
+
+    public int generationId() {
+        return super.generation().generationId;
+    }
+
+    public Optional<String> groupInstanceId() {
+        return super.groupInstanceId();
     }
 }

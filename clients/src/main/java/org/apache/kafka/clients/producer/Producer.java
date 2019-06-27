@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.producer;
 
+import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.PartitionInfo;
@@ -41,6 +42,12 @@ public interface Producer<K, V> extends Closeable {
      * See {@link KafkaProducer#initTransactions()}
      */
     void initTransactions();
+
+    /**
+     * See {@link KafkaProducer#initTransactions(Consumer)}
+     */
+    void initTransactions(Consumer<byte[], byte[]> consumer);
+
 
     /**
      * See {@link KafkaProducer#beginTransaction()}
