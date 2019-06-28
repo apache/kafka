@@ -84,7 +84,7 @@ import static org.apache.kafka.streams.kstream.internals.graph.GraphGraceSearchU
 public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<K, V> {
     private static final Logger LOG = LoggerFactory.getLogger(KTableImpl.class);
 
-    static final String SOURCE_NAME = "KSTREAM-SOURCE-";
+    static final String SOURCE_NAME = "KTABLE-SOURCE-";
 
     static final String STATE_STORE_NAME = "STATE-STORE-";
 
@@ -106,17 +106,16 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
 
     private static final String TRANSFORMVALUES_NAME = "KTABLE-TRANSFORMVALUES-";
 
-    private static final String FK_JOIN_STATE_STORE_NAME_SUFFIX = "-INTERNAL-SUBSCRIPTION-STATE-STORE-";
-    private static final String PREFIX_SCAN_PROCESSOR_SUFFIX = "-PREFIX-SCAN-PROCESSOR-";
+    private static final String FK_JOIN_STATE_STORE_NAME = "KTABLE-INTERNAL-SUBSCRIPTION-STATE-STORE-";
+    private static final String PREFIX_SCAN_PROCESSOR = "KTABLE-PREFIX-SCAN-PROCESSOR-";
     private static final String JOIN_ON_FOREIGN_KEY_NAME = "KTABLE-JOIN-ON-FOREIGN-KEY-";
-    private static final String SUBSCRIPTION_REGISTRATION_SUFFIX = "-SUBSCRIPTION-REGISTRATION-";
-    private static final String SUBSCRIPTION_RESPONSE_SUFFIX = "-SUBSCRIPTION-RESPONSE-";
-    private static final String SUBSCRIPTION_PROCESSOR_SUFFIX = "-SUBSCRIPTION-PROCESSOR-";
-    private static final String SUBSCRIPTION_RESPONSE_RESOLVER_PROCESSOR_SUFFIX = "-SUBSCRIPTION-RESPONSE-RESOLVER-PROCESSOR-";
-    private static final String FOREIGN_KEY_JOIN_OUTPUT_PROCESSOR_SUFFIX = "-FOREIGN-KEY-JOIN-OUTPUT-PROCESSOR-";
-    private static final String SOURCE_NAME_SUFFIX = "-SOURCE-";
-    private static final String SINK_NAME_SUFFIX = "-SINK-";
-    private static final String TOPIC_SUFFIX = "-TOPIC-";
+    private static final String SUBSCRIPTION_REGISTRATION = "KTABLE-SUBSCRIPTION-REGISTRATION-";
+    private static final String SUBSCRIPTION_RESPONSE = "KTABLE-SUBSCRIPTION-RESPONSE-";
+    private static final String SUBSCRIPTION_PROCESSOR = "KTABLE-SUBSCRIPTION-PROCESSOR-";
+    private static final String SUBSCRIPTION_RESPONSE_RESOLVER_PROCESSOR = "KTABLE-SUBSCRIPTION-RESPONSE-RESOLVER-PROCESSOR-";
+    private static final String FK_JOIN_OUTPUT_PROCESSOR = "KTABLE-OUTPUT-PROCESSOR-";
+    private static final String TOPIC_SUFFIX = "-topic";
+    private static final String SINK_NAME = "KTABLE-SINK-";
 
     private final ProcessorSupplier<?, ?> processorSupplier;
 
@@ -897,13 +896,12 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
         final String namedPrefix = renamed.orElseGenerateWithPrefix(builder, JOIN_ON_FOREIGN_KEY_NAME);
 
         //Must make a repartitioner processor, and an associated topic with a sink and source processor.
-        final String repartitionProcessorName = builder.newProcessorName(namedPrefix + SUBSCRIPTION_REGISTRATION_SUFFIX);
+        final String repartitionProcessorName = renamed.suffixWithOrElseGet("-subscription-registration-processor", builder, SUBSCRIPTION_REGISTRATION);
         final String repartitionTopicName = repartitionProcessorName + TOPIC_SUFFIX;
-        final String repartitionSourceName = builder.newProcessorName(repartitionProcessorName + SOURCE_NAME_SUFFIX);
-        final String repartitionSinkName = builder.newProcessorName(repartitionProcessorName + SINK_NAME_SUFFIX);
+        final String repartitionSourceName = renamed.suffixWithOrElseGet("-subscription-registration-source", builder, SOURCE_NAME);
+        final String repartitionSinkName = renamed.suffixWithOrElseGet("-subscription-registration-sink", builder, SINK_NAME);
 
-        //TODO - Rename the JOINTHIS to something more descriptive...
-        final String oneToOneName = builder.newProcessorName(namedPrefix + SUBSCRIPTION_PROCESSOR_SUFFIX);
+        final String oneToOneName = renamed.suffixWithOrElseGet("-subscription-processor", builder, SUBSCRIPTION_PROCESSOR);
 
         //Create a processor that generates and sends subscription requests (SubscriptionWrapper) to the
         //ForeignKeySingleLookupProcessorSupplier.
@@ -924,7 +922,9 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
         //
         //SubscriptionResponseWrappers are issued depending on the results of the SubscriptionWrapper processing
         //and the presence of the matching keyed event in the foreignKeyTable KTable.
-        final String subscriptionStateStoreName = builder.newProcessorName(namedPrefix + FK_JOIN_STATE_STORE_NAME_SUFFIX);
+
+
+        final String subscriptionStateStoreName = renamed.suffixWithOrElseGet("-subscription-state-store", builder, FK_JOIN_STATE_STORE_NAME);
         final ForeignKeySingleLookupProcessorSupplier<K, KO, VO> oneToOne =
                 new ForeignKeySingleLookupProcessorSupplier<>(subscriptionStateStoreName, ((KTableImpl<KO, VO, VO>) foreignKeyTable).valueGetterSupplier());
 
@@ -940,22 +940,24 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
         //finalRepartitionTopicName below.
         final ProcessorSupplier<KO, Change<VO>> prefixScanProcessorSupplier =
                 new KTableKTablePrefixScanProcessorSupplier<>(oneToOne.valueGetterSupplier());
-        final String prefixScanProcessorSupplierName = builder.newProcessorName(namedPrefix + PREFIX_SCAN_PROCESSOR_SUFFIX);
+
+
+        final String prefixScanProcessorSupplierName = renamed.suffixWithOrElseGet("-prefix-scan-processor", builder, PREFIX_SCAN_PROCESSOR);
 
         //Rekey all SubscriptionResponseWrapper events back to K from KO, to ensure they end up in the the same partition.
-        final String finalRepartitionerName = builder.newProcessorName(namedPrefix + SUBSCRIPTION_RESPONSE_SUFFIX);
+        final String finalRepartitionerName = renamed.suffixWithOrElseGet("-subscription-response-processor", builder, SUBSCRIPTION_RESPONSE);
         final String finalRepartitionTopicName = finalRepartitionerName + TOPIC_SUFFIX;
-        final String finalRepartitionSourceName = builder.newProcessorName(finalRepartitionerName + SOURCE_NAME_SUFFIX);
-        final String finalRepartitionSinkName = builder.newProcessorName(finalRepartitionerName + SINK_NAME_SUFFIX);
+        final String finalRepartitionSourceName = renamed.suffixWithOrElseGet("-subscription-response-source", builder, SOURCE_NAME);
+        final String finalRepartitionSinkName = renamed.suffixWithOrElseGet("-subscription-response-sink", builder, SINK_NAME);
 
         //Create the processor to resolve the subscription updates.
         final KTableValueGetterSupplier<K, V> thisKTableValueGetterSupplier = this.valueGetterSupplier();
 
         final SubscriptionResolverJoinProcessorSupplier<K, V, VO, VR> resolverProcessor = new SubscriptionResolverJoinProcessorSupplier<>(thisKTableValueGetterSupplier, valueSerde().serializer(), joiner, leftJoin);
-        final String resolverProcessorName = builder.newProcessorName(namedPrefix + SUBSCRIPTION_RESPONSE_RESOLVER_PROCESSOR_SUFFIX);
+        final String resolverProcessorName = renamed.suffixWithOrElseGet("-subscription-response-resolver-processor", builder, SUBSCRIPTION_RESPONSE_RESOLVER_PROCESSOR);
 
         final KTableSource<K, VR> outputProcessor = new KTableSource<>(materializedInternal.storeName(), materializedInternal.queryableStoreName());
-        final String outputProcessorName = builder.newProcessorName(namedPrefix + FOREIGN_KEY_JOIN_OUTPUT_PROCESSOR_SUFFIX);
+        final String outputProcessorName = renamed.suffixWithOrElseGet("-output-processor", builder, FK_JOIN_OUTPUT_PROCESSOR);
 
         final HashSet<String> copartitions = new HashSet<>();
         copartitions.add(repartitionSourceName);
