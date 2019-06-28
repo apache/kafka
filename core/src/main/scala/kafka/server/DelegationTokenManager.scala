@@ -165,7 +165,7 @@ class DelegationTokenManager(val config: KafkaConfig,
 
   import DelegationTokenManager._
 
-  type CreateResponseCallback = CreateTokenResult => Unit
+  type CreateResponseCallback = CreateTokenResult => UnitKafkaApis.scala
   type RenewResponseCallback = (Errors, Long) => Unit
   type ExpireResponseCallback = (Errors, Long) => Unit
   type DescribeResponseCallback = (Errors, List[DelegationToken]) => Unit

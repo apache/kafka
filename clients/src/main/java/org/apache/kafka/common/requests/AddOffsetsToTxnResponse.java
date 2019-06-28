@@ -16,30 +16,17 @@
  */
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.message.AddOffsetsToTxnResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
 import java.util.Map;
 
-import static org.apache.kafka.common.protocol.CommonFields.ERROR_CODE;
-import static org.apache.kafka.common.protocol.CommonFields.THROTTLE_TIME_MS;
-
 public class AddOffsetsToTxnResponse extends AbstractResponse {
-    private static final Schema ADD_OFFSETS_TO_TXN_RESPONSE_V0 = new Schema(
-            THROTTLE_TIME_MS,
-            ERROR_CODE);
 
-    /**
-     * The version number is bumped to indicate that on quota violation brokers send out responses before throttling.
-     */
-    private static final Schema ADD_OFFSETS_TO_TXN_RESPONSE_V1 = ADD_OFFSETS_TO_TXN_RESPONSE_V0;
-
-    public static Schema[] schemaVersions() {
-        return new Schema[]{ADD_OFFSETS_TO_TXN_RESPONSE_V0, ADD_OFFSETS_TO_TXN_RESPONSE_V1};
-    }
+    public AddOffsetsToTxnResponseData data;
 
     // Possible error codes:
     //   NotCoordinator
@@ -51,51 +38,40 @@ public class AddOffsetsToTxnResponse extends AbstractResponse {
     //   GroupAuthorizationFailed
     //   TransactionalIdAuthorizationFailed
 
-    private final Errors error;
-    private final int throttleTimeMs;
-
-    public AddOffsetsToTxnResponse(int throttleTimeMs, Errors error) {
-        this.throttleTimeMs = throttleTimeMs;
-        this.error = error;
+    public AddOffsetsToTxnResponse(AddOffsetsToTxnResponseData data) {
+        this.data = data;
     }
 
     public AddOffsetsToTxnResponse(Struct struct) {
-        this.throttleTimeMs = struct.get(THROTTLE_TIME_MS);
-        this.error = Errors.forCode(struct.get(ERROR_CODE));
+        this.data = new AddOffsetsToTxnResponseData(struct, (short) (AddOffsetsToTxnResponseData.SCHEMAS.length - 1));
     }
 
-    @Override
-    public int throttleTimeMs() {
-        return throttleTimeMs;
-    }
-
-    public Errors error() {
-        return error;
+    public AddOffsetsToTxnResponse(Struct struct, short version) {
+        this.data = new AddOffsetsToTxnResponseData(struct, version);
     }
 
     @Override
     public Map<Errors, Integer> errorCounts() {
-        return errorCounts(error);
+        return errorCounts(Errors.forCode(data.errorCode()));
     }
 
     @Override
     protected Struct toStruct(short version) {
-        Struct struct = new Struct(ApiKeys.ADD_OFFSETS_TO_TXN.responseSchema(version));
-        struct.set(THROTTLE_TIME_MS, throttleTimeMs);
-        struct.set(ERROR_CODE, error.code());
-        return struct;
+        return data.toStruct(version);
+    }
+
+    @Override
+    public int throttleTimeMs() {
+        return data.throttleTimeMs();
     }
 
     public static AddOffsetsToTxnResponse parse(ByteBuffer buffer, short version) {
-        return new AddOffsetsToTxnResponse(ApiKeys.ADD_OFFSETS_TO_TXN.parseResponse(version, buffer));
+        return new AddOffsetsToTxnResponse(ApiKeys.ADD_OFFSETS_TO_TXN.parseResponse(version, buffer), version);
     }
 
     @Override
     public String toString() {
-        return "AddOffsetsToTxnResponse(" +
-                "error=" + error +
-                ", throttleTimeMs=" + throttleTimeMs +
-                ')';
+        return data.toString();
     }
 
     @Override
