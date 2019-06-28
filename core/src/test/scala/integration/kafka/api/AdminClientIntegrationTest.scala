@@ -1974,13 +1974,16 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
     */
   def teardownBrokerLoggers(): Unit = {
     if (changedBrokerLoggers.nonEmpty) {
-      // clean up changed loggers in the JVM
-      val validLoggers = describeBrokerLoggers().entries().asScala.map(_.name).toSet
-      // fail the command if any of the configured broker loggers do not exist
+      val validLoggers = describeBrokerLoggers().entries().asScala.filterNot(_.name().equals("root")).map(_.name).toSet
       val resetBrokerLoggersEntries = changedBrokerLoggers
         .intersect(validLoggers)
         .map { logger => new AlterConfigOp(new ConfigEntry(logger, ""), AlterConfigOp.OpType.DELETE) }
         .asJavaCollection
+
+      // ensure that we first reset the root logger to an arbitrary log level. Note that we cannot reset it to its original value
+      alterBrokerLoggers(List(
+        new AlterConfigOp(new ConfigEntry("root", LogLevelConfig.FATAL_LOG_LEVEL), AlterConfigOp.OpType.SET)
+      ).asJavaCollection)
       alterBrokerLoggers(resetBrokerLoggersEntries)
 
       changedBrokerLoggers.clear()
