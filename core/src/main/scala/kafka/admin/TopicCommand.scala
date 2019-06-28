@@ -120,7 +120,10 @@ object TopicCommand extends Logging {
       opts.reportUnavailablePartitions && hasUnavailablePartitions(partitionDescription)
     }
     private def hasUnderMinIsrPartitions(partitionDescription: PartitionDescription) = {
-      partitionDescription.isr.size < partitionDescription.minIsrCount
+      if (partitionDescription.leader.isDefined)
+        partitionDescription.isr.size < partitionDescription.minIsrCount
+      else
+        partitionDescription.minIsrCount > 0
     }
     private def hasAtMinIsrPartitions(partitionDescription: PartitionDescription) = {
       partitionDescription.isr.size == partitionDescription.minIsrCount
@@ -451,7 +454,7 @@ object TopicCommand extends Logging {
     print("\tPartition: " + tp.partition)
     print("\tLeader: " + (if(tp.leader.isDefined) tp.leader.get else "none"))
     print("\tReplicas: " + tp.assignedReplicas.mkString(","))
-    print("\tIsr: " + (if(tp.leader.isDefined) tp.isr.mkString(",") else "none"))
+    print("\tIsr: " + tp.isr.mkString(","))
     print(markedForDeletionString)
     println()
   }

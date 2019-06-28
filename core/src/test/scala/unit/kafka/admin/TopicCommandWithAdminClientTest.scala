@@ -601,7 +601,7 @@ class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Loggin
           topicService.describeTopic(new TopicCommandOptions(Array("--topic", testTopicName, "--unavailable-partitions"))))
       val rows = output.split("\n")
       assertTrue(rows(0).startsWith(s"\tTopic: $testTopicName"))
-      assertTrue(rows(0).endsWith("Leader: none\tReplicas: 0\tIsr: none"))
+      assertTrue(rows(0).contains("Leader: none\tReplicas: 0\tIsr:"))
     } finally {
       restartDeadBrokers()
     }
@@ -743,21 +743,5 @@ class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Loggin
     output = TestUtils.grabConsoleOutput(topicService.listTopics(new TopicCommandOptions(Array("--list", "--exclude-internal"))))
     assertTrue(output.contains(testTopicName))
     assertFalse(output.contains(Topic.GROUP_METADATA_TOPIC_NAME))
-  }
-
-  @Test
-  def testDescribeTopicsWithEmptyISR(): Unit = {
-    createAndWaitTopic(
-      new TopicCommandOptions(Array("--partitions", "1", "--replication-factor", "2", "--topic", testTopicName)))
-
-    try {
-      val testTopicDescription = adminClient.describeTopics(Collections.singletonList(testTopicName)).all.get.asScala(testTopicName)
-      testTopicDescription.partitions.asScala.head.isr.asScala.map(_.id).foreach(killBroker)
-      val output = TestUtils.grabConsoleOutput(topicService.describeTopic(new TopicCommandOptions(Array("--topic", testTopicName))))
-      val rows = output.split("\n")
-      assertTrue(rows(1).endsWith("Isr: none"))
-    } finally {
-      restartDeadBrokers()
-    }
   }
 }
