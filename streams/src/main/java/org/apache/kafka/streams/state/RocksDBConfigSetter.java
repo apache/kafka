@@ -27,7 +27,7 @@ import org.slf4j.LoggerFactory;
  * An interface to that allows developers to customize the RocksDB settings for a given Store.
  * Please read the <a href="https://github.com/facebook/rocksdb/wiki/RocksDB-Tuning-Guide">RocksDB Tuning Guide</a>.
  *
- * Note: if you choose to modify the {@code org.rocksds.BlockBasedTableConfig} you should use retrieve a reference to
+ * Note: if you choose to modify the {@code org.rocksdb.BlockBasedTableConfig} you should use retrieve a reference to
  * the existing one (rather than create a new BlockBasedTableConfig object) so as to not lose the other default settings.
  * This can be done as {@code BlockBasedTableConfig tableConfig = (BlockBasedTableConfig) options.tableFormatConfig();}
  */
