@@ -20,7 +20,7 @@ import java.io.File
 import java.util.Properties
 import java.util.concurrent.atomic.AtomicBoolean
 
-import kafka.cluster.{Partition, Replica}
+import kafka.cluster.Partition
 import kafka.log.{Log, LogManager}
 import kafka.utils._
 import org.apache.kafka.common.TopicPartition
@@ -210,10 +210,11 @@ class IsrExpirationTest {
     val partition = replicaManager.createPartition(tp)
     partition.setLog(localLog, isFutureLog = false)
 
-    val allReplicas = getFollowerReplicas(partition, leaderId, time)
-    allReplicas.foreach(r => partition.addReplicaIfNotExists(r))
-    // set in sync replicas for this partition to all the assigned replicas
-    partition.inSyncReplicas = allReplicas.map(_.brokerId).toSet + leaderId
+    partition.updateAssignmentAndIsr(
+      assignment = configs.map(_.brokerId),
+      isr = configs.map(_.brokerId).toSet
+    )
+
     // set lastCaughtUpTime to current time
     for (replica <- partition.remoteReplicas)
       replica.updateFetchState(
@@ -234,11 +235,5 @@ class IsrExpirationTest {
     EasyMock.expect(log.logEndOffset).andReturn(leaderLogEndOffset).anyTimes()
     EasyMock.replay(log)
     log
-  }
-
-  private def getFollowerReplicas(partition: Partition, leaderId: Int, time: Time): Seq[Replica] = {
-    configs.filter(_.brokerId != leaderId).map { config =>
-      new Replica(config.brokerId, partition.topicPartition)
-    }
   }
 }

@@ -26,6 +26,7 @@ import kafka.log.{Log, LogConfig, LogManager, ProducerStateManager}
 import kafka.utils.{MockScheduler, MockTime, TestUtils}
 import TestUtils.createBroker
 import kafka.cluster.BrokerEndPoint
+import kafka.server.QuotaFactory.UnboundedQuota
 import kafka.server.checkpoints.LazyOffsetCheckpoints
 import kafka.server.epoch.util.ReplicaFetcherMockBlockingSend
 import kafka.utils.timer.MockTimer
@@ -512,6 +513,7 @@ class ReplicaManagerTest {
         fetchMaxBytes = maxFetchBytes,
         hardMaxBytesLimit = false,
         fetchInfos = Seq(tp -> validFetchPartitionData),
+        quota = UnboundedQuota,
         isolationLevel = IsolationLevel.READ_UNCOMMITTED,
         responseCallback = callback
       )
@@ -533,6 +535,7 @@ class ReplicaManagerTest {
         fetchMaxBytes = maxFetchBytes,
         hardMaxBytesLimit = false,
         fetchInfos = Seq(tp -> invalidFetchPartitionData),
+        quota = UnboundedQuota,
         isolationLevel = IsolationLevel.READ_UNCOMMITTED,
         responseCallback = callback
       )
@@ -612,6 +615,7 @@ class ReplicaManagerTest {
         fetchInfos = Seq(
           tp0 -> new PartitionData(1, 0, 100000, Optional.empty()),
           tp1 -> new PartitionData(1, 0, 100000, Optional.empty())),
+        quota = UnboundedQuota,
         responseCallback = fetchCallback,
         isolationLevel = IsolationLevel.READ_UNCOMMITTED
       )
@@ -741,7 +745,9 @@ class ReplicaManagerTest {
     val metadataCache: MetadataCache = EasyMock.createMock(classOf[MetadataCache])
     EasyMock.expect(metadataCache.getAliveBrokers).andReturn(aliveBrokers).anyTimes
     aliveBrokerIds.foreach { brokerId =>
-      EasyMock.expect(metadataCache.isBrokerAlive(EasyMock.eq(brokerId))).andReturn(true).anyTimes
+      EasyMock.expect(metadataCache.getAliveBroker(EasyMock.eq(brokerId)))
+        .andReturn(Option(createBroker(brokerId, s"host$brokerId", brokerId)))
+        .anyTimes
     }
     EasyMock.replay(metadataCache)
 
@@ -887,6 +893,7 @@ class ReplicaManagerTest {
       fetchMaxBytes = Int.MaxValue,
       hardMaxBytesLimit = false,
       fetchInfos = Seq(partition -> partitionData),
+      quota = UnboundedQuota,
       responseCallback = fetchCallback,
       isolationLevel = isolationLevel)
 
@@ -903,7 +910,9 @@ class ReplicaManagerTest {
     val metadataCache: MetadataCache = EasyMock.createMock(classOf[MetadataCache])
     EasyMock.expect(metadataCache.getAliveBrokers).andReturn(aliveBrokers).anyTimes()
     aliveBrokerIds.foreach { brokerId =>
-      EasyMock.expect(metadataCache.isBrokerAlive(EasyMock.eq(brokerId))).andReturn(true).anyTimes()
+      EasyMock.expect(metadataCache.getAliveBroker(EasyMock.eq(brokerId)))
+        .andReturn(Option(createBroker(brokerId, s"host$brokerId", brokerId)))
+        .anyTimes()
     }
     EasyMock.replay(metadataCache)
 

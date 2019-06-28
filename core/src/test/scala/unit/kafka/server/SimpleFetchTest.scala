@@ -134,11 +134,13 @@ class SimpleFetchTest {
       followerStartOffset = 0L,
       followerFetchTimeMs= time.milliseconds,
       leaderEndOffset = leo.messageOffset)
-    partition.addReplicaIfNotExists(followerReplica)
 
-    // add both of them to ISR
-    val allReplicas = List(configs.head.brokerId, followerReplica.brokerId)
-    partition.inSyncReplicas = allReplicas.toSet
+    val allReplicas = Seq(configs.head.brokerId, followerReplica.brokerId)
+    partition.updateReplicasAndIsr(
+      assignment = allReplicas,
+      defaultRemoteReplicas = Seq(followerReplica),
+      isr = allReplicas.toSet
+    )
   }
 
   @After
