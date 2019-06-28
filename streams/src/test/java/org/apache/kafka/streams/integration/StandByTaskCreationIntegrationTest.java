@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.integration;
 
-import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KafkaStreams.State;
@@ -33,6 +32,7 @@ import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.TestUtils;
+import org.junit.After;
 import org.junit.BeforeClass;
 import org.junit.ClassRule;
 import org.junit.Test;
@@ -49,12 +49,21 @@ public class StandByTaskCreationIntegrationTest {
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS);
 
     private static final String INPUT_TOPIC = "input-topic";
-    private static final String OUTPUT_TOPIC = "output-topic";
+
+    private KafkaStreams client1;
+    private KafkaStreams client2;
+    private volatile boolean client1IsOk = false;
+    private volatile boolean client2IsOk = false;
 
     @BeforeClass
     public static void createTopics() throws InterruptedException {
         CLUSTER.createTopic(INPUT_TOPIC, 2, 1);
-        CLUSTER.createTopic(OUTPUT_TOPIC, 2, 1);
+    }
+
+    @After
+    public void after() {
+        client1.close();
+        client2.close();
     }
 
     private Properties streamsConfiguration() {
@@ -66,13 +75,11 @@ public class StandByTaskCreationIntegrationTest {
         streamsConfiguration.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.Integer().getClass());
         streamsConfiguration.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.Integer().getClass());
         streamsConfiguration.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1);
-        streamsConfiguration.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 1);
-        streamsConfiguration.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         return streamsConfiguration;
     }
 
     @Test
-    public void shouldNotCreateAnyStandByTasksForStateStoreWithLoggingDisabled() throws InterruptedException {
+    public void shouldNotCreateAnyStandByTasksForStateStoreWithLoggingDisabled() throws Exception {
         final StreamsBuilder builder = new StreamsBuilder();
 
         final String stateStoreName = "myTransformState";
@@ -84,44 +91,35 @@ public class StandByTaskCreationIntegrationTest {
 
         builder.stream(INPUT_TOPIC, Consumed.with(Serdes.Integer(), Serdes.Integer()))
             .transform(() -> new Transformer<Integer, Integer, KeyValue<Integer, Integer>>() {
-                private KeyValueStore<Integer, Integer> state;
-
                 @SuppressWarnings("unchecked")
                 @Override
-                public void init(final ProcessorContext context) {
-                    state = (KeyValueStore<Integer, Integer>) context.getStateStore(stateStoreName);
-                }
+                public void init(final ProcessorContext context) {}
 
                 @Override
                 public KeyValue<Integer, Integer> transform(final Integer key, final Integer value) {
-                    state.putIfAbsent(key, value);
-                    final KeyValue<Integer, Integer> result = new KeyValue<>(key, value);
-                    return result;
+                    return null;
                 }
 
                 @Override
                 public void close() {}
-            }, stateStoreName)
-            .to(OUTPUT_TOPIC);
+            }, stateStoreName);
 
         final Topology topology = builder.build();
-        final KafkaStreams client1 = new KafkaStreams(topology, streamsConfiguration());
-        final KafkaStreams client2 = new KafkaStreams(topology, streamsConfiguration());
+        client1 = new KafkaStreams(topology, streamsConfiguration());
+        client2 = new KafkaStreams(topology, streamsConfiguration());
 
-        final boolean[] client1IsOk = {false}; // has to be a final array, otherwise flag cannot be modified in lambda
         client1.setStateListener((newState, oldState) -> {
             if (newState == State.RUNNING &&
                 client1.localThreadsMetadata().iterator().next().standbyTasks().isEmpty()) {
 
-                client1IsOk[0] = true;
+                client1IsOk = true;
             }
         });
-        final boolean[] client2IsOk = {false}; // has to be a final array, otherwise flag cannot be modified in lambda
         client2.setStateListener((newState, oldState) -> {
             if (newState == State.RUNNING &&
                 client2.localThreadsMetadata().iterator().next().standbyTasks().isEmpty()) {
 
-                client2IsOk[0] = true;
+                client2IsOk = true;
             }
         });
 
@@ -129,11 +127,8 @@ public class StandByTaskCreationIntegrationTest {
         client2.start();
 
         TestUtils.waitForCondition(
-            () -> client1IsOk[0] && client2IsOk[0],
+            () -> client1IsOk && client2IsOk,
             30 * 1000,
-            "At least one client is not in state RUNNING or has a stand-by task");
-
-        client1.close();
-        client2.close();
+            "At least one client did not reach state RUNNING without any stand-by tasks");
     }
 }
