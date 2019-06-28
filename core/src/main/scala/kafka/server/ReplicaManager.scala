@@ -831,9 +831,7 @@ class ReplicaManager(val config: KafkaConfig,
                     quota: ReplicaQuota = UnboundedQuota,
                     responseCallback: Seq[(TopicPartition, FetchPartitionData)] => Unit,
                     isolationLevel: IsolationLevel,
-                    clientMetadata: Option[ClientMetadata],
-                    followerHighWatermarks: TopicPartition => Option[Long] = _ => None,
-                    hasFetchSession: Boolean) {
+                    clientMetadata: Option[ClientMetadata]) {
     val isFromFollower = Request.isValidBrokerId(replicaId)
 
     val fetchIsolation = if (isFromFollower || replicaId == Request.FutureLocalReplicaId)
@@ -869,14 +867,31 @@ class ReplicaManager(val config: KafkaConfig,
       bytesReadable = bytesReadable + logReadResult.info.records.sizeInBytes
       logReadResultMap.put(topicPartition, logReadResult)
     }
-    val numPartitionsWithoutCachedHW = fetchInfos.flatMap(info => followerHighWatermarks(info._1)).size
+
+    // If the last last sent HW for each requested partitions is behind the HW of the local log,
+    // we should return immediately to ensure the follower has an up-to-date HW
+    val allPartitionsNeedHwUpdate: Boolean = if (isFromFollower) {
+      fetchInfos.forall {
+        case (tp, _) => getPartition(tp) match {
+          case HostedPartition.Online(partition) =>
+            val leaderHW: Long = partition.localLogOrException.highWatermark
+            partition.getReplica(replicaId) match {
+              case Some(replica) => leaderHW > replica.highWatermark
+              case None => false
+            }
+          case _ => false // If the partition is offline or missing
+        }
+      }
+    } else {
+      false
+    }
 
     // respond immediately if 1) fetch request does not want to wait
     //                        2) fetch request does not require any data
     //                        3) has enough data to respond
     //                        4) some error happens while reading data
-    //                        5) there are no cached HW for the follower
-    if (timeout <= 0 || fetchInfos.isEmpty || bytesReadable >= fetchMinBytes || errorReadingData || numPartitionsWithoutCachedHW == 0) {
+    //                        5) all the requested partitions need HW update
+    if (timeout <= 0 || fetchInfos.isEmpty || bytesReadable >= fetchMinBytes || errorReadingData || allPartitionsNeedHwUpdate) {
       val fetchPartitionData = logReadResults.map { case (tp, result) =>
 
         tp -> FetchPartitionData(result.error, result.highWatermark, result.leaderLogStartOffset, result.info.records,
@@ -893,9 +908,9 @@ class ReplicaManager(val config: KafkaConfig,
         })
       }
       val fetchMetadata = FetchMetadata(fetchMinBytes, fetchMaxBytes, hardMaxBytesLimit, isFromFollower,
-        fetchIsolation, isFromFollower, replicaId, fetchPartitionStatus, hasFetchSession)
+        fetchIsolation, isFromFollower, replicaId, fetchPartitionStatus)
       val delayedFetch = new DelayedFetch(timeout, fetchMetadata, this, quota, clientMetadata,
-        responseCallback, followerHighWatermarks)
+        responseCallback)
 
       // create a list of (topic, partition) pairs to use as keys for this delayed fetch operation
       val delayedFetchKeys = fetchPartitionStatus.map { case (tp, _) => TopicPartitionOperationKey(tp) }
@@ -940,8 +955,8 @@ class ReplicaManager(val config: KafkaConfig,
         val preferredReadReplica = clientMetadata.flatMap(
           metadata => findPreferredReadReplica(tp, metadata, replicaId, fetchInfo.fetchOffset))
 
-        if (preferredReadReplica.isDefined && !preferredReadReplica.contains(localBrokerId)) {
-          // If a preferred read-replica is set and is not this replica (the leader), skip the read
+        if (preferredReadReplica.isDefined) {
+          // If a preferred read-replica is set, skip the read
           val offsetSnapshot: LogOffsetSnapshot = partition.fetchOffsetSnapshot(fetchInfo.currentLeaderEpoch, false)
           LogReadResult(info = FetchDataInfo(LogOffsetMetadata.UnknownOffsetMetadata, MemoryRecords.EMPTY),
             highWatermark = offsetSnapshot.highWatermark.messageOffset,
@@ -1040,7 +1055,8 @@ class ReplicaManager(val config: KafkaConfig,
 
   /**
     * Using the configured [[ReplicaSelector]], determine the preferred read replica for a partition given the
-    * client metadata, the requested offset, and the current set of replicas
+    * client metadata, the requested offset, and the current set of replicas. If the preferred read replica is the
+    * leader, return None
     */
   def findPreferredReadReplica(tp: TopicPartition,
                                clientMetadata: ClientMetadata,
@@ -1492,7 +1508,8 @@ class ReplicaManager(val config: KafkaConfig,
               followerFetchOffsetMetadata = readResult.info.fetchOffsetMetadata,
               followerStartOffset = readResult.followerLogStartOffset,
               followerFetchTimeMs = readResult.fetchTimeMs,
-              leaderEndOffset = readResult.leaderLogEndOffset)) {
+              leaderEndOffset = readResult.leaderLogEndOffset,
+              highWatermark = readResult.highWatermark)) {
               readResult
             } else {
               warn(s"Leader $localBrokerId failed to record follower $followerId's position " +

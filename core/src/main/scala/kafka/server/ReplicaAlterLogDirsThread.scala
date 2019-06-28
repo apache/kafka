@@ -22,7 +22,7 @@ import java.util.Optional
 
 import kafka.api.Request
 import kafka.cluster.BrokerEndPoint
-import kafka.log.{LogAppendInfo, LogOffsetSnapshot}
+import kafka.log.LogAppendInfo
 import kafka.server.AbstractFetcherThread.ResultWithPartitions
 import kafka.server.QuotaFactory.UnboundedQuota
 import org.apache.kafka.common.TopicPartition
@@ -90,9 +90,7 @@ class ReplicaAlterLogDirsThread(name: String,
       UnboundedQuota,
       processResponseCallback,
       request.isolationLevel,
-      None,
-      _ => None,
-      request.metadata().sessionId() != JFetchMetadata.INVALID_SESSION_ID)
+      None)
 
     if (partitionData == null)
       throw new IllegalStateException(s"Failed to fetch data for partitions ${request.fetchData.keySet().toArray.mkString(",")}")

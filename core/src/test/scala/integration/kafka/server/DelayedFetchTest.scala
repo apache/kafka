@@ -18,7 +18,7 @@ package kafka.server
 
 import java.util.Optional
 
-import kafka.cluster.Partition
+import kafka.cluster.{Partition, Replica}
 import kafka.log.LogOffsetSnapshot
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.FencedLeaderEpochException
@@ -102,8 +102,8 @@ class DelayedFetchTest extends EasyMockSupport {
       replicaManager = replicaManager,
       quota = replicaQuota,
       clientMetadata = None,
-      responseCallback = callback,
-      _ => followerHW)
+      responseCallback = callback
+    )
 
     val partition: Partition = mock(classOf[Partition])
 
@@ -118,6 +118,11 @@ class DelayedFetchTest extends EasyMockSupport {
           lastStableOffset = new LogOffsetMetadata(400L)))
 
     expectReadFromReplica(replicaId, topicPartition, fetchStatus.fetchInfo)
+
+    val follower = new Replica(replicaId, topicPartition)
+    followerHW.foreach(hw => follower.updateFetchState(LogOffsetMetadata.UnknownOffsetMetadata, 0L, 0L, 0L, hw))
+    EasyMock.expect(partition.getReplica(replicaId))
+        .andReturn(Some(follower))
 
     replayAll()
     checkResult.apply(delayedFetch)
@@ -165,7 +170,6 @@ class DelayedFetchTest extends EasyMockSupport {
       isFromFollower = true,
       replicaId = replicaId,
       fetchPartitionStatus = Seq((topicPartition, fetchStatus)),
-      hasFetchSession = true
     )
   }
 

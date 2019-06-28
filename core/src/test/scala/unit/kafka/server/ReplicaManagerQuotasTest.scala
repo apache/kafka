@@ -171,6 +171,7 @@ class ReplicaManagerQuotasTest {
 
       EasyMock.expect(replicaManager.shouldLeaderThrottle(EasyMock.anyObject[ReplicaQuota], EasyMock.anyObject[TopicPartition], EasyMock.anyObject[Int]))
         .andReturn(!isReplicaInSync).anyTimes()
+      EasyMock.expect(partition.getReplica(1)).andReturn(None)
       EasyMock.replay(replicaManager, partition)
 
       val tp = new TopicPartition("t1", 0)
@@ -183,11 +184,10 @@ class ReplicaManagerQuotasTest {
         fetchIsolation = FetchLogEnd,
         isFromFollower = true,
         replicaId = 1,
-        fetchPartitionStatus = List((tp, fetchPartitionStatus)),
-        hasFetchSession = true
+        fetchPartitionStatus = List((tp, fetchPartitionStatus))
       )
       new DelayedFetch(delayMs = 600, fetchMetadata = fetchMetadata, replicaManager = replicaManager,
-        quota = null, clientMetadata = None, responseCallback = null, _ => Some(endOffsetMetadata.messageOffset)) {
+        quota = null, clientMetadata = None, responseCallback = null) {
         override def forceComplete(): Boolean = true
       }
     }

@@ -466,7 +466,7 @@ class KafkaApisTest {
     replicaManager.fetchMessages(anyLong, anyInt, anyInt, anyInt, anyBoolean,
       anyObject[Seq[(TopicPartition, FetchRequest.PartitionData)]], anyObject[ReplicaQuota],
       anyObject[Seq[(TopicPartition, FetchPartitionData)] => Unit](), anyObject[IsolationLevel],
-      anyObject[Option[ClientMetadata]], anyObject(), anyBoolean)
+      anyObject[Option[ClientMetadata]])
     expectLastCall[Unit].andAnswer(new IAnswer[Unit] {
       def answer: Unit = {
         val callback = getCurrentArguments.apply(7).asInstanceOf[(Seq[(TopicPartition, FetchPartitionData)] => Unit)]

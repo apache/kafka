@@ -43,16 +43,14 @@ case class FetchMetadata(fetchMinBytes: Int,
                          fetchIsolation: FetchIsolation,
                          isFromFollower: Boolean,
                          replicaId: Int,
-                         fetchPartitionStatus: Seq[(TopicPartition, FetchPartitionStatus)],
-                         hasFetchSession: Boolean) {
+                         fetchPartitionStatus: Seq[(TopicPartition, FetchPartitionStatus)]) {
 
   override def toString = "FetchMetadata(minBytes=" + fetchMinBytes + ", " +
     "maxBytes=" + fetchMaxBytes + ", " +
     "onlyLeader=" + fetchOnlyLeader + ", " +
     "fetchIsolation=" + fetchIsolation + ", " +
     "replicaId=" + replicaId + ", " +
-    "partitionStatus=" + fetchPartitionStatus + ", " +
-    "hasFetchSession=" + hasFetchSession + ")"
+    "partitionStatus=" + fetchPartitionStatus + ")"
 }
 /**
  * A delayed fetch operation that can be created by the replica manager and watched
@@ -63,8 +61,7 @@ class DelayedFetch(delayMs: Long,
                    replicaManager: ReplicaManager,
                    quota: ReplicaQuota,
                    clientMetadata: Option[ClientMetadata],
-                   responseCallback: Seq[(TopicPartition, FetchPartitionData)] => Unit,
-                   followerHighwatermarks: TopicPartition => Option[Long] = _ => None)
+                   responseCallback: Seq[(TopicPartition, FetchPartitionData)] => Unit)
   extends DelayedOperation(delayMs) {
 
   /**
@@ -120,10 +117,10 @@ class DelayedFetch(delayMs: Long,
               }
             }
 
-            if (fetchMetadata.isFromFollower && fetchMetadata.hasFetchSession) {
-              // Case G check if the follower has the correct HW from the leader
-              val followerHW = followerHighwatermarks(topicPartition)
-              if (followerHW.isEmpty || followerHW.exists(hw => offsetSnapshot.highWatermark.messageOffset > hw)) {
+            if (fetchMetadata.isFromFollower) {
+              // Case G check if the follower has the latest HW from the leader
+              if (partition.getReplica(fetchMetadata.replicaId)
+                .exists(r => offsetSnapshot.highWatermark.messageOffset > r.highWatermark)) {
                 return forceComplete()
               }
             }

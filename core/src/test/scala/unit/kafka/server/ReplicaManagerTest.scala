@@ -514,8 +514,7 @@ class ReplicaManagerTest {
         fetchInfos = Seq(tp -> validFetchPartitionData),
         isolationLevel = IsolationLevel.READ_UNCOMMITTED,
         responseCallback = callback,
-        clientMetadata = None,
-        hasFetchSession = true
+        clientMetadata = None
       )
 
       assertTrue(successfulFetch.isDefined)
@@ -537,8 +536,7 @@ class ReplicaManagerTest {
         fetchInfos = Seq(tp -> invalidFetchPartitionData),
         isolationLevel = IsolationLevel.READ_UNCOMMITTED,
         responseCallback = callback,
-        clientMetadata = None,
-        hasFetchSession = true
+        clientMetadata = None
       )
 
       assertTrue(successfulFetch.isDefined)
@@ -618,8 +616,7 @@ class ReplicaManagerTest {
           tp1 -> new PartitionData(1, 0, 100000, Optional.empty())),
         responseCallback = fetchCallback,
         isolationLevel = IsolationLevel.READ_UNCOMMITTED,
-        clientMetadata = None,
-        hasFetchSession = true
+        clientMetadata = None
       )
       val tp0Log = replicaManager.localLog(tp0)
       assertTrue(tp0Log.isDefined)
@@ -714,9 +711,9 @@ class ReplicaManagerTest {
     val metadata: ClientMetadata = new DefaultClientMetadata("rack-a", "client-id",
       InetAddress.getByName("localhost"), KafkaPrincipal.ANONYMOUS, "default")
 
+    // We expect to select the leader, which means we return None
     val preferredReadReplica: Option[Int] = replicaManager.findPreferredReadReplica(tp0, metadata, Request.OrdinaryConsumerId, 1L)
-    assertTrue(preferredReadReplica.isDefined)
-    assertEquals(preferredReadReplica, partition.leaderReplicaIdOpt)
+    assertFalse(preferredReadReplica.isDefined)
   }
 
   @Test
@@ -801,9 +798,8 @@ class ReplicaManagerTest {
     // Fetch from follower succeeds
     assertTrue(consumerResult.isFired)
 
-    // Returns a preferred replica (should just be the leader)
-    assertTrue(consumerResult.assertFired.preferredReadReplica.isDefined)
-    assertEquals(consumerResult.assertFired.preferredReadReplica.get, 0)
+    // Returns a preferred replica (should just be the leader, which is None)
+    assertFalse(consumerResult.assertFired.preferredReadReplica.isDefined)
   }
 
   @Test(expected = classOf[ClassNotFoundException])
@@ -1064,8 +1060,7 @@ class ReplicaManagerTest {
       fetchInfos = Seq(partition -> partitionData),
       responseCallback = fetchCallback,
       isolationLevel = isolationLevel,
-      clientMetadata = clientMetadata,
-      hasFetchSession = true
+      clientMetadata = clientMetadata
     )
 
     result

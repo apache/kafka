@@ -281,12 +281,6 @@ trait FetchContext extends Logging {
   def getFetchOffset(part: TopicPartition): Option[Long]
 
   /**
-    * Get the follower's high watermark for the partition, if known. Only applies to incremental fetch contexts where
-    * we have returned a FetchResponse as part of the session.
-    */
-  def getFollowerHighWatermark(part: TopicPartition): Option[Long]
-
-  /**
     * Apply a function to each partition in the fetch request.
     */
   def foreachPartition(fun: (TopicPartition, FetchRequest.PartitionData) => Unit): Unit
@@ -320,8 +314,6 @@ class SessionErrorContext(val error: Errors,
                           val reqMetadata: JFetchMetadata) extends FetchContext {
   override def getFetchOffset(part: TopicPartition): Option[Long] = None
 
-  override def getFollowerHighWatermark(part: TopicPartition): Option[Long] = None
-
   override def foreachPartition(fun: (TopicPartition, FetchRequest.PartitionData) => Unit): Unit = {}
 
   override def getResponseSize(updates: FetchSession.RESP_MAP, versionId: Short): Int = {
@@ -343,8 +335,6 @@ class SessionErrorContext(val error: Errors,
 class SessionlessFetchContext(val fetchData: util.Map[TopicPartition, FetchRequest.PartitionData]) extends FetchContext {
   override def getFetchOffset(part: TopicPartition): Option[Long] =
     Option(fetchData.get(part)).map(_.fetchOffset)
-
-  override def getFollowerHighWatermark(part: TopicPartition): Option[Long] = None
 
   override def foreachPartition(fun: (TopicPartition, FetchRequest.PartitionData) => Unit): Unit = {
     fetchData.entrySet.asScala.foreach(entry => fun(entry.getKey, entry.getValue))
@@ -376,8 +366,6 @@ class FullFetchContext(private val time: Time,
                        private val isFromFollower: Boolean) extends FetchContext {
   override def getFetchOffset(part: TopicPartition): Option[Long] =
     Option(fetchData.get(part)).map(_.fetchOffset)
-
-  override def getFollowerHighWatermark(part: TopicPartition): Option[Long] = None
 
   override def foreachPartition(fun: (TopicPartition, FetchRequest.PartitionData) => Unit): Unit = {
     fetchData.entrySet.asScala.foreach(entry => fun(entry.getKey, entry.getValue))
@@ -418,8 +406,6 @@ class IncrementalFetchContext(private val time: Time,
                               private val session: FetchSession) extends FetchContext {
 
   override def getFetchOffset(tp: TopicPartition): Option[Long] = session.getFetchOffset(tp)
-
-  override def getFollowerHighWatermark(tp: TopicPartition): Option[Long] = session.getFollowerHighWatermark(tp)
 
   override def foreachPartition(fun: (TopicPartition, FetchRequest.PartitionData) => Unit): Unit = {
     // Take the session lock and iterate over all the cached partitions.

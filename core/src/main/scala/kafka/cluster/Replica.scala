@@ -42,6 +42,10 @@ class Replica(val brokerId: Int, val topicPartition: TopicPartition) extends Log
   // the LEO of leader at time t. This is used to determine the lag of this follower and ISR of this partition.
   @volatile private[this] var _lastCaughtUpTimeMs = 0L
 
+  // highWatermark is the leader's high watermark after the most recent FetchRequest from this follower. This is
+  // used to determine the maximum HW this follower knows about
+  @volatile private[this] var _highWatermark = 0L
+
   def logStartOffset: Long = _logStartOffset
 
   def logEndOffsetMetadata: LogOffsetMetadata = _logEndOffsetMetadata
@@ -49,6 +53,8 @@ class Replica(val brokerId: Int, val topicPartition: TopicPartition) extends Log
   def logEndOffset: Long = logEndOffsetMetadata.messageOffset
 
   def lastCaughtUpTimeMs: Long = _lastCaughtUpTimeMs
+
+  def highWatermark: Long = _highWatermark
 
   /*
    * If the FetchRequest reads up to the log end offset of the leader when the current fetch request is received,
@@ -65,7 +71,8 @@ class Replica(val brokerId: Int, val topicPartition: TopicPartition) extends Log
   def updateFetchState(followerFetchOffsetMetadata: LogOffsetMetadata,
                        followerStartOffset: Long,
                        followerFetchTimeMs: Long,
-                       leaderEndOffset: Long): Unit = {
+                       leaderEndOffset: Long,
+                       highWatermark: Long): Unit = {
     if (followerFetchOffsetMetadata.messageOffset >= leaderEndOffset)
       _lastCaughtUpTimeMs = math.max(_lastCaughtUpTimeMs, followerFetchTimeMs)
     else if (followerFetchOffsetMetadata.messageOffset >= lastFetchLeaderLogEndOffset)
@@ -75,6 +82,7 @@ class Replica(val brokerId: Int, val topicPartition: TopicPartition) extends Log
     _logEndOffsetMetadata = followerFetchOffsetMetadata
     lastFetchLeaderLogEndOffset = leaderEndOffset
     lastFetchTimeMs = followerFetchTimeMs
+    _highWatermark = highWatermark
     trace(s"Updated state of replica to $this")
   }
 
@@ -96,6 +104,7 @@ class Replica(val brokerId: Int, val topicPartition: TopicPartition) extends Log
     replicaString.append(s", logEndOffsetMetadata=$logEndOffsetMetadata")
     replicaString.append(s", lastFetchLeaderLogEndOffset=$lastFetchLeaderLogEndOffset")
     replicaString.append(s", lastFetchTimeMs=$lastFetchTimeMs")
+    replicaString.append(s", highWatermark=$highWatermark")
     replicaString.append(")")
     replicaString.toString
   }

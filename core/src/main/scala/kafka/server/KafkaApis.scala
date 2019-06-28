@@ -74,7 +74,6 @@ import org.apache.kafka.common.replica.ClientMetadata.DefaultClientMetadata
 import org.apache.kafka.common.requests.CreateAclsResponse.AclCreationResponse
 import org.apache.kafka.common.requests.DeleteAclsResponse.{AclDeletionResult, AclFilterResponse}
 import org.apache.kafka.common.requests.DescribeLogDirsResponse.LogDirInfo
-import org.apache.kafka.common.requests.{FetchMetadata => JFetchMetadata}
 import org.apache.kafka.common.requests.FindCoordinatorRequest.CoordinatorType
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.requests._
@@ -594,14 +593,6 @@ class KafkaApis(val requestChannel: RequestChannel,
       None
     }
 
-    val hasFetchSession = !fetchRequest.metadata.equals(JFetchMetadata.LEGACY)
-
-    val followerHighWatermarks: TopicPartition => Option[Long] = if (fetchRequest.isFromFollower) {
-      fetchContext.getFollowerHighWatermark
-    } else {
-      _ => None
-    }
-
     def errorResponse[T >: MemoryRecords <: BaseRecords](error: Errors): FetchResponse.PartitionData[T] = {
       new FetchResponse.PartitionData[T](error, FetchResponse.INVALID_HIGHWATERMARK, FetchResponse.INVALID_LAST_STABLE_OFFSET,
         FetchResponse.INVALID_LOG_START_OFFSET, null, MemoryRecords.EMPTY)
@@ -798,9 +789,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         replicationQuota(fetchRequest),
         processResponseCallback,
         fetchRequest.isolationLevel,
-        clientMetadata,
-        followerHighWatermarks,
-        hasFetchSession)
+        clientMetadata)
     }
   }
 

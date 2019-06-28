@@ -560,7 +560,8 @@ class Partition(val topicPartition: TopicPartition,
             followerFetchOffsetMetadata = LogOffsetMetadata.UnknownOffsetMetadata,
             followerStartOffset = Log.UnknownOffset,
             followerFetchTimeMs = 0L,
-            leaderEndOffset = Log.UnknownOffset
+            leaderEndOffset = Log.UnknownOffset,
+            highWatermark = 0L
           )
         }
       }
@@ -620,7 +621,8 @@ class Partition(val topicPartition: TopicPartition,
                                followerFetchOffsetMetadata: LogOffsetMetadata,
                                followerStartOffset: Long,
                                followerFetchTimeMs: Long,
-                               leaderEndOffset: Long): Boolean = {
+                               leaderEndOffset: Long,
+                               highWatermark: Long): Boolean = {
 
     getReplica(followerId) match {
       case Some(followerReplica) =>
@@ -630,7 +632,8 @@ class Partition(val topicPartition: TopicPartition,
           followerFetchOffsetMetadata,
           followerStartOffset,
           followerFetchTimeMs,
-          leaderEndOffset)
+          leaderEndOffset,
+          highWatermark)
         val newLeaderLW = if (delayedOperations.numDelayedDelete > 0) lowWatermarkIfLeader else -1L
         // check if the LW of the partition has incremented
         // since the replica's logStartOffset may have incremented
