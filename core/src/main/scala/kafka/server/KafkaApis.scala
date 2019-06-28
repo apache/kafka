@@ -1278,6 +1278,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         val members = summary.members.map { member =>
           new DescribeGroupsResponseData.DescribedGroupMember()
             .setMemberId(member.memberId)
+            .setGroupInstanceId(member.groupInstanceId.orNull)
             .setClientId(member.clientId)
             .setClientHost(member.clientHost)
             .setMemberAssignment(member.assignment)

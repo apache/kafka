@@ -2515,9 +2515,8 @@ class GroupCoordinatorTest {
   }
 
   @Test
-  def testDescribeGroupStable() {
-    val memberId = JoinGroupRequest.UNKNOWN_MEMBER_ID
-    val joinGroupResult = dynamicJoinGroup(groupId, memberId, protocolType, protocols)
+  def testDescribeGroupStableForDynamicMember() {
+    val joinGroupResult = dynamicJoinGroup(groupId, JoinGroupRequest.UNKNOWN_MEMBER_ID, protocolType, protocols)
     val assignedMemberId = joinGroupResult.memberId
     val generationId = joinGroupResult.generationId
     val joinGroupError = joinGroupResult.error
@@ -2535,6 +2534,29 @@ class GroupCoordinatorTest {
     assertEquals(protocolType, summary.protocolType)
     assertEquals("range", summary.protocol)
     assertEquals(List(assignedMemberId), summary.members.map(_.memberId))
+  }
+
+  @Test
+  def testDescribeGroupStableForStaticMember() {
+    val joinGroupResult = staticJoinGroup(groupId, JoinGroupRequest.UNKNOWN_MEMBER_ID, leaderInstanceId, protocolType, protocols)
+    val assignedMemberId = joinGroupResult.memberId
+    val generationId = joinGroupResult.generationId
+    val joinGroupError = joinGroupResult.error
+    assertEquals(Errors.NONE, joinGroupError)
+
+    EasyMock.reset(replicaManager)
+    val syncGroupResult = syncGroupLeader(groupId, generationId, assignedMemberId, Map(assignedMemberId -> Array[Byte]()))
+
+    val syncGroupError = syncGroupResult._2
+    assertEquals(Errors.NONE, syncGroupError)
+
+    EasyMock.reset(replicaManager)
+    val (error, summary) = groupCoordinator.handleDescribeGroup(groupId)
+    assertEquals(Errors.NONE, error)
+    assertEquals(protocolType, summary.protocolType)
+    assertEquals("range", summary.protocol)
+    assertEquals(List(assignedMemberId), summary.members.map(_.memberId))
+    assertEquals(List(leaderInstanceId), summary.members.map(_.groupInstanceId))
   }
 
   @Test
