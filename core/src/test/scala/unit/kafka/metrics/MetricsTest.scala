@@ -21,7 +21,7 @@ import java.util.Properties
 
 import javax.management.ObjectName
 import com.yammer.metrics.Metrics
-import com.yammer.metrics.core.{Meter, MetricPredicate, MetricsRegistry}
+import com.yammer.metrics.core.{Meter, MetricPredicate}
 import org.junit.Test
 import org.junit.Assert._
 import kafka.integration.KafkaServerTestHarness
@@ -131,56 +131,6 @@ class MetricsTest extends KafkaServerTestHarness with Logging {
     TestUtils.consumeTopicRecords(servers, topic, nMessages)
 
     assertTrue(meterCount(bytesOut) > initialBytesOut)
-  }
-
-  @Test
-  def testOldLeaderLostMetrics(): Unit = {
-    val topic = "leaked-metric-test"
-    val tp0 = new TopicPartition(topic, 0)
-    val tp1 = new TopicPartition(topic, 1)
-
-    val mockMetricsRegistry0 = new MetricsRegistry()
-    val mockMetricsRegistry1 = new MetricsRegistry()
-
-    // use two different metrics registries for testing
-    servers(0).brokerTopicStats.updateMetricsRegistry(mockMetricsRegistry0)
-    servers(1).brokerTopicStats.updateMetricsRegistry(mockMetricsRegistry1)
-
-    TestUtils.createTopic(zkClient, topic, Map(0 -> List(0, 1), 1 -> List(1, 0)), servers)
-    // change the leader of all partitions
-    zkClient.createPartitionReassignment(Predef.Map(tp0 -> Seq(0), tp1 -> Seq(0)))
-    TestUtils.awaitLeaderChange(servers, tp1, 1)
-    // Produce a few messages to make the metrics tick
-    TestUtils.generateAndProduceMessages(servers, topic, nMessages)
-    // Consume messages to make bytesOut tick
-    TestUtils.consumeTopicRecords(servers, topic, nMessages)
-
-    val metricsToTest = List("BytesInPerSec", "BytesOutPerSec", "MessagesInPerSec")
-
-    // testing if the node that stops being the leader of any partitions loses the metrics
-    for (metric <- metricsToTest) {
-      assertEquals(mockMetricsRegistry0.allMetrics.keySet.asScala
-        .count(_.getMBeanName.endsWith(s"name=${metric},topic=${topic}")), 1)
-      assertEquals(mockMetricsRegistry1.allMetrics.keySet.asScala
-        .count(_.getMBeanName.endsWith(s"name=${metric},topic=${topic}")), 0)
-    }
-
-    // change the leader so 2 nodes are both leaders of both partitions again
-    // so that we can test if migrated leader has the metrics again
-    // change the leader of all partitions
-    zkClient.createPartitionReassignment(Predef.Map(tp0 -> Seq(0), tp1 -> Seq(1)))
-    TestUtils.awaitLeaderChange(servers, tp1, 0)
-    // Produce a few messages to make the metrics tick
-    TestUtils.generateAndProduceMessages(servers, topic, nMessages)
-    // Consume messages to make bytesOut tick
-    TestUtils.consumeTopicRecords(servers, topic, nMessages)
-
-    for (metric <- metricsToTest) {
-      assertEquals(mockMetricsRegistry0.allMetrics.keySet.asScala
-        .count(_.getMBeanName.endsWith(s"name=${metric},topic=${topic}")), 1)
-      assertEquals(mockMetricsRegistry1.allMetrics.keySet.asScala
-        .count(_.getMBeanName.endsWith(s"name=${metric},topic=${topic}")), 1)
-    }
   }
 
   @Test
