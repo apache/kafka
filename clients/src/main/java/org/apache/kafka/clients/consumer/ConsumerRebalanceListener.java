@@ -28,8 +28,9 @@ import org.apache.kafka.common.TopicPartition;
  * those partitions will never be reassigned and this callback is not applicable.
  * <p>
  * When Kafka is managing the group membership, a partition re-assignment will be triggered any time the members of the group change or the subscription
- * of the members changes. This can occur when processes die, new process instances are added or old instances come back to life after failure.
- * Rebalances can also be triggered by changes affecting the subscribed topics (e.g. when the number of partitions is
+ * of the members changes. This can occur when processes die, new process instances are added or old instances come back to life after failure causing
+ * a rebalance event.
+ * Partition re-assignments can also be triggered by changes affecting the subscribed topics (e.g. when the number of partitions is
  * administratively adjusted).
  * <p>
  * There are many uses for this functionality. One common use is saving offsets in a custom store. By saving offsets in
@@ -50,16 +51,19 @@ import org.apache.kafka.common.TopicPartition;
  * It is guaranteed that for any partition, if a partition is reassigned from one consumer to another, then the old consumer will
  * always invoke {@link #onPartitionsRevoked(Collection) onPartitionsRevoked} for that partition prior to the new consumer
  * invoking {@link #onPartitionsAssigned(Collection) onPartitionsAssigned} for the same partition. So if offsets or other state is saved in the
- * {@link #onPartitionsRevoked(Collection) onPartitionsRevoked} call it is guaranteed to be saved by the time the process taking over that
- * partition has their {@link #onPartitionsAssigned(Collection) onPartitionsAssigned} callback called to load the state.
+ * {@link #onPartitionsRevoked(Collection) onPartitionsRevoked} call by one consumer member, it will be always accessible by the time the
+ * other consumer member taking over that partition and triggering its {@link #onPartitionsAssigned(Collection) onPartitionsAssigned} callback to load the state.
  * <p>
- * In addition, a third {@link #onPartitionsLost(Collection)} callback will be invoked when the partition previously owned by the consumer
- * are lost. It is different to the {@link #onPartitionsRevoked(Collection)} function such that the latter is invoked when a partition is revoked
- * from the consumer during a rebalance event, while the former is invoked when a partition is lost not during a rebalance event, but due to
- * an exceptional event, such as a consumer finding out it is no longer part of the consumer group, or that some of its assigned partitions no longer
- * exist due to administrative operations like delete topics. Users then could implement these two functions differently (by default,
+ * In addition, a third {@link #onPartitionsLost(Collection)} callback will be invoked when some partitions previously owned by the consumer
+ * are lost due to unexpected events, for example, the consumer finding some of its assigned partitions no longer
+ * exist from its topic metadata due to administrative operations like delete topics, or the consumer realizing it is
+ * no longer part of the consumer group due to soft failures and therefore all of its previously owned partitions have reassigned to other consumers already.
+ * Note this function is very different
+ * to the {@link #onPartitionsRevoked(Collection)} function: the latter is invoked when a partition is revoked
+ * from the consumer who still owns it right before the invocation, while the former is invoked when a partition is already lost
+ * and not owned by the consumer anymore during the invocation. Users then could implement these two functions differently (by default,
  * {@link #onPartitionsLost(Collection)} will be calling {@link #onPartitionsRevoked(Collection)} directly); for example, in the
- * {@link #onPartitionsLost(Collection)} we would not need to store the offsets since we know these partitions are no longer owned by the consumer
+ * {@link #onPartitionsLost(Collection)} we should not need to store the offsets since we know these partitions are no longer owned by the consumer
  * at that time.
  * <p>
  * Here is pseudo-code for a callback implementation for saving offsets:

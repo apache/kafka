@@ -121,7 +121,8 @@ public class ConsumerProtocol {
 
     public enum AssignmentError {
         NONE(0),
-        NEED_REJOIN(1);
+        NEED_REJOIN(1),
+        ASSIGNOR_ERROR(2);
 
         private final short code;
 
@@ -139,6 +140,8 @@ public class ConsumerProtocol {
                     return NONE;
                 case 1:
                     return NEED_REJOIN;
+                case 2:
+                    return ASSIGNOR_ERROR;
                 default:
                     throw new IllegalArgumentException("Unknown error code: " + code);
             }

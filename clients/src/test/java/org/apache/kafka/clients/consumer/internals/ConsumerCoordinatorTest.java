@@ -197,7 +197,7 @@ public class ConsumerCoordinatorTest {
     }
 
     @Test
-    public void testSelectRebalanceProtcol() {
+    public void testSelectRebalanceProtocol() {
         List<PartitionAssignor> assignors = new ArrayList<>();
         assignors.add(new MockPartitionAssignor(Collections.singletonList(PartitionAssignor.RebalanceProtocol.EAGER)));
         assignors.add(new MockPartitionAssignor(Collections.singletonList(PartitionAssignor.RebalanceProtocol.COOPERATIVE)));
@@ -607,7 +607,6 @@ public class ConsumerCoordinatorTest {
         final String consumerId = "leader";
         final List<TopicPartition> owned = Collections.emptyList();
         final List<TopicPartition> oldAssigned = Arrays.asList(t1p);
-
         subscriptions.subscribe(Pattern.compile(".*"), rebalanceListener);
         client.updateMetadata(TestUtils.metadataUpdateWith(1, singletonMap(topic1, 1)));
         coordinator.maybeUpdateSubscriptionMetadata();
@@ -1171,7 +1170,7 @@ public class ConsumerCoordinatorTest {
 
         assertFalse(coordinator.rejoinNeededOrPending());
         assertEquals(0, rebalanceListener.revokedCount);
-        assertEquals(protocol == PartitionAssignor.RebalanceProtocol.EAGER ? 2 : 1, rebalanceListener.assignedCount);
+        assertEquals(1, rebalanceListener.assignedCount);
     }
 
     @Test
@@ -1382,8 +1381,7 @@ public class ConsumerCoordinatorTest {
     public void testAutoCommitDynamicAssignment() {
         final String consumerId = "consumer";
 
-        try (ConsumerCoordinator coordinator = buildCoordinator(rebalanceConfig, new Metrics(), assignors,
-            true)
+        try (ConsumerCoordinator coordinator = buildCoordinator(rebalanceConfig, new Metrics(), assignors, true)
         ) {
             subscriptions.subscribe(singleton(topic1), rebalanceListener);
             joinAsFollowerAndReceiveAssignment(consumerId, coordinator, singletonList(t1p));
@@ -1399,8 +1397,7 @@ public class ConsumerCoordinatorTest {
     public void testAutoCommitRetryBackoff() {
         final String consumerId = "consumer";
 
-        try (ConsumerCoordinator coordinator = buildCoordinator(rebalanceConfig, new Metrics(), assignors,
-            true)) {
+        try (ConsumerCoordinator coordinator = buildCoordinator(rebalanceConfig, new Metrics(), assignors, true)) {
             subscriptions.subscribe(singleton(topic1), rebalanceListener);
             joinAsFollowerAndReceiveAssignment(consumerId, coordinator, singletonList(t1p));
 
@@ -1473,8 +1470,7 @@ public class ConsumerCoordinatorTest {
     public void testAutoCommitDynamicAssignmentRebalance() {
         final String consumerId = "consumer";
 
-        try (ConsumerCoordinator coordinator = buildCoordinator(rebalanceConfig, new Metrics(), assignors,
-            true)) {
+        try (ConsumerCoordinator coordinator = buildCoordinator(rebalanceConfig, new Metrics(), assignors, true)) {
             subscriptions.subscribe(singleton(topic1), rebalanceListener);
             client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
             coordinator.ensureCoordinatorReady(time.timer(Long.MAX_VALUE));

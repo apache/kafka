@@ -89,7 +89,9 @@ public interface PartitionAssignor {
 
     /**
      * Return the version of the assignor which indicates how the user metadata encodings
-     * and the assignment algorithm gets evolved.
+     * and the assignment algorithm gets evolved. The broker-side group coordinator can then
+     * select the leader as the one with the highest assignor version, expecting it be able
+     * to decode other member assignor's subscription user metadata encoded with older versions.
      */
     default short version() {
         return (short) 0;
@@ -166,10 +168,6 @@ public interface PartitionAssignor {
             this(topics, ByteBuffer.wrap(new byte[0]));
         }
 
-        Short version() {
-            return version;
-        }
-
         public List<String> topics() {
             return topics;
         }
@@ -182,12 +180,16 @@ public interface PartitionAssignor {
             return userData;
         }
 
-        public void setGroupInstanceId(Optional<String> groupInstanceId) {
+        public Optional<String> groupInstanceId() {
+            return groupInstanceId;
+        }
+
+        void setGroupInstanceId(Optional<String> groupInstanceId) {
             this.groupInstanceId = groupInstanceId;
         }
 
-        public Optional<String> groupInstanceId() {
-            return groupInstanceId;
+        Short version() {
+            return version;
         }
 
         @Override
@@ -202,7 +204,7 @@ public interface PartitionAssignor {
 
     class Assignment {
         private final Short version;
-        private List<TopicPartition> partitions;
+        private final List<TopicPartition> partitions;
         private final ByteBuffer userData;
         private ConsumerProtocol.AssignmentError error;
 
@@ -231,28 +233,23 @@ public interface PartitionAssignor {
             this(partitions, ByteBuffer.wrap(new byte[0]));
         }
 
-        Short version() {
-            return version;
-        }
-
         public List<TopicPartition> partitions() {
             return partitions;
         }
 
-        public ConsumerProtocol.AssignmentError error() {
-            return error;
-        }
-
-        public void updatePartitions(List<TopicPartition> partitions) {
-            this.partitions = partitions;
-        }
-
-        public void setError(ConsumerProtocol.AssignmentError error) {
-            this.error = error;
-        }
-
         public ByteBuffer userData() {
             return userData;
+        }
+
+        Short version() {
+            return version;
+        }
+
+        ConsumerProtocol.AssignmentError error() {
+            return error;
+        }
+        void setError(ConsumerProtocol.AssignmentError error) {
+            this.error = error;
         }
 
         @Override

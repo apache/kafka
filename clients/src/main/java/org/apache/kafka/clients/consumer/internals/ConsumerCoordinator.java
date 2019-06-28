@@ -292,7 +292,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     }
 
     private Exception maybeLostPartitions(final String rootCause, final Set<TopicPartition> lostPartitions) {
-        if (subscriptions.partitionsAutoAssigned() && !lostPartitions.isEmpty()) {
+        if (!lostPartitions.isEmpty()) {
             log.info("Lost previously assigned partitions {} due to {}", lostPartitions, rootCause);
 
             ConsumerRebalanceListener listener = subscriptions.rebalanceListener();
@@ -326,6 +326,15 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         Set<TopicPartition> ownedPartitions = new HashSet<>(subscriptions.assignedPartitions());
 
         Assignment assignment = ConsumerProtocol.deserializeAssignment(assignmentBuffer);
+
+        if (assignment.error() == ConsumerProtocol.AssignmentError.ASSIGNOR_ERROR) {
+            // leader's assignor has a fatal
+            throw new KafkaException("Leader's assignor logic has a fatal error that violates the rebalance protocol, should close this client now");
+        } else if (assignment.error() == ConsumerProtocol.AssignmentError.NEED_REJOIN) {
+            // request re-join based on leader communicated error code
+            requestRejoin();
+        }
+
         if (!subscriptions.assignFromSubscribed(assignment.partitions())) {
             log.warn("We received an assignment {} that doesn't match our current subscription {}; it is likely " +
                 "that the subscription has changed since we joined the group. Will try re-join the group with current subscription",
@@ -355,11 +364,6 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         addedPartitions.removeAll(ownedPartitions);
         switch (protocol) {
             case EAGER:
-                if (!ownedPartitions.isEmpty()) {
-                    log.info("Coordinator has owned partitions {} that are not revoked with {} protocol, " +
-                        "it is likely client is woken up before a previous pending rebalance completes its callback", ownedPartitions, protocol);
-                }
-
                 // assign partitions that are not yet owned
                 firstException.compareAndSet(null, maybeAssignPartitions(addedPartitions));
 
@@ -381,11 +385,6 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
                 // revoked partitions that was previously owned but no longer assigned
                 firstException.compareAndSet(null, maybeRevokePartitions(revokedPartitions));
-
-                // request re-join based on leader communicated error code
-                if (assignment.error() == ConsumerProtocol.AssignmentError.NEED_REJOIN) {
-                    requestRejoin();
-                }
 
                 break;
         }
@@ -425,7 +424,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
         if (subscriptions.partitionsAutoAssigned()) {
             if (protocol == null) {
-                throw new IllegalStateException("User confingure ConsumerConfig#PARTITION_ASSIGNMENT_STRATEGY_CONFIG to empty " +
+                throw new IllegalStateException("User configure ConsumerConfig#PARTITION_ASSIGNMENT_STRATEGY_CONFIG to empty " +
                     "while trying to subscribe for group protocol to auto assign partitions");
             }
             // Always update the heartbeat last poll time so that the heartbeat thread does not leave the
@@ -516,13 +515,13 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         Set<String> allSubscribedTopics = new HashSet<>();
         Map<String, Subscription> subscriptions = new HashMap<>();
         // collect all the owned partitions
-        Map<TopicPartition, String> ownedPartitions = new HashMap<>();
+        Map<String, List<TopicPartition>> ownedPartitions = new HashMap<>();
         for (JoinGroupResponseData.JoinGroupResponseMember memberSubscription : allSubscriptions) {
             Subscription subscription = ConsumerProtocol.deserializeSubscription(ByteBuffer.wrap(memberSubscription.metadata()));
             subscription.setGroupInstanceId(Optional.ofNullable(memberSubscription.groupInstanceId()));
             subscriptions.put(memberSubscription.memberId(), subscription);
             allSubscribedTopics.addAll(subscription.topics());
-            ownedPartitions.putAll(subscription.ownedPartitions().stream().collect(Collectors.toMap(item -> item, item -> memberSubscription.memberId())));
+            ownedPartitions.put(memberSubscription.memberId(), subscription.ownedPartitions());
         }
 
         // the leader will begin watching for changes to any of the topics the group is interested in,
@@ -535,13 +534,8 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
         Map<String, Assignment> assignments = assignor.assign(metadata.fetch(), subscriptions);
 
-        switch (protocol) {
-            case EAGER:
-                break;
-
-            case COOPERATIVE:
-                adjustAssignment(ownedPartitions, assignments);
-                break;
+        if (protocol == RebalanceProtocol.COOPERATIVE) {
+            validateAssignment(ownedPartitions, assignments);
         }
 
         // user-customized assignor may have created some topics that are not in the subscription list
@@ -586,34 +580,47 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         return groupAssignment;
     }
 
-    private void adjustAssignment(final Map<TopicPartition, String> ownedPartitions,
-                                  final Map<String, Assignment> assignments) {
-        boolean revocationsNeeded = false;
-        Set<TopicPartition> assignedPartitions = new HashSet<>();
+    /**
+     * Used by COOPERATIVE rebalance protocol only.
+     *
+     * Validate the user assignor returned assignments such that there are no partitions which are going to
+     * be assigned to a different consumer other than its current owner (i.e. who includes it in its owned
+     * partitions list encoded in subscription); also if there are any revoked partitions set the error code to let
+     * everyone retry.
+     */
+    private void validateAssignment(final Map<String, List<TopicPartition>> ownedPartitions,
+                                    final Map<String, Assignment> assignments) {
+        Set<TopicPartition> totalRevokedPartitions = new HashSet<>();
+        Set<TopicPartition> totalAddedPartitions = new HashSet<>();
         for (final Map.Entry<String, Assignment> entry : assignments.entrySet()) {
             final Assignment assignment = entry.getValue();
-            assignedPartitions.addAll(assignment.partitions());
+            final Set<TopicPartition> addedPartitions = new HashSet<>(assignment.partitions());
+            addedPartitions.removeAll(ownedPartitions.get(entry.getKey()));
+            final Set<TopicPartition> revokedPartitions = new HashSet<>(ownedPartitions.get(entry.getKey()));
+            revokedPartitions.removeAll(assignment.partitions());
 
-            // update the assignment if the partition is owned by another different owner
-            List<TopicPartition> updatedPartitions = assignment.partitions().stream()
-                .filter(tp -> ownedPartitions.containsKey(tp) && !entry.getKey().equals(ownedPartitions.get(tp)))
-                .collect(Collectors.toList());
-            if (!updatedPartitions.equals(assignment.partitions())) {
-                assignment.updatePartitions(updatedPartitions);
-                revocationsNeeded = true;
+            totalAddedPartitions.addAll(addedPartitions);
+            totalRevokedPartitions.addAll(revokedPartitions);
+        }
+
+        // if there are overlap between revoked partitions and added partitions, it means some partitions
+        // immediately gets re-assigned to another member while it is still claimed by some member
+        totalAddedPartitions.retainAll(totalRevokedPartitions);
+        if (!totalAddedPartitions.isEmpty()) {
+            log.error("With COOPERATIVE protocol, all owned partitions should not be " +
+                "reassigned to other members; however the assignor has reassigned partitions {} which are still owned " +
+                "by some members; return the error code to all members to let them stop", totalAddedPartitions);
+
+            for (final Assignment assignment : assignments.values()) {
+                assignment.setError(ConsumerProtocol.AssignmentError.ASSIGNOR_ERROR);
             }
         }
 
-        // for all owned but not assigned partitions, blindly add them to assignment
-        for (final Map.Entry<TopicPartition, String> entry : ownedPartitions.entrySet()) {
-            final TopicPartition tp = entry.getKey();
-            if (!assignedPartitions.contains(tp)) {
-                assignments.get(entry.getValue()).partitions().add(tp);
-            }
-        }
+        if (!totalRevokedPartitions.isEmpty()) {
+            log.info("With COOPERATIVE protocol there are some partitions {} that will be revoked by their current " +
+                "owners; return the error code to let all members to re-trigger another rebalance after revoking partitions",
+                totalRevokedPartitions);
 
-        // if revocations are triggered, tell everyone to re-join immediately.
-        if (revocationsNeeded) {
             for (final Assignment assignment : assignments.values()) {
                 assignment.setError(ConsumerProtocol.AssignmentError.NEED_REJOIN);
             }
@@ -664,16 +671,19 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
     @Override
     public void resetGeneration(String errorMessage) {
-        // lost all partitions
-        Set<TopicPartition> lostPartitions = new HashSet<>(subscriptions.assignedPartitions());
-        subscriptions.assignFromSubscribed(Collections.emptySet());
+        if (subscriptions.partitionsAutoAssigned()) {
+            // lost all partitions if it is based on subscriptions
+            Set<TopicPartition> lostPartitions = new HashSet<>(subscriptions.assignedPartitions());
+            subscriptions.assignFromSubscribed(Collections.emptySet());
 
-        Exception e = maybeLostPartitions(errorMessage, lostPartitions);
-        super.resetGeneration(errorMessage);
+            Exception e = maybeLostPartitions(errorMessage, lostPartitions);
 
-        if (e != null) {
-            throw new KafkaException("User rebalance callback throws an error", e);
+            if (e != null) {
+                throw new KafkaException("User rebalance callback throws an error", e);
+            }
         }
+
+        super.resetGeneration(errorMessage);
     }
 
     @Override
