@@ -19,8 +19,9 @@ package kafka.log.remote
 import java.io.File
 import java.util
 import java.util.concurrent.ConcurrentHashMap
+import java.util.function.{Consumer, Function}
 
-import kafka.log.LogManager
+import kafka.log.Log
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.utils.Utils
 
@@ -28,9 +29,14 @@ object RLMIndexer {
   val UNKNOWN_INDEX: Long = -1L
 }
 
-class RLMIndexer(rsm: RemoteStorageManager, logManager: LogManager) extends AutoCloseable {
+class RLMIndexer(rsm: RemoteStorageManager, logFetcher: TopicPartition => Option[Log]) extends AutoCloseable {
 
   private val remoteIndexes: util.concurrent.ConcurrentMap[TopicPartition, TopicPartitionRemoteIndex] = new ConcurrentHashMap[TopicPartition, TopicPartitionRemoteIndex]()
+
+  def lookupLastOffset(tp: TopicPartition): Option[Long] = {
+    val remoteIndex = remoteIndexes.get(tp)
+    if (remoteIndex != null) remoteIndex.currentLastOffset else None
+  }
 
   def lookupEntryForOffset(tp: TopicPartition, offset: Long): Option[RemoteLogIndexEntry] = {
     val indexEntry = remoteIndexes.get(tp)
@@ -43,23 +49,29 @@ class RLMIndexer(rsm: RemoteStorageManager, logManager: LogManager) extends Auto
    * @return the offset of the topic-partition that is already indexed if it has done earlier, else it returns -1.
    */
   def getOrLoadIndexOffset(tp: TopicPartition): Option[Long] = {
-    remoteIndexes.computeIfAbsent(tp, (tp: TopicPartition) => {
-      val log = logManager.getLog(tp).getOrElse(throw new RuntimeException("This broker is not a leader or a a follower for the given topic partition " + tp))
+    remoteIndexes.computeIfAbsent(tp, new Function[TopicPartition, TopicPartitionRemoteIndex]() {
+      override def apply(tp: TopicPartition): TopicPartitionRemoteIndex = {
+        val log = logFetcher(tp).getOrElse(throw new RuntimeException("This broker is not a leader or a a follower for the given topic partition " + tp))
 
-      val parentDir = log.dir
-      TopicPartitionRemoteIndex.open(tp, parentDir)
+        val parentDir = log.dir
+        TopicPartitionRemoteIndex.open(tp, parentDir)
+      }
     }).currentStartOffset
   }
 
   def maybeBuildIndexes(tp: TopicPartition, entries: Seq[RemoteLogIndexEntry], parentDir: File, baseOffsetStr: String): Boolean = {
     if (entries.nonEmpty) {
-      val indexEntry = remoteIndexes.computeIfAbsent(tp, (x: TopicPartition) => TopicPartitionRemoteIndex.open(x, parentDir))
+      val indexEntry = remoteIndexes.computeIfAbsent(tp, new Function[TopicPartition, TopicPartitionRemoteIndex] {
+        override def apply(x: TopicPartition): TopicPartitionRemoteIndex = TopicPartitionRemoteIndex.open(x, parentDir)
+      })
       val maybeLong = indexEntry.appendEntries(entries, baseOffsetStr)
       maybeLong.isDefined && maybeLong.get >= 0
     } else false
   }
 
   override def close(): Unit = {
-    remoteIndexes.values().forEach(x => Utils.closeQuietly(x, "RLMIndexEntry"))
+    remoteIndexes.values().forEach(new Consumer[TopicPartitionRemoteIndex] {
+      override def accept(x: TopicPartitionRemoteIndex): Unit = Utils.closeQuietly(x, "RLMIndexEntry")
+    })
   }
 }

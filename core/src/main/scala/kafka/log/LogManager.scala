@@ -19,7 +19,6 @@ package kafka.log
 
 import java.io._
 import java.nio.file.Files
-import java.util.Collections
 import java.util.concurrent._
 
 import com.yammer.metrics.core.Gauge
@@ -66,7 +65,7 @@ class LogManager(logDirs: Seq[File],
                  brokerTopicStats: BrokerTopicStats,
                  logDirFailureChannel: LogDirFailureChannel,
                  time: Time,
-                 remoteLogManagerConfig: RemoteLogManagerConfig = RemoteLogManagerConfig(remoteLogStorageEnable = false, null, 0L, 0L))
+                 remoteLogManagerConfig: RemoteLogManagerConfig = RemoteLogManager.DefaultConfig)
   extends Logging with KafkaMetricsGroup {
 
   import LogManager._
@@ -89,18 +88,22 @@ class LogManager(logDirs: Seq[File],
 
   def createRemoteLogManager(remoteLogManagerConfig: RemoteLogManagerConfig): Option[RemoteLogManager] = {
     if (remoteLogManagerConfig.remoteLogStorageEnable) {
-      val remoteLogManager: RemoteLogManager = new RemoteLogManager(this)
-      //todo:satish pass configs
-      remoteLogManager.configure(Collections.emptyMap())
-      Option(remoteLogManager)
+      val logFetcher: TopicPartition => Option[Log] = getLog(_)
+      val remoteLogManager = new RemoteLogManager(logFetcher, remoteLogManagerConfig)
+      Some(remoteLogManager)
     } else {
       None
     }
   }
 
-  private val _remoteLogManager: Option[RemoteLogManager] = createRemoteLogManager(remoteLogManagerConfig)
+  private var _remoteLogManager: Option[RemoteLogManager] = createRemoteLogManager(remoteLogManagerConfig)
 
   def remoteLogManager: Option[RemoteLogManager] = _remoteLogManager
+
+  // Visible for testing
+  private[log] def setRemoteLogManager(rlm: Option[RemoteLogManager]): Unit = {
+    _remoteLogManager = rlm
+  }
 
   def reconfigureDefaultLogConfig(logConfig: LogConfig): Unit = {
     this._currentDefaultConfig = logConfig
@@ -1075,8 +1078,7 @@ object LogManager {
       brokerTopicStats = brokerTopicStats,
       logDirFailureChannel = logDirFailureChannel,
       time = time,
-      RemoteLogManagerConfig(config.remoteLogStorageEnable, config.remoteLogStorageManager,
-        config.remoteLogRetentionBytes, config.remoteLogRetentionMillis)
+      RemoteLogManager.createRemoteLogManagerConfig(config)
     )
   }
 }

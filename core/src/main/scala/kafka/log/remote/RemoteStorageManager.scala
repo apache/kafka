@@ -76,12 +76,13 @@ trait RemoteStorageManager extends Configurable with AutoCloseable {
    * Will read at least one batch, if the 1st batch size is larger than maxBytes.
    *
    * @param remoteLogIndexEntry The first remoteLogIndexEntry that remoteLogIndexEntry.lastOffset >= startOffset
-   * @param maxBytes
-   * @param startOffset
+   * @param maxBytes maximum bytes to fetch for the given entry
+   * @param startOffset initial offset to be read from the given rdi in remoteLogIndexEntry
+   * @param minOneMessage if true read at least one record even if the size is more than maxBytes
    * @return
    */
   @throws(classOf[IOException])
-  def read(remoteLogIndexEntry: RemoteLogIndexEntry, maxBytes: Int, startOffset: Long): Records
+  def read(remoteLogIndexEntry: RemoteLogIndexEntry, maxBytes: Int, startOffset: Long, minOneMessage: Boolean): Records
 
   /**
    * stops all the threads and closes the instance.

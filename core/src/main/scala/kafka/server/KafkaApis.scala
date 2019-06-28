@@ -690,7 +690,7 @@ class KafkaApis(val requestChannel: RequestChannel,
                 new FetchResponse.PartitionData[BaseRecords](partitionData.error, partitionData.highWatermark,
                   partitionData.lastStableOffset, partitionData.logStartOffset,
                   partitionData.preferredReadReplica, partitionData.abortedTransactions,
-                  new LazyDownConversionRecords(tp, unconvertedRecords, magic, fetchContext.getFetchOffset(tp).get, time))
+                  new LazyDownConversionRecords(tp, unconvertedRecords, magic, fetchContext.getFetchOffset(tp).get, time), partitionData.nextLocalOffset)
               } catch {
                 case e: UnsupportedCompressionTypeException =>
                   trace("Received unsupported compression type error during down-conversion", e)
@@ -700,7 +700,7 @@ class KafkaApis(val requestChannel: RequestChannel,
           case None => new FetchResponse.PartitionData[BaseRecords](partitionData.error, partitionData.highWatermark,
             partitionData.lastStableOffset, partitionData.logStartOffset,
             partitionData.preferredReadReplica, partitionData.abortedTransactions,
-            unconvertedRecords)
+            unconvertedRecords, partitionData.nextLocalOffset)
         }
       }
     }
@@ -711,9 +711,10 @@ class KafkaApis(val requestChannel: RequestChannel,
       responsePartitionData.foreach { case (tp, data) =>
         val abortedTransactions = data.abortedTransactions.map(_.asJava).orNull
         val lastStableOffset = data.lastStableOffset.getOrElse(FetchResponse.INVALID_LAST_STABLE_OFFSET)
+        val nextLocalOffset = data.nextLocalOffset.getOrElse(FetchResponse.INVALID_NEXT_LOCAL_OFFSET)
         partitions.put(tp, new FetchResponse.PartitionData(data.error, data.highWatermark, lastStableOffset,
           data.logStartOffset, data.preferredReadReplica.map(int2Integer).asJava,
-          abortedTransactions, data.records))
+          abortedTransactions, data.records, nextLocalOffset))
       }
       erroneous.foreach { case (tp, data) => partitions.put(tp, data) }
 

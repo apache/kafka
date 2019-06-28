@@ -40,6 +40,7 @@ import Implicits._
 import com.yammer.metrics.Metrics
 import com.yammer.metrics.core.Meter
 import kafka.controller.LeaderIsrAndControllerEpoch
+import kafka.log.remote.{RemoteLogManager, RemoteLogManagerConfig}
 import kafka.zk._
 import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType
@@ -1030,7 +1031,8 @@ object TestUtils extends Logging {
   def createLogManager(logDirs: Seq[File] = Seq.empty[File],
                        defaultConfig: LogConfig = LogConfig(),
                        cleanerConfig: CleanerConfig = CleanerConfig(enableCleaner = false),
-                       time: MockTime = new MockTime()): LogManager = {
+                       time: MockTime = new MockTime(),
+                       remoteLogManagerConfig: RemoteLogManagerConfig = RemoteLogManager.DefaultConfig): LogManager = {
     new LogManager(logDirs = logDirs.map(_.getAbsoluteFile),
                    initialOfflineDirs = Array.empty[File],
                    topicConfigs = Map(),
@@ -1046,7 +1048,8 @@ object TestUtils extends Logging {
                    time = time,
                    brokerState = BrokerState(),
                    brokerTopicStats = new BrokerTopicStats,
-                   logDirFailureChannel = new LogDirFailureChannel(logDirs.size))
+                   logDirFailureChannel = new LogDirFailureChannel(logDirs.size),
+                   remoteLogManagerConfig = remoteLogManagerConfig)
   }
 
   def produceMessages(servers: Seq[KafkaServer],

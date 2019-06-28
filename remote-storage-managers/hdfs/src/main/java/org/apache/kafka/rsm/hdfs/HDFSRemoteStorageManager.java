@@ -200,7 +200,7 @@ public class HDFSRemoteStorageManager implements RemoteStorageManager {
         Read remote log from startOffset.
      */
     @Override
-    public Records read(RemoteLogIndexEntry remoteLogIndexEntry, int maxBytes, long startOffset) throws IOException {
+    public Records read(RemoteLogIndexEntry remoteLogIndexEntry, int maxBytes, long startOffset, boolean minOneMessage) throws IOException {
         if (startOffset > remoteLogIndexEntry.lastOffset())
             throw new IllegalArgumentException("startOffset > remoteLogIndexEntry.lastOffset()");
 

@@ -17,55 +17,78 @@
 package kafka.log.remote
 
 import java.io.Closeable
-import java.nio.file.{Files, Path}
+import java.nio.file.{DirectoryStream, Files, Path}
 import java.util
 import java.util.concurrent._
+import java.util.function.BiConsumer
 
-import kafka.log._
-import kafka.server.{FetchDataInfo, LogReadResult}
+import kafka.log.{Log, LogSegment}
+import kafka.server.{Defaults, FetchDataInfo, KafkaConfig, LogOffsetMetadata}
 import kafka.utils.Logging
+import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.errors.OffsetOutOfRangeException
 import org.apache.kafka.common.requests.FetchRequest.PartitionData
 import org.apache.kafka.common.utils.Utils
-import org.apache.kafka.common.{Configurable, TopicPartition}
 
 import scala.collection.JavaConverters._
 import scala.collection.{JavaConverters, Set}
 
-class RemoteLogManager(logManager: LogManager) extends Logging with Configurable with Closeable {
-  private var remoteStorageManager: RemoteStorageManager = _
-  private var rlmFollower: RLMFollower = _
-  private var rlmIndexer: RLMIndexer = _
+class RemoteLogManager(logFetcher: TopicPartition => Option[Log], rlmConfig: RemoteLogManagerConfig) extends Logging with Closeable {
 
   private val watchedSegments: BlockingQueue[LogSegmentEntry] = new LinkedBlockingQueue[LogSegmentEntry]()
-
-  private val polledDirs: util.Map[TopicPartition, Path] = new ConcurrentHashMap[TopicPartition, Path]()
+  private val polledDirs = new ConcurrentHashMap[TopicPartition, Path]().asScala
   private val maxOffsets: util.Map[TopicPartition, Long] = new ConcurrentHashMap[TopicPartition, Long]()
 
-  private val pollerDirsRunnable: Runnable = () => {
-    polledDirs.forEach((tp: TopicPartition, path: Path) => {
-      val dirPath: Path = path
-      val tp: TopicPartition = Log.parseTopicPartitionName(dirPath.toFile)
+  private def createRemoteStorageManager(): RemoteStorageManager = {
+    val rsm = Class.forName(rlmConfig.remoteLogStorageManagerClass)
+      .getDeclaredConstructor().newInstance().asInstanceOf[RemoteStorageManager]
 
-      val maxOffset = maxOffsets.get(tp)
-      //todo-satish avoid polling log directories as it may introduce IO ops to read directory metadata
-      // we need to introduce a callback whenever log rollover occurs for a topic partition.
-      val logFiles: List[String] = Files.newDirectoryStream(dirPath, (entry: Path) => {
-        val fileName = entry.getFileName.toFile.getName
-        fileName.endsWith(Log.LogFileSuffix) && (Log.offsetFromFileName(fileName) > maxOffset)
-      }).iterator().asScala
-        .map(x => x.getFileName.toFile.getName).toList
+    val rsmProps = new util.HashMap[String, Any]()
+    rlmConfig.remoteStorageConfig.foreach { case (k, v) => rsmProps.put(k, v) }
+    rsmProps.put(KafkaConfig.RemoteLogRetentionMillisProp, rlmConfig.remoteLogRetentionMillis)
+    rsmProps.put(KafkaConfig.RemoteLogRetentionBytesProp, rlmConfig.remoteLogRetentionBytes)
+    rsm.configure(rsmProps)
+    rsm
+  }
 
-      if (logFiles.size > 1) {
-        val sortedPaths = logFiles.sorted
-        val passiveLogFiles = sortedPaths.slice(0, sortedPaths.size - 1)
-        logManager.getLog(tp).foreach(log => {
-          val lastSegmentOffset = Log.offsetFromFileName(passiveLogFiles.last)
-          val segments = log.logSegments(maxOffset + 1, lastSegmentOffset)
-          segments.foreach(segment => watchedSegments.add(LogSegmentEntry(tp, segment.baseOffset, segment)))
-          maxOffsets.put(tp, lastSegmentOffset)
+  private val remoteStorageManager: RemoteStorageManager = createRemoteStorageManager()
+  private val rlmIndexer: RLMIndexer = new RLMIndexer(remoteStorageManager, logFetcher)
+  private val rlmFollower: RLMFollower = new RLMFollower(remoteStorageManager, logFetcher, rlmIndexer)
+
+  private val pollerDirsRunnable: Runnable = new Runnable() {
+    override def run(): Unit = {
+      polledDirs.foreach { case (tp, path) =>
+        val dirPath: Path = path
+        val tp: TopicPartition = Log.parseTopicPartitionName(dirPath.toFile)
+
+        val maxOffset = maxOffsets.get(tp)
+        val paths = Files.newDirectoryStream(dirPath, new DirectoryStream.Filter[Path]() {
+          override def accept(path: Path): Boolean = {
+            val fileName = path.toFile.getName
+            fileName.endsWith(Log.LogFileSuffix) && (Log.offsetFromFileName(fileName) > maxOffset)
+          }
         })
+        try {
+          //todo-satish avoid polling log directories as it may introduce IO ops to read directory metadata
+          // we need to introduce a callback whenever log rollover occurs for a topic partition.
+          val logFiles: List[String] = paths.iterator().asScala
+            .map(x => x.toFile.getName).toList
+
+          if (logFiles.size > 1) {
+            val sortedPaths = logFiles.sorted
+            val passiveLogFiles = sortedPaths.slice(0, sortedPaths.size - 1)
+            logFetcher(tp).foreach(log => {
+              val lastSegmentOffset = Log.offsetFromFileName(passiveLogFiles.last)
+              val segments = log.logSegments(maxOffset + 1, lastSegmentOffset)
+              segments.foreach(segment => watchedSegments.add(LogSegmentEntry(tp, segment.baseOffset, segment)))
+              maxOffsets.put(tp, lastSegmentOffset)
+            })
+          }
+        } finally {
+          Utils.closeQuietly(paths, "paths")
+        }
       }
-    })
+    }
   }
 
   private val pollerExecutorService: ScheduledExecutorService = Executors.newSingleThreadScheduledExecutor()
@@ -85,8 +108,8 @@ class RemoteLogManager(logManager: LogManager) extends Logging with Configurable
 
             val tp = segmentEntry.topicPartition
 
-            //todo-satish Not all LogSegments on different replicas are same. So, we need to avoid duplicating log-segments in remote
-            // tier with similar offset ranges.
+            //todo-satish Not all LogSegments on different replicas are same. So, we need to avoid duplicating
+            // log-segments in remote tier with similar offset ranges.
             val entries = remoteStorageManager.copyLogSegment(tp, segment)
             val file = segment.log.file()
             val fileName = file.getName
@@ -94,29 +117,16 @@ class RemoteLogManager(logManager: LogManager) extends Logging with Configurable
             rlmIndexer.maybeBuildIndexes(tp, entries, file, baseOffsetStr)
           } catch {
             case ex: InterruptedException => throw ex
-            case ex: Throwable => //todo-satish log the message here for failed log copying
-              logger.warn("Error occured while building indexes in RLM leader", ex)
+            case ex: Throwable =>
+              logger.error(s"Error occurred while building indexes in RLM leader for segment entry $segmentEntry", ex)
           }
         }
       } catch {
-        case ex: InterruptedException => // log the interrupted error
+        case ex: InterruptedException =>
           logger.info("Current thread is interrupted with ", ex)
       }
     }
   })
-
-  /**
-   * Configure this class with the given key-value pairs
-   */
-  override def configure(configs: util.Map[String, _]): Unit = {
-    remoteStorageManager = Class.forName(configs.get("remote.log.storage.manager.class").toString)
-      .getDeclaredConstructor().newInstance().asInstanceOf[RemoteStorageManager]
-    //todo-satish filter configs with remote storage manager having key with prefix "remote.log.storage.manager.prop"
-    remoteStorageManager.configure(configs)
-    rlmIndexer = new RLMIndexer(remoteStorageManager, logManager)
-    //    remoteStorageManager.configure(configs.filterKeys( key => key.startsWith("remote.log.storage.manager")).)
-    rlmFollower = new RLMFollower(remoteStorageManager, logManager, rlmIndexer)
-  }
 
   /**
    * Ask RLM to monitor the given TopicPartitions, and copy inactive Log
@@ -126,10 +136,10 @@ class RemoteLogManager(logManager: LogManager) extends Logging with Configurable
   def handleLeaderPartitions(topicPartitions: Set[TopicPartition]): Boolean = {
 
     // stop begin followers as they become leaders.
-    rlmFollower.removeFollowers(JavaConverters.asJavaCollection(topicPartitions))
+    rlmFollower.removeFollowers(JavaConverters.asJavaCollectionConverter(topicPartitions).asJavaCollection)
 
     topicPartitions.foreach(tp =>
-      logManager.getLog(tp).foreach(log => {
+      logFetcher(tp).foreach(log => {
         val segments: util.List[LogSegmentEntry] = new util.ArrayList[LogSegmentEntry]()
         log.logSegments.foreach(x => {
           segments.add(LogSegmentEntry(tp, x.baseOffset, x))
@@ -155,9 +165,9 @@ class RemoteLogManager(logManager: LogManager) extends Logging with Configurable
 
     // remove these partitions as they become followers
     topicPartitions.foreach(tp => {
-      logManager.getLog(tp).foreach(log => log.logSegments
+      logFetcher(tp).foreach(log => log.logSegments
         .foreach(logSegment => {
-          watchedSegments.remove(logSegment)
+          watchedSegments.remove(LogSegmentEntry(tp, logSegment.baseOffset, logSegment))
           remoteStorageManager.cancelCopyingLogSegment(tp)
         }))
     })
@@ -168,32 +178,38 @@ class RemoteLogManager(logManager: LogManager) extends Logging with Configurable
     })
 
     //these partitions become followers
-    rlmFollower.addFollowers(JavaConverters.asJavaCollection(topicPartitions))
+    rlmFollower.addFollowers(JavaConverters.asJavaCollectionConverter(topicPartitions).asJavaCollection)
 
     true
+  }
+
+  def lookupLastOffset(tp: TopicPartition): Option[Long] = {
+    rlmIndexer.lookupLastOffset(tp)
   }
 
   /**
    * Read topic partition data from remote
    *
    * @param fetchMaxByes
-   * @param hardMaxBytesLimit
+   * @param minOneMessage
    * @param tp
    * @param fetchInfo
    * @return
    */
-  def read(fetchMaxByes: Int, hardMaxBytesLimit: Boolean, tp: TopicPartition, fetchInfo: PartitionData): LogReadResult = {
+  def read(fetchMaxByes: Int, minOneMessage: Boolean, tp: TopicPartition, fetchInfo: PartitionData): FetchDataInfo = {
     val offset = fetchInfo.fetchOffset
-    val entry = rlmIndexer.lookupEntryForOffset(tp, offset).getOrElse(throw new RuntimeException)
-    //todo need to get other information to build the expected LogReadResult
-    val records = remoteStorageManager.read(entry, fetchInfo.maxBytes, offset)
-    null
+    val entry = rlmIndexer.lookupEntryForOffset(tp, offset)
+      .getOrElse(throw new OffsetOutOfRangeException(s"Received request for offset $offset for partition $tp, which does not exist in remote tier"))
+
+    val records = remoteStorageManager.read(entry, fetchInfo.maxBytes, offset, minOneMessage)
+
+    FetchDataInfo(LogOffsetMetadata(offset), records)
   }
 
   /**
-   * Stops all the threads and closes the instance.
+   * Stops all the threads and releases all the resources.
    */
-  def close() = {
+  def close(): Unit = {
     Utils.closeQuietly(remoteStorageManager, "RemoteLogStorageManager")
     executorService.shutdownNow()
     pollerExecutorService.shutdownNow()
@@ -204,7 +220,8 @@ class RemoteLogManager(logManager: LogManager) extends Logging with Configurable
 case class RemoteLogManagerConfig(remoteLogStorageEnable: Boolean,
                                   remoteLogStorageManagerClass: String,
                                   remoteLogRetentionBytes: Long,
-                                  remoteLogRetentionMillis: Long)
+                                  remoteLogRetentionMillis: Long,
+                                  remoteStorageConfig: scala.collection.immutable.Map[String, Any])
 
 private case class LogSegmentEntry(topicPartition: TopicPartition,
                                    baseOffset: Long,
@@ -219,5 +236,26 @@ private case class LogSegmentEntry(topicPartition: TopicPartition,
       case that: LogSegmentEntry => topicPartition.equals(that.topicPartition) && baseOffset.equals(that.baseOffset)
       case _ => false
     }
+  }
+}
+
+object RemoteLogManager {
+  val REMOTE_STORAGE_MANAGER_CONFIG_PREFIX = "remote.log.storage."
+  val DefaultConfig = RemoteLogManagerConfig(remoteLogStorageEnable = Defaults.RemoteLogStorageEnable, null,
+    Defaults.RemoteLogRetentionBytes, TimeUnit.MINUTES.toMillis(Defaults.RemoteLogRetentionMinutes), Map.empty)
+
+  def createRemoteLogManagerConfig(config: KafkaConfig): RemoteLogManagerConfig = {
+    var rsmProps = collection.mutable.Map[String, Any]()
+    config.props.forEach(new BiConsumer[Any, Any] {
+      override def accept(key: Any, value: Any): Unit = {
+        key match {
+          case key: String if key.startsWith(REMOTE_STORAGE_MANAGER_CONFIG_PREFIX) =>
+            rsmProps += (key.toString -> value)
+          case _ =>
+        }
+      }
+    })
+    RemoteLogManagerConfig(config.remoteLogStorageEnable, config.remoteLogStorageManager,
+      config.remoteLogRetentionBytes, config.remoteLogRetentionMillis, rsmProps.toMap)
   }
 }

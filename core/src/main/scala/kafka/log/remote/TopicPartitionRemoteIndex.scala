@@ -20,6 +20,7 @@ import java.io.{File, IOException}
 import java.nio.file.{Files, Path}
 import java.util.concurrent.locks.ReentrantLock
 import java.util.concurrent.{ConcurrentNavigableMap, ConcurrentSkipListMap}
+import java.util.function.{Consumer, Predicate}
 
 import kafka.log.remote.TopicPartitionRemoteIndex.{REMOTE_OFFSET_INDEX_SUFFIX, REMOTE_TIME_INDEX_SUFFIX}
 import kafka.log.{Log, OffsetIndex, TimeIndex}
@@ -131,9 +132,15 @@ class TopicPartitionRemoteIndex(val topicPartition: TopicPartition, logDir: File
   }
 
   override def close(): Unit = {
-    remoteLogIndexes.values().forEach(x => Utils.closeQuietly(x, "RemoteLogIndex"))
-    remoteOffsetIndexes.values().forEach(x => Utils.closeQuietly(x, "RemoteOffsetIndex"))
-    remoteTimeIndexes.values().forEach(x => Utils.closeQuietly(x, "RemoteTimeIndex"))
+    remoteLogIndexes.values().forEach(new Consumer[RemoteLogIndex]() {
+      override def accept(x: RemoteLogIndex): Unit = Utils.closeQuietly(x, "RemoteLogIndex")
+    })
+    remoteOffsetIndexes.values().forEach(new Consumer[OffsetIndex] {
+      override def accept(x: OffsetIndex): Unit = Utils.closeQuietly(x, "RemoteOffsetIndex")
+    })
+    remoteTimeIndexes.values().forEach(new Consumer[TimeIndex] {
+      override def accept(x: TimeIndex): Unit = Utils.closeQuietly(x, "RemoteTimeIndex")
+    })
   }
 }
 
@@ -144,16 +151,20 @@ object TopicPartitionRemoteIndex {
   def open(tp: TopicPartition, logDir: File): TopicPartitionRemoteIndex = {
     val entry: TopicPartitionRemoteIndex = new TopicPartitionRemoteIndex(tp, logDir)
 
-    Files.list(logDir.toPath).filter((filePath: Path) => filePath.endsWith(RemoteLogIndex.SUFFIX))
-      .forEach((remoteLogIndexPath: Path) => {
-        val prefix = RemoteLogIndex.offsetFromFileName(remoteLogIndexPath.getFileName.toString)
+    Files.list(logDir.toPath).filter(new Predicate[Path] {
+      override def test(filePath: Path): Boolean = filePath.endsWith(RemoteLogIndex.SUFFIX)
+    }).forEach(new Consumer[Path] {
+      override def accept(remoteLogIndexPath: Path): Unit = {
+        val file = remoteLogIndexPath.toFile
+        val prefix = RemoteLogIndex.offsetFromFileName(file.getName)
         val offset = prefix.toLong
-        val remoteLogIndex = RemoteLogIndex.open(remoteLogIndexPath.toFile)
+        val remoteLogIndex = RemoteLogIndex.open(file)
         val offsetIndex = new OffsetIndex(new File(logDir, prefix + REMOTE_OFFSET_INDEX_SUFFIX), offset)
         val timeIndex = new TimeIndex(new File(logDir, prefix + REMOTE_TIME_INDEX_SUFFIX), prefix.toLong)
 
         entry.addIndex(offset, remoteLogIndex, offsetIndex, timeIndex)
-      })
+      }
+    })
     entry
   }
 }

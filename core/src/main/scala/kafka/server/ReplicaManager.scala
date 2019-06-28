@@ -93,6 +93,7 @@ case class LogReadResult(info: FetchDataInfo,
                          fetchTimeMs: Long,
                          readSize: Int,
                          lastStableOffset: Option[Long],
+                         nextLocalOffset: Option[Long] = None,
                          preferredReadReplica: Option[Int] = None,
                          followerNeedsHwUpdate: Boolean = false,
                          exception: Option[Throwable] = None) {
@@ -116,9 +117,9 @@ case class FetchPartitionData(error: Errors = Errors.NONE,
                               logStartOffset: Long,
                               records: Records,
                               lastStableOffset: Option[Long],
+                              nextLocalOffset: Option[Long] = None,
                               abortedTransactions: Option[List[AbortedTransaction]],
                               preferredReadReplica: Option[Int])
-
 
 /**
  * Trait to represent the state of hosted partitions. We create a concrete (active) Partition
@@ -283,6 +284,7 @@ class ReplicaManager(val config: KafkaConfig,
       lastIsrChangeMs.set(System.currentTimeMillis())
     }
   }
+
   /**
    * This function periodically runs to see if ISR needs to be propagated. It propagates ISR when:
    * 1. There is ISR change not propagated yet.
@@ -344,7 +346,7 @@ class ReplicaManager(val config: KafkaConfig,
       brokerTopicStats.removeMetrics(topic)
   }
 
-  def stopReplica(topicPartition: TopicPartition, deletePartition: Boolean)  = {
+  def stopReplica(topicPartition: TopicPartition, deletePartition: Boolean) = {
     stateChangeLogger.trace(s"Handling stop replica (delete=$deletePartition) for partition $topicPartition")
 
     if (deletePartition) {
@@ -892,7 +894,7 @@ class ReplicaManager(val config: KafkaConfig,
     if (timeout <= 0 || fetchInfos.isEmpty || bytesReadable >= fetchMinBytes || errorReadingData || anyPartitionsNeedHwUpdate) {
       val fetchPartitionData = logReadResults.map { case (tp, result) =>
         tp -> FetchPartitionData(result.error, result.highWatermark, result.leaderLogStartOffset, result.info.records,
-          result.lastStableOffset, result.info.abortedTransactions, result.preferredReadReplica)
+          result.lastStableOffset, result.nextLocalOffset, result.info.abortedTransactions, result.preferredReadReplica)
       }
       maybeUpdateHwAndSendResponse(fetchPartitionData)
     } else {
@@ -941,6 +943,19 @@ class ReplicaManager(val config: KafkaConfig,
         readSize = 0,
         lastStableOffset = None,
         exception = Some(e))
+    }
+
+    def checkFetchDataInfo(tp: TopicPartition, givenFetchedDataInfo: FetchDataInfo): FetchDataInfo = {
+      if (shouldLeaderThrottle(quota, tp, replicaId)) {
+        // If the partition is being throttled, simply return an empty set.
+        FetchDataInfo(givenFetchedDataInfo.fetchOffsetMetadata, MemoryRecords.EMPTY)
+      } else if (!hardMaxBytesLimit && givenFetchedDataInfo.firstEntryIncomplete) {
+        // For FetchRequest version 3, we replace incomplete message sets with an empty one as consumers can make
+        // progress in such cases and don't need to report a `RecordTooLargeException`
+        FetchDataInfo(givenFetchedDataInfo.fetchOffsetMetadata, MemoryRecords.EMPTY)
+      } else {
+        givenFetchedDataInfo
+      }
     }
 
     def read(tp: TopicPartition, fetchInfo: PartitionData, limitBytes: Int, minOneMessage: Boolean): LogReadResult = {
@@ -993,28 +1008,17 @@ class ReplicaManager(val config: KafkaConfig,
 
           // Check if the HW known to the follower is behind the actual HW
           val followerNeedsHwUpdate: Boolean = partition.getReplica(replicaId)
-            .exists(replica => replica.lastSentHighWatermark < readInfo.highWatermark)
+            .exists(replica => replica.lastSentHighWatermark < readInfo.highWatermark)val fetchDataInfo: FetchDataInfo = checkFetchDataInfo(tp, readInfo.fetchedData)
 
-          val fetchDataInfo = if (shouldLeaderThrottle(quota, tp, replicaId)) {
-            // If the partition is being throttled, simply return an empty set.
-            FetchDataInfo(readInfo.fetchedData.fetchOffsetMetadata, MemoryRecords.EMPTY)
-          } else if (!hardMaxBytesLimit && readInfo.fetchedData.firstEntryIncomplete) {
-            // For FetchRequest version 3, we replace incomplete message sets with an empty one as consumers can make
-            // progress in such cases and don't need to report a `RecordTooLargeException`
-            FetchDataInfo(readInfo.fetchedData.fetchOffsetMetadata, MemoryRecords.EMPTY)
-          } else {
-            readInfo.fetchedData
-          }
-
-          LogReadResult(info = fetchDataInfo,
-            highWatermark = readInfo.highWatermark,
-            leaderLogStartOffset = readInfo.logStartOffset,
-            leaderLogEndOffset = readInfo.logEndOffset,
-            followerLogStartOffset = followerLogStartOffset,
-            fetchTimeMs = fetchTimeMs,
-            readSize = adjustedMaxBytes,
-            lastStableOffset = Some(readInfo.lastStableOffset),
-            preferredReadReplica = preferredReadReplica,
+        LogReadResult(info = fetchDataInfo,
+          highWatermark = readInfo.highWatermark,
+          leaderLogStartOffset = readInfo.logStartOffset,
+          leaderLogEndOffset = readInfo.logEndOffset,
+          followerLogStartOffset = followerLogStartOffset,
+          fetchTimeMs = fetchTimeMs,
+          readSize = adjustedMaxBytes,
+          lastStableOffset = Some(readInfo.lastStableOffset),
+          preferredReadReplica = preferredReadReplica,
             followerNeedsHwUpdate = followerNeedsHwUpdate,
             exception = None)
         }
@@ -1026,14 +1030,48 @@ class ReplicaManager(val config: KafkaConfig,
                 _: UnknownLeaderEpochException |
                 _: FencedLeaderEpochException |
                 _: ReplicaNotAvailableException |
-                _: KafkaStorageException |
-                _: OffsetOutOfRangeException) =>
-            createLogReadResult(e)
+                _: KafkaStorageException) =>
+          createLogReadResult(e)
         case e: OffsetOutOfRangeException =>
-          // Incase of offset out of range errors, check for remote log manager to fetch from remote storage
-          // todo check if it is from a follower then do not return the data as the data may have already been copied
-          logManager.remoteLogManager.map(rlm => rlm.read(fetchMaxBytes, hardMaxBytesLimit, tp, fetchInfo))
-            .getOrElse(createLogReadResult(e))
+          // Incase of offset out of range errors, check for remote log manager to fetch from remote storage.
+          // if it is from a follower then send the offset metadata but not the records data as that can be fetched
+          // from the remote store.
+          logManager.remoteLogManager.map(rlm => {
+            val partition = getPartitionOrException(tp, expectLeader = fetchOnlyFromLeader)
+              .localReplicaWithEpochOrException(fetchInfo.currentLeaderEpoch, fetchOnlyFromLeader)
+            val highWatermark = partition.highWatermark.messageOffset
+            val leaderLogStartOffset = partition.logStartOffset
+            val leaderLogEndOffset = partition.logEndOffset
+            val fetchTimeMs = time.milliseconds
+            val readSize = adjustedMaxBytes
+            val lastStableOffset = Some(partition.lastStableOffset.messageOffset)
+            var error: Option[Throwable] = None
+            var nextLocalOffset: Option[Long] = None
+            val isFollowerRequest = Request.isValidBrokerId(replicaId)
+            val fetchDataInfo = if (isFollowerRequest) {
+              // send the offset to follower broker
+              val mayBeLastOffset = rlm.lookupLastOffset(tp)
+              if (mayBeLastOffset.isEmpty) {
+                error = Some(new OffsetOutOfRangeException(s"Received request for offset $offset for partition $tp, which does not exist in remote tier"))
+              } else
+                nextLocalOffset = Some(mayBeLastOffset.get + 1)
+
+              FetchDataInfo(LogOffsetMetadata(fetchInfo.fetchOffset, -1L, -1), MemoryRecords.EMPTY)
+            }
+            else rlm.read(adjustedMaxBytes, minOneMessage, tp, fetchInfo)
+
+            if (error.isDefined) createLogReadResult(error.get)
+            else LogReadResult(checkFetchDataInfo(tp, fetchDataInfo),
+              highWatermark,
+              leaderLogStartOffset,
+              leaderLogEndOffset,
+              followerLogStartOffset,
+              fetchTimeMs,
+              readSize,
+              lastStableOffset,
+              nextLocalOffset,
+              exception = None)
+          }).getOrElse(createLogReadResult(e))
         case e: Throwable =>
           brokerTopicStats.topicStats(tp.topic).failedFetchRequestRate.mark()
           brokerTopicStats.allTopicsStats.failedFetchRequestRate.mark()
@@ -1393,7 +1431,7 @@ class ReplicaManager(val config: KafkaConfig,
                             partitionStates: Map[Partition, LeaderAndIsrRequest.PartitionState],
                             correlationId: Int,
                             responseMap: mutable.Map[TopicPartition, Errors],
-                            highWatermarkCheckpoints: OffsetCheckpoints) : Set[Partition] = {
+                            highWatermarkCheckpoints: OffsetCheckpoints): Set[Partition] = {
     partitionStates.foreach { case (partition, partitionState) =>
       stateChangeLogger.trace(s"Handling LeaderAndIsr request correlationId $correlationId from controller $controllerId " +
         s"epoch $controllerEpoch starting the become-follower transition for partition ${partition.topicPartition} with leader " +

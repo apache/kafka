@@ -80,20 +80,22 @@ class TopicPartitionRemoteIndexTest extends JUnitSuite with Logging {
       val baseOffset = lastOffset + 1
       val entries = generateEntries(entriesCt, stepOffset, baseOffset)
       lastOffset = entries.last.lastOffset
-      workers += (() => {
-        val firstOffset = entries.head.firstOffset
-        val mayBeAddedOffset = rlmIndex.appendEntries(entries, Log.filenamePrefixFromOffset(firstOffset))
+      workers += new Runnable() {
+        override def run(): Unit = {
+          val firstOffset = entries.head.firstOffset
+          val mayBeAddedOffset = rlmIndex.appendEntries(entries, Log.filenamePrefixFromOffset(firstOffset))
 
-        val result = if (mayBeAddedOffset.isDefined) {
-          entries.count(entry => {
-            entry.equals(rlmIndex.lookupEntryForOffset(entry.firstOffset).get)
-          }) == entries.size
-        } else {
-          true
+          val result = if (mayBeAddedOffset.isDefined) {
+            entries.count(entry => {
+              entry.equals(rlmIndex.lookupEntryForOffset(entry.firstOffset).get)
+            }) == entries.size
+          } else {
+            true
+          }
+          if (!result) failed.compareAndSet(false, true)
+          latch.countDown()
         }
-        if (!result) failed.compareAndSet(false, true)
-        latch.countDown()
-      })
+      }
     }
     val executorService = Executors.newFixedThreadPool(threadCt)
 

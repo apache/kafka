@@ -19,31 +19,32 @@ package kafka.server
 
 import java.nio.ByteBuffer
 import java.util.Optional
-import java.util.concurrent.locks.ReentrantLock
-
-import kafka.cluster.BrokerEndPoint
-import kafka.utils.{DelayedItem, Pool, ShutdownableThread}
-import org.apache.kafka.common.errors._
-import org.apache.kafka.common.requests.EpochEndOffset._
-import kafka.common.ClientIdAndBroker
-import kafka.metrics.KafkaMetricsGroup
-import kafka.utils.CoreUtils.inLock
-import org.apache.kafka.common.protocol.Errors
-import AbstractFetcherThread._
 
 import scala.collection.{Map, Seq, Set, mutable}
-import scala.collection.JavaConverters._
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicLong
+import java.util.concurrent.locks.ReentrantLock
 import java.util.function.Consumer
 
 import com.yammer.metrics.core.Gauge
+import kafka.cluster.BrokerEndPoint
+import kafka.common.ClientIdAndBroker
 import kafka.log.LogAppendInfo
+import kafka.metrics.KafkaMetricsGroup
+import kafka.server.AbstractFetcherThread._
+import kafka.utils.CoreUtils.inLock
+import kafka.utils.{DelayedItem, Pool, ShutdownableThread}
+import org.apache.kafka.common.errors._
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.internals.PartitionStates
+import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.{FileRecords, MemoryRecords, Records}
+import org.apache.kafka.common.requests.EpochEndOffset._
 import org.apache.kafka.common.requests._
+import org.apache.kafka.common.{KafkaException, TopicPartition}
 
+import scala.collection.JavaConverters._
+import scala.collection.{Map, Set, mutable}
 import scala.math._
 
 /**
@@ -322,12 +323,20 @@ abstract class AbstractFetcherThread(name: String,
                       fetcherLagStats.getAndMaybePut(topicPartition).lag = Math.max(0L, partitionData.highWatermark - nextOffset)
 
                       // ReplicaDirAlterThread may have removed topicPartition from the partitionStates after processing the partition data
-                      if (validBytes > 0 && partitionStates.contains(topicPartition)) {
-                        // Update partitionStates only if there is no exception during processPartitionData
-                        val newFetchState = PartitionFetchState(nextOffset, fetchState.currentLeaderEpoch,
-                          state = Fetching)
-                        partitionStates.updateAndMoveToEnd(topicPartition, newFetchState)
-                        fetcherStats.byteRate.mark(validBytes)
+                      if (partitionStates.contains(topicPartition)) {
+                        // check the response indicates to ignore the current payload and fetch the
+                        // nextoffset available in the local log.
+                        if (partitionData.isValidNextLocalOffset) {
+                          val newFetchState = PartitionFetchState(partitionData.nextLocalOffset,
+                            fetchState.currentLeaderEpoch, state = Fetching)
+                          partitionStates.updateAndMoveToEnd(topicPartition, newFetchState)
+                        } else if (validBytes > 0) {
+                          // Update partitionStates only if there is no exception during processPartitionData
+                          val newFetchState = PartitionFetchState(nextOffset, fetchState.currentLeaderEpoch,
+                            state = Fetching)
+                          partitionStates.updateAndMoveToEnd(topicPartition, newFetchState)
+                          fetcherStats.byteRate.mark(validBytes)
+                        }
                       }
                     }
                   } catch {
