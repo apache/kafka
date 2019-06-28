@@ -18,7 +18,6 @@
 package kafka.metrics
 
 import java.util.Properties
-
 import javax.management.ObjectName
 import com.yammer.metrics.Metrics
 import com.yammer.metrics.core.{Meter, MetricPredicate}

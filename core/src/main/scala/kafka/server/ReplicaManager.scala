@@ -1133,8 +1133,8 @@ class ReplicaManager(val config: KafkaConfig,
         // in all of the partitions that the current broker is now a follower of
         // add all the topics in a list as candidate to remove metrics
         // and finally remove all the metrics of topics that the current broker IS NO LONGER a leader of
-        val topicNotToInclude = leaderPartitionsIterator.map(_.topic).toSet
-        partitionsBecomeFollower.map(_.topic).diff(topicNotToInclude).foreach(brokerTopicStats.removeOldLeaderMetrics)
+        val leaderTopicSet = leaderPartitionsIterator.map(_.topic).toSet
+        partitionsBecomeFollower.map(_.topic).diff(leaderTopicSet).foreach(brokerTopicStats.removeOldLeaderMetrics)
 
         leaderAndIsrRequest.partitionStates.asScala.keys.foreach { topicPartition =>
           /*

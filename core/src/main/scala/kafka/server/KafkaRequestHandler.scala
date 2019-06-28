@@ -23,7 +23,7 @@ import kafka.metrics.KafkaMetricsGroup
 import java.util.concurrent.{CountDownLatch, TimeUnit}
 import java.util.concurrent.atomic.AtomicInteger
 
-import com.yammer.metrics.core.{Meter, Metric, MetricsRegistry}
+import com.yammer.metrics.core.{Meter}
 import org.apache.kafka.common.internals.FatalExitError
 import org.apache.kafka.common.utils.{KafkaThread, Time}
 
@@ -150,7 +150,6 @@ class BrokerTopicMetrics(name: Option[String]) extends KafkaMetricsGroup {
 
   def messagesInRate = metricTypeMap.getAndMaybePut(
     BrokerTopicStats.MessagesInPerSec, newMeter(BrokerTopicStats.MessagesInPerSec, "messages", TimeUnit.SECONDS, tags))
-
   def bytesInRate = metricTypeMap.getAndMaybePut(
     BrokerTopicStats.BytesInPerSec, newMeter(BrokerTopicStats.BytesInPerSec, "bytes", TimeUnit.SECONDS, tags))
   def bytesOutRate = metricTypeMap.getAndMaybePut(
@@ -217,13 +216,6 @@ class BrokerTopicStats {
   private var stats = new Pool[String, BrokerTopicMetrics](Some(valueFactory))
   var allTopicsStats = new BrokerTopicMetrics(None)
 
-  // only visible for testing
-  private[kafka] def updateMetricsRegistry(metricsRegistry: MetricsRegistry) = {
-    // reassign stats using new valueFactory with new metricsRegistry
-    stats = new Pool[String, BrokerTopicMetrics](Some((k: String) => new BrokerTopicMetrics(Some(k))))
-    allTopicsStats = new BrokerTopicMetrics(None)
-  }
-
   def topicStats(topic: String): BrokerTopicMetrics =
     stats.getAndMaybePut(topic)
 
@@ -262,7 +254,6 @@ class BrokerTopicStats {
       allTopicsStats.bytesOutRate.mark(value)
     }
   }
-
 
   def close(): Unit = {
     allTopicsStats.close()
