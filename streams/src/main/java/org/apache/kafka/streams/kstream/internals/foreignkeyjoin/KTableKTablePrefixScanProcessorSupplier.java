@@ -83,6 +83,7 @@ public class KTableKTablePrefixScanProcessorSupplier<K, KO, VO> implements Proce
                 }
             } finally {
                 prefixScanResults.close();
+            }
         }
     }
 }
