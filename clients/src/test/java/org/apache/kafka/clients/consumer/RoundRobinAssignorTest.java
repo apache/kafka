@@ -188,14 +188,10 @@ public class RoundRobinAssignorTest {
         partitionsPerTopic.put(topic2, 3);
 
         Map<String, Subscription> consumers = new HashMap<>();
-        Subscription consumer1Subscription = new Subscription(topics(topic1, topic2),
-                                                              null,
-                                                              Collections.emptyList());
+        Subscription consumer1Subscription = new Subscription(topics(topic1, topic2), null);
         consumer1Subscription.setGroupInstanceId(Optional.of(instance1));
         consumers.put(consumer1, consumer1Subscription);
-        Subscription consumer2Subscription = new Subscription(topics(topic1, topic2),
-                                                              null,
-                                                              Collections.emptyList());
+        Subscription consumer2Subscription = new Subscription(topics(topic1, topic2), null);
         consumer2Subscription.setGroupInstanceId(Optional.of(instance2));
         consumers.put(consumer2, consumer2Subscription);
         Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic, consumers);
@@ -219,9 +215,7 @@ public class RoundRobinAssignorTest {
 
         Map<String, Subscription> consumers = new HashMap<>();
 
-        Subscription consumer1Subscription = new Subscription(topics(topic1, topic2),
-                                                              null,
-                                                              Collections.emptyList());
+        Subscription consumer1Subscription = new Subscription(topics(topic1, topic2), null);
         consumer1Subscription.setGroupInstanceId(Optional.of(instance1));
         consumers.put(consumer1, consumer1Subscription);
         consumers.put(consumer2, new Subscription(topics(topic1, topic2)));
@@ -257,9 +251,7 @@ public class RoundRobinAssignorTest {
         partitionsPerTopic.put(topic2, 3);
         Map<String, Subscription> consumers = new HashMap<>();
         for (MemberInfo m : staticMemberInfos) {
-            Subscription subscription = new Subscription(topics(topic1, topic2),
-                                                         null,
-                                                         Collections.emptyList());
+            Subscription subscription = new Subscription(topics(topic1, topic2), null);
             subscription.setGroupInstanceId(m.groupInstanceId);
             consumers.put(m.memberId, subscription);
         }
@@ -333,9 +325,7 @@ public class RoundRobinAssignorTest {
         partitionsPerTopic.put(topic2, 3);
         Map<String, Subscription> consumers = new HashMap<>();
         for (MemberInfo m : staticMemberInfos) {
-            Subscription subscription = new Subscription(topics(topic1, topic2),
-                                                         null,
-                                                         Collections.emptyList());
+            Subscription subscription = new Subscription(topics(topic1, topic2), null);
             subscription.setGroupInstanceId(m.groupInstanceId);
             consumers.put(m.memberId, subscription);
         }

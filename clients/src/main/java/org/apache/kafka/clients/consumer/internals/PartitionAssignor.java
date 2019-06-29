@@ -156,7 +156,7 @@ public interface PartitionAssignor {
             this(version, topics, userData, Collections.emptyList());
         }
 
-        public Subscription(List<String> topics, ByteBuffer userData, List<TopicPartition> ownedPartitions) {
+        Subscription(List<String> topics, ByteBuffer userData, List<TopicPartition> ownedPartitions) {
             this(CONSUMER_PROTOCOL_V1, topics, userData, ownedPartitions);
         }
 
@@ -184,7 +184,7 @@ public interface PartitionAssignor {
             return groupInstanceId;
         }
 
-        void setGroupInstanceId(Optional<String> groupInstanceId) {
+        public void setGroupInstanceId(Optional<String> groupInstanceId) {
             this.groupInstanceId = groupInstanceId;
         }
 
@@ -248,6 +248,7 @@ public interface PartitionAssignor {
         ConsumerProtocol.AssignmentError error() {
             return error;
         }
+
         void setError(ConsumerProtocol.AssignmentError error) {
             this.error = error;
         }

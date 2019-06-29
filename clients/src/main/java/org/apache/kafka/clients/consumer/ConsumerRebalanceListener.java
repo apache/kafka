@@ -54,18 +54,31 @@ import org.apache.kafka.common.TopicPartition;
  * {@link #onPartitionsRevoked(Collection) onPartitionsRevoked} call by one consumer member, it will be always accessible by the time the
  * other consumer member taking over that partition and triggering its {@link #onPartitionsAssigned(Collection) onPartitionsAssigned} callback to load the state.
  * <p>
- * In addition, a third {@link #onPartitionsLost(Collection)} callback will be invoked when some partitions previously owned by the consumer
- * are lost due to unexpected events, for example, the consumer finding some of its assigned partitions no longer
- * exist from its topic metadata due to administrative operations like delete topics, or the consumer realizing it is
- * no longer part of the consumer group due to soft failures and therefore all of its previously owned partitions have reassigned to other consumers already.
- * Note this function is very different
- * to the {@link #onPartitionsRevoked(Collection)} function: the latter is invoked when a partition is revoked
- * from the consumer who still owns it right before the invocation, while the former is invoked when a partition is already lost
- * and not owned by the consumer anymore during the invocation. Users then could implement these two functions differently (by default,
+ * You can think of revocation as a graceful way to give up ownership of a partition. In some cases, the consumer may not have an opportunity to do so.
+ * For example, if the session times out, then the partitions may be reassigned before we have a chance to revoke them gracefully.
+ * For this case, we have a third callback {@link #onPartitionsLost(Collection)}. The difference between this function and
+ * {@link #onPartitionsRevoked(Collection)} is that upon invocation of {@link #onPartitionsLost(Collection)}, the partitions are no longer owned
+ * by the consumer but maybe by some other members in the group.
+ * Users could implement these two functions differently (by default,
  * {@link #onPartitionsLost(Collection)} will be calling {@link #onPartitionsRevoked(Collection)} directly); for example, in the
  * {@link #onPartitionsLost(Collection)} we should not need to store the offsets since we know these partitions are no longer owned by the consumer
  * at that time.
  * <p>
+ * It is possible
+ * for a {@link org.apache.kafka.common.errors.WakeupException} or {@link org.apache.kafka.common.errors.InterruptException}
+ * to be raised from one of these nested invocations. In this case, the exception will be propagated to the current
+ * invocation of {@link KafkaConsumer#poll(java.time.Duration)} in which this callback is being executed. This means it is not
+ * necessary to catch these exceptions and re-attempt to wakeup or interrupt the consumer thread.
+ * Also if the callback function implementation itself throws an exception, this exception will be propagated to the current
+ * invocation of {@link KafkaConsumer#poll(java.time.Duration)} as well.
+ *
+ * Note that the semantics of the callback is only for notifying the assignment change, and hence throwing any exceptions would
+ * not affect any of the notified assignment changes at all. That means, if user captures the exception and
+ * calls {@link KafkaConsumer#poll(java.time.Duration)} again, these callback functions would not be invoked any more unless there are
+ * new partitions reassigned.
+ *
+ * <p>
+ *
  * Here is pseudo-code for a callback implementation for saving offsets:
  * <pre>
  * {@code
@@ -109,7 +122,7 @@ public interface ConsumerRebalanceListener {
      * <p>
      * It is common for the revocation callback to use the consumer instance in order to commit offsets. It is possible
      * for a {@link org.apache.kafka.common.errors.WakeupException} or {@link org.apache.kafka.common.errors.InterruptException}
-     * to be raised from one these nested invocations. In this case, the exception will be propagated to the current
+     * to be raised from one of these nested invocations. In this case, the exception will be propagated to the current
      * invocation of {@link KafkaConsumer#poll(java.time.Duration)} in which this callback is being executed. This means it is not
      * necessary to catch these exceptions and re-attempt to wakeup or interrupt the consumer thread.
      *
@@ -130,7 +143,7 @@ public interface ConsumerRebalanceListener {
      * <p>
      * It is common for the assignment callback to use the consumer instance in order to query offsets. It is possible
      * for a {@link org.apache.kafka.common.errors.WakeupException} or {@link org.apache.kafka.common.errors.InterruptException}
-     * to be raised from one these nested invocations. In this case, the exception will be propagated to the current
+     * to be raised from one of these nested invocations. In this case, the exception will be propagated to the current
      * invocation of {@link KafkaConsumer#poll(java.time.Duration)} in which this callback is being executed. This means it is not
      * necessary to catch these exceptions and re-attempt to wakeup or interrupt the consumer thread.
      *
@@ -148,16 +161,14 @@ public interface ConsumerRebalanceListener {
      * to other consumers during a rebalance event. However, during exceptional scenarios when the consumer realized that it
      * does not own this partition any longer, i.e. not revoked via a normal rebalance event, then this method would be invoked.
      *
-     * For example, if a consumer is kicked out of the group in the previous generation and hence were not aware when the new
-     * group is formed and partitions assigned to other members; later when it finally be notified about the illegal generation
-     * error and are going to reset its generation and re-join, this function will be called.
+     * For example, this function is called if a consumer's session timeout has expired.
      *
-     * By default it will just trigger {@link ConsumerRebalanceListener#onPartitionsRevoked}; for advanced users who want to distinguish
+     * By default it will just trigger {@link ConsumerRebalanceListener#onPartitionsRevoked}; for users who want to distinguish
      * the handling logic of revoked partitions v.s. lost partitions, they can override the default implementation.
      *
      * It is possible
      * for a {@link org.apache.kafka.common.errors.WakeupException} or {@link org.apache.kafka.common.errors.InterruptException}
-     * to be raised from one these nested invocations. In this case, the exception will be propagated to the current
+     * to be raised from one of these nested invocations. In this case, the exception will be propagated to the current
      * invocation of {@link KafkaConsumer#poll(java.time.Duration)} in which this callback is being executed. This means it is not
      * necessary to catch these exceptions and re-attempt to wakeup or interrupt the consumer thread.
      *
