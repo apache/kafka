@@ -132,7 +132,7 @@ public interface PartitionAssignor {
         private final Short version;
         private final List<String> topics;
         private final ByteBuffer userData;
-        private final List<TopicPartition> ownedPartitions;
+        private List<TopicPartition> ownedPartitions;
         private Optional<String> groupInstanceId;
 
         Subscription(Short version,
@@ -154,10 +154,6 @@ public interface PartitionAssignor {
 
         Subscription(Short version, List<String> topics, ByteBuffer userData) {
             this(version, topics, userData, Collections.emptyList());
-        }
-
-        Subscription(List<String> topics, ByteBuffer userData, List<TopicPartition> ownedPartitions) {
-            this(CONSUMER_PROTOCOL_V1, topics, userData, ownedPartitions);
         }
 
         public Subscription(List<String> topics, ByteBuffer userData) {
@@ -186,6 +182,10 @@ public interface PartitionAssignor {
 
         public void setGroupInstanceId(Optional<String> groupInstanceId) {
             this.groupInstanceId = groupInstanceId;
+        }
+
+        void setOwnedPartitions(List<TopicPartition> ownedPartitions) {
+            this.ownedPartitions = ownedPartitions;
         }
 
         Short version() {
