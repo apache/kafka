@@ -922,7 +922,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
         final StoreBuilder<KeyValueStore<Bytes, byte[]>> prefixScanStoreBuilder = Stores.timestampedKeyValueStoreBuilder(thisRocksDBRef,
                 new CombinedKeySerde<>(((KTableImpl<KO, VO, ?>) foreignKeyTable).keySerde(), keySerde),
                 new SubscriptionWrapperSerde<K>(keySerde));
-        
+
         //foreignKeyTable-driven event processing.
         //Performs a prefixScan on the subscriptionStateStoreName and emits a SubscriptionResponseWrapper for each
         //matching subscribed event. These subsequent events are emitted to a repartition topic named
@@ -995,10 +995,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
                 finalRepartitionSinkName,
                 finalRepartitionSourceName,
                 keySerde,
-                new SubscriptionResponseWrapperSerde<>(
-                        ((KTableImpl<KO, VO, VO>) foreignKeyTable).valSerde.serializer(),
-                        ((KTableImpl<KO, VO, VO>) foreignKeyTable).valSerde.deserializer()
-                ),
+                new SubscriptionResponseWrapperSerde<>(((KTableImpl<KO, VO, VO>) foreignKeyTable).valSerde),
                 valueGetterSupplier()
                 );
 

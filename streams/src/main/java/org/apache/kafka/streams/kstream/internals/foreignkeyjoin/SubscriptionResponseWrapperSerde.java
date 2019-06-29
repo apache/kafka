@@ -28,10 +28,9 @@ public class SubscriptionResponseWrapperSerde<V> implements Serde<SubscriptionRe
     private final SubscriptionResponseWrapperDeserializer<V> deserializer;
     public static int VERSION_BITS = 7;
 
-    public SubscriptionResponseWrapperSerde(final Serializer<V> serializer,
-                                            final Deserializer<V> deserializer) {
-        this.serializer = new SubscriptionResponseWrapperSerializer<>(serializer);
-        this.deserializer = new SubscriptionResponseWrapperDeserializer<>(deserializer);
+    public SubscriptionResponseWrapperSerde(final Serde<V> foreignValueSerde) {
+        this.serializer = new SubscriptionResponseWrapperSerializer<>(foreignValueSerde.serializer());
+        this.deserializer = new SubscriptionResponseWrapperDeserializer<>(foreignValueSerde.deserializer());
     }
 
     @Override

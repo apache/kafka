@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.kstream.internals.foreignkeyjoin;
 
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Murmur3;
 import org.junit.Test;
@@ -28,10 +29,24 @@ public class SubscriptionResponseWrapperSerdeTest {
 
     @Test
     @SuppressWarnings("unchecked")
-    public void nullForeignKeyTest() {
+    public void ShouldSerdeWithNonNullsTest() {
+        final long[] hashedValue = Murmur3.hash128(new byte[] {(byte) 0x01, (byte) 0x9A, (byte) 0xFF, (byte) 0x00});
+        final String foreignValue = "foreignValue";
+        final SubscriptionResponseWrapper<String> srw = new SubscriptionResponseWrapper<>(hashedValue, foreignValue);
+        final SubscriptionResponseWrapperSerde srwSerde = new SubscriptionResponseWrapperSerde(Serdes.String());
+        final byte[] serResponse = srwSerde.serializer().serialize(null, srw);
+        final SubscriptionResponseWrapper<String> result = (SubscriptionResponseWrapper<String>) srwSerde.deserializer().deserialize(null, serResponse);
+
+        assertArrayEquals(hashedValue, result.getOriginalValueHash());
+        assertEquals(foreignValue, result.getForeignValue());
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    public void shouldSerdeWithNullForeignValueTest() {
         final long[] hashedValue = Murmur3.hash128(new byte[] {(byte) 0x01, (byte) 0x9A, (byte) 0xFF, (byte) 0x00});
         final SubscriptionResponseWrapper<String> srw = new SubscriptionResponseWrapper<>(hashedValue, null);
-        final SubscriptionResponseWrapperSerde srwSerde = new SubscriptionResponseWrapperSerde(Serdes.String().serializer(), Serdes.String().deserializer());
+        final SubscriptionResponseWrapperSerde srwSerde = new SubscriptionResponseWrapperSerde(Serdes.String());
         final byte[] serResponse = srwSerde.serializer().serialize(null, srw);
         final SubscriptionResponseWrapper<String> result = (SubscriptionResponseWrapper<String>) srwSerde.deserializer().deserialize(null, serResponse);
 
@@ -41,27 +56,36 @@ public class SubscriptionResponseWrapperSerdeTest {
 
     @Test
     @SuppressWarnings("unchecked")
-    public void nonNullForeignKeyTest() {
-        final long[] hashedValue = Murmur3.hash128(new byte[] {(byte) 0x01, (byte) 0x9A, (byte) 0xFF, (byte) 0x00});
-        final SubscriptionResponseWrapper<String> srw = new SubscriptionResponseWrapper<>(hashedValue, "foreignKey");
-        final SubscriptionResponseWrapperSerde srwSerde = new SubscriptionResponseWrapperSerde(Serdes.String().serializer(), Serdes.String().deserializer());
+    public void shouldSerdeWithNullHashTest() {
+        final long[] hashedValue = null;
+        final String foreignValue = "foreignValue";
+        final SubscriptionResponseWrapper<String> srw = new SubscriptionResponseWrapper<>(hashedValue, foreignValue);
+        final SubscriptionResponseWrapperSerde srwSerde = new SubscriptionResponseWrapperSerde(Serdes.String());
         final byte[] serResponse = srwSerde.serializer().serialize(null, srw);
         final SubscriptionResponseWrapper<String> result = (SubscriptionResponseWrapper<String>) srwSerde.deserializer().deserialize(null, serResponse);
 
         assertArrayEquals(hashedValue, result.getOriginalValueHash());
-        assertEquals("foreignKey", result.getForeignValue());
+        assertEquals(foreignValue, result.getForeignValue());
     }
 
     @Test
     @SuppressWarnings("unchecked")
-    public void nullHashTest() {
+    public void shouldSerdeWithNullsTest() {
         final long[] hashedValue = null;
-        final SubscriptionResponseWrapper<String> srw = new SubscriptionResponseWrapper<>(hashedValue, "foreignKey");
-        final SubscriptionResponseWrapperSerde srwSerde = new SubscriptionResponseWrapperSerde(Serdes.String().serializer(), Serdes.String().deserializer());
+        final String foreignValue = null;
+        final SubscriptionResponseWrapper<String> srw = new SubscriptionResponseWrapper<>(hashedValue, foreignValue);
+        final SubscriptionResponseWrapperSerde srwSerde = new SubscriptionResponseWrapperSerde(Serdes.String());
         final byte[] serResponse = srwSerde.serializer().serialize(null, srw);
         final SubscriptionResponseWrapper<String> result = (SubscriptionResponseWrapper<String>) srwSerde.deserializer().deserialize(null, serResponse);
 
         assertArrayEquals(hashedValue, result.getOriginalValueHash());
-        assertEquals("foreignKey", result.getForeignValue());
+        assertEquals(foreignValue, result.getForeignValue());
+    }
+
+    @Test (expected = UnsupportedVersionException.class)
+    @SuppressWarnings("unchecked")
+    public void shouldThrowExceptionWithBadVersionTest() {
+        final long[] hashedValue = null;
+        new SubscriptionResponseWrapper<>(hashedValue, "foreignValue", (byte) 0xFF);
     }
 }

@@ -18,6 +18,8 @@ package org.apache.kafka.streams.kstream.internals.foreignkeyjoin;
 
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 
+import java.util.Objects;
+
 public class SubscriptionResponseWrapper<FV> {
     final public static byte CURRENT_VERSION = 0x00;
     //Max version is limited by how many bytes we have available in the Serde.
@@ -33,8 +35,8 @@ public class SubscriptionResponseWrapper<FV> {
     }
 
     public SubscriptionResponseWrapper(final long[] originalValueHash, final FV foreignValue, final byte version) {
-        if (Byte.compare(MAXIMUM_VERSION_INCLUSIVE, version) < 0) {
-            throw new UnsupportedVersionException("SubscriptionWrapper cannot support version > " + MAXIMUM_VERSION_INCLUSIVE);
+        if (version != CURRENT_VERSION) {
+            throw new UnsupportedVersionException("SubscriptionWrapper does not support version " + version);
         }
         this.originalValueHash = originalValueHash;
         this.foreignValue = foreignValue;

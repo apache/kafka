@@ -18,6 +18,7 @@ package org.apache.kafka.streams.kstream.internals.foreignkeyjoin;
 
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 
+import java.util.Objects;
 
 
 public class SubscriptionWrapper<K> {
@@ -70,6 +71,12 @@ public class SubscriptionWrapper<K> {
     }
 
     public SubscriptionWrapper(final long[] hash, final Instruction instruction, final K primaryKey, final byte version) {
+        Objects.requireNonNull(instruction, "instruction cannot be null. Required by downstream processor.");
+        Objects.requireNonNull(primaryKey, "primaryKey cannot be null. Required by downstream processor.");
+        if (version != CURRENT_VERSION) {
+            throw new UnsupportedVersionException("SubscriptionWrapper does not support version " + version);
+        }
+
         this.instruction = instruction;
         this.hash = hash;
         this.primaryKey = primaryKey;
