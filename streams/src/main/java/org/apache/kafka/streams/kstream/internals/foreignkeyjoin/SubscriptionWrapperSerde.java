@@ -26,7 +26,7 @@ import java.util.Map;
 public class SubscriptionWrapperSerde<K> implements Serde {
     private final SubscriptionWrapperSerializer<K> serializer;
     private final SubscriptionWrapperDeserializer<K> deserializer;
-    public static int VERSION_BITS = 7;
+    public static int versionBits = 7;
 
     public SubscriptionWrapperSerde(final Serde<K> primaryKeySerde) {
         this.serializer = new SubscriptionWrapperSerializer<>(primaryKeySerde.serializer());
@@ -71,12 +71,12 @@ public class SubscriptionWrapperSerde<K> implements Serde {
 
             final ByteBuffer buf;
             if (data.getHash() != null) {
-                buf = ByteBuffer.allocate(2 + 2* Long.BYTES + primaryKeySerializedData.length);
-                buf.put((byte) (data.getVersion() | (byte) 0x00 ));
+                buf = ByteBuffer.allocate(2 + 2 * Long.BYTES + primaryKeySerializedData.length);
+                buf.put((byte) (data.getVersion() | (byte) 0x00));
             } else {
                 //Don't store hash as it's null.
                 buf = ByteBuffer.allocate(2 + primaryKeySerializedData.length);
-                buf.put((byte) (data.getVersion() | (byte) 0x80 ));
+                buf.put((byte) (data.getVersion() | (byte) 0x80));
             }
 
             buf.put(data.getInstruction().getByte());
@@ -97,7 +97,7 @@ public class SubscriptionWrapperSerde<K> implements Serde {
 
     private static class SubscriptionWrapperDeserializer<K> implements Deserializer<SubscriptionWrapper> {
         final private Deserializer<K> primaryKeyDeserializer;
-        SubscriptionWrapperDeserializer (Deserializer<K> primaryKeyDeserializer) {
+        SubscriptionWrapperDeserializer(final Deserializer<K> primaryKeyDeserializer) {
             this.primaryKeyDeserializer = primaryKeyDeserializer;
         }
 
@@ -111,7 +111,7 @@ public class SubscriptionWrapperSerde<K> implements Serde {
             //{7-bits-version}{1-bit-isHashNull}{1-byte-instruction}{Optional-16-byte-Hash}{PK-serialized}
             final ByteBuffer buf = ByteBuffer.wrap(data);
             final byte versionAndIsHashNull = buf.get();
-            final byte version = (byte)(0x7F & versionAndIsHashNull);
+            final byte version = (byte) (0x7F & versionAndIsHashNull);
             final boolean isHashNull = (0x80 & versionAndIsHashNull) == 0x80;
             final SubscriptionWrapper.Instruction inst = SubscriptionWrapper.Instruction.fromValue(buf.get());
 

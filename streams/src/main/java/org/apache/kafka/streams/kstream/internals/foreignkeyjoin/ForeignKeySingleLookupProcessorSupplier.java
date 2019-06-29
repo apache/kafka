@@ -17,7 +17,6 @@
 
 package org.apache.kafka.streams.kstream.internals.foreignkeyjoin;
 
-import org.apache.kafka.clients.consumer.internals.PartitionAssignor;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.streams.kstream.internals.KTablePrefixValueGetterSupplier;
@@ -35,9 +34,9 @@ import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import static org.apache.kafka.streams.kstream.internals.foreignkeyjoin.SubscriptionWrapper.Instruction.DELETE_KEY_AND_PROPAGATE;
-import static org.apache.kafka.streams.kstream.internals.foreignkeyjoin.SubscriptionWrapper.Instruction.PROPAGATE_NULL_IF_NO_FK_VAL_AVAILABLE;
 import static org.apache.kafka.streams.kstream.internals.foreignkeyjoin.SubscriptionWrapper.Instruction.PROPAGATE_ONLY_IF_FK_VAL_AVAILABLE;
+import static org.apache.kafka.streams.kstream.internals.foreignkeyjoin.SubscriptionWrapper.Instruction.PROPAGATE_NULL_IF_NO_FK_VAL_AVAILABLE;
+import static org.apache.kafka.streams.kstream.internals.foreignkeyjoin.SubscriptionWrapper.Instruction.DELETE_KEY_AND_PROPAGATE;
 
 public class ForeignKeySingleLookupProcessorSupplier<K, KO, VO>
         implements ProcessorSupplier<KO, SubscriptionWrapper<K>> {
@@ -89,7 +88,7 @@ public class ForeignKeySingleLookupProcessorSupplier<K, KO, VO>
                     throw new UnsupportedVersionException("SubscriptionWrapper is of an incompatible version.");
                 }
 
-                final CombinedKey<KO,K> combinedKey = new CombinedKey<KO, K>(key, value.getPrimaryKey());
+                final CombinedKey<KO, K> combinedKey = new CombinedKey<KO, K>(key, value.getPrimaryKey());
 
                 //If the subscriptionWrapper hash indicates a null, must delete from statestore.
                 //This store is used by the prefix scanner in KTableKTablePrefixScanProcessorSupplier

@@ -26,7 +26,7 @@ import java.util.Map;
 public class SubscriptionResponseWrapperSerde<V> implements Serde<SubscriptionResponseWrapper<V>> {
     private final SubscriptionResponseWrapperSerializer<V> serializer;
     private final SubscriptionResponseWrapperDeserializer<V> deserializer;
-    public static int VERSION_BITS = 7;
+    public static int versionBits = 7;
 
     public SubscriptionResponseWrapperSerde(final Serde<V> foreignValueSerde) {
         this.serializer = new SubscriptionResponseWrapperSerializer<>(foreignValueSerde.serializer());
@@ -77,12 +77,12 @@ public class SubscriptionResponseWrapperSerde<V> implements Serde<SubscriptionRe
             final ByteBuffer buf = ByteBuffer.allocate(1 + hashLength + serializedDataLength);
 
             if (originalHash != null) {
-                buf.put((byte) (data.getVersion() | (byte) 0x00 ));
+                buf.put((byte) (data.getVersion() | (byte) 0x00));
                 buf.putLong(originalHash[0]);
                 buf.putLong(originalHash[1]);
             } else {
                 //Don't store hash as it's null.
-                buf.put((byte) (data.getVersion() | (byte) 0x80 ));
+                buf.put((byte) (data.getVersion() | (byte) 0x80));
             }
 
             if (serializedData != null)
@@ -114,7 +114,7 @@ public class SubscriptionResponseWrapperSerde<V> implements Serde<SubscriptionRe
 
             final ByteBuffer buf = ByteBuffer.wrap(data);
             final byte versionAndIsHashNull = buf.get();
-            final byte version = (byte)(0x7F & versionAndIsHashNull);
+            final byte version = (byte) (0x7F & versionAndIsHashNull);
             final boolean isHashNull = (0x80 & versionAndIsHashNull) == 0x80;
 
             final long[] hash;
