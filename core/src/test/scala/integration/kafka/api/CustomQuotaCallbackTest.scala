@@ -398,7 +398,7 @@ class GroupedUserQuotaCallback extends ClientQuotaCallback with Reconfigurable w
   override def updateClusterMetadata(cluster: Cluster): Boolean = {
     val topicsByGroup = cluster.topics.asScala.groupBy(group)
 
-    !topicsByGroup.forall { case (group, groupTopics) =>
+    topicsByGroup.map { case (group, groupTopics) =>
       val groupPartitions = groupTopics.flatMap(topic => cluster.partitionsForTopic(topic).asScala)
       val totalPartitions = groupPartitions.size
       val partitionsOnThisBroker = groupPartitions.count { p => p.leader != null && p.leader.id == brokerId }
@@ -409,7 +409,7 @@ class GroupedUserQuotaCallback extends ClientQuotaCallback with Reconfigurable w
       else
         partitionsOnThisBroker.toDouble / totalPartitions
       partitionRatio.put(group, multiplier) != multiplier
-    }
+    }.exists(identity)
   }
 
   override def updateQuota(quotaType: ClientQuotaType, quotaEntity: ClientQuotaEntity, newValue: Double): Unit = {
