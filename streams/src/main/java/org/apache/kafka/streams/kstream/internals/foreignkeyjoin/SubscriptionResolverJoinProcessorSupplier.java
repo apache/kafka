@@ -17,6 +17,7 @@
 
 package org.apache.kafka.streams.kstream.internals.foreignkeyjoin;
 
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Murmur3;
 import org.apache.kafka.streams.kstream.ValueJoiner;
@@ -59,6 +60,12 @@ public class SubscriptionResolverJoinProcessorSupplier<K, V, VO, VR> implements 
 
             @Override
             public void process(final K key, final SubscriptionResponseWrapper<VO> value) {
+                if (value.getVersion() != SubscriptionResponseWrapper.CURRENT_VERSION) {
+                    //Guard against modifications to SubscriptionResponseWrapper. Need to ensure that there is
+                    //compatibility with previous versions to enable rolling upgrades. Must develop a strategy for
+                    //upgrading from older SubscriptionWrapper versions to newer versions.
+                    throw new UnsupportedVersionException("SubscriptionResponseWrapper is of an incompatible version.");
+                }
                 final ValueAndTimestamp<V> currentValueWithTimestamp = valueGetter.get(key);
 
                 //final V currentValue = currentValueWithTimestamp.value();
@@ -69,7 +76,7 @@ public class SubscriptionResolverJoinProcessorSupplier<K, V, VO, VR> implements 
                 //registered schema.
                 final String dummySerializationTopic = context().topic() + "-join-resolver";
                 final long[] currentHash = currentValueWithTimestamp == null ?
-                        Murmur3.hash128(new byte[]{}) :
+                        null :
                         Murmur3.hash128(valueSerializer.serialize(dummySerializationTopic, currentValueWithTimestamp.value()));
 
                 final long[] messageHash = value.getOriginalValueHash();

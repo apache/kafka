@@ -59,9 +59,8 @@ public class KTableRepartitionerProcessorSupplier<K, KO, V> implements Processor
 
         @Override
         public void process(final K key, final Change<V> change) {
-            final long[] nullHash = Murmur3.hash128(new byte[]{});
             final long[] currentHash = change.newValue == null ?
-                    Murmur3.hash128(new byte[]{}) :
+                    null :
                     Murmur3.hash128(valueSerializer.serialize(context().topic(), change.newValue));
 
             if (change.oldValue != null) {
@@ -76,7 +75,7 @@ public class KTableRepartitionerProcessorSupplier<K, KO, V> implements Processor
                     } else {
                         //Different Foreign Key - delete the old key value and propagate the new one.
                         //Delete it from the oldKey's state store
-                        context().forward(oldForeignKey, new SubscriptionWrapper<>(nullHash, DELETE_KEY_NO_PROPAGATE, key));
+                        context().forward(oldForeignKey, new SubscriptionWrapper<>(currentHash, DELETE_KEY_NO_PROPAGATE, key));
                         //Add to the newKey's state store. Additionally, propagate null if no FK is found there,
                         //since we must "unset" any output set by the previous FK-join. This is true for both INNER
                         //and LEFT join.
@@ -84,7 +83,7 @@ public class KTableRepartitionerProcessorSupplier<K, KO, V> implements Processor
                     }
                 } else {
                     //A simple propagatable delete. Delete from the state store and propagate the delete onwards.
-                    context().forward(oldForeignKey, new SubscriptionWrapper<>(nullHash, DELETE_KEY_AND_PROPAGATE, key));
+                    context().forward(oldForeignKey, new SubscriptionWrapper<>(currentHash, DELETE_KEY_AND_PROPAGATE, key));
                 }
             } else if (change.newValue != null) {
                 //change.oldValue is null, which means it was deleted at least once before, or it is brand new.

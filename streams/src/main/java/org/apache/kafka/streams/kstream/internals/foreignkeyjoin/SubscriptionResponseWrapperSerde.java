@@ -26,6 +26,7 @@ import java.util.Map;
 public class SubscriptionResponseWrapperSerde<V> implements Serde<SubscriptionResponseWrapper<V>> {
     private final SubscriptionResponseWrapperSerializer<V> serializer;
     private final SubscriptionResponseWrapperDeserializer<V> deserializer;
+    public static int VERSION_BITS = 7;
 
     public SubscriptionResponseWrapperSerde(final Serializer<V> serializer,
                                             final Deserializer<V> deserializer) {
@@ -67,13 +68,24 @@ public class SubscriptionResponseWrapperSerde<V> implements Serde<SubscriptionRe
 
         @Override
         public byte[] serialize(final String topic, final SubscriptionResponseWrapper<V> data) {
-            //{16-bytes Hash}{n-bytes serialized data}
+            //{1-bit-isHashNull}{7-bits-version}{Optional-16-byte-Hash}{n-bytes serialized data}
+
             final byte[] serializedData = serializer.serialize(topic, data.getForeignValue());
-            final int length = serializedData == null ? 0 : serializedData.length;
-            final ByteBuffer buf = ByteBuffer.allocate(16 + length);
-            final long[] elem = data.getOriginalValueHash();
-            buf.putLong(elem[0]);
-            buf.putLong(elem[1]);
+            final int serializedDataLength = serializedData == null ? 0 : serializedData.length;
+            final long[] originalHash = data.getOriginalValueHash();
+            final int hashLength = originalHash == null ? 0 : 2 * Long.BYTES;
+
+            final ByteBuffer buf = ByteBuffer.allocate(1 + hashLength + serializedDataLength);
+
+            if (originalHash != null) {
+                buf.put((byte) (data.getVersion() | (byte) 0x00 ));
+                buf.putLong(originalHash[0]);
+                buf.putLong(originalHash[1]);
+            } else {
+                //Don't store hash as it's null.
+                buf.put((byte) (data.getVersion() | (byte) 0x80 ));
+            }
+
             if (serializedData != null)
                 buf.put(serializedData);
             return buf.array();
@@ -99,17 +111,33 @@ public class SubscriptionResponseWrapperSerde<V> implements Serde<SubscriptionRe
 
         @Override
         public SubscriptionResponseWrapper<V> deserialize(final String topic, final byte[] data) {
-            //{16-bytes Hash}{n-bytes serialized data}
-            final int size = 16;
+            //{1-bit-isHashNull}{7-bits-version}{Optional-16-byte-Hash}{n-bytes serialized data}
+
             final ByteBuffer buf = ByteBuffer.wrap(data);
-            final long[] hash = new long[2];
-            hash[0] = buf.getLong();
-            hash[1] = buf.getLong();
-            final byte[] serializedValue = data.length == size ? null : new byte[data.length - size];
-            if (serializedValue != null)
-                buf.get(serializedValue, 0, data.length - size);
+            final byte versionAndIsHashNull = buf.get();
+            final byte version = (byte)(0x7F & versionAndIsHashNull);
+            final boolean isHashNull = (0x80 & versionAndIsHashNull) == 0x80;
+
+            final long[] hash;
+            int lengthSum = 1; //The first byte
+            if (isHashNull) {
+                hash = null;
+            } else {
+                hash = new long[2];
+                hash[0] = buf.getLong();
+                hash[1] = buf.getLong();
+                lengthSum += 2 * Long.BYTES;
+            }
+
+            final byte[] serializedValue;
+            if (data.length - lengthSum > 0) {
+                serializedValue = new byte[data.length - lengthSum];
+                buf.get(serializedValue, 0, serializedValue.length);
+            } else
+                serializedValue = null;
+
             final V value = deserializer.deserialize(topic, serializedValue);
-            return new SubscriptionResponseWrapper<>(hash, value);
+            return new SubscriptionResponseWrapper<>(hash, value, version);
         }
 
         @Override

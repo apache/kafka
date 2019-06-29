@@ -16,8 +16,14 @@
  */
 package org.apache.kafka.streams.kstream.internals.foreignkeyjoin;
 
+import org.apache.kafka.common.errors.UnsupportedVersionException;
+
+
+
 public class SubscriptionWrapper<K> {
-    final static byte CURRENT_VERSION = 0x00;
+    final static byte CURRENT_VERSION = 0;
+    //This is the maximum version because SubscriptionWrapperSerde uses
+    final private static byte MAXIMUM_VERSION_INCLUSIVE = (byte)Math.pow(2, SubscriptionWrapperSerde.VERSION_BITS);
 
     final private long[] hash;
     final private Instruction instruction;
@@ -25,15 +31,20 @@ public class SubscriptionWrapper<K> {
     final private K primaryKey;
 
     public enum Instruction {
-        DELETE_KEY_NO_PROPAGATE((byte) 0x00),
         //Send nothing. Do not propagate.
-        DELETE_KEY_AND_PROPAGATE((byte) 0x01),
+        DELETE_KEY_NO_PROPAGATE((byte) 0x00),
+
         //Send (k, null)
-        PROPAGATE_NULL_IF_NO_FK_VAL_AVAILABLE((byte) 0x02), //(changing foreign key, but FK+Val may not exist)
+        DELETE_KEY_AND_PROPAGATE((byte) 0x01),
+
+        //(changing foreign key, but FK+Val may not exist)
         //Send (k, fk-val) OR
         //Send (k, null) if fk-val does not exist
-        PROPAGATE_ONLY_IF_FK_VAL_AVAILABLE((byte) 0x03); //(first time ever sending key)
+        PROPAGATE_NULL_IF_NO_FK_VAL_AVAILABLE((byte) 0x02),
+
+        //(first time ever sending key)
         //Send (k, fk-val) only if fk-val exists.
+        PROPAGATE_ONLY_IF_FK_VAL_AVAILABLE((byte) 0x03);
 
         private byte value;
         Instruction(final byte value) {

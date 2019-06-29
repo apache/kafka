@@ -26,6 +26,7 @@ import java.util.Map;
 public class SubscriptionWrapperSerde<K> implements Serde {
     private final SubscriptionWrapperSerializer<K> serializer;
     private final SubscriptionWrapperDeserializer<K> deserializer;
+    public static int VERSION_BITS = 7;
 
     public SubscriptionWrapperSerde(final Serde<K> primaryKeySerde) {
         this.serializer = new SubscriptionWrapperSerializer<>(primaryKeySerde.serializer());
@@ -65,18 +66,25 @@ public class SubscriptionWrapperSerde<K> implements Serde {
 
         @Override
         public byte[] serialize(final String topic, final SubscriptionWrapper<K> data) {
-            //{1-byte-version}{1-byte-instruction}{16-bytes Hash}{Integer.Bytes-PK-length}{PK-serialized}
+            //{1-bit-isHashNull}{7-bits-version}{1-byte-instruction}{Optional-16-byte-Hash}{PK-serialized}
             final byte[] primaryKeySerializedData = primaryKeySerializer.serialize(topic, data.getPrimaryKey());
-            //Size of Integer.BYTES bytes
-            final byte[] primaryKeyByteSize = numToBytes(primaryKeySerializedData.length);
 
-            final ByteBuffer buf = ByteBuffer.allocate(2 + 2* Long.BYTES + Integer.BYTES + primaryKeySerializedData.length);
-            buf.put(data.getVersion());
+            final ByteBuffer buf;
+            if (data.getHash() != null) {
+                buf = ByteBuffer.allocate(2 + 2* Long.BYTES + primaryKeySerializedData.length);
+                buf.put((byte) (data.getVersion() | (byte) 0x00 ));
+            } else {
+                //Don't store hash as it's null.
+                buf = ByteBuffer.allocate(2 + primaryKeySerializedData.length);
+                buf.put((byte) (data.getVersion() | (byte) 0x80 ));
+            }
+
             buf.put(data.getInstruction().getByte());
             final long[] elem = data.getHash();
-            buf.putLong(elem[0]);
-            buf.putLong(elem[1]);
-            buf.put(primaryKeyByteSize);
+            if (data.getHash() != null) {
+                buf.putLong(elem[0]);
+                buf.putLong(elem[1]);
+            }
             buf.put(primaryKeySerializedData);
             return buf.array();
         }
@@ -100,16 +108,25 @@ public class SubscriptionWrapperSerde<K> implements Serde {
 
         @Override
         public SubscriptionWrapper deserialize(final String topic, final byte[] data) {
-            //{1-byte-version}{1-byte-instruction}{16-bytes Hash}{Integer.Bytes-PK-length}{PK-serialized}
+            //{7-bits-version}{1-bit-isHashNull}{1-byte-instruction}{Optional-16-byte-Hash}{PK-serialized}
             final ByteBuffer buf = ByteBuffer.wrap(data);
-            final byte version = buf.get();
+            final byte versionAndIsHashNull = buf.get();
+            final byte version = (byte)(0x7F & versionAndIsHashNull);
+            final boolean isHashNull = (0x80 & versionAndIsHashNull) == 0x80;
             final SubscriptionWrapper.Instruction inst = SubscriptionWrapper.Instruction.fromValue(buf.get());
-            final long[] hash = new long[2];
-            hash[0] = buf.getLong();
-            hash[1] = buf.getLong();
-            final int fkLength = buf.getInt();
 
-            final byte[] primaryKeyRaw = new byte[fkLength];
+            final long[] hash;
+            int lengthSum = 2; //The first 2 bytes
+            if (isHashNull) {
+                hash = null;
+            } else {
+                hash = new long[2];
+                hash[0] = buf.getLong();
+                hash[1] = buf.getLong();
+                lengthSum += 2 * Long.BYTES;
+            }
+
+            final byte[] primaryKeyRaw = new byte[data.length - lengthSum]; //The remaining data is the serialized pk
             buf.get(primaryKeyRaw, 0, primaryKeyRaw.length);
             final K primaryKey = primaryKeyDeserializer.deserialize(topic, primaryKeyRaw);
 

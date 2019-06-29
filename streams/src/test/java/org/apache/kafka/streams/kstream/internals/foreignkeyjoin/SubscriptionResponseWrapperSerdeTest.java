@@ -51,4 +51,17 @@ public class SubscriptionResponseWrapperSerdeTest {
         assertArrayEquals(hashedValue, result.getOriginalValueHash());
         assertEquals("foreignKey", result.getForeignValue());
     }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    public void nullHashTest() {
+        final long[] hashedValue = null;
+        final SubscriptionResponseWrapper<String> srw = new SubscriptionResponseWrapper<>(hashedValue, "foreignKey");
+        final SubscriptionResponseWrapperSerde srwSerde = new SubscriptionResponseWrapperSerde(Serdes.String().serializer(), Serdes.String().deserializer());
+        final byte[] serResponse = srwSerde.serializer().serialize(null, srw);
+        final SubscriptionResponseWrapper<String> result = (SubscriptionResponseWrapper<String>) srwSerde.deserializer().deserialize(null, serResponse);
+
+        assertArrayEquals(hashedValue, result.getOriginalValueHash());
+        assertEquals("foreignKey", result.getForeignValue());
+    }
 }
