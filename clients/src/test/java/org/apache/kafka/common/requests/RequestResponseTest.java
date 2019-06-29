@@ -892,7 +892,7 @@ public class RequestResponseTest {
         String clientId = "consumer-1";
         String clientHost = "localhost";
         DescribeGroupsResponseData describeGroupsResponseData = new DescribeGroupsResponseData();
-        DescribeGroupsResponseData.DescribedGroupMember member = DescribeGroupsResponse.groupMember("memberId",
+        DescribeGroupsResponseData.DescribedGroupMember member = DescribeGroupsResponse.groupMember("memberId", null,
                 clientId, clientHost, new byte[0], new byte[0]);
         DescribeGroupsResponseData.DescribedGroup metadata = DescribeGroupsResponse.groupMetadata("test-group", Errors.NONE,
                 "STABLE", "consumer", "roundrobin", asList(member), Collections.emptySet());

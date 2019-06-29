@@ -57,6 +57,7 @@ import org.apache.kafka.common.message.CreateTopicsResponseData;
 import org.apache.kafka.common.message.DeleteTopicsResponseData.DeletableTopicResult;
 import org.apache.kafka.common.message.DeleteTopicsResponseData;
 import org.apache.kafka.common.message.DescribeGroupsResponseData;
+import org.apache.kafka.common.message.DescribeGroupsResponseData.DescribedGroupMember;
 import org.apache.kafka.common.message.ElectLeadersResponseData.PartitionResult;
 import org.apache.kafka.common.message.ElectLeadersResponseData.ReplicaElectionResult;
 import org.apache.kafka.common.message.IncrementalAlterConfigsResponseData.AlterConfigsResourceResult;
@@ -1151,7 +1152,7 @@ public class KafkaAdminClientTest {
 
             DescribeGroupsResponseData data = new DescribeGroupsResponseData();
 
-            //Retriable  errors should be retried
+            //Retriable errors should be retried
             data.groups().add(DescribeGroupsResponse.groupMetadata(
                 "group-0",
                 Errors.COORDINATOR_LOAD_IN_PROGRESS,
@@ -1204,16 +1205,21 @@ public class KafkaAdminClientTest {
             byte[] memberAssignmentBytes = new byte[memberAssignment.remaining()];
             memberAssignment.get(memberAssignmentBytes);
 
+            DescribedGroupMember memberOne = DescribeGroupsResponse.groupMember("0", "instance1", "clientId0", "clientHost", memberAssignmentBytes, null);
+            DescribedGroupMember memberTwo = DescribeGroupsResponse.groupMember("1", "instance2", "clientId1", "clientHost", memberAssignmentBytes, null);
+
+            List<MemberDescription> expectedMemberDescriptions = new ArrayList<>();
+            expectedMemberDescriptions.add(convertToMemberDescriptions(memberOne,
+                                                                       new MemberAssignment(new HashSet<>(topicPartitions))));
+            expectedMemberDescriptions.add(convertToMemberDescriptions(memberTwo,
+                                                                       new MemberAssignment(new HashSet<>(topicPartitions))));
             data.groups().add(DescribeGroupsResponse.groupMetadata(
                     "group-0",
                     Errors.NONE,
                     "",
                     ConsumerProtocol.PROTOCOL_TYPE,
                     "",
-                    asList(
-                        DescribeGroupsResponse.groupMember("0", "clientId0", "clientHost", memberAssignmentBytes, null),
-                        DescribeGroupsResponse.groupMember("1", "clientId1", "clientHost", memberAssignmentBytes, null)
-                    ),
+                    asList(memberOne, memberTwo),
                     Collections.emptySet()));
 
             env.kafkaClient().prepareResponse(new DescribeGroupsResponse(data));
@@ -1224,6 +1230,7 @@ public class KafkaAdminClientTest {
             assertEquals(1, result.describedGroups().size());
             assertEquals("group-0", groupDescription.groupId());
             assertEquals(2, groupDescription.members().size());
+            assertEquals(expectedMemberDescriptions, groupDescription.members());
         }
     }
 
@@ -1266,8 +1273,8 @@ public class KafkaAdminClientTest {
                     ConsumerProtocol.PROTOCOL_TYPE,
                     "",
                     asList(
-                            DescribeGroupsResponse.groupMember("0", "clientId0", "clientHost", memberAssignmentBytes, null),
-                            DescribeGroupsResponse.groupMember("1", "clientId1", "clientHost", memberAssignmentBytes, null)
+                            DescribeGroupsResponse.groupMember("0", null, "clientId0", "clientHost", memberAssignmentBytes, null),
+                            DescribeGroupsResponse.groupMember("1", null, "clientId1", "clientHost", memberAssignmentBytes, null)
                     ),
                     Collections.emptySet()));
 
@@ -1279,8 +1286,8 @@ public class KafkaAdminClientTest {
                     "connect",
                     "",
                     asList(
-                            DescribeGroupsResponse.groupMember("0", "clientId0", "clientHost", memberAssignmentBytes, null),
-                            DescribeGroupsResponse.groupMember("1", "clientId1", "clientHost", memberAssignmentBytes, null)
+                            DescribeGroupsResponse.groupMember("0", null, "clientId0", "clientHost", memberAssignmentBytes, null),
+                            DescribeGroupsResponse.groupMember("1", null, "clientId1", "clientHost", memberAssignmentBytes, null)
                     ),
                     Collections.emptySet()));
 
@@ -1509,6 +1516,15 @@ public class KafkaAdminClientTest {
             env.kafkaClient().prepareResponse(new IncrementalAlterConfigsResponse(responseData));
             env.adminClient().incrementalAlterConfigs(Collections.singletonMap(brokerResource, asList(alterConfigOp1))).all().get();
         }
+    }
+
+    private static MemberDescription convertToMemberDescriptions(DescribedGroupMember member,
+                                                                 MemberAssignment assignment) {
+        return new MemberDescription(member.memberId(),
+                                     Optional.ofNullable(member.groupInstanceId()),
+                                     member.clientId(),
+                                     member.clientHost(),
+                                     assignment);
     }
 
     @SafeVarargs

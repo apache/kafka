@@ -54,12 +54,14 @@ public class DescribeGroupsResponse extends AbstractResponse {
 
     public static DescribedGroupMember groupMember(
         final String memberId,
+        final String groupInstanceId,
         final String clientId,
         final String clientHost,
         final byte[] assignment,
         final byte[] metadata) {
         return new DescribedGroupMember()
             .setMemberId(memberId)
+            .setGroupInstanceId(groupInstanceId)
             .setClientId(clientId)
             .setClientHost(clientHost)
             .setMemberAssignment(assignment)
