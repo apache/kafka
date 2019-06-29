@@ -18,7 +18,7 @@ import java.io.File
 import java.{lang, util}
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger}
-import java.util.{Collections, Properties}
+import java.util.Properties
 
 import kafka.api.GroupedUserPrincipalBuilder._
 import kafka.api.GroupedUserQuotaCallback._
@@ -315,7 +315,7 @@ object GroupedUserQuotaCallback {
   val QuotaGroupTag = "group"
   val DefaultProduceQuotaProp = "default.produce.quota"
   val DefaultFetchQuotaProp = "default.fetch.quota"
-  val UnlimitedQuotaMetricTags = Collections.emptyMap[String, String]
+  val UnlimitedQuotaMetricTags = new util.HashMap[String, String]
   val quotaLimitCalls = Map(
     ClientQuotaType.PRODUCE -> new AtomicInteger,
     ClientQuotaType.FETCH -> new AtomicInteger,
@@ -344,10 +344,8 @@ object GroupedUserQuotaCallback {
 class GroupedUserQuotaCallback extends ClientQuotaCallback with Reconfigurable with Logging {
 
   var brokerId: Int = -1
-  val customQuotasUpdated = ClientQuotaType.values.toList
-    .map(quotaType =>(quotaType -> new AtomicBoolean)).toMap
-  val quotas = ClientQuotaType.values.toList
-    .map(quotaType => (quotaType -> new ConcurrentHashMap[String, Double])).toMap
+  val customQuotasUpdated = ClientQuotaType.values.map(quotaType => quotaType -> new AtomicBoolean).toMap
+  val quotas = ClientQuotaType.values.map(quotaType => quotaType -> new ConcurrentHashMap[String, Double]).toMap
 
   val partitionRatio = new ConcurrentHashMap[String, Double]()
 
