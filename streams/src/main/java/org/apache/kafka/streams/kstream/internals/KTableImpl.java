@@ -950,16 +950,19 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
 
         final HashSet<String> copartitions = new HashSet<>();
         copartitions.add(repartitionSourceName);
-        copartitions.addAll(sourceNodes);
         copartitions.addAll(((KTableImpl<?, ?, ?>) foreignKeyTable).sourceNodes);
-        //TODO - Figure out a correct copartitioning strategy for topics with differing partition counts.
+
+        //If uncommented, this enforces input topic copartitioning/
+//        copartitions.addAll(sourceNodes);
 //        copartitions.add(finalRepartitionSourceName);
         builder.internalTopologyBuilder.copartitionSources(copartitions);
 
-        final HashSet<String> copartitions2 = new HashSet<>();
-        copartitions2.add(finalRepartitionSourceName);
-        copartitions2.addAll(sourceNodes);
-        builder.internalTopologyBuilder.copartitionSources(copartitions2);
+        //TODO - Figure out a correct copartitioning strategy for chaining multiple of these joins together.
+        //See KTableKTableForeignKeyInnerJoinMultiIntegrationTest to see it NOT working...
+        final HashSet<String> copartitionsTwo = new HashSet<>();
+        copartitionsTwo.addAll(sourceNodes);
+        copartitionsTwo.add(finalRepartitionSourceName);
+        builder.internalTopologyBuilder.copartitionSources(copartitionsTwo);
 
         final ProcessorParameters repartitionProcessorParameters = new ProcessorParameters<>(
                 repartitionProcessor,

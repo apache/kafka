@@ -31,11 +31,13 @@ import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
+import org.apache.kafka.streams.kstream.Named;
 import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.kstream.ValueMapper;
@@ -76,7 +78,7 @@ public class KTableKTableForeignKeyJoinIntegrationTest {
     private final static MockTime MOCK_TIME = CLUSTER.time;
     private final static String LEFT_TABLE = "left_table";
     private final static String RIGHT_TABLE = "right_table";
-    private final static String OUTPUT = "output-";
+    private final static String OUTPUT = "output-topic";
     private static Properties streamsConfig;
     private KafkaStreams streams;
     private KafkaStreams streamsTwo;
@@ -120,7 +122,7 @@ public class KTableKTableForeignKeyJoinIntegrationTest {
         CLUSTER.deleteTopicsAndWait(OUTPUT);
 
         CLUSTER.createTopic(LEFT_TABLE, 3, 1);
-        CLUSTER.createTopic(RIGHT_TABLE, 3, 1);
+        CLUSTER.createTopic(RIGHT_TABLE, 7, 1);
         CLUSTER.createTopic(OUTPUT, 3, 1);
 
         IntegrationTestUtils.purgeLocalStreamsState(streamsConfig);
@@ -128,6 +130,12 @@ public class KTableKTableForeignKeyJoinIntegrationTest {
 
     @After
     public void after() throws IOException {
+        Set<String> topics = CLUSTER.getAllTopicsInCluster();
+
+        for (final String topic : topics) {
+            System.out.println(topic);
+        }
+
         if (streams != null) {
             streams.close();
             streams = null;
@@ -681,14 +689,17 @@ public class KTableKTableForeignKeyJoinIntegrationTest {
         }
 
         if (leftJoin)
-            left.leftJoin(right, tableOneKeyExtractor, joiner, materialized)
+            left.leftJoin(right, tableOneKeyExtractor, joiner, Named.as("customName"), materialized)
                 .toStream()
                 .to(OUTPUT, Produced.with(Serdes.Integer(), Serdes.String()));
         else
-            left.join(right, tableOneKeyExtractor, joiner, materialized)
+            left.join(right, tableOneKeyExtractor, joiner/*, Named.as("customName")*/, materialized)
                 .toStream()
                 .to(OUTPUT, Produced.with(Serdes.Integer(), Serdes.String()));
 
-        return new KafkaStreams(builder.build(), streamsConfig);
+        final Topology topology = builder.build();
+        System.out.println("Topology description " + topology.describe());
+
+        return new KafkaStreams(topology, streamsConfig);
     }
 }
