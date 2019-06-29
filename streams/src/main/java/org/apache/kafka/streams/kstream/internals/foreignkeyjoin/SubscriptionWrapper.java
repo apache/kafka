@@ -16,9 +16,13 @@
  */
 package org.apache.kafka.streams.kstream.internals.foreignkeyjoin;
 
-public class SubscriptionWrapper {
+public class SubscriptionWrapper<K> {
+    final static byte CURRENT_VERSION = 0x00;
+
     final private long[] hash;
     final private Instruction instruction;
+    final private byte version;
+    final private K primaryKey;
 
     public enum Instruction {
         DELETE_KEY_NO_PROPAGATE((byte) 0x00),
@@ -50,9 +54,15 @@ public class SubscriptionWrapper {
         }
     }
 
-    public SubscriptionWrapper(final long[] hash, final Instruction instruction) {
+    public SubscriptionWrapper(final long[] hash, final Instruction instruction, final K primaryKey) {
+        this(hash, instruction, primaryKey, CURRENT_VERSION);
+    }
+
+    public SubscriptionWrapper(final long[] hash, final Instruction instruction, final K primaryKey, final byte version) {
         this.instruction = instruction;
         this.hash = hash;
+        this.primaryKey = primaryKey;
+        this.version = version;
     }
 
     public Instruction getInstruction() {
@@ -61,6 +71,14 @@ public class SubscriptionWrapper {
 
     public long[] getHash() {
         return hash;
+    }
+
+    public K getPrimaryKey() {
+        return primaryKey;
+    }
+
+    public byte getVersion() {
+        return version;
     }
 }
 

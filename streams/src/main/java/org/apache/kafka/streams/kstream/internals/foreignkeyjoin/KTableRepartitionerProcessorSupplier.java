@@ -66,35 +66,31 @@ public class KTableRepartitionerProcessorSupplier<K, KO, V> implements Processor
 
             if (change.oldValue != null) {
                 final KO oldForeignKey = mapper.apply(change.oldValue);
-                final CombinedKey<KO, K> combinedOldKey = new CombinedKey<>(oldForeignKey, key);
                 if (change.newValue != null) {
-                    final KO extractedNewForeignKey = mapper.apply(change.newValue);
-                    final CombinedKey<KO, K> combinedNewKey = new CombinedKey<>(extractedNewForeignKey, key);
+                    final KO newForeignKey = mapper.apply(change.newValue);
 
                     //Requires equal to be defined...
-                    if (oldForeignKey.equals(extractedNewForeignKey)) {
+                    if (oldForeignKey.equals(newForeignKey)) {
                         //Same foreign key. Just propagate onwards.
-                        context().forward(combinedNewKey, new SubscriptionWrapper(currentHash, PROPAGATE_NULL_IF_NO_FK_VAL_AVAILABLE));
+                        context().forward(newForeignKey, new SubscriptionWrapper<>(currentHash, PROPAGATE_NULL_IF_NO_FK_VAL_AVAILABLE, key));
                     } else {
                         //Different Foreign Key - delete the old key value and propagate the new one.
-
                         //Delete it from the oldKey's state store
-                        context().forward(combinedOldKey, new SubscriptionWrapper(nullHash, DELETE_KEY_NO_PROPAGATE));
-                        // Add to the newKey's state store. Additionally, propagate null if no FK is found there,
-                        // since we must "unset" any output set by the previous FK-join. This is true for both INNER
-                        // and LEFT join.
-                        context().forward(combinedNewKey, new SubscriptionWrapper(currentHash, PROPAGATE_NULL_IF_NO_FK_VAL_AVAILABLE));
+                        context().forward(oldForeignKey, new SubscriptionWrapper<>(nullHash, DELETE_KEY_NO_PROPAGATE, key));
+                        //Add to the newKey's state store. Additionally, propagate null if no FK is found there,
+                        //since we must "unset" any output set by the previous FK-join. This is true for both INNER
+                        //and LEFT join.
+                        context().forward(newForeignKey, new SubscriptionWrapper<>(currentHash, PROPAGATE_NULL_IF_NO_FK_VAL_AVAILABLE, key));
                     }
                 } else {
                     //A simple propagatable delete. Delete from the state store and propagate the delete onwards.
-                    context().forward(combinedOldKey, new SubscriptionWrapper(nullHash, DELETE_KEY_AND_PROPAGATE));
+                    context().forward(oldForeignKey, new SubscriptionWrapper<>(nullHash, DELETE_KEY_AND_PROPAGATE, key));
                 }
             } else if (change.newValue != null) {
                 //change.oldValue is null, which means it was deleted at least once before, or it is brand new.
                 //In either case, we only need to propagate if the FK_VAL is available, as the null from the delete would
                 //have been propagated otherwise.
-                final KO extractedForeignKeyValue = mapper.apply(change.newValue);
-                final CombinedKey<KO, K> newCombinedKeyValue = new CombinedKey<>(extractedForeignKeyValue, key);
+
                 final SubscriptionWrapper.Instruction instruction;
                 if (leftJoin) {
                     //Want to send info even if RHS is null.
@@ -102,7 +98,7 @@ public class KTableRepartitionerProcessorSupplier<K, KO, V> implements Processor
                 } else {
                     instruction = PROPAGATE_ONLY_IF_FK_VAL_AVAILABLE;
                 }
-                context().forward(newCombinedKeyValue, new SubscriptionWrapper(currentHash, instruction));
+                context().forward(mapper.apply(change.newValue), new SubscriptionWrapper<>(currentHash, instruction, key));
             }
         }
 

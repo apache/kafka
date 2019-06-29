@@ -33,7 +33,6 @@ import org.apache.kafka.streams.kstream.ValueMapper;
 import org.apache.kafka.streams.kstream.ValueMapperWithKey;
 import org.apache.kafka.streams.kstream.ValueTransformerWithKeySupplier;
 import org.apache.kafka.streams.kstream.internals.foreignkeyjoin.CombinedKey;
-import org.apache.kafka.streams.kstream.internals.foreignkeyjoin.CombinedKeyForeignKeyPartitioner;
 import org.apache.kafka.streams.kstream.internals.foreignkeyjoin.CombinedKeySerde;
 import org.apache.kafka.streams.kstream.internals.foreignkeyjoin.ForeignKeySingleLookupProcessorSupplier;
 import org.apache.kafka.streams.kstream.internals.foreignkeyjoin.KTableKTablePrefixScanProcessorSupplier;
@@ -893,7 +892,6 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
         enableSendingOldValues();
 
         final NamedInternal renamed = new NamedInternal(joinName);
-        final String namedPrefix = renamed.orElseGenerateWithPrefix(builder, JOIN_ON_FOREIGN_KEY_NAME);
 
         //Must make a repartitioner processor, and an associated topic with a sink and source processor.
         final String repartitionProcessorName = renamed.suffixWithOrElseGet("-subscription-registration-processor", builder, SUBSCRIPTION_REGISTRATION);
@@ -908,22 +906,13 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
         final KTableRepartitionerProcessorSupplier<K, KO, V> repartitionProcessor =
                 new KTableRepartitionerProcessorSupplier<>(foreignKeyExtractor, valSerde.serializer(), leftJoin);
 
-        final CombinedKeySerde<KO, K> combinedKeySerde = new CombinedKeySerde<>(((KTableImpl<KO, VO, ?>) foreignKeyTable).keySerde(), keySerde);
-
-        //Create the combinedKeyPartitioner that will partition CombinedKey on just the foreignKey (KO).
-        //This will ensure that the SubscriptionRequest events (partitioned on KO) will be co-partitioned with the
-        //correct foreignKeyTable (keyed on KO).
-        final CombinedKeyForeignKeyPartitioner<KO, K, V> combinedKeyPartitioner = new CombinedKeyForeignKeyPartitioner<>(combinedKeySerde);
-
-        //Receives SubscriptionWrapper events from the KTableRepartitionerProcessorSupplier and handles them according
+        //Receives events from the KTableRepartitionerProcessorSupplier and handles them according
         //to the embedded instructions within the SubscriptionWrapper.
         //An internal materialized RocksDB statestore maintains the current active subscriptions, and will update the
         //state according to the incoming SubscriptionWrapper instructions.
         //
         //SubscriptionResponseWrappers are issued depending on the results of the SubscriptionWrapper processing
         //and the presence of the matching keyed event in the foreignKeyTable KTable.
-
-
         final String subscriptionStateStoreName = renamed.suffixWithOrElseGet("-subscription-state-store", builder, FK_JOIN_STATE_STORE_NAME);
         final ForeignKeySingleLookupProcessorSupplier<K, KO, VO> oneToOne =
                 new ForeignKeySingleLookupProcessorSupplier<>(subscriptionStateStoreName, ((KTableImpl<KO, VO, VO>) foreignKeyTable).valueGetterSupplier());
@@ -931,8 +920,8 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
         final RocksDbKeyValueBytesStoreSupplier thisRocksDBRef = new RocksDbKeyValueBytesStoreSupplier(subscriptionStateStoreName, true);
 
         final StoreBuilder<KeyValueStore<Bytes, byte[]>> prefixScanStoreBuilder = Stores.timestampedKeyValueStoreBuilder(thisRocksDBRef,
-                combinedKeySerde,
-                new SubscriptionWrapperSerde());
+                new CombinedKeySerde<>(((KTableImpl<KO, VO, ?>) foreignKeyTable).keySerde(), keySerde),
+                new SubscriptionWrapperSerde<K>(keySerde));
 
         //foreignKeyTable-driven event processing.
         //Performs a prefixScan on the subscriptionStateStoreName and emits a SubscriptionResponseWrapper for each
@@ -977,7 +966,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
                 repartitionProcessorName
         );
 
-        final ProcessorParameters<CombinedKey<KO, K>, SubscriptionWrapper> oneToOneProcessorParameters = new ProcessorParameters<>(
+        final ProcessorParameters<KO, SubscriptionWrapper<K>> oneToOneProcessorParameters = new ProcessorParameters<>(
                 oneToOne,
                 oneToOneName
         );
@@ -997,7 +986,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
                 outputProcessorName
         );
 
-        final KTableKTableForeignKeyJoinResolutionNode fkSinkAndResolveNode = new KTableKTableForeignKeyJoinResolutionNode<VR, K, V, KO, VO>(
+        final KTableKTableForeignKeyJoinResolutionNode fkSinkAndResolveNode = new KTableKTableForeignKeyJoinResolutionNode<>(
                 resolverProcessorParameters.processorName(),
                 oneToOneProcessorParameters,
                 prefixScanProcessorParameters,
@@ -1013,18 +1002,17 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
                 valueGetterSupplier()
                 );
 
-        final OptimizableRepartitionNode.OptimizableRepartitionNodeBuilder<CombinedKey<KO, K>, V> repartitionNodeBuilder =
+        final OptimizableRepartitionNode.OptimizableRepartitionNodeBuilder<KO, SubscriptionWrapper<K>> repartitionNodeBuilder =
                 OptimizableRepartitionNode.optimizableRepartitionNodeBuilder();
 
-        final OptimizableRepartitionNode<CombinedKey<KO, K>, V> repartitionNode = repartitionNodeBuilder
+        final OptimizableRepartitionNode<KO, SubscriptionWrapper<V>> repartitionNode = repartitionNodeBuilder
                 .withNodeName(repartitionSourceName)
                 .withProcessorParameters(repartitionProcessorParameters)
                 .withSinkName(repartitionSinkName)
                 .withSourceName(repartitionSourceName)
                 .withRepartitionTopic(repartitionTopicName)
-                .withValueSerde(new SubscriptionWrapperSerde())
-                .withPartitioner(combinedKeyPartitioner)
-                .withKeySerde(combinedKeySerde)
+                .withValueSerde(new SubscriptionWrapperSerde<>(this.keySerde))
+                .withKeySerde(((KTableImpl<KO, VO, VO>) foreignKeyTable).keySerde)
                 .build();
 
         final StatefulProcessorNode<CombinedKey<KO, K>, V> oneToOneNode = new StatefulProcessorNode(

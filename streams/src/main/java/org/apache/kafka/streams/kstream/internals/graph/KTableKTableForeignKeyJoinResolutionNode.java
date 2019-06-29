@@ -29,8 +29,8 @@ import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 /**
  * Too much specific information to generalize so the Foreign Key KTable-KTable join requires a specific node.
  */
-public class KTableKTableForeignKeyJoinResolutionNode<VR, K, V, KO, VO> extends StreamsGraphNode {
-    private final ProcessorParameters<CombinedKey<KO, K>, SubscriptionWrapper> joinOneToOneProcessorParameters;
+public class KTableKTableForeignKeyJoinResolutionNode<K, V, KO, VO> extends StreamsGraphNode {
+    private final ProcessorParameters<KO, SubscriptionWrapper<K>> joinOneToOneProcessorParameters;
     private final ProcessorParameters<KO, Change<VO>> joinByPrefixProcessorParameters;
     private final ProcessorParameters<K, SubscriptionResponseWrapper<VO>> resolverProcessorParameters;
     private final String finalRepartitionTopicName;
@@ -41,7 +41,7 @@ public class KTableKTableForeignKeyJoinResolutionNode<VR, K, V, KO, VO> extends 
     private final KTableValueGetterSupplier<K, V> originalValueGetter;
 
     public KTableKTableForeignKeyJoinResolutionNode(final String nodeName,
-                                                    final ProcessorParameters<CombinedKey<KO, K>, SubscriptionWrapper> joinOneToOneProcessorParameters,
+                                                    final ProcessorParameters<KO, SubscriptionWrapper<K>> joinOneToOneProcessorParameters,
                                                     final ProcessorParameters<KO, Change<VO>> joinByPrefixProcessorParameters,
                                                     final ProcessorParameters<K, SubscriptionResponseWrapper<VO>> resolverProcessorParameters,
                                                     final String finalRepartitionTopicName,

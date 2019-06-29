@@ -23,19 +23,13 @@ import org.apache.kafka.common.serialization.Serializer;
 import java.nio.ByteBuffer;
 import java.util.Map;
 
-public class SubscriptionWrapperSerde implements Serde {
-    private final SubscriptionWrapperSerializer serializer;
-    private final SubscriptionWrapperDeserializer deserializer;
+public class SubscriptionWrapperSerde<K> implements Serde {
+    private final SubscriptionWrapperSerializer<K> serializer;
+    private final SubscriptionWrapperDeserializer<K> deserializer;
 
-    public SubscriptionWrapperSerde(final SubscriptionWrapperSerializer serializer,
-                                    final SubscriptionWrapperDeserializer deserializer) {
-        this.serializer = serializer;
-        this.deserializer = deserializer;
-    }
-
-    public SubscriptionWrapperSerde() {
-        this.serializer = new SubscriptionWrapperSerializer();
-        this.deserializer = new SubscriptionWrapperDeserializer();
+    public SubscriptionWrapperSerde(final Serde<K> primaryKeySerde) {
+        this.serializer = new SubscriptionWrapperSerializer<>(primaryKeySerde.serializer());
+        this.deserializer = new SubscriptionWrapperDeserializer<>(primaryKeySerde.deserializer());
     }
 
     @Override
@@ -58,8 +52,10 @@ public class SubscriptionWrapperSerde implements Serde {
         return deserializer;
     }
 
-    private static class SubscriptionWrapperSerializer implements Serializer<SubscriptionWrapper> {
-        public SubscriptionWrapperSerializer() {
+    private static class SubscriptionWrapperSerializer<K> implements Serializer<SubscriptionWrapper<K>> {
+        final private Serializer<K> primaryKeySerializer;
+        SubscriptionWrapperSerializer(final Serializer<K> primaryKeySerializer) {
+            this.primaryKeySerializer = primaryKeySerializer;
         }
 
         @Override
@@ -68,13 +64,20 @@ public class SubscriptionWrapperSerde implements Serde {
         }
 
         @Override
-        public byte[] serialize(final String topic, final SubscriptionWrapper data) {
-            //{16-bytes Hash}{1-byte boolean propagate}
-            final ByteBuffer buf = ByteBuffer.allocate(17);
+        public byte[] serialize(final String topic, final SubscriptionWrapper<K> data) {
+            //{1-byte-version}{1-byte-instruction}{16-bytes Hash}{Integer.Bytes-PK-length}{PK-serialized}
+            final byte[] primaryKeySerializedData = primaryKeySerializer.serialize(topic, data.getPrimaryKey());
+            //Size of Integer.BYTES bytes
+            final byte[] primaryKeyByteSize = numToBytes(primaryKeySerializedData.length);
+
+            final ByteBuffer buf = ByteBuffer.allocate(2 + 2* Long.BYTES + Integer.BYTES + primaryKeySerializedData.length);
+            buf.put(data.getVersion());
+            buf.put(data.getInstruction().getByte());
             final long[] elem = data.getHash();
             buf.putLong(elem[0]);
             buf.putLong(elem[1]);
-            buf.put(data.getInstruction().getByte());
+            buf.put(primaryKeyByteSize);
+            buf.put(primaryKeySerializedData);
             return buf.array();
         }
 
@@ -84,7 +87,12 @@ public class SubscriptionWrapperSerde implements Serde {
         }
     }
 
-    private static class SubscriptionWrapperDeserializer implements Deserializer<SubscriptionWrapper> {
+    private static class SubscriptionWrapperDeserializer<K> implements Deserializer<SubscriptionWrapper> {
+        final private Deserializer<K> primaryKeyDeserializer;
+        SubscriptionWrapperDeserializer (Deserializer<K> primaryKeyDeserializer) {
+            this.primaryKeyDeserializer = primaryKeyDeserializer;
+        }
+
         @Override
         public void configure(final Map<String, ?> configs, final boolean isKey) {
             //Do nothing
@@ -92,18 +100,31 @@ public class SubscriptionWrapperSerde implements Serde {
 
         @Override
         public SubscriptionWrapper deserialize(final String topic, final byte[] data) {
-            //{16-bytes Hash}{1-byte boolean propagate}
+            //{1-byte-version}{1-byte-instruction}{16-bytes Hash}{Integer.Bytes-PK-length}{PK-serialized}
             final ByteBuffer buf = ByteBuffer.wrap(data);
+            final byte version = buf.get();
+            final SubscriptionWrapper.Instruction inst = SubscriptionWrapper.Instruction.fromValue(buf.get());
             final long[] hash = new long[2];
             hash[0] = buf.getLong();
             hash[1] = buf.getLong();
-            final byte instruction = buf.get(16);
-            return new SubscriptionWrapper(hash, SubscriptionWrapper.Instruction.fromValue(instruction));
+            final int fkLength = buf.getInt();
+
+            final byte[] primaryKeyRaw = new byte[fkLength];
+            buf.get(primaryKeyRaw, 0, primaryKeyRaw.length);
+            final K primaryKey = primaryKeyDeserializer.deserialize(topic, primaryKeyRaw);
+
+            return new SubscriptionWrapper<>(hash, inst, primaryKey, version);
         }
 
         @Override
         public void close() {
             //Do nothing
         }
+    }
+
+    private static byte[] numToBytes(final int num) {
+        final ByteBuffer wrapped = ByteBuffer.allocate(Integer.BYTES);
+        wrapped.putInt(num);
+        return wrapped.array();
     }
 }

@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.kstream.internals.foreignkeyjoin;
 
+import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Murmur3;
 import org.junit.Test;
 
@@ -26,14 +27,16 @@ public class SubscriptionWrapperSerdeTest {
 
     @Test
     @SuppressWarnings("unchecked")
-    public void serdeTest() {
-        final SubscriptionWrapperSerde swSerde = new SubscriptionWrapperSerde();
+    public void stringSerdeTest() {
+        final String originalKey = "originalKey";
+        final SubscriptionWrapperSerde swSerde = new SubscriptionWrapperSerde<>(Serdes.String());
         final long[] hashedValue = Murmur3.hash128(new byte[] {(byte) 0xFF, (byte) 0xAA, (byte) 0x00, (byte) 0x19});
-        final SubscriptionWrapper wrapper = new SubscriptionWrapper(hashedValue, SubscriptionWrapper.Instruction.DELETE_KEY_AND_PROPAGATE);
+        final SubscriptionWrapper wrapper = new SubscriptionWrapper(hashedValue, SubscriptionWrapper.Instruction.DELETE_KEY_AND_PROPAGATE, originalKey);
         final byte[] serialized = swSerde.serializer().serialize(null, wrapper);
         final SubscriptionWrapper deserialized = (SubscriptionWrapper) swSerde.deserializer().deserialize(null, serialized);
 
         assertEquals(deserialized.getInstruction(), SubscriptionWrapper.Instruction.DELETE_KEY_AND_PROPAGATE);
         assertArrayEquals(hashedValue, deserialized.getHash());
+        assertEquals(originalKey, deserialized.getPrimaryKey());
     }
 }
