@@ -1085,8 +1085,10 @@ class SocketServerTest {
     val errors = new mutable.HashSet[String]
 
     def acceptorStackTraces: scala.collection.Map[Thread, String] = {
-      Thread.getAllStackTraces.asScala.filterKeys(_.getName.contains("kafka-socket-acceptor"))
-        .mapValues(_.toList.mkString("\n")).toMap
+      Thread.getAllStackTraces.asScala.collect {
+        case (thread, stacktraceElement) if thread.getName.contains("kafka-socket-acceptor") =>
+          thread -> stacktraceElement.mkString("\n")
+      }
     }
 
     def acceptorBlocked: Boolean = {
