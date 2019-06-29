@@ -17,6 +17,7 @@
 
 package org.apache.kafka.streams.kstream.internals.foreignkeyjoin;
 
+import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.kstream.internals.Change;
@@ -26,6 +27,8 @@ import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
+import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
+import org.apache.kafka.streams.processor.internals.metrics.ThreadMetrics;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.slf4j.Logger;
@@ -46,7 +49,8 @@ public class KTableKTablePrefixScanProcessorSupplier<K, KO, VO> implements Proce
 
 
     private class KTableKTableJoinProcessor extends AbstractProcessor<KO, Change<VO>> {
-
+        private StreamsMetricsImpl metrics;
+        private Sensor skippedRecordsSensor;
         private final KTablePrefixValueGetter<CombinedKey<KO, K>, SubscriptionWrapper> prefixValueGetter;
 
         public KTableKTableJoinProcessor(final KTablePrefixValueGetterSupplier<CombinedKey<KO, K>, SubscriptionWrapper> valueGetter) {
@@ -57,6 +61,8 @@ public class KTableKTablePrefixScanProcessorSupplier<K, KO, VO> implements Proce
         @Override
         public void init(final ProcessorContext context) {
             super.init(context);
+            metrics = (StreamsMetricsImpl) context.metrics();
+            skippedRecordsSensor = ThreadMetrics.skipRecordSensor(metrics);
             prefixValueGetter.init(context);
         }
 
@@ -65,8 +71,16 @@ public class KTableKTablePrefixScanProcessorSupplier<K, KO, VO> implements Proce
          */
         @Override
         public void process(final KO key, final Change<VO> value) {
-            if (key == null)
-                throw new StreamsException("Record key for foreignKeyJoin operator should not be null.");
+            // if the key is null, we do not need proceed aggregating
+            // the record with the table
+            if (key == null) {
+                LOG.warn(
+                        "Skipping record due to null key. value=[{}] topic=[{}] partition=[{}] offset=[{}]",
+                        value, context().topic(), context().partition(), context().offset()
+                );
+                skippedRecordsSensor.record();
+                return;
+            }
 
             //Don't do any work if the value hasn't changed.
             //It can be expensive to update all the records returned from prefixScan.
