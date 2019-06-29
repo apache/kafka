@@ -741,7 +741,6 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
       altered = alterResult.values.get(topic2).get
     } catch {
       case e: ExecutionException =>
-      case e: ExecutionException =>
         assertTrue(e.getCause.isInstanceOf[InvalidPartitionsException])
         assertEquals("Topic currently has 3 partitions, which is higher than the requested 2.", e.getCause.getMessage)
         // assert that the topic2 still has 3 partitions
