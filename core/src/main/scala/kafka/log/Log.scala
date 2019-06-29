@@ -1163,6 +1163,8 @@ class Log(@volatile var dir: File,
           }
         }
 
+        // We cache offset metadata for the start of each transaction. This allows us to
+        // compute the last stable offset without relying on additional index lookups.
         val firstOffsetMetadata = if (batch.isTransactional)
           Some(LogOffsetMetadata(batch.baseOffset, appendOffsetMetadata.segmentBaseOffset, relativePositionInSegment))
         else
