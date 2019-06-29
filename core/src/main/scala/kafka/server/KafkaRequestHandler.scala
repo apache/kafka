@@ -23,7 +23,7 @@ import kafka.metrics.KafkaMetricsGroup
 import java.util.concurrent.{CountDownLatch, TimeUnit}
 import java.util.concurrent.atomic.AtomicInteger
 
-import com.yammer.metrics.core.{Meter}
+import com.yammer.metrics.core.Meter
 import org.apache.kafka.common.internals.FatalExitError
 import org.apache.kafka.common.utils.{KafkaThread, Time}
 
@@ -146,6 +146,7 @@ class BrokerTopicMetrics(name: Option[String]) extends KafkaMetricsGroup {
     case Some(topic) => Map("topic" -> topic)
   }
 
+  // an internal map for "lazy initialization" of certain metrics
   private val metricTypeMap = new Pool[String, Meter]
 
   def messagesInRate = metricTypeMap.getAndMaybePut(
@@ -169,6 +170,7 @@ class BrokerTopicMetrics(name: Option[String]) extends KafkaMetricsGroup {
   val fetchMessageConversionsRate = newMeter(BrokerTopicStats.FetchMessageConversionsPerSec, "requests", TimeUnit.SECONDS, tags)
   val produceMessageConversionsRate = newMeter(BrokerTopicStats.ProduceMessageConversionsPerSec, "requests", TimeUnit.SECONDS, tags)
 
+  // this method helps check with metricTypeMap first before deleting a metric
   def removeMetricHelper(metricType: String, tags: scala.collection.Map[String, String]): Unit = {
     val metric: Meter = metricTypeMap.remove(metricType)
     if (metric != null) {
@@ -213,8 +215,8 @@ object BrokerTopicStats {
 class BrokerTopicStats {
   import BrokerTopicStats._
 
-  private var stats = new Pool[String, BrokerTopicMetrics](Some(valueFactory))
-  var allTopicsStats = new BrokerTopicMetrics(None)
+  private val stats = new Pool[String, BrokerTopicMetrics](Some(valueFactory))
+  val allTopicsStats = new BrokerTopicMetrics(None)
 
   def topicStats(topic: String): BrokerTopicMetrics =
     stats.getAndMaybePut(topic)
@@ -232,7 +234,7 @@ class BrokerTopicStats {
   }
 
   // This method only remove bytesIn, bytesOut, and messagesIn metrics
-  // of a leader that becomes a follower
+  // of a broker that stops being a leader
   def removeOldLeaderMetrics(topic: String) {
     val topicMetrics = topicStats(topic)
     topicMetrics.removeMetricHelper(BrokerTopicStats.MessagesInPerSec, topicMetrics.tags)

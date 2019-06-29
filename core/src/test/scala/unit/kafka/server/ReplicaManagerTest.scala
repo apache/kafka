@@ -683,7 +683,7 @@ class ReplicaManagerTest {
     val controllerId = 0
     val (rm0, rm1, _, mockTopicStats1) = prepareDifferentReplicaManagersWithMockedBrokerTopicStats()
 
-    EasyMock.expect(mockTopicStats1.removeOldLeaderMetrics(topic)).andVoid.atLeastOnce
+    EasyMock.expect(mockTopicStats1.removeOldLeaderMetrics(topic)).andVoid.once
     EasyMock.replay(mockTopicStats1)
 
     try {

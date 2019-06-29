@@ -374,13 +374,6 @@ class ReplicaManager(val config: KafkaConfig,
         // First stop fetchers for all partitions, then stop the corresponding replicas
         replicaFetcherManager.removeFetcherForPartitions(partitions)
         replicaAlterLogDirsManager.removeFetcherForPartitions(partitions)
-
-        // for all the partitions that the current broker stops being a replica of
-        // find those that the broker is no longer a leader of so we can safely remove
-        // the metrics bytesIn, bytesOut and messagesIn
-        val leaderTopicSet = leaderPartitionsIterator.map(_.topic).toSet
-        partitions.map(_.topic).diff(leaderTopicSet).foreach(brokerTopicStats.removeOldLeaderMetrics)
-
         for (topicPartition <- partitions){
           try {
             stopReplica(topicPartition, stopReplicaRequest.deletePartitions)
@@ -392,7 +385,6 @@ class ReplicaManager(val config: KafkaConfig,
               responseMap.put(topicPartition, Errors.KAFKA_STORAGE_ERROR)
           }
         }
-
         (responseMap, Errors.NONE)
       }
     }
@@ -1127,12 +1119,12 @@ class ReplicaManager(val config: KafkaConfig,
         else
           Set.empty[Partition]
 
-        // iterate through all the partitions which the broker is a leader of
-        // and remove any topic that is found since the current broker still needs to update its metrics
-        // for those topics
-        // in all of the partitions that the current broker is now a follower of
-        // add all the topics in a list as candidate to remove metrics
-        // and finally remove all the metrics of topics that the current broker IS NO LONGER a leader of
+        /*
+         * KAFKA-8392
+         * For topic partitions of which the broker is no longer a leader, delete metrics (bytesIn, bytesOut, messagesIn)
+         * related to those topics. Note that this means the broker stops being either a replica or a leader of
+         * partitions of said topics
+         */
         val leaderTopicSet = leaderPartitionsIterator.map(_.topic).toSet
         partitionsBecomeFollower.map(_.topic).diff(leaderTopicSet).foreach(brokerTopicStats.removeOldLeaderMetrics)
 
