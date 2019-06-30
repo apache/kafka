@@ -95,12 +95,6 @@ public class MockProcessor<K, V> extends AbstractProcessor<K, V> {
         }
     }
 
-    public static String makeRecord(final Object key, final Object value, final long timestamp) {
-        return (key == null ? "null" : key) +
-            ":" + (value == null ? "null" : value) +
-            " (ts: " + timestamp + ")";
-    }
-
     public void checkAndClearProcessResult(final KeyValueTimestamp... expected) {
         assertEquals("the number of outputs:" + processed, expected.length, processed.size());
         for (int i = 0; i < expected.length; i++) {
