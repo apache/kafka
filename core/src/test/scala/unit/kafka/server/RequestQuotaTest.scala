@@ -26,6 +26,7 @@ import org.apache.kafka.common.Node
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.acl.{AccessControlEntry, AccessControlEntryFilter, AclBinding, AclBindingFilter, AclOperation, AclPermissionType}
 import org.apache.kafka.common.config.ConfigResource
+import org.apache.kafka.common.message.ApiVersionsRequestData
 import org.apache.kafka.common.message.ControlledShutdownRequestData
 import org.apache.kafka.common.message.CreateTopicsRequestData
 import org.apache.kafka.common.message.CreateTopicsRequestData.{CreatableTopic, CreatableTopicCollection}
@@ -350,7 +351,7 @@ class RequestQuotaTest extends BaseRequestTest {
           new SaslAuthenticateRequest.Builder(new SaslAuthenticateRequestData().setAuthBytes(new Array[Byte](0)))
 
         case ApiKeys.API_VERSIONS =>
-          new ApiVersionsRequest.Builder
+          new ApiVersionsRequest.Builder(new ApiVersionsRequestData())
 
         case ApiKeys.CREATE_TOPICS => {
           new CreateTopicsRequest.Builder(
@@ -536,7 +537,7 @@ class RequestQuotaTest extends BaseRequestTest {
       case ApiKeys.DESCRIBE_GROUPS =>
         new DescribeGroupsResponse(response, ApiKeys.DESCRIBE_GROUPS.latestVersion).throttleTimeMs
       case ApiKeys.LIST_GROUPS => new ListGroupsResponse(response).throttleTimeMs
-      case ApiKeys.API_VERSIONS => new ApiVersionsResponse(response).throttleTimeMs
+      case ApiKeys.API_VERSIONS => new ApiVersionsResponse(response, ApiKeys.API_VERSIONS.latestVersion).throttleTimeMs
       case ApiKeys.CREATE_TOPICS =>
         new CreateTopicsResponse(response, ApiKeys.CREATE_TOPICS.latestVersion).throttleTimeMs
       case ApiKeys.DELETE_TOPICS => 

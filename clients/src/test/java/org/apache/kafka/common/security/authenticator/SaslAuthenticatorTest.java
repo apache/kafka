@@ -53,6 +53,7 @@ import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
 import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.errors.SaslAuthenticationException;
+import org.apache.kafka.common.message.ApiVersionsRequestData;
 import org.apache.kafka.common.message.SaslAuthenticateRequestData;
 import org.apache.kafka.common.message.SaslHandshakeRequestData;
 import org.apache.kafka.common.network.CertStores;
@@ -681,7 +682,7 @@ public class SaslAuthenticatorTest {
         String node = "1";
         createClientConnection(SecurityProtocol.PLAINTEXT, node);
         RequestHeader header = new RequestHeader(ApiKeys.API_VERSIONS, Short.MAX_VALUE, "someclient", 1);
-        ApiVersionsRequest request = new ApiVersionsRequest.Builder().build();
+        ApiVersionsRequest request = new ApiVersionsRequest.Builder(new ApiVersionsRequestData()).build();
         selector.send(request.toSend(node, header));
         ByteBuffer responseBuffer = waitForResponse();
         ResponseHeader.parse(responseBuffer);
@@ -2000,7 +2001,7 @@ public class SaslAuthenticatorTest {
     // Creates an ApiVersionsRequest with version 0. Using v0 in tests since
     // SaslClientAuthenticator always uses version 0
     private ApiVersionsRequest createApiVersionsRequestV0() {
-        return new ApiVersionsRequest.Builder((short) 0).build();
+        return new ApiVersionsRequest.Builder(new ApiVersionsRequestData(), (short) 0).build();
     }
 
     @SuppressWarnings("unchecked")

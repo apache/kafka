@@ -183,18 +183,15 @@ public class SenderTest {
         apiVersions.update("0", NodeApiVersions.create(Collections.singleton(
                 new ApiVersionsResponse.ApiVersion(ApiKeys.PRODUCE, (short) 0, (short) 2))));
 
-        client.prepareResponse(new MockClient.RequestMatcher() {
-            @Override
-            public boolean matches(AbstractRequest body) {
-                ProduceRequest request = (ProduceRequest) body;
-                if (request.version() != 2)
-                    return false;
+        client.prepareResponse(body -> {
+            ProduceRequest request = (ProduceRequest) body;
+            if (request.version() != 2)
+                return false;
 
-                MemoryRecords records = request.partitionRecordsOrFail().get(tp0);
-                return records != null &&
-                        records.sizeInBytes() > 0 &&
-                        records.hasMatchingMagic(RecordBatch.MAGIC_VALUE_V1);
-            }
+            MemoryRecords records = request.partitionRecordsOrFail().get(tp0);
+            return records != null &&
+                    records.sizeInBytes() > 0 &&
+                    records.hasMatchingMagic(RecordBatch.MAGIC_VALUE_V1);
         }, produceResponse(tp0, offset, Errors.NONE, 0));
 
         sender.runOnce(); // connect

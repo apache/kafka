@@ -16,42 +16,35 @@
  */
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.message.ApiVersionsRequestData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
 import java.util.Collections;
 
 public class ApiVersionsRequest extends AbstractRequest {
-    private static final Schema API_VERSIONS_REQUEST_V0 = new Schema();
 
-    /* v1 request is the same as v0. Throttle time has been added to response */
-    private static final Schema API_VERSIONS_REQUEST_V1 = API_VERSIONS_REQUEST_V0;
-
-    /**
-     * The version number is bumped to indicate that on quota violation brokers send out responses before throttling.
-     */
-    private static final Schema API_VERSIONS_REQUEST_V2 = API_VERSIONS_REQUEST_V1;
-
-    public static Schema[] schemaVersions() {
-        return new Schema[]{API_VERSIONS_REQUEST_V0, API_VERSIONS_REQUEST_V1, API_VERSIONS_REQUEST_V2};
-    }
+    public final ApiVersionsRequestData data;
 
     public static class Builder extends AbstractRequest.Builder<ApiVersionsRequest> {
 
-        public Builder() {
+        public final ApiVersionsRequestData data;
+
+        public Builder(ApiVersionsRequestData data) {
             super(ApiKeys.API_VERSIONS);
+            this.data = data;
         }
 
-        public Builder(short version) {
+        public Builder(ApiVersionsRequestData data, short version) {
             super(ApiKeys.API_VERSIONS, version);
+            this.data = data;
         }
 
         @Override
         public ApiVersionsRequest build(short version) {
-            return new ApiVersionsRequest(version);
+            return new ApiVersionsRequest(data, version);
         }
 
         @Override
@@ -62,13 +55,13 @@ public class ApiVersionsRequest extends AbstractRequest {
 
     private final Short unsupportedRequestVersion;
 
-    public ApiVersionsRequest(short version) {
-        this(version, null);
+    public ApiVersionsRequest(ApiVersionsRequestData data, short version) {
+        this(data, version, null);
     }
 
-    public ApiVersionsRequest(short version, Short unsupportedRequestVersion) {
+    public ApiVersionsRequest(ApiVersionsRequestData data, short version, Short unsupportedRequestVersion) {
         super(ApiKeys.API_VERSIONS, version);
-
+        this.data = data;
         // Unlike other request types, the broker handles ApiVersion requests with higher versions than
         // supported. It does so by treating the request as if it were v0 and returns a response using
         // the v0 response schema. The reason for this is that the client does not yet know what versions
@@ -78,7 +71,7 @@ public class ApiVersionsRequest extends AbstractRequest {
     }
 
     public ApiVersionsRequest(Struct struct, short version) {
-        this(version, null);
+        this(new ApiVersionsRequestData(struct, version), version);
     }
 
     public boolean hasUnsupportedRequestVersion() {
@@ -108,5 +101,4 @@ public class ApiVersionsRequest extends AbstractRequest {
     public static ApiVersionsRequest parse(ByteBuffer buffer, short version) {
         return new ApiVersionsRequest(ApiKeys.API_VERSIONS.parseRequest(version, buffer), version);
     }
-
 }

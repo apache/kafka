@@ -40,6 +40,7 @@ import org.apache.kafka.common.requests.ApiVersionsResponse.ApiVersion
 import org.apache.kafka.common.utils.LogContext
 import org.apache.kafka.common.utils.{KafkaThread, Time}
 import org.apache.kafka.common.Node
+import org.apache.kafka.common.message.ApiVersionsRequestData
 import org.apache.kafka.common.requests.{AbstractRequest, AbstractResponse, ApiVersionsRequest, ApiVersionsResponse, MetadataRequest, MetadataResponse}
 
 import scala.collection.JavaConverters._
@@ -161,7 +162,8 @@ object BrokerApiVersionsCommand {
     }
 
     private def getApiVersions(node: Node): List[ApiVersion] = {
-      val response = send(node, ApiKeys.API_VERSIONS, new ApiVersionsRequest.Builder()).asInstanceOf[ApiVersionsResponse]
+      val response = send(node, ApiKeys.API_VERSIONS,
+        new ApiVersionsRequest.Builder(new ApiVersionsRequestData())).asInstanceOf[ApiVersionsResponse]
       response.error.maybeThrow()
       response.apiVersions.asScala.toList
     }
