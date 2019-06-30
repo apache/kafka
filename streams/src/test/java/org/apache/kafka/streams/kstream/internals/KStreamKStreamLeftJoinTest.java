@@ -343,8 +343,7 @@ public class KStreamKStreamLeftJoinTest {
             driver.pipeInput(recordFactory.create(topic1, expectedKey, "G" + expectedKey, time));
         }
         processor.checkAndClearProcessResult(new KeyValueTimestamp<>(0, "G0+null", 899),
-            new KeyValueTimestamp<>(1, "G1+null", 899),
-            new KeyValueTimestamp<>(2, "G2+null", 899),
+            new KeyValueTimestamp<>(1, "G1+null", 899), new KeyValueTimestamp<>(2, "G2+null", 899),
             new KeyValueTimestamp<>(3, "G3+null", 899));
         // push four items with increase timestamp to the primary stream; this should produce three left-join and one full-join items
         // w1 = { 0:A0 (ts: 0), 1:A1 (ts: 0),
@@ -371,8 +370,7 @@ public class KStreamKStreamLeftJoinTest {
             driver.pipeInput(recordFactory.create(topic1, expectedKey, "H" + expectedKey, time));
         }
         processor.checkAndClearProcessResult(new KeyValueTimestamp<>(0, "H0+b0", 1000),
-            new KeyValueTimestamp<>(1, "H1+null", 900),
-            new KeyValueTimestamp<>(2, "H2+null", 900),
+            new KeyValueTimestamp<>(1, "H1+null", 900), new KeyValueTimestamp<>(2, "H2+null", 900),
             new KeyValueTimestamp<>(3, "H3+null", 900));
         // push four items with increase timestamp to the primary stream; this should produce two left-join and two full-join items
         // w1 = { 0:A0 (ts: 0), 1:A1 (ts: 0),
@@ -401,8 +399,7 @@ public class KStreamKStreamLeftJoinTest {
             driver.pipeInput(recordFactory.create(topic1, expectedKey, "I" + expectedKey, time));
         }
         processor.checkAndClearProcessResult(new KeyValueTimestamp<>(0, "I0+b0", 1000),
-            new KeyValueTimestamp<>(1, "I1+b1", 1001),
-            new KeyValueTimestamp<>(2, "I2+null", 901),
+            new KeyValueTimestamp<>(1, "I1+b1", 1001), new KeyValueTimestamp<>(2, "I2+null", 901),
             new KeyValueTimestamp<>(3, "I3+null", 901));
         // push four items with increase timestamp to the primary stream; this should produce one left-join and three full-join items
         // w1 = { 0:A0 (ts: 0), 1:A1 (ts: 0),
@@ -433,8 +430,7 @@ public class KStreamKStreamLeftJoinTest {
             driver.pipeInput(recordFactory.create(topic1, expectedKey, "J" + expectedKey, time));
         }
         processor.checkAndClearProcessResult(new KeyValueTimestamp<>(0, "J0+b0", 1000),
-            new KeyValueTimestamp<>(1, "J1+b1", 1001),
-            new KeyValueTimestamp<>(2, "J2+b2", 1002),
+            new KeyValueTimestamp<>(1, "J1+b1", 1001), new KeyValueTimestamp<>(2, "J2+b2", 1002),
             new KeyValueTimestamp<>(3, "J3+null", 902));
         // push four items with increase timestamp to the primary stream; this should produce one left-join and three full-join items
         // w1 = { 0:A0 (ts: 0), 1:A1 (ts: 0),
@@ -467,8 +463,7 @@ public class KStreamKStreamLeftJoinTest {
             driver.pipeInput(recordFactory.create(topic1, expectedKey, "K" + expectedKey, time));
         }
         processor.checkAndClearProcessResult(new KeyValueTimestamp<>(0, "K0+b0", 1000),
-            new KeyValueTimestamp<>(1, "K1+b1", 1001),
-            new KeyValueTimestamp<>(2, "K2+b2", 1002),
+            new KeyValueTimestamp<>(1, "K1+b1", 1001), new KeyValueTimestamp<>(2, "K2+b2", 1002),
             new KeyValueTimestamp<>(3, "K3+b3", 1003));
     }
 }
