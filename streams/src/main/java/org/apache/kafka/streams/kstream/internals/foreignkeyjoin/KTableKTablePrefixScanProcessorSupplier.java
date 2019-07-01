@@ -82,7 +82,10 @@ public class KTableKTablePrefixScanProcessorSupplier<K, KO, VO> implements Proce
                 return;
             }
 
+            //Make a CombinedKey that contains ONLY the prefix and no PK. When serialized, it will allow the prefixScan
+            //to extract serialized CombinedKeys containing both the PK and FK.
             final CombinedKey<KO, K> prefixKey = new CombinedKey<>(key);
+
             //Perform the prefixScan and propagate the results
             final KeyValueIterator<CombinedKey<KO, K>, ValueAndTimestamp<SubscriptionWrapper>> prefixScanResults = prefixValueGetter.prefixScan(prefixKey);
             try {

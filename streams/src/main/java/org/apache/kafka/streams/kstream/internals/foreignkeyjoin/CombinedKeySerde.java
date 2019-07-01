@@ -94,7 +94,9 @@ public class CombinedKeySerde<KO, K> implements Serde<CombinedKey<KO, K>> {
 
         @Override
         public byte[] serialize(final String topic, final CombinedKey<KF, KP> data) {
-            //{Integer.BYTES foreignKeyLength}{foreignKeySerialized}{primaryKeySerialized}
+            //The serialization format - note that primaryKeySerialized may be null, such as when a prefixScan
+            //key is being created.
+            //{Integer.BYTES foreignKeyLength}{foreignKeySerialized}{Optional-primaryKeySerialized}
             final byte[] foreignKeySerializedData = foreignKeySerializer.serialize(topic, data.getForeignKey());
             //Integer.BYTES bytes
             final byte[] foreignKeyByteSize = numToBytes(foreignKeySerializedData.length);
@@ -147,6 +149,7 @@ public class CombinedKeySerde<KO, K> implements Serde<CombinedKey<KO, K>> {
 
         @Override
         public CombinedKey<KF, KP> deserialize(final String topic, final byte[] data) {
+            //{Integer.BYTES foreignKeyLength}{foreignKeySerialized}{Optional-primaryKeySerialized}
             final ByteBuffer buf = ByteBuffer.wrap(data);
             final int foreignKeyLength = buf.getInt();
             final byte[] foreignKeyRaw = new byte[foreignKeyLength];
