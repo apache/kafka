@@ -485,7 +485,7 @@ class PartitionTest {
     assertTrue("Expected first makeLeader() to return 'leader changed'",
       partition.makeLeader(controllerId, leaderState, 0, offsetCheckpoints))
     assertEquals("Current leader epoch", leaderEpoch, partition.getLeaderEpoch)
-    assertEquals("ISR", Set[Integer](leader, follower2), partition.inSyncReplicas)
+    assertEquals("ISR", Set[Integer](leader, follower2), partition.inSyncReplicaIds)
 
     // after makeLeader(() call, partition should know about all the replicas
     // append records with initial leader epoch
@@ -806,7 +806,7 @@ class PartitionTest {
     assertTrue("Expected first makeLeader() to return 'leader changed'",
                partition.makeLeader(controllerId, leaderState, 0, offsetCheckpoints))
     assertEquals("Current leader epoch", leaderEpoch, partition.getLeaderEpoch)
-    assertEquals("ISR", Set[Integer](leader, follower2), partition.inSyncReplicas)
+    assertEquals("ISR", Set[Integer](leader, follower2), partition.inSyncReplicaIds)
 
     // after makeLeader(() call, partition should know about all the replicas
     // append records with initial leader epoch
@@ -846,14 +846,14 @@ class PartitionTest {
     // fetch from follower not in ISR from log start offset should not add this follower to ISR
     updateFollowerFetchState(follower1, LogOffsetMetadata(0))
     updateFollowerFetchState(follower1, LogOffsetMetadata(lastOffsetOfFirstBatch))
-    assertEquals("ISR", Set[Integer](leader, follower2), partition.inSyncReplicas)
+    assertEquals("ISR", Set[Integer](leader, follower2), partition.inSyncReplicaIds)
 
     // fetch from the follower not in ISR from start offset of the current leader epoch should
     // add this follower to ISR
     when(stateStore.expandIsr(controllerEpoch, new LeaderAndIsr(leader, leaderEpoch + 2,
       List(leader, follower2, follower1), 1))).thenReturn(Some(2))
     updateFollowerFetchState(follower1, LogOffsetMetadata(currentLeaderEpochStartOffset))
-    assertEquals("ISR", Set[Integer](leader, follower1, follower2), partition.inSyncReplicas)
+    assertEquals("ISR", Set[Integer](leader, follower1, follower2), partition.inSyncReplicaIds)
   }
 
   /**
@@ -1066,7 +1066,7 @@ class PartitionTest {
         offsetCheckpoints
       )
     )
-    assertEquals(Set(brokerId), partition.inSyncReplicas)
+    assertEquals(Set(brokerId), partition.inSyncReplicaIds)
 
     val remoteReplica = partition.getReplica(remoteBrokerId).get
     assertEquals(LogOffsetMetadata.UnknownOffsetMetadata.messageOffset, remoteReplica.logEndOffset)
@@ -1078,7 +1078,7 @@ class PartitionTest {
       followerFetchTimeMs = time.milliseconds(),
       leaderEndOffset = 6L)
 
-    assertEquals(Set(brokerId), partition.inSyncReplicas)
+    assertEquals(Set(brokerId), partition.inSyncReplicaIds)
     assertEquals(3L, remoteReplica.logEndOffset)
     assertEquals(0L, remoteReplica.logStartOffset)
 
@@ -1096,7 +1096,7 @@ class PartitionTest {
       followerFetchTimeMs = time.milliseconds(),
       leaderEndOffset = 6L)
 
-    assertEquals(Set(brokerId, remoteBrokerId), partition.inSyncReplicas)
+    assertEquals(Set(brokerId, remoteBrokerId), partition.inSyncReplicaIds)
     assertEquals(10L, remoteReplica.logEndOffset)
     assertEquals(0L, remoteReplica.logStartOffset)
   }
@@ -1119,7 +1119,7 @@ class PartitionTest {
     assertTrue("Expected become leader transition to succeed",
       partition.makeLeader(controllerId, new LeaderAndIsrRequest.PartitionState(controllerEpoch, brokerId,
         leaderEpoch, isr, 1, replicas, true), 0, offsetCheckpoints))
-    assertEquals(Set(brokerId), partition.inSyncReplicas)
+    assertEquals(Set(brokerId), partition.inSyncReplicaIds)
 
     val remoteReplica = partition.getReplica(remoteBrokerId).get
     assertEquals(LogOffsetMetadata.UnknownOffsetMetadata.messageOffset, remoteReplica.logEndOffset)
@@ -1140,7 +1140,7 @@ class PartitionTest {
       leaderEndOffset = 10L)
 
     // Follower state is updated, but the ISR has not expanded
-    assertEquals(Set(brokerId), partition.inSyncReplicas)
+    assertEquals(Set(brokerId), partition.inSyncReplicaIds)
     assertEquals(10L, remoteReplica.logEndOffset)
     assertEquals(0L, remoteReplica.logStartOffset)
   }
@@ -1171,7 +1171,7 @@ class PartitionTest {
         offsetCheckpoints
       )
     )
-    assertEquals(Set(brokerId, remoteBrokerId), partition.inSyncReplicas)
+    assertEquals(Set(brokerId, remoteBrokerId), partition.inSyncReplicaIds)
     assertEquals(0L, partition.localLogOrException.highWatermark)
 
     val remoteReplica = partition.getReplica(remoteBrokerId).get
@@ -1181,7 +1181,7 @@ class PartitionTest {
 
     // On initialization, the replica is considered caught up and should not be removed
     partition.maybeShrinkIsr(10000)
-    assertEquals(Set(brokerId, remoteBrokerId), partition.inSyncReplicas)
+    assertEquals(Set(brokerId, remoteBrokerId), partition.inSyncReplicaIds)
 
     // If enough time passes without a fetch update, the ISR should shrink
     time.sleep(10001)
@@ -1193,7 +1193,7 @@ class PartitionTest {
     when(stateStore.shrinkIsr(controllerEpoch, updatedLeaderAndIsr)).thenReturn(Some(2))
 
     partition.maybeShrinkIsr(10000)
-    assertEquals(Set(brokerId), partition.inSyncReplicas)
+    assertEquals(Set(brokerId), partition.inSyncReplicaIds)
     assertEquals(10L, partition.localLogOrException.highWatermark)
   }
 
@@ -1223,7 +1223,7 @@ class PartitionTest {
         offsetCheckpoints
       )
     )
-    assertEquals(Set(brokerId, remoteBrokerId), partition.inSyncReplicas)
+    assertEquals(Set(brokerId, remoteBrokerId), partition.inSyncReplicaIds)
     assertEquals(0L, partition.localLogOrException.highWatermark)
 
     val remoteReplica = partition.getReplica(remoteBrokerId).get
@@ -1261,7 +1261,7 @@ class PartitionTest {
     // The ISR should not be shrunk because the follower has caught up with the leader at the
     // time of the first fetch.
     partition.maybeShrinkIsr(10000)
-    assertEquals(Set(brokerId, remoteBrokerId), partition.inSyncReplicas)
+    assertEquals(Set(brokerId, remoteBrokerId), partition.inSyncReplicaIds)
   }
 
   @Test
@@ -1290,7 +1290,7 @@ class PartitionTest {
         offsetCheckpoints
       )
     )
-    assertEquals(Set(brokerId, remoteBrokerId), partition.inSyncReplicas)
+    assertEquals(Set(brokerId, remoteBrokerId), partition.inSyncReplicaIds)
     assertEquals(0L, partition.localLogOrException.highWatermark)
 
     val remoteReplica = partition.getReplica(remoteBrokerId).get
@@ -1314,7 +1314,7 @@ class PartitionTest {
 
     // The ISR should not be shrunk because the follower is caught up to the leader's log end
     partition.maybeShrinkIsr(10000)
-    assertEquals(Set(brokerId, remoteBrokerId), partition.inSyncReplicas)
+    assertEquals(Set(brokerId, remoteBrokerId), partition.inSyncReplicaIds)
   }
 
   @Test
@@ -1336,7 +1336,7 @@ class PartitionTest {
     assertTrue("Expected become leader transition to succeed",
       partition.makeLeader(controllerId, new LeaderAndIsrRequest.PartitionState(controllerEpoch, brokerId,
         leaderEpoch, isr, 1, replicas, true), 0, offsetCheckpoints))
-    assertEquals(Set(brokerId, remoteBrokerId), partition.inSyncReplicas)
+    assertEquals(Set(brokerId, remoteBrokerId), partition.inSyncReplicaIds)
     assertEquals(0L, partition.localLogOrException.highWatermark)
 
     val remoteReplica = partition.getReplica(remoteBrokerId).get
@@ -1355,7 +1355,7 @@ class PartitionTest {
     when(stateStore.shrinkIsr(controllerEpoch, updatedLeaderAndIsr)).thenReturn(None)
 
     partition.maybeShrinkIsr(10000)
-    assertEquals(Set(brokerId, remoteBrokerId), partition.inSyncReplicas)
+    assertEquals(Set(brokerId, remoteBrokerId), partition.inSyncReplicaIds)
     assertEquals(0L, partition.localLogOrException.highWatermark)
   }
 

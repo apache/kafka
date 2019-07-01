@@ -177,7 +177,7 @@ class Partition(val topicPartition: TopicPartition,
   // defined when this broker is leader for partition
   @volatile private var leaderEpochStartOffsetOpt: Option[Long] = None
   @volatile var leaderReplicaIdOpt: Option[Int] = None
-  @volatile var inSyncReplicas: Set[Int] = Set.empty[Int]
+  @volatile var inSyncReplicaIds = Set.empty[Int]
   // Includes all valid broker ids (@see Request::isValidBrokerId) that were assigned to this topic partition.
   @volatile var allReplicaIds = Seq.empty[Int]
 
@@ -211,7 +211,7 @@ class Partition(val topicPartition: TopicPartition,
   newGauge("InSyncReplicasCount",
     new Gauge[Int] {
       def value: Int = {
-        if (isLeader) inSyncReplicas.size else 0
+        if (isLeader) inSyncReplicaIds.size else 0
       }
     },
     tags
@@ -254,14 +254,14 @@ class Partition(val topicPartition: TopicPartition,
   )
 
   def isUnderReplicated: Boolean =
-    isLeader && inSyncReplicas.size < allReplicaIds.size
+    isLeader && inSyncReplicaIds.size < allReplicaIds.size
 
   def isUnderMinIsr: Boolean = {
-    leaderLogIfLocal.exists { inSyncReplicas.size < _.config.minInSyncReplicas }
+    leaderLogIfLocal.exists { inSyncReplicaIds.size < _.config.minInSyncReplicas }
   }
 
   def isAtMinIsr: Boolean = {
-    leaderLogIfLocal.exists { inSyncReplicas.size == _.config.minInSyncReplicas }
+    leaderLogIfLocal.exists { inSyncReplicaIds.size == _.config.minInSyncReplicas }
   }
 
   /**
@@ -459,7 +459,7 @@ class Partition(val topicPartition: TopicPartition,
       allReplicaIds = Seq.empty
       log = None
       futureLog = None
-      inSyncReplicas = Set.empty
+      inSyncReplicaIds = Set.empty
       leaderReplicaIdOpt = None
       leaderEpochStartOffsetOpt = None
       Partition.removeMetrics(topicPartition)
@@ -513,7 +513,7 @@ class Partition(val topicPartition: TopicPartition,
       val curTimeMs = time.milliseconds
       // initialize lastCaughtUpTime of replicas as well as their lastFetchTimeMs and lastFetchLeaderLogEndOffset.
       remoteReplicas.foreach { replica =>
-        val lastCaughtUpTimeMs = if (inSyncReplicas.contains(replica.brokerId)) curTimeMs else 0L
+        val lastCaughtUpTimeMs = if (inSyncReplicaIds.contains(replica.brokerId)) curTimeMs else 0L
         replica.resetLastCaughtUpTime(curLeaderLogEndOffset, curTimeMs, lastCaughtUpTimeMs)
       }
 
@@ -621,25 +621,18 @@ class Partition(val topicPartition: TopicPartition,
 
   // Public visibility for tests
   def updateAssignmentAndIsr(assignment: Seq[Int], isr: Set[Int]): Unit = {
-    val replicas = assignment
-      .filter(_ != localBrokerId)
-      .map(id => new Replica(id, topicPartition))
-    updateReplicasAndIsr(assignment, replicas, isr)
-  }
-
-  // Public visibility for tests
-  def updateReplicasAndIsr(assignment: Seq[Int], defaultRemoteReplicas: Seq[Replica], isr: Set[Int]): Unit = {
     val replicaSet = assignment.toSet
     val removedReplicas = remoteReplicasMap.keys -- replicaSet
 
     require(isr.subsetOf(replicaSet), s"ISR ($isr) must be a subset of the assigned replicas ($replicaSet)")
 
-    defaultRemoteReplicas
-      .foreach(replica => remoteReplicasMap.getAndMaybePut(replica.brokerId, replica))
+    assignment
+      .filter(_ != localBrokerId)
+      .foreach(id => remoteReplicasMap.getAndMaybePut(id, new Replica(id, topicPartition)))
     removedReplicas.foreach(remoteReplicasMap.remove)
     allReplicaIds = assignment
 
-    inSyncReplicas = isr
+    inSyncReplicaIds = isr
 
     require(
       (remoteReplicasMap.keys + localBrokerId).toSet == replicaSet,
@@ -674,13 +667,13 @@ class Partition(val topicPartition: TopicPartition,
       leaderLogIfLocal match {
         case Some(leaderLog) =>
           val leaderHighwatermark = leaderLog.highWatermark
-          if (!inSyncReplicas.contains(followerReplica.brokerId) && isFollowerInSync(followerReplica, leaderHighwatermark)) {
-            val newInSyncReplicas = inSyncReplicas + followerReplica.brokerId
-            info(s"Expanding ISR from ${inSyncReplicas.mkString(",")} " +
-              s"to ${newInSyncReplicas.mkString(",")}")
+          if (!inSyncReplicaIds.contains(followerReplica.brokerId) && isFollowerInSync(followerReplica, leaderHighwatermark)) {
+            val newInSyncReplicaIds = inSyncReplicaIds + followerReplica.brokerId
+            info(s"Expanding ISR from ${inSyncReplicaIds.mkString(",")} " +
+              s"to ${newInSyncReplicaIds.mkString(",")}")
 
             // update ISR in ZK and cache
-            expandIsr(newInSyncReplicas)
+            expandIsr(newInSyncReplicaIds)
           }
           // check if the HW of the partition can now be incremented
           // since the replica may already be in the ISR and its LEO has just incremented
@@ -707,14 +700,14 @@ class Partition(val topicPartition: TopicPartition,
     leaderLogIfLocal match {
       case Some(leaderLog) =>
         // keep the current immutable replica list reference
-        val curInSyncReplicas = inSyncReplicas
+        val curInSyncReplicaIds = inSyncReplicaIds
 
         if (isTraceEnabled) {
           def logEndOffsetString: ((Int, Long)) => String = {
             case (brokerId, logEndOffset) => s"broker $brokerId: $logEndOffset"
           }
 
-          val curInSyncReplicaObjects = (curInSyncReplicas - localBrokerId).map(getReplicaOrException)
+          val curInSyncReplicaObjects = (curInSyncReplicaIds - localBrokerId).map(getReplicaOrException)
           val replicaInfo = curInSyncReplicaObjects.map(replica => (replica.brokerId, replica.logEndOffset))
           val localLogInfo = (localBrokerId, localLogOrException.logEndOffset)
           val (ackedReplicas, awaitingReplicas) = (replicaInfo + localLogInfo).partition { _._2 >= requiredOffset}
@@ -730,7 +723,7 @@ class Partition(val topicPartition: TopicPartition,
            * The topic may be configured not to accept messages if there are not enough replicas in ISR
            * in this scenario the request was already appended locally and then added to the purgatory before the ISR was shrunk
            */
-          if (minIsr <= curInSyncReplicas.size)
+          if (minIsr <= curInSyncReplicaIds.size)
             (true, Errors.NONE)
           else
             (true, Errors.NOT_ENOUGH_REPLICAS_AFTER_APPEND)
@@ -761,7 +754,7 @@ class Partition(val topicPartition: TopicPartition,
    */
   private def maybeIncrementLeaderHW(leaderLog: Log, curTime: Long = time.milliseconds): Boolean = {
     val replicaLogEndOffsets = remoteReplicas.filter { replica =>
-      curTime - replica.lastCaughtUpTimeMs <= replicaLagTimeMaxMs || inSyncReplicas.contains(replica.brokerId)
+      curTime - replica.lastCaughtUpTimeMs <= replicaLagTimeMaxMs || inSyncReplicaIds.contains(replica.brokerId)
     }.map(_.logEndOffsetMetadata)
     val newHighWatermark = (replicaLogEndOffsets + leaderLog.logEndOffsetMetadata).min(new LogOffsetMetadata.OffsetOrdering)
     val oldHighWatermark = leaderLog.highWatermarkMetadata
@@ -815,23 +808,23 @@ class Partition(val topicPartition: TopicPartition,
     val leaderHWIncremented = inWriteLock(leaderIsrUpdateLock) {
       leaderLogIfLocal match {
         case Some(leaderLog) =>
-          val outOfSyncReplicas = getOutOfSyncReplicas(replicaMaxLagTimeMs)
-          if (outOfSyncReplicas.nonEmpty) {
-            val newInSyncReplicas = inSyncReplicas -- outOfSyncReplicas
-            assert(newInSyncReplicas.nonEmpty)
+          val outOfSyncReplicaIds = getOutOfSyncReplicas(replicaMaxLagTimeMs)
+          if (outOfSyncReplicaIds.nonEmpty) {
+            val newInSyncReplicaIds = inSyncReplicaIds -- outOfSyncReplicaIds
+            assert(newInSyncReplicaIds.nonEmpty)
             info("Shrinking ISR from %s to %s. Leader: (highWatermark: %d, endOffset: %d). Out of sync replicas: %s."
-              .format(inSyncReplicas.mkString(","),
-                newInSyncReplicas.mkString(","),
+              .format(inSyncReplicaIds.mkString(","),
+                newInSyncReplicaIds.mkString(","),
                 leaderLog.highWatermark,
                 leaderLog.logEndOffset,
-                outOfSyncReplicas.map { replicaId =>
+                outOfSyncReplicaIds.map { replicaId =>
                   s"(brokerId: $replicaId, endOffset: ${getReplicaOrException(replicaId).logEndOffset})"
                 }.mkString(" ")
               )
             )
 
             // update ISR in zk and in cache
-            shrinkIsr(newInSyncReplicas)
+            shrinkIsr(newInSyncReplicaIds)
 
             // we may need to increment high watermark since ISR could be down to 1
             maybeIncrementLeaderHW(leaderLog)
@@ -870,10 +863,10 @@ class Partition(val topicPartition: TopicPartition,
      * is violated, that replica is considered to be out of sync
      *
      **/
-    val candidateReplicas = inSyncReplicas - localBrokerId
+    val candidateReplicaIds = inSyncReplicaIds - localBrokerId
     val currentTimeMs = time.milliseconds()
     val leaderEndOffset = localLogOrException.logEndOffset
-    candidateReplicas.filter(replicaId => isFollowerOutOfSync(replicaId, leaderEndOffset, currentTimeMs, maxLagMs))
+    candidateReplicaIds.filter(replicaId => isFollowerOutOfSync(replicaId, leaderEndOffset, currentTimeMs, maxLagMs))
   }
 
   private def doAppendRecordsToFollowerOrFutureReplica(records: MemoryRecords, isFuture: Boolean): Option[LogAppendInfo] = {
@@ -923,11 +916,11 @@ class Partition(val topicPartition: TopicPartition,
       leaderLogIfLocal match {
         case Some(leaderLog) =>
           val minIsr = leaderLog.config.minInSyncReplicas
-          val inSyncSize = inSyncReplicas.size
+          val inSyncSize = inSyncReplicaIds.size
 
           // Avoid writing to leader if there are not enough insync replicas to make it safe
           if (inSyncSize < minIsr && requiredAcks == -1) {
-            throw new NotEnoughReplicasException(s"The size of the current ISR $inSyncReplicas " +
+            throw new NotEnoughReplicasException(s"The size of the current ISR $inSyncReplicaIds " +
               s"is insufficient to satisfy the min.isr requirement of $minIsr for partition $topicPartition")
           }
 
@@ -1178,7 +1171,7 @@ class Partition(val topicPartition: TopicPartition,
   private def maybeUpdateIsrAndVersion(isr: Set[Int], zkVersionOpt: Option[Int]): Unit = {
     zkVersionOpt match {
       case Some(newVersion) =>
-        inSyncReplicas = isr
+        inSyncReplicaIds = isr
         zkVersion = newVersion
         info("ISR updated to [%s] and zkVersion updated to [%d]".format(isr.mkString(","), zkVersion))
 
@@ -1200,8 +1193,8 @@ class Partition(val topicPartition: TopicPartition,
     partitionString.append("Topic: " + topic)
     partitionString.append("; Partition: " + partitionId)
     partitionString.append("; Leader: " + leaderReplicaIdOpt)
-    partitionString.append("; AllReplicas: " + allReplicaIds.mkString(","))
-    partitionString.append("; InSyncReplicas: " + inSyncReplicas.mkString(","))
+    partitionString.append("; AllReplicaIds: " + allReplicaIds.mkString(","))
+    partitionString.append("; InSyncReplicaIds: " + inSyncReplicaIds.mkString(","))
     partitionString.toString
   }
 }
