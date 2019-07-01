@@ -35,13 +35,8 @@ public class RestartLatch {
     private final Consumer<RestartLatch> uponCompletion;
     private final Time clock;
 
-    RestartLatch(
-            int expectedStarts,
-            int expectedStops,
-            Consumer<RestartLatch> uponCompletion,
-            List<RestartLatch> dependents,
-            Time clock
-    ) {
+    RestartLatch(int expectedStarts, int expectedStops, Consumer<RestartLatch> uponCompletion,
+                 List<RestartLatch> dependents, Time clock) {
         startLatch = new CountDownLatch(expectedStarts < 0 ? 0 : expectedStarts);
         stopLatch = new CountDownLatch(expectedStops < 0 ? 0 : expectedStops);
         this.dependents = dependents;

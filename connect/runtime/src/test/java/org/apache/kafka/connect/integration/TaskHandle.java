@@ -130,21 +130,33 @@ public class TaskHandle {
     }
 
     /**
-     * Wait for this task to meet the expected number of records as defined by {@code
-     * expectedRecords}.
+     * Wait up to the specified number of milliseconds for this task to meet the expected number of
+     * records as defined by {@code expectedRecords}.
      *
-     * @param  timeout duration to wait for records
+     * @param timeout duration to wait for records
      * @throws InterruptedException if another threads interrupts this one while waiting for records
      */
     public void awaitRecords(long timeout) throws InterruptedException {
+        awaitRecords(timeout, TimeUnit.MILLISECONDS);
+    }
+
+    /**
+     * Wait up to the specified timeout for this task to meet the expected number of records as
+     * defined by {@code expectedRecords}.
+     *
+     * @param timeout duration to wait for records
+     * @param unit    the unit of duration; may not be null
+     * @throws InterruptedException if another threads interrupts this one while waiting for records
+     */
+    public void awaitRecords(long timeout, TimeUnit unit) throws InterruptedException {
         if (recordsRemainingLatch == null) {
             throw new IllegalStateException("Illegal state encountered. expectedRecords() was not set for this task?");
         }
-        if (!recordsRemainingLatch.await(timeout, TimeUnit.MILLISECONDS)) {
+        if (!recordsRemainingLatch.await(timeout, unit)) {
             String msg = String.format(
                     "Insufficient records seen by task %s in %d millis. Records expected=%d, actual=%d",
                     taskId,
-                    timeout,
+                    unit.toMillis(timeout),
                     expectedRecords,
                     expectedRecords - recordsRemainingLatch.getCount());
             throw new DataException(msg);
@@ -154,21 +166,33 @@ public class TaskHandle {
     }
 
     /**
-     * Wait for this task to meet the expected number of commits as defined by {@code
-     * expectedCommits}.
+     * Wait up to the specified timeout in milliseconds for this task to meet the expected number
+     * of commits as defined by {@code expectedCommits}.
      *
-     * @param  timeout duration to wait for commits
+     * @param timeout duration to wait for commits
      * @throws InterruptedException if another threads interrupts this one while waiting for commits
      */
     public void awaitCommits(long timeout) throws InterruptedException {
+        awaitCommits(timeout, TimeUnit.MILLISECONDS);
+    }
+
+    /**
+     * Wait up to the specified timeout for this task to meet the expected number of commits as
+     * defined by {@code expectedCommits}.
+     *
+     * @param timeout duration to wait for commits
+     * @param unit    the unit of duration; may not be null
+     * @throws InterruptedException if another threads interrupts this one while waiting for commits
+     */
+    public void awaitCommits(long timeout, TimeUnit unit) throws InterruptedException {
         if (recordsToCommitLatch == null) {
             throw new IllegalStateException("Illegal state encountered. expectedRecords() was not set for this task?");
         }
-        if (!recordsToCommitLatch.await(timeout, TimeUnit.MILLISECONDS)) {
+        if (!recordsToCommitLatch.await(timeout, unit)) {
             String msg = String.format(
                     "Insufficient records seen by task %s in %d millis. Records expected=%d, actual=%d",
                     taskId,
-                    timeout,
+                    unit.toMillis(timeout),
                     expectedCommits,
                     expectedCommits - recordsToCommitLatch.getCount());
             throw new DataException(msg);

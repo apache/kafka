@@ -151,5 +151,4 @@ public class StartAndStopCounter {
     protected void remove(RestartLatch restartLatch) {
         restartLatches.remove(restartLatch);
     }
-
 }

@@ -257,7 +257,7 @@ public class ConnectorHandle {
      * the connector and tasks are stopped, and only tracks the number of times the connector and
      * tasks are <em>started</em>.
      *
-     * @param expectedStarts    the expected number of starts
+     * @param expectedStarts the expected number of starts
      * @return the latch; never null
      * @see #expectedRestarts(int)
      */
