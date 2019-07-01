@@ -504,7 +504,7 @@ class PartitionTest {
         followerStartOffset = 0L,
         followerFetchTimeMs = time.milliseconds(),
         leaderEndOffset = partition.localLogOrException.logEndOffset,
-        highWatermark = partition.localLogOrException.highWatermark)
+        leaderHighWatermark = partition.localLogOrException.highWatermark)
     }
 
     def fetchOffsetsForTimestamp(timestamp: Long, isolation: Option[IsolationLevel]): Either[ApiException, Option[TimestampAndOffset]] = {
@@ -833,7 +833,7 @@ class PartitionTest {
         followerStartOffset = 0L,
         followerFetchTimeMs = time.milliseconds(),
         leaderEndOffset = partition.localLogOrException.logEndOffset,
-        highWatermark = partition.localLogOrException.highWatermark)
+        leaderHighWatermark = partition.localLogOrException.highWatermark)
     }
 
     updateFollowerFetchState(follower2, LogOffsetMetadata(0))
@@ -1034,12 +1034,12 @@ class PartitionTest {
       followerStartOffset = 0L,
       followerFetchTimeMs = time.milliseconds(),
       leaderEndOffset = 6L,
-      highWatermark = 5L)
+      leaderHighWatermark = 5L)
 
     assertEquals(initializeTimeMs, remoteReplica.lastCaughtUpTimeMs)
     assertEquals(3L, remoteReplica.logEndOffset)
     assertEquals(0L, remoteReplica.logStartOffset)
-    assertEquals(5L, remoteReplica.highWatermark)
+    assertEquals(5L, remoteReplica.lastSentHighWatermark)
 
     time.sleep(500)
 
@@ -1048,12 +1048,12 @@ class PartitionTest {
       followerStartOffset = 0L,
       followerFetchTimeMs = time.milliseconds(),
       leaderEndOffset = 6L,
-      highWatermark = 6L)
+      leaderHighWatermark = 6L)
 
     assertEquals(time.milliseconds(), remoteReplica.lastCaughtUpTimeMs)
     assertEquals(6L, remoteReplica.logEndOffset)
     assertEquals(0L, remoteReplica.logStartOffset)
-    assertEquals(6L, remoteReplica.highWatermark)
+    assertEquals(6L, remoteReplica.lastSentHighWatermark)
 
   }
 
@@ -1086,7 +1086,7 @@ class PartitionTest {
       followerStartOffset = 0L,
       followerFetchTimeMs = time.milliseconds(),
       leaderEndOffset = 6L,
-      highWatermark = 6L)
+      leaderHighWatermark = 6L)
 
     assertEquals(Set(brokerId), partition.inSyncReplicas)
     assertEquals(3L, remoteReplica.logEndOffset)
@@ -1105,7 +1105,7 @@ class PartitionTest {
       followerStartOffset = 0L,
       followerFetchTimeMs = time.milliseconds(),
       leaderEndOffset = 6L,
-      highWatermark = 6L)
+      leaderHighWatermark = 6L)
 
     assertEquals(Set(brokerId, remoteBrokerId), partition.inSyncReplicas)
     assertEquals(10L, remoteReplica.logEndOffset)
@@ -1149,13 +1149,13 @@ class PartitionTest {
       followerStartOffset = 0L,
       followerFetchTimeMs = time.milliseconds(),
       leaderEndOffset = 10L,
-      highWatermark = 10L)
+      leaderHighWatermark = 10L)
 
     // Follower state is updated, but the ISR has not expanded
     assertEquals(Set(brokerId), partition.inSyncReplicas)
     assertEquals(10L, remoteReplica.logEndOffset)
     assertEquals(0L, remoteReplica.logStartOffset)
-    assertEquals(10L, remoteReplica.highWatermark)
+    assertEquals(10L, remoteReplica.lastSentHighWatermark)
   }
 
   @Test
@@ -1238,12 +1238,12 @@ class PartitionTest {
       followerStartOffset = 0L,
       followerFetchTimeMs = firstFetchTimeMs,
       leaderEndOffset = 10L,
-      highWatermark = partition.localLogOrException.highWatermark)
+      leaderHighWatermark = partition.localLogOrException.highWatermark)
     assertEquals(initializeTimeMs, remoteReplica.lastCaughtUpTimeMs)
     assertEquals(5L, partition.localLogOrException.highWatermark)
     assertEquals(5L, remoteReplica.logEndOffset)
     assertEquals(0L, remoteReplica.logStartOffset)
-    assertEquals(0L, remoteReplica.highWatermark)
+    assertEquals(0L, remoteReplica.lastSentHighWatermark)
 
     // Some new data is appended, but the follower catches up to the old end offset.
     // The total elapsed time from initialization is larger than the max allowed replica lag.
@@ -1254,12 +1254,12 @@ class PartitionTest {
       followerStartOffset = 0L,
       followerFetchTimeMs = time.milliseconds(),
       leaderEndOffset = 15L,
-      highWatermark = partition.localLogOrException.highWatermark)
+      leaderHighWatermark = partition.localLogOrException.highWatermark)
     assertEquals(firstFetchTimeMs, remoteReplica.lastCaughtUpTimeMs)
     assertEquals(10L, partition.localLogOrException.highWatermark)
     assertEquals(10L, remoteReplica.logEndOffset)
     assertEquals(0L, remoteReplica.logStartOffset)
-    assertEquals(5L, remoteReplica.highWatermark)
+    assertEquals(5L, remoteReplica.lastSentHighWatermark)
 
     // The ISR should not be shrunk because the follower has caught up with the leader at the
     // time of the first fetch.
@@ -1300,7 +1300,7 @@ class PartitionTest {
       followerStartOffset = 0L,
       followerFetchTimeMs = time.milliseconds(),
       leaderEndOffset = 10L,
-      highWatermark = 10L)
+      leaderHighWatermark = 10L)
     assertEquals(initializeTimeMs, remoteReplica.lastCaughtUpTimeMs)
     assertEquals(10L, partition.localLogOrException.highWatermark)
     assertEquals(10L, remoteReplica.logEndOffset)

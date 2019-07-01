@@ -44,7 +44,7 @@ class Replica(val brokerId: Int, val topicPartition: TopicPartition) extends Log
 
   // highWatermark is the leader's high watermark after the most recent FetchRequest from this follower. This is
   // used to determine the maximum HW this follower knows about
-  @volatile private[this] var _highWatermark = 0L
+  @volatile private[this] var _lastSentHighWatermark = 0L
 
   def logStartOffset: Long = _logStartOffset
 
@@ -54,7 +54,7 @@ class Replica(val brokerId: Int, val topicPartition: TopicPartition) extends Log
 
   def lastCaughtUpTimeMs: Long = _lastCaughtUpTimeMs
 
-  def highWatermark: Long = _highWatermark
+  def lastSentHighWatermark: Long = _lastSentHighWatermark
 
   /*
    * If the FetchRequest reads up to the log end offset of the leader when the current fetch request is received,
@@ -72,7 +72,7 @@ class Replica(val brokerId: Int, val topicPartition: TopicPartition) extends Log
                        followerStartOffset: Long,
                        followerFetchTimeMs: Long,
                        leaderEndOffset: Long,
-                       highWatermark: Long): Unit = {
+                       leaderHighWatermark: Long): Unit = {
     if (followerFetchOffsetMetadata.messageOffset >= leaderEndOffset)
       _lastCaughtUpTimeMs = math.max(_lastCaughtUpTimeMs, followerFetchTimeMs)
     else if (followerFetchOffsetMetadata.messageOffset >= lastFetchLeaderLogEndOffset)
@@ -82,7 +82,7 @@ class Replica(val brokerId: Int, val topicPartition: TopicPartition) extends Log
     _logEndOffsetMetadata = followerFetchOffsetMetadata
     lastFetchLeaderLogEndOffset = leaderEndOffset
     lastFetchTimeMs = followerFetchTimeMs
-    _highWatermark = highWatermark
+    _lastSentHighWatermark = leaderHighWatermark
     trace(s"Updated state of replica to $this")
   }
 
@@ -104,7 +104,7 @@ class Replica(val brokerId: Int, val topicPartition: TopicPartition) extends Log
     replicaString.append(s", logEndOffsetMetadata=$logEndOffsetMetadata")
     replicaString.append(s", lastFetchLeaderLogEndOffset=$lastFetchLeaderLogEndOffset")
     replicaString.append(s", lastFetchTimeMs=$lastFetchTimeMs")
-    replicaString.append(s", highWatermark=$highWatermark")
+    replicaString.append(s", lastSentHighWatermark=$lastSentHighWatermark")
     replicaString.append(")")
     replicaString.toString
   }

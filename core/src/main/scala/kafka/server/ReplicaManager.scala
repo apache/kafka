@@ -93,6 +93,7 @@ case class LogReadResult(info: FetchDataInfo,
                          readSize: Int,
                          lastStableOffset: Option[Long],
                          preferredReadReplica: Option[Int] = None,
+                         followerNeedsHwUpdate: Boolean = false,
                          exception: Option[Throwable] = None) {
 
   def error: Errors = exception match {
@@ -868,23 +869,10 @@ class ReplicaManager(val config: KafkaConfig,
       logReadResultMap.put(topicPartition, logReadResult)
     }
 
-    // If the last last sent HW for each requested partitions is behind the HW of the local log,
-    // we should return immediately to ensure the follower has an up-to-date HW
-    val allPartitionsNeedHwUpdate: Boolean = if (isFromFollower) {
-      fetchInfos.forall {
-        case (tp, _) => getPartition(tp) match {
-          case HostedPartition.Online(partition) =>
-            val leaderHW: Long = partition.localLogOrException.highWatermark
-            partition.getReplica(replicaId) match {
-              case Some(replica) => leaderHW > replica.highWatermark
-              case None => false
-            }
-          case _ => false // If the partition is offline or missing
-        }
+    val allPartitionsNeedHwUpdate: Boolean = isFromFollower &&
+      logReadResults.forall {
+        case (_, lrr) => lrr.followerNeedsHwUpdate
       }
-    } else {
-      false
-    }
 
     // respond immediately if 1) fetch request does not want to wait
     //                        2) fetch request does not require any data
@@ -977,6 +965,11 @@ class ReplicaManager(val config: KafkaConfig,
             fetchIsolation = fetchIsolation,
             fetchOnlyFromLeader = fetchOnlyFromLeader,
             minOneMessage = minOneMessage)
+
+          // Check if the HW known to the follower is behind the actual HW
+          val followerNeedsHwUpdate: Boolean = partition.getReplica(replicaId)
+            .exists(replica => replica.lastSentHighWatermark < readInfo.highWatermark)
+
           val fetchDataInfo = if (shouldLeaderThrottle(quota, tp, replicaId)) {
             // If the partition is being throttled, simply return an empty set.
             FetchDataInfo(readInfo.fetchedData.fetchOffsetMetadata, MemoryRecords.EMPTY)
@@ -997,6 +990,7 @@ class ReplicaManager(val config: KafkaConfig,
             readSize = adjustedMaxBytes,
             lastStableOffset = Some(readInfo.lastStableOffset),
             preferredReadReplica = preferredReadReplica,
+            followerNeedsHwUpdate = followerNeedsHwUpdate,
             exception = None)
         }
       } catch {
@@ -1509,7 +1503,7 @@ class ReplicaManager(val config: KafkaConfig,
               followerStartOffset = readResult.followerLogStartOffset,
               followerFetchTimeMs = readResult.fetchTimeMs,
               leaderEndOffset = readResult.leaderLogEndOffset,
-              highWatermark = readResult.highWatermark)) {
+              leaderHighWatermark = readResult.highWatermark)) {
               readResult
             } else {
               warn(s"Leader $localBrokerId failed to record follower $followerId's position " +

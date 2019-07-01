@@ -120,7 +120,7 @@ class DelayedFetch(delayMs: Long,
             if (fetchMetadata.isFromFollower) {
               // Case G check if the follower has the latest HW from the leader
               if (partition.getReplica(fetchMetadata.replicaId)
-                .exists(r => offsetSnapshot.highWatermark.messageOffset > r.highWatermark)) {
+                .exists(r => offsetSnapshot.highWatermark.messageOffset > r.lastSentHighWatermark)) {
                 return forceComplete()
               }
             }

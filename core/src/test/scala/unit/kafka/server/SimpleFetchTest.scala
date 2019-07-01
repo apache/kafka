@@ -134,7 +134,7 @@ class SimpleFetchTest {
       followerStartOffset = 0L,
       followerFetchTimeMs= time.milliseconds,
       leaderEndOffset = leo.messageOffset,
-      highWatermark = partitionHW)
+      leaderHighWatermark = partitionHW)
     partition.addReplicaIfNotExists(followerReplica)
 
     // add both of them to ISR
