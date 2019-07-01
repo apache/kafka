@@ -31,9 +31,9 @@ package org.apache.kafka.streams.state;
  */
 public interface PrefixScanKeyValueStore<K, V> {
     /**
-     * Return an iterator over all keys that share the same prefix byte[].
+     * Return an iterator over all keys that share the same prefix K.
      *
-     * @param prefix The byte[] prefix to perform the prefixScan for
+     * @param prefix The prefix to perform the prefixScan for
      * @throws NullPointerException If {@code null} is used for prefix.
      */
     KeyValueIterator<K, V> prefixScan(K prefix);
