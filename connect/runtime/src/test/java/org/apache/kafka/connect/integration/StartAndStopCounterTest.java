@@ -59,5 +59,4 @@ public class StartAndStopCounterTest {
     public void shouldExpectRestarts() {
 
     }
-
 }
