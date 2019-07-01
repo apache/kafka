@@ -41,7 +41,7 @@ import org.junit.experimental.categories.Category;
 import java.util.Properties;
 
 @Category({IntegrationTest.class})
-public class StandByTaskCreationIntegrationTest {
+public class StandbyTaskCreationIntegrationTest {
 
     private static final int NUM_BROKERS = 1;
 
@@ -110,14 +110,14 @@ public class StandByTaskCreationIntegrationTest {
 
         client1.setStateListener((newState, oldState) -> {
             if (newState == State.RUNNING &&
-                client1.localThreadsMetadata().iterator().next().standbyTasks().isEmpty()) {
+                client1.localThreadsMetadata().stream().allMatch((thread) -> thread.standbyTasks().isEmpty())) {
 
                 client1IsOk = true;
             }
         });
         client2.setStateListener((newState, oldState) -> {
             if (newState == State.RUNNING &&
-                client2.localThreadsMetadata().iterator().next().standbyTasks().isEmpty()) {
+                client2.localThreadsMetadata().stream().allMatch((thread) -> thread.standbyTasks().isEmpty())) {
 
                 client2IsOk = true;
             }
