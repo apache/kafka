@@ -1911,26 +1911,33 @@ class KafkaApis(val requestChannel: RequestChannel,
   def handleEndTxnRequest(request: RequestChannel.Request): Unit = {
     ensureInterBrokerVersion(KAFKA_0_11_0_IV0)
     val endTxnRequest = request.body[EndTxnRequest]
-    val transactionalId = endTxnRequest.transactionalId
+    val transactionalId = endTxnRequest.data.transactionalId
 
     if (authorize(request, WRITE, TRANSACTIONAL_ID, transactionalId)) {
       def sendResponseCallback(error: Errors): Unit = {
         def createResponse(requestThrottleMs: Int): AbstractResponse = {
-          val responseBody = new EndTxnResponse(requestThrottleMs, error)
-          trace(s"Completed ${endTxnRequest.transactionalId}'s EndTxnRequest with command: ${endTxnRequest.command}, errors: $error from client ${request.header.clientId}.")
+          val responseBody = new EndTxnResponse(new EndTxnResponseData()
+            .setErrorCode(error.code())
+            .setThrottleTimeMs(requestThrottleMs))
+          trace(s"Completed ${endTxnRequest.data.transactionalId}'s EndTxnRequest " +
+            s"with committed: ${endTxnRequest.data.committed}, " +
+            s"errors: $error from client ${request.header.clientId}.")
           responseBody
         }
         sendResponseMaybeThrottle(request, createResponse)
       }
 
-      txnCoordinator.handleEndTransaction(endTxnRequest.transactionalId,
-        endTxnRequest.producerId,
-        endTxnRequest.producerEpoch,
-        endTxnRequest.command,
+      txnCoordinator.handleEndTransaction(endTxnRequest.data.transactionalId,
+        endTxnRequest.data.producerId,
+        endTxnRequest.data.producerEpoch,
+        TransactionResult.forId(endTxnRequest.data.committed),
         sendResponseCallback)
     } else
       sendResponseMaybeThrottle(request, requestThrottleMs =>
-        new EndTxnResponse(requestThrottleMs, Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED))
+        new EndTxnResponse(new EndTxnResponseData()
+            .setErrorCode(Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED.code)
+            .setThrottleTimeMs(requestThrottleMs))
+      )
   }
 
   def handleWriteTxnMarkersRequest(request: RequestChannel.Request): Unit = {
