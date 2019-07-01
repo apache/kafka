@@ -36,6 +36,7 @@ public class TaskHandle {
     private final String taskId;
     private final ConnectorHandle connectorHandle;
     private final AtomicInteger partitionsAssigned = new AtomicInteger(0);
+    private final StartAndStopCounter startAndStopCounter = new StartAndStopCounter();
 
     private CountDownLatch recordsRemainingLatch;
     private CountDownLatch recordsToCommitLatch;
@@ -135,7 +136,7 @@ public class TaskHandle {
      * @param  timeout duration to wait for records
      * @throws InterruptedException if another threads interrupts this one while waiting for records
      */
-    public void awaitRecords(int timeout) throws InterruptedException {
+    public void awaitRecords(long timeout) throws InterruptedException {
         if (recordsRemainingLatch == null) {
             throw new IllegalStateException("Illegal state encountered. expectedRecords() was not set for this task?");
         }
@@ -159,7 +160,7 @@ public class TaskHandle {
      * @param  timeout duration to wait for commits
      * @throws InterruptedException if another threads interrupts this one while waiting for commits
      */
-    public void awaitCommits(int timeout) throws InterruptedException {
+    public void awaitCommits(long timeout) throws InterruptedException {
         if (recordsToCommitLatch == null) {
             throw new IllegalStateException("Illegal state encountered. expectedRecords() was not set for this task?");
         }
@@ -174,6 +175,42 @@ public class TaskHandle {
         }
         log.debug("Task {} saw {} records, expected {} records",
                   taskId, expectedCommits - recordsToCommitLatch.getCount(), expectedCommits);
+    }
+
+    /**
+     * Record that this task has been stopped. This should be called by the task.
+     */
+    public void recordTaskStart() {
+        startAndStopCounter.recordStart();
+    }
+
+    /**
+     * Record that this task has been stopped. This should be called by the task.
+     */
+    public void recordTaskStop() {
+        startAndStopCounter.recordStop();
+    }
+
+    /**
+     * Obtain a {@link RestartLatch} that can be used to wait until this task has completed the
+     * expected number of restarts.
+     *
+     * @param expectedRestarts the expected number of restarts
+     * @return the latch; never null
+     */
+    public RestartLatch expectedRestarts(int expectedRestarts) {
+        return startAndStopCounter.expectedRestarts(expectedRestarts);
+    }
+
+    /**
+     * Obtain a {@link RestartLatch} that can be used to wait until this task has completed the
+     * expected number of starts.
+     *
+     * @param expectedStarts    the expected number of starts
+     * @return the latch; never null
+     */
+    public RestartLatch expectedStarts(int expectedStarts) {
+        return startAndStopCounter.expectedStarts(expectedStarts);
     }
 
     @Override

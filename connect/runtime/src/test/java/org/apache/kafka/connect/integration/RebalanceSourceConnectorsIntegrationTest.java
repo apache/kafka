@@ -36,6 +36,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -156,22 +157,28 @@ public class RebalanceSourceConnectorsIntegrationTest {
                 CONNECTOR_SETUP_DURATION_MS, "Connector tasks did not start in time.");
 
         int numRecordsProduced = 100;
-        int recordTransferDurationMs = 5000;
+        long recordTransferDurationMs = TimeUnit.SECONDS.toMillis(30);
 
         // consume all records from the source topic or fail, to ensure that they were correctly produced
         int recordNum = connect.kafka().consume(numRecordsProduced, recordTransferDurationMs, TOPIC_NAME).count();
         assertTrue("Not enough records produced by source connector. Expected at least: " + numRecordsProduced + " + but got " + recordNum,
                 recordNum >= numRecordsProduced);
 
+        // expect that we're going to restart the connector and its tasks
+        RestartLatch restartLatch = connectorHandle.expectedRestarts(1);
+
         // Reconfigure the source connector by changing the Kafka topic used as output
         props.put(TOPIC_CONFIG, anotherTopic);
         connect.configureConnector(CONNECTOR_NAME, props);
 
+        // Wait for the connector *and tasks* to be restarted
+        assertTrue("Failed to alter connector configuration and see connector and tasks restart "
+                   + "within " + CONNECTOR_SETUP_DURATION_MS + "ms",
+                restartLatch.await(CONNECTOR_SETUP_DURATION_MS, TimeUnit.MILLISECONDS));
+
+        // And wait for the Connect to show the connectors and tasks are running
         waitForCondition(() -> this.assertConnectorAndTasksRunning(CONNECTOR_NAME, NUM_TASKS).orElse(false),
                 CONNECTOR_SETUP_DURATION_MS, "Connector tasks did not start in time.");
-
-        // expect all records to be produced by the connector
-        connectorHandle.expectedRecords(numRecordsProduced);
 
         // expect all records to be produced by the connector
         connectorHandle.expectedCommits(numRecordsProduced);
@@ -320,6 +327,7 @@ public class RebalanceSourceConnectorsIntegrationTest {
                     && info.tasks().size() == numTasks
                     && info.connector().state().equals(AbstractStatus.State.RUNNING.toString())
                     && info.tasks().stream().allMatch(s -> s.state().equals(AbstractStatus.State.RUNNING.toString()));
+            log.debug("Found connector and tasks running: {}", result);
             return Optional.of(result);
         } catch (Exception e) {
             log.error("Could not check connector state info.", e);
