@@ -22,12 +22,8 @@ import kafka.server.KafkaConfig
 import kafka.utils.Logging
 import kafka.zk.KafkaZkClient
 import kafka.zk.KafkaZkClient.UpdateLeaderAndIsrResult
-import kafka.zk.TopicPartitionStateZNode
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.ControllerMovedException
-import org.apache.zookeeper.KeeperException.Code
-import scala.collection.breakOut
-import scala.collection.mutable
 
 abstract class ReplicaStateMachine(controllerContext: ControllerContext) extends Logging {
   /**
@@ -102,6 +98,8 @@ class ZkReplicaStateMachine(config: KafkaConfig,
   extends ReplicaStateMachine(controllerContext) with Logging {
 
   private val controllerId = config.brokerId
+  private val util = new StateMachineUtil(controllerContext, zkClient)
+
   this.logIdent = s"[ReplicaStateMachine controllerId=$controllerId] "
 
   override def handleStateChanges(replicas: Seq[PartitionAndReplica], targetState: ReplicaState): Unit = {
@@ -273,28 +271,67 @@ class ZkReplicaStateMachine(config: KafkaConfig,
    * to retry.
    * @param replicaId The replica being removed from isr of multiple partitions
    * @param partitions The partitions from which we're trying to remove the replica from isr
-   * @return The updated LeaderIsrAndControllerEpochs of all partitions for which we successfully removed the replica from isr.
+   * @return The updated LeaderIsrAndControllerEpochs of all partitions which either didn't include replicaId
+   *         already or which replicaId was successfully removed from
    */
   private def removeReplicasFromIsr(
     replicaId: Int,
     partitions: Seq[TopicPartition]
   ): Map[TopicPartition, LeaderIsrAndControllerEpoch] = {
-    var results = Map.empty[TopicPartition, LeaderIsrAndControllerEpoch]
+
+    def logFailedOfflineStateChange(tp: TopicPartition, exception: Exception): Unit = {
+      val replica = PartitionAndReplica(tp, replicaId)
+      val currentState = controllerContext.replicaState(replica)
+      logFailedStateChange(replica, currentState, OfflineReplica, exception)
+    }
+
+    def stateChangeFailedException(tp: TopicPartition, reason: String): StateChangeFailedException = {
+      new StateChangeFailedException(s"Failed to change state of replica $replicaId for partition $tp: $reason")
+    }
+
+    val results = Map.newBuilder[TopicPartition, LeaderIsrAndControllerEpoch]
     var remaining = partitions
     while (remaining.nonEmpty) {
-      val (finishedRemoval, removalsToRetry) = doRemoveReplicasFromIsr(replicaId, remaining)
+      val leaderAndIsrs = Map.newBuilder[TopicPartition, LeaderAndIsr]
+      for (partition <- remaining) {
+        controllerContext.partitionLeadershipInfo.get(partition) match {
+          case Some(leaderIsrAndControllerEpoch) =>
+            val leaderAndIsr = leaderIsrAndControllerEpoch.leaderAndIsr
+            if (leaderAndIsr.isr.contains(replicaId))
+              leaderAndIsrs += partition -> leaderAndIsr
+            else
+              results += partition -> leaderIsrAndControllerEpoch
+          case None =>
+            val exception = stateChangeFailedException(partition, "No leader and ISR information is available")
+            logFailedOfflineStateChange(partition, exception)
+        }
+      }
+
+      val (finishedRemoval, removalsToRetry) = doRemoveReplicasFromIsr(replicaId, leaderAndIsrs.result())
       remaining = removalsToRetry
 
       finishedRemoval.foreach {
-        case (partition, Left(e)) =>
-            val replica = PartitionAndReplica(partition, replicaId)
-            val currentState = controllerContext.replicaState(replica)
-            logFailedStateChange(replica, currentState, OfflineReplica, e)
+        case (partition, Left(exception)) =>
+          logFailedOfflineStateChange(partition, exception)
+
         case (partition, Right(leaderIsrAndEpoch)) =>
           results += partition -> leaderIsrAndEpoch
       }
+
+      if (remaining.nonEmpty) {
+        val partitionsFailingUpdate = util.maybeUpdateLeaderAndIsr(remaining, stateChangeFailedException)
+        remaining = remaining.filter { tp =>
+          partitionsFailingUpdate.get(tp) match {
+            case Some(exception) =>
+              logFailedOfflineStateChange(tp, exception)
+              false
+            case None =>
+              true
+          }
+        }
+      }
     }
-    results
+    results.result()
   }
 
   /**
@@ -302,7 +339,7 @@ class ZkReplicaStateMachine(config: KafkaConfig,
    * Removing a replica from isr updates partition state in zookeeper.
    *
    * @param replicaId The replica being removed from isr of multiple partitions
-   * @param partitions The partitions from which we're trying to remove the replica from isr
+   * @param leaderAndIsrs FIXME
    * @return A tuple of two elements:
    *         1. The updated Right[LeaderIsrAndControllerEpochs] of all partitions for which we successfully
    *         removed the replica from isr. Or Left[Exception] corresponding to failed removals that should
@@ -312,22 +349,13 @@ class ZkReplicaStateMachine(config: KafkaConfig,
    */
   private def doRemoveReplicasFromIsr(
     replicaId: Int,
-    partitions: Seq[TopicPartition]
+    leaderAndIsrs: Map[TopicPartition, LeaderAndIsr]
   ): (Map[TopicPartition, Either[Exception, LeaderIsrAndControllerEpoch]], Seq[TopicPartition]) = {
-    val (leaderAndIsrs, partitionsWithNoLeaderAndIsrInZk) = getTopicPartitionStatesFromZk(partitions)
-    val (leaderAndIsrsWithReplica, leaderAndIsrsWithoutReplica) = leaderAndIsrs.partition { case (_, result) =>
-      result.right.map { leaderAndIsr =>
-        leaderAndIsr.isr.contains(replicaId)
-      }.right.getOrElse(false)
-    }
-
-    val adjustedLeaderAndIsrs: Map[TopicPartition, LeaderAndIsr] = leaderAndIsrsWithReplica.flatMap {
-      case (partition, result) =>
-        result.right.toOption.map { leaderAndIsr =>
-          val newLeader = if (replicaId == leaderAndIsr.leader) LeaderAndIsr.NoLeader else leaderAndIsr.leader
-          val adjustedIsr = if (leaderAndIsr.isr.size == 1) leaderAndIsr.isr else leaderAndIsr.isr.filter(_ != replicaId)
-          partition -> leaderAndIsr.newLeaderAndIsr(newLeader, adjustedIsr)
-        }
+    val adjustedLeaderAndIsrs: Map[TopicPartition, LeaderAndIsr] = leaderAndIsrs.map {
+      case (partition, leaderAndIsr) =>
+        val newLeader = if (replicaId == leaderAndIsr.leader) LeaderAndIsr.NoLeader else leaderAndIsr.leader
+        val adjustedIsr = if (leaderAndIsr.isr.size == 1) leaderAndIsr.isr else leaderAndIsr.isr.filter(_ != replicaId)
+        partition -> leaderAndIsr.newLeaderAndIsr(newLeader, adjustedIsr)
     }
 
     val UpdateLeaderAndIsrResult(finishedPartitions, updatesToRetry) = zkClient.updateLeaderAndIsr(
@@ -336,19 +364,8 @@ class ZkReplicaStateMachine(config: KafkaConfig,
       controllerContext.epochZkVersion
     )
 
-    val exceptionsForPartitionsWithNoLeaderAndIsrInZk: Map[TopicPartition, Either[Exception, LeaderIsrAndControllerEpoch]] =
-      partitionsWithNoLeaderAndIsrInZk.flatMap { partition =>
-        if (!controllerContext.isTopicQueuedUpForDeletion(partition.topic)) {
-          val exception = new StateChangeFailedException(
-            s"Failed to change state of replica $replicaId for partition $partition since the leader and isr " +
-            "path in zookeeper is empty"
-          )
-          Option(partition -> Left(exception))
-        } else None
-      }(breakOut)
-
-    val leaderIsrAndControllerEpochs: Map[TopicPartition, Either[Exception, LeaderIsrAndControllerEpoch]] =
-      (leaderAndIsrsWithoutReplica ++ finishedPartitions).map { case (partition, result: Either[Exception, LeaderAndIsr]) =>
+    val updatedLeaderIsrAndControllerEpochs: Map[TopicPartition, Either[Exception, LeaderIsrAndControllerEpoch]] =
+      finishedPartitions.map { case (partition, result: Either[Exception, LeaderAndIsr]) =>
         (
           partition,
           result.right.map { leaderAndIsr =>
@@ -356,64 +373,13 @@ class ZkReplicaStateMachine(config: KafkaConfig,
             controllerContext.partitionLeadershipInfo.put(partition, leaderIsrAndControllerEpoch)
             leaderIsrAndControllerEpoch
           }
-          )
+        )
       }
 
     (
-      leaderIsrAndControllerEpochs ++ exceptionsForPartitionsWithNoLeaderAndIsrInZk,
+      updatedLeaderIsrAndControllerEpochs,
       updatesToRetry
     )
-  }
-
-  /**
-   * Gets the partition state from zookeeper
-   * @param partitions the partitions whose state we want from zookeeper
-   * @return A tuple of two values:
-   *         1. The Right(LeaderAndIsrs) of partitions whose state we successfully read from zookeeper.
-   *         The Left(Exception) to failed zookeeper lookups or states whose controller epoch exceeds our current epoch
-   *         2. The partitions that had no leader and isr state in zookeeper. This happens if the controller
-   *         didn't finish partition initialization.
-   */
-  private def getTopicPartitionStatesFromZk(
-    partitions: Seq[TopicPartition]
-  ): (Map[TopicPartition, Either[Exception, LeaderAndIsr]], Seq[TopicPartition]) = {
-    val getDataResponses = try {
-      zkClient.getTopicPartitionStatesRaw(partitions)
-    } catch {
-      case e: Exception =>
-        return (partitions.map(_ -> Left(e))(breakOut), Seq.empty)
-    }
-
-    val partitionsWithNoLeaderAndIsrInZk = mutable.Buffer.empty[TopicPartition]
-    val result = mutable.Map.empty[TopicPartition, Either[Exception, LeaderAndIsr]]
-
-    getDataResponses.foreach { getDataResponse =>
-      val partition = getDataResponse.ctx.get.asInstanceOf[TopicPartition]
-      val _: Unit = if (getDataResponse.resultCode == Code.OK) {
-        TopicPartitionStateZNode.decode(getDataResponse.data, getDataResponse.stat) match {
-          case None =>
-            partitionsWithNoLeaderAndIsrInZk += partition
-          case Some(leaderIsrAndControllerEpoch) =>
-            if (leaderIsrAndControllerEpoch.controllerEpoch > controllerContext.epoch) {
-              val exception = new StateChangeFailedException(
-                "Leader and isr path written by another controller. This probably " +
-                s"means the current controller with epoch ${controllerContext.epoch} went through a soft failure and " +
-                s"another controller was elected with epoch ${leaderIsrAndControllerEpoch.controllerEpoch}. Aborting " +
-                "state change by this controller"
-              )
-              result += (partition -> Left(exception))
-            } else {
-              result += (partition -> Right(leaderIsrAndControllerEpoch.leaderAndIsr))
-            }
-        }
-      } else if (getDataResponse.resultCode == Code.NONODE) {
-        partitionsWithNoLeaderAndIsrInZk += partition
-      } else {
-        result += (partition -> Left(getDataResponse.resultException.get))
-      }
-    }
-
-    (result.toMap, partitionsWithNoLeaderAndIsrInZk)
   }
 
   private def logSuccessfulTransition(replicaId: Int, partition: TopicPartition, currState: ReplicaState, targetState: ReplicaState): Unit = {
@@ -428,7 +394,10 @@ class ZkReplicaStateMachine(config: KafkaConfig,
     logFailedStateChange(replica, currState, targetState, e)
   }
 
-  private def logFailedStateChange(replica: PartitionAndReplica, currState: ReplicaState, targetState: ReplicaState, t: Throwable): Unit = {
+  private def logFailedStateChange(replica: PartitionAndReplica,
+                                   currState: ReplicaState,
+                                   targetState: ReplicaState,
+                                   t: Throwable): Unit = {
     stateChangeLogger.withControllerEpoch(controllerContext.epoch)
       .error(s"Controller $controllerId epoch ${controllerContext.epoch} initiated state change of replica ${replica.replica} " +
         s"for partition ${replica.topicPartition} from $currState to $targetState failed", t)

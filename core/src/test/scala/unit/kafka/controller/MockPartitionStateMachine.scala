@@ -21,7 +21,7 @@ import kafka.common.StateChangeFailedException
 import kafka.controller.Election._
 import org.apache.kafka.common.TopicPartition
 
-import scala.collection.{breakOut, mutable}
+import scala.collection.breakOut
 
 class MockPartitionStateMachine(controllerContext: ControllerContext,
                                 uncleanLeaderElectionEnabled: Boolean)
@@ -69,33 +69,38 @@ class MockPartitionStateMachine(controllerContext: ControllerContext,
     partitions: Seq[TopicPartition],
     leaderElectionStrategy: PartitionLeaderElectionStrategy
   ): Map[TopicPartition, Either[Throwable, LeaderAndIsr]] = {
-    val failedElections = mutable.Map.empty[TopicPartition, Either[Throwable, LeaderAndIsr]]
-    val validLeaderAndIsrs = mutable.Buffer.empty[(TopicPartition, LeaderAndIsr)]
+    val leaderIsrAndControllerEpochPerPartition = partitions.map { partition =>
+      partition -> controllerContext.partitionLeadershipInfo(partition)
+    }
 
-    for (partition <- partitions) {
-      val leaderIsrAndControllerEpoch = controllerContext.partitionLeadershipInfo(partition)
-      if (leaderIsrAndControllerEpoch.controllerEpoch > controllerContext.epoch) {
-        val failMsg = s"Aborted leader election for partition $partition since the LeaderAndIsr path was " +
-          s"already written by another controller. This probably means that the current controller went through " +
-          s"a soft failure and another controller was elected with epoch ${leaderIsrAndControllerEpoch.controllerEpoch}."
-        failedElections.put(partition, Left(new StateChangeFailedException(failMsg)))
-      } else {
-        validLeaderAndIsrs.append((partition, leaderIsrAndControllerEpoch.leaderAndIsr))
-      }
+    val (invalidPartitionsForElection, validPartitionsForElection) = leaderIsrAndControllerEpochPerPartition.partition { case (_, leaderIsrAndControllerEpoch) =>
+      leaderIsrAndControllerEpoch.controllerEpoch > controllerContext.epoch
+    }
+
+    val validPartitionsLeaderAndIsrs = validPartitionsForElection.map { case (tp, leaderIsrAndControllerEpoch) =>
+      tp -> leaderIsrAndControllerEpoch.leaderAndIsr
+    }
+
+    val failedElections = invalidPartitionsForElection.map { case (partition, leaderIsrAndControllerEpoch) =>
+      val failMsg = s"aborted leader election for partition $partition since the LeaderAndIsr path was " +
+        s"already written by another controller. This probably means that the current controller went through " +
+        s"a soft failure and another controller was elected with epoch ${leaderIsrAndControllerEpoch.controllerEpoch}."
+
+      partition -> Left(new StateChangeFailedException(failMsg))
     }
 
     val electionResults = leaderElectionStrategy match {
       case OfflinePartitionLeaderElectionStrategy(isUnclean) =>
-        val partitionsWithUncleanLeaderElectionState = validLeaderAndIsrs.map { case (partition, leaderAndIsr) =>
-          (partition, Some(leaderAndIsr), isUnclean || uncleanLeaderElectionEnabled)
+        val partitionsWithUncleanLeaderElectionState = validPartitionsForElection.map { case (partition, leaderIsrAndControllerEpoch) =>
+          (partition, Some(leaderIsrAndControllerEpoch.leaderAndIsr), isUnclean || uncleanLeaderElectionEnabled)
         }
         leaderForOffline(controllerContext, partitionsWithUncleanLeaderElectionState)
       case ReassignPartitionLeaderElectionStrategy =>
-        leaderForReassign(controllerContext, validLeaderAndIsrs)
+        leaderForReassign(controllerContext, validPartitionsLeaderAndIsrs)
       case PreferredReplicaPartitionLeaderElectionStrategy =>
-        leaderForPreferredReplica(controllerContext, validLeaderAndIsrs)
+        leaderForPreferredReplica(controllerContext, validPartitionsLeaderAndIsrs)
       case ControlledShutdownPartitionLeaderElectionStrategy =>
-        leaderForControlledShutdown(controllerContext, validLeaderAndIsrs)
+        leaderForControlledShutdown(controllerContext, validPartitionsLeaderAndIsrs)
     }
 
     val results: Map[TopicPartition, Either[Exception, LeaderAndIsr]] = electionResults.map { electionResult =>

@@ -883,6 +883,19 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
     }.toMap
   }
 
+  def fetchPartitionStates(partitions: Seq[TopicPartition]): Seq[(TopicPartition, Option[LeaderIsrAndControllerEpoch])] = {
+    val getDataResponses = getTopicPartitionStatesRaw(partitions)
+    getDataResponses.map { getDataResponse =>
+      val partition = getDataResponse.ctx.get.asInstanceOf[TopicPartition]
+      val leaderIsrAndControllerEpochOpt = getDataResponse.resultCode match {
+        case Code.OK => TopicPartitionStateZNode.decode(getDataResponse.data, getDataResponse.stat)
+        case Code.NONODE => None
+        case _ => throw getDataResponse.resultException.get
+      }
+      partition -> leaderIsrAndControllerEpochOpt
+    }
+  }
+
   /**
    * Gets topic partition state for the given partition.
    * @param partition the partition for which we want to get state.
