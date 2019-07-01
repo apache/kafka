@@ -110,14 +110,14 @@ public class StandbyTaskCreationIntegrationTest {
 
         client1.setStateListener((newState, oldState) -> {
             if (newState == State.RUNNING &&
-                client1.localThreadsMetadata().stream().allMatch((thread) -> thread.standbyTasks().isEmpty())) {
+                client1.localThreadsMetadata().stream().allMatch(thread -> thread.standbyTasks().isEmpty())) {
 
                 client1IsOk = true;
             }
         });
         client2.setStateListener((newState, oldState) -> {
             if (newState == State.RUNNING &&
-                client2.localThreadsMetadata().stream().allMatch((thread) -> thread.standbyTasks().isEmpty())) {
+                client2.localThreadsMetadata().stream().allMatch(thread -> thread.standbyTasks().isEmpty())) {
 
                 client2IsOk = true;
             }
