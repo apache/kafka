@@ -180,9 +180,6 @@ public class RebalanceSourceConnectorsIntegrationTest {
         waitForCondition(() -> this.assertConnectorAndTasksRunning(CONNECTOR_NAME, NUM_TASKS).orElse(false),
                 CONNECTOR_SETUP_DURATION_MS, "Connector tasks did not start in time.");
 
-        // expect all records to be produced by the connector
-        connectorHandle.expectedCommits(numRecordsProduced);
-
         // consume all records from the source topic or fail, to ensure that they were correctly produced
         recordNum = connect.kafka().consume(numRecordsProduced, recordTransferDurationMs, anotherTopic).count();
         assertTrue("Not enough records produced by source connector. Expected at least: " + numRecordsProduced + " + but got " + recordNum,
