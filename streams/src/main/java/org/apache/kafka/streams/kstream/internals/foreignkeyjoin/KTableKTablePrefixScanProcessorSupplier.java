@@ -82,11 +82,6 @@ public class KTableKTablePrefixScanProcessorSupplier<K, KO, VO> implements Proce
                 return;
             }
 
-            //Don't do any work if the value hasn't changed.
-            //It can be expensive to update all the records returned from prefixScan.
-            if (value.oldValue == value.newValue)
-                return;
-
             final CombinedKey<KO, K> prefixKey = new CombinedKey<>(key);
             //Perform the prefixScan and propagate the results
             final KeyValueIterator<CombinedKey<KO, K>, ValueAndTimestamp<SubscriptionWrapper>> prefixScanResults = prefixValueGetter.prefixScan(prefixKey);
