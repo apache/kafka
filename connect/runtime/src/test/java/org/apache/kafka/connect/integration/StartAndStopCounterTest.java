@@ -17,22 +17,43 @@
 
 package org.apache.kafka.connect.integration;
 
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
+import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 
 public class StartAndStopCounterTest {
 
     private StartAndStopCounter counter;
     private Time clock;
+    private ExecutorService waiters;
+    private RestartLatch latch;
 
     @Before
     public void setup() {
         clock = new MockTime();
         counter = new StartAndStopCounter(clock);
+    }
+
+    @After
+    public void teardown() {
+        if (waiters != null) {
+            try {
+                waiters.shutdownNow();
+            } finally {
+                waiters = null;
+            }
+        }
     }
 
     @Test
@@ -56,7 +77,41 @@ public class StartAndStopCounterTest {
     }
 
     @Test
-    public void shouldExpectRestarts() {
+    public void shouldExpectRestarts() throws Exception {
+        waiters = Executors.newSingleThreadExecutor();
 
+        latch = counter.expectedRestarts(1);
+        Future<Boolean> future = asyncAwait(100, TimeUnit.MILLISECONDS);
+
+        clock.sleep(1000);
+        counter.recordStop();
+        counter.recordStart();
+        assertTrue(future.get(200, TimeUnit.MILLISECONDS));
+        assertTrue(future.isDone());
+    }
+    @Test
+    public void shouldFailToWaitForRestartThatNeverHappens() throws Exception {
+        waiters = Executors.newSingleThreadExecutor();
+
+        latch = counter.expectedRestarts(1);
+        Future<Boolean> future = asyncAwait(100, TimeUnit.MILLISECONDS);
+
+        clock.sleep(1000);
+        counter.recordStop();
+        // Don't record a start!
+        //counter.recordStart();
+        assertFalse(future.get(200, TimeUnit.MILLISECONDS));
+        assertTrue(future.isDone());
+    }
+
+    private Future<Boolean> asyncAwait(long duration, TimeUnit unit) {
+        return waiters.submit(() -> {
+            try {
+                return latch.await(duration, unit);
+            } catch (InterruptedException e) {
+                Thread.interrupted();
+                return false;
+            }
+        });
     }
 }

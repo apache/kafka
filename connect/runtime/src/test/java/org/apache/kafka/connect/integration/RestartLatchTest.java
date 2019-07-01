@@ -27,6 +27,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
+import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -45,6 +46,17 @@ public class RestartLatchTest {
     @Before
     public void setup() {
         clock = new MockTime();
+    }
+
+    @After
+    public void teardown() {
+        if (waiters != null) {
+            try {
+                waiters.shutdownNow();
+            } finally {
+                waiters = null;
+            }
+        }
     }
 
     @Test
