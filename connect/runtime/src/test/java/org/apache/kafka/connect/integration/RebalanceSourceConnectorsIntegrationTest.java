@@ -62,8 +62,8 @@ public class RebalanceSourceConnectorsIntegrationTest {
     private static final Logger log = LoggerFactory.getLogger(RebalanceSourceConnectorsIntegrationTest.class);
 
     private static final int NUM_TOPIC_PARTITIONS = 3;
-    private static final int CONNECTOR_SETUP_DURATION_MS = 30_000;
-    private static final int WORKER_SETUP_DURATION_MS = 30_000;
+    private static final long CONNECTOR_SETUP_DURATION_MS = TimeUnit.SECONDS.toMillis(30);
+    private static final long WORKER_SETUP_DURATION_MS = TimeUnit.SECONDS.toMillis(60);
     private static final int NUM_TASKS = 4;
     private static final String CONNECTOR_NAME = "seq-source1";
     private static final String TOPIC_NAME = "sequential-topic";

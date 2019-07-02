@@ -76,8 +76,8 @@ public class ErrorHandlingIntegrationTest {
     private static final int EXPECTED_CORRECT_RECORDS = 19;
     private static final int EXPECTED_INCORRECT_RECORDS = 1;
     private static final int NUM_TASKS = 1;
-    private static final long CONNECTOR_SETUP_DURATION_MS = TimeUnit.SECONDS.toMillis(15);
-    private static final long CONSUME_MAX_DURATION_MS = TimeUnit.SECONDS.toMillis(15);
+    private static final long CONNECTOR_SETUP_DURATION_MS = TimeUnit.SECONDS.toMillis(60);
+    private static final long CONSUME_MAX_DURATION_MS = TimeUnit.SECONDS.toMillis(30);
 
     private EmbeddedConnectCluster connect;
     private ConnectorHandle connectorHandle;
