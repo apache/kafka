@@ -294,7 +294,7 @@ public class ProduceBenchWorker implements TaskWorker {
 
             TopicPartition partition = partitionsIterator.next();
             ProducerRecord<byte[], byte[]> record;
-            if (spec.manualPartition()) {
+            if (spec.useConfiguredPartitioner()) {
                 record = new ProducerRecord<>(
                     partition.topic(), keys.next(), values.next());
             } else {

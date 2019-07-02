@@ -71,7 +71,7 @@ public class ProduceBenchSpec extends TaskSpec {
     private final Map<String, String> commonClientConf;
     private final TopicsSpec activeTopics;
     private final TopicsSpec inactiveTopics;
-    private final boolean manualPartition;
+    private final boolean useConfiguredPartitioner;
     private final boolean skipFlush;
 
     @JsonCreator
@@ -89,7 +89,7 @@ public class ProduceBenchSpec extends TaskSpec {
                          @JsonProperty("adminClientConf") Map<String, String> adminClientConf,
                          @JsonProperty("activeTopics") TopicsSpec activeTopics,
                          @JsonProperty("inactiveTopics") TopicsSpec inactiveTopics,
-                         @JsonProperty("manualPartition") boolean manualPartition, 
+                         @JsonProperty("useConfiguredPartitioner") boolean useConfiguredPartitioner, 
                          @JsonProperty("skipFlush") boolean skipFlush) {
         super(startMs, durationMs);
         this.producerNode = (producerNode == null) ? "" : producerNode;
@@ -108,7 +108,7 @@ public class ProduceBenchSpec extends TaskSpec {
             TopicsSpec.EMPTY : activeTopics.immutableCopy();
         this.inactiveTopics = (inactiveTopics == null) ?
             TopicsSpec.EMPTY : inactiveTopics.immutableCopy();
-        this.manualPartition = manualPartition;
+        this.useConfiguredPartitioner = useConfiguredPartitioner;
         this.skipFlush = skipFlush;
     }
 
@@ -173,8 +173,8 @@ public class ProduceBenchSpec extends TaskSpec {
     }
 
     @JsonProperty
-    public boolean manualPartition() {
-        return manualPartition;
+    public boolean useConfiguredPartitioner() {
+        return useConfiguredPartitioner;
     }
 
     @JsonProperty
