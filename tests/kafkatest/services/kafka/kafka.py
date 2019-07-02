@@ -31,7 +31,7 @@ from kafkatest.services.monitor.jmx import JmxMixin
 from kafkatest.services.security.minikdc import MiniKdc
 from kafkatest.services.security.listener_security_config import ListenerSecurityConfig
 from kafkatest.services.security.security_config import SecurityConfig
-from kafkatest.version import DEV_BRANCH, LATEST_0_10_0
+from kafkatest.version import DEV_BRANCH, LATEST_0_10_0, KafkaVersion
 
 
 class KafkaListener:
@@ -164,11 +164,16 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         self.setup_interbroker_listener(interbroker_security_protocol, self.listener_security_config.use_separate_interbroker_listener)
         self.interbroker_sasl_mechanism = interbroker_sasl_mechanism
 
+        # Pass a KafkaVersion to all of the nodes
+        version = KafkaVersion(version)
+
         for node in self.nodes:
             node.version = version
             node.config = KafkaConfig(**{config_property.BROKER_ID: self.idx(node)})
 
     def set_version(self, version):
+        # Pass a KafkaVersion to all of the nodes
+        version = KafkaVersion(version)
         for node in self.nodes:
             node.version = version
 
