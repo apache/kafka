@@ -109,7 +109,7 @@ class FetchFromFollowerTest(ProduceConsumeValidateTest):
         self.jmx_tool.start_jmx_tool(consumer_idx, consumer_node)
 
         # Wait for at least one interval of "metadata.max.age.ms"
-        time.sleep(5)
+        time.sleep(15)
 
         # Read the JMX output
         self.jmx_tool.read_jmx_output(consumer_idx, consumer_node)
