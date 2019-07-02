@@ -45,11 +45,11 @@ import org.apache.kafka.common.requests.EpochEndOffset._
 import org.apache.kafka.common.requests.FetchRequest.PartitionData
 import org.apache.kafka.common.requests.FetchResponse.AbortedTransaction
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
-import org.apache.kafka.common.requests._
+import org.apache.kafka.common.requests.{ApiError, DeleteRecordsResponse, DescribeLogDirsResponse, EpochEndOffset, IsolationLevel, LeaderAndIsrRequest, LeaderAndIsrResponse, OffsetsForLeaderEpochRequest, StopReplicaRequest, UpdateMetadataRequest}
 import org.apache.kafka.common.utils.Time
 
 import scala.collection.JavaConverters._
-import scala.collection._
+import scala.collection.{Map, Seq, Set, mutable}
 
 /*
  * Result metadata of a log append operation on the log
@@ -193,7 +193,7 @@ class ReplicaManager(val config: KafkaConfig,
   val replicaFetcherManager = createReplicaFetcherManager(metrics, time, threadNamePrefix, quotaManagers.follower)
   val replicaAlterLogDirsManager = createReplicaAlterLogDirsManager(quotaManagers.alterLogDirs, brokerTopicStats)
   private val highWatermarkCheckPointThreadStarted = new AtomicBoolean(false)
-  @volatile var highWatermarkCheckpoints = logManager.liveLogDirs.map(dir =>
+  @volatile var highWatermarkCheckpoints: Map[String, OffsetCheckpointFile] = logManager.liveLogDirs.map(dir =>
     (dir.getAbsolutePath, new OffsetCheckpointFile(new File(dir, ReplicaManager.HighWatermarkFilename), logDirFailureChannel))).toMap
 
   this.logIdent = s"[ReplicaManager broker=$localBrokerId] "
@@ -487,7 +487,7 @@ class ReplicaManager(val config: KafkaConfig,
                   new PartitionResponse(result.error, result.info.firstOffset.getOrElse(-1), result.info.logAppendTime, result.info.logStartOffset)) // response status
       }
 
-      recordConversionStatsCallback(localProduceResults.mapValues(_.info.recordConversionStats))
+      recordConversionStatsCallback(localProduceResults.map { case (k, v) => k -> v.info.recordConversionStats })
 
       if (delayedProduceRequestRequired(requiredAcks, entriesPerPartition, localProduceResults)) {
         // create delayed produce operation
@@ -504,7 +504,7 @@ class ReplicaManager(val config: KafkaConfig,
 
       } else {
         // we can respond immediately
-        val produceResponseStatus = produceStatus.mapValues(status => status.responseStatus)
+        val produceResponseStatus = produceStatus.map { case (k, status) => k -> status.responseStatus }
         responseCallback(produceResponseStatus)
       }
     } else {
@@ -709,7 +709,7 @@ class ReplicaManager(val config: KafkaConfig,
       delayedDeleteRecordsPurgatory.tryCompleteElseWatch(delayedDeleteRecords, deleteRecordsRequestKeys)
     } else {
       // we can respond immediately
-      val deleteRecordsResponseStatus = deleteRecordsStatus.mapValues(status => status.responseStatus)
+      val deleteRecordsResponseStatus = deleteRecordsStatus.map { case (k, status) => k -> status.responseStatus }
       responseCallback(deleteRecordsResponseStatus)
     }
   }
@@ -1481,7 +1481,7 @@ class ReplicaManager(val config: KafkaConfig,
       newOfflinePartitions.map(_.topic).foreach { topic: String =>
         maybeRemoveTopicMetrics(topic)
       }
-      highWatermarkCheckpoints = highWatermarkCheckpoints.filterKeys(_ != dir)
+      highWatermarkCheckpoints = highWatermarkCheckpoints.filter { case (checkpointDir, _) => checkpointDir != dir }
 
       info(s"Broker $localBrokerId stopped fetcher for partitions ${newOfflinePartitions.mkString(",")} and stopped moving logs " +
            s"for partitions ${partitionsWithOfflineFutureReplica.mkString(",")} because they are in the failed log directory $dir.")
@@ -1566,9 +1566,9 @@ class ReplicaManager(val config: KafkaConfig,
       }
 
       if (expectedLeaders.nonEmpty) {
-        val watchKeys: Seq[TopicPartitionOperationKey] = expectedLeaders.map{
+        val watchKeys = expectedLeaders.iterator.map {
           case (tp, _) => TopicPartitionOperationKey(tp)
-        }(breakOut)
+        }.toIndexedSeq
 
         delayedElectLeaderPurgatory.tryCompleteElseWatch(
           new DelayedElectLeader(

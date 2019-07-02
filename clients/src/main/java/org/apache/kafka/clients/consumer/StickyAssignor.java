@@ -223,6 +223,7 @@ public class StickyAssignor extends AbstractPartitionAssignor {
         }
     }
 
+    @Override
     public Map<String, List<TopicPartition>> assign(Map<String, Integer> partitionsPerTopic,
                                                     Map<String, Subscription> subscriptions) {
         Map<String, List<TopicPartition>> currentAssignment = new HashMap<>();
@@ -244,19 +245,19 @@ public class StickyAssignor extends AbstractPartitionAssignor {
         }
 
         for (Entry<String, Subscription> entry: subscriptions.entrySet()) {
-            String consumer = entry.getKey();
-            consumer2AllPotentialPartitions.put(consumer, new ArrayList<>());
+            String consumerId = entry.getKey();
+            consumer2AllPotentialPartitions.put(consumerId, new ArrayList<>());
             entry.getValue().topics().stream().filter(topic -> partitionsPerTopic.get(topic) != null).forEach(topic -> {
                 for (int i = 0; i < partitionsPerTopic.get(topic); ++i) {
                     TopicPartition topicPartition = new TopicPartition(topic, i);
-                    consumer2AllPotentialPartitions.get(consumer).add(topicPartition);
-                    partition2AllPotentialConsumers.get(topicPartition).add(consumer);
+                    consumer2AllPotentialPartitions.get(consumerId).add(topicPartition);
+                    partition2AllPotentialConsumers.get(topicPartition).add(consumerId);
                 }
             });
 
             // add this consumer to currentAssignment (with an empty topic partition assignment) if it does not already exist
-            if (!currentAssignment.containsKey(consumer))
-                currentAssignment.put(consumer, new ArrayList<>());
+            if (!currentAssignment.containsKey(consumerId))
+                currentAssignment.put(consumerId, new ArrayList<>());
         }
 
         // a mapping of partition to current consumer

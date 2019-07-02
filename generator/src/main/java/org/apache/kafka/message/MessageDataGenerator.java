@@ -19,6 +19,7 @@ package org.apache.kafka.message;
 
 import java.io.Writer;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -27,13 +28,15 @@ import java.util.stream.Collectors;
  * Generates Kafka MessageData classes.
  */
 public final class MessageDataGenerator {
+    private final StructRegistry structRegistry;
     private final HeaderGenerator headerGenerator;
     private final SchemaGenerator schemaGenerator;
     private final CodeBuffer buffer;
 
     MessageDataGenerator() {
+        this.structRegistry = new StructRegistry();
         this.headerGenerator = new HeaderGenerator();
-        this.schemaGenerator = new SchemaGenerator(headerGenerator);
+        this.schemaGenerator = new SchemaGenerator(headerGenerator, structRegistry);
         this.buffer = new CodeBuffer();
     }
 
@@ -42,6 +45,7 @@ public final class MessageDataGenerator {
             throw new RuntimeException("Message " + message.name() + " does " +
                 "not specify a maximum version.");
         }
+        structRegistry.register(message);
         schemaGenerator.generateSchemas(message);
         generateClass(Optional.of(message),
             message.name() + "Data",
@@ -104,6 +108,13 @@ public final class MessageDataGenerator {
         }
         generateSubclasses(className, struct, parentVersions, isSetElement);
         if (isTopLevel) {
+            for (Iterator<StructSpec> iter = structRegistry.commonStructs(); iter.hasNext(); ) {
+                StructSpec commonStruct = iter.next();
+                generateClass(Optional.empty(),
+                        commonStruct.name(),
+                        commonStruct,
+                        commonStruct.versions());
+            }
             buffer.decrementIndent();
             buffer.printf("}%n");
         }
@@ -139,10 +150,12 @@ public final class MessageDataGenerator {
         for (FieldSpec field : struct.fields()) {
             if (field.type().isStructArray()) {
                 FieldType.ArrayType arrayType = (FieldType.ArrayType) field.type();
-                generateClass(Optional.empty(),
-                    arrayType.elementType().toString(),
-                    field.toStruct(),
-                    parentVersions.intersect(struct.versions()));
+                if (!structRegistry.commonStructNames().contains(arrayType.elementName())) {
+                    generateClass(Optional.empty(),
+                            arrayType.elementType().toString(),
+                            structRegistry.findStruct(field),
+                            parentVersions.intersect(struct.versions()));
+                }
             }
         }
         if (isSetElement) {
@@ -306,7 +319,7 @@ public final class MessageDataGenerator {
             return MessageGenerator.capitalizeFirst(field.typeString());
         } else if (field.type().isArray()) {
             FieldType.ArrayType arrayType = (FieldType.ArrayType) field.type();
-            if (field.toStruct().hasKeys()) {
+            if (structRegistry.isStructArrayWithKeys(field)) {
                 headerGenerator.addImport(MessageGenerator.IMPLICIT_LINKED_HASH_MULTI_COLLECTION_CLASS);
                 return collectionType(arrayType.elementType().toString());
             } else {
@@ -321,7 +334,7 @@ public final class MessageDataGenerator {
     private String fieldConcreteJavaType(FieldSpec field) {
         if (field.type().isArray()) {
             FieldType.ArrayType arrayType = (FieldType.ArrayType) field.type();
-            if (field.toStruct().hasKeys()) {
+            if (structRegistry.isStructArrayWithKeys(field)) {
                 headerGenerator.addImport(MessageGenerator.IMPLICIT_LINKED_HASH_MULTI_COLLECTION_CLASS);
                 return collectionType(arrayType.elementType().toString());
             } else {
@@ -412,7 +425,7 @@ public final class MessageDataGenerator {
                 buffer.printf("{%n");
                 buffer.incrementIndent();
             }
-            boolean hasKeys = field.toStruct().hasKeys();
+            boolean hasKeys = structRegistry.isStructArrayWithKeys(field);
             buffer.printf("int arrayLength = readable.readInt();%n");
             buffer.printf("if (arrayLength < 0) {%n");
             buffer.incrementIndent();
@@ -1236,7 +1249,7 @@ public final class MessageDataGenerator {
                     field.name() + ": custom defaults are not supported for array fields.");
             }
             FieldType.ArrayType arrayType = (FieldType.ArrayType) field.type();
-            if (field.toStruct().hasKeys()) {
+            if (structRegistry.isStructArrayWithKeys(field)) {
                 return "new " + collectionType(arrayType.elementType().toString()) + "(0)";
             } else {
                 headerGenerator.addImport(MessageGenerator.ARRAYLIST_CLASS);

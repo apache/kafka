@@ -26,6 +26,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 
 /**
@@ -39,7 +40,7 @@ public abstract class AbstractPartitionAssignor implements PartitionAssignor {
      * Perform the group assignment given the partition counts and member subscriptions
      * @param partitionsPerTopic The number of partitions for each subscribed topic. Topics not in metadata will be excluded
      *                           from this map.
-     * @param subscriptions Map from the memberId to their respective topic subscription
+     * @param subscriptions Map from the member id to their respective topic subscription
      * @return Map from each member to the list of partitions assigned to them.
      */
     public abstract Map<String, List<TopicPartition>> assign(Map<String, Integer> partitionsPerTopic,
@@ -89,5 +90,51 @@ public abstract class AbstractPartitionAssignor implements PartitionAssignor {
         for (int i = 0; i < numPartitions; i++)
             partitions.add(new TopicPartition(topic, i));
         return partitions;
+    }
+
+    public static class MemberInfo implements Comparable<MemberInfo> {
+        public final String memberId;
+        public final Optional<String> groupInstanceId;
+
+        public MemberInfo(String memberId, Optional<String> groupInstanceId) {
+            this.memberId = memberId;
+            this.groupInstanceId = groupInstanceId;
+        }
+
+        @Override
+        public int compareTo(MemberInfo otherMemberInfo) {
+            if (this.groupInstanceId.isPresent() &&
+                    otherMemberInfo.groupInstanceId.isPresent()) {
+                return this.groupInstanceId.get()
+                        .compareTo(otherMemberInfo.groupInstanceId.get());
+            } else if (this.groupInstanceId.isPresent()) {
+                return -1;
+            } else if (otherMemberInfo.groupInstanceId.isPresent()) {
+                return 1;
+            } else {
+                return this.memberId.compareTo(otherMemberInfo.memberId);
+            }
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            return o instanceof MemberInfo && this.memberId.equals(((MemberInfo) o).memberId);
+        }
+
+        /**
+         * We could just use member.id to be the hashcode, since it's unique
+         * across the group.
+         */
+        @Override
+        public int hashCode() {
+            return memberId.hashCode();
+        }
+
+        @Override
+        public String toString() {
+            return "MemberInfo [member.id: " + memberId
+                    + ", group.instance.id: " + groupInstanceId.orElse("{}")
+                    + "]";
+        }
     }
 }

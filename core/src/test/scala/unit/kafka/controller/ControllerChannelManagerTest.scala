@@ -71,10 +71,10 @@ class ControllerChannelManagerTest {
     assertEquals(controllerId, leaderAndIsrRequest.controllerId)
     assertEquals(controllerEpoch, leaderAndIsrRequest.controllerEpoch)
     assertEquals(partitions.keySet, leaderAndIsrRequest.partitionStates.keySet.asScala)
-    assertEquals(partitions.mapValues(_.leader),
-      leaderAndIsrRequest.partitionStates.asScala.mapValues(_.basePartitionState.leader))
-    assertEquals(partitions.mapValues(_.isr),
-      leaderAndIsrRequest.partitionStates.asScala.mapValues(_.basePartitionState.isr.asScala))
+    assertEquals(partitions.map { case (k, v) => (k, v.leader) },
+      leaderAndIsrRequest.partitionStates.asScala.mapValues(_.basePartitionState.leader).toMap)
+    assertEquals(partitions.map { case (k, v) => (k, v.isr) },
+      leaderAndIsrRequest.partitionStates.asScala.mapValues(_.basePartitionState.isr.asScala).toMap)
 
     applyLeaderAndIsrResponseCallbacks(Errors.NONE, batch.sentRequests(2).toList)
     assertEquals(1, batch.sentEvents.size)
@@ -202,8 +202,10 @@ class ControllerChannelManagerTest {
 
     val updateMetadataRequest = updateMetadataRequests.head
     assertEquals(3, updateMetadataRequest.partitionStates.size)
-    assertEquals(partitions.mapValues(_.leader), updateMetadataRequest.partitionStates.asScala.mapValues(_.basePartitionState.leader))
-    assertEquals(partitions.mapValues(_.isr), updateMetadataRequest.partitionStates.asScala.mapValues(_.basePartitionState.isr.asScala))
+    assertEquals(partitions.map { case (k, v) => (k, v.leader) },
+      updateMetadataRequest.partitionStates.asScala.map { case (k, v) => (k, v.basePartitionState.leader) })
+    assertEquals(partitions.map { case (k, v) => (k, v.isr) },
+      updateMetadataRequest.partitionStates.asScala.map { case (k, v) => (k, v.basePartitionState.isr.asScala) })
 
     assertEquals(controllerId, updateMetadataRequest.controllerId)
     assertEquals(controllerEpoch, updateMetadataRequest.controllerEpoch)
@@ -272,9 +274,11 @@ class ControllerChannelManagerTest {
       .map(_.basePartitionState.leader)
       .forall(leaderId => leaderId == LeaderAndIsr.LeaderDuringDelete))
 
-    assertEquals(partitions.filterKeys(_.topic == "bar").mapValues(_.leader),
-      updateMetadataRequest.partitionStates.asScala.filterKeys(_.topic == "bar").mapValues(_.basePartitionState.leader))
-    assertEquals(partitions.mapValues(_.isr), updateMetadataRequest.partitionStates.asScala.mapValues(_.basePartitionState.isr.asScala))
+    assertEquals(partitions.filter { case (k, _) => k.topic == "bar" }.map { case (k, v) => (k, v.leader) },
+      updateMetadataRequest.partitionStates.asScala.filter { case (k, _) => k.topic == "bar" }.map { case (k, v) =>
+        (k, v.basePartitionState.leader) })
+    assertEquals(partitions.map { case (k, v) => (k, v.isr) },
+      updateMetadataRequest.partitionStates.asScala.map { case (k, v) => (k, v.basePartitionState.isr.asScala) })
 
     assertEquals(3, updateMetadataRequest.liveBrokers.size)
     assertEquals(Set(1, 2, 3), updateMetadataRequest.liveBrokers.asScala.map(_.id).toSet)

@@ -194,7 +194,7 @@ object ConfigCommand extends Config {
    */
   private def preProcessBrokerConfigs(configsToBeAdded: Properties, perBrokerConfig: Boolean) {
     val passwordEncoderConfigs = new Properties
-    passwordEncoderConfigs ++= configsToBeAdded.asScala.filterKeys(_.startsWith("password.encoder."))
+    passwordEncoderConfigs ++= configsToBeAdded.asScala.filter { case (key, _) => key.startsWith("password.encoder.") }
     if (!passwordEncoderConfigs.isEmpty) {
       info(s"Password encoder configs ${passwordEncoderConfigs.keySet} will be used for encrypting" +
         " passwords, but will not be stored in ZooKeeper.")

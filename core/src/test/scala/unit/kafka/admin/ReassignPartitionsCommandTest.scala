@@ -37,6 +37,7 @@ import scala.collection.JavaConverters._
 import org.apache.kafka.common.TopicPartition
 
 import scala.collection.mutable
+import scala.collection.Seq
 
 class ReassignPartitionsCommandTest extends ZooKeeperTestHarness with Logging {
   var servers: Seq[KafkaServer] = Seq()

@@ -29,6 +29,7 @@ import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.utils.Utils
 
 import scala.collection.JavaConverters._
+import scala.collection.Seq
 
 /**
  * A command for delete records of the given partitions down to the specified offset.

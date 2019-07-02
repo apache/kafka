@@ -50,12 +50,12 @@ public class ConsumerGroupDescription {
     }
 
     ConsumerGroupDescription(String groupId,
-                                    boolean isSimpleConsumerGroup,
-                                    Collection<MemberDescription> members,
-                                    String partitionAssignor,
-                                    ConsumerGroupState state,
-                                    Node coordinator,
-                                    Set<AclOperation> authorizedOperations) {
+                             boolean isSimpleConsumerGroup,
+                             Collection<MemberDescription> members,
+                             String partitionAssignor,
+                             ConsumerGroupState state,
+                             Node coordinator,
+                             Set<AclOperation> authorizedOperations) {
         this.groupId = groupId == null ? "" : groupId;
         this.isSimpleConsumerGroup = isSimpleConsumerGroup;
         this.members = members == null ? Collections.emptyList() :
