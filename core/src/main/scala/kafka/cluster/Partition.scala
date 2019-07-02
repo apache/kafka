@@ -178,7 +178,7 @@ class Partition(val topicPartition: TopicPartition,
   @volatile private var leaderEpochStartOffsetOpt: Option[Long] = None
   @volatile var leaderReplicaIdOpt: Option[Int] = None
   @volatile var inSyncReplicaIds = Set.empty[Int]
-  // Includes all valid broker ids (@see Request::isValidBrokerId) that were assigned to this topic partition.
+  // An order sequence of all the valid broker ids that were assigned to this topic partition
   @volatile var allReplicaIds = Seq.empty[Int]
 
   // Logs belonging to this partition. Majority of time it will be only one log, but if log directory
@@ -619,7 +619,17 @@ class Partition(val topicPartition: TopicPartition,
     }
   }
 
-  // Public visibility for tests
+  /**
+   * Stores the topic partition assignment and ISR.
+   * It creates a new Replica object for any new remote broker. The isr parameter is
+   * expected to be a subset of the assignment parameter.
+   *
+   * Note: public visibility for tests.
+   *
+   * @param assignment An order sequence of all the broker ids that were assigned to this
+   *                   topic partition
+   * @param isr The set of broker ids that are known to be insync with the leader
+   */
   def updateAssignmentAndIsr(assignment: Seq[Int], isr: Set[Int]): Unit = {
     val replicaSet = assignment.toSet
     val removedReplicas = remoteReplicasMap.keys -- replicaSet
