@@ -874,6 +874,7 @@ class ReplicaManager(val config: KafkaConfig,
         case (_, lrr) => lrr.followerNeedsHwUpdate
       }
 
+    // Wrap the given callback function with another function that will update the HW for the remote follower
     val updateHwAndThenCallback: Seq[(TopicPartition, FetchPartitionData)] => Unit =
       (fetchPartitionData: Seq[(TopicPartition, FetchPartitionData)]) => {
         fetchPartitionData.foreach {
