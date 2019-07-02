@@ -86,7 +86,7 @@ import org.apache.kafka.common.{Node, TopicPartition}
 
 import scala.compat.java8.OptionConverters._
 import scala.collection.JavaConverters._
-import scala.collection._
+import scala.collection.{Map, Seq, Set, immutable, mutable}
 import scala.collection.mutable.ArrayBuffer
 import scala.util.{Failure, Success, Try}
 
@@ -320,7 +320,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     val unauthorizedTopicErrors = mutable.Map[TopicPartition, Errors]()
     val nonExistingTopicErrors = mutable.Map[TopicPartition, Errors]()
     // the callback for sending an offset commit response
-    def sendResponseCallback(commitStatus: immutable.Map[TopicPartition, Errors]) {
+    def sendResponseCallback(commitStatus: Map[TopicPartition, Errors]) {
       val combinedCommitStatus = commitStatus ++ unauthorizedTopicErrors ++ nonExistingTopicErrors
       if (isDebugEnabled)
         combinedCommitStatus.foreach { case (topicPartition, error) =>
@@ -406,13 +406,13 @@ class KafkaApis(val requestChannel: RequestChannel,
         //   - If v2/v3/v4 (no explicit commit timestamp) we treat it the same as v5.
         //   - For v5 and beyond there is no per partition expiration timestamp, so this field is no longer in effect
         val currentTimestamp = time.milliseconds
-        val partitionData = authorizedTopicRequestInfo.mapValues { partitionData =>
+        val partitionData = authorizedTopicRequestInfo.map { case (k, partitionData) =>
           val metadata = if (partitionData.committedMetadata() == null)
             OffsetAndMetadata.NoMetadata
           else
             partitionData.committedMetadata()
 
-          new OffsetAndMetadata(
+          k -> new OffsetAndMetadata(
             offset = partitionData.committedOffset(),
             leaderEpoch = Optional.ofNullable[Integer](partitionData.committedLeaderEpoch),
             metadata = metadata,
@@ -1615,22 +1615,21 @@ class KafkaApis(val requestChannel: RequestChannel,
         }
       })
       val toCreate = mutable.Map[String, CreatableTopic]()
-      createTopicsRequest.data.topics.asScala.foreach { case topic =>
-        if (results.find(topic.name()).errorCode() == 0) {
-          toCreate += topic.name() -> topic
+      createTopicsRequest.data.topics.asScala.foreach { topic =>
+        if (results.find(topic.name).errorCode == Errors.NONE.code) {
+          toCreate += topic.name -> topic
         }
       }
       def handleCreateTopicsResults(errors: Map[String, ApiError]): Unit = {
-        errors.foreach {
-          case (topicName, error) =>
-            results.find(topicName).
-              setErrorCode(error.error().code()).
-              setErrorMessage(error.message())
+        errors.foreach { case (topicName, error) =>
+          results.find(topicName).
+            setErrorCode(error.error.code).
+            setErrorMessage(error.message)
         }
         sendResponseCallback(results)
       }
-      adminManager.createTopics(createTopicsRequest.data.timeoutMs(),
-          createTopicsRequest.data.validateOnly(),
+      adminManager.createTopics(createTopicsRequest.data.timeoutMs,
+          createTopicsRequest.data.validateOnly,
           toCreate,
           handleCreateTopicsResults)
     }
@@ -1869,7 +1868,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       */
     def maybeSendResponseCallback(producerId: Long, result: TransactionResult)(responseStatus: Map[TopicPartition, PartitionResponse]): Unit = {
       trace(s"End transaction marker append for producer id $producerId completed with status: $responseStatus")
-      val currentErrors = new ConcurrentHashMap[TopicPartition, Errors](responseStatus.mapValues(_.error).asJava)
+      val currentErrors = new ConcurrentHashMap[TopicPartition, Errors](responseStatus.map { case (k, v) => k -> v.error }.asJava)
       updateErrors(producerId, currentErrors)
       val successfulOffsetsPartitions = responseStatus.filter { case (topicPartition, partitionResponse) =>
         topicPartition.topic == GROUP_METADATA_TOPIC_NAME && partitionResponse.error == Errors.NONE
@@ -2523,7 +2522,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     if (!authorize(request.session, Alter, Resource.ClusterResource)) {
       val error = new ApiError(Errors.CLUSTER_AUTHORIZATION_FAILED, null)
       val partitionErrors: Map[TopicPartition, ApiError] =
-        electionRequest.topicPartitions.map(partition => partition -> error)(breakOut)
+        electionRequest.topicPartitions.iterator.map(partition => partition -> error).toMap
 
       sendResponseCallback(error)(partitionErrors)
     } else {

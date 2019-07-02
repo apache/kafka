@@ -758,7 +758,7 @@ class PartitionTest {
     }
 
     assertThrows[IllegalArgumentException] {
-      val replica = partition.getOrCreateReplica(brokerId)
+      partition.getOrCreateReplica(brokerId)
     }
 
     val remoteReplicaId = brokerId + 1;

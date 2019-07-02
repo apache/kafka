@@ -311,7 +311,6 @@ class ReplicaAlterLogDirsThreadTest {
     val responseCallback: Capture[Seq[(TopicPartition, FetchPartitionData)] => Unit]  = EasyMock.newCapture()
 
     val initialFetchOffset = 100
-    val futureReplicaLEO = 111
 
     //Stubs
     expect(replicaManager.getPartitionOrException(t1p0, expectLeader = false))

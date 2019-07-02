@@ -56,7 +56,7 @@ class OffsetCheckpointFile(val file: File, logDirFailureChannel: LogDirFailureCh
   val checkpoint = new CheckpointFile[(TopicPartition, Long)](file, OffsetCheckpointFile.CurrentVersion,
     OffsetCheckpointFile.Formatter, logDirFailureChannel, file.getParent)
 
-  def write(offsets: Map[TopicPartition, Long]): Unit = checkpoint.write(offsets.toSeq)
+  def write(offsets: Map[TopicPartition, Long]): Unit = checkpoint.write(offsets)
 
   def read(): Map[TopicPartition, Long] = checkpoint.read().toMap
 

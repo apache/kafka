@@ -31,7 +31,7 @@ import kafka.utils.CoreUtils.inLock
 import org.apache.kafka.common.protocol.Errors
 import AbstractFetcherThread._
 
-import scala.collection.{Map, Set, mutable}
+import scala.collection.{Map, Seq, Set, mutable}
 import scala.collection.JavaConverters._
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicLong

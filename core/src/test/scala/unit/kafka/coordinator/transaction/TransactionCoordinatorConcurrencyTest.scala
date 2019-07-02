@@ -251,7 +251,7 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
 
     val topicPartition = new TopicPartition(TRANSACTION_STATE_TOPIC_NAME, partitionId)
     val startOffset = replicaManager.getLogEndOffset(topicPartition).getOrElse(20L)
-    val records = MemoryRecords.withRecords(startOffset, CompressionType.NONE, txnRecordsByPartition(partitionId): _*)
+    val records = MemoryRecords.withRecords(startOffset, CompressionType.NONE, txnRecordsByPartition(partitionId).toArray: _*)
     val endOffset = startOffset + records.records.asScala.size
 
     EasyMock.expect(logMock.logStartOffset).andStubReturn(startOffset)

@@ -18,6 +18,8 @@ package kafka.server
 
 import java.util.Optional
 
+import scala.collection.Seq
+
 import kafka.cluster.{Partition, Replica}
 import kafka.log.LogOffsetSnapshot
 import org.apache.kafka.common.TopicPartition
@@ -172,8 +174,7 @@ class DelayedFetchTest extends EasyMockSupport {
       fetchIsolation = FetchLogEnd,
       isFromFollower = true,
       replicaId = replicaId,
-      fetchPartitionStatus = Seq((topicPartition, fetchStatus)),
-    )
+      fetchPartitionStatus = Seq((topicPartition, fetchStatus)))
   }
 
   private def expectReadFromReplicaWithError(replicaId: Int,

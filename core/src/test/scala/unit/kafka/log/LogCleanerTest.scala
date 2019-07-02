@@ -1283,7 +1283,7 @@ class LogCleanerTest {
 
     val numSegmentsInitial = log.logSegments.size
     val allKeys = LogTest.keysInLog(log).toList
-    val expectedKeysAfterCleaning = mutable.MutableList[Long]()
+    val expectedKeysAfterCleaning = new mutable.ArrayBuffer[Long]()
 
     // pretend we want to clean every alternate key
     val offsetMap = new FakeOffsetMap(Int.MaxValue)
@@ -1642,9 +1642,9 @@ class LogCleanerTest {
         new SimpleRecord(time.milliseconds(), keyBytes, keyBytes) // the value doesn't matter since we validate offsets
       }
       val records = if (isTransactional)
-        MemoryRecords.withTransactionalRecords(CompressionType.NONE, producerId, producerEpoch, sequence, simpleRecords: _*)
+        MemoryRecords.withTransactionalRecords(CompressionType.NONE, producerId, producerEpoch, sequence, simpleRecords.toArray: _*)
       else
-        MemoryRecords.withIdempotentRecords(CompressionType.NONE, producerId, producerEpoch, sequence, simpleRecords: _*)
+        MemoryRecords.withIdempotentRecords(CompressionType.NONE, producerId, producerEpoch, sequence, simpleRecords.toArray: _*)
       sequence += simpleRecords.size
       log.appendAsLeader(records, leaderEpoch, isFromClient)
     }

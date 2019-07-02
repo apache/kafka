@@ -53,7 +53,7 @@ import org.junit.Assert._
 import org.junit.{After, Before, Test}
 
 import scala.collection.JavaConverters._
-import scala.collection.Map
+import scala.collection.{Map, Seq}
 
 class ReplicaManagerTest {
 

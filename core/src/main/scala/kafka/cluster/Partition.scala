@@ -41,7 +41,7 @@ import org.apache.kafka.common.requests._
 import org.apache.kafka.common.utils.Time
 
 import scala.collection.JavaConverters._
-import scala.collection.Map
+import scala.collection.{Map, Seq}
 
 trait PartitionStateStore {
   def fetchTopicConfig(): Properties
