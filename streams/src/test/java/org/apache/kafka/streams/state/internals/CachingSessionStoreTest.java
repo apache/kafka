@@ -24,7 +24,7 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.KeyValueTimestamp;
-import org.apache.kafka.streams.errors.InvalidStateStoreException;
+import org.apache.kafka.streams.errors.internals.StateStoreClosedException;
 import org.apache.kafka.streams.kstream.SessionWindowedDeserializer;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.Change;
@@ -389,25 +389,25 @@ public class CachingSessionStoreTest {
         assertEquals(0, cache.size());
     }
 
-    @Test(expected = InvalidStateStoreException.class)
+    @Test(expected = StateStoreClosedException.class)
     public void shouldThrowIfTryingToFetchFromClosedCachingStore() {
         cachingStore.close();
         cachingStore.fetch(keyA);
     }
 
-    @Test(expected = InvalidStateStoreException.class)
+    @Test(expected = StateStoreClosedException.class)
     public void shouldThrowIfTryingToFindMergeSessionFromClosedCachingStore() {
         cachingStore.close();
         cachingStore.findSessions(keyA, 0, Long.MAX_VALUE);
     }
 
-    @Test(expected = InvalidStateStoreException.class)
+    @Test(expected = StateStoreClosedException.class)
     public void shouldThrowIfTryingToRemoveFromClosedCachingStore() {
         cachingStore.close();
         cachingStore.remove(new Windowed<>(keyA, new SessionWindow(0, 0)));
     }
 
-    @Test(expected = InvalidStateStoreException.class)
+    @Test(expected = StateStoreClosedException.class)
     public void shouldThrowIfTryingToPutIntoClosedCachingStore() {
         cachingStore.close();
         cachingStore.put(new Windowed<>(keyA, new SessionWindow(0, 0)), "1".getBytes());

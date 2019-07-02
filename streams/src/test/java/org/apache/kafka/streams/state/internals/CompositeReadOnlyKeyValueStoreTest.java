@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
@@ -29,6 +30,7 @@ import org.apache.kafka.test.InternalMockProcessorContext;
 import org.apache.kafka.test.NoOpReadOnlyStore;
 import org.apache.kafka.test.NoOpRecordCollector;
 import org.apache.kafka.test.StateStoreProviderStub;
+import org.apache.kafka.test.StreamsTestUtils;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -62,7 +64,8 @@ public class CompositeReadOnlyKeyValueStoreTest {
         otherUnderlyingStore = newStoreInstance();
         stubProviderOne.addStore("other-store", otherUnderlyingStore);
 
-        theStore = new CompositeReadOnlyKeyValueStore<>(
+        final KafkaStreams streams = StreamsTestUtils.mockStreams(KafkaStreams.State.RUNNING);
+        theStore = new CompositeReadOnlyKeyValueStore<>(streams,
             new WrappingStoreProvider(Arrays.<StateStoreProvider>asList(stubProviderOne, stubProviderTwo)),
                                         QueryableStoreTypes.<String, String>keyValueStore(),
                                         storeName);
@@ -291,7 +294,8 @@ public class CompositeReadOnlyKeyValueStoreTest {
     }
 
     private CompositeReadOnlyKeyValueStore<Object, Object> rebalancing() {
-        return new CompositeReadOnlyKeyValueStore<>(new WrappingStoreProvider(Collections.<StateStoreProvider>singletonList(new StateStoreProviderStub(true))),
+        final KafkaStreams streams = StreamsTestUtils.mockStreams(KafkaStreams.State.RUNNING);
+        return new CompositeReadOnlyKeyValueStore<>(streams, new WrappingStoreProvider(Collections.<StateStoreProvider>singletonList(new StateStoreProviderStub(true))),
                 QueryableStoreTypes.keyValueStore(), storeName);
     }
 

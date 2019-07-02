@@ -60,6 +60,7 @@ import org.apache.kafka.streams.state.internals.GlobalStateStoreProvider;
 import org.apache.kafka.streams.state.internals.QueryableStoreProvider;
 import org.apache.kafka.streams.state.internals.StateStoreProvider;
 import org.apache.kafka.streams.state.internals.StreamThreadStateStoreProvider;
+import org.apache.kafka.streams.state.internals.StateStoreUtils;
 import org.slf4j.Logger;
 
 import java.time.Duration;
@@ -741,7 +742,7 @@ public class KafkaStreams implements AutoCloseable {
         }
 
         final GlobalStateStoreProvider globalStateStoreProvider = new GlobalStateStoreProvider(internalTopologyBuilder.globalStateStores());
-        queryableStoreProvider = new QueryableStoreProvider(storeProviders, globalStateStoreProvider);
+        queryableStoreProvider = new QueryableStoreProvider(this, storeProviders, globalStateStoreProvider);
 
         stateDirCleaner = Executors.newSingleThreadScheduledExecutor(r -> {
             final Thread thread = new Thread(r, clientId + "-CleanupThread");
@@ -1064,7 +1065,11 @@ public class KafkaStreams implements AutoCloseable {
      */
     public <T> T store(final String storeName, final QueryableStoreType<T> queryableStoreType) {
         validateIsRunning();
-        return queryableStoreProvider.getStore(storeName, queryableStoreType);
+        try {
+            return queryableStoreProvider.getStore(storeName, queryableStoreType);
+        } catch (final InvalidStateStoreException e) {
+            throw StateStoreUtils.wrapExceptionFromStateStoreProvider(this, e);
+        }
     }
 
     /**

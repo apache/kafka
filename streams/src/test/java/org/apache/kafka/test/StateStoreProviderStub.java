@@ -21,6 +21,7 @@ import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.QueryableStoreType;
 import org.apache.kafka.streams.state.internals.StateStoreProvider;
 
+import java.lang.reflect.Constructor;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -30,17 +31,26 @@ public class StateStoreProviderStub implements StateStoreProvider {
 
     private final Map<String, StateStore> stores = new HashMap<>();
     private final boolean throwException;
+    private final Class<? extends InvalidStateStoreException> exceptionClass;
 
     public StateStoreProviderStub(final boolean throwException) {
-
         this.throwException = throwException;
+        this.exceptionClass = InvalidStateStoreException.class;
+    }
+
+
+    public StateStoreProviderStub(final Class<? extends InvalidStateStoreException> exceptionClass) {
+
+        this.throwException = true;
+        this.exceptionClass = exceptionClass;
     }
 
     @SuppressWarnings("unchecked")
     @Override
     public <T> List<T> stores(final String storeName, final QueryableStoreType<T> queryableStoreType) {
         if (throwException) {
-            throw new InvalidStateStoreException("store is unavailable");
+            //throw new InvalidStateStoreException("store is unavailable");
+            throw stateStoreException("store is unavailable");
         }
         if (stores.containsKey(storeName) && queryableStoreType.accepts(stores.get(storeName))) {
             return (List<T>) Collections.singletonList(stores.get(storeName));
@@ -51,6 +61,16 @@ public class StateStoreProviderStub implements StateStoreProvider {
     public void addStore(final String storeName,
                          final StateStore store) {
         stores.put(storeName, store);
+    }
+
+    private InvalidStateStoreException stateStoreException(final String message) {
+        try {
+            final Constructor<? extends InvalidStateStoreException> constructor = exceptionClass.getConstructor(String.class);
+            InvalidStateStoreException ex = constructor.newInstance(message);
+            return ex;
+        } catch (final Exception e) {
+            throw new RuntimeException(e.getMessage(), e);
+        }
     }
 
 }

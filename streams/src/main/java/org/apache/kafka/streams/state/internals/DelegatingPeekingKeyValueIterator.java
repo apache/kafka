@@ -16,8 +16,9 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.errors.InvalidStateStoreException;
+import org.apache.kafka.streams.errors.internals.StateStoreClosedException;
 import org.apache.kafka.streams.state.KeyValueIterator;
 
 import java.util.NoSuchElementException;
@@ -25,10 +26,11 @@ import java.util.NoSuchElementException;
 /**
  * Optimized {@link KeyValueIterator} used when the same element could be peeked multiple times.
  */
-public class DelegatingPeekingKeyValueIterator<K, V> implements KeyValueIterator<K, V>, PeekingKeyValueIterator<K, V> {
+public class DelegatingPeekingKeyValueIterator<K, V> implements KeyValueIterator<K, V>, PeekingKeyValueIterator<K, V>, ConsumeKafkaStreams {
     private final KeyValueIterator<K, V> underlying;
     private final String storeName;
     private KeyValue<K, V> next;
+    private KafkaStreams streams = null;
 
     private volatile boolean open = true;
 
@@ -54,7 +56,11 @@ public class DelegatingPeekingKeyValueIterator<K, V> implements KeyValueIterator
     @Override
     public synchronized boolean hasNext() {
         if (!open) {
-            throw new InvalidStateStoreException(String.format("Store %s has closed", storeName));
+            try {
+                throw new StateStoreClosedException(String.format("Store %s has closed", storeName));
+            } catch (final StateStoreClosedException e) {
+                throw StateStoreUtils.wrapStateStoreClosedException(streams, e, storeName);
+            }
         }
         if (next != null) {
             return true;
@@ -78,6 +84,7 @@ public class DelegatingPeekingKeyValueIterator<K, V> implements KeyValueIterator
         return result;
     }
 
+
     @Override
     public void remove() {
         throw new UnsupportedOperationException("remove() is not supported in " + getClass().getName());
@@ -89,5 +96,10 @@ public class DelegatingPeekingKeyValueIterator<K, V> implements KeyValueIterator
             throw new NoSuchElementException();
         }
         return next;
+    }
+
+    @Override
+    public void accept(final KafkaStreams streams) {
+        this.streams = streams;
     }
 }

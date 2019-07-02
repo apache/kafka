@@ -16,7 +16,9 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
+import org.apache.kafka.streams.errors.internals.StateStoreClosedException;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.QueryableStoreType;
@@ -33,19 +35,29 @@ public class CompositeReadOnlySessionStore<K, V> implements ReadOnlySessionStore
     private final StateStoreProvider storeProvider;
     private final QueryableStoreType<ReadOnlySessionStore<K, V>> queryableStoreType;
     private final String storeName;
+    private final KafkaStreams streams;
 
-    public CompositeReadOnlySessionStore(final StateStoreProvider storeProvider,
+    public CompositeReadOnlySessionStore(final KafkaStreams streams, final StateStoreProvider storeProvider,
                                          final QueryableStoreType<ReadOnlySessionStore<K, V>> queryableStoreType,
                                          final String storeName) {
+        this.streams = streams;
         this.storeProvider = storeProvider;
         this.queryableStoreType = queryableStoreType;
         this.storeName = storeName;
     }
 
+    private List<ReadOnlySessionStore<K, V>> getStores() {
+        try {
+            return storeProvider.stores(storeName, queryableStoreType);
+        } catch (final InvalidStateStoreException e) {
+            throw StateStoreUtils.wrapExceptionFromStateStoreProvider(streams, e);
+        }
+    }
+
     @Override
     public KeyValueIterator<Windowed<K>, V> fetch(final K key) {
         Objects.requireNonNull(key, "key can't be null");
-        final List<ReadOnlySessionStore<K, V>> stores = storeProvider.stores(storeName, queryableStoreType);
+        final List<ReadOnlySessionStore<K, V>> stores = getStores();
         for (final ReadOnlySessionStore<K, V> store : stores) {
             try {
                 final KeyValueIterator<Windowed<K>, V> result = store.fetch(key);
@@ -54,11 +66,8 @@ public class CompositeReadOnlySessionStore<K, V> implements ReadOnlySessionStore
                 } else {
                     return result;
                 }
-            } catch (final InvalidStateStoreException ise) {
-                throw new InvalidStateStoreException("State store  [" + storeName + "] is not available anymore" +
-                                                             " and may have been migrated to another instance; " +
-                                                             "please re-discover its location from the state metadata. " +
-                                                             "Original error message: " + ise.toString());
+            } catch (final StateStoreClosedException e) {
+                throw StateStoreUtils.wrapStateStoreClosedException(streams, e, storeName);
             }
         }
         return KeyValueIterators.emptyIterator();
@@ -68,10 +77,17 @@ public class CompositeReadOnlySessionStore<K, V> implements ReadOnlySessionStore
     public KeyValueIterator<Windowed<K>, V> fetch(final K from, final K to) {
         Objects.requireNonNull(from, "from can't be null");
         Objects.requireNonNull(to, "to can't be null");
-        final NextIteratorFunction<Windowed<K>, V, ReadOnlySessionStore<K, V>> nextIteratorFunction = store -> store.fetch(from, to);
-        return new DelegatingPeekingKeyValueIterator<>(storeName,
-                                                       new CompositeKeyValueIterator<>(
-                                                               storeProvider.stores(storeName, queryableStoreType).iterator(),
-                                                               nextIteratorFunction));
+        final NextIteratorFunction<Windowed<K>, V, ReadOnlySessionStore<K, V>> nextIteratorFunction = store -> {
+            try {
+                return store.fetch(from, to);
+            } catch (final StateStoreClosedException e) {
+                throw StateStoreUtils.wrapStateStoreClosedException(streams, e, storeName);
+            }
+        };
+        final List<ReadOnlySessionStore<K, V>> stores = getStores();
+        final KeyValueIterator<Windowed<K>, V> iterator = new DelegatingPeekingKeyValueIterator<>(storeName,
+                new CompositeKeyValueIterator<>(stores.iterator(), nextIteratorFunction));
+        ((ConsumeKafkaStreams) iterator).accept(streams);
+        return iterator;
     }
 }

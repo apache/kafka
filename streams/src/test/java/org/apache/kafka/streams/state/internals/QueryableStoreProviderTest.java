@@ -17,12 +17,14 @@
 package org.apache.kafka.streams.state.internals;
 
 
+import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.NoOpWindowStore;
 import org.apache.kafka.streams.state.QueryableStoreTypes;
 import org.apache.kafka.test.NoOpReadOnlyStore;
 import org.apache.kafka.test.StateStoreProviderStub;
+import org.apache.kafka.test.StreamsTestUtils;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -40,12 +42,13 @@ public class QueryableStoreProviderTest {
 
     @Before
     public void before() {
+        final KafkaStreams streams = StreamsTestUtils.mockStreams(KafkaStreams.State.RUNNING);
         final StateStoreProviderStub theStoreProvider = new StateStoreProviderStub(false);
         theStoreProvider.addStore(keyValueStore, new NoOpReadOnlyStore<>());
         theStoreProvider.addStore(windowStore, new NoOpWindowStore());
         globalStateStores = new HashMap<>();
         storeProvider =
-            new QueryableStoreProvider(
+            new QueryableStoreProvider(streams,
                     Collections.<StateStoreProvider>singletonList(theStoreProvider), new GlobalStateStoreProvider(globalStateStores));
     }
 

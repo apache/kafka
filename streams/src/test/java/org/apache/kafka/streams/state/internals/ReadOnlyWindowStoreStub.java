@@ -17,7 +17,7 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.errors.InvalidStateStoreException;
+import org.apache.kafka.streams.errors.internals.StateStoreClosedException;
 import org.apache.kafka.streams.internals.ApiUtils;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.TimeWindow;
@@ -54,6 +54,9 @@ public class ReadOnlyWindowStoreStub<K, V> implements ReadOnlyWindowStore<K, V>,
 
     @Override
     public V fetch(final K key, final long time) {
+        if (!open) {
+            throw new StateStoreClosedException("Store is not open");
+        }
         final Map<K, V> kvMap = data.get(time);
         if (kvMap != null) {
             return kvMap.get(key);
@@ -66,7 +69,7 @@ public class ReadOnlyWindowStoreStub<K, V> implements ReadOnlyWindowStore<K, V>,
     @Override
     public WindowStoreIterator<V> fetch(final K key, final long timeFrom, final long timeTo) {
         if (!open) {
-            throw new InvalidStateStoreException("Store is not open");
+            throw new StateStoreClosedException("Store is not open");
         }
         final List<KeyValue<Long, V>> results = new ArrayList<>();
         for (long now = timeFrom; now <= timeTo; now++) {
@@ -89,7 +92,7 @@ public class ReadOnlyWindowStoreStub<K, V> implements ReadOnlyWindowStore<K, V>,
     @Override
     public KeyValueIterator<Windowed<K>, V> all() {
         if (!open) {
-            throw new InvalidStateStoreException("Store is not open");
+            throw new StateStoreClosedException("Store is not open");
         }
         final List<KeyValue<Windowed<K>, V>> results = new ArrayList<>();
         for (final long now : data.keySet()) {
@@ -133,7 +136,7 @@ public class ReadOnlyWindowStoreStub<K, V> implements ReadOnlyWindowStore<K, V>,
     @Override
     public KeyValueIterator<Windowed<K>, V> fetchAll(final long timeFrom, final long timeTo) {
         if (!open) {
-            throw new InvalidStateStoreException("Store is not open");
+            throw new StateStoreClosedException("Store is not open");
         }
         final List<KeyValue<Windowed<K>, V>> results = new ArrayList<>();
         for (final long now : data.keySet()) {
@@ -187,7 +190,7 @@ public class ReadOnlyWindowStoreStub<K, V> implements ReadOnlyWindowStore<K, V>,
     @Override
     public KeyValueIterator<Windowed<K>, V> fetch(final K from, final K to, final long timeFrom, final long timeTo) {
         if (!open) {
-            throw new InvalidStateStoreException("Store is not open");
+            throw new StateStoreClosedException("Store is not open");
         }
         final List<KeyValue<Windowed<K>, V>> results = new ArrayList<>();
         for (long now = timeFrom; now <= timeTo; now++) {
@@ -257,7 +260,9 @@ public class ReadOnlyWindowStoreStub<K, V> implements ReadOnlyWindowStore<K, V>,
     public void flush() {}
 
     @Override
-    public void close() {}
+    public void close() {
+        open = false;
+    }
 
     @Override
     public boolean persistent() {

@@ -17,7 +17,7 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.serialization.Serde;
-import org.apache.kafka.streams.errors.InvalidStateStoreException;
+import org.apache.kafka.streams.errors.internals.StateStoreClosedException;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.KeyValueIterator;
@@ -101,29 +101,29 @@ public class RocksDBKeyValueStoreTest extends AbstractKeyValueStoreTest {
 
         try {
             iteratorOne.hasNext();
-            fail("should have thrown InvalidStateStoreException on closed store");
-        } catch (final InvalidStateStoreException e) {
+            fail("should have thrown StateStoreClosedException on closed store");
+        } catch (final StateStoreClosedException e) {
             // ok
         }
 
         try {
             iteratorOne.next();
-            fail("should have thrown InvalidStateStoreException on closed store");
-        } catch (final InvalidStateStoreException e) {
+            fail("should have thrown StateStoreClosedException on closed store");
+        } catch (final StateStoreClosedException e) {
             // ok
         }
 
         try {
             iteratorTwo.hasNext();
-            fail("should have thrown InvalidStateStoreException on closed store");
-        } catch (final InvalidStateStoreException e) {
+            fail("should have thrown StateStoreClosedException on closed store");
+        } catch (final StateStoreClosedException e) {
             // ok
         }
 
         try {
             iteratorTwo.next();
-            fail("should have thrown InvalidStateStoreException on closed store");
-        } catch (final InvalidStateStoreException e) {
+            fail("should have thrown StateStoreClosedException on closed store");
+        } catch (final StateStoreClosedException e) {
             // ok
         }
     }

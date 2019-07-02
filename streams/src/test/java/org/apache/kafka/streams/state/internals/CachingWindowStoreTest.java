@@ -26,7 +26,7 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.TopologyTestDriver;
-import org.apache.kafka.streams.errors.InvalidStateStoreException;
+import org.apache.kafka.streams.errors.internals.StateStoreClosedException;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.TimeWindowedDeserializer;
 import org.apache.kafka.streams.kstream.Transformer;
@@ -477,19 +477,19 @@ public class CachingWindowStoreTest {
         assertEquals(0, cache.size());
     }
 
-    @Test(expected = InvalidStateStoreException.class)
+    @Test(expected = StateStoreClosedException.class)
     public void shouldThrowIfTryingToFetchFromClosedCachingStore() {
         cachingStore.close();
         cachingStore.fetch(bytesKey("a"), ofEpochMilli(0), ofEpochMilli(10));
     }
 
-    @Test(expected = InvalidStateStoreException.class)
+    @Test(expected = StateStoreClosedException.class)
     public void shouldThrowIfTryingToFetchRangeFromClosedCachingStore() {
         cachingStore.close();
         cachingStore.fetch(bytesKey("a"), bytesKey("b"), ofEpochMilli(0), ofEpochMilli(10));
     }
 
-    @Test(expected = InvalidStateStoreException.class)
+    @Test(expected = StateStoreClosedException.class)
     public void shouldThrowIfTryingToWriteToClosedCachingStore() {
         cachingStore.close();
         cachingStore.put(bytesKey("a"), bytesValue("a"));

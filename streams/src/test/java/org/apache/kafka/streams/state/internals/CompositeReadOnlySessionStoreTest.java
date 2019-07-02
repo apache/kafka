@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.kstream.Windowed;
@@ -53,8 +54,8 @@ public class CompositeReadOnlySessionStoreTest {
         stubProviderOne.addStore(storeName, underlyingSessionStore);
         stubProviderOne.addStore("other-session-store", otherUnderlyingStore);
 
-
-        sessionStore = new CompositeReadOnlySessionStore<>(
+        final KafkaStreams streams = StreamsTestUtils.mockStreams(KafkaStreams.State.RUNNING);
+        sessionStore = new CompositeReadOnlySessionStore<>(streams,
                 new WrappingStoreProvider(Arrays.<StateStoreProvider>asList(stubProviderOne, stubProviderTwo)),
                 QueryableStoreTypes.<String, Long>sessionStore(), storeName);
     }
@@ -107,8 +108,9 @@ public class CompositeReadOnlySessionStoreTest {
 
     @Test(expected = InvalidStateStoreException.class)
     public void shouldThrowInvalidStateStoreExceptionOnRebalance() {
+        final KafkaStreams streams = StreamsTestUtils.mockStreams(KafkaStreams.State.RUNNING);
         final CompositeReadOnlySessionStore<String, String> store =
-            new CompositeReadOnlySessionStore<>(
+            new CompositeReadOnlySessionStore<>(streams,
                 new StateStoreProviderStub(true),
                 QueryableStoreTypes.sessionStore(),
                 "whateva");

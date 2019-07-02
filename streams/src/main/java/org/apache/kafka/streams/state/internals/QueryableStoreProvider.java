@@ -16,7 +16,8 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import org.apache.kafka.streams.errors.InvalidStateStoreException;
+import org.apache.kafka.streams.KafkaStreams;
+import org.apache.kafka.streams.errors.internals.EmptyStateStoreException;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.QueryableStoreType;
 
@@ -32,9 +33,11 @@ public class QueryableStoreProvider {
 
     private final List<StateStoreProvider> storeProviders;
     private final GlobalStateStoreProvider globalStoreProvider;
+    private final KafkaStreams streams;
 
-    public QueryableStoreProvider(final List<StateStoreProvider> storeProviders,
+    public QueryableStoreProvider(final KafkaStreams streams, final List<StateStoreProvider> storeProviders,
                                   final GlobalStateStoreProvider globalStateStoreProvider) {
+        this.streams = streams;
         this.storeProviders = new ArrayList<>(storeProviders);
         this.globalStoreProvider = globalStateStoreProvider;
     }
@@ -50,6 +53,7 @@ public class QueryableStoreProvider {
      */
     public <T> T getStore(final String storeName,
                           final QueryableStoreType<T> queryableStoreType) {
+        ((ConsumeKafkaStreams) queryableStoreType).accept(streams);
         final List<T> globalStore = globalStoreProvider.stores(storeName, queryableStoreType);
         if (!globalStore.isEmpty()) {
             return queryableStoreType.create(new WrappingStoreProvider(singletonList(globalStoreProvider)), storeName);
@@ -59,7 +63,7 @@ public class QueryableStoreProvider {
             allStores.addAll(storeProvider.stores(storeName, queryableStoreType));
         }
         if (allStores.isEmpty()) {
-            throw new InvalidStateStoreException("The state store, " + storeName + ", may have migrated to another instance.");
+            throw new EmptyStateStoreException("The state store, " + storeName + ", may have migrated to another instance.");
         }
         return queryableStoreType.create(
                 new WrappingStoreProvider(storeProviders),

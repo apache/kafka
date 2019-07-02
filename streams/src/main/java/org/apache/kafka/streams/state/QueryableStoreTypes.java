@@ -23,6 +23,7 @@ import org.apache.kafka.streams.state.internals.CompositeReadOnlyKeyValueStore;
 import org.apache.kafka.streams.state.internals.CompositeReadOnlySessionStore;
 import org.apache.kafka.streams.state.internals.CompositeReadOnlyWindowStore;
 import org.apache.kafka.streams.state.internals.StateStoreProvider;
+import org.apache.kafka.streams.state.internals.ConsumeKafkaStreams;
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -91,9 +92,10 @@ public final class QueryableStoreTypes {
         return new SessionStoreType<>();
     }
 
-    private static abstract class QueryableStoreTypeMatcher<T> implements QueryableStoreType<T> {
+    private static abstract class QueryableStoreTypeMatcher<T> implements QueryableStoreType<T>, ConsumeKafkaStreams {
 
         private final Set<Class> matchTo;
+        protected KafkaStreams streams;
 
         QueryableStoreTypeMatcher(final Set<Class> matchTo) {
             this.matchTo = matchTo;
@@ -109,6 +111,11 @@ public final class QueryableStoreTypes {
             }
             return true;
         }
+
+        @Override
+        public void accept(final KafkaStreams streams) {
+            this.streams = streams;
+        }
     }
 
     public static class KeyValueStoreType<K, V> extends QueryableStoreTypeMatcher<ReadOnlyKeyValueStore<K, V>> {
@@ -120,7 +127,7 @@ public final class QueryableStoreTypes {
         @Override
         public ReadOnlyKeyValueStore<K, V> create(final StateStoreProvider storeProvider,
                                                   final String storeName) {
-            return new CompositeReadOnlyKeyValueStore<>(storeProvider, this, storeName);
+            return new CompositeReadOnlyKeyValueStore<>(streams, storeProvider, this, storeName);
         }
 
     }
@@ -137,7 +144,7 @@ public final class QueryableStoreTypes {
         @Override
         public ReadOnlyKeyValueStore<K, ValueAndTimestamp<V>> create(final StateStoreProvider storeProvider,
                                                                      final String storeName) {
-            return new CompositeReadOnlyKeyValueStore<>(storeProvider, this, storeName);
+            return new CompositeReadOnlyKeyValueStore<>(streams, storeProvider, this, storeName);
         }
     }
 
@@ -150,7 +157,7 @@ public final class QueryableStoreTypes {
         @Override
         public ReadOnlyWindowStore<K, V> create(final StateStoreProvider storeProvider,
                                                 final String storeName) {
-            return new CompositeReadOnlyWindowStore<>(storeProvider, this, storeName);
+            return new CompositeReadOnlyWindowStore<>(streams, storeProvider, this, storeName);
         }
     }
 
@@ -166,7 +173,7 @@ public final class QueryableStoreTypes {
         @Override
         public ReadOnlyWindowStore<K, ValueAndTimestamp<V>> create(final StateStoreProvider storeProvider,
                                                                    final String storeName) {
-            return new CompositeReadOnlyWindowStore<>(storeProvider, this, storeName);
+            return new CompositeReadOnlyWindowStore<>(streams, storeProvider, this, storeName);
         }
     }
 
@@ -179,7 +186,7 @@ public final class QueryableStoreTypes {
         @Override
         public ReadOnlySessionStore<K, V> create(final StateStoreProvider storeProvider,
                                                  final String storeName) {
-            return new CompositeReadOnlySessionStore<>(storeProvider, this, storeName);
+            return new CompositeReadOnlySessionStore<>(streams, storeProvider, this, storeName);
         }
     }
 

@@ -18,7 +18,7 @@ package org.apache.kafka.streams.state.internals;
 
 
 import org.apache.kafka.common.serialization.Serdes;
-import org.apache.kafka.streams.errors.InvalidStateStoreException;
+import org.apache.kafka.streams.errors.internals.EmptyStateStoreException;
 import org.apache.kafka.streams.state.NoOpWindowStore;
 import org.apache.kafka.streams.state.QueryableStoreTypes;
 import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
@@ -74,7 +74,7 @@ public class WrappingStoreProviderTest {
         assertEquals(2, windowStores.size());
     }
 
-    @Test(expected = InvalidStateStoreException.class)
+    @Test(expected = EmptyStateStoreException.class)
     public void shouldThrowInvalidStoreExceptionIfNoStoreOfTypeFound() {
         wrappingStoreProvider.stores("doesn't exist", QueryableStoreTypes.keyValueStore());
     }

@@ -26,7 +26,8 @@ import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.TopologyWrapper;
-import org.apache.kafka.streams.errors.InvalidStateStoreException;
+import org.apache.kafka.streams.errors.internals.StateStoreClosedException;
+import org.apache.kafka.streams.errors.StreamThreadNotRunningException;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.apache.kafka.streams.processor.internals.ProcessorTopology;
@@ -246,28 +247,28 @@ public class StreamThreadStateStoreProviderTest {
         }
     }
 
-    @Test(expected = InvalidStateStoreException.class)
+    @Test(expected = StateStoreClosedException.class)
     public void shouldThrowInvalidStoreExceptionIfKVStoreClosed() {
         mockThread(true);
         taskOne.getStore("kv-store").close();
         provider.stores("kv-store", QueryableStoreTypes.keyValueStore());
     }
 
-    @Test(expected = InvalidStateStoreException.class)
+    @Test(expected = StateStoreClosedException.class)
     public void shouldThrowInvalidStoreExceptionIfTsKVStoreClosed() {
         mockThread(true);
         taskOne.getStore("timestamped-kv-store").close();
         provider.stores("timestamped-kv-store", QueryableStoreTypes.timestampedKeyValueStore());
     }
 
-    @Test(expected = InvalidStateStoreException.class)
+    @Test(expected = StateStoreClosedException.class)
     public void shouldThrowInvalidStoreExceptionIfWindowStoreClosed() {
         mockThread(true);
         taskOne.getStore("window-store").close();
         provider.stores("window-store", QueryableStoreTypes.windowStore());
     }
 
-    @Test(expected = InvalidStateStoreException.class)
+    @Test(expected = StateStoreClosedException.class)
     public void shouldThrowInvalidStoreExceptionIfTsWindowStoreClosed() {
         mockThread(true);
         taskOne.getStore("timestamped-window-store").close();
@@ -291,7 +292,7 @@ public class StreamThreadStateStoreProviderTest {
         );
     }
 
-    @Test(expected = InvalidStateStoreException.class)
+    @Test(expected = StreamThreadNotRunningException.class)
     public void shouldThrowInvalidStoreExceptionIfNotAllStoresAvailable() {
         mockThread(false);
         provider.stores("kv-store", QueryableStoreTypes.keyValueStore());
