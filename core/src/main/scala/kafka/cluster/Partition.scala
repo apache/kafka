@@ -178,7 +178,7 @@ class Partition(val topicPartition: TopicPartition,
   @volatile private var leaderEpochStartOffsetOpt: Option[Long] = None
   @volatile var leaderReplicaIdOpt: Option[Int] = None
   @volatile var inSyncReplicaIds = Set.empty[Int]
-  // An order sequence of all the valid broker ids that were assigned to this topic partition
+  // An ordered sequence of all the valid broker ids that were assigned to this topic partition
   @volatile var allReplicaIds = Seq.empty[Int]
 
   // Logs belonging to this partition. Majority of time it will be only one log, but if log directory
@@ -626,7 +626,7 @@ class Partition(val topicPartition: TopicPartition,
    *
    * Note: public visibility for tests.
    *
-   * @param assignment An order sequence of all the broker ids that were assigned to this
+   * @param assignment An ordered sequence of all the broker ids that were assigned to this
    *                   topic partition
    * @param isr The set of broker ids that are known to be insync with the leader
    */
