@@ -59,6 +59,7 @@ import static java.util.Collections.singletonList;
 import static java.util.Collections.singletonMap;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
+import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.Is.is;
@@ -431,7 +432,7 @@ public class ProcessorStateManagerTest {
             noPartitions,
             false,
             stateDirectory,
-            emptyMap(),
+            singletonMap(persistentStoreName, persistentStorePartition.topic()),
             changelogReader,
             false,
             logContext);
@@ -439,6 +440,122 @@ public class ProcessorStateManagerTest {
         stateMgr.close(true);
         final Map<TopicPartition, Long> read = checkpoint.read();
         assertThat(read, equalTo(offsets));
+    }
+
+    @Test
+    public void shouldRejectInvalidLoadedCheckpoints() throws IOException {
+        final Map<TopicPartition, Long> offsets = mkMap(
+            mkEntry(persistentStorePartition, 99L),
+            mkEntry(new TopicPartition("invalid", 3), 987L)
+        );
+        checkpoint.write(offsets);
+
+        final MockKeyValueStore persistentStore = new MockKeyValueStore(persistentStoreName, true);
+        final ProcessorStateManager stateMgr = new ProcessorStateManager(
+            taskId,
+            noPartitions,
+            false,
+            stateDirectory,
+            singletonMap(persistentStoreName, persistentStorePartition.topic()),
+            changelogReader,
+            false,
+            logContext);
+        stateMgr.register(persistentStore, persistentStore.stateRestoreCallback);
+        stateMgr.checkpoint(emptyMap());
+        stateMgr.close(true);
+        final Map<TopicPartition, Long> read = checkpoint.read();
+
+        // note we dropped the invalid topic
+        assertThat(read, equalTo(singletonMap(persistentStorePartition, 99L)));
+    }
+
+    @Test
+    public void shouldOverrideLoadedCheckpointsWithRestoredCheckpoints() throws IOException {
+        final Map<TopicPartition, Long> offsets = singletonMap(persistentStorePartition, 99L);
+        checkpoint.write(offsets);
+
+        final MockKeyValueStore persistentStore = new MockKeyValueStore(persistentStoreName, true);
+        final ProcessorStateManager stateMgr = new ProcessorStateManager(
+            taskId,
+            noPartitions,
+            false,
+            stateDirectory,
+            singletonMap(persistentStoreName, persistentStorePartition.topic()),
+            changelogReader,
+            false,
+            logContext);
+        stateMgr.register(persistentStore, persistentStore.stateRestoreCallback);
+
+        changelogReader.setRestoredOffsets(singletonMap(persistentStorePartition, 110L));
+
+        stateMgr.checkpoint(emptyMap());
+        stateMgr.close(true);
+        final Map<TopicPartition, Long> read = checkpoint.read();
+        assertThat(read, equalTo(singletonMap(persistentStorePartition, 110L)));
+    }
+
+    @Test
+    public void shouldIgnoreIrrelevantRestoredCheckpoints() throws IOException {
+        final Map<TopicPartition, Long> offsets = singletonMap(persistentStorePartition, 99L);
+        checkpoint.write(offsets);
+
+        final MockKeyValueStore persistentStore = new MockKeyValueStore(persistentStoreName, true);
+        final ProcessorStateManager stateMgr = new ProcessorStateManager(
+            taskId,
+            noPartitions,
+            false,
+            stateDirectory,
+            singletonMap(persistentStoreName, persistentStorePartition.topic()),
+            changelogReader,
+            false,
+            logContext);
+        stateMgr.register(persistentStore, persistentStore.stateRestoreCallback);
+
+        // should ignore irrelevant topic partitions
+        changelogReader.setRestoredOffsets(mkMap(
+            mkEntry(persistentStorePartition, 110L),
+            mkEntry(new TopicPartition("sillytopic", 5000), 1234L)
+        ));
+
+        stateMgr.checkpoint(emptyMap());
+        stateMgr.close(true);
+        final Map<TopicPartition, Long> read = checkpoint.read();
+        assertThat(read, equalTo(singletonMap(persistentStorePartition, 110L)));
+    }
+
+    @Test
+    public void shouldOverrideRestoredOffsetsWithCheckpoint() throws IOException {
+        final Map<TopicPartition, Long> offsets = singletonMap(persistentStorePartition, 99L);
+        checkpoint.write(offsets);
+
+        final MockKeyValueStore persistentStore = new MockKeyValueStore(persistentStoreName, true);
+        final ProcessorStateManager stateMgr = new ProcessorStateManager(
+            taskId,
+            noPartitions,
+            false,
+            stateDirectory,
+            singletonMap(persistentStoreName, persistentStorePartition.topic()),
+            changelogReader,
+            false,
+            logContext);
+        stateMgr.register(persistentStore, persistentStore.stateRestoreCallback);
+
+        // should ignore irrelevant topic partitions
+        changelogReader.setRestoredOffsets(mkMap(
+            mkEntry(persistentStorePartition, 110L),
+            mkEntry(new TopicPartition("sillytopic", 5000), 1234L)
+        ));
+
+        // should ignore irrelevant topic partitions
+        stateMgr.checkpoint(mkMap(
+            mkEntry(persistentStorePartition, 220L),
+            mkEntry(new TopicPartition("ignoreme", 42), 9000L)
+        ));
+        stateMgr.close(true);
+        final Map<TopicPartition, Long> read = checkpoint.read();
+
+        // the checkpoint gets incremented to be the log position _after_ the committed offset
+        assertThat(read, equalTo(singletonMap(persistentStorePartition, 221L)));
     }
 
     @Test
@@ -752,7 +869,7 @@ public class ProcessorStateManagerTest {
                 noPartitions,
                 false,
                 stateDirectory,
-                emptyMap(),
+                singletonMap(persistentStoreName, persistentStoreTopicName),
                 changelogReader,
                 true,
                 logContext);

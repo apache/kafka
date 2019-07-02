@@ -20,6 +20,7 @@ import org.apache.kafka.common.TopicPartition;
 
 import java.util.Collection;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Performs bulk read operations from a set of partitions. Used to
@@ -43,6 +44,8 @@ public interface ChangelogReader {
      * @return the restored offsets for all persistent stores.
      */
     Map<TopicPartition, Long> restoredOffsets();
+
+    Map<TopicPartition, Long> restoredOffsets(final Set<TopicPartition> partitions);
 
     void reset();
 }

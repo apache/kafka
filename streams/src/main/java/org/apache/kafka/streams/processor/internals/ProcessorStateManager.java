@@ -33,11 +33,12 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static java.util.Collections.unmodifiableList;
 import static org.apache.kafka.streams.processor.internals.StateRestoreCallbackAdapter.adapt;
@@ -63,14 +64,12 @@ public class ProcessorStateManager extends AbstractStateManager {
     private final List<TopicPartition> changelogPartitions = new ArrayList<>();
 
     // TODO: this map does not work with customized grouper where multiple partitions
-    // of the same topic can be assigned to the same topic.
+    // of the same topic can be assigned to the same task.
     private final Map<String, TopicPartition> partitionForTopic;
-
-    private final Set<TopicPartition> sources;
 
     /**
      * @throws ProcessorStateException if the task directory does not exist and could not be created
-     * @throws IOException if any severe error happens while creating or locking the state directory
+     * @throws IOException             if any severe error happens while creating or locking the state directory
      */
     public ProcessorStateManager(final TaskId taskId,
                                  final Collection<TopicPartition> sources,
@@ -88,7 +87,6 @@ public class ProcessorStateManager extends AbstractStateManager {
         logPrefix = String.format("task [%s] ", taskId);
 
         partitionForTopic = new HashMap<>();
-        this.sources = new HashSet<>(sources);
         for (final TopicPartition source : sources) {
             partitionForTopic.put(source.topic(), source);
         }
@@ -101,8 +99,6 @@ public class ProcessorStateManager extends AbstractStateManager {
 
         // load the checkpoint information
         checkpointableOffsets.putAll(checkpoint.read());
-
-        verifyCheckpointableOffsets();
 
         log.trace("Checkpointable offsets read from checkpoint: {}", checkpointableOffsets);
 
@@ -317,35 +313,31 @@ public class ProcessorStateManager extends AbstractStateManager {
         }
     }
 
+    private Stream<TopicPartition> validCheckpointableTopics() {
+        return registeredStores
+            .values()
+            .stream()
+            .filter(Optional::isPresent)
+            .map(Optional::get)
+            .filter(store -> store.persistent() && storeToChangelogTopic.containsKey(store.name()))
+            .map(store -> new TopicPartition(storeToChangelogTopic.get(store.name()), getPartition(store.name())));
+    }
+
     // write the checkpoint
     @Override
     public void checkpoint(final Map<TopicPartition, Long> checkpointableOffsets) {
-        for (Map.Entry<TopicPartition, Long> entry : changelogReader.restoredOffsets().entrySet()) {
-            if (sources.contains(entry.getKey())) {
-                this.checkpointableOffsets.put(entry.getKey(), entry.getValue());
-            }
-        }
+        final Map<TopicPartition, Long> restoredOffsets = changelogReader.restoredOffsets();
         log.trace("Checkpointable offsets updated with restored offsets: {}", this.checkpointableOffsets);
-        for (final Map.Entry<String, Optional<StateStore>> entry : registeredStores.entrySet()) {
-            if (entry.getValue().isPresent()) {
-                final StateStore store = entry.getValue().get();
-                final String storeName = store.name();
-                // only checkpoint the offset to the offsets file if
-                // it is persistent AND changelog enabled
-                if (store.persistent() && storeToChangelogTopic.containsKey(storeName)) {
-                    final String changelogTopic = storeToChangelogTopic.get(storeName);
-                    final TopicPartition topicPartition = new TopicPartition(changelogTopic, getPartition(storeName));
-                    if (checkpointableOffsets.containsKey(topicPartition)) {
-                        // store the last offset + 1 (the log position after restoration)
-                        this.checkpointableOffsets.put(topicPartition, checkpointableOffsets.get(topicPartition) + 1);
-                    } else if (standbyRestoredOffsets.containsKey(topicPartition)) {
-                        this.checkpointableOffsets.put(topicPartition, standbyRestoredOffsets.get(topicPartition));
-                    }
-                }
-            } else {
-                throw new IllegalStateException("Expected " + entry.getKey() + " to have been initialized");
+        validCheckpointableTopics().forEachOrdered(topicPartition -> {
+            if (checkpointableOffsets.containsKey(topicPartition)) {
+                // store the last offset + 1 (the log position after restoration)
+                this.checkpointableOffsets.put(topicPartition, checkpointableOffsets.get(topicPartition) + 1);
+            } else if (standbyRestoredOffsets.containsKey(topicPartition)) {
+                this.checkpointableOffsets.put(topicPartition, standbyRestoredOffsets.get(topicPartition));
+            } else if (restoredOffsets.containsKey(topicPartition)) {
+                this.checkpointableOffsets.put(topicPartition, restoredOffsets.get(topicPartition));
             }
-        }
+        });
 
         log.trace("Checkpointable offsets updated with active acked offsets: {}", this.checkpointableOffsets);
 
@@ -354,7 +346,7 @@ public class ProcessorStateManager extends AbstractStateManager {
             checkpoint = new OffsetCheckpoint(new File(baseDir, CHECKPOINT_FILE_NAME));
         }
 
-        verifyCheckpointableOffsets();
+        purgeInvalidCheckpointableOffsets();
         log.trace("Writing checkpoint: {}", this.checkpointableOffsets);
         try {
             checkpoint.write(this.checkpointableOffsets);
@@ -394,10 +386,12 @@ public class ProcessorStateManager extends AbstractStateManager {
         }
     }
 
-    private void verifyCheckpointableOffsets() {
+    private void purgeInvalidCheckpointableOffsets() {
+        final Set<TopicPartition> validCheckpointableTopics = validCheckpointableTopics().collect(Collectors.toSet());
         Map<TopicPartition, Long> illegal = null;
         for (final Map.Entry<TopicPartition, Long> entry : checkpointableOffsets.entrySet()) {
-            if (!sources.contains(entry.getKey())) {
+            if (!validCheckpointableTopics.contains(entry.getKey())) {
+                // avoiding allocation in the common case where we don't need the collection.
                 if (illegal == null) {
                     illegal = new HashMap<>();
                 }
@@ -407,13 +401,14 @@ public class ProcessorStateManager extends AbstractStateManager {
         if (illegal != null) {
             final String message = String.format(
                 "Task %s should not have checkpoints for the following unowned partitions: %s." +
-                    "Most likely, the checkpoint file has become corrupted. " +
-                    "Attempt cleaning the state directory and restarting.",
+                    "Attempting to skip over invalid partitions, which should repair the checkpoint file.",
                 taskId,
                 illegal
             );
-            log.error(message);
-            throw new IllegalStateException(message);
+            log.warn(message);
+            for (final TopicPartition topicPartition : illegal.keySet()) {
+                checkpointableOffsets.remove(topicPartition);
+            }
         }
     }
 }
