@@ -33,9 +33,11 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 import static java.util.Collections.unmodifiableList;
 import static org.apache.kafka.streams.processor.internals.StateRestoreCallbackAdapter.adapt;
@@ -64,6 +66,8 @@ public class ProcessorStateManager extends AbstractStateManager {
     // of the same topic can be assigned to the same topic.
     private final Map<String, TopicPartition> partitionForTopic;
 
+    private final Set<TopicPartition> sources;
+
     /**
      * @throws ProcessorStateException if the task directory does not exist and could not be created
      * @throws IOException if any severe error happens while creating or locking the state directory
@@ -84,6 +88,7 @@ public class ProcessorStateManager extends AbstractStateManager {
         logPrefix = String.format("task [%s] ", taskId);
 
         partitionForTopic = new HashMap<>();
+        this.sources = new HashSet<>(sources);
         for (final TopicPartition source : sources) {
             partitionForTopic.put(source.topic(), source);
         }
@@ -96,6 +101,8 @@ public class ProcessorStateManager extends AbstractStateManager {
 
         // load the checkpoint information
         checkpointableOffsets.putAll(checkpoint.read());
+
+        verifyCheckpointableOffsets();
 
         log.trace("Checkpointable offsets read from checkpoint: {}", checkpointableOffsets);
 
@@ -266,6 +273,7 @@ public class ProcessorStateManager extends AbstractStateManager {
     /**
      * {@link StateStore#close() Close} all stores (even in case of failure).
      * Log all exception and re-throw the first exception that did occur at the end.
+     *
      * @throws ProcessorStateException if any error happens when closing the state stores
      */
     @Override
@@ -312,7 +320,11 @@ public class ProcessorStateManager extends AbstractStateManager {
     // write the checkpoint
     @Override
     public void checkpoint(final Map<TopicPartition, Long> checkpointableOffsets) {
-        this.checkpointableOffsets.putAll(changelogReader.restoredOffsets());
+        for (Map.Entry<TopicPartition, Long> entry : changelogReader.restoredOffsets().entrySet()) {
+            if (sources.contains(entry.getKey())) {
+                this.checkpointableOffsets.put(entry.getKey(), entry.getValue());
+            }
+        }
         log.trace("Checkpointable offsets updated with restored offsets: {}", this.checkpointableOffsets);
         for (final Map.Entry<String, Optional<StateStore>> entry : registeredStores.entrySet()) {
             if (entry.getValue().isPresent()) {
@@ -342,6 +354,7 @@ public class ProcessorStateManager extends AbstractStateManager {
             checkpoint = new OffsetCheckpoint(new File(baseDir, CHECKPOINT_FILE_NAME));
         }
 
+        verifyCheckpointableOffsets();
         log.trace("Writing checkpoint: {}", this.checkpointableOffsets);
         try {
             checkpoint.write(this.checkpointableOffsets);
@@ -378,6 +391,29 @@ public class ProcessorStateManager extends AbstractStateManager {
                     "store [" + entry.getKey() + "] has not been correctly registered. This is a bug in Kafka Streams."
                 );
             }
+        }
+    }
+
+    private void verifyCheckpointableOffsets() {
+        Map<TopicPartition, Long> illegal = null;
+        for (final Map.Entry<TopicPartition, Long> entry : checkpointableOffsets.entrySet()) {
+            if (!sources.contains(entry.getKey())) {
+                if (illegal == null) {
+                    illegal = new HashMap<>();
+                }
+                illegal.put(entry.getKey(), entry.getValue());
+            }
+        }
+        if (illegal != null) {
+            final String message = String.format(
+                "Task %s should not have checkpoints for the following unowned partitions: %s." +
+                    "Most likely, the checkpoint file has become corrupted. " +
+                    "Attempt cleaning the state directory and restarting.",
+                taskId,
+                illegal
+            );
+            log.error(message);
+            throw new IllegalStateException(message);
         }
     }
 }
