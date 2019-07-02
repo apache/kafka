@@ -17,13 +17,15 @@
 package kafka.server
 
 import java.util.concurrent.{ConcurrentHashMap, TimeUnit}
+import java.util.concurrent.locks.ReentrantReadWriteLock
+
+import scala.collection.Seq
 
 import kafka.server.Constants._
 import kafka.server.ReplicationQuotaManagerConfig._
 import kafka.utils.CoreUtils._
 import kafka.utils.Logging
 import org.apache.kafka.common.metrics._
-import java.util.concurrent.locks.ReentrantReadWriteLock
 
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.metrics.stats.SimpleRate

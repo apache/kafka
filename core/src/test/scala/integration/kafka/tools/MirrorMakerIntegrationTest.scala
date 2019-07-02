@@ -18,6 +18,8 @@ package kafka.tools
 
 import java.util.Properties
 
+import scala.collection.Seq
+
 import kafka.integration.KafkaServerTestHarness
 import kafka.server.KafkaConfig
 import kafka.tools.MirrorMaker.{ConsumerWrapper, MirrorMakerProducer, NoRecordsException}

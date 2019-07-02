@@ -18,6 +18,8 @@ package kafka.server
 
 import java.util.Properties
 
+import scala.collection.Seq
+
 import kafka.utils.TestUtils
 import TestUtils._
 import kafka.zk.ZooKeeperTestHarness
@@ -73,7 +75,7 @@ class LogRecoveryTest extends ZooKeeperTestHarness {
   }
 
   @Before
-  override def setUp() {
+  override def setUp(): Unit = {
     super.setUp()
 
     configs = TestUtils.createBrokerConfigs(2, zkConnect, enableControlledShutdown = false).map(KafkaConfig.fromProps(_, overridingProps))
@@ -91,7 +93,7 @@ class LogRecoveryTest extends ZooKeeperTestHarness {
   }
 
   @After
-  override def tearDown() {
+  override def tearDown(): Unit = {
     producer.close()
     TestUtils.shutdownServers(servers)
     super.tearDown()
@@ -238,7 +240,7 @@ class LogRecoveryTest extends ZooKeeperTestHarness {
     assertEquals(hw, hwFile2.read.getOrElse(topicPartition, 0L))
   }
 
-  private def sendMessages(n: Int) {
+  private def sendMessages(n: Int): Unit = {
     (0 until n).map(_ => producer.send(new ProducerRecord(topic, 0, message))).foreach(_.get)
   }
 }

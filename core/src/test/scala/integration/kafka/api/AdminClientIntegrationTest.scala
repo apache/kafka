@@ -50,6 +50,7 @@ import org.junit.rules.Timeout
 import org.junit.{After, Before, Rule, Test}
 import org.scalatest.Assertions.intercept
 import scala.collection.JavaConverters._
+import scala.collection.Seq
 import scala.compat.java8.OptionConverters._
 import scala.concurrent.duration.Duration
 import scala.concurrent.{Await, Future}

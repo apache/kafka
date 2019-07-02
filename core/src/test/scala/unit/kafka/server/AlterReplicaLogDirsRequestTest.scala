@@ -38,7 +38,7 @@ class AlterReplicaLogDirsRequestTest extends BaseRequestTest {
   val topic = "topic"
 
   @Test
-  def testAlterReplicaLogDirsRequest() {
+  def testAlterReplicaLogDirsRequest(): Unit = {
     val partitionNum = 5
 
     // Alter replica dir before topic creation

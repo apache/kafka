@@ -732,7 +732,7 @@ class DynamicMetricsReporters(brokerId: Int, server: KafkaServer) extends Reconf
       case reporter: Reconfigurable => dynamicConfig.maybeReconfigure(reporter, dynamicConfig.currentKafkaConfig, configs)
       case _ =>
     }
-    val added = updatedMetricsReporters -- currentReporters.keySet
+    val added = updatedMetricsReporters.filterNot(currentReporters.keySet)
     createReporters(added.asJava, configs)
   }
 
@@ -844,9 +844,9 @@ class DynamicListenerConfig(server: KafkaServer) extends BrokerReconfigurable wi
   def validateReconfiguration(newConfig: KafkaConfig): Unit = {
 
     def immutableListenerConfigs(kafkaConfig: KafkaConfig, prefix: String): Map[String, AnyRef] = {
-      newConfig.originals.asScala
-        .filterKeys(_.startsWith(prefix))
-        .filterKeys(k => !DynamicSecurityConfigs.contains(k))
+      newConfig.originals.asScala.filter { case (key, _) =>
+        key.startsWith(prefix) && !DynamicSecurityConfigs.contains(key)
+      }
     }
 
     val oldConfig = server.config

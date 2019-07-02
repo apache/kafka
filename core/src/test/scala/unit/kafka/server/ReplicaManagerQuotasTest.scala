@@ -190,7 +190,8 @@ class ReplicaManagerQuotasTest {
     assertFalse("Out of sync replica should not complete", setupDelayedFetch(isReplicaInSync = false).tryComplete())
   }
 
-  def setUpMocks(fetchInfo: Seq[(TopicPartition, PartitionData)], record: SimpleRecord = this.record, bothReplicasInSync: Boolean = false) {
+  def setUpMocks(fetchInfo: Seq[(TopicPartition, PartitionData)], record: SimpleRecord = this.record,
+                 bothReplicasInSync: Boolean = false): Unit = {
     val zkClient: KafkaZkClient = EasyMock.createMock(classOf[KafkaZkClient])
     val scheduler: KafkaScheduler = createNiceMock(classOf[KafkaScheduler])
 
@@ -257,7 +258,7 @@ class ReplicaManagerQuotasTest {
   }
 
   @After
-  def tearDown() {
+  def tearDown(): Unit = {
     if (replicaManager != null)
       replicaManager.shutdown(false)
     metrics.close()
