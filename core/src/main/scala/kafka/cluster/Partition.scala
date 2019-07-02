@@ -624,8 +624,6 @@ class Partition(val topicPartition: TopicPartition,
     val replicaSet = assignment.toSet
     val removedReplicas = remoteReplicasMap.keys -- replicaSet
 
-    require(isr.subsetOf(replicaSet), s"ISR ($isr) must be a subset of the assigned replicas ($replicaSet)")
-
     assignment
       .filter(_ != localBrokerId)
       .foreach(id => remoteReplicasMap.getAndMaybePut(id, new Replica(id, topicPartition)))
@@ -633,16 +631,6 @@ class Partition(val topicPartition: TopicPartition,
     allReplicaIds = assignment
 
     inSyncReplicaIds = isr
-
-    require(
-      (remoteReplicasMap.keys + localBrokerId).toSet == replicaSet,
-      s"The remote replica map (${remoteReplicasMap.keys}) plus local id ($localBrokerId) must match " +
-      s"the assigned replicas ($replicaSet)."
-    )
-    require(
-      !remoteReplicasMap.contains(localBrokerId),
-      s"The remote replica map (${remoteReplicasMap.keys}) must not contain the local id ($localBrokerId)"
-    )
   }
 
   /**
