@@ -82,7 +82,7 @@ class ConnectDistributedTest(Test):
     def setup_services(self, security_protocol=SecurityConfig.PLAINTEXT, timestamp_type=None, broker_version=DEV_BRANCH, auto_create_topics=False):
         self.kafka = KafkaService(self.test_context, self.num_brokers, self.zk,
                                   security_protocol=security_protocol, interbroker_security_protocol=security_protocol,
-                                  topics=self.topics, version=KafkaVersion(broker_version),
+                                  topics=self.topics, version=broker_version,
                                   server_prop_overides=[["auto.create.topics.enable", str(auto_create_topics)]])
         if timestamp_type is not None:
             for node in self.kafka.nodes:
@@ -546,7 +546,7 @@ class ConnectDistributedTest(Test):
         or relies upon the broker to auto-create the topics (v0.10.0.x and before).
         """
         self.CONNECT_PROTOCOL = connect_protocol
-        self.setup_services(broker_version=broker_version, auto_create_topics=auto_create_topics, security_protocol=security_protocol)
+        self.setup_services(broker_version=KafkaVersion(broker_version), auto_create_topics=auto_create_topics, security_protocol=security_protocol)
         self.cc.set_configs(lambda node: self.render("connect-distributed.properties", node=node))
 
         self.cc.start()
