@@ -874,6 +874,14 @@ class ReplicaManager(val config: KafkaConfig,
         case (_, lrr) => lrr.followerNeedsHwUpdate
       }
 
+    val updateHwAndThenCallback: Seq[(TopicPartition, FetchPartitionData)] => Unit =
+      (fetchPartitionData: Seq[(TopicPartition, FetchPartitionData)]) => {
+        fetchPartitionData.foreach {
+          case (tp, partitionData) => updateFollowerHighWatermark(tp, replicaId, partitionData.highWatermark)
+        }
+        responseCallback(fetchPartitionData)
+      }
+
     // respond immediately if 1) fetch request does not want to wait
     //                        2) fetch request does not require any data
     //                        3) has enough data to respond
@@ -881,11 +889,10 @@ class ReplicaManager(val config: KafkaConfig,
     //                        5) all the requested partitions need HW update
     if (timeout <= 0 || fetchInfos.isEmpty || bytesReadable >= fetchMinBytes || errorReadingData || allPartitionsNeedHwUpdate) {
       val fetchPartitionData = logReadResults.map { case (tp, result) =>
-
         tp -> FetchPartitionData(result.error, result.highWatermark, result.leaderLogStartOffset, result.info.records,
           result.lastStableOffset, result.info.abortedTransactions, result.preferredReadReplica)
       }
-      responseCallback(fetchPartitionData)
+      updateHwAndThenCallback(fetchPartitionData)
     } else {
       // construct the fetch results from the read results
       val fetchPartitionStatus = new mutable.ArrayBuffer[(TopicPartition, FetchPartitionStatus)]
@@ -898,7 +905,7 @@ class ReplicaManager(val config: KafkaConfig,
       val fetchMetadata = FetchMetadata(fetchMinBytes, fetchMaxBytes, hardMaxBytesLimit, isFromFollower,
         fetchIsolation, isFromFollower, replicaId, fetchPartitionStatus)
       val delayedFetch = new DelayedFetch(timeout, fetchMetadata, this, quota, clientMetadata,
-        responseCallback)
+        updateHwAndThenCallback)
 
       // create a list of (topic, partition) pairs to use as keys for this delayed fetch operation
       val delayedFetchKeys = fetchPartitionStatus.map { case (tp, _) => TopicPartitionOperationKey(tp) }
@@ -1502,8 +1509,7 @@ class ReplicaManager(val config: KafkaConfig,
               followerFetchOffsetMetadata = readResult.info.fetchOffsetMetadata,
               followerStartOffset = readResult.followerLogStartOffset,
               followerFetchTimeMs = readResult.fetchTimeMs,
-              leaderEndOffset = readResult.leaderLogEndOffset,
-              leaderHighWatermark = readResult.highWatermark)) {
+              leaderEndOffset = readResult.leaderLogEndOffset)) {
               readResult
             } else {
               warn(s"Leader $localBrokerId failed to record follower $followerId's position " +
@@ -1518,6 +1524,21 @@ class ReplicaManager(val config: KafkaConfig,
         }
       }
       topicPartition -> updatedReadResult
+    }
+  }
+
+  private def updateFollowerHighWatermark(topicPartition: TopicPartition, followerId: Int, highWatermark: Long): Unit = {
+    nonOfflinePartition(topicPartition) match {
+      case Some(partition) =>
+        partition.getReplica(followerId) match {
+          case Some(replica) => replica.updateLastSentHighWatermark(highWatermark)
+          case None =>
+            warn(s"While updating the HW for follower $followerId for partition $topicPartition, " +
+              s"the replica could not be found.")
+        }
+      case None =>
+        warn(s"While updating the HW for follower $followerId for partition $topicPartition, " +
+          s"the partition $topicPartition hasn't been created.")
     }
   }
 

@@ -556,13 +556,14 @@ class Partition(val topicPartition: TopicPartition,
         // mark local replica as the leader after converting hw
         leaderReplicaIdOpt = Some(localBrokerId)
         // reset log end offset for remote replicas
-        remoteReplicas.foreach { _.updateFetchState(
+        remoteReplicas.foreach { replica =>
+          replica.updateFetchState(
             followerFetchOffsetMetadata = LogOffsetMetadata.UnknownOffsetMetadata,
             followerStartOffset = Log.UnknownOffset,
             followerFetchTimeMs = 0L,
-            leaderEndOffset = Log.UnknownOffset,
-            leaderHighWatermark = 0L
+            leaderEndOffset = Log.UnknownOffset
           )
+          replica.updateLastSentHighWatermark(0L)
         }
       }
       // we may need to increment high watermark since ISR could be down to 1
@@ -621,8 +622,7 @@ class Partition(val topicPartition: TopicPartition,
                                followerFetchOffsetMetadata: LogOffsetMetadata,
                                followerStartOffset: Long,
                                followerFetchTimeMs: Long,
-                               leaderEndOffset: Long,
-                               leaderHighWatermark: Long): Boolean = {
+                               leaderEndOffset: Long): Boolean = {
 
     getReplica(followerId) match {
       case Some(followerReplica) =>
@@ -632,8 +632,7 @@ class Partition(val topicPartition: TopicPartition,
           followerFetchOffsetMetadata,
           followerStartOffset,
           followerFetchTimeMs,
-          leaderEndOffset,
-          leaderHighWatermark)
+          leaderEndOffset)
         val newLeaderLW = if (delayedOperations.numDelayedDelete > 0) lowWatermarkIfLeader else -1L
         // check if the LW of the partition has incremented
         // since the replica's logStartOffset may have incremented
