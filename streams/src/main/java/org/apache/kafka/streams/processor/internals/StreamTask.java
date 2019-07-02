@@ -286,13 +286,10 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
             initializeTransactions();
             recordCollector.init(producer);
 
-            if (stateMgr.checkpoint != null) {
-                try {
-                    stateMgr.checkpoint.delete();
-                    stateMgr.checkpoint = null;
-                } catch (final IOException e) {
-                    throw new ProcessorStateException(String.format("%sError while deleting the checkpoint file", logPrefix), e);
-                }
+            try {
+                stateMgr.clearCheckpoints();
+            } catch (final IOException e) {
+                throw new ProcessorStateException(format("%sError while deleting the checkpoint file", logPrefix), e);
             }
         }
     }

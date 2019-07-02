@@ -107,7 +107,7 @@ public class ProcessorStateManagerTest {
                 put(StreamsConfig.STATE_DIR_CONFIG, baseDir.getPath());
             }
         }), new MockTime(), true);
-        checkpointFile = new File(stateDirectory.directoryForTask(taskId), ProcessorStateManager.CHECKPOINT_FILE_NAME);
+        checkpointFile = new File(stateDirectory.directoryForTask(taskId), StateManagerUtil.CHECKPOINT_FILE_NAME);
         checkpoint = new OffsetCheckpoint(checkpointFile);
     }
 
@@ -254,7 +254,8 @@ public class ProcessorStateManagerTest {
         storeToChangelogTopic.put(storeName2, storeTopicName2);
         storeToChangelogTopic.put(storeName3, storeTopicName3);
 
-        final OffsetCheckpoint checkpoint = new OffsetCheckpoint(new File(stateDirectory.directoryForTask(taskId), ProcessorStateManager.CHECKPOINT_FILE_NAME));
+        final OffsetCheckpoint checkpoint = new OffsetCheckpoint(new File(stateDirectory.directoryForTask(taskId),
+                                                                          StateManagerUtil.CHECKPOINT_FILE_NAME));
         checkpoint.write(singletonMap(new TopicPartition(storeTopicName1, 0), lastCheckpointedOffset));
 
         final TopicPartition partition1 = new TopicPartition(storeTopicName1, 0);
@@ -431,7 +432,7 @@ public class ProcessorStateManagerTest {
             noPartitions,
             false,
             stateDirectory,
-            emptyMap(),
+            singletonMap(persistentStoreName, persistentStorePartition.topic()),
             changelogReader,
             false,
             logContext);
@@ -439,6 +440,95 @@ public class ProcessorStateManagerTest {
         stateMgr.close(true);
         final Map<TopicPartition, Long> read = checkpoint.read();
         assertThat(read, equalTo(offsets));
+    }
+
+    @Test
+    public void shouldOverrideLoadedCheckpointsWithRestoredCheckpoints() throws IOException {
+        final Map<TopicPartition, Long> offsets = singletonMap(persistentStorePartition, 99L);
+        checkpoint.write(offsets);
+
+        final MockKeyValueStore persistentStore = new MockKeyValueStore(persistentStoreName, true);
+        final ProcessorStateManager stateMgr = new ProcessorStateManager(
+            taskId,
+            noPartitions,
+            false,
+            stateDirectory,
+            singletonMap(persistentStoreName, persistentStorePartition.topic()),
+            changelogReader,
+            false,
+            logContext);
+        stateMgr.register(persistentStore, persistentStore.stateRestoreCallback);
+
+        changelogReader.setRestoredOffsets(singletonMap(persistentStorePartition, 110L));
+
+        stateMgr.checkpoint(emptyMap());
+        stateMgr.close(true);
+        final Map<TopicPartition, Long> read = checkpoint.read();
+        assertThat(read, equalTo(singletonMap(persistentStorePartition, 110L)));
+    }
+
+    @Test
+    public void shouldIgnoreIrrelevantRestoredCheckpoints() throws IOException {
+        final Map<TopicPartition, Long> offsets = singletonMap(persistentStorePartition, 99L);
+        checkpoint.write(offsets);
+
+        final MockKeyValueStore persistentStore = new MockKeyValueStore(persistentStoreName, true);
+        final ProcessorStateManager stateMgr = new ProcessorStateManager(
+            taskId,
+            noPartitions,
+            false,
+            stateDirectory,
+            singletonMap(persistentStoreName, persistentStorePartition.topic()),
+            changelogReader,
+            false,
+            logContext);
+        stateMgr.register(persistentStore, persistentStore.stateRestoreCallback);
+
+        // should ignore irrelevant topic partitions
+        changelogReader.setRestoredOffsets(mkMap(
+            mkEntry(persistentStorePartition, 110L),
+            mkEntry(new TopicPartition("sillytopic", 5000), 1234L)
+        ));
+
+        stateMgr.checkpoint(emptyMap());
+        stateMgr.close(true);
+        final Map<TopicPartition, Long> read = checkpoint.read();
+        assertThat(read, equalTo(singletonMap(persistentStorePartition, 110L)));
+    }
+
+    @Test
+    public void shouldOverrideRestoredOffsetsWithCheckpoint() throws IOException {
+        final Map<TopicPartition, Long> offsets = singletonMap(persistentStorePartition, 99L);
+        checkpoint.write(offsets);
+
+        final MockKeyValueStore persistentStore = new MockKeyValueStore(persistentStoreName, true);
+        final ProcessorStateManager stateMgr = new ProcessorStateManager(
+            taskId,
+            noPartitions,
+            false,
+            stateDirectory,
+            singletonMap(persistentStoreName, persistentStorePartition.topic()),
+            changelogReader,
+            false,
+            logContext);
+        stateMgr.register(persistentStore, persistentStore.stateRestoreCallback);
+
+        // should ignore irrelevant topic partitions
+        changelogReader.setRestoredOffsets(mkMap(
+            mkEntry(persistentStorePartition, 110L),
+            mkEntry(new TopicPartition("sillytopic", 5000), 1234L)
+        ));
+
+        // should ignore irrelevant topic partitions
+        stateMgr.checkpoint(mkMap(
+            mkEntry(persistentStorePartition, 220L),
+            mkEntry(new TopicPartition("ignoreme", 42), 9000L)
+        ));
+        stateMgr.close(true);
+        final Map<TopicPartition, Long> read = checkpoint.read();
+
+        // the checkpoint gets incremented to be the log position _after_ the committed offset
+        assertThat(read, equalTo(singletonMap(persistentStorePartition, 221L)));
     }
 
     @Test
@@ -540,7 +630,7 @@ public class ProcessorStateManagerTest {
             logContext);
 
         try {
-            stateManager.register(new MockKeyValueStore(ProcessorStateManager.CHECKPOINT_FILE_NAME, true), null);
+            stateManager.register(new MockKeyValueStore(StateManagerUtil.CHECKPOINT_FILE_NAME, true), null);
             fail("should have thrown illegal argument exception when store name same as checkpoint file");
         } catch (final IllegalArgumentException e) {
             //pass
@@ -752,7 +842,7 @@ public class ProcessorStateManagerTest {
                 noPartitions,
                 false,
                 stateDirectory,
-                emptyMap(),
+                singletonMap(persistentStoreName, persistentStoreTopicName),
                 changelogReader,
                 true,
                 logContext);
