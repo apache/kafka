@@ -71,7 +71,7 @@
         ]},
         { "name": "PreferredReadReplica", "type": "int32", "versions": "11+", "ignorable": true,
           "about": "The preferred read replica for the consumer to use on its next fetch request"},
-        { "name": "Records", "type": "bytes", "versions": "0+", "nullableVersions": "0+",
+        { "name": "Records", "type": "bytes", "versions": "0+", "nullableVersions": "0+", "style": "zeroCopyByteBuffer",
           "about": "The record data." }
       ]}
     ]}

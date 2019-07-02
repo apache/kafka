@@ -20,7 +20,7 @@
   // Version 1 is the same as version 0.
   "validVersions": "0-1",
   "fields": [
-    { "name": "AuthBytes", "type": "bytes", "versions": "0+",
+    { "name": "AuthBytes", "type": "bytes", "versions": "0+", "style": "zeroCopyByteBuffer",
       "about": "The SASL authentication bytes from the client, as defined by the SASL mechanism." }
   ]
 }

@@ -99,6 +99,7 @@ import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.security.token.delegation.DelegationToken;
 import org.apache.kafka.common.security.token.delegation.TokenInformation;
+import org.apache.kafka.common.utils.ByteUtils;
 import org.apache.kafka.common.utils.SecurityUtils;
 import org.apache.kafka.common.utils.Utils;
 import org.junit.Test;
@@ -1180,7 +1181,7 @@ public class RequestResponseTest {
     }
 
     private SaslAuthenticateRequest createSaslAuthenticateRequest() {
-        SaslAuthenticateRequestData data = new SaslAuthenticateRequestData().setAuthBytes(new byte[0]);
+        SaslAuthenticateRequestData data = new SaslAuthenticateRequestData().setAuthBytes(ByteUtils.EMPTY_BUFFER);
         return new SaslAuthenticateRequest(data);
     }
 

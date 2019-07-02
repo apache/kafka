@@ -17,6 +17,7 @@
 
 package org.apache.kafka.common.protocol;
 
+import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 
 public interface Writable {
@@ -24,7 +25,8 @@ public interface Writable {
     void writeShort(short val);
     void writeInt(int val);
     void writeLong(long val);
-    void writeArray(byte[] arr);
+    void writeRawBytes(byte[] arr);
+    void writeRawBytes(ByteBuffer buf);
 
     /**
      * Write a nullable byte array delimited by a four-byte length prefix.
@@ -42,7 +44,26 @@ public interface Writable {
      */
     default void writeBytes(byte[] arr) {
         writeInt(arr.length);
-        writeArray(arr);
+        writeRawBytes(arr);
+    }
+
+    /**
+     * Write a nullable byte array delimited by a four-byte length prefix.
+     */
+    default void writeNullableBytes(ByteBuffer buf) {
+        if (buf == null) {
+            writeInt(-1);
+        } else {
+            writeBytes(buf);
+        }
+    }
+
+    /**
+     * Write a byte array delimited by a four-byte length prefix.
+     */
+    default void writeBytes(ByteBuffer buf) {
+        writeInt(buf.remaining());
+        writeRawBytes(buf);
     }
 
     /**
@@ -66,6 +87,6 @@ public interface Writable {
                 Short.MAX_VALUE);
         }
         writeShort((short) arr.length);
-        writeArray(arr);
+        writeRawBytes(arr);
     }
 }

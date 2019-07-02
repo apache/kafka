@@ -17,6 +17,7 @@
 
 package org.apache.kafka.common.protocol;
 
+import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
 
 public class ByteBufferAccessor implements Readable, Writable {
@@ -47,7 +48,7 @@ public class ByteBufferAccessor implements Readable, Writable {
     }
 
     @Override
-    public void readArray(byte[] arr) {
+    public void readRawBytes(byte[] arr) {
         buf.get(arr);
     }
 
@@ -72,7 +73,26 @@ public class ByteBufferAccessor implements Readable, Writable {
     }
 
     @Override
-    public void writeArray(byte[] arr) {
+    public void writeRawBytes(byte[] arr) {
         buf.put(arr);
+    }
+
+    @Override
+    public void writeRawBytes(ByteBuffer b) {
+        buf.put(b);
+    }
+
+    @Override
+    public ByteBuffer readNullableByteBufferMaybeZeroCopy() {
+        int length = readInt();
+        if (length < 0) {
+            return null;
+        } else if (length > buf.remaining()) {
+            throw new BufferUnderflowException();
+        }
+        ByteBuffer newBuf = buf.slice();
+        newBuf.limit(length);
+        buf.position(buf.position() + length);
+        return newBuf;
     }
 }

@@ -449,7 +449,7 @@ public class SaslServerAuthenticator implements Authenticator {
 
             try {
                 byte[] responseToken = saslServer.evaluateResponse(
-                        Utils.copyArray(saslAuthenticateRequest.data().authBytes()));
+                        Utils.toArray(saslAuthenticateRequest.data().authBytes()));
                 if (reauthInfo.reauthenticating() && saslServer.isComplete())
                     reauthInfo.ensurePrincipalUnchanged(principal());
                 // For versions with SASL_AUTHENTICATE header, send a response to SASL_AUTHENTICATE request even if token is empty.

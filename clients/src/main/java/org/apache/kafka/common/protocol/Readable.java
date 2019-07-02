@@ -17,6 +17,7 @@
 
 package org.apache.kafka.common.protocol;
 
+import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 
 public interface Readable {
@@ -24,7 +25,7 @@ public interface Readable {
     short readShort();
     int readInt();
     long readLong();
-    void readArray(byte[] arr);
+    void readRawBytes(byte[] arr);
 
     /**
      * Read a Kafka-delimited string from a byte buffer.  The UTF-8 string
@@ -37,7 +38,7 @@ public interface Readable {
             return null;
         }
         byte[] arr = new byte[length];
-        readArray(arr);
+        readRawBytes(arr);
         return new String(arr, StandardCharsets.UTF_8);
     }
 
@@ -45,13 +46,19 @@ public interface Readable {
      * Read a Kafka-delimited array from a byte buffer.  The array length is
      * stored in a four-byte short.
      */
-    default byte[] readNullableBytes() {
+    default byte[] readNullableByteArray() {
         int length = readInt();
         if (length < 0) {
             return null;
         }
         byte[] arr = new byte[length];
-        readArray(arr);
+        readRawBytes(arr);
         return arr;
     }
+
+    /**
+     * Read a bytes field into a ByteBuffer.  If possible, avoid copying the bytes,
+     * in favor of simply returning a reference into the containing object.
+     */
+    ByteBuffer readNullableByteBufferMaybeZeroCopy();
 }

@@ -31,7 +31,9 @@ public final class ApiMessageTypeGenerator {
     private static final class ApiData {
         short apiKey;
         MessageSpec requestSpec;
+        boolean requestContainsZeroCopyFields;
         MessageSpec responseSpec;
+        boolean responseContainsZeroCopyFields;
 
         ApiData(short apiKey) {
             this.apiKey = apiKey;
@@ -73,7 +75,7 @@ public final class ApiMessageTypeGenerator {
         this.buffer = new CodeBuffer();
     }
 
-    public void registerMessageType(MessageSpec spec) {
+    void registerMessageType(MessageSpec spec, boolean containsZeroCopyFields) {
         switch (spec.type()) {
             case REQUEST: {
                 short apiKey = spec.apiKey().get();
@@ -87,6 +89,7 @@ public final class ApiMessageTypeGenerator {
                         "API key " + spec.apiKey().get());
                 }
                 data.requestSpec = spec;
+                data.requestContainsZeroCopyFields = containsZeroCopyFields;
                 break;
             }
             case RESPONSE: {
@@ -101,6 +104,7 @@ public final class ApiMessageTypeGenerator {
                         "API key " + spec.apiKey().get());
                 }
                 data.responseSpec = spec;
+                data.responseContainsZeroCopyFields = containsZeroCopyFields;
                 break;
             }
             default:
@@ -130,6 +134,10 @@ public final class ApiMessageTypeGenerator {
         buffer.printf("%n");
         generateAccessor("responseSchemas", "Schema[]");
         buffer.printf("%n");
+        generateAccessor("requestContainsZeroCopyFields", "boolean");
+        buffer.printf("%n");
+        generateAccessor("responseContainsZeroCopyFields", "boolean");
+        buffer.printf("%n");
         generateToString();
         buffer.decrementIndent();
         buffer.printf("}%n");
@@ -142,12 +150,14 @@ public final class ApiMessageTypeGenerator {
             ApiData apiData = entry.getValue();
             String name = apiData.name();
             numProcessed++;
-            buffer.printf("%s(\"%s\", (short) %d, %s, %s)%s%n",
+            buffer.printf("%s(\"%s\", (short) %d, %s, %s, %s, %s)%s%n",
                 MessageGenerator.toSnakeCase(name).toUpperCase(Locale.ROOT),
                 MessageGenerator.capitalizeFirst(name),
                 entry.getKey(),
                 apiData.requestSchema(),
                 apiData.responseSchema(),
+                Boolean.toString(apiData.requestContainsZeroCopyFields),
+                Boolean.toString(apiData.responseContainsZeroCopyFields),
                 (numProcessed == apis.size()) ? ";" : ",");
         }
     }
@@ -157,17 +167,22 @@ public final class ApiMessageTypeGenerator {
         buffer.printf("private final short apiKey;%n");
         buffer.printf("private final Schema[] requestSchemas;%n");
         buffer.printf("private final Schema[] responseSchemas;%n");
+        buffer.printf("private final boolean requestContainsZeroCopyFields;%n");
+        buffer.printf("private final boolean responseContainsZeroCopyFields;%n");
         headerGenerator.addImport(MessageGenerator.SCHEMA_CLASS);
     }
 
     private void generateEnumConstructor() {
         buffer.printf("ApiMessageType(String name, short apiKey, " +
-            "Schema[] requestSchemas, Schema[] responseSchemas) {%n");
+            "Schema[] requestSchemas, Schema[] responseSchemas, " +
+            "boolean requestContainsZeroCopyFields, boolean responseContainsZeroCopyFields) {%n");
         buffer.incrementIndent();
         buffer.printf("this.name = name;%n");
         buffer.printf("this.apiKey = apiKey;%n");
         buffer.printf("this.requestSchemas = requestSchemas;%n");
         buffer.printf("this.responseSchemas = responseSchemas;%n");
+        buffer.printf("this.requestContainsZeroCopyFields = requestContainsZeroCopyFields;%n");
+        buffer.printf("this.responseContainsZeroCopyFields = responseContainsZeroCopyFields;%n");
         buffer.decrementIndent();
         buffer.printf("}%n");
     }

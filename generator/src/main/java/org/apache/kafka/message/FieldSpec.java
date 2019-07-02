@@ -46,6 +46,8 @@ public final class FieldSpec {
 
     private final String about;
 
+    private final TranslationStyle style;
+
     @JsonCreator
     public FieldSpec(@JsonProperty("name") String name,
                      @JsonProperty("versions") String versions,
@@ -56,7 +58,8 @@ public final class FieldSpec {
                      @JsonProperty("default") String fieldDefault,
                      @JsonProperty("ignorable") boolean ignorable,
                      @JsonProperty("entityType") EntityType entityType,
-                     @JsonProperty("about") String about) {
+                     @JsonProperty("about") String about,
+                     @JsonProperty("style") TranslationStyle style) {
         this.name = Objects.requireNonNull(name);
         this.versions = Versions.parse(versions, null);
         if (this.versions == null) {
@@ -82,6 +85,15 @@ public final class FieldSpec {
         if (!this.fields().isEmpty()) {
             if (!this.type.isArray()) {
                 throw new RuntimeException("Non-array field " + name + " cannot have fields");
+            }
+        }
+        this.style = (style == null) ? TranslationStyle.DEFAULT : style;
+        if ((this.style == TranslationStyle.BYTE_ARRAY) ||
+                (this.style == TranslationStyle.ZERO_COPY_BYTE_BUFFER)) {
+            if (!this.type.isBytes()) {
+                throw new RuntimeException("Invalid translation style " + this.style +
+                        " for field " + this.name + ".  This style can only be used with fields " +
+                        " of type 'bytes', not " + this.type);
             }
         }
     }
@@ -153,5 +165,10 @@ public final class FieldSpec {
     @JsonProperty("about")
     public String about() {
         return about;
+    }
+
+    @JsonProperty("style")
+    public TranslationStyle style() {
+        return style;
     }
 }

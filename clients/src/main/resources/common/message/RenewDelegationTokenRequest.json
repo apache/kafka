@@ -20,7 +20,7 @@
   // Version 1 is the same as version 0.
   "validVersions": "0-1",
   "fields": [
-    { "name": "Hmac", "type": "bytes", "versions": "0+",
+    { "name": "Hmac", "type": "bytes", "versions": "0+", "style": "zeroCopyByteBuffer",
       "about": "The HMAC of the delegation token to be renewed." },
     { "name": "RenewPeriodMs", "type": "int64", "versions": "0+",
       "about": "The renewal time period in milliseconds." }

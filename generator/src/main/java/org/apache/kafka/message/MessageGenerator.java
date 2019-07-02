@@ -53,6 +53,8 @@ public final class MessageGenerator {
 
     static final String WRITABLE_CLASS = "org.apache.kafka.common.protocol.Writable";
 
+    static final String OBJECTS_CLASS = "java.util.Objects";
+
     static final String ARRAYS_CLASS = "java.util.Arrays";
 
     static final String LIST_CLASS = "java.util.List";
@@ -77,11 +79,13 @@ public final class MessageGenerator {
 
     static final String STRUCT_CLASS = "org.apache.kafka.common.protocol.types.Struct";
 
-    static final String BYTES_CLASS = "org.apache.kafka.common.utils.Bytes";
-
     static final String REQUEST_SUFFIX = "Request";
 
     static final String RESPONSE_SUFFIX = "Response";
+
+    static final String BYTE_UTILS_CLASS = "org.apache.kafka.common.utils.ByteUtils";
+
+    static final String BYTE_BUFFER_CLASS = "java.nio.ByteBuffer";
 
     /**
      * The Jackson serializer we use for JSON objects.
@@ -110,13 +114,14 @@ public final class MessageGenerator {
                     String javaName = spec.generatedClassName() + JAVA_SUFFIX;
                     outputFileNames.add(javaName);
                     Path outputPath = Paths.get(outputDir, javaName);
+                    MessageDataGenerator generator;
                     try (BufferedWriter writer = Files.newBufferedWriter(outputPath)) {
-                        MessageDataGenerator generator = new MessageDataGenerator();
+                        generator = new MessageDataGenerator();
                         generator.generate(spec);
                         generator.write(writer);
                     }
                     numProcessed++;
-                    messageTypeGenerator.registerMessageType(spec);
+                    messageTypeGenerator.registerMessageType(spec, generator.containsZeroCopyFields());
                 } catch (Exception e) {
                     throw new RuntimeException("Exception while processing " + inputPath.toString(), e);
                 }

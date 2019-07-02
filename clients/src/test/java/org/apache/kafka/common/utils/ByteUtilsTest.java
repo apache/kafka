@@ -229,4 +229,23 @@ public class ByteUtilsTest {
         assertEquals(value, ByteUtils.readVarlong(in));
     }
 
+    @Test
+    public void testArrayToHexString() {
+        assertEquals("[00 01 02 0e]", ByteUtils.toHexString(new byte[] {0, 1, 2, 14 }));
+        assertEquals("[ff]", ByteUtils.toHexString(new byte[] {-1}));
+        assertEquals("[]", ByteUtils.toHexString(new byte[] {}));
+        assertEquals("[]", ByteUtils.toHexString(ByteUtils.EMPTY_ARRAY));
+    }
+
+    @Test
+    public void testByteBufferToHexString() {
+        ByteBuffer buf1 = ByteBuffer.wrap(new byte[] {0, 1, 2, 14});
+        assertEquals("[00 01 02 0e]", ByteUtils.toHexString(buf1));
+        assertEquals("[00 01 02 0e]", ByteUtils.toHexString(buf1));
+        assertEquals("[ff]",
+                ByteUtils.toHexString(ByteBuffer.wrap(new byte[] {-1})));
+        assertEquals("[]",
+                ByteUtils.toHexString(ByteBuffer.wrap(new byte[] {})));
+        assertEquals("[]", ByteUtils.toHexString(ByteUtils.EMPTY_BUFFER));
+    }
 }

@@ -26,6 +26,7 @@ import com.yammer.metrics.core.{Gauge, Meter}
 import kafka.metrics.KafkaMetricsGroup
 import kafka.utils.{Logging, NotNothing, Pool}
 import org.apache.kafka.common.memory.MemoryPool
+import org.apache.kafka.common.message.ApiMessageType
 import org.apache.kafka.common.network.Send
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests._
@@ -91,10 +92,11 @@ object RequestChannel extends Logging {
     def header: RequestHeader = context.header
     def sizeOfBodyInBytes: Int = bodyAndSize.size
 
-    //most request types are parsed entirely into objects at this point. for those we can release the underlying buffer.
-    //some (like produce, or any time the schema contains fields of types BYTES or NULLABLE_BYTES) retain a reference
-    //to the buffer. for those requests we cannot release the buffer early, but only when request processing is done.
-    if (!header.apiKey.requiresDelayedAllocation) {
+    // Most request types are parsed entirely into objects at this point.  For those, we can
+    // release the underlying buffer.  Some other requests contain zero-copy fields.
+    // These fields hold a reference to the underlying buffer.  Therefore, we cannot release
+    // that buffer until all the request processing is done.
+    if (!ApiMessageType.fromApiKey(header.apiKey().id).requestContainsZeroCopyFields()) {
       releaseBuffer()
     }
 

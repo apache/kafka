@@ -27,6 +27,9 @@ import java.nio.ByteBuffer;
  * This classes exposes low-level methods for reading/writing from byte streams or buffers.
  */
 public final class ByteUtils {
+    public static final ByteBuffer EMPTY_BUFFER = ByteBuffer.allocate(0).asReadOnlyBuffer();
+
+    public static final byte[] EMPTY_ARRAY = new byte[0];
 
     private ByteUtils() {}
 
@@ -330,5 +333,39 @@ public final class ByteUtils {
     private static IllegalArgumentException illegalVarlongException(long value) {
         throw new IllegalArgumentException("Varlong is too long, most significant bit in the 10th byte is set, " +
                 "converted value: " + Long.toHexString(value));
+    }
+
+    public static String toHexString(byte[] buf) {
+        if (buf.length == 0) {
+            return "[]";
+        }
+        StringBuilder builder = new StringBuilder();
+        builder.append("[");
+        builder.append(String.format("%02x", buf[0]));
+        int position = 1;
+        while (position < buf.length) {
+            builder.append(String.format(" %02x", buf[position++]));
+        } 
+        builder.append("]");
+        return builder.toString();
+    }
+
+    public static String toHexString(ByteBuffer buf) {
+        if (buf.remaining() == 0) {
+            return "[]";
+        }
+        StringBuilder builder = new StringBuilder();
+        builder.append("[");
+        int position = buf.position();
+        try {
+            builder.append(String.format("%02x", buf.get()));
+            while (buf.hasRemaining()) {
+                builder.append(String.format(" %02x", buf.get()));
+            } 
+        } finally {
+            buf.position(position);
+        }
+        builder.append("]");
+        return builder.toString();
     }
 }

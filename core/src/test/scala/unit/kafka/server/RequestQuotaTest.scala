@@ -53,8 +53,7 @@ import org.apache.kafka.common.requests.CreateAclsRequest.AclCreation
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.resource.{PatternType, ResourcePattern, ResourcePatternFilter, ResourceType => AdminResourceType}
 import org.apache.kafka.common.security.auth.{AuthenticationContext, KafkaPrincipal, KafkaPrincipalBuilder, SecurityProtocol}
-import org.apache.kafka.common.utils.Sanitizer
-import org.apache.kafka.common.utils.SecurityUtils
+import org.apache.kafka.common.utils.{ByteUtils, Sanitizer, SecurityUtils}
 import org.junit.Assert._
 import org.junit.{After, Before, Test}
 
@@ -348,7 +347,7 @@ class RequestQuotaTest extends BaseRequestTest {
           new SaslHandshakeRequest.Builder(new SaslHandshakeRequestData().setMechanism("PLAIN"))
 
         case ApiKeys.SASL_AUTHENTICATE =>
-          new SaslAuthenticateRequest.Builder(new SaslAuthenticateRequestData().setAuthBytes(new Array[Byte](0)))
+          new SaslAuthenticateRequest.Builder(new SaslAuthenticateRequestData().setAuthBytes(ByteUtils.EMPTY_BUFFER))
 
         case ApiKeys.API_VERSIONS =>
           new ApiVersionsRequest.Builder
