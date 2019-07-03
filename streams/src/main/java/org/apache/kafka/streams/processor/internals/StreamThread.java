@@ -190,14 +190,20 @@ public class StreamThread extends Thread {
             oldState = state;
 
             if (state == State.PENDING_SHUTDOWN && newState != State.DEAD) {
+                log.debug("Invalid transition from PENDING_SHUTDOWN to {}: " +
+                              "only DEAD state is a valid next state", newState);
                 // when the state is already in PENDING_SHUTDOWN, all other transitions will be
                 // refused but we do not throw exception here
                 return null;
             } else if (state == State.DEAD) {
+                log.debug("Invalid transition from DEAD to {}: " +
+                              "no valid next state after DEAD", newState);
                 // when the state is already in NOT_RUNNING, all its transitions
                 // will be refused but we do not throw exception here
                 return null;
             } else if (state == State.PARTITIONS_REVOKED && newState == State.PARTITIONS_REVOKED) {
+                log.debug("Invalid transition from PARTITIONS_REVOKED to PARTITIONS_REVOKED: " +
+                              "self transition is not allowed");
                 // when the state is already in PARTITIONS_REVOKED, its transition to itself will be
                 // refused but we do not throw exception here
                 return null;
@@ -268,9 +274,12 @@ public class StreamThread extends Thread {
             final long start = time.milliseconds();
             try {
                 if (streamThread.setState(State.PARTITIONS_ASSIGNED) == null) {
-                    return;
-                }
-                if (streamThread.assignmentErrorCode.get() == StreamsPartitionAssignor.Error.NONE.code()) {
+                    log.error("State transition from {} to PARTITIONS_ASSIGNED failed. " +
+                                  "Will skip the task initialization", streamThread.state());
+                } else if (streamThread.assignmentErrorCode.get() != StreamsPartitionAssignor.Error.NONE.code()) {
+                    log.error("Encountered assignment error during partition assignment: {}. " +
+                                  "Will skip the task initialization", streamThread.assignmentErrorCode);
+                } else {
                     taskManager.createTasks(assignment);
                 }
             } catch (final Throwable t) {
@@ -828,6 +837,15 @@ public class StreamThread extends Thread {
             // any other state should not happen
             log.error("Unexpected state {} during normal iteration", state);
             throw new StreamsException(logPrefix + "Unexpected state " + state + " during normal iteration");
+        }
+
+        // We could potentially mutate the state during #pollRequests(), and by moving towards the PENDING_SHUTDOWN,
+        // the task manager internal states could also be cleaned up or uninitialized. It is safe to proceed only when the
+        // thread is still running after #pollRequests(), since from this point no external state mutation could alter
+        // the task manager state.
+        if (!isRunning()) {
+            log.warn("State already transits to {}, skipping the run once call after poll request", state);
+            return;
         }
 
         final long pollLatency = advanceNowAndComputeLatency();
