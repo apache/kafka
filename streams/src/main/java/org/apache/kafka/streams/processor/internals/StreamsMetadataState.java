@@ -23,7 +23,6 @@ import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StreamPartitioner;
-import org.apache.kafka.streams.processor.TopologyBuilder;
 import org.apache.kafka.streams.state.HostInfo;
 import org.apache.kafka.streams.state.StreamsMetadata;
 
@@ -44,17 +43,32 @@ import java.util.Set;
  */
 public class StreamsMetadataState {
     public static final HostInfo UNKNOWN_HOST = new HostInfo("unknown", -1);
-    private final TopologyBuilder builder;
+    private final InternalTopologyBuilder builder;
     private final List<StreamsMetadata> allMetadata = new ArrayList<>();
     private final Set<String> globalStores;
     private final HostInfo thisHost;
     private Cluster clusterMetadata;
     private StreamsMetadata myMetadata;
 
-    public StreamsMetadataState(final TopologyBuilder builder, final HostInfo thisHost) {
+    public StreamsMetadataState(final InternalTopologyBuilder builder, final HostInfo thisHost) {
         this.builder = builder;
         this.globalStores = builder.globalStateStores().keySet();
         this.thisHost = thisHost;
+    }
+
+    @Override
+    public String toString() {
+        return toString("");
+    }
+
+    public String toString(final String indent) {
+        final StringBuilder builder = new StringBuilder();
+        builder.append(indent).append("GlobalMetadata: ").append(allMetadata).append("\n");
+        builder.append(indent).append("GlobalStores: ").append(globalStores).append("\n");
+        builder.append(indent).append("My HostInfo: ").append(thisHost).append("\n");
+        builder.append(indent).append(clusterMetadata).append("\n");
+
+        return builder.toString();
     }
 
     /**
@@ -90,7 +104,7 @@ public class StreamsMetadataState {
         }
 
         final ArrayList<StreamsMetadata> results = new ArrayList<>();
-        for (StreamsMetadata metadata : allMetadata) {
+        for (final StreamsMetadata metadata : allMetadata) {
             if (metadata.stateStoreNames().contains(storeName)) {
                 results.add(metadata);
             }
@@ -140,9 +154,7 @@ public class StreamsMetadataState {
 
         return getStreamsMetadataForKey(storeName,
                                         key,
-                                        new DefaultStreamPartitioner<>(keySerializer,
-                                                                       clusterMetadata,
-                                                                       sourceTopicsInfo.topicWithMostPartitions),
+                                        new DefaultStreamPartitioner<>(keySerializer, clusterMetadata),
                                         sourceTopicsInfo);
     }
 
@@ -183,7 +195,7 @@ public class StreamsMetadataState {
             return myMetadata;
         }
 
-        SourceTopicsInfo sourceTopicsInfo = getSourceTopicsInfo(storeName);
+        final SourceTopicsInfo sourceTopicsInfo = getSourceTopicsInfo(storeName);
         if (sourceTopicsInfo == null) {
             return null;
         }
@@ -193,16 +205,16 @@ public class StreamsMetadataState {
     /**
      * Respond to changes to the HostInfo -> TopicPartition mapping. Will rebuild the
      * metadata
-     * @param currentState  the current mapping of {@link HostInfo} -> {@link TopicPartition}s
+     * @param currentState       the current mapping of {@link HostInfo} -> {@link TopicPartition}s
      * @param clusterMetadata    the current clusterMetadata {@link Cluster}
      */
-    public synchronized void onChange(final Map<HostInfo, Set<TopicPartition>> currentState, final Cluster clusterMetadata) {
+    synchronized void onChange(final Map<HostInfo, Set<TopicPartition>> currentState, final Cluster clusterMetadata) {
         this.clusterMetadata = clusterMetadata;
         rebuildMetadata(currentState);
     }
 
     private boolean hasPartitionsForAnyTopics(final List<String> topicNames, final Set<TopicPartition> partitionForHost) {
-        for (TopicPartition topicPartition : partitionForHost) {
+        for (final TopicPartition topicPartition : partitionForHost) {
             if (topicNames.contains(topicPartition.topic())) {
                 return true;
             }
@@ -216,11 +228,11 @@ public class StreamsMetadataState {
             return;
         }
         final Map<String, List<String>> stores = builder.stateStoreNameToSourceTopics();
-        for (Map.Entry<HostInfo, Set<TopicPartition>> entry : currentState.entrySet()) {
+        for (final Map.Entry<HostInfo, Set<TopicPartition>> entry : currentState.entrySet()) {
             final HostInfo key = entry.getKey();
             final Set<TopicPartition> partitionsForHost = new HashSet<>(entry.getValue());
             final Set<String> storesOnHost = new HashSet<>();
-            for (Map.Entry<String, List<String>> storeTopicEntry : stores.entrySet()) {
+            for (final Map.Entry<String, List<String>> storeTopicEntry : stores.entrySet()) {
                 final List<String> topicsForStore = storeTopicEntry.getValue();
                 if (hasPartitionsForAnyTopics(topicsForStore, partitionsForHost)) {
                     storesOnHost.add(storeTopicEntry.getKey());
@@ -240,13 +252,13 @@ public class StreamsMetadataState {
                                                          final StreamPartitioner<? super K, ?> partitioner,
                                                          final SourceTopicsInfo sourceTopicsInfo) {
 
-        final Integer partition = partitioner.partition(key, null, sourceTopicsInfo.maxPartitions);
+        final Integer partition = partitioner.partition(sourceTopicsInfo.topicWithMostPartitions, key, null, sourceTopicsInfo.maxPartitions);
         final Set<TopicPartition> matchingPartitions = new HashSet<>();
-        for (String sourceTopic : sourceTopicsInfo.sourceTopics) {
+        for (final String sourceTopic : sourceTopicsInfo.sourceTopics) {
             matchingPartitions.add(new TopicPartition(sourceTopic, partition));
         }
 
-        for (StreamsMetadata streamsMetadata : allMetadata) {
+        for (final StreamsMetadata streamsMetadata : allMetadata) {
             final Set<String> stateStoreNames = streamsMetadata.stateStoreNames();
             final Set<TopicPartition> topicPartitions = new HashSet<>(streamsMetadata.topicPartitions());
             topicPartitions.retainAll(matchingPartitions);
@@ -277,7 +289,7 @@ public class StreamsMetadataState {
 
         private SourceTopicsInfo(final List<String> sourceTopics) {
             this.sourceTopics = sourceTopics;
-            for (String topic : sourceTopics) {
+            for (final String topic : sourceTopics) {
                 final List<PartitionInfo> partitions = clusterMetadata.partitionsForTopic(topic);
                 if (partitions.size() > maxPartitions) {
                     maxPartitions = partitions.size();

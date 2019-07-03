@@ -1,0 +1,173 @@
+<!--
+ Licensed to the Apache Software Foundation (ASF) under one or more
+ contributor license agreements.  See the NOTICE file distributed with
+ this work for additional information regarding copyright ownership.
+ The ASF licenses this file to You under the Apache License, Version 2.0
+ (the "License"); you may not use this file except in compliance with
+ the License.  You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+ Unless required by applicable law or agreed to in writing, software
+ distributed under the License is distributed on an "AS IS" BASIS,
+ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ See the License for the specific language governing permissions and
+ limitations under the License.
+-->
+
+<script><!--#include virtual="../js/templateData.js" --></script>
+
+<script id="content-template" type="text/x-handlebars-template">
+    <h1>Architecture</h1>
+    <div class="sub-nav-sticky">
+        <div class="sticky-top">
+            <div style="height:35px">
+                <a href="/{{version}}/documentation/streams/">Introduction</a>
+                <a href="/{{version}}/documentation/streams/quickstart">Run Demo App</a>
+                <a href="/{{version}}/documentation/streams/tutorial">Tutorial: Write App</a>
+                <a href="/{{version}}/documentation/streams/core-concepts">Concepts</a>
+                <a class="active-menu-item" href="/{{version}}/documentation/streams/architecture">Architecture</a>
+                <a href="/{{version}}/documentation/streams/developer-guide/">Developer Guide</a>
+                <a href="/{{version}}/documentation/streams/upgrade-guide">Upgrade</a>
+            </div>
+        </div>
+    </div>
+
+    Kafka Streams simplifies application development by building on the Kafka producer and consumer libraries and leveraging the native capabilities of
+    Kafka to offer data parallelism, distributed coordination, fault tolerance, and operational simplicity. In this section, we describe how Kafka Streams works underneath the covers.
+
+    <p>
+        The picture below shows the anatomy of an application that uses the Kafka Streams library. Let's walk through some details.
+    </p>
+    <img class="centered" src="/{{version}}/images/streams-architecture-overview.jpg" style="width:750px">
+
+    <h3><a id="streams_architecture_tasks" href="#streams_architecture_tasks">Stream Partitions and Tasks</a></h3>
+
+    <p>
+        The messaging layer of Kafka partitions data for storing and transporting it. Kafka Streams partitions data for processing it.
+        In both cases, this partitioning is what enables data locality, elasticity, scalability, high performance, and fault tolerance.
+        Kafka Streams uses the concepts of <b>partitions</b> and <b>tasks</b> as logical units of its parallelism model based on Kafka topic partitions.
+        There are close links between Kafka Streams and Kafka in the context of parallelism:
+    </p>
+
+    <ul>
+        <li>Each <b>stream partition</b> is a totally ordered sequence of data records and maps to a Kafka <b>topic partition</b>.</li>
+        <li>A <b>data record</b> in the stream maps to a Kafka <b>message</b> from that topic.</li>
+        <li>The <b>keys</b> of data records determine the partitioning of data in both Kafka and Kafka Streams, i.e., how data is routed to specific partitions within topics.</li>
+    </ul>
+
+    <p>
+        An application's processor topology is scaled by breaking it into multiple tasks.
+        More specifically, Kafka Streams creates a fixed number of tasks based on the input stream partitions for the application,
+        with each task assigned a list of partitions from the input streams (i.e., Kafka topics). The assignment of partitions to tasks
+        never changes so that each task is a fixed unit of parallelism of the application. Tasks can then instantiate their own processor topology
+        based on the assigned partitions; they also maintain a buffer for each of its assigned partitions and process messages one-at-a-time from
+        these record buffers. As a result stream tasks can be processed independently and in parallel without manual intervention.
+    </p>
+
+    <p>
+        It is important to understand that Kafka Streams is not a resource manager, but a library that "runs" anywhere its stream processing application runs.
+        Multiple instances of the application are executed either on the same machine, or spread across multiple machines and tasks can be distributed automatically
+        by the library to those running application instances. The assignment of partitions to tasks never changes; if an application instance fails, all its assigned
+        tasks will be automatically restarted on other instances and continue to consume from the same stream partitions.
+    </p>
+
+    <p>
+        The following diagram shows two tasks each assigned with one partition of the input streams.
+    </p>
+    <img class="centered" src="/{{version}}/images/streams-architecture-tasks.jpg" style="width:400px">
+    <br>
+
+    <h3><a id="streams_architecture_threads" href="#streams_architecture_threads">Threading Model</a></h3>
+
+    <p>
+        Kafka Streams allows the user to configure the number of <b>threads</b> that the library can use to parallelize processing within an application instance.
+        Each thread can execute one or more tasks with their processor topologies independently. For example, the following diagram shows one stream thread running two stream tasks.
+    </p>
+    <img class="centered" src="/{{version}}/images/streams-architecture-threads.jpg" style="width:400px">
+
+    <p>
+        Starting more stream threads or more instances of the application merely amounts to replicating the topology and having it process a different subset of Kafka partitions, effectively parallelizing processing.
+        It is worth noting that there is no shared state amongst the threads, so no inter-thread coordination is necessary. This makes it very simple to run topologies in parallel across the application instances and threads.
+        The assignment of Kafka topic partitions amongst the various stream threads is transparently handled by Kafka Streams leveraging <a href="https://cwiki.apache.org/confluence/display/KAFKA/Kafka+Client-side+Assignment+Proposal">Kafka's coordination</a> functionality.
+    </p>
+
+    <p>
+        As we described above, scaling your stream processing application with Kafka Streams is easy: you merely need to start additional instances of your application,
+        and Kafka Streams takes care of distributing partitions amongst tasks that run in the application instances. You can start as many threads of the application
+        as there are input Kafka topic partitions so that, across all running instances of an application, every thread (or rather, the tasks it runs) has at least one input partition to process.
+    </p>
+    <br>
+
+    <h3><a id="streams_architecture_state" href="#streams_architecture_state">Local State Stores</a></h3>
+
+    <p>
+        Kafka Streams provides so-called <b>state stores</b>, which can be used by stream processing applications to store and query data,
+        which is an important capability when implementing stateful operations. The <a href="/{{version}}/documentation/streams/developer-guide#streams_dsl">Kafka Streams DSL</a>, for example, automatically creates
+        and manages such state stores when you are calling stateful operators such as <code>join()</code> or <code>aggregate()</code>, or when you are windowing a stream.
+    </p>
+
+    <p>
+        Every stream task in a Kafka Streams application may embed one or more local state stores that can be accessed via APIs to store and query data required for processing.
+        Kafka Streams offers fault-tolerance and automatic recovery for such local state stores.
+    </p>
+
+    <p>
+        The following diagram shows two stream tasks with their dedicated local state stores.
+    </p>
+    <img class="centered" src="/{{version}}/images/streams-architecture-states.jpg" style="width:400px">
+    <br>
+
+    <h3><a id="streams_architecture_recovery" href="#streams_architecture_recovery">Fault Tolerance</a></h3>
+
+    <p>
+        Kafka Streams builds on fault-tolerance capabilities integrated natively within Kafka. Kafka partitions are highly available and replicated; so when stream data is persisted to Kafka it is available
+        even if the application fails and needs to re-process it. Tasks in Kafka Streams leverage the fault-tolerance capability
+        offered by the Kafka consumer client to handle failures.
+        If a task runs on a machine that fails, Kafka Streams automatically restarts the task in one of the remaining running instances of the application.
+    </p>
+
+    <p>
+        In addition, Kafka Streams makes sure that the local state stores are robust to failures, too. For each state store, it maintains a replicated changelog Kafka topic in which it tracks any state updates.
+        These changelog topics are partitioned as well so that each local state store instance, and hence the task accessing the store, has its own dedicated changelog topic partition.
+        <a href="/{{version}}/documentation/#compaction">Log compaction</a> is enabled on the changelog topics so that old data can be purged safely to prevent the topics from growing indefinitely.
+        If tasks run on a machine that fails and are restarted on another machine, Kafka Streams guarantees to restore their associated state stores to the content before the failure by
+        replaying the corresponding changelog topics prior to resuming the processing on the newly started tasks. As a result, failure handling is completely transparent to the end user.
+    </p>
+
+    <p>
+        Note that the cost of task (re)initialization typically depends primarily on the time for restoring the state by replaying the state stores' associated changelog topics.
+        To minimize this restoration time, users can configure their applications to have <b>standby replicas</b> of local states (i.e. fully replicated copies of the state).
+        When a task migration happens, Kafka Streams then attempts to assign a task to an application instance where such a standby replica already exists in order to minimize
+        the task (re)initialization cost. See <code>num.standby.replicas</code> in the <a href="/{{version}}/documentation/#streamsconfigs"><b>Kafka Streams Configs</b></a> section.
+    </p>
+
+    <div class="pagination">
+        <a href="/{{version}}/documentation/streams/core-concepts" class="pagination__btn pagination__btn__prev">Previous</a>
+        <a href="/{{version}}/documentation/streams/developer-guide" class="pagination__btn pagination__btn__next">Next</a>
+    </div>
+</script>
+
+<!--#include virtual="../../includes/_header.htm" -->
+<!--#include virtual="../../includes/_top.htm" -->
+<div class="content documentation documentation--current">
+    <!--#include virtual="../../includes/_nav.htm" -->
+    <div class="right">
+        <!--#include virtual="../../includes/_docs_banner.htm" -->
+        <ul class="breadcrumbs">
+            <li><a href="/documentation">Documentation</a></li>
+            <li><a href="/documentation/streams">Kafka Streams</a></li>
+        </ul>
+        <div class="p-content"></div>
+    </div>
+</div>
+<!--#include virtual="../../includes/_footer.htm" -->
+<script>
+$(function() {
+  // Show selected style on nav item
+  $('.b-nav__streams').addClass('selected');
+
+  // Display docs subnav items
+  $('.b-nav__docs').parent().toggleClass('nav__item__with__subs--expanded');
+});
+</script>

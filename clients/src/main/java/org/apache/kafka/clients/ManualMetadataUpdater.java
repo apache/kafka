@@ -16,9 +16,12 @@
  */
 package org.apache.kafka.clients;
 
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.requests.RequestHeader;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -33,6 +36,8 @@ import java.util.List;
  * This class is not thread-safe!
  */
 public class ManualMetadataUpdater implements MetadataUpdater {
+
+    private static final Logger log = LoggerFactory.getLogger(ManualMetadataUpdater.class);
 
     private List<Node> nodes;
 
@@ -69,6 +74,13 @@ public class ManualMetadataUpdater implements MetadataUpdater {
     }
 
     @Override
+    public void handleFatalException(KafkaException exception) {
+        // We don't fail the broker on failures, but there should be sufficient information in the logs indicating the reason
+        // for failure.
+        log.debug("An error occurred in broker-to-broker communication.", exception);
+    }
+
+    @Override
     public void handleCompletedMetadataResponse(RequestHeader requestHeader, long now, MetadataResponse response) {
         // Do nothing
     }
@@ -76,5 +88,9 @@ public class ManualMetadataUpdater implements MetadataUpdater {
     @Override
     public void requestUpdate() {
         // Do nothing
+    }
+
+    @Override
+    public void close() {
     }
 }

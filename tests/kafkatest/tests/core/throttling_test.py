@@ -133,7 +133,7 @@ class ThrottlingTest(ProduceConsumeValidateTest):
         self.logger.debug("Transfer took %d second. Estimated time : %ds",
                           time_taken,
                           estimated_throttled_time)
-        assert time_taken >= estimated_throttled_time, \
+        assert time_taken >= estimated_throttled_time * 0.9, \
             ("Expected rebalance to take at least %ds, but it took %ds" % (
                 estimated_throttled_time,
                 time_taken))
@@ -150,9 +150,7 @@ class ThrottlingTest(ProduceConsumeValidateTest):
         bulk_producer = ProducerPerformanceService(
             context=self.test_context, num_nodes=1, kafka=self.kafka,
             topic=self.topic, num_records=self.num_records,
-            record_size=self.record_size, throughput=-1, client_id=producer_id,
-            jmx_object_names=['kafka.producer:type=producer-metrics,client-id=%s' % producer_id],
-            jmx_attributes=['outgoing-byte-rate'])
+            record_size=self.record_size, throughput=-1, client_id=producer_id)
 
 
         self.producer = VerifiableProducer(context=self.test_context,
@@ -173,3 +171,9 @@ class ThrottlingTest(ProduceConsumeValidateTest):
         bulk_producer.run()
         self.run_produce_consume_validate(core_test_action=
                                           lambda: self.reassign_partitions(bounce_brokers, self.throttle))
+
+        self.logger.debug("Bulk producer outgoing-byte-rates: %s",
+                          (metric.value for k, metrics in
+                          bulk_producer.metrics(group='producer-metrics', name='outgoing-byte-rate', client_id=producer_id) for
+                          metric in metrics)
+        )

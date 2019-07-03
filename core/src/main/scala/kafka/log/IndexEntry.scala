@@ -17,6 +17,8 @@
 
 package kafka.log
 
+import org.apache.kafka.common.requests.ListOffsetResponse
+
 sealed trait IndexEntry {
   // We always use Long for both key and value to avoid boxing.
   def indexKey: Long
@@ -43,4 +45,8 @@ case class OffsetPosition(offset: Long, position: Int) extends IndexEntry {
 case class TimestampOffset(timestamp: Long, offset: Long) extends IndexEntry {
   override def indexKey = timestamp
   override def indexValue = offset
+}
+
+object TimestampOffset {
+  val Unknown = TimestampOffset(ListOffsetResponse.UNKNOWN_TIMESTAMP, ListOffsetResponse.UNKNOWN_OFFSET)
 }

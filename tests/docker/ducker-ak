@@ -1,0 +1,563 @@
+#!/usr/bin/env bash
+
+# Licensed to the Apache Software Foundation (ASF) under one or more
+# contributor license agreements.  See the NOTICE file distributed with
+# this work for additional information regarding copyright ownership.
+# The ASF licenses this file to You under the Apache License, Version 2.0
+# (the "License"); you may not use this file except in compliance with
+# the License.  You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+#
+# Ducker-AK: a tool for running Apache Kafka system tests inside Docker images.
+#
+# Note: this should be compatible with the version of bash that ships on most
+# Macs, bash 3.2.57.
+#
+
+script_path="${0}"
+
+# The absolute path to the directory which this script is in.  This will also be the directory
+# which we run docker build from.
+ducker_dir="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+
+# The absolute path to the root Kafka directory
+kafka_dir="$( cd "${ducker_dir}/../.." && pwd )"
+
+# The memory consumption to allow during the docker build.
+# This does not include swap.
+docker_build_memory_limit="3200m"
+
+# The maximum mmemory consumption to allow in containers.
+docker_run_memory_limit="2000m"
+
+# The default number of cluster nodes to bring up if a number is not specified.
+default_num_nodes=14
+
+# The default OpenJDK base image.
+default_jdk="openjdk:8"
+
+# The default ducker-ak image name.
+default_image_name="ducker-ak"
+
+# Display a usage message on the terminal and exit.
+#
+# $1: The exit status to use
+usage() {
+    local exit_status="${1}"
+    cat <<EOF
+ducker-ak: a tool for running Apache Kafka tests inside Docker images.
+
+Usage: ${script_path} [command] [options]
+
+help|-h|--help
+    Display this help message
+
+up [-n|--num-nodes NUM_NODES] [-f|--force] [docker-image]
+        [-C|--custom-ducktape DIR]
+    Bring up a cluster with the specified amount of nodes (defaults to ${default_num_nodes}).
+    The docker image name defaults to ${default_image_name}.  If --force is specified, we will
+    attempt to bring up an image even some parameters are not valid.
+
+    If --custom-ducktape is specified, we will install the provided custom
+    ducktape source code directory before bringing up the nodes.  The provided
+    directory should be the ducktape git repo, not the ducktape installed module directory.
+
+test [test-name(s)]
+    Run a test or set of tests inside the currently active Ducker nodes.
+    For example, to run the system test produce_bench_test, you would run:
+        ./tests/docker/ducker-ak test ./tests/kafkatest/test/core/produce_bench_test.py
+
+ssh [node-name|user-name@node-name] [command]
+    Log in to a running ducker container.  If node-name is not given, it prints
+    the names of all running nodes.  If node-name is 'all', we will run the
+    command on every node.  If user-name is given, we will try to log in as
+    that user.  Otherwise, we will log in as the 'ducker' user.  If a command
+    is specified, we will run that command.  Otherwise, we will provide a login
+    shell.
+
+down [-q|--quiet] [-f|--force]
+    Tear down all the currently active ducker-ak nodes.  If --quiet is specified,
+    only error messages are printed. If --force or -f is specified, "docker rm -f"
+    will be used to remove the nodes, which kills currently running ducker-ak test.
+
+purge [--f|--force]
+    Purge Docker images created by ducker-ak.  This will free disk space.
+    If --force is set, we run 'docker rmi -f'.
+EOF
+    exit "${exit_status}"
+}
+
+# Exit with an error message.
+die() {
+    echo $@
+    exit 1
+}
+
+# Check for the presence of certain commands.
+#
+# $@: The commands to check for.  This function will die if any of these commands are not found by
+#       the 'which' command.
+require_commands() {
+    local cmds="${@}"
+    for cmd in ${cmds}; do
+        which -- "${cmd}" &> /dev/null || die "You must install ${cmd} to run this script."
+    done
+}
+
+# Set a global variable to a value.
+#
+# $1: The variable name to set.  This function will die if the variable already has a value.  The
+#     variable will be made readonly to prevent any future modifications.
+# $2: The value to set the variable to.  This function will die if the value is empty or starts
+#     with a dash.
+# $3: A human-readable description of the variable.
+set_once() {
+    local key="${1}"
+    local value="${2}"
+    local what="${3}"
+    [[ -n "${!key}" ]] && die "Error: more than one value specified for ${what}."
+    verify_command_line_argument "${value}" "${what}"
+    # It would be better to use declare -g, but older bash versions don't support it.
+    export ${key}="${value}"
+}
+
+# Verify that a command-line argument is present and does not start with a slash.
+#
+# $1: The command-line argument to verify.
+# $2: A human-readable description of the variable.
+verify_command_line_argument() {
+    local value="${1}"
+    local what="${2}"
+    [[ -n "${value}" ]] || die "Error: no value specified for ${what}"
+    [[ ${value} == -* ]] && die "Error: invalid value ${value} specified for ${what}"
+}
+
+# Echo a message if a flag is set.
+#
+# $1: If this is 1, the message will be echoed.
+# $@: The message
+maybe_echo() {
+    local verbose="${1}"
+    shift
+    [[ "${verbose}" -eq 1 ]] && echo "${@}"
+}
+
+# Counts the number of elements passed to this subroutine.
+count() {
+    echo $#
+}
+
+# Push a new directory on to the bash directory stack, or exit with a failure message.
+#
+# $1: The directory push on to the directory stack.
+must_pushd() {
+    local target_dir="${1}"
+    pushd -- "${target_dir}" &> /dev/null || die "failed to change directory to ${target_dir}"
+}
+
+# Pop a directory from the bash directory stack, or exit with a failure message.
+must_popd() {
+    popd &> /dev/null || die "failed to popd"
+}
+
+# Run a command and die if it fails.
+#
+# Optional flags:
+# -v: print the command before running it.
+# -o: display the command output.
+# $@: The command to run.
+must_do() {
+    local verbose=0
+    local output="/dev/null"
+    while true; do
+        case ${1} in
+            -v) verbose=1; shift;;
+            -o) output="/dev/stdout"; shift;;
+            *) break;;
+        esac
+    done
+    local cmd="${@}"
+    [[ "${verbose}" -eq 1 ]] && echo "${cmd}"
+    ${cmd} >${output} || die "${1} failed"
+}
+
+# Ask the user a yes/no question.
+#
+# $1: The prompt to use
+# $_return: 0 if the user answered no; 1 if the user answered yes.
+ask_yes_no() {
+    local prompt="${1}"
+    while true; do
+        read -r -p "${prompt} " response
+        case "${response}" in
+            [yY]|[yY][eE][sS]) _return=1; return;;
+            [nN]|[nN][oO]) _return=0; return;;
+            *);;
+        esac
+        echo "Please respond 'yes' or 'no'."
+        echo
+    done
+}
+
+# Build a docker image.
+#
+# $1: The name of the image to build.
+ducker_build() {
+    local image_name="${1}"
+
+    # Use SECONDS, a builtin bash variable that gets incremented each second, to measure the docker
+    # build duration.
+    SECONDS=0
+
+    must_pushd "${ducker_dir}"
+    must_do -v -o docker build --memory="${docker_build_memory_limit}" \
+        --build-arg "ducker_creator=${user_name}" --build-arg "jdk_version=${jdk_version}" -t "${image_name}" \
+        -f "${ducker_dir}/Dockerfile" ${docker_args} -- .
+    docker_status=$?
+    must_popd
+    duration="${SECONDS}"
+    if [[ ${docker_status} -ne 0 ]]; then
+        die "** ERROR: Failed to build ${what} image after $((${duration} / 60))m \
+$((${duration} % 60))s.  See ${build_log} for details."
+    fi
+    echo "** Successfully built ${what} image in $((${duration} / 60))m \
+$((${duration} % 60))s.  See ${build_log} for details."
+}
+
+docker_run() {
+    local node=${1}
+    local image_name=${2}
+
+    # Invoke docker-run. We need privileged mode to be able to run iptables
+    # and mount FUSE filesystems inside the container.  We also need it to
+    # run iptables inside the container.
+    must_do -v docker run --privileged \
+        -d -t -h "${node}" --network ducknet \
+        --memory=${docker_run_memory_limit} --memory-swappiness=1 \
+        -v "${kafka_dir}:/opt/kafka-dev" --name "${node}" -- "${image_name}"
+}
+
+setup_custom_ducktape() {
+    local custom_ducktape="${1}"
+    local image_name="${2}"
+
+    [[ -f "${custom_ducktape}/ducktape/__init__.py" ]] || \
+        die "You must supply a valid ducktape directory to --custom-ducktape"
+    docker_run ducker01 "${image_name}"
+    local running_container="$(docker ps -f=network=ducknet -q)"
+    must_do -v -o docker cp "${custom_ducktape}" "${running_container}:/opt/ducktape"
+    docker exec --user=root ducker01 bash -c 'set -x && cd /opt/kafka-dev/tests && sudo python ./setup.py develop install && cd /opt/ducktape && sudo python ./setup.py develop install'
+    [[ $? -ne 0 ]] && die "failed to install the new ducktape."
+    must_do -v -o docker commit ducker01 "${image_name}"
+    must_do -v docker kill "${running_container}"
+    must_do -v docker rm ducker01
+}
+
+ducker_up() {
+    require_commands docker
+    while [[ $# -ge 1 ]]; do
+        case "${1}" in
+            -C|--custom-ducktape) set_once custom_ducktape "${2}" "the custom ducktape directory"; shift 2;;
+            -f|--force) force=1; shift;;
+            -n|--num-nodes) set_once num_nodes "${2}" "number of nodes"; shift 2;;
+            -j|--jdk) set_once jdk_version "${2}" "the OpenJDK base image"; shift 2;;
+            *) set_once image_name "${1}" "docker image name"; shift;;
+        esac
+    done
+    [[ -n "${num_nodes}" ]] || num_nodes="${default_num_nodes}"
+    [[ -n "${jdk_version}" ]] || jdk_version="${default_jdk}"
+    [[ -n "${image_name}" ]] || image_name="${default_image_name}-${jdk_version/:/-}"
+    [[ "${num_nodes}" =~ ^-?[0-9]+$ ]] || \
+        die "ducker_up: the number of nodes must be an integer."
+    [[ "${num_nodes}" -gt 0 ]] || die "ducker_up: the number of nodes must be greater than 0."
+    if [[ "${num_nodes}" -lt 2 ]]; then
+        if [[ "${force}" -ne 1 ]]; then
+            echo "ducker_up: It is recommended to run at least 2 nodes, since ducker01 is only \
+used to run ducktape itself.  If you want to do it anyway, you can use --force to attempt to \
+use only ${num_nodes}."
+            exit 1
+        fi
+    fi
+
+    docker ps >/dev/null || die "ducker_up: failed to run docker.  Please check that the daemon is started."
+
+    ducker_build "${image_name}"
+
+    docker inspect --format='{{.Config.Labels}}' --type=image "${image_name}" | grep -q 'ducker.type'
+    local docker_status=${PIPESTATUS[0]}
+    local grep_status=${PIPESTATUS[1]}
+    [[ "${docker_status}" -eq 0 ]] || die "ducker_up: failed to inspect image ${image_name}.  \
+Please check that it exists."
+    if [[ "${grep_status}" -ne 0 ]]; then
+        if [[ "${force}" -ne 1 ]]; then
+            echo "ducker_up: ${image_name} does not appear to be a ducker image.  It lacks the \
+ducker.type label.  If you think this is a mistake, you can use --force to attempt to bring \
+it up anyway."
+            exit 1
+        fi
+    fi
+    local running_containers="$(docker ps -f=network=ducknet -q)"
+    local num_running_containers=$(count ${running_containers})
+    if [[ ${num_running_containers} -gt 0 ]]; then
+        die "ducker_up: there are ${num_running_containers} ducker containers \
+running already.  Use ducker down to bring down these containers before \
+attempting to start new ones."
+    fi
+
+    echo "ducker_up: Bringing up ${image_name} with ${num_nodes} nodes..."
+    if docker network inspect ducknet &>/dev/null; then
+        must_do -v docker network rm ducknet
+    fi
+    must_do -v docker network create ducknet
+    if [[ -n "${custom_ducktape}" ]]; then
+        setup_custom_ducktape "${custom_ducktape}" "${image_name}"
+    fi
+    for n in $(seq -f %02g 1 ${num_nodes}); do
+        local node="ducker${n}"
+        docker_run "${node}" "${image_name}"
+    done
+    mkdir -p "${ducker_dir}/build"
+    exec 3<> "${ducker_dir}/build/node_hosts"
+    for n in $(seq -f %02g 1 ${num_nodes}); do
+        local node="ducker${n}"
+        docker exec --user=root "${node}" grep "${node}" /etc/hosts >&3
+        [[ $? -ne 0 ]] && die "failed to find the /etc/hosts entry for ${node}"
+    done
+    exec 3>&-
+    for n in $(seq -f %02g 1 ${num_nodes}); do
+        local node="ducker${n}"
+        docker exec --user=root "${node}" \
+            bash -c "grep -v ${node} /opt/kafka-dev/tests/docker/build/node_hosts >> /etc/hosts"
+        [[ $? -ne 0 ]] && die "failed to append to the /etc/hosts file on ${node}"
+    done
+
+    echo "ducker_up: added the latest entries to /etc/hosts on each node."
+    generate_cluster_json_file "${num_nodes}" "${ducker_dir}/build/cluster.json"
+    echo "ducker_up: successfully wrote ${ducker_dir}/build/cluster.json"
+    echo "** ducker_up: successfully brought up ${num_nodes} nodes."
+}
+
+# Generate the cluster.json file used by ducktape to identify cluster nodes.
+#
+# $1: The number of cluster nodes.
+# $2: The path to write the cluster.json file to.
+generate_cluster_json_file() {
+    local num_nodes="${1}"
+    local path="${2}"
+    exec 3<> "${path}"
+cat<<EOF >&3
+{
+  "_comment": [
+    "Licensed to the Apache Software Foundation (ASF) under one or more",
+    "contributor license agreements.  See the NOTICE file distributed with",
+    "this work for additional information regarding copyright ownership.",
+    "The ASF licenses this file to You under the Apache License, Version 2.0",
+    "(the \"License\"); you may not use this file except in compliance with",
+    "the License.  You may obtain a copy of the License at",
+    "",
+    "http://www.apache.org/licenses/LICENSE-2.0",
+    "",
+    "Unless required by applicable law or agreed to in writing, software",
+    "distributed under the License is distributed on an \"AS IS\" BASIS,",
+    "WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.",
+    "See the License for the specific language governing permissions and",
+    "limitations under the License."
+  ],
+  "nodes": [
+EOF
+    for n in $(seq 2 ${num_nodes}); do
+      if [[ ${n} -eq ${num_nodes} ]]; then
+        suffix=""
+      else
+        suffix=","
+      fi
+      local node=$(printf ducker%02d ${n})
+cat<<EOF >&3
+    {
+      "externally_routable_ip": "${node}",
+      "ssh_config": {
+        "host": "${node}",
+        "hostname": "${node}",
+        "identityfile": "/home/ducker/.ssh/id_rsa",
+        "password": "",
+        "port": 22,
+        "user": "ducker"
+      }
+    }${suffix}
+EOF
+    done
+cat<<EOF >&3
+  ]
+}
+EOF
+    exec 3>&-
+}
+
+ducker_test() {
+    require_commands docker
+    docker inspect ducker01 &>/dev/null || \
+        die "ducker_test: the ducker01 instance appears to be down. Did you run 'ducker up'?"
+    [[ $# -lt 1 ]] && \
+        die "ducker_test: you must supply at least one system test to run. Type --help for help."
+    local args=""
+    local kafka_test=0
+    for arg in "${@}"; do
+        local regex=".*\/kafkatest\/(.*)"
+        if [[ $arg =~ $regex ]]; then
+            local kpath=${BASH_REMATCH[1]}
+            args="${args} ./tests/kafkatest/${kpath}"
+        else
+            args="${args} ${arg}"
+        fi
+    done
+    must_pushd "${kafka_dir}"
+    (test -f ./gradlew || gradle) && ./gradlew systemTestLibs
+    must_popd
+    cmd="cd /opt/kafka-dev && ducktape --cluster-file /opt/kafka-dev/tests/docker/build/cluster.json $args"
+    echo "docker exec ducker01 bash -c \"${cmd}\""
+    exec docker exec --user=ducker ducker01 bash -c "${cmd}"
+}
+
+ducker_ssh() {
+    require_commands docker
+    [[ $# -eq 0 ]] && die "ducker_ssh: Please specify a container name to log into. \
+Currently active containers: $(echo_running_container_names)"
+    local node_info="${1}"
+    shift
+    local guest_command="$*"
+    local user_name="ducker"
+    if [[ "${node_info}" =~ @ ]]; then
+        user_name="${node_info%%@*}"
+        local node_name="${node_info##*@}"
+    else
+        local node_name="${node_info}"
+    fi
+    local docker_flags=""
+    if [[ -z "${guest_command}" ]]; then
+        local docker_flags="${docker_flags} -t"
+        local guest_command_prefix=""
+        guest_command=bash
+    else
+        local guest_command_prefix="bash -c"
+    fi
+    if [[ "${node_name}" == "all" ]]; then
+        local nodes=$(echo_running_container_names)
+        [[ "${nodes}" == "(none)" ]] && die "ducker_ssh: can't locate any running ducker nodes."
+        for node in ${nodes}; do
+            docker exec --user=${user_name} -i ${docker_flags} "${node}" \
+                ${guest_command_prefix} "${guest_command}" || die "docker exec ${node} failed"
+        done
+    else
+        docker inspect --type=container -- "${node_name}" &>/dev/null || \
+            die "ducker_ssh: can't locate node ${node_name}. Currently running nodes: \
+$(echo_running_container_names)"
+        exec docker exec --user=${user_name} -i ${docker_flags} "${node_name}" \
+            ${guest_command_prefix} "${guest_command}"
+    fi
+}
+
+# Echo all the running Ducker container names, or (none) if there are no running Ducker containers.
+echo_running_container_names() {
+    node_names="$(docker ps -f=network=ducknet -q --format '{{.Names}}' | sort)"
+    if [[ -z "${node_names}" ]]; then
+        echo "(none)"
+    else
+        echo ${node_names//$'\n'/ }
+    fi
+}
+
+ducker_down() {
+    require_commands docker
+    local verbose=1
+    local force_str=""
+    while [[ $# -ge 1 ]]; do
+        case "${1}" in
+            -q|--quiet) verbose=0; shift;;
+            -f|--force) force_str="-f"; shift;;
+            *) die "ducker_down: unexpected command-line argument ${1}";;
+        esac
+    done
+    local running_containers
+    running_containers="$(docker ps -f=network=ducknet -q)"
+    [[ $? -eq 0 ]]  || die "ducker_down: docker command failed.  Is the docker daemon running?"
+    running_containers=${running_containers//$'\n'/ }
+    local all_containers="$(docker ps -a -f=network=ducknet -q)"
+    all_containers=${all_containers//$'\n'/ }
+    if [[ -z "${all_containers}" ]]; then
+        maybe_echo "${verbose}" "No ducker containers found."
+        return
+    fi
+    verbose_flag=""
+    if [[ ${verbose} == 1 ]]; then
+        verbose_flag="-v"
+    fi
+    if [[ -n "${running_containers}" ]]; then
+        must_do ${verbose_flag} docker kill "${running_containers}"
+    fi
+    must_do ${verbose_flag} docker rm ${force_str} "${all_containers}"
+    must_do ${verbose_flag} -o rm -f -- "${ducker_dir}/build/node_hosts" "${ducker_dir}/build/cluster.json"
+    if docker network inspect ducknet &>/dev/null; then
+        must_do -v docker network rm ducknet
+    fi
+    maybe_echo "${verbose}" "ducker_down: removed $(count ${all_containers}) containers."
+}
+
+ducker_purge() {
+    require_commands docker
+    local force_str=""
+    while [[ $# -ge 1 ]]; do
+        case "${1}" in
+            -f|--force) force_str="-f"; shift;;
+            *) die "ducker_purge: unknown argument ${1}";;
+        esac
+    done
+    echo "** ducker_purge: attempting to locate ducker images to purge"
+    local images
+    images=$(docker images -q -a -f label=ducker.creator)
+    [[ $? -ne 0 ]] && die "docker images command failed"
+    images=${images//$'\n'/ }
+    declare -a purge_images=()
+    if [[ -z "${images}" ]]; then
+        echo "** ducker_purge: no images found to purge."
+        exit 0
+    fi
+    echo "** ducker_purge: images to delete:"
+    for image in ${images}; do
+        echo -n "${image} "
+        docker inspect --format='{{.Config.Labels}} {{.Created}}' --type=image "${image}"
+        [[ $? -ne 0 ]] && die "docker inspect ${image} failed"
+    done
+    ask_yes_no "Delete these docker images? [y/n]"
+    [[ "${_return}" -eq 0 ]] && exit 0
+    must_do -v -o docker rmi ${force_str} ${images}
+}
+
+# Parse command-line arguments
+[[ $# -lt 1 ]] && usage 0
+# Display the help text if -h or --help appears in the command line
+for arg in ${@}; do
+    case "${arg}" in
+        -h|--help) usage 0;;
+        --) break;;
+        *);;
+    esac
+done
+action="${1}"
+shift
+case "${action}" in
+    help) usage 0;;
+
+    up|test|ssh|down|purge)
+        ducker_${action} "${@}"; exit 0;;
+
+    *)  echo "Unknown command '${action}'.  Type '${script_path} --help' for usage information."
+        exit 1;;
+esac

@@ -23,10 +23,12 @@ import org.apache.kafka.streams.processor.ProcessorSupplier;
 
 class KStreamPeek<K, V> implements ProcessorSupplier<K, V> {
 
+    private final boolean forwardDownStream;
     private final ForeachAction<K, V> action;
 
-    public KStreamPeek(final ForeachAction<K, V> action) {
+    public KStreamPeek(final ForeachAction<K, V> action, final boolean forwardDownStream) {
         this.action = action;
+        this.forwardDownStream = forwardDownStream;
     }
 
     @Override
@@ -38,7 +40,10 @@ class KStreamPeek<K, V> implements ProcessorSupplier<K, V> {
         @Override
         public void process(final K key, final V value) {
             action.apply(key, value);
-            context().forward(key, value);
+            if (forwardDownStream) {
+                context().forward(key, value);
+            }
         }
     }
+
 }

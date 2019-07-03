@@ -18,383 +18,273 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
-import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
-import org.apache.kafka.streams.kstream.Aggregator;
-import org.apache.kafka.streams.kstream.ForeachAction;
-import org.apache.kafka.streams.kstream.Initializer;
-import org.apache.kafka.streams.kstream.KStreamBuilder;
+import org.apache.kafka.streams.StreamsBuilder;
+import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.TopologyTestDriver;
+import org.apache.kafka.streams.kstream.Consumed;
+import org.apache.kafka.streams.kstream.Grouped;
 import org.apache.kafka.streams.kstream.KTable;
-import org.apache.kafka.streams.kstream.KeyValueMapper;
-import org.apache.kafka.streams.kstream.Reducer;
-import org.apache.kafka.streams.kstream.ValueJoiner;
-import org.apache.kafka.streams.kstream.ValueMapper;
-import org.apache.kafka.test.KStreamTestDriver;
+import org.apache.kafka.streams.kstream.Materialized;
+import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.test.ConsumerRecordFactory;
 import org.apache.kafka.test.MockAggregator;
 import org.apache.kafka.test.MockInitializer;
-import org.apache.kafka.test.MockKeyValueMapper;
+import org.apache.kafka.test.MockMapper;
+import org.apache.kafka.test.MockProcessor;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.TestUtils;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Rule;
 import org.junit.Test;
 
-
-import java.io.File;
-import java.io.IOException;
-import java.util.HashMap;
-import java.util.Map;
-
+import static java.util.Arrays.asList;
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
+import static org.apache.kafka.common.utils.Utils.mkProperties;
 import static org.junit.Assert.assertEquals;
 
 public class KTableAggregateTest {
+    private final Serde<String> stringSerde = Serdes.String();
+    private final Consumed<String, String> consumed = Consumed.with(stringSerde, stringSerde);
+    private final Grouped<String, String> stringSerialized = Grouped.with(stringSerde, stringSerde);
+    private final MockProcessorSupplier<String, Object> supplier = new MockProcessorSupplier<>();
 
-    final private Serde<String> stringSerde = Serdes.String();
+    @Test
+    public void testAggBasic() {
+        final StreamsBuilder builder = new StreamsBuilder();
+        final String topic1 = "topic1";
 
-    private KStreamTestDriver driver = null;
-    private File stateDir = null;
+        final KTable<String, String> table1 = builder.table(topic1, consumed);
+        final KTable<String, String> table2 = table1
+            .groupBy(
+                MockMapper.noOpKeyValueMapper(),
+                stringSerialized)
+            .aggregate(
+                MockInitializer.STRING_INIT,
+                MockAggregator.TOSTRING_ADDER,
+                MockAggregator.TOSTRING_REMOVER,
+                Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as("topic1-Canonized")
+                    .withValueSerde(stringSerde));
 
-    @Rule
-    public EmbeddedKafkaCluster cluster = null;
+        table2.toStream().process(supplier);
 
-    @After
-    public void tearDown() {
-        if (driver != null) {
-            driver.close();
+        try (
+            final TopologyTestDriver driver = new TopologyTestDriver(
+                builder.build(),
+                mkProperties(mkMap(
+                    mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy"),
+                    mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, "test"),
+                    mkEntry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory("kafka-test").getAbsolutePath())
+                )),
+                0L)) {
+            final ConsumerRecordFactory<String, String> recordFactory =
+                new ConsumerRecordFactory<>(new StringSerializer(), new StringSerializer(), 0L, 0L);
+
+            driver.pipeInput(recordFactory.create(topic1, "A", "1", 10L));
+            driver.pipeInput(recordFactory.create(topic1, "B", "2", 15L));
+            driver.pipeInput(recordFactory.create(topic1, "A", "3", 20L));
+            driver.pipeInput(recordFactory.create(topic1, "B", "4", 18L));
+            driver.pipeInput(recordFactory.create(topic1, "C", "5", 5L));
+            driver.pipeInput(recordFactory.create(topic1, "D", "6", 25L));
+            driver.pipeInput(recordFactory.create(topic1, "B", "7", 15L));
+            driver.pipeInput(recordFactory.create(topic1, "C", "8", 10L));
+
+            assertEquals(
+                asList(
+                    "A:0+1 (ts: 10)",
+                    "B:0+2 (ts: 15)",
+                    "A:0+1-1 (ts: 20)",
+                    "A:0+1-1+3 (ts: 20)",
+                    "B:0+2-2 (ts: 18)",
+                    "B:0+2-2+4 (ts: 18)",
+                    "C:0+5 (ts: 5)",
+                    "D:0+6 (ts: 25)",
+                    "B:0+2-2+4-4 (ts: 18)",
+                    "B:0+2-2+4-4+7 (ts: 18)",
+                    "C:0+5-5 (ts: 10)",
+                    "C:0+5-5+8 (ts: 10)"),
+                supplier.theCapturedProcessor().processed);
         }
-        driver = null;
-    }
-
-    @Before
-    public void setUp() throws IOException {
-        stateDir = TestUtils.tempDirectory("kafka-test");
     }
 
     @Test
-    public void testAggBasic() throws Exception {
-        final KStreamBuilder builder = new KStreamBuilder();
+    public void testAggRepartition() {
+        final StreamsBuilder builder = new StreamsBuilder();
         final String topic1 = "topic1";
-        final MockProcessorSupplier<String, String> proc = new MockProcessorSupplier<>();
 
-        KTable<String, String> table1 = builder.table(stringSerde, stringSerde, topic1, "anyStoreName");
-        KTable<String, String> table2 = table1.groupBy(MockKeyValueMapper.<String, String>NoOpKeyValueMapper(),
-                stringSerde,
-                stringSerde
-        ).aggregate(MockInitializer.STRING_INIT,
+        final KTable<String, String> table1 = builder.table(topic1, consumed);
+        final KTable<String, String> table2 = table1
+            .groupBy(
+                (key, value) -> {
+                    switch (key) {
+                        case "null":
+                            return KeyValue.pair(null, value);
+                        case "NULL":
+                            return null;
+                        default:
+                            return KeyValue.pair(value, value);
+                    }
+                },
+                stringSerialized)
+            .aggregate(
+                MockInitializer.STRING_INIT,
                 MockAggregator.TOSTRING_ADDER,
                 MockAggregator.TOSTRING_REMOVER,
-                stringSerde,
-                "topic1-Canonized");
+                Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as("topic1-Canonized")
+                    .withValueSerde(stringSerde));
 
-        table2.toStream().process(proc);
+        table2.toStream().process(supplier);
 
-        driver = new KStreamTestDriver(builder, stateDir);
+        try (
+            final TopologyTestDriver driver = new TopologyTestDriver(
+                builder.build(),
+                mkProperties(mkMap(
+                    mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy"),
+                    mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, "test"),
+                    mkEntry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory("kafka-test").getAbsolutePath())
+                )),
+                0L)) {
+            final ConsumerRecordFactory<String, String> recordFactory =
+                new ConsumerRecordFactory<>(new StringSerializer(), new StringSerializer(), 0L, 0L);
 
-        driver.process(topic1, "A", "1");
-        driver.flushState();
-        driver.process(topic1, "B", "2");
-        driver.flushState();
-        driver.process(topic1, "A", "3");
-        driver.flushState();
-        driver.process(topic1, "B", "4");
-        driver.flushState();
-        driver.process(topic1, "C", "5");
-        driver.flushState();
-        driver.process(topic1, "D", "6");
-        driver.flushState();
-        driver.process(topic1, "B", "7");
-        driver.flushState();
-        driver.process(topic1, "C", "8");
-        driver.flushState();
+            driver.pipeInput(recordFactory.create(topic1, "A", "1", 10L));
+            driver.pipeInput(recordFactory.create(topic1, "A", (String) null, 15L));
+            driver.pipeInput(recordFactory.create(topic1, "A", "1", 12L));
+            driver.pipeInput(recordFactory.create(topic1, "B", "2", 20L));
+            driver.pipeInput(recordFactory.create(topic1, "null", "3", 25L));
+            driver.pipeInput(recordFactory.create(topic1, "B", "4", 23L));
+            driver.pipeInput(recordFactory.create(topic1, "NULL", "5", 24L));
+            driver.pipeInput(recordFactory.create(topic1, "B", "7", 22L));
 
-        assertEquals(Utils.mkList(
-                "A:0+1",
-                "B:0+2",
-                "A:0+1-1+3",
-                "B:0+2-2+4",
-                "C:0+5",
-                "D:0+6",
-                "B:0+2-2+4-4+7",
-                "C:0+5-5+8"), proc.processed);
+            assertEquals(
+                asList(
+                    "1:0+1 (ts: 10)",
+                    "1:0+1-1 (ts: 15)",
+                    "1:0+1-1+1 (ts: 15)",
+                    "2:0+2 (ts: 20)",
+                    //noop
+                    "2:0+2-2 (ts: 23)", "4:0+4 (ts: 23)",
+                    //noop
+                    "4:0+4-4 (ts: 23)", "7:0+7 (ts: 22)"),
+                supplier.theCapturedProcessor().processed);
+        }
+    }
+
+    private static void testCountHelper(final StreamsBuilder builder,
+                                        final String input,
+                                        final MockProcessorSupplier<String, Object> supplier) {
+        try (
+            final TopologyTestDriver driver = new TopologyTestDriver(
+                builder.build(),
+                mkProperties(mkMap(
+                    mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy"),
+                    mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, "test"),
+                    mkEntry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory("kafka-test").getAbsolutePath())
+                )),
+                0L)) {
+            final ConsumerRecordFactory<String, String> recordFactory =
+                new ConsumerRecordFactory<>(new StringSerializer(), new StringSerializer(), 0L, 0L);
+
+            driver.pipeInput(recordFactory.create(input, "A", "green", 10L));
+            driver.pipeInput(recordFactory.create(input, "B", "green", 9L));
+            driver.pipeInput(recordFactory.create(input, "A", "blue", 12L));
+            driver.pipeInput(recordFactory.create(input, "C", "yellow", 15L));
+            driver.pipeInput(recordFactory.create(input, "D", "green", 11L));
+
+            assertEquals(
+                asList(
+                    "green:1 (ts: 10)",
+                    "green:2 (ts: 10)",
+                    "green:1 (ts: 12)", "blue:1 (ts: 12)",
+                    "yellow:1 (ts: 15)",
+                    "green:2 (ts: 12)"),
+                supplier.theCapturedProcessor().processed);
+        }
     }
 
 
     @Test
-    public void testAggCoalesced() throws Exception {
-        final KStreamBuilder builder = new KStreamBuilder();
-        final String topic1 = "topic1";
-        final MockProcessorSupplier<String, String> proc = new MockProcessorSupplier<>();
-
-        KTable<String, String> table1 = builder.table(stringSerde, stringSerde, topic1, "anyStoreName");
-        KTable<String, String> table2 = table1.groupBy(MockKeyValueMapper.<String, String>NoOpKeyValueMapper(),
-            stringSerde,
-            stringSerde
-        ).aggregate(MockInitializer.STRING_INIT,
-            MockAggregator.TOSTRING_ADDER,
-            MockAggregator.TOSTRING_REMOVER,
-            stringSerde,
-            "topic1-Canonized");
-
-        table2.toStream().process(proc);
-
-        driver = new KStreamTestDriver(builder, stateDir);
-
-        driver.process(topic1, "A", "1");
-        driver.process(topic1, "A", "3");
-        driver.process(topic1, "A", "4");
-        driver.flushState();
-        assertEquals(Utils.mkList(
-            "A:0+4"), proc.processed);
-    }
-
-
-    @Test
-    public void testAggRepartition() throws Exception {
-        final KStreamBuilder builder = new KStreamBuilder();
-        final String topic1 = "topic1";
-        final MockProcessorSupplier<String, String> proc = new MockProcessorSupplier<>();
-
-        KTable<String, String> table1 = builder.table(stringSerde, stringSerde, topic1, "anyStoreName");
-        KTable<String, String> table2 = table1.groupBy(new KeyValueMapper<String, String, KeyValue<String, String>>() {
-            @Override
-                public KeyValue<String, String> apply(String key, String value) {
-                switch (key) {
-                    case "null":
-                        return KeyValue.pair(null, value);
-                    case "NULL":
-                        return null;
-                    default:
-                        return KeyValue.pair(value, value);
-                }
-                }
-            },
-                stringSerde,
-                stringSerde
-        )
-                .aggregate(MockInitializer.STRING_INIT,
-                MockAggregator.TOSTRING_ADDER,
-                MockAggregator.TOSTRING_REMOVER,
-                stringSerde,
-                "topic1-Canonized");
-
-        table2.toStream().process(proc);
-
-        driver = new KStreamTestDriver(builder, stateDir);
-
-        driver.process(topic1, "A", "1");
-        driver.flushState();
-        driver.process(topic1, "A", null);
-        driver.flushState();
-        driver.process(topic1, "A", "1");
-        driver.flushState();
-        driver.process(topic1, "B", "2");
-        driver.flushState();
-        driver.process(topic1, "null", "3");
-        driver.flushState();
-        driver.process(topic1, "B", "4");
-        driver.flushState();
-        driver.process(topic1, "NULL", "5");
-        driver.flushState();
-        driver.process(topic1, "B", "7");
-        driver.flushState();
-
-        assertEquals(Utils.mkList(
-                "1:0+1",
-                "1:0+1-1",
-                "1:0+1-1+1",
-                "2:0+2", 
-                  //noop
-                "2:0+2-2", "4:0+4",
-                  //noop
-                "4:0+4-4", "7:0+7"
-                ), proc.processed);
-    }
-
-    @Test
-    public void testCount() throws IOException {
-        final KStreamBuilder builder = new KStreamBuilder();
+    public void testCount() {
+        final StreamsBuilder builder = new StreamsBuilder();
         final String input = "count-test-input";
-        final MockProcessorSupplier<String, Long> proc = new MockProcessorSupplier<>();
 
-        builder.table(Serdes.String(), Serdes.String(), input, "anyStoreName")
-                .groupBy(MockKeyValueMapper.<String, String>SelectValueKeyValueMapper(), stringSerde, stringSerde)
-                .count("count")
-                .toStream()
-                .process(proc);
-
-        driver = new KStreamTestDriver(builder, stateDir);
-
-        driver.process(input, "A", "green");
-        driver.flushState();
-        driver.process(input, "B", "green");
-        driver.flushState();
-        driver.process(input, "A", "blue");
-        driver.flushState();
-        driver.process(input, "C", "yellow");
-        driver.flushState();
-        driver.process(input, "D", "green");
-        driver.flushState();
-        driver.flushState();
-
-
-        assertEquals(Utils.mkList(
-                 "green:1",
-                 "green:2",
-                 "green:1", "blue:1",
-                 "yellow:1",
-                 "green:2"
-                 ), proc.processed);
-    }
-
-    @Test
-    public void testCountCoalesced() throws IOException {
-        final KStreamBuilder builder = new KStreamBuilder();
-        final String input = "count-test-input";
-        final MockProcessorSupplier<String, Long> proc = new MockProcessorSupplier<>();
-
-        builder.table(Serdes.String(), Serdes.String(), input, "anyStoreName")
-            .groupBy(MockKeyValueMapper.<String, String>SelectValueKeyValueMapper(), stringSerde, stringSerde)
-            .count("count")
+        builder
+            .table(input, consumed)
+            .groupBy(MockMapper.selectValueKeyValueMapper(), stringSerialized)
+            .count(Materialized.as("count"))
             .toStream()
-            .process(proc);
+            .process(supplier);
 
-        driver = new KStreamTestDriver(builder, stateDir);
-
-        driver.process(input, "A", "green");
-        driver.process(input, "B", "green");
-        driver.process(input, "A", "blue");
-        driver.process(input, "C", "yellow");
-        driver.process(input, "D", "green");
-        driver.flushState();
-
-
-        assertEquals(Utils.mkList(
-            "blue:1",
-            "yellow:1",
-            "green:2"
-            ), proc.processed);
+        testCountHelper(builder, input, supplier);
     }
-    
+
     @Test
-    public void testRemoveOldBeforeAddNew() throws IOException {
-        final KStreamBuilder builder = new KStreamBuilder();
+    public void testCountWithInternalStore() {
+        final StreamsBuilder builder = new StreamsBuilder();
         final String input = "count-test-input";
-        final MockProcessorSupplier<String, String> proc = new MockProcessorSupplier<>();
 
-        builder.table(Serdes.String(), Serdes.String(), input, "anyStoreName")
-                .groupBy(new KeyValueMapper<String, String, KeyValue<String, String>>() {
+        builder
+            .table(input, consumed)
+            .groupBy(MockMapper.selectValueKeyValueMapper(), stringSerialized)
+            .count()
+            .toStream()
+            .process(supplier);
 
-                    @Override
-                    public KeyValue<String, String> apply(String key, String value) {
-                        return KeyValue.pair(String.valueOf(key.charAt(0)), String.valueOf(key.charAt(1)));
-                    }
-                }, stringSerde, stringSerde)
-                .aggregate(new Initializer<String>() {
-
-                    @Override
-                    public String apply() {
-                        return "";
-                    }
-                }, new Aggregator<String, String, String>() {
-                    
-                    @Override
-                    public String apply(String aggKey, String value, String aggregate) {
-                        return aggregate + value;
-                    } 
-                }, new Aggregator<String, String, String>() {
-
-                    @Override
-                    public String apply(String key, String value, String aggregate) {
-                        return aggregate.replaceAll(value, "");
-                    }
-                }, Serdes.String(), "someStore")
-                .toStream()
-                .process(proc);
-
-        driver = new KStreamTestDriver(builder, stateDir);
-
-        driver.process(input, "11", "A");
-        driver.flushState();
-        driver.process(input, "12", "B");
-        driver.flushState();
-        driver.process(input, "11", null);
-        driver.flushState();
-        driver.process(input, "12", "C");
-        driver.flushState();
-
-        assertEquals(Utils.mkList(
-                 "1:1",
-                 "1:12",
-                 "1:2",
-                 "1:2"
-                 ), proc.processed);
+        testCountHelper(builder, input, supplier);
     }
 
     @Test
-    public void shouldForwardToCorrectProcessorNodeWhenMultiCacheEvictions() throws Exception {
-        final String tableOne = "tableOne";
-        final String tableTwo = "tableTwo";
-        final KStreamBuilder builder = new KStreamBuilder();
-        final String reduceTopic = "TestDriver-reducer-store-repartition";
-        final Map<String, Long> reduceResults = new HashMap<>();
+    public void testRemoveOldBeforeAddNew() {
+        final StreamsBuilder builder = new StreamsBuilder();
+        final String input = "count-test-input";
+        final MockProcessorSupplier<String, String> supplier = new MockProcessorSupplier<>();
 
-        final KTable<String, String> one = builder.table(Serdes.String(), Serdes.String(), tableOne, tableOne);
-        final KTable<Long, String> two = builder.table(Serdes.Long(), Serdes.String(), tableTwo, tableTwo);
+        builder
+            .table(input, consumed)
+            .groupBy(
+                (key, value) -> KeyValue.pair(
+                    String.valueOf(key.charAt(0)),
+                    String.valueOf(key.charAt(1))),
+                stringSerialized)
+            .aggregate(
+                () -> "",
+                (aggKey, value, aggregate) -> aggregate + value,
+                (key, value, aggregate) -> aggregate.replaceAll(value, ""),
+                Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as("someStore")
+                    .withValueSerde(Serdes.String()))
+            .toStream()
+            .process(supplier);
 
+        try (
+            final TopologyTestDriver driver = new TopologyTestDriver(
+                builder.build(),
+                mkProperties(mkMap(
+                    mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy"),
+                    mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, "test"),
+                    mkEntry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory("kafka-test").getAbsolutePath())
+                )),
+                0L)) {
+            final ConsumerRecordFactory<String, String> recordFactory =
+                new ConsumerRecordFactory<>(new StringSerializer(), new StringSerializer(), 0L, 0L);
 
-        final KTable<String, Long> reduce = two.groupBy(new KeyValueMapper<Long, String, KeyValue<String, Long>>() {
-            @Override
-            public KeyValue<String, Long> apply(final Long key, final String value) {
-                return new KeyValue<>(value, key);
-            }
-        }, Serdes.String(), Serdes.Long())
-                .reduce(new Reducer<Long>() {
-                    @Override
-                    public Long apply(final Long value1, final Long value2) {
-                        return value1 + value2;
-                    }
-                }, new Reducer<Long>() {
-                    @Override
-                    public Long apply(final Long value1, final Long value2) {
-                        return value1 - value2;
-                    }
-                }, "reducer-store");
+            final MockProcessor<String, String> proc = supplier.theCapturedProcessor();
 
-        reduce.foreach(new ForeachAction<String, Long>() {
-            @Override
-            public void apply(final String key, final Long value) {
-                reduceResults.put(key, value);
-            }
-        });
+            driver.pipeInput(recordFactory.create(input, "11", "A", 10L));
+            driver.pipeInput(recordFactory.create(input, "12", "B", 8L));
+            driver.pipeInput(recordFactory.create(input, "11", (String) null, 12L));
+            driver.pipeInput(recordFactory.create(input, "12", "C", 6L));
 
-        one.leftJoin(reduce, new ValueJoiner<String, Long, String>() {
-            @Override
-            public String apply(final String value1, final Long value2) {
-                return value1 + ":" + value2;
-            }
-        })
-                .mapValues(new ValueMapper<String, String>() {
-                    @Override
-                    public String apply(final String value) {
-                        return value;
-                    }
-                });
-
-        driver = new KStreamTestDriver(builder, stateDir, 111);
-        driver.process(reduceTopic, "1", new Change<>(1L, null));
-        driver.process("tableOne", "2", "2");
-        // this should trigger eviction on the reducer-store topic
-        driver.process(reduceTopic, "2", new Change<>(2L, null));
-        // this wont as it is the same value
-        driver.process(reduceTopic, "2", new Change<>(2L, null));
-        assertEquals(Long.valueOf(2L), reduceResults.get("2"));
-
-        // this will trigger eviction on the tableOne topic
-        // that in turn will cause an eviction on reducer-topic. It will flush
-        // key 2 as it is the only dirty entry in the cache
-        driver.process("tableOne", "1", "5");
-        assertEquals(Long.valueOf(4L), reduceResults.get("2"));
+            assertEquals(
+                asList(
+                    "1:1 (ts: 10)",
+                    "1:12 (ts: 10)",
+                    "1:2 (ts: 12)",
+                    "1: (ts: 12)",
+                    "1:2 (ts: 12)"
+                ),
+                proc.processed
+            );
+        }
     }
 }

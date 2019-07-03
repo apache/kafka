@@ -20,6 +20,7 @@ import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
 import java.io.Serializable;
+import java.util.Objects;
 
 /**
  * Unique ID for a single task. It includes a unique connector ID and a task ID that is unique within
@@ -56,10 +57,8 @@ public class ConnectorTaskId implements Serializable, Comparable<ConnectorTaskId
 
         if (task != that.task)
             return false;
-        if (connector != null ? !connector.equals(that.connector) : that.connector != null)
-            return false;
 
-        return true;
+        return Objects.equals(connector, that.connector);
     }
 
     @Override
@@ -79,6 +78,6 @@ public class ConnectorTaskId implements Serializable, Comparable<ConnectorTaskId
         int connectorCmp = connector.compareTo(o.connector);
         if (connectorCmp != 0)
             return connectorCmp;
-        return ((Integer) task).compareTo(o.task);
+        return Integer.compare(task, o.task);
     }
 }

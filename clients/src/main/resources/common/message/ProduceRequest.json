@@ -1,0 +1,52 @@
+// Licensed to the Apache Software Foundation (ASF) under one or more
+// contributor license agreements.  See the NOTICE file distributed with
+// this work for additional information regarding copyright ownership.
+// The ASF licenses this file to You under the Apache License, Version 2.0
+// (the "License"); you may not use this file except in compliance with
+// the License.  You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+{
+  "apiKey": 0,
+  "type": "request",
+  "name": "ProduceRequest",
+  // Version 1 and 2 are the same as version 0.
+  //
+  // Version 3 adds the transactional ID, which is used for authorization when attempting to write
+  // transactional data.  Version 3 also adds support for Kafka Message Format v2.
+  //
+  // Version 4 is the same as version 3, but the requestor must be prepared to handle a
+  // KAFKA_STORAGE_ERROR. 
+  //
+  // Version 5 and 6 are the same as version 3.
+  //
+  // Starting in version 7, records can be produced using ZStandard compression.  See KIP-110.
+  "validVersions": "0-7",
+  "fields": [
+    { "name": "TransactionalId", "type": "string", "versions": "3+", "nullableVersions": "0+", "entityType": "transactionalId",
+      "about": "The transactional ID, or null if the producer is not transactional." },
+    { "name": "Acks", "type": "int16", "versions": "0+",
+      "about": "The number of acknowledgments the producer requires the leader to have received before considering a request complete. Allowed values: 0 for no acknowledgments, 1 for only the leader and -1 for the full ISR." },
+    { "name": "TimeoutMs", "type": "int32", "versions": "0+",
+      "about": "The timeout to await a response in miliseconds." },
+    { "name": "Topics", "type": "[]TopicProduceData", "versions": "0+", 
+      "about": "Each topic to produce to.", "fields": [
+      { "name": "Name", "type": "string", "versions": "0+", "entityType": "topicName",
+        "about": "The topic name." },
+      { "name": "Partitions", "type": "[]PartitionProduceData", "versions": "0+",
+        "about": "Each partition to produce to.", "fields": [
+        { "name": "PartitionIndex", "type": "int32", "versions": "0+",
+          "about": "The partition index." },
+        { "name": "Records", "type": "bytes", "versions": "0+", "nullableVersions": "0+",
+          "about": "The record data to be produced." }
+      ]}
+    ]}
+  ]
+}

@@ -14,64 +14,26 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.common.requests;
 
-
+import org.apache.kafka.common.message.CreateTopicsResponseData;
+import org.apache.kafka.common.message.CreateTopicsResponseData.CreatableTopicResult;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
-import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 
 public class CreateTopicsResponse extends AbstractResponse {
-    private static final String TOPIC_ERRORS_KEY_NAME = "topic_errors";
-    private static final String TOPIC_KEY_NAME = "topic";
-    private static final String ERROR_CODE_KEY_NAME = "error_code";
-    private static final String ERROR_MESSAGE_KEY_NAME = "error_message";
-
-    public static class Error {
-        private final Errors error;
-        private final String message; // introduced in V1
-
-        public Error(Errors error, String message) {
-            this.error = error;
-            this.message = message;
-        }
-
-        public boolean is(Errors error) {
-            return this.error == error;
-        }
-
-        public Errors error() {
-            return error;
-        }
-
-        public String message() {
-            return message;
-        }
-
-        public String messageWithFallback() {
-            if (message == null)
-                return error.message();
-            return message;
-        }
-
-        @Override
-        public String toString() {
-            return "Error(error=" + error + ", message=" + message + ")";
-        }
-    }
-
     /**
      * Possible error codes:
      *
      * REQUEST_TIMED_OUT(7)
      * INVALID_TOPIC_EXCEPTION(17)
-     * CLUSTER_AUTHORIZATION_FAILED(31)
+     * TOPIC_AUTHORIZATION_FAILED(29)
      * TOPIC_ALREADY_EXISTS(36)
      * INVALID_PARTITIONS(37)
      * INVALID_REPLICATION_FACTOR(38)
@@ -79,53 +41,50 @@ public class CreateTopicsResponse extends AbstractResponse {
      * INVALID_CONFIG(40)
      * NOT_CONTROLLER(41)
      * INVALID_REQUEST(42)
+     * POLICY_VIOLATION(44)
      */
 
-    private final Map<String, Error> errors;
+    private final CreateTopicsResponseData data;
 
-    public CreateTopicsResponse(Map<String, Error> errors) {
-        this.errors = errors;
+    public CreateTopicsResponse(CreateTopicsResponseData data) {
+        this.data = data;
     }
 
-    public CreateTopicsResponse(Struct struct) {
-        Object[] topicErrorStructs = struct.getArray(TOPIC_ERRORS_KEY_NAME);
-        Map<String, Error> errors = new HashMap<>();
-        for (Object topicErrorStructObj : topicErrorStructs) {
-            Struct topicErrorCodeStruct = (Struct) topicErrorStructObj;
-            String topic = topicErrorCodeStruct.getString(TOPIC_KEY_NAME);
-            Errors error = Errors.forCode(topicErrorCodeStruct.getShort(ERROR_CODE_KEY_NAME));
-            String errorMessage = null;
-            if (topicErrorCodeStruct.hasField(ERROR_MESSAGE_KEY_NAME))
-                errorMessage = topicErrorCodeStruct.getString(ERROR_MESSAGE_KEY_NAME);
-            errors.put(topic, new Error(error, errorMessage));
-        }
+    public CreateTopicsResponse(Struct struct, short version) {
+        this.data = new CreateTopicsResponseData(struct, version);
+    }
 
-        this.errors = errors;
+    public CreateTopicsResponseData data() {
+        return data;
     }
 
     @Override
     protected Struct toStruct(short version) {
-        Struct struct = new Struct(ApiKeys.CREATE_TOPICS.responseSchema(version));
-
-        List<Struct> topicErrorsStructs = new ArrayList<>(errors.size());
-        for (Map.Entry<String, Error> topicError : errors.entrySet()) {
-            Struct topicErrorsStruct = struct.instance(TOPIC_ERRORS_KEY_NAME);
-            topicErrorsStruct.set(TOPIC_KEY_NAME, topicError.getKey());
-            Error error = topicError.getValue();
-            topicErrorsStruct.set(ERROR_CODE_KEY_NAME, error.error.code());
-            if (version >= 1)
-                topicErrorsStruct.set(ERROR_MESSAGE_KEY_NAME, error.message());
-            topicErrorsStructs.add(topicErrorsStruct);
-        }
-        struct.set(TOPIC_ERRORS_KEY_NAME, topicErrorsStructs.toArray());
-        return struct;
+        return data.toStruct(version);
     }
 
-    public Map<String, Error> errors() {
-        return errors;
+    @Override
+    public int throttleTimeMs() {
+        return data.throttleTimeMs();
+    }
+
+    @Override
+    public Map<Errors, Integer> errorCounts() {
+        HashMap<Errors, Integer> counts = new HashMap<>();
+        for (CreatableTopicResult result : data.topics()) {
+            Errors error = Errors.forCode(result.errorCode());
+            counts.put(error, counts.getOrDefault(error, 0) + 1);
+        }
+        return counts;
     }
 
     public static CreateTopicsResponse parse(ByteBuffer buffer, short version) {
-        return new CreateTopicsResponse(ApiKeys.CREATE_TOPICS.responseSchema(version).read(buffer));
+        return new CreateTopicsResponse(
+            ApiKeys.CREATE_TOPICS.responseSchema(version).read(buffer), version);
+    }
+
+    @Override
+    public boolean shouldClientThrottle(short version) {
+        return version >= 3;
     }
 }

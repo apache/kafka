@@ -42,8 +42,8 @@ public abstract class MaskField<R extends ConnectRecord<R>> implements Transform
 
     public static final String OVERVIEW_DOC =
             "Mask specified fields with a valid null value for the field type (i.e. 0, false, empty string, and so on)."
-                    + "<p/>Use the concrete transformation type designed for the record key (<code>" + Key.class.getCanonicalName() + "</code>) "
-                    + "or value (<code>" + Value.class.getCanonicalName() + "</code>).";
+                    + "<p/>Use the concrete transformation type designed for the record key (<code>" + Key.class.getName() + "</code>) "
+                    + "or value (<code>" + Value.class.getName() + "</code>).";
 
     private static final String FIELDS_CONFIG = "fields";
 

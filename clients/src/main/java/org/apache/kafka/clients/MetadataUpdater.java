@@ -16,10 +16,12 @@
  */
 package org.apache.kafka.clients;
 
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.requests.RequestHeader;
 
+import java.io.Closeable;
 import java.util.List;
 
 /**
@@ -28,7 +30,7 @@ import java.util.List;
  * <p>
  * This class is not thread-safe!
  */
-interface MetadataUpdater {
+public interface MetadataUpdater extends Closeable {
 
     /**
      * Gets the current cluster info without blocking.
@@ -53,7 +55,7 @@ interface MetadataUpdater {
     long maybeUpdate(long now);
 
     /**
-     * If `request` is a metadata request, handles it and return `true`. Otherwise, returns `false`.
+     * Handle disconnections for metadata requests.
      *
      * This provides a mechanism for the `MetadataUpdater` implementation to use the NetworkClient instance for its own
      * requests with special handling for disconnections of such requests.
@@ -62,7 +64,14 @@ interface MetadataUpdater {
     void handleDisconnection(String destination);
 
     /**
-     * If `request` is a metadata request, handles it and returns `true`. Otherwise, returns `false`.
+     * Handle failure. Propagate the exception if awaiting metadata.
+     *
+     * @param fatalException exception corresponding to the failure
+     */
+    void handleFatalException(KafkaException fatalException);
+
+    /**
+     * Handle responses for metadata requests.
      *
      * This provides a mechanism for the `MetadataUpdater` implementation to use the NetworkClient instance for its own
      * requests with special handling for completed receives of such requests.
@@ -74,4 +83,10 @@ interface MetadataUpdater {
      * start of the update if possible (see `maybeUpdate` for more information).
      */
     void requestUpdate();
+
+    /**
+     * Close this updater.
+     */
+    @Override
+    void close();
 }

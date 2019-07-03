@@ -17,24 +17,18 @@
 
 package kafka.cluster
 
-import kafka.log.Log
+import kafka.log.{Log}
 import kafka.utils.Logging
-import kafka.server.{LogOffsetMetadata, LogReadResult}
-import kafka.common.KafkaException
-import java.util.concurrent.atomic.AtomicLong
+import kafka.server.{LogOffsetMetadata}
+import org.apache.kafka.common.{TopicPartition}
 
-import org.apache.kafka.common.utils.Time
-
-class Replica(val brokerId: Int,
-              val partition: Partition,
-              time: Time = Time.SYSTEM,
-              initialHighWatermarkValue: Long = 0L,
-              val log: Option[Log] = None) extends Logging {
-  // the high watermark offset value, in non-leader replicas only its message offsets are kept
-  @volatile private[this] var highWatermarkMetadata = new LogOffsetMetadata(initialHighWatermarkValue)
+class Replica(val brokerId: Int, val topicPartition: TopicPartition) extends Logging {
   // the log end offset value, kept in all replicas;
   // for local replica it is the log's end offset, for remote replicas its value is only updated by follower fetch
-  @volatile private[this] var logEndOffsetMetadata = LogOffsetMetadata.UnknownOffsetMetadata
+  @volatile private[this] var _logEndOffsetMetadata = LogOffsetMetadata.UnknownOffsetMetadata
+  // the log start offset value, kept in all replicas;
+  // for local replica it is the log's start offset, for remote replicas its value is only updated by follower fetch
+  @volatile private[this] var _logStartOffset = Log.UnknownOffset
 
   // The log end offset value at the time the leader received the last FetchRequest from this follower
   // This is used to determine the lastCaughtUpTimeMs of the follower
@@ -48,11 +42,13 @@ class Replica(val brokerId: Int,
   // the LEO of leader at time t. This is used to determine the lag of this follower and ISR of this partition.
   @volatile private[this] var _lastCaughtUpTimeMs = 0L
 
-  val topicPartition = partition.topicPartition
+  def logStartOffset: Long = _logStartOffset
 
-  def isLocal: Boolean = log.isDefined
+  def logEndOffsetMetadata: LogOffsetMetadata = _logEndOffsetMetadata
 
-  def lastCaughtUpTimeMs = _lastCaughtUpTimeMs
+  def logEndOffset: Long = logEndOffsetMetadata.messageOffset
+
+  def lastCaughtUpTimeMs: Long = _lastCaughtUpTimeMs
 
   /*
    * If the FetchRequest reads up to the log end offset of the leader when the current fetch request is received,
@@ -66,55 +62,42 @@ class Replica(val brokerId: Int,
    * fetch request is always smaller than the leader's LEO, which can happen if small produce requests are received at
    * high frequency.
    */
-  def updateLogReadResult(logReadResult : LogReadResult) {
-    if (logReadResult.info.fetchOffsetMetadata.messageOffset >= logReadResult.leaderLogEndOffset)
-      _lastCaughtUpTimeMs = math.max(_lastCaughtUpTimeMs, logReadResult.fetchTimeMs)
-    else if (logReadResult.info.fetchOffsetMetadata.messageOffset >= lastFetchLeaderLogEndOffset)
+  def updateFetchState(followerFetchOffsetMetadata: LogOffsetMetadata,
+                       followerStartOffset: Long,
+                       followerFetchTimeMs: Long,
+                       leaderEndOffset: Long): Unit = {
+    if (followerFetchOffsetMetadata.messageOffset >= leaderEndOffset)
+      _lastCaughtUpTimeMs = math.max(_lastCaughtUpTimeMs, followerFetchTimeMs)
+    else if (followerFetchOffsetMetadata.messageOffset >= lastFetchLeaderLogEndOffset)
       _lastCaughtUpTimeMs = math.max(_lastCaughtUpTimeMs, lastFetchTimeMs)
 
-    logEndOffset = logReadResult.info.fetchOffsetMetadata
-    lastFetchLeaderLogEndOffset = logReadResult.leaderLogEndOffset
-    lastFetchTimeMs = logReadResult.fetchTimeMs
+    _logStartOffset = followerStartOffset
+    _logEndOffsetMetadata = followerFetchOffsetMetadata
+    lastFetchLeaderLogEndOffset = leaderEndOffset
+    lastFetchTimeMs = followerFetchTimeMs
+    trace(s"Updated state of replica to $this")
   }
 
-  def resetLastCaughtUpTime(curLeaderLogEndOffset: Long, curTimeMs: Long, lastCaughtUpTimeMs: Long) {
+  def resetLastCaughtUpTime(curLeaderLogEndOffset: Long, curTimeMs: Long, lastCaughtUpTimeMs: Long): Unit = {
     lastFetchLeaderLogEndOffset = curLeaderLogEndOffset
     lastFetchTimeMs = curTimeMs
     _lastCaughtUpTimeMs = lastCaughtUpTimeMs
+    trace(s"Reset state of replica to $this")
   }
 
-  private def logEndOffset_=(newLogEndOffset: LogOffsetMetadata) {
-    if (isLocal) {
-      throw new KafkaException(s"Should not set log end offset on partition $topicPartition's local replica $brokerId")
-    } else {
-      logEndOffsetMetadata = newLogEndOffset
-      trace(s"Setting log end offset for replica $brokerId for partition $topicPartition to [$logEndOffsetMetadata]")
-    }
-  }
-
-  def logEndOffset =
-    if (isLocal)
-      log.get.logEndOffsetMetadata
-    else
-      logEndOffsetMetadata
-
-  def highWatermark_=(newHighWatermark: LogOffsetMetadata) {
-    if (isLocal) {
-      highWatermarkMetadata = newHighWatermark
-      trace(s"Setting high watermark for replica $brokerId partition $topicPartition to [$newHighWatermark]")
-    } else {
-      throw new KafkaException(s"Should not set high watermark on partition $topicPartition's non-local replica $brokerId")
-    }
-  }
-
-  def highWatermark = highWatermarkMetadata
-
-  def convertHWToLocalOffsetMetadata() = {
-    if (isLocal) {
-      highWatermarkMetadata = log.get.convertToOffsetMetadata(highWatermarkMetadata.messageOffset)
-    } else {
-      throw new KafkaException(s"Should not construct complete high watermark on partition $topicPartition's non-local replica $brokerId")
-    }
+  override def toString: String = {
+    val replicaString = new StringBuilder
+    replicaString.append("Replica(replicaId=" + brokerId)
+    replicaString.append(s", topic=${topicPartition.topic}")
+    replicaString.append(s", partition=${topicPartition.partition}")
+    replicaString.append(s", lastCaughtUpTimeMs=$lastCaughtUpTimeMs")
+    replicaString.append(s", logStartOffset=$logStartOffset")
+    replicaString.append(s", logEndOffset=$logEndOffset")
+    replicaString.append(s", logEndOffsetMetadata=$logEndOffsetMetadata")
+    replicaString.append(s", lastFetchLeaderLogEndOffset=$lastFetchLeaderLogEndOffset")
+    replicaString.append(s", lastFetchTimeMs=$lastFetchTimeMs")
+    replicaString.append(")")
+    replicaString.toString
   }
 
   override def equals(that: Any): Boolean = that match {
@@ -123,15 +106,4 @@ class Replica(val brokerId: Int,
   }
 
   override def hashCode: Int = 31 + topicPartition.hashCode + 17 * brokerId
-
-  override def toString: String = {
-    val replicaString = new StringBuilder
-    replicaString.append("ReplicaId: " + brokerId)
-    replicaString.append("; Topic: " + partition.topic)
-    replicaString.append("; Partition: " + partition.partitionId)
-    replicaString.append("; isLocal: " + isLocal)
-    replicaString.append("; lastCaughtUpTimeMs: " + lastCaughtUpTimeMs)
-    if (isLocal) replicaString.append("; Highwatermark: " + highWatermark)
-    replicaString.toString
-  }
 }

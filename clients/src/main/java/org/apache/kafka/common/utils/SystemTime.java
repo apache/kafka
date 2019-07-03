@@ -16,7 +16,9 @@
  */
 package org.apache.kafka.common.utils;
 
-import java.util.concurrent.TimeUnit;
+import org.apache.kafka.common.errors.TimeoutException;
+
+import java.util.function.Supplier;
 
 /**
  * A time implementation that uses the system clock and sleep call. Use `Time.SYSTEM` instead of creating an instance
@@ -30,22 +32,28 @@ public class SystemTime implements Time {
     }
 
     @Override
-    public long hiResClockMs() {
-        return TimeUnit.NANOSECONDS.toMillis(nanoseconds());
-    }
-
-    @Override
     public long nanoseconds() {
         return System.nanoTime();
     }
 
     @Override
     public void sleep(long ms) {
-        try {
-            Thread.sleep(ms);
-        } catch (InterruptedException e) {
-            // just wake up early
-            Thread.currentThread().interrupt();
+        Utils.sleep(ms);
+    }
+
+    @Override
+    public void waitObject(Object obj, Supplier<Boolean> condition, long deadlineMs) throws InterruptedException {
+        synchronized (obj) {
+            while (true) {
+                if (condition.get())
+                    return;
+
+                long currentTimeMs = milliseconds();
+                if (currentTimeMs >= deadlineMs)
+                    throw new TimeoutException("Condition not satisfied before deadline");
+
+                obj.wait(deadlineMs - currentTimeMs);
+            }
         }
     }
 

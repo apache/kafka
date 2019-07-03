@@ -26,6 +26,10 @@ if [ "x$KAFKA_LOG4J_OPTS" = "x" ]; then
     export KAFKA_LOG4J_OPTS="-Dlog4j.configuration=file:$base_dir/../config/connect-log4j.properties"
 fi
 
+if [ "x$KAFKA_HEAP_OPTS" = "x" ]; then
+  export KAFKA_HEAP_OPTS="-Xms256M -Xmx2G"
+fi
+
 EXTRA_ARGS=${EXTRA_ARGS-'-name connectStandalone'}
 
 COMMAND=$1

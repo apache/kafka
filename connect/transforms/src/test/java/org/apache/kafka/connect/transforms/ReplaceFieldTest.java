@@ -20,6 +20,7 @@ import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaBuilder;
 import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.sink.SinkRecord;
+import org.junit.After;
 import org.junit.Test;
 
 import java.util.HashMap;
@@ -28,11 +29,15 @@ import java.util.Map;
 import static org.junit.Assert.assertEquals;
 
 public class ReplaceFieldTest {
+    private ReplaceField<SinkRecord> xform = new ReplaceField.Value<>();
+
+    @After
+    public void teardown() {
+        xform.close();
+    }
 
     @Test
     public void schemaless() {
-        final ReplaceField<SinkRecord> xform = new ReplaceField.Value<>();
-
         final Map<String, String> props = new HashMap<>();
         props.put("blacklist", "dont");
         props.put("renames", "abc:xyz,foo:bar");
@@ -57,8 +62,6 @@ public class ReplaceFieldTest {
 
     @Test
     public void withSchema() {
-        final ReplaceField<SinkRecord> xform = new ReplaceField.Value<>();
-
         final Map<String, String> props = new HashMap<>();
         props.put("whitelist", "abc,foo");
         props.put("renames", "abc:xyz,foo:bar");

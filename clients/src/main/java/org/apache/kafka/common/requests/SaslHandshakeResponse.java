@@ -16,15 +16,15 @@
  */
 package org.apache.kafka.common.requests;
 
-import java.nio.ByteBuffer;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.List;
-
+import org.apache.kafka.common.message.SaslHandshakeResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
 
+import java.nio.ByteBuffer;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
 
 /**
  * Response from SASL server which indicates if the client-chosen mechanism is enabled in the server.
@@ -32,49 +32,40 @@ import org.apache.kafka.common.protocol.types.Struct;
  */
 public class SaslHandshakeResponse extends AbstractResponse {
 
-    private static final String ERROR_CODE_KEY_NAME = "error_code";
-    private static final String ENABLED_MECHANISMS_KEY_NAME = "enabled_mechanisms";
+    private final SaslHandshakeResponseData data;
 
-    /**
-     * Possible error codes:
-     *   UNSUPPORTED_SASL_MECHANISM(33): Client mechanism not enabled in server
-     *   ILLEGAL_SASL_STATE(34) : Invalid request during SASL handshake
-     */
-    private final Errors error;
-    private final List<String> enabledMechanisms;
-
-    public SaslHandshakeResponse(Errors error, Collection<String> enabledMechanisms) {
-        this.error = error;
-        this.enabledMechanisms = new ArrayList<>(enabledMechanisms);
+    public SaslHandshakeResponse(SaslHandshakeResponseData data) {
+        this.data = data;
     }
 
-    public SaslHandshakeResponse(Struct struct) {
-        error = Errors.forCode(struct.getShort(ERROR_CODE_KEY_NAME));
-        Object[] mechanisms = struct.getArray(ENABLED_MECHANISMS_KEY_NAME);
-        ArrayList<String> enabledMechanisms = new ArrayList<>();
-        for (Object mechanism : mechanisms)
-            enabledMechanisms.add((String) mechanism);
-        this.enabledMechanisms = enabledMechanisms;
+    public SaslHandshakeResponse(Struct struct, short version) {
+        this.data = new SaslHandshakeResponseData(struct, version);
     }
 
+    /*
+    * Possible error codes:
+    *   UNSUPPORTED_SASL_MECHANISM(33): Client mechanism not enabled in server
+    *   ILLEGAL_SASL_STATE(34) : Invalid request during SASL handshake
+    */
     public Errors error() {
-        return error;
+        return Errors.forCode(data.errorCode());
+    }
+
+    @Override
+    public Map<Errors, Integer> errorCounts() {
+        return Collections.singletonMap(Errors.forCode(data.errorCode()), 1);
     }
 
     @Override
     public Struct toStruct(short version) {
-        Struct struct = new Struct(ApiKeys.SASL_HANDSHAKE.responseSchema(version));
-        struct.set(ERROR_CODE_KEY_NAME, error.code());
-        struct.set(ENABLED_MECHANISMS_KEY_NAME, enabledMechanisms.toArray());
-        return struct;
+        return data.toStruct(version);
     }
 
     public List<String> enabledMechanisms() {
-        return enabledMechanisms;
+        return data.mechanisms();
     }
 
     public static SaslHandshakeResponse parse(ByteBuffer buffer, short version) {
-        return new SaslHandshakeResponse(ApiKeys.SASL_HANDSHAKE.parseResponse(version, buffer));
+        return new SaslHandshakeResponse(ApiKeys.SASL_HANDSHAKE.parseResponse(version, buffer), version);
     }
 }
-

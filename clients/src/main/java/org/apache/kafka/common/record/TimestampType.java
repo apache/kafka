@@ -32,19 +32,6 @@ public enum TimestampType {
         this.name = name;
     }
 
-    public byte updateAttributes(byte attributes) {
-        if (this == NO_TIMESTAMP_TYPE)
-            throw new IllegalArgumentException("Cannot use NO_TIMESTAMP_TYPE in attributes");
-
-        return this == CREATE_TIME ?
-            (byte) (attributes & ~Record.TIMESTAMP_TYPE_MASK) : (byte) (attributes | Record.TIMESTAMP_TYPE_MASK);
-    }
-
-    public static TimestampType forAttributes(byte attributes) {
-        int timestampType = (attributes & Record.TIMESTAMP_TYPE_MASK) >> Record.TIMESTAMP_TYPE_ATTRIBUTE_OFFSET;
-        return timestampType == 0 ? CREATE_TIME : LOG_APPEND_TIME;
-    }
-
     public static TimestampType forName(String name) {
         for (TimestampType t : values())
             if (t.name.equals(name))

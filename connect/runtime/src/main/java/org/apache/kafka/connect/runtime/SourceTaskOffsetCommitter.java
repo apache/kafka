@@ -18,6 +18,7 @@ package org.apache.kafka.connect.runtime;
 
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.util.ConnectorTaskId;
+import org.apache.kafka.connect.util.LoggingContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -79,7 +80,9 @@ class SourceTaskOffsetCommitter {
         ScheduledFuture<?> commitFuture = commitExecutorService.scheduleWithFixedDelay(new Runnable() {
             @Override
             public void run() {
-                commit(workerTask);
+                try (LoggingContext loggingContext = LoggingContext.forOffsets(id)) {
+                    commit(workerTask);
+                }
             }
         }, commitIntervalMs, commitIntervalMs, TimeUnit.MILLISECONDS);
         committers.put(id, commitFuture);
@@ -90,7 +93,7 @@ class SourceTaskOffsetCommitter {
         if (task == null)
             return;
 
-        try {
+        try (LoggingContext loggingContext = LoggingContext.forTask(id)) {
             task.cancel(false);
             if (!task.isDone())
                 task.get();
@@ -103,17 +106,17 @@ class SourceTaskOffsetCommitter {
     }
 
     private void commit(WorkerSourceTask workerTask) {
-        log.debug("Committing offsets for {}", workerTask);
+        log.debug("{} Committing offsets", workerTask);
         try {
             if (workerTask.commitOffsets()) {
                 return;
             }
-            log.error("Failed to commit offsets for {}", workerTask);
+            log.error("{} Failed to commit offsets", workerTask);
         } catch (Throwable t) {
             // We're very careful about exceptions here since any uncaught exceptions in the commit
             // thread would cause the fixed interval schedule on the ExecutorService to stop running
             // for that task
-            log.error("Unhandled exception when committing {}: ", workerTask, t);
+            log.error("{} Unhandled exception when committing: ", workerTask, t);
         }
     }
 }

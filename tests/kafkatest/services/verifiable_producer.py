@@ -15,20 +15,26 @@
 
 import json
 import os
-import signal
+
 import time
-
-from ducktape.services.background_thread import BackgroundThreadService
 from ducktape.cluster.remoteaccount import RemoteCommandError
-from ducktape.utils.util import wait_until
-
-from kafkatest.directory_layout.kafka_path import KafkaPathResolverMixin, TOOLS_JAR_NAME, TOOLS_DEPENDANT_TEST_LIBS_JAR_NAME
+from ducktape.services.background_thread import BackgroundThreadService
+from kafkatest.directory_layout.kafka_path import KafkaPathResolverMixin
+from kafkatest.services.kafka import TopicPartition
+from kafkatest.services.verifiable_client import VerifiableClientMixin
 from kafkatest.utils import is_int, is_int_with_prefix
-from kafkatest.version import DEV_BRANCH, LATEST_0_8_2
-from kafkatest.utils.remote_account import line_count
+from kafkatest.version import DEV_BRANCH
 
 
-class VerifiableProducer(KafkaPathResolverMixin, BackgroundThreadService):
+class VerifiableProducer(KafkaPathResolverMixin, VerifiableClientMixin, BackgroundThreadService):
+    """This service wraps org.apache.kafka.tools.VerifiableProducer for use in
+    system testing.
+
+    NOTE: this class should be treated as a PUBLIC API. Downstream users use
+    this service both directly and through class extension, so care must be
+    taken to ensure compatibility.
+    """
+
     PERSISTENT_ROOT = "/mnt/verifiable_producer"
     STDOUT_CAPTURE = os.path.join(PERSISTENT_ROOT, "verifiable_producer.stdout")
     STDERR_CAPTURE = os.path.join(PERSISTENT_ROOT, "verifiable_producer.stderr")
@@ -51,17 +57,24 @@ class VerifiableProducer(KafkaPathResolverMixin, BackgroundThreadService):
 
     def __init__(self, context, num_nodes, kafka, topic, max_messages=-1, throughput=100000,
                  message_validator=is_int, compression_types=None, version=DEV_BRANCH, acks=None,
-                 stop_timeout_sec=150, request_timeout_sec=30, log_level="INFO"):
+                 stop_timeout_sec=150, request_timeout_sec=30, log_level="INFO",
+                 enable_idempotence=False, offline_nodes=[], create_time=-1, repeating_keys=None,
+                 jaas_override_variables=None, kafka_opts_override="", client_prop_file_override="",
+                 retries=None):
         """
-        :param max_messages is a number of messages to be produced per producer
-        :param message_validator checks for an expected format of messages produced. There are
-        currently two:
-               * is_int is an integer format; this is default and expected to be used if
-               num_nodes = 1
-               * is_int_with_prefix recommended if num_nodes > 1, because otherwise each producer
-               will produce exactly same messages, and validation may miss missing messages.
-        :param compression_types: If None, all producers will not use compression; or a list of
-        compression types, one per producer (could be "none").
+        Args:
+            :param max_messages                number of messages to be produced per producer
+            :param message_validator           checks for an expected format of messages produced. There are
+                                               currently two:
+                                               * is_int is an integer format; this is default and expected to be used if
+                                                 num_nodes = 1
+                                               * is_int_with_prefix recommended if num_nodes > 1, because otherwise each producer
+                                                 will produce exactly same messages, and validation may miss missing messages.
+            :param compression_types           If None, all producers will not use compression; or a list of compression types,
+                                               one per producer (could be "none").
+            :param jaas_override_variables     A dict of variables to be used in the jaas.conf template file
+            :param kafka_opts_override         Override parameters of the KAFKA_OPTS environment variable
+            :param client_prop_file_override   Override client.properties file used by the consumer
         """
         super(VerifiableProducer, self).__init__(context, num_nodes)
         self.log_level = log_level
@@ -78,16 +91,29 @@ class VerifiableProducer(KafkaPathResolverMixin, BackgroundThreadService):
         for node in self.nodes:
             node.version = version
         self.acked_values = []
+        self._last_acked_offsets = {}
         self.not_acked_values = []
         self.produced_count = {}
         self.clean_shutdown_nodes = set()
         self.acks = acks
         self.stop_timeout_sec = stop_timeout_sec
         self.request_timeout_sec = request_timeout_sec
+        self.enable_idempotence = enable_idempotence
+        self.offline_nodes = offline_nodes
+        self.create_time = create_time
+        self.repeating_keys = repeating_keys
+        self.jaas_override_variables = jaas_override_variables or {}
+        self.kafka_opts_override = kafka_opts_override
+        self.client_prop_file_override = client_prop_file_override
+        self.retries = retries
+
+    def java_class_name(self):
+        return "VerifiableProducer"
 
     def prop_file(self, node):
         idx = self.idx(node)
-        prop_file = str(self.security_config)
+        prop_file = self.render('producer.properties', request_timeout_ms=(self.request_timeout_sec * 1000))
+        prop_file += "\n{}".format(str(self.security_config))
         if self.compression_types is not None:
             compression_index = idx - 1
             self.logger.info("VerifiableProducer (index = %d) will use compression type = %s", idx,
@@ -103,16 +129,30 @@ class VerifiableProducer(KafkaPathResolverMixin, BackgroundThreadService):
         node.account.create_file(VerifiableProducer.LOG4J_CONFIG, log_config)
 
         # Configure security
-        self.security_config = self.kafka.security_config.client_config(node=node)
+        self.security_config = self.kafka.security_config.client_config(node=node,
+                                                                        jaas_override_variables=self.jaas_override_variables)
         self.security_config.setup_node(node)
 
         # Create and upload config file
-        producer_prop_file = self.prop_file(node)
+        if self.client_prop_file_override:
+            producer_prop_file = self.client_prop_file_override
+        else:
+            producer_prop_file = self.prop_file(node)
+
         if self.acks is not None:
             self.logger.info("VerifiableProducer (index = %d) will use acks = %s", idx, self.acks)
             producer_prop_file += "\nacks=%s\n" % self.acks
 
-        producer_prop_file += "\nrequest.timeout.ms=%d\n" % (self.request_timeout_sec * 1000)
+        if self.enable_idempotence:
+            self.logger.info("Setting up an idempotent producer")
+            producer_prop_file += "\nmax.in.flight.requests.per.connection=5\n"
+            producer_prop_file += "\nretries=1000000\n"
+            producer_prop_file += "\nenable.idempotence=true\n"
+        elif self.retries is not None:
+            self.logger.info("VerifiableProducer (index = %d) will use retries = %s", idx, self.retries)
+            producer_prop_file += "\nretries=%s\n" % self.retries
+            producer_prop_file += "\ndelivery.timeout.ms=%s\n" % (self.request_timeout_sec * 1000 * self.retries)
+
         self.logger.info("verifiable_producer.properties:")
         self.logger.info(producer_prop_file)
         node.account.create_file(VerifiableProducer.CONFIG_FILE, producer_prop_file)
@@ -123,55 +163,40 @@ class VerifiableProducer(KafkaPathResolverMixin, BackgroundThreadService):
         self.produced_count[idx] = 0
         last_produced_time = time.time()
         prev_msg = None
-        node.account.ssh(cmd)
 
-        # Ensure that STDOUT_CAPTURE exists before try to read from it
-        # Note that if max_messages is configured, it's possible for the process to exit before this
-        # wait_until condition is checked
-        start = time.time()
-        wait_until(lambda: node.account.isfile(VerifiableProducer.STDOUT_CAPTURE) and
-                           line_count(node, VerifiableProducer.STDOUT_CAPTURE) > 0,
-                   timeout_sec=10, err_msg="%s: VerifiableProducer took too long to start" % node.account)
-        self.logger.debug("%s: VerifiableProducer took %s seconds to start" % (node.account, time.time() - start))
+        for line in node.account.ssh_capture(cmd):
+            line = line.strip()
 
-        with node.account.open(VerifiableProducer.STDOUT_CAPTURE, 'r') as f:
-            while True:
-                line = f.readline()
-                if line == '' and not self.alive(node):
-                    # The process is gone, and we've reached the end of the output file, so we don't expect
-                    # any more output to appear in the STDOUT_CAPTURE file
-                    break
+            data = self.try_parse_json(line)
+            if data is not None:
 
-                line = line.strip()
+                with self.lock:
+                    if data["name"] == "producer_send_error":
+                        data["node"] = idx
+                        self.not_acked_values.append(self.message_validator(data["value"]))
+                        self.produced_count[idx] += 1
 
-                data = self.try_parse_json(line)
-                if data is not None:
+                    elif data["name"] == "producer_send_success":
+                        partition = TopicPartition(data["topic"], data["partition"])
+                        self.acked_values.append(self.message_validator(data["value"]))
+                        self._last_acked_offsets[partition] = data["offset"]
+                        self.produced_count[idx] += 1
 
-                    with self.lock:
-                        if data["name"] == "producer_send_error":
-                            data["node"] = idx
-                            self.not_acked_values.append(self.message_validator(data["value"]))
-                            self.produced_count[idx] += 1
+                        # Log information if there is a large gap between successively acknowledged messages
+                        t = time.time()
+                        time_delta_sec = t - last_produced_time
+                        if time_delta_sec > 2 and prev_msg is not None:
+                            self.logger.debug(
+                                "Time delta between successively acked messages is large: " +
+                                "delta_t_sec: %s, prev_message: %s, current_message: %s" % (str(time_delta_sec), str(prev_msg), str(data)))
 
-                        elif data["name"] == "producer_send_success":
-                            self.acked_values.append(self.message_validator(data["value"]))
-                            self.produced_count[idx] += 1
+                        last_produced_time = t
+                        prev_msg = data
 
-                            # Log information if there is a large gap between successively acknowledged messages
-                            t = time.time()
-                            time_delta_sec = t - last_produced_time
-                            if time_delta_sec > 2 and prev_msg is not None:
-                                self.logger.debug(
-                                    "Time delta between successively acked messages is large: " +
-                                    "delta_t_sec: %s, prev_message: %s, current_message: %s" % (str(time_delta_sec), str(prev_msg), str(data)))
-
-                            last_produced_time = t
-                            prev_msg = data
-
-                        elif data["name"] == "shutdown_complete":
-                            if node in self.clean_shutdown_nodes:
-                                raise Exception("Unexpected shutdown event from producer, already shutdown. Producer index: %d" % idx)
-                            self.clean_shutdown_nodes.add(node)
+                    elif data["name"] == "shutdown_complete":
+                        if node in self.clean_shutdown_nodes:
+                            raise Exception("Unexpected shutdown event from producer, already shutdown. Producer index: %d" % idx)
+                        self.clean_shutdown_nodes.add(node)
 
     def _has_output(self, node):
         """Helper used as a proxy to determine whether jmx is running by that jmx_tool_log contains output."""
@@ -182,23 +207,15 @@ class VerifiableProducer(KafkaPathResolverMixin, BackgroundThreadService):
             return True
 
     def start_cmd(self, node, idx):
-        cmd = ""
-        if node.version <= LATEST_0_8_2:
-            # 0.8.2.X releases do not have VerifiableProducer.java, so cheat and add
-            # the tools jar from the development branch to the classpath
-            tools_jar = self.path.jar(TOOLS_JAR_NAME, DEV_BRANCH)
-            tools_dependant_libs_jar = self.path.jar(TOOLS_DEPENDANT_TEST_LIBS_JAR_NAME, DEV_BRANCH)
+        cmd  = "export LOG_DIR=%s;" % VerifiableProducer.LOG_DIR
+        if self.kafka_opts_override:
+            cmd += " export KAFKA_OPTS=\"%s\";" % self.kafka_opts_override
+        else:
+            cmd += " export KAFKA_OPTS=%s;" % self.security_config.kafka_opts
 
-            cmd += "for file in %s; do CLASSPATH=$CLASSPATH:$file; done; " % tools_jar
-            cmd += "for file in %s; do CLASSPATH=$CLASSPATH:$file; done; " % tools_dependant_libs_jar
-            cmd += "export CLASSPATH; "
-
-        cmd += "export LOG_DIR=%s;" % VerifiableProducer.LOG_DIR
-        cmd += " export KAFKA_OPTS=%s;" % self.security_config.kafka_opts
         cmd += " export KAFKA_LOG4J_OPTS=\"-Dlog4j.configuration=file:%s\"; " % VerifiableProducer.LOG4J_CONFIG
-        cmd += " " + self.path.script("kafka-run-class.sh", node)
-        cmd += " org.apache.kafka.tools.VerifiableProducer"
-        cmd += " --topic %s --broker-list %s" % (self.topic, self.kafka.bootstrap_servers(self.security_config.security_protocol))
+        cmd += self.impl.exec_cmd(node)
+        cmd += " --topic %s --broker-list %s" % (self.topic, self.kafka.bootstrap_servers(self.security_config.security_protocol, True, self.offline_nodes))
         if self.max_messages > 0:
             cmd += " --max-messages %s" % str(self.max_messages)
         if self.throughput > 0:
@@ -207,29 +224,31 @@ class VerifiableProducer(KafkaPathResolverMixin, BackgroundThreadService):
             cmd += " --value-prefix %s" % str(idx)
         if self.acks is not None:
             cmd += " --acks %s " % str(self.acks)
+        if self.create_time > -1:
+            cmd += " --message-create-time %s " % str(self.create_time)
+        if self.repeating_keys is not None:
+            cmd += " --repeating-keys %s " % str(self.repeating_keys)
 
         cmd += " --producer.config %s" % VerifiableProducer.CONFIG_FILE
-        cmd += " 2>> %s 1>> %s &" % (VerifiableProducer.STDERR_CAPTURE, VerifiableProducer.STDOUT_CAPTURE)
+
+        cmd += " 2>> %s | tee -a %s &" % (VerifiableProducer.STDOUT_CAPTURE, VerifiableProducer.STDOUT_CAPTURE)
         return cmd
 
     def kill_node(self, node, clean_shutdown=True, allow_fail=False):
-        if clean_shutdown:
-            sig = signal.SIGTERM
-        else:
-            sig = signal.SIGKILL
+        sig = self.impl.kill_signal(clean_shutdown)
         for pid in self.pids(node):
             node.account.signal(pid, sig, allow_fail)
 
     def pids(self, node):
-        try:
-            cmd = "jps | grep -i VerifiableProducer | awk '{print $1}'"
-            pid_arr = [pid for pid in node.account.ssh_capture(cmd, allow_fail=True, callback=int)]
-            return pid_arr
-        except (RemoteCommandError, ValueError) as e:
-            return []
+        return self.impl.pids(node)
 
     def alive(self, node):
         return len(self.pids(node)) > 0
+
+    @property
+    def last_acked_offsets(self):
+        with self.lock:
+            return self._last_acked_offsets
 
     @property
     def acked(self):
@@ -259,7 +278,11 @@ class VerifiableProducer(KafkaPathResolverMixin, BackgroundThreadService):
             return True
 
     def stop_node(self, node):
-        self.kill_node(node, clean_shutdown=True, allow_fail=False)
+        # There is a race condition on shutdown if using `max_messages` since the
+        # VerifiableProducer will shutdown automatically when all messages have been
+        # written. In this case, the process will be gone and the signal will fail.
+        allow_fail = self.max_messages > 0
+        self.kill_node(node, clean_shutdown=True, allow_fail=allow_fail)
 
         stopped = self.wait_node(node, timeout_sec=self.stop_timeout_sec)
         assert stopped, "Node %s: did not stop within the specified timeout of %s seconds" % \

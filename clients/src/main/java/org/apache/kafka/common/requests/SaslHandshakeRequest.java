@@ -16,14 +16,13 @@
  */
 package org.apache.kafka.common.requests;
 
-import java.nio.ByteBuffer;
-import java.util.Collections;
-import java.util.List;
 
+import org.apache.kafka.common.message.SaslHandshakeRequestData;
+import org.apache.kafka.common.message.SaslHandshakeResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
 
+import java.nio.ByteBuffer;
 
 /**
  * Request from SASL client containing client SASL mechanism.
@@ -36,35 +35,53 @@ import org.apache.kafka.common.protocol.types.Struct;
  */
 public class SaslHandshakeRequest extends AbstractRequest {
 
-    public static final String MECHANISM_KEY_NAME = "mechanism";
+    public static class Builder extends AbstractRequest.Builder<SaslHandshakeRequest> {
+        private final SaslHandshakeRequestData data;
 
-    private final String mechanism;
+        public Builder(SaslHandshakeRequestData data) {
+            super(ApiKeys.SASL_HANDSHAKE);
+            this.data = data;
+        }
 
-    public SaslHandshakeRequest(String mechanism) {
-        super(ApiKeys.SASL_HANDSHAKE.latestVersion());
-        this.mechanism = mechanism;
+        @Override
+        public SaslHandshakeRequest build(short version) {
+            return new SaslHandshakeRequest(data, version);
+        }
+
+        @Override
+        public String toString() {
+            return data.toString();
+        }
+    }
+
+    private final SaslHandshakeRequestData data;
+    private final short version;
+
+    public SaslHandshakeRequest(SaslHandshakeRequestData data) {
+        this(data, ApiKeys.SASL_HANDSHAKE.latestVersion());
+    }
+
+    public SaslHandshakeRequest(SaslHandshakeRequestData data, short version) {
+        super(ApiKeys.SASL_HANDSHAKE, version);
+        this.data = data;
+        this.version = version;
     }
 
     public SaslHandshakeRequest(Struct struct, short version) {
-        super(version);
-        mechanism = struct.getString(MECHANISM_KEY_NAME);
+        super(ApiKeys.SASL_HANDSHAKE, version);
+        this.data = new SaslHandshakeRequestData(struct, version);
+        this.version = version;
     }
 
-    public String mechanism() {
-        return mechanism;
+    public SaslHandshakeRequestData data() {
+        return data;
     }
 
     @Override
-    public AbstractResponse getErrorResponse(Throwable e) {
-        short versionId = version();
-        switch (versionId) {
-            case 0:
-                List<String> enabledMechanisms = Collections.emptyList();
-                return new SaslHandshakeResponse(Errors.forException(e), enabledMechanisms);
-            default:
-                throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
-                        versionId, this.getClass().getSimpleName(), ApiKeys.SASL_HANDSHAKE.latestVersion()));
-        }
+    public AbstractResponse getErrorResponse(int throttleTimeMs, Throwable e) {
+        SaslHandshakeResponseData response = new SaslHandshakeResponseData();
+        response.setErrorCode(ApiError.fromThrowable(e).error().code());
+        return new SaslHandshakeResponse(response);
     }
 
     public static SaslHandshakeRequest parse(ByteBuffer buffer, short version) {
@@ -73,9 +90,7 @@ public class SaslHandshakeRequest extends AbstractRequest {
 
     @Override
     protected Struct toStruct() {
-        Struct struct = new Struct(ApiKeys.SASL_HANDSHAKE.requestSchema(version()));
-        struct.set(MECHANISM_KEY_NAME, mechanism);
-        return struct;
+        return data.toStruct(version);
     }
 }
 

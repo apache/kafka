@@ -16,15 +16,29 @@
  */
 package org.apache.kafka.connect.runtime;
 
+import org.apache.kafka.connect.runtime.distributed.ClusterConfigState;
 import org.apache.kafka.connect.source.SourceTaskContext;
 import org.apache.kafka.connect.storage.OffsetStorageReader;
+
+import java.util.Map;
 
 public class WorkerSourceTaskContext implements SourceTaskContext {
 
     private final OffsetStorageReader reader;
+    private final WorkerSourceTask task;
+    private final ClusterConfigState configState;
 
-    public WorkerSourceTaskContext(OffsetStorageReader reader) {
+    public WorkerSourceTaskContext(OffsetStorageReader reader,
+                                   WorkerSourceTask task,
+                                   ClusterConfigState configState) {
         this.reader = reader;
+        this.task = task;
+        this.configState = configState;
+    }
+
+    @Override
+    public Map<String, String> configs() {
+        return configState.taskConfig(task.id());
     }
 
     @Override

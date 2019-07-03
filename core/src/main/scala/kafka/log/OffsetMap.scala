@@ -27,6 +27,7 @@ trait OffsetMap {
   def slots: Int
   def put(key: ByteBuffer, offset: Long)
   def get(key: ByteBuffer): Long
+  def updateLatestOffset(offset: Long)
   def clear()
   def size: Int
   def utilization: Double = size.toDouble / slots
@@ -148,7 +149,7 @@ class SkimpyOffsetMap(val memory: Int, val hashAlgorithm: String = "MD5") extend
     this.lookups = 0L
     this.probes = 0L
     this.lastOffset = -1L
-    Arrays.fill(bytes.array, bytes.arrayOffset, bytes.arrayOffset + bytes.limit, 0.toByte)
+    Arrays.fill(bytes.array, bytes.arrayOffset, bytes.arrayOffset + bytes.limit(), 0.toByte)
   }
   
   /**
@@ -166,6 +167,10 @@ class SkimpyOffsetMap(val memory: Int, val hashAlgorithm: String = "MD5") extend
    * The latest offset put into the map
    */
   override def latestOffset: Long = lastOffset
+
+  override def updateLatestOffset(offset: Long): Unit = {
+    lastOffset = offset
+  }
 
   /**
    * Calculate the ith probe position. We first try reading successive integers from the hash itself

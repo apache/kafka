@@ -19,6 +19,7 @@ package org.apache.kafka.connect.sink;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.connect.connector.ConnectRecord;
 import org.apache.kafka.connect.data.Schema;
+import org.apache.kafka.connect.header.Header;
 
 /**
  * SinkRecord is a {@link ConnectRecord} that has been read from Kafka and includes the kafkaOffset of
@@ -38,7 +39,12 @@ public class SinkRecord extends ConnectRecord<SinkRecord> {
 
     public SinkRecord(String topic, int partition, Schema keySchema, Object key, Schema valueSchema, Object value, long kafkaOffset,
                       Long timestamp, TimestampType timestampType) {
-        super(topic, partition, keySchema, key, valueSchema, value, timestamp);
+        this(topic, partition, keySchema, key, valueSchema, value, kafkaOffset, timestamp, timestampType, null);
+    }
+
+    public SinkRecord(String topic, int partition, Schema keySchema, Object key, Schema valueSchema, Object value, long kafkaOffset,
+                      Long timestamp, TimestampType timestampType, Iterable<Header> headers) {
+        super(topic, partition, keySchema, key, valueSchema, value, timestamp, headers);
         this.kafkaOffset = kafkaOffset;
         this.timestampType = timestampType;
     }
@@ -53,7 +59,13 @@ public class SinkRecord extends ConnectRecord<SinkRecord> {
 
     @Override
     public SinkRecord newRecord(String topic, Integer kafkaPartition, Schema keySchema, Object key, Schema valueSchema, Object value, Long timestamp) {
-        return new SinkRecord(topic, kafkaPartition, keySchema, key, valueSchema, value, kafkaOffset(), timestamp, timestampType);
+        return newRecord(topic, kafkaPartition, keySchema, key, valueSchema, value, timestamp, headers().duplicate());
+    }
+
+    @Override
+    public SinkRecord newRecord(String topic, Integer kafkaPartition, Schema keySchema, Object key, Schema valueSchema, Object value,
+                                Long timestamp, Iterable<Header> headers) {
+        return new SinkRecord(topic, kafkaPartition, keySchema, key, valueSchema, value, kafkaOffset(), timestamp, timestampType, headers);
     }
 
     @Override
@@ -76,7 +88,7 @@ public class SinkRecord extends ConnectRecord<SinkRecord> {
     @Override
     public int hashCode() {
         int result = super.hashCode();
-        result = 31 * result + (int) (kafkaOffset ^ (kafkaOffset >>> 32));
+        result = 31 * result + Long.hashCode(kafkaOffset);
         result = 31 * result + timestampType.hashCode();
         return result;
     }

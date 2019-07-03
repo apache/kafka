@@ -34,7 +34,7 @@ public class StringSerializer implements Serializer<String> {
         Object encodingValue = configs.get(propertyName);
         if (encodingValue == null)
             encodingValue = configs.get("serializer.encoding");
-        if (encodingValue != null && encodingValue instanceof String)
+        if (encodingValue instanceof String)
             encoding = (String) encodingValue;
     }
 
@@ -48,10 +48,5 @@ public class StringSerializer implements Serializer<String> {
         } catch (UnsupportedEncodingException e) {
             throw new SerializationException("Error when serializing string to byte[] due to unsupported encoding " + encoding);
         }
-    }
-
-    @Override
-    public void close() {
-        // nothing to do
     }
 }

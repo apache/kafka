@@ -36,13 +36,15 @@ class ConsumerRollingUpgradeTest(VerifiableConsumerTest):
         assignment = set([frozenset(partitions) for partitions in consumer.current_assignment().values()])
         assert assignment == set([
             frozenset([TopicPartition(self.TOPIC, 0), TopicPartition(self.TOPIC, 1)]),
-            frozenset([TopicPartition(self.TOPIC, 2), TopicPartition(self.TOPIC, 3)])])
+            frozenset([TopicPartition(self.TOPIC, 2), TopicPartition(self.TOPIC, 3)])]), \
+            "Mismatched assignment: %s" % assignment
 
     def _verify_roundrobin_assignment(self, consumer):
         assignment = set([frozenset(x) for x in consumer.current_assignment().values()])
         assert assignment == set([
             frozenset([TopicPartition(self.TOPIC, 0), TopicPartition(self.TOPIC, 2)]),
-            frozenset([TopicPartition(self.TOPIC, 1), TopicPartition(self.TOPIC, 3)])])
+            frozenset([TopicPartition(self.TOPIC, 1), TopicPartition(self.TOPIC, 3)])]), \
+            "Mismatched assignment: %s" % assignment
 
     @cluster(num_nodes=4)
     def rolling_update_test(self):

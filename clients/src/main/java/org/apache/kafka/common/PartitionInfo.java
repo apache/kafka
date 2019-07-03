@@ -17,22 +17,33 @@
 package org.apache.kafka.common;
 
 /**
- * Information about a topic-partition.
+ * This is used to describe per-partition state in the MetadataResponse.
  */
 public class PartitionInfo {
-
     private final String topic;
     private final int partition;
     private final Node leader;
     private final Node[] replicas;
     private final Node[] inSyncReplicas;
+    private final Node[] offlineReplicas;
 
+    // Used only by tests
     public PartitionInfo(String topic, int partition, Node leader, Node[] replicas, Node[] inSyncReplicas) {
+        this(topic, partition, leader, replicas, inSyncReplicas, new Node[0]);
+    }
+
+    public PartitionInfo(String topic,
+                         int partition,
+                         Node leader,
+                         Node[] replicas,
+                         Node[] inSyncReplicas,
+                         Node[] offlineReplicas) {
         this.topic = topic;
         this.partition = partition;
         this.leader = leader;
         this.replicas = replicas;
         this.inSyncReplicas = inSyncReplicas;
+        this.offlineReplicas = offlineReplicas;
     }
 
     /**
@@ -71,23 +82,33 @@ public class PartitionInfo {
         return inSyncReplicas;
     }
 
+    /**
+     * The subset of the replicas that are offline
+     */
+    public Node[] offlineReplicas() {
+        return offlineReplicas;
+    }
+
     @Override
     public String toString() {
-        return String.format("Partition(topic = %s, partition = %d, leader = %s, replicas = %s, isr = %s)",
+        return String.format("Partition(topic = %s, partition = %d, leader = %s, replicas = %s, isr = %s, offlineReplicas = %s)",
                              topic,
                              partition,
                              leader == null ? "none" : leader.idString(),
                              formatNodeIds(replicas),
-                             formatNodeIds(inSyncReplicas));
+                             formatNodeIds(inSyncReplicas),
+                             formatNodeIds(offlineReplicas));
     }
 
     /* Extract the node ids from each item in the array and format for display */
     private String formatNodeIds(Node[] nodes) {
         StringBuilder b = new StringBuilder("[");
-        for (int i = 0; i < nodes.length; i++) {
-            b.append(nodes[i].idString());
-            if (i < nodes.length - 1)
-                b.append(',');
+        if (nodes != null) {
+            for (int i = 0; i < nodes.length; i++) {
+                b.append(nodes[i].idString());
+                if (i < nodes.length - 1)
+                    b.append(',');
+            }
         }
         b.append("]");
         return b.toString();

@@ -17,8 +17,6 @@
 package org.apache.kafka.common.internals;
 
 import org.apache.kafka.common.utils.Exit;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  * An error that indicates the need to exit the JVM process. This should only be used by the server or command-line
@@ -28,8 +26,6 @@ import org.slf4j.LoggerFactory;
  * the thread when it calls {@link Exit#exit(int)}.
  */
 public class FatalExitError extends Error {
-
-    private static final Logger log = LoggerFactory.getLogger(FatalExitError.class);
 
     private final static long serialVersionUID = 1L;
 

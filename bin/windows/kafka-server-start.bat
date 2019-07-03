@@ -34,5 +34,5 @@ IF ["%KAFKA_HEAP_OPTS%"] EQU [""] (
         set KAFKA_HEAP_OPTS=-Xmx1G -Xms1G
     )
 )
-%~dp0kafka-run-class.bat kafka.Kafka %*
+"%~dp0kafka-run-class.bat" kafka.Kafka %*
 EndLocal

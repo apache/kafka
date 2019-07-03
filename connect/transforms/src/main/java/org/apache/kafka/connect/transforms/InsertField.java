@@ -42,8 +42,8 @@ public abstract class InsertField<R extends ConnectRecord<R>> implements Transfo
 
     public static final String OVERVIEW_DOC =
             "Insert field(s) using attributes from the record metadata or a configured static value."
-                    + "<p/>Use the concrete transformation type designed for the record key (<code>" + Key.class.getCanonicalName() + "</code>) "
-                    + "or value (<code>" + Value.class.getCanonicalName() + "</code>).";
+                    + "<p/>Use the concrete transformation type designed for the record key (<code>" + Key.class.getName() + "</code>) "
+                    + "or value (<code>" + Value.class.getName() + "</code>).";
 
     private interface ConfigName {
         String TOPIC_FIELD = "topic.field";

@@ -16,48 +16,60 @@
  */
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.message.LeaveGroupResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
+import java.util.Collections;
+import java.util.Map;
 
 public class LeaveGroupResponse extends AbstractResponse {
 
-    private static final String ERROR_CODE_KEY_NAME = "error_code";
+    private final LeaveGroupResponseData data;
 
-    /**
-     * Possible error code:
-     *
-     * GROUP_LOAD_IN_PROGRESS (14)
-     * CONSUMER_COORDINATOR_NOT_AVAILABLE (15)
-     * NOT_COORDINATOR_FOR_CONSUMER (16)
-     * UNKNOWN_CONSUMER_ID (25)
-     * GROUP_AUTHORIZATION_FAILED (30)
-     */
-    private final Errors error;
-
-    public LeaveGroupResponse(Errors error) {
-        this.error = error;
+    public LeaveGroupResponse(LeaveGroupResponseData data) {
+        this.data = data;
     }
 
     public LeaveGroupResponse(Struct struct) {
-        error = Errors.forCode(struct.getShort(ERROR_CODE_KEY_NAME));
+        short latestVersion = (short) (LeaveGroupResponseData.SCHEMAS.length - 1);
+        this.data = new LeaveGroupResponseData(struct, latestVersion);
+    }
+    public LeaveGroupResponse(Struct struct, short version) {
+        this.data = new LeaveGroupResponseData(struct, version);
+    }
+
+    public LeaveGroupResponseData data() {
+        return data;
+    }
+
+    @Override
+    public int throttleTimeMs() {
+        return data.throttleTimeMs();
     }
 
     public Errors error() {
-        return error;
+        return Errors.forCode(data.errorCode());
+    }
+
+    @Override
+    public Map<Errors, Integer> errorCounts() {
+        return Collections.singletonMap(Errors.forCode(data.errorCode()), 1);
     }
 
     @Override
     public Struct toStruct(short version) {
-        Struct struct = new Struct(ApiKeys.LEAVE_GROUP.responseSchema(version));
-        struct.set(ERROR_CODE_KEY_NAME, error.code());
-        return struct;
+        return data.toStruct(version);
     }
 
     public static LeaveGroupResponse parse(ByteBuffer buffer, short versionId) {
-        return new LeaveGroupResponse(ApiKeys.LEAVE_GROUP.parseResponse(versionId, buffer));
+        return new LeaveGroupResponse(ApiKeys.LEAVE_GROUP.parseResponse(versionId, buffer), versionId);
     }
 
+    @Override
+    public boolean shouldClientThrottle(short version) {
+        return version >= 2;
+    }
 }

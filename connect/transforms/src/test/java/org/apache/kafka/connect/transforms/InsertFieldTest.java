@@ -22,6 +22,7 @@ import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.data.Timestamp;
 import org.apache.kafka.connect.errors.DataException;
 import org.apache.kafka.connect.source.SourceRecord;
+import org.junit.After;
 import org.junit.Test;
 
 import java.util.Collections;
@@ -32,14 +33,17 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertSame;
 
 public class InsertFieldTest {
+    private InsertField<SourceRecord> xform = new InsertField.Value<>();
+
+    @After
+    public void teardown() {
+        xform.close();
+    }
 
     @Test(expected = DataException.class)
     public void topLevelStructRequired() {
-        final InsertField<SourceRecord> xform = new InsertField.Value<>();
         xform.configure(Collections.singletonMap("topic.field", "topic_field"));
-        xform.apply(new SourceRecord(null, null,
-                "", 0,
-                Schema.INT32_SCHEMA, 42));
+        xform.apply(new SourceRecord(null, null, "", 0, Schema.INT32_SCHEMA, 42));
     }
 
     @Test
@@ -51,7 +55,6 @@ public class InsertFieldTest {
         props.put("static.field", "instance_id");
         props.put("static.value", "my-instance-id");
 
-        final InsertField<SourceRecord> xform = new InsertField.Value<>();
         xform.configure(props);
 
         final Schema simpleStructSchema = SchemaBuilder.struct().name("name").version(1).doc("doc").field("magic", Schema.OPTIONAL_INT64_SCHEMA).build();
@@ -94,7 +97,6 @@ public class InsertFieldTest {
         props.put("static.field", "instance_id");
         props.put("static.value", "my-instance-id");
 
-        final InsertField<SourceRecord> xform = new InsertField.Value<>();
         xform.configure(props);
 
         final SourceRecord record = new SourceRecord(null, null, "test", 0,

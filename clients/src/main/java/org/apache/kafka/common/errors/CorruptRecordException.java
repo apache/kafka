@@ -25,7 +25,7 @@ public class CorruptRecordException extends RetriableException {
     private static final long serialVersionUID = 1L;
 
     public CorruptRecordException() {
-        super("This message has failed its CRC checksum, exceeds the valid size, or is otherwise corrupt.");
+        super("This message has failed its CRC checksum, exceeds the valid size, has a null key for a compacted topic, or is otherwise corrupt.");
     }
 
     public CorruptRecordException(String message) {

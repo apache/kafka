@@ -16,8 +16,9 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.test.GenericInMemoryKeyValueStore;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -29,35 +30,37 @@ import static org.junit.Assert.assertTrue;
 public class DelegatingPeekingKeyValueIteratorTest {
 
     private final String name = "name";
-    private InMemoryKeyValueStore<String, String> store;
+    private KeyValueStore<String, String> store;
 
     @Before
-    public void setUp() throws Exception {
-        store = new InMemoryKeyValueStore<>(name, Serdes.String(), Serdes.String());
+    public void setUp() {
+        store = new GenericInMemoryKeyValueStore<>(name);
     }
 
     @Test
-    public void shouldPeekNextKey() throws Exception {
+    public void shouldPeekNextKey() {
         store.put("A", "A");
         final DelegatingPeekingKeyValueIterator<String, String> peekingIterator = new DelegatingPeekingKeyValueIterator<>(name, store.all());
         assertEquals("A", peekingIterator.peekNextKey());
         assertEquals("A", peekingIterator.peekNextKey());
         assertTrue(peekingIterator.hasNext());
+        peekingIterator.close();
     }
 
     @Test
-    public void shouldPeekNext() throws Exception {
+    public void shouldPeekNext() {
         store.put("A", "A");
         final DelegatingPeekingKeyValueIterator<String, String> peekingIterator = new DelegatingPeekingKeyValueIterator<>(name, store.all());
         assertEquals(KeyValue.pair("A", "A"), peekingIterator.peekNext());
         assertEquals(KeyValue.pair("A", "A"), peekingIterator.peekNext());
         assertTrue(peekingIterator.hasNext());
+        peekingIterator.close();
     }
 
     @Test
-    public void shouldPeekAndIterate() throws Exception {
+    public void shouldPeekAndIterate() {
         final String[] kvs = {"a", "b", "c", "d", "e", "f"};
-        for (String kv : kvs) {
+        for (final String kv : kvs) {
             store.put(kv, kv);
         }
 
@@ -71,18 +74,21 @@ public class DelegatingPeekingKeyValueIteratorTest {
             index++;
         }
         assertEquals(kvs.length, index);
+        peekingIterator.close();
     }
 
     @Test(expected = NoSuchElementException.class)
-    public void shouldThrowNoSuchElementWhenNoMoreItemsLeftAndNextCalled() throws Exception {
+    public void shouldThrowNoSuchElementWhenNoMoreItemsLeftAndNextCalled() {
         final DelegatingPeekingKeyValueIterator<String, String> peekingIterator = new DelegatingPeekingKeyValueIterator<>(name, store.all());
         peekingIterator.next();
+        peekingIterator.close();
     }
 
     @Test(expected = NoSuchElementException.class)
-    public void shouldThrowNoSuchElementWhenNoMoreItemsLeftAndPeekNextCalled() throws Exception {
+    public void shouldThrowNoSuchElementWhenNoMoreItemsLeftAndPeekNextCalled() {
         final DelegatingPeekingKeyValueIterator<String, String> peekingIterator = new DelegatingPeekingKeyValueIterator<>(name, store.all());
         peekingIterator.peekNextKey();
+        peekingIterator.close();
     }
 
 

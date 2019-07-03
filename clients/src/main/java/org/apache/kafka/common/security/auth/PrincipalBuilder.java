@@ -25,10 +25,13 @@ import org.apache.kafka.common.Configurable;
 import java.util.Map;
 import java.security.Principal;
 
-/*
+/**
  * PrincipalBuilder for Authenticator
+ * @deprecated As of Kafka 1.0.0, use {@link KafkaPrincipalBuilder} instead. This will be removed in
+ *             a future major release.
  */
 @InterfaceStability.Unstable
+@Deprecated
 public interface PrincipalBuilder extends Configurable {
 
     /**

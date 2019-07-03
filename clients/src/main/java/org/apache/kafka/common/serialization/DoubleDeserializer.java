@@ -18,14 +18,7 @@ package org.apache.kafka.common.serialization;
 
 import org.apache.kafka.common.errors.SerializationException;
 
-import java.util.Map;
-
 public class DoubleDeserializer implements Deserializer<Double> {
-
-    @Override
-    public void configure(Map<String, ?> configs, boolean isKey) {
-        // nothing to do
-    }
 
     @Override
     public Double deserialize(String topic, byte[] data) {
@@ -41,10 +34,5 @@ public class DoubleDeserializer implements Deserializer<Double> {
             value |= b & 0xFF;
         }
         return Double.longBitsToDouble(value);
-    }
-
-    @Override
-    public void close() {
-        // nothing to do
     }
 }

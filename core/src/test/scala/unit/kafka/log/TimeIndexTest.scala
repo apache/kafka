@@ -19,23 +19,23 @@ package kafka.log
 
 import java.io.File
 
-import kafka.common.InvalidOffsetException
 import kafka.utils.TestUtils
-import org.junit.{Test, After, Before}
-import org.junit.Assert.{assertEquals}
-import org.scalatest.junit.JUnitSuite
+import org.apache.kafka.common.errors.InvalidOffsetException
+import org.junit.{After, Before, Test}
+import org.junit.Assert.assertEquals
+import org.scalatest.Assertions.intercept
 
 /**
  * Unit test for time index.
  */
-class TimeIndexTest extends JUnitSuite {
+class TimeIndexTest {
   var idx: TimeIndex = null
   val maxEntries = 30
   val baseOffset = 45L
 
   @Before
   def setup() {
-    this.idx = new TimeIndex(file = nonExistantTempFile(), baseOffset = baseOffset, maxIndexSize = maxEntries * 12)
+    this.idx = new TimeIndex(nonExistantTempFile(), baseOffset = baseOffset, maxIndexSize = maxEntries * 12)
   }
 
   @After
@@ -58,6 +58,20 @@ class TimeIndexTest extends JUnitSuite {
     assertEquals(TimestampOffset(20L, 65L), idx.lookup(25))
     // look for timestamp same as the one in the entry
     assertEquals(TimestampOffset(30L, 75L), idx.lookup(30))
+  }
+
+  @Test
+  def testEntry(): Unit = {
+    appendEntries(maxEntries - 1)
+    assertEquals(TimestampOffset(10L, 55L), idx.entry(0))
+    assertEquals(TimestampOffset(20L, 65L), idx.entry(1))
+    assertEquals(TimestampOffset(30L, 75L), idx.entry(2))
+    assertEquals(TimestampOffset(40L, 85L), idx.entry(3))
+  }
+
+  @Test(expected = classOf[IllegalArgumentException])
+  def testEntryOverflow(): Unit = {
+    idx.entry(0)
   }
 
   @Test
@@ -93,5 +107,46 @@ class TimeIndexTest extends JUnitSuite {
     file.delete()
     file
   }
+
+  @Test
+  def testSanityCheck(): Unit = {
+    idx.sanityCheck()
+    appendEntries(5)
+    val firstEntry = idx.entry(0)
+    idx.sanityCheck()
+    idx.close()
+
+    var shouldCorruptOffset = false
+    var shouldCorruptTimestamp = false
+    var shouldCorruptLength = false
+    idx = new TimeIndex(idx.file, baseOffset = baseOffset, maxIndexSize = maxEntries * 12) {
+      override def lastEntry = {
+        val superLastEntry = super.lastEntry
+        val offset = if (shouldCorruptOffset) baseOffset - 1 else superLastEntry.offset
+        val timestamp = if (shouldCorruptTimestamp) firstEntry.timestamp - 1 else superLastEntry.timestamp
+        new TimestampOffset(timestamp, offset)
+      }
+      override def length = {
+        val superLength = super.length
+        if (shouldCorruptLength) superLength - 1 else superLength
+      }
+    }
+
+    shouldCorruptOffset = true
+    intercept[CorruptIndexException](idx.sanityCheck())
+    shouldCorruptOffset = false
+
+    shouldCorruptTimestamp = true
+    intercept[CorruptIndexException](idx.sanityCheck())
+    shouldCorruptTimestamp = false
+
+    shouldCorruptLength = true
+    intercept[CorruptIndexException](idx.sanityCheck())
+    shouldCorruptLength = false
+
+    idx.sanityCheck()
+    idx.close()
+  }
+
 }
 

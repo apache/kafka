@@ -31,6 +31,16 @@ public final class ByteUtils {
     private ByteUtils() {}
 
     /**
+     * Read an unsigned integer from the current position in the buffer, incrementing the position by 4 bytes
+     *
+     * @param buffer The buffer to read from
+     * @return The integer read, as a long to avoid signedness
+     */
+    public static long readUnsignedInt(ByteBuffer buffer) {
+        return buffer.getInt() & 0xffffffffL;
+    }
+
+    /**
      * Read an unsigned integer from the given position without modifying the buffers position
      *
      * @param buffer the buffer to read from
