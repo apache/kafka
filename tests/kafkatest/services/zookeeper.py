@@ -188,4 +188,4 @@ class ZookeeperService(KafkaPathResolverMixin, Service):
 
     def java_cli_class_name(self):
         """ The class name of the Zookeeper tool within Kafka. """
-        return "kafka.tools.ZooKeeperMainWrapper"
+        return "org.apache.zookeeper.ZooKeeperMain"
