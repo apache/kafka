@@ -443,33 +443,6 @@ public class ProcessorStateManagerTest {
     }
 
     @Test
-    public void shouldRejectInvalidLoadedCheckpoints() throws IOException {
-        final Map<TopicPartition, Long> offsets = mkMap(
-            mkEntry(persistentStorePartition, 99L),
-            mkEntry(new TopicPartition("invalid", 3), 987L)
-        );
-        checkpoint.write(offsets);
-
-        final MockKeyValueStore persistentStore = new MockKeyValueStore(persistentStoreName, true);
-        final ProcessorStateManager stateMgr = new ProcessorStateManager(
-            taskId,
-            noPartitions,
-            false,
-            stateDirectory,
-            singletonMap(persistentStoreName, persistentStorePartition.topic()),
-            changelogReader,
-            false,
-            logContext);
-        stateMgr.register(persistentStore, persistentStore.stateRestoreCallback);
-        stateMgr.checkpoint(emptyMap());
-        stateMgr.close(true);
-        final Map<TopicPartition, Long> read = checkpoint.read();
-
-        // note we dropped the invalid topic
-        assertThat(read, equalTo(singletonMap(persistentStorePartition, 99L)));
-    }
-
-    @Test
     public void shouldOverrideLoadedCheckpointsWithRestoredCheckpoints() throws IOException {
         final Map<TopicPartition, Long> offsets = singletonMap(persistentStorePartition, 99L);
         checkpoint.write(offsets);

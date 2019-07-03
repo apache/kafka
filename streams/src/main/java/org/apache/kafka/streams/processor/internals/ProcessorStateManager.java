@@ -338,7 +338,9 @@ public class ProcessorStateManager implements StateManager {
 
     @Override
     public void checkpoint(final Map<TopicPartition, Long> checkpointableOffsetsFromProcessing) {
-        final Map<TopicPartition, Long> restoredOffsets = changelogReader.restoredOffsets();
+        ensureStoresRegistered();
+
+        final Map<TopicPartition, Long> restoredOffsets = validCheckpointableOffsets(changelogReader.restoredOffsets());
         log.trace("Checkpointable offsets updated with restored offsets: {}", checkpointFileCache);
         validCheckpointableTopics().forEachOrdered(topicPartition -> {
             if (checkpointableOffsetsFromProcessing.containsKey(topicPartition)) {
@@ -358,7 +360,6 @@ public class ProcessorStateManager implements StateManager {
             checkpointFile = new OffsetCheckpoint(new File(baseDir, CHECKPOINT_FILE_NAME));
         }
 
-        purgeInvalidCheckpointableOffsets();
         log.trace("Writing checkpoint: {}", checkpointFileCache);
         try {
             checkpointFile.write(checkpointFileCache);
@@ -407,30 +408,17 @@ public class ProcessorStateManager implements StateManager {
             .map(store -> new TopicPartition(storeToChangelogTopic.get(store.name()), getPartition(store.name())));
     }
 
-    private void purgeInvalidCheckpointableOffsets() {
+    private Map<TopicPartition, Long> validCheckpointableOffsets(final Map<TopicPartition, Long> checkpointableOffsets) {
         final Set<TopicPartition> validCheckpointableTopics = validCheckpointableTopics().collect(Collectors.toSet());
-        Map<TopicPartition, Long> illegal = null;
-        for (final Map.Entry<TopicPartition, Long> entry : checkpointFileCache.entrySet()) {
-            if (!validCheckpointableTopics.contains(entry.getKey())) {
-                // avoiding allocation in the common case where we don't need the collection.
-                if (illegal == null) {
-                    illegal = new HashMap<>();
-                }
-                illegal.put(entry.getKey(), entry.getValue());
+
+        final Map<TopicPartition, Long> result = new HashMap<>(checkpointableOffsets.size());
+
+        for (final Map.Entry<TopicPartition, Long> entry : checkpointableOffsets.entrySet()) {
+            if (validCheckpointableTopics.contains(entry.getKey())) {
+                result.put(entry.getKey(), entry.getValue());
             }
         }
-        if (illegal != null) {
-            final String message = String.format(
-                "Task %s should not have checkpoints for the following unowned partitions: %s." +
-                    "The checkpoint file is probably corrupted. " +
-                    "Dropping checkpoints for invalid partitions, which should repair the checkpoint file.",
-                taskId,
-                illegal
-            );
-            log.warn(message);
-            for (final TopicPartition topicPartition : illegal.keySet()) {
-                checkpointFileCache.remove(topicPartition);
-            }
-        }
+
+        return result;
     }
 }
