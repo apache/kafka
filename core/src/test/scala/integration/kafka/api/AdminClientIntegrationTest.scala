@@ -30,7 +30,7 @@ import kafka.security.auth.{Cluster, Group, Topic}
 import kafka.server.{Defaults, KafkaConfig, KafkaServer}
 import kafka.utils.Implicits._
 import kafka.utils.TestUtils._
-import kafka.utils.{Logging, TestUtils}
+import kafka.utils.{Log4jController, Logging, TestUtils}
 import kafka.zk.KafkaZkClient
 import org.apache.kafka.clients.admin._
 import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer}
@@ -1943,6 +1943,16 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
     val newRootLoggerConfig = describeBrokerLoggers()
     assertEquals(newRootLogLevel, newRootLoggerConfig.get("root").value())
     assertEquals(newRootLogLevel, newRootLoggerConfig.get("kafka.controller.KafkaController").value())
+  }
+
+  @Test
+  def testIncrementalAlterConfigsForLog4jLogLevelsCannotResetRootLogger(): Unit = {
+    client = AdminClient.create(createConfig())
+    val deleteRootLoggerEntry = Seq(
+      new AlterConfigOp(new ConfigEntry(Log4jController.ROOT_LOGGER, ""), AlterConfigOp.OpType.DELETE)
+    ).asJavaCollection
+
+    assertTrue(intercept[ExecutionException](alterBrokerLoggers(deleteRootLoggerEntry)).getCause.isInstanceOf[InvalidRequestException])
   }
 
   @Test
