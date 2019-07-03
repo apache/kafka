@@ -23,7 +23,10 @@ import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.acl.AclBinding;
 import org.apache.kafka.common.acl.AclBindingFilter;
+import org.apache.kafka.common.acl.AccessControlEntry;
 import org.apache.kafka.common.acl.AccessControlEntryFilter;
+import org.apache.kafka.common.acl.AclPermissionType;
+import org.apache.kafka.common.acl.AclOperation;
 import org.apache.kafka.common.resource.ResourceType;
 import org.apache.kafka.common.resource.ResourcePattern;
 import org.apache.kafka.common.resource.ResourcePatternFilter;
@@ -205,6 +208,7 @@ public class MirrorSourceConnector extends SourceConnector {
         List<AclBinding> bindings = listTopicAclBindings().stream()
             .filter(x -> x.pattern().resourceType() == ResourceType.TOPIC)
             .filter(x -> x.pattern().patternType() == PatternType.LITERAL)
+            .filter(x -> !(x.entry().permissionType() == AclPermissionType.ALLOW && x.entry().operation() == AclOperation.WRITE))
             .filter(x -> shouldReplicateTopic(x.pattern().name()))
             .map(this::targetAclBinding)
             .collect(Collectors.toList());
@@ -328,8 +332,11 @@ public class MirrorSourceConnector extends SourceConnector {
 
     AclBinding targetAclBinding(AclBinding sourceAclBinding) {
         String targetTopic = formatRemoteTopic(sourceAclBinding.pattern().name());
-        return new AclBinding(new ResourcePattern(ResourceType.TOPIC, targetTopic, PatternType.LITERAL),
-            sourceAclBinding.entry());
+        AccessControlEntry entry = sourceAclBinding.entry();
+        entry = (entry.permissionType() == AclPermissionType.ALLOW && entry.operation() == AclOperation.ALL)?
+                new AccessControlEntry(entry.principal(), entry.host(), AclOperation.READ, entry.permissionType()):
+                entry;
+        return new AclBinding(new ResourcePattern(ResourceType.TOPIC, targetTopic, PatternType.LITERAL), entry);
     }
 
     boolean shouldReplicateTopic(String topic) {
