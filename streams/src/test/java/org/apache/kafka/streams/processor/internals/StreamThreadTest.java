@@ -82,6 +82,7 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static java.util.Arrays.asList;
@@ -693,6 +694,51 @@ public class StreamThreadTest {
         ).updateThreadMetadata(getSharedAdminClientId(clientId));
         thread.shutdown();
         EasyMock.verify(taskManager);
+    }
+
+    @Test
+    public void shouldNotAccessTaskManagerWhenPendingShutdownInRunOnce() throws InterruptedException {
+        final Consumer<byte[], byte[]> consumer = EasyMock.createNiceMock(Consumer.class);
+        final TaskManager taskManager = EasyMock.createNiceMock(TaskManager.class);
+        EasyMock.expect(taskManager.activeTask(new TopicPartition("a", 1))).andReturn(null).times(1);
+
+        EasyMock.expectLastCall();
+        EasyMock.replay(taskManager, consumer);
+        AtomicBoolean runOnceLock = new AtomicBoolean(false);
+
+        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, clientId);
+        final StreamThread thread = new StreamThread(
+            mockTime,
+            config,
+            null,
+            consumer,
+            consumer,
+            null,
+            taskManager,
+            streamsMetrics,
+            internalTopologyBuilder,
+            clientId,
+            new LogContext(""),
+            new AtomicInteger()
+        ).updateThreadMetadata(getSharedAdminClientId(clientId));
+        thread.setStateListener(
+            (t, newState, oldState) -> {
+                if (oldState == StreamThread.State.PARTITIONS_REVOKED && newState == StreamThread.State.PARTITIONS_ASSIGNED) {
+//                    thread.shutdown();
+                    thread.runOnce();
+                    runOnceLock.set(true);
+                    notifyAll();
+                }
+            });
+
+        int timeoutMs = 10_000;
+        synchronized (this) {
+            while(!runOnceLock.get()) {
+                wait(timeoutMs);
+            }
+        }
+
+//        EasyMock.verify(taskManager);
     }
 
     @Test
