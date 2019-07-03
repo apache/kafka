@@ -327,7 +327,7 @@ class WorkerSourceTask extends WorkerTask {
                                     // timeouts, callbacks with exceptions should never be invoked in practice. If the
                                     // user overrode these settings, the best we can do is notify them of the failure via
                                     // logging.
-                                    log.error("{} failed to send record to {}: {}", WorkerSourceTask.this, topic, e);
+                                    log.error("{} failed to send record to {}:", WorkerSourceTask.this, topic, e);
                                     log.debug("{} Failed record: {}", WorkerSourceTask.this, preTransformRecord);
                                 } else {
                                     log.trace("{} Wrote record successfully: topic {} partition {} offset {}",

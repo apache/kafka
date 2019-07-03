@@ -20,7 +20,7 @@ import java.io.File
 import java.util.{Optional, Properties}
 import java.util.concurrent.atomic.AtomicBoolean
 
-import kafka.cluster.{Partition, Replica}
+import kafka.cluster.Partition
 import kafka.log.{Log, LogManager, LogOffsetSnapshot}
 import kafka.utils._
 import kafka.zk.KafkaZkClient
@@ -190,7 +190,8 @@ class ReplicaManagerQuotasTest {
     assertFalse("Out of sync replica should not complete", setupDelayedFetch(isReplicaInSync = false).tryComplete())
   }
 
-  def setUpMocks(fetchInfo: Seq[(TopicPartition, PartitionData)], record: SimpleRecord = this.record, bothReplicasInSync: Boolean = false) {
+  def setUpMocks(fetchInfo: Seq[(TopicPartition, PartitionData)], record: SimpleRecord = this.record,
+                 bothReplicasInSync: Boolean = false): Unit = {
     val zkClient: KafkaZkClient = EasyMock.createMock(classOf[KafkaZkClient])
     val scheduler: KafkaScheduler = createNiceMock(classOf[KafkaScheduler])
 
@@ -245,19 +246,15 @@ class ReplicaManagerQuotasTest {
       partition.leaderReplicaIdOpt = Some(leaderBrokerId)
       partition.setLog(log, isFutureLog = false)
 
-      val followerReplica = new Replica(configs.last.brokerId, p)
-      val allReplicas : Set[Int] = Set(leaderBrokerId, followerReplica.brokerId)
-      partition.addReplicaIfNotExists(followerReplica)
-      if (bothReplicasInSync) {
-        partition.inSyncReplicas = allReplicas
-      } else {
-        partition.inSyncReplicas = Set(leaderBrokerId)
-      }
+      partition.updateAssignmentAndIsr(
+        assignment = Seq(leaderBrokerId, configs.last.brokerId),
+        isr = if (bothReplicasInSync) Set(leaderBrokerId, configs.last.brokerId) else Set(leaderBrokerId)
+      )
     }
   }
 
   @After
-  def tearDown() {
+  def tearDown(): Unit = {
     if (replicaManager != null)
       replicaManager.shutdown(false)
     metrics.close()

@@ -33,6 +33,7 @@ import org.apache.kafka.common.serialization.{ByteArrayDeserializer, ByteArraySe
 import org.junit.{After, Before}
 
 import scala.collection.mutable
+import scala.collection.Seq
 
 /**
  * A helper class for writing integration tests that involve producers, consumers, and servers
