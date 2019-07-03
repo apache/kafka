@@ -179,12 +179,11 @@
 
        <span class="kd">private</span> <span class="kt">static</span> <span class="n">org.rocksdb.Cache</span> <span class="n">cache</span> <span class="o">=</span> <span class="k">new</span> <span class="n">org</span><span class="o">.</span><span class="na">rocksdb</span><span class="o">.</span><span class="na">LRUCache</span><span class="o">(</span><span class="mi">TOTAL_OFF_HEAP_MEMORY</span><span class="o">,</span> <span class="n">-1</span><span class="o">,</span> <span class="n">false</span><span class="o">,</span> <span class="n">INDEX_FILTER_BLOCK_RATIO</span><span class="o">);</span><sup><a href="#fn1" id="ref1">1</a></sup>
        <span class="kd">private</span> <span class="kt">static</span> <span class="n">org.rocksdb.WriteBufferManager</span> <span class="n">writeBufferManager</span> <span class="o">=</span> <span class="k">new</span> <span class="n">org</span><span class="o">.</span><span class="na">rocksdb</span><span class="o">.</span><span class="na">WriteBufferManager</span><span class="o">(</span><span class="mi">TOTAL_MEMTABLE_MEMORY</span><span class="o">,</span> cache<span class="o">);</span>
-       <span class="kd">private</span> <span class="n">org.rocksdb.Filter</span> <span class="n">filter</span> <span class="o">=</span> <span class="k">new</span> <span class="n">org</span><span class="o">.</span><span class="na">rocksdb</span><span class="o">.</span><span class="na">BloomFilter</span><span class="o">();</span>
 
        <span class="nd">@Override</span>
        <span class="kd">public</span> <span class="kt">void</span> <span class="nf">setConfig</span><span class="o">(</span><span class="kd">final</span> <span class="n">String</span> <span class="n">storeName</span><span class="o">,</span> <span class="kd">final</span> <span class="n">Options</span> <span class="n">options</span><span class="o">,</span> <span class="kd">final</span> <span class="n">Map</span><span class="o">&lt;</span><span class="n">String</span><span class="o">,</span> <span class="n">Object</span><span class="o">&gt;</span> <span class="n">configs</span><span class="o">)</span> <span class="o">{</span>
 
-         <span class="n">BlockBasedTableConfig</span> <span class="n">tableConfig</span> <span class="o">=</span> <span class="k">new</span> <span class="n">org</span><span class="o">.</span><span class="na">rocksdb</span><span class="o">.</span><span class="na">BlockBasedTableConfig</span><span class="o">();</span>
+         <span class="n">BlockBasedTableConfig</span> <span class="n">tableConfig</span> <span class="o">=</span> <span class="k">(BlockBasedTableConfig)</span> <span class="n">options</span><span><span class="o">.</span><span class="na">tableFormatConfig</span><span class="o">();</span>
 
          <span class="c1"> // These three options in combination will limit the memory used by RocksDB to the size passed to the block cache (TOTAL_OFF_HEAP_MEMORY)</span>
          <span class="n">tableConfig</span><span class="o">.</span><span class="na">setBlockCache</span><span class="o">(</span><span class="mi">cache</span><span class="o">);</span>
@@ -204,8 +203,6 @@
        <span class="nd">@Override</span>
        <span class="kd">public</span> <span class="kt">void</span> <span class="nf">close</span><span class="o">(</span><span class="kd">final</span> <span class="n">String</span> <span class="n">storeName</span><span class="o">,</span> <span class="kd">final</span> <span class="n">Options</span> <span class="n">options</span><span class="o">)</span> <span class="o">{</span>
          <span class="c1">// Cache and WriteBufferManager should not be closed here, as the same objects are shared by every store instance.</span>
-         <span class="c1">// The filter, however, is not shared and should be closed to avoid leaking memory.</span>
-         <span class="n">filter</span><span class="o">.</span><span class="na">close</span><span class="o">();</span>
        <span class="o">}</span>
     <span class="o">}</span>
       </div>
