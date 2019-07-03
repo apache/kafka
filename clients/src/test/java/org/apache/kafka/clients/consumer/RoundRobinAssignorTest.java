@@ -317,7 +317,9 @@ public class RoundRobinAssignorTest {
         }
 
         Map<String, List<TopicPartition>> staticAssignment =
-            checkStaticAssignment(assignor, partitionsPerTopic, consumers, expectedInstanceAssignment);
+            checkStaticAssignment(assignor, partitionsPerTopic, consumers);
+        assertEquals(expectedInstanceAssignment, staticAssignment);
+
         memberIdToInstanceId.clear();
 
         // Now switch the member.id fields for each member info, the assignment should
@@ -329,8 +331,7 @@ public class RoundRobinAssignorTest {
         consumers.put(consumer5, consumers.get(consumer2));
         consumers.remove(consumer2);
         Map<String, List<TopicPartition>> newStaticAssignment =
-            checkStaticAssignment(assignor, partitionsPerTopic, consumers, expectedInstanceAssignment);
-
+            checkStaticAssignment(assignor, partitionsPerTopic, consumers);
         assertEquals(staticAssignment, newStaticAssignment);
     }
 

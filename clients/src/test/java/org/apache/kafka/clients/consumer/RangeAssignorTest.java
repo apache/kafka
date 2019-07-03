@@ -20,6 +20,7 @@ import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.Subscription;
 import org.apache.kafka.clients.consumer.internals.AbstractPartitionAssignor;
 import org.apache.kafka.clients.consumer.internals.AbstractPartitionAssignor.MemberInfo;
 import org.apache.kafka.common.TopicPartition;
+import org.junit.Before;
 import org.junit.Test;
 
 import java.util.ArrayList;
@@ -39,6 +40,26 @@ public class RangeAssignorTest {
     private RangeAssignor assignor = new RangeAssignor();
     private String consumerId = "consumer";
     private String topic = "topic";
+
+    // For plural tests
+    private String topic1 = "topic1";
+    private String topic2 = "topic2";
+    private final String consumer1 = "consumer1";
+    private final String instance1 = "instance1";
+    private final String consumer2 = "consumer2";
+    private final String instance2 = "instance2";
+    private final String consumer3 = "consumer3";
+    private final String instance3 = "instance3";
+
+    private List<MemberInfo> staticMemberInfos;
+
+    @Before
+    public void setUp() {
+        staticMemberInfos = new ArrayList<>();
+        staticMemberInfos.add(new MemberInfo(consumer1, Optional.of(instance1)));
+        staticMemberInfos.add(new MemberInfo(consumer2, Optional.of(instance2)));
+        staticMemberInfos.add(new MemberInfo(consumer3, Optional.of(instance3)));
+    }
 
     @Test
     public void testOneConsumerNoTopic() {
@@ -88,9 +109,6 @@ public class RangeAssignorTest {
 
     @Test
     public void testOneConsumerMultipleTopics() {
-        String topic1 = "topic1";
-        String topic2 = "topic2";
-
         Map<String, Integer> partitionsPerTopic = new HashMap<>();
         partitionsPerTopic.put(topic1, 1);
         partitionsPerTopic.put(topic2, 2);
@@ -104,10 +122,6 @@ public class RangeAssignorTest {
 
     @Test
     public void testTwoConsumersOneTopicOnePartition() {
-        String topic = "topic";
-        String consumer1 = "consumer1";
-        String consumer2 = "consumer2";
-
         Map<String, Integer> partitionsPerTopic = new HashMap<>();
         partitionsPerTopic.put(topic, 1);
 
@@ -123,10 +137,6 @@ public class RangeAssignorTest {
 
     @Test
     public void testTwoConsumersOneTopicTwoPartitions() {
-        String topic = "topic";
-        String consumer1 = "consumer1";
-        String consumer2 = "consumer2";
-
         Map<String, Integer> partitionsPerTopic = new HashMap<>();
         partitionsPerTopic.put(topic, 2);
 
@@ -141,12 +151,6 @@ public class RangeAssignorTest {
 
     @Test
     public void testMultipleConsumersMixedTopics() {
-        String topic1 = "topic1";
-        String topic2 = "topic2";
-        String consumer1 = "consumer1";
-        String consumer2 = "consumer2";
-        String consumer3 = "consumer3";
-
         Map<String, Integer> partitionsPerTopic = new HashMap<>();
         partitionsPerTopic.put(topic1, 3);
         partitionsPerTopic.put(topic2, 2);
@@ -186,12 +190,8 @@ public class RangeAssignorTest {
     public void testTwoStaticConsumersTwoTopicsSixPartitions() {
         // although consumer 2 has a higher rank than 1, the comparison happens on
         // instance id level.
-        String topic1 = "topic1";
-        String topic2 = "topic2";
         String consumer1 = "consumer-b";
-        String instance1 = "instance1";
         String consumer2 = "consumer-a";
-        String instance2 = "instance2";
 
         Map<String, Integer> partitionsPerTopic = new HashMap<>();
         partitionsPerTopic.put(topic1, 3);
@@ -217,10 +217,7 @@ public class RangeAssignorTest {
     public void testOneStaticConsumerAndOneDynamicConsumerTwoTopicsSixPartitions() {
         // although consumer 2 has a higher rank than 1, consumer 1 will win the comparison
         // because it has instance id while consumer 2 doesn't.
-        String topic1 = "topic1";
-        String topic2 = "topic2";
         String consumer1 = "consumer-b";
-        String instance1 = "instance1";
         String consumer2 = "consumer-a";
 
         Map<String, Integer> partitionsPerTopic = new HashMap<>();
@@ -243,25 +240,6 @@ public class RangeAssignorTest {
 
     @Test
     public void testStaticMemberRangeAssignmentPersistent() {
-        // Have 3 static members instance1, instance2, instance3 to be persistent
-        // across generations. Their assignment shall be the same.
-        String topic1 = "topic1";
-        String topic2 = "topic2";
-        String consumer1 = "consumer1";
-        String instance1 = "instance1";
-        String consumer2 = "consumer2";
-        String instance2 = "instance2";
-        String consumer3 = "consumer3";
-        String instance3 = "instance3";
-
-        List<MemberInfo> staticMemberInfos = new ArrayList<>();
-        staticMemberInfos.add(new MemberInfo(consumer1, Optional.of(instance1)));
-        staticMemberInfos.add(new MemberInfo(consumer2, Optional.of(instance2)));
-        staticMemberInfos.add(new MemberInfo(consumer3, Optional.of(instance3)));
-
-        // Consumer 4 is a dynamic member.
-        String consumer4 = "consumer4";
-
         Map<String, Integer> partitionsPerTopic = new HashMap<>();
         partitionsPerTopic.put(topic1, 5);
         partitionsPerTopic.put(topic2, 4);
@@ -273,9 +251,13 @@ public class RangeAssignorTest {
             subscription.setGroupInstanceId(m.groupInstanceId);
             consumers.put(m.memberId, subscription);
         }
+        // Consumer 4 is a dynamic member.
+        String consumer4 = "consumer4";
         consumers.put(consumer4, new Subscription(topics(topic1, topic2)));
 
         Map<String, List<TopicPartition>> expectedAssignment = new HashMap<>();
+        // Have 3 static members instance1, instance2, instance3 to be persistent
+        // across generations. Their assignment shall be the same.
         expectedAssignment.put(consumer1, partitions(tp(topic1, 0), tp(topic1, 1), tp(topic2, 0)));
         expectedAssignment.put(consumer2, partitions(tp(topic1, 2), tp(topic2, 1)));
         expectedAssignment.put(consumer3, partitions(tp(topic1, 3), tp(topic2, 2)));
@@ -297,26 +279,10 @@ public class RangeAssignorTest {
 
     @Test
     public void testStaticMemberRangeAssignmentPersistentAfterMemberIdChanges() {
-        String topic1 = "topic1";
-        String topic2 = "topic2";
-        String consumer1 = "consumer1";
-        String instance1 = "instance1";
-        String consumer2 = "consumer2";
-        String instance2 = "instance2";
-        String consumer3 = "consumer3";
-        String instance3 = "instance3";
-        Map<String, String> memberIdToInstanceId = new HashMap<>();
-        memberIdToInstanceId.put(consumer1, instance1);
-        memberIdToInstanceId.put(consumer2, instance2);
-        memberIdToInstanceId.put(consumer3, instance3);
-
         Map<String, Integer> partitionsPerTopic = new HashMap<>();
         partitionsPerTopic.put(topic1, 5);
         partitionsPerTopic.put(topic2, 5);
-        List<MemberInfo> staticMemberInfos = new ArrayList<>();
-        for (Map.Entry<String, String> entry : memberIdToInstanceId.entrySet()) {
-            staticMemberInfos.add(new MemberInfo(entry.getKey(), Optional.of(entry.getValue())));
-        }
+
         Map<String, Subscription> consumers = new HashMap<>();
         for (MemberInfo m : staticMemberInfos) {
             Subscription subscription = new Subscription(topics(topic1, topic2),
@@ -334,7 +300,8 @@ public class RangeAssignorTest {
                                        partitions(tp(topic1, 4), tp(topic2, 4)));
 
         Map<String, List<TopicPartition>> staticAssignment =
-            checkStaticAssignment(assignor, partitionsPerTopic, consumers, expectedInstanceAssignment);
+            checkStaticAssignment(assignor, partitionsPerTopic, consumers);
+        assertEquals(expectedInstanceAssignment, staticAssignment);
 
         // Now switch the member.id fields for each member info, the assignment should
         // stay the same as last time.
@@ -346,15 +313,13 @@ public class RangeAssignorTest {
         consumers.remove(consumer2);
 
         Map<String, List<TopicPartition>> newStaticAssignment =
-            checkStaticAssignment(assignor, partitionsPerTopic, consumers, expectedInstanceAssignment);
-
+            checkStaticAssignment(assignor, partitionsPerTopic, consumers);
         assertEquals(staticAssignment, newStaticAssignment);
     }
 
     static Map<String, List<TopicPartition>> checkStaticAssignment(AbstractPartitionAssignor assignor,
                                                                    Map<String, Integer> partitionsPerTopic,
-                                                                  Map<String, Subscription> consumers,
-                                                                  Map<String, List<TopicPartition>> expectedInstanceAssignment) {
+                                                                   Map<String, Subscription> consumers) {
         Map<String, List<TopicPartition>> assignmentByMemberId = assignor.assign(partitionsPerTopic, consumers);
         Map<String, List<TopicPartition>> assignmentByInstanceId = new HashMap<>();
         for (Map.Entry<String, Subscription> entry : consumers.entrySet()) {
@@ -362,7 +327,6 @@ public class RangeAssignorTest {
             Optional<String> instanceId = entry.getValue().groupInstanceId();
             instanceId.ifPresent(id -> assignmentByInstanceId.put(id, assignmentByMemberId.get(memberId)));
         }
-        assertEquals(expectedInstanceAssignment, assignmentByInstanceId);
         return assignmentByInstanceId;
     }
 
