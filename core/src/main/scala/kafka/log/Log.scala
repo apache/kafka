@@ -330,10 +330,12 @@ class Log(@volatile var dir: File,
    */
   def initializeHighWatermarkOffsetMetadata(): Unit = {
     if (highWatermarkMetadata.messageOffsetOnly) {
-      highWatermarkMetadata = convertToOffsetMetadata(highWatermark).getOrElse {
-        convertToOffsetMetadata(logStartOffset).getOrElse {
-          val firstSegmentOffset = logSegments.head.baseOffset
-          LogOffsetMetadata(firstSegmentOffset, firstSegmentOffset, 0)
+      lock.synchronized {
+        highWatermarkMetadata = convertToOffsetMetadata(highWatermark).getOrElse {
+          convertToOffsetMetadata(logStartOffset).getOrElse {
+            val firstSegmentOffset = logSegments.head.baseOffset
+            LogOffsetMetadata(firstSegmentOffset, firstSegmentOffset, 0)
+          }
         }
       }
     }
@@ -363,24 +365,26 @@ class Log(@volatile var dir: File,
     * offset out of range error if the segment info cannot be loaded.
     */
   def offsetSnapshot: LogOffsetSnapshot = {
-
     var highWatermark = _highWatermarkMetadata
     if (highWatermark.messageOffsetOnly) {
       lock.synchronized {
-        val fullOffset = convertToOffsetMetadataOrThrow(highWatermark.messageOffset)
+        val fullOffset = convertToOffsetMetadataOrThrow(_highWatermarkMetadata.messageOffset)
         _highWatermarkMetadata = fullOffset
         highWatermark = _highWatermarkMetadata
       }
     }
 
-    val lastStable: LogOffsetMetadata = if (firstUnstableOffset.exists(_.messageOffsetOnly)) {
-      lock.synchronized {
-        val fullOffset = convertToOffsetMetadataOrThrow(firstUnstableOffset.get.messageOffset)
-        firstUnstableOffset = Some(fullOffset)
+    var lastStable: LogOffsetMetadata = lastStableOffsetMetadata
+    if (lastStable.messageOffsetOnly) {
+      lock synchronized {
+        firstUnstableOffset match {
+          case None => highWatermark
+          case Some(offsetMetadata) =>
+            val fullOffset = convertToOffsetMetadataOrThrow(offsetMetadata.messageOffset)
+            firstUnstableOffset = Some(fullOffset)
+            lastStable = fullOffset
+        }
       }
-      lastStableOffsetMetadata
-    } else {
-      lastStableOffsetMetadata
     }
 
     LogOffsetSnapshot(

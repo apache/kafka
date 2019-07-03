@@ -211,7 +211,7 @@ class MetadataCache(brokerId: Int) extends Logging {
         .filter(pair => pair match {
           case (_, node) => !node.isEmpty
         })
-    } getOrElse Map.empty[Int, Node]
+    }.getOrElse(Map.empty[Int, Node])
   }
 
   def getControllerId: Option[Int] = metadataSnapshot.controllerId
