@@ -159,8 +159,8 @@ class MetadataCache(brokerId: Int) extends Logging {
     topics -- metadataSnapshot.partitionStates.keySet
   }
 
-  def isBrokerAlive(brokerId: Int): Boolean = {
-    metadataSnapshot.aliveBrokers.contains(brokerId)
+  def getAliveBroker(brokerId: Int): Option[Broker] = {
+    metadataSnapshot.aliveBrokers.get(brokerId)
   }
 
   def getAliveBrokers: Seq[Broker] = {
