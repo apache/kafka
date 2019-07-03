@@ -217,6 +217,34 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
   }
 
   @Test
+  def testKeyStoreAlter_ConfigProvider(): Unit = {
+    val topic2 = "testtopic2"
+    TestUtils.createTopic(zkClient, topic2, numPartitions, replicationFactor = numServers, servers)
+
+    // Start a producer and consumer that work with the current broker keystore.
+    // This should continue working while changes are made
+    val (producerThread, consumerThread) = startProduceConsume(retries = 0)
+    TestUtils.waitUntilTrue(() => consumerThread.received >= 10, "Messages not received")
+
+    // Producer with new truststore should fail to connect before keystore update
+    val producer1 = ProducerBuilder().trustStoreProps(sslProperties2).maxRetries(0).build()
+    verifyAuthenticationFailure(producer1)
+
+    sslProperties2.setProperty("ssl.keystore.password", "${file:/usr/kerberos:password}")
+    // Update broker keystore for external listener
+    alterSslKeystoreUsingConfigCommand(sslProperties2, SecureExternal)
+
+    // New producer with old truststore should fail to connect
+    val producer2 = ProducerBuilder().trustStoreProps(sslProperties1).maxRetries(0).build()
+    verifyAuthenticationFailure(producer2)
+
+    // Produce/consume should work with new truststore with new producer/consumer
+    val producer = ProducerBuilder().trustStoreProps(sslProperties2).maxRetries(0).build()
+    val consumer = ConsumerBuilder("group1").trustStoreProps(sslProperties2).topic(topic2).build()
+    verifyProduceConsume(producer, consumer, 10, topic2)
+  }
+
+  @Test
   def testKeyStoreAlter(): Unit = {
     val topic2 = "testtopic2"
     TestUtils.createTopic(zkClient, topic2, numPartitions, replicationFactor = numServers, servers)
@@ -230,6 +258,7 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
     val producer1 = ProducerBuilder().trustStoreProps(sslProperties2).maxRetries(0).build()
     verifyAuthenticationFailure(producer1)
 
+    sslProperties2.setProperty("ssl.keystore.password", "${file:/usr/kerberos:password}")
     // Update broker keystore for external listener
     alterSslKeystoreUsingConfigCommand(sslProperties2, SecureExternal)
 
@@ -257,6 +286,7 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
     verifyProduceConsume(producer, consumer, 10, topic2)
 
     // Verify that keystores can be updated using same file name.
+    sslProperties2.setProperty("ssl.keystore.password", "ServerPassword")
     val reusableProps = sslProperties2.clone().asInstanceOf[Properties]
     val reusableFile = File.createTempFile("keystore", ".jks")
     reusableProps.setProperty(SSL_KEYSTORE_LOCATION_CONFIG, reusableFile.getPath)
@@ -337,7 +367,7 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
     verifySslProduceConsume(sslProperties2, "alter-truststore-5")
 
     // Update internal keystore/truststore and validate new client connections from broker (e.g. controller).
-    // Alter internal keystore from `sslProperties1` to `sslProperties2`, force disconnect of a controller connection
+    // Alter internal keystore testKeyStoreAlter_ConfigProviderfrom `sslProperties1` to `sslProperties2`, force disconnect of a controller connection
     // and verify that metadata is propagated for new topic.
     val props2 = securityProps(sslProperties2, KEYSTORE_PROPS, prefix)
     props2 ++= securityProps(combinedStoreProps, TRUSTSTORE_PROPS, prefix)
@@ -363,7 +393,9 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
     verifyThreads("kafka-log-cleaner-thread-", countPerBroker = 1)
 
     val props = new Properties
-    props.put(KafkaConfig.LogCleanerThreadsProp, "2")
+    props.put(KafkaConfig.LogCleanerThreadsProp, "${file:/usr/kerberos:log}")
+    props.setProperty("config.providers", "file")
+    props.setProperty("config.providers.file.class", "org.apache.kafka.common.config.provider.MockFileConfigProvider")
     props.put(KafkaConfig.LogCleanerDedupeBufferSizeProp, "20000000")
     props.put(KafkaConfig.LogCleanerDedupeBufferLoadFactorProp, "0.8")
     props.put(KafkaConfig.LogCleanerIoBufferSizeProp, "300000")
@@ -1167,7 +1199,8 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
   private def alterSslKeystoreUsingConfigCommand(props: Properties, listener: String): Unit = {
     val configPrefix = listenerPrefix(listener)
     val newProps = securityProps(props, KEYSTORE_PROPS, configPrefix)
-
+    newProps.setProperty("config.providers", "file")
+    newProps.setProperty("config.providers.file.class", "org.apache.kafka.common.config.provider.MockFileConfigProvider")
     val propsFile = TestUtils.tempFile()
     val propsWriter = new FileWriter(propsFile)
     try {
@@ -1242,9 +1275,7 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
         val exception = intercept[ExecutionException](alterResult.values.get(brokerResource).get)
         assertTrue(exception.getCause.isInstanceOf[InvalidRequestException])
       }
-      servers.foreach { server =>
-        assertEquals(oldProps, server.config.values.asScala.filter { case (k, _) => newProps.containsKey(k) })
-      }
+      servers.foreach { server => assertEquals(oldProps, server.config.values.asScala.filterKeys(newProps.containsKey)) }
     } else {
       alterResult.all.get
       waitForConfig(aPropToVerify._1, aPropToVerify._2)
