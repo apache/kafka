@@ -136,7 +136,7 @@ public class StreamsMetricsImpl implements StreamsMetrics {
 
     public Map<String, String> storeLevelTagMap(final String taskName, final String storeType, final String storeName) {
         final Map<String, String> tagMap = taskLevelTagMap(taskName);
-        tagMap.put(storeType + STORE_ID_TAG, storeName);
+        tagMap.put(storeType + "-" + STORE_ID_TAG, storeName);
         return tagMap;
     }
 
@@ -469,12 +469,14 @@ public class StreamsMetricsImpl implements StreamsMetrics {
                                                  final String group,
                                                  final Map<String, String> tags,
                                                  final String operation) {
-        addInvocationRateAndCount(sensor,
-                                  group,
-                                  tags,
-                                  operation,
-                                  "The total number of " + operation,
-                                  "The average per-second number of " + operation);
+        addInvocationRateAndCount(
+            sensor,
+            group,
+            tags,
+            operation,
+            "The total number of " + operation,
+            "The average per-second number of " + operation
+        );
     }
 
     public static void addAmountRateAndTotalMetricsToSensor(final Sensor sensor,

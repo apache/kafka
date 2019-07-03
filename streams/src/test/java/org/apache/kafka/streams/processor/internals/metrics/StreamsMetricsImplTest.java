@@ -34,13 +34,8 @@ import java.util.concurrent.TimeUnit;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.PROCESSOR_NODE_METRICS_GROUP;
-import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addAmountRateMetricToSensor;
-import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addAmountRateAndTotalMetricsToSensor;
-import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addAvgAndTotalMetricsToSensor;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addAvgMaxLatency;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addInvocationRateAndCount;
-import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addTotalMetricToSensor;
-import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addValueMetricToSensor;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.CoreMatchers.notNullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -62,6 +57,7 @@ public class StreamsMetricsImplTest extends EasyMockSupport {
     private final Map<String, String> tags = mkMap(mkEntry("tag", "value"));
     private final String description1 = "description number one";
     private final String description2 = "description number two";
+    private final MockTime time = new MockTime(0);
 
     @Test
     public void shouldGetThreadLevelSensor() {
@@ -247,41 +243,51 @@ public class StreamsMetricsImplTest extends EasyMockSupport {
     }
 
     @Test
+    public void shouldGetStoreLevelTagMap() {
+        final String threadName = "test-thread";
+        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, threadName);
+        final String taskName = "test-task";
+        final String storeType = "remote-window";
+        final String storeName = "window-keeper";
+
+        final Map<String, String> tagMap = streamsMetrics.storeLevelTagMap(taskName, storeType, storeName);
+
+        assertThat(tagMap.size(), equalTo(3));
+        assertThat(tagMap.get(StreamsMetricsImpl.THREAD_ID_TAG), equalTo(threadName));
+        assertThat(tagMap.get(StreamsMetricsImpl.TASK_ID_TAG), equalTo(taskName));
+        assertThat(tagMap.get(storeType + "-" + StreamsMetricsImpl.STORE_ID_TAG), equalTo(storeName));
+    }
+
+    @Test
     public void shouldAddAmountRateAndSum() {
-        final MockTime time = new MockTime(0);
+        StreamsMetricsImpl
+            .addAmountRateAndTotalMetricsToSensor(sensor, group, tags, metricNamePrefix, description1, description2);
 
-        addAmountRateAndTotalMetricsToSensor(sensor, group, tags, metricNamePrefix, description1, description2);
-
-        verifyAmountRateMetric(metrics, sensor, description1, time);
-        verifySumMetric(metrics, sensor, description2, time, 60);
+        verifyAmountRateMetric(description1);
+        time.sleep(60000); // advance mock time to get empty samples in the metric for next verification
+        verifySumMetric(description2);
         assertThat(metrics.metrics().size(), equalTo(2 + 1)); // one metric is added automatically in the constructor of Metrics
     }
 
     @Test
     public void shouldAddSum() {
-        final MockTime time = new MockTime(0);
+        StreamsMetricsImpl.addTotalMetricToSensor(sensor, group, tags, metricNamePrefix, description1);
 
-        addTotalMetricToSensor(sensor, group, tags, metricNamePrefix, description1);
-
-        verifySumMetric(metrics, sensor, description1, time, 0);
+        verifySumMetric(description1);
         assertThat(metrics.metrics().size(), equalTo(1 + 1)); // one metric is added automatically in the constructor of Metrics
     }
 
     @Test
     public void shouldAddAmountRate() {
-        final MockTime time = new MockTime(0);
+        StreamsMetricsImpl.addAmountRateMetricToSensor(sensor, group, tags, metricNamePrefix, description1);
 
-        addAmountRateMetricToSensor(sensor, group, tags, metricNamePrefix, description1);
-
-        verifyAmountRateMetric(metrics, sensor, description1, time);
+        verifyAmountRateMetric(description1);
         assertThat(metrics.metrics().size(), equalTo(1 + 1)); // one metric is added automatically in the constructor of Metrics
     }
 
     @Test
     public void shouldAddValue() {
-        final MockTime time = new MockTime(0);
-
-        addValueMetricToSensor(sensor, group, tags, metricNamePrefix, description1);
+        StreamsMetricsImpl.addValueMetricToSensor(sensor, group, tags, metricNamePrefix, description1);
 
         final KafkaMetric ratioMetric = metrics.metric(new MetricName(metricNamePrefix, group, description1, tags));
         assertThat(ratioMetric, is(notNullValue()));
@@ -297,20 +303,16 @@ public class StreamsMetricsImplTest extends EasyMockSupport {
 
     @Test
     public void shouldAddAvgAndTotalMetricsToSensor() {
-        final MockTime time = new MockTime(0);
+        StreamsMetricsImpl
+            .addAvgAndTotalMetricsToSensor(sensor, group, tags, metricNamePrefix, description1, description2);
 
-        addAvgAndTotalMetricsToSensor(sensor, group, tags, metricNamePrefix, description1, description2);
-
-        verifyAvgMetric(metrics, sensor, description1, time);
-        verifySumMetric(metrics, sensor, description2, time, 60.0);
+        verifyAvgMetric(description1);
+        time.sleep(60000); // advance mock time to get empty samples in the metric for next verification
+        verifySumMetric(description2);
         assertThat(metrics.metrics().size(), equalTo(2 + 1)); // one metric is added automatically in the constructor of Metrics
     }
 
-    private void verifySumMetric(final Metrics metrics,
-                                 final Sensor sensor,
-                                 final String description,
-                                 final MockTime time,
-                                 final double initialValue) {
+    private void verifySumMetric(final String description) {
         final KafkaMetric metric = metrics
             .metric(new MetricName(metricNamePrefix + "-total", group, description, tags));
         assertThat(metric, is(notNullValue()));
@@ -319,29 +321,24 @@ public class StreamsMetricsImplTest extends EasyMockSupport {
         sensor.record(value1, time.milliseconds());
         final double value2 = 18.0;
         sensor.record(value2, time.milliseconds());
-        assertThat(metric.measurable().measure(new MetricConfig(), time.milliseconds()),
-                   equalTo(initialValue + value1 + value2));
+        assertThat(
+            metric.measurable().measure(new MetricConfig(), time.milliseconds()),
+            equalTo(value1 + value2)
+        );
     }
 
-    private void verifyAmountRateMetric(final Metrics metrics,
-                                        final Sensor sensor,
-                                        final String description,
-                                        final MockTime time) {
+    private void verifyAmountRateMetric(final String description) {
         final KafkaMetric rateMetric = metrics
             .metric(new MetricName(metricNamePrefix + "-rate", group, description, tags));
         assertThat(rateMetric, is(notNullValue()));
-        final double value1 = 42.0;
+        final double value1 = 72.0;
         sensor.record(value1, time.milliseconds());
         final double value2 = 18.0;
         sensor.record(value2, time.milliseconds());
-        time.sleep(30000);
-        assertThat(rateMetric.measurable().measure(new MetricConfig(), time.milliseconds()), equalTo(2.0));
+        assertThat(rateMetric.measurable().measure(new MetricConfig(), time.milliseconds()), equalTo(3.0));
     }
 
-    private void verifyAvgMetric(final Metrics metrics,
-                                 final Sensor sensor,
-                                 final String description,
-                                 final MockTime time) {
+    private void verifyAvgMetric(final String description) {
         final KafkaMetric avgMetric = metrics
             .metric(new MetricName(metricNamePrefix + "-avg", group, description, tags));
         assertThat(avgMetric, is(notNullValue()));

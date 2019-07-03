@@ -20,6 +20,7 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.Sensor.RecordingLevel;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
+import org.apache.kafka.streams.state.internals.metrics.RocksDBMetrics.RocksDBMetricContext;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.powermock.core.classloader.annotations.PrepareForTest;
@@ -53,29 +54,33 @@ public class RocksDBMetricsTest {
     private final Map<String, String> tags = Collections.singletonMap("hello", "world");
 
     private interface SensorCreator {
-        Sensor sensor(StreamsMetricsImpl streamsMetrics, String taskName, String storeType, String storeName);
+        Sensor sensor(final StreamsMetricsImpl streamsMetrics, final RocksDBMetricContext metricContext);
     }
 
     @Test
     public void shouldGetBytesWrittenSensor() {
         final String metricNamePrefix = "bytes-written";
         final String descriptionOfTotal = "Total number of bytes written to the RocksDB state store";
-        final String descriptionOfRate = "Average per-second number of bytes written to the RocksDB state store";
-        verifyRateAndTotalSensor(metricNamePrefix,
-                                 descriptionOfTotal,
-                                 descriptionOfRate,
-                                 RocksDBMetrics::bytesWrittenToDatabaseSensor);
+        final String descriptionOfRate = "Average number of bytes written per second to the RocksDB state store";
+        verifyRateAndTotalSensor(
+            metricNamePrefix,
+            descriptionOfTotal,
+            descriptionOfRate,
+            RocksDBMetrics::bytesWrittenToDatabaseSensor
+        );
     }
 
     @Test
     public void shouldGetBytesReadSensor() {
         final String metricNamePrefix = "bytes-read";
         final String descriptionOfTotal = "Total number of bytes read from the RocksDB state store";
-        final String descriptionOfRate = "Average per-second number of bytes read from the RocksDB state store";
-        verifyRateAndTotalSensor(metricNamePrefix,
-                                 descriptionOfTotal,
-                                 descriptionOfRate,
-                                 RocksDBMetrics::bytesReadFromDatabaseSensor);
+        final String descriptionOfRate = "Average number of bytes read per second from the RocksDB state store";
+        verifyRateAndTotalSensor(
+            metricNamePrefix,
+            descriptionOfTotal,
+            descriptionOfRate,
+            RocksDBMetrics::bytesReadFromDatabaseSensor
+        );
     }
 
     @Test
@@ -89,11 +94,13 @@ public class RocksDBMetricsTest {
     public void shouldGetMemtableBytesFlushedSensor() {
         final String metricNamePrefix = "memtable-bytes-flushed";
         final String descriptionOfTotal = "Total number of bytes flushed from the memtable to disk";
-        final String descriptionOfRate = "Average per-second number of bytes flushed from the memtable to disk";
-        verifyRateAndTotalSensor(metricNamePrefix,
-                                 descriptionOfTotal,
-                                 descriptionOfRate,
-                                 RocksDBMetrics::memtableBytesFlushedSensor);
+        final String descriptionOfRate = "Average number of bytes flushed per second from the memtable to disk";
+        verifyRateAndTotalSensor(
+            metricNamePrefix,
+            descriptionOfTotal,
+            descriptionOfRate,
+            RocksDBMetrics::memtableBytesFlushedSensor
+        );
     }
 
     @Test
@@ -123,14 +130,16 @@ public class RocksDBMetricsTest {
         final String descriptionOfAvg = "Moving average duration of write stalls in ms";
         final String descriptionOfTotal = "Total duration of write stalls in ms";
         setupStreamsMetricsMock(metricNamePrefix);
-        StreamsMetricsImpl.addAvgAndTotalMetricsToSensor(sensor,
-                                                         STATE_LEVEL_GROUP,
-                                                         tags,
-                                                         metricNamePrefix,
-                                                         descriptionOfAvg,
-                                                         descriptionOfTotal);
+        StreamsMetricsImpl.addAvgAndTotalMetricsToSensor(
+            sensor,
+            STATE_LEVEL_GROUP,
+            tags,
+            metricNamePrefix,
+            descriptionOfAvg,
+            descriptionOfTotal
+        );
 
-        replayAndVerify(RocksDBMetrics::writeStallDurationSensor);
+        replayCallAndVerify(RocksDBMetrics::writeStallDurationSensor);
     }
 
     @Test
@@ -160,14 +169,14 @@ public class RocksDBMetricsTest {
     @Test
     public void shouldGetBytesReadDuringCompactionSensor() {
         final String metricNamePrefix = "bytes-read-compaction";
-        final String description = "Average per-second number of bytes read during compaction";
+        final String description = "Average number of bytes read per second during compaction";
         verifyRateSensor(metricNamePrefix, description, RocksDBMetrics::bytesReadDuringCompactionSensor);
     }
 
     @Test
     public void shouldGetBytesWrittenDuringCompactionSensor() {
         final String metricNamePrefix = "bytes-written-compaction";
-        final String description = "Average per-second number of bytes written during compaction";
+        final String description = "Average number of bytes written per second during compaction";
         verifyRateSensor(metricNamePrefix, description, RocksDBMetrics::bytesWrittenDuringCompactionSensor);
     }
 
@@ -206,7 +215,7 @@ public class RocksDBMetricsTest {
         setupStreamsMetricsMock(metricNamePrefix);
         StreamsMetricsImpl.addTotalMetricToSensor(sensor, STATE_LEVEL_GROUP, tags, metricNamePrefix, description);
 
-        replayAndVerify(RocksDBMetrics::numberOfFileErrorsSensor);
+        replayCallAndVerify(RocksDBMetrics::numberOfFileErrorsSensor);
     }
 
     private void verifyRateAndTotalSensor(final String metricNamePrefix,
@@ -214,14 +223,16 @@ public class RocksDBMetricsTest {
                                           final String descriptionOfRate,
                                           final SensorCreator sensorCreator) {
         setupStreamsMetricsMock(metricNamePrefix);
-        StreamsMetricsImpl.addAmountRateAndTotalMetricsToSensor(sensor,
-                                                                STATE_LEVEL_GROUP,
-                                                                tags,
-                                                                metricNamePrefix,
-                                                                descriptionOfRate,
-                                                                descriptionOfTotal);
+        StreamsMetricsImpl.addAmountRateAndTotalMetricsToSensor(
+            sensor,
+            STATE_LEVEL_GROUP,
+            tags,
+            metricNamePrefix,
+            descriptionOfRate,
+            descriptionOfTotal
+        );
 
-        replayAndVerify(sensorCreator);
+        replayCallAndVerify(sensorCreator);
     }
 
     private void verifyRateSensor(final String metricNamePrefix,
@@ -230,7 +241,7 @@ public class RocksDBMetricsTest {
         setupStreamsMetricsMock(metricNamePrefix);
         StreamsMetricsImpl.addAmountRateMetricToSensor(sensor, STATE_LEVEL_GROUP, tags, metricNamePrefix, description);
 
-        replayAndVerify(sensorCreator);
+        replayCallAndVerify(sensorCreator);
     }
 
     private void verifyValueSensor(final String metricNamePrefix,
@@ -239,25 +250,30 @@ public class RocksDBMetricsTest {
         setupStreamsMetricsMock(metricNamePrefix);
         StreamsMetricsImpl.addValueMetricToSensor(sensor, STATE_LEVEL_GROUP, tags, metricNamePrefix, description);
 
-        replayAndVerify(sensorCreator);
+        replayCallAndVerify(sensorCreator);
     }
 
     private void setupStreamsMetricsMock(final String metricNamePrefix) {
         mockStatic(StreamsMetricsImpl.class);
-        expect(streamsMetrics.storeLevelSensor(taskName,
-                                               storeName,
-                                               metricNamePrefix,
-                                               RecordingLevel.DEBUG)).andReturn(sensor);
-        expect(streamsMetrics.storeLevelTagMap(taskName,
-                                               STORE_TYPE_PREFIX + storeType,
-                                               storeName)).andReturn(tags);
+        expect(streamsMetrics.storeLevelSensor(
+            taskName,
+            storeName,
+            metricNamePrefix,
+            RecordingLevel.DEBUG
+        )).andReturn(sensor);
+        expect(streamsMetrics.storeLevelTagMap(
+            taskName,
+            STORE_TYPE_PREFIX + storeType,
+            storeName
+        )).andReturn(tags);
     }
 
-    private void replayAndVerify(final SensorCreator sensorCreator) {
+    private void replayCallAndVerify(final SensorCreator sensorCreator) {
         replayAll();
         replay(StreamsMetricsImpl.class);
 
-        final Sensor sensor = sensorCreator.sensor(streamsMetrics, taskName, storeType, storeName);
+        final Sensor sensor =
+            sensorCreator.sensor(streamsMetrics, new RocksDBMetricContext(taskName, storeType, storeName));
 
         verifyAll();
         verify(StreamsMetricsImpl.class);

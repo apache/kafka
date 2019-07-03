@@ -49,151 +49,155 @@ public class RocksDBMetrics {
     private static final String NUMBER_OF_OPEN_FILES = "number-open-files";
     private static final String NUMBER_OF_FILE_ERRORS = "number-file-errors";
 
-    private static final String STORE_TYPE_PREFIX = "rocksdb-";
+    public static class RocksDBMetricContext {
+        private final String taskName;
+        private final String storeType;
+        private final String storeName;
+
+        public RocksDBMetricContext(final String taskName, final String storeType, final String storeName) {
+            this.taskName = taskName;
+            this.storeType = "rocksdb-" + storeType;
+            this.storeName = storeName;
+        }
+
+        public String taskName() {
+            return taskName;
+        }
+        public String storeType() {
+            return storeType;
+        }
+        public String storeName() {
+            return storeName;
+        }
+    }
 
     public static Sensor bytesWrittenToDatabaseSensor(final StreamsMetricsImpl streamsMetrics,
-                                                      final String taskName,
-                                                      final String storeType,
-                                                      final String storeName) {
-        final Sensor sensor = streamsMetrics
-            .storeLevelSensor(taskName, storeName, BYTES_WRITTEN_TO_DB, RecordingLevel.DEBUG);
-        addAmountRateAndTotalMetricsToSensor(sensor,
-                                             STATE_LEVEL_GROUP,
-                                             streamsMetrics.storeLevelTagMap(taskName,
-                                                                             STORE_TYPE_PREFIX + storeType, storeName),
-                                             BYTES_WRITTEN_TO_DB,
-                                             "Average per-second number of bytes written to the RocksDB state store",
-                                             "Total number of bytes written to the RocksDB state store");
+                                                      final RocksDBMetricContext metricContext) {
+        final Sensor sensor = createSensor(streamsMetrics, metricContext, BYTES_WRITTEN_TO_DB);
+        addAmountRateAndTotalMetricsToSensor(
+            sensor,
+            STATE_LEVEL_GROUP,
+            streamsMetrics
+                .storeLevelTagMap(metricContext.taskName(), metricContext.storeType(), metricContext.storeName()),
+            BYTES_WRITTEN_TO_DB,
+            "Average number of bytes written per second to the RocksDB state store",
+            "Total number of bytes written to the RocksDB state store");
         return sensor;
     }
 
     public static Sensor bytesReadFromDatabaseSensor(final StreamsMetricsImpl streamsMetrics,
-                                                     final String taskName,
-                                                     final String storeType,
-                                                     final String storeName) {
-        final Sensor sensor = streamsMetrics
-            .storeLevelSensor(taskName, storeName, BYTES_READ_FROM_DB, RecordingLevel.DEBUG);
+                                                     final RocksDBMetricContext metricContext) {
+        final Sensor sensor = createSensor(streamsMetrics, metricContext, BYTES_READ_FROM_DB);
         addAmountRateAndTotalMetricsToSensor(sensor,
-                                             STATE_LEVEL_GROUP,
-                                             streamsMetrics.storeLevelTagMap(taskName,
-                                                                             STORE_TYPE_PREFIX + storeType, storeName),
-                                             BYTES_READ_FROM_DB,
-                                             "Average per-second number of bytes read from the RocksDB state store",
-                                             "Total number of bytes read from the RocksDB state store");
+            STATE_LEVEL_GROUP,
+            streamsMetrics
+                .storeLevelTagMap(metricContext.taskName(), metricContext.storeType(), metricContext.storeName()),
+            BYTES_READ_FROM_DB,
+            "Average number of bytes read per second from the RocksDB state store",
+            "Total number of bytes read from the RocksDB state store"
+        );
         return sensor;
     }
 
     public static Sensor memtableBytesFlushedSensor(final StreamsMetricsImpl streamsMetrics,
-                                                    final String taskName,
-                                                    final String storeType,
-                                                    final String storeName) {
-        final Sensor sensor = streamsMetrics
-            .storeLevelSensor(taskName, storeName, MEMTABLE_BYTES_FLUSHED, RecordingLevel.DEBUG);
+                                                    final RocksDBMetricContext metricContext) {
+        final Sensor sensor = createSensor(streamsMetrics, metricContext, MEMTABLE_BYTES_FLUSHED);
         addAmountRateAndTotalMetricsToSensor(sensor,
-                                             STATE_LEVEL_GROUP,
-                                             streamsMetrics.storeLevelTagMap(taskName,
-                                                                             STORE_TYPE_PREFIX + storeType, storeName),
-                                             MEMTABLE_BYTES_FLUSHED,
-                                             "Average per-second number of bytes flushed from the memtable to disk",
-                                             "Total number of bytes flushed from the memtable to disk");
+            STATE_LEVEL_GROUP,
+            streamsMetrics
+                .storeLevelTagMap(metricContext.taskName(), metricContext.storeType(), metricContext.storeName()),
+            MEMTABLE_BYTES_FLUSHED,
+            "Average number of bytes flushed per second from the memtable to disk",
+            "Total number of bytes flushed from the memtable to disk"
+        );
         return sensor;
     }
 
     public static Sensor memtableHitRatioSensor(final StreamsMetricsImpl streamsMetrics,
-                                                final String taskName,
-                                                final String storeType,
-                                                final String storeName) {
-        final Sensor sensor = streamsMetrics
-            .storeLevelSensor(taskName, storeName, MEMTABLE_HIT_RATIO, RecordingLevel.DEBUG);
+                                                final RocksDBMetricContext metricContext) {
+        final Sensor sensor = createSensor(streamsMetrics, metricContext, MEMTABLE_HIT_RATIO);
         addValueMetricToSensor(sensor,
-                               STATE_LEVEL_GROUP,
-                               streamsMetrics.storeLevelTagMap(taskName, STORE_TYPE_PREFIX + storeType, storeName),
-                               MEMTABLE_HIT_RATIO,
-                               "Ratio of memtable hits relative to all lookups to the memtable");
+            STATE_LEVEL_GROUP,
+            streamsMetrics
+                .storeLevelTagMap(metricContext.taskName(), metricContext.storeType(), metricContext.storeName()),
+            MEMTABLE_HIT_RATIO,
+            "Ratio of memtable hits relative to all lookups to the memtable"
+        );
         return sensor;
     }
 
     public static Sensor memtableAvgFlushTimeSensor(final StreamsMetricsImpl streamsMetrics,
-                                                    final String taskName,
-                                                    final String storeType,
-                                                    final String storeName) {
-        final Sensor sensor = streamsMetrics
-            .storeLevelSensor(taskName, storeName, MEMTABLE_FLUSH_TIME + AVG_SUFFIX, RecordingLevel.DEBUG);
+                                                    final RocksDBMetricContext metricContext) {
+        final Sensor sensor = createSensor(streamsMetrics, metricContext, MEMTABLE_FLUSH_TIME + AVG_SUFFIX);
         addValueMetricToSensor(sensor,
-                               STATE_LEVEL_GROUP,
-                               streamsMetrics.storeLevelTagMap(taskName, STORE_TYPE_PREFIX + storeType, storeName),
-                               MEMTABLE_FLUSH_TIME + AVG_SUFFIX,
-                               "Average time spent on flushing the memtable to disk in ms");
+            STATE_LEVEL_GROUP,
+            streamsMetrics
+                .storeLevelTagMap(metricContext.taskName(), metricContext.storeType(), metricContext.storeName()),
+            MEMTABLE_FLUSH_TIME + AVG_SUFFIX,
+            "Average time spent on flushing the memtable to disk in ms"
+        );
         return sensor;
     }
 
     public static Sensor memtableMinFlushTimeSensor(final StreamsMetricsImpl streamsMetrics,
-                                                    final String taskName,
-                                                    final String storeType,
-                                                    final String storeName) {
-        final Sensor sensor = streamsMetrics
-            .storeLevelSensor(taskName, storeName, MEMTABLE_FLUSH_TIME + MIN_SUFFIX, RecordingLevel.DEBUG);
+                                                    final RocksDBMetricContext metricContext) {
+        final Sensor sensor = createSensor(streamsMetrics, metricContext, MEMTABLE_FLUSH_TIME + MIN_SUFFIX);
         addValueMetricToSensor(sensor,
-                               STATE_LEVEL_GROUP,
-                               streamsMetrics.storeLevelTagMap(taskName, STORE_TYPE_PREFIX + storeType, storeName),
-                               MEMTABLE_FLUSH_TIME + MIN_SUFFIX,
-                               "Minimum time spent on flushing the memtable to disk in ms");
+            STATE_LEVEL_GROUP,
+            streamsMetrics
+                .storeLevelTagMap(metricContext.taskName(), metricContext.storeType(), metricContext.storeName()),
+            MEMTABLE_FLUSH_TIME + MIN_SUFFIX,
+            "Minimum time spent on flushing the memtable to disk in ms"
+        );
         return sensor;
     }
 
     public static Sensor memtableMaxFlushTimeSensor(final StreamsMetricsImpl streamsMetrics,
-                                                    final String taskName,
-                                                    final String storeType,
-                                                    final String storeName) {
-        final Sensor sensor = streamsMetrics
-            .storeLevelSensor(taskName, storeName, MEMTABLE_FLUSH_TIME + MAX_SUFFIX, RecordingLevel.DEBUG);
+                                                    final RocksDBMetricContext metricContext) {
+        final Sensor sensor = createSensor(streamsMetrics, metricContext, MEMTABLE_FLUSH_TIME + MAX_SUFFIX);
         addValueMetricToSensor(sensor,
-                               STATE_LEVEL_GROUP,
-                               streamsMetrics.storeLevelTagMap(taskName, STORE_TYPE_PREFIX + storeType, storeName),
-                               MEMTABLE_FLUSH_TIME + MAX_SUFFIX,
-                               "Maximum time spent on flushing the memtable to disk in ms");
+            STATE_LEVEL_GROUP,
+            streamsMetrics
+                .storeLevelTagMap(metricContext.taskName(), metricContext.storeType(), metricContext.storeName()),
+            MEMTABLE_FLUSH_TIME + MAX_SUFFIX,
+            "Maximum time spent on flushing the memtable to disk in ms"
+        );
         return sensor;
     }
 
     public static Sensor writeStallDurationSensor(final StreamsMetricsImpl streamsMetrics,
-                                                  final String taskName,
-                                                  final String storeType,
-                                                  final String storeName) {
-        final Sensor sensor = streamsMetrics
-            .storeLevelSensor(taskName, storeName, WRITE_STALL_DURATION, RecordingLevel.DEBUG);
+                                                  final RocksDBMetricContext metricContext) {
+        final Sensor sensor = createSensor(streamsMetrics, metricContext, WRITE_STALL_DURATION);
         addAvgAndTotalMetricsToSensor(sensor,
-                                      STATE_LEVEL_GROUP,
-                                      streamsMetrics
-                                          .storeLevelTagMap(taskName, STORE_TYPE_PREFIX + storeType, storeName),
-                                      WRITE_STALL_DURATION,
-                                      "Moving average duration of write stalls in ms",
-                                      "Total duration of write stalls in ms");
+            STATE_LEVEL_GROUP,
+            streamsMetrics
+                .storeLevelTagMap(metricContext.taskName(), metricContext.storeType(), metricContext.storeName()),
+            WRITE_STALL_DURATION,
+            "Moving average duration of write stalls in ms",
+            "Total duration of write stalls in ms"
+        );
         return sensor;
     }
 
     public static Sensor blockCacheDataHitRatioSensor(final StreamsMetricsImpl streamsMetrics,
-                                                      final String taskName,
-                                                      final String storeType,
-                                                      final String storeName) {
-        final Sensor sensor = streamsMetrics
-            .storeLevelSensor(taskName, storeName, BLOCK_CACHE_DATA_HIT_RATIO, RecordingLevel.DEBUG);
+                                                      final RocksDBMetricContext metricContext) {
+        final Sensor sensor = createSensor(streamsMetrics, metricContext, BLOCK_CACHE_DATA_HIT_RATIO);
         addValueMetricToSensor(sensor,
-                               STATE_LEVEL_GROUP,
-                               streamsMetrics.storeLevelTagMap(taskName, STORE_TYPE_PREFIX + storeType, storeName),
-                               BLOCK_CACHE_DATA_HIT_RATIO,
-                               "Ratio of block cache hits for data relative to all lookups for data to the block cache");
+            STATE_LEVEL_GROUP,
+            streamsMetrics
+                .storeLevelTagMap(metricContext.taskName(), metricContext.storeType(), metricContext.storeName()),
+            BLOCK_CACHE_DATA_HIT_RATIO,
+            "Ratio of block cache hits for data relative to all lookups for data to the block cache"
+        );
         return sensor;
     }
 
     public static Sensor blockCacheIndexHitRatioSensor(final StreamsMetricsImpl streamsMetrics,
-                                                       final String taskName,
-                                                       final String storeType,
-                                                       final String storeName) {
-        final Sensor sensor = streamsMetrics
-            .storeLevelSensor(taskName, storeName, BLOCK_CACHE_INDEX_HIT_RATIO, RecordingLevel.DEBUG);
+                                                       final RocksDBMetricContext metricContext) {
+        final Sensor sensor = createSensor(streamsMetrics, metricContext, BLOCK_CACHE_INDEX_HIT_RATIO);
         addValueMetricToSensor(sensor,
                                STATE_LEVEL_GROUP,
-                               streamsMetrics.storeLevelTagMap(taskName, STORE_TYPE_PREFIX + storeType, storeName),
+                               streamsMetrics.storeLevelTagMap(metricContext.taskName(), metricContext.storeType(), metricContext.storeName()),
                                BLOCK_CACHE_INDEX_HIT_RATIO,
                                "Ratio of block cache hits for indexes relative to all lookups for indexes to"
                                    + " the block cache");
@@ -201,115 +205,117 @@ public class RocksDBMetrics {
     }
 
     public static Sensor blockCacheFilterHitRatioSensor(final StreamsMetricsImpl streamsMetrics,
-                                                        final String taskName,
-                                                        final String storeType,
-                                                        final String storeName) {
-        final Sensor sensor = streamsMetrics
-            .storeLevelSensor(taskName, storeName, BLOCK_CACHE_FILTER_HIT_RATIO, RecordingLevel.DEBUG);
+                                                        final RocksDBMetricContext metricContext) {
+        final Sensor sensor = createSensor(streamsMetrics, metricContext, BLOCK_CACHE_FILTER_HIT_RATIO);
         addValueMetricToSensor(sensor,
-                               STATE_LEVEL_GROUP,
-                               streamsMetrics.storeLevelTagMap(taskName, STORE_TYPE_PREFIX + storeType, storeName),
-                               BLOCK_CACHE_FILTER_HIT_RATIO,
-                               "Ratio of block cache hits for filters relative to all lookups for filters to"
-                                   + " the block cache");
+            STATE_LEVEL_GROUP,
+            streamsMetrics
+                .storeLevelTagMap(metricContext.taskName(), metricContext.storeType(), metricContext.storeName()),
+            BLOCK_CACHE_FILTER_HIT_RATIO,
+            "Ratio of block cache hits for filters relative to all lookups for filters to"
+                + " the block cache"
+        );
         return sensor;
     }
 
     public static Sensor bytesReadDuringCompactionSensor(final StreamsMetricsImpl streamsMetrics,
-                                                         final String taskName,
-                                                         final String storeType,
-                                                         final String storeName) {
-        final Sensor sensor = streamsMetrics
-            .storeLevelSensor(taskName, storeName, BYTES_READ_DURING_COMPACTION, RecordingLevel.DEBUG);
+                                                         final RocksDBMetricContext metricContext) {
+        final Sensor sensor = createSensor(streamsMetrics, metricContext, BYTES_READ_DURING_COMPACTION);
         addAmountRateMetricToSensor(sensor,
-                                    STATE_LEVEL_GROUP,
-                                    streamsMetrics.storeLevelTagMap(taskName, STORE_TYPE_PREFIX + storeType, storeName),
-                                    BYTES_READ_DURING_COMPACTION,
-                                    "Average per-second number of bytes read during compaction");
+            STATE_LEVEL_GROUP,
+            streamsMetrics
+                .storeLevelTagMap(metricContext.taskName(), metricContext.storeType(), metricContext.storeName()),
+            BYTES_READ_DURING_COMPACTION,
+            "Average number of bytes read per second during compaction"
+        );
         return sensor;
     }
 
     public static Sensor bytesWrittenDuringCompactionSensor(final StreamsMetricsImpl streamsMetrics,
-                                                            final String taskName,
-                                                            final String storeType,
-                                                            final String storeName) {
-        final Sensor sensor = streamsMetrics
-            .storeLevelSensor(taskName, storeName, BYTES_WRITTEN_DURING_COMPACTION, RecordingLevel.DEBUG);
+                                                            final RocksDBMetricContext metricContext) {
+        final Sensor sensor = createSensor(streamsMetrics, metricContext, BYTES_WRITTEN_DURING_COMPACTION);
         addAmountRateMetricToSensor(sensor,
-                                    STATE_LEVEL_GROUP,
-                                    streamsMetrics.storeLevelTagMap(taskName, STORE_TYPE_PREFIX + storeType, storeName),
-                                    BYTES_WRITTEN_DURING_COMPACTION,
-                                    "Average per-second number of bytes written during compaction");
+            STATE_LEVEL_GROUP,
+            streamsMetrics
+                .storeLevelTagMap(metricContext.taskName(), metricContext.storeType(), metricContext.storeName()),
+            BYTES_WRITTEN_DURING_COMPACTION,
+            "Average number of bytes written per second during compaction"
+        );
         return sensor;
     }
 
     public static Sensor compactionTimeAvgSensor(final StreamsMetricsImpl streamsMetrics,
-                                                 final String taskName,
-                                                 final String storeType,
-                                                 final String storeName) {
-        final Sensor sensor = streamsMetrics
-            .storeLevelSensor(taskName, storeName, COMPACTION_TIME + AVG_SUFFIX, RecordingLevel.DEBUG);
+                                                 final RocksDBMetricContext metricContext) {
+        final Sensor sensor = createSensor(streamsMetrics, metricContext, COMPACTION_TIME + AVG_SUFFIX);
         addValueMetricToSensor(sensor,
-                               STATE_LEVEL_GROUP,
-                               streamsMetrics.storeLevelTagMap(taskName, STORE_TYPE_PREFIX + storeType, storeName),
-                               COMPACTION_TIME + AVG_SUFFIX,
-                               "Average time spent on compaction in ms");
+            STATE_LEVEL_GROUP,
+            streamsMetrics
+                .storeLevelTagMap(metricContext.taskName(), metricContext.storeType(), metricContext.storeName()),
+            COMPACTION_TIME + AVG_SUFFIX,
+            "Average time spent on compaction in ms"
+        );
         return sensor;
     }
 
     public static Sensor compactionTimeMinSensor(final StreamsMetricsImpl streamsMetrics,
-                                                 final String taskName,
-                                                 final String storeType,
-                                                 final String storeName) {
-        final Sensor sensor = streamsMetrics
-            .storeLevelSensor(taskName, storeName, COMPACTION_TIME + MIN_SUFFIX, RecordingLevel.DEBUG);
+                                                 final RocksDBMetricContext metricContext) {
+        final Sensor sensor = createSensor(streamsMetrics, metricContext, COMPACTION_TIME + MIN_SUFFIX);
         addValueMetricToSensor(sensor,
-                               STATE_LEVEL_GROUP,
-                               streamsMetrics.storeLevelTagMap(taskName, STORE_TYPE_PREFIX + storeType, storeName),
-                               COMPACTION_TIME + MIN_SUFFIX,
-                               "Minimum time spent on compaction in ms");
+            STATE_LEVEL_GROUP,
+            streamsMetrics
+                .storeLevelTagMap(metricContext.taskName(), metricContext.storeType(), metricContext.storeName()),
+            COMPACTION_TIME + MIN_SUFFIX,
+            "Minimum time spent on compaction in ms"
+        );
         return sensor;
     }
 
     public static Sensor compactionTimeMaxSensor(final StreamsMetricsImpl streamsMetrics,
-                                                 final String taskName,
-                                                 final String storeType,
-                                                 final String storeName) {
-        final Sensor sensor = streamsMetrics
-            .storeLevelSensor(taskName, storeName, COMPACTION_TIME + MAX_SUFFIX, RecordingLevel.DEBUG);
+                                                 final RocksDBMetricContext metricContext) {
+        final Sensor sensor = createSensor(streamsMetrics, metricContext, COMPACTION_TIME + MAX_SUFFIX);
         addValueMetricToSensor(sensor,
-                               STATE_LEVEL_GROUP,
-                               streamsMetrics.storeLevelTagMap(taskName, STORE_TYPE_PREFIX + storeType, storeName),
-                               COMPACTION_TIME + MAX_SUFFIX,
-                               "Maximum time spent on compaction in ms");
+            STATE_LEVEL_GROUP,
+            streamsMetrics
+                .storeLevelTagMap(metricContext.taskName(), metricContext.storeType(), metricContext.storeName()),
+            COMPACTION_TIME + MAX_SUFFIX,
+            "Maximum time spent on compaction in ms"
+        );
         return sensor;
     }
 
     public static Sensor numberOfOpenFilesSensor(final StreamsMetricsImpl streamsMetrics,
-                                                 final String taskName,
-                                                 final String storeType,
-                                                 final String storeName) {
-        final Sensor sensor = streamsMetrics
-            .storeLevelSensor(taskName, storeName, NUMBER_OF_OPEN_FILES, RecordingLevel.DEBUG);
+                                                 final RocksDBMetricContext metricContext) {
+        final Sensor sensor = createSensor(streamsMetrics, metricContext, NUMBER_OF_OPEN_FILES);
         addValueMetricToSensor(sensor,
-                               STATE_LEVEL_GROUP,
-                               streamsMetrics.storeLevelTagMap(taskName, STORE_TYPE_PREFIX + storeType, storeName),
-                               NUMBER_OF_OPEN_FILES,
-                               "Number of currently open files");
+            STATE_LEVEL_GROUP,
+            streamsMetrics
+                .storeLevelTagMap(metricContext.taskName(), metricContext.storeType(), metricContext.storeName()),
+            NUMBER_OF_OPEN_FILES,
+            "Number of currently open files"
+        );
         return sensor;
     }
 
     public static Sensor numberOfFileErrorsSensor(final StreamsMetricsImpl streamsMetrics,
-                                                  final String taskName,
-                                                  final String storeType,
-                                                  final String storeName) {
-        final Sensor sensor = streamsMetrics
-            .storeLevelSensor(taskName, storeName, NUMBER_OF_FILE_ERRORS, RecordingLevel.DEBUG);
+                                                  final RocksDBMetricContext metricContext) {
+        final Sensor sensor = createSensor(streamsMetrics, metricContext, NUMBER_OF_FILE_ERRORS);
         addTotalMetricToSensor(sensor,
-                               STATE_LEVEL_GROUP,
-                               streamsMetrics.storeLevelTagMap(taskName, STORE_TYPE_PREFIX + storeType, storeName),
-                               NUMBER_OF_FILE_ERRORS,
-                               "Total number of file errors occurred");
+            STATE_LEVEL_GROUP,
+            streamsMetrics
+                .storeLevelTagMap(metricContext.taskName(), metricContext.storeType(), metricContext.storeName()),
+            NUMBER_OF_FILE_ERRORS,
+            "Total number of file errors occurred"
+        );
         return sensor;
+    }
+
+    private static Sensor createSensor(final StreamsMetricsImpl streamsMetrics,
+                                       final RocksDBMetricContext metricContext,
+                                       final String sensorName) {
+        return streamsMetrics.storeLevelSensor(
+            metricContext.taskName(),
+            metricContext.storeName(),
+            sensorName,
+            RecordingLevel.DEBUG);
     }
 }
