@@ -264,15 +264,10 @@ public class StoreChangelogReader implements ChangelogReader {
 
     @Override
     public Map<TopicPartition, Long> restoredOffsets() {
-        return restoredOffsets(stateRestorers.keySet());
-    }
-
-    @Override
-    public Map<TopicPartition, Long> restoredOffsets(final Set<TopicPartition> partitions) {
         final Map<TopicPartition, Long> restoredOffsets = new HashMap<>();
         for (final Map.Entry<TopicPartition, StateRestorer> entry : stateRestorers.entrySet()) {
             final StateRestorer restorer = entry.getValue();
-            if (restorer.isPersistent() && partitions.contains(entry.getKey())) {
+            if (restorer.isPersistent()) {
                 restoredOffsets.put(entry.getKey(), restorer.restoredOffset());
             }
         }

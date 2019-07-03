@@ -94,7 +94,7 @@ public class OffsetCheckpoint {
                 fileOutputStream.getFD().sync();
             }
 
-            LOG.trace("Swapping tmp checkpoint file {} {}", temp.getAbsolutePath(), file.getAbsolutePath());
+            LOG.trace("Swapping tmp checkpoint file {} {}", temp.toPath(), file.toPath());
             Utils.atomicMoveWithFallback(temp.toPath(), file.toPath());
         }
     }

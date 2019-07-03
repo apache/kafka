@@ -20,7 +20,6 @@ import org.apache.kafka.common.TopicPartition;
 
 import java.util.Collection;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
@@ -46,17 +45,6 @@ public class MockChangelogReader implements ChangelogReader {
 
     void setRestoredOffsets(final Map<TopicPartition, Long> restoredOffsets) {
         this.restoredOffsets = restoredOffsets;
-    }
-
-    @Override
-    public Map<TopicPartition, Long> restoredOffsets(final Set<TopicPartition> partitions) {
-        final Map<TopicPartition, Long> result = new HashMap<>();
-        for (final TopicPartition partition : partitions) {
-            if (restoredOffsets.containsKey(partition)) {
-                result.put(partition, restoredOffsets.get(partition));
-            }
-        }
-        return result;
     }
 
     @Override
