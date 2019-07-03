@@ -196,9 +196,9 @@ class MetadataCache(brokerId: Int) extends Logging {
     }
   }
 
-  def getPartitionReplicaEndpoints(topic: String, partitionId: Int, listenerName: ListenerName): Map[Int, Node] = {
+  def getPartitionReplicaEndpoints(tp: TopicPartition, listenerName: ListenerName): Map[Int, Node] = {
     val snapshot = metadataSnapshot
-    snapshot.partitionStates.get(topic).flatMap(_.get(partitionId)).map { partitionInfo =>
+    snapshot.partitionStates.get(tp.topic()).flatMap(_.get(tp.partition())).map { partitionInfo =>
       val replicaIds = partitionInfo.basePartitionState.replicas
       replicaIds.asScala
         .map(replicaId => replicaId.intValue() -> {

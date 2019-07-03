@@ -916,7 +916,7 @@ class ReplicaManagerTest {
     }
     EasyMock
       .expect(metadataCache.getPartitionReplicaEndpoints(
-        EasyMock.anyObject(), EasyMock.anyObject(), EasyMock.anyObject()))
+        EasyMock.anyObject(), EasyMock.anyObject()))
       .andReturn(Map(
         leaderBrokerId -> new Node(leaderBrokerId, "host1", 9092, "rack-a"),
         followerBrokerId -> new Node(followerBrokerId, "host2", 9092, "rack-b")).toMap

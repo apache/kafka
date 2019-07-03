@@ -951,6 +951,7 @@ class ReplicaManager(val config: KafkaConfig,
           metadata => findPreferredReadReplica(tp, metadata, replicaId, fetchInfo.fetchOffset, fetchTimeMs))
 
         if (preferredReadReplica.isDefined) {
+          debug(s"Replica selector $classOf[replicaSelector] returned ${preferredReadReplica.get} for $clientMetadata")
           // If a preferred read-replica is set, skip the read
           val offsetSnapshot: LogOffsetSnapshot = partition.fetchOffsetSnapshot(fetchInfo.currentLeaderEpoch, false)
           LogReadResult(info = FetchDataInfo(LogOffsetMetadata.UnknownOffsetMetadata, MemoryRecords.EMPTY),
@@ -1071,7 +1072,7 @@ class ReplicaManager(val config: KafkaConfig,
         // Don't look up preferred for follower fetches via normal replication
         Option.empty
       } else {
-        val replicaEndpoints = metadataCache.getPartitionReplicaEndpoints(tp.topic(), tp.partition(), new ListenerName(clientMetadata.listenerName))
+        val replicaEndpoints = metadataCache.getPartitionReplicaEndpoints(tp, new ListenerName(clientMetadata.listenerName))
         var replicaInfoSet: Set[ReplicaView] = partition.remoteReplicas
           // Exclude replicas that don't have the requested offset (whether or not if they're in the ISR)
           .filter(replica => replica.logEndOffset >= fetchOffset)
