@@ -198,7 +198,7 @@ class MetadataCache(brokerId: Int) extends Logging {
 
   def getPartitionReplicaEndpoints(topic: String, partitionId: Int, listenerName: ListenerName): Map[Int, Node] = {
     val snapshot = metadataSnapshot
-    snapshot.partitionStates.get(topic).flatMap(_.get(partitionId)).map(partitionInfo => {
+    snapshot.partitionStates.get(topic).flatMap(_.get(partitionId)).map { partitionInfo =>
       val replicaIds = partitionInfo.basePartitionState.replicas
       replicaIds.asScala
         .map(replicaId => replicaId.intValue() -> {
@@ -211,7 +211,7 @@ class MetadataCache(brokerId: Int) extends Logging {
         .filter(pair => pair match {
           case (_, node) => !node.isEmpty
         })
-    }).getOrElse(Map.empty[Int, Node])
+    } getOrElse Map.empty[Int, Node]
   }
 
   def getControllerId: Option[Int] = metadataSnapshot.controllerId

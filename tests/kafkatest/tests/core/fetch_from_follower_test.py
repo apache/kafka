@@ -124,8 +124,6 @@ class FetchFromFollowerTest(ProduceConsumeValidateTest):
                           dict(all_captured_preferred_read_replicas.items()))
         assert all_captured_preferred_read_replicas[2] > 0, "Expected to see broker 2 (rack-b) as a preferred replica"
         assert all_captured_preferred_read_replicas[1] == 0, "Did not expect to see broker 1 as a preferred replica"
-        assert all_captured_preferred_read_replicas[2] > all_captured_preferred_read_replicas[-1], \
-            "Expected to see broker 2 more often than no preferred replica"
 
         # Validate consumed messages
         self.stop_producer_and_consumer()

@@ -712,7 +712,8 @@ class ReplicaManagerTest {
       InetAddress.getByName("localhost"), KafkaPrincipal.ANONYMOUS, "default")
 
     // We expect to select the leader, which means we return None
-    val preferredReadReplica: Option[Int] = replicaManager.findPreferredReadReplica(tp0, metadata, Request.OrdinaryConsumerId, 1L)
+    val preferredReadReplica: Option[Int] = replicaManager.findPreferredReadReplica(
+      tp0, metadata, Request.OrdinaryConsumerId, 1L, System.currentTimeMillis)
     assertFalse(preferredReadReplica.isDefined)
   }
 

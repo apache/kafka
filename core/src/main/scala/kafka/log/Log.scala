@@ -363,14 +363,14 @@ class Log(@volatile var dir: File,
     * offset out of range error if the segment info cannot be loaded.
     */
   def offsetSnapshot: LogOffsetSnapshot = {
-    val highWatermark: LogOffsetMetadata = if (_highWatermarkMetadata.messageOffsetOnly) {
+
+    var highWatermark = _highWatermarkMetadata
+    if (highWatermark.messageOffsetOnly) {
       lock.synchronized {
-        val fullOffset = convertToOffsetMetadataOrThrow(_highWatermarkMetadata.messageOffset)
+        val fullOffset = convertToOffsetMetadataOrThrow(highWatermark.messageOffset)
         _highWatermarkMetadata = fullOffset
+        highWatermark = _highWatermarkMetadata
       }
-      _highWatermarkMetadata
-    } else {
-      _highWatermarkMetadata
     }
 
     val lastStable: LogOffsetMetadata = if (firstUnstableOffset.exists(_.messageOffsetOnly)) {

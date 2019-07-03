@@ -230,10 +230,6 @@ case class FetchSession(val id: Int,
     Option(partitionMap.find(new CachedPartition(topicPartition))).map(_.fetchOffset)
   }
 
-  def getFollowerHighWatermark(topicPartition: TopicPartition): Option[Long] = synchronized {
-    Option(partitionMap.find(new CachedPartition(topicPartition))).map(_.highWatermark)
-  }
-
   type TL = util.ArrayList[TopicPartition]
 
   // Update the cached partition data based on the request.
