@@ -1065,58 +1065,46 @@ public class StreamThreadTest {
 
     @Test
     public void shouldCreateStandbyTask() {
-        final MockProcessor mockProcessor = new MockProcessor();
-        internalTopologyBuilder.addSource(null, "source1", null, null, null, topic1);
-        internalTopologyBuilder.addProcessor("processor1", () -> mockProcessor, "source1");
+        setupInternalTopologyWithoutState();
         internalTopologyBuilder.addStateStore(new MockKeyValueStoreBuilder("myStore", true), "processor1");
-        final StreamThread.StandbyTaskCreator standbyTaskCreator = createStandbyTaskCreator(internalTopologyBuilder);
 
-        final StandbyTask standbyTask = standbyTaskCreator.createTask(
-            new MockConsumer<>(OffsetResetStrategy.EARLIEST),
-            new TaskId(1, 2),
-            Collections.emptySet());
+        final StandbyTask standbyTask = createStandbyTask();
 
         assertThat(standbyTask, not(nullValue()));
     }
 
     @Test
     public void shouldNotCreateStandbyTaskWithoutStateStores() {
-        final MockProcessor mockProcessor = new MockProcessor();
-        internalTopologyBuilder.addSource(null, "source1", null, null, null, topic1);
-        internalTopologyBuilder.addProcessor("processor1", () -> mockProcessor, "source1");
-        final StreamThread.StandbyTaskCreator standbyTaskCreator = createStandbyTaskCreator(internalTopologyBuilder);
+        setupInternalTopologyWithoutState();
 
-        final StandbyTask standbyTask = standbyTaskCreator.createTask(
-            new MockConsumer<>(OffsetResetStrategy.EARLIEST),
-            new TaskId(1, 2),
-            Collections.emptySet());
+        final StandbyTask standbyTask = createStandbyTask();
 
         assertThat(standbyTask, nullValue());
     }
 
     @Test
     public void shouldNotCreateStandbyTaskIfStateStoresHaveLoggingDisabled() {
-        final MockProcessor mockProcessor = new MockProcessor();
-        internalTopologyBuilder.addSource(null, "source1", null, null, null, topic1);
-        internalTopologyBuilder.addProcessor("processor1", () -> mockProcessor, "source1");
+        setupInternalTopologyWithoutState();
         final StoreBuilder storeBuilder = new MockKeyValueStoreBuilder("myStore", true);
         storeBuilder.withLoggingDisabled();
         internalTopologyBuilder.addStateStore(storeBuilder, "processor1");
-        final StreamThread.StandbyTaskCreator standbyTaskCreator = createStandbyTaskCreator(internalTopologyBuilder);
 
-        final StandbyTask standbyTask = standbyTaskCreator.createTask(
-            new MockConsumer<>(OffsetResetStrategy.EARLIEST),
-            new TaskId(1, 2),
-            Collections.emptySet());
+        final StandbyTask standbyTask = createStandbyTask();
 
         assertThat(standbyTask, nullValue());
     }
 
-    private StreamThread.StandbyTaskCreator createStandbyTaskCreator(final InternalTopologyBuilder internalTopologyBuilder) {
+    private void setupInternalTopologyWithoutState() {
+        final MockProcessor mockProcessor = new MockProcessor();
+        internalTopologyBuilder.addSource(null, "source1", null, null, null, topic1);
+        internalTopologyBuilder.addProcessor("processor1", () -> mockProcessor, "source1");
+    }
+
+    private StandbyTask createStandbyTask() {
         final LogContext logContext = new LogContext("test");
         final Logger log = logContext.logger(StreamThreadTest.class);
         final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, clientId);
-        return new StreamThread.StandbyTaskCreator(
+        final StreamThread.StandbyTaskCreator standbyTaskCreator = new StreamThread.StandbyTaskCreator(
             internalTopologyBuilder,
             config,
             streamsMetrics,
@@ -1124,6 +1112,10 @@ public class StreamThreadTest {
             new MockChangelogReader(),
             mockTime,
             log);
+        return standbyTaskCreator.createTask(
+            new MockConsumer<>(OffsetResetStrategy.EARLIEST),
+            new TaskId(1, 2),
+            Collections.emptySet());
     }
 
     @Test

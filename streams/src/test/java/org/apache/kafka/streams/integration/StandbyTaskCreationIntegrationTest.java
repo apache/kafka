@@ -129,6 +129,8 @@ public class StandbyTaskCreationIntegrationTest {
         TestUtils.waitForCondition(
             () -> client1IsOk && client2IsOk,
             30 * 1000,
-            "At least one client did not reach state RUNNING without any stand-by tasks");
+            "At least one client did not reach state RUNNING without any stand-by tasks: "
+                + "Client 1 is " + (!client1IsOk ? "NOT " : "") + "OK, "
+                + "client 2 is " + (!client2IsOk ? "NOT " : "") + "OK.");
     }
 }
