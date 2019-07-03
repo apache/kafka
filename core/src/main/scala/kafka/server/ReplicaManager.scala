@@ -226,7 +226,7 @@ class ReplicaManager(val config: KafkaConfig,
     }
   }
 
-  val replicaSelector: ReplicaSelector = createReplicaSelector()
+  val replicaSelectorOpt: Option[ReplicaSelector] = createReplicaSelector()
 
   val leaderCount = newGauge(
     "LeaderCount",
@@ -1072,33 +1072,35 @@ class ReplicaManager(val config: KafkaConfig,
         // Don't look up preferred for follower fetches via normal replication
         Option.empty
       } else {
-        val replicaEndpoints = metadataCache.getPartitionReplicaEndpoints(tp, new ListenerName(clientMetadata.listenerName))
-        var replicaInfoSet: Set[ReplicaView] = partition.remoteReplicas
-          // Exclude replicas that don't have the requested offset (whether or not if they're in the ISR)
-          .filter(replica => replica.logEndOffset >= fetchOffset)
-          .filter(replica => replica.logStartOffset <= fetchOffset)
-          .map(replica => new DefaultReplicaView(
-            replicaEndpoints.getOrElse(replica.brokerId, Node.noNode()),
-            replica.logEndOffset,
-            currentTimeMs - replica.lastCaughtUpTimeMs
-          ))
+        replicaSelectorOpt.flatMap { replicaSelector =>
+          val replicaEndpoints = metadataCache.getPartitionReplicaEndpoints(tp, new ListenerName(clientMetadata.listenerName))
+          var replicaInfoSet: Set[ReplicaView] = partition.remoteReplicas
+            // Exclude replicas that don't have the requested offset (whether or not if they're in the ISR)
+            .filter(replica => replica.logEndOffset >= fetchOffset)
+            .filter(replica => replica.logStartOffset <= fetchOffset)
+            .map(replica => new DefaultReplicaView(
+              replicaEndpoints.getOrElse(replica.brokerId, Node.noNode()),
+              replica.logEndOffset,
+              currentTimeMs - replica.lastCaughtUpTimeMs
+            ))
 
-        if (partition.leaderReplicaIdOpt.isDefined) {
-          val leaderReplica: ReplicaView = partition.leaderReplicaIdOpt
-            .map(replicaId => replicaEndpoints.getOrElse(replicaId, Node.noNode()))
-            .map(leaderNode => new DefaultReplicaView(leaderNode, partition.localLogOrException.logEndOffset, 0L))
-            .get
-          replicaInfoSet ++= Set(leaderReplica)
+          if (partition.leaderReplicaIdOpt.isDefined) {
+            val leaderReplica: ReplicaView = partition.leaderReplicaIdOpt
+              .map(replicaId => replicaEndpoints.getOrElse(replicaId, Node.noNode()))
+              .map(leaderNode => new DefaultReplicaView(leaderNode, partition.localLogOrException.logEndOffset, 0L))
+              .get
+            replicaInfoSet ++= Set(leaderReplica)
 
-          val partitionInfo = new DefaultPartitionView(replicaInfoSet.asJava, leaderReplica)
-          replicaSelector.select(tp, clientMetadata, partitionInfo).asScala
-            .filter(!_.endpoint.isEmpty)
-            // Even though the replica selector can return the leader, we don't want to send it out with the
-            // FetchResponse, so we exclude it here
-            .filter(!_.equals(leaderReplica))
-            .map(_.endpoint.id)
-        } else {
-          None
+            val partitionInfo = new DefaultPartitionView(replicaInfoSet.asJava, leaderReplica)
+            replicaSelector.select(tp, clientMetadata, partitionInfo).asScala
+              .filter(!_.endpoint.isEmpty)
+              // Even though the replica selector can return the leader, we don't want to send it out with the
+              // FetchResponse, so we exclude it here
+              .filter(!_.equals(leaderReplica))
+              .map(_.endpoint.id)
+          } else {
+            None
+          }
         }
       }
     } else {
@@ -1631,9 +1633,7 @@ class ReplicaManager(val config: KafkaConfig,
     delayedElectLeaderPurgatory.shutdown()
     if (checkpointHW)
       checkpointHighWatermarks()
-    if (replicaSelector != null) {
-      replicaSelector.close()
-    }
+    replicaSelectorOpt.foreach(_.close)
     info("Shut down completely")
   }
 
@@ -1645,10 +1645,12 @@ class ReplicaManager(val config: KafkaConfig,
     new ReplicaAlterLogDirsManager(config, this, quotaManager, brokerTopicStats)
   }
 
-  protected def createReplicaSelector(): ReplicaSelector = {
-    val tmpReplicaSelector: ReplicaSelector = CoreUtils.createObject[ReplicaSelector](config.replicaSelectorClassName)
-    tmpReplicaSelector.configure(config.originals())
-    tmpReplicaSelector
+  protected def createReplicaSelector(): Option[ReplicaSelector] = {
+    config.replicaSelectorClassName.map { className =>
+      val tmpReplicaSelector: ReplicaSelector = CoreUtils.createObject[ReplicaSelector](className)
+      tmpReplicaSelector.configure(config.originals())
+      tmpReplicaSelector
+    }
   }
 
   def lastOffsetForLeaderEpoch(requestedEpochInfo: Map[TopicPartition, OffsetsForLeaderEpochRequest.PartitionData]): Map[TopicPartition, EpochEndOffset] = {

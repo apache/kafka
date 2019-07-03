@@ -42,7 +42,6 @@ import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.replica.ClientMetadata.DefaultClientMetadata
 import org.apache.kafka.common.replica.ClientMetadata
-import org.apache.kafka.common.replica.LeaderReplicaSelector
 import org.apache.kafka.common.requests.FetchRequest
 import org.apache.kafka.common.requests.FetchRequest.PartitionData
 import org.apache.kafka.common.requests.FetchResponse.AbortedTransaction
@@ -696,11 +695,9 @@ class ReplicaManagerTest {
     val countDownLatch = new CountDownLatch(1)
 
     // Prepare the mocked components for the test
-    val props = new Properties()
-    props.put(KafkaConfig.ReplicaSelectorClassProp, classOf[LeaderReplicaSelector].getCanonicalName)
     val (replicaManager, mockLogMgr) = prepareReplicaManagerAndLogManager(
       topicPartition, leaderEpoch + leaderEpochIncrement, followerBrokerId,
-      leaderBrokerId, countDownLatch, expectTruncation = true, extraProps = props)
+      leaderBrokerId, countDownLatch, expectTruncation = true)
 
     val partition = replicaManager.createPartition(new TopicPartition(topic, topicPartition))
 
@@ -734,11 +731,9 @@ class ReplicaManagerTest {
     val countDownLatch = new CountDownLatch(1)
 
     // Prepare the mocked components for the test
-    val props = new Properties()
-    props.put(KafkaConfig.ReplicaSelectorClassProp, classOf[LeaderReplicaSelector].getCanonicalName)
     val (replicaManager, mockLogMgr) = prepareReplicaManagerAndLogManager(
       topicPartition, leaderEpoch + leaderEpochIncrement, followerBrokerId,
-      leaderBrokerId, countDownLatch, expectTruncation = true, extraProps = props)
+      leaderBrokerId, countDownLatch, expectTruncation = true)
 
     val brokerList = Seq[Integer](0, 1).asJava
 
@@ -777,11 +772,9 @@ class ReplicaManagerTest {
     val countDownLatch = new CountDownLatch(1)
 
     // Prepare the mocked components for the test
-    val props = new Properties()
-    props.put(KafkaConfig.ReplicaSelectorClassProp, classOf[LeaderReplicaSelector].getCanonicalName)
     val (replicaManager, mockLogMgr) = prepareReplicaManagerAndLogManager(
       topicPartition, leaderEpoch + leaderEpochIncrement, followerBrokerId,
-      leaderBrokerId, countDownLatch, expectTruncation = true, extraProps = props)
+      leaderBrokerId, countDownLatch, expectTruncation = true)
 
     val brokerList = Seq[Integer](0, 1).asJava
 
@@ -838,7 +831,7 @@ class ReplicaManagerTest {
     val (replicaManager, mockLogMgr) = prepareReplicaManagerAndLogManager(
       topicPartition, leaderEpoch + leaderEpochIncrement, followerBrokerId,
       leaderBrokerId, countDownLatch, expectTruncation = true)
-    assertEquals(replicaManager.replicaSelector.getClass, classOf[LeaderReplicaSelector])
+    assertFalse(replicaManager.replicaSelectorOpt.isDefined)
   }
 
   /**

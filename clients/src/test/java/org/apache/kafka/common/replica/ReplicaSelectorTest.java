@@ -33,21 +33,6 @@ import static org.apache.kafka.test.TestUtils.assertOptional;
 import static org.junit.Assert.assertEquals;
 
 public class ReplicaSelectorTest {
-    @Test
-    public void testLeaderSelector() {
-        TopicPartition tp = new TopicPartition("test", 0);
-
-        List<ReplicaView> replicaViewSet = replicaInfoSet();
-        ReplicaView leader = replicaViewSet.get(0);
-        PartitionView partitionView = partitionInfo(new HashSet<>(replicaViewSet), leader);
-
-        ReplicaSelector selector = new LeaderReplicaSelector();
-        Optional<ReplicaView> selected;
-
-        ClientMetadata metadata = metadata("doesnt-matter");
-        selected = selector.select(tp, metadata, partitionView);
-        assertOptional(selected, replicaInfo -> assertEquals(replicaInfo, leader));
-    }
 
     @Test
     public void testSameRackSelector() {
