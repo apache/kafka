@@ -59,21 +59,19 @@ import static org.apache.kafka.streams.processor.internals.StateManagerUtil.conv
  */
 public class GlobalStateManagerImpl implements GlobalStateManager {
     private final Logger log;
+    private final boolean eosEnabled;
     private final ProcessorTopology topology;
     private final Consumer<byte[], byte[]> globalConsumer;
+    private final File baseDir;
     private final StateDirectory stateDirectory;
     private final Set<String> globalStoreNames = new HashSet<>();
+    private final FixedOrderMap<String, Optional<StateStore>> globalStores = new FixedOrderMap<>();
     private final StateRestoreListener stateRestoreListener;
-    private final File baseDir;
-    private final boolean eosEnabled;
     private InternalProcessorContext globalProcessorContext;
     private final int retries;
     private final long retryBackoffMs;
     private final Duration pollTime;
     private final Set<String> globalNonPersistentStoresTopics = new HashSet<>();
-
-    private final FixedOrderMap<String, Optional<StateStore>> globalStores = new FixedOrderMap<>();
-
     private final OffsetCheckpoint checkpointFile;
     private final Map<TopicPartition, Long> checkpointFileCache;
 
@@ -143,15 +141,16 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
     @Override
     public void reinitializeStateStoresForPartitions(final Collection<TopicPartition> partitions,
                                                      final InternalProcessorContext processorContext) {
-        StateManagerUtil.reinitializeStateStoresForPartitions(log,
-                                                              eosEnabled,
-                                                              baseDir,
-                                                              globalStores,
-                                                              topology.storeToChangelogTopic(),
-                                                              partitions,
-                                                              processorContext,
-                                                              checkpointFile,
-                                                              checkpointFileCache
+        StateManagerUtil.reinitializeStateStoresForPartitions(
+            log,
+            eosEnabled,
+            baseDir,
+            globalStores,
+            topology.storeToChangelogTopic(),
+            partitions,
+            processorContext,
+            checkpointFile,
+            checkpointFileCache
         );
 
         globalConsumer.assign(partitions);
