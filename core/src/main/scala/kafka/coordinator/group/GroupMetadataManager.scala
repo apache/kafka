@@ -36,6 +36,8 @@ import kafka.zk.KafkaZkClient
 import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.apache.kafka.common.internals.Topic
+import org.apache.kafka.common.metrics.stats.{Avg, Max}
+import org.apache.kafka.common.metrics.{MetricConfig, Metrics}
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.protocol.types.Type._
 import org.apache.kafka.common.protocol.types._
@@ -53,7 +55,8 @@ class GroupMetadataManager(brokerId: Int,
                            config: OffsetConfig,
                            replicaManager: ReplicaManager,
                            zkClient: KafkaZkClient,
-                           time: Time) extends Logging with KafkaMetricsGroup {
+                           time: Time,
+                           metrics: Metrics) extends Logging with KafkaMetricsGroup {
 
   private val compressionType: CompressionType = CompressionType.forId(config.offsetsTopicCompressionCodec.codec)
 
@@ -81,6 +84,15 @@ class GroupMetadataManager(brokerId: Int,
    * marker comes in for a transaction, it is for a particular partition on the offsets topic and a particular producerId.
    * We use this structure to quickly find the groups which need to be updated by the commit/abort marker. */
   private val openGroupsForProducer = mutable.HashMap[Long, mutable.Set[String]]()
+
+  /* setup metrics*/
+  private val metricConfig: MetricConfig = new MetricConfig().samples(1)
+  val partitionLoadSensor = metrics.sensor("GroupLoadTime", metricConfig)
+
+  private val partitionMaxMetricName = metrics.metricName("group-load-time-max", "group-metadata-manager-metrics")
+  partitionLoadSensor.add(partitionMaxMetricName, new Max())
+  private val partitionAvgMetricName = metrics.metricName("group-load-time-avg", "group-metadata-manager-metrics")
+  partitionLoadSensor.add(partitionAvgMetricName, new Avg())
 
   this.logIdent = s"[GroupMetadataManager brokerId=$brokerId] "
 
@@ -498,7 +510,9 @@ class GroupMetadataManager(brokerId: Int,
     try {
       val startMs = time.milliseconds()
       doLoadGroupsAndOffsets(topicPartition, onGroupLoaded)
-      info(s"Finished loading offsets and group metadata from $topicPartition in ${time.milliseconds() - startMs} milliseconds.")
+      val endMs = time.milliseconds()
+      partitionLoadSensor.record(endMs - startMs, endMs, false)
+      info(s"Finished loading offsets and group metadata from $topicPartition in ${endMs - startMs} milliseconds.")
     } catch {
       case t: Throwable => error(s"Error loading offsets from $topicPartition", t)
     } finally {

@@ -31,6 +31,8 @@ import kafka.utils.{Logging, Pool, Scheduler}
 import kafka.zk.KafkaZkClient
 import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.apache.kafka.common.internals.Topic
+import org.apache.kafka.common.metrics.stats.{Avg, Max}
+import org.apache.kafka.common.metrics.{MetricConfig, Metrics}
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.{FileRecords, MemoryRecords, SimpleRecord}
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
@@ -71,7 +73,8 @@ class TransactionStateManager(brokerId: Int,
                               scheduler: Scheduler,
                               replicaManager: ReplicaManager,
                               config: TransactionConfig,
-                              time: Time) extends Logging {
+                              time: Time,
+                              metrics: Metrics) extends Logging {
 
   this.logIdent = "[Transaction State Manager " + brokerId + "]: "
 
@@ -94,6 +97,15 @@ class TransactionStateManager(brokerId: Int,
 
   /** number of partitions for the transaction log topic */
   private val transactionTopicPartitionCount = getTransactionTopicPartitionCount
+
+  /** setup metrics*/
+  private val metricConfig: MetricConfig = new MetricConfig().samples(1)
+  private val partitionLoadSensor = metrics.sensor("TransactionLoadTime", metricConfig)
+
+  private val partitionMaxMetricName = metrics.metricName("transaction-load-time-max", "transaction-state-manager-metrics")
+  partitionLoadSensor.add(partitionMaxMetricName, new Max())
+  private val partitionAvgMetricName = metrics.metricName("transaction-load-time-avg", "transaction-state-manager-metrics")
+  partitionLoadSensor.add(partitionAvgMetricName, new Avg())
 
   // visible for testing only
   private[transaction] def addLoadingPartition(partitionId: Int, coordinatorEpoch: Int): Unit = {
@@ -339,8 +351,9 @@ class TransactionStateManager(brokerId: Int,
                 currOffset = batch.nextOffset
               }
             }
-
-            info(s"Finished loading ${loadedTransactions.size} transaction metadata from $topicPartition in ${time.milliseconds() - startMs} milliseconds")
+            val endMs = time.milliseconds()
+            partitionLoadSensor.record(endMs - startMs, endMs, false)
+            info(s"Finished loading ${loadedTransactions.size} transaction metadata from $topicPartition in ${endMs - startMs} milliseconds")
           }
         } catch {
           case t: Throwable => error(s"Error loading transactions from transaction log $topicPartition", t)

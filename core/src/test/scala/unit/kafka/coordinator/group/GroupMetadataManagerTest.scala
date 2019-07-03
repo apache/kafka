@@ -19,10 +19,12 @@ package kafka.coordinator.group
 
 import com.yammer.metrics.Metrics
 import com.yammer.metrics.core.Gauge
+import java.lang.management.ManagementFactory
 import java.nio.ByteBuffer
 import java.util.Collections
 import java.util.Optional
 import java.util.concurrent.locks.ReentrantLock
+import javax.management.ObjectName
 import kafka.api._
 import kafka.cluster.Partition
 import kafka.common.OffsetAndMetadata
@@ -35,6 +37,7 @@ import org.apache.kafka.clients.consumer.internals.ConsumerProtocol
 import org.apache.kafka.clients.consumer.internals.PartitionAssignor.Subscription
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.internals.Topic
+import org.apache.kafka.common.metrics.{JmxReporter, Metrics => kMetrics}
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.requests.OffsetFetchResponse
@@ -55,6 +58,7 @@ class GroupMetadataManagerTest {
   var zkClient: KafkaZkClient = null
   var partition: Partition = null
   var defaultOffsetRetentionMs = Long.MaxValue
+  var metrics: kMetrics = null
 
   val groupId = "foo"
   val groupInstanceId = Some("bar")
@@ -86,9 +90,10 @@ class GroupMetadataManagerTest {
     EasyMock.expect(zkClient.getTopicPartitionCount(Topic.GROUP_METADATA_TOPIC_NAME)).andReturn(Some(2))
     EasyMock.replay(zkClient)
 
+    metrics = new kMetrics()
     time = new MockTime
     replicaManager = EasyMock.createNiceMock(classOf[ReplicaManager])
-    groupMetadataManager = new GroupMetadataManager(0, ApiVersion.latestVersion, offsetConfig, replicaManager, zkClient, time)
+    groupMetadataManager = new GroupMetadataManager(0, ApiVersion.latestVersion, offsetConfig, replicaManager, zkClient, time, metrics)
     partition = EasyMock.niceMock(classOf[Partition])
   }
 
@@ -2051,5 +2056,60 @@ class GroupMetadataManagerTest {
     expectMetrics(groupMetadataManager, 1, 1, 0)
     group.transitionTo(CompletingRebalance)
     expectMetrics(groupMetadataManager, 1, 0, 1)
+  }
+
+  def addDelay(durationMs: Long)(groupMetadata: GroupMetadata): Unit ={
+    time.sleep(durationMs)
+  }
+
+  @Test
+  def testPartitionLoadMetric(): Unit = {
+    val server = ManagementFactory.getPlatformMBeanServer
+    val mBeanName = "kafka.coordinator.group:type=group-metadata-manager-metrics"
+    val reporter = new JmxReporter("kafka.coordinator.group")
+    metrics.addReporter(reporter)
+
+    assertTrue(server.isRegistered(new ObjectName(mBeanName)))
+    assertEquals(Double.NaN, server.getAttribute(new ObjectName(mBeanName), "group-load-time-max"))
+    assertEquals(Double.NaN, server.getAttribute(new ObjectName(mBeanName), "group-load-time-avg"))
+    assertTrue(reporter.containsMbean(mBeanName))
+
+    val groupMetadataTopicPartition = groupTopicPartition
+    val startOffset = 15L
+    val memberId = "98098230493"
+    val committedOffsets = Map(
+      new TopicPartition("foo", 0) -> 23L,
+      new TopicPartition("foo", 1) -> 455L,
+      new TopicPartition("bar", 0) -> 8992L
+    )
+
+    val offsetCommitRecords = createCommittedOffsetRecords(committedOffsets)
+    val groupMetadataRecord = buildStableGroupRecordWithMember(generation = 15,
+      protocolType = "consumer", protocol = "range", memberId)
+    val records = MemoryRecords.withRecords(startOffset, CompressionType.NONE,
+      offsetCommitRecords ++ Seq(groupMetadataRecord): _*)
+
+    def loadWithDelay(duration: Int): Unit = {
+      EasyMock.reset(replicaManager)
+      expectGroupMetadataLoad(groupMetadataTopicPartition, startOffset, records)
+      EasyMock.replay(replicaManager)
+      groupMetadataManager.loadGroupsAndOffsets(groupMetadataTopicPartition, addDelay(duration))
+    }
+
+    // max of one 30sec window
+    val durationMs = List(9000, 3000, 7000, 7000, 7000)
+    durationMs.foreach(loadWithDelay)
+    assertEquals(9000.0, server.getAttribute(new ObjectName(mBeanName), "group-load-time-max"))
+
+    // last window was complete, so compute new max of this window
+    val durationMs2 = List(6000, 2000, 4000)
+    durationMs2.foreach(loadWithDelay)
+    assertEquals(6000.0, server.getAttribute(new ObjectName(mBeanName), "group-load-time-max"))
+
+    // even if a window records no new value, the max is the same as the previous window
+    time.sleep(31000)
+    assertEquals(6000.0, server.getAttribute(new ObjectName(mBeanName), "group-load-time-max"))
+
+    assertTrue(server.getAttribute(new ObjectName(mBeanName), "group-load-time-avg").asInstanceOf[Double] >= 0.0)
   }
 }
