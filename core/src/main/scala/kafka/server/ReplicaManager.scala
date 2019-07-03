@@ -951,7 +951,10 @@ class ReplicaManager(val config: KafkaConfig,
           metadata => findPreferredReadReplica(tp, metadata, replicaId, fetchInfo.fetchOffset, fetchTimeMs))
 
         if (preferredReadReplica.isDefined) {
-          debug(s"Replica selector $classOf[replicaSelector] returned ${preferredReadReplica.get} for $clientMetadata")
+          replicaSelectorOpt.foreach{ selector =>
+            debug(s"Replica selector ${selector.getClass.getSimpleName} returned preferred replica " +
+              s"${preferredReadReplica.get} for $clientMetadata")
+          }
           // If a preferred read-replica is set, skip the read
           val offsetSnapshot: LogOffsetSnapshot = partition.fetchOffsetSnapshot(fetchInfo.currentLeaderEpoch, false)
           LogReadResult(info = FetchDataInfo(LogOffsetMetadata.UnknownOffsetMetadata, MemoryRecords.EMPTY),
