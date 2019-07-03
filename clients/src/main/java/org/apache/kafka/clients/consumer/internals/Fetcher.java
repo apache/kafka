@@ -1670,7 +1670,7 @@ public class Fetcher<K, V> implements Closeable {
             String name = "topic." + topic + ".bytes-fetched";
             Sensor bytesFetched = this.metrics.getSensor(name);
             if (bytesFetched == null) {
-                Map<String, String> metricTags = Collections.singletonMap("topic", topic.replace('.', '_'));
+                Map<String, String> metricTags = Collections.singletonMap("topic", topic);
 
                 bytesFetched = this.metrics.sensor(name);
                 bytesFetched.add(this.metrics.metricInstance(metricsRegistry.topicFetchSizeAvg,
@@ -1686,8 +1686,7 @@ public class Fetcher<K, V> implements Closeable {
             name = "topic." + topic + ".records-fetched";
             Sensor recordsFetched = this.metrics.getSensor(name);
             if (recordsFetched == null) {
-                Map<String, String> metricTags = new HashMap<>(1);
-                metricTags.put("topic", topic.replace('.', '_'));
+                Map<String, String> metricTags = Collections.singletonMap("topic", topic);
 
                 recordsFetched = this.metrics.sensor(name);
                 recordsFetched.add(this.metrics.metricInstance(metricsRegistry.topicRecordsPerRequestAvg,
@@ -1720,7 +1719,7 @@ public class Fetcher<K, V> implements Closeable {
             Sensor recordsLead = this.metrics.getSensor(name);
             if (recordsLead == null) {
                 Map<String, String> metricTags = new HashMap<>(2);
-                metricTags.put("topic", tp.topic().replace('.', '_'));
+                metricTags.put("topic", tp.topic());
                 metricTags.put("partition", String.valueOf(tp.partition()));
 
                 recordsLead = this.metrics.sensor(name);
@@ -1739,7 +1738,7 @@ public class Fetcher<K, V> implements Closeable {
             Sensor recordsLag = this.metrics.getSensor(name);
             if (recordsLag == null) {
                 Map<String, String> metricTags = new HashMap<>(2);
-                metricTags.put("topic", tp.topic().replace('.', '_'));
+                metricTags.put("topic", tp.topic());
                 metricTags.put("partition", String.valueOf(tp.partition()));
 
                 recordsLag = this.metrics.sensor(name);
