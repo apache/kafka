@@ -31,6 +31,7 @@ import org.junit.{Before, Test}
 import org.apache.kafka.test.TestUtils.isValidClusterId
 
 import scala.collection.JavaConverters._
+import scala.collection.Seq
 
 class MetadataRequestTest extends BaseRequestTest {
 

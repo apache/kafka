@@ -22,6 +22,7 @@ import org.junit.{After, Before, Test}
 
 import scala.util.Random
 import scala.collection.JavaConverters._
+import scala.collection.Seq
 import org.apache.log4j.{Level, Logger}
 import java.util.Properties
 import java.util.concurrent.ExecutionException

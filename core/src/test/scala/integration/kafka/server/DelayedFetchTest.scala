@@ -18,6 +18,8 @@ package kafka.server
 
 import java.util.Optional
 
+import scala.collection.Seq
+
 import kafka.cluster.Partition
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.FencedLeaderEpochException

@@ -21,6 +21,8 @@ import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, Paths}
 import java.util.Properties
 
+import scala.collection.Seq
+
 import kafka.common.AdminCommandFailedException
 import kafka.network.RequestChannel
 import kafka.security.auth._
@@ -56,7 +58,7 @@ class PreferredReplicaLeaderElectionCommandTest extends ZooKeeperTestHarness wit
         brokerConfigs.foreach(p => p.setProperty("authorizer.class.name", className))
       case None =>
     }
-    createTestTopicAndCluster(topicPartition,brokerConfigs)
+    createTestTopicAndCluster(topicPartition, brokerConfigs)
   }
 
   private def createTestTopicAndCluster(partitionsAndAssignments: Map[TopicPartition, List[Int]],

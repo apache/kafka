@@ -36,6 +36,7 @@ import org.scalatest.Assertions.fail
 
 import scala.collection.JavaConverters._
 import scala.collection.mutable.Buffer
+import scala.collection.Seq
 import scala.concurrent.ExecutionException
 
 class TransactionsTest extends KafkaServerTestHarness {

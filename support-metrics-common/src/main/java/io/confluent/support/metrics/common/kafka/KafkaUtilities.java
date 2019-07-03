@@ -259,7 +259,7 @@ public class KafkaUtilities {
     try {
       Set<String> topics = new HashSet<>();
       topics.add(topic);
-      scala.Option<scala.collection.immutable.Map<Object, Seq<Object>>> partitionAssignmentOption =
+      scala.Option<scala.collection.Map<Object, Seq<Object>>> partitionAssignmentOption =
           zkClient.getPartitionAssignmentForTopics(
               JavaConversions.asScalaSet(topics).<String>toSet()).get(topic);
       if (!partitionAssignmentOption.isEmpty()) {

@@ -32,7 +32,7 @@ import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.common.errors.KafkaStorageException
 
-import scala.collection.{Iterable, immutable, mutable}
+import scala.collection.{Iterable, Seq, immutable, mutable}
 
 private[log] sealed trait LogCleaningState
 private[log] case object LogCleaningInProgress extends LogCleaningState
@@ -356,7 +356,7 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
       val checkpoint = checkpoints(dataDir)
       if (checkpoint != null) {
         try {
-          val existing = checkpoint.read().filterKeys(logs.keys) ++ update
+          val existing = checkpoint.read().filter { case (k, _) => logs.keys.contains(k) } ++ update
           checkpoint.write(existing)
         } catch {
           case e: KafkaStorageException =>
@@ -393,7 +393,7 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
   def handleLogDirFailure(dir: String) {
     info(s"Stopping cleaning logs in dir $dir")
     inLock(lock) {
-      checkpoints = checkpoints.filterKeys(_.getAbsolutePath != dir)
+      checkpoints = checkpoints.filter { case (k, _) => k.getAbsolutePath != dir }
     }
   }
 

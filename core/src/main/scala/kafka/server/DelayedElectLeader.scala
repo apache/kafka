@@ -34,8 +34,8 @@ class DelayedElectLeader(
   responseCallback: Map[TopicPartition, ApiError] => Unit
 ) extends DelayedOperation(delayMs) {
 
-  var waitingPartitions = expectedLeaders
-  val fullResults = results.to[mutable.Set]
+  private var waitingPartitions = expectedLeaders
+  private val fullResults = mutable.Map() ++= results
 
 
   /**
@@ -50,8 +50,8 @@ class DelayedElectLeader(
   override def onComplete(): Unit = {
     // This could be called to force complete, so I need the full list of partitions, so I can time them all out.
     updateWaiting()
-    val timedout = waitingPartitions.map{
-      case (tp, leader) => tp -> new ApiError(Errors.REQUEST_TIMED_OUT, null)
+    val timedout = waitingPartitions.map {
+      case (tp, _) => tp -> new ApiError(Errors.REQUEST_TIMED_OUT, null)
     }.toMap
     responseCallback(timedout ++ fullResults)
   }
@@ -70,7 +70,7 @@ class DelayedElectLeader(
   }
 
   private def updateWaiting() = {
-    waitingPartitions.foreach{case (tp, leader) =>
+    waitingPartitions.foreach { case (tp, leader) =>
       val ps = replicaManager.metadataCache.getPartitionInfo(tp.topic, tp.partition)
       ps match {
         case Some(ps) =>

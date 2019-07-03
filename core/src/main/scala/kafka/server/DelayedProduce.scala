@@ -125,7 +125,7 @@ class DelayedProduce(delayMs: Long,
    * Upon completion, return the current response status along with the error code per partition
    */
   override def onComplete() {
-    val responseStatus = produceMetadata.produceStatus.mapValues(status => status.responseStatus)
+    val responseStatus = produceMetadata.produceStatus.map { case (k, status) => k -> status.responseStatus }
     responseCallback(responseStatus)
   }
 }
