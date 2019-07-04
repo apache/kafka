@@ -31,7 +31,6 @@ import kafka.server.checkpoints.LazyOffsetCheckpoints
 import kafka.server.epoch.util.ReplicaFetcherMockBlockingSend
 import kafka.utils.timer.MockTimer
 import kafka.zk.KafkaZkClient
-import org.I0Itec.zkclient.ZkClient
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record._
@@ -41,7 +40,6 @@ import org.apache.kafka.common.requests.FetchRequest.PartitionData
 import org.apache.kafka.common.requests.FetchResponse.AbortedTransaction
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.common.{Node, TopicPartition}
-import org.apache.zookeeper.data.Stat
 import org.easymock.EasyMock
 import org.junit.Assert._
 import org.junit.{After, Before, Test}
@@ -54,7 +52,6 @@ class ReplicaManagerTest {
   val topic = "test-topic"
   val time = new MockTime
   val metrics = new Metrics
-  var zkClient: ZkClient = _
   var kafkaZkClient: KafkaZkClient = _
 
   // Constants defined for readability
@@ -65,12 +62,9 @@ class ReplicaManagerTest {
 
   @Before
   def setUp() {
-    zkClient = EasyMock.createMock(classOf[ZkClient])
     kafkaZkClient = EasyMock.createMock(classOf[KafkaZkClient])
     EasyMock.expect(kafkaZkClient.getEntityConfigs(EasyMock.anyString(), EasyMock.anyString())).andReturn(new Properties()).anyTimes()
     EasyMock.replay(kafkaZkClient)
-    EasyMock.expect(zkClient.readData(EasyMock.anyString(), EasyMock.anyObject[Stat])).andReturn(null).anyTimes()
-    EasyMock.replay(zkClient)
   }
 
   @After
