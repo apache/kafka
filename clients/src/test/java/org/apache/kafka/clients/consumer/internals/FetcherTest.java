@@ -327,6 +327,7 @@ public class FetcherTest {
 
         fetcher.clearBufferedDataForUnassignedPartitions(newAssignedTopicPartitions);
         assertFalse(fetcher.hasCompletedFetches());
+        assertFalse(fetcher.hasParsedFetchesCache());
     }
 
     @Test
@@ -913,6 +914,7 @@ public class FetcherTest {
 
         Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> fetchedRecords = fetchedRecords();
         assertEquals("Should not return any records when partition is paused", 0, fetchedRecords.size());
+        assertTrue("Should still contain completed fetches", fetcher.hasCompletedFetches());
         assertNull(fetchedRecords.get(tp0));
         assertEquals(0, fetcher.sendFetches());
 
@@ -927,6 +929,7 @@ public class FetcherTest {
         consumerClient.poll(time.timer(0));
         fetchedRecords = fetchedRecords();
         assertEquals("Should not return records after previously paused partitions are fetched", 0, fetchedRecords.size());
+        assertFalse("Should no longer contain completed fetches", fetcher.hasCompletedFetches());
     }
 
     @Test
@@ -955,11 +958,13 @@ public class FetcherTest {
 
         fetchedRecords = fetchedRecords();
         assertEquals("Should return completed fetch for unpaused partitions", 1, fetchedRecords.size());
+        assertTrue("Should still contain completed fetches", fetcher.hasCompletedFetches());
         assertNotNull(fetchedRecords.get(tp1));
         assertNull(fetchedRecords.get(tp0));
 
         fetchedRecords = fetchedRecords();
         assertEquals("Should return no records for remaining paused partition", 0, fetchedRecords.size());
+        assertTrue("Should still contain completed fetches", fetcher.hasCompletedFetches());
     }
 
     @Test
@@ -990,6 +995,46 @@ public class FetcherTest {
 
         fetchedRecords = fetchedRecords();
         assertEquals("Should return no records for all paused partitions", 0, fetchedRecords.size());
+        assertTrue("Should still contain completed fetches", fetcher.hasCompletedFetches());
+    }
+
+    @Test
+    public void testPartialFetchOnParsedFetchCache() {
+        // this test sends creates a completed fetch with 3 records and a max poll of 2 records to assert
+        // that a fetch that must be returned over at least 2 polls can be cached successfully when its partition is
+        // paused, then returned successfully after its been resumed again later
+        buildFetcher(2);
+
+        Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> fetchedRecords;
+
+        assignFromUser(Utils.mkSet(tp0, tp1));
+
+        subscriptions.seek(tp0, 1);
+        assertEquals(1, fetcher.sendFetches());
+        client.prepareResponse(fullFetchResponse(tp0, this.records, Errors.NONE, 100L, 0));
+        consumerClient.poll(time.timer(0));
+
+        fetchedRecords = fetchedRecords();
+
+        assertEquals("Should return 2 records from fetch with 3 records", 2, fetchedRecords.get(tp0).size());
+        assertFalse("Should have no cached parsed fetches", fetcher.hasParsedFetchesCache());
+
+        subscriptions.pause(tp0);
+        consumerClient.poll(time.timer(0));
+
+        fetchedRecords = fetchedRecords();
+
+        assertEquals("Should return no records for paused partitions", 0, fetchedRecords.size());
+        assertTrue("Should have 1 entry in the parsed fetches cache", fetcher.hasParsedFetchesCache());
+
+        subscriptions.resume(tp0);
+
+        consumerClient.poll(time.timer(0));
+
+        fetchedRecords = fetchedRecords();
+
+        assertEquals("Should return last remaining record", 1, fetchedRecords.get(tp0).size());
+        assertFalse("Should have no cached parsed fetches", fetcher.hasParsedFetchesCache());
     }
 
     @Test
