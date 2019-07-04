@@ -227,6 +227,11 @@ public class Fetcher<K, V> implements Closeable {
         return !completedFetches.isEmpty();
     }
 
+    // Visibilty for testing
+    protected boolean hasParsedFetchesCache() {
+        return !parsedFetchesCache.isEmpty();
+    }
+
     /**
      * Set-up a fetch request for any node that we have assigned partitions for which doesn't already have
      * an in-flight fetch or pending fetch data.
@@ -637,7 +642,7 @@ public class Fetcher<K, V> implements Closeable {
             if (fetched.isEmpty())
                 throw e;
         } finally {
-            // add any partitions that were paused back to queues to be reevaluating in the next poll
+            // add any partitions that were paused back to queues to be re-evaluated in the next poll
             completedFetches.addAll(pausedCompletedFetches);
             parsedFetchesCache.addAll(pausedParsedRecordsCache);
         }
@@ -734,11 +739,6 @@ public class Fetcher<K, V> implements Closeable {
                 Long lead = subscriptions.partitionLead(partitionRecords.partition);
                 if (lead != null) {
                     this.sensors.recordPartitionLead(partitionRecords.partition, lead);
-                }
-
-                // TODO: is this necessary?  are metrics still reported if we don't drain?
-                if (partitionRecords.lastRecord == null) {
-                    partitionRecords.drain();
                 }
 
                 return partRecords;
@@ -1110,6 +1110,9 @@ public class Fetcher<K, V> implements Closeable {
         for (CompletedFetch completedFetch : completedFetches) {
             exclude.add(completedFetch.partition);
         }
+        for (PartitionRecords records : parsedFetchesCache) {
+            exclude.add(records.partition);
+        }
         return subscriptions.fetchablePartitions(tp -> !exclude.contains(tp));
     }
 
@@ -1368,18 +1371,31 @@ public class Fetcher<K, V> implements Closeable {
      * @param assignedPartitions  newly assigned {@link TopicPartition}
      */
     public void clearBufferedDataForUnassignedPartitions(Collection<TopicPartition> assignedPartitions) {
-        Iterator<CompletedFetch> itr = completedFetches.iterator();
-        while (itr.hasNext()) {
-            TopicPartition tp = itr.next().partition;
+        Iterator<CompletedFetch> completedFetchesItr = completedFetches.iterator();
+        while (completedFetchesItr.hasNext()) {
+            TopicPartition tp = completedFetchesItr.next().partition;
             if (!assignedPartitions.contains(tp)) {
-                itr.remove();
+                completedFetchesItr.remove();
             }
         }
+
+        Iterator<PartitionRecords> parsedFetchesCacheItr = parsedFetchesCache.iterator();
+        while (parsedFetchesCacheItr.hasNext()) {
+            PartitionRecords records = parsedFetchesCacheItr.next();
+            TopicPartition tp = records.partition;
+            if (!assignedPartitions.contains(tp)) {
+                records.drain();
+                parsedFetchesCacheItr.remove();
+            }
+        }
+
         if (nextInLineRecords != null && !assignedPartitions.contains(nextInLineRecords.partition)) {
             nextInLineRecords.drain();
             nextInLineRecords = null;
         }
     }
+
+
 
     /**
      * Clear the buffered data which are not a part of newly assigned topics
