@@ -3694,6 +3694,37 @@ class LogTest {
   }
 
   @Test
+  def testOffsetSnapshot() {
+    val logConfig = LogTest.createLogConfig(segmentBytes = 1024 * 1024 * 5)
+    val log = createLog(logDir, logConfig)
+
+    // append a few records
+    appendAsFollower(log, MemoryRecords.withRecords(CompressionType.NONE,
+      new SimpleRecord("a".getBytes),
+      new SimpleRecord("b".getBytes),
+      new SimpleRecord("c".getBytes)), 5)
+
+
+    log.highWatermark = 2L
+    var offsets: LogOffsetSnapshot = log.offsetSnapshot
+    assertEquals(offsets.highWatermark.messageOffset, 2L)
+    assertFalse(offsets.highWatermark.messageOffsetOnly)
+
+    offsets = log.offsetSnapshot
+    assertEquals(offsets.highWatermark.messageOffset, 2L)
+    assertFalse(offsets.highWatermark.messageOffsetOnly)
+
+    try {
+      log.highWatermark = 100L
+      offsets = log.offsetSnapshot
+      fail("Should have thrown")
+    } catch {
+      case e: OffsetOutOfRangeException => // pass
+      case _ => fail("Should have seen OffsetOutOfRangeException")
+    }
+  }
+
+  @Test
   def testLastStableOffsetWithMixedProducerData() {
     val logConfig = LogTest.createLogConfig(segmentBytes = 1024 * 1024 * 5)
     val log = createLog(logDir, logConfig)
