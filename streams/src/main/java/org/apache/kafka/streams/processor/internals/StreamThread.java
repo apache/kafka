@@ -818,7 +818,6 @@ public class StreamThread extends Thread {
     // Visible for testing
     void runOnce() {
         final ConsumerRecords<byte[], byte[]> records;
-        log.error("entered run once");
         now = time.milliseconds();
 
         if (state == State.PARTITIONS_ASSIGNED) {

@@ -70,6 +70,8 @@ import org.easymock.EasyMock;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.time.Duration;
@@ -104,6 +106,7 @@ import static org.junit.Assert.fail;
 
 public class StreamThreadTest {
 
+    private static final Logger LOG = LoggerFactory.getLogger(StreamThread.class);
     private final String clientId = "clientId";
     private final String applicationId = "stream-thread-test";
     private final int threadIdx = 1;
@@ -697,48 +700,53 @@ public class StreamThreadTest {
     }
 
     @Test
-    public void shouldNotAccessTaskManagerWhenPendingShutdownInRunOnce() throws InterruptedException {
+    public void shouldNotAccessTaskManagerWhenPendingShutdownInRunOnce() {
         final Consumer<byte[], byte[]> consumer = EasyMock.createNiceMock(Consumer.class);
         final TaskManager taskManager = EasyMock.createNiceMock(TaskManager.class);
-        EasyMock.expect(taskManager.activeTask(new TopicPartition("a", 1))).andReturn(null).times(1);
 
-        EasyMock.expectLastCall();
+        EasyMock.verifyUnexpectedCalls();
         EasyMock.replay(taskManager, consumer);
-        AtomicBoolean runOnceLock = new AtomicBoolean(false);
 
-        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, clientId);
-        final StreamThread thread = new StreamThread(
-            mockTime,
-            config,
-            null,
-            consumer,
-            consumer,
-            null,
-            taskManager,
-            streamsMetrics,
-            internalTopologyBuilder,
-            clientId,
-            new LogContext(""),
-            new AtomicInteger()
-        ).updateThreadMetadata(getSharedAdminClientId(clientId));
-        thread.setStateListener(
+        internalTopologyBuilder.addSource(null, "source1", null, null, null, topic1);
+
+        final StreamThread streamThread = createStreamThread(clientId, new StreamsConfig(configProps(true)), true);
+
+        final Map<TaskId, Set<TopicPartition>> activeTasks = new HashMap<>();
+        final List<TopicPartition> assignedPartitions = new ArrayList<>();
+
+        // assign single partition
+        assignedPartitions.add(t1p1);
+        assignedPartitions.add(t1p2);
+        activeTasks.put(task1, Collections.singleton(t1p1));
+        activeTasks.put(task2, Collections.singleton(t1p2));
+
+        streamThread.taskManager().setAssignmentMetadata(activeTasks, Collections.emptyMap());
+        final MockConsumer<byte[], byte[]> mockConsumer = (MockConsumer<byte[], byte[]>) streamThread.consumer;
+        final Map<TopicPartition, Long> beginOffsets = new HashMap<>();
+        beginOffsets.put(t1p1, 0L);
+        beginOffsets.put(t1p2, 0L);
+        mockConsumer.updateBeginningOffsets(beginOffsets);
+
+        Thread callbackThread = new Thread(() -> {
+            streamThread.rebalanceListener.onPartitionsRevoked(Collections.emptyList());
+            mockConsumer.assignForSubscribed(assignedPartitions);
+            streamThread.rebalanceListener.onPartitionsAssigned(assignedPartitions);
+        });
+
+        streamThread.setStateListener(
             (t, newState, oldState) -> {
-                if (oldState == StreamThread.State.PARTITIONS_REVOKED && newState == StreamThread.State.PARTITIONS_ASSIGNED) {
-//                    thread.shutdown();
-                    thread.runOnce();
-                    runOnceLock.set(true);
-                    notifyAll();
+                LOG.error("see state transition {} to new state {}", oldState, newState);
+               if (oldState == StreamThread.State.CREATED && newState == StreamThread.State.STARTING) {
+                   // Start triggering consumer callbacks to make sure we proceed to PARTITIONS_ASSIGNED stage.
+                   callbackThread.start();
+               } else if (oldState == StreamThread.State.PARTITIONS_REVOKED && newState == StreamThread.State.PARTITIONS_ASSIGNED) {
+                   streamThread.shutdown();
                 }
             });
 
-        int timeoutMs = 10_000;
-        synchronized (this) {
-            while(!runOnceLock.get()) {
-                wait(timeoutMs);
-            }
-        }
+        streamThread.run();
 
-//        EasyMock.verify(taskManager);
+        EasyMock.verify(taskManager);
     }
 
     @Test
