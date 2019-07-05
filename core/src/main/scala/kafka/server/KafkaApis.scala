@@ -62,6 +62,7 @@ import org.apache.kafka.common.message.JoinGroupResponseData
 import org.apache.kafka.common.message.LeaveGroupResponseData
 import org.apache.kafka.common.message.OffsetCommitRequestData
 import org.apache.kafka.common.message.OffsetCommitResponseData
+import org.apache.kafka.common.message.RenewDelegationTokenResponseData
 import org.apache.kafka.common.message.SaslAuthenticateResponseData
 import org.apache.kafka.common.message.SaslHandshakeResponseData
 import org.apache.kafka.common.message.SyncGroupResponseData
@@ -2391,7 +2392,11 @@ class KafkaApis(val requestChannel: RequestChannel,
       trace("Sending renew token response %s for correlation id %d to client %s."
         .format(request.header.correlationId, request.header.clientId))
       sendResponseMaybeThrottle(request, requestThrottleMs =>
-        new RenewDelegationTokenResponse(requestThrottleMs, error, expiryTimestamp))
+        new RenewDelegationTokenResponse(
+             new RenewDelegationTokenResponseData()
+               .setThrottleTimeMs(requestThrottleMs)
+               .setErrorCode(error.code)
+               .setExpiryTimestampMs(expiryTimestamp)))
     }
 
     if (!allowTokenRequests(request))
@@ -2399,8 +2404,8 @@ class KafkaApis(val requestChannel: RequestChannel,
     else {
       tokenManager.renewToken(
         request.session.principal,
-        renewTokenRequest.hmac,
-        renewTokenRequest.renewTimePeriod(),
+        ByteBuffer.wrap(renewTokenRequest.data.hmac),
+        renewTokenRequest.data.renewPeriodMs,
         sendResponseCallback
       )
     }

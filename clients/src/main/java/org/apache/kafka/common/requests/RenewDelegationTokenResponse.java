@@ -16,92 +16,56 @@
  */
 package org.apache.kafka.common.requests;
 
-import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.types.Field;
-import org.apache.kafka.common.protocol.types.Schema;
-import org.apache.kafka.common.protocol.types.Struct;
-
 import java.nio.ByteBuffer;
+import java.util.Collections;
 import java.util.Map;
 
-import static org.apache.kafka.common.protocol.CommonFields.ERROR_CODE;
-import static org.apache.kafka.common.protocol.CommonFields.THROTTLE_TIME_MS;
-import static org.apache.kafka.common.protocol.types.Type.INT64;
+import org.apache.kafka.common.message.RenewDelegationTokenResponseData;
+import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.types.Struct;
 
 public class RenewDelegationTokenResponse extends AbstractResponse {
 
-    private static final String EXPIRY_TIMESTAMP_KEY_NAME = "expiry_timestamp";
+    private final RenewDelegationTokenResponseData data;
 
-    private final Errors error;
-    private final long expiryTimestamp;
-    private final int throttleTimeMs;
-
-    private static final Schema TOKEN_RENEW_RESPONSE_V0 = new Schema(
-            ERROR_CODE,
-            new Field(EXPIRY_TIMESTAMP_KEY_NAME, INT64, "timestamp (in msec) at which this token expires.."),
-            THROTTLE_TIME_MS);
-
-    /**
-     * The version number is bumped to indicate that on quota violation brokers send out responses before throttling.
-     */
-    private static final Schema TOKEN_RENEW_RESPONSE_V1 = TOKEN_RENEW_RESPONSE_V0;
-
-    public RenewDelegationTokenResponse(int throttleTimeMs, Errors error, long expiryTimestamp) {
-        this.throttleTimeMs = throttleTimeMs;
-        this.error = error;
-        this.expiryTimestamp = expiryTimestamp;
+    public RenewDelegationTokenResponse(RenewDelegationTokenResponseData data) {
+        this.data = data;
     }
 
-    public RenewDelegationTokenResponse(int throttleTimeMs, Errors error) {
-        this(throttleTimeMs, error, -1);
-    }
-
-    public RenewDelegationTokenResponse(Struct struct) {
-        error = Errors.forCode(struct.get(ERROR_CODE));
-        expiryTimestamp = struct.getLong(EXPIRY_TIMESTAMP_KEY_NAME);
-        this.throttleTimeMs = struct.getOrElse(THROTTLE_TIME_MS, DEFAULT_THROTTLE_TIME);
+    public RenewDelegationTokenResponse(Struct struct, short version) {
+        data = new RenewDelegationTokenResponseData(struct, version);
     }
 
     public static RenewDelegationTokenResponse parse(ByteBuffer buffer, short version) {
-        return new RenewDelegationTokenResponse(ApiKeys.RENEW_DELEGATION_TOKEN.responseSchema(version).read(buffer));
-    }
-
-    public static Schema[] schemaVersions() {
-        return new Schema[] {TOKEN_RENEW_RESPONSE_V0, TOKEN_RENEW_RESPONSE_V1};
+        return new RenewDelegationTokenResponse(ApiKeys.RENEW_DELEGATION_TOKEN.responseSchema(version).read(buffer), version);
     }
 
     @Override
     public Map<Errors, Integer> errorCounts() {
-        return errorCounts(error);
+        return Collections.singletonMap(error(), 1);
     }
 
     @Override
     protected Struct toStruct(short version) {
-        Struct struct = new Struct(ApiKeys.RENEW_DELEGATION_TOKEN.responseSchema(version));
-
-        struct.set(ERROR_CODE, error.code());
-        struct.set(EXPIRY_TIMESTAMP_KEY_NAME, expiryTimestamp);
-        struct.setIfExists(THROTTLE_TIME_MS, throttleTimeMs);
-
-        return struct;
+        return data.toStruct(version);
     }
 
     @Override
     public int throttleTimeMs() {
-        return throttleTimeMs;
+        return data.throttleTimeMs();
     }
 
     public Errors error() {
-        return error;
+        return Errors.forCode(data.errorCode());
     }
 
     public long expiryTimestamp() {
-        return expiryTimestamp;
+        return data.expiryTimestampMs();
     }
 
     public boolean hasError() {
-        return this.error != Errors.NONE;
+        return error() != Errors.NONE;
     }
 
     @Override

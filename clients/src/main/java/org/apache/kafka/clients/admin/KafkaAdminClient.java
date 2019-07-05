@@ -74,6 +74,7 @@ import org.apache.kafka.common.message.DescribeGroupsResponseData.DescribedGroup
 import org.apache.kafka.common.message.DescribeGroupsResponseData.DescribedGroupMember;
 import org.apache.kafka.common.message.FindCoordinatorRequestData;
 import org.apache.kafka.common.message.MetadataRequestData;
+import org.apache.kafka.common.message.RenewDelegationTokenRequestData;
 import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData;
 import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData.AlterableConfigCollection;
 import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData.AlterableConfig;
@@ -2436,8 +2437,11 @@ public class KafkaAdminClient extends AdminClient {
             new LeastLoadedNodeProvider()) {
 
             @Override
-            AbstractRequest.Builder createRequest(int timeoutMs) {
-                return new RenewDelegationTokenRequest.Builder(hmac, options.renewTimePeriodMs());
+            AbstractRequest.Builder<RenewDelegationTokenRequest> createRequest(int timeoutMs) {
+                return new RenewDelegationTokenRequest.Builder(
+                        new RenewDelegationTokenRequestData()
+                        .setHmac(hmac)
+                        .setRenewPeriodMs(options.renewTimePeriodMs()));
             }
 
             @Override
