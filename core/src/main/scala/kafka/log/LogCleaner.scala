@@ -36,7 +36,7 @@ import org.apache.kafka.common.record._
 import org.apache.kafka.common.utils.Time
 
 import scala.collection.JavaConverters._
-import scala.collection.{Iterable, Set, mutable}
+import scala.collection.{Iterable, Seq, Set, mutable}
 import scala.util.control.ControlThrowable
 
 /**

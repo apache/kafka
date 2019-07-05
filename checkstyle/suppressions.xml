@@ -30,8 +30,6 @@
     <suppress checks="ParameterNumber"
               files="KafkaConsumer.java"/>
     <suppress checks="ParameterNumber"
-              files="ConsumerCoordinator.java"/>
-    <suppress checks="ParameterNumber"
               files="Fetcher.java"/>
     <suppress checks="ParameterNumber"
               files="Sender.java"/>
@@ -64,7 +62,7 @@
 
     <!-- clients tests -->
     <suppress checks="ClassDataAbstractionCoupling"
-              files="(Sender|Fetcher|KafkaConsumer|Metrics|ConsumerCoordinator|RequestResponse|TransactionManager|KafkaAdminClient)Test.java"/>
+              files="(Sender|Fetcher|KafkaConsumer|Metrics|RequestResponse|TransactionManager|KafkaAdminClient)Test.java"/>
 
     <suppress checks="ClassFanOutComplexity"
               files="(ConsumerCoordinator|KafkaConsumer|RequestResponse|Fetcher|KafkaAdminClient)Test.java"/>

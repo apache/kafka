@@ -20,7 +20,7 @@ package kafka.controller
 import kafka.cluster.Broker
 import org.apache.kafka.common.TopicPartition
 
-import scala.collection.{Seq, Set, mutable}
+import scala.collection.{Map, Seq, Set, mutable}
 
 class ControllerContext {
   val stats = new ControllerStats
@@ -113,7 +113,7 @@ class ControllerContext {
 
   def removeLiveBrokers(brokerIds: Set[Int]): Unit = {
     liveBrokers = liveBrokers.filter(broker => !brokerIds.contains(broker.id))
-    liveBrokerEpochs = liveBrokerEpochs.filterKeys(id => !brokerIds.contains(id))
+    liveBrokerEpochs = liveBrokerEpochs.filter { case (id, _) => !brokerIds.contains(id) }
   }
 
   def updateBrokerMetadata(oldMetadata: Broker, newMetadata: Broker): Unit = {

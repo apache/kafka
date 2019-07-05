@@ -135,7 +135,10 @@ class SocketServerTest {
     channel.sendResponse(new RequestChannel.SendResponse(request, send, Some(request.header.toString), None))
   }
 
-  def connect(s: SocketServer = server, listenerName: ListenerName = ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT), localAddr: InetAddress = null, port: Int = 0) = {
+  def connect(s: SocketServer = server,
+              listenerName: ListenerName = ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT),
+              localAddr: InetAddress = null,
+              port: Int = 0) = {
     val socket = new Socket("localhost", s.boundPort(listenerName), localAddr, port)
     sockets += socket
     socket
@@ -191,12 +194,13 @@ class SocketServerTest {
   def testControlPlaneRequest(): Unit = {
     val testProps = new Properties
     testProps ++= props
-    testProps.put("listeners", "PLAINTEXT://localhost:0,CONTROLLER://localhost:5000")
+    testProps.put("listeners", "PLAINTEXT://localhost:0,CONTROLLER://localhost:0")
     testProps.put("listener.security.protocol.map", "PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT")
     testProps.put("control.plane.listener.name", "CONTROLLER")
     val config = KafkaConfig.fromProps(testProps)
     withTestableServer(config, { testableServer =>
-      val socket = connect(testableServer, config.controlPlaneListenerName.get, localAddr = InetAddress.getLocalHost, port = 5000)
+      val socket = connect(testableServer, config.controlPlaneListenerName.get,
+        localAddr = InetAddress.getLocalHost)
       sendAndReceiveControllerRequest(socket, testableServer)
     })
   }
@@ -807,8 +811,7 @@ class SocketServerTest {
     def requestMetricMeters = YammerMetrics
       .defaultRegistry
       .allMetrics.asScala
-      .filterKeys(k => k.getType == "RequestMetrics")
-      .collect { case (k, metric: Meter) => (k.toString, metric.count) }
+      .collect { case (k, metric: Meter) if k.getType == "RequestMetrics" => (k.toString, metric.count) }
 
     assertEquals(nonZeroMeters, requestMetricMeters.filter { case (_, value) => value != 0 })
     server.shutdown()
@@ -822,7 +825,7 @@ class SocketServerTest {
     val nonZeroMetricNamesAndValues = YammerMetrics
       .defaultRegistry
       .allMetrics.asScala
-      .filterKeys(k => k.getName.endsWith("IdlePercent") || k.getName.endsWith("NetworkProcessorAvgIdlePercent"))
+      .filter { case (k, _) => k.getName.endsWith("IdlePercent") || k.getName.endsWith("NetworkProcessorAvgIdlePercent") }
       .collect { case (k, metric: Gauge[_]) => (k, metric.value().asInstanceOf[Double]) }
       .filter { case (_, value) => value != 0.0 && !value.equals(Double.NaN) }
 
@@ -1068,7 +1071,7 @@ class SocketServerTest {
 
       testableSelector.operationCounts.clear()
       testableSelector.addFailure(SelectorOperation.Poll,
-          Some(new RuntimeException("ControlThrowable exception during poll()") with ControlThrowable))
+          Some(new ControlThrowable() {}))
       testableSelector.waitForOperations(SelectorOperation.Poll, 1)
 
       testableSelector.waitForOperations(SelectorOperation.CloseSelector, 1)
@@ -1086,8 +1089,10 @@ class SocketServerTest {
     val errors = new mutable.HashSet[String]
 
     def acceptorStackTraces: scala.collection.Map[Thread, String] = {
-      Thread.getAllStackTraces.asScala.filterKeys(_.getName.contains("kafka-socket-acceptor"))
-        .mapValues(_.toList.mkString("\n"))
+      Thread.getAllStackTraces.asScala.collect {
+        case (thread, stacktraceElement) if thread.getName.contains("kafka-socket-acceptor") =>
+          thread -> stacktraceElement.mkString("\n")
+      }
     }
 
     def acceptorBlocked: Boolean = {
@@ -1247,7 +1252,7 @@ class SocketServerTest {
         extends Selector(config.socketRequestMaxBytes, config.connectionsMaxIdleMs, config.failedAuthenticationDelayMs,
             metrics, time, "socket-server", metricTags.asJava, false, true, channelBuilder, MemoryPool.NONE, new LogContext()) {
 
-    val failures = mutable.Map[SelectorOperation, Exception]()
+    val failures = mutable.Map[SelectorOperation, Throwable]()
     val operationCounts = mutable.Map[SelectorOperation, Int]().withDefaultValue(0)
     val allChannels = mutable.Set[String]()
     val allLocallyClosedChannels = mutable.Set[String]()
@@ -1283,7 +1288,7 @@ class SocketServerTest {
     @volatile var pollTimeoutOverride: Option[Long] = None
     @volatile var pollCallback: () => Unit = () => {}
 
-    def addFailure(operation: SelectorOperation, exception: Option[Exception] = None) {
+    def addFailure(operation: SelectorOperation, exception: Option[Throwable] = None) {
       failures += operation ->
         exception.getOrElse(new IllegalStateException(s"Test exception during $operation"))
     }

@@ -21,6 +21,7 @@ import org.apache.kafka.common.record.BufferSupplier;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.MemoryRecordsBuilder;
+import org.apache.kafka.common.record.MutableRecordBatch;
 import org.apache.kafka.common.record.Record;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.TimestampType;
@@ -50,21 +51,23 @@ import static org.apache.kafka.common.record.RecordBatch.CURRENT_MAGIC_VALUE;
 public class RecordBatchIterationBenchmark {
 
     private final Random random = new Random(0);
-    private final int batchCount = 5000;
-    private final int maxBatchSize = 10;
+    private final int batchCount = 100;
 
     public enum Bytes {
         RANDOM, ONES
     }
 
-    @Param(value = {"LZ4", "SNAPPY", "NONE"})
+    @Param(value = {"10", "50", "200", "500"})
+    private int maxBatchSize = 200;
+
+    @Param(value = {"LZ4", "SNAPPY", "GZIP", "ZSTD", "NONE"})
     private CompressionType compressionType = CompressionType.NONE;
 
     @Param(value = {"1", "2"})
     private byte messageVersion = CURRENT_MAGIC_VALUE;
 
     @Param(value = {"100", "1000", "10000", "100000"})
-    private int messageSize = 100;
+    private int messageSize = 1000;
 
     @Param(value = {"RANDOM", "ONES"})
     private Bytes bytes = Bytes.RANDOM;
@@ -130,6 +133,7 @@ public class RecordBatchIterationBenchmark {
     }
 
     @OperationsPerInvocation(value = batchCount)
+    @Fork(jvmArgsAppend = "-Xmx8g")
     @Benchmark
     public void measureStreamingIteratorForVariableBatchSize(Blackhole bh) throws IOException {
         for (int i = 0; i < batchCount; ++i) {
@@ -142,4 +146,17 @@ public class RecordBatchIterationBenchmark {
         }
     }
 
+    @OperationsPerInvocation(value = batchCount)
+    @Fork(jvmArgsAppend = "-Xmx8g")
+    @Benchmark
+    public void measureSkipIteratorForVariableBatchSize(Blackhole bh) throws IOException {
+        for (int i = 0; i < batchCount; ++i) {
+            for (MutableRecordBatch batch : MemoryRecords.readableRecords(batchBuffers[i].duplicate()).batches()) {
+                try (CloseableIterator<Record> iterator = batch.skipKeyValueIterator(bufferSupplier)) {
+                    while (iterator.hasNext())
+                        bh.consume(iterator.next());
+                }
+            }
+        }
+    }
 }

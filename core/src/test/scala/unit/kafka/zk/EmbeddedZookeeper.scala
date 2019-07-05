@@ -48,7 +48,7 @@ class EmbeddedZookeeper() extends Logging {
   factory.startup(zookeeper)
   val port = zookeeper.getClientPort
 
-  def shutdown() {
+  def shutdown(): Unit = {
     CoreUtils.swallow(zookeeper.shutdown(), this)
     CoreUtils.swallow(factory.shutdown(), this)
 

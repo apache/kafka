@@ -15,6 +15,8 @@ package kafka.api
 import java.io.File
 import java.util.{Locale, Properties}
 
+import scala.collection.Seq
+
 import kafka.server.KafkaConfig
 import kafka.utils.{JaasTestUtils, TestUtils}
 import org.apache.kafka.common.network.ListenerName
@@ -53,7 +55,7 @@ class SaslPlainPlaintextConsumerTest extends BaseConsumerTest with SaslSetup {
   }
 
   /**
-   * Checks that everyone can access ZkUtils.SecureZkRootPaths and ZkUtils.SensitiveZkRootPaths
+   * Checks that everyone can access ZkData.SecureZkRootPaths and ZkData.SensitiveZkRootPaths
    * when zookeeper.set.acl=false, even if ZooKeeper is SASL-enabled.
    */
   @Test

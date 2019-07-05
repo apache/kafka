@@ -376,6 +376,32 @@ public class DefaultRecordBatchTest {
     }
 
     @Test
+    public void testSkipKeyValueIteratorCorrectness() {
+        Header[] headers = {new RecordHeader("k1", "v1".getBytes()), new RecordHeader("k2", "v2".getBytes())};
+
+        MemoryRecords records = MemoryRecords.withRecords(RecordBatch.MAGIC_VALUE_V2, 0L,
+            CompressionType.LZ4, TimestampType.CREATE_TIME,
+            new SimpleRecord(1L, "a".getBytes(), "1".getBytes()),
+            new SimpleRecord(2L, "b".getBytes(), "2".getBytes()),
+            new SimpleRecord(3L, "c".getBytes(), "3".getBytes()),
+            new SimpleRecord(1000L, "abc".getBytes(), "0".getBytes()),
+            new SimpleRecord(9999L, "abc".getBytes(), "0".getBytes(), headers)
+            );
+        DefaultRecordBatch batch = new DefaultRecordBatch(records.buffer());
+        try (CloseableIterator<Record> streamingIterator = batch.skipKeyValueIterator(BufferSupplier.NO_CACHING)) {
+            assertEquals(Arrays.asList(
+                new PartialDefaultRecord(9, (byte) 0, 0L, 1L, -1, 1, 1),
+                new PartialDefaultRecord(9, (byte) 0, 1L, 2L, -1, 1, 1),
+                new PartialDefaultRecord(9, (byte) 0, 2L, 3L, -1, 1, 1),
+                new PartialDefaultRecord(12, (byte) 0, 3L, 1000L, -1, 3, 1),
+                new PartialDefaultRecord(25, (byte) 0, 4L, 9999L, -1, 3, 1)
+                ),
+                Utils.toList(streamingIterator)
+            );
+        }
+    }
+
+    @Test
     public void testIncrementSequence() {
         assertEquals(10, DefaultRecordBatch.incrementSequence(5, 5));
         assertEquals(0, DefaultRecordBatch.incrementSequence(Integer.MAX_VALUE, 1));

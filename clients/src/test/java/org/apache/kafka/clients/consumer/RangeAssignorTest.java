@@ -33,16 +33,15 @@ import static org.junit.Assert.assertTrue;
 public class RangeAssignorTest {
 
     private RangeAssignor assignor = new RangeAssignor();
-
+    private String consumerId = "consumer";
+    private String topic = "topic";
 
     @Test
     public void testOneConsumerNoTopic() {
-        String consumerId = "consumer";
-
         Map<String, Integer> partitionsPerTopic = new HashMap<>();
 
         Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic,
-                Collections.singletonMap(consumerId, new Subscription(Collections.<String>emptyList())));
+                Collections.singletonMap(consumerId, new Subscription(Collections.emptyList())));
 
         assertEquals(Collections.singleton(consumerId), assignment.keySet());
         assertTrue(assignment.get(consumerId).isEmpty());
@@ -50,9 +49,6 @@ public class RangeAssignorTest {
 
     @Test
     public void testOneConsumerNonexistentTopic() {
-        String topic = "topic";
-        String consumerId = "consumer";
-
         Map<String, Integer> partitionsPerTopic = new HashMap<>();
         Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic,
                 Collections.singletonMap(consumerId, new Subscription(topics(topic))));
@@ -62,9 +58,6 @@ public class RangeAssignorTest {
 
     @Test
     public void testOneConsumerOneTopic() {
-        String topic = "topic";
-        String consumerId = "consumer";
-
         Map<String, Integer> partitionsPerTopic = new HashMap<>();
         partitionsPerTopic.put(topic, 3);
 
@@ -77,9 +70,7 @@ public class RangeAssignorTest {
 
     @Test
     public void testOnlyAssignsPartitionsFromSubscribedTopics() {
-        String topic = "topic";
         String otherTopic = "other";
-        String consumerId = "consumer";
 
         Map<String, Integer> partitionsPerTopic = new HashMap<>();
         partitionsPerTopic.put(topic, 3);
@@ -95,7 +86,6 @@ public class RangeAssignorTest {
     public void testOneConsumerMultipleTopics() {
         String topic1 = "topic1";
         String topic2 = "topic2";
-        String consumerId = "consumer";
 
         Map<String, Integer> partitionsPerTopic = new HashMap<>();
         partitionsPerTopic.put(topic1, 1);
@@ -123,7 +113,7 @@ public class RangeAssignorTest {
 
         Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic, consumers);
         assertAssignment(partitions(tp(topic, 0)), assignment.get(consumer1));
-        assertAssignment(Collections.<TopicPartition>emptyList(), assignment.get(consumer2));
+        assertAssignment(Collections.emptyList(), assignment.get(consumer2));
     }
 
 

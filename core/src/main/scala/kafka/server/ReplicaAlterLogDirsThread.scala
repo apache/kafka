@@ -22,7 +22,7 @@ import java.util.Optional
 
 import kafka.api.Request
 import kafka.cluster.BrokerEndPoint
-import kafka.log.{LogAppendInfo, LogOffsetSnapshot}
+import kafka.log.LogAppendInfo
 import kafka.server.AbstractFetcherThread.ResultWithPartitions
 import kafka.server.QuotaFactory.UnboundedQuota
 import org.apache.kafka.common.TopicPartition
@@ -31,7 +31,7 @@ import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record.Records
 import org.apache.kafka.common.requests.EpochEndOffset._
 import org.apache.kafka.common.requests.FetchResponse.PartitionData
-import org.apache.kafka.common.requests.{EpochEndOffset, FetchRequest, FetchResponse}
+import org.apache.kafka.common.requests.{EpochEndOffset, FetchRequest, FetchResponse, FetchMetadata => JFetchMetadata}
 
 import scala.collection.JavaConverters._
 import scala.collection.{Map, Seq, Set, mutable}
@@ -89,7 +89,8 @@ class ReplicaAlterLogDirsThread(name: String,
       request.fetchData.asScala.toSeq,
       UnboundedQuota,
       processResponseCallback,
-      request.isolationLevel)
+      request.isolationLevel,
+      None)
 
     if (partitionData == null)
       throw new IllegalStateException(s"Failed to fetch data for partitions ${request.fetchData.keySet().toArray.mkString(",")}")
@@ -121,18 +122,13 @@ class ReplicaAlterLogDirsThread(name: String,
   }
 
   override protected def fetchEarliestOffsetFromLeader(topicPartition: TopicPartition, leaderEpoch: Int): Long = {
-    val offsetSnapshot = offsetSnapshotFromCurrentReplica(topicPartition, leaderEpoch)
-    offsetSnapshot.logStartOffset
+    val partition = replicaMgr.getPartitionOrException(topicPartition, expectLeader = false)
+    partition.localLogOrException.logStartOffset
   }
 
   override protected def fetchLatestOffsetFromLeader(topicPartition: TopicPartition, leaderEpoch: Int): Long = {
-    val offsetSnapshot = offsetSnapshotFromCurrentReplica(topicPartition, leaderEpoch)
-    offsetSnapshot.logEndOffset.messageOffset
-  }
-
-  private def offsetSnapshotFromCurrentReplica(topicPartition: TopicPartition, leaderEpoch: Int): LogOffsetSnapshot = {
     val partition = replicaMgr.getPartitionOrException(topicPartition, expectLeader = false)
-    partition.fetchOffsetSnapshot(Optional.of[Integer](leaderEpoch), fetchOnlyFromLeader = false)
+    partition.localLogOrException.logEndOffset
   }
 
   /**

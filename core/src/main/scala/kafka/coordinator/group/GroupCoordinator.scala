@@ -557,7 +557,7 @@ class GroupCoordinator(val brokerId: Int,
                              offsetMetadata: immutable.Map[TopicPartition, OffsetAndMetadata],
                              responseCallback: immutable.Map[TopicPartition, Errors] => Unit): Unit = {
     validateGroupStatus(groupId, ApiKeys.TXN_OFFSET_COMMIT) match {
-      case Some(error) => responseCallback(offsetMetadata.mapValues(_ => error))
+      case Some(error) => responseCallback(offsetMetadata.map { case (k, _) => k -> error })
       case None =>
         val group = groupManager.getGroup(groupId).getOrElse {
           groupManager.addGroup(new GroupMetadata(groupId, Empty, time))
@@ -573,7 +573,7 @@ class GroupCoordinator(val brokerId: Int,
                           offsetMetadata: immutable.Map[TopicPartition, OffsetAndMetadata],
                           responseCallback: immutable.Map[TopicPartition, Errors] => Unit) {
     validateGroupStatus(groupId, ApiKeys.OFFSET_COMMIT) match {
-      case Some(error) => responseCallback(offsetMetadata.mapValues(_ => error))
+      case Some(error) => responseCallback(offsetMetadata.map { case (k, _) => k -> error })
       case None =>
         groupManager.getGroup(groupId) match {
           case None =>
@@ -584,7 +584,7 @@ class GroupCoordinator(val brokerId: Int,
                 offsetMetadata, responseCallback)
             } else {
               // or this is a request coming from an older generation. either way, reject the commit
-              responseCallback(offsetMetadata.mapValues(_ => Errors.ILLEGAL_GENERATION))
+              responseCallback(offsetMetadata.map { case (k, _) => k -> Errors.ILLEGAL_GENERATION })
             }
 
           case Some(group) =>
@@ -616,17 +616,17 @@ class GroupCoordinator(val brokerId: Int,
         // from the coordinator metadata; it is likely that the group has migrated to some other
         // coordinator OR the group is in a transient unstable phase. Let the member retry
         // finding the correct coordinator and rejoin.
-        responseCallback(offsetMetadata.mapValues(_ => Errors.COORDINATOR_NOT_AVAILABLE))
+        responseCallback(offsetMetadata.map { case (k, _) => k -> Errors.COORDINATOR_NOT_AVAILABLE })
       } else if (group.isStaticMemberFenced(memberId, groupInstanceId)) {
-        responseCallback(offsetMetadata.mapValues(_ => Errors.FENCED_INSTANCE_ID))
+        responseCallback(offsetMetadata.map { case (k, _) => k -> Errors.FENCED_INSTANCE_ID })
       } else if ((generationId < 0 && group.is(Empty)) || (producerId != NO_PRODUCER_ID)) {
         // The group is only using Kafka to store offsets.
         // Also, for transactional offset commits we don't need to validate group membership and the generation.
         groupManager.storeOffsets(group, memberId, offsetMetadata, responseCallback, producerId, producerEpoch)
       } else if (!group.has(memberId)) {
-        responseCallback(offsetMetadata.mapValues(_ => Errors.UNKNOWN_MEMBER_ID))
+        responseCallback(offsetMetadata.map { case (k, _) => k -> Errors.UNKNOWN_MEMBER_ID })
       } else if (generationId != group.generationId) {
-        responseCallback(offsetMetadata.mapValues(_ => Errors.ILLEGAL_GENERATION))
+        responseCallback(offsetMetadata.map { case (k, _) => k -> Errors.ILLEGAL_GENERATION })
       } else {
         group.currentState match {
           case Stable | PreparingRebalance =>
@@ -641,7 +641,7 @@ class GroupCoordinator(val brokerId: Int,
             // but since the consumer's member.id and generation is valid, it means it has received
             // the latest group generation information from the JoinResponse.
             // So let's return a REBALANCE_IN_PROGRESS to let consumer handle it gracefully.
-            responseCallback(offsetMetadata.mapValues(_ => Errors.REBALANCE_IN_PROGRESS))
+            responseCallback(offsetMetadata.map { case (k, _) => k -> Errors.REBALANCE_IN_PROGRESS })
 
           case _ =>
             throw new RuntimeException(s"Logic error: unexpected group state ${group.currentState}")
