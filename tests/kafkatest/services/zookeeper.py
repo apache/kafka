@@ -159,7 +159,7 @@ class ZookeeperService(KafkaPathResolverMixin, Service):
 
         node = self.nodes[0]
         result = None
-        for line in node.account.ssh_capture(cmd):
+        for line in node.account.ssh_capture(cmd, allow_fail=True):
             # loop through all lines in the output, but only hold on to the first match
             if result is None:
                 match = re.match("^({.+})$", line)
