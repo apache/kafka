@@ -603,15 +603,6 @@ public final class Utils {
     }
 
     /**
-     * Print an error message and shutdown the JVM
-     * @param message The error message
-     */
-    public static void croak(String message) {
-        System.err.println(message);
-        Exit.exit(1);
-    }
-
-    /**
      * Read a buffer into a Byte array for the given offset and length
      */
     public static byte[] readBytes(ByteBuffer buffer, int offset, int length) {
@@ -868,7 +859,6 @@ public final class Utils {
             }
         }
     }
-
 
     /**
      * A cheap way to deterministically convert a number to a positive value. When the input is
