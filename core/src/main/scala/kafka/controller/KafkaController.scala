@@ -388,7 +388,7 @@ class KafkaController(val config: KafkaConfig,
     // 3. check if reassignment of some partitions need to be restarted
     controllerContext.partitionsBeingReassigned.foreach {
       case (tp, context) =>
-        if (reassignmentContext.newReplicas.exists(newBrokersSet.contains))
+        if (context.newReplicas.exists(newBrokersSet.contains))
           onPartitionReassignment(tp, context)
     }
     // 4. check if topic deletion needs to be resumed. If at least one replica that belongs to the topic being deleted exists
