@@ -151,7 +151,7 @@ class ZkNodeChangeNotificationListener(private val zkClient: KafkaZkClient,
     override def handleChildChange(): Unit = addChangeNotification
   }
 
-  object ZkStateChangeHandler extends  StateChangeHandler {
+  object ZkStateChangeHandler extends StateChangeHandler {
     override val name: String = StateChangeHandlers.zkNodeChangeListenerHandler(seqNodeRoot)
     override def afterInitializingSession(): Unit = addChangeNotification
   }

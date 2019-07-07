@@ -40,6 +40,7 @@ class ControllerFailoverTest extends KafkaServerTestHarness with Logging {
   val overridingProps = new Properties()
   val metrics = new Metrics()
   overridingProps.put(KafkaConfig.NumPartitionsProp, numParts.toString)
+  overridingProps.put(KafkaConfig.AutoLeaderRebalanceEnableProp, true.toString)
 
   override def generateConfigs = TestUtils.createBrokerConfigs(numNodes, zkConnect)
     .map(KafkaConfig.fromProps(_, overridingProps))
@@ -81,7 +82,7 @@ class ControllerFailoverTest extends KafkaServerTestHarness with Logging {
     }
     initialController.eventManager.put(illegalStateEvent)
     // Check that we have shutdown the scheduler (via onControllerResigned)
-    TestUtils.waitUntilTrue(() => !initialController.kafkaScheduler.isStarted, "Scheduler was not shutdown")
+    TestUtils.waitUntilTrue(() => !initialController.autoLeaderRebalanceScheduler.isStarted, "Scheduler was not shutdown")
     TestUtils.waitUntilTrue(() => !initialController.isActive, "Controller did not become inactive")
     latch.countDown()
     TestUtils.waitUntilTrue(() => Option(exceptionThrown.get()).isDefined, "handleIllegalState did not throw an exception")
