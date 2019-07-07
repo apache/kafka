@@ -70,8 +70,6 @@ import org.easymock.EasyMock;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.time.Duration;
@@ -84,7 +82,6 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
 import java.util.UUID;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static java.util.Arrays.asList;
@@ -106,7 +103,6 @@ import static org.junit.Assert.fail;
 
 public class StreamThreadTest {
 
-    private static final Logger LOG = LoggerFactory.getLogger(StreamThread.class);
     private final String clientId = "clientId";
     private final String applicationId = "stream-thread-test";
     private final int threadIdx = 1;
@@ -701,13 +697,9 @@ public class StreamThreadTest {
 
     @Test
     public void shouldNotAccessTaskManagerWhenPendingShutdownInRunOnce() {
-        final Consumer<byte[], byte[]> consumer = EasyMock.createNiceMock(Consumer.class);
-        final TaskManager taskManager = EasyMock.createNiceMock(TaskManager.class);
+        final LogCaptureAppender appender = LogCaptureAppender.createAndRegister();
 
-        EasyMock.verifyUnexpectedCalls();
-        EasyMock.replay(taskManager, consumer);
-
-        internalTopologyBuilder.addSource(null, "source1", null, null, null, topic1);
+        internalTopologyBuilder.addSource(null, "source", null, null, null, topic1);
 
         final StreamThread streamThread = createStreamThread(clientId, new StreamsConfig(configProps(true)), true);
 
@@ -727,7 +719,7 @@ public class StreamThreadTest {
         beginOffsets.put(t1p2, 0L);
         mockConsumer.updateBeginningOffsets(beginOffsets);
 
-        Thread callbackThread = new Thread(() -> {
+        final Thread callbackThread = new Thread(() -> {
             streamThread.rebalanceListener.onPartitionsRevoked(Collections.emptyList());
             mockConsumer.assignForSubscribed(assignedPartitions);
             streamThread.rebalanceListener.onPartitionsAssigned(assignedPartitions);
@@ -735,18 +727,24 @@ public class StreamThreadTest {
 
         streamThread.setStateListener(
             (t, newState, oldState) -> {
-                LOG.error("see state transition {} to new state {}", oldState, newState);
-               if (oldState == StreamThread.State.CREATED && newState == StreamThread.State.STARTING) {
-                   // Start triggering consumer callbacks to make sure we proceed to PARTITIONS_ASSIGNED stage.
-                   callbackThread.start();
-               } else if (oldState == StreamThread.State.PARTITIONS_REVOKED && newState == StreamThread.State.PARTITIONS_ASSIGNED) {
-                   streamThread.shutdown();
+                if (oldState == StreamThread.State.CREATED && newState == StreamThread.State.STARTING) {
+                    // Start triggering consumer callbacks to make sure we proceed to PARTITIONS_ASSIGNED stage.
+                    callbackThread.start();
+                } else if (oldState == StreamThread.State.PARTITIONS_REVOKED && newState == StreamThread.State.PARTITIONS_ASSIGNED) {
+                    // Immediately trigger shutdown call to switch the state.
+                    streamThread.shutdown();
                 }
             });
 
         streamThread.run();
 
-        EasyMock.verify(taskManager);
+        LogCaptureAppender.unregister(appender);
+        final List<String> strings = appender.getMessages();
+        assertTrue(strings.contains(
+            "stream-thread [clientId-StreamThread-1] " +
+                "State already transits to PENDING_SHUTDOWN, " +
+                "skipping the run once call after poll request")
+        );
     }
 
     @Test

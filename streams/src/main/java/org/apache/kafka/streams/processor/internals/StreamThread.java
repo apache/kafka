@@ -280,6 +280,7 @@ public class StreamThread extends Thread {
                     log.error("Encountered assignment error during partition assignment: {}. " +
                                   "Will skip the task initialization", streamThread.assignmentErrorCode);
                 } else {
+                    log.debug("Creating tasks based on assignment.");
                     taskManager.createTasks(assignment);
                 }
             } catch (final Throwable t) {
@@ -838,10 +839,10 @@ public class StreamThread extends Thread {
             throw new StreamsException(logPrefix + "Unexpected state " + state + " during normal iteration");
         }
 
-        // We could potentially mutate the state during #pollRequests(), and by moving towards the PENDING_SHUTDOWN,
-        // the task manager internal states could also be cleaned up or uninitialized. It is safe to proceed only when the
-        // thread is still running after #pollRequests(), since from this point no external state mutation could alter
-        // the task manager state.
+        // Shutdown hook could potentially be triggered and transit the thread state to PENDING_SHUTDOWN during #pollRequests().
+        // The task manager internal states could be uninitialized if the state transition happens during #onPartitionAssigned().
+        // Should only proceed when the thread is still running after #pollRequests(), because no external state mutation
+        // could affect the task manager state beyond this point within #runOnce().
         if (!isRunning()) {
             log.warn("State already transits to {}, skipping the run once call after poll request", state);
             return;
@@ -1196,7 +1197,7 @@ public class StreamThread extends Thread {
         // intentionally do not check the returned flag
         setState(State.PENDING_SHUTDOWN);
 
-        log.info("Shutting down");
+        log.info("Shutting down with cleanRun {}", cleanRun);
 
         try {
             taskManager.shutdown(cleanRun);
