@@ -1606,7 +1606,7 @@ public class RequestResponseTest {
     private IncrementalAlterConfigsResponse createIncrementalAlterConfigsResponse() {
         IncrementalAlterConfigsResponseData data = new IncrementalAlterConfigsResponseData();
 
-        data.resources().add(new AlterConfigsResourceResponse()
+        data.responses().add(new AlterConfigsResourceResponse()
                 .setResourceName("testtopic")
                 .setResourceType(ResourceType.TOPIC.code())
                 .setErrorCode(Errors.INVALID_REQUEST.code())

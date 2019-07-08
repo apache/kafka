@@ -80,7 +80,7 @@ public class IncrementalAlterConfigsRequest extends AbstractRequest {
         IncrementalAlterConfigsResponseData response = new IncrementalAlterConfigsResponseData();
         ApiError apiError = ApiError.fromThrowable(e);
         for (AlterConfigsResource resource : data.resources()) {
-            response.resources().add(new AlterConfigsResourceResponse()
+            response.responses().add(new AlterConfigsResourceResponse()
                     .setResourceName(resource.resourceName())
                     .setResourceType(resource.resourceType())
                     .setErrorCode(apiError.error().code())

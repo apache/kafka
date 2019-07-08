@@ -1472,13 +1472,13 @@ public class KafkaAdminClientTest {
 
             //test error scenarios
             IncrementalAlterConfigsResponseData responseData =  new IncrementalAlterConfigsResponseData();
-            responseData.resources().add(new AlterConfigsResourceResponse()
+            responseData.responses().add(new AlterConfigsResourceResponse()
                     .setResourceName("")
                     .setResourceType(ConfigResource.Type.BROKER.id())
                     .setErrorCode(Errors.CLUSTER_AUTHORIZATION_FAILED.code())
                     .setErrorMessage("authorization error"));
 
-            responseData.resources().add(new AlterConfigsResourceResponse()
+            responseData.responses().add(new AlterConfigsResourceResponse()
                     .setResourceName("topic1")
                     .setResourceType(ConfigResource.Type.TOPIC.id())
                     .setErrorCode(Errors.INVALID_REQUEST.code())
@@ -1507,7 +1507,7 @@ public class KafkaAdminClientTest {
 
             // Test a call where there are no errors.
             responseData =  new IncrementalAlterConfigsResponseData();
-            responseData.resources().add(new AlterConfigsResourceResponse()
+            responseData.responses().add(new AlterConfigsResourceResponse()
                     .setResourceName("")
                     .setResourceType(ConfigResource.Type.BROKER.id())
                     .setErrorCode(Errors.NONE.code())
