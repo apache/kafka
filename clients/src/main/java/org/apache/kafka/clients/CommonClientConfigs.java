@@ -115,7 +115,9 @@ public class CommonClientConfigs {
     public static final String MAX_POLL_INTERVAL_MS_DOC = "The maximum delay between invocations of poll() when using " +
             "consumer group management. This places an upper bound on the amount of time that the consumer can be idle " +
             "before fetching more records. If poll() is not called before expiration of this timeout, then the consumer " +
-            "is considered failed and the group will rebalance in order to reassign the partitions to another member. ";
+            "is considered failed and the group will rebalance in order to reassign the partitions to another member. " +
+            "For static members reaching this timeout, the expiration will be <code>max.poll.interval.ms</code> + <code>session.timeout.ms</code> " +
+            "since they do not leave group explicitly, but only stops sending heartbeats until broker expires their sessions.";
 
     public static final String REBALANCE_TIMEOUT_MS_CONFIG = "rebalance.timeout.ms";
     public static final String REBALANCE_TIMEOUT_MS_DOC = "The maximum allowed time for each worker to join the group " +
