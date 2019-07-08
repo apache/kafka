@@ -20,7 +20,9 @@
   // Version 1 adds KAFKA_STORAGE_ERROR as a valid error code.
   //
   // Version 2 is the same as version 1.
-  "validVersions": "0-2",
+  //
+  // Version 3 is the same as version 2.
+  "validVersions": "0-3",
   "fields": [
     { "name": "ErrorCode", "type": "int16", "versions": "0+",
       "about": "The error code, or 0 if there was no error." },
