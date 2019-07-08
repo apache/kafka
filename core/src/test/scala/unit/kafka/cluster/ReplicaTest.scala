@@ -62,16 +62,14 @@ class ReplicaTest {
 
   @Test
   def testSegmentDeletionWithHighWatermarkInitialization(): Unit = {
-    val initialHighWatermark = 25L
-    log.highWatermark = initialHighWatermark
-
-    assertEquals(initialHighWatermark, log.highWatermark)
-
     val expiredTimestamp = time.milliseconds() - 1000
     for (i <- 0 until 100) {
       val records = TestUtils.singletonRecords(value = s"test$i".getBytes, timestamp = expiredTimestamp)
       log.appendAsLeader(records, leaderEpoch = 0)
     }
+
+    val initialHighWatermark = log.updateHighWatermark(25L)
+    assertEquals(25L, initialHighWatermark)
 
     val initialNumSegments = log.numberOfSegments
     log.deleteOldSegments()
@@ -94,7 +92,7 @@ class ReplicaTest {
     assertEquals(100L, log.logEndOffset)
 
     for (hw <- 0 to 100) {
-      log.highWatermark = hw
+      log.updateHighWatermark(hw)
       assertEquals(hw, log.highWatermark)
       log.deleteOldSegments()
       assertTrue(log.logStartOffset <= hw)
@@ -123,7 +121,7 @@ class ReplicaTest {
       log.appendAsLeader(records, leaderEpoch = 0)
     }
 
-    log.highWatermark = 25L
+    log.updateHighWatermark(25L)
     log.maybeIncrementLogStartOffset(26L)
   }
 }
