@@ -264,7 +264,6 @@
 
     <subpackage name="processor">
       <subpackage name="internals">
-        <allow pkg="org.I0Itec.zkclient" />
         <allow pkg="com.fasterxml.jackson" />
         <allow pkg="org.apache.zookeeper" />
         <allow pkg="org.apache.zookeeper" />

@@ -248,7 +248,7 @@ public final class WorkerUtils {
      * @throws RuntimeException  If one or more topics have different number of partitions than
      * described in 'topicsInfo'
      */
-    private static void verifyTopics(
+    static void verifyTopics(
         Logger log, AdminClient adminClient,
         Collection<String> topicsToVerify, Map<String, NewTopic> topicsInfo, int retryCount, long retryBackoffMs) throws Throwable {
 
@@ -279,9 +279,13 @@ public final class WorkerUtils {
                 DescribeTopicsResult topicsResult = adminClient.describeTopics(
                         topicsToVerify, new DescribeTopicsOptions().timeoutMs(ADMIN_REQUEST_TIMEOUT));
                 return topicsResult.all().get();
-            } catch (UnknownTopicOrPartitionException exception) {
-                lastException = exception;
-                Thread.sleep(retryBackoffMs);
+            } catch (ExecutionException exception) {
+                if (exception.getCause() instanceof UnknownTopicOrPartitionException) {
+                    lastException = (UnknownTopicOrPartitionException) exception.getCause();
+                    Thread.sleep(retryBackoffMs);
+                } else {
+                    throw exception;
+                }
             }
         }
         throw lastException;

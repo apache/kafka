@@ -135,7 +135,10 @@ class SocketServerTest {
     channel.sendResponse(new RequestChannel.SendResponse(request, send, Some(request.header.toString), None))
   }
 
-  def connect(s: SocketServer = server, listenerName: ListenerName = ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT), localAddr: InetAddress = null, port: Int = 0) = {
+  def connect(s: SocketServer = server,
+              listenerName: ListenerName = ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT),
+              localAddr: InetAddress = null,
+              port: Int = 0) = {
     val socket = new Socket("localhost", s.boundPort(listenerName), localAddr, port)
     sockets += socket
     socket
@@ -191,12 +194,13 @@ class SocketServerTest {
   def testControlPlaneRequest(): Unit = {
     val testProps = new Properties
     testProps ++= props
-    testProps.put("listeners", "PLAINTEXT://localhost:0,CONTROLLER://localhost:5000")
+    testProps.put("listeners", "PLAINTEXT://localhost:0,CONTROLLER://localhost:0")
     testProps.put("listener.security.protocol.map", "PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT")
     testProps.put("control.plane.listener.name", "CONTROLLER")
     val config = KafkaConfig.fromProps(testProps)
     withTestableServer(config, { testableServer =>
-      val socket = connect(testableServer, config.controlPlaneListenerName.get, localAddr = InetAddress.getLocalHost, port = 5000)
+      val socket = connect(testableServer, config.controlPlaneListenerName.get,
+        localAddr = InetAddress.getLocalHost)
       sendAndReceiveControllerRequest(socket, testableServer)
     })
   }
