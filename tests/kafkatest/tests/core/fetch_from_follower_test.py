@@ -128,3 +128,5 @@ class FetchFromFollowerTest(ProduceConsumeValidateTest):
         # Validate consumed messages
         self.stop_producer_and_consumer()
         self.validate()
+
+        assert False, "Failing just to get debug logs on all runs"

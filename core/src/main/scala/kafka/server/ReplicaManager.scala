@@ -968,6 +968,7 @@ class ReplicaManager(val config: KafkaConfig,
             preferredReadReplica = preferredReadReplica,
             exception = None)
         } else {
+          debug(s"No preferred replica for $clientMetadata")
           // Try the read first, this tells us whether we need all of adjustedFetchSize for this partition
           val readInfo: LogReadInfo = partition.readRecords(
             fetchOffset = fetchInfo.fetchOffset,
@@ -1096,6 +1097,10 @@ class ReplicaManager(val config: KafkaConfig,
 
             val partitionInfo = new DefaultPartitionView(replicaInfoSet.asJava, leaderReplica)
             replicaSelector.select(tp, clientMetadata, partitionInfo).asScala
+              .map(rv => {
+                debug(s"Selected $rv in ${replicaSelectorOpt.get.getClass.getSimpleName}")
+                rv
+              })
               .filter(!_.endpoint.isEmpty)
               // Even though the replica selector can return the leader, we don't want to send it out with the
               // FetchResponse, so we exclude it here
