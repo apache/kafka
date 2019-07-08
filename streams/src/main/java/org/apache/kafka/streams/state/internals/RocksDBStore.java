@@ -375,16 +375,17 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]> {
         open = false;
         closeOpenIterators();
         dbAccessor.close();
+        db.close();
         userSpecifiedOptions.close();
         wOptions.close();
         fOptions.close();
-        db.close();
         filter.close();
 
         dbAccessor = null;
         userSpecifiedOptions = null;
         wOptions = null;
         fOptions = null;
+        filter = null;
         db = null;
     }
 
