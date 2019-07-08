@@ -60,22 +60,17 @@ class FetchFromFollowerTest(ProduceConsumeValidateTest):
                                           "configs": {"min.insync.replicas": 1}},
                                   },
                                   server_prop_overides=[
-                                      ["broker.rack", "rack-a"],
                                       ["replica.selector.class", self.RACK_AWARE_REPLICA_SELECTOR]
                                   ],
                                   per_node_server_prop_overrides={
-                                      2: [("broker.rack", "rack-b")]
+                                      1: [("broker.rack", "rack-a")],
+                                      2: [("broker.rack", "rack-b")],
+                                      3: [("broker.rack", "rack-c")]
                                   })
 
         self.producer_throughput = 1000
         self.num_producers = 1
         self.num_consumers = 1
-        self.producer = VerifiableProducer(self.test_context, self.num_producers, self.kafka, self.topic,
-                                           throughput=self.producer_throughput)
-        self.consumer = ConsoleConsumer(self.test_context, self.num_consumers, self.kafka, self.topic,
-                                        client_id="console-consumer", group_id="test-consumer-group-1",
-                                        consumer_timeout_ms=60000, message_validator=is_int,
-                                        consumer_properties={"client.rack": "rack-b", "metadata.max.age.ms": "3000"})
 
     def min_cluster_size(self):
         return super(FetchFromFollowerTest, self).min_cluster_size() + self.num_producers * 2 + self.num_consumers * 2
@@ -93,6 +88,20 @@ class FetchFromFollowerTest(ProduceConsumeValidateTest):
         producing some records, we verify that the client has been informed of the preferred replica and that all the
         records are properly consumed.
         """
+
+        # Find the leader, configure consumer to be on a different rack
+        leader_node = self.kafka.leader(self.topic, 0)
+        leader_idx = self.kafka.idx(leader_node)
+        non_leader_idx = 2 if leader_idx != 2 else 1
+        non_leader_rack = "rack-b" if leader_idx != 2 else "rack-a"
+
+
+        self.producer = VerifiableProducer(self.test_context, self.num_producers, self.kafka, self.topic,
+                                           throughput=self.producer_throughput)
+        self.consumer = ConsoleConsumer(self.test_context, self.num_consumers, self.kafka, self.topic,
+                                        client_id="console-consumer", group_id="test-consumer-group-1",
+                                        consumer_timeout_ms=60000, message_validator=is_int,
+                                        consumer_properties={"client.rack": non_leader_rack, "metadata.max.age.ms": "3000"})
 
         # Start up and let some data get produced
         self.start_producer_and_consumer()
@@ -122,8 +131,11 @@ class FetchFromFollowerTest(ProduceConsumeValidateTest):
 
         self.logger.debug("Saw the following preferred read replicas %s",
                           dict(all_captured_preferred_read_replicas.items()))
-        assert all_captured_preferred_read_replicas[2] > 0, "Expected to see broker 2 (rack-b) as a preferred replica"
-        assert all_captured_preferred_read_replicas[1] == 0, "Did not expect to see broker 1 as a preferred replica"
+        for idx in (1, 2, 3):
+            if idx == non_leader_idx:
+                assert all_captured_preferred_read_replicas[idx] > 0, "Expected to see broker %d (%s) as a preferred replica" % (idx, non_leader_rack)
+            elif idx != leader_idx:
+                assert all_captured_preferred_read_replicas[idx] == 0, "Did not expect to see broker %d as a preferred replic" % idx
 
         # Validate consumed messages
         self.stop_producer_and_consumer()
