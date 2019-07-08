@@ -52,7 +52,7 @@ class LogOffsetTest extends BaseRequestTest {
 
   @deprecated("ListOffsetsRequest V0", since = "")
   @Test
-  def testGetOffsetsForUnknownTopic() {
+  def testGetOffsetsForUnknownTopic(): Unit = {
     val topicPartition = new TopicPartition("foo", 0)
     val request = ListOffsetRequest.Builder.forConsumer(false, IsolationLevel.READ_UNCOMMITTED)
       .setTargetTimes(Map(topicPartition ->
@@ -63,7 +63,7 @@ class LogOffsetTest extends BaseRequestTest {
 
   @deprecated("ListOffsetsRequest V0", since = "")
   @Test
-  def testGetOffsetsAfterDeleteRecords() {
+  def testGetOffsetsAfterDeleteRecords(): Unit = {
     val topic = "kafka-"
     val topicPartition = new TopicPartition(topic, 0)
 
@@ -96,7 +96,7 @@ class LogOffsetTest extends BaseRequestTest {
   }
 
   @Test
-  def testGetOffsetsBeforeLatestTime() {
+  def testGetOffsetsBeforeLatestTime(): Unit = {
     val topic = "kafka-"
     val topicPartition = new TopicPartition(topic, 0)
 
@@ -131,7 +131,7 @@ class LogOffsetTest extends BaseRequestTest {
   }
 
   @Test
-  def testEmptyLogsGetOffsets() {
+  def testEmptyLogsGetOffsets(): Unit = {
     val random = new Random
     val topic = "kafka-"
     val topicPartition = new TopicPartition(topic, random.nextInt(10))
@@ -156,7 +156,7 @@ class LogOffsetTest extends BaseRequestTest {
 
   @deprecated("legacyFetchOffsetsBefore", since = "")
   @Test
-  def testGetOffsetsBeforeNow() {
+  def testGetOffsetsBeforeNow(): Unit = {
     val random = new Random
     val topic = "kafka-"
     val topicPartition = new TopicPartition(topic, random.nextInt(3))
@@ -186,7 +186,7 @@ class LogOffsetTest extends BaseRequestTest {
 
   @deprecated("legacyFetchOffsetsBefore", since = "")
   @Test
-  def testGetOffsetsBeforeEarliestTime() {
+  def testGetOffsetsBeforeEarliestTime(): Unit = {
     val random = new Random
     val topic = "kafka-"
     val topicPartition = new TopicPartition(topic, random.nextInt(3))
@@ -215,7 +215,7 @@ class LogOffsetTest extends BaseRequestTest {
   /* We test that `fetchOffsetsBefore` works correctly if `LogSegment.size` changes after each invocation (simulating
    * a race condition) */
   @Test
-  def testFetchOffsetsBeforeWithChangingSegmentSize() {
+  def testFetchOffsetsBeforeWithChangingSegmentSize(): Unit = {
     val log: Log = EasyMock.niceMock(classOf[Log])
     val logSegment: LogSegment = EasyMock.niceMock(classOf[LogSegment])
     EasyMock.expect(logSegment.size).andStubAnswer(new IAnswer[Int] {
@@ -232,7 +232,7 @@ class LogOffsetTest extends BaseRequestTest {
   /* We test that `fetchOffsetsBefore` works correctly if `Log.logSegments` content and size are
    * different (simulating a race condition) */
   @Test
-  def testFetchOffsetsBeforeWithChangingSegments() {
+  def testFetchOffsetsBeforeWithChangingSegments(): Unit = {
     val log: Log = EasyMock.niceMock(classOf[Log])
     val logSegment: LogSegment = EasyMock.niceMock(classOf[LogSegment])
     EasyMock.expect(log.logSegments).andStubAnswer {

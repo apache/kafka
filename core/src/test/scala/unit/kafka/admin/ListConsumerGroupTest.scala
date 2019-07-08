@@ -23,7 +23,7 @@ import kafka.utils.TestUtils
 class ListConsumerGroupTest extends ConsumerGroupCommandTest {
 
   @Test
-  def testListConsumerGroups() {
+  def testListConsumerGroups(): Unit = {
     val simpleGroup = "simple-group"
     addSimpleGroupExecutor(group = simpleGroup)
     addConsumerGroupExecutor(numConsumers = 1)
@@ -40,7 +40,7 @@ class ListConsumerGroupTest extends ConsumerGroupCommandTest {
   }
 
   @Test(expected = classOf[OptionException])
-  def testListWithUnrecognizedNewConsumerOption() {
+  def testListWithUnrecognizedNewConsumerOption(): Unit = {
     val cgcArgs = Array("--new-consumer", "--bootstrap-server", brokerList, "--list")
     getConsumerGroupService(cgcArgs)
   }

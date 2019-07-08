@@ -274,11 +274,11 @@ class TransactionCoordinator(brokerId: Int,
     }
   }
 
-  def handleTxnImmigration(txnTopicPartitionId: Int, coordinatorEpoch: Int) {
+  def handleTxnImmigration(txnTopicPartitionId: Int, coordinatorEpoch: Int): Unit = {
     txnManager.loadTransactionsForTxnTopicPartition(txnTopicPartitionId, coordinatorEpoch, txnMarkerChannelManager.addTxnMarkersToSend)
   }
 
-  def handleTxnEmigration(txnTopicPartitionId: Int, coordinatorEpoch: Int) {
+  def handleTxnEmigration(txnTopicPartitionId: Int, coordinatorEpoch: Int): Unit = {
       txnManager.removeTransactionsForTxnTopicPartition(txnTopicPartitionId, coordinatorEpoch)
       txnMarkerChannelManager.removeMarkersForTxnTopicPartition(txnTopicPartitionId)
   }
@@ -493,7 +493,7 @@ class TransactionCoordinator(brokerId: Int,
   /**
    * Startup logic executed at the same time when the server starts up.
    */
-  def startup(enableTransactionalIdExpiration: Boolean = true) {
+  def startup(enableTransactionalIdExpiration: Boolean = true): Unit = {
     info("Starting up.")
     scheduler.startup()
     scheduler.schedule("transaction-abort",
@@ -513,7 +513,7 @@ class TransactionCoordinator(brokerId: Int,
    * Shutdown logic executed at the same time when server shuts down.
    * Ordering of actions should be reversed from the startup process.
    */
-  def shutdown() {
+  def shutdown(): Unit = {
     info("Shutting down.")
     isActive.set(false)
     scheduler.shutdown()

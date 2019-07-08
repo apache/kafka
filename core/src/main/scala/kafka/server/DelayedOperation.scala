@@ -329,7 +329,7 @@ final class DelayedOperationPurgatory[T <: DelayedOperation](purgatoryName: Stri
    * Return the watch list of the given key, note that we need to
    * grab the removeWatchersLock to avoid the operation being added to a removed watcher list
    */
-  private def watchForOperation(key: Any, operation: T) {
+  private def watchForOperation(key: Any, operation: T): Unit = {
     val wl = watcherList(key)
     inLock(wl.watchersLock) {
       val watcher = wl.watchersByKey.getAndMaybePut(key)
@@ -340,7 +340,7 @@ final class DelayedOperationPurgatory[T <: DelayedOperation](purgatoryName: Stri
   /*
    * Remove the key from watcher lists if its list is empty
    */
-  private def removeKeyIfEmpty(key: Any, watchers: Watchers) {
+  private def removeKeyIfEmpty(key: Any, watchers: Watchers): Unit = {
     val wl = watcherList(key)
     inLock(wl.watchersLock) {
       // if the current key is no longer correlated to the watchers to remove, skip
@@ -356,7 +356,7 @@ final class DelayedOperationPurgatory[T <: DelayedOperation](purgatoryName: Stri
   /**
    * Shutdown the expire reaper thread
    */
-  def shutdown() {
+  def shutdown(): Unit = {
     if (reaperEnabled)
       expirationReaper.shutdown()
     timeoutTimer.shutdown()
@@ -374,7 +374,7 @@ final class DelayedOperationPurgatory[T <: DelayedOperation](purgatoryName: Stri
     def isEmpty: Boolean = operations.isEmpty
 
     // add the element to watch
-    def watch(t: T) {
+    def watch(t: T): Unit = {
       operations.add(t)
     }
 
@@ -432,7 +432,7 @@ final class DelayedOperationPurgatory[T <: DelayedOperation](purgatoryName: Stri
     }
   }
 
-  def advanceClock(timeoutMs: Long) {
+  def advanceClock(timeoutMs: Long): Unit = {
     timeoutTimer.advanceClock(timeoutMs)
 
     // Trigger a purge if the number of completed but still being watched operations is larger than
@@ -458,7 +458,7 @@ final class DelayedOperationPurgatory[T <: DelayedOperation](purgatoryName: Stri
     "ExpirationReaper-%d-%s".format(brokerId, purgatoryName),
     false) {
 
-    override def doWork() {
+    override def doWork(): Unit = {
       advanceClock(200L)
     }
   }

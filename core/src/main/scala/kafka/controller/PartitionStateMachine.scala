@@ -34,7 +34,7 @@ abstract class PartitionStateMachine(controllerContext: ControllerContext) exten
   /**
    * Invoked on successful controller election.
    */
-  def startup() {
+  def startup(): Unit = {
     info("Initializing partition state")
     initializePartitionState()
     info("Triggering online partition state changes")
@@ -45,7 +45,7 @@ abstract class PartitionStateMachine(controllerContext: ControllerContext) exten
   /**
    * Invoked on controller shutdown.
    */
-  def shutdown() {
+  def shutdown(): Unit = {
     info("Stopped partition state machine")
   }
 
@@ -79,7 +79,7 @@ abstract class PartitionStateMachine(controllerContext: ControllerContext) exten
    * Invoked on startup of the partition's state machine to set the initial state for all existing partitions in
    * zookeeper
    */
-  private def initializePartitionState() {
+  private def initializePartitionState(): Unit = {
     for (topicPartition <- controllerContext.allPartitions) {
       // check if leader and isr path exists for partition. If not, then it is in NEW state
       controllerContext.partitionLeadershipInfo.get(topicPartition) match {

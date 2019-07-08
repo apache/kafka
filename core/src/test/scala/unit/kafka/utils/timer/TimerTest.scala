@@ -39,7 +39,7 @@ class TimerTest {
   private[this] var timer: Timer = null
 
   @Before
-  def setup() {
+  def setup(): Unit = {
     timer = new SystemTimer("test", tickMs = 1, wheelSize = 3)
   }
 

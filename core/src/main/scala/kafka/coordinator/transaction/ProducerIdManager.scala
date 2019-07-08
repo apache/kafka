@@ -150,7 +150,7 @@ class ProducerIdManager(val brokerId: Int, val zkClient: KafkaZkClient) extends 
     }
   }
 
-  def shutdown() {
+  def shutdown(): Unit = {
     info(s"Shutdown complete: last producerId assigned $nextProducerId")
   }
 }

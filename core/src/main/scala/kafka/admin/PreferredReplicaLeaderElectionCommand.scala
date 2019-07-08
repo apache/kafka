@@ -105,7 +105,7 @@ object PreferredReplicaLeaderElectionCommand extends Logging {
   }
 
   def writePreferredReplicaElectionData(zkClient: KafkaZkClient,
-                                        partitionsUndergoingPreferredReplicaElection: Set[TopicPartition]) {
+                                        partitionsUndergoingPreferredReplicaElection: Set[TopicPartition]): Unit = {
     try {
       zkClient.createPreferredReplicaElection(partitionsUndergoingPreferredReplicaElection.toSet)
       println("Created preferred replica election path with %s".format(partitionsUndergoingPreferredReplicaElection.mkString(",")))
@@ -169,7 +169,7 @@ object PreferredReplicaLeaderElectionCommand extends Logging {
     val time = Time.SYSTEM
     zkClient = KafkaZkClient(zkConnect, isSecure, timeout, timeout, Int.MaxValue, time)
 
-    override def electPreferredLeaders(partitionsFromUser: Option[Set[TopicPartition]]) {
+    override def electPreferredLeaders(partitionsFromUser: Option[Set[TopicPartition]]): Unit = {
       try {
         val topics =
           partitionsFromUser match {

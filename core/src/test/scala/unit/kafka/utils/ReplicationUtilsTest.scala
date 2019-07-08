@@ -37,7 +37,7 @@ class ReplicationUtilsTest extends ZooKeeperTestHarness {
   private val isr = List(1, 2)
 
   @Before
-  override def setUp() {
+  override def setUp(): Unit = {
     super.setUp()
     zkClient.makeSurePersistentPathExists(TopicZNode.path(topic))
     val topicPartition = new TopicPartition(topic, partition)
@@ -47,7 +47,7 @@ class ReplicationUtilsTest extends ZooKeeperTestHarness {
   }
 
   @Test
-  def testUpdateLeaderAndIsr() {
+  def testUpdateLeaderAndIsr(): Unit = {
     val configs = TestUtils.createBrokerConfigs(1, zkConnect).map(KafkaConfig.fromProps)
     val log: Log = EasyMock.createMock(classOf[Log])
     EasyMock.expect(log.logEndOffset).andReturn(20).anyTimes()

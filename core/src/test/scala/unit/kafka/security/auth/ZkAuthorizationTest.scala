@@ -44,7 +44,7 @@ class ZkAuthorizationTest extends ZooKeeperTestHarness with Logging {
   val authProvider = "zookeeper.authProvider.1"
 
   @Before
-  override def setUp() {
+  override def setUp(): Unit = {
     System.setProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM, jaasFile.getAbsolutePath)
     Configuration.setConfiguration(null)
     System.setProperty(authProvider, "org.apache.zookeeper.server.auth.SASLAuthenticationProvider")
@@ -52,7 +52,7 @@ class ZkAuthorizationTest extends ZooKeeperTestHarness with Logging {
   }
 
   @After
-  override def tearDown() {
+  override def tearDown(): Unit = {
     super.tearDown()
     System.clearProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM)
     System.clearProperty(authProvider)

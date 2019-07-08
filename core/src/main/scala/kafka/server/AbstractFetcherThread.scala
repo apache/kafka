@@ -97,7 +97,7 @@ abstract class AbstractFetcherThread(name: String,
 
   protected def isOffsetForLeaderEpochSupported: Boolean
 
-  override def shutdown() {
+  override def shutdown(): Unit = {
     initiateShutdown()
     inLock(partitionMapLock) {
       partitionMapCond.signalAll()
@@ -109,7 +109,7 @@ abstract class AbstractFetcherThread(name: String,
     fetcherLagStats.unregister()
   }
 
-  override def doWork() {
+  override def doWork(): Unit = {
     maybeTruncate()
     maybeFetch()
   }
@@ -135,7 +135,7 @@ abstract class AbstractFetcherThread(name: String,
   }
 
   // deal with partitions with errors, potentially due to leadership changes
-  private def handlePartitionsWithErrors(partitions: Iterable[TopicPartition], methodName: String) {
+  private def handlePartitionsWithErrors(partitions: Iterable[TopicPartition], methodName: String): Unit = {
     if (partitions.nonEmpty) {
       debug(s"Handling errors in $methodName for partitions $partitions")
       delayPartitions(partitions, fetchBackOffMs)
@@ -383,7 +383,7 @@ abstract class AbstractFetcherThread(name: String,
     }
   }
 
-  def markPartitionsForTruncation(topicPartition: TopicPartition, truncationOffset: Long) {
+  def markPartitionsForTruncation(topicPartition: TopicPartition, truncationOffset: Long): Unit = {
     partitionMapLock.lockInterruptibly()
     try {
       Option(partitionStates.stateValue(topicPartition)).foreach { state =>
@@ -405,7 +405,7 @@ abstract class AbstractFetcherThread(name: String,
   }
 
 
-  def addPartitions(initialFetchStates: Map[TopicPartition, OffsetAndEpoch]) {
+  def addPartitions(initialFetchStates: Map[TopicPartition, OffsetAndEpoch]): Unit = {
     partitionMapLock.lockInterruptibly()
     try {
       initialFetchStates.foreach { case (tp, initialFetchState) =>
@@ -433,7 +433,7 @@ abstract class AbstractFetcherThread(name: String,
     *
     * @param fetchOffsets the partitions to update fetch offset and maybe mark truncation complete
     */
-  private def updateFetchOffsetAndMaybeMarkTruncationComplete(fetchOffsets: Map[TopicPartition, OffsetTruncationState]) {
+  private def updateFetchOffsetAndMaybeMarkTruncationComplete(fetchOffsets: Map[TopicPartition, OffsetTruncationState]): Unit = {
     val newStates: Map[TopicPartition, PartitionFetchState] = partitionStates.partitionStates.asScala
       .map { state =>
         val currentFetchState = state.value
@@ -606,7 +606,7 @@ abstract class AbstractFetcherThread(name: String,
     }
   }
 
-  def delayPartitions(partitions: Iterable[TopicPartition], delay: Long) {
+  def delayPartitions(partitions: Iterable[TopicPartition], delay: Long): Unit = {
     partitionMapLock.lockInterruptibly()
     try {
       for (partition <- partitions) {
@@ -621,7 +621,7 @@ abstract class AbstractFetcherThread(name: String,
     } finally partitionMapLock.unlock()
   }
 
-  def removePartitions(topicPartitions: Set[TopicPartition]) {
+  def removePartitions(topicPartitions: Set[TopicPartition]): Unit = {
     partitionMapLock.lockInterruptibly()
     try {
       topicPartitions.foreach { topicPartition =>
@@ -690,13 +690,13 @@ class FetcherLagMetrics(metricId: ClientIdTopicPartition) extends KafkaMetricsGr
     tags
   )
 
-  def lag_=(newLag: Long) {
+  def lag_=(newLag: Long): Unit = {
     lagVal.set(newLag)
   }
 
   def lag = lagVal.get
 
-  def unregister() {
+  def unregister(): Unit = {
     removeMetric(FetcherMetrics.ConsumerLag, tags)
   }
 }
@@ -717,12 +717,12 @@ class FetcherLagStats(metricId: ClientIdAndBroker) {
       false
   }
 
-  def unregister(topicPartition: TopicPartition) {
+  def unregister(topicPartition: TopicPartition): Unit = {
     val lagMetrics = stats.remove(ClientIdTopicPartition(metricId.clientId, topicPartition))
     if (lagMetrics != null) lagMetrics.unregister()
   }
 
-  def unregister() {
+  def unregister(): Unit = {
     stats.keys.toBuffer.foreach { key: ClientIdTopicPartition =>
       unregister(key.topicPartition)
     }
@@ -738,7 +738,7 @@ class FetcherStats(metricId: ClientIdAndBroker) extends KafkaMetricsGroup {
 
   val byteRate = newMeter(FetcherMetrics.BytesPerSec, "bytes", TimeUnit.SECONDS, tags)
 
-  def unregister() {
+  def unregister(): Unit = {
     removeMetric(FetcherMetrics.RequestsPerSec, tags)
     removeMetric(FetcherMetrics.BytesPerSec, tags)
   }

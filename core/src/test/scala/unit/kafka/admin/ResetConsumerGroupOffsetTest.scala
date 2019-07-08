@@ -31,7 +31,7 @@ import org.junit.Test
 class TimeConversionTests {
 
   @Test
-  def testDateTimeFormats() {
+  def testDateTimeFormats(): Unit = {
     //check valid formats
     invokeGetDateTimeMethod(new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS"))
     invokeGetDateTimeMethod(new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSZ"))
@@ -55,7 +55,7 @@ class TimeConversionTests {
     }
   }
 
-  private def invokeGetDateTimeMethod(format: SimpleDateFormat) {
+  private def invokeGetDateTimeMethod(format: SimpleDateFormat): Unit = {
     val checkpoint = new Date()
     val timestampString = format.format(checkpoint)
     ConsumerGroupCommand.convertTimestamp(timestampString)
@@ -104,7 +104,7 @@ class ResetConsumerGroupOffsetTest extends ConsumerGroupCommandTest {
   }
 
   @Test
-  def testResetOffsetsNotExistingGroup() {
+  def testResetOffsetsNotExistingGroup(): Unit = {
     val group = "missing.group"
     val args = buildArgsForGroup(group, "--all-topics", "--to-current", "--execute")
     val consumerGroupCommand = getConsumerGroupService(args)
@@ -178,7 +178,7 @@ class ResetConsumerGroupOffsetTest extends ConsumerGroupCommandTest {
   }
 
   @Test
-  def testResetOffsetsToLocalDateTime() {
+  def testResetOffsetsToLocalDateTime(): Unit = {
     val format = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS")
     val calendar = Calendar.getInstance()
     calendar.add(Calendar.DATE, -1)
@@ -194,7 +194,7 @@ class ResetConsumerGroupOffsetTest extends ConsumerGroupCommandTest {
   }
 
   @Test
-  def testResetOffsetsToZonedDateTime() {
+  def testResetOffsetsToZonedDateTime(): Unit = {
     val format = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSXXX")
 
     produceMessages(topic, 50)
@@ -210,28 +210,28 @@ class ResetConsumerGroupOffsetTest extends ConsumerGroupCommandTest {
   }
 
   @Test
-  def testResetOffsetsByDuration() {
+  def testResetOffsetsByDuration(): Unit = {
     val args = buildArgsForGroup(group, "--all-topics", "--by-duration", "PT1M", "--execute")
     produceConsumeAndShutdown(topic, group, totalMessages = 100)
     resetAndAssertOffsets(args, expectedOffset = 0)
   }
 
   @Test
-  def testResetOffsetsByDurationToEarliest() {
+  def testResetOffsetsByDurationToEarliest(): Unit = {
     val args = buildArgsForGroup(group, "--all-topics", "--by-duration", "PT0.1S", "--execute")
     produceConsumeAndShutdown(topic, group, totalMessages = 100)
     resetAndAssertOffsets(args, expectedOffset = 100)
   }
 
   @Test
-  def testResetOffsetsToEarliest() {
+  def testResetOffsetsToEarliest(): Unit = {
     val args = buildArgsForGroup(group, "--all-topics", "--to-earliest", "--execute")
     produceConsumeAndShutdown(topic, group, totalMessages = 100)
     resetAndAssertOffsets(args, expectedOffset = 0)
   }
 
   @Test
-  def testResetOffsetsToLatest() {
+  def testResetOffsetsToLatest(): Unit = {
     val args = buildArgsForGroup(group, "--all-topics", "--to-latest", "--execute")
     produceConsumeAndShutdown(topic, group, totalMessages = 100)
     produceMessages(topic, 100)
@@ -239,7 +239,7 @@ class ResetConsumerGroupOffsetTest extends ConsumerGroupCommandTest {
   }
 
   @Test
-  def testResetOffsetsToCurrentOffset() {
+  def testResetOffsetsToCurrentOffset(): Unit = {
     val args = buildArgsForGroup(group, "--all-topics", "--to-current", "--execute")
     produceConsumeAndShutdown(topic, group, totalMessages = 100)
     produceMessages(topic, 100)
@@ -247,14 +247,14 @@ class ResetConsumerGroupOffsetTest extends ConsumerGroupCommandTest {
   }
 
   @Test
-  def testResetOffsetsToSpecificOffset() {
+  def testResetOffsetsToSpecificOffset(): Unit = {
     val args = buildArgsForGroup(group, "--all-topics", "--to-offset", "1", "--execute")
     produceConsumeAndShutdown(topic, group, totalMessages = 100)
     resetAndAssertOffsets(args, expectedOffset = 1)
   }
 
   @Test
-  def testResetOffsetsShiftPlus() {
+  def testResetOffsetsShiftPlus(): Unit = {
     val args = buildArgsForGroup(group, "--all-topics", "--shift-by", "50", "--execute")
     produceConsumeAndShutdown(topic, group, totalMessages = 100)
     produceMessages(topic, 100)
@@ -262,7 +262,7 @@ class ResetConsumerGroupOffsetTest extends ConsumerGroupCommandTest {
   }
 
   @Test
-  def testResetOffsetsShiftMinus() {
+  def testResetOffsetsShiftMinus(): Unit = {
     val args = buildArgsForGroup(group, "--all-topics", "--shift-by", "-50", "--execute")
     produceConsumeAndShutdown(topic, group, totalMessages = 100)
     produceMessages(topic, 100)
@@ -270,7 +270,7 @@ class ResetConsumerGroupOffsetTest extends ConsumerGroupCommandTest {
   }
 
   @Test
-  def testResetOffsetsShiftByLowerThanEarliest() {
+  def testResetOffsetsShiftByLowerThanEarliest(): Unit = {
     val args = buildArgsForGroup(group, "--all-topics", "--shift-by", "-150", "--execute")
     produceConsumeAndShutdown(topic, group, totalMessages = 100)
     produceMessages(topic, 100)
@@ -278,7 +278,7 @@ class ResetConsumerGroupOffsetTest extends ConsumerGroupCommandTest {
   }
 
   @Test
-  def testResetOffsetsShiftByHigherThanLatest() {
+  def testResetOffsetsShiftByHigherThanLatest(): Unit = {
     val args = buildArgsForGroup(group, "--all-topics", "--shift-by", "150", "--execute")
     produceConsumeAndShutdown(topic, group, totalMessages = 100)
     produceMessages(topic, 100)
@@ -286,14 +286,14 @@ class ResetConsumerGroupOffsetTest extends ConsumerGroupCommandTest {
   }
 
   @Test
-  def testResetOffsetsToEarliestOnOneTopic() {
+  def testResetOffsetsToEarliestOnOneTopic(): Unit = {
     val args = buildArgsForGroup(group, "--topic", topic, "--to-earliest", "--execute")
     produceConsumeAndShutdown(topic, group, totalMessages = 100)
     resetAndAssertOffsets(args, expectedOffset = 0)
   }
 
   @Test
-  def testResetOffsetsToEarliestOnOneTopicAndPartition() {
+  def testResetOffsetsToEarliestOnOneTopicAndPartition(): Unit = {
     val topic = "bar"
     createTopic(topic, 2, 1)
 
@@ -312,7 +312,7 @@ class ResetConsumerGroupOffsetTest extends ConsumerGroupCommandTest {
   }
 
   @Test
-  def testResetOffsetsToEarliestOnTopics() {
+  def testResetOffsetsToEarliestOnTopics(): Unit = {
     val topic1 = "topic1"
     val topic2 = "topic2"
     createTopic(topic1, 1, 1)
@@ -337,7 +337,7 @@ class ResetConsumerGroupOffsetTest extends ConsumerGroupCommandTest {
   }
 
   @Test
-  def testResetOffsetsToEarliestOnTopicsAndPartitions() {
+  def testResetOffsetsToEarliestOnTopicsAndPartitions(): Unit = {
     val topic1 = "topic1"
     val topic2 = "topic2"
 
@@ -367,7 +367,7 @@ class ResetConsumerGroupOffsetTest extends ConsumerGroupCommandTest {
 
   @Test
   // This one deals with old CSV export/import format for a single --group arg: "topic,partition,offset" to support old behavior
-  def testResetOffsetsExportImportPlanSingleGroupArg() {
+  def testResetOffsetsExportImportPlanSingleGroupArg(): Unit = {
     val topic = "bar"
     val tp0 = new TopicPartition(topic, 0)
     val tp1 = new TopicPartition(topic, 1)
@@ -398,7 +398,7 @@ class ResetConsumerGroupOffsetTest extends ConsumerGroupCommandTest {
   @Test
   // This one deals with universal CSV export/import file format "group,topic,partition,offset",
   // supporting multiple --group args or --all-groups arg
-  def testResetOffsetsExportImportPlan() {
+  def testResetOffsetsExportImportPlan(): Unit = {
     val group1 = group + "1"
     val group2 = group + "2"
     val topic1 = "bar1"
@@ -443,7 +443,7 @@ class ResetConsumerGroupOffsetTest extends ConsumerGroupCommandTest {
   }
 
   @Test(expected = classOf[OptionException])
-  def testResetWithUnrecognizedNewConsumerOption() {
+  def testResetWithUnrecognizedNewConsumerOption(): Unit = {
     val cgcArgs = Array("--new-consumer", "--bootstrap-server", brokerList, "--reset-offsets", "--group", group, "--all-topics",
       "--to-offset", "2", "--export")
     getConsumerGroupService(cgcArgs)
@@ -455,7 +455,7 @@ class ResetConsumerGroupOffsetTest extends ConsumerGroupCommandTest {
     TestUtils.produceMessages(servers, records, acks = 1)
   }
 
-  private def produceConsumeAndShutdown(topic: String, group: String, totalMessages: Int, numConsumers: Int = 1) {
+  private def produceConsumeAndShutdown(topic: String, group: String, totalMessages: Int, numConsumers: Int = 1): Unit = {
     produceMessages(topic, totalMessages)
     val executor = addConsumerGroupExecutor(numConsumers = numConsumers, topic = topic, group = group)
     awaitConsumerProgress(topic, group, totalMessages)

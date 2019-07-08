@@ -44,7 +44,7 @@ class SaslMultiMechanismConsumerTest extends BaseConsumerTest with SaslSetup {
   }
 
   @Test
-  def testMultipleBrokerMechanisms() {
+  def testMultipleBrokerMechanisms(): Unit = {
     val plainSaslProducer = createProducer()
     val plainSaslConsumer = createConsumer()
 

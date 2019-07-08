@@ -66,7 +66,7 @@ class GroupCoordinatorConcurrencyTest extends AbstractCoordinatorConcurrencyTest
   var groupCoordinator: GroupCoordinator = _
 
   @Before
-  override def setUp() {
+  override def setUp(): Unit = {
     super.setUp()
 
     EasyMock.expect(zkClient.getTopicPartitionCount(Topic.GROUP_METADATA_TOPIC_NAME))
@@ -88,7 +88,7 @@ class GroupCoordinatorConcurrencyTest extends AbstractCoordinatorConcurrencyTest
   }
 
   @After
-  override def tearDown() {
+  override def tearDown(): Unit = {
     try {
       if (groupCoordinator != null)
         groupCoordinator.shutdown()
@@ -104,17 +104,17 @@ class GroupCoordinatorConcurrencyTest extends AbstractCoordinatorConcurrencyTest
   }
 
   @Test
-  def testConcurrentGoodPathSequence() {
+  def testConcurrentGoodPathSequence(): Unit = {
     verifyConcurrentOperations(createGroupMembers, allOperations)
   }
 
   @Test
-  def testConcurrentTxnGoodPathSequence() {
+  def testConcurrentTxnGoodPathSequence(): Unit = {
     verifyConcurrentOperations(createGroupMembers, allOperationsWithTxn)
   }
 
   @Test
-  def testConcurrentRandomSequence() {
+  def testConcurrentRandomSequence(): Unit = {
     verifyConcurrentRandomSequences(createGroupMembers, allOperationsWithTxn)
   }
 

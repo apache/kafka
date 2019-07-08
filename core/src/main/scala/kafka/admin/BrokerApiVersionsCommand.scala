@@ -92,7 +92,7 @@ object BrokerApiVersionsCommand {
     options = parser.parse(args : _*)
     checkArgs()
 
-    def checkArgs() {
+    def checkArgs(): Unit = {
       CommandLineUtils.printHelpAndExitIfNeeded(this, "This tool helps to retrieve broker version information.")
       // check required args
       CommandLineUtils.checkRequiredArgs(parser, options, bootstrapServerOpt)
@@ -111,7 +111,7 @@ object BrokerApiVersionsCommand {
     val pendingFutures = new ConcurrentLinkedQueue[RequestFuture[ClientResponse]]()
 
     val networkThread = new KafkaThread("admin-client-network-thread", new Runnable {
-      override def run() {
+      override def run(): Unit = {
         try {
           while (running)
             client.poll(time.timer(Long.MaxValue))
@@ -169,7 +169,7 @@ object BrokerApiVersionsCommand {
     /**
      * Wait until there is a non-empty list of brokers in the cluster.
      */
-    def awaitBrokers() {
+    def awaitBrokers(): Unit = {
       var nodes = List[Node]()
       do {
         nodes = findAllBrokers()
@@ -192,7 +192,7 @@ object BrokerApiVersionsCommand {
         broker -> Try[NodeApiVersions](new NodeApiVersions(getApiVersions(broker).asJava))
       }.toMap
 
-    def close() {
+    def close(): Unit = {
       running = false
       try {
         client.close()

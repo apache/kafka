@@ -51,7 +51,7 @@ class ConsumerGroupCommandTest extends KafkaServerTestHarness {
   }
 
   @Before
-  override def setUp() {
+  override def setUp(): Unit = {
     super.setUp()
     createTopic(topic, 1, 1)
   }
@@ -130,7 +130,7 @@ object ConsumerGroupCommandTest {
 
     def subscribe(): Unit
 
-    def run() {
+    def run(): Unit = {
       try {
         subscribe()
         while (true)
@@ -142,7 +142,7 @@ object ConsumerGroupCommandTest {
       }
     }
 
-    def shutdown() {
+    def shutdown(): Unit = {
       consumer.wakeup()
     }
   }
@@ -172,12 +172,12 @@ object ConsumerGroupCommandTest {
     private val executor: ExecutorService = Executors.newFixedThreadPool(numThreads)
     private val consumers = new ArrayBuffer[AbstractConsumerRunnable]()
 
-    def submit(consumerThread: AbstractConsumerRunnable) {
+    def submit(consumerThread: AbstractConsumerRunnable): Unit = {
       consumers += consumerThread
       executor.submit(consumerThread)
     }
 
-    def shutdown() {
+    def shutdown(): Unit = {
       consumers.foreach(_.shutdown())
       executor.shutdown()
       executor.awaitTermination(5000, TimeUnit.MILLISECONDS)

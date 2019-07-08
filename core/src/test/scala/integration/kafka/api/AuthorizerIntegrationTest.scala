@@ -255,7 +255,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   )
 
   @Before
-  override def setUp() {
+  override def setUp(): Unit = {
     doSetup(createOffsetsTopic = false)
 
     addAndVerifyAcls(Set(new Acl(userPrincipal, Allow, Acl.WildCardHost, ClusterAction)), Resource.ClusterResource)
@@ -481,7 +481,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   ).build()
 
   @Test
-  def testAuthorizationWithTopicExisting() {
+  def testAuthorizationWithTopicExisting(): Unit = {
     val requestKeyToRequest = mutable.LinkedHashMap[ApiKeys, AbstractRequest](
       ApiKeys.METADATA -> createMetadataRequest(allowAutoTopicCreation = true),
       ApiKeys.PRODUCE -> createProduceRequest,
@@ -542,7 +542,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
    * even if the topic doesn't exist, request APIs should not leak the topic name
    */
   @Test
-  def testAuthorizationWithTopicNotExisting() {
+  def testAuthorizationWithTopicNotExisting(): Unit = {
     adminZkClient.deleteTopic(topic)
     TestUtils.verifyTopicDeletion(zkClient, topic, 1, servers)
     adminZkClient.deleteTopic(deleteTopic)
@@ -586,7 +586,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   }
 
   @Test
-  def testCreateTopicAuthorizationWithClusterCreate() {
+  def testCreateTopicAuthorizationWithClusterCreate(): Unit = {
     removeAllAcls()
     val resources = Set[ResourceType](Topic)
 
@@ -598,7 +598,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   }
 
   @Test
-  def testFetchFollowerRequest() {
+  def testFetchFollowerRequest(): Unit = {
     val key = ApiKeys.FETCH
     val request = createFetchFollowerRequest
 
@@ -633,7 +633,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   }
 
   @Test
-  def testProduceWithNoTopicAccess() {
+  def testProduceWithNoTopicAccess(): Unit = {
     try {
       val producer = createProducer()
       sendRecords(producer, numRecords, tp)
@@ -644,7 +644,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   }
 
   @Test
-  def testProduceWithTopicDescribe() {
+  def testProduceWithTopicDescribe(): Unit = {
     addAndVerifyAcls(Set(new Acl(userPrincipal, Allow, Acl.WildCardHost, Describe)), topicResource)
     try {
       val producer = createProducer()
@@ -657,7 +657,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   }
 
   @Test
-  def testProduceWithTopicRead() {
+  def testProduceWithTopicRead(): Unit = {
     addAndVerifyAcls(Set(new Acl(userPrincipal, Allow, Acl.WildCardHost, Read)), topicResource)
     try {
       val producer = createProducer()
@@ -670,23 +670,23 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   }
 
   @Test
-  def testProduceWithTopicWrite() {
+  def testProduceWithTopicWrite(): Unit = {
     addAndVerifyAcls(Set(new Acl(userPrincipal, Allow, Acl.WildCardHost, Write)), topicResource)
     val producer = createProducer()
     sendRecords(producer, numRecords, tp)
   }
 
   @Test
-  def testCreatePermissionOnTopicToWriteToNonExistentTopic() {
+  def testCreatePermissionOnTopicToWriteToNonExistentTopic(): Unit = {
     testCreatePermissionNeededToWriteToNonExistentTopic(Topic)
   }
 
   @Test
-  def testCreatePermissionOnClusterToWriteToNonExistentTopic() {
+  def testCreatePermissionOnClusterToWriteToNonExistentTopic(): Unit = {
     testCreatePermissionNeededToWriteToNonExistentTopic(Cluster)
   }
 
-  private def testCreatePermissionNeededToWriteToNonExistentTopic(resType: ResourceType) {
+  private def testCreatePermissionNeededToWriteToNonExistentTopic(resType: ResourceType): Unit = {
     val topicPartition = new TopicPartition(createTopic, 0)
     val newTopicResource = Resource(Topic, createTopic, LITERAL)
     addAndVerifyAcls(Set(new Acl(userPrincipal, Allow, Acl.WildCardHost, Write)), newTopicResource)
@@ -754,7 +754,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   }
 
   @Test(expected = classOf[KafkaException])
-  def testConsumeWithoutTopicDescribeAccess() {
+  def testConsumeWithoutTopicDescribeAccess(): Unit = {
     addAndVerifyAcls(Set(new Acl(userPrincipal, Allow, Acl.WildCardHost, Write)), topicResource)
     val producer = createProducer()
     sendRecords(producer, 1, tp)
@@ -770,7 +770,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   }
 
   @Test
-  def testConsumeWithTopicDescribe() {
+  def testConsumeWithTopicDescribe(): Unit = {
     addAndVerifyAcls(Set(new Acl(userPrincipal, Allow, Acl.WildCardHost, Write)), topicResource)
     val producer = createProducer()
     sendRecords(producer, 1, tp)
@@ -789,7 +789,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   }
 
   @Test
-  def testConsumeWithTopicWrite() {
+  def testConsumeWithTopicWrite(): Unit = {
     addAndVerifyAcls(Set(new Acl(userPrincipal, Allow, Acl.WildCardHost, Write)), topicResource)
     val producer = createProducer()
     sendRecords(producer, 1, tp)
@@ -809,7 +809,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   }
 
   @Test
-  def testConsumeWithTopicAndGroupRead() {
+  def testConsumeWithTopicAndGroupRead(): Unit = {
     addAndVerifyAcls(Set(new Acl(userPrincipal, Allow, Acl.WildCardHost, Write)), topicResource)
     val producer = createProducer()
     sendRecords(producer, 1, tp)
@@ -824,7 +824,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   }
 
   @Test
-  def testPatternSubscriptionWithNoTopicAccess() {
+  def testPatternSubscriptionWithNoTopicAccess(): Unit = {
     addAndVerifyAcls(Set(new Acl(userPrincipal, Allow, Acl.WildCardHost, Write)), topicResource)
     val producer = createProducer()
     sendRecords(producer, 1, tp)
@@ -839,7 +839,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   }
 
   @Test
-  def testPatternSubscriptionWithTopicDescribeOnlyAndGroupRead() {
+  def testPatternSubscriptionWithTopicDescribeOnlyAndGroupRead(): Unit = {
     addAndVerifyAcls(Set(new Acl(userPrincipal, Allow, Acl.WildCardHost, Write)), topicResource)
     val producer = createProducer()
     sendRecords(producer, 1, tp)
@@ -858,7 +858,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   }
 
   @Test
-  def testPatternSubscriptionWithTopicAndGroupRead() {
+  def testPatternSubscriptionWithTopicAndGroupRead(): Unit = {
     addAndVerifyAcls(Set(new Acl(userPrincipal, Allow, Acl.WildCardHost, Write)), topicResource)
     val producer = createProducer()
     sendRecords(producer, 1, tp)
@@ -887,7 +887,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   }
 
   @Test
-  def testPatternSubscriptionMatchingInternalTopic() {
+  def testPatternSubscriptionMatchingInternalTopic(): Unit = {
     addAndVerifyAcls(Set(new Acl(userPrincipal, Allow, Acl.WildCardHost, Write)), topicResource)
     val producer = createProducer()
     sendRecords(producer, 1, tp)
@@ -912,7 +912,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   }
 
   @Test
-  def testPatternSubscriptionMatchingInternalTopicWithDescribeOnlyPermission() {
+  def testPatternSubscriptionMatchingInternalTopicWithDescribeOnlyPermission(): Unit = {
     addAndVerifyAcls(Set(new Acl(userPrincipal, Allow, Acl.WildCardHost, Write)), topicResource)
     val producer = createProducer()
     sendRecords(producer, 1, tp)
@@ -937,7 +937,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   }
 
   @Test
-  def testPatternSubscriptionNotMatchingInternalTopic() {
+  def testPatternSubscriptionNotMatchingInternalTopic(): Unit = {
     addAndVerifyAcls(Set(new Acl(userPrincipal, Allow, Acl.WildCardHost, Write)), topicResource)
     val producer = createProducer()
     sendRecords(producer, 1, tp)
@@ -955,20 +955,20 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
 }
 
   @Test
-  def testCreatePermissionOnTopicToReadFromNonExistentTopic() {
+  def testCreatePermissionOnTopicToReadFromNonExistentTopic(): Unit = {
     testCreatePermissionNeededToReadFromNonExistentTopic("newTopic",
       Set(new Acl(userPrincipal, Allow, Acl.WildCardHost, Create)),
       Topic)
   }
 
   @Test
-  def testCreatePermissionOnClusterToReadFromNonExistentTopic() {
+  def testCreatePermissionOnClusterToReadFromNonExistentTopic(): Unit = {
     testCreatePermissionNeededToReadFromNonExistentTopic("newTopic",
       Set(new Acl(userPrincipal, Allow, Acl.WildCardHost, Create)),
       Cluster)
   }
 
-  private def testCreatePermissionNeededToReadFromNonExistentTopic(newTopic: String, acls: Set[Acl], resType: ResourceType) {
+  private def testCreatePermissionNeededToReadFromNonExistentTopic(newTopic: String, acls: Set[Acl], resType: ResourceType): Unit = {
     val topicPartition = new TopicPartition(newTopic, 0)
     val newTopicResource = Resource(Topic, newTopic, LITERAL)
     addAndVerifyAcls(Set(new Acl(userPrincipal, Allow, Acl.WildCardHost, Read)), newTopicResource)
@@ -990,7 +990,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   }
 
   @Test
-  def testCreatePermissionMetadataRequestAutoCreate() {
+  def testCreatePermissionMetadataRequestAutoCreate(): Unit = {
     val readAcls = topicReadAcl.get(topicResource).get
     addAndVerifyAcls(readAcls, topicResource)
     assertTrue(zkClient.topicExists(topicResource.name))
@@ -1015,20 +1015,20 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   }
 
   @Test(expected = classOf[AuthorizationException])
-  def testCommitWithNoAccess() {
+  def testCommitWithNoAccess(): Unit = {
     val consumer = createConsumer()
     consumer.commitSync(Map(tp -> new OffsetAndMetadata(5)).asJava)
   }
 
   @Test(expected = classOf[KafkaException])
-  def testCommitWithNoTopicAccess() {
+  def testCommitWithNoTopicAccess(): Unit = {
     addAndVerifyAcls(Set(new Acl(userPrincipal, Allow, Acl.WildCardHost, Read)), groupResource)
     val consumer = createConsumer()
     consumer.commitSync(Map(tp -> new OffsetAndMetadata(5)).asJava)
   }
 
   @Test(expected = classOf[TopicAuthorizationException])
-  def testCommitWithTopicWrite() {
+  def testCommitWithTopicWrite(): Unit = {
     addAndVerifyAcls(Set(new Acl(userPrincipal, Allow, Acl.WildCardHost, Read)), groupResource)
     addAndVerifyAcls(Set(new Acl(userPrincipal, Allow, Acl.WildCardHost, Write)), topicResource)
     val consumer = createConsumer()
@@ -1036,7 +1036,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   }
 
   @Test(expected = classOf[TopicAuthorizationException])
-  def testCommitWithTopicDescribe() {
+  def testCommitWithTopicDescribe(): Unit = {
     addAndVerifyAcls(Set(new Acl(userPrincipal, Allow, Acl.WildCardHost, Read)), groupResource)
     addAndVerifyAcls(Set(new Acl(userPrincipal, Allow, Acl.WildCardHost, Describe)), topicResource)
     val consumer = createConsumer()
@@ -1044,14 +1044,14 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   }
 
   @Test(expected = classOf[GroupAuthorizationException])
-  def testCommitWithNoGroupAccess() {
+  def testCommitWithNoGroupAccess(): Unit = {
     addAndVerifyAcls(Set(new Acl(userPrincipal, Allow, Acl.WildCardHost, Read)), topicResource)
     val consumer = createConsumer()
     consumer.commitSync(Map(tp -> new OffsetAndMetadata(5)).asJava)
   }
 
   @Test
-  def testCommitWithTopicAndGroupRead() {
+  def testCommitWithTopicAndGroupRead(): Unit = {
     addAndVerifyAcls(Set(new Acl(userPrincipal, Allow, Acl.WildCardHost, Read)), groupResource)
     addAndVerifyAcls(Set(new Acl(userPrincipal, Allow, Acl.WildCardHost, Read)), topicResource)
     val consumer = createConsumer()
@@ -1059,14 +1059,14 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   }
 
   @Test(expected = classOf[AuthorizationException])
-  def testOffsetFetchWithNoAccess() {
+  def testOffsetFetchWithNoAccess(): Unit = {
     val consumer = createConsumer()
     consumer.assign(List(tp).asJava)
     consumer.position(tp)
   }
 
   @Test(expected = classOf[GroupAuthorizationException])
-  def testOffsetFetchWithNoGroupAccess() {
+  def testOffsetFetchWithNoGroupAccess(): Unit = {
     addAndVerifyAcls(Set(new Acl(userPrincipal, Allow, Acl.WildCardHost, Read)), topicResource)
     val consumer = createConsumer()
     consumer.assign(List(tp).asJava)
@@ -1074,7 +1074,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   }
 
   @Test(expected = classOf[KafkaException])
-  def testOffsetFetchWithNoTopicAccess() {
+  def testOffsetFetchWithNoTopicAccess(): Unit = {
     addAndVerifyAcls(Set(new Acl(userPrincipal, Allow, Acl.WildCardHost, Read)), groupResource)
     val consumer = createConsumer()
     consumer.assign(List(tp).asJava)
@@ -1082,7 +1082,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   }
 
   @Test
-  def testFetchAllOffsetsTopicAuthorization() {
+  def testFetchAllOffsetsTopicAuthorization(): Unit = {
     val offset = 15L
     addAndVerifyAcls(Set(new Acl(userPrincipal, Allow, Acl.WildCardHost, Read)), groupResource)
     addAndVerifyAcls(Set(new Acl(userPrincipal, Allow, Acl.WildCardHost, Read)), topicResource)
@@ -1111,7 +1111,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   }
 
   @Test
-  def testOffsetFetchTopicDescribe() {
+  def testOffsetFetchTopicDescribe(): Unit = {
     addAndVerifyAcls(Set(new Acl(userPrincipal, Allow, Acl.WildCardHost, Describe)), groupResource)
     addAndVerifyAcls(Set(new Acl(userPrincipal, Allow, Acl.WildCardHost, Describe)), topicResource)
     val consumer = createConsumer()
@@ -1120,7 +1120,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   }
 
   @Test
-  def testOffsetFetchWithTopicAndGroupRead() {
+  def testOffsetFetchWithTopicAndGroupRead(): Unit = {
     addAndVerifyAcls(Set(new Acl(userPrincipal, Allow, Acl.WildCardHost, Read)), groupResource)
     addAndVerifyAcls(Set(new Acl(userPrincipal, Allow, Acl.WildCardHost, Read)), topicResource)
     val consumer = createConsumer()
@@ -1129,47 +1129,47 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   }
 
   @Test(expected = classOf[TopicAuthorizationException])
-  def testMetadataWithNoTopicAccess() {
+  def testMetadataWithNoTopicAccess(): Unit = {
     val consumer = createConsumer()
     consumer.partitionsFor(topic)
   }
 
   @Test
-  def testMetadataWithTopicDescribe() {
+  def testMetadataWithTopicDescribe(): Unit = {
     addAndVerifyAcls(Set(new Acl(userPrincipal, Allow, Acl.WildCardHost, Describe)), topicResource)
     val consumer = createConsumer()
     consumer.partitionsFor(topic)
   }
 
   @Test(expected = classOf[TopicAuthorizationException])
-  def testListOffsetsWithNoTopicAccess() {
+  def testListOffsetsWithNoTopicAccess(): Unit = {
     val consumer = createConsumer()
     consumer.endOffsets(Set(tp).asJava)
   }
 
   @Test
-  def testListOffsetsWithTopicDescribe() {
+  def testListOffsetsWithTopicDescribe(): Unit = {
     addAndVerifyAcls(Set(new Acl(userPrincipal, Allow, Acl.WildCardHost, Describe)), topicResource)
     val consumer = createConsumer()
     consumer.endOffsets(Set(tp).asJava)
   }
 
   @Test
-  def testDescribeGroupApiWithNoGroupAcl() {
+  def testDescribeGroupApiWithNoGroupAcl(): Unit = {
     addAndVerifyAcls(Set(new Acl(userPrincipal, Allow, Acl.WildCardHost, Describe)), topicResource)
     val result = createAdminClient().describeConsumerGroups(Seq(group).asJava)
     TestUtils.assertFutureExceptionTypeEquals(result.describedGroups().get(group), classOf[GroupAuthorizationException])
   }
 
   @Test
-  def testDescribeGroupApiWithGroupDescribe() {
+  def testDescribeGroupApiWithGroupDescribe(): Unit = {
     addAndVerifyAcls(Set(new Acl(userPrincipal, Allow, Acl.WildCardHost, Describe)), groupResource)
     addAndVerifyAcls(Set(new Acl(userPrincipal, Allow, Acl.WildCardHost, Describe)), topicResource)
     createAdminClient().describeConsumerGroups(Seq(group).asJava).describedGroups().get(group).get()
   }
 
   @Test
-  def testDescribeGroupCliWithGroupDescribe() {
+  def testDescribeGroupCliWithGroupDescribe(): Unit = {
     addAndVerifyAcls(Set(new Acl(userPrincipal, Allow, Acl.WildCardHost, Describe)), groupResource)
     addAndVerifyAcls(Set(new Acl(userPrincipal, Allow, Acl.WildCardHost, Describe)), topicResource)
 
@@ -1181,7 +1181,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   }
 
   @Test
-  def testListGroupApiWithAndWithoutListGroupAcls() {
+  def testListGroupApiWithAndWithoutListGroupAcls(): Unit = {
     // write some record to the topic
     addAndVerifyAcls(Set(new Acl(userPrincipal, Allow, Acl.WildCardHost, Write)), topicResource)
     val producer = createProducer()
@@ -1225,7 +1225,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   }
 
   @Test
-  def testDeleteGroupApiWithDeleteGroupAcl() {
+  def testDeleteGroupApiWithDeleteGroupAcl(): Unit = {
     addAndVerifyAcls(Set(new Acl(userPrincipal, Allow, Acl.WildCardHost, Read)), groupResource)
     addAndVerifyAcls(Set(new Acl(userPrincipal, Allow, Acl.WildCardHost, Read)), topicResource)
     addAndVerifyAcls(Set(new Acl(userPrincipal, Allow, Acl.WildCardHost, Delete)), groupResource)
@@ -1236,7 +1236,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   }
 
   @Test
-  def testDeleteGroupApiWithNoDeleteGroupAcl() {
+  def testDeleteGroupApiWithNoDeleteGroupAcl(): Unit = {
     addAndVerifyAcls(Set(new Acl(userPrincipal, Allow, Acl.WildCardHost, Read)), groupResource)
     addAndVerifyAcls(Set(new Acl(userPrincipal, Allow, Acl.WildCardHost, Read)), topicResource)
     val consumer = createConsumer()
@@ -1247,13 +1247,13 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   }
 
   @Test
-  def testDeleteGroupApiWithNoDeleteGroupAcl2() {
+  def testDeleteGroupApiWithNoDeleteGroupAcl2(): Unit = {
     val result = createAdminClient().deleteConsumerGroups(Seq(group).asJava)
     TestUtils.assertFutureExceptionTypeEquals(result.deletedGroups().get(group), classOf[GroupAuthorizationException])
   }
 
   @Test
-  def testUnauthorizedDeleteTopicsWithoutDescribe() {
+  def testUnauthorizedDeleteTopicsWithoutDescribe(): Unit = {
     val response = connectAndSend(deleteTopicsRequest, ApiKeys.DELETE_TOPICS)
     val version = ApiKeys.DELETE_TOPICS.latestVersion
     val deleteResponse = DeleteTopicsResponse.parse(response, version)
@@ -1261,7 +1261,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   }
 
   @Test
-  def testUnauthorizedDeleteTopicsWithDescribe() {
+  def testUnauthorizedDeleteTopicsWithDescribe(): Unit = {
     addAndVerifyAcls(Set(new Acl(userPrincipal, Allow, Acl.WildCardHost, Describe)), deleteTopicResource)
     val response = connectAndSend(deleteTopicsRequest, ApiKeys.DELETE_TOPICS)
     val version = ApiKeys.DELETE_TOPICS.latestVersion
@@ -1271,7 +1271,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   }
 
   @Test
-  def testDeleteTopicsWithWildCardAuth() {
+  def testDeleteTopicsWithWildCardAuth(): Unit = {
     addAndVerifyAcls(Set(new Acl(userPrincipal, Allow, Acl.WildCardHost, Delete)), Resource(Topic, "*", LITERAL))
     val response = connectAndSend(deleteTopicsRequest, ApiKeys.DELETE_TOPICS)
     val version = ApiKeys.DELETE_TOPICS.latestVersion
@@ -1281,7 +1281,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   }
 
   @Test
-  def testUnauthorizedDeleteRecordsWithoutDescribe() {
+  def testUnauthorizedDeleteRecordsWithoutDescribe(): Unit = {
     val response = connectAndSend(deleteRecordsRequest, ApiKeys.DELETE_RECORDS)
     val version = ApiKeys.DELETE_RECORDS.latestVersion
     val deleteRecordsResponse = DeleteRecordsResponse.parse(response, version)
@@ -1289,7 +1289,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   }
 
   @Test
-  def testUnauthorizedDeleteRecordsWithDescribe() {
+  def testUnauthorizedDeleteRecordsWithDescribe(): Unit = {
     addAndVerifyAcls(Set(new Acl(userPrincipal, Allow, Acl.WildCardHost, Describe)), deleteTopicResource)
     val response = connectAndSend(deleteRecordsRequest, ApiKeys.DELETE_RECORDS)
     val version = ApiKeys.DELETE_RECORDS.latestVersion
@@ -1298,7 +1298,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   }
 
   @Test
-  def testDeleteRecordsWithWildCardAuth() {
+  def testDeleteRecordsWithWildCardAuth(): Unit = {
     addAndVerifyAcls(Set(new Acl(userPrincipal, Allow, Acl.WildCardHost, Delete)), Resource(Topic, "*", LITERAL))
     val response = connectAndSend(deleteRecordsRequest, ApiKeys.DELETE_RECORDS)
     val version = ApiKeys.DELETE_RECORDS.latestVersion
@@ -1308,7 +1308,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   }
 
   @Test
-  def testUnauthorizedCreatePartitions() {
+  def testUnauthorizedCreatePartitions(): Unit = {
     val response = connectAndSend(createPartitionsRequest, ApiKeys.CREATE_PARTITIONS)
     val version = ApiKeys.CREATE_PARTITIONS.latestVersion
     val createPartitionsResponse = CreatePartitionsResponse.parse(response, version)
@@ -1316,7 +1316,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   }
 
   @Test
-  def testCreatePartitionsWithWildCardAuth() {
+  def testCreatePartitionsWithWildCardAuth(): Unit = {
     addAndVerifyAcls(Set(new Acl(userPrincipal, Allow, Acl.WildCardHost, Alter)), Resource(Topic, "*", LITERAL))
     val response = connectAndSend(createPartitionsRequest, ApiKeys.CREATE_PARTITIONS)
     val version = ApiKeys.CREATE_PARTITIONS.latestVersion
@@ -1595,7 +1595,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
 
   private def sendRecords(producer: KafkaProducer[Array[Byte], Array[Byte]],
                           numRecords: Int,
-                          tp: TopicPartition) {
+                          tp: TopicPartition): Unit = {
     val futures = (0 until numRecords).map { i =>
       producer.send(new ProducerRecord(tp.topic(), tp.partition(), i.toString.getBytes, i.toString.getBytes))
     }
@@ -1615,7 +1615,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
                              numRecords: Int = 1,
                              startingOffset: Int = 0,
                              topic: String = topic,
-                             part: Int = part) {
+                             part: Int = part): Unit = {
     val records = TestUtils.consumeRecords(consumer, numRecords)
 
     for (i <- 0 until numRecords) {

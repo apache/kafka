@@ -40,7 +40,7 @@ import kafka.utils.{CommandLineUtils, Exit, Logging}
   */
 object JmxTool extends Logging {
 
-  def main(args: Array[String]) {
+  def main(args: Array[String]): Unit = {
     // Parse command line
     val parser = new OptionParser(false)
     val objectNameOpt =

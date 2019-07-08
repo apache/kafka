@@ -23,12 +23,12 @@ import org.junit.{After, Before, Test}
 class ReassignPartitionsCommandArgsTest {
 
   @Before
-  def setUp() {
+  def setUp(): Unit = {
     Exit.setExitProcedure((_, message) => throw new IllegalArgumentException(message.orNull))
   }
 
   @After
-  def tearDown() {
+  def tearDown(): Unit = {
     Exit.resetExitProcedure()
   }
 

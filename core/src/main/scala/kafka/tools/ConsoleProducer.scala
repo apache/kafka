@@ -45,7 +45,7 @@ object ConsoleProducer {
         val producer = new KafkaProducer[Array[Byte], Array[Byte]](producerProps(config))
 
         Runtime.getRuntime.addShutdownHook(new Thread() {
-          override def run() {
+          override def run(): Unit = {
             producer.close()
           }
         })
@@ -252,7 +252,7 @@ object ConsoleProducer {
     var ignoreError = false
     var lineNumber = 0
 
-    override def init(inputStream: InputStream, props: Properties) {
+    override def init(inputStream: InputStream, props: Properties): Unit = {
       topic = props.getProperty("topic")
       if (props.containsKey("parse.key"))
         parseKey = props.getProperty("parse.key").trim.equalsIgnoreCase("true")

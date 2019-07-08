@@ -45,7 +45,7 @@ class ControllerFailoverTest extends KafkaServerTestHarness with Logging {
     .map(KafkaConfig.fromProps(_, overridingProps))
 
   @After
-  override def tearDown() {
+  override def tearDown(): Unit = {
     super.tearDown()
     this.metrics.close()
   }
@@ -55,7 +55,7 @@ class ControllerFailoverTest extends KafkaServerTestHarness with Logging {
    * for the background of this test case
    */
   @Test
-  def testHandleIllegalStateException() {
+  def testHandleIllegalStateException(): Unit = {
     val initialController = servers.find(_.kafkaController.isActive).map(_.kafkaController).getOrElse {
       fail("Could not find controller")
     }

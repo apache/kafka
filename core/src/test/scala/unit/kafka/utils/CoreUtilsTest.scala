@@ -41,7 +41,7 @@ class CoreUtilsTest extends Logging {
   val clusterIdPattern = Pattern.compile("[a-zA-Z0-9_\\-]+")
 
   @Test
-  def testSwallow() {
+  def testSwallow(): Unit = {
     CoreUtils.swallow(throw new KafkaException("test"), this, Level.INFO)
   }
 
@@ -96,7 +96,7 @@ class CoreUtilsTest extends Logging {
   }
 
   @Test
-  def testCircularIterator() {
+  def testCircularIterator(): Unit = {
     val l = List(1, 2)
     val itl = CoreUtils.circularIterator(l)
     assertEquals(1, itl.next())
@@ -115,7 +115,7 @@ class CoreUtilsTest extends Logging {
   }
 
   @Test
-  def testReadBytes() {
+  def testReadBytes(): Unit = {
     for(testCase <- List("", "a", "abcd")) {
       val bytes = testCase.getBytes
       assertTrue(Arrays.equals(bytes, Utils.readBytes(ByteBuffer.wrap(bytes))))
@@ -123,7 +123,7 @@ class CoreUtilsTest extends Logging {
   }
 
   @Test
-  def testAbs() {
+  def testAbs(): Unit = {
     assertEquals(0, Utils.abs(Integer.MIN_VALUE))
     assertEquals(1, Utils.abs(-1))
     assertEquals(0, Utils.abs(0))
@@ -132,7 +132,7 @@ class CoreUtilsTest extends Logging {
   }
 
   @Test
-  def testReplaceSuffix() {
+  def testReplaceSuffix(): Unit = {
     assertEquals("blah.foo.text", CoreUtils.replaceSuffix("blah.foo.txt", ".txt", ".text"))
     assertEquals("blah.foo", CoreUtils.replaceSuffix("blah.foo.txt", ".txt", ""))
     assertEquals("txt.txt", CoreUtils.replaceSuffix("txt.txt.txt", ".txt", ""))
@@ -140,7 +140,7 @@ class CoreUtilsTest extends Logging {
   }
 
   @Test
-  def testReadInt() {
+  def testReadInt(): Unit = {
     val values = Array(0, 1, -1, Byte.MaxValue, Short.MaxValue, 2 * Short.MaxValue, Int.MaxValue/2, Int.MinValue/2, Int.MaxValue, Int.MinValue, Int.MaxValue)
     val buffer = ByteBuffer.allocate(4 * values.size)
     for(i <- 0 until values.length) {
@@ -150,7 +150,7 @@ class CoreUtilsTest extends Logging {
   }
 
   @Test
-  def testCsvList() {
+  def testCsvList(): Unit = {
     val emptyString:String = ""
     val nullString:String = null
     val emptyList = CoreUtils.parseCsvList(emptyString)
@@ -163,7 +163,7 @@ class CoreUtilsTest extends Logging {
   }
 
   @Test
-  def testCsvMap() {
+  def testCsvMap(): Unit = {
     val emptyString: String = ""
     val emptyMap = CoreUtils.parseCsvMap(emptyString)
     val emptyStringMap = Map.empty[String, String]
@@ -198,7 +198,7 @@ class CoreUtilsTest extends Logging {
   }
 
   @Test
-  def testInLock() {
+  def testInLock(): Unit = {
     val lock = new ReentrantLock()
     val result = inLock(lock) {
       assertTrue("Should be in lock", lock.isHeldByCurrentThread)
@@ -209,7 +209,7 @@ class CoreUtilsTest extends Logging {
   }
 
   @Test
-  def testUrlSafeBase64EncodeUUID() {
+  def testUrlSafeBase64EncodeUUID(): Unit = {
 
     // Test a UUID that has no + or / characters in base64 encoding [a149b4a3-06e1-4b49-a8cb-8a9c4a59fa46 ->(base64)-> oUm0owbhS0moy4qcSln6Rg==]
     val clusterId1 = Base64.getUrlEncoder.withoutPadding.encodeToString(CoreUtils.getBytesFromUuid(UUID.fromString(
@@ -227,7 +227,7 @@ class CoreUtilsTest extends Logging {
   }
 
   @Test
-  def testGenerateUuidAsBase64() {
+  def testGenerateUuidAsBase64(): Unit = {
     val clusterId = CoreUtils.generateUuidAsBase64()
     assertEquals(clusterId.length, 22)
     assertTrue(clusterIdPattern.matcher(clusterId).matches())

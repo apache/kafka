@@ -67,12 +67,12 @@ case object BrokerShuttingDown extends BrokerStates { val state: Byte = 7 }
 case class BrokerState() {
   @volatile var currentState: Byte = NotRunning.state
 
-  def newState(newState: BrokerStates) {
+  def newState(newState: BrokerStates): Unit = {
     this.newState(newState.state)
   }
 
   // Allowing undefined custom state
-  def newState(newState: Byte) {
+  def newState(newState: Byte): Unit = {
     currentState = newState
   }
 }

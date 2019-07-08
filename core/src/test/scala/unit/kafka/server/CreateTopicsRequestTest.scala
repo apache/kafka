@@ -24,7 +24,7 @@ import org.junit.Test
 
 class CreateTopicsRequestTest extends AbstractCreateTopicsRequestTest {
   @Test
-  def testValidCreateTopicsRequests() {
+  def testValidCreateTopicsRequests(): Unit = {
     // Generated assignments
     validateValidCreateTopicsRequests(topicsReq(Seq(topicReq("topic1"))))
     validateValidCreateTopicsRequests(topicsReq(Seq(topicReq("topic2", replicationFactor = 3))))
@@ -53,7 +53,7 @@ class CreateTopicsRequestTest extends AbstractCreateTopicsRequestTest {
   }
 
   @Test
-  def testErrorCreateTopicsRequests() {
+  def testErrorCreateTopicsRequests(): Unit = {
     val existingTopic = "existing-topic"
     createTopic(existingTopic, 1, 1)
     // Basic
@@ -113,7 +113,7 @@ class CreateTopicsRequestTest extends AbstractCreateTopicsRequestTest {
   }
 
   @Test
-  def testInvalidCreateTopicsRequests() {
+  def testInvalidCreateTopicsRequests(): Unit = {
     // Partitions/ReplicationFactor and ReplicaAssignment
     validateErrorCreateTopicsRequests(topicsReq(Seq(
       topicReq("bad-args-topic", numPartitions = 10, replicationFactor = 3,
@@ -127,7 +127,7 @@ class CreateTopicsRequestTest extends AbstractCreateTopicsRequestTest {
   }
 
   @Test
-  def testNotController() {
+  def testNotController(): Unit = {
     val req = topicsReq(Seq(topicReq("topic1")))
     val response = sendCreateTopicRequest(req, notControllerSocketServer)
     assertEquals(1, response.errorCounts().get(Errors.NOT_CONTROLLER))

@@ -43,7 +43,7 @@ class KafkaMetricReporterExceptionHandlingTest extends BaseRequestTest {
   }
 
   @Before
-  override def setUp() {
+  override def setUp(): Unit = {
     super.setUp()
 
     // need a quota prop to register a "throttle-time" metrics after server startup
@@ -53,7 +53,7 @@ class KafkaMetricReporterExceptionHandlingTest extends BaseRequestTest {
   }
 
   @After
-  override def tearDown() {
+  override def tearDown(): Unit = {
     KafkaMetricReporterExceptionHandlingTest.goodReporterRegistered.set(0)
     KafkaMetricReporterExceptionHandlingTest.badReporterRegistered.set(0)
     
@@ -61,7 +61,7 @@ class KafkaMetricReporterExceptionHandlingTest extends BaseRequestTest {
   }
 
   @Test
-  def testBothReportersAreInvoked() {
+  def testBothReportersAreInvoked(): Unit = {
     val port = anySocketServer.boundPort(ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT))
     val socket = new Socket("localhost", port)
     socket.setSoTimeout(10000)
@@ -85,28 +85,28 @@ object KafkaMetricReporterExceptionHandlingTest {
 
   class GoodReporter extends MetricsReporter {
 
-    def configure(configs: java.util.Map[String, _]) {
+    def configure(configs: java.util.Map[String, _]): Unit = {
     }
 
-    def init(metrics: java.util.List[KafkaMetric]) {
+    def init(metrics: java.util.List[KafkaMetric]): Unit = {
     }
 
-    def metricChange(metric: KafkaMetric) {
+    def metricChange(metric: KafkaMetric): Unit = {
       if (metric.metricName.group == "Request") {
         goodReporterRegistered.incrementAndGet
       }
     }
 
-    def metricRemoval(metric: KafkaMetric) {
+    def metricRemoval(metric: KafkaMetric): Unit = {
     }
 
-    def close() {
+    def close(): Unit = {
     }
   }
 
   class BadReporter extends GoodReporter {
 
-    override def metricChange(metric: KafkaMetric) {
+    override def metricChange(metric: KafkaMetric): Unit = {
       if (metric.metricName.group == "Request") {
         badReporterRegistered.incrementAndGet
         throw new RuntimeException(metric.metricName.toString)

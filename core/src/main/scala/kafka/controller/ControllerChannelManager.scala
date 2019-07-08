@@ -81,7 +81,7 @@ class ControllerChannelManager(controllerContext: ControllerContext,
   }
 
   def sendRequest(brokerId: Int, request: AbstractControlRequest.Builder[_ <: AbstractControlRequest],
-                  callback: AbstractResponse => Unit = null) {
+                  callback: AbstractResponse => Unit = null): Unit = {
     brokerLock synchronized {
       val stateInfoOpt = brokerStateInfo.get(brokerId)
       stateInfoOpt match {
@@ -93,7 +93,7 @@ class ControllerChannelManager(controllerContext: ControllerContext,
     }
   }
 
-  def addBroker(broker: Broker) {
+  def addBroker(broker: Broker): Unit = {
     // be careful here. Maybe the startup() API has already started the request send thread
     brokerLock synchronized {
       if (!brokerStateInfo.contains(broker.id)) {
@@ -103,13 +103,13 @@ class ControllerChannelManager(controllerContext: ControllerContext,
     }
   }
 
-  def removeBroker(brokerId: Int) {
+  def removeBroker(brokerId: Int): Unit = {
     brokerLock synchronized {
       removeExistingBroker(brokerStateInfo(brokerId))
     }
   }
 
-  private def addNewBroker(broker: Broker) {
+  private def addNewBroker(broker: Broker): Unit = {
     val messageQueue = new LinkedBlockingQueue[QueueItem]
     debug(s"Controller ${config.brokerId} trying to connect to broker ${broker.id}")
     val controllerToBrokerListenerName = config.controlPlaneListenerName.getOrElse(config.interBrokerListenerName)
@@ -188,7 +188,7 @@ class ControllerChannelManager(controllerContext: ControllerContext,
 
   private def brokerMetricTags(brokerId: Int) = Map("broker-id" -> brokerId.toString)
 
-  private def removeExistingBroker(brokerState: ControllerBrokerStateInfo) {
+  private def removeExistingBroker(brokerState: ControllerBrokerStateInfo): Unit = {
     try {
       // Shutdown the RequestSendThread before closing the NetworkClient to avoid the concurrent use of the
       // non-threadsafe classes as described in KAFKA-4959.
@@ -206,7 +206,7 @@ class ControllerChannelManager(controllerContext: ControllerContext,
     }
   }
 
-  protected def startRequestSendThread(brokerId: Int) {
+  protected def startRequestSendThread(brokerId: Int): Unit = {
     val requestThread = brokerStateInfo(brokerId).requestSendThread
     if (requestThread.getState == Thread.State.NEW)
       requestThread.start()
@@ -352,7 +352,7 @@ abstract class AbstractControllerBrokerRequestBatch(config: KafkaConfig,
                   request: AbstractControlRequest.Builder[_ <: AbstractControlRequest],
                   callback: AbstractResponse => Unit = null): Unit
 
-  def newBatch() {
+  def newBatch(): Unit = {
     // raise error if the previous batch is not empty
     if (leaderAndIsrRequestMap.nonEmpty)
       throw new IllegalStateException("Controller to broker state change requests batch is not empty while creating " +
@@ -366,7 +366,7 @@ abstract class AbstractControllerBrokerRequestBatch(config: KafkaConfig,
         s"$updateMetadataRequestPartitionInfoMap might be lost ")
   }
 
-  def clear() {
+  def clear(): Unit = {
     leaderAndIsrRequestMap.clear()
     stopReplicaRequestMap.clear()
     updateMetadataRequestBrokerSet.clear()
@@ -407,7 +407,7 @@ abstract class AbstractControllerBrokerRequestBatch(config: KafkaConfig,
   def addUpdateMetadataRequestForBrokers(brokerIds: Seq[Int],
                                          partitions: collection.Set[TopicPartition]): Unit = {
 
-    def updateMetadataRequestPartitionInfo(partition: TopicPartition, beingDeleted: Boolean) {
+    def updateMetadataRequestPartitionInfo(partition: TopicPartition, beingDeleted: Boolean): Unit = {
       val leaderIsrAndControllerEpochOpt = controllerContext.partitionLeadershipInfo.get(partition)
       leaderIsrAndControllerEpochOpt match {
         case Some(l @ LeaderIsrAndControllerEpoch(leaderAndIsr, controllerEpoch)) =>

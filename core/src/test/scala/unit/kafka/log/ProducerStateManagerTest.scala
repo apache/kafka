@@ -659,7 +659,7 @@ class ProducerStateManagerTest {
   }
 
   @Test(expected = classOf[UnknownProducerIdException])
-  def testPidExpirationTimeout() {
+  def testPidExpirationTimeout(): Unit = {
     val epoch = 5.toShort
     val sequence = 37
     append(stateManager, producerId, epoch, sequence, 1L)
@@ -669,7 +669,7 @@ class ProducerStateManagerTest {
   }
 
   @Test
-  def testFirstUnstableOffset() {
+  def testFirstUnstableOffset(): Unit = {
     val epoch = 5.toShort
     val sequence = 0
 
@@ -703,7 +703,7 @@ class ProducerStateManagerTest {
   }
 
   @Test
-  def testProducersWithOngoingTransactionsDontExpire() {
+  def testProducersWithOngoingTransactionsDontExpire(): Unit = {
     val epoch = 5.toShort
     val sequence = 0
 

@@ -41,7 +41,7 @@ class BrokerCompressionTest(messageCompression: String, brokerCompression: Strin
   val logConfig = LogConfig()
 
   @After
-  def tearDown() {
+  def tearDown(): Unit = {
     Utils.delete(tmpDir)
   }
 
@@ -49,7 +49,7 @@ class BrokerCompressionTest(messageCompression: String, brokerCompression: Strin
    * Test broker-side compression configuration
    */
   @Test
-  def testBrokerSideCompression() {
+  def testBrokerSideCompression(): Unit = {
     val messageCompressionCode = CompressionCodec.getCompressionCodec(messageCompression)
     val logProps = new Properties()
     logProps.put(LogConfig.CompressionTypeProp, brokerCompression)

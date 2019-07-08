@@ -418,7 +418,7 @@ object ProducerStateManager {
     }
   }
 
-  private def writeSnapshot(file: File, entries: mutable.Map[Long, ProducerStateEntry]) {
+  private def writeSnapshot(file: File, entries: mutable.Map[Long, ProducerStateEntry]): Unit = {
     val struct = new Struct(PidSnapshotMapSchema)
     struct.set(VersionField, ProducerSnapshotVersion)
     struct.set(CrcField, 0L) // we'll fill this after writing the entries
@@ -464,7 +464,7 @@ object ProducerStateManager {
   // visible for testing
   private[log] def deleteSnapshotsBefore(dir: File, offset: Long): Unit = deleteSnapshotFiles(dir, _ < offset)
 
-  private def deleteSnapshotFiles(dir: File, predicate: Long => Boolean = _ => true) {
+  private def deleteSnapshotFiles(dir: File, predicate: Long => Boolean = _ => true): Unit = {
     listSnapshotFiles(dir).filter(file => predicate(offsetFromFile(file))).foreach { file =>
       Files.deleteIfExists(file.toPath)
     }
@@ -551,7 +551,7 @@ class ProducerStateManager(val topicPartition: TopicPartition,
 
   def isEmpty: Boolean = producers.isEmpty && unreplicatedTxns.isEmpty
 
-  private def loadFromSnapshot(logStartOffset: Long, currentTime: Long) {
+  private def loadFromSnapshot(logStartOffset: Long, currentTime: Long): Unit = {
     while (true) {
       latestSnapshotFile match {
         case Some(file) =>
@@ -592,7 +592,7 @@ class ProducerStateManager(val topicPartition: TopicPartition,
   /**
    * Expire any producer ids which have been idle longer than the configured maximum expiration timeout.
    */
-  def removeExpiredProducers(currentTimeMs: Long) {
+  def removeExpiredProducers(currentTimeMs: Long): Unit = {
     producers.retain { case (_, lastEntry) =>
       !isProducerExpired(currentTimeMs, lastEntry)
     }
@@ -706,7 +706,7 @@ class ProducerStateManager(val topicPartition: TopicPartition,
    * should no longer be retained: these producers will be removed if and when we need to load state from
    * the snapshot.
    */
-  def truncateHead(logStartOffset: Long) {
+  def truncateHead(logStartOffset: Long): Unit = {
     val evictedProducerEntries = producers.filter { case (_, producerState) =>
       !isProducerRetained(producerState, logStartOffset)
     }
@@ -745,7 +745,7 @@ class ProducerStateManager(val topicPartition: TopicPartition,
   /**
    * Truncate the producer id mapping and remove all snapshots. This resets the state of the mapping.
    */
-  def truncate() {
+  def truncate(): Unit = {
     producers.clear()
     ongoingTxns.clear()
     unreplicatedTxns.clear()

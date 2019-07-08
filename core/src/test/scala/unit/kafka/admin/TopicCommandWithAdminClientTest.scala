@@ -65,7 +65,7 @@ class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Loggin
   private val _testName = new TestName
   @Rule def testName = _testName
 
-  def assertExitCode(expected: Int, method: () => Unit) {
+  def assertExitCode(expected: Int, method: () => Unit): Unit = {
     def mockExitProcedure(exitCode: Int, exitMessage: Option[String]): Nothing = {
       assertEquals(expected, exitCode)
       throw new RuntimeException
@@ -80,7 +80,7 @@ class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Loggin
     }
   }
 
-  def assertCheckArgsExitCode(expected: Int, options: TopicCommandOptions) {
+  def assertCheckArgsExitCode(expected: Int, options: TopicCommandOptions): Unit = {
     assertExitCode(expected, options.checkArgs _)
   }
 
@@ -101,7 +101,7 @@ class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Loggin
   }
 
   @Before
-  def setup() {
+  def setup(): Unit = {
     // create adminClient
     val props = new Properties()
     props.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, brokerList)
@@ -254,7 +254,7 @@ class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Loggin
   }
 
   @Test
-  def testCreateWithInvalidReplicationFactor() {
+  def testCreateWithInvalidReplicationFactor(): Unit = {
     intercept[IllegalArgumentException] {
       topicService.createTopic(new TopicCommandOptions(
         Array("--partitions", "2", "--replication-factor", (Short.MaxValue+1).toString, "--topic", testTopicName)))

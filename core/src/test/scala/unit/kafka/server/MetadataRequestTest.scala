@@ -35,7 +35,7 @@ import scala.collection.Seq
 
 class MetadataRequestTest extends BaseRequestTest {
 
-  override def brokerPropertyOverrides(properties: Properties) {
+  override def brokerPropertyOverrides(properties: Properties): Unit = {
     properties.setProperty(KafkaConfig.DefaultReplicationFactorProp, "2")
     properties.setProperty(KafkaConfig.RackProp, s"rack/${properties.getProperty(KafkaConfig.BrokerIdProp)}")
   }
@@ -46,20 +46,20 @@ class MetadataRequestTest extends BaseRequestTest {
   }
 
   @Test
-  def testClusterIdWithRequestVersion1() {
+  def testClusterIdWithRequestVersion1(): Unit = {
     val v1MetadataResponse = sendMetadataRequest(MetadataRequest.Builder.allTopics.build(1.toShort))
     val v1ClusterId = v1MetadataResponse.clusterId
     assertNull(s"v1 clusterId should be null", v1ClusterId)
   }
 
   @Test
-  def testClusterIdIsValid() {
+  def testClusterIdIsValid(): Unit = {
     val metadataResponse = sendMetadataRequest(MetadataRequest.Builder.allTopics.build(2.toShort))
     isValidClusterId(metadataResponse.clusterId)
   }
 
   @Test
-  def testControllerId() {
+  def testControllerId(): Unit = {
     val controllerServer = servers.find(_.kafkaController.isActive).get
     val controllerId = controllerServer.config.brokerId
     val metadataResponse = sendMetadataRequest(MetadataRequest.Builder.allTopics.build(1.toShort))
@@ -81,7 +81,7 @@ class MetadataRequestTest extends BaseRequestTest {
   }
 
   @Test
-  def testRack() {
+  def testRack(): Unit = {
     val metadataResponse = sendMetadataRequest(MetadataRequest.Builder.allTopics.build(1.toShort))
     // Validate rack matches what's set in generateConfigs() above
     metadataResponse.brokers.asScala.foreach { broker =>
@@ -90,7 +90,7 @@ class MetadataRequestTest extends BaseRequestTest {
   }
 
   @Test
-  def testIsInternal() {
+  def testIsInternal(): Unit = {
     val internalTopic = Topic.GROUP_METADATA_TOPIC_NAME
     val notInternalTopic = "notInternal"
     // create the topics
@@ -111,7 +111,7 @@ class MetadataRequestTest extends BaseRequestTest {
   }
 
   @Test
-  def testNoTopicsRequest() {
+  def testNoTopicsRequest(): Unit = {
     // create some topics
     createTopic("t1", 3, 2)
     createTopic("t2", 3, 2)
@@ -197,7 +197,7 @@ class MetadataRequestTest extends BaseRequestTest {
   }
 
   @Test
-  def testAllTopicsRequest() {
+  def testAllTopicsRequest(): Unit = {
     // create some topics
     createTopic("t1", 3, 2)
     createTopic("t2", 3, 2)
@@ -250,7 +250,7 @@ class MetadataRequestTest extends BaseRequestTest {
   }
 
   @Test
-  def testReplicaDownResponse() {
+  def testReplicaDownResponse(): Unit = {
     val replicaDownTopic = "replicaDown"
     val replicaCount = 3
 

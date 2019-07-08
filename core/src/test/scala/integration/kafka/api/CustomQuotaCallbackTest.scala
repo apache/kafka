@@ -62,7 +62,7 @@ class CustomQuotaCallbackTest extends IntegrationTestHarness with SaslSetup {
   val defaultConsumeQuota = 1000 * 1000 * 1000
 
   @Before
-  override def setUp() {
+  override def setUp(): Unit = {
     startSasl(jaasSections(kafkaServerSaslMechanisms, Some("SCRAM-SHA-256"), KafkaSasl, JaasTestUtils.KafkaServerContextName))
     this.serverConfig.setProperty(KafkaConfig.ProducerQuotaBytesPerSecondDefaultProp, Long.MaxValue.toString)
     this.serverConfig.setProperty(KafkaConfig.ConsumerQuotaBytesPerSecondDefaultProp, Long.MaxValue.toString)
@@ -85,14 +85,14 @@ class CustomQuotaCallbackTest extends IntegrationTestHarness with SaslSetup {
     super.tearDown()
   }
 
-  override def configureSecurityBeforeServersStart() {
+  override def configureSecurityBeforeServersStart(): Unit = {
     super.configureSecurityBeforeServersStart()
     zkClient.makeSurePersistentPathExists(ConfigEntityChangeNotificationZNode.path)
     createScramCredentials(zkConnect, JaasTestUtils.KafkaScramAdmin, JaasTestUtils.KafkaScramAdminPassword)
   }
 
   @Test
-  def testCustomQuotaCallback() {
+  def testCustomQuotaCallback(): Unit = {
     // Large quota override, should not throttle
     var brokerId = 0
     var user = createGroupWithOneUser("group0_user1", brokerId)

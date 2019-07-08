@@ -196,7 +196,7 @@ object DelegationTokenCommand extends Logging {
 
     options = parser.parse(args : _*)
 
-    def checkArgs() {
+    def checkArgs(): Unit = {
       // check required args
       CommandLineUtils.checkRequiredArgs(parser, options, bootstrapServerOpt, commandConfigOpt)
 

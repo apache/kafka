@@ -26,7 +26,7 @@ import org.junit.Assert._
 class OffsetMapTest {
   
   @Test
-  def testBasicValidation() {
+  def testBasicValidation(): Unit = {
     validateMap(10)
     validateMap(100)
     validateMap(1000)
@@ -34,7 +34,7 @@ class OffsetMapTest {
   }
   
   @Test
-  def testClear() {
+  def testClear(): Unit = {
     val map = new SkimpyOffsetMap(4000)
     for(i <- 0 until 10)
       map.put(key(i), i)
@@ -46,7 +46,7 @@ class OffsetMapTest {
   }
   
   @Test
-  def testGetWhenFull() {
+  def testGetWhenFull(): Unit = {
     val map = new SkimpyOffsetMap(4096)
     var i = 37L  //any value would do
     while (map.size < map.slots) {
@@ -71,7 +71,7 @@ class OffsetMapTest {
 }
 
 object OffsetMapTest {
-  def main(args: Array[String]) {
+  def main(args: Array[String]): Unit = {
     if(args.length != 2) {
       System.err.println("USAGE: java OffsetMapTest size load")
       Exit.exit(1)

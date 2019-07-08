@@ -22,7 +22,7 @@ import org.apache.kafka.common.requests.ElectLeadersRequest
 import scala.collection.JavaConverters._
 
 package object api {
-  implicit final class ElectLeadersRequestOps(val self: ElectLeadersRequest) extends AnyVal {
+  implicit final class ElectLeadersRequestOps(private val self: ElectLeadersRequest) extends AnyVal {
     def topicPartitions: Set[TopicPartition] = {
       if (self.data.topicPartitions == null) {
         Set.empty

@@ -42,7 +42,7 @@ class LogCleanerIntegrationTest extends AbstractLogCleanerIntegrationTest {
   val topicPartitions = Array(new TopicPartition("log", 0), new TopicPartition("log", 1), new TopicPartition("log", 2))
 
   @Test(timeout = DEFAULT_MAX_WAIT_MS)
-  def testMarksPartitionsAsOfflineAndPopulatesUncleanableMetrics() {
+  def testMarksPartitionsAsOfflineAndPopulatesUncleanableMetrics(): Unit = {
     val largeMessageKey = 20
     val (_, largeMessageSet) = createLargeSingleMessageSet(largeMessageKey, RecordBatch.CURRENT_MAGIC_VALUE)
     val maxMessageSize = largeMessageSet.sizeInBytes

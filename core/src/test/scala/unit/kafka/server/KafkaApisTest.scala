@@ -82,7 +82,7 @@ class KafkaApisTest {
   private val time = new MockTime
 
   @After
-  def tearDown() {
+  def tearDown(): Unit = {
     quotas.shutdown()
     metrics.close()
   }
@@ -547,7 +547,7 @@ class KafkaApisTest {
   }
 
   @Test
-  def rejectJoinGroupRequestWhenStaticMembershipNotSupported() {
+  def rejectJoinGroupRequestWhenStaticMembershipNotSupported(): Unit = {
     val capturedResponse = expectNoThrottling()
     EasyMock.replay(clientRequestQuotaManager, requestChannel)
 
@@ -567,7 +567,7 @@ class KafkaApisTest {
   }
 
   @Test
-  def rejectSyncGroupRequestWhenStaticMembershipNotSupported() {
+  def rejectSyncGroupRequestWhenStaticMembershipNotSupported(): Unit = {
     val capturedResponse = expectNoThrottling()
     EasyMock.replay(clientRequestQuotaManager, requestChannel)
 
@@ -586,7 +586,7 @@ class KafkaApisTest {
   }
 
   @Test
-  def rejectHeartbeatRequestWhenStaticMembershipNotSupported() {
+  def rejectHeartbeatRequestWhenStaticMembershipNotSupported(): Unit = {
     val capturedResponse = expectNoThrottling()
     EasyMock.replay(clientRequestQuotaManager, requestChannel)
 
@@ -605,7 +605,7 @@ class KafkaApisTest {
   }
 
   @Test
-  def rejectOffsetCommitRequestWhenStaticMembershipNotSupported() {
+  def rejectOffsetCommitRequestWhenStaticMembershipNotSupported(): Unit = {
     val capturedResponse = expectNoThrottling()
     EasyMock.replay(clientRequestQuotaManager, requestChannel)
 

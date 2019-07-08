@@ -149,7 +149,7 @@ class DelayedFetch(delayMs: Long,
       false
   }
 
-  override def onExpiration() {
+  override def onExpiration(): Unit = {
     if (fetchMetadata.isFromFollower)
       DelayedFetchMetrics.followerExpiredRequestMeter.mark()
     else
@@ -159,7 +159,7 @@ class DelayedFetch(delayMs: Long,
   /**
    * Upon completion, read whatever data is available and pass to the complete callback
    */
-  override def onComplete() {
+  override def onComplete(): Unit = {
     val logReadResults = replicaManager.readFromLocalLog(
       replicaId = fetchMetadata.replicaId,
       fetchOnlyFromLeader = fetchMetadata.fetchOnlyLeader,

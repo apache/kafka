@@ -254,7 +254,7 @@ object KafkaConfig {
 
   private val LogConfigPrefix = "log."
 
-  def main(args: Array[String]) {
+  def main(args: Array[String]): Unit = {
     System.out.println(configDef.toHtmlTable(DynamicBrokerConfig.dynamicConfigUpdateModes))
   }
 
@@ -1463,7 +1463,7 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigO
 
   validateValues()
 
-  private def validateValues() {
+  private def validateValues(): Unit = {
     if(brokerIdGenerationEnable) {
       require(brokerId >= -1 && brokerId <= maxReservedBrokerId, "broker.id must be equal or greater than -1 and not greater than reserved.broker.max.id")
     } else {
