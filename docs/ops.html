@@ -1029,6 +1029,26 @@
         <td>Connection status of broker's ZooKeeper session which may be one of
             Disconnected|SyncConnected|AuthFailed|ConnectedReadOnly|SaslAuthenticated|Expired.</td>
       </tr>
+      <tr>
+        <td>Max time to load group metadata</td>
+        <td>kafka.coordinator.group:type=GroupMetadataManager,name=GroupLoadTimeMax</td>
+        <td>maximum time, in milliseconds, it took to load offsets and group metadata from one consumer offset partition in the last 30 seconds</td>
+      </tr>
+      <tr>
+        <td>Avg time to load group metadata</td>
+        <td>kafka.coordinator.group:type=GroupMetadataManager,name=GroupLoadTimeAvg</td>
+        <td>average time, in milliseconds, it took to load offsets and group metadata from one consumer offset partition in the last 30 seconds</td>
+      </tr>
+      <tr>
+        <td>Max time to load transaction metadata</td>
+        <td>kafka.coordinator.transaction:type=TransactionStateManager,name=TransactionLoadTimeMax</td>
+        <td>maximum time, in milliseconds, it took to load transaction metadata from one consumer offset partition in the last 30 seconds</td>
+      </tr>
+      <tr>
+        <td>Avg time to load transaction metadata</td>
+        <td>kafka.coordinator.transaction:type=TransactionStateManager,name=TransactionLoadTimeAvg</td>
+        <td>average time, in milliseconds, it took to load transaction metadata from one consumer offset partition in the last 30 seconds</td>
+      </tr>
   </tbody></table>
 
   <h4><a id="selector_monitoring" href="#selector_monitoring">Common monitoring metrics for producer/consumer/connect/streams</a></h4>
