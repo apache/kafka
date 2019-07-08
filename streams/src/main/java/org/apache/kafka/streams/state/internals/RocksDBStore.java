@@ -385,7 +385,6 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]> {
         userSpecifiedOptions = null;
         wOptions = null;
         fOptions = null;
-        filter = null;
         db = null;
     }
 
