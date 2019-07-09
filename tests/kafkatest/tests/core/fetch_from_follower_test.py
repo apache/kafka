@@ -95,7 +95,7 @@ class FetchFromFollowerTest(ProduceConsumeValidateTest):
         non_leader_idx = 2 if leader_idx != 2 else 1
         non_leader_rack = "rack-b" if leader_idx != 2 else "rack-a"
 
-        self.logger.debug("Leader %d %s" % (leader_idx, leader_node.rack))
+        self.logger.debug("Leader %d %s" % (leader_idx, leader_node))
         self.logger.debug("Non-Leader %d %s" % (non_leader_idx, non_leader_rack))
 
         self.producer = VerifiableProducer(self.test_context, self.num_producers, self.kafka, self.topic,
