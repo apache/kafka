@@ -30,29 +30,30 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
 public class RoundRobinPartitionerTest {
-    private byte[] keyBytes = "key".getBytes();
-    private Partitioner partitioner = new RoundRobinPartitioner();
-    private Node node0 = new Node(0, "localhost", 99);
-    private Node node1 = new Node(1, "localhost", 100);
-    private Node node2 = new Node(2, "localhost", 101);
-    private Node[] nodes = new Node[] {node0, node1, node2};
-    private String topic = "test";
-    // Intentionally make the partition list not in partition order to test the edge
-    // cases.
-    private List<PartitionInfo> partitions = asList(new PartitionInfo(topic, 1, null, nodes, nodes),
-            new PartitionInfo(topic, 2, node1, nodes, nodes), new PartitionInfo(topic, 0, node0, nodes, nodes));
-    private Cluster cluster = new Cluster("clusterId", asList(node0, node1, node2), partitions,
-            Collections.<String>emptySet(), Collections.<String>emptySet());
+    private final static Node[] NODES = new Node[] {
+        new Node(0, "localhost", 99),
+        new Node(1, "localhost", 100),
+        new Node(2, "localhost", 101)
+    };
 
     @Test
     public void testRoundRobinWithUnavailablePartitions() {
+        // Intentionally make the partition list not in partition order to test the edge
+        // cases.
+        List<PartitionInfo> partitions = asList(
+                new PartitionInfo("test", 1, null, NODES, NODES),
+                new PartitionInfo("test", 2, NODES[1], NODES, NODES),
+                new PartitionInfo("test", 0, NODES[0], NODES, NODES));
         // When there are some unavailable partitions, we want to make sure that (1) we
         // always pick an available partition,
         // and (2) the available partitions are selected in a round robin way.
         int countForPart0 = 0;
         int countForPart2 = 0;
+        Partitioner partitioner = new RoundRobinPartitioner();
+        Cluster cluster = new Cluster("clusterId", asList(NODES[0], NODES[1], NODES[2]), partitions,
+            Collections.<String>emptySet(), Collections.<String>emptySet());
         for (int i = 1; i <= 100; i++) {
-            int part = partitioner.partition(topic, null, null, null, null, cluster);
+            int part = partitioner.partition("test", null, null, null, null, cluster);
             assertTrue("We should never choose a leader-less node in round robin", part == 0 || part == 2);
             if (part == 0)
                 countForPart0++;
@@ -67,14 +68,16 @@ public class RoundRobinPartitionerTest {
         final String topicA = "topicA";
         final String topicB = "topicB";
 
-        List<PartitionInfo> allPartitions = asList(new PartitionInfo(topicA, 0, node0, nodes, nodes),
-                new PartitionInfo(topicA, 1, node1, nodes, nodes), new PartitionInfo(topicA, 2, node2, nodes, nodes),
-                new PartitionInfo(topicB, 0, node0, nodes, nodes));
-        Cluster testCluster = new Cluster("clusterId", asList(node0, node1, node2), allPartitions,
+        List<PartitionInfo> allPartitions = asList(new PartitionInfo(topicA, 0, NODES[0], NODES, NODES),
+                new PartitionInfo(topicA, 1, NODES[1], NODES, NODES), new PartitionInfo(topicA, 2, NODES[2], NODES, NODES),
+                new PartitionInfo(topicB, 0, NODES[0], NODES, NODES));
+        Cluster testCluster = new Cluster("clusterId", asList(NODES[0], NODES[1], NODES[2]), allPartitions,
                 Collections.<String>emptySet(), Collections.<String>emptySet());
 
         final Map<Integer, Integer> partitionCount = new HashMap<>();
 
+        final byte[] keyBytes = "key".getBytes();
+        Partitioner partitioner = new RoundRobinPartitioner();
         for (int i = 0; i < 30; ++i) {
             int partition = partitioner.partition(topicA, null, keyBytes, null, null, testCluster);
             Integer count = partitionCount.get(partition);
@@ -87,9 +90,9 @@ public class RoundRobinPartitionerTest {
             }
         }
 
-        assertEquals(10, (int) partitionCount.get(0));
-        assertEquals(10, (int) partitionCount.get(1));
-        assertEquals(10, (int) partitionCount.get(2));
+        assertEquals(10, partitionCount.get(0).intValue());
+        assertEquals(10, partitionCount.get(1).intValue());
+        assertEquals(10, partitionCount.get(2).intValue());
     }
     
     @Test
@@ -97,14 +100,15 @@ public class RoundRobinPartitionerTest {
         final String topicA = "topicA";
         final String topicB = "topicB";
 
-        List<PartitionInfo> allPartitions = asList(new PartitionInfo(topicA, 0, node0, nodes, nodes),
-                new PartitionInfo(topicA, 1, node1, nodes, nodes), new PartitionInfo(topicA, 2, node2, nodes, nodes),
-                new PartitionInfo(topicB, 0, node0, nodes, nodes));
-        Cluster testCluster = new Cluster("clusterId", asList(node0, node1, node2), allPartitions,
+        List<PartitionInfo> allPartitions = asList(new PartitionInfo(topicA, 0, NODES[0], NODES, NODES),
+                new PartitionInfo(topicA, 1, NODES[1], NODES, NODES), new PartitionInfo(topicA, 2, NODES[2], NODES, NODES),
+                new PartitionInfo(topicB, 0, NODES[0], NODES, NODES));
+        Cluster testCluster = new Cluster("clusterId", asList(NODES[0], NODES[1], NODES[2]), allPartitions,
                 Collections.<String>emptySet(), Collections.<String>emptySet());
 
         final Map<Integer, Integer> partitionCount = new HashMap<>();
 
+        Partitioner partitioner = new RoundRobinPartitioner();
         for (int i = 0; i < 30; ++i) {
             int partition = partitioner.partition(topicA, null, null, null, null, testCluster);
             Integer count = partitionCount.get(partition);
@@ -117,8 +121,8 @@ public class RoundRobinPartitionerTest {
             }
         }
 
-        assertEquals(10, (int) partitionCount.get(0));
-        assertEquals(10, (int) partitionCount.get(1));
-        assertEquals(10, (int) partitionCount.get(2));
+        assertEquals(10, partitionCount.get(0).intValue());
+        assertEquals(10, partitionCount.get(1).intValue());
+        assertEquals(10, partitionCount.get(2).intValue());
     }    
 }
