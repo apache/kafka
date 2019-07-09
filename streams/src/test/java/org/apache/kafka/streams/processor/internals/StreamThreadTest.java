@@ -20,8 +20,10 @@ import org.apache.kafka.clients.admin.MockAdminClient;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.InvalidOffsetException;
 import org.apache.kafka.clients.consumer.MockConsumer;
+import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.clients.producer.MockProducer;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.common.Cluster;
@@ -697,54 +699,41 @@ public class StreamThreadTest {
 
     @Test
     public void shouldNotAccessTaskManagerWhenPendingShutdownInRunOnce() {
-        final LogCaptureAppender appender = LogCaptureAppender.createAndRegister();
+        final TaskManager taskManager = EasyMock.createNiceMock(TaskManager.class);
+        EasyMock.expect(taskManager.activeTask(t1p1)).andReturn(null);
+        EasyMock.replay(taskManager);
 
-        internalTopologyBuilder.addSource(null, "source", null, null, null, topic1);
+        final MockStreamThreadConsumer<byte[], byte[]> mockStreamThreadConsumer =
+            new MockStreamThreadConsumer<byte[], byte[]>(OffsetResetStrategy.EARLIEST) {
+            @Override
+            public void onPoll() {
+                super.streamThread.shutdown();
+            }
+        };
 
-        final StreamThread streamThread = createStreamThread(clientId, new StreamsConfig(configProps(true)), true);
+        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, clientId);
+        final StreamThread thread = new StreamThread(
+            mockTime,
+            config,
+            null,
+            mockStreamThreadConsumer,
+            mockStreamThreadConsumer,
+            null,
+            taskManager,
+            streamsMetrics,
+            internalTopologyBuilder,
+            clientId,
+            new LogContext(""),
+            new AtomicInteger()
+        ).updateThreadMetadata(getSharedAdminClientId(clientId));
 
-        final Map<TaskId, Set<TopicPartition>> activeTasks = new HashMap<>();
-        final List<TopicPartition> assignedPartitions = new ArrayList<>();
+        mockStreamThreadConsumer.setStreamThread(thread);
+        mockStreamThreadConsumer.assign(Collections.singletonList(t1p1));
+        mockStreamThreadConsumer.updateBeginningOffsets(Collections.singletonMap(t1p1, 0L));
 
-        // assign single partition
-        assignedPartitions.add(t1p1);
-        assignedPartitions.add(t1p2);
-        activeTasks.put(task1, Collections.singleton(t1p1));
-        activeTasks.put(task2, Collections.singleton(t1p2));
-
-        streamThread.taskManager().setAssignmentMetadata(activeTasks, Collections.emptyMap());
-        final MockConsumer<byte[], byte[]> mockConsumer = (MockConsumer<byte[], byte[]>) streamThread.consumer;
-        final Map<TopicPartition, Long> beginOffsets = new HashMap<>();
-        beginOffsets.put(t1p1, 0L);
-        beginOffsets.put(t1p2, 0L);
-        mockConsumer.updateBeginningOffsets(beginOffsets);
-
-        final Thread callbackThread = new Thread(() -> {
-            streamThread.rebalanceListener.onPartitionsRevoked(Collections.emptyList());
-            mockConsumer.assignForSubscribed(assignedPartitions);
-            streamThread.rebalanceListener.onPartitionsAssigned(assignedPartitions);
-        });
-
-        streamThread.setStateListener(
-            (t, newState, oldState) -> {
-                if (oldState == StreamThread.State.CREATED && newState == StreamThread.State.STARTING) {
-                    // Start triggering consumer callbacks to make sure we proceed to PARTITIONS_ASSIGNED stage.
-                    callbackThread.start();
-                } else if (oldState == StreamThread.State.PARTITIONS_REVOKED && newState == StreamThread.State.PARTITIONS_ASSIGNED) {
-                    // Immediately trigger shutdown call to switch the state.
-                    streamThread.shutdown();
-                }
-            });
-
-        streamThread.run();
-
-        LogCaptureAppender.unregister(appender);
-        final List<String> strings = appender.getMessages();
-        assertTrue(strings.contains(
-            "stream-thread [clientId-StreamThread-1] " +
-                "State already transits to PENDING_SHUTDOWN, " +
-                "skipping the run once call after poll request")
-        );
+        addRecord(mockStreamThreadConsumer, 1L, 0L);
+        thread.setState(StreamThread.State.STARTING);
+        thread.runOnce();
     }
 
     @Test
@@ -1621,5 +1610,31 @@ public class StreamThreadTest {
             -1,
             new byte[0],
             new byte[0]));
+    }
+
+
+    /**
+     * Mock consumer that could alter stream thread state during #poll()
+     */
+    private abstract class MockStreamThreadConsumer<K, V> extends MockConsumer<K, V> {
+
+        private StreamThread streamThread;
+
+        MockStreamThreadConsumer(final OffsetResetStrategy offsetResetStrategy) {
+            super(offsetResetStrategy);
+        }
+
+        @Override
+        public synchronized ConsumerRecords<K, V> poll(final Duration timeout) {
+            assertNotNull(streamThread);
+            onPoll();
+            return super.poll(timeout);
+        }
+
+        public abstract void onPoll();
+
+        void setStreamThread(final StreamThread streamThread) {
+            this.streamThread = streamThread;
+        }
     }
 }

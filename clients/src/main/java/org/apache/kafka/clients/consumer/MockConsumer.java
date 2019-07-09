@@ -143,12 +143,6 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
         this.subscriptions.assignFromUser(new HashSet<>(partitions));
     }
 
-    public synchronized void assignForSubscribed(Collection<TopicPartition> partitions) {
-        ensureNotClosed();
-        committed.clear();
-        this.subscriptions.assignFromSubscribed(new HashSet<>(partitions));
-    }
-
     @Override
     public synchronized void unsubscribe() {
         ensureNotClosed();
