@@ -112,7 +112,6 @@ versions += [
   spotbugs: "3.1.12",
   spotbugsPlugin: "1.6.9",
   spotlessPlugin: "3.23.0",
-  zkclient: "0.11",
   zookeeper: "3.4.14",
   zstd: "1.4.0-1"
 ]
@@ -178,7 +177,6 @@ libs += [
   slf4jApi: "org.slf4j:slf4j-api:$versions.slf4j",
   slf4jlog4j: "org.slf4j:slf4j-log4j12:$versions.slf4j",
   snappy: "org.xerial.snappy:snappy-java:$versions.snappy",
-  zkclient: "com.101tec:zkclient:$versions.zkclient",
   zookeeper: "org.apache.zookeeper:zookeeper:$versions.zookeeper",
   jfreechart: "jfreechart:jfreechart:$versions.jfreechart",
   mavenArtifact: "org.apache.maven:maven-artifact:$versions.mavenArtifact",

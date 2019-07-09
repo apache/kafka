@@ -19,7 +19,6 @@ package org.apache.kafka.common.record;
 import org.apache.kafka.common.errors.CorruptRecordException;
 import org.junit.Test;
 
-import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.Iterator;
 
@@ -56,7 +55,7 @@ public class ByteBufferLogInputStreamTest {
     }
 
     @Test(expected = CorruptRecordException.class)
-    public void iteratorRaisesOnTooSmallRecords() throws IOException {
+    public void iteratorRaisesOnTooSmallRecords() {
         ByteBuffer buffer = ByteBuffer.allocate(1024);
         MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, CompressionType.NONE, TimestampType.CREATE_TIME, 0L);
         builder.append(15L, "a".getBytes(), "1".getBytes());
@@ -79,7 +78,7 @@ public class ByteBufferLogInputStreamTest {
     }
 
     @Test(expected = CorruptRecordException.class)
-    public void iteratorRaisesOnInvalidMagic() throws IOException {
+    public void iteratorRaisesOnInvalidMagic() {
         ByteBuffer buffer = ByteBuffer.allocate(1024);
         MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, CompressionType.NONE, TimestampType.CREATE_TIME, 0L);
         builder.append(15L, "a".getBytes(), "1".getBytes());
@@ -102,7 +101,7 @@ public class ByteBufferLogInputStreamTest {
     }
 
     @Test(expected = CorruptRecordException.class)
-    public void iteratorRaisesOnTooLargeRecords() throws IOException {
+    public void iteratorRaisesOnTooLargeRecords() {
         ByteBuffer buffer = ByteBuffer.allocate(1024);
         MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, CompressionType.NONE, TimestampType.CREATE_TIME, 0L);
         builder.append(15L, "a".getBytes(), "1".getBytes());
