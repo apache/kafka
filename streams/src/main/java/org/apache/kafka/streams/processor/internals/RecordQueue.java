@@ -113,10 +113,9 @@ public class RecordQueue {
      */
     public StampedRecord poll() {
         final StampedRecord recordToReturn = headRecord;
+        headRecord = null;
 
         updateHead();
-
-        headRecord = null;
 
         return recordToReturn;
     }
