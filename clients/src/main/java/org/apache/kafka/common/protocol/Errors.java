@@ -75,6 +75,7 @@ import org.apache.kafka.common.errors.OffsetNotAvailableException;
 import org.apache.kafka.common.errors.OffsetOutOfRangeException;
 import org.apache.kafka.common.errors.OperationNotAttemptedException;
 import org.apache.kafka.common.errors.OutOfOrderSequenceException;
+import org.apache.kafka.common.errors.PendingTransactionException;
 import org.apache.kafka.common.errors.PolicyViolationException;
 import org.apache.kafka.common.errors.PreferredLeaderNotAvailableException;
 import org.apache.kafka.common.errors.ProducerFencedException;
@@ -309,7 +310,9 @@ public enum Errors {
             FencedInstanceIdException::new),
     ELIGIBLE_LEADERS_NOT_AVAILABLE(83, "Eligible topic partition leaders are not available",
             EligibleLeadersNotAvailableException::new),
-    ELECTION_NOT_NEEDED(84, "Leader election not needed for topic partition", ElectionNotNeededException::new);
+    ELECTION_NOT_NEEDED(84, "Leader election not needed for topic partition", ElectionNotNeededException::new),
+    PENDING_TRANSACTION(85, "There are pending transactions for the offset topic that needs to be cleared",
+                        PendingTransactionException::new);
 
     private static final Logger log = LoggerFactory.getLogger(Errors.class);
 

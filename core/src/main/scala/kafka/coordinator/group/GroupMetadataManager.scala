@@ -453,6 +453,13 @@ class GroupMetadataManager(brokerId: Int,
               Optional.empty(), "", Errors.NONE)
             topicPartition -> partitionData
           }.toMap
+        } else if (group.hasPendingOffsetCommitsForTopicPartition(topicPartitionsOpt)) {
+          // Some pending transactions have not been cleaned up yet.
+          topicPartitionsOpt.getOrElse(Seq.empty[TopicPartition]).map { topicPartition =>
+            val partitionData = new OffsetFetchResponse.PartitionData(OffsetFetchResponse.INVALID_OFFSET,
+              Optional.empty(), "", Errors.PENDING_TRANSACTION)
+            topicPartition -> partitionData
+          }.toMap
         } else {
           topicPartitionsOpt match {
             case None =>
