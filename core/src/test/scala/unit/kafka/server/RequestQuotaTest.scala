@@ -542,7 +542,7 @@ class RequestQuotaTest extends BaseRequestTest {
         new MetadataResponse(response, ApiKeys.DESCRIBE_GROUPS.latestVersion).throttleTimeMs
       case ApiKeys.OFFSET_COMMIT =>
         new OffsetCommitResponse(response, ApiKeys.OFFSET_COMMIT.latestVersion).throttleTimeMs
-      case ApiKeys.OFFSET_FETCH => new OffsetFetchResponse(response).throttleTimeMs
+      case ApiKeys.OFFSET_FETCH => new OffsetFetchResponse(response, ApiKeys.OFFSET_FETCH.latestVersion).throttleTimeMs
       case ApiKeys.FIND_COORDINATOR =>
         new FindCoordinatorResponse(response, ApiKeys.FIND_COORDINATOR.latestVersion).throttleTimeMs
       case ApiKeys.JOIN_GROUP => new JoinGroupResponse(response).throttleTimeMs
