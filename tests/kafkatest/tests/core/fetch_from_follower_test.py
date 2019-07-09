@@ -123,8 +123,11 @@ class FetchFromFollowerTest(ProduceConsumeValidateTest):
         self.jmx_tool.read_jmx_output(consumer_idx, consumer_node)
 
         all_captured_preferred_read_replicas = defaultdict(int)
+        self.logger.debug(self.jmx_tool.jmx_stats)
+
         for ts, data in self.jmx_tool.jmx_stats[0].items():
             for k, v in data.items():
+                self.logger.debug("JMX => %s %s" % (k, v))
                 if k.endswith(jmx_attribute):
                     all_captured_preferred_read_replicas[int(v)] += 1
 
