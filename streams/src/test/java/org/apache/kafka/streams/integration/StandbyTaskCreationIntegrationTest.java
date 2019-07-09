@@ -25,8 +25,10 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.kstream.Consumed;
+import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Transformer;
 import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.ThreadMetadata;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
@@ -39,6 +41,7 @@ import org.junit.Test;
 import org.junit.experimental.categories.Category;
 
 import java.util.Properties;
+import java.util.function.Predicate;
 
 @Category({IntegrationTest.class})
 public class StandbyTaskCreationIntegrationTest {
@@ -81,14 +84,12 @@ public class StandbyTaskCreationIntegrationTest {
     @Test
     public void shouldNotCreateAnyStandByTasksForStateStoreWithLoggingDisabled() throws Exception {
         final StreamsBuilder builder = new StreamsBuilder();
-
         final String stateStoreName = "myTransformState";
         final StoreBuilder<KeyValueStore<Integer, Integer>> keyValueStoreBuilder =
             Stores.keyValueStoreBuilder(Stores.persistentKeyValueStore(stateStoreName),
                                         Serdes.Integer(),
                                         Serdes.Integer()).withLoggingDisabled();
         builder.addStateStore(keyValueStoreBuilder);
-
         builder.stream(INPUT_TOPIC, Consumed.with(Serdes.Integer(), Serdes.Integer()))
             .transform(() -> new Transformer<Integer, Integer, KeyValue<Integer, Integer>>() {
                 @SuppressWarnings("unchecked")
@@ -105,32 +106,81 @@ public class StandbyTaskCreationIntegrationTest {
             }, stateStoreName);
 
         final Topology topology = builder.build();
-        client1 = new KafkaStreams(topology, streamsConfiguration());
-        client2 = new KafkaStreams(topology, streamsConfiguration());
+        createClients(topology, streamsConfiguration(), topology, streamsConfiguration());
 
+        setStateListenersForVerification(thread -> thread.standbyTasks().isEmpty() && !thread.activeTasks().isEmpty());
+
+        startClients();
+
+        waitUntilBothClientAreOK(
+            "At least one client did not reach state RUNNING with active tasks but no stand-by tasks"
+        );
+    }
+
+    @Test
+    public void shouldCreateStandByTasksForMaterializedAndOptimizedSourceTables() throws Exception {
+        final Properties streamsConfiguration1 = streamsConfiguration();
+        streamsConfiguration1.put(StreamsConfig.TOPOLOGY_OPTIMIZATION, StreamsConfig.OPTIMIZE);
+        final Properties streamsConfiguration2 = streamsConfiguration();
+        streamsConfiguration2.put(StreamsConfig.TOPOLOGY_OPTIMIZATION, StreamsConfig.OPTIMIZE);
+
+        final StreamsBuilder builder = new StreamsBuilder();
+        builder.table(INPUT_TOPIC, Consumed.with(Serdes.Integer(), Serdes.Integer()), Materialized.as("source-table"));
+
+        createClients(
+            builder.build(streamsConfiguration1),
+            streamsConfiguration1,
+            builder.build(streamsConfiguration2),
+            streamsConfiguration2
+        );
+
+        setStateListenersForVerification(thread -> !thread.standbyTasks().isEmpty() && !thread.activeTasks().isEmpty());
+
+        startClients();
+
+        waitUntilBothClientAreOK(
+            "At least one client did not reach state RUNNING with active tasks and stand-by tasks"
+        );
+    }
+
+    private void createClients(final Topology topology1,
+                               final Properties streamsConfiguration1,
+                               final Topology topology2,
+                               final Properties streamsConfiguration2) {
+
+        client1 = new KafkaStreams(topology1, streamsConfiguration1);
+        client2 = new KafkaStreams(topology2, streamsConfiguration2);
+    }
+
+    private void setStateListenersForVerification(final Predicate<ThreadMetadata> taskCondition) {
         client1.setStateListener((newState, oldState) -> {
             if (newState == State.RUNNING &&
-                client1.localThreadsMetadata().stream().allMatch(thread -> thread.standbyTasks().isEmpty())) {
+                client1.localThreadsMetadata().stream().allMatch(taskCondition)) {
 
                 client1IsOk = true;
             }
         });
         client2.setStateListener((newState, oldState) -> {
             if (newState == State.RUNNING &&
-                client2.localThreadsMetadata().stream().allMatch(thread -> thread.standbyTasks().isEmpty())) {
+                client2.localThreadsMetadata().stream().allMatch(taskCondition)) {
 
                 client2IsOk = true;
             }
         });
+    }
 
+    private void startClients() {
         client1.start();
         client2.start();
+    }
 
+    private void waitUntilBothClientAreOK(final String message) throws Exception {
         TestUtils.waitForCondition(
             () -> client1IsOk && client2IsOk,
             30 * 1000,
-            "At least one client did not reach state RUNNING without any stand-by tasks: "
+            message + ": "
                 + "Client 1 is " + (!client1IsOk ? "NOT " : "") + "OK, "
-                + "client 2 is " + (!client2IsOk ? "NOT " : "") + "OK.");
+                + "client 2 is " + (!client2IsOk ? "NOT " : "") + "OK."
+        );
     }
 }
