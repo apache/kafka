@@ -55,7 +55,7 @@ public class OffsetFetchRequestTest {
                                    new TopicPartition(topicTwo, partitionTwo));
         builder = new OffsetFetchRequest.Builder(
             groupId,
-            partitions
+            false, partitions
         );
     }
 
@@ -100,6 +100,22 @@ public class OffsetFetchRequestTest {
     @Test
     public void testConstructorFailForUnsupportedAllPartition() {
         builder = OffsetFetchRequest.Builder.allTopicPartitions(groupId);
+        for (short version = 0; version <= ApiKeys.OFFSET_FETCH.latestVersion(); version++) {
+            short finalVersion = version;
+            if (version <= 1) {
+                assertThrows(UnsupportedVersionException.class, () -> builder.build(finalVersion));
+            } else {
+                OffsetFetchRequest request = builder.build(finalVersion);
+                assertEquals(groupId, request.groupId());
+                assertNull(request.partitions());
+                assertTrue(request.isAllPartitions());
+            }
+        }
+    }
+
+    @Test
+    public void testConstructorFailForUnsupportedWaitTransaction() {
+        builder = new OffsetFetchRequest.Builder(groupId, true, Collections.emptyList());
         for (short version = 0; version <= ApiKeys.OFFSET_FETCH.latestVersion(); version++) {
             short finalVersion = version;
             if (version <= 1) {

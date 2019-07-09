@@ -289,7 +289,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   }
 
   private def createOffsetFetchRequest = {
-    new requests.OffsetFetchRequest.Builder(group, List(tp).asJava).build()
+    new requests.OffsetFetchRequest.Builder(group, false, List(tp).asJava).build()
   }
 
   private def createFindCoordinatorRequest = {

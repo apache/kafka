@@ -3028,7 +3028,7 @@ public class KafkaAdminClient extends AdminClient {
                 new ConstantNodeIdProvider(context.node().get().id())) {
             @Override
             OffsetFetchRequest.Builder createRequest(int timeoutMs) {
-                return new OffsetFetchRequest.Builder(context.groupId(), context.options().topicPartitions());
+                return new OffsetFetchRequest.Builder(context.groupId(), false, context.options().topicPartitions());
             }
 
             @Override

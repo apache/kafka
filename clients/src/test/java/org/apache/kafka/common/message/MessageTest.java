@@ -465,10 +465,19 @@ public final class MessageTest {
         OffsetFetchRequestData allPartitionData = new OffsetFetchRequestData()
                                                       .setGroupId(groupId)
                                                       .setTopics(null);
+
+        OffsetFetchRequestData waitTransactionData = new OffsetFetchRequestData()
+                                                         .setGroupId(groupId)
+                                                         .setTopics(null)
+                                                         .setWaitTransaction(true);
+
         for (short version = 0; version <= ApiKeys.OFFSET_FETCH.latestVersion(); version++) {
             if (version < 2) {
                 final short finalVersion = version;
                 assertThrows(SchemaException.class, () -> testAllMessageRoundTripsFromVersion(finalVersion, allPartitionData));
+            } else if (version < 7) {
+                final short finalVersion = version;
+                assertThrows(UnsupportedVersionException.class, () -> testAllMessageRoundTripsFromVersion(finalVersion, waitTransactionData));
             } else {
                 testAllMessageRoundTripsFromVersion(version, allPartitionData);
             }

@@ -1222,7 +1222,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         log.debug("Fetching committed offsets for partitions: {}", partitions);
         // construct the request
         OffsetFetchRequest.Builder requestBuilder = new OffsetFetchRequest.Builder(this.rebalanceConfig.groupId,
-                new ArrayList<>(partitions));
+                                                                                   false, new ArrayList<>(partitions));
 
         // send the request with a callback
         return client.send(coordinator, requestBuilder)
@@ -1236,7 +1236,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                 Errors error = response.error();
                 log.debug("Offset fetch failed: {}", error.message());
 
-                if (error == Errors.COORDINATOR_LOAD_IN_PROGRESS) {
+                if (error == Errors.COORDINATOR_LOAD_IN_PROGRESS || error == Errors.PENDING_TRANSACTION) {
                     // just retry
                     future.raise(error);
                 } else if (error == Errors.NOT_COORDINATOR) {

@@ -28,7 +28,9 @@
   // Version 3, 4, and 5 are the same as version 2.
   //
   // Version 6 is the first flexible version.
-  "validVersions": "0-6",
+  //
+  // Version 7 is adding the wait for transaction flag.
+  "validVersions": "0-7",
   "flexibleVersions": "6+",
   "fields": [
     { "name": "GroupId", "type": "string", "versions": "0+", "entityType": "groupId",
@@ -39,6 +41,8 @@
         "about": "The topic name."},
       { "name": "PartitionIndexes", "type": "[]int32", "versions": "0+",
         "about": "The partition indexes we would like to fetch offsets for." }
-    ]}
+    ]},
+    {"name": "WaitTransaction", "type": "bool", "versions": "7+", "default": "false",
+      "about": "The flag indicating whether we should wait for a pending transaction commit"}
   ]
 }

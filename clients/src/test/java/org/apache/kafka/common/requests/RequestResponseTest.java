@@ -798,7 +798,7 @@ public class RequestResponseTest {
 
         assertTrue(allTopicPartitionsString.contains("groupId='someGroup', topics=null"));
         String string = new OffsetFetchRequest.Builder("group1",
-            Collections.singletonList(new TopicPartition("test11", 1))).toString();
+                                                       false, Collections.singletonList(new TopicPartition("test11", 1))).toString();
         assertTrue(string.contains("test11"));
         assertTrue(string.contains("group1"));
     }
@@ -1222,7 +1222,7 @@ public class RequestResponseTest {
     }
 
     private OffsetFetchRequest createOffsetFetchRequest(int version) {
-        return new OffsetFetchRequest.Builder("group1", Collections.singletonList(new TopicPartition("test11", 1)))
+        return new OffsetFetchRequest.Builder("group1", false, Collections.singletonList(new TopicPartition("test11", 1)))
                 .build((short) version);
     }
 

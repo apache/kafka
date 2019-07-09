@@ -682,6 +682,14 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
   def hasPendingOffsetCommitsFromProducer(producerId: Long) =
     pendingTransactionalOffsetCommits.contains(producerId)
 
+  def hasPendingOffsetCommitsForTopicPartition(topicPartitionsOpt: Option[Seq[TopicPartition]]) : Boolean = {
+    pendingTransactionalOffsetCommits.exists(
+      _._2.exists(topicPartitionAndOffsets =>
+        topicPartitionsOpt.getOrElse(Seq.empty[TopicPartition]).contains(topicPartitionAndOffsets._1)
+      )
+    )
+  }
+
   def removeAllOffsets(): immutable.Map[TopicPartition, OffsetAndMetadata] = removeOffsets(offsets.keySet.toSeq)
 
   def removeOffsets(topicPartitions: Seq[TopicPartition]): immutable.Map[TopicPartition, OffsetAndMetadata] = {

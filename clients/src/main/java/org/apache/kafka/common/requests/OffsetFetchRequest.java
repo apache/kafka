@@ -40,7 +40,9 @@ public class OffsetFetchRequest extends AbstractRequest {
 
         public final OffsetFetchRequestData data;
 
-        public Builder(String groupId, List<TopicPartition> partitions) {
+        public Builder(String groupId,
+                       boolean waitTransaction,
+                       List<TopicPartition> partitions) {
             super(ApiKeys.OFFSET_FETCH);
 
             final List<OffsetFetchRequestTopic> topics;
@@ -61,11 +63,12 @@ public class OffsetFetchRequest extends AbstractRequest {
 
             this.data = new OffsetFetchRequestData()
                             .setGroupId(groupId)
+                            .setWaitTransaction(waitTransaction)
                             .setTopics(topics);
         }
 
         public static Builder allTopicPartitions(String groupId) {
-            return new Builder(groupId, null);
+            return new Builder(groupId, false, null);
         }
 
         public boolean isAllTopicPartitions() {
@@ -74,9 +77,15 @@ public class OffsetFetchRequest extends AbstractRequest {
 
         @Override
         public OffsetFetchRequest build(short version) {
-            if (isAllTopicPartitions() && version < 2)
+            if (isAllTopicPartitions() && version < 2) {
                 throw new UnsupportedVersionException("The broker only supports OffsetFetchRequest " +
-                        "v" + version + ", but we need v2 or newer to request all topic partitions.");
+                    "v" + version + ", but we need v2 or newer to request all topic partitions.");
+            }
+
+            if (data.waitTransaction() && version < 7) {
+                throw new UnsupportedVersionException("The broker only supports OffsetFetchRequest " +
+                    "v" + version + ", but we need v7 or newer to request wait transactions.");
+            }
             return new OffsetFetchRequest(data, version);
         }
 
@@ -101,6 +110,10 @@ public class OffsetFetchRequest extends AbstractRequest {
 
     public String groupId() {
         return data.groupId();
+    }
+
+    public boolean waitTransaction() {
+        return data.waitTransaction();
     }
 
     private OffsetFetchRequest(OffsetFetchRequestData data, short version) {
