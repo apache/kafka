@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import java.util.ArrayList;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.Metrics;
@@ -38,7 +39,6 @@ import org.apache.kafka.streams.processor.TimestampExtractor;
 import org.apache.kafka.streams.state.StateSerdes;
 import org.apache.kafka.test.InternalMockProcessorContext;
 import org.apache.kafka.test.MockSourceNode;
-import org.apache.kafka.test.MockTimestampExtractor;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -53,7 +53,7 @@ import static org.junit.Assert.assertTrue;
 public class RecordQueueTest {
     private final Serializer<Integer> intSerializer = new IntegerSerializer();
     private final Deserializer<Integer> intDeserializer = new IntegerDeserializer();
-    private final TimestampExtractor timestampExtractor = new MockTimestampExtractor();
+    private final TimestampExtractor timestampExtractor = new RecordQueueTestTimestampExtractor();
     private final String[] topics = {"topic"};
 
     private final Sensor skippedRecordsSensor = new Metrics().sensor("skipped-records");
@@ -182,7 +182,30 @@ public class RecordQueueTest {
         assertEquals(4L, queue.timestamp());
     }
 
-    @Test(expected = StreamsException.class)
+    @Test
+    public void testTimestampExtractorPartitionTime() {
+
+        RecordQueueTestTimestampExtractor testTimestampExtractor = (RecordQueueTestTimestampExtractor) timestampExtractor;
+
+        assertTrue(queue.isEmpty());
+        assertEquals(0, queue.size());
+        assertEquals(RecordQueue.UNKNOWN, queue.timestamp());
+
+        // add three 3 out-of-order records with timestamp 2, 1, 3, 4
+        final List<ConsumerRecord<byte[], byte[]>> list1 = Arrays.asList(
+            new ConsumerRecord<>("topic", 1, 2, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue),
+            new ConsumerRecord<>("topic", 1, 1, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue),
+            new ConsumerRecord<>("topic", 1, 3, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue),
+            new ConsumerRecord<>("topic", 1, 4, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue));
+
+        queue.addRawRecords(list1);
+        while (queue.poll() != null) {}
+
+        assertEquals(testTimestampExtractor.observedPartitionTimes, new ArrayList<>(Arrays.asList(RecordQueue.UNKNOWN, 2L, 2L, 3L)));
+
+    }
+
+        @Test(expected = StreamsException.class)
     public void shouldThrowStreamsExceptionWhenKeyDeserializationFails() {
         final byte[] key = Serdes.Long().serializer().serialize("foo", 1L);
         final List<ConsumerRecord<byte[], byte[]>> records = Collections.singletonList(
@@ -252,5 +275,18 @@ public class RecordQueueTest {
         queue.addRawRecords(records);
 
         assertEquals(0, queue.size());
+    }
+
+    static class RecordQueueTestTimestampExtractor implements TimestampExtractor {
+        private List<Long> observedPartitionTimes = new ArrayList<>();
+
+        public long extract(ConsumerRecord<Object, Object> record, long partitionTime) {
+            observedPartitionTimes.add(partitionTime);
+            return record.offset();
+        }
+
+        public List<Long> observedPartitionTimes() {
+            return observedPartitionTimes;
+        }
     }
 }
