@@ -16,32 +16,14 @@
  */
 package org.apache.kafka.common.metrics.stats;
 
-import org.apache.kafka.common.metrics.MeasurableStat;
-import org.apache.kafka.common.metrics.MetricConfig;
-
 /**
- * An un-windowed cumulative total maintained over all time.
+ * An non-sampled cumulative total maintained over all time.
+ * This is a non-sampled version of {@link WindowedSum}.
+ *
+ * See also {@link CumulativeCount} if you just want to increment the value by 1 on each recording.
+ *
+ * @deprecated since 2.4 . Use {@link CumulativeSum} instead.
  */
-public class Total implements MeasurableStat {
-
-    private double total;
-
-    public Total() {
-        this.total = 0.0;
-    }
-
-    public Total(double value) {
-        this.total = value;
-    }
-
-    @Override
-    public void record(MetricConfig config, double value, long now) {
-        this.total += value;
-    }
-
-    @Override
-    public double measure(MetricConfig config, long now) {
-        return this.total;
-    }
-
+@Deprecated
+public class Total extends CumulativeSum {
 }

@@ -24,9 +24,9 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Avg;
+import org.apache.kafka.common.metrics.stats.CumulativeSum;
 import org.apache.kafka.common.metrics.stats.Max;
 import org.apache.kafka.common.metrics.stats.Rate;
-import org.apache.kafka.common.metrics.stats.Total;
 import org.apache.kafka.common.metrics.stats.Value;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.connect.errors.ConnectException;
@@ -591,11 +591,11 @@ class WorkerSourceTask extends WorkerTask {
 
             sourceRecordPoll = metricGroup.sensor("source-record-poll");
             sourceRecordPoll.add(metricGroup.metricName(registry.sourceRecordPollRate), new Rate());
-            sourceRecordPoll.add(metricGroup.metricName(registry.sourceRecordPollTotal), new Total());
+            sourceRecordPoll.add(metricGroup.metricName(registry.sourceRecordPollTotal), new CumulativeSum());
 
             sourceRecordWrite = metricGroup.sensor("source-record-write");
             sourceRecordWrite.add(metricGroup.metricName(registry.sourceRecordWriteRate), new Rate());
-            sourceRecordWrite.add(metricGroup.metricName(registry.sourceRecordWriteTotal), new Total());
+            sourceRecordWrite.add(metricGroup.metricName(registry.sourceRecordWriteTotal), new CumulativeSum());
 
             pollTime = metricGroup.sensor("poll-batch-time");
             pollTime.add(metricGroup.metricName(registry.sourceRecordPollBatchTimeMax), new Max());

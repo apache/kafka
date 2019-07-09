@@ -14,13 +14,35 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common.metrics;
+package org.apache.kafka.common.metrics.stats;
+
+import org.apache.kafka.common.metrics.MetricConfig;
+
+import java.util.List;
 
 /**
- * A MeasurableStat is a {@link Stat} that is also {@link Measurable} (i.e. can produce a single floating point value).
- * This is the interface used for most of the simple statistics such as {@link org.apache.kafka.common.metrics.stats.Avg},
- * {@link org.apache.kafka.common.metrics.stats.Max}, {@link org.apache.kafka.common.metrics.stats.CumulativeCount}, etc.
+ * A {@link SampledStat} that maintains the sum of what it has seen.
+ * This is a sampled version of {@link CumulativeSum}.
+ *
+ * See also {@link WindowedCount} if you want to increment the value by 1 on each recording.
  */
-public interface MeasurableStat extends Stat, Measurable {
+public class WindowedSum extends SampledStat {
+
+    public WindowedSum() {
+        super(0);
+    }
+
+    @Override
+    protected void update(Sample sample, MetricConfig config, double value, long now) {
+        sample.value += value;
+    }
+
+    @Override
+    public double combine(List<Sample> samples, MetricConfig config, long now) {
+        double total = 0.0;
+        for (Sample sample : samples)
+            total += sample.value;
+        return total;
+    }
 
 }
