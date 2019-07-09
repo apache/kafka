@@ -494,7 +494,7 @@ public class StreamsConfig extends AbstractConfig {
                     REPLICATION_FACTOR_DOC)
             .define(STATE_DIR_CONFIG,
                     Type.STRING,
-                    "/var/lib/kafka-streams",
+                    "/tmp/kafka-streams",
                     Importance.HIGH,
                     STATE_DIR_DOC)
 
