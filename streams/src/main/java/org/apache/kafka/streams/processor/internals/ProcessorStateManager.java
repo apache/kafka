@@ -360,9 +360,13 @@ public class ProcessorStateManager implements StateManager {
     }
 
     private void updateCheckpointFileCache(final Map<TopicPartition, Long> checkpointableOffsetsFromProcessing) {
-        final Map<TopicPartition, Long> restoredOffsets = validCheckpointableOffsets(changelogReader.restoredOffsets());
+        final Set<TopicPartition> validCheckpointableTopics = validCheckpointableTopics();
+        final Map<TopicPartition, Long> restoredOffsets = validCheckpointableOffsets(
+            changelogReader.restoredOffsets(),
+            validCheckpointableTopics
+        );
         log.trace("Checkpointable offsets updated with restored offsets: {}", checkpointFileCache);
-        for (final TopicPartition topicPartition : validCheckpointableTopics()) {
+        for (final TopicPartition topicPartition : validCheckpointableTopics) {
             if (checkpointableOffsetsFromProcessing.containsKey(topicPartition)) {
                 // if we have just recently processed some offsets,
                 // store the last offset + 1 (the log position after restoration)
@@ -378,7 +382,8 @@ public class ProcessorStateManager implements StateManager {
             } else {
                 // As a last resort, fall back to the offset we loaded from the checkpoint file at startup, but
                 // only if the offset is actually valid for our current state stores.
-                final Long loadedOffset = validCheckpointableOffsets(initialLoadedCheckpoints).get(topicPartition);
+                final Long loadedOffset =
+                    validCheckpointableOffsets(initialLoadedCheckpoints, validCheckpointableTopics).get(topicPartition);
                 if (loadedOffset != null) {
                     checkpointFileCache.put(topicPartition, loadedOffset);
                 }
@@ -422,24 +427,29 @@ public class ProcessorStateManager implements StateManager {
 
         final Set<TopicPartition> result = new HashSet<>(storeToChangelogTopic.size());
         for (final Map.Entry<String, String> storeToChangelog : storeToChangelogTopic.entrySet()) {
-            if (registeredStores.containsKey(storeToChangelog.getKey())
-                && registeredStores.get(storeToChangelog.getKey()).isPresent()
-                && registeredStores.get(storeToChangelog.getKey()).get().persistent()) {
+            final String storeName = storeToChangelog.getKey();
+            if (registeredStores.containsKey(storeName)
+                && registeredStores.get(storeName).isPresent()
+                && registeredStores.get(storeName).get().persistent()) {
 
-                result.add(new TopicPartition(storeToChangelog.getValue(), getPartition(storeToChangelog.getValue())));
+                final String changelogTopic = storeToChangelog.getValue();
+                result.add(new TopicPartition(changelogTopic, getPartition(changelogTopic)));
             }
         }
         return result;
     }
 
-    private Map<TopicPartition, Long> validCheckpointableOffsets(final Map<TopicPartition, Long> checkpointableOffsets) {
-        final Set<TopicPartition> validCheckpointableTopics = validCheckpointableTopics();
+    private static Map<TopicPartition, Long> validCheckpointableOffsets(
+        final Map<TopicPartition, Long> checkpointableOffsets,
+        final Set<TopicPartition> validCheckpointableTopics) {
 
         final Map<TopicPartition, Long> result = new HashMap<>(checkpointableOffsets.size());
 
-        for (final Map.Entry<TopicPartition, Long> entry : checkpointableOffsets.entrySet()) {
-            if (validCheckpointableTopics.contains(entry.getKey())) {
-                result.put(entry.getKey(), entry.getValue());
+        for (final Map.Entry<TopicPartition, Long> topicToCheckpointableOffset : checkpointableOffsets.entrySet()) {
+            final TopicPartition topic = topicToCheckpointableOffset.getKey();
+            if (validCheckpointableTopics.contains(topic)) {
+                final Long checkpointableOffset = topicToCheckpointableOffset.getValue();
+                result.put(topic, checkpointableOffset);
             }
         }
 

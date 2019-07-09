@@ -254,8 +254,9 @@ public class ProcessorStateManagerTest {
         storeToChangelogTopic.put(storeName2, storeTopicName2);
         storeToChangelogTopic.put(storeName3, storeTopicName3);
 
-        final OffsetCheckpoint checkpoint = new OffsetCheckpoint(new File(stateDirectory.directoryForTask(taskId),
-                                                                          StateManagerUtil.CHECKPOINT_FILE_NAME));
+        final OffsetCheckpoint checkpoint = new OffsetCheckpoint(
+            new File(stateDirectory.directoryForTask(taskId), StateManagerUtil.CHECKPOINT_FILE_NAME)
+        );
         checkpoint.write(singletonMap(new TopicPartition(storeTopicName1, 0), storeTopic1LoadedCheckpoint));
 
         final TopicPartition partition1 = new TopicPartition(storeTopicName1, 0);
@@ -442,7 +443,7 @@ public class ProcessorStateManagerTest {
     }
 
     @Test
-    public void shouldIgnoreIrrlevantLoadedCheckpoints() throws IOException {
+    public void shouldIgnoreIrrelevantLoadedCheckpoints() throws IOException {
         final Map<TopicPartition, Long> offsets = mkMap(
             mkEntry(persistentStorePartition, 99L),
             mkEntry(new TopicPartition("ignoreme", 1234), 12L)
