@@ -838,7 +838,7 @@ public class StreamThread extends Thread {
         }
 
         // Shutdown hook could potentially be triggered and transit the thread state to PENDING_SHUTDOWN during #pollRequests().
-        // The task manager internal states could be uninitialized if the state transition happens during #onPartitionAssigned().
+        // The task manager internal states could be uninitialized if the state transition happens during #onPartitionsAssigned().
         // Should only proceed when the thread is still running after #pollRequests(), because no external state mutation
         // could affect the task manager state beyond this point within #runOnce().
         if (!isRunning()) {
@@ -1195,7 +1195,7 @@ public class StreamThread extends Thread {
         // intentionally do not check the returned flag
         setState(State.PENDING_SHUTDOWN);
 
-        log.info("Shutting down with clean flag to {}", cleanRun);
+        log.info("Shutting down");
 
         try {
             taskManager.shutdown(cleanRun);
