@@ -185,7 +185,7 @@ public class RecordQueueTest {
     @Test
     public void testTimestampExtractorPartitionTime() {
 
-        RecordQueueTestTimestampExtractor testTimestampExtractor = (RecordQueueTestTimestampExtractor) timestampExtractor;
+        final RecordQueueTestTimestampExtractor testTimestampExtractor = (RecordQueueTestTimestampExtractor) timestampExtractor;
 
         assertTrue(queue.isEmpty());
         assertEquals(0, queue.size());
@@ -199,13 +199,13 @@ public class RecordQueueTest {
             new ConsumerRecord<>("topic", 1, 4, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue));
 
         queue.addRawRecords(list1);
-        while (queue.poll() != null) {}
+        while (queue.poll() != null) {
+        }
 
         assertEquals(testTimestampExtractor.observedPartitionTimes, new ArrayList<>(Arrays.asList(RecordQueue.UNKNOWN, 2L, 2L, 3L)));
-
     }
 
-        @Test(expected = StreamsException.class)
+    @Test(expected = StreamsException.class)
     public void shouldThrowStreamsExceptionWhenKeyDeserializationFails() {
         final byte[] key = Serdes.Long().serializer().serialize("foo", 1L);
         final List<ConsumerRecord<byte[], byte[]>> records = Collections.singletonList(
@@ -278,9 +278,9 @@ public class RecordQueueTest {
     }
 
     static class RecordQueueTestTimestampExtractor implements TimestampExtractor {
-        private List<Long> observedPartitionTimes = new ArrayList<>();
+        private final List<Long> observedPartitionTimes = new ArrayList<>();
 
-        public long extract(ConsumerRecord<Object, Object> record, long partitionTime) {
+        public long extract(final ConsumerRecord<Object, Object> record, final long partitionTime) {
             observedPartitionTimes.add(partitionTime);
             return record.offset();
         }
