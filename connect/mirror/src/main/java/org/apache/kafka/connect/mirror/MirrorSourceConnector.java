@@ -208,7 +208,7 @@ public class MirrorSourceConnector extends SourceConnector {
         List<AclBinding> bindings = listTopicAclBindings().stream()
             .filter(x -> x.pattern().resourceType() == ResourceType.TOPIC)
             .filter(x -> x.pattern().patternType() == PatternType.LITERAL)
-            .filter(x -> !(x.entry().permissionType() == AclPermissionType.ALLOW && x.entry().operation() == AclOperation.WRITE))
+            .filter(this::shouldReplicateAcl)
             .filter(x -> shouldReplicateTopic(x.pattern().name()))
             .map(this::targetAclBinding)
             .collect(Collectors.toList());
@@ -330,18 +330,30 @@ public class MirrorSourceConnector extends SourceConnector {
         return new Config(entries);
     }
 
+    private static AccessControlEntry downgradeAllowAllACL(AccessControlEntry entry) {
+        return new AccessControlEntry(entry.principal(), entry.host(), AclOperation.READ, entry.permissionType());
+    }
+
     AclBinding targetAclBinding(AclBinding sourceAclBinding) {
         String targetTopic = formatRemoteTopic(sourceAclBinding.pattern().name());
-        AccessControlEntry entry = sourceAclBinding.entry();
-        entry = (entry.permissionType() == AclPermissionType.ALLOW && entry.operation() == AclOperation.ALL)?
-                new AccessControlEntry(entry.principal(), entry.host(), AclOperation.READ, entry.permissionType()):
-                entry;
+        final AccessControlEntry entry;
+        if (sourceAclBinding.entry().permissionType() == AclPermissionType.ALLOW
+                && sourceAclBinding.entry().operation() == AclOperation.ALL) {
+            entry = downgradeAllowAllACL(sourceAclBinding.entry());
+        } else {
+            entry = sourceAclBinding.entry();
+        }
         return new AclBinding(new ResourcePattern(ResourceType.TOPIC, targetTopic, PatternType.LITERAL), entry);
     }
 
     boolean shouldReplicateTopic(String topic) {
         return (topicFilter.shouldReplicateTopic(topic) || isHeartbeatTopic(topic))
             && !replicationPolicy.isInternalTopic(topic) && !isCycle(topic);
+    }
+
+    boolean shouldReplicateAcl(AclBinding aclBinding) {
+        return !(aclBinding.entry().permissionType() == AclPermissionType.ALLOW
+            && aclBinding.entry().operation() == AclOperation.WRITE);
     }
 
     boolean shouldReplicateTopicConfigurationProperty(String property) {
