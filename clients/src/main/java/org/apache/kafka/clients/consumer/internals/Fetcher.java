@@ -77,6 +77,7 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.slf4j.helpers.MessageFormatter;
 
 import java.io.Closeable;
@@ -1628,6 +1629,7 @@ public class Fetcher<K, V> implements Closeable {
     }
 
     private static class FetchManagerMetrics {
+        private final static Logger log = LoggerFactory.getLogger(FetchManagerMetrics.class);
         private final Metrics metrics;
         private FetcherMetricsRegistry metricsRegistry;
         private final Sensor bytesFetched;
@@ -1716,8 +1718,11 @@ public class Fetcher<K, V> implements Closeable {
                     if (!this.assignedPartitions.contains(tp)) {
                         MetricName metricName = partitionPreferredReadReplicaMetricName(tp);
                         if (metrics.metric(metricName) == null) {
-                            metrics.addMetric(metricName, (Gauge<Integer>) (config, now) ->
-                                subscription.preferredReadReplica(tp, 0L).orElse(-1));
+                            metrics.addMetric(metricName, (Gauge<Integer>) (config, now) -> {
+                                int prr = subscription.preferredReadReplica(tp, 0L).orElse(-1);
+                                log.debug("Returning JMX value for preferred-read-replica: {}", prr);
+                                return prr;
+                            });
                         }
                     }
                 }
