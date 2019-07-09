@@ -274,7 +274,7 @@ public class StreamThread extends Thread {
             final long start = time.milliseconds();
             try {
                 if (streamThread.setState(State.PARTITIONS_ASSIGNED) == null) {
-                    log.debug("Skipping task creation in rebalance because we are already in {} phase.",
+                    log.debug("Skipping task creation in rebalance because we are already in {} state.",
                               streamThread.state());
                 } else if (streamThread.assignmentErrorCode.get() != StreamsPartitionAssignor.Error.NONE.code()) {
                     log.debug("Encountered assignment error during partition assignment: {}. " +
