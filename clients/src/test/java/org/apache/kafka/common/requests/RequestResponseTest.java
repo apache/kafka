@@ -718,7 +718,7 @@ public class RequestResponseTest {
     @Test
     public void testOffsetFetchRequestBuilderToString() {
         String allTopicPartitionsString = OffsetFetchRequest.Builder.allTopicPartitions("someGroup").toString();
-        assertTrue(allTopicPartitionsString.contains("<ALL>"));
+        assertTrue(allTopicPartitionsString.contains("groupId='someGroup', topics=[]"));
         String string = new OffsetFetchRequest.Builder("group1",
                 singletonList(new TopicPartition("test11", 1))).toString();
         assertTrue(string.contains("test11"));

@@ -1079,7 +1079,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         @Override
         public void handle(OffsetFetchResponse response, RequestFuture<Map<TopicPartition, OffsetAndMetadata>> future) {
             if (response.hasError()) {
-                Errors error = response.error();
+                Errors error = Errors.forCode(response.data.errorCode());
                 log.debug("Offset fetch failed: {}", error.message());
 
                 if (error == Errors.COORDINATOR_LOAD_IN_PROGRESS) {
