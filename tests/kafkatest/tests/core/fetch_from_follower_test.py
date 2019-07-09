@@ -95,7 +95,6 @@ class FetchFromFollowerTest(ProduceConsumeValidateTest):
         non_leader_idx = 2 if leader_idx != 2 else 1
         non_leader_rack = "rack-b" if leader_idx != 2 else "rack-a"
 
-
         self.producer = VerifiableProducer(self.test_context, self.num_producers, self.kafka, self.topic,
                                            throughput=self.producer_throughput)
         self.consumer = ConsoleConsumer(self.test_context, self.num_consumers, self.kafka, self.topic,
@@ -118,7 +117,7 @@ class FetchFromFollowerTest(ProduceConsumeValidateTest):
         self.jmx_tool.start_jmx_tool(consumer_idx, consumer_node)
 
         # Wait for at least one interval of "metadata.max.age.ms"
-        time.sleep(15)
+        time.sleep(5)
 
         # Read the JMX output
         self.jmx_tool.read_jmx_output(consumer_idx, consumer_node)
@@ -140,5 +139,3 @@ class FetchFromFollowerTest(ProduceConsumeValidateTest):
         # Validate consumed messages
         self.stop_producer_and_consumer()
         self.validate()
-
-        assert False, "Failing just to get debug logs on all runs"
