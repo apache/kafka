@@ -50,15 +50,15 @@ abstract class ExtractRecordMetadataTimestamp implements TimestampExtractor {
      * Extracts the embedded metadata timestamp from the given {@link ConsumerRecord}.
      *
      * @param record a data record
-     * @param previousTimestamp the latest extracted valid timestamp of the current record's partition˙ (could be -1 if unknown)
+     * @param partitionTime the latest extracted valid timestamp of the current record's partition˙ (could be -1 if unknown)
      * @return the embedded metadata timestamp of the given {@link ConsumerRecord}
      */
     @Override
-    public long extract(final ConsumerRecord<Object, Object> record, final long previousTimestamp) {
+    public long extract(final ConsumerRecord<Object, Object> record, final long partitionTime) {
         final long timestamp = record.timestamp();
 
         if (timestamp < 0) {
-            return onInvalidTimestamp(record, timestamp, previousTimestamp);
+            return onInvalidTimestamp(record, timestamp, partitionTime);
         }
 
         return timestamp;
