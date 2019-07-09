@@ -190,19 +190,19 @@ public class StreamThread extends Thread {
             oldState = state;
 
             if (state == State.PENDING_SHUTDOWN && newState != State.DEAD) {
-                log.debug("Invalid transition from PENDING_SHUTDOWN to {}: " +
+                log.debug("Ignoring request to transit from PENDING_SHUTDOWN to {}: " +
                               "only DEAD state is a valid next state", newState);
                 // when the state is already in PENDING_SHUTDOWN, all other transitions will be
                 // refused but we do not throw exception here
                 return null;
             } else if (state == State.DEAD) {
-                log.debug("Invalid transition from DEAD to {}: " +
+                log.debug("Ignoring request to transit from DEAD to {}: " +
                               "no valid next state after DEAD", newState);
                 // when the state is already in NOT_RUNNING, all its transitions
                 // will be refused but we do not throw exception here
                 return null;
             } else if (state == State.PARTITIONS_REVOKED && newState == State.PARTITIONS_REVOKED) {
-                log.debug("Invalid transition from PARTITIONS_REVOKED to PARTITIONS_REVOKED: " +
+                log.debug("Ignoring request to transit from PARTITIONS_REVOKED to PARTITIONS_REVOKED: " +
                               "self transition is not allowed");
                 // when the state is already in PARTITIONS_REVOKED, its transition to itself will be
                 // refused but we do not throw exception here
@@ -274,10 +274,10 @@ public class StreamThread extends Thread {
             final long start = time.milliseconds();
             try {
                 if (streamThread.setState(State.PARTITIONS_ASSIGNED) == null) {
-                    log.error("State transition from {} to PARTITIONS_ASSIGNED failed. " +
-                                  "Will skip the task initialization", streamThread.state());
+                    log.debug("Skipping task creation in rebalance because we are already in {} phase.",
+                              streamThread.state());
                 } else if (streamThread.assignmentErrorCode.get() != StreamsPartitionAssignor.Error.NONE.code()) {
-                    log.error("Encountered assignment error during partition assignment: {}. " +
+                    log.debug("Encountered assignment error during partition assignment: {}. " +
                                   "Will skip the task initialization", streamThread.assignmentErrorCode);
                 } else {
                     log.debug("Creating tasks based on assignment.");
@@ -286,9 +286,7 @@ public class StreamThread extends Thread {
             } catch (final Throwable t) {
                 log.error(
                     "Error caught during partition assignment, " +
-                        "will abort the current process and re-throw at the end of rebalance: {}",
-                    t
-                );
+                        "will abort the current process and re-throw at the end of rebalance", t);
                 streamThread.setRebalanceException(t);
             } finally {
                 log.info("partition assignment took {} ms.\n" +
@@ -844,7 +842,7 @@ public class StreamThread extends Thread {
         // Should only proceed when the thread is still running after #pollRequests(), because no external state mutation
         // could affect the task manager state beyond this point within #runOnce().
         if (!isRunning()) {
-            log.warn("State already transits to {}, skipping the run once call after poll request", state);
+            log.debug("State already transits to {}, skipping the run once call after poll request", state);
             return;
         }
 
@@ -1197,7 +1195,7 @@ public class StreamThread extends Thread {
         // intentionally do not check the returned flag
         setState(State.PENDING_SHUTDOWN);
 
-        log.info("Shutting down with cleanRun {}", cleanRun);
+        log.info("Shutting down with clean flag to {}", cleanRun);
 
         try {
             taskManager.shutdown(cleanRun);
