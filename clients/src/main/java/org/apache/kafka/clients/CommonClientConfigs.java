@@ -105,7 +105,7 @@ public class CommonClientConfigs {
     public static final String GROUP_ID_DOC = "A unique string that identifies the consumer group this consumer belongs to. This property is required if the consumer uses either the group management functionality by using <code>subscribe(topic)</code> or the Kafka-based offset management strategy.";
 
     public static final String GROUP_INSTANCE_ID_CONFIG = "group.instance.id";
-    public static final String GROUP_INSTANCE_ID_DOC = "A unique identifier of the consumer instance provided by end user. " +
+    public static final String GROUP_INSTANCE_ID_DOC = "A unique identifier of the consumer instance provided by the end user. " +
             "Only non-empty strings are permitted. If set, the consumer is treated as a static member, " +
             "which means that only one instance with this ID is allowed in the consumer group at any time. " +
             "This can be used in combination with a larger session timeout to avoid group rebalances caused by transient unavailability " +
