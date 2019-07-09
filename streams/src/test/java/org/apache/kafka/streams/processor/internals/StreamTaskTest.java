@@ -643,7 +643,7 @@ public class StreamTaskTest {
     }
 
     @Test
-    public void shouldRestorePartitionTimeAfterRestart() {
+    public void shouldRestorePartitionTimeAfterRestartWithEosDisabled() {
         task = createStatelessTask(createConfig(false));
         task.initializeStateStores();
         task.initializeTopology();
@@ -659,7 +659,29 @@ public class StreamTaskTest {
         assertTrue(task.getPartitionTime(partition1) == RecordQueue.UNKNOWN);
 
         // timestamp would be updated here
-        task.addRecords(partition1, singletonList(getConsumerRecord(partition1, 999)));
+        task.setAssignmentToStoredTimestamps();
+        assertTrue(task.getPartitionTime(partition1) == 1000);
+        assertTrue(task.getStreamTime() == 1000);
+    }
+
+    @Test
+    public void shouldRestorePartitionTimeAfterRestartWithEosEnabled() {
+        task = createStatelessTask(createConfig(true));
+        task.initializeStateStores();
+        task.initializeTopology();
+
+        task.addRecords(partition1, singletonList(getConsumerRecord(partition1, 1000)));
+
+        task.process();
+        // time stamp will be committed here
+        task.commit();
+        assertTrue(Long.parseLong(task.consumer.committed(partition1).metadata()) == 1000);
+        // reset times here to artificially represent a restart
+        task.resetTimes();
+        assertTrue(task.getPartitionTime(partition1) == RecordQueue.UNKNOWN);
+
+        // timestamp would be updated here
+        task.setAssignmentToStoredTimestamps();
         assertTrue(task.getPartitionTime(partition1) == 1000);
         assertTrue(task.getStreamTime() == 1000);
     }
@@ -692,7 +714,6 @@ public class StreamTaskTest {
 
         assertTrue(task.isProcessable(0L));
     }
-
 
     @Test
     public void shouldBeProcessableIfWaitedForTooLong() {

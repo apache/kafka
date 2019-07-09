@@ -734,6 +734,26 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         taskClosed = true;
     }
 
+    private void retrieveCommittedTimestamp(final TopicPartition partition) {
+        final OffsetAndMetadata metadata = consumer.committed(partition);
+
+        if (metadata != null) {
+            final long committedTimestamp = Long.parseLong(metadata.metadata());
+            partitionGroup.setPartitionTimestamp(partition, committedTimestamp);
+            log.debug("A committed timestamp was detected: setting the partition time of partition {}"
+                      + " to {} in stream task {}", partition, committedTimestamp, this);
+        }
+    }
+
+    /**
+     * Retrieves formerly committed timestamps and updates the local queue's partition time.
+     */
+    public void setAssignmentToStoredTimestamps() {
+        for (final TopicPartition partition : consumer.assignment()) {
+            retrieveCommittedTimestamp(partition);
+        }
+    }
+
     /**
      * Adds records to queues. If a record has an invalid (i.e., negative) timestamp, the record is skipped
      * and not added to the queue for processing
@@ -742,23 +762,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
      * @param records   the records
      */
     public void addRecords(final TopicPartition partition, final Iterable<ConsumerRecord<byte[], byte[]>> records) {
-        // if condition put here in case of restarts and rebalances to check for correct timestamp
-        if (recordInfo.queue() != null && getPartitionTime(partition) == RecordQueue.UNKNOWN) {
-            final OffsetAndMetadata metadata;
-            if (!eosEnabled) {
-                metadata = consumer.committed(partition);
-            } else {
-                //Offset metadata information could not be retrieved when eos is enabled
-                metadata = null;
-            }
-
-            if (metadata != null) {
-                final long committedTimestamp = Long.parseLong(metadata.metadata());
-                partitionGroup.setPartitionTimestamp(partition, committedTimestamp);
-                log.debug("A committed timestamp was detected: setting the partition time of partition {}"
-                          + " to {} in stream task {}", partition, committedTimestamp, this);
-            }
-        }
         final int newQueueSize = partitionGroup.addRawRecords(partition, records);
 
         if (log.isTraceEnabled()) {

@@ -47,7 +47,7 @@ public class RecordQueue {
     private final ArrayDeque<ConsumerRecord<byte[], byte[]>> fifoQueue;
 
     private StampedRecord headRecord = null;
-    private long partitionTime = ConsumerRecord.NO_TIMESTAMP;
+    private long partitionTime = RecordQueue.UNKNOWN;
 
     RecordQueue(final TopicPartition partition,
                 final SourceNode source,
