@@ -869,6 +869,8 @@ project(':core') {
     from(project(':streams:test-utils').configurations.runtime) { into("libs/") }
     from(project(':streams:examples').jar) { into("libs/") }
     from(project(':streams:examples').configurations.runtime) { into("libs/") }
+    from(project(':remote-storage-managers:hdfs').jar) { into("libs/") }
+    from(project(':remote-storage-managers:hdfs').configurations.runtime) { into("libs/") }
     duplicatesStrategy 'exclude'
   }
 
@@ -1771,7 +1773,6 @@ project(':remote-storage-managers:hdfs') {
   archivesBaseName = "kafka-rsm-hdfs"
 
   dependencies {
-    compile libs.slf4jApi
     compile group: 'org.apache.hadoop', name: 'hadoop-client', version: '3.1.2'
     compile project(':core')
 
@@ -1781,6 +1782,18 @@ project(':remote-storage-managers:hdfs') {
     testCompile project(':core').sourceSets.test.output
     testCompile project(':clients').sourceSets.test.output
     testRuntime libs.slf4jlog4j
+  }
+
+  tasks.create(name: "copyDependantLibs", type: Copy) {
+    from(configurations.runtime) {
+      exclude('kafka-rsm-hdfs*')
+    }
+    into "$buildDir/dependant-libs-${versions.scala}"
+    duplicatesStrategy 'exclude'
+  }
+
+  jar {
+    dependsOn copyDependantLibs
   }
 
   javadoc {
