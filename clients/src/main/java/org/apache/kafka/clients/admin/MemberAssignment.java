@@ -35,6 +35,8 @@ public class MemberAssignment {
      *
      * @param topicPartitions List of topic partitions
      */
+    // Do not make external changes to this constructor (package access or parameters):
+    // users may rely on it for writing test cases.
     public MemberAssignment(Set<TopicPartition> topicPartitions) {
         this.topicPartitions = topicPartitions == null ? Collections.<TopicPartition>emptySet() :
             Collections.unmodifiableSet(new HashSet<>(topicPartitions));
