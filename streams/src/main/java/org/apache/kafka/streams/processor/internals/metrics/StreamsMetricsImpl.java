@@ -514,12 +514,12 @@ public class StreamsMetricsImpl implements StreamsMetrics {
         sensor.add(new MetricName(name, group, description, tags), new Value());
     }
 
-    public static void addAvgAndTotalMetricsToSensor(final Sensor sensor,
-                                                     final String group,
-                                                     final Map<String, String> tags,
-                                                     final String metricNamePrefix,
-                                                     final String descriptionOfAvg,
-                                                     final String descriptionOfTotal) {
+    public static void addAvgAndSumMetricsToSensor(final Sensor sensor,
+                                                   final String group,
+                                                   final Map<String, String> tags,
+                                                   final String metricNamePrefix,
+                                                   final String descriptionOfAvg,
+                                                   final String descriptionOfTotal) {
         sensor.add(new MetricName(metricNamePrefix + AVG_SUFFIX, group, descriptionOfAvg, tags), new Avg());
         sensor.add(new MetricName(metricNamePrefix + TOTAL_SUFFIX, group, descriptionOfTotal, tags), new Sum());
     }

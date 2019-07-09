@@ -130,7 +130,7 @@ public class RocksDBMetricsTest {
         final String descriptionOfAvg = "Moving average duration of write stalls in ms";
         final String descriptionOfTotal = "Total duration of write stalls in ms";
         setupStreamsMetricsMock(metricNamePrefix);
-        StreamsMetricsImpl.addAvgAndTotalMetricsToSensor(
+        StreamsMetricsImpl.addAvgAndSumMetricsToSensor(
             sensor,
             STATE_LEVEL_GROUP,
             tags,

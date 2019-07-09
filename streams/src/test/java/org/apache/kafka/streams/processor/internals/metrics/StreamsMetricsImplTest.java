@@ -304,7 +304,7 @@ public class StreamsMetricsImplTest extends EasyMockSupport {
     @Test
     public void shouldAddAvgAndTotalMetricsToSensor() {
         StreamsMetricsImpl
-            .addAvgAndTotalMetricsToSensor(sensor, group, tags, metricNamePrefix, description1, description2);
+            .addAvgAndSumMetricsToSensor(sensor, group, tags, metricNamePrefix, description1, description2);
 
         verifyAvgMetric(description1);
         time.sleep(60000); // advance mock time to get empty samples in the metric for next verification

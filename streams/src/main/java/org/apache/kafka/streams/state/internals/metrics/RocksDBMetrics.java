@@ -27,7 +27,7 @@ import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetric
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.STATE_LEVEL_GROUP;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addAmountRateMetricToSensor;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addAmountRateAndTotalMetricsToSensor;
-import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addAvgAndTotalMetricsToSensor;
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addAvgAndSumMetricsToSensor;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addTotalMetricToSensor;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addValueMetricToSensor;
 
@@ -168,7 +168,7 @@ public class RocksDBMetrics {
     public static Sensor writeStallDurationSensor(final StreamsMetricsImpl streamsMetrics,
                                                   final RocksDBMetricContext metricContext) {
         final Sensor sensor = createSensor(streamsMetrics, metricContext, WRITE_STALL_DURATION);
-        addAvgAndTotalMetricsToSensor(sensor,
+        addAvgAndSumMetricsToSensor(sensor,
             STATE_LEVEL_GROUP,
             streamsMetrics
                 .storeLevelTagMap(metricContext.taskName(), metricContext.storeType(), metricContext.storeName()),
