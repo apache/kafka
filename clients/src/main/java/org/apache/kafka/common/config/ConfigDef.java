@@ -1188,7 +1188,6 @@ public class ConfigDef {
             // print column values
             for (String headerName : headers()) {
                 addColumnValue(b, getConfigValue(key, headerName));
-                b.append("</td>");
             }
             if (hasUpdateModes) {
                 String updateMode = dynamicUpdateModes.get(key.name);
