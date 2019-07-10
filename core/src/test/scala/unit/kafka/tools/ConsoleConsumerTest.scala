@@ -420,16 +420,35 @@ class ConsoleConsumerTest {
       "--topic", "test",
       "--property", "print.key=true",
       "--property", "key.deserializer=org.apache.kafka.test.MockDeserializer",
-      "--property", "key.deserializer.my-props=abc"
+      "--property", "key.deserializer.my-prop=abc"
     )
     val config = new ConsoleConsumer.ConsumerConfig(args)
     assertTrue(config.formatter.isInstanceOf[DefaultMessageFormatter])
-    assertTrue(config.formatterArgs.containsKey("key.deserializer.my-props"))
+    assertTrue(config.formatterArgs.containsKey("key.deserializer.my-prop"))
     val formatter = config.formatter.asInstanceOf[DefaultMessageFormatter]
     assertTrue(formatter.keyDeserializer.get.isInstanceOf[MockDeserializer])
     assertEquals(1, formatter.keyDeserializer.get.asInstanceOf[MockDeserializer].configs.size)
-    assertEquals("abc", formatter.keyDeserializer.get.asInstanceOf[MockDeserializer].configs.get("my-props"))
+    assertEquals("abc", formatter.keyDeserializer.get.asInstanceOf[MockDeserializer].configs.get("my-prop"))
     assertTrue(formatter.keyDeserializer.get.asInstanceOf[MockDeserializer].isKey)
+  }
+
+  @Test
+  def testCustomValueDeserializer(): Unit = {
+    val args = Array(
+      "--bootstrap-server", "localhost:9092",
+      "--topic", "test",
+      "--property", "print.key=true",
+      "--property", "value.deserializer=org.apache.kafka.test.MockDeserializer",
+      "--property", "value.deserializer.my-prop=abc"
+    )
+    val config = new ConsoleConsumer.ConsumerConfig(args)
+    assertTrue(config.formatter.isInstanceOf[DefaultMessageFormatter])
+    assertTrue(config.formatterArgs.containsKey("value.deserializer.my-prop"))
+    val formatter = config.formatter.asInstanceOf[DefaultMessageFormatter]
+    assertTrue(formatter.valueDeserializer.get.isInstanceOf[MockDeserializer])
+    assertEquals(1, formatter.valueDeserializer.get.asInstanceOf[MockDeserializer].configs.size)
+    assertEquals("abc", formatter.valueDeserializer.get.asInstanceOf[MockDeserializer].configs.get("my-prop"))
+    assertTrue(formatter.valueDeserializer.get.asInstanceOf[MockDeserializer].isKey)
   }
 
   @Test
@@ -495,4 +514,40 @@ class ConsoleConsumerTest {
       Exit.resetExitProcedure()
     }
   }
+
+  /**
+    * There is no test for the default key and value deserializer properties
+    */
+  @Test(expected = classOf[ShouldExitException])
+  def shouldExitOnUnrecognisedProperty() {
+    val expectedMessage = Some("Unrecognised arguments ({not=ok, bad.property=not.good}) passed to kafka.tools.DefaultMessageFormatter.")
+    Exit.setExitProcedure((_, message) => {
+      assertEquals("Console consumer should exit with help information with bad properties listed", expectedMessage, message)
+      throw new ShouldExitException() // Code should exit with help information
+    }
+    )
+
+    val args: Array[String] = Array(
+      "--bootstrap-server", "localhost:9092",
+      "--topic", "test",
+      "--property", "print.key=true",
+      "--property", "bad.property=not.good",
+      "--property", "not=ok")
+
+    try {
+      try {
+        val config = new ConsoleConsumer.ConsumerConfig(args)
+      } catch {
+        case e: IllegalArgumentException => {
+          assertEquals(e.getClass, classOf[IllegalArgumentException])
+        }
+      }
+    } finally {
+      Exit.resetExitProcedure()
+    }
+
+  }
+
 }
+
+class ShouldExitException extends RuntimeException

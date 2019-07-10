@@ -310,7 +310,11 @@ object ConsoleConsumer extends Logging {
       formatterArgs.setProperty(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, valueDeserializer)
     }
 
-    formatter.init(formatterArgs)
+    try {
+      formatter.init(formatterArgs)
+    } catch {
+      case e => CommandLineUtils.printUsageAndDie(parser, e.getMessage)
+    }
 
     val topicOrFilterOpt = List(topicIdOpt, whitelistOpt).filter(options.has)
     if (topicOrFilterOpt.size != 1)
@@ -466,36 +470,62 @@ class DefaultMessageFormatter extends MessageFormatter {
   var keyDeserializer: Option[Deserializer[_]] = None
   var valueDeserializer: Option[Deserializer[_]] = None
 
-  override def init(props: Properties) {
-    if (props.containsKey("print.timestamp"))
-      printTimestamp = props.getProperty("print.timestamp").trim.equalsIgnoreCase("true")
-    if (props.containsKey("print.key"))
-      printKey = props.getProperty("print.key").trim.equalsIgnoreCase("true")
-    if (props.containsKey("print.value"))
-      printValue = props.getProperty("print.value").trim.equalsIgnoreCase("true")
-    if (props.containsKey("key.separator"))
-      keySeparator = props.getProperty("key.separator").getBytes(StandardCharsets.UTF_8)
-    if (props.containsKey("line.separator"))
-      lineSeparator = props.getProperty("line.separator").getBytes(StandardCharsets.UTF_8)
-    // Note that `toString` will be called on the instance returned by `Deserializer.deserialize`
-    if (props.containsKey("key.deserializer")) {
-      keyDeserializer = Some(Class.forName(props.getProperty("key.deserializer")).getDeclaredConstructor()
-        .newInstance().asInstanceOf[Deserializer[_]])
-      keyDeserializer.get.configure(propertiesWithKeyPrefixStripped("key.deserializer.", props).asScala.asJava, true)
+  override def init(propsOriginal: Properties) {
+    // copy the properties so we can modify it
+    val props = new Properties()
+    def process(key: String, processor: (String) => Unit) = {
+      if (props.containsKey(key)) {
+        processor(props.getProperty(key))
+        props.remove(key)
+      }
     }
-    // Note that `toString` will be called on the instance returned by `Deserializer.deserialize`
-    if (props.containsKey("value.deserializer")) {
-      valueDeserializer = Some(Class.forName(props.getProperty("value.deserializer")).getDeclaredConstructor()
-        .newInstance().asInstanceOf[Deserializer[_]])
-      valueDeserializer.get.configure(propertiesWithKeyPrefixStripped("value.deserializer.", props).asScala.asJava, false)
+
+    // https://github.com/scala/bug/issues/10418
+    props.putAll(propsOriginal: java.util.Map[_, _])
+
+    process("print.timestamp", (value: String) => printTimestamp = value.trim.equalsIgnoreCase("true"))
+    process("print.key", (value: String) => printKey = value.trim.equalsIgnoreCase("true"))
+    process("print.value", (value: String) => printValue = value.trim.equalsIgnoreCase("true"))
+    process("key.separator", (value: String) => keySeparator = value.getBytes(StandardCharsets.UTF_8))
+    process("line.separator", (value: String) => lineSeparator = value.getBytes(StandardCharsets.UTF_8))
+
+    val keyDeserializerKey = "key.deserializer"
+    val keyDeserProps = propertiesWithKeyPrefixStripped(keyDeserializerKey, props)
+    process(keyDeserializerKey, (value: String) => {
+      // Note that `toString` will be called on the instance returned by `Deserializer.deserialize`
+      keyDeserializer = Some(Class.forName(value).getDeclaredConstructor().newInstance().asInstanceOf[Deserializer[_]])
+      keyDeserializer.get.configure(keyDeserProps.asScala.asJava, true)
+    })
+
+    val valueDeserializerKey = "value.deserializer"
+    val valDeserProps = propertiesWithKeyPrefixStripped(valueDeserializerKey, props)
+    process(valueDeserializerKey, (value: String) => {
+      // Note that `toString` will be called on the instance returned by `Deserializer.deserialize`
+      valueDeserializer = Some(Class.forName(value).getDeclaredConstructor().newInstance().asInstanceOf[Deserializer[_]])
+      valueDeserializer.get.configure(valDeserProps.asScala.asJava, false)
+    })
+
+    // remove all deserializer properties as well
+    keyDeserProps.asScala.foreach { case (key, value) =>
+      props.remove(keyDeserializerKey + '.' + key)
+    }
+    valDeserProps.asScala.foreach { case (key, value) =>
+      props.remove(valueDeserializerKey + '.' + key)
+    }
+
+    if (!props.isEmpty) {
+      // props contained an unrecognised property
+      throw new IllegalArgumentException(s"Unrecognised arguments (${props}) passed to ${this.getClass.getName}.")
     }
   }
+
+
 
   private def propertiesWithKeyPrefixStripped(prefix: String, props: Properties): Properties = {
     val newProps = new Properties()
     props.asScala.foreach { case (key, value) =>
       if (key.startsWith(prefix) && key.length > prefix.length)
-        newProps.put(key.substring(prefix.length), value)
+        newProps.put(key.substring(prefix.length + 1), value)
     }
     newProps
   }
