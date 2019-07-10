@@ -472,7 +472,7 @@ public class KStreamImplTest {
         testStream.branch((Predicate) null);
     }
 
-
+    @Test
     public void shouldTranslatePredicateMap() {
         Map<String, Predicate<? super String, ? super String>> predicatesMap = new HashMap<>();
         Predicate predicateZero = new Predicate() {
