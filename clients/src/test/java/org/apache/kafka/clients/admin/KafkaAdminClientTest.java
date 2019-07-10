@@ -62,6 +62,7 @@ import org.apache.kafka.common.message.ElectLeadersResponseData.PartitionResult;
 import org.apache.kafka.common.message.ElectLeadersResponseData.ReplicaElectionResult;
 import org.apache.kafka.common.message.IncrementalAlterConfigsResponseData.AlterConfigsResourceResult;
 import org.apache.kafka.common.message.IncrementalAlterConfigsResponseData;
+import org.apache.kafka.common.message.ListGroupsResponseData;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.common.requests.CreateAclsResponse.AclCreationResponse;
@@ -1030,51 +1031,68 @@ public class KafkaAdminClientTest {
 
             env.kafkaClient().prepareResponseFrom(
                     new ListGroupsResponse(
-                            Errors.NONE,
-                            asList(
-                                    new ListGroupsResponse.Group("group-1", ConsumerProtocol.PROTOCOL_TYPE),
-                                    new ListGroupsResponse.Group("group-connect-1", "connector")
-                            )),
+                            new ListGroupsResponseData()
+                            .setErrorCode(Errors.NONE.code())
+                            .setGroups(Arrays.asList(
+                                    new ListGroupsResponseData.ListedGroup()
+                                            .setGroupId("group-1")
+                                            .setProtocolType(ConsumerProtocol.PROTOCOL_TYPE),
+                                    new ListGroupsResponseData.ListedGroup()
+                                            .setGroupId("group-connect-1")
+                                            .setProtocolType("connector")
+                            ))),
                     node0);
 
             // handle retriable errors
             env.kafkaClient().prepareResponseFrom(
                     new ListGroupsResponse(
-                        Errors.COORDINATOR_NOT_AVAILABLE,
-                        Collections.emptyList()
+                            new ListGroupsResponseData()
+                                    .setErrorCode(Errors.COORDINATOR_NOT_AVAILABLE.code())
+                                    .setGroups(Collections.emptyList())
                     ),
                     node1);
             env.kafkaClient().prepareResponseFrom(
                     new ListGroupsResponse(
-                            Errors.COORDINATOR_LOAD_IN_PROGRESS,
-                            Collections.emptyList()
+                            new ListGroupsResponseData()
+                                    .setErrorCode(Errors.COORDINATOR_LOAD_IN_PROGRESS.code())
+                                    .setGroups(Collections.emptyList())
                     ),
                     node1);
             env.kafkaClient().prepareResponseFrom(
                     new ListGroupsResponse(
-                            Errors.NONE,
-                            asList(
-                                    new ListGroupsResponse.Group("group-2", ConsumerProtocol.PROTOCOL_TYPE),
-                                    new ListGroupsResponse.Group("group-connect-2", "connector")
-                            )),
+                            new ListGroupsResponseData()
+                                    .setErrorCode(Errors.NONE.code())
+                                    .setGroups(Arrays.asList(
+                                            new ListGroupsResponseData.ListedGroup()
+                                                    .setGroupId("group-2")
+                                                    .setProtocolType(ConsumerProtocol.PROTOCOL_TYPE),
+                                            new ListGroupsResponseData.ListedGroup()
+                                                    .setGroupId("group-connect-2")
+                                                    .setProtocolType("connector")
+                            ))),
                     node1);
 
             env.kafkaClient().prepareResponseFrom(
                     new ListGroupsResponse(
-                            Errors.NONE,
-                            asList(
-                                    new ListGroupsResponse.Group("group-3", ConsumerProtocol.PROTOCOL_TYPE),
-                                    new ListGroupsResponse.Group("group-connect-3", "connector")
-                            )),
+                            new ListGroupsResponseData()
+                                    .setErrorCode(Errors.NONE.code())
+                                    .setGroups(Arrays.asList(
+                                            new ListGroupsResponseData.ListedGroup()
+                                                    .setGroupId("group-3")
+                                                    .setProtocolType(ConsumerProtocol.PROTOCOL_TYPE),
+                                            new ListGroupsResponseData.ListedGroup()
+                                                    .setGroupId("group-connect-3")
+                                                    .setProtocolType("connector")
+                                    ))),
                     node2);
 
             // fatal error
             env.kafkaClient().prepareResponseFrom(
                     new ListGroupsResponse(
-                            Errors.UNKNOWN_SERVER_ERROR,
-                            Collections.emptyList()),
+                            new ListGroupsResponseData()
+                                    .setErrorCode(Errors.UNKNOWN_SERVER_ERROR.code())
+                                    .setGroups(Collections.emptyList())),
                     node3);
-
 
             final ListConsumerGroupsResult result = env.adminClient().listConsumerGroups();
             TestUtils.assertFutureError(result.all(), UnknownServerException.class);

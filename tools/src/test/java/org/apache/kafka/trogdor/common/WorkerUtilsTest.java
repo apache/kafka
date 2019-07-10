@@ -17,24 +17,23 @@
 
 package org.apache.kafka.trogdor.common;
 
+import static org.junit.Assert.assertEquals;
 
+import org.apache.kafka.clients.admin.MockAdminClient;
+import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.admin.TopicDescription;
 import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.TopicPartitionInfo;
-
-import org.apache.kafka.common.Node;
-import org.apache.kafka.clients.admin.MockAdminClient;
-
 import org.apache.kafka.common.errors.TopicExistsException;
+import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.utils.Utils;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import org.apache.kafka.clients.admin.NewTopic;
+import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
-import static org.junit.Assert.assertEquals;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -45,7 +44,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
-
 
 public class WorkerUtilsTest {
 
@@ -317,5 +315,22 @@ public class WorkerUtilsTest {
             topicName,
             tpInfo,
             null);
+    }
+
+    @Test
+    public void testVerifyTopics() throws Throwable {
+        Map<String, NewTopic> newTopics = Collections.singletonMap(TEST_TOPIC, NEW_TEST_TOPIC);
+        WorkerUtils.createTopics(log, adminClient, newTopics, true);
+        adminClient.setFetchesRemainingUntilVisible(TEST_TOPIC, 2);
+        WorkerUtils.verifyTopics(log, adminClient, Collections.singleton(TEST_TOPIC),
+            Collections.singletonMap(TEST_TOPIC, NEW_TEST_TOPIC), 3, 1);
+        adminClient.setFetchesRemainingUntilVisible(TEST_TOPIC, 100);
+        try {
+            WorkerUtils.verifyTopics(log, adminClient, Collections.singleton(TEST_TOPIC),
+                    Collections.singletonMap(TEST_TOPIC, NEW_TEST_TOPIC), 2, 1);
+            Assert.fail("expected to get UnknownTopicOrPartitionException");
+        } catch (UnknownTopicOrPartitionException e) {
+            // expected
+        }
     }
 }
