@@ -333,8 +333,8 @@ object TopicCommand extends Logging {
         }
 
         if(tp.hasPartitions) {
-          if (Topic.INTERNAL_TOPICS.contains(topic)) {
-            throw new IllegalArgumentException(s"The number of partitions for the internal topics${Topic.INTERNAL_TOPICS} cannot be changed.")
+          if (Topic.isInternal(topic)) {
+            throw new IllegalArgumentException(s"The number of partitions for the internal topic $topic cannot be changed.")
           }
           println("WARNING: If partitions are increased for a topic that has a key, the partition " +
             "logic or ordering of the messages will be affected")
