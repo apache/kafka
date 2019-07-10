@@ -45,7 +45,7 @@ import org.apache.kafka.common.requests.FetchRequest
 import org.apache.kafka.common.requests.FetchRequest.PartitionData
 import org.apache.kafka.common.requests.FetchResponse.AbortedTransaction
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
-import org.apache.kafka.common.requests.{EpochEndOffset, IsolationLevel, LeaderAndIsrRequest}
+import org.apache.kafka.common.requests.{EpochEndOffset, IsolationLevel, LeaderAndIsrRequest, StopReplicaRequest}
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.common.{Node, TopicPartition}
@@ -188,6 +188,50 @@ class ReplicaManagerTest {
           new LeaderAndIsrRequest.PartitionState(0, 1, 1, brokerList, 0, brokerList, false)).asJava,
         Set(new Node(0, "host1", 0), new Node(1, "host2", 1)).asJava).build()
       rm.becomeLeaderOrFollower(1, leaderAndIsrRequest2, (_, _) => ())
+
+      assertTrue(appendResult.isFired)
+    } finally {
+      rm.shutdown(checkpointHW = false)
+    }
+  }
+
+  @Test
+  def testClearPurgatoryOnReceivingStopReplicaRequest() {
+    val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect)
+    props.put("log.dir", TestUtils.tempRelativeDir("data").getAbsolutePath)
+    val config = KafkaConfig.fromProps(props)
+    val mockLogMgr = TestUtils.createLogManager(config.logDirs.map(new File(_)), LogConfig(new Properties()))
+    val aliveBrokers = Seq(createBroker(0, "host0", 0), createBroker(1, "host1", 1))
+    val metadataCache: MetadataCache = EasyMock.createMock(classOf[MetadataCache])
+    EasyMock.expect(metadataCache.getAliveBrokers).andReturn(aliveBrokers).anyTimes()
+    EasyMock.replay(metadataCache)
+    val rm = new ReplicaManager(config, metrics, time, kafkaZkClient, new MockScheduler(time), mockLogMgr,
+      new AtomicBoolean(false), QuotaFactory.instantiate(config, metrics, time, ""), new BrokerTopicStats,
+      metadataCache, new LogDirFailureChannel(config.logDirs.size))
+
+    try {
+      val brokerList = Seq[Integer](0, 1).asJava
+      // Make this replica the leader.
+      val leaderAndIsrRequest = new LeaderAndIsrRequest.Builder(ApiKeys.LEADER_AND_ISR.latestVersion, 0, 0, brokerEpoch,
+        collection.immutable.Map(new TopicPartition(topic, 0) -> new LeaderAndIsrRequest.PartitionState(0, 0, 0, brokerList, 0, brokerList, false)).asJava,
+        Set(new Node(0, "host1", 0), new Node(1, "host2", 1)).asJava).build()
+      rm.becomeLeaderOrFollower(0, leaderAndIsrRequest, (_, _) => ())
+
+      // Try to produce to the leader replica.
+      val records = MemoryRecords.withRecords(CompressionType.NONE, new SimpleRecord("first message".getBytes()))
+      val appendResult = appendRecords(rm, new TopicPartition(topic, 0), records).onFire { response =>
+        assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION, response.error)
+      }
+
+      // Send StopReplicaRequest(delete = false) to move replica to OfflineReplica state.
+      val stopReplicaRequest1 =  new StopReplicaRequest.Builder(ApiKeys.STOP_REPLICA.latestVersion(), 0, 0, brokerEpoch, false,
+        Set(new TopicPartition(topic, 0)).asJava).build()
+      rm.stopReplicas(stopReplicaRequest1)
+
+      // Send StopReplicaRequest(delete = true) to move replica to NonExistentReplica state.
+      val stopReplicaRequest2 =  new StopReplicaRequest.Builder(ApiKeys.STOP_REPLICA.latestVersion(), 0, 0, brokerEpoch, true,
+        Set(new TopicPartition(topic, 0)).asJava).build()
+      rm.stopReplicas(stopReplicaRequest2)
 
       assertTrue(appendResult.isFired)
     } finally {
