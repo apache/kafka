@@ -338,7 +338,7 @@ public abstract class TimestampConverter<R extends ConnectRecord<R>> implements 
             return newRecord(record, updatedSchema, convertTimestamp(value, timestampTypeFromSchema(schema)));
         } else {
             final Struct value = requireStructOrNull(operatingValue(record), PURPOSE);
-            Schema updatedSchema = value != null ? schemaUpdateCache.get(value.schema()) : null;
+            Schema updatedSchema = schemaUpdateCache.get(schema);
             if (updatedSchema == null) {
                 SchemaBuilder builder = SchemaUtil.copySchemaBasics(schema, SchemaBuilder.struct());
                 for (Field field : schema.fields()) {
