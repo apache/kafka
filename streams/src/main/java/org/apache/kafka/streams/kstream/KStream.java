@@ -753,15 +753,15 @@ public interface KStream<K, V> {
      * A record will be dropped if none of the predicates evaluate to true.
      * This is a stateless record-by-record operation.
      *
-     * @param predicates a Map of predicates names to {@link Predicate} instances
-     * @return a {@link Map} of predicate names to multiple distinct substreams of this {@code KStream}
+     * @param predicates the ordered list of {@link Predicate} instances
+     * @return multiple distinct substreams of this {@code KStream}
      */
     @SuppressWarnings("unchecked")
     KStream<K, V>[] branch(final Predicate<? super K, ? super V>... predicates);
 
     /**
-     * Creates an Map of {@Code Strings} to {@code KStream} from this stream by branching the records in the original stream based on
-     * the supplied predicates.
+     * Creates an Map of {@Code Strings} to {@code KStream} from this stream by branching the records in the original
+     * stream based on the supplied predicates.
      * Each record is evaluated against the supplied predicates, and predicates are evaluated in order.
      * Each stream in the result array corresponds position-wise (index) to the predicate in the supplied predicates.
      * The branching happens on first-match: A record in the original stream is assigned to the corresponding result
@@ -769,8 +769,8 @@ public interface KStream<K, V> {
      * A record will be dropped if none of the predicates evaluate to true.
      * This is a stateless record-by-record operation.
      *
-     * @param predicates the ordered list of {@link Predicate} instances
-     * @return multiple distinct substreams of this {@code KStream}
+     * @param predicates a Map of predicates names to {@link Predicate} instances
+     * @return a {@link Map} of predicate names to multiple distinct substreams of this {@code KStream}
      */
     Map<String, KStream<K, V>> branch(final Map<String, Predicate<? super K, ? super V>> predicates);
 
