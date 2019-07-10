@@ -25,6 +25,13 @@ import org.apache.kafka.common.protocol.types.Struct;
 import java.nio.ByteBuffer;
 import java.util.Collections;
 
+/**
+ * Possible error codes:
+ *
+ * COORDINATOR_LOAD_IN_PROGRESS (14)
+ * COORDINATOR_NOT_AVAILABLE (15)
+ * AUTHORIZATION_FAILED (29)
+ */
 public class ListGroupsRequest extends AbstractRequest {
 
     public static class Builder extends AbstractRequest.Builder<ListGroupsRequest> {
@@ -34,7 +41,6 @@ public class ListGroupsRequest extends AbstractRequest {
         public Builder(ListGroupsRequestData data) {
             super(ApiKeys.LIST_GROUPS);
             this.data = data;
-
         }
 
         @Override
@@ -49,18 +55,15 @@ public class ListGroupsRequest extends AbstractRequest {
     }
 
     private final ListGroupsRequestData data;
-    private final short version;
 
     public ListGroupsRequest(ListGroupsRequestData data, short version) {
         super(ApiKeys.LIST_GROUPS, version);
         this.data = data;
-        this.version = version;
     }
 
     public ListGroupsRequest(Struct struct, short version) {
         super(ApiKeys.LIST_GROUPS, version);
         this.data = new ListGroupsRequestData(struct, version);
-        this.version = version;
     }
 
     @Override
