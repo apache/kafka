@@ -1,3 +1,19 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.common.TopicPartition;
@@ -11,36 +27,36 @@ import static org.junit.Assert.assertNotEquals;
 
 public class MemberDescriptionTest {
 
-    private static final String memberId = "memberId";
-    private static final Optional<String> groupInstanceId = Optional.of("instanceId");
-    private static final String clientId = "clientId";
-    private static final String host = "host";
-    private static final MemberAssignment assignment;
-    private static final MemberDescription staticMemberDescription;
+    private static final String MEMBER_ID = "member_id";
+    private static final Optional<String> INSTANCE_ID = Optional.of("instanceId");
+    private static final String CLIENT_ID = "client_id";
+    private static final String HOST = "host";
+    private static final MemberAssignment ASSIGNMENT;
+    private static final MemberDescription STATIC_MEMBER_DESCRIPTION;
 
     static {
-       assignment = new MemberAssignment(Collections.singleton(new TopicPartition("topic", 1)));
-       staticMemberDescription = new MemberDescription(memberId,
-                                                       groupInstanceId,
-                                                       clientId,
-                                                       host,
-                                                       assignment);
+        ASSIGNMENT = new MemberAssignment(Collections.singleton(new TopicPartition("topic", 1)));
+        STATIC_MEMBER_DESCRIPTION = new MemberDescription(MEMBER_ID,
+                                                          INSTANCE_ID,
+                                                          CLIENT_ID,
+                                                          HOST,
+                                                          ASSIGNMENT);
     }
 
     @Test
     public void testEqualsWithoutGroupInstanceId() {
-        MemberDescription dynamicMemberDescription = new MemberDescription(memberId,
-                                                                           clientId,
-                                                                           host,
-                                                                           assignment);
+        MemberDescription dynamicMemberDescription = new MemberDescription(MEMBER_ID,
+                                                                           CLIENT_ID,
+                                                                           HOST,
+                                                                           ASSIGNMENT);
 
-        MemberDescription identityDescription = new MemberDescription(memberId,
-                                                                      clientId,
-                                                                      host,
-                                                                      assignment);
+        MemberDescription identityDescription = new MemberDescription(MEMBER_ID,
+                                                                      CLIENT_ID,
+                                                                      HOST,
+                                                                      ASSIGNMENT);
 
-        assertNotEquals(staticMemberDescription, dynamicMemberDescription);
-        assertNotEquals(staticMemberDescription.hashCode(), dynamicMemberDescription.hashCode());
+        assertNotEquals(STATIC_MEMBER_DESCRIPTION, dynamicMemberDescription);
+        assertNotEquals(STATIC_MEMBER_DESCRIPTION.hashCode(), dynamicMemberDescription.hashCode());
 
         // Check self equality.
         assertEquals(dynamicMemberDescription, dynamicMemberDescription);
@@ -51,36 +67,36 @@ public class MemberDescriptionTest {
     @Test
     public void testEqualsWithGroupInstanceId() {
         // Check self equality.
-        assertEquals(staticMemberDescription, staticMemberDescription);
+        assertEquals(STATIC_MEMBER_DESCRIPTION, STATIC_MEMBER_DESCRIPTION);
 
-        MemberDescription identityDescription = new MemberDescription(memberId,
-                                                                      groupInstanceId,
-                                                                      clientId,
-                                                                      host,
-                                                                      assignment);
+        MemberDescription identityDescription = new MemberDescription(MEMBER_ID,
+                                                                      INSTANCE_ID,
+                                                                      CLIENT_ID,
+                                                                      HOST,
+                                                                      ASSIGNMENT);
 
-        assertEquals(staticMemberDescription, identityDescription);
-        assertEquals(staticMemberDescription.hashCode(), identityDescription.hashCode());
+        assertEquals(STATIC_MEMBER_DESCRIPTION, identityDescription);
+        assertEquals(STATIC_MEMBER_DESCRIPTION.hashCode(), identityDescription.hashCode());
     }
 
     @Test
     public void testNonEqual() {
         MemberDescription newMemberDescription = new MemberDescription("new_member",
-                                                                       groupInstanceId,
-                                                                       clientId,
-                                                                       host,
-                                                                       assignment);
+                                                                       INSTANCE_ID,
+                                                                       CLIENT_ID,
+                                                                       HOST,
+                                                                       ASSIGNMENT);
 
-        assertNotEquals(staticMemberDescription, newMemberDescription);
-        assertNotEquals(staticMemberDescription.hashCode(), newMemberDescription.hashCode());
+        assertNotEquals(STATIC_MEMBER_DESCRIPTION, newMemberDescription);
+        assertNotEquals(STATIC_MEMBER_DESCRIPTION.hashCode(), newMemberDescription.hashCode());
 
-        MemberDescription newInstanceDescription = new MemberDescription(memberId,
+        MemberDescription newInstanceDescription = new MemberDescription(MEMBER_ID,
                                                                          Optional.of("new_instance"),
-                                                                         clientId,
-                                                                         host,
-                                                                         assignment);
+                                                                         CLIENT_ID,
+                                                                         HOST,
+                                                                         ASSIGNMENT);
 
-        assertNotEquals(staticMemberDescription, newInstanceDescription);
-        assertNotEquals(staticMemberDescription.hashCode(), newInstanceDescription.hashCode());
+        assertNotEquals(STATIC_MEMBER_DESCRIPTION, newInstanceDescription);
+        assertNotEquals(STATIC_MEMBER_DESCRIPTION.hashCode(), newInstanceDescription.hashCode());
     }
 }
