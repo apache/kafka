@@ -116,7 +116,7 @@ public class CommonClientConfigs {
                                                           + "consumer group management. This places an upper bound on the amount of time that the consumer can be idle "
                                                           + "before fetching more records. If poll() is not called before expiration of this timeout, then the consumer "
                                                           + "is considered failed and the group will rebalance in order to reassign the partitions to another member. "
-                                                          + "For consumers using a non-null group.instance.id which reach this timeout, partitions will not be immediately reassigned. "
+                                                          + "For consumers using a non-null <code>group.instance.id</code> which reach this timeout, partitions will not be immediately reassigned. "
                                                           + "Instead, the consumer will stop sending heartbeats and partitions will be reassigned "
                                                           + "after expiration of <code>session.timeout.ms</code>. This mirrors the behavior of a static consumer which has shutdown.";
 
