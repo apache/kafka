@@ -24,6 +24,9 @@ import org.apache.kafka.streams.kstream.internals.TimeWindow;
 import org.junit.Assert;
 import org.junit.Test;
 
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.equalTo;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
 public class WindowedSerdesTest {
@@ -64,5 +67,53 @@ public class WindowedSerdesTest {
         final byte[] bytes = sessionWindowedSerde.serializer().serialize(topic, sessionWindowed);
         final Windowed<Integer> windowed = sessionWindowedSerde.deserializer().deserialize(topic, bytes);
         Assert.assertEquals(sessionWindowed, windowed);
+    }
+
+    @Test
+    public void timeWindowedSerializerShouldThrowNpeIfNotInitializedProperly() {
+        final TimeWindowedSerializer<byte[]> serializer = new TimeWindowedSerializer<>();
+        final NullPointerException exception = assertThrows(
+            NullPointerException.class,
+            () -> serializer.serialize("topic", new Windowed<>(new byte[0], new TimeWindow(0, 1))));
+        assertThat(
+            exception.getMessage(),
+            equalTo("Inner serializer is `null`. User code must use constructor " +
+                "`TimeWindowedSerializer(final Serializer<T> inner)` instead of the no-arg constructor."));
+    }
+
+    @Test
+    public void timeWindowedDeerializerShouldThrowNpeIfNotInitializedProperly() {
+        final TimeWindowedDeserializer<byte[]> deserializer = new TimeWindowedDeserializer<>();
+        final NullPointerException exception = assertThrows(
+            NullPointerException.class,
+            () -> deserializer.deserialize("topic", new byte[0]));
+        assertThat(
+            exception.getMessage(),
+            equalTo("Inner deserializer is `null`. User code must use constructor " +
+                "`TimeWindowedDeserializer(final Deserializer<T> inner)` instead of the no-arg constructor."));
+    }
+
+    @Test
+    public void sessionWindowedSerializerShouldThrowNpeIfNotInitializedProperly() {
+        final SessionWindowedSerializer<byte[]> serializer = new SessionWindowedSerializer<>();
+        final NullPointerException exception = assertThrows(
+            NullPointerException.class,
+            () -> serializer.serialize("topic", new Windowed<>(new byte[0], new SessionWindow(0, 0))));
+        assertThat(
+            exception.getMessage(),
+            equalTo("Inner serializer is `null`. User code must use constructor " +
+                "`SessionWindowedSerializer(final Serializer<T> inner)` instead of the no-arg constructor."));
+    }
+
+    @Test
+    public void sessionWindowedDeserializerShouldThrowNpeIfNotInitializedProperly() {
+        final SessionWindowedDeserializer<byte[]> deserializer = new SessionWindowedDeserializer<>();
+        final NullPointerException exception = assertThrows(
+            NullPointerException.class,
+            () -> deserializer.deserialize("topic", new byte[0]));
+        assertThat(
+            exception.getMessage(),
+            equalTo("Inner deserializer is `null`. User code must use constructor " +
+                "`SessionWindowedDeserializer(final Deserializer<T> inner)` instead of the no-arg constructor."));
     }
 }

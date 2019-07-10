@@ -60,21 +60,26 @@ public class SessionWindowedSerializer<T> implements WindowedSerializer<T> {
 
     @Override
     public byte[] serialize(final String topic, final Windowed<T> data) {
+        WindowedSerdes.verifyInnerSerializerNotNull(inner, this);
+
         if (data == null) {
             return null;
         }
-
         // for either key or value, their schema is the same hence we will just use session key schema
         return SessionKeySchema.toBinary(data, inner, topic);
     }
 
     @Override
     public void close() {
-        inner.close();
+        if (inner != null) {
+            inner.close();
+        }
     }
 
     @Override
     public byte[] serializeBaseKey(final String topic, final Windowed<T> data) {
+        WindowedSerdes.verifyInnerSerializerNotNull(inner, this);
+
         return inner.serialize(topic, data.key());
     }
 
