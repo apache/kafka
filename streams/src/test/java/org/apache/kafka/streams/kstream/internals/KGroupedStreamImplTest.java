@@ -576,18 +576,18 @@ public class KGroupedStreamImplTest {
             driver.pipeInput(recordFactory.create(TOPIC, "3", "B", 100L));
         }
         assertThat(supplier.theCapturedProcessor().processed, equalTo(Arrays.asList(
-            new KeyValueTimestamp<>(new Windowed<>("1", new TimeWindow(0, 500)),  1L,  0),
-            new KeyValueTimestamp<>(new Windowed<>("1", new TimeWindow(0, 500)),  2L,  499),
-            new KeyValueTimestamp<>(new Windowed<>("1", new TimeWindow(0, 500)),  3L,  499),
-            new KeyValueTimestamp<>(new Windowed<>("2", new TimeWindow(0, 500)),  1L,  0),
-            new KeyValueTimestamp<>(new Windowed<>("2", new TimeWindow(0, 500)),  2L,  100),
-            new KeyValueTimestamp<>(new Windowed<>("2", new TimeWindow(0, 500)),  3L,  200),
-            new KeyValueTimestamp<>(new Windowed<>("3", new TimeWindow(0, 500)),  1L,  1),
-            new KeyValueTimestamp<>(new Windowed<>("1", new TimeWindow(500, 1000)),  1L,  500),
-            new KeyValueTimestamp<>(new Windowed<>("1", new TimeWindow(500, 1000)),  2L,  500),
-            new KeyValueTimestamp<>(new Windowed<>("2", new TimeWindow(500, 1000)),  1L,  500),
-            new KeyValueTimestamp<>(new Windowed<>("2", new TimeWindow(500, 1000)),  2L,  500),
-            new KeyValueTimestamp<>(new Windowed<>("3", new TimeWindow(0, 500)),  2L,  100)
+            new KeyValueTimestamp<>(new Windowed<>("1", new TimeWindow(0L, 500L)),  1L,  0L),
+            new KeyValueTimestamp<>(new Windowed<>("1", new TimeWindow(0L, 500L)),  2L,  499L),
+            new KeyValueTimestamp<>(new Windowed<>("1", new TimeWindow(0L, 500L)),  3L,  499L),
+            new KeyValueTimestamp<>(new Windowed<>("2", new TimeWindow(0L, 500L)),  1L,  0L),
+            new KeyValueTimestamp<>(new Windowed<>("2", new TimeWindow(0L, 500L)),  2L,  100L),
+            new KeyValueTimestamp<>(new Windowed<>("2", new TimeWindow(0L, 500L)),  3L,  200L),
+            new KeyValueTimestamp<>(new Windowed<>("3", new TimeWindow(0L, 500L)),  1L,  1L),
+            new KeyValueTimestamp<>(new Windowed<>("1", new TimeWindow(500L, 1000L)),  1L,  500L),
+            new KeyValueTimestamp<>(new Windowed<>("1", new TimeWindow(500L, 1000L)),  2L,  500L),
+            new KeyValueTimestamp<>(new Windowed<>("2", new TimeWindow(500L, 1000L)),  1L,  500L),
+            new KeyValueTimestamp<>(new Windowed<>("2", new TimeWindow(500L, 1000L)),  2L,  500L),
+            new KeyValueTimestamp<>(new Windowed<>("3", new TimeWindow(0L, 500L)),  2L,  100L)
         )));
     }
 
