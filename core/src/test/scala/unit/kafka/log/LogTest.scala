@@ -3657,13 +3657,13 @@ class LogTest {
     assertEquals(2, log.logSegments.size)
     appendPid(5)
 
-    assertEquals(0L, log.lastStableOffset)
+    assertEquals(Some(0L), log.firstUnstableOffset)
 
     log.updateHighWatermark(log.logEndOffset)
     log.maybeIncrementLogStartOffset(5L)
 
     // the first unstable offset should be lower bounded by the log start offset
-    assertEquals(5L, log.lastStableOffset)
+    assertEquals(Some(5L), log.firstUnstableOffset)
   }
 
   @Test
@@ -3682,7 +3682,7 @@ class LogTest {
     assertEquals(2, log.logSegments.size)
     appendPid(5)
 
-    assertEquals(0L, log.lastStableOffset)
+    assertEquals(Some(0L), log.firstUnstableOffset)
 
     log.updateHighWatermark(log.logEndOffset)
     log.maybeIncrementLogStartOffset(8L)
@@ -3691,7 +3691,7 @@ class LogTest {
     assertEquals(1, log.logSegments.size)
 
     // the first unstable offset should be lower bounded by the log start offset
-    assertEquals(8L, log.lastStableOffset)
+    assertEquals(Some(8L), log.firstUnstableOffset)
   }
 
   @Test
@@ -3775,7 +3775,7 @@ class LogTest {
       new SimpleRecord("a".getBytes),
       new SimpleRecord("b".getBytes),
       new SimpleRecord("c".getBytes)), leaderEpoch = 0)
-    assertEquals(firstAppendInfo.firstOffset.get, log.lastStableOffset)
+    assertEquals(firstAppendInfo.firstOffset, log.firstUnstableOffset)
 
     // mix in some non-transactional data
     log.appendAsLeader(MemoryRecords.withRecords(CompressionType.NONE,
@@ -3790,7 +3790,7 @@ class LogTest {
       new SimpleRecord("f".getBytes)), leaderEpoch = 0)
 
     // LSO should not have changed
-    assertEquals(firstAppendInfo.firstOffset.get, log.lastStableOffset)
+    assertEquals(firstAppendInfo.firstOffset, log.firstUnstableOffset)
 
     // now first producer's transaction is aborted
     val abortAppendInfo = log.appendAsLeader(endTxnRecords(ControlRecordType.ABORT, pid1, epoch),
@@ -3798,7 +3798,7 @@ class LogTest {
     log.updateHighWatermark(abortAppendInfo.lastOffset + 1)
 
     // LSO should now point to one less than the first offset of the second transaction
-    assertEquals(secondAppendInfo.firstOffset.get, log.lastStableOffset)
+    assertEquals(secondAppendInfo.firstOffset, log.firstUnstableOffset)
 
     // commit the second transaction
     val commitAppendInfo = log.appendAsLeader(endTxnRecords(ControlRecordType.COMMIT, pid2, epoch),
