@@ -383,6 +383,8 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
         return branchChildren;
     }
 
+    @Override
+    @SuppressWarnings("unchecked")
     public Map<String, KStream<K, V>> branch(final Map<String, Predicate<? super K, ? super V>> predicatesMap) {
         // extract predicates array
         Predicate<? super K, ? super V>[] predicates = (Predicate<? super K, ? super V>[]) predicatesMap.values().toArray();
