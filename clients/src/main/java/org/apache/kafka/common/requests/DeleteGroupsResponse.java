@@ -61,7 +61,11 @@ public class DeleteGroupsResponse extends AbstractResponse {
         return result != null && result.errorCode() != Errors.NONE.code();
     }
 
-    public Errors get(String group) {
+    public Errors get(String group) throws IllegalArgumentException {
+        DeletableGroupResult result = data.results().find(group);
+        if (result == null) {
+            throw new IllegalArgumentException("could not find group " + group + " in the delete group response");
+        }
         return Errors.forCode(data.results().find(group).errorCode());
     }
 

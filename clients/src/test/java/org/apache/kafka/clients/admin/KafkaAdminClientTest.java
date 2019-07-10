@@ -1461,7 +1461,7 @@ public class KafkaAdminClientTest {
             final DeleteConsumerGroupsResult errorResult = env.adminClient().deleteConsumerGroups(groupIds);
             TestUtils.assertFutureError(errorResult.deletedGroups().get("group-0"), GroupAuthorizationException.class);
 
-            //Retriable  errors should be retried
+            //Retriable errors should be retried
             env.kafkaClient().prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, env.cluster().controller()));
 
             final DeletableGroupResultCollection errorResponse1 = new DeletableGroupResultCollection();

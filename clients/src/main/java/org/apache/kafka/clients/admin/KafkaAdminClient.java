@@ -3013,11 +3013,15 @@ public class KafkaAdminClient extends AdminClient {
                     return;
                 }
 
-                final Errors groupError = response.get(context.getGroupId());
-                if (handleGroupRequestError(groupError, context.getFuture()))
-                    return;
-
-                context.getFuture().complete(null);
+                try {
+                    final Errors groupError = response.get(context.getGroupId());
+                    if (!handleGroupRequestError(groupError, context.getFuture())) {
+                        context.getFuture().complete(null);
+                    }
+                } catch (IllegalArgumentException | ApiException e) {
+                    log.error("Encountered error while trying to get group {} exception",
+                              context.getGroupId(), e);
+                }
             }
 
             @Override
