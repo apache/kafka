@@ -40,8 +40,6 @@ public class ConsumerGroupDescription {
     private final Node coordinator;
     private final Set<AclOperation> authorizedOperations;
 
-    // Do not make external changes to this constructor (package access or parameters):
-    // users may rely on it for writing test cases.
     public ConsumerGroupDescription(String groupId,
                                     boolean isSimpleConsumerGroup,
                                     Collection<MemberDescription> members,

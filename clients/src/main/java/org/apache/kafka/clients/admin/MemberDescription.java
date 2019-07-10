@@ -30,8 +30,6 @@ public class MemberDescription {
     private final String host;
     private final MemberAssignment assignment;
 
-    // Do not make external changes to this constructor (package access or parameters):
-    // users may rely on it for writing test cases.
     public MemberDescription(String memberId,
                              Optional<String> groupInstanceId,
                              String clientId,
@@ -45,9 +43,6 @@ public class MemberDescription {
             new MemberAssignment(Collections.emptySet()) : assignment;
     }
 
-    @Deprecated
-    // Do not make external changes to this constructor (package access or parameters):
-    // users may rely on it for writing test cases.
     public MemberDescription(String memberId,
                              String clientId,
                              String host,
