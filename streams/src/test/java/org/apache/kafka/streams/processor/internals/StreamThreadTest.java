@@ -699,12 +699,12 @@ public class StreamThreadTest {
     }
 
     @Test
-    public void shouldNotAccessTaskManagerWhenPendingShutdownInRunOnce() {
+    public void shouldNotThrowWhenPendingShutdownInRunOnce() {
         mockRunOnce(true);
     }
 
     @Test
-    public void shouldHaveNoErrorAccessTaskManagerInRunOnceNoShutdown() {
+    public void shouldNotThrowWithoutPendingShutdownInRunOnce() {
         // A reference test to verify that without intermediate shutdown the runOnce should pass
         // without any exception.
         mockRunOnce(false);

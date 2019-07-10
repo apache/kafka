@@ -274,11 +274,15 @@ public class StreamThread extends Thread {
             final long start = time.milliseconds();
             try {
                 if (streamThread.setState(State.PARTITIONS_ASSIGNED) == null) {
-                    log.debug("Skipping task creation in rebalance because we are already in {} state.",
-                              streamThread.state());
+                    log.debug(
+                        "Skipping task creation in rebalance because we are already in {} state.",
+                        streamThread.state()
+                    );
                 } else if (streamThread.assignmentErrorCode.get() != StreamsPartitionAssignor.Error.NONE.code()) {
-                    log.debug("Encountered assignment error during partition assignment: {}. " +
-                                  "Will skip the task initialization", streamThread.assignmentErrorCode);
+                    log.debug(
+                        "Encountered assignment error during partition assignment: {}. Skipping task initialization",
+                        streamThread.assignmentErrorCode
+                    );
                 } else {
                     log.debug("Creating tasks based on assignment.");
                     taskManager.createTasks(assignment);
