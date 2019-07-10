@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 # Licensed to the Apache Software Foundation (ASF) under one or more
 # contributor license agreements.  See the NOTICE file distributed with
 # this work for additional information regarding copyright ownership.
@@ -30,7 +30,7 @@ Actions:
 EOF
 }
 
-if [[ $# -lt 1 ]]; then
+if [ $# -lt 1 ]; then
     usage
     exit 0
 fi
