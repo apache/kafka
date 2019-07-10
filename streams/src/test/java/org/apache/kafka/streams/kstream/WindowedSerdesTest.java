@@ -82,7 +82,19 @@ public class WindowedSerdesTest {
     }
 
     @Test
-    public void timeWindowedDeerializerShouldThrowNpeIfNotInitializedProperly() {
+    public void timeWindowedSerializerShouldThrowNpeOnSerializingBaseKeyIfNotInitializedProperly() {
+        final TimeWindowedSerializer<byte[]> serializer = new TimeWindowedSerializer<>();
+        final NullPointerException exception = assertThrows(
+            NullPointerException.class,
+            () -> serializer.serializeBaseKey("topic", new Windowed<>(new byte[0], new TimeWindow(0, 1))));
+        assertThat(
+            exception.getMessage(),
+            equalTo("Inner serializer is `null`. User code must use constructor " +
+                "`TimeWindowedSerializer(final Serializer<T> inner)` instead of the no-arg constructor."));
+    }
+
+    @Test
+    public void timeWindowedDeserializerShouldThrowNpeIfNotInitializedProperly() {
         final TimeWindowedDeserializer<byte[]> deserializer = new TimeWindowedDeserializer<>();
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
@@ -106,6 +118,18 @@ public class WindowedSerdesTest {
     }
 
     @Test
+    public void sessionWindowedSerializerShouldThrowNpeOnSerializingBaseKeyIfNotInitializedProperly() {
+        final SessionWindowedSerializer<byte[]> serializer = new SessionWindowedSerializer<>();
+        final NullPointerException exception = assertThrows(
+            NullPointerException.class,
+            () -> serializer.serializeBaseKey("topic", new Windowed<>(new byte[0], new SessionWindow(0, 0))));
+        assertThat(
+            exception.getMessage(),
+            equalTo("Inner serializer is `null`. User code must use constructor " +
+                "`SessionWindowedSerializer(final Serializer<T> inner)` instead of the no-arg constructor."));
+    }
+
+    @Test
     public void sessionWindowedDeserializerShouldThrowNpeIfNotInitializedProperly() {
         final SessionWindowedDeserializer<byte[]> deserializer = new SessionWindowedDeserializer<>();
         final NullPointerException exception = assertThrows(
@@ -116,4 +140,25 @@ public class WindowedSerdesTest {
             equalTo("Inner deserializer is `null`. User code must use constructor " +
                 "`SessionWindowedDeserializer(final Deserializer<T> inner)` instead of the no-arg constructor."));
     }
+
+    @Test
+    public void timeWindowedSerializerShouldNotThrowOnCloseIfNotInitializedProperly() {
+        new TimeWindowedSerializer<>().close();
+    }
+
+    @Test
+    public void timeWindowedDeserializerShouldNotThrowOnCloseIfNotInitializedProperly() {
+        new TimeWindowedDeserializer<>().close();
+    }
+
+    @Test
+    public void sessionWindowedSerializerShouldNotThrowOnCloseIfNotInitializedProperly() {
+        new SessionWindowedSerializer<>().close();
+    }
+
+    @Test
+    public void sessionWindowedDeserializerShouldNotThrowOnCloseIfNotInitializedProperly() {
+        new SessionWindowedDeserializer<>().close();
+    }
+
 }
