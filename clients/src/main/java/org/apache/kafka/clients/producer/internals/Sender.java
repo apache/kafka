@@ -321,7 +321,7 @@ public class Sender implements Runnable {
                 }
             } catch (AuthenticationException e) {
                 // This is already logged as error, but propagated here to perform any clean ups.
-                log.trace("Authentication exception while processing transactional request: {}", e);
+                log.trace("Authentication exception while processing transactional request", e);
                 transactionManager.authenticationFailed(e);
             }
         }
@@ -536,7 +536,7 @@ public class Sender implements Runnable {
                         transactionManager.setProducerIdAndEpoch(producerIdAndEpoch);
                         return;
                     } else if (error.exception() instanceof RetriableException) {
-                        log.debug("Retriable error from InitProducerId response", error.message());
+                        log.debug("Retriable error from InitProducerId response: {}", error.message());
                     } else {
                         transactionManager.transitionToFatalError(error.exception());
                         break;
