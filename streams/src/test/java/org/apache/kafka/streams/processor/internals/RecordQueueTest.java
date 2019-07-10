@@ -284,9 +284,5 @@ public class RecordQueueTest {
             observedPartitionTimes.add(partitionTime);
             return record.offset();
         }
-
-        public List<Long> observedPartitionTimes() {
-            return observedPartitionTimes;
-        }
     }
 }

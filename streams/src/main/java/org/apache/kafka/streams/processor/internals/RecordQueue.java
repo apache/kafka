@@ -192,7 +192,6 @@ public class RecordQueue {
 
             headRecord = new StampedRecord(deserialized, timestamp);
 
-            // update the partition timestamp if the current head record's timestamp has exceed its value
             if (timestamp > partitionTime) {
                 partitionTime = timestamp;
             }
