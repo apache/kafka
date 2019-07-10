@@ -55,7 +55,7 @@ public class ExampleConnectIntegrationTest {
 
     private static final int NUM_RECORDS_PRODUCED = 2000;
     private static final int NUM_TOPIC_PARTITIONS = 3;
-    private static final int RECORD_TRANSFER_DURATION_MS = 5000;
+    private static final int RECORD_TRANSFER_DURATION_MS = 15000;
     private static final int CONNECTOR_SETUP_DURATION_MS = 15000;
     private static final int NUM_TASKS = 3;
     private static final int NUM_WORKERS = 3;
@@ -142,7 +142,7 @@ public class ExampleConnectIntegrationTest {
         connectorHandle.awaitRecords(RECORD_TRANSFER_DURATION_MS);
 
         // wait for the connector tasks to commit all records.
-        connectorHandle.awaitCommits(CONNECTOR_SETUP_DURATION_MS);
+        connectorHandle.awaitCommits(RECORD_TRANSFER_DURATION_MS);
 
         // delete connector
         connect.deleteConnector(CONNECTOR_NAME);
@@ -178,7 +178,7 @@ public class ExampleConnectIntegrationTest {
         connectorHandle.awaitRecords(RECORD_TRANSFER_DURATION_MS);
 
         // wait for the connector tasks to commit enough records
-        connectorHandle.awaitCommits(CONNECTOR_SETUP_DURATION_MS);
+        connectorHandle.awaitCommits(RECORD_TRANSFER_DURATION_MS);
 
         // consume all records from the source topic or fail, to ensure that they were correctly produced
         int recordNum = connect.kafka().consume(NUM_RECORDS_PRODUCED, RECORD_TRANSFER_DURATION_MS, "test-topic").count();
