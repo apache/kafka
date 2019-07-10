@@ -694,6 +694,11 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             } else if (groupId.isEmpty())
                 log.warn("Support for using the empty group id by consumers is deprecated and will be removed in the next major release.");
 
+            boolean allowAutoCreateTopics = config.getBoolean(ConsumerConfig.ALLOW_AUTO_CREATE_TOPICS_CONFIG);
+            if (allowAutoCreateTopics) {
+                log.warn("Support for server-side topic auto-creation is deprecated and will be removed in a future release.");
+            }
+
             log.debug("Initializing the Kafka consumer");
             this.requestTimeoutMs = config.getInt(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG);
             this.defaultApiTimeoutMs = config.getInt(ConsumerConfig.DEFAULT_API_TIMEOUT_MS_CONFIG);

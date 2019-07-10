@@ -240,6 +240,17 @@ public class ProducerConfig extends AbstractConfig {
             "The default is <code>null</code>, which means transactions cannot be used. " +
             "Note that, by default, transactions require a cluster of at least three brokers which is the recommended setting for production; for development you can change this, by adjusting broker setting <code>transaction.state.log.replication.factor</code>.";
 
+    /** <code> auto.create.topics.enable </code> */
+    public static final String AUTO_CREATE_TOPICS_ENABLE_CONFIG = "auto.create.topics.enable";
+    public static final String AUTO_CREATE_TOPICS_ENABLE_DOC = "Enable auto-creation of topics on the producer. Even if the broker config <code>auto.create.topics.enable</code> does not allow auto-creation server-side, topics can still be created automatically client-side.";
+
+    /** <code> auto.create.num.partitions </code> */
+    public static final String AUTO_CREATE_NUM_PARTITIONS_CONFIG = "auto.create.num.partitions";
+    public static final String AUTO_CREATE_NUM_PARTITIONS_DOC = "The default number of log partitions per topic for auto-created topics. This value is only used if the broker's auto-creation configuration has been disabled and the producer's config has been enabled.";
+
+    /** <code> auto.create.replication.factor</code> */
+    public static final String AUTO_CREATE_REPLICATION_FACTOR_CONFIG = "auto.create.replication.factor";
+    public static final String AUTO_CREATE_REPLICATION_FACTOR_DOC = "The default replication factor for automatically created topics. This value is only used if the broker's auto-creation configuration has been disabled and the producer's config has been enabled.";
     static {
         CONFIG = new ConfigDef().define(BOOTSTRAP_SERVERS_CONFIG, Type.LIST, Collections.emptyList(), new ConfigDef.NonNullValidator(), Importance.HIGH, CommonClientConfigs.BOOTSTRAP_SERVERS_DOC)
                                 .define(CLIENT_DNS_LOOKUP_CONFIG,
@@ -358,7 +369,22 @@ public class ProducerConfig extends AbstractConfig {
                                         null,
                                         new ConfigDef.NonEmptyString(),
                                         Importance.LOW,
-                                        TRANSACTIONAL_ID_DOC);
+                                        TRANSACTIONAL_ID_DOC)
+                                .define(AUTO_CREATE_TOPICS_ENABLE_CONFIG,
+                                        Type.BOOLEAN,
+                                        false,
+                                        Importance.MEDIUM,
+                                        AUTO_CREATE_TOPICS_ENABLE_DOC)
+                                .define(AUTO_CREATE_NUM_PARTITIONS_CONFIG,
+                                        Type.INT,
+                                        -1,
+                                        Importance.MEDIUM,
+                                        AUTO_CREATE_NUM_PARTITIONS_DOC)
+                                .define(AUTO_CREATE_REPLICATION_FACTOR_CONFIG,
+                                        Type.INT,
+                                        -1,
+                                        Importance.MEDIUM,
+                                        AUTO_CREATE_REPLICATION_FACTOR_DOC);
     }
 
     @Override

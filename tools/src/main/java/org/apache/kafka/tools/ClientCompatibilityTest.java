@@ -85,6 +85,7 @@ public class ClientCompatibilityTest {
         final int numClusterNodes;
         final boolean createTopicsSupported;
         final boolean describeAclsSupported;
+        final boolean brokerAutoCreateDisabled;
 
         TestConfig(Namespace res) {
             this.bootstrapServer = res.getString("bootstrapServer");
@@ -95,6 +96,7 @@ public class ClientCompatibilityTest {
             this.numClusterNodes = res.getInt("numClusterNodes");
             this.createTopicsSupported = res.getBoolean("createTopicsSupported");
             this.describeAclsSupported = res.getBoolean("describeAclsSupported");
+            this.brokerAutoCreateDisabled = res.getBoolean("brokerAutocreateDisabled");
         }
     }
 
@@ -161,6 +163,14 @@ public class ClientCompatibilityTest {
             .dest("describeAclsSupported")
             .metavar("DESCRIBE_ACLS_SUPPORTED")
             .help("Whether describeAcls is supported in the AdminClient.");
+        parser.addArgument("--broker-autocreate-disabled")
+            .action(store())
+            .required(true)
+            .type(Boolean.class)
+            .dest("brokerAutocreateDisabled")
+            .metavar("BROKER_AUTOCREATE_DISABLED")
+            .help("Whether the ability to autocreate topics has been disabled on the broker.");
+           
 
         Namespace res = null;
         try {
@@ -227,6 +237,7 @@ public class ClientCompatibilityTest {
         testAdminClient();
         testProduce();
         testConsume(prodTimeMs);
+        testAutoCreateOnProduce();
     }
 
     public void testProduce() throws Exception {
@@ -242,6 +253,30 @@ public class ClientCompatibilityTest {
         future1.get();
         future2.get();
         producer.close();
+    }
+    
+    public void testAutoCreateOnProduce() throws Throwable {
+        Properties producerProps = new Properties();
+        producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, testConfig.bootstrapServer);
+        producerProps.put(ProducerConfig.AUTO_CREATE_TOPICS_ENABLE_CONFIG, true);
+        if (testConfig.brokerAutoCreateDisabled) {
+            producerProps.put(ProducerConfig.AUTO_CREATE_NUM_PARTITIONS_CONFIG, 4);
+            producerProps.put(ProducerConfig.AUTO_CREATE_REPLICATION_FACTOR_CONFIG, 1); 
+        }
+        ByteArraySerializer serializer = new ByteArraySerializer();
+        KafkaProducer<byte[], byte[]> producer = new KafkaProducer<>(producerProps, serializer, serializer);
+        tryFeature("autocreateTopic", !testConfig.brokerAutoCreateDisabled || testConfig.createTopicsSupported,
+            () -> {
+                try {
+                    ProducerRecord<byte[], byte[]> record1 = new ProducerRecord<>("UnknownTopic", message1);
+                    Future<RecordMetadata> future = producer.send(record1);
+                    future.get();
+                } catch (ExecutionException e) {
+                    throw e.getCause();
+                }
+            }
+        );
+        producer.close();   
     }
 
     void testAdminClient() throws Throwable {
