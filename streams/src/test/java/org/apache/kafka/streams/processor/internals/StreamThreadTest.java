@@ -76,6 +76,7 @@ import org.junit.Test;
 import java.io.File;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -699,17 +700,56 @@ public class StreamThreadTest {
 
     @Test
     public void shouldNotAccessTaskManagerWhenPendingShutdownInRunOnce() {
-        final TaskManager taskManager = EasyMock.createNiceMock(TaskManager.class);
-        EasyMock.expect(taskManager.activeTask(t1p1)).andReturn(null);
-        EasyMock.replay(taskManager);
+        mockRunOnce(true);
+    }
+
+    @Test
+    public void shouldHaveNoErrorAccessTaskManagerInRunOnceNoShutdown() {
+        // A reference test to verify that without intermediate shutdown the runOnce should pass
+        // without any exception.
+        mockRunOnce(false);
+    }
+
+    private void mockRunOnce(final boolean shutdownOnPoll) {
+        final Collection<TopicPartition> assignedPartitions = Collections.singletonList(t1p1);
+        class MockStreamThreadConsumer<K, V> extends MockConsumer<K, V> {
+
+            private StreamThread streamThread;
+
+            private MockStreamThreadConsumer(final OffsetResetStrategy offsetResetStrategy) {
+                super(offsetResetStrategy);
+            }
+
+            @Override
+            public synchronized ConsumerRecords<K, V> poll(final Duration timeout) {
+                assertNotNull(streamThread);
+                if (shutdownOnPoll) {
+                    streamThread.shutdown();
+                }
+                streamThread.rebalanceListener.onPartitionsAssigned(assignedPartitions);
+                return super.poll(timeout);
+            }
+
+            private void setStreamThread(final StreamThread streamThread) {
+                this.streamThread = streamThread;
+            }
+        }
 
         final MockStreamThreadConsumer<byte[], byte[]> mockStreamThreadConsumer =
-            new MockStreamThreadConsumer<byte[], byte[]>(OffsetResetStrategy.EARLIEST) {
-            @Override
-            public void onPoll() {
-                super.streamThread.shutdown();
-            }
-        };
+            new MockStreamThreadConsumer<>(OffsetResetStrategy.EARLIEST);
+
+        final TaskManager taskManager = new TaskManager(new MockChangelogReader(),
+                                                        processId,
+                                                        "log-prefix",
+                                                        mockStreamThreadConsumer,
+                                                        streamsMetadataState,
+                                                        null,
+                                                        null,
+                                                        null,
+                                                        new AssignedStreamsTasks(new LogContext()),
+                                                        new AssignedStandbyTasks(new LogContext()));
+        taskManager.setConsumer(mockStreamThreadConsumer);
+        taskManager.setAssignmentMetadata(Collections.emptyMap(), Collections.emptyMap());
 
         final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, clientId);
         final StreamThread thread = new StreamThread(
@@ -728,11 +768,12 @@ public class StreamThreadTest {
         ).updateThreadMetadata(getSharedAdminClientId(clientId));
 
         mockStreamThreadConsumer.setStreamThread(thread);
-        mockStreamThreadConsumer.assign(Collections.singletonList(t1p1));
+        mockStreamThreadConsumer.assign(assignedPartitions);
         mockStreamThreadConsumer.updateBeginningOffsets(Collections.singletonMap(t1p1, 0L));
 
         addRecord(mockStreamThreadConsumer, 1L, 0L);
         thread.setState(StreamThread.State.STARTING);
+        thread.setState(StreamThread.State.PARTITIONS_REVOKED);
         thread.runOnce();
     }
 
@@ -1610,31 +1651,5 @@ public class StreamThreadTest {
             -1,
             new byte[0],
             new byte[0]));
-    }
-
-
-    /**
-     * Mock consumer that could alter stream thread state during #poll()
-     */
-    private abstract class MockStreamThreadConsumer<K, V> extends MockConsumer<K, V> {
-
-        private StreamThread streamThread;
-
-        MockStreamThreadConsumer(final OffsetResetStrategy offsetResetStrategy) {
-            super(offsetResetStrategy);
-        }
-
-        @Override
-        public synchronized ConsumerRecords<K, V> poll(final Duration timeout) {
-            assertNotNull(streamThread);
-            onPoll();
-            return super.poll(timeout);
-        }
-
-        public abstract void onPoll();
-
-        void setStreamThread(final StreamThread streamThread) {
-            this.streamThread = streamThread;
-        }
     }
 }
