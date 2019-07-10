@@ -313,7 +313,7 @@ object ConsoleConsumer extends Logging {
     try {
       formatter.init(formatterArgs)
     } catch {
-      case e => CommandLineUtils.printUsageAndDie(parser, e.getMessage)
+      case e:IllegalArgumentException => CommandLineUtils.printUsageAndDie(parser, e.getMessage)
     }
 
     val topicOrFilterOpt = List(topicIdOpt, whitelistOpt).filter(options.has)
