@@ -20,7 +20,6 @@ import org.apache.kafka.common.utils.AppInfoParser;
 import io.confluent.support.metrics.SupportKafkaMetricsBasic;
 import io.confluent.support.metrics.common.Collector;
 import io.confluent.support.metrics.common.Uuid;
-import io.confluent.support.metrics.common.Version;
 import io.confluent.support.metrics.common.time.TimeUtils;
 import kafka.server.KafkaServer;
 
@@ -42,7 +41,6 @@ public class BasicCollector extends Collector {
       TimeUtils time,
       Uuid uuid
   ) {
-    super();
     this.server = server;
     this.time = time;
     this.uuid = uuid;
@@ -53,14 +51,20 @@ public class BasicCollector extends Collector {
    */
   @Override
   public GenericContainer collectMetrics() {
+    String kafkaVersion = AppInfoParser.getVersion();
     SupportKafkaMetricsBasic metricsRecord = new SupportKafkaMetricsBasic();
     metricsRecord.setTimestamp(time.nowInUnixTime());
-    metricsRecord.setKafkaVersion(AppInfoParser.getVersion());
-    metricsRecord.setConfluentPlatformVersion(Version.getVersion());
+    metricsRecord.setKafkaVersion(kafkaVersion);
+    metricsRecord.setConfluentPlatformVersion(cpVersion(kafkaVersion));
     metricsRecord.setCollectorState(this.getRuntimeState().stateId());
     metricsRecord.setBrokerProcessUUID(uuid.toString());
     metricsRecord.setClusterId(server.clusterId());
     return metricsRecord;
+  }
+
+  // visible for testing
+  public static String cpVersion(String kafkaVersion) {
+    return kafkaVersion.replace("-ce", "").replace("-ccs", "");
   }
 
 }

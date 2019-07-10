@@ -23,7 +23,6 @@ import org.junit.Test;
 import io.confluent.support.metrics.SupportKafkaMetricsBasic;
 import io.confluent.support.metrics.common.Collector;
 import io.confluent.support.metrics.common.Uuid;
-import io.confluent.support.metrics.common.Version;
 import io.confluent.support.metrics.common.time.TimeUtils;
 
 import static org.junit.Assert.assertEquals;
@@ -58,8 +57,17 @@ public class BasicCollectorTest {
     assertTrue(unixTimeAtTestStart <= basicRecord.getTimestamp());
     assertTrue(basicRecord.getTimestamp() <= time.nowInUnixTime());
     assertEquals(AppInfoParser.getVersion(), basicRecord.getKafkaVersion());
-    assertEquals(Version.getVersion(), basicRecord.getConfluentPlatformVersion());
+    assertEquals(BasicCollector.cpVersion(AppInfoParser.getVersion()), basicRecord.getConfluentPlatformVersion());
     assertEquals(metricsCollector.getRuntimeState().stateId(), basicRecord.getCollectorState().intValue());
     assertEquals(uuid.toString(), basicRecord.getBrokerProcessUUID());
   }
+
+  @Test
+  public void testCpVersion() {
+    assertEquals("5.3.0", BasicCollector.cpVersion("5.3.0-ccs"));
+    assertEquals("5.3.0-SNAPSHOT", BasicCollector.cpVersion("5.3.0-ccs-SNAPSHOT"));
+    assertEquals("5.3.0", BasicCollector.cpVersion("5.3.0-ce"));
+    assertEquals("5.3.0-SNAPSHOT", BasicCollector.cpVersion("5.3.0-ce-SNAPSHOT"));
+  }
+
 }
