@@ -89,7 +89,12 @@ class LogManager(logDirs: Seq[File],
   def createRemoteLogManager(remoteLogManagerConfig: RemoteLogManagerConfig): Option[RemoteLogManager] = {
     if (remoteLogManagerConfig.remoteLogStorageEnable) {
       val logFetcher: TopicPartition => Option[Log] = getLog(_)
-      val remoteLogManager = new RemoteLogManager(logFetcher, remoteLogManagerConfig)
+      def logSegmentCleaner(tp:TopicPartition, segment:LogSegment) : Unit = {
+        getLog(tp).foreach(x => {
+          x.deleteSegment(segment)
+        })
+      }
+      val remoteLogManager = new RemoteLogManager(logFetcher, logSegmentCleaner, remoteLogManagerConfig)
       Some(remoteLogManager)
     } else {
       None

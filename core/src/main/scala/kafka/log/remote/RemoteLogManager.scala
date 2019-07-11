@@ -33,7 +33,9 @@ import org.apache.kafka.common.utils.Utils
 import scala.collection.JavaConverters._
 import scala.collection.{JavaConverters, Set}
 
-class RemoteLogManager(logFetcher: TopicPartition => Option[Log], rlmConfig: RemoteLogManagerConfig) extends Logging with Closeable {
+class RemoteLogManager(logFetcher: TopicPartition => Option[Log],
+                       segmentCleaner: (TopicPartition, LogSegment) => Unit,
+                       rlmConfig: RemoteLogManagerConfig) extends Logging with Closeable {
 
   private val watchedSegments: BlockingQueue[LogSegmentEntry] = new LinkedBlockingQueue[LogSegmentEntry]()
   private val polledDirs = new ConcurrentHashMap[TopicPartition, Path]().asScala
@@ -61,11 +63,11 @@ class RemoteLogManager(logFetcher: TopicPartition => Option[Log], rlmConfig: Rem
         val dirPath: Path = path
         val tp: TopicPartition = Log.parseTopicPartitionName(dirPath.toFile)
 
-        val maxOffset = maxOffsets.get(tp)
+        val maxOffset = if(maxOffsets.containsKey(tp)) maxOffsets.get(tp) else -1L
         val paths = Files.newDirectoryStream(dirPath, new DirectoryStream.Filter[Path]() {
           override def accept(path: Path): Boolean = {
             val fileName = path.toFile.getName
-            fileName.endsWith(Log.LogFileSuffix) && (Log.offsetFromFileName(fileName) > maxOffset)
+            fileName.endsWith(Log.LogFileSuffix) && Log.offsetFromFileName(fileName) > maxOffset
           }
         })
         try {
@@ -79,7 +81,7 @@ class RemoteLogManager(logFetcher: TopicPartition => Option[Log], rlmConfig: Rem
             val passiveLogFiles = sortedPaths.slice(0, sortedPaths.size - 1)
             logFetcher(tp).foreach(log => {
               val lastSegmentOffset = Log.offsetFromFileName(passiveLogFiles.last)
-              val segments = log.logSegments(maxOffset + 1, lastSegmentOffset)
+              val segments = log.logSegments(maxOffset + 1, lastSegmentOffset + 1)
               segments.foreach(segment => watchedSegments.add(LogSegmentEntry(tp, segment.baseOffset, segment)))
               maxOffsets.put(tp, lastSegmentOffset)
             })
@@ -114,7 +116,11 @@ class RemoteLogManager(logFetcher: TopicPartition => Option[Log], rlmConfig: Rem
             val file = segment.log.file()
             val fileName = file.getName
             val baseOffsetStr = fileName.substring(0, fileName.indexOf("."))
-            rlmIndexer.maybeBuildIndexes(tp, entries, file, baseOffsetStr)
+            rlmIndexer.maybeBuildIndexes(tp, entries, file.getParentFile, baseOffsetStr)
+
+            //delete the local log-segment as it is already copied into remote storage
+            //todo-satish need to clean up while restarting in scenarios where broker is exited before doing this task.
+            segmentCleaner(tp, segment)
           } catch {
             case ex: InterruptedException => throw ex
             case ex: Throwable =>
@@ -240,8 +246,8 @@ private case class LogSegmentEntry(topicPartition: TopicPartition,
 }
 
 object RemoteLogManager {
-  val REMOTE_STORAGE_MANAGER_CONFIG_PREFIX = "remote.log.storage."
-  val DefaultConfig = RemoteLogManagerConfig(remoteLogStorageEnable = Defaults.RemoteLogStorageEnable, null,
+  def REMOTE_STORAGE_MANAGER_CONFIG_PREFIX = "remote.log.storage."
+  def DefaultConfig = RemoteLogManagerConfig(remoteLogStorageEnable = Defaults.RemoteLogStorageEnable, null,
     Defaults.RemoteLogRetentionBytes, TimeUnit.MINUTES.toMillis(Defaults.RemoteLogRetentionMinutes), Map.empty)
 
   def createRemoteLogManagerConfig(config: KafkaConfig): RemoteLogManagerConfig = {

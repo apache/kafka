@@ -2163,7 +2163,7 @@ class Log(@volatile var dir: File,
    * @param segments The log segments to schedule for deletion
    * @param asyncDelete Whether the segment files should be deleted asynchronously
    */
-  private def removeAndDeleteSegments(segments: Iterable[LogSegment], asyncDelete: Boolean): Unit = {
+  def removeAndDeleteSegments(segments: Iterable[LogSegment], asyncDelete: Boolean): Unit = {
     lock synchronized {
       // As most callers hold an iterator into the `segments` collection and `removeAndDeleteSegment` mutates it by
       // removing the deleted segment, we should force materialization of the iterator here, so that results of the

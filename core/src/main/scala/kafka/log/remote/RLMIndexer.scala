@@ -34,12 +34,12 @@ class RLMIndexer(rsm: RemoteStorageManager, logFetcher: TopicPartition => Option
   private val remoteIndexes: util.concurrent.ConcurrentMap[TopicPartition, TopicPartitionRemoteIndex] = new ConcurrentHashMap[TopicPartition, TopicPartitionRemoteIndex]()
 
   def lookupLastOffset(tp: TopicPartition): Option[Long] = {
-    val remoteIndex = remoteIndexes.get(tp)
+    val remoteIndex = maybeLoadIndex(tp)
     if (remoteIndex != null) remoteIndex.currentLastOffset else None
   }
 
   def lookupEntryForOffset(tp: TopicPartition, offset: Long): Option[RemoteLogIndexEntry] = {
-    val indexEntry = remoteIndexes.get(tp)
+    val indexEntry = maybeLoadIndex(tp)
     if (indexEntry != null) indexEntry.lookupEntryForOffset(offset) else None
   }
 
@@ -49,14 +49,19 @@ class RLMIndexer(rsm: RemoteStorageManager, logFetcher: TopicPartition => Option
    * @return the offset of the topic-partition that is already indexed if it has done earlier, else it returns -1.
    */
   def getOrLoadIndexOffset(tp: TopicPartition): Option[Long] = {
+    maybeLoadIndex(tp).currentStartOffset
+  }
+
+  private def maybeLoadIndex(tp: TopicPartition): TopicPartitionRemoteIndex = {
     remoteIndexes.computeIfAbsent(tp, new Function[TopicPartition, TopicPartitionRemoteIndex]() {
       override def apply(tp: TopicPartition): TopicPartitionRemoteIndex = {
-        val log = logFetcher(tp).getOrElse(throw new RuntimeException("This broker is not a leader or a a follower for the given topic partition " + tp))
+        val log = logFetcher(tp).getOrElse(
+          throw new RuntimeException("This broker is not a leader or a a follower for the given topic partition " + tp))
 
         val parentDir = log.dir
         TopicPartitionRemoteIndex.open(tp, parentDir)
       }
-    }).currentStartOffset
+    })
   }
 
   def maybeBuildIndexes(tp: TopicPartition, entries: Seq[RemoteLogIndexEntry], parentDir: File, baseOffsetStr: String): Boolean = {

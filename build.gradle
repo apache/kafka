@@ -848,6 +848,7 @@ project(':core') {
     from(configurations.archives.artifacts.files) { into("libs/") }
     from(project.siteDocsTar) { into("site-docs/") }
     from(project(':tools').jar) { into("libs/") }
+    from(project(':remote-storage-managers:hdfs').jar) { into("libs/") }
     from(project(':tools').configurations.runtime) { into("libs/") }
     from(project(':connect:api').jar) { into("libs/") }
     from(project(':connect:api').configurations.runtime) { into("libs/") }

@@ -33,8 +33,8 @@ import org.apache.kafka.common.record.FileRecords;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.Records;
-import scala.collection.JavaConverters;
-import scala.collection.Seq;
+
+import static kafka.log.remote.RemoteLogManager.REMOTE_STORAGE_MANAGER_CONFIG_PREFIX;
 
 import java.io.File;
 import java.io.IOException;
@@ -52,11 +52,14 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import scala.collection.JavaConverters;
+import scala.collection.Seq;
+
 public class HDFSRemoteStorageManager implements RemoteStorageManager {
     // TODO: Use the utilities in AbstractConfig. Should we support dynamic config?
-    public static final String HDFS_URI_PROP = "rsm.hdfs.fs.uri";
-    public static final String HDFS_BASE_DIR_PROP = "rsm.hdfs.base.dir";
-    public static final String HDFS_REMOTE_INDEX_INTERVAL_BYTES = "rsm.hdfs.remote.index.interval.bytes";
+    public static final String HDFS_URI_PROP = REMOTE_STORAGE_MANAGER_CONFIG_PREFIX() + "hdfs.fs.uri";
+    public static final String HDFS_BASE_DIR_PROP = REMOTE_STORAGE_MANAGER_CONFIG_PREFIX() + "hdfs.base.dir";
+    public static final String HDFS_REMOTE_INDEX_INTERVAL_BYTES = REMOTE_STORAGE_MANAGER_CONFIG_PREFIX() + "hdfs.remote.index.interval.bytes";
     public static final String HDFS_REMOTE_INDEX_INTERVAL_BYTES_DEFAULT = "262144";
 
     private static final String REMOTE_LOG_DIR_FORMAT = "%020d-%020d";
