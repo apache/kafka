@@ -41,8 +41,8 @@ import java.util.Set;
  *
  * PartitionGroup also maintains a stream-time for the group as a whole.
  * This is defined as the highest timestamp of any record yet polled from the PartitionGroup.
- * The PartitionGroup's stream-time is also the stream-time of its task and is used as the
- * stream-time for any computations that require it.
+ * Note however that any computation that depends on stream time tracks it on a per-operator basis to obtain an
+ * accurate view of the local stream time as seen by that node.
  *
  * The PartitionGroups's stream-time is initially UNKNOWN (-1), and it set to a known value upon first poll.
  * As a consequence of the definition, the PartitionGroup's stream-time is non-decreasing
@@ -157,10 +157,9 @@ public class PartitionGroup {
     }
 
     /**
-     * Return the timestamp of this partition group as the smallest
-     * partition timestamp among all its partitions
+     * Return the stream time of this partition group defined as the largest timestamp seen across all partitions
      */
-    public long timestamp() {
+    public long streamTime() {
         return streamTime;
     }
 
@@ -192,6 +191,7 @@ public class PartitionGroup {
 
     public void clear() {
         nonEmptyQueuesByTime.clear();
+        streamTime = RecordQueue.UNKNOWN;
         for (final RecordQueue queue : partitionQueues.values()) {
             queue.clear();
         }
