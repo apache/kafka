@@ -54,7 +54,6 @@ public class JoinGroupRequest extends AbstractRequest {
     }
 
     private final JoinGroupRequestData data;
-    private final short version;
 
     public static final String UNKNOWN_MEMBER_ID = "";
 
@@ -95,13 +94,21 @@ public class JoinGroupRequest extends AbstractRequest {
     public JoinGroupRequest(JoinGroupRequestData data, short version) {
         super(ApiKeys.JOIN_GROUP, version);
         this.data = data;
-        this.version = version;
+        maybeOverrideRebalanceTimeout(version);
     }
 
     public JoinGroupRequest(Struct struct, short version) {
         super(ApiKeys.JOIN_GROUP, version);
         this.data = new JoinGroupRequestData(struct, version);
-        this.version = version;
+        maybeOverrideRebalanceTimeout(version);
+    }
+
+    private void maybeOverrideRebalanceTimeout(short version) {
+        if (version == 0) {
+            // Version 0 has no rebalance timeout, so we use the session timeout
+            // to be consistent with the original behavior of the API.
+            data.setRebalanceTimeoutMs(data.sessionTimeoutMs());
+        }
     }
 
     public JoinGroupRequestData data() {
@@ -149,6 +156,6 @@ public class JoinGroupRequest extends AbstractRequest {
 
     @Override
     protected Struct toStruct() {
-        return data.toStruct(version);
+        return data.toStruct(version());
     }
 }

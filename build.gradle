@@ -679,6 +679,8 @@ project(':core') {
       exclude module: 'log4j'
       exclude module: 'netty'
     }
+    // ZooKeeperMain depends on commons-cli but declares the dependency as `provided`
+    compile libs.commonsCli
 
     compileOnly libs.log4j
 
