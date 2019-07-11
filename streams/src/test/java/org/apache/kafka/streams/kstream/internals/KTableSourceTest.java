@@ -79,8 +79,8 @@ public class KTableSourceTest {
                 new KeyValueTimestamp<>("B", 2, 11L),
                 new KeyValueTimestamp<>("C", 3, 12L),
                 new KeyValueTimestamp<>("D", 4, 13L),
-                new KeyValueTimestamp<>("A", "null", 14L),
-                new KeyValueTimestamp<>("B", "null", 15L)),
+                new KeyValueTimestamp<>("A", null, 14L),
+                new KeyValueTimestamp<>("B", null, 15L)),
             supplier.theCapturedProcessor().processed);
     }
 
@@ -105,7 +105,8 @@ public class KTableSourceTest {
         final StreamsBuilder builder = new StreamsBuilder();
         final String topic1 = "topic1";
 
-        @SuppressWarnings("unchecked") final KTableImpl<String, String, String> table1 =
+        @SuppressWarnings("unchecked")
+        final KTableImpl<String, String, String> table1 =
             (KTableImpl<String, String, String>) builder.table(topic1, stringConsumed, Materialized.as("store"));
 
         final Topology topology = builder.build();
@@ -153,7 +154,8 @@ public class KTableSourceTest {
         final StreamsBuilder builder = new StreamsBuilder();
         final String topic1 = "topic1";
 
-        @SuppressWarnings("unchecked") final KTableImpl<String, String, String> table1 = (KTableImpl<String, String, String>) builder.table(topic1, stringConsumed);
+        @SuppressWarnings("unchecked")
+        final KTableImpl<String, String, String> table1 = (KTableImpl<String, String, String>) builder.table(topic1, stringConsumed);
 
         final MockProcessorSupplier<String, Integer> supplier = new MockProcessorSupplier<>();
         final Topology topology = builder.build().addProcessor("proc1", supplier, table1.name);
@@ -167,12 +169,15 @@ public class KTableSourceTest {
             proc1.checkAndClearProcessResult(new KeyValueTimestamp<>("A", new Change<>("01", null), 10),
                 new KeyValueTimestamp<>("B", new Change<>("01", null), 20),
                 new KeyValueTimestamp<>("C", new Change<>("01", null), 15));
+
             driver.pipeInput(recordFactory.create(topic1, "A", "02", 8L));
             driver.pipeInput(recordFactory.create(topic1, "B", "02", 22L));
             proc1.checkAndClearProcessResult(new KeyValueTimestamp<>("A", new Change<>("02", null), 8),
                 new KeyValueTimestamp<>("B", new Change<>("02", null), 22));
+
             driver.pipeInput(recordFactory.create(topic1, "A", "03", 12L));
             proc1.checkAndClearProcessResult(new KeyValueTimestamp<>("A", new Change<>("03", null), 12));
+
             driver.pipeInput(recordFactory.create(topic1, "A", (String) null, 15L));
             driver.pipeInput(recordFactory.create(topic1, "B", (String) null, 20L));
             proc1.checkAndClearProcessResult(new KeyValueTimestamp<>("A", new Change<>(null, null), 15),
@@ -185,7 +190,8 @@ public class KTableSourceTest {
         final StreamsBuilder builder = new StreamsBuilder();
         final String topic1 = "topic1";
 
-        @SuppressWarnings("unchecked") final KTableImpl<String, String, String> table1 = (KTableImpl<String, String, String>) builder.table(topic1, stringConsumed);
+        @SuppressWarnings("unchecked")
+        final KTableImpl<String, String, String> table1 = (KTableImpl<String, String, String>) builder.table(topic1, stringConsumed);
         table1.enableSendingOldValues();
         assertTrue(table1.sendingOldValueEnabled());
 
@@ -201,12 +207,15 @@ public class KTableSourceTest {
             proc1.checkAndClearProcessResult(new KeyValueTimestamp<>("A", new Change<>("01", null), 10),
                 new KeyValueTimestamp<>("B", new Change<>("01", null), 20),
                 new KeyValueTimestamp<>("C", new Change<>("01", null), 15));
+
             driver.pipeInput(recordFactory.create(topic1, "A", "02", 8L));
             driver.pipeInput(recordFactory.create(topic1, "B", "02", 22L));
             proc1.checkAndClearProcessResult(new KeyValueTimestamp<>("A", new Change<>("02", "01"), 8),
                 new KeyValueTimestamp<>("B", new Change<>("02", "01"), 22));
+
             driver.pipeInput(recordFactory.create(topic1, "A", "03", 12L));
             proc1.checkAndClearProcessResult(new KeyValueTimestamp<>("A", new Change<>("03", "02"), 12));
+
             driver.pipeInput(recordFactory.create(topic1, "A", (String) null, 15L));
             driver.pipeInput(recordFactory.create(topic1, "B", (String) null, 20L));
             proc1.checkAndClearProcessResult(new KeyValueTimestamp<>("A", new Change<>(null, "03"), 15),

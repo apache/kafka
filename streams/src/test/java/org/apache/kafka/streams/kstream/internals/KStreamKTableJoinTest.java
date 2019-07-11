@@ -54,7 +54,7 @@ public class KStreamKTableJoinTest {
     private final String streamTopic = "streamTopic";
     private final String tableTopic = "tableTopic";
     private final ConsumerRecordFactory<Integer, String> recordFactory =
-            new ConsumerRecordFactory<>(new IntegerSerializer(), new StringSerializer(), 0L);
+        new ConsumerRecordFactory<>(new IntegerSerializer(), new StringSerializer(), 0L);
     private final int[] expectedKeys = {0, 1, 2, 3};
 
     private MockProcessor<Integer, String> processor;
@@ -95,10 +95,10 @@ public class KStreamKTableJoinTest {
         final Random r = new Random(System.currentTimeMillis());
         for (int i = 0; i < messageCount; i++) {
             driver.pipeInput(recordFactory.create(
-                    tableTopic,
-                    expectedKeys[i],
-                    valuePrefix + expectedKeys[i],
-                    r.nextInt(Integer.MAX_VALUE)));
+                tableTopic,
+                expectedKeys[i],
+                valuePrefix + expectedKeys[i],
+                r.nextInt(Integer.MAX_VALUE)));
         }
     }
 
@@ -111,7 +111,7 @@ public class KStreamKTableJoinTest {
     @Test
     public void shouldRequireCopartitionedStreams() {
         final Collection<Set<String>> copartitionGroups =
-                TopologyWrapper.getInternalTopologyBuilder(builder.build()).copartitionGroups();
+            TopologyWrapper.getInternalTopologyBuilder(builder.build()).copartitionGroups();
 
         assertEquals(1, copartitionGroups.size());
         assertEquals(new HashSet<>(Arrays.asList(streamTopic, tableTopic)), copartitionGroups.iterator().next());
@@ -138,6 +138,7 @@ public class KStreamKTableJoinTest {
         pushToStream(4, "X");
         processor.checkAndClearProcessResult(new KeyValueTimestamp<>(0, "X0+Y0", 0),
                 new KeyValueTimestamp<>(1, "X1+Y1", 1));
+
         // push all items to the table. this should not produce any item
         pushToTable(4, "YY");
         processor.checkAndClearProcessResult(EMPTY);
@@ -148,6 +149,7 @@ public class KStreamKTableJoinTest {
                 new KeyValueTimestamp<>(1, "X1+YY1", 1),
                 new KeyValueTimestamp<>(2, "X2+YY2", 2),
                 new KeyValueTimestamp<>(3, "X3+YY3", 3));
+
         // push all items to the table. this should not produce any item
         pushToTable(4, "YYY");
         processor.checkAndClearProcessResult(EMPTY);
@@ -163,6 +165,7 @@ public class KStreamKTableJoinTest {
         pushToStream(4, "X");
         processor.checkAndClearProcessResult(new KeyValueTimestamp<>(0, "X0+Y0", 0),
                 new KeyValueTimestamp<>(1, "X1+Y1", 1));
+
     }
 
     @Test
@@ -177,6 +180,7 @@ public class KStreamKTableJoinTest {
                 new KeyValueTimestamp<>(1, "X1+Y1", 1),
                 new KeyValueTimestamp<>(2, "X2+Y2", 2),
                 new KeyValueTimestamp<>(3, "X3+Y3", 3));
+
         // push two items with null to the table as deletes. this should not produce any item.
         pushNullValueToTable();
         processor.checkAndClearProcessResult(EMPTY);
@@ -184,7 +188,8 @@ public class KStreamKTableJoinTest {
         // push all four items to the primary stream. this should produce two items.
         pushToStream(4, "XX");
         processor.checkAndClearProcessResult(new KeyValueTimestamp<>(2, "XX2+Y2", 2),
-                new KeyValueTimestamp<>(3, "XX3+Y3", 3));    }
+                new KeyValueTimestamp<>(3, "XX3+Y3", 3));
+    }
 
     @Test
     public void shouldLogAndMeterWhenSkippingNullLeftKey() {

@@ -65,8 +65,7 @@ public class KStreamTransformValuesTest {
                 private int total = 0;
 
                 @Override
-                public void init(final ProcessorContext context) {
-                }
+                public void init(final ProcessorContext context) { }
 
                 @Override
                 public Integer transform(final Number value) {
@@ -75,8 +74,7 @@ public class KStreamTransformValuesTest {
                 }
 
                 @Override
-                public void close() {
-                }
+                public void close() { }
             };
 
         final int[] expectedKeys = {1, 10, 100, 1000};
@@ -107,8 +105,7 @@ public class KStreamTransformValuesTest {
                 private int total = 0;
 
                 @Override
-                public void init(final ProcessorContext context) {
-                }
+                public void init(final ProcessorContext context) { }
 
                 @Override
                 public Integer transform(final Integer readOnlyKey, final Number value) {
@@ -117,8 +114,7 @@ public class KStreamTransformValuesTest {
                 }
 
                 @Override
-                public void close() {
-                }
+                public void close() { }
             };
 
         final int[] expectedKeys = {1, 10, 100, 1000};

@@ -576,22 +576,20 @@ public class KGroupedStreamImplTest {
             driver.pipeInput(recordFactory.create(TOPIC, "3", "B", 100L));
         }
         assertThat(supplier.theCapturedProcessor().processed, equalTo(Arrays.asList(
-            new KeyValueTimestamp<>(new Windowed<>("1", new TimeWindow(0L, 500L)),  1L,  0L),
-            new KeyValueTimestamp<>(new Windowed<>("1", new TimeWindow(0L, 500L)),  2L,  499L),
-            new KeyValueTimestamp<>(new Windowed<>("1", new TimeWindow(0L, 500L)),  3L,  499L),
-            new KeyValueTimestamp<>(new Windowed<>("2", new TimeWindow(0L, 500L)),  1L,  0L),
-            new KeyValueTimestamp<>(new Windowed<>("2", new TimeWindow(0L, 500L)),  2L,  100L),
-            new KeyValueTimestamp<>(new Windowed<>("2", new TimeWindow(0L, 500L)),  3L,  200L),
-            new KeyValueTimestamp<>(new Windowed<>("3", new TimeWindow(0L, 500L)),  1L,  1L),
-            new KeyValueTimestamp<>(new Windowed<>("1", new TimeWindow(500L, 1000L)),  1L,  500L),
-            new KeyValueTimestamp<>(new Windowed<>("1", new TimeWindow(500L, 1000L)),  2L,  500L),
-            new KeyValueTimestamp<>(new Windowed<>("2", new TimeWindow(500L, 1000L)),  1L,  500L),
-            new KeyValueTimestamp<>(new Windowed<>("2", new TimeWindow(500L, 1000L)),  2L,  500L),
-            new KeyValueTimestamp<>(new Windowed<>("3", new TimeWindow(0L, 500L)),  2L,  100L)
+            new KeyValueTimestamp<>(new Windowed<>("1", new TimeWindow(0L, 500L)), 1L, 0L),
+            new KeyValueTimestamp<>(new Windowed<>("1", new TimeWindow(0L, 500L)), 2L, 499L),
+            new KeyValueTimestamp<>(new Windowed<>("1", new TimeWindow(0L, 500L)), 3L, 499L),
+            new KeyValueTimestamp<>(new Windowed<>("2", new TimeWindow(0L, 500L)), 1L, 0L),
+            new KeyValueTimestamp<>(new Windowed<>("2", new TimeWindow(0L, 500L)), 2L, 100L),
+            new KeyValueTimestamp<>(new Windowed<>("2", new TimeWindow(0L, 500L)), 3L, 200L),
+            new KeyValueTimestamp<>(new Windowed<>("3", new TimeWindow(0L, 500L)), 1L, 1L),
+            new KeyValueTimestamp<>(new Windowed<>("1", new TimeWindow(500L, 1000L)), 1L, 500L),
+            new KeyValueTimestamp<>(new Windowed<>("1", new TimeWindow(500L, 1000L)), 2L, 500L),
+            new KeyValueTimestamp<>(new Windowed<>("2", new TimeWindow(500L, 1000L)), 1L, 500L),
+            new KeyValueTimestamp<>(new Windowed<>("2", new TimeWindow(500L, 1000L)), 2L, 500L),
+            new KeyValueTimestamp<>(new Windowed<>("3", new TimeWindow(0L, 500L)), 2L, 100L)
         )));
     }
-
-
 
     @Test
     public void shouldCountWindowed() {

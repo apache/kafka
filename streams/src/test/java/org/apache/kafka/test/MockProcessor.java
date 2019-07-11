@@ -77,9 +77,7 @@ public class MockProcessor<K, V> extends AbstractProcessor<K, V> {
 
     @Override
     public void process(final K key, final V value) {
-        KeyValueTimestamp<Object, Object> keyValueTimestamp = new KeyValueTimestamp<>(key == null ? "null" : key,
-                value == null ? "null" : value,
-                context().timestamp());
+        KeyValueTimestamp<Object, Object> keyValueTimestamp = new KeyValueTimestamp<>(key, value, context().timestamp());
 
         if (value != null) {
             lastValueAndTimestampPerKey.put(key, ValueAndTimestamp.make(value, context().timestamp()));

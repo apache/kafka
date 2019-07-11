@@ -53,13 +53,14 @@ public class KTableFilterTest {
     private final ConsumerRecordFactory<String, Integer> recordFactory =
         new ConsumerRecordFactory<>(new StringSerializer(), new IntegerSerializer(), 0L);
     private final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.String(), Serdes.Integer());
-    private final Predicate<String, Integer> predicate = (key, value) -> (value % 2) == 0;
 
     @Before
     public void setUp() {
         // disable caching at the config level
         props.setProperty(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, "0");
     }
+
+    private final Predicate<String, Integer> predicate = (key, value) -> (value % 2) == 0;
 
     private void doTestKTable(final StreamsBuilder builder,
                               final KTable<String, Integer> table2,
@@ -80,18 +81,18 @@ public class KTableFilterTest {
 
         final List<MockProcessor<String, Integer>> processors = supplier.capturedProcessors(2);
 
-        processors.get(0).checkAndClearProcessResult(new KeyValueTimestamp<>("A", "null", 10),
+        processors.get(0).checkAndClearProcessResult(new KeyValueTimestamp<>("A", null, 10),
             new KeyValueTimestamp<>("B", 2, 5),
-            new KeyValueTimestamp<>("C", "null", 8),
+            new KeyValueTimestamp<>("C", null, 8),
             new KeyValueTimestamp<>("D", 4, 14),
-            new KeyValueTimestamp<>("A", "null", 18),
-            new KeyValueTimestamp<>("B", "null", 15));
+            new KeyValueTimestamp<>("A", null, 18),
+            new KeyValueTimestamp<>("B", null, 15));
         processors.get(1).checkAndClearProcessResult(new KeyValueTimestamp<>("A", 1, 10),
-            new KeyValueTimestamp<>("B", "null", 5),
+            new KeyValueTimestamp<>("B", null, 5),
             new KeyValueTimestamp<>("C", 3, 8),
-            new KeyValueTimestamp<>("D", "null", 14),
-            new KeyValueTimestamp<>("A", "null", 18),
-            new KeyValueTimestamp<>("B", "null", 15));
+            new KeyValueTimestamp<>("D", null, 14),
+            new KeyValueTimestamp<>("A", null, 18),
+            new KeyValueTimestamp<>("B", null, 15));
     }
 
     @Test
@@ -238,6 +239,7 @@ public class KTableFilterTest {
             processors.get(1).checkAndClearProcessResult(new KeyValueTimestamp<>("A", new Change<>(null, null), 5),
                 new KeyValueTimestamp<>("B", new Change<>(null, null), 10),
                 new KeyValueTimestamp<>("C", new Change<>(null, null), 15));
+
             driver.pipeInput(recordFactory.create(topic1, "A", 2, 15L));
             driver.pipeInput(recordFactory.create(topic1, "B", 2, 8L));
 
@@ -245,6 +247,7 @@ public class KTableFilterTest {
                 new KeyValueTimestamp<>("B", new Change<>(2, null), 8));
             processors.get(1).checkAndClearProcessResult(new KeyValueTimestamp<>("A", new Change<>(2, null), 15),
                 new KeyValueTimestamp<>("B", new Change<>(2, null), 8));
+
             driver.pipeInput(recordFactory.create(topic1, "A", 3, 20L));
 
             processors.get(0).checkAndClearProcessResult(new KeyValueTimestamp<>("A", new Change<>(3, null), 20));
@@ -316,10 +319,12 @@ public class KTableFilterTest {
                 new KeyValueTimestamp<>("B", new Change<>(2, 1), 8));
             processors.get(1).checkAndClearProcessResult(new KeyValueTimestamp<>("A", new Change<>(2, null), 15),
                 new KeyValueTimestamp<>("B", new Change<>(2, null), 8));
+
             driver.pipeInput(recordFactory.create(topic1, "A", 3, 20L));
 
             processors.get(0).checkAndClearProcessResult(new KeyValueTimestamp<>("A", new Change<>(3, 2), 20));
             processors.get(1).checkAndClearProcessResult(new KeyValueTimestamp<>("A", new Change<>(null, 2), 20));
+
             driver.pipeInput(recordFactory.create(topic1, "A", null, 10L));
             driver.pipeInput(recordFactory.create(topic1, "B", null, 20L));
 

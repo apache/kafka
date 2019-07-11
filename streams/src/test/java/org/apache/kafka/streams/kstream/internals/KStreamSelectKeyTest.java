@@ -50,12 +50,12 @@ public class KStreamSelectKeyTest {
         keyMap.put(2, "TWO");
         keyMap.put(3, "THREE");
 
-        final KeyValueTimestamp[] expected = new KeyValueTimestamp[] {new KeyValueTimestamp<>("ONE", 1, 0),
+        final KeyValueTimestamp[] expected = new KeyValueTimestamp[]{new KeyValueTimestamp<>("ONE", 1, 0),
             new KeyValueTimestamp<>("TWO", 2, 0),
             new KeyValueTimestamp<>("THREE", 3, 0)};
-        final int[] expectedValues = new int[] {1, 2, 3};
+        final int[] expectedValues = new int[]{1, 2, 3};
 
-        final KStream<String, Integer> stream =
+        final KStream<String, Integer>  stream =
             builder.stream(topicName, Consumed.with(Serdes.String(), Serdes.Integer()));
         final MockProcessorSupplier<String, Integer> supplier = new MockProcessorSupplier<>();
         stream.selectKey((key, value) -> keyMap.get(value)).process(supplier);
@@ -77,7 +77,6 @@ public class KStreamSelectKeyTest {
     public void testTypeVariance() {
         new StreamsBuilder()
             .<Integer, String>stream("empty")
-            .foreach((key, value) -> {
-            });
+            .foreach((key, value) -> { });
     }
 }

@@ -93,18 +93,18 @@ public class KTableAggregateTest {
 
             assertEquals(
                 asList(
-                        new KeyValueTimestamp<>("A", "0+1", 10L),
-                        new KeyValueTimestamp<>("B", "0+2", 15L),
-                        new KeyValueTimestamp<>("A", "0+1-1", 20L),
-                        new KeyValueTimestamp<>("A", "0+1-1+3", 20L),
-                        new KeyValueTimestamp<>("B", "0+2-2", 18L),
-                        new KeyValueTimestamp<>("B", "0+2-2+4", 18L),
-                        new KeyValueTimestamp<>("C", "0+5", 5L),
-                        new KeyValueTimestamp<>("D", "0+6", 25L),
-                        new KeyValueTimestamp<>("B", "0+2-2+4-4", 18L),
-                        new KeyValueTimestamp<>("B", "0+2-2+4-4+7", 18L),
-                        new KeyValueTimestamp<>("C", "0+5-5", 10L),
-                        new KeyValueTimestamp<>("C", "0+5-5+8", 10L)),
+                    new KeyValueTimestamp<>("A", "0+1", 10L),
+                    new KeyValueTimestamp<>("B", "0+2", 15L),
+                    new KeyValueTimestamp<>("A", "0+1-1", 20L),
+                    new KeyValueTimestamp<>("A", "0+1-1+3", 20L),
+                    new KeyValueTimestamp<>("B", "0+2-2", 18L),
+                    new KeyValueTimestamp<>("B", "0+2-2+4", 18L),
+                    new KeyValueTimestamp<>("C", "0+5", 5L),
+                    new KeyValueTimestamp<>("D", "0+6", 25L),
+                    new KeyValueTimestamp<>("B", "0+2-2+4-4", 18L),
+                    new KeyValueTimestamp<>("B", "0+2-2+4-4+7", 18L),
+                    new KeyValueTimestamp<>("C", "0+5-5", 10L),
+                    new KeyValueTimestamp<>("C", "0+5-5+8", 10L)),
                 supplier.theCapturedProcessor().processed);
         }
     }
@@ -160,10 +160,10 @@ public class KTableAggregateTest {
 
             assertEquals(
                 asList(
-                        new KeyValueTimestamp<>("1", "0+1", 10),
-                        new KeyValueTimestamp<>("1", "0+1-1", 15),
-                        new KeyValueTimestamp<>("1", "0+1-1+1", 15),
-                        new KeyValueTimestamp<>("2", "0+2", 20),
+                    new KeyValueTimestamp<>("1", "0+1", 10),
+                    new KeyValueTimestamp<>("1", "0+1-1", 15),
+                    new KeyValueTimestamp<>("1", "0+1-1+1", 15),
+                    new KeyValueTimestamp<>("2", "0+2", 20),
                         new KeyValueTimestamp<>("2", "0+2-2", 23),
                         new KeyValueTimestamp<>("4", "0+4", 23),
                         new KeyValueTimestamp<>("4", "0+4-4", 23),
@@ -195,12 +195,12 @@ public class KTableAggregateTest {
 
             assertEquals(
                 asList(
-                        new KeyValueTimestamp<>("green", 1L, 10),
-                        new KeyValueTimestamp<>("green", 2L, 10),
-                        new KeyValueTimestamp<>("green", 1L, 12),
-                        new KeyValueTimestamp<>("blue", 1L, 12),
-                        new KeyValueTimestamp<>("yellow", 1L, 15),
-                        new KeyValueTimestamp<>("green", 2L, 12)),
+                    new KeyValueTimestamp<>("green", 1L, 10),
+                    new KeyValueTimestamp<>("green", 2L, 10),
+                    new KeyValueTimestamp<>("green", 1L, 12),
+                    new KeyValueTimestamp<>("blue", 1L, 12),
+                    new KeyValueTimestamp<>("yellow", 1L, 15),
+                    new KeyValueTimestamp<>("green", 2L, 12)),
                 supplier.theCapturedProcessor().processed);
         }
     }
@@ -279,17 +279,14 @@ public class KTableAggregateTest {
 
             assertEquals(
                 asList(
-                        new KeyValueTimestamp<>("1", "1", 10),
-                        new KeyValueTimestamp<>("1", "12", 10),
-                        new KeyValueTimestamp<>("1", "2", 12),
-                        new KeyValueTimestamp<>("1", "", 12),
-                        new KeyValueTimestamp<>("1", "2", 12L)
+                    new KeyValueTimestamp<>("1", "1", 10),
+                    new KeyValueTimestamp<>("1", "12", 10),
+                    new KeyValueTimestamp<>("1", "2", 12),
+                    new KeyValueTimestamp<>("1", "", 12),
+                    new KeyValueTimestamp<>("1", "2", 12L)
                 ),
                 proc.processed
             );
         }
     }
 }
-
-
-

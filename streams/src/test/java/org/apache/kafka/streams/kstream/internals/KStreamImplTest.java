@@ -719,7 +719,6 @@ public class KStreamImplTest {
                 new KeyValueTimestamp<>("G", "gg", 4),
                 new KeyValueTimestamp<>("H", "hh", 6)),
                      processorSupplier.theCapturedProcessor().processed);
-
     }
 
     @Test

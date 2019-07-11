@@ -72,7 +72,12 @@ public class KStreamFlatMapTest {
 
         assertEquals(6, supplier.theCapturedProcessor().processed.size());
 
-        final KeyValueTimestamp[] expected = {new KeyValueTimestamp<>("10", "V1", 0), new KeyValueTimestamp<>("20", "V2", 0), new KeyValueTimestamp<>("21", "V2", 0), new KeyValueTimestamp<>("30", "V3", 0), new KeyValueTimestamp<>("31", "V3", 0), new KeyValueTimestamp<>("32", "V3", 0)};
+        final KeyValueTimestamp[] expected = {new KeyValueTimestamp<>("10", "V1", 0),
+            new KeyValueTimestamp<>("20", "V2", 0),
+            new KeyValueTimestamp<>("21", "V2", 0),
+            new KeyValueTimestamp<>("30", "V3", 0),
+            new KeyValueTimestamp<>("31", "V3", 0),
+            new KeyValueTimestamp<>("32", "V3", 0)};
 
         for (int i = 0; i < expected.length; i++) {
             assertEquals(expected[i], supplier.theCapturedProcessor().processed.get(i));

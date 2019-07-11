@@ -87,7 +87,7 @@ public class KStreamGlobalKTableJoinTest {
 
     private void pushToStream(final int messageCount, final String valuePrefix, final boolean includeForeignKey) {
         final ConsumerRecordFactory<Integer, String> recordFactory =
-                new ConsumerRecordFactory<>(new IntegerSerializer(), new StringSerializer(), 0L, 1L);
+            new ConsumerRecordFactory<>(new IntegerSerializer(), new StringSerializer(), 0L, 1L);
         for (int i = 0; i < messageCount; i++) {
             String value = valuePrefix + expectedKeys[i];
             if (includeForeignKey) {
@@ -99,7 +99,7 @@ public class KStreamGlobalKTableJoinTest {
 
     private void pushToGlobalTable(final int messageCount, final String valuePrefix) {
         final ConsumerRecordFactory<String, String> recordFactory =
-                new ConsumerRecordFactory<>(new StringSerializer(), new StringSerializer());
+            new ConsumerRecordFactory<>(new StringSerializer(), new StringSerializer());
         for (int i = 0; i < messageCount; i++) {
             driver.pipeInput(recordFactory.create(globalTableTopic, "FKey" + expectedKeys[i], valuePrefix + expectedKeys[i]));
         }
@@ -107,7 +107,7 @@ public class KStreamGlobalKTableJoinTest {
 
     private void pushNullValueToGlobalTable(final int messageCount) {
         final ConsumerRecordFactory<String, String> recordFactory =
-                new ConsumerRecordFactory<>(new StringSerializer(), new StringSerializer());
+            new ConsumerRecordFactory<>(new StringSerializer(), new StringSerializer());
         for (int i = 0; i < messageCount; i++) {
             driver.pipeInput(recordFactory.create(globalTableTopic, "FKey" + expectedKeys[i], (String) null));
         }
@@ -116,7 +116,7 @@ public class KStreamGlobalKTableJoinTest {
     @Test
     public void shouldNotRequireCopartitioning() {
         final Collection<Set<String>> copartitionGroups =
-                TopologyWrapper.getInternalTopologyBuilder(builder.build()).copartitionGroups();
+            TopologyWrapper.getInternalTopologyBuilder(builder.build()).copartitionGroups();
 
         assertEquals("KStream-GlobalKTable joins do not need to be co-partitioned", 0, copartitionGroups.size());
     }
@@ -148,6 +148,7 @@ public class KStreamGlobalKTableJoinTest {
         pushToStream(4, "X", true);
         processor.checkAndClearProcessResult(new KeyValueTimestamp<>(0, "X0,FKey0+Y0", 0),
                 new KeyValueTimestamp<>(1, "X1,FKey1+Y1", 1));
+
         // push all items to the globalTable. this should not produce any item
 
         pushToGlobalTable(4, "YY");
@@ -160,6 +161,7 @@ public class KStreamGlobalKTableJoinTest {
                 new KeyValueTimestamp<>(1, "X1,FKey1+YY1", 1),
                 new KeyValueTimestamp<>(2, "X2,FKey2+YY2", 2),
                 new KeyValueTimestamp<>(3, "X3,FKey3+YY3", 3));
+
         // push all items to the globalTable. this should not produce any item
 
         pushToGlobalTable(4, "YYY");
@@ -179,6 +181,7 @@ public class KStreamGlobalKTableJoinTest {
         pushToStream(4, "X", true);
         processor.checkAndClearProcessResult(new KeyValueTimestamp<>(0, "X0,FKey0+Y0", 0),
                 new KeyValueTimestamp<>(1, "X1,FKey1+Y1", 1));
+
     }
 
     @Test
@@ -196,6 +199,7 @@ public class KStreamGlobalKTableJoinTest {
                 new KeyValueTimestamp<>(1, "X1,FKey1+Y1", 1),
                 new KeyValueTimestamp<>(2, "X2,FKey2+Y2", 2),
                 new KeyValueTimestamp<>(3, "X3,FKey3+Y3", 3));
+
         // push two items with null to the globalTable as deletes. this should not produce any item.
 
         pushNullValueToGlobalTable(2);
@@ -205,7 +209,8 @@ public class KStreamGlobalKTableJoinTest {
 
         pushToStream(4, "XX", true);
         processor.checkAndClearProcessResult(new KeyValueTimestamp<>(2, "XX2,FKey2+Y2", 2),
-                new KeyValueTimestamp<>(3, "XX3,FKey3+Y3", 3));    }
+                new KeyValueTimestamp<>(3, "XX3,FKey3+Y3", 3));
+    }
 
     @Test
     public void shouldNotJoinOnNullKeyMapperValues() {

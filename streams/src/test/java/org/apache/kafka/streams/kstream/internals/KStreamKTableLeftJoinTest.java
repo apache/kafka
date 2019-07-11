@@ -50,7 +50,7 @@ public class KStreamKTableLeftJoinTest {
     private final String streamTopic = "streamTopic";
     private final String tableTopic = "tableTopic";
     private final ConsumerRecordFactory<Integer, String> recordFactory =
-            new ConsumerRecordFactory<>(new IntegerSerializer(), new StringSerializer(), 0L);
+        new ConsumerRecordFactory<>(new IntegerSerializer(), new StringSerializer(), 0L);
     private final int[] expectedKeys = {0, 1, 2, 3};
 
     private TopologyTestDriver driver;
@@ -91,10 +91,10 @@ public class KStreamKTableLeftJoinTest {
         final Random r = new Random(System.currentTimeMillis());
         for (int i = 0; i < messageCount; i++) {
             driver.pipeInput(recordFactory.create(
-                    tableTopic,
-                    expectedKeys[i],
-                    valuePrefix + expectedKeys[i],
-                    r.nextInt(Integer.MAX_VALUE)));
+                tableTopic,
+                expectedKeys[i],
+                valuePrefix + expectedKeys[i],
+                r.nextInt(Integer.MAX_VALUE)));
         }
     }
 
@@ -107,7 +107,7 @@ public class KStreamKTableLeftJoinTest {
     @Test
     public void shouldRequireCopartitionedStreams() {
         final Collection<Set<String>> copartitionGroups =
-                TopologyWrapper.getInternalTopologyBuilder(builder.build()).copartitionGroups();
+            TopologyWrapper.getInternalTopologyBuilder(builder.build()).copartitionGroups();
 
         assertEquals(1, copartitionGroups.size());
         assertEquals(new HashSet<>(Arrays.asList(streamTopic, tableTopic)), copartitionGroups.iterator().next());
@@ -118,7 +118,8 @@ public class KStreamKTableLeftJoinTest {
         // push two items to the primary stream. the table is empty
         pushToStream(2, "X");
         processor.checkAndClearProcessResult(new KeyValueTimestamp<>(0, "X0+null", 0),
-                new KeyValueTimestamp<>(1, "X1+null", 1));    }
+                new KeyValueTimestamp<>(1, "X1+null", 1));
+    }
 
     @Test
     public void shouldNotJoinOnTableUpdates() {
@@ -126,6 +127,7 @@ public class KStreamKTableLeftJoinTest {
         pushToStream(2, "X");
         processor.checkAndClearProcessResult(new KeyValueTimestamp<>(0, "X0+null", 0),
                 new KeyValueTimestamp<>(1, "X1+null", 1));
+
         // push two items to the table. this should not produce any item.
         pushToTable(2, "Y");
         processor.checkAndClearProcessResult(EMPTY);
@@ -136,6 +138,7 @@ public class KStreamKTableLeftJoinTest {
                 new KeyValueTimestamp<>(1, "X1+Y1", 1),
                 new KeyValueTimestamp<>(2, "X2+null", 2),
                 new KeyValueTimestamp<>(3, "X3+null", 3));
+
         // push all items to the table. this should not produce any item
         pushToTable(4, "YY");
         processor.checkAndClearProcessResult(EMPTY);
@@ -146,6 +149,7 @@ public class KStreamKTableLeftJoinTest {
                 new KeyValueTimestamp<>(1, "X1+YY1", 1),
                 new KeyValueTimestamp<>(2, "X2+YY2", 2),
                 new KeyValueTimestamp<>(3, "X3+YY3", 3));
+
         // push all items to the table. this should not produce any item
         pushToTable(4, "YYY");
         processor.checkAndClearProcessResult(EMPTY);
@@ -163,6 +167,7 @@ public class KStreamKTableLeftJoinTest {
                 new KeyValueTimestamp<>(1, "X1+Y1", 1),
                 new KeyValueTimestamp<>(2, "X2+null", 2),
                 new KeyValueTimestamp<>(3, "X3+null", 3));
+
     }
 
     @Test
@@ -177,6 +182,7 @@ public class KStreamKTableLeftJoinTest {
                 new KeyValueTimestamp<>(1, "X1+Y1", 1),
                 new KeyValueTimestamp<>(2, "X2+Y2", 2),
                 new KeyValueTimestamp<>(3, "X3+Y3", 3));
+
         // push two items with null to the table as deletes. this should not produce any item.
         pushNullValueToTable(2);
         processor.checkAndClearProcessResult(EMPTY);
@@ -186,6 +192,7 @@ public class KStreamKTableLeftJoinTest {
         processor.checkAndClearProcessResult(new KeyValueTimestamp<>(0, "XX0+null", 0),
                 new KeyValueTimestamp<>(1, "XX1+null", 1),
                 new KeyValueTimestamp<>(2, "XX2+Y2", 2),
-                new KeyValueTimestamp<>(3, "XX3+Y3", 3));    }
+                new KeyValueTimestamp<>(3, "XX3+Y3", 3));
+    }
 
 }
