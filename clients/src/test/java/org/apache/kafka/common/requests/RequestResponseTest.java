@@ -819,17 +819,7 @@ public class RequestResponseTest {
                         .setName("consumer-range")
                         .setMetadata(new byte[0])).iterator()
         );
-        if (version == 0) {
-            return new JoinGroupRequest.Builder(
-                    new JoinGroupRequestData()
-                            .setGroupId("group1")
-                            .setSessionTimeoutMs(30000)
-                            .setMemberId("consumer1")
-                            .setGroupInstanceId(null)
-                            .setProtocolType("consumer")
-                            .setProtocols(protocols))
-                    .build((short) version);
-        } else if (version <= 4) {
+        if (version <= 4) {
             return new JoinGroupRequest.Builder(
                     new JoinGroupRequestData()
                             .setGroupId("group1")
