@@ -39,6 +39,7 @@ import org.apache.kafka.streams.processor.TimestampExtractor;
 import org.apache.kafka.streams.state.StateSerdes;
 import org.apache.kafka.test.InternalMockProcessorContext;
 import org.apache.kafka.test.MockSourceNode;
+import org.apache.kafka.test.MockTimestampExtractor;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -53,7 +54,7 @@ import static org.junit.Assert.assertTrue;
 public class RecordQueueTest {
     private final Serializer<Integer> intSerializer = new IntegerSerializer();
     private final Deserializer<Integer> intDeserializer = new IntegerDeserializer();
-    private final TimestampExtractor timestampExtractor = new RecordQueueTestTimestampExtractor();
+    private final TimestampExtractor timestampExtractor = new MockTimestampExtractor();
     private final String[] topics = {"topic"};
 
     private final Sensor skippedRecordsSensor = new Metrics().sensor("skipped-records");
@@ -185,8 +186,6 @@ public class RecordQueueTest {
     @Test
     public void testTimestampExtractorPartitionTime() {
 
-        final RecordQueueTestTimestampExtractor testTimestampExtractor = (RecordQueueTestTimestampExtractor) timestampExtractor;
-
         assertTrue(queue.isEmpty());
         assertEquals(0, queue.size());
         assertEquals(RecordQueue.UNKNOWN, queue.timestamp());
@@ -198,11 +197,17 @@ public class RecordQueueTest {
             new ConsumerRecord<>("topic", 1, 3, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue),
             new ConsumerRecord<>("topic", 1, 4, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue));
 
-        queue.addRawRecords(list1);
-        while (queue.poll() != null) {
-        }
+        assertEquals(queue.partitionTime(), RecordQueue.UNKNOWN);
 
-        assertEquals(testTimestampExtractor.observedPartitionTimes, new ArrayList<>(Arrays.asList(RecordQueue.UNKNOWN, 2L, 2L, 3L)));
+        queue.addRawRecords(list1);
+
+        assertEquals(queue.partitionTime(), 2L);
+
+        queue.poll();
+        assertEquals(queue.partitionTime(), 2L);
+
+        queue.poll();
+        assertEquals(queue.partitionTime(), 3L);
     }
 
     @Test(expected = StreamsException.class)
@@ -277,11 +282,55 @@ public class RecordQueueTest {
         assertEquals(0, queue.size());
     }
 
-    static class RecordQueueTestTimestampExtractor implements TimestampExtractor {
-        private final List<Long> observedPartitionTimes = new ArrayList<>();
+    @Test
+    public void shouldPassPartitionTimeToTimestampExtractor() {
 
-        public long extract(final ConsumerRecord<Object, Object> record, final long partitionTime) {
-            observedPartitionTimes.add(partitionTime);
+        final PartitionTimeTrackingTimestampExtractor timestampExtractor = new PartitionTimeTrackingTimestampExtractor();
+        final RecordQueue queue = new RecordQueue(
+            new TopicPartition(topics[0], 1),
+            mockSourceNodeWithMetrics,
+            timestampExtractor,
+            new LogAndFailExceptionHandler(),
+            context,
+            new LogContext());
+
+        assertTrue(queue.isEmpty());
+        assertEquals(0, queue.size());
+        assertEquals(RecordQueue.UNKNOWN, queue.timestamp());
+
+        // add three 3 out-of-order records with timestamp 2, 1, 3, 4
+        final List<ConsumerRecord<byte[], byte[]>> list1 = Arrays.asList(
+            new ConsumerRecord<>("topic", 1, 2, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue),
+            new ConsumerRecord<>("topic", 1, 1, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue),
+            new ConsumerRecord<>("topic", 1, 3, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue),
+            new ConsumerRecord<>("topic", 1, 4, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue));
+
+        assertEquals(RecordQueue.UNKNOWN, timestampExtractor.partitionTime);
+
+        queue.addRawRecords(list1);
+
+        // no (known) timestamp has yet been passed to the timestamp extractor
+        assertEquals(RecordQueue.UNKNOWN, timestampExtractor.partitionTime);
+
+        queue.poll();
+        assertEquals(2L, timestampExtractor.partitionTime);
+
+        queue.poll();
+        assertEquals(2L, timestampExtractor.partitionTime);
+
+        queue.poll();
+        assertEquals(3L, timestampExtractor.partitionTime);
+
+    }
+
+    class PartitionTimeTrackingTimestampExtractor implements TimestampExtractor {
+        private long partitionTime = RecordQueue.UNKNOWN;
+
+        public long extract(ConsumerRecord<Object, Object> record, long partitionTime) {
+            if (partitionTime < this.partitionTime) {
+                throw new IllegalStateException("Partition time should not decrease");
+            }
+            this.partitionTime = partitionTime;
             return record.offset();
         }
     }

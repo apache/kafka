@@ -140,12 +140,21 @@ public class RecordQueue {
     }
 
     /**
-     * Returns the tracked partition timestamp
+     * Returns the head record's timestamp
      *
      * @return timestamp
      */
     public long timestamp() {
         return headRecord == null ? UNKNOWN : headRecord.timestamp;
+    }
+
+    /**
+     * Returns the tracked partition time
+     *
+     * @return partition time
+     */
+    long partitionTime() {
+        return partitionTime;
     }
 
     /**
