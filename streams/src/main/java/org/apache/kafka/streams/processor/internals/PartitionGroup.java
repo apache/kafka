@@ -41,7 +41,7 @@ import java.util.Set;
  *
  * PartitionGroup also maintains a stream-time for the group as a whole.
  * This is defined as the highest timestamp of any record yet polled from the PartitionGroup.
- * Note however that any computation that depends on stream time should track it on a per-operator basis to obtain an
+ * Note however that any computation that depends on stream-time should track it on a per-operator basis to obtain an
  * accurate view of the local time as seen by that processor.
  *
  * The PartitionGroups's stream-time is initially UNKNOWN (-1), and it set to a known value upon first poll.
@@ -109,7 +109,7 @@ public class PartitionGroup {
                     nonEmptyQueuesByTime.offer(queue);
                 }
 
-                // always update the stream time to the record's timestamp yet to be processed if it is larger
+                // always update the stream-time to the record's timestamp yet to be processed if it is larger
                 if (record.timestamp > streamTime) {
                     streamTime = record.timestamp;
                     recordLatenessSensor.record(0);
@@ -140,8 +140,8 @@ public class PartitionGroup {
             nonEmptyQueuesByTime.offer(recordQueue);
 
             // if all partitions now are non-empty, set the flag
-            // we do not need to update the stream time here since this task will definitely be
-            // processed next, and hence the stream time will be updated when we retrieved records by then
+            // we do not need to update the stream-time here since this task will definitely be
+            // processed next, and hence the stream-time will be updated when we retrieved records by then
             if (nonEmptyQueuesByTime.size() == this.partitionQueues.size()) {
                 allBuffered = true;
             }
@@ -157,7 +157,7 @@ public class PartitionGroup {
     }
 
     /**
-     * Return the stream time of this partition group defined as the largest timestamp seen across all partitions
+     * Return the stream-time of this partition group defined as the largest timestamp seen across all partitions
      */
     public long streamTime() {
         return streamTime;
