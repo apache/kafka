@@ -367,7 +367,7 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
     verifySslProduceConsume(sslProperties2, "alter-truststore-5")
 
     // Update internal keystore/truststore and validate new client connections from broker (e.g. controller).
-    // Alter internal keystore testKeyStoreAlter_ConfigProviderfrom `sslProperties1` to `sslProperties2`, force disconnect of a controller connection
+    // Alter internal keystore testKeyStoreAlter_ConfigProvider from `sslProperties1` to `sslProperties2`, force disconnect of a controller connection
     // and verify that metadata is propagated for new topic.
     val props2 = securityProps(sslProperties2, KEYSTORE_PROPS, prefix)
     props2 ++= securityProps(combinedStoreProps, TRUSTSTORE_PROPS, prefix)

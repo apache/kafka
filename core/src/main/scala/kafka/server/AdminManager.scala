@@ -372,12 +372,10 @@ class AdminManager(val config: KafkaConfig,
       try {
         val configEntriesMap = config.entries.asScala.map(entry => (entry.name, entry.value)).toMap
 
-        val configPropsOrigin = new Properties
+        val configProps = new Properties
         config.entries.asScala.foreach { configEntry =>
-          configPropsOrigin.setProperty(configEntry.name, configEntry.value)
+          configProps.setProperty(configEntry.name, configEntry.value)
         }
-
-        val configProps = resolveVariableConfigs(configPropsOrigin)
 
         resource.`type` match {
           case ConfigResource.Type.TOPIC => alterTopicConfigs(resource, validateOnly, configProps, configEntriesMap)
