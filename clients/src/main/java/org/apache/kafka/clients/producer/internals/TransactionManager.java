@@ -998,7 +998,7 @@ public class TransactionManager {
                     offsetAndMetadata.metadata(), offsetAndMetadata.leaderEpoch());
             pendingTxnOffsetCommits.put(entry.getKey(), committedOffset);
         }
- 
+
         TxnOffsetCommitRequest.Builder builder = new TxnOffsetCommitRequest.Builder(
             new TxnOffsetCommitRequestData()
                 .setTransactionalId(transactionalId)
