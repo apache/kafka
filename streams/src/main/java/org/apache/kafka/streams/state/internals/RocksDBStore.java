@@ -403,10 +403,10 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BulkLoadingSt
         }
 
         dbAccessor.close();
-        db.close();
         userSpecifiedOptions.close();
         wOptions.close();
         fOptions.close();
+        db.close();
         filter.close();
         cache.close();
 
