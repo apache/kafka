@@ -83,7 +83,7 @@ public class TransactionManager {
     private static final int NO_LAST_ACKED_SEQUENCE_NUMBER = -1;
 
     private final Logger log;
-    private final String transactionalId;
+    private String transactionalId;
     private final int transactionTimeoutMs;
 
     private static class TopicPartitionBookkeeper {
@@ -270,6 +270,10 @@ public class TransactionManager {
 
     TransactionManager() {
         this(new LogContext(), null, 0, 100L);
+    }
+
+    public void setTransactionalId(String transactionalId) {
+        this.transactionalId = transactionalId;
     }
 
     public synchronized TransactionalRequestResult initializeTransactions() {

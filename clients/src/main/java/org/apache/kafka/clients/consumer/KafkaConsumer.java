@@ -2306,20 +2306,19 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         return clientId;
     }
 
-    String memberId() {
-        return coordinator.memberId();
+    public String groupId() {
+        return groupId;
     }
 
-    int generationId() {
+    public int generationId() {
         return coordinator.generationId();
     }
 
-    Optional<String> groupInstanceId() {
+    public Optional<String> groupInstanceId() {
         return coordinator.groupInstanceId();
     }
 
-    void fullOffsetFetch(final long timeout) {
-        coordinator.fetchCommittedOffsets(subscriptions.assignedPartitions(), time.timer(timeout));
+    public Map<TopicPartition, OffsetAndMetadata> fetchPartitionOffsets(final long timeout) {
+        return coordinator.fetchCommittedOffsets(subscriptions.assignedPartitions(), time.timer(timeout));
     }
-
 }

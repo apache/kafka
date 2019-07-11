@@ -26,6 +26,7 @@ import java.time.Duration;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
@@ -252,4 +253,13 @@ public interface Consumer<K, V> extends Closeable {
      */
     void wakeup();
 
+    int generation();
+
+    default String groupId() {
+        return "";
+    }
+
+    Optional<String> groupInstanceId();
+
+    Map<TopicPartition, OffsetAndMetadata> fetchPartitionOffsets(final long timeout);
 }

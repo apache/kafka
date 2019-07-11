@@ -22,7 +22,6 @@ import org.apache.kafka.clients.ClientUtils;
 import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.clients.NetworkClient;
 import org.apache.kafka.clients.consumer.Consumer;
-import org.apache.kafka.clients.consumer.EosConsumerStateAccessor;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetCommitCallback;
@@ -80,6 +79,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Properties;
+import java.util.UUID;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
@@ -257,6 +257,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     private final ProducerInterceptors<K, V> interceptors;
     private final ApiVersions apiVersions;
     private final TransactionManager transactionManager;
+    private Consumer<byte[], byte[]> consumer;
 
     /**
      * A producer is instantiated by providing a set of key-value pairs as configuration. Valid configuration strings
@@ -626,11 +627,29 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     }
 
     public void initTransactions(Consumer<byte[], byte[]> consumer) {
-        EosConsumerStateAccessor accessor = new EosConsumerStateAccessor(consumer);
+        this.consumer = consumer;
+        throwIfNoTransactionManager();
+        throwIfProducerClosed();
 
-        initTransactions();
+        maybeAllocateTransactionalId();
+        // Block on poll until group rebalance is complete
+        consumer.poll(Duration.ofMillis(Integer.MAX_VALUE));
+        // Block on fetch all partition offsets.
+        consumer.fetchPartitionOffsets(Long.MAX_VALUE);
+
+        TransactionalRequestResult result = transactionManager.initializeTransactions();
+        sender.wakeup();
+        result.await(maxBlockTimeMs, TimeUnit.MILLISECONDS);
     }
 
+    private void maybeAllocateTransactionalId() {
+        String allocatedTransactionalId = transactionManager.transactionalId();
+        if (allocatedTransactionalId == null || allocatedTransactionalId.isEmpty()) {
+            String transactionalId = consumer.groupInstanceId().isPresent() ?
+                                         consumer.groupInstanceId().get(): UUID.randomUUID().toString();
+            transactionManager.setTransactionalId(transactionalId);
+        }
+    }
 
     /**
      * Should be called before the start of each new transaction. Note that prior to the first invocation
@@ -680,6 +699,14 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         throwIfNoTransactionManager();
         throwIfProducerClosed();
         TransactionalRequestResult result = transactionManager.sendOffsetsToTransaction(offsets, consumerGroupId);
+        sender.wakeup();
+        result.await();
+    }
+
+    public void sendOffsetsToTransaction(Map<TopicPartition, OffsetAndMetadata> offsets) throws ProducerFencedException {
+        throwIfNoTransactionManager();
+        throwIfProducerClosed();
+        TransactionalRequestResult result = transactionManager.sendOffsetsToTransaction(offsets, consumer.groupId());
         sender.wakeup();
         result.await();
     }
