@@ -200,6 +200,7 @@ public class TransactionManager {
     private volatile RuntimeException lastError = null;
     private volatile ProducerIdAndEpoch producerIdAndEpoch;
     private volatile boolean transactionStarted = false;
+    private org.apache.kafka.clients.consumer.Consumer<byte[], byte[]> consumer;
 
     private enum State {
         UNINITIALIZED,
@@ -274,6 +275,10 @@ public class TransactionManager {
 
     public void setTransactionalId(String transactionalId) {
         this.transactionalId = transactionalId;
+    }
+
+    public void setConsumer(org.apache.kafka.clients.consumer.Consumer<byte[], byte[]> consumer) {
+        this.consumer = consumer;
     }
 
     public synchronized TransactionalRequestResult initializeTransactions() {
@@ -993,7 +998,7 @@ public class TransactionManager {
             pendingTxnOffsetCommits.put(entry.getKey(), committedOffset);
         }
         TxnOffsetCommitRequest.Builder builder = new TxnOffsetCommitRequest.Builder(transactionalId, consumerGroupId,
-                producerIdAndEpoch.producerId, producerIdAndEpoch.epoch, pendingTxnOffsetCommits);
+                producerIdAndEpoch.producerId, producerIdAndEpoch.epoch, pendingTxnOffsetCommits, consumer.generation());
         return new TxnOffsetCommitHandler(result, builder);
     }
 

@@ -255,11 +255,7 @@ public interface Consumer<K, V> extends Closeable {
 
     int generation();
 
-    default String groupId() {
-        return "";
-    }
+    String groupId();
 
     Optional<String> groupInstanceId();
-
-    Map<TopicPartition, OffsetAndMetadata> fetchPartitionOffsets(final long timeout);
 }

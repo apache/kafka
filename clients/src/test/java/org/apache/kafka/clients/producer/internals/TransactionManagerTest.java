@@ -896,7 +896,7 @@ public class TransactionManagerTest {
 
         transactionManager.beginTransaction();
         TransactionalRequestResult sendOffsetsResult = transactionManager.sendOffsetsToTransaction(
-                singletonMap(tp, new OffsetAndMetadata(39L)), consumerGroupId);
+            singletonMap(tp, new OffsetAndMetadata(39L)), consumerGroupId);
 
         prepareAddOffsetsToTxnResponse(Errors.NONE, consumerGroupId, pid, epoch);
         sender.runOnce();  // AddOffsetsToTxn Handled, TxnOffsetCommit Enqueued
@@ -1066,7 +1066,7 @@ public class TransactionManagerTest {
 
         transactionManager.beginTransaction();
         TransactionalRequestResult sendOffsetsResult = transactionManager.sendOffsetsToTransaction(
-                singletonMap(new TopicPartition("foo", 0), new OffsetAndMetadata(39L)), consumerGroupId);
+            singletonMap(new TopicPartition("foo", 0), new OffsetAndMetadata(39L)), consumerGroupId);
 
         prepareAddOffsetsToTxnResponse(Errors.NONE, consumerGroupId, pid, epoch);
         sender.runOnce();  // AddOffsetsToTxn Handled, TxnOffsetCommit Enqueued
@@ -1098,7 +1098,7 @@ public class TransactionManagerTest {
 
         transactionManager.beginTransaction();
         TransactionalRequestResult sendOffsetsResult = transactionManager.sendOffsetsToTransaction(
-                singletonMap(tp1, new OffsetAndMetadata(39L)), consumerGroupId);
+            singletonMap(tp1, new OffsetAndMetadata(39L)), consumerGroupId);
 
         prepareAddOffsetsToTxnResponse(Errors.NONE, consumerGroupId, pid, epoch);
         sender.runOnce();  // AddOffsetsToTxn Handled, TxnOffsetCommit Enqueued
@@ -1134,7 +1134,7 @@ public class TransactionManagerTest {
 
         transactionManager.beginTransaction();
         TransactionalRequestResult sendOffsetsResult = transactionManager.sendOffsetsToTransaction(
-                singletonMap(tp, new OffsetAndMetadata(39L)), consumerGroupId);
+            singletonMap(tp, new OffsetAndMetadata(39L)), consumerGroupId);
 
         prepareAddOffsetsToTxnResponse(Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED, consumerGroupId, pid, epoch);
         sender.runOnce();  // AddOffsetsToTxn Handled
@@ -1159,7 +1159,7 @@ public class TransactionManagerTest {
 
         transactionManager.beginTransaction();
         TransactionalRequestResult sendOffsetsResult = transactionManager.sendOffsetsToTransaction(
-                singletonMap(tp, new OffsetAndMetadata(39L)), consumerGroupId);
+            singletonMap(tp, new OffsetAndMetadata(39L)), consumerGroupId);
 
         prepareAddOffsetsToTxnResponse(Errors.NONE, consumerGroupId, pid, epoch);
         sender.runOnce();  // AddOffsetsToTxn Handled, TxnOffsetCommit Enqueued

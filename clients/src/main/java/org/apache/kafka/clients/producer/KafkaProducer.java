@@ -632,10 +632,6 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         throwIfProducerClosed();
 
         maybeAllocateTransactionalId();
-        // Block on poll until group rebalance is complete
-        consumer.poll(Duration.ofMillis(Integer.MAX_VALUE));
-        // Block on fetch all partition offsets.
-        consumer.fetchPartitionOffsets(Long.MAX_VALUE);
 
         TransactionalRequestResult result = transactionManager.initializeTransactions();
         sender.wakeup();
@@ -696,6 +692,11 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      */
     public void sendOffsetsToTransaction(Map<TopicPartition, OffsetAndMetadata> offsets,
                                          String consumerGroupId) throws ProducerFencedException {
+
+        if (consumer != null) {
+            throw new IllegalArgumentException("Consumer instance is defined, " +
+                                                   "please use sendOffsetsToTransaction(Map) without passing in consumer group id instead");
+        }
         throwIfNoTransactionManager();
         throwIfProducerClosed();
         TransactionalRequestResult result = transactionManager.sendOffsetsToTransaction(offsets, consumerGroupId);
@@ -704,11 +705,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     }
 
     public void sendOffsetsToTransaction(Map<TopicPartition, OffsetAndMetadata> offsets) throws ProducerFencedException {
-        throwIfNoTransactionManager();
-        throwIfProducerClosed();
-        TransactionalRequestResult result = transactionManager.sendOffsetsToTransaction(offsets, consumer.groupId());
-        sender.wakeup();
-        result.await();
+       sendOffsetsToTransaction(offsets, consumer.groupId());
     }
 
     /**
