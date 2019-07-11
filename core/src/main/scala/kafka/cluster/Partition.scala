@@ -456,7 +456,7 @@ class Partition(val topicPartition: TopicPartition,
     // need to hold the lock to prevent appendMessagesToLeader() from hitting I/O exceptions due to log being deleted
     var wasLeader = false
     inWriteLock(leaderIsrUpdateLock) {
-      wasLeader = leaderReplicaIdOpt.map(_ == localBrokerId).getOrElse(false)
+      wasLeader = leaderReplicaIdOpt.contains(localBrokerId)
       remoteReplicasMap.clear()
       allReplicaIds = Seq.empty
       log = None
@@ -469,7 +469,7 @@ class Partition(val topicPartition: TopicPartition,
       if (logManager.getLog(topicPartition, isFuture = true).isDefined)
         logManager.asyncDelete(topicPartition, isFuture = true)
     }
-    // If the deleted replica was leader replica, there might be delayed requests in purgatory need to be cleaned up.
+    // If the deleted replica was leader replica, there might be delayed requests in purgatory that need to be cleaned up.
     if (wasLeader)
       tryCompleteDelayedRequests()
   }
