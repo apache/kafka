@@ -1384,6 +1384,7 @@ class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter extends Options
 
     @Override
     public void close() {
+        // ColumnFamilyOptions should be closed last
         dbOptions.close();
         columnFamilyOptions.close();
     }
