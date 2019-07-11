@@ -54,7 +54,7 @@ public class FailOnInvalidTimestamp extends ExtractRecordMetadataTimestamp {
      *
      * @param record a data record
      * @param recordTimestamp the timestamp extractor from the record
-     * @param partitionTime the largest extracted valid timestamp of the current record's partition˙ (could be -1 if unknown)
+     * @param partitionTime the highest extracted valid timestamp of the current record's partition˙ (could be -1 if unknown)
      * @return nothing; always raises an exception
      * @throws StreamsException on every invocation
      */

@@ -32,7 +32,7 @@ import java.util.ArrayDeque;
 /**
  * RecordQueue is a FIFO queue of {@link StampedRecord} (ConsumerRecord + timestamp). It also keeps track of the
  * partition timestamp defined as the largest timestamp seen on the partition so far; this is passed to the
- * timestamp extractor but not otherwise used.
+ * timestamp extractor.
  */
 public class RecordQueue {
 

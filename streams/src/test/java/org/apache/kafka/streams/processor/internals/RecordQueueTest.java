@@ -183,7 +183,7 @@ public class RecordQueueTest {
     }
 
     @Test
-    public void testTimestampExtractorPartitionTime() {
+    public void shouldTrackPartitionTimeAsMaxSeenTimestamp() {
 
         assertTrue(queue.isEmpty());
         assertEquals(0, queue.size());
@@ -325,7 +325,7 @@ public class RecordQueueTest {
     class PartitionTimeTrackingTimestampExtractor implements TimestampExtractor {
         private long partitionTime = RecordQueue.UNKNOWN;
 
-        public long extract(ConsumerRecord<Object, Object> record, long partitionTime) {
+        public long extract(final ConsumerRecord<Object, Object> record, final long partitionTime) {
             if (partitionTime < this.partitionTime) {
                 throw new IllegalStateException("Partition time should not decrease");
             }

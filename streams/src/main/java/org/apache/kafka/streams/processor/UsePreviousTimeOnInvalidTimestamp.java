@@ -62,7 +62,7 @@ public class UsePreviousTimeOnInvalidTimestamp extends ExtractRecordMetadataTime
             throws StreamsException {
         if (partitionTime < 0) {
             throw new StreamsException("Could not infer new timestamp for input record " + record
-                    + " because latest extracted valid timestamp is unknown.");
+                    + " because partition time is unknown.");
         }
         return partitionTime;
     }

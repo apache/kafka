@@ -41,8 +41,8 @@ import java.util.Set;
  *
  * PartitionGroup also maintains a stream-time for the group as a whole.
  * This is defined as the highest timestamp of any record yet polled from the PartitionGroup.
- * Note however that any computation that depends on stream time tracks it on a per-operator basis to obtain an
- * accurate view of the local stream time as seen by that node.
+ * Note however that any computation that depends on stream time should track it on a per-operator basis to obtain an
+ * accurate view of the local time as seen by that processor.
  *
  * The PartitionGroups's stream-time is initially UNKNOWN (-1), and it set to a known value upon first poll.
  * As a consequence of the definition, the PartitionGroup's stream-time is non-decreasing
