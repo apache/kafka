@@ -24,7 +24,6 @@ import kafka.log.LogConfig
 import kafka.metrics.KafkaMetricsGroup
 import kafka.utils._
 import kafka.zk.{AdminZkClient, KafkaZkClient}
-import org.apache.kafka.clients.admin.AdminClientConfig
 import org.apache.kafka.clients.admin.AlterConfigOp
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType
 import org.apache.kafka.common.config.ConfigDef.ConfigKey
@@ -607,18 +606,5 @@ class AdminManager(val config: KafkaConfig,
     val source = if (allSynonyms.isEmpty) ConfigSource.DEFAULT_CONFIG else allSynonyms.head.source
     val readOnly = !allNames.exists(DynamicBrokerConfig.AllDynamicConfigs.contains)
     new DescribeConfigsResponse.ConfigEntry(name, valueAsString, source, isSensitive, readOnly, synonyms.asJava)
-  }
-
-  private def resolveVariableConfigs(propsOriginal: Properties): Properties = {
-    val props = new Properties
-    propsOriginal.put("bootstrap.servers", "localhost:1")
-    val config = new AdminClientConfig(propsOriginal)
-    val resolvedProps = config.originals
-    for ((key, value) <- resolvedProps.asScala) {
-      if (!key.startsWith("config.provider") &&  key != "bootstrap.servers") {
-        props.put(key, value)
-      }
-    }
-    props
   }
 }
