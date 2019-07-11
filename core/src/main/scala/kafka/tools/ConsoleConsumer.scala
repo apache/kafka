@@ -222,7 +222,12 @@ object ConsoleConsumer extends Logging {
       .describedAs("class")
       .ofType(classOf[String])
       .defaultsTo(classOf[DefaultMessageFormatter].getName)
-    val messageFormatterArgOpt = parser.accepts("property",
+    // Deprecated in favour of the more explicit formatter-property argument
+    val messageFormatterDeprecatedArgOpt = parser.accepts("property", "Deprecated. See formatter-property.")
+      .withRequiredArg
+      .describedAs("prop")
+      .ofType(classOf[String])
+    val messageFormatterArgOpt = parser.accepts("formatter-property",
       "The properties to initialize the message formatter. Default properties include:\n" +
         "\tprint.timestamp=true|false\n" +
         "\tprint.key=true|false\n" +
@@ -295,7 +300,14 @@ object ConsoleConsumer extends Logging {
     val partitionArg = if (options.has(partitionIdOpt)) Some(options.valueOf(partitionIdOpt).intValue) else None
     val skipMessageOnError = options.has(skipMessageOnErrorOpt)
     val messageFormatterClass = Class.forName(options.valueOf(messageFormatterOpt))
-    val formatterArgs = CommandLineUtils.parseKeyValueArgs(options.valuesOf(messageFormatterArgOpt).asScala)
+    val formatterArgsNew = CommandLineUtils.parseKeyValueArgs(options.valuesOf(messageFormatterArgOpt).asScala)
+    val formatterArgsDeprecated = CommandLineUtils.parseKeyValueArgs(options.valuesOf(messageFormatterDeprecatedArgOpt).asScala)
+    if (!formatterArgsDeprecated.isEmpty && !formatterArgsNew.isEmpty) {
+      CommandLineUtils.printUsageAndDie(parser, s"${messageFormatterDeprecatedArgOpt.forHelp()} is deprecated. It will be removed from future releases. Please use ${messageFormatterArgOpt} instead. You cannot use both.")
+    } else if (!formatterArgsDeprecated.isEmpty) {
+      System.err.println(s"${messageFormatterDeprecatedArgOpt.forHelp()} is deprecated. It will be removed from future releases. Please use ${messageFormatterArgOpt} instead.")
+    }
+    val formatterArgs = if (formatterArgsDeprecated.isEmpty) formatterArgsNew else formatterArgsDeprecated
     val maxMessages = if (options.has(maxMessagesOpt)) options.valueOf(maxMessagesOpt).intValue else -1
     val timeoutMs = if (options.has(timeoutMsOpt)) options.valueOf(timeoutMsOpt).intValue else -1
     val bootstrapServer = options.valueOf(bootstrapServerOpt)

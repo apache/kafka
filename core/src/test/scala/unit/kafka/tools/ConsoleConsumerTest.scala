@@ -446,9 +446,9 @@ class ConsoleConsumerTest {
     assertTrue(config.formatterArgs.containsKey("value.deserializer.my-prop"))
     val formatter = config.formatter.asInstanceOf[DefaultMessageFormatter]
     assertTrue(formatter.valueDeserializer.get.isInstanceOf[MockDeserializer])
-    assertEquals(1, formatter.valueDeserializer.get.asInstanceOf[MockDeserializer].configs.size)
-    assertEquals("abc", formatter.valueDeserializer.get.asInstanceOf[MockDeserializer].configs.get("my-prop"))
-    assertTrue(formatter.valueDeserializer.get.asInstanceOf[MockDeserializer].isKey)
+    val deserializer = formatter.valueDeserializer.get.asInstanceOf[MockDeserializer]
+    assertEquals(1, deserializer.configs.size)
+    assertEquals("abc", deserializer.configs.get("my-prop"))
   }
 
   @Test
@@ -542,6 +542,42 @@ class ConsoleConsumerTest {
           assertEquals(e.getClass, classOf[IllegalArgumentException])
         }
       }
+    } finally {
+      Exit.resetExitProcedure()
+    }
+  }
+
+  @Test
+  def testNewFormatterPropertyName(): Unit = {
+    val args = Array(
+      "--bootstrap-server", "localhost:9092",
+      "--topic", "test",
+      "--formatter-property", "print.key=true"
+    )
+    val config = new ConsoleConsumer.ConsumerConfig(args)
+    assertTrue(config.formatter.isInstanceOf[DefaultMessageFormatter])
+    val formatter = config.formatter.asInstanceOf[DefaultMessageFormatter]
+    assertTrue("print.key setting picked up properly from new property name", formatter.printKey)
+  }
+
+  @Test(expected = classOf[ShouldExitException])
+  def shouldExitOnDeprecatedPropertyMix() {
+    val expectedMessage = Some("[property] is deprecated. It will be removed from future releases. Please use [formatter-property] instead. You cannot use both.")
+    Exit.setExitProcedure((_, message) => {
+      assertEquals("Console consumer should exit with help information about deprecated option", expectedMessage, message)
+      throw new ShouldExitException() // Code should exit with help information
+    }
+    )
+
+    val args: Array[String] = Array(
+      "--bootstrap-server", "localhost:9092",
+      "--topic", "test",
+      "--property", "print.key=true",
+      "--formatter-property", "bad.property=not.good")
+
+
+    try {
+      val config = new ConsoleConsumer.ConsumerConfig(args)
     } finally {
       Exit.resetExitProcedure()
     }
