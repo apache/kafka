@@ -1443,10 +1443,10 @@ public class KafkaAdminClientTest {
 
             final DeletableGroupResultCollection validResponse = new DeletableGroupResultCollection();
             validResponse.add(new DeletableGroupResult()
-                    .setGroupId("group-0")
-                    .setErrorCode(Errors.NONE.code()));
+                                  .setGroupId("group-0")
+                                  .setErrorCode(Errors.NONE.code()));
             env.kafkaClient().prepareResponse(new DeleteGroupsResponse(
-                    new DeleteGroupsResponseData()
+                new DeleteGroupsResponseData()
                     .setResults(validResponse)
             ));
 
@@ -1466,18 +1466,20 @@ public class KafkaAdminClientTest {
 
             final DeletableGroupResultCollection errorResponse1 = new DeletableGroupResultCollection();
             errorResponse1.add(new DeletableGroupResult()
-                    .setGroupId("group-0")
-                    .setErrorCode(Errors.COORDINATOR_NOT_AVAILABLE.code())
+                                   .setGroupId("group-0")
+                                   .setErrorCode(Errors.COORDINATOR_NOT_AVAILABLE.code())
             );
-            env.kafkaClient().prepareResponse(new DeleteGroupsResponse(new DeleteGroupsResponseData()
+            env.kafkaClient().prepareResponse(new DeleteGroupsResponse(
+                new DeleteGroupsResponseData()
                     .setResults(errorResponse1)));
 
             final DeletableGroupResultCollection errorResponse2 = new DeletableGroupResultCollection();
             errorResponse2.add(new DeletableGroupResult()
-                    .setGroupId("group-0")
-                    .setErrorCode(Errors.COORDINATOR_LOAD_IN_PROGRESS.code())
+                                   .setGroupId("group-0")
+                                   .setErrorCode(Errors.COORDINATOR_LOAD_IN_PROGRESS.code())
             );
-            env.kafkaClient().prepareResponse(new DeleteGroupsResponse(new DeleteGroupsResponseData()
+            env.kafkaClient().prepareResponse(new DeleteGroupsResponse(
+                new DeleteGroupsResponseData()
                     .setResults(errorResponse2)));
 
             /*
@@ -1487,14 +1489,16 @@ public class KafkaAdminClientTest {
              */
             final DeletableGroupResultCollection coordinatorMoved = new DeletableGroupResultCollection();
             coordinatorMoved.add(new DeletableGroupResult()
-                    .setGroupId("UnitTestError")
-                    .setErrorCode(Errors.NOT_COORDINATOR.code())
+                                     .setGroupId("UnitTestError")
+                                     .setErrorCode(Errors.NOT_COORDINATOR.code())
             );
-            env.kafkaClient().prepareResponse(new DeleteGroupsResponse(new DeleteGroupsResponseData()
+            env.kafkaClient().prepareResponse(new DeleteGroupsResponse(
+                new DeleteGroupsResponseData()
                     .setResults(coordinatorMoved)));
             env.kafkaClient().prepareResponse(prepareFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
 
-            env.kafkaClient().prepareResponse(new DeleteGroupsResponse(new DeleteGroupsResponseData()
+            env.kafkaClient().prepareResponse(new DeleteGroupsResponse(
+                new DeleteGroupsResponseData()
                     .setResults(validResponse)));
 
             final DeleteConsumerGroupsResult errorResult1 = env.adminClient().deleteConsumerGroups(groupIds);

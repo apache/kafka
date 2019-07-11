@@ -922,18 +922,18 @@ public class RequestResponseTest {
 
     private DeleteGroupsRequest createDeleteGroupsRequest() {
         return new DeleteGroupsRequest.Builder(
-                new DeleteGroupsRequestData()
-                        .setGroupsNames(Collections.singletonList("test-group"))
+            new DeleteGroupsRequestData()
+                .setGroupsNames(Collections.singletonList("test-group"))
         ).build();
     }
 
     private DeleteGroupsResponse createDeleteGroupsResponse() {
         DeletableGroupResultCollection result = new DeletableGroupResultCollection();
         result.add(new DeletableGroupResult()
-                .setGroupId("test-group")
-                .setErrorCode(Errors.NONE.code()));
+                       .setGroupId("test-group")
+                       .setErrorCode(Errors.NONE.code()));
         return new DeleteGroupsResponse(
-                new DeleteGroupsResponseData()
+            new DeleteGroupsResponseData()
                 .setResults(result)
         );
     }

@@ -2998,7 +2998,7 @@ public class KafkaAdminClient extends AdminClient {
             @Override
             AbstractRequest.Builder createRequest(int timeoutMs) {
                 return new DeleteGroupsRequest.Builder(
-                        new DeleteGroupsRequestData()
+                    new DeleteGroupsRequestData()
                         .setGroupsNames(Collections.singletonList(context.getGroupId()))
                 );
             }
@@ -3013,15 +3013,11 @@ public class KafkaAdminClient extends AdminClient {
                     return;
                 }
 
-                try {
-                    final Errors groupError = response.get(context.getGroupId());
-                    if (!handleGroupRequestError(groupError, context.getFuture())) {
-                        context.getFuture().complete(null);
-                    }
-                } catch (IllegalArgumentException | ApiException e) {
-                    log.error("Encountered error while trying to get group {} exception",
-                              context.getGroupId(), e);
-                }
+                final Errors groupError = response.get(context.getGroupId());
+                if (handleGroupRequestError(groupError, context.getFuture()))
+                    return;
+
+                context.getFuture().complete(null);
             }
 
             @Override

@@ -18,6 +18,7 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.message.DeleteGroupsRequestData;
 import org.apache.kafka.common.message.DeleteGroupsResponseData;
+import org.apache.kafka.common.message.DeleteGroupsResponseData.DeletableGroupResult;
 import org.apache.kafka.common.message.DeleteGroupsResponseData.DeletableGroupResultCollection;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
@@ -65,17 +66,16 @@ public class DeleteGroupsRequest extends AbstractRequest {
             case 0:
             case 1:
                 DeletableGroupResultCollection groupResults = new DeletableGroupResultCollection();
-                data.groupsNames().forEach(groupId ->
-                        groupResults.add(new DeleteGroupsResponseData.DeletableGroupResult()
-                                        .setGroupId(groupId)
-                                        .setErrorCode(error.code())
-                        )
-                );
+                for (String groupId : data.groupsNames()) {
+                    groupResults.add(new DeletableGroupResult()
+                                         .setGroupId(groupId)
+                                         .setErrorCode(error.code()));
+                }
 
                 return new DeleteGroupsResponse(
-                        new DeleteGroupsResponseData()
-                                .setResults(groupResults)
-                                .setThrottleTimeMs(throttleTimeMs)
+                    new DeleteGroupsResponseData()
+                        .setResults(groupResults)
+                        .setThrottleTimeMs(throttleTimeMs)
                 );
             default:
                 throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",

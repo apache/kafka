@@ -26,6 +26,17 @@ import java.nio.ByteBuffer;
 import java.util.HashMap;
 import java.util.Map;
 
+/**
+ * Possible error codes:
+ *
+ * COORDINATOR_LOAD_IN_PROGRESS (14)
+ * COORDINATOR_NOT_AVAILABLE(15)
+ * NOT_COORDINATOR (16)
+ * INVALID_GROUP_ID(24)
+ * GROUP_AUTHORIZATION_FAILED(30)
+ * NON_EMPTY_GROUP(68)
+ * GROUP_ID_NOT_FOUND(69)
+ */
 public class DeleteGroupsResponse extends AbstractResponse {
 
     public final DeleteGroupsResponseData data;
@@ -57,8 +68,7 @@ public class DeleteGroupsResponse extends AbstractResponse {
     }
 
     public boolean hasError(String group) {
-        DeletableGroupResult result = data.results().find(group);
-        return result != null && result.errorCode() != Errors.NONE.code();
+        return get(group).code() != Errors.NONE.code();
     }
 
     public Errors get(String group) throws IllegalArgumentException {
@@ -66,7 +76,7 @@ public class DeleteGroupsResponse extends AbstractResponse {
         if (result == null) {
             throw new IllegalArgumentException("could not find group " + group + " in the delete group response");
         }
-        return Errors.forCode(data.results().find(group).errorCode());
+        return Errors.forCode(result.errorCode());
     }
 
     @Override
