@@ -20,8 +20,8 @@ import java.io.File
 
 import kafka.api._
 import kafka.utils._
-import kafka.cluster.Replica
-import kafka.log.{Log, LogManager}
+import kafka.log.Log
+import kafka.log.LogManager
 import kafka.server.QuotaFactory.UnboundedQuota
 import kafka.zk.KafkaZkClient
 import org.apache.kafka.common.metrics.Metrics
@@ -83,6 +83,7 @@ class SimpleFetchTest {
     EasyMock.expect(log.logEndOffset).andReturn(leaderLEO).anyTimes()
     EasyMock.expect(log.dir).andReturn(TestUtils.tempDir()).anyTimes()
     EasyMock.expect(log.logEndOffsetMetadata).andReturn(LogOffsetMetadata(leaderLEO)).anyTimes()
+    EasyMock.expect(log.highWatermarkMetadata).andReturn(LogOffsetMetadata(partitionHW)).anyTimes()
     EasyMock.expect(log.highWatermark).andReturn(partitionHW).anyTimes()
     EasyMock.expect(log.lastStableOffset).andReturn(partitionHW).anyTimes()
     EasyMock.expect(log.read(
@@ -127,18 +128,19 @@ class SimpleFetchTest {
     partition.setLog(log, false)
 
     // create the follower replica with defined log end offset
-    val followerReplica= new Replica(configs(1).brokerId, partition.topicPartition)
+    val followerId = configs(1).brokerId
+    val allReplicas = Seq(configs.head.brokerId, followerId)
+    partition.updateAssignmentAndIsr(
+      assignment = allReplicas,
+      isr = allReplicas.toSet
+    )
     val leo = LogOffsetMetadata(followerLEO, 0L, followerLEO.toInt)
-    followerReplica.updateFetchState(
+    partition.updateFollowerFetchState(
+      followerId,
       followerFetchOffsetMetadata = leo,
       followerStartOffset = 0L,
       followerFetchTimeMs= time.milliseconds,
       leaderEndOffset = leo.messageOffset)
-    partition.addReplicaIfNotExists(followerReplica)
-
-    // add both of them to ISR
-    val allReplicas = List(configs.head.brokerId, followerReplica.brokerId)
-    partition.inSyncReplicas = allReplicas.toSet
   }
 
   @After
@@ -176,7 +178,8 @@ class SimpleFetchTest {
       fetchMaxBytes = Int.MaxValue,
       hardMaxBytesLimit = false,
       readPartitionInfo = fetchInfo,
-      quota = UnboundedQuota).find(_._1 == topicPartition)
+      quota = UnboundedQuota,
+      clientMetadata = None).find(_._1 == topicPartition)
     val firstReadRecord = readCommittedRecords.get._2.info.records.records.iterator.next()
     assertEquals("Reading committed data should return messages only up to high watermark", recordToHW,
       new SimpleRecord(firstReadRecord))
@@ -188,7 +191,8 @@ class SimpleFetchTest {
       fetchMaxBytes = Int.MaxValue,
       hardMaxBytesLimit = false,
       readPartitionInfo = fetchInfo,
-      quota = UnboundedQuota).find(_._1 == topicPartition)
+      quota = UnboundedQuota,
+      clientMetadata = None).find(_._1 == topicPartition)
 
     val firstRecord = readAllRecords.get._2.info.records.records.iterator.next()
     assertEquals("Reading any data can return messages up to the end of the log", recordToLEO,

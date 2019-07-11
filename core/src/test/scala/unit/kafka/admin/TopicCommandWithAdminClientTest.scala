@@ -37,6 +37,7 @@ import org.junit.{After, Before, Rule, Test}
 import org.scalatest.Assertions.{fail, intercept}
 
 import scala.collection.JavaConverters._
+import scala.collection.Seq
 import scala.concurrent.ExecutionException
 import scala.util.Random
 

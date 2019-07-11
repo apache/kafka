@@ -38,7 +38,7 @@ import org.junit.{After, Test}
 import org.scalatest.Assertions.intercept
 
 import scala.collection.JavaConverters._
-import scala.collection.{Map, immutable}
+import scala.collection.{Map, Seq, immutable}
 
 class AdminZkClientTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
 

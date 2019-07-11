@@ -24,7 +24,6 @@ import org.apache.kafka.common.utils.Utils
 import org.easymock.EasyMock
 import org.junit._
 import org.junit.Assert._
-import kafka.cluster.Replica
 import kafka.utils.{KafkaScheduler, MockTime, TestUtils}
 import kafka.zk.KafkaZkClient
 import java.util.concurrent.atomic.AtomicBoolean
@@ -76,8 +75,12 @@ class HighwatermarkPersistenceTest {
       // create leader and follower replicas
       val log0 = logManagers.head.getOrCreateLog(new TopicPartition(topic, 0), LogConfig())
       partition0.setLog(log0, isFutureLog = false)
-      val followerReplicaPartition0 = new Replica(configs.last.brokerId, tp0)
-      partition0.addReplicaIfNotExists(followerReplicaPartition0)
+
+      partition0.updateAssignmentAndIsr(
+        assignment = Seq(configs.head.brokerId, configs.last.brokerId),
+        isr = Set(configs.head.brokerId)
+      )
+
       replicaManager.checkpointHighWatermarks()
       fooPartition0Hw = hwmFor(replicaManager, topic, 0)
       assertEquals(log0.highWatermark, fooPartition0Hw)

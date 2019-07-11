@@ -148,8 +148,8 @@ object LeaderElectionCommand extends Logging {
     val noop = mutable.Set.empty[TopicPartition]
     val failed = mutable.Map.empty[TopicPartition, Throwable]
 
-    electionResults.foreach { case (topicPartition, error) =>
-      val _: Unit = if (error.isPresent) {
+    electionResults.foreach[Unit] { case (topicPartition, error) =>
+      if (error.isPresent) {
         error.get match {
           case _: ElectionNotNeededException => noop += topicPartition
           case _ => failed += topicPartition -> error.get

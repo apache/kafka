@@ -115,7 +115,7 @@ class DelayedDeleteRecords(delayMs: Long,
    * Upon completion, return the current response status along with the error code per partition
    */
   override def onComplete() {
-    val responseStatus = deleteRecordsStatus.mapValues(status => status.responseStatus)
+    val responseStatus = deleteRecordsStatus.map { case (k, status) => k -> status.responseStatus }
     responseCallback(responseStatus)
   }
 }

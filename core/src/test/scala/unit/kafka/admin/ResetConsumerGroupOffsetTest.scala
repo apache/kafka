@@ -16,6 +16,8 @@ import java.io.{BufferedWriter, File, FileWriter}
 import java.text.{ParseException, SimpleDateFormat}
 import java.util.{Calendar, Date, Properties}
 
+import scala.collection.Seq
+
 import joptsimple.OptionException
 import kafka.admin.ConsumerGroupCommand.ConsumerGroupService
 import kafka.server.KafkaConfig
@@ -325,7 +327,7 @@ class ResetConsumerGroupOffsetTest extends ConsumerGroupCommandTest {
     val tp1 = new TopicPartition(topic1, 0)
     val tp2 = new TopicPartition(topic2, 0)
 
-    val allResetOffsets = resetOffsets(consumerGroupCommand)(group).mapValues(_.offset())
+    val allResetOffsets = resetOffsets(consumerGroupCommand)(group).mapValues(_.offset).toMap
     assertEquals(Map(tp1 -> 0L, tp2 -> 0L), allResetOffsets)
     assertEquals(Map(tp1 -> 0L), committedOffsets(topic1))
     assertEquals(Map(tp2 -> 0L), committedOffsets(topic2))
@@ -353,7 +355,7 @@ class ResetConsumerGroupOffsetTest extends ConsumerGroupCommandTest {
 
     val tp1 = new TopicPartition(topic1, 1)
     val tp2 = new TopicPartition(topic2, 1)
-    val allResetOffsets = resetOffsets(consumerGroupCommand)(group).mapValues(_.offset())
+    val allResetOffsets = resetOffsets(consumerGroupCommand)(group).mapValues(_.offset).toMap
     assertEquals(Map(tp1 -> 0, tp2 -> 0), allResetOffsets)
 
     assertEquals(priorCommittedOffsets1 + (tp1 -> 0L), committedOffsets(topic1))
@@ -383,12 +385,12 @@ class ResetConsumerGroupOffsetTest extends ConsumerGroupCommandTest {
     val bw = new BufferedWriter(new FileWriter(file))
     bw.write(consumerGroupCommand.exportOffsetsToCsv(exportedOffsets))
     bw.close()
-    assertEquals(Map(tp0 -> 2L, tp1 -> 2L), exportedOffsets(group).mapValues(_.offset))
+    assertEquals(Map(tp0 -> 2L, tp1 -> 2L), exportedOffsets(group).mapValues(_.offset).toMap)
 
     val cgcArgsExec = buildArgsForGroup(group, "--all-topics", "--from-file", file.getCanonicalPath, "--dry-run")
     val consumerGroupCommandExec = getConsumerGroupService(cgcArgsExec)
     val importedOffsets = consumerGroupCommandExec.resetOffsets()
-    assertEquals(Map(tp0 -> 2L, tp1 -> 2L), importedOffsets(group).mapValues(_.offset))
+    assertEquals(Map(tp0 -> 2L, tp1 -> 2L), importedOffsets(group).mapValues(_.offset).toMap)
 
     adminZkClient.deleteTopic(topic)
   }
@@ -421,21 +423,21 @@ class ResetConsumerGroupOffsetTest extends ConsumerGroupCommandTest {
     val bw = new BufferedWriter(new FileWriter(file))
     bw.write(consumerGroupCommand.exportOffsetsToCsv(exportedOffsets))
     bw.close()
-    assertEquals(Map(t1p0 -> 2L, t1p1 -> 2L), exportedOffsets(group1).mapValues(_.offset))
-    assertEquals(Map(t2p0 -> 2L, t2p1 -> 2L), exportedOffsets(group2).mapValues(_.offset))
+    assertEquals(Map(t1p0 -> 2L, t1p1 -> 2L), exportedOffsets(group1).mapValues(_.offset).toMap)
+    assertEquals(Map(t2p0 -> 2L, t2p1 -> 2L), exportedOffsets(group2).mapValues(_.offset).toMap)
 
     // Multiple --group's offset import
     val cgcArgsExec = buildArgsForGroups(Seq(group1, group2), "--all-topics", "--from-file", file.getCanonicalPath, "--dry-run")
     val consumerGroupCommandExec = getConsumerGroupService(cgcArgsExec)
     val importedOffsets = consumerGroupCommandExec.resetOffsets()
-    assertEquals(Map(t1p0 -> 2L, t1p1 -> 2L), importedOffsets(group1).mapValues(_.offset))
-    assertEquals(Map(t2p0 -> 2L, t2p1 -> 2L), importedOffsets(group2).mapValues(_.offset))
+    assertEquals(Map(t1p0 -> 2L, t1p1 -> 2L), importedOffsets(group1).mapValues(_.offset).toMap)
+    assertEquals(Map(t2p0 -> 2L, t2p1 -> 2L), importedOffsets(group2).mapValues(_.offset).toMap)
 
     // Single --group offset import using "group,topic,partition,offset" csv format
     val cgcArgsExec2 = buildArgsForGroup(group1, "--all-topics", "--from-file", file.getCanonicalPath, "--dry-run")
     val consumerGroupCommandExec2 = getConsumerGroupService(cgcArgsExec2)
     val importedOffsets2 = consumerGroupCommandExec2.resetOffsets()
-    assertEquals(Map(t1p0 -> 2L, t1p1 -> 2L), importedOffsets2(group1).mapValues(_.offset))
+    assertEquals(Map(t1p0 -> 2L, t1p1 -> 2L), importedOffsets2(group1).mapValues(_.offset).toMap)
 
     adminZkClient.deleteTopic(topic)
   }
@@ -482,7 +484,7 @@ class ResetConsumerGroupOffsetTest extends ConsumerGroupCommandTest {
         (group, partitionInfo) <- resetOffsetsResultByGroup
       } {
         val priorOffsets = committedOffsets(topic = topic, group = group)
-        assertEquals(expectedOffsets(topic), partitionInfo.filter(partitionInfo => partitionInfo._1.topic() == topic).mapValues(_.offset))
+        assertEquals(expectedOffsets(topic), partitionInfo.filter(partitionInfo => partitionInfo._1.topic() == topic).mapValues(_.offset).toMap)
         assertEquals(if (dryRun) priorOffsets else expectedOffsets(topic), committedOffsets(topic = topic, group = group))
       }
     } finally {

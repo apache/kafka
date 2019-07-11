@@ -41,7 +41,7 @@ import org.apache.zookeeper.KeeperException
 import org.apache.zookeeper.KeeperException.Code
 
 import scala.collection.JavaConverters._
-import scala.collection._
+import scala.collection.{Map, Seq, Set, immutable, mutable}
 import scala.util.{Failure, Try}
 
 sealed trait ElectionTrigger
@@ -897,7 +897,7 @@ class KafkaController(val config: KafkaConfig,
       // Ensure we detect future reassignments
       eventManager.put(PartitionReassignment)
     } else {
-      val reassignment = updatedPartitionsBeingReassigned.mapValues(_.newReplicas)
+      val reassignment = updatedPartitionsBeingReassigned.map { case (k, v) => k -> v.newReplicas }
       try zkClient.setOrCreatePartitionReassignment(reassignment, controllerContext.epochZkVersion)
       catch {
         case e: KeeperException => throw new AdminOperationException(e)
@@ -1276,8 +1276,8 @@ class KafkaController(val config: KafkaConfig,
     val deadBrokerIds = liveOrShuttingDownBrokerIds -- curBrokerIds
     val bouncedBrokerIds = (curBrokerIds & liveOrShuttingDownBrokerIds)
       .filter(brokerId => curBrokerIdAndEpochs(brokerId) > controllerContext.liveBrokerIdAndEpochs(brokerId))
-    val newBrokerAndEpochs = curBrokerAndEpochs.filterKeys(broker => newBrokerIds.contains(broker.id))
-    val bouncedBrokerAndEpochs = curBrokerAndEpochs.filterKeys(broker => bouncedBrokerIds.contains(broker.id))
+    val newBrokerAndEpochs = curBrokerAndEpochs.filter { case (broker, _) => newBrokerIds.contains(broker.id) }
+    val bouncedBrokerAndEpochs = curBrokerAndEpochs.filter { case (broker, _) => bouncedBrokerIds.contains(broker.id) }
     val newBrokerIdsSorted = newBrokerIds.toSeq.sorted
     val deadBrokerIdsSorted = deadBrokerIds.toSeq.sorted
     val liveBrokerIdsSorted = curBrokerIds.toSeq.sorted
@@ -1358,7 +1358,7 @@ class KafkaController(val config: KafkaConfig,
   }
 
   private def processPartitionModifications(topic: String): Unit = {
-    def restorePartitionReplicaAssignment(topic: String, newPartitionReplicaAssignment : immutable.Map[TopicPartition, Seq[Int]]): Unit = {
+    def restorePartitionReplicaAssignment(topic: String, newPartitionReplicaAssignment: Map[TopicPartition, Seq[Int]]): Unit = {
       info("Restoring the partition replica assignment for topic %s".format(topic))
 
       val existingPartitions = zkClient.getChildren(TopicPartitionsZNode.path(topic))
@@ -1505,7 +1505,7 @@ class KafkaController(val config: KafkaConfig,
   ): Unit = {
     callback(
       partitionsFromAdminClientOpt.fold(Map.empty[TopicPartition, Either[ApiError, Int]]) { partitions =>
-        partitions.map(partition => partition -> Left(new ApiError(Errors.NOT_CONTROLLER, null)))(breakOut)
+        partitions.iterator.map(partition => partition -> Left(new ApiError(Errors.NOT_CONTROLLER, null))).toMap
       }
     )
   }
@@ -1518,7 +1518,7 @@ class KafkaController(val config: KafkaConfig,
   ): Unit = {
     if (!isActive) {
       callback(partitionsFromAdminClientOpt.fold(Map.empty[TopicPartition, Either[ApiError, Int]]) { partitions =>
-        partitions.map(partition => partition -> Left(new ApiError(Errors.NOT_CONTROLLER, null)))(breakOut)
+        partitions.iterator.map(partition => partition -> Left(new ApiError(Errors.NOT_CONTROLLER, null))).toMap
       })
     } else {
       // We need to register the watcher if the path doesn't exist in order to detect future preferred replica
@@ -1556,19 +1556,19 @@ class KafkaController(val config: KafkaConfig,
           }
         }
 
-        val results = onReplicaElection(electablePartitions, electionType, electionTrigger).mapValues {
-          case Left(ex) =>
+        val results = onReplicaElection(electablePartitions, electionType, electionTrigger).map {
+          case (k, Left(ex)) =>
             if (ex.isInstanceOf[StateChangeFailedException]) {
               val error = if (electionType == ElectionType.PREFERRED) {
                 Errors.PREFERRED_LEADER_NOT_AVAILABLE
               } else {
                 Errors.ELIGIBLE_LEADERS_NOT_AVAILABLE
               }
-              Left(new ApiError(error, ex.getMessage))
+              k -> Left(new ApiError(error, ex.getMessage))
             } else {
-              Left(ApiError.fromThrowable(ex))
+              k -> Left(ApiError.fromThrowable(ex))
             }
-          case Right(leaderAndIsr) => Right(leaderAndIsr.leader)
+          case (k, Right(leaderAndIsr)) => k -> Right(leaderAndIsr.leader)
         } ++
         alreadyValidLeader.map(_ -> Left(new ApiError(Errors.ELECTION_NOT_NEEDED))) ++
         partitionsBeingDeleted.map(

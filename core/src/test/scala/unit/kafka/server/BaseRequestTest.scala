@@ -22,6 +22,8 @@ import java.net.Socket
 import java.nio.ByteBuffer
 import java.util.Properties
 
+import scala.collection.Seq
+
 import kafka.api.IntegrationTestHarness
 import kafka.network.SocketServer
 import org.apache.kafka.common.network.ListenerName

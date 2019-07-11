@@ -28,7 +28,7 @@ import kafka.common.{OffsetsOutOfOrderException, UnexpectedAppendOffsetException
 import kafka.log.Log.DeleteDirSuffix
 import kafka.server.checkpoints.LeaderEpochCheckpointFile
 import kafka.server.epoch.{EpochEntry, LeaderEpochFileCache}
-import kafka.server.{BrokerTopicStats, FetchDataInfo, KafkaConfig, LogDirFailureChannel}
+import kafka.server.{BrokerTopicStats, FetchDataInfo, KafkaConfig, LogDirFailureChannel, LogOffsetMetadata}
 import kafka.utils._
 import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.apache.kafka.common.errors._
@@ -3308,7 +3308,21 @@ class LogTest {
     appendEndTxnMarkerAsLeader(log, pid4, epoch, ControlRecordType.COMMIT) // 90
 
     val abortedTransactions = allAbortedTransactions(log)
-    assertEquals(List(new AbortedTxn(pid1, 0L, 29L, 8L), new AbortedTxn(pid2, 8L, 74L, 36L)), abortedTransactions)
+    val expectedTransactions = List(
+      new AbortedTxn(pid1, 0L, 29L, 8L),
+      new AbortedTxn(pid2, 8L, 74L, 36L)
+    )
+    assertEquals(expectedTransactions, abortedTransactions)
+
+    // Verify caching of the segment position of the first unstable offset
+    log.highWatermark = 30L
+    assertCachedFirstUnstableOffset(log, expectedOffset = 8L)
+
+    log.highWatermark = 75L
+    assertCachedFirstUnstableOffset(log, expectedOffset = 36L)
+
+    log.highWatermark = log.logEndOffset
+    assertEquals(None, log.firstUnstableOffset)
   }
 
   @Test
@@ -3509,7 +3523,39 @@ class LogTest {
     appendAsFollower(log, MemoryRecords.readableRecords(buffer))
 
     val abortedTransactions = allAbortedTransactions(log)
-    assertEquals(List(new AbortedTxn(pid1, 0L, 29L, 8L), new AbortedTxn(pid2, 8L, 74L, 36L)), abortedTransactions)
+    val expectedTransactions = List(
+      new AbortedTxn(pid1, 0L, 29L, 8L),
+      new AbortedTxn(pid2, 8L, 74L, 36L)
+    )
+
+    assertEquals(expectedTransactions, abortedTransactions)
+
+    // Verify caching of the segment position of the first unstable offset
+    log.highWatermark = 30L
+    assertCachedFirstUnstableOffset(log, expectedOffset = 8L)
+
+    log.highWatermark = 75L
+    assertCachedFirstUnstableOffset(log, expectedOffset = 36L)
+
+    log.highWatermark = log.logEndOffset
+    assertEquals(None, log.firstUnstableOffset)
+  }
+
+  private def assertCachedFirstUnstableOffset(log: Log, expectedOffset: Long): Unit = {
+    assertTrue(log.firstUnstableOffset.isDefined)
+    val firstUnstableOffset = log.firstUnstableOffset.get
+    assertEquals(expectedOffset, firstUnstableOffset.messageOffset)
+    assertFalse(firstUnstableOffset.messageOffsetOnly)
+    assertValidLogOffsetMetadata(log, firstUnstableOffset)
+  }
+
+  private def assertValidLogOffsetMetadata(log: Log, offsetMetadata: LogOffsetMetadata): Unit = {
+    val readInfo = log.read(startOffset = offsetMetadata.messageOffset,
+      maxLength = 2048,
+      maxOffset = None,
+      minOneMessage = false,
+      includeAbortedTxns = false)
+    assertEquals(offsetMetadata, readInfo.fetchOffsetMetadata)
   }
 
   @Test(expected = classOf[TransactionCoordinatorFencedException])
@@ -3648,6 +3694,37 @@ class LogTest {
   }
 
   @Test
+  def testOffsetSnapshot() {
+    val logConfig = LogTest.createLogConfig(segmentBytes = 1024 * 1024 * 5)
+    val log = createLog(logDir, logConfig)
+
+    // append a few records
+    appendAsFollower(log, MemoryRecords.withRecords(CompressionType.NONE,
+      new SimpleRecord("a".getBytes),
+      new SimpleRecord("b".getBytes),
+      new SimpleRecord("c".getBytes)), 5)
+
+
+    log.highWatermark = 2L
+    var offsets: LogOffsetSnapshot = log.offsetSnapshot
+    assertEquals(offsets.highWatermark.messageOffset, 2L)
+    assertFalse(offsets.highWatermark.messageOffsetOnly)
+
+    offsets = log.offsetSnapshot
+    assertEquals(offsets.highWatermark.messageOffset, 2L)
+    assertFalse(offsets.highWatermark.messageOffsetOnly)
+
+    try {
+      log.highWatermark = 100L
+      offsets = log.offsetSnapshot
+      fail("Should have thrown")
+    } catch {
+      case e: OffsetOutOfRangeException => // pass
+      case _ => fail("Should have seen OffsetOutOfRangeException")
+    }
+  }
+
+  @Test
   def testLastStableOffsetWithMixedProducerData() {
     val logConfig = LogTest.createLogConfig(segmentBytes = 1024 * 1024 * 5)
     val log = createLog(logDir, logConfig)
@@ -3741,7 +3818,17 @@ class LogTest {
     assertEquals(new AbortedTransaction(pid, 0), fetchDataInfo.abortedTransactions.get.head)
   }
 
- private def allAbortedTransactions(log: Log) = log.logSegments.flatMap(_.txnIndex.allAbortedTxns)
+  @Test
+  def testLoadPartitionDirWithNoSegmentsShouldNotThrow() {
+    val dirName = Log.logDeleteDirName(new TopicPartition("foo", 3))
+    val logDir = new File(tmpDir, dirName)
+    logDir.mkdirs()
+    val logConfig = LogTest.createLogConfig()
+    val log = createLog(logDir, logConfig)
+    assertEquals(1, log.numberOfSegments)
+  }
+
+  private def allAbortedTransactions(log: Log) = log.logSegments.flatMap(_.txnIndex.allAbortedTxns)
 
   private def appendTransactionalAsLeader(log: Log, producerId: Long, producerEpoch: Short): Int => Unit = {
     var sequence = 0
