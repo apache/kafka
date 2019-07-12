@@ -82,6 +82,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
     private Sensor closeTaskSensor;
     private long idleStartTime;
     private Producer<byte[], byte[]> producer;
+    private final boolean isThreadProducer;
     private boolean commitRequested = false;
     private boolean transactionInFlight = false;
 
@@ -151,8 +152,9 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
                       final StateDirectory stateDirectory,
                       final ThreadCache cache,
                       final Time time,
-                      final ProducerSupplier producerSupplier) {
-        this(id, partitions, topology, consumer, changelogReader, config, metrics, stateDirectory, cache, time, producerSupplier, null);
+                      final ProducerSupplier producerSupplier,
+                      boolean isThreadProducer) {
+        this(id, partitions, topology, consumer, changelogReader, config, metrics, stateDirectory, cache, time, producerSupplier, null, isThreadProducer);
     }
 
     public StreamTask(final TaskId id,
@@ -166,9 +168,11 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
                       final ThreadCache cache,
                       final Time time,
                       final ProducerSupplier producerSupplier,
-                      final RecordCollector recordCollector) {
+                      final RecordCollector recordCollector,
+                      boolean isThreadProducer) {
         super(id, partitions, topology, consumer, changelogReader, false, stateDirectory, config);
 
+        this.isThreadProducer = isThreadProducer;
         this.time = time;
         this.producerSupplier = producerSupplier;
         this.producer = producerSupplier.get();
@@ -859,7 +863,9 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
 
     private void initializeTransactions() {
         try {
-            producer.initTransactions();
+            if (!isThreadProducer) {
+                producer.initTransactions(consumer);
+            }
         } catch (final TimeoutException retriable) {
             log.error(
                 "Timeout exception caught when initializing transactions for task {}. " +

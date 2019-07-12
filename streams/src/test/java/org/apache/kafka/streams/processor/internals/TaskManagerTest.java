@@ -128,7 +128,7 @@ public class TaskManagerTest {
                                       adminClient,
                                       active,
                                       standby);
-        taskManager.setConsumer(consumer);
+        taskManager.setMainConsumer(consumer);
     }
 
     private void replay() {
@@ -625,7 +625,7 @@ public class TaskManagerTest {
     public void shouldNotResumeConsumptionUntilAllStoresRestored() {
         expect(active.allTasksRunning()).andReturn(false);
         final Consumer<byte[], byte[]> consumer = EasyMock.createStrictMock(Consumer.class);
-        taskManager.setConsumer(consumer);
+        taskManager.setMainConsumer(consumer);
         EasyMock.replay(active, consumer);
 
         // shouldn't invoke `resume` method in consumer

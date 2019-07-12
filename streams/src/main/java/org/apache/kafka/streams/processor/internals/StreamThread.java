@@ -451,7 +451,7 @@ public class StreamThread extends Thread {
                 stateDirectory,
                 cache,
                 time,
-                () -> createProducer(taskId));
+                () -> createProducer(taskId), false);
         }
 
         private Producer<byte[], byte[]> createProducer(final TaskId id) {
@@ -644,15 +644,15 @@ public class StreamThread extends Thread {
             consumerConfigs.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "none");
         }
 
-        final Consumer<byte[], byte[]> consumer = clientSupplier.getConsumer(consumerConfigs);
-        taskManager.setConsumer(consumer);
+        final Consumer<byte[], byte[]> mainConsumer = clientSupplier.getConsumer(consumerConfigs);
+        taskManager.setMainConsumer(mainConsumer);
 
         return new StreamThread(
             time,
             config,
             threadProducer,
             restoreConsumer,
-            consumer,
+            mainConsumer,
             originalReset,
             taskManager,
             streamsMetrics,
