@@ -33,6 +33,7 @@ import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{MetadataResponse, UpdateMetadataRequest}
 
+
 /**
  *  A cache for the state (e.g., current leader) of each partition. This cache is updated through
  *  UpdateMetadataRequest from the controller. Every broker maintains the same cache, asynchronously.
@@ -193,6 +194,24 @@ class MetadataCache(brokerId: Int) extends Logging {
           Node.noNode
       }
     }
+  }
+
+  def getPartitionReplicaEndpoints(tp: TopicPartition, listenerName: ListenerName): Map[Int, Node] = {
+    val snapshot = metadataSnapshot
+    snapshot.partitionStates.get(tp.topic()).flatMap(_.get(tp.partition())).map { partitionInfo =>
+      val replicaIds = partitionInfo.basePartitionState.replicas
+      replicaIds.asScala
+        .map(replicaId => replicaId.intValue() -> {
+          snapshot.aliveBrokers.get(replicaId.longValue()) match {
+            case Some(broker) =>
+              broker.getNode(listenerName).getOrElse(Node.noNode())
+            case None =>
+              Node.noNode()
+          }}).toMap
+        .filter(pair => pair match {
+          case (_, node) => !node.isEmpty
+        })
+    }.getOrElse(Map.empty[Int, Node])
   }
 
   def getControllerId: Option[Int] = metadataSnapshot.controllerId

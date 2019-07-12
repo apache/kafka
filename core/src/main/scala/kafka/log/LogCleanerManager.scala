@@ -544,7 +544,7 @@ private[log] object LogCleanerManager extends Logging {
     val firstUncleanableDirtyOffset: Long = Seq(
 
       // we do not clean beyond the first unstable offset
-      log.firstUnstableOffset.map(_.messageOffset),
+      log.firstUnstableOffset,
 
       // the active segment is always uncleanable
       Option(log.activeSegment.baseOffset),

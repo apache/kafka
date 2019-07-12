@@ -67,6 +67,7 @@ versions += [
   avroPlugin: "0.10.0",
   bcpkix: "1.61",
   checkstyle: "8.20",
+  commonsCli: "1.4",
   gradle: "5.4.1",
   gradleVersionsPlugin: "0.21.0",
   grgit: "3.1.1",
@@ -116,8 +117,7 @@ versions += [
   spotbugs: "3.1.12",
   spotbugsPlugin: "1.6.9",
   spotlessPlugin: "3.23.0",
-  zkclient: "0.11",
-  zookeeper: "3.4.14",
+  zookeeper: "3.5.5",
   zstd: "1.4.0-1"
 ]
 
@@ -135,6 +135,7 @@ libs += [
   argparse4j: "net.sourceforge.argparse4j:argparse4j:$versions.argparse4j",
   avro: "org.apache.avro:avro:$versions.avro",
   bcpkix: "org.bouncycastle:bcpkix-jdk15on:$versions.bcpkix",
+  commonsCli: "commons-cli:commons-cli:$versions.commonsCli",
   easymock: "org.easymock:easymock:$versions.easymock",
   jacksonDatabind: "com.fasterxml.jackson.core:jackson-databind:$versions.jackson",
   jacksonDataformatCsv: "com.fasterxml.jackson.dataformat:jackson-dataformat-csv:$versions.jackson",
@@ -183,7 +184,6 @@ libs += [
   slf4jApi: "org.slf4j:slf4j-api:$versions.slf4j",
   slf4jlog4j: "org.slf4j:slf4j-log4j12:$versions.slf4j",
   snappy: "org.xerial.snappy:snappy-java:$versions.snappy",
-  zkclient: "com.101tec:zkclient:$versions.zkclient",
   zookeeper: "org.apache.zookeeper:zookeeper:$versions.zookeeper",
   jfreechart: "jfreechart:jfreechart:$versions.jfreechart",
   mavenArtifact: "org.apache.maven:maven-artifact:$versions.mavenArtifact",
