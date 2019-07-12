@@ -76,12 +76,14 @@ TopologyTestDriver testDriver = new TopologyTestDriver(topology, config);
     </p>
     <pre>
 ConsumerRecordFactory&lt;String, Integer&gt; factory = new ConsumerRecordFactory&lt;&gt;("input-topic", new StringSerializer(), new IntegerSerializer());
-testDriver.pipe(factory.create("key", 42L));
-    </pre>
-    <p>
-    To verify the output, the test driver produces <code>ProducerRecord</code>s with key and value type <code>byte[]</code>.
-    For result verification, you can specify corresponding deserializers when reading the output record from the driver.
-    <pre>
+testDriver.pipeInput(factory.create("key", 42L));
+        </pre>
+            <p>
+                To verify the output, the test driver produces <code>ProducerRecord</code>s with key and value type
+                <code>byte[]</code>.
+                For result verification, you can specify corresponding deserializers when reading the output record from
+                the driver.
+            <pre>
 ProducerRecord&lt;String, Integer&gt; outputRecord = testDriver.readOutput("output-topic", new StringDeserializer(), new LongDeserializer());
     </pre>
     <p>
