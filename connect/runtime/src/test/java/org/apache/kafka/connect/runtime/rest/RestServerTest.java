@@ -78,6 +78,7 @@ public class RestServerTest {
         workerProps.put(WorkerConfig.INTERNAL_KEY_CONVERTER_CLASS_CONFIG, "org.apache.kafka.connect.json.JsonConverter");
         workerProps.put(WorkerConfig.INTERNAL_VALUE_CONVERTER_CLASS_CONFIG, "org.apache.kafka.connect.json.JsonConverter");
         workerProps.put(DistributedConfig.OFFSET_STORAGE_TOPIC_CONFIG, "connect-offsets");
+        workerProps.put(WorkerConfig.LISTENERS_CONFIG, "HTTP://localhost:0");
 
         return workerProps;
     }
@@ -105,6 +106,7 @@ public class RestServerTest {
 
         // Build listener from hostname and port
         configMap = new HashMap<>(baseWorkerProps());
+        configMap.remove(WorkerConfig.LISTENERS_CONFIG);
         configMap.put(WorkerConfig.REST_HOST_NAME_CONFIG, "my-hostname");
         configMap.put(WorkerConfig.REST_PORT_CONFIG, "8080");
         config = new DistributedConfig(configMap);
@@ -115,7 +117,7 @@ public class RestServerTest {
     @SuppressWarnings("deprecation")
     @Test
     public void testAdvertisedUri() {
-        // Advertised URI from listeenrs without protocol
+        // Advertised URI from listeners without protocol
         Map<String, String> configMap = new HashMap<>(baseWorkerProps());
         configMap.put(WorkerConfig.LISTENERS_CONFIG, "http://localhost:8080,https://localhost:8443");
         DistributedConfig config = new DistributedConfig(configMap);
@@ -153,6 +155,7 @@ public class RestServerTest {
 
         // listener from hostname and port
         configMap = new HashMap<>(baseWorkerProps());
+        configMap.remove(WorkerConfig.LISTENERS_CONFIG);
         configMap.put(WorkerConfig.REST_HOST_NAME_CONFIG, "my-hostname");
         configMap.put(WorkerConfig.REST_PORT_CONFIG, "8080");
         config = new DistributedConfig(configMap);
