@@ -1086,7 +1086,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                 Errors error = Errors.forCode(response.data.errorCode());
                 log.debug("Offset fetch failed: {}", error.message());
 
-                if (error == Errors.COORDINATOR_LOAD_IN_PROGRESS) {
+                if (error == Errors.COORDINATOR_LOAD_IN_PROGRESS | error == Errors.PENDING_TRANSACTION) {
                     // just retry
                     future.raise(error);
                 } else if (error == Errors.NOT_COORDINATOR) {

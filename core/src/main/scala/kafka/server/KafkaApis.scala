@@ -1187,7 +1187,7 @@ class KafkaApis(val requestChannel: RequestChannel,
           } else {
             // versions 1 and above read offsets from Kafka
             if (offsetFetchRequest.isAllPartitions) {
-              val (error, allPartitionData) = groupCoordinator.handleFetchOffsets(offsetFetchRequest.groupId)
+              val (error, allPartitionData) = groupCoordinator.handleFetchOffsets(offsetFetchRequest.groupId, offsetFetchRequest.isolationLevel())
               if (error != Errors.NONE)
                 offsetFetchRequest.getErrorResponse(requestThrottleMs, error)
               else {
@@ -1198,8 +1198,7 @@ class KafkaApis(val requestChannel: RequestChannel,
             } else {
               val (authorizedPartitions, unauthorizedPartitions) = offsetFetchRequest.partitions.asScala
                 .partition(authorizeTopicDescribe)
-              val (error, authorizedPartitionData) = groupCoordinator.handleFetchOffsets(offsetFetchRequest.groupId,
-                Some(authorizedPartitions))
+              val (error, authorizedPartitionData) = groupCoordinator.handleFetchOffsets(offsetFetchRequest.groupId, offsetFetchRequest.isolationLevel(), Some(authorizedPartitions))
               if (error != Errors.NONE)
                 offsetFetchRequest.getErrorResponse(requestThrottleMs, error)
               else {

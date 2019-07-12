@@ -94,8 +94,12 @@ public class OffsetFetchRequest extends AbstractRequest {
         return data.groupId();
     }
 
-    public static OffsetFetchRequest forAllPartitions(String groupId) {
-        return OffsetFetchRequest.Builder.allTopicPartitions(groupId).build((short) 2);
+    public IsolationLevel isolationLevel() {
+        return IsolationLevel.forId(data.isolationLevel());
+    }
+
+    public static OffsetFetchRequest forAllPartitions(String groupId, IsolationLevel isolationLevel) {
+        return OffsetFetchRequest.Builder.allTopicPartitions(groupId, isolationLevel).build((short) 2);
     }
 
     private OffsetFetchRequest(OffsetFetchRequestData data, short version) {

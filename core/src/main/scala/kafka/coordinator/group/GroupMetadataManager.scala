@@ -40,7 +40,7 @@ import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.protocol.types.Type._
 import org.apache.kafka.common.protocol.types._
 import org.apache.kafka.common.record._
-import org.apache.kafka.common.requests.{OffsetCommitRequest, OffsetFetchResponse}
+import org.apache.kafka.common.requests.{IsolationLevel, OffsetCommitRequest, OffsetFetchResponse}
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.utils.{Time, Utils}
 
@@ -436,7 +436,7 @@ class GroupMetadataManager(brokerId: Int,
    * The most important guarantee that this API provides is that it should never return a stale offset. i.e., it either
    * returns the current offset or it begins to sync the cache from the log (and returns an error code).
    */
-  def getOffsets(groupId: String, topicPartitionsOpt: Option[Seq[TopicPartition]]): Map[TopicPartition, OffsetFetchResponse.PartitionData] = {
+  def getOffsets(groupId: String, topicPartitionsOpt: Option[Seq[TopicPartition]], isolationLevel: IsolationLevel): Map[TopicPartition, OffsetFetchResponse.PartitionData] = {
     trace("Getting offsets of %s for group %s.".format(topicPartitionsOpt.getOrElse("all partitions"), groupId))
     val group = groupMetadataCache.get(groupId)
     if (group == null) {
@@ -453,7 +453,7 @@ class GroupMetadataManager(brokerId: Int,
               Optional.empty(), "", Errors.NONE)
             topicPartition -> partitionData
           }.toMap
-        } else if (group.hasPendingOffsetCommitsForTopicPartition(topicPartitionsOpt)) {
+        } else if ( group.hasPendingOffsetCommitsForTopicPartition(topicPartitionsOpt)) {
           // Some pending transactions have not been cleaned up yet.
           topicPartitionsOpt.getOrElse(Seq.empty[TopicPartition]).map { topicPartition =>
             val partitionData = new OffsetFetchResponse.PartitionData(OffsetFetchResponse.INVALID_OFFSET,

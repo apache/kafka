@@ -53,8 +53,6 @@
         { "name": "CommittedMetadata", "type": "string", "versions": "0+", "nullableVersions": "0+",
           "about": "Any associated metadata the client wants to keep." }
       ]}
-    ]},
-    { "name": "GenerationId", "type": "int32", "versions": "3+",
-      "about": "The generation of the transactional producer."}
+    ]}
   ]
 }
