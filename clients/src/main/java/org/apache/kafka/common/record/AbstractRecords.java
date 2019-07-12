@@ -104,6 +104,7 @@ public abstract class AbstractRecords implements Records {
         for (RecordBatchAndRecords recordBatchAndRecords : recordBatchAndRecordsList) {
             temporaryMemoryBytes += recordBatchAndRecords.batch.sizeInBytes();
             if (recordBatchAndRecords.batch.magic() <= toMagic) {
+                buffer = Utils.ensureCapacity(buffer, buffer.position() + recordBatchAndRecords.batch.sizeInBytes());
                 recordBatchAndRecords.batch.writeTo(buffer);
             } else {
                 MemoryRecordsBuilder builder = convertRecordBatch(toMagic, buffer, recordBatchAndRecords);

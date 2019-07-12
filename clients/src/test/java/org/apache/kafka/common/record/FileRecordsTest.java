@@ -35,6 +35,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Random;
 
 import static java.util.Arrays.asList;
 import static org.apache.kafka.test.TestUtils.tempFile;
@@ -357,6 +358,41 @@ public class FileRecordsTest {
         doTestConversion(CompressionType.GZIP, RecordBatch.MAGIC_VALUE_V1);
         doTestConversion(CompressionType.NONE, RecordBatch.MAGIC_VALUE_V2);
         doTestConversion(CompressionType.GZIP, RecordBatch.MAGIC_VALUE_V2);
+    }
+
+    @Test
+    public void testDownconversionAfterMessageFormatDowngrade() throws IOException {
+        // random bytes
+        Random random = new Random();
+        byte[] bytes = new byte[3000];
+        random.nextBytes(bytes);
+
+        // records
+        CompressionType compressionType = CompressionType.GZIP;
+        List<Long> offsets = asList(0L, 1L);
+        List<Byte> magic = asList(RecordBatch.MAGIC_VALUE_V2, RecordBatch.MAGIC_VALUE_V1);  // downgrade message format from v2 to v1
+        List<SimpleRecord> records = asList(
+                new SimpleRecord(1L, "k1".getBytes(), bytes),
+                new SimpleRecord(2L, "k2".getBytes(), bytes));
+        byte toMagic = 1;
+
+        // create MemoryRecords
+        ByteBuffer buffer = ByteBuffer.allocate(8000);
+        for (int i = 0; i < records.size(); i++) {
+            MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, magic.get(i), compressionType, TimestampType.CREATE_TIME, 0L);
+            builder.appendWithOffset(offsets.get(i), records.get(i));
+            builder.close();
+        }
+        buffer.flip();
+
+        // create FileRecords, down-convert and verify
+        try (FileRecords fileRecords = FileRecords.open(tempFile())) {
+            fileRecords.append(MemoryRecords.readableRecords(buffer));
+            fileRecords.flush();
+
+            Records convertedRecords = fileRecords.downConvert(toMagic, 0, time).records();
+            verifyConvertedRecords(records, offsets, convertedRecords, compressionType, toMagic);
+        }
     }
 
     private void doTestConversion(CompressionType compressionType, byte toMagic) throws IOException {
