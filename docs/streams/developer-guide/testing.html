@@ -99,7 +99,7 @@ TopologyTestDriver testDriver = new TopologyTestDriver(topology, props);
             </p>
             <pre>
 ConsumerRecordFactory&lt;String, Integer&gt; factory = new ConsumerRecordFactory&lt;&gt;("input-topic", new StringSerializer(), new IntegerSerializer());
-testDriver.pipe(factory.create("key", 42L));
+testDriver.pipeInput(factory.create("key", 42L));
         </pre>
             <p>
                 To verify the output, the test driver produces <code>ProducerRecord</code>s with key and value type
