@@ -1126,7 +1126,7 @@ class ReplicaManager(val config: KafkaConfig,
          * partitions of said topics
          */
         val leaderTopicSet = leaderPartitionsIterator.map(_.topic).toSet
-        partitionsBecomeFollower.map(_.topic).diff(leaderTopicSet).foreach(brokerTopicStats.removeOldLeaderMetrics)
+        partitionsBecomeFollower.map(_.topic).toSet.diff(leaderTopicSet).foreach(brokerTopicStats.removeOldLeaderMetrics)
 
         leaderAndIsrRequest.partitionStates.asScala.keys.foreach { topicPartition =>
           /*
