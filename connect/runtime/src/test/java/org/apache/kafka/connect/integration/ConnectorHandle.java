@@ -196,7 +196,6 @@ public class ConnectorHandle {
      * Record that this connector has been started. This should be called by the connector under
      * test.
      *
-     * @see #expectedRestarts(int)
      * @see #expectedStarts(int)
      */
     public void recordConnectorStart() {
@@ -207,7 +206,6 @@ public class ConnectorHandle {
      * Record that this connector has been stopped. This should be called by the connector under
      * test.
      *
-     * @see #expectedRestarts(int)
      * @see #expectedStarts(int)
      */
     public void recordConnectorStop() {
@@ -215,58 +213,111 @@ public class ConnectorHandle {
     }
 
     /**
-     * Obtain a {@link RestartLatch} that can be used to wait until the connector using this handle
-     * and all tasks using {@link TaskHandle} have completed the expected number of restarts,
-     * starting the counts at the time this method is called.
-     *
-     * <p>A test can call this method, specifying the number of times the connector and tasks
-     * will each be stopped and started from that point (typically {@code expectedRestarts(1)}).
-     * The test should then change the connector or otherwise cause the connector to restart one or
-     * more times, and then can call {@link RestartLatch#await(long, TimeUnit)} to wait up to a
-     * specified duration for the connector and all tasks to be restarted the specified number of
-     * times.
-     *
-     * <p>This method tracks the number of times the connector and tasks are stopped
-     * <em>and</em> started. See also {@link #expectedStarts(int)}.
-     *
-     * @param expectedRestarts the expected number of restarts
-     * @return the latch; never null
-     * @see #expectedStarts(int)
-     */
-    public RestartLatch expectedRestarts(int expectedRestarts) {
-        List<RestartLatch> taskLatches = taskHandles.values()
-                                                    .stream()
-                                                    .map(task -> task.expectedRestarts(expectedRestarts))
-                                                    .collect(Collectors.toList());
-        return startAndStopCounter.expectedRestarts(expectedRestarts, taskLatches);
-    }
-
-    /**
-     * Obtain a {@link RestartLatch} that can be used to wait until the connector using this handle
-     * and all tasks using {@link TaskHandle} have completed the expected number of starts,
-     * starting the counts at the time this method is called.
+     * Obtain a {@link StartAndStopLatch} that can be used to wait until the connector using this handle
+     * and all tasks using {@link TaskHandle} have completed the expected number of
+     * starts, starting the counts at the time this method is called.
      *
      * <p>A test can call this method, specifying the number of times the connector and tasks
      * will each be stopped and started from that point (typically {@code expectedStarts(1)}).
      * The test should then change the connector or otherwise cause the connector to restart one or
-     * more times, and then can call {@link RestartLatch#await(long, TimeUnit)} to wait up to a
-     * specified duration for the connector and all tasks to be started the specified number of
-     * times.
+     * more times, and then can call {@link StartAndStopLatch#await(long, TimeUnit)} to wait up to a
+     * specified duration for the connector and all tasks to be started at least the specified
+     * number of times.
      *
-     * <p>Unlike {@link #expectedRestarts(int)}, this method does not track the number of times
-     * the connector and tasks are stopped, and only tracks the number of times the connector and
-     * tasks are <em>started</em>.
+     * <p>This method does not track the number of times the connector and tasks are stopped, and
+     * only tracks the number of times the connector and tasks are <em>started</em>.
      *
-     * @param expectedStarts the expected number of starts
-     * @return the latch; never null
-     * @see #expectedRestarts(int)
+     * @param expectedStarts the minimum number of starts that are expected once this method is
+     *                       called
+     * @return the latch that can be used to wait for the starts to complete; never null
      */
-    public RestartLatch expectedStarts(int expectedStarts) {
-        List<RestartLatch> taskLatches = taskHandles.values()
-                                                    .stream()
-                                                    .map(task -> task.expectedStarts(expectedStarts))
-                                                    .collect(Collectors.toList());
+    public StartAndStopLatch expectedStarts(int expectedStarts) {
+        return expectedStarts(expectedStarts, true);
+    }
+
+    /**
+     * Obtain a {@link StartAndStopLatch} that can be used to wait until the connector using this handle
+     * and optionally all tasks using {@link TaskHandle} have completed the expected number of
+     * starts, starting the counts at the time this method is called.
+     *
+     * <p>A test can call this method, specifying the number of times the connector and tasks
+     * will each be stopped and started from that point (typically {@code expectedStarts(1)}).
+     * The test should then change the connector or otherwise cause the connector to restart one or
+     * more times, and then can call {@link StartAndStopLatch#await(long, TimeUnit)} to wait up to a
+     * specified duration for the connector and all tasks to be started at least the specified
+     * number of times.
+     *
+     * <p>This method does not track the number of times the connector and tasks are stopped, and
+     * only tracks the number of times the connector and tasks are <em>started</em>.
+     *
+     * @param expectedStarts the minimum number of starts that are expected once this method is
+     *                       called
+     * @param includeTasks  true if the latch should also wait for the tasks to be stopped the
+     *                      specified minimum number of times
+     * @return the latch that can be used to wait for the starts to complete; never null
+     */
+    public StartAndStopLatch expectedStarts(int expectedStarts, boolean includeTasks) {
+        List<StartAndStopLatch> taskLatches = null;
+        if (includeTasks) {
+            taskLatches = taskHandles.values().stream()
+                                     .map(task -> task.expectedStarts(expectedStarts))
+                                     .collect(Collectors.toList());
+        }
         return startAndStopCounter.expectedStarts(expectedStarts, taskLatches);
+    }
+
+    /**
+     * Obtain a {@link StartAndStopLatch} that can be used to wait until the connector using this handle
+     * and optionally all tasks using {@link TaskHandle} have completed the minimum number of
+     * stops, starting the counts at the time this method is called.
+     *
+     * <p>A test can call this method, specifying the number of times the connector and tasks
+     * will each be stopped from that point (typically {@code expectedStops(1)}).
+     * The test should then change the connector or otherwise cause the connector to stop (or
+     * restart) one or more times, and then can call
+     * {@link StartAndStopLatch#await(long, TimeUnit)} to wait up to a specified duration for the
+     * connector and all tasks to be started at least the specified number of times.
+     *
+     * <p>This method does not track the number of times the connector and tasks are stopped, and
+     * only tracks the number of times the connector and tasks are <em>started</em>.
+     *
+     * @param expectedStops the minimum number of starts that are expected once this method is
+     *                      called
+     * @return the latch that can be used to wait for the starts to complete; never null
+     */
+    public StartAndStopLatch expectedStops(int expectedStops) {
+        return expectedStops(expectedStops, true);
+    }
+
+    /**
+     * Obtain a {@link StartAndStopLatch} that can be used to wait until the connector using this handle
+     * and optionally all tasks using {@link TaskHandle} have completed the minimum number of
+     * stops, starting the counts at the time this method is called.
+     *
+     * <p>A test can call this method, specifying the number of times the connector and tasks
+     * will each be stopped from that point (typically {@code expectedStops(1)}).
+     * The test should then change the connector or otherwise cause the connector to stop (or
+     * restart) one or more times, and then can call
+     * {@link StartAndStopLatch#await(long, TimeUnit)} to wait up to a specified duration for the
+     * connector and all tasks to be started at least the specified number of times.
+     *
+     * <p>This method does not track the number of times the connector and tasks are stopped, and
+     * only tracks the number of times the connector and tasks are <em>started</em>.
+     *
+     * @param expectedStops the minimum number of starts that are expected once this method is
+     *                      called
+     * @param includeTasks  true if the latch should also wait for the tasks to be stopped the
+     *                      specified minimum number of times
+     * @return the latch that can be used to wait for the starts to complete; never null
+     */
+    public StartAndStopLatch expectedStops(int expectedStops, boolean includeTasks) {
+        List<StartAndStopLatch> taskLatches = null;
+        if (includeTasks) {
+            taskLatches = taskHandles.values().stream()
+                                     .map(task -> task.expectedStops(expectedStops))
+                                     .collect(Collectors.toList());
+        }
+        return startAndStopCounter.expectedStops(expectedStops, taskLatches);
     }
 
     @Override

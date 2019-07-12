@@ -37,7 +37,7 @@ public class StartAndStopCounterTest {
     private StartAndStopCounter counter;
     private Time clock;
     private ExecutorService waiters;
-    private RestartLatch latch;
+    private StartAndStopLatch latch;
 
     @Before
     public void setup() {
@@ -97,9 +97,8 @@ public class StartAndStopCounterTest {
         Future<Boolean> future = asyncAwait(100, TimeUnit.MILLISECONDS);
 
         clock.sleep(1000);
+        // Record a stop but NOT a start
         counter.recordStop();
-        // Don't record a start!
-        //counter.recordStart();
         assertFalse(future.get(200, TimeUnit.MILLISECONDS));
         assertTrue(future.isDone());
     }

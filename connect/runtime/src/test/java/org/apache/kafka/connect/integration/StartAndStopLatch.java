@@ -28,17 +28,17 @@ import org.apache.kafka.common.utils.Time;
  * A latch that can be used to count down the number of times a connector and/or tasks have
  * been started and stopped.
  */
-public class RestartLatch {
+public class StartAndStopLatch {
     private final CountDownLatch startLatch;
     private final CountDownLatch stopLatch;
-    private final List<RestartLatch> dependents;
-    private final Consumer<RestartLatch> uponCompletion;
+    private final List<StartAndStopLatch> dependents;
+    private final Consumer<StartAndStopLatch> uponCompletion;
     private final Time clock;
 
-    RestartLatch(int expectedStarts, int expectedStops, Consumer<RestartLatch> uponCompletion,
-                 List<RestartLatch> dependents, Time clock) {
-        startLatch = new CountDownLatch(expectedStarts < 0 ? 0 : expectedStarts);
-        stopLatch = new CountDownLatch(expectedStops < 0 ? 0 : expectedStops);
+    StartAndStopLatch(int expectedStarts, int expectedStops, Consumer<StartAndStopLatch> uponCompletion,
+                 List<StartAndStopLatch> dependents, Time clock) {
+        this.startLatch = new CountDownLatch(expectedStarts < 0 ? 0 : expectedStarts);
+        this.stopLatch = new CountDownLatch(expectedStops < 0 ? 0 : expectedStops);
         this.dependents = dependents;
         this.uponCompletion = uponCompletion;
         this.clock = clock;
@@ -104,7 +104,7 @@ public class RestartLatch {
         }
 
         if (dependents != null) {
-            for (RestartLatch dependent : dependents) {
+            for (StartAndStopLatch dependent : dependents) {
                 if (!dependent.await(end - clock.milliseconds(), TimeUnit.MILLISECONDS)) {
                     return false;
                 }

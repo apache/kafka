@@ -34,34 +34,31 @@ import org.junit.Test;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
-public class RestartLatchTest {
+public class StartAndStopLatchTest {
 
     private Time clock;
-    private RestartLatch latch;
-    private List<RestartLatch> dependents;
+    private StartAndStopLatch latch;
+    private List<StartAndStopLatch> dependents;
     private AtomicBoolean completed = new AtomicBoolean();
-    private ExecutorService waiters = Executors.newSingleThreadExecutor();
+    private ExecutorService waiters;
     private Future<Boolean> future;
 
     @Before
     public void setup() {
         clock = new MockTime();
+        waiters = Executors.newSingleThreadExecutor();
     }
 
     @After
     public void teardown() {
         if (waiters != null) {
-            try {
-                waiters.shutdownNow();
-            } finally {
-                waiters = null;
-            }
+            waiters.shutdownNow();
         }
     }
 
     @Test
     public void shouldReturnFalseWhenAwaitingForStartToNeverComplete() throws Throwable {
-        latch = new RestartLatch(1, 1, this::complete, dependents, clock);
+        latch = new StartAndStopLatch(1, 1, this::complete, dependents, clock);
         future = asyncAwait(100);
         clock.sleep(10);
         assertFalse(future.get(200, TimeUnit.MILLISECONDS));
@@ -70,7 +67,7 @@ public class RestartLatchTest {
 
     @Test
     public void shouldReturnFalseWhenAwaitingForStopToNeverComplete() throws Throwable {
-        latch = new RestartLatch(1, 1, this::complete, dependents, clock);
+        latch = new StartAndStopLatch(1, 1, this::complete, dependents, clock);
         future = asyncAwait(100);
         latch.recordStart();
         clock.sleep(10);
@@ -80,7 +77,7 @@ public class RestartLatchTest {
 
     @Test
     public void shouldReturnTrueWhenAwaitingForStartAndStopToComplete() throws Throwable {
-        latch = new RestartLatch(1, 1, this::complete, dependents, clock);
+        latch = new StartAndStopLatch(1, 1, this::complete, dependents, clock);
         future = asyncAwait(100);
         latch.recordStart();
         latch.recordStop();
@@ -91,9 +88,9 @@ public class RestartLatchTest {
 
     @Test
     public void shouldReturnFalseWhenAwaitingForDependentLatchToComplete() throws Throwable {
-        RestartLatch depLatch = new RestartLatch(1, 1, this::complete, null, clock);
+        StartAndStopLatch depLatch = new StartAndStopLatch(1, 1, this::complete, null, clock);
         dependents = Collections.singletonList(depLatch);
-        latch = new RestartLatch(1, 1, this::complete, dependents, clock);
+        latch = new StartAndStopLatch(1, 1, this::complete, dependents, clock);
 
         future = asyncAwait(100);
         latch.recordStart();
@@ -105,9 +102,9 @@ public class RestartLatchTest {
 
     @Test
     public void shouldReturnTrueWhenAwaitingForStartAndStopAndDependentLatch() throws Throwable {
-        RestartLatch depLatch = new RestartLatch(1, 1, this::complete, null, clock);
+        StartAndStopLatch depLatch = new StartAndStopLatch(1, 1, this::complete, null, clock);
         dependents = Collections.singletonList(depLatch);
-        latch = new RestartLatch(1, 1, this::complete, dependents, clock);
+        latch = new StartAndStopLatch(1, 1, this::complete, dependents, clock);
 
         future = asyncAwait(100);
         latch.recordStart();
@@ -134,8 +131,7 @@ public class RestartLatchTest {
         });
     }
 
-    private void complete(RestartLatch latch) {
+    private void complete(StartAndStopLatch latch) {
         completed.set(true);
     }
-
 }

@@ -133,11 +133,11 @@ public class TaskHandle {
      * Wait up to the specified number of milliseconds for this task to meet the expected number of
      * records as defined by {@code expectedRecords}.
      *
-     * @param timeout duration to wait for records
+     * @param timeoutMillis number of milliseconds to wait for records
      * @throws InterruptedException if another threads interrupts this one while waiting for records
      */
-    public void awaitRecords(long timeout) throws InterruptedException {
-        awaitRecords(timeout, TimeUnit.MILLISECONDS);
+    public void awaitRecords(long timeoutMillis) throws InterruptedException {
+        awaitRecords(timeoutMillis, TimeUnit.MILLISECONDS);
     }
 
     /**
@@ -169,11 +169,11 @@ public class TaskHandle {
      * Wait up to the specified timeout in milliseconds for this task to meet the expected number
      * of commits as defined by {@code expectedCommits}.
      *
-     * @param timeout duration to wait for commits
+     * @param timeoutMillis number of milliseconds to wait for commits
      * @throws InterruptedException if another threads interrupts this one while waiting for commits
      */
-    public void awaitCommits(long timeout) throws InterruptedException {
-        awaitCommits(timeout, TimeUnit.MILLISECONDS);
+    public void awaitCommits(long timeoutMillis) throws InterruptedException {
+        awaitCommits(timeoutMillis, TimeUnit.MILLISECONDS);
     }
 
     /**
@@ -216,25 +216,25 @@ public class TaskHandle {
     }
 
     /**
-     * Obtain a {@link RestartLatch} that can be used to wait until this task has completed the
-     * expected number of restarts.
-     *
-     * @param expectedRestarts the expected number of restarts
-     * @return the latch; never null
-     */
-    public RestartLatch expectedRestarts(int expectedRestarts) {
-        return startAndStopCounter.expectedRestarts(expectedRestarts);
-    }
-
-    /**
-     * Obtain a {@link RestartLatch} that can be used to wait until this task has completed the
+     * Obtain a {@link StartAndStopLatch} that can be used to wait until this task has completed the
      * expected number of starts.
      *
      * @param expectedStarts    the expected number of starts
      * @return the latch; never null
      */
-    public RestartLatch expectedStarts(int expectedStarts) {
+    public StartAndStopLatch expectedStarts(int expectedStarts) {
         return startAndStopCounter.expectedStarts(expectedStarts);
+    }
+
+    /**
+     * Obtain a {@link StartAndStopLatch} that can be used to wait until this task has completed the
+     * expected number of starts.
+     *
+     * @param expectedStops    the expected number of stops
+     * @return the latch; never null
+     */
+    public StartAndStopLatch expectedStops(int expectedStops) {
+        return startAndStopCounter.expectedStops(expectedStops);
     }
 
     @Override

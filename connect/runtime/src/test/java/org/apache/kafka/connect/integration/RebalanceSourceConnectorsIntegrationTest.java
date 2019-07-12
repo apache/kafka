@@ -165,7 +165,7 @@ public class RebalanceSourceConnectorsIntegrationTest {
                 recordNum >= numRecordsProduced);
 
         // expect that we're going to restart the connector and its tasks
-        RestartLatch restartLatch = connectorHandle.expectedRestarts(1);
+        StartAndStopLatch restartLatch = connectorHandle.expectedStarts(1);
 
         // Reconfigure the source connector by changing the Kafka topic used as output
         props.put(TOPIC_CONFIG, anotherTopic);
