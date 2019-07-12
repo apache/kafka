@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.transforms;
 
+import java.util.Map;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaBuilder;
 import org.apache.kafka.connect.data.Struct;
@@ -30,6 +31,8 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 
 public class ValueToKeyTest {
+
+    private static final String INCLUDED_TOPIC_NAME = "includedTopic";
     private final ValueToKey<SinkRecord> xform = new ValueToKey<>();
 
     @After
@@ -86,6 +89,49 @@ public class ValueToKeyTest {
 
         assertEquals(expectedKeySchema, transformedRecord.keySchema());
         assertEquals(expectedKey, transformedRecord.key());
+    }
+
+    @Test
+    public void withIncludedTopics() {
+        final Map<String, String> config = new HashMap<>();
+        config.put("fields", "a,b");
+        config.put("topics", INCLUDED_TOPIC_NAME);
+        xform.configure(config);
+
+        final HashMap<String, Integer> value = new HashMap<>();
+        value.put("a", 1);
+        value.put("b", 2);
+        value.put("c", 3);
+
+        final SinkRecord record = new SinkRecord(INCLUDED_TOPIC_NAME, 0, null, null, null, value, 0);
+        final SinkRecord transformedRecord = xform.apply(record);
+
+        final HashMap<String, Integer> expectedKey = new HashMap<>();
+        expectedKey.put("a", 1);
+        expectedKey.put("b", 2);
+
+        assertNull(transformedRecord.keySchema());
+        assertEquals(expectedKey, transformedRecord.key());
+    }
+
+    @Test
+    public void withExcludedTopics() {
+        final Map<String, String> config = new HashMap<>();
+        config.put("fields", "a,b");
+        config.put("topics", "excludedTopic");
+        xform.configure(config);
+
+        final HashMap<String, Integer> value = new HashMap<>();
+        value.put("a", 1);
+        value.put("b", 2);
+        value.put("c", 3);
+
+        final Object originalKey = "ORIGINAL_KEY";
+        final SinkRecord record = new SinkRecord(INCLUDED_TOPIC_NAME, 0, null, originalKey, null, value, 0);
+        final SinkRecord transformedRecord = xform.apply(record);
+
+        assertNull(transformedRecord.keySchema());
+        assertEquals(originalKey, transformedRecord.key());
     }
 
 }
