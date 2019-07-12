@@ -34,7 +34,7 @@ import kafka.message.{BrokerCompressionCodec, CompressionCodec, NoCompressionCod
 import kafka.metrics.KafkaMetricsGroup
 import kafka.server.checkpoints.LeaderEpochCheckpointFile
 import kafka.server.epoch.LeaderEpochFileCache
-import kafka.server.{BrokerTopicStats, FetchDataInfo, LogDirFailureChannel, LogOffsetMetadata, OffsetAndEpoch}
+import kafka.server.{BrokerTopicStats, FetchDataInfo, FetchHighWatermark, FetchIsolation, FetchLogEnd, FetchTxnCommitted, LogDirFailureChannel, LogOffsetMetadata, OffsetAndEpoch}
 import kafka.utils._
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.record.FileRecords.TimestampAndOffset
@@ -851,7 +851,7 @@ class Log(@volatile var dir: File,
           if (offsetsToSnapshot.contains(Some(segment.baseOffset)))
             producerStateManager.takeSnapshot()
 
-          val fetchDataInfo = segment.read(startOffset, Some(lastOffset), Int.MaxValue)
+          val fetchDataInfo = segment.read(startOffset, Int.MaxValue)
           if (fetchDataInfo != null)
             loadProducersFromLog(producerStateManager, fetchDataInfo.records)
         }
@@ -1389,43 +1389,60 @@ class Log(@volatile var dir: File,
     }
   }
 
+  private def emptyFetchDataInfo(fetchOffsetMetadata: LogOffsetMetadata,
+                                 isolation: FetchIsolation): FetchDataInfo = {
+    val abortedTransactions =
+      if (isolation == FetchTxnCommitted) Some(List.empty[AbortedTransaction])
+      else None
+    FetchDataInfo(fetchOffsetMetadata,
+      MemoryRecords.EMPTY,
+      firstEntryIncomplete = false,
+      abortedTransactions = abortedTransactions)
+  }
+
   /**
    * Read messages from the log.
    *
    * @param startOffset The offset to begin reading at
    * @param maxLength The maximum number of bytes to read
-   * @param maxOffset The offset to read up to, exclusive. (i.e. this offset NOT included in the resulting message set)
+   * @param isolation The fetch isolation, which controls the maximum offset we are allowed to read
    * @param minOneMessage If this is true, the first message will be returned even if it exceeds `maxLength` (if one exists)
-   * @param includeAbortedTxns Whether or not to lookup aborted transactions for fetched data
    * @throws OffsetOutOfRangeException If startOffset is beyond the log end offset or before the log start offset
    * @return The fetch data information including fetch starting offset metadata and messages read.
    */
   def read(startOffset: Long,
            maxLength: Int,
-           maxOffset: Option[Long],
-           minOneMessage: Boolean,
-           includeAbortedTxns: Boolean): FetchDataInfo = {
+           isolation: FetchIsolation,
+           minOneMessage: Boolean): FetchDataInfo = {
     maybeHandleIOException(s"Exception while reading from $topicPartition in dir ${dir.getParent}") {
       trace(s"Reading $maxLength bytes from offset $startOffset of length $size bytes")
 
-      // Because we don't use lock for reading, the synchronization is a little bit tricky.
+      val includeAbortedTxns = isolation == FetchTxnCommitted
+
+      // Because we don't use the lock for reading, the synchronization is a little bit tricky.
       // We create the local variables to avoid race conditions with updates to the log.
-      val currentNextOffsetMetadata = nextOffsetMetadata
-      val next = currentNextOffsetMetadata.messageOffset
-      if (startOffset == next) {
-        val abortedTransactions =
-          if (includeAbortedTxns) Some(List.empty[AbortedTransaction])
-          else None
-        return FetchDataInfo(currentNextOffsetMetadata, MemoryRecords.EMPTY, firstEntryIncomplete = false,
-          abortedTransactions = abortedTransactions)
-      }
+      val endOffsetMetadata = nextOffsetMetadata
+      val endOffset = nextOffsetMetadata.messageOffset
+      if (startOffset == endOffset)
+        return emptyFetchDataInfo(endOffsetMetadata, isolation)
 
       var segmentEntry = segments.floorEntry(startOffset)
 
       // return error on attempt to read beyond the log end offset or read below log start offset
-      if (startOffset > next || segmentEntry == null || startOffset < logStartOffset)
+      if (startOffset > endOffset || segmentEntry == null || startOffset < logStartOffset)
         throw new OffsetOutOfRangeException(s"Received request for offset $startOffset for partition $topicPartition, " +
-          s"but we only have log segments in the range $logStartOffset to $next.")
+          s"but we only have log segments in the range $logStartOffset to $endOffset.")
+
+      val maxOffsetMetadata = isolation match {
+        case FetchLogEnd => nextOffsetMetadata
+        case FetchHighWatermark => fetchHighWatermarkMetadata
+        case FetchTxnCommitted => fetchLastStableOffsetMetadata
+      }
+
+      if (startOffset > maxOffsetMetadata.messageOffset) {
+        val startOffsetMetadata = convertToOffsetMetadataOrThrow(startOffset)
+        return emptyFetchDataInfo(startOffsetMetadata, isolation)
+      }
 
       // Do the read on the segment with a base offset less than the target offset
       // but if that segment doesn't contain any messages with an offset greater than that
@@ -1438,11 +1455,13 @@ class Log(@volatile var dir: File,
         // cause OffsetOutOfRangeException. To solve that, we cap the reading up to exposed position instead of the log
         // end of the active segment.
         val maxPosition = {
-          if (segmentEntry == segments.lastEntry) {
+          if (maxOffsetMetadata.segmentBaseOffset == segment.baseOffset) {
+            maxOffsetMetadata.relativePositionInSegment
+          } else if (segmentEntry == segments.lastEntry) {
             val exposedPos = nextOffsetMetadata.relativePositionInSegment.toLong
             // Check the segment again in case a new segment has just rolled out.
             if (segmentEntry != segments.lastEntry)
-            // New log segment has rolled out, we can read up to the file end.
+              // New log segment has rolled out, we can read up to the file end.
               segment.size
             else
               exposedPos
@@ -1450,7 +1469,8 @@ class Log(@volatile var dir: File,
             segment.size
           }
         }
-        val fetchInfo = segment.read(startOffset, maxOffset, maxLength, maxPosition, minOneMessage)
+
+        val fetchInfo = segment.read(startOffset, maxLength, maxPosition, minOneMessage)
         if (fetchInfo == null) {
           segmentEntry = segments.higherEntry(segmentEntry.getKey)
         } else {
@@ -1623,9 +1643,8 @@ class Log(@volatile var dir: File,
   private def convertToOffsetMetadataOrThrow(offset: Long): LogOffsetMetadata = {
     val fetchDataInfo = read(offset,
       maxLength = 1,
-      maxOffset = None,
-      minOneMessage = false,
-      includeAbortedTxns = false)
+      isolation = FetchLogEnd,
+      minOneMessage = false)
     fetchDataInfo.fetchOffsetMetadata
   }
 

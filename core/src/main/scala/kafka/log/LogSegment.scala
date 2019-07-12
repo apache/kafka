@@ -43,8 +43,8 @@ import scala.math._
  * A segment with a base offset of [base_offset] would be stored in two files, a [base_offset].index and a [base_offset].log file.
  *
  * @param log The file records containing log entries
- * @param offsetIndex The offset index
- * @param timeIndex The timestamp index
+ * @param lazyOffsetIndex The offset index
+ * @param lazyTimeIndex The timestamp index
  * @param txnIndex The transaction index
  * @param baseOffset A lower bound on the offsets in this segment
  * @param indexIntervalBytes The approximate number of bytes between entries in the index
@@ -279,7 +279,6 @@ class LogSegment private[log] (val log: FileRecords,
    * no more than maxSize bytes and will end before maxOffset if a maxOffset is specified.
    *
    * @param startOffset A lower bound on the first offset to include in the message set we read
-   * @param maxOffset An optional maximum offset for the message set we read
    * @param maxSize The maximum number of bytes to include in the message set we read
    * @param maxPosition The maximum position in the log segment that should be exposed for read
    * @param minOneMessage If this is true, the first message will be returned even if it exceeds `maxSize` (if one exists)
@@ -288,12 +287,13 @@ class LogSegment private[log] (val log: FileRecords,
    *         or null if the startOffset is larger than the largest offset in this log
    */
   @threadsafe
-  def read(startOffset: Long, maxOffset: Option[Long], maxSize: Int, maxPosition: Long = size,
+  def read(startOffset: Long,
+           maxSize: Int,
+           maxPosition: Long = size,
            minOneMessage: Boolean = false): FetchDataInfo = {
     if (maxSize < 0)
       throw new IllegalArgumentException(s"Invalid max size $maxSize for log read from segment $log")
 
-    val logSize = log.sizeInBytes // this may change, need to save a consistent copy
     val startOffsetAndSize = translateOffset(startOffset)
 
     // if the start position is already off the end of the log, return null
@@ -312,25 +312,7 @@ class LogSegment private[log] (val log: FileRecords,
       return FetchDataInfo(offsetMetadata, MemoryRecords.EMPTY)
 
     // calculate the length of the message set to read based on whether or not they gave us a maxOffset
-    val fetchSize: Int = maxOffset match {
-      case None =>
-        // no max offset, just read until the max position
-        min((maxPosition - startPosition).toInt, adjustedMaxSize)
-      case Some(offset) =>
-        // there is a max offset, translate it to a file position and use that to calculate the max read size;
-        // when the leader of a partition changes, it's possible for the new leader's high watermark to be less than the
-        // true high watermark in the previous leader for a short window. In this window, if a consumer fetches on an
-        // offset between new leader's high watermark and the log end offset, we want to return an empty response.
-        if (offset < startOffset)
-          return FetchDataInfo(offsetMetadata, MemoryRecords.EMPTY, firstEntryIncomplete = false)
-        val mapping = translateOffset(offset, startPosition)
-        val endPosition =
-          if (mapping == null)
-            logSize // the max offset is off the end of the log, use the end of the file
-          else
-            mapping.position
-        min(min(maxPosition, endPosition) - startPosition, adjustedMaxSize).toInt
-    }
+    val fetchSize: Int = min((maxPosition - startPosition).toInt, adjustedMaxSize)
 
     FetchDataInfo(offsetMetadata, log.slice(startPosition, fetchSize),
       firstEntryIncomplete = adjustedMaxSize < startOffsetAndSize.size)
@@ -467,7 +449,7 @@ class LogSegment private[log] (val log: FileRecords,
    */
   @threadsafe
   def readNextOffset: Long = {
-    val fetchData = read(offsetIndex.lastOffset, None, log.sizeInBytes)
+    val fetchData = read(offsetIndex.lastOffset, log.sizeInBytes)
     if (fetchData == null)
       baseOffset
     else
