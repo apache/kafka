@@ -302,9 +302,19 @@ public class Sender implements Runnable {
                     transactionManager.transitionToFatalError(
                         new KafkaException("The client hasn't received acknowledgment for " +
                             "some previously sent messages and can no longer retry them. It isn't safe to continue."));
-                } else if (transactionManager.hasInFlightTransactionalRequest() || maybeSendTransactionalRequest()) {
+                } else if (transactionManager.hasInFlightTransactionalRequest()) {
                     // as long as there are outstanding transactional requests, we simply wait for them to return
                     client.poll(retryBackoffMs, time.milliseconds());
+                    return;
+                }
+
+                maybeBeginFlush();
+                TransactionManager.TxnRequestHandler nextRequestHandler = transactionManager.nextRequestHandler(accumulator.hasIncomplete());
+                if (nextRequestHandler != null) {
+                    if (maybeSendTransactionalRequest(nextRequestHandler)) {
+                        client.poll(retryBackoffMs, time.milliseconds());
+                    }
+
                     return;
                 }
 
@@ -412,7 +422,7 @@ public class Sender implements Runnable {
         return pollTimeout;
     }
 
-    private boolean maybeSendTransactionalRequest() {
+    private void maybeBeginFlush() {
         if (transactionManager.isCompleting() && accumulator.hasIncomplete()) {
             if (transactionManager.isAborting())
                 accumulator.abortUndrainedBatches(new KafkaException("Failing batch since transaction was aborted"));
@@ -423,11 +433,12 @@ public class Sender implements Runnable {
             if (!accumulator.flushInProgress())
                 accumulator.beginFlush();
         }
+    }
 
-        TransactionManager.TxnRequestHandler nextRequestHandler = transactionManager.nextRequestHandler(accumulator.hasIncomplete());
-        if (nextRequestHandler == null)
-            return false;
-
+    /**
+     * Enqueue a FindCoordinatorRequest if needed, otherwise send the next request
+     */
+    private boolean maybeSendTransactionalRequest(TransactionManager.TxnRequestHandler nextRequestHandler) {
         AbstractRequest.Builder<?> requestBuilder = nextRequestHandler.requestBuilder();
         while (!forceClose) {
             Node targetNode = null;
@@ -470,7 +481,7 @@ public class Sender implements Runnable {
             metadata.requestUpdate();
         }
         transactionManager.retry(nextRequestHandler);
-        return true;
+        return false;
     }
 
     private void maybeAbortBatches(RuntimeException exception) {
