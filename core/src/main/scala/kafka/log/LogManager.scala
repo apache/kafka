@@ -677,7 +677,7 @@ class LogManager(logDirs: Seq[File],
         if (!isNew && offlineLogDirs.nonEmpty)
           throw new KafkaStorageException(s"Can not create log for $topicPartition because log directories ${offlineLogDirs.mkString(",")} are offline")
 
-        val logDir = {
+        val logDirs: List[File] = {
           val preferredLogDir = preferredLogDirs.get(topicPartition)
 
           if (isFuture) {
@@ -688,9 +688,9 @@ class LogManager(logDirs: Seq[File],
           }
 
           if (preferredLogDir != null)
-            preferredLogDir
+            List(new File(preferredLogDir))
           else
-            nextLogDir().getAbsolutePath
+            nextLogDirs()
         }
 
         val logDirName = {
@@ -700,21 +700,14 @@ class LogManager(logDirs: Seq[File],
             Log.logDirName(topicPartition)
         }
 
-        val dir = createLogDirectory(logDir, logDirName)
-          .recoverWith {
-            case e: KafkaStorageException =>
-              // If the next log directory, try the other ones before failing
-              _liveLogDirs.asScala
-                .map(_.getAbsolutePath)
-                .filter(_ != logDir)
-                .map(createLogDirectory(_, logDirName))
-                .find(_.isSuccess)
-                .getOrElse(Failure(e))
-          }
+        val logDir = logDirs
+          .map(createLogDirectory(_, logDirName))
+          .find(_.isSuccess)
+          .getOrElse(Failure(new KafkaStorageException("No log directories available")))
           .get // If Failure, will throw
 
         val log = Log(
-          dir = dir,
+          dir = logDir,
           config = config,
           logStartOffset = 0L,
           recoveryPoint = 0L,
@@ -739,20 +732,22 @@ class LogManager(logDirs: Seq[File],
     }
   }
 
-  private def createLogDirectory(logDir: String, logDirName: String): Try[File] = {
-    if (isLogDirOnline(logDir)) {
-      val dir = new File(logDir, logDirName)
+  private def createLogDirectory(logDir: File, logDirName: String): Try[File] = {
+    val logDirPath = logDir.getAbsolutePath
+    if (isLogDirOnline(logDirPath)) {
+      val dir = new File(logDirPath, logDirName)
       try {
         Files.createDirectories(dir.toPath)
         Success(dir)
       } catch {
         case e: IOException =>
-          val msg = s"Error while creating log for $logDirName in dir $logDir"
-          logDirFailureChannel.maybeAddOfflineLogDir(logDir, msg, e)
+          val msg = s"Error while creating log for $logDirName in dir $logDirPath"
+          logDirFailureChannel.maybeAddOfflineLogDir(logDirPath, msg, e)
+          warn(e.getMessage, e)
           Failure(new KafkaStorageException(msg, e))
       }
     } else {
-      Failure(new KafkaStorageException(s"Can not create log $logDirName because log directory $logDir is offline"))
+      Failure(new KafkaStorageException(s"Can not create log $logDirName because log directory $logDirPath is offline"))
     }
   }
 
@@ -887,13 +882,13 @@ class LogManager(logDirs: Seq[File],
   }
 
   /**
-   * Choose the next directory in which to create a log. Currently this is done
-   * by calculating the number of partitions in each directory and then choosing the
-   * data directory with the fewest partitions.
+   * Provides the full ordered list of suggested directories for the next partition.
+   * Currently this is done by calculating the number of partitions in each directory and then sorting the
+   * data directories by fewest partitions.
    */
-  private def nextLogDir(): File = {
+  private def nextLogDirs(): List[File] = {
     if(_liveLogDirs.size == 1) {
-      _liveLogDirs.peek()
+      List(_liveLogDirs.peek())
     } else {
       // count the number of logs in each parent directory (including 0 for empty directories
       val logCounts = allLogs.groupBy(_.dir.getParent).mapValues(_.size)
@@ -901,8 +896,9 @@ class LogManager(logDirs: Seq[File],
       val dirCounts = (zeros ++ logCounts).toBuffer
 
       // choose the directory with the least logs in it
-      val leastLoaded = dirCounts.sortBy(_._2).head
-      new File(leastLoaded._1)
+      dirCounts.sortBy(_._2).map {
+        case (path: String, _: Int) => new File(path)
+      }.toList
     }
   }
 
