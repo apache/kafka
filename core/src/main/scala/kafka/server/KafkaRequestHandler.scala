@@ -237,14 +237,17 @@ class BrokerTopicStats {
   // of a broker that stops being a leader
   def removeOldLeaderMetrics(topic: String) {
     val topicMetrics = topicStats(topic)
-    topicMetrics.removeMetricHelper(BrokerTopicStats.BytesOutPerSec, topicMetrics.tags)
-    topicMetrics.removeMetricHelper(BrokerTopicStats.ProduceMessageConversionsPerSec, topicMetrics.tags)
-    topicMetrics.removeMetricHelper(BrokerTopicStats.ReplicationBytesOutPerSec, topicMetrics.tags)
+    if (topicMetrics != null) {
+      topicMetrics.removeMetricHelper(BrokerTopicStats.BytesOutPerSec, topicMetrics.tags)
+      topicMetrics.removeMetricHelper(BrokerTopicStats.ProduceMessageConversionsPerSec, topicMetrics.tags)
+      topicMetrics.removeMetricHelper(BrokerTopicStats.ReplicationBytesOutPerSec, topicMetrics.tags)
+    }
   }
 
   def removeOldFollowerMetrics(topic: String): Unit = {
     val topicMetrics = topicStats(topic)
-    topicMetrics.removeMetricHelper(BrokerTopicStats.ReplicationBytesInPerSec, topicMetrics.tags)
+    if (topicMetrics != null)
+      topicMetrics.removeMetricHelper(BrokerTopicStats.ReplicationBytesInPerSec, topicMetrics.tags)
   }
 
   def removeMetrics(topic: String) {
