@@ -443,7 +443,7 @@ public class StandbyTaskTest {
         task.close(true, false);
 
         final File taskDir = stateDirectory.directoryForTask(taskId);
-        final OffsetCheckpoint checkpoint = new OffsetCheckpoint(new File(taskDir, ProcessorStateManager.CHECKPOINT_FILE_NAME));
+        final OffsetCheckpoint checkpoint = new OffsetCheckpoint(new File(taskDir, StateManagerUtil.CHECKPOINT_FILE_NAME));
         final Map<TopicPartition, Long> offsets = checkpoint.read();
 
         assertEquals(1, offsets.size());
@@ -637,7 +637,7 @@ public class StandbyTaskTest {
         task.commit();
 
         final Map<TopicPartition, Long> checkpoint = new OffsetCheckpoint(
-            new File(stateDirectory.directoryForTask(taskId), ProcessorStateManager.CHECKPOINT_FILE_NAME)
+            new File(stateDirectory.directoryForTask(taskId), StateManagerUtil.CHECKPOINT_FILE_NAME)
         ).read();
         assertThat(checkpoint, equalTo(Collections.singletonMap(globalTopicPartition, 51L)));
 
