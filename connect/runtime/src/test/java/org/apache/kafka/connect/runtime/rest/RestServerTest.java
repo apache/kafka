@@ -78,13 +78,8 @@ public class RestServerTest {
         workerProps.put(WorkerConfig.INTERNAL_KEY_CONVERTER_CLASS_CONFIG, "org.apache.kafka.connect.json.JsonConverter");
         workerProps.put(WorkerConfig.INTERNAL_VALUE_CONVERTER_CLASS_CONFIG, "org.apache.kafka.connect.json.JsonConverter");
         workerProps.put(DistributedConfig.OFFSET_STORAGE_TOPIC_CONFIG, "connect-offsets");
-
-        return workerProps;
-    }
-
-    private Map<String, String> workerPropsWithDynamicPort() {
-        Map<String, String> workerProps = baseWorkerProps();
         workerProps.put(WorkerConfig.LISTENERS_CONFIG, "HTTP://localhost:0");
+
         return workerProps;
     }
 
@@ -111,6 +106,7 @@ public class RestServerTest {
 
         // Build listener from hostname and port
         configMap = new HashMap<>(baseWorkerProps());
+        configMap.remove(WorkerConfig.LISTENERS_CONFIG);
         configMap.put(WorkerConfig.REST_HOST_NAME_CONFIG, "my-hostname");
         configMap.put(WorkerConfig.REST_PORT_CONFIG, "8080");
         config = new DistributedConfig(configMap);
@@ -159,6 +155,7 @@ public class RestServerTest {
 
         // listener from hostname and port
         configMap = new HashMap<>(baseWorkerProps());
+        configMap.remove(WorkerConfig.LISTENERS_CONFIG);
         configMap.put(WorkerConfig.REST_HOST_NAME_CONFIG, "my-hostname");
         configMap.put(WorkerConfig.REST_PORT_CONFIG, "8080");
         config = new DistributedConfig(configMap);
@@ -168,7 +165,7 @@ public class RestServerTest {
 
     @Test
     public void testOptionsDoesNotIncludeWadlOutput() throws IOException {
-        Map<String, String> configMap = new HashMap<>(workerPropsWithDynamicPort());
+        Map<String, String> configMap = new HashMap<>(baseWorkerProps());
         DistributedConfig workerConfig = new DistributedConfig(configMap);
 
         EasyMock.expect(herder.kafkaClusterId()).andReturn(KAFKA_CLUSTER_ID);
@@ -203,7 +200,7 @@ public class RestServerTest {
 
     public void checkCORSRequest(String corsDomain, String origin, String expectedHeader, String method)
         throws IOException {
-        Map<String, String> workerProps = workerPropsWithDynamicPort();
+        Map<String, String> workerProps = baseWorkerProps();
         workerProps.put(WorkerConfig.ACCESS_CONTROL_ALLOW_ORIGIN_CONFIG, corsDomain);
         workerProps.put(WorkerConfig.ACCESS_CONTROL_ALLOW_METHODS_CONFIG, method);
         WorkerConfig workerConfig = new DistributedConfig(workerProps);
@@ -258,7 +255,7 @@ public class RestServerTest {
 
     @Test
     public void testStandaloneConfig() throws IOException  {
-        Map<String, String> workerProps = workerPropsWithDynamicPort();
+        Map<String, String> workerProps = baseWorkerProps();
         workerProps.put("offset.storage.file.filename", "/tmp");
         WorkerConfig workerConfig = new StandaloneConfig(workerProps);
 
