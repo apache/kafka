@@ -555,6 +555,7 @@ class GroupCoordinator(val brokerId: Int,
                              producerId: Long,
                              producerEpoch: Short,
                              offsetMetadata: immutable.Map[TopicPartition, OffsetAndMetadata],
+                             generation: Int,
                              responseCallback: immutable.Map[TopicPartition, Errors] => Unit): Unit = {
     validateGroupStatus(groupId, ApiKeys.TXN_OFFSET_COMMIT) match {
       case Some(error) => responseCallback(offsetMetadata.map { case (k, _) => k -> error })
@@ -562,7 +563,7 @@ class GroupCoordinator(val brokerId: Int,
         val group = groupManager.getGroup(groupId).getOrElse {
           groupManager.addGroup(new GroupMetadata(groupId, Empty, time))
         }
-        doCommitOffsets(group, NoMemberId, None, NoGeneration, producerId, producerEpoch, offsetMetadata, responseCallback)
+        doCommitOffsets(group, NoMemberId, None, generation, producerId, producerEpoch, offsetMetadata, responseCallback)
     }
   }
 
@@ -619,7 +620,7 @@ class GroupCoordinator(val brokerId: Int,
         responseCallback(offsetMetadata.map { case (k, _) => k -> Errors.COORDINATOR_NOT_AVAILABLE })
       } else if (group.isStaticMemberFenced(memberId, groupInstanceId)) {
         responseCallback(offsetMetadata.map { case (k, _) => k -> Errors.FENCED_INSTANCE_ID })
-      } else if ((generationId < 0 && group.is(Empty)) || (producerId != NO_PRODUCER_ID)) {
+      } else if ((generationId < 0 && group.is(Empty))) {
         // The group is only using Kafka to store offsets.
         // Also, for transactional offset commits we don't need to validate group membership and the generation.
         groupManager.storeOffsets(group, memberId, offsetMetadata, responseCallback, producerId, producerEpoch)

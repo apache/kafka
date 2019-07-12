@@ -54,7 +54,7 @@
           "about": "Any associated metadata the client wants to keep." }
       ]}
     ]},
-    { "name": "GenerationId", "type": "string", "versions": "3+",
+    { "name": "GenerationId", "type": "int32", "versions": "3+",
       "about": "The generation of the transactional producer."}
   ]
 }

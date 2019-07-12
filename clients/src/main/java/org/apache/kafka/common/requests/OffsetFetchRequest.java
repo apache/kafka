@@ -40,7 +40,7 @@ public class OffsetFetchRequest extends AbstractRequest {
 
         public final OffsetFetchRequestData data;
 
-        public Builder(String groupId, List<TopicPartition> partitions) {
+        public Builder(String groupId, List<TopicPartition> partitions, IsolationLevel isolationLevel) {
             super(ApiKeys.OFFSET_FETCH);
 
             Map<String, OffsetFetchRequestTopic> offsetFetchRequestTopicMap = new HashMap<>();
@@ -54,11 +54,12 @@ public class OffsetFetchRequest extends AbstractRequest {
 
             this.data = new OffsetFetchRequestData()
                             .setGroupId(groupId)
-                            .setTopics(new ArrayList<>(offsetFetchRequestTopicMap.values()));
+                            .setTopics(new ArrayList<>(offsetFetchRequestTopicMap.values()))
+                            .setIsolationLevel(isolationLevel.id());
         }
 
-        public static Builder allTopicPartitions(String groupId) {
-            return new Builder(groupId, Collections.emptyList());
+        public static Builder allTopicPartitions(String groupId, IsolationLevel isolationLevel) {
+            return new Builder(groupId, Collections.emptyList(), isolationLevel);
         }
 
         public boolean isAllTopicPartitions() {

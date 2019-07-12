@@ -47,6 +47,7 @@ import org.apache.kafka.common.metrics.stats.Avg;
 import org.apache.kafka.common.metrics.stats.Max;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.RecordBatch;
+import org.apache.kafka.common.requests.IsolationLevel;
 import org.apache.kafka.common.requests.OffsetCommitRequest;
 import org.apache.kafka.common.requests.OffsetCommitResponse;
 import org.apache.kafka.common.requests.OffsetFetchRequest;
@@ -85,6 +86,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     private final OffsetCommitCallback defaultOffsetCommitCallback;
     private final boolean autoCommitEnabled;
     private final int autoCommitIntervalMs;
+    private final IsolationLevel isolationLevel;
     private final ConsumerInterceptors<?, ?> interceptors;
     private final AtomicInteger pendingAsyncCommits;
 
@@ -136,6 +138,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                                Time time,
                                boolean autoCommitEnabled,
                                int autoCommitIntervalMs,
+                               IsolationLevel isolationLevel,
                                ConsumerInterceptors<?, ?> interceptors) {
         super(rebalanceConfig,
               logContext,
@@ -154,6 +157,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         this.assignors = assignors;
         this.completedOffsetCommits = new ConcurrentLinkedQueue<>();
         this.sensors = new ConsumerCoordinatorMetrics(metrics, metricGrpPrefix);
+        this.isolationLevel = isolationLevel;
         this.interceptors = interceptors;
         this.pendingAsyncCommits = new AtomicInteger();
         this.asyncCommitFenced = new AtomicBoolean(false);
@@ -1068,7 +1072,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         log.debug("Fetching committed offsets for partitions: {}", partitions);
         // construct the request
         OffsetFetchRequest.Builder requestBuilder = new OffsetFetchRequest.Builder(this.rebalanceConfig.groupId,
-                new ArrayList<>(partitions));
+                new ArrayList<>(partitions), this.isolationLevel);
 
         // send the request with a callback
         return client.send(coordinator, requestBuilder)

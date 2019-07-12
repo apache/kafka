@@ -1006,6 +1006,7 @@ public class TransactionManager {
                 .setProducerId(producerIdAndEpoch.producerId)
                 .setProducerEpoch(producerIdAndEpoch.epoch)
                 .setTopics(TxnOffsetCommitRequest.getTopics(pendingTxnOffsetCommits))
+                .setGenerationId(consumer.generation())
         );
         return new TxnOffsetCommitHandler(result, builder);
     }
@@ -1211,6 +1212,9 @@ public class TransactionManager {
                     reenqueue();
                     return;
                 } else if (error == Errors.INVALID_PRODUCER_EPOCH) {
+                    fatalError(error.exception());
+                    return;
+                } else if (error == Errors.ILLEGAL_GENERATION) {
                     fatalError(error.exception());
                     return;
                 } else if (error == Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED) {
