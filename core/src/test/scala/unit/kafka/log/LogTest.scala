@@ -124,7 +124,7 @@ class LogTest {
     log.appendAsLeader(TestUtils.records(List(
       new SimpleRecord("0".getBytes),
       new SimpleRecord("1".getBytes),
-      new SimpleRecord("2".getBytes),
+      new SimpleRecord("2".getBytes)
     )), leaderEpoch = 0)
     log.appendAsLeader(TestUtils.records(List(
       new SimpleRecord("3".getBytes),
