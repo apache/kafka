@@ -179,20 +179,20 @@ class BrokerTopicMetrics(name: Option[String]) extends KafkaMetricsGroup {
   }
 
   def close() {
-    removeMetricHelper(BrokerTopicStats.MessagesInPerSec, tags)
-    removeMetricHelper(BrokerTopicStats.BytesInPerSec, tags)
+    removeMetric(BrokerTopicStats.MessagesInPerSec, tags)
+    removeMetric(BrokerTopicStats.BytesInPerSec, tags)
     removeMetricHelper(BrokerTopicStats.BytesOutPerSec, tags)
     removeMetric(BrokerTopicStats.BytesRejectedPerSec, tags)
     if (replicationBytesInRate.isDefined)
-      removeMetric(BrokerTopicStats.ReplicationBytesInPerSec, tags)
+      removeMetricHelper(BrokerTopicStats.ReplicationBytesInPerSec, tags)
     if (replicationBytesOutRate.isDefined)
-      removeMetric(BrokerTopicStats.ReplicationBytesOutPerSec, tags)
+      removeMetricHelper(BrokerTopicStats.ReplicationBytesOutPerSec, tags)
     removeMetric(BrokerTopicStats.FailedProduceRequestsPerSec, tags)
     removeMetric(BrokerTopicStats.FailedFetchRequestsPerSec, tags)
     removeMetric(BrokerTopicStats.TotalProduceRequestsPerSec, tags)
     removeMetric(BrokerTopicStats.TotalFetchRequestsPerSec, tags)
     removeMetric(BrokerTopicStats.FetchMessageConversionsPerSec, tags)
-    removeMetric(BrokerTopicStats.ProduceMessageConversionsPerSec, tags)
+    removeMetricHelper(BrokerTopicStats.ProduceMessageConversionsPerSec, tags)
   }
 }
 
