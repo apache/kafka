@@ -744,7 +744,7 @@ class LogManager(logDirs: Seq[File],
         case e: IOException =>
           val msg = s"Error while creating log for $logDirName in dir $logDirPath"
           logDirFailureChannel.maybeAddOfflineLogDir(logDirPath, msg, e)
-          warn(e.getMessage, e)
+          warn(msg, e)
           Failure(new KafkaStorageException(msg, e))
       }
     } else {
