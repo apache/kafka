@@ -59,7 +59,7 @@ import org.apache.kafka.common.message.HeartbeatResponseData;
 import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData.AlterConfigsResource;
 import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData.AlterableConfig;
 import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData;
-import org.apache.kafka.common.message.IncrementalAlterConfigsResponseData.AlterConfigsResourceResult;
+import org.apache.kafka.common.message.IncrementalAlterConfigsResponseData.AlterConfigsResourceResponse;
 import org.apache.kafka.common.message.IncrementalAlterConfigsResponseData;
 import org.apache.kafka.common.message.InitProducerIdRequestData;
 import org.apache.kafka.common.message.InitProducerIdResponseData;
@@ -1604,7 +1604,7 @@ public class RequestResponseTest {
     private IncrementalAlterConfigsResponse createIncrementalAlterConfigsResponse() {
         IncrementalAlterConfigsResponseData data = new IncrementalAlterConfigsResponseData();
 
-        data.responses().add(new AlterConfigsResourceResult()
+        data.responses().add(new AlterConfigsResourceResponse()
                 .setResourceName("testtopic")
                 .setResourceType(ResourceType.TOPIC.code())
                 .setErrorCode(Errors.INVALID_REQUEST.code())
