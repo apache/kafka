@@ -17,18 +17,21 @@
 
 package kafka.log
 
-import java.io._
-import java.nio.file.Files
+import java.io.File
 import java.util.{Collections, Properties}
 
 import kafka.server.FetchDataInfo
 import kafka.server.checkpoints.OffsetCheckpointFile
+import kafka.utils.TestUtils.{CreateLogDirectoryFn, CreateLogDirectoryOverride}
 import kafka.utils._
 import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.apache.kafka.common.errors.OffsetOutOfRangeException
 import org.apache.kafka.common.utils.Utils
 import org.junit.Assert._
 import org.junit.{After, Before, Test}
+
+import scala.collection.mutable
+import scala.util.{Failure, Try}
 
 class LogManagerTest {
 
@@ -98,29 +101,40 @@ class LogManagerTest {
 
   @Test
   def testCreateLogWithLogDirFallback() {
-
-    // Configure a number of directories that will fail, and one that won't
-    // making it unlikely that the good log directory will be first choice.
-    val dirs = (0 to 100)
+    // Configure a number of directories one level deeper in logDir,
+    // so they all get cleaned up in tearDown().
+    val dirs = (0 to 4)
       .map(_.toString)
       .map(logDir.toPath.resolve(_).toFile)
-    val goodDir = dirs(88)
 
+    // Create a new LogManager with the configured directories and an overridden createLogDirectory.
+    // The first half of directories tried will fail, the rest goes through to super.createLogDirectory.
+    val brokenDirs = mutable.Set[File]()
+    def createLogDirectoryOverride(original: CreateLogDirectoryFn)(logDir: File, logDirName: String): Try[File] = {
+      if (brokenDirs.contains(logDir) || brokenDirs.size < dirs.length/2) {
+        brokenDirs.add(logDir)
+        Failure(new Throwable("broken dir"))
+      } else {
+        original.apply(logDir, logDirName)
+      }
+    }
     logManager.shutdown()
-    logManager = createLogManager(dirs)
+    logManager = createLogManager(dirs, createLogDirectoryOverride = createLogDirectoryOverride)
     logManager.startup()
 
-    // To simulate disk failure, delete log directories and replace them with files
-    // so that Files.createDirectories will fail.
-    dirs.filter(_ != goodDir).foreach { dir =>
-      Utils.delete(dir)
-      Files.createFile(dir.toPath)
-    }
+    // Request creating a new log.
+    // LogManager should try using all configured log directories until one succeeds.
+    logManager.getOrCreateLog(new TopicPartition(name, 0), logConfig, isNew = true)
 
-    val log = logManager.getOrCreateLog(new TopicPartition(name, 0), logConfig, isNew = true)
-    val logFile = new File(goodDir, name + "-0")
-    assertTrue(logFile.exists)
-    log.appendAsLeader(TestUtils.singletonRecords("test".getBytes()), leaderEpoch = 0)
+    // Verify that half the directories were considered broken,
+    assertEquals(dirs.length / 2, brokenDirs.size)
+
+    // and that exactly one log file was created,
+    val containsLogFile: File => Boolean = dir => new File(dir, name + "-0").exists()
+    assertEquals("More than one log file created", 1, dirs.count(containsLogFile))
+
+    // and that it wasn't created in one of the broken directories.
+    assertFalse(brokenDirs.exists(containsLogFile))
   }
 
   /**
@@ -365,11 +379,15 @@ class LogManagerTest {
     }
   }
 
-  private def createLogManager(logDirs: Seq[File] = Seq(this.logDir)): LogManager = {
+  private def createLogManager(logDirs: Seq[File] = Seq(this.logDir),
+                               createLogDirectoryOverride: CreateLogDirectoryOverride = original => original
+                              ): LogManager = {
     TestUtils.createLogManager(
       defaultConfig = logConfig,
       logDirs = logDirs,
-      time = this.time)
+      time = this.time,
+      createLogDirectoryOverride = createLogDirectoryOverride
+    )
   }
 
   @Test

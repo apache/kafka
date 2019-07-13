@@ -733,7 +733,7 @@ class LogManager(logDirs: Seq[File],
     }
   }
 
-  private def createLogDirectory(logDir: File, logDirName: String): Try[File] = {
+  protected def createLogDirectory(logDir: File, logDirName: String): Try[File] = {
     val logDirPath = logDir.getAbsolutePath
     if (isLogDirOnline(logDirPath)) {
       val dir = new File(logDirPath, logDirName)

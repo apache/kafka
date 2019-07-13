@@ -17,7 +17,7 @@
 
 package kafka.utils
 
-import java.io._
+import java.io.{File, _}
 import java.nio._
 import java.nio.channels._
 import java.nio.charset.{Charset, StandardCharsets}
@@ -64,6 +64,7 @@ import org.scalatest.Assertions.fail
 import scala.collection.JavaConverters._
 import scala.collection.{Map, mutable}
 import scala.collection.mutable.{ArrayBuffer, ListBuffer}
+import scala.util.Try
 
 /**
  * Utility functions to help with testing
@@ -1012,13 +1013,18 @@ object TestUtils extends Logging {
     }.mkString("\n")
   }
 
+  type CreateLogDirectoryFn = (File,String) => Try[File]
+  type CreateLogDirectoryOverride = CreateLogDirectoryFn => CreateLogDirectoryFn
+
   /**
    * Create new LogManager instance with default configuration for testing
    */
   def createLogManager(logDirs: Seq[File] = Seq.empty[File],
                        defaultConfig: LogConfig = LogConfig(),
                        cleanerConfig: CleanerConfig = CleanerConfig(enableCleaner = false),
-                       time: MockTime = new MockTime()): LogManager = {
+                       time: MockTime = new MockTime(),
+                       createLogDirectoryOverride: CreateLogDirectoryOverride = original => original
+                      ): LogManager = {
     new LogManager(logDirs = logDirs.map(_.getAbsoluteFile),
                    initialOfflineDirs = Array.empty[File],
                    topicConfigs = Map(),
@@ -1034,7 +1040,12 @@ object TestUtils extends Logging {
                    time = time,
                    brokerState = BrokerState(),
                    brokerTopicStats = new BrokerTopicStats,
-                   logDirFailureChannel = new LogDirFailureChannel(logDirs.size))
+                   logDirFailureChannel = new LogDirFailureChannel(logDirs.size)) {
+      override def createLogDirectory(logDir: File, logDirName: String): Try[File] =
+        createLogDirectoryOverride
+          .apply(super.createLogDirectory)
+          .apply(logDir, logDirName)
+    }
   }
 
   def produceMessages(servers: Seq[KafkaServer],
