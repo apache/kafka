@@ -19,7 +19,6 @@ package kafka.api
 
 import com.yammer.metrics.Metrics
 import com.yammer.metrics.core.Gauge
-
 import java.io.File
 import java.util.concurrent.ExecutionException
 
@@ -31,12 +30,12 @@ import org.apache.kafka.clients.consumer.{Consumer, ConsumerConfig}
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.{KafkaException, TopicPartition}
-import org.apache.kafka.common.errors.{GroupAuthorizationException, TopicAuthorizationException}
+import org.apache.kafka.common.errors.{AuthorizationException, GroupAuthorizationException, TopicAuthorizationException}
 import org.apache.kafka.common.resource.PatternType
 import org.apache.kafka.common.resource.PatternType.{LITERAL, PREFIXED}
 import org.junit.Assert._
 import org.junit.{After, Before, Test}
-import org.scalatest.Assertions.fail
+import org.scalatest.Assertions.{assertThrows, fail}
 
 import scala.collection.JavaConverters._
 
@@ -289,7 +288,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     }
   }
 
-  protected def setAclsAndProduce(tp: TopicPartition) {
+  protected def setAcls(tp: TopicPartition) {
     AclCommand.main(produceAclArgs(tp.topic))
     AclCommand.main(consumeAclArgs(tp.topic))
     servers.foreach { s =>
@@ -297,19 +296,38 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
         new Resource(Topic, tp.topic, PatternType.LITERAL))
       TestUtils.waitAndVerifyAcls(GroupReadAcl, s.dataPlaneRequestProcessor.authorizer.get, groupResource)
     }
+  }
+
+  protected def setAclsAndProduce(tp: TopicPartition) {
+    setAcls(tp)
     val producer = createProducer()
     sendRecords(producer, numRecords, tp)
   }
 
   /**
     * Tests that a producer fails to publish messages when the appropriate ACL
-    * isn't set.
+    * isn't set. Also verifies that subsequent send to authorized topic succeeds.
     */
-  @Test(expected = classOf[TopicAuthorizationException])
+  @Test
   def testNoProduceWithoutDescribeAcl(): Unit = {
     val producer = createProducer()
+    assertThrows[TopicAuthorizationException] { sendRecords(producer, numRecords, tp) }
+    val consumer = createConsumer()
+    consumer.assign(List(tp).asJava)
+    assertThrows[TopicAuthorizationException] { consumeRecords(consumer, numRecords, topic = tp.topic) }
+
+    // Verify successful produce-consume on another topic using the same producer and consumer
+    val tp2 = new TopicPartition("topic2", 0)
+    setAcls(tp2)
+    sendRecords(producer, numRecords, tp2)
+    consumer.assign(List(tp2).asJava)
+    consumeRecords(consumer, numRecords, topic = tp2.topic)
+
+    // Add ACLs and verify successful produce-consume on first topic
+    setAcls(tp)
     sendRecords(producer, numRecords, tp)
-    confirmReauthenticationMetrics
+    consumer.assign(List(tp).asJava)
+    consumeRecords(consumer, numRecords, topic = tp.topic)
   }
 
   @Test

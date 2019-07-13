@@ -182,8 +182,12 @@ public class SubscriptionState {
             return false;
 
         subscription = topicsToSubscribe;
-        groupSubscription = new HashSet<>(groupSubscription);
-        groupSubscription.addAll(topicsToSubscribe);
+        if (subscriptionType != SubscriptionType.USER_ASSIGNED) {
+            groupSubscription = new HashSet<>(groupSubscription);
+            groupSubscription.addAll(topicsToSubscribe);
+        } else {
+            groupSubscription = new HashSet<>(topicsToSubscribe);
+        }
         return true;
     }
 
