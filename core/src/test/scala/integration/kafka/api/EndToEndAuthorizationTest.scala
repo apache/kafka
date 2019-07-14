@@ -321,7 +321,13 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     setAcls(tp2)
     sendRecords(producer, numRecords, tp2)
     consumer.assign(List(tp2).asJava)
-    consumeRecords(consumer, numRecords, topic = tp2.topic)
+    // We may see a GroupAuthorizationException from a FindCoordinator request sent earlier.
+    // Retry consume in that case.
+    try {
+      consumeRecords(consumer, numRecords, topic = tp2.topic)
+    } catch {
+      case e: GroupAuthorizationException => consumeRecords(consumer, numRecords, topic = tp2.topic)
+    }
 
     // Add ACLs and verify successful produce-consume on first topic
     setAcls(tp)
