@@ -20,9 +20,9 @@ package org.apache.kafka.clients.admin;
 import org.apache.kafka.common.annotation.InterfaceStability;
 
 /**
- * Options for {@link AdminClient#electLeaders(ElectionType, Set, ElectLeadersOptions)}.
+ * Options for {@link Admin#electLeaders(ElectionType, Set, ElectLeadersOptions)}.
  *
- * The API of this class is evolving, see {@link AdminClient} for details.
+ * The API of this class is evolving, see {@link Admin} for details.
  */
 @InterfaceStability.Evolving
 final public class ElectLeadersOptions extends AbstractOptions<ElectLeadersOptions> {

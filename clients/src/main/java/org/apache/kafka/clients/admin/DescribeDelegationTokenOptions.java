@@ -23,9 +23,9 @@ import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 
 /**
- * Options for {@link AdminClient#describeDelegationToken(DescribeDelegationTokenOptions)}.
+ * Options for {@link Admin#describeDelegationToken(DescribeDelegationTokenOptions)}.
  *
- * The API of this class is evolving, see {@link AdminClient} for details.
+ * The API of this class is evolving, see {@link Admin} for details.
  */
 @InterfaceStability.Evolving
 public class DescribeDelegationTokenOptions extends AbstractOptions<DescribeDelegationTokenOptions> {

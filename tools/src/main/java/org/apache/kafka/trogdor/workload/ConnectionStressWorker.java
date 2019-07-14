@@ -26,7 +26,7 @@ import org.apache.kafka.clients.ClientUtils;
 import org.apache.kafka.clients.ManualMetadataUpdater;
 import org.apache.kafka.clients.NetworkClient;
 import org.apache.kafka.clients.NetworkClientUtils;
-import org.apache.kafka.clients.admin.AdminClient;
+import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.Cluster;
@@ -207,7 +207,7 @@ public class ConnectionStressWorker implements TaskWorker {
 
         @Override
         public boolean tryConnect() {
-            try (AdminClient client = AdminClient.create(this.props)) {
+            try (Admin client = Admin.create(this.props)) {
                 client.describeCluster().nodes().get();
             } catch (RuntimeException e) {
                 return false;

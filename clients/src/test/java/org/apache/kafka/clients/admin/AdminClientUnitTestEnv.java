@@ -34,7 +34,7 @@ import java.util.Map;
  * easily create a simple cluster.
  * <p>
  * To use in a test, create an instance and prepare its {@link #kafkaClient() MockClient} with the expected responses
- * for the {@link AdminClient}. Then, use the {@link #adminClient() AdminClient} in the test, which will then use the MockClient
+ * for the {@link Admin}. Then, use the {@link #adminClient() AdminClient} in the test, which will then use the MockClient
  * and receive the responses you provided.
  *
  * Since {@link #kafkaClient() MockClient} is not thread-safe,
@@ -103,7 +103,7 @@ public class AdminClientUnitTestEnv implements AutoCloseable {
         return cluster;
     }
 
-    public AdminClient adminClient() {
+    public Admin adminClient() {
         return adminClient;
     }
 

@@ -920,7 +920,7 @@
         <p>Typical steps for delegation token usage are:</p>
         <ol>
         <li>User authenticates with the Kafka cluster via SASL or SSL, and obtains a delegation token. This can be done
-            using AdminClient APIs or using <tt>kafka-delegation-tokens.sh</tt> script.</li>
+            using Admin APIs or using <tt>kafka-delegation-tokens.sh</tt> script.</li>
         <li>User securely passes the delegation token to Kafka clients for authenticating with the Kafka cluster.</li>
         <li>Token owner/renewer can renew/expire the delegation tokens.</li>
         </ol>
@@ -944,7 +944,7 @@
         </li>
 
         <li><h5><a id="security_sasl_create_tokens" href="#security_sasl_create_tokens">Creating Delegation Tokens</a></h5>
-        <p>Tokens can be created by using AdminClient APIs or using <tt>kafka-delegation-tokens.sh</tt> script.
+        <p>Tokens can be created by using Admin APIs or using <tt>kafka-delegation-tokens.sh</tt> script.
             Delegation token requests (create/renew/expire/describe) should be issued only on SASL or SSL authenticated channels.
             Tokens can not be requests if the initial authentication is done through delegation token.
             <tt>kafka-delegation-tokens.sh</tt> script examples are given below.</p>
@@ -1281,8 +1281,8 @@
                 Note that for consumer option we must also specify the consumer group.
                 In order to remove a principal from producer or consumer role we just need to pass --remove option. </li>
 
-        <li><b>AdminClient API based acl management</b><br>
-            Users having Alter permission on ClusterResource can use AdminClient API for ACL management. kafka-acls.sh script supports AdminClient API to manage ACLs without interacting with zookeeper/authorizer directly.
+        <li><b>Admin API based acl management</b><br>
+            Users having Alter permission on ClusterResource can use Admin API for ACL management. kafka-acls.sh script supports AdminClient API to manage ACLs without interacting with zookeeper/authorizer directly.
             All the above examples can be executed by using <b>--bootstrap-server</b> option. For example:
 
             <pre class="brush: bash;">

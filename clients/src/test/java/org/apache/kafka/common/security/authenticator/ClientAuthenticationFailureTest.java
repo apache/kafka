@@ -17,7 +17,7 @@
 package org.apache.kafka.common.security.authenticator;
 
 import org.apache.kafka.clients.CommonClientConfigs;
-import org.apache.kafka.clients.admin.AdminClient;
+import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.DescribeTopicsResult;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
@@ -118,7 +118,7 @@ public class ClientAuthenticationFailureTest {
     public void testAdminClientWithInvalidCredentials() {
         Map<String, Object> props = new HashMap<>(saslClientConfigs);
         props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:" + server.port());
-        try (AdminClient client = AdminClient.create(props)) {
+        try (Admin client = Admin.create(props)) {
             DescribeTopicsResult result = client.describeTopics(Collections.singleton("test"));
             result.all().get();
             fail("Expected an authentication error!");

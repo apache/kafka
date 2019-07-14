@@ -29,11 +29,11 @@ import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 
 /**
- * The result of {@link AdminClient#electPreferredLeaders(Collection, ElectPreferredLeadersOptions)}
+ * The result of {@link Admin#electPreferredLeaders(Collection, ElectPreferredLeadersOptions)}
  *
- * The API of this class is evolving, see {@link AdminClient} for details.
+ * The API of this class is evolving, see {@link Admin} for details.
  *
- * @deprecated Since 2.4.0. Use {@link AdminClient#electLeaders(ElectionType, Set, ElectLeadersOptions)}.
+ * @deprecated Since 2.4.0. Use {@link Admin#electLeaders(ElectionType, Set, ElectLeadersOptions)}.
  */
 @InterfaceStability.Evolving
 @Deprecated
@@ -82,7 +82,7 @@ public class ElectPreferredLeadersResult {
      * an election was attempted even if the election was not successful.</p>
      *
      * <p>This method is provided to discover the partitions attempted when
-     * {@link AdminClient#electPreferredLeaders(Collection)} is called
+     * {@link Admin#electPreferredLeaders(Collection)} is called
      * with a null {@code partitions} argument.</p>
      */
     public KafkaFuture<Set<TopicPartition>> partitions() {

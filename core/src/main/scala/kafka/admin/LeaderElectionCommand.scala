@@ -25,8 +25,7 @@ import kafka.utils.CommandLineUtils
 import kafka.utils.CoreUtils
 import kafka.utils.Json
 import kafka.utils.Logging
-import org.apache.kafka.clients.admin.AdminClientConfig
-import org.apache.kafka.clients.admin.{AdminClient => JAdminClient}
+import org.apache.kafka.clients.admin.{Admin, AdminClientConfig}
 import org.apache.kafka.common.ElectionType
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.ClusterAuthorizationException
@@ -82,7 +81,7 @@ object LeaderElectionCommand extends Logging {
       )
       props.setProperty(AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG, timeout.toMillis.toString)
 
-      JAdminClient.create(props)
+      Admin.create(props)
     }
 
     try {
@@ -117,7 +116,7 @@ object LeaderElectionCommand extends Logging {
   }
 
   private[this] def electLeaders(
-    client: JAdminClient,
+    client: Admin,
     electionType: ElectionType,
     topicPartitions: Option[Set[TopicPartition]]
   ): Unit = {

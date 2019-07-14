@@ -22,7 +22,7 @@ import joptsimple.OptionSet;
 import joptsimple.OptionSpec;
 import joptsimple.OptionSpecBuilder;
 import kafka.utils.CommandLineUtils;
-import org.apache.kafka.clients.admin.AdminClient;
+import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.DeleteTopicsResult;
 import org.apache.kafka.clients.admin.DescribeConsumerGroupsOptions;
 import org.apache.kafka.clients.admin.DescribeConsumerGroupsResult;
@@ -150,7 +150,7 @@ public class StreamsResetter {
             }
             properties.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, options.valueOf(bootstrapServerOption));
 
-            kafkaAdminClient = (KafkaAdminClient) AdminClient.create(properties);
+            kafkaAdminClient = (KafkaAdminClient) Admin.create(properties);
             validateNoActiveConsumers(groupId, kafkaAdminClient);
 
             allTopics.clear();
@@ -179,7 +179,7 @@ public class StreamsResetter {
     }
 
     private void validateNoActiveConsumers(final String groupId,
-                                           final AdminClient adminClient)
+                                           final Admin adminClient)
         throws ExecutionException, InterruptedException {
 
         final DescribeConsumerGroupsResult describeResult = adminClient.describeConsumerGroups(Collections.singleton(groupId),
@@ -647,7 +647,7 @@ public class StreamsResetter {
 
     // visible for testing
     public void doDelete(final List<String> topicsToDelete,
-                          final AdminClient adminClient) {
+                          final Admin adminClient) {
         boolean hasDeleteErrors = false;
         final DeleteTopicsResult deleteTopicsResult = adminClient.deleteTopics(topicsToDelete);
         final Map<String, KafkaFuture<Void>> results = deleteTopicsResult.values();

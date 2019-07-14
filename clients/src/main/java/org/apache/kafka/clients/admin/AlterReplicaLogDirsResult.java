@@ -23,7 +23,7 @@ import java.util.Map;
 
 
 /**
- * The result of {@link AdminClient#alterReplicaLogDirs(Map, AlterReplicaLogDirsOptions)}.
+ * The result of {@link Admin#alterReplicaLogDirs(Map, AlterReplicaLogDirsOptions)}.
  */
 @InterfaceStability.Evolving
 public class AlterReplicaLogDirsResult {
