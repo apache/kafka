@@ -35,7 +35,7 @@ public abstract class AdminClient implements Admin {
      * @param props The configuration.
      * @return The new KafkaAdminClient.
      */
-    public static Admin create(Properties props) {
+    public static AdminClient create(Properties props) {
         return KafkaAdminClient.createInternal(new AdminClientConfig(props, true), null);
     }
 
@@ -45,7 +45,7 @@ public abstract class AdminClient implements Admin {
      * @param conf The configuration.
      * @return The new KafkaAdminClient.
      */
-    public static Admin create(Map<String, Object> conf) {
+    public static AdminClient create(Map<String, Object> conf) {
         return KafkaAdminClient.createInternal(new AdminClientConfig(conf, true), null);
     }
 }
