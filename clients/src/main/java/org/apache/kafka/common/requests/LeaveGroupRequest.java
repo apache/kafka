@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.LeaveGroupRequestData;
 import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity;
 import org.apache.kafka.common.message.LeaveGroupResponseData;
@@ -25,6 +26,7 @@ import org.apache.kafka.common.protocol.MessageUtil;
 import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
+import java.util.Collections;
 import java.util.List;
 
 public class LeaveGroupRequest extends AbstractRequest {
@@ -37,6 +39,9 @@ public class LeaveGroupRequest extends AbstractRequest {
             super(ApiKeys.LEAVE_GROUP);
             this.groupId = groupId;
             this.members = members;
+            if (members.isEmpty()) {
+                throw new IllegalArgumentException("leaving members should not be empty");
+            }
         }
 
         /**
@@ -51,6 +56,11 @@ public class LeaveGroupRequest extends AbstractRequest {
                            .setGroupId(groupId)
                            .setMembers(members);
             } else {
+                if (members.size() != 1) {
+                    throw new UnsupportedVersionException("Version " + version + " leave group request only " +
+                                                              "supports single member instance than " + members.size() + " members");
+                }
+
                 data = new LeaveGroupRequestData()
                            .setGroupId(groupId)
                            .setMemberId(members.get(0).memberId());
@@ -83,6 +93,13 @@ public class LeaveGroupRequest extends AbstractRequest {
 
     public LeaveGroupRequestData data() {
         return data;
+    }
+
+    public List<MemberIdentity> members() {
+        // Before version 3, leave group request is still in single mode
+        return version <= 2 ? Collections.singletonList(
+            new MemberIdentity()
+                .setMemberId(data.memberId())) : data.members();
     }
 
     @Override

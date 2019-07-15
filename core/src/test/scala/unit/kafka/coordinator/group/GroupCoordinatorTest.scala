@@ -55,7 +55,7 @@ class GroupCoordinatorTest {
   type HeartbeatCallback = Errors => Unit
   type CommitOffsetCallbackParams = Map[TopicPartition, Errors]
   type CommitOffsetCallback = Map[TopicPartition, Errors] => Unit
-  type LeaveGroupCallback = List[LeaveGroupResult] => Unit
+  type LeaveGroupCallback = LeaveGroupResult => Unit
 
   val ClientId = "consumer-test"
   val ClientHost = "localhost"
@@ -936,6 +936,24 @@ class GroupCoordinatorTest {
   }
 
   @Test
+  def staticMemberLeaveWithIllegalStateAsPendingMember() {
+    val rebalanceResult = staticMembersJoinAndRebalance(leaderInstanceId, followerInstanceId)
+    val group = groupCoordinator.groupManager.getGroup(groupId).get
+    group.addPendingMember(rebalanceResult.followerId)
+    group.remove(rebalanceResult.followerId)
+    EasyMock.reset(replicaManager)
+
+    // Illegal state exception shall trigger since follower id resides in pending member bucket.
+    val expectedException = intercept[IllegalStateException] {
+      leaveGroup(groupId, rebalanceResult.followerId, followerInstanceId)
+    }
+
+    val message = expectedException.getMessage
+    assertTrue(message.contains(rebalanceResult.followerId))
+    assertTrue(message.contains(followerInstanceId.get))
+  }
+
+  @Test
   def staticMemberReJoinWithIllegalStateAsUnknownMember() {
     staticMembersJoinAndRebalance(leaderInstanceId, followerInstanceId)
     val group = groupCoordinator.groupManager.getGroup(groupId).get
@@ -1022,7 +1040,7 @@ class GroupCoordinatorTest {
     // Send a special leave group request from static follower, moving group towards PreparingRebalance
     EasyMock.reset(replicaManager)
     val followerLeaveGroupResults = leaveGroup(groupId, rebalanceResult.followerId)
-    verifyLeaveGroupResult(List(Errors.NONE), followerLeaveGroupResults)
+    verifyLeaveGroupResult(followerLeaveGroupResults)
     assertGroupState(groupState = PreparingRebalance)
 
     timer.advanceClock(DefaultRebalanceTimeout + 1)
@@ -1777,7 +1795,7 @@ class GroupCoordinatorTest {
 
     EasyMock.reset(replicaManager)
     val leaveGroupResults = leaveGroup(groupId, pending.memberId)
-    verifyLeaveGroupResult(List(Errors.NONE), leaveGroupResults)
+    verifyLeaveGroupResult(leaveGroupResults)
 
     assertGroupState(groupState = CompletingRebalance)
     assertEquals(2, group().allMembers.size)
@@ -1990,7 +2008,7 @@ class GroupCoordinatorTest {
     // and leaves.
     EasyMock.reset(replicaManager)
     val leaveGroupResults = leaveGroup(groupId, assignedMemberId)
-    verifyLeaveGroupResult(List(Errors.NONE), leaveGroupResults)
+    verifyLeaveGroupResult(leaveGroupResults)
 
     // The simple offset commit should now fail
     EasyMock.reset(replicaManager)
@@ -2422,13 +2440,13 @@ class GroupCoordinatorTest {
     val memberId = JoinGroupRequest.UNKNOWN_MEMBER_ID
 
     val leaveGroupResults = leaveGroup(otherGroupId, memberId)
-    verifyLeaveGroupResult(List(Errors.NOT_COORDINATOR), leaveGroupResults)
+    verifyLeaveGroupResult(leaveGroupResults, Errors.NOT_COORDINATOR)
   }
 
   @Test
   def testLeaveGroupUnknownGroup() {
     val leaveGroupResults = leaveGroup(groupId, memberId)
-    verifyLeaveGroupResult(List(Errors.UNKNOWN_MEMBER_ID), leaveGroupResults)
+    verifyLeaveGroupResult(leaveGroupResults, Errors.UNKNOWN_MEMBER_ID)
   }
 
   @Test
@@ -2442,7 +2460,7 @@ class GroupCoordinatorTest {
 
     EasyMock.reset(replicaManager)
     val leaveGroupResults = leaveGroup(groupId, otherMemberId)
-    verifyLeaveGroupResult(List(Errors.UNKNOWN_MEMBER_ID), leaveGroupResults)
+    verifyLeaveGroupResult(leaveGroupResults, Errors.NONE, List(Errors.UNKNOWN_MEMBER_ID))
   }
 
   @Test
@@ -2451,7 +2469,7 @@ class GroupCoordinatorTest {
 
     groupCoordinator.groupManager.addGroup(new GroupMetadata(deadGroupId, Dead, new MockTime()))
     val leaveGroupResults = leaveGroup(deadGroupId, memberId)
-    verifyLeaveGroupResult(List(Errors.COORDINATOR_NOT_AVAILABLE), leaveGroupResults)
+    verifyLeaveGroupResult(leaveGroupResults, Errors.COORDINATOR_NOT_AVAILABLE)
   }
 
   @Test
@@ -2465,18 +2483,28 @@ class GroupCoordinatorTest {
 
     EasyMock.reset(replicaManager)
     val leaveGroupResults = leaveGroup(groupId, assignedMemberId)
-    verifyLeaveGroupResult(List(Errors.NONE), leaveGroupResults)
+    verifyLeaveGroupResult(leaveGroupResults)
   }
 
   @Test
-  def testLeaveGroupStaticMember() {
+  def testLeaveGroupWithFencedInstanceId() {
+    val joinGroupResult = staticJoinGroup(groupId, JoinGroupRequest.UNKNOWN_MEMBER_ID, leaderInstanceId, protocolType, protocolSuperset)
+    assertEquals(Errors.NONE, joinGroupResult.error)
+
+    EasyMock.reset(replicaManager)
+    val leaveGroupResults = leaveGroup(groupId, "some_member", leaderInstanceId)
+    verifyLeaveGroupResult(leaveGroupResults, Errors.NONE, List(Errors.FENCED_INSTANCE_ID))
+  }
+
+  @Test
+  def testLeaveGroupStaticMemberWithUnknownMemberId() {
     val joinGroupResult = staticJoinGroup(groupId, JoinGroupRequest.UNKNOWN_MEMBER_ID, leaderInstanceId, protocolType, protocolSuperset)
     assertEquals(Errors.NONE, joinGroupResult.error)
 
     EasyMock.reset(replicaManager)
     // Having unknown member id will not affect the request processing.
     val leaveGroupResults = leaveGroup(groupId, JoinGroupRequest.UNKNOWN_MEMBER_ID, leaderInstanceId)
-    verifyLeaveGroupResult(List(Errors.NONE), leaveGroupResults)
+    verifyLeaveGroupResult(leaveGroupResults, Errors.NONE, List(Errors.NONE))
   }
 
   @Test
@@ -2617,7 +2645,7 @@ class GroupCoordinatorTest {
 
     EasyMock.reset(replicaManager)
     val leaveGroupResults = leaveGroup(groupId, joinGroupResult.memberId)
-    verifyLeaveGroupResult(List(Errors.NONE), leaveGroupResults)
+    verifyLeaveGroupResult(leaveGroupResults)
 
     val groupTopicPartition = new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, groupPartitionId)
     val partition: Partition = EasyMock.niceMock(classOf[Partition])
@@ -2658,7 +2686,7 @@ class GroupCoordinatorTest {
 
     EasyMock.reset(replicaManager)
     val leaveGroupResults = leaveGroup(groupId, assignedMemberId)
-    verifyLeaveGroupResult(List(Errors.NONE), leaveGroupResults)
+    verifyLeaveGroupResult(leaveGroupResults)
 
     val groupTopicPartition = new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, groupPartitionId)
     val partition: Partition = EasyMock.niceMock(classOf[Partition])
@@ -2779,10 +2807,10 @@ class GroupCoordinatorTest {
     (responseFuture, responseCallback)
   }
 
-  private def setupLeaveGroupCallback: (Future[List[LeaveGroupResult]], LeaveGroupCallback) = {
-    val responsePromise = Promise[List[LeaveGroupResult]]
+  private def setupLeaveGroupCallback: (Future[LeaveGroupResult], LeaveGroupCallback) = {
+    val responsePromise = Promise[LeaveGroupResult]
     val responseFuture = responsePromise.future
-    val responseCallback: LeaveGroupCallback = responsePromise.success(_)
+    val responseCallback: LeaveGroupCallback = result => responsePromise.success(result)
     (responseFuture, responseCallback)
   }
 
@@ -2983,7 +3011,7 @@ class GroupCoordinatorTest {
 
   private def leaveGroup(groupId: String,
                          consumerId: String,
-                         groupInstanceId: Option[String] = None): List[LeaveGroupResult] = {
+                         groupInstanceId: Option[String] = None): LeaveGroupResult = {
     val (responseFuture, responseCallback) = setupLeaveGroupCallback
 
     EasyMock.expect(replicaManager.getPartition(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, groupPartitionId)))
@@ -3013,11 +3041,15 @@ class GroupCoordinatorTest {
 }
 
 object GroupCoordinatorTest {
-  def verifyLeaveGroupResult(expectedErrors: List[Errors],
-                             leaveGroupResults: List[LeaveGroupResult]): Unit = {
-    assertEquals(expectedErrors.size, leaveGroupResults.size)
-    for (i  <- 0 until expectedErrors.size) {
-      assertEquals(expectedErrors(i), leaveGroupResults(i).error)
+  def verifyLeaveGroupResult(leaveGroupResult: LeaveGroupResult,
+                             expectedTopLevelError: Errors = Errors.NONE,
+                             expectedMemberLevelErrors: List[Errors] = List(Errors.NONE)): Unit = {
+    assertEquals(expectedTopLevelError, leaveGroupResult.topLevelError)
+    if (expectedMemberLevelErrors.nonEmpty) {
+      assertEquals(expectedMemberLevelErrors.size, leaveGroupResult.memberResponses.size)
+      for (i <- expectedMemberLevelErrors.indices) {
+            assertEquals(expectedMemberLevelErrors(i), leaveGroupResult.memberResponses(i).error)
+          }
     }
   }
 }

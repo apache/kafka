@@ -119,7 +119,6 @@ public abstract class AbstractCoordinator implements Closeable {
     private final Heartbeat heartbeat;
     private final GroupRebalanceConfig rebalanceConfig;
     protected final ConsumerNetworkClient client;
-
     protected final Time time;
 
     private HeartbeatThread heartbeatThread = null;
@@ -877,19 +876,19 @@ public abstract class AbstractCoordinator implements Closeable {
     private class LeaveGroupResponseHandler extends CoordinatorResponseHandler<LeaveGroupResponse, Void> {
         @Override
         public void handle(LeaveGroupResponse leaveResponse, RequestFuture<Void> future) {
-            final List<MemberResponse> members = leaveResponse.errors();
+            final List<MemberResponse> members = leaveResponse.memberResponses();
             if (members.size() != 1) {
                 future.raise(new IllegalStateException("The expected leave group response " +
-                                                           "should only contain 1 member info, however get " + members.size()));
+                                                           "should only contain one member info, however get " + members));
+            }
+
+            final Errors error = leaveResponse.error();
+            if (error == Errors.NONE) {
+                log.debug("LeaveGroup request returned successfully");
+                future.complete(null);
             } else {
-                final Errors error = Errors.forCode(members.get(0).errorCode());
-                if (error == Errors.NONE) {
-                    log.debug("LeaveGroup request returned successfully");
-                    future.complete(null);
-                } else {
-                    log.error("LeaveGroup request failed with error: {}", error.message());
-                    future.raise(error);
-                }
+                log.error("LeaveGroup request failed with error: {}", error.message());
+                future.raise(error);
             }
         }
     }

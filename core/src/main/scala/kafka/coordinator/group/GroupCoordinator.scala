@@ -422,47 +422,52 @@ class GroupCoordinator(val brokerId: Int,
 
   def handleLeaveGroup(groupId: String,
                        leavingMembers: List[MemberIdentity],
-                       responseCallback: List[LeaveGroupResult] => Unit): Unit = {
+                       responseCallback: LeaveGroupResult => Unit) {
     validateGroupStatus(groupId, ApiKeys.LEAVE_GROUP) match {
       case Some(error) =>
-        responseCallback(leavingMembers.map { leavingMember =>
-          leaveError(leavingMember, error)
-        })
+        responseCallback(noMemberLevelError(error, leavingMembers))
       case None =>
         groupManager.getGroup(groupId) match {
           case None =>
-            responseCallback(leavingMembers.map { leavingMember =>
-              leaveError(leavingMember, Errors.UNKNOWN_MEMBER_ID)
-            })
+            responseCallback(noMemberLevelError(Errors.UNKNOWN_MEMBER_ID, leavingMembers))
           case Some(group) =>
             group.inLock {
-              responseCallback(leavingMembers.map { leavingMember => {
-                val memberId = leavingMember.memberId
-                val groupInstanceId = Option(leavingMember.groupInstanceId)
-                if (group.is(Dead)) {
-                  leaveError(leavingMember, Errors.COORDINATOR_NOT_AVAILABLE)
-                } else if (group.isPendingMember(memberId)) {
-                  // if a pending member is leaving, it needs to be removed from the pending list, heartbeat cancelled
-                  // and if necessary, prompt a JoinGroup completion.
-                  info(s"Pending member $memberId is leaving group ${group.groupId}.")
-                  removePendingMemberAndUpdateGroup(group, memberId)
-                  heartbeatPurgatory.checkAndComplete(MemberKey(group.groupId, memberId))
-                  leaveError(leavingMember, Errors.NONE)
-                } else if (!group.has(memberId) && !group.hasStaticMember(groupInstanceId)) {
-                  leaveError(leavingMember, Errors.UNKNOWN_MEMBER_ID)
-                } else {
-                  val member = if (group.hasStaticMember(groupInstanceId))
-                    group.get(group.getStaticMemberId(groupInstanceId))
-                  else
-                    group.get(memberId)
-                  removeHeartbeatForLeavingMember(group, member)
-                  info(s"Member[group.instance.id ${member.groupInstanceId}, member.id ${member.memberId}] " +
-                    s"in group ${group.groupId} has left, removing it from the group")
-                  removeMemberAndUpdateGroup(group, member, s"removing member $memberId on LeaveGroup")
-                  leaveError(leavingMember, Errors.NONE)
-                }
+              if (group.is(Dead)) {
+                responseCallback(noMemberLevelError(Errors.COORDINATOR_NOT_AVAILABLE, leavingMembers))
+              } else {
+                responseCallback(leaveError(Errors.NONE, leavingMembers.map { leavingMember =>
+                  val memberId = leavingMember.memberId
+                  val groupInstanceId = Option(leavingMember.groupInstanceId)
+                  if (memberId != JoinGroupRequest.UNKNOWN_MEMBER_ID
+                    && group.isStaticMemberFenced(memberId, groupInstanceId)) {
+                    memberLeaveError(leavingMember, Errors.FENCED_INSTANCE_ID)
+                  } else if (group.isPendingMember(memberId)) {
+                    if (groupInstanceId.isDefined) {
+                      throw new IllegalStateException(s"the static member $groupInstanceId was unexpectedly to be leaving " +
+                        s"from pending member bucket with member id $memberId")
+                    } else {
+                      // if a pending member is leaving, it needs to be removed from the pending list, heartbeat cancelled
+                      // and if necessary, prompt a JoinGroup completion.
+                      info(s"Pending member $memberId is leaving group ${group.groupId}.")
+                      removePendingMemberAndUpdateGroup(group, memberId)
+                      heartbeatPurgatory.checkAndComplete(MemberKey(group.groupId, memberId))
+                      memberLeaveError(leavingMember, Errors.NONE)
+                    }
+                  } else if (!group.has(memberId) && !group.hasStaticMember(groupInstanceId)) {
+                    memberLeaveError(leavingMember, Errors.UNKNOWN_MEMBER_ID)
+                  } else {
+                    val member = if (group.hasStaticMember(groupInstanceId))
+                      group.get(group.getStaticMemberId(groupInstanceId))
+                    else
+                      group.get(memberId)
+                    removeHeartbeatForLeavingMember(group, member)
+                    info(s"Member[group.instance.id ${member.groupInstanceId}, member.id ${member.memberId}] " +
+                      s"in group ${group.groupId} has left, removing it from the group")
+                    removeMemberAndUpdateGroup(group, member, s"removing member $memberId on LeaveGroup")
+                    memberLeaveError(leavingMember, Errors.NONE)
+                  }
+                }))
               }
-              })
             }
         }
     }
@@ -1122,12 +1127,27 @@ object GroupCoordinator {
       error = error)
   }
 
-  def leaveError(memberIdentity: MemberIdentity,
-                 error: Errors): LeaveGroupResult = {
-    LeaveGroupResult(
+  def memberLeaveError(memberIdentity: MemberIdentity,
+                       error: Errors): LeaveMemberResponse = {
+    LeaveMemberResponse(
       memberId = memberIdentity.memberId,
       groupInstanceId = Option(memberIdentity.groupInstanceId),
       error = error)
+  }
+
+  def leaveError(topLevelError: Errors,
+                 memberResponses: List[LeaveMemberResponse]): LeaveGroupResult = {
+    LeaveGroupResult(
+      topLevelError = topLevelError,
+      memberResponses = memberResponses)
+  }
+
+  def noMemberLevelError(topLevelError: Errors,
+                         leavingMembers: List[MemberIdentity]): LeaveGroupResult = {
+    val memberResponses = leavingMembers.map {leavingMember =>
+      memberLeaveError(leavingMember, Errors.NONE)
+    }
+    leaveError(topLevelError, memberResponses)
   }
 }
 
@@ -1146,7 +1166,9 @@ case class JoinGroupResult(members: List[JoinGroupResponseMember],
 case class SyncGroupResult(memberAssignment: Array[Byte],
                            error: Errors)
 
-case class LeaveGroupResult(memberId: String,
-                            groupInstanceId: Option[String],
-                            error: Errors)
+case class LeaveMemberResponse(memberId: String,
+                               groupInstanceId: Option[String],
+                               error: Errors)
 
+case class LeaveGroupResult(topLevelError: Errors,
+                            memberResponses : List[LeaveMemberResponse])

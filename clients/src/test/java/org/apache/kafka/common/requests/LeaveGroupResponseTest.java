@@ -17,23 +17,51 @@
 package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.message.LeaveGroupResponseData;
+import org.apache.kafka.common.message.LeaveGroupResponseData.MemberResponse;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
+import org.junit.Before;
 import org.junit.Test;
 
+import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import static org.apache.kafka.common.requests.AbstractResponse.DEFAULT_THROTTLE_TIME;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 public class LeaveGroupResponseTest {
+
+    private final String memberIdOne = "member_1";
+    private final String instanceIdOne = "instance_1";
+    private final String memberIdTwo = "member_2";
+    private final String instanceIdTwo = "instance_2";
+
     private final int throttleTimeMs = 10;
 
+    private List<MemberResponse> memberResponses;
+
+    @Before
+    public void setUp() {
+        memberResponses = Arrays.asList(new MemberResponse()
+                                            .setMemberId(memberIdOne)
+                                            .setGroupInstanceId(instanceIdOne)
+                                            .setErrorCode(Errors.UNKNOWN_MEMBER_ID.code()),
+                                        new MemberResponse()
+                                            .setMemberId(memberIdTwo)
+                                            .setGroupInstanceId(instanceIdTwo)
+                                            .setErrorCode(Errors.FENCED_INSTANCE_ID.code())
+        );
+    }
+
+
     @Test
-    public void testConstructor() {
+    public void testConstructorWithStruct() {
         Map<Errors, Integer> expectedErrorCounts = Collections.singletonMap(Errors.NOT_COORDINATOR, 1);
 
         LeaveGroupResponseData responseData = new LeaveGroupResponseData()
@@ -54,6 +82,48 @@ public class LeaveGroupResponseTest {
         }
     }
 
+
+    @Test
+    public void testConstructorWithMemberResponses() {
+        Map<Errors, Integer> expectedErrorCounts = new HashMap<>();
+        expectedErrorCounts.put(Errors.UNKNOWN_MEMBER_ID, 1);
+        expectedErrorCounts.put(Errors.FENCED_INSTANCE_ID, 1);
+
+        List<MemberResponse> expectedSingleMemberResponses = Collections.singletonList(
+            new MemberResponse()
+                .setErrorCode(Errors.NOT_COORDINATOR.code())
+        );
+        for (short version = 0; version < LeaveGroupResponseData.SCHEMAS.length; version++) {
+            try {
+                LeaveGroupResponse multiLeaveResponse = new LeaveGroupResponse(memberResponses,
+                                                                               Errors.NONE,
+                                                                               throttleTimeMs,
+                                                                               version);
+                if (version <= 2) {
+                    fail("Version " + version + " leave group response should not accept multi member response.");
+                }
+                assertEquals(expectedErrorCounts, multiLeaveResponse.errorCounts());
+                assertEquals(throttleTimeMs, multiLeaveResponse.throttleTimeMs());
+                assertEquals(memberResponses, multiLeaveResponse.memberResponses());
+                assertEquals(Errors.UNKNOWN_MEMBER_ID, multiLeaveResponse.error());
+            } catch (IllegalStateException e) {
+                LeaveGroupResponse singleLeaveResponse = new LeaveGroupResponse(memberResponses.subList(0, 1),
+                                                                                Errors.NOT_COORDINATOR,
+                                                                                throttleTimeMs,
+                                                                                version);
+                assertEquals(Collections.singletonMap(Errors.NOT_COORDINATOR, 1), singleLeaveResponse.errorCounts());
+                if (version >= 1) {
+                    assertEquals(throttleTimeMs, singleLeaveResponse.throttleTimeMs());
+                } else {
+                    assertEquals(DEFAULT_THROTTLE_TIME, singleLeaveResponse.throttleTimeMs());
+                }
+                assertEquals(expectedSingleMemberResponses, singleLeaveResponse.memberResponses());
+                assertEquals(Errors.NOT_COORDINATOR, singleLeaveResponse.error());
+
+            }
+        }
+    }
+
     @Test
     public void testShouldThrottle() {
         // A dummy setup is ok.
@@ -68,10 +138,10 @@ public class LeaveGroupResponseTest {
     }
 
     @Test
-    public void testEquality() {
+    public void testEqualityWithStruct() {
         LeaveGroupResponseData responseData = new LeaveGroupResponseData()
-            .setErrorCode(Errors.NONE.code())
-            .setThrottleTimeMs(throttleTimeMs);
+                                                  .setErrorCode(Errors.NONE.code())
+                                                  .setThrottleTimeMs(throttleTimeMs);
         for (short version = 0; version <= ApiKeys.LEAVE_GROUP.latestVersion(); version++) {
             LeaveGroupResponse primaryResponse = new LeaveGroupResponse(responseData.toStruct(version), version);
 
@@ -80,6 +150,31 @@ public class LeaveGroupResponseTest {
             assertEquals(primaryResponse, primaryResponse);
             assertEquals(primaryResponse, secondaryResponse);
             assertEquals(primaryResponse.hashCode(), secondaryResponse.hashCode());
+
+        }
+    }
+
+    @Test
+    public void testEqualityWithMemberResponses() {
+
+        for (short version = 0; version < LeaveGroupResponseData.SCHEMAS.length; version++) {
+            List<MemberResponse> localResponses = version > 2 ? memberResponses : memberResponses.subList(0, 1);
+            LeaveGroupResponse primaryResponse = new LeaveGroupResponse(localResponses,
+                                                                        Errors.NONE,
+                                                                        throttleTimeMs,
+                                                                        version);
+
+            if (localResponses.size() > 1) {
+                Collections.reverse(localResponses);
+            }
+            LeaveGroupResponse reversedResponse = new LeaveGroupResponse(localResponses,
+                                                                         Errors.NONE,
+                                                                         throttleTimeMs,
+                                                                         version);
+
+            assertEquals(primaryResponse, primaryResponse);
+            assertEquals(primaryResponse, reversedResponse);
+            assertEquals(primaryResponse.hashCode(), reversedResponse.hashCode());
         }
     }
 }

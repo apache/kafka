@@ -31,7 +31,7 @@ import kafka.api.{ApiVersion, KAFKA_0_11_0_IV0, KAFKA_2_3_IV0}
 import kafka.cluster.Partition
 import kafka.common.OffsetAndMetadata
 import kafka.controller.KafkaController
-import kafka.coordinator.group.{GroupCoordinator, JoinGroupResult, LeaveGroupResult, SyncGroupResult}
+import kafka.coordinator.group.{GroupCoordinator, JoinGroupResult, LeaveGroupResult, LeaveMemberResponse, SyncGroupResult}
 import kafka.coordinator.transaction.{InitProducerIdResult, TransactionCoordinator}
 import kafka.message.ZStdCompressionCodec
 import kafka.network.RequestChannel
@@ -1551,13 +1551,7 @@ class KafkaApis(val requestChannel: RequestChannel,
   def handleLeaveGroupRequest(request: RequestChannel.Request) {
     val leaveGroupRequest = request.body[LeaveGroupRequest]
 
-    // Before version 3, leave group request is still in single mode
-    val members = if (leaveGroupRequest.version <= 2) {
-      List(new MemberIdentity()
-        .setMemberId(leaveGroupRequest.data.memberId))
-    } else {
-      leaveGroupRequest.data.members.asScala.toList
-    }
+    val members = leaveGroupRequest.members().asScala.toList
 
     if (!authorize(request.session, Read, Resource(Group, leaveGroupRequest.data.groupId, LITERAL))) {
       sendResponseMaybeThrottle(request, requestThrottleMs => {
@@ -1574,8 +1568,8 @@ class KafkaApis(val requestChannel: RequestChannel,
         )
       })
     } else {
-      def sendResponseCallback(leaveGroupResults: List[LeaveGroupResult]) {
-        val memberResponses = leaveGroupResults.map(
+      def sendResponseCallback(leaveGroupResult : LeaveGroupResult) {
+        val memberResponses = leaveGroupResult.memberResponses.map(
           leaveGroupResult =>
             new MemberResponse()
               .setErrorCode(leaveGroupResult.error.code)
@@ -1583,27 +1577,11 @@ class KafkaApis(val requestChannel: RequestChannel,
               .setGroupInstanceId(leaveGroupResult.groupInstanceId.orNull)
         )
         def createResponse(requestThrottleMs: Int): AbstractResponse = {
-          val batchLeaveGroupResponse = if (leaveGroupRequest.version <= 2) {
-            if (leaveGroupResults.size != 1) {
-              throw new IllegalStateException(s"Singleton leave group request shouldn't have more than 1 " +
-                s"response, while actually get ${leaveGroupResults.size}")
-            }
-            new LeaveGroupResponse(
-              new LeaveGroupResponseData()
-                .setThrottleTimeMs(requestThrottleMs)
-                .setErrorCode(memberResponses.head.errorCode)
-            )
-          } else {
-            new LeaveGroupResponse(
-              new LeaveGroupResponseData()
-                .setThrottleTimeMs(requestThrottleMs)
-                .setMembers(memberResponses.asJava)
-            )
-          }
-
-          trace("Sending leave group response %s for correlation id %d to client %s."
-            .format(batchLeaveGroupResponse, request.header.correlationId, request.header.clientId))
-          batchLeaveGroupResponse
+          new LeaveGroupResponse(
+            memberResponses.asJava,
+            leaveGroupResult.topLevelError,
+            requestThrottleMs,
+            leaveGroupRequest.version)
         }
         sendResponseMaybeThrottle(request, createResponse)
       }

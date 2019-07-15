@@ -24,10 +24,25 @@ import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
+/**
+ * Possible error codes.
+ *
+ * Top level errors:
+ * - {@link Errors#COORDINATOR_LOAD_IN_PROGRESS}
+ * - {@link Errors#COORDINATOR_NOT_AVAILABLE}
+ * - {@link Errors#NOT_COORDINATOR}
+ * - {@link Errors#GROUP_AUTHORIZATION_FAILED}
+ * - {@link Errors#UNKNOWN_MEMBER_ID} returned when the group is not found
+ *
+ * Member level errors:
+ * - {@link Errors#FENCED_INSTANCE_ID}
+ * - {@link Errors#UNKNOWN_MEMBER_ID}
+ */
 public class LeaveGroupResponse extends AbstractResponse {
 
     public final LeaveGroupResponseData data;
@@ -36,10 +51,35 @@ public class LeaveGroupResponse extends AbstractResponse {
         this.data = data;
     }
 
+    public LeaveGroupResponse(List<MemberResponse> memberResponses,
+                              Errors topLevelError,
+                              int throttleTimeMs,
+                              short version) {
+        if (version <= 2) {
+            if (memberResponses.size() != 1) {
+                throw new IllegalStateException("Singleton leave group request shouldn't have more than one " +
+                                                    "response, while actually get " + memberResponses.size());
+            }
+
+            short errorCode = topLevelError != Errors.NONE ? topLevelError.code() :
+                                  memberResponses.get(0).errorCode();
+
+            this.data = new LeaveGroupResponseData()
+                            .setErrorCode(errorCode)
+                            .setThrottleTimeMs(throttleTimeMs);
+        } else {
+            this.data = new LeaveGroupResponseData()
+                            .setErrorCode(topLevelError.code())
+                            .setThrottleTimeMs(throttleTimeMs)
+                            .setMembers(memberResponses);
+        }
+    }
+
     public LeaveGroupResponse(Struct struct) {
         short latestVersion = (short) (LeaveGroupResponseData.SCHEMAS.length - 1);
         this.data = new LeaveGroupResponseData(struct, latestVersion);
     }
+
     public LeaveGroupResponse(Struct struct, short version) {
         this.data = new LeaveGroupResponseData(struct, version);
     }
@@ -49,30 +89,51 @@ public class LeaveGroupResponse extends AbstractResponse {
         return data.throttleTimeMs();
     }
 
-    /**
-     * Get leave group errors.
-     *
-     * Possible error code:
-     *
-     * GROUP_LOAD_IN_PROGRESS (14)
-     * CONSUMER_COORDINATOR_NOT_AVAILABLE (15)
-     * NOT_COORDINATOR_FOR_CONSUMER (16)
-     * UNKNOWN_CONSUMER_ID (25)
-     * GROUP_AUTHORIZATION_FAILED (30)
-     */
-    public List<MemberResponse> errors() {
+    public List<MemberResponse> memberResponses() {
         if (data.members().isEmpty()) {
-            return Collections.singletonList(new MemberResponse()
-                                                 .setMemberId(JoinGroupRequest.UNKNOWN_MEMBER_ID)
-                                                 .setErrorCode(data.errorCode())
+            return Collections.singletonList(
+                new MemberResponse().setErrorCode(data.errorCode())
             );
         } else {
             return data.members();
         }
     }
 
+    public Errors error() {
+        Errors topLevelError = Errors.forCode(data.errorCode());
+        if (topLevelError != Errors.NONE) {
+            return topLevelError;
+        } else {
+            for (MemberResponse memberResponse : data.members()) {
+                Errors memberError = Errors.forCode(memberResponse.errorCode());
+                if (memberError != Errors.NONE) {
+                    return memberError;
+                }
+            }
+            return Errors.NONE;
+        }
+    }
+
     public Map<Errors, Integer> errorCounts() {
-        return Collections.singletonMap(Errors.forCode(data.errorCode()), 1);
+        Map<Errors, Integer> combinedErrorCounts = new HashMap<>();
+        // Top level error.
+        Errors topLevelError = Errors.forCode(data.errorCode());
+        if (topLevelError != Errors.NONE) {
+            combinedErrorCounts.put(topLevelError, 1);
+        }
+
+        // Member level error.
+        Map<String, Errors> errorMap = new HashMap<>();
+
+        for (MemberResponse memberResponse : data.members()) {
+            Errors memberError = Errors.forCode(memberResponse.errorCode());
+            if (memberError != Errors.NONE) {
+                errorMap.put(memberResponse.memberId(), memberError);
+            }
+        }
+
+        combinedErrorCounts.putAll(errorCounts(errorMap));
+        return combinedErrorCounts;
     }
 
     @Override

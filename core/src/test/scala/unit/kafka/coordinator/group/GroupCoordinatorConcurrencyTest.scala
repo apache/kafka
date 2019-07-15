@@ -264,7 +264,7 @@ class GroupCoordinatorConcurrencyTest extends AbstractCoordinatorConcurrencyTest
 
   class LeaveGroupOperation extends GroupOperation[LeaveGroupCallbackParams, LeaveGroupCallback] {
     override def responseCallback(responsePromise: Promise[LeaveGroupCallbackParams]): LeaveGroupCallback = {
-      val callback: LeaveGroupCallback = error => responsePromise.success(error)
+      val callback: LeaveGroupCallback = result => responsePromise.success(result)
       callback
     }
     override def runWithCallback(member: GroupMember, responseCallback: LeaveGroupCallback): Unit = {
@@ -273,11 +273,12 @@ class GroupCoordinatorConcurrencyTest extends AbstractCoordinatorConcurrencyTest
       groupCoordinator.handleLeaveGroup(member.group.groupId, List(memberIdentity), responseCallback)
     }
     override def awaitAndVerify(member: GroupMember): Unit = {
-      val leaveGroupResults = await(member, DefaultSessionTimeout)
+      val leaveGroupResult = await(member, DefaultSessionTimeout)
 
-      GroupCoordinatorTest.verifyLeaveGroupResult(List(Errors.NONE), leaveGroupResults)
-      assertEquals(member.memberId, leaveGroupResults.head.memberId)
-      assertEquals(None, leaveGroupResults.head.groupInstanceId)
+      val memberResponses = leaveGroupResult.memberResponses
+      GroupCoordinatorTest.verifyLeaveGroupResult(leaveGroupResult, Errors.NONE, List(Errors.NONE))
+      assertEquals(member.memberId, memberResponses.head.memberId)
+      assertEquals(None, memberResponses.head.groupInstanceId)
     }
   }
 }
@@ -292,8 +293,8 @@ object GroupCoordinatorConcurrencyTest {
   type HeartbeatCallback = Errors => Unit
   type CommitOffsetCallbackParams = Map[TopicPartition, Errors]
   type CommitOffsetCallback = Map[TopicPartition, Errors] => Unit
-  type LeaveGroupCallbackParams = List[LeaveGroupResult]
-  type LeaveGroupCallback = List[LeaveGroupResult] => Unit
+  type LeaveGroupCallbackParams = LeaveGroupResult
+  type LeaveGroupCallback = LeaveGroupResult => Unit
   type CompleteTxnCallbackParams = Errors
   type CompleteTxnCallback = Errors => Unit
 
