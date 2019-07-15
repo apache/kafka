@@ -67,6 +67,8 @@ import org.apache.kafka.common.message.IncrementalAlterConfigsResponseData.Alter
 import org.apache.kafka.common.message.IncrementalAlterConfigsResponseData;
 import org.apache.kafka.common.message.AlterPartitionReassignmentsRequestData;
 import org.apache.kafka.common.message.AlterPartitionReassignmentsResponseData;
+import org.apache.kafka.common.message.ListPartitionReassignmentsRequestData;
+import org.apache.kafka.common.message.ListPartitionReassignmentsResponseData;
 import org.apache.kafka.common.message.InitProducerIdRequestData;
 import org.apache.kafka.common.message.InitProducerIdResponseData;
 import org.apache.kafka.common.message.JoinGroupRequestData;
@@ -367,6 +369,9 @@ public class RequestResponseTest {
         checkRequest(createAlterPartitionReassignmentsRequest(), true);
         checkErrorResponse(createAlterPartitionReassignmentsRequest(), new UnknownServerException(), true);
         checkResponse(createAlterPartitionReassignmentsResponse(), 0, true);
+        checkRequest(createListPartitionReassignmentsRequest(), true);
+        checkErrorResponse(createListPartitionReassignmentsRequest(), new UnknownServerException(), true);
+        checkResponse(createListPartitionReassignmentsResponse(), 0, true);
     }
 
     @Test
@@ -1655,5 +1660,32 @@ public class RequestResponseTest {
                         )
         );
         return new AlterPartitionReassignmentsResponse(data);
+    }
+
+    private ListPartitionReassignmentsRequest createListPartitionReassignmentsRequest() {
+        ListPartitionReassignmentsRequestData data = new ListPartitionReassignmentsRequestData();
+        data.topics().add(
+                new ListPartitionReassignmentsRequestData.ListPartitionReassignmentsTopics()
+                        .setName("topic")
+                        .setPartitionIndexes(Collections.singletonList(1))
+        );
+        return new ListPartitionReassignmentsRequest.Builder(data).build((short) 0);
+    }
+
+    private ListPartitionReassignmentsResponse createListPartitionReassignmentsResponse() {
+        ListPartitionReassignmentsResponseData data = new ListPartitionReassignmentsResponseData();
+        data.topics().add(
+                new ListPartitionReassignmentsResponseData.OngoingTopicReassignment()
+                        .setName("topic")
+                        .setPartitions(Collections.singletonList(
+                                new ListPartitionReassignmentsResponseData.OngoingPartitionReassignment()
+                                        .setPartitionIndex(0)
+                                        .setReplicas(Arrays.asList(1, 2))
+                                        .setAddingReplicas(Collections.singletonList(2))
+                                        .setRemovingReplicas(Collections.singletonList(1))
+                                )
+                        )
+        );
+        return new ListPartitionReassignmentsResponse(data);
     }
 }

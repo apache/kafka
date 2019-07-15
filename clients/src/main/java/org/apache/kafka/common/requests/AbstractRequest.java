@@ -235,6 +235,8 @@ public abstract class AbstractRequest extends AbstractRequestResponse {
                 return new IncrementalAlterConfigsRequest(struct, apiVersion);
             case ALTER_PARTITION_REASSIGNMENTS:
                 return new AlterPartitionReassignmentsRequest(struct, apiVersion);
+            case LIST_PARTITION_REASSIGNMENTS:
+                return new ListPartitionReassignmentsRequest(struct, apiVersion);
             default:
                 throw new AssertionError(String.format("ApiKey %s is not currently handled in `parseRequest`, the " +
                         "code should be updated to do so.", apiKey));

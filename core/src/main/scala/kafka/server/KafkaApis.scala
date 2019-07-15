@@ -53,6 +53,7 @@ import org.apache.kafka.common.message.CreateTopicsResponseData.{CreatableTopicR
 import org.apache.kafka.common.message.DeleteGroupsResponseData
 import org.apache.kafka.common.message.DeleteGroupsResponseData.{DeletableGroupResult, DeletableGroupResultCollection}
 import org.apache.kafka.common.message.AlterPartitionReassignmentsResponseData
+import org.apache.kafka.common.message.ListPartitionReassignmentsResponseData
 import org.apache.kafka.common.message.DeleteTopicsResponseData
 import org.apache.kafka.common.message.DeleteTopicsResponseData.{DeletableTopicResult, DeletableTopicResultCollection}
 import org.apache.kafka.common.message.DescribeGroupsResponseData
@@ -179,6 +180,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         case ApiKeys.ELECT_LEADERS => handleElectReplicaLeader(request)
         case ApiKeys.INCREMENTAL_ALTER_CONFIGS => handleIncrementalAlterConfigsRequest(request)
         case ApiKeys.ALTER_PARTITION_REASSIGNMENTS => handleAlterPartitionReassignmentsRequest(request)
+        case ApiKeys.LIST_PARTITION_REASSIGNMENTS => handleListPartitionReassignmentsRequest(request)
       }
     } catch {
       case e: FatalExitError => throw e
@@ -2299,6 +2301,16 @@ class KafkaApis(val requestChannel: RequestChannel,
     println("TODO")
     sendResponseMaybeThrottle(request, requestThrottleMs =>
       new AlterPartitionReassignmentsResponse(new AlterPartitionReassignmentsResponseData().setThrottleTimeMs(requestThrottleMs).toStruct(0)))
+    println("TODO")
+  }
+
+  def handleListPartitionReassignmentsRequest(request: RequestChannel.Request): Unit = {
+    authorizeClusterDescribe(request)
+    val listPartitionReassignmentsRequest = request.body[ListPartitionReassignmentsRequest]
+
+    println("TODO")
+    sendResponseMaybeThrottle(request, requestThrottleMs =>
+      new ListPartitionReassignmentsResponse(new ListPartitionReassignmentsResponseData().setThrottleTimeMs(requestThrottleMs).toStruct(0)))
     println("TODO")
   }
 
