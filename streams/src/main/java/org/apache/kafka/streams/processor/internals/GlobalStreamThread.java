@@ -137,13 +137,6 @@ public class GlobalStreamThread extends Thread {
     }
 
     /**
-     * @return whether or not the given GlobalStreamThread instance is connected
-     */
-    public boolean isConnected() {
-        return globalConsumer.isConnected();
-    }
-
-    /**
      * Sets the state
      *
      * @param newState New state
