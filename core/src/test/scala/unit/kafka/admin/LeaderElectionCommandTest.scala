@@ -79,12 +79,12 @@ final class LeaderElectionCommandTest extends ZooKeeperTestHarness {
 
       val topicPartition = new TopicPartition(topic, partition)
 
-      waitForLeaderToBecome(client, topicPartition, Option(broker2))
+      TestUtils.waitForLeaderToBecome(client, topicPartition, Option(broker2))
 
       servers(broker3).shutdown()
-      waitForBrokerOutOfIsr(client, Set(topicPartition), broker3)
+      TestUtils.waitForBrokersOutOfIsr(client, Set(topicPartition), Set(broker3))
       servers(broker2).shutdown()
-      waitForLeaderToBecome(client, topicPartition, None)
+      TestUtils.waitForLeaderToBecome(client, topicPartition, None)
       servers(broker3).startup()
 
       LeaderElectionCommand.main(
@@ -95,7 +95,7 @@ final class LeaderElectionCommandTest extends ZooKeeperTestHarness {
         )
       )
 
-      assertEquals(Option(broker3), currentLeader(client, topicPartition))
+      assertEquals(Option(broker3), TestUtils.currentLeader(client, topicPartition))
     }
   }
 
@@ -110,12 +110,12 @@ final class LeaderElectionCommandTest extends ZooKeeperTestHarness {
 
       val topicPartition = new TopicPartition(topic, partition)
 
-      waitForLeaderToBecome(client, topicPartition, Option(broker2))
+      TestUtils.waitForLeaderToBecome(client, topicPartition, Option(broker2))
 
       servers(broker3).shutdown()
-      waitForBrokerOutOfIsr(client, Set(topicPartition), broker3)
+      TestUtils.waitForBrokersOutOfIsr(client, Set(topicPartition), Set(broker3))
       servers(broker2).shutdown()
-      waitForLeaderToBecome(client, topicPartition, None)
+      TestUtils.waitForLeaderToBecome(client, topicPartition, None)
       servers(broker3).startup()
 
       LeaderElectionCommand.main(
@@ -127,7 +127,7 @@ final class LeaderElectionCommandTest extends ZooKeeperTestHarness {
         )
       )
 
-      assertEquals(Option(broker3), currentLeader(client, topicPartition))
+      assertEquals(Option(broker3), TestUtils.currentLeader(client, topicPartition))
     }
   }
 
@@ -142,12 +142,12 @@ final class LeaderElectionCommandTest extends ZooKeeperTestHarness {
 
       val topicPartition = new TopicPartition(topic, partition)
 
-      waitForLeaderToBecome(client, topicPartition, Option(broker2))
+      TestUtils.waitForLeaderToBecome(client, topicPartition, Option(broker2))
 
       servers(broker3).shutdown()
-      waitForBrokerOutOfIsr(client, Set(topicPartition), broker3)
+      TestUtils.waitForBrokersOutOfIsr(client, Set(topicPartition), Set(broker3))
       servers(broker2).shutdown()
-      waitForLeaderToBecome(client, topicPartition, None)
+      TestUtils.waitForLeaderToBecome(client, topicPartition, None)
       servers(broker3).startup()
 
       val topicPartitionPath = tempTopicPartitionFile(Set(topicPartition))
@@ -160,7 +160,7 @@ final class LeaderElectionCommandTest extends ZooKeeperTestHarness {
         )
       )
 
-      assertEquals(Option(broker3), currentLeader(client, topicPartition))
+      assertEquals(Option(broker3), TestUtils.currentLeader(client, topicPartition))
     }
   }
 
@@ -175,12 +175,12 @@ final class LeaderElectionCommandTest extends ZooKeeperTestHarness {
 
       val topicPartition = new TopicPartition(topic, partition)
 
-      waitForLeaderToBecome(client, topicPartition, Option(broker2))
+      TestUtils.waitForLeaderToBecome(client, topicPartition, Option(broker2))
 
       servers(broker2).shutdown()
-      waitForLeaderToBecome(client, topicPartition, Some(broker3))
+      TestUtils.waitForLeaderToBecome(client, topicPartition, Some(broker3))
       servers(broker2).startup()
-      waitForBrokerInIsr(client, Set(topicPartition), broker2)
+      TestUtils.waitForBrokersInIsr(client, topicPartition, Set(broker2))
 
       LeaderElectionCommand.main(
         Array(
@@ -190,7 +190,7 @@ final class LeaderElectionCommandTest extends ZooKeeperTestHarness {
         )
       )
 
-      assertEquals(Option(broker2), currentLeader(client, topicPartition))
+      assertEquals(Option(broker2), TestUtils.currentLeader(client, topicPartition))
     }
   }
 
@@ -317,48 +317,6 @@ object LeaderElectionCommandTest {
       val port = server.socketServer.boundPort(ListenerName.normalised("PLAINTEXT"))
       s"localhost:$port"
     }.headOption.mkString(",")
-  }
-
-  def currentLeader(client: JAdminClient, topicPartition: TopicPartition): Option[Int] = {
-    Option(
-      client
-        .describeTopics(List(topicPartition.topic).asJava)
-        .all
-        .get
-        .get(topicPartition.topic)
-        .partitions
-        .get(topicPartition.partition)
-        .leader
-    ).map(_.id)
-  }
-
-  def waitForLeaderToBecome(client: JAdminClient, topicPartition: TopicPartition, leader: Option[Int]): Unit = {
-    TestUtils.waitUntilTrue(
-      () => currentLeader(client, topicPartition) == leader,
-      s"Expected leader to become $leader", 10000
-    )
-  }
-
-  def waitForBrokerOutOfIsr(client: JAdminClient, partitions: Set[TopicPartition], brokerId: Int): Unit = {
-    TestUtils.waitUntilTrue(
-      () => {
-        val description = client.describeTopics(partitions.map(_.topic).asJava).all.get.asScala
-        val isr = description.values.flatMap(_.partitions.asScala.flatMap(_.isr.asScala))
-        isr.forall(_.id != brokerId)
-      },
-      s"Expect broker $brokerId to no longer be in any ISR for $partitions"
-    )
-  }
-
-  def waitForBrokerInIsr(client: JAdminClient, partitions: Set[TopicPartition], brokerId: Int): Unit = {
-    TestUtils.waitUntilTrue(
-      () => {
-        val description = client.describeTopics(partitions.map(_.topic).asJava).all.get.asScala
-        val isr = description.values.flatMap(_.partitions.asScala.flatMap(_.isr.asScala))
-        isr.exists(_.id == brokerId)
-      },
-      s"Expect broker $brokerId to no longer be in any ISR for $partitions"
-    )
   }
 
   def tempTopicPartitionFile(partitions: Set[TopicPartition]): Path = {

@@ -26,6 +26,7 @@ import java.util.Set;
 
 public class MockChangelogReader implements ChangelogReader {
     private final Set<TopicPartition> registered = new HashSet<>();
+    private Map<TopicPartition, Long> restoredOffsets = Collections.emptyMap();
 
     @Override
     public void register(final StateRestorer restorer) {
@@ -39,7 +40,11 @@ public class MockChangelogReader implements ChangelogReader {
 
     @Override
     public Map<TopicPartition, Long> restoredOffsets() {
-        return Collections.emptyMap();
+        return restoredOffsets;
+    }
+
+    void setRestoredOffsets(final Map<TopicPartition, Long> restoredOffsets) {
+        this.restoredOffsets = restoredOffsets;
     }
 
     @Override

@@ -33,15 +33,20 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
+import static java.util.Collections.emptyMap;
 import static java.util.Collections.unmodifiableList;
+import static org.apache.kafka.streams.processor.internals.StateManagerUtil.CHECKPOINT_FILE_NAME;
+import static org.apache.kafka.streams.processor.internals.StateManagerUtil.converterForStore;
 import static org.apache.kafka.streams.processor.internals.StateRestoreCallbackAdapter.adapt;
 
 
-public class ProcessorStateManager extends AbstractStateManager {
+public class ProcessorStateManager implements StateManager {
     private static final String STATE_CHANGELOG_TOPIC_SUFFIX = "-changelog";
 
     private final Logger log;
@@ -57,16 +62,23 @@ public class ProcessorStateManager extends AbstractStateManager {
 
     // must be maintained in topological order
     private final FixedOrderMap<String, Optional<StateStore>> registeredStores = new FixedOrderMap<>();
+    private final FixedOrderMap<String, Optional<StateStore>> globalStores = new FixedOrderMap<>();
 
     private final List<TopicPartition> changelogPartitions = new ArrayList<>();
 
     // TODO: this map does not work with customized grouper where multiple partitions
-    // of the same topic can be assigned to the same topic.
+    // of the same topic can be assigned to the same task.
     private final Map<String, TopicPartition> partitionForTopic;
+
+    private final boolean eosEnabled;
+    private final File baseDir;
+    private OffsetCheckpoint checkpointFile;
+    private final Map<TopicPartition, Long> checkpointFileCache = new HashMap<>();
+    private final Map<TopicPartition, Long> initialLoadedCheckpoints;
 
     /**
      * @throws ProcessorStateException if the task directory does not exist and could not be created
-     * @throws IOException if any severe error happens while creating or locking the state directory
+     * @throws IOException             if any severe error happens while creating or locking the state directory
      */
     public ProcessorStateManager(final TaskId taskId,
                                  final Collection<TopicPartition> sources,
@@ -76,9 +88,9 @@ public class ProcessorStateManager extends AbstractStateManager {
                                  final ChangelogReader changelogReader,
                                  final boolean eosEnabled,
                                  final LogContext logContext) throws IOException {
-        super(stateDirectory.directoryForTask(taskId), eosEnabled);
+        this.eosEnabled = eosEnabled;
 
-        this.log = logContext.logger(ProcessorStateManager.class);
+        log = logContext.logger(ProcessorStateManager.class);
         this.taskId = taskId;
         this.changelogReader = changelogReader;
         logPrefix = String.format("task [%s] ", taskId);
@@ -94,15 +106,17 @@ public class ProcessorStateManager extends AbstractStateManager {
         recordConverters = isStandby ? new HashMap<>() : null;
         this.storeToChangelogTopic = new HashMap<>(storeToChangelogTopic);
 
-        // load the checkpoint information
-        checkpointableOffsets.putAll(checkpoint.read());
+        baseDir = stateDirectory.directoryForTask(taskId);
+        checkpointFile = new OffsetCheckpoint(new File(baseDir, CHECKPOINT_FILE_NAME));
+        initialLoadedCheckpoints = checkpointFile.read();
 
-        log.trace("Checkpointable offsets read from checkpoint: {}", checkpointableOffsets);
+        log.trace("Checkpointable offsets read from checkpoint: {}", initialLoadedCheckpoints);
 
         if (eosEnabled) {
-            // delete the checkpoint file after finish loading its stored offsets
-            checkpoint.delete();
-            checkpoint = null;
+            // with EOS enabled, there should never be a checkpoint file _during_ processing.
+            // delete the checkpoint file after loading its stored offsets.
+            checkpointFile.delete();
+            checkpointFile = null;
         }
 
         log.debug("Created state store manager for task {} with the acquired state dir lock", taskId);
@@ -126,7 +140,7 @@ public class ProcessorStateManager extends AbstractStateManager {
         log.debug("Registering state store {} to its state manager", storeName);
 
         if (CHECKPOINT_FILE_NAME.equals(storeName)) {
-            throw new IllegalArgumentException(String.format("%sIllegal store name: %s", logPrefix, CHECKPOINT_FILE_NAME));
+            throw new IllegalArgumentException(String.format("%sIllegal store name: %s", logPrefix, storeName));
         }
 
         if (registeredStores.containsKey(storeName) && registeredStores.get(storeName).isPresent()) {
@@ -135,10 +149,7 @@ public class ProcessorStateManager extends AbstractStateManager {
 
         // check that the underlying change log topic exist or not
         final String topic = storeToChangelogTopic.get(storeName);
-        if (topic == null) {
-            registeredStores.put(storeName, Optional.of(store));
-        } else {
-
+        if (topic != null) {
             final TopicPartition storePartition = new TopicPartition(topic, getPartition(topic));
 
             final RecordConverter recordConverter = converterForStore(store);
@@ -149,12 +160,16 @@ public class ProcessorStateManager extends AbstractStateManager {
                 restoreCallbacks.put(topic, stateRestoreCallback);
                 recordConverters.put(topic, recordConverter);
             } else {
-                log.trace("Restoring state store {} from changelog topic {} at checkpoint {}", storeName, topic, checkpointableOffsets.get(storePartition));
+                final Long restoreCheckpoint = store.persistent() ? initialLoadedCheckpoints.get(storePartition) : null;
+                if (restoreCheckpoint != null) {
+                    checkpointFileCache.put(storePartition, restoreCheckpoint);
+                }
+                log.trace("Restoring state store {} from changelog topic {} at checkpoint {}", storeName, topic, restoreCheckpoint);
 
                 final StateRestorer restorer = new StateRestorer(
                     storePartition,
                     new CompositeRestoreListener(stateRestoreCallback),
-                    checkpointableOffsets.get(storePartition),
+                    restoreCheckpoint,
                     offsetLimit(storePartition),
                     store.persistent(),
                     storeName,
@@ -164,24 +179,38 @@ public class ProcessorStateManager extends AbstractStateManager {
                 changelogReader.register(restorer);
             }
             changelogPartitions.add(storePartition);
-
-            registeredStores.put(storeName, Optional.of(store));
         }
+
+        registeredStores.put(storeName, Optional.of(store));
     }
 
     @Override
     public void reinitializeStateStoresForPartitions(final Collection<TopicPartition> partitions,
                                                      final InternalProcessorContext processorContext) {
-        reinitializeStateStoresForPartitions(
-            log,
-            registeredStores,
-            storeToChangelogTopic,
-            partitions,
-            processorContext);
+        StateManagerUtil.reinitializeStateStoresForPartitions(log,
+                                                              eosEnabled,
+                                                              baseDir,
+                                                              registeredStores,
+                                                              storeToChangelogTopic,
+                                                              partitions,
+                                                              processorContext,
+                                                              checkpointFile,
+                                                              checkpointFileCache
+        );
+    }
+
+    void clearCheckpoints() throws IOException {
+        if (checkpointFile != null) {
+            checkpointFile.delete();
+            checkpointFile = null;
+
+            checkpointFileCache.clear();
+        }
     }
 
     @Override
     public Map<TopicPartition, Long> checkpointed() {
+        updateCheckpointFileCache(emptyMap());
         final Map<TopicPartition, Long> partitionsAndOffsets = new HashMap<>();
 
         for (final Map.Entry<String, StateRestoreCallback> entry : restoreCallbacks.entrySet()) {
@@ -189,7 +218,7 @@ public class ProcessorStateManager extends AbstractStateManager {
             final int partition = getPartition(topicName);
             final TopicPartition storePartition = new TopicPartition(topicName, partition);
 
-            partitionsAndOffsets.put(storePartition, checkpointableOffsets.getOrDefault(storePartition, -1L));
+            partitionsAndOffsets.put(storePartition, checkpointFileCache.getOrDefault(storePartition, -1L));
         }
         return partitionsAndOffsets;
     }
@@ -209,7 +238,7 @@ public class ProcessorStateManager extends AbstractStateManager {
 
             try {
                 restoreCallback.restoreBatch(convertedRecords);
-            } catch (final Exception e) {
+            } catch (final RuntimeException e) {
                 throw new ProcessorStateException(String.format("%sException caught while trying to restore state from %s", logPrefix, storePartition), e);
             }
         }
@@ -246,7 +275,7 @@ public class ProcessorStateManager extends AbstractStateManager {
                     log.trace("Flushing store {}", store.name());
                     try {
                         store.flush();
-                    } catch (final Exception e) {
+                    } catch (final RuntimeException e) {
                         if (firstException == null) {
                             firstException = new ProcessorStateException(String.format("%sFailed to flush state store %s", logPrefix, store.name()), e);
                         }
@@ -266,6 +295,7 @@ public class ProcessorStateManager extends AbstractStateManager {
     /**
      * {@link StateStore#close() Close} all stores (even in case of failure).
      * Log all exception and re-throw the first exception that did occur at the end.
+     *
      * @throws ProcessorStateException if any error happens when closing the state stores
      */
     @Override
@@ -282,7 +312,7 @@ public class ProcessorStateManager extends AbstractStateManager {
                     try {
                         store.close();
                         registeredStores.put(store.name(), Optional.empty());
-                    } catch (final Exception e) {
+                    } catch (final RuntimeException e) {
                         if (firstException == null) {
                             firstException = new ProcessorStateException(String.format("%sFailed to close state store %s", logPrefix, store.name()), e);
                         }
@@ -294,11 +324,10 @@ public class ProcessorStateManager extends AbstractStateManager {
             }
         }
 
-        if (!clean && eosEnabled && checkpoint != null) {
+        if (!clean && eosEnabled) {
             // delete the checkpoint file if this is an unclean close
             try {
-                checkpoint.delete();
-                checkpoint = null;
+                clearCheckpoints();
             } catch (final IOException e) {
                 throw new ProcessorStateException(String.format("%sError while deleting the checkpoint file", logPrefix), e);
             }
@@ -309,44 +338,56 @@ public class ProcessorStateManager extends AbstractStateManager {
         }
     }
 
-    // write the checkpoint
     @Override
-    public void checkpoint(final Map<TopicPartition, Long> checkpointableOffsets) {
-        this.checkpointableOffsets.putAll(changelogReader.restoredOffsets());
-        log.trace("Checkpointable offsets updated with restored offsets: {}", this.checkpointableOffsets);
-        for (final Map.Entry<String, Optional<StateStore>> entry : registeredStores.entrySet()) {
-            if (entry.getValue().isPresent()) {
-                final StateStore store = entry.getValue().get();
-                final String storeName = store.name();
-                // only checkpoint the offset to the offsets file if
-                // it is persistent AND changelog enabled
-                if (store.persistent() && storeToChangelogTopic.containsKey(storeName)) {
-                    final String changelogTopic = storeToChangelogTopic.get(storeName);
-                    final TopicPartition topicPartition = new TopicPartition(changelogTopic, getPartition(storeName));
-                    if (checkpointableOffsets.containsKey(topicPartition)) {
-                        // store the last offset + 1 (the log position after restoration)
-                        this.checkpointableOffsets.put(topicPartition, checkpointableOffsets.get(topicPartition) + 1);
-                    } else if (standbyRestoredOffsets.containsKey(topicPartition)) {
-                        this.checkpointableOffsets.put(topicPartition, standbyRestoredOffsets.get(topicPartition));
-                    }
-                }
-            } else {
-                throw new IllegalStateException("Expected " + entry.getKey() + " to have been initialized");
-            }
-        }
-
-        log.trace("Checkpointable offsets updated with active acked offsets: {}", this.checkpointableOffsets);
+    public void checkpoint(final Map<TopicPartition, Long> checkpointableOffsetsFromProcessing) {
+        ensureStoresRegistered();
 
         // write the checkpoint file before closing
-        if (checkpoint == null) {
-            checkpoint = new OffsetCheckpoint(new File(baseDir, CHECKPOINT_FILE_NAME));
+        if (checkpointFile == null) {
+            checkpointFile = new OffsetCheckpoint(new File(baseDir, CHECKPOINT_FILE_NAME));
         }
 
-        log.trace("Writing checkpoint: {}", this.checkpointableOffsets);
+        updateCheckpointFileCache(checkpointableOffsetsFromProcessing);
+
+        log.trace("Checkpointable offsets updated with active acked offsets: {}", checkpointFileCache);
+
+        log.trace("Writing checkpoint: {}", checkpointFileCache);
         try {
-            checkpoint.write(this.checkpointableOffsets);
+            checkpointFile.write(checkpointFileCache);
         } catch (final IOException e) {
-            log.warn("Failed to write offset checkpoint file to [{}]", checkpoint, e);
+            log.warn("Failed to write offset checkpoint file to [{}]", checkpointFile, e);
+        }
+    }
+
+    private void updateCheckpointFileCache(final Map<TopicPartition, Long> checkpointableOffsetsFromProcessing) {
+        final Set<TopicPartition> validCheckpointableTopics = validCheckpointableTopics();
+        final Map<TopicPartition, Long> restoredOffsets = validCheckpointableOffsets(
+            changelogReader.restoredOffsets(),
+            validCheckpointableTopics
+        );
+        log.trace("Checkpointable offsets updated with restored offsets: {}", checkpointFileCache);
+        for (final TopicPartition topicPartition : validCheckpointableTopics) {
+            if (checkpointableOffsetsFromProcessing.containsKey(topicPartition)) {
+                // if we have just recently processed some offsets,
+                // store the last offset + 1 (the log position after restoration)
+                checkpointFileCache.put(topicPartition, checkpointableOffsetsFromProcessing.get(topicPartition) + 1);
+            } else if (standbyRestoredOffsets.containsKey(topicPartition)) {
+                // or if we restored some offset as a standby task, use it
+                checkpointFileCache.put(topicPartition, standbyRestoredOffsets.get(topicPartition));
+            } else if (restoredOffsets.containsKey(topicPartition)) {
+                // or if we restored some offset as an active task, use it
+                checkpointFileCache.put(topicPartition, restoredOffsets.get(topicPartition));
+            } else if (checkpointFileCache.containsKey(topicPartition)) {
+                // or if we have a prior value we've cached (and written to the checkpoint file), then keep it
+            } else {
+                // As a last resort, fall back to the offset we loaded from the checkpoint file at startup, but
+                // only if the offset is actually valid for our current state stores.
+                final Long loadedOffset =
+                    validCheckpointableOffsets(initialLoadedCheckpoints, validCheckpointableTopics).get(topicPartition);
+                if (loadedOffset != null) {
+                    checkpointFileCache.put(topicPartition, loadedOffset);
+                }
+            }
         }
     }
 
@@ -379,5 +420,39 @@ public class ProcessorStateManager extends AbstractStateManager {
                 );
             }
         }
+    }
+
+    private Set<TopicPartition> validCheckpointableTopics() {
+        // it's only valid to record checkpoints for registered stores that are both persistent and change-logged
+
+        final Set<TopicPartition> result = new HashSet<>(storeToChangelogTopic.size());
+        for (final Map.Entry<String, String> storeToChangelog : storeToChangelogTopic.entrySet()) {
+            final String storeName = storeToChangelog.getKey();
+            if (registeredStores.containsKey(storeName)
+                && registeredStores.get(storeName).isPresent()
+                && registeredStores.get(storeName).get().persistent()) {
+
+                final String changelogTopic = storeToChangelog.getValue();
+                result.add(new TopicPartition(changelogTopic, getPartition(changelogTopic)));
+            }
+        }
+        return result;
+    }
+
+    private static Map<TopicPartition, Long> validCheckpointableOffsets(
+        final Map<TopicPartition, Long> checkpointableOffsets,
+        final Set<TopicPartition> validCheckpointableTopics) {
+
+        final Map<TopicPartition, Long> result = new HashMap<>(checkpointableOffsets.size());
+
+        for (final Map.Entry<TopicPartition, Long> topicToCheckpointableOffset : checkpointableOffsets.entrySet()) {
+            final TopicPartition topic = topicToCheckpointableOffset.getKey();
+            if (validCheckpointableTopics.contains(topic)) {
+                final Long checkpointableOffset = topicToCheckpointableOffset.getValue();
+                result.put(topic, checkpointableOffset);
+            }
+        }
+
+        return result;
     }
 }

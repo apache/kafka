@@ -24,7 +24,9 @@ import java.nio.charset.{Charset, StandardCharsets}
 import java.nio.file.{Files, StandardOpenOption}
 import java.security.cert.X509Certificate
 import java.time.Duration
-import java.util.{Collections, Properties}
+import java.util.Arrays
+import java.util.Collections
+import java.util.Properties
 import java.util.concurrent.{Callable, ExecutionException, Executors, TimeUnit}
 
 import javax.net.ssl.X509TrustManager
@@ -1111,7 +1113,7 @@ object TestUtils extends Logging {
     waitUntilTrue(() => servers.forall(server =>
       server.config.logDirs.forall { logDir =>
         topicPartitions.forall { tp =>
-          !java.util.Arrays.asList(new File(logDir).list()).asScala.exists { partitionDirectoryName =>
+          !Arrays.asList(new File(logDir).list()).asScala.exists { partitionDirectoryName =>
             partitionDirectoryName.startsWith(tp.topic + "-" + tp.partition) &&
               partitionDirectoryName.endsWith(Log.DeleteDirSuffix)
           }
@@ -1458,6 +1460,58 @@ object TestUtils extends Logging {
     val newConfig = new Config(configEntries)
     val configs = Map(new ConfigResource(ConfigResource.Type.TOPIC, topic) -> newConfig).asJava
     adminClient.alterConfigs(configs)
+  }
+
+  def currentLeader(client: AdminClient, topicPartition: TopicPartition): Option[Int] = {
+    Option(
+      client
+        .describeTopics(Arrays.asList(topicPartition.topic))
+        .all
+        .get
+        .get(topicPartition.topic)
+        .partitions
+        .get(topicPartition.partition)
+        .leader
+    ).map(_.id)
+  }
+
+  def waitForLeaderToBecome(client: AdminClient, topicPartition: TopicPartition, leader: Option[Int]): Unit = {
+    TestUtils.waitUntilTrue(
+      () => currentLeader(client, topicPartition) == leader,
+      s"Expected leader to become $leader", 10000
+    )
+  }
+
+  def waitForBrokersOutOfIsr(client: AdminClient, partition: Set[TopicPartition], brokerIds: Set[Int]): Unit = {
+    TestUtils.waitUntilTrue(
+      () => {
+        val description = client.describeTopics(partition.map(_.topic).asJava).all.get.asScala
+        val isr = description
+          .values
+          .flatMap(_.partitions.asScala.flatMap(_.isr.asScala))
+          .map(_.id)
+          .toSet
+
+        brokerIds.intersect(isr).isEmpty
+      },
+      s"Expected brokers $brokerIds to no longer in the ISR for $partition"
+    )
+  }
+
+  def waitForBrokersInIsr(client: AdminClient, partition: TopicPartition, brokerIds: Set[Int]): Unit = {
+    TestUtils.waitUntilTrue(
+      () => {
+        val description = client.describeTopics(Set(partition.topic).asJava).all.get.asScala
+        val isr = description
+          .values
+          .flatMap(_.partitions.asScala.flatMap(_.isr.asScala))
+          .map(_.id)
+          .toSet
+
+        brokerIds.subsetOf(isr)
+      },
+      s"Expected brokers $brokerIds to be in the ISR for $partition"
+    )
   }
 
   /**
