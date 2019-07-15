@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.LogContext;
@@ -36,8 +37,8 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
     private final Set<TopicPartition> restoredPartitions = new HashSet<>();
     private final Map<TopicPartition, StreamTask> restoringByPartition = new HashMap<>();
 
-    AssignedStreamsTasks(final LogContext logContext) {
-        super(logContext, "stream task");
+    AssignedStreamsTasks(final LogContext logContext, final Producer<byte[], byte[]> threadProducer) {
+        super(logContext, "stream task", threadProducer);
     }
 
     @Override

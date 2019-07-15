@@ -66,6 +66,7 @@ import static org.apache.kafka.streams.kstream.internals.metrics.Sensors.recordL
 public class StreamTask extends AbstractTask implements ProcessorNodePunctuator {
 
     private static final ConsumerRecord<Object, Object> DUMMY_RECORD = new ConsumerRecord<>(ProcessorContextImpl.NONEXIST_TOPIC, -1, -1L, null, null);
+    public static final Map<TopicPartition, OffsetAndMetadata> INTERNAL_COMMIT = null;
 
     private final Time time;
     private final long maxTaskIdleMs;
@@ -438,10 +439,11 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
      *
      * @throws TaskMigratedException if committing offsets failed (non-EOS)
      *                               or if the task producer got fenced (EOS)
+     * @return a map of topic partition to offsets if needExternal commit
      */
     @Override
-    public void commit() {
-        commit(true);
+    public Map<TopicPartition, OffsetAndMetadata> commit() {
+        return commit(true);
     }
 
     /**
@@ -449,7 +451,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
      *                               or if the task producer got fenced (EOS)
      */
     // visible for testing
-    void commit(final boolean startNewTransaction) {
+    Map<TopicPartition, OffsetAndMetadata> commit(final boolean startNewTransaction) {
         final long startNs = time.nanoseconds();
         log.debug("Committing");
 
@@ -469,6 +471,9 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
 
         try {
             if (eosEnabled) {
+                if (isThreadProducer) {
+                    return consumedOffsetsAndMetadata;
+                }
                 producer.sendOffsetsToTransaction(consumedOffsetsAndMetadata, applicationId);
                 producer.commitTransaction();
                 transactionInFlight = false;
@@ -486,6 +491,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         commitNeeded = false;
         commitRequested = false;
         taskMetrics.taskCommitTimeSensor.record(time.nanoseconds() - startNs);
+        return null;
     }
 
     @Override

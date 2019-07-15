@@ -669,7 +669,7 @@ public class StandbyTaskTest {
             stateDirectory
         ) {
             @Override
-            public void commit() {
+            public Map<TopicPartition, OffsetAndMetadata> commit() {
                 throw new RuntimeException("KABOOM!");
             }
 

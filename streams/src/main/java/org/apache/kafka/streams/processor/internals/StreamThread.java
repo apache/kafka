@@ -629,7 +629,7 @@ public class StreamThread extends Thread {
             activeTaskCreator,
             standbyTaskCreator,
             adminClient,
-            new AssignedStreamsTasks(logContext),
+            new AssignedStreamsTasks(logContext, threadProducer),
             new AssignedStandbyTasks(logContext));
 
         log.info("Creating consumer client");

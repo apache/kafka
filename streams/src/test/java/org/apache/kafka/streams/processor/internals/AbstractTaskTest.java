@@ -250,7 +250,7 @@ public class AbstractTaskTest {
             public void resume() {}
 
             @Override
-            public void commit() {}
+            public Map<TopicPartition, OffsetAndMetadata> commit() {}
 
             @Override
             public void suspend() {}

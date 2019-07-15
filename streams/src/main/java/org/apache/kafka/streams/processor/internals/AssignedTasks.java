@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.errors.LockException;
@@ -36,21 +38,26 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicReference;
 
+import static org.apache.kafka.streams.processor.internals.StreamTask.INTERNAL_COMMIT;
+
 abstract class AssignedTasks<T extends Task> {
     final Logger log;
     private final String taskTypeName;
     private final Map<TaskId, T> created = new HashMap<>();
     private final Map<TaskId, T> suspended = new HashMap<>();
     private final Set<TaskId> previousActiveTasks = new HashSet<>();
+    private final Producer<byte[], byte[]> eosProducer;
 
     // IQ may access this map.
     final Map<TaskId, T> running = new ConcurrentHashMap<>();
     private final Map<TopicPartition, T> runningByPartition = new HashMap<>();
 
     AssignedTasks(final LogContext logContext,
-                  final String taskTypeName) {
+                  final String taskTypeName,
+                  final Producer<byte[], byte[]> eosProducer) {
         this.taskTypeName = taskTypeName;
         this.log = logContext.logger(getClass());
+        this.eosProducer = eosProducer;
     }
 
     void addNewTask(final T task) {
@@ -278,12 +285,18 @@ abstract class AssignedTasks<T extends Task> {
     int commit() {
         int committed = 0;
         RuntimeException firstException = null;
+        Map<TopicPartition, OffsetAndMetadata> needsExternalCommit = new HashMap<>();
+
+        Producer<>
 
         for (final Iterator<T> it = running().iterator(); it.hasNext(); ) {
             final T task = it.next();
             try {
                 if (task.commitNeeded()) {
-                    task.commit();
+                    Map<TopicPartition, OffsetAndMetadata> uncommitted = task.commit();
+                    if (uncommitted != INTERNAL_COMMIT) {
+                        needsExternalCommit.putAll(uncommitted);
+                    }
                     committed++;
                 }
             } catch (final TaskMigratedException e) {
@@ -308,6 +321,12 @@ abstract class AssignedTasks<T extends Task> {
 
         if (firstException != null) {
             throw firstException;
+        }
+
+        if (!needsExternalCommit.isEmpty()) {
+            eosProducer.sendOffsetsToTransaction(needsExternalCommit);
+            eosProducer.commitTransaction();
+            eosProducer.beginTransaction();
         }
 
         return committed;
