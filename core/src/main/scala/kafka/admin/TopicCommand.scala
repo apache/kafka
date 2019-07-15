@@ -354,8 +354,8 @@ object TopicCommand extends Logging {
 
     override def describeTopic(opts: TopicCommandOptions): Unit = {
       val topics = getTopics(opts.topic, opts.excludeInternalTopics)
-      val topicOptWithExits = opts.topic.isDefined && opts.ifExists
-      ensureTopicExists(topics, topicOptWithExits)
+      val shouldIgnoreNoTopics = !opts.topic.isDefined || opts.ifExists
+      ensureTopicExists(topics, shouldIgnoreNoTopics)
       val liveBrokers = zkClient.getAllBrokersInCluster.map(_.id).toSet
       val describeOptions = new DescribeOptions(opts, liveBrokers)
       val adminZkClient = new AdminZkClient(zkClient)
@@ -437,8 +437,8 @@ object TopicCommand extends Logging {
     * @param topics
     * @param topicOptWithExists
     */
-  private def ensureTopicExists(topics: Seq[String], topicOptWithExists: Boolean = false) = {
-    if (topics.isEmpty && !topicOptWithExists) {
+  private def ensureTopicExists(topics: Seq[String], shouldIgnoreNoTopics: Boolean = false) = {
+    if (!shouldIgnoreNoTopics && topics.isEmpty) {
       // If given topic doesn't exist then throw exception
       throw new IllegalArgumentException(s"Topics in [${topics.mkString(",")}] does not exist")
     }
