@@ -288,7 +288,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     }
   }
 
-  private def setAcls(tp: TopicPartition) {
+  private def setReadAndWriteAcls(tp: TopicPartition) {
     AclCommand.main(produceAclArgs(tp.topic))
     AclCommand.main(consumeAclArgs(tp.topic))
     servers.foreach { s =>
@@ -299,7 +299,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
   }
 
   protected def setAclsAndProduce(tp: TopicPartition) {
-    setAcls(tp)
+    setReadAndWriteAcls(tp)
     val producer = createProducer()
     sendRecords(producer, numRecords, tp)
   }
@@ -334,7 +334,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     // Verify successful produce/consume/describe on another topic using the same producer, consumer and adminClient
     val topic2 = "topic2"
     val tp2 = new TopicPartition(topic2, 0)
-    setAcls(tp2)
+    setReadAndWriteAcls(tp2)
     sendRecords(producer, numRecords, tp2)
     consumer.assign(List(tp2).asJava)
     consumeRecords(consumer, numRecords, topic = topic2)
@@ -355,7 +355,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     }
 
     // Add ACLs and verify successful produce/consume/describe on first topic
-    setAcls(tp)
+    setReadAndWriteAcls(tp)
     consumeRecordsIgnoreOneAuthorizationException(consumer, numRecords, startingOffset = numRecords, topic2)
     sendRecords(producer, numRecords, tp)
     consumeRecords(consumer, numRecords, topic = topic)
@@ -404,7 +404,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     assertThrows[TopicAuthorizationException] { consumeRecords(consumer, timeout = 3000) }
 
     // Verify that no records are consumed even if one of the requested topics is authorized
-    setAcls(tp)
+    setReadAndWriteAcls(tp)
     consumer.subscribe(List(topic, "topic2").asJava)
     assertThrows[TopicAuthorizationException] { consumeRecords(consumer, timeout = 3000) }
 

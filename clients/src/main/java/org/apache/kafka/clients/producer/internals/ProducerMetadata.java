@@ -95,13 +95,9 @@ public class ProducerMetadata extends Metadata {
         long currentTimeMs = time.milliseconds();
         long deadlineMs = currentTimeMs + timeoutMs < 0 ? Long.MAX_VALUE : currentTimeMs + timeoutMs;
         time.waitObject(this, () -> {
-            boolean done = updateVersion() > lastVersion || isClosed();
-            // Propagate fatal exceptions if we haven't yet processed required metadata version to avoid unnecessary wait.
-            // If metadata has been updated to the required version, don't clear error state so that caller can process
-            // errors related to the topic being processed.
-            if (!done)
-                maybeThrowFatalException();
-            return done;
+            // Throw fatal exceptions, if there are any. Recoverable topic errors will be handled by the caller.
+            maybeThrowFatalException();
+            return updateVersion() > lastVersion || isClosed();
         }, deadlineMs);
 
         if (isClosed())

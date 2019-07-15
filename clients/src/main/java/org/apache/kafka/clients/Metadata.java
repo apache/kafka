@@ -266,7 +266,6 @@ public class Metadata implements Closeable {
     }
 
     private void maybeSetMetadataError(Cluster cluster) {
-        // if we encounter any invalid topics, cache the exception to later throw to the user
         clearRecoverableErrors();
         checkInvalidTopics(cluster);
         checkUnauthorizedTopics(cluster);
@@ -363,12 +362,16 @@ public class Metadata implements Closeable {
     }
 
     /**
-     * If any fatal exceptions were encountered during metadata update, throw the exception. All
-     * exceptions from the last metadata update are cleared. This is used by the producer to abort waiting
-     * for metadata if there were fatal exceptions (e.g. authentication failures) in the last metadata update.
+     * If any fatal exceptions were encountered during metadata update, throw the exception. This is used by
+     * the producer to abort waiting for metadata if there were fatal exceptions (e.g. authentication failures)
+     * in the last metadata update.
      */
     public synchronized void maybeThrowFatalException() {
-        clearErrorsAndMaybeThrowException(() -> null);
+        KafkaException metadataException = this.fatalException;
+        if (metadataException != null) {
+            fatalException = null;
+            throw metadataException;
+        }
     }
 
     /**
