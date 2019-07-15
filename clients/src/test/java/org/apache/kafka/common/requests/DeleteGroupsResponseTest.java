@@ -27,8 +27,6 @@ import java.util.HashMap;
 import java.util.Map;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.assertFalse;
 
 public class DeleteGroupsResponseTest {
 
@@ -55,9 +53,7 @@ public class DeleteGroupsResponseTest {
 
     @Test
     public void testGetErrorWithExistingGroupIds() {
-        assertFalse(deleteGroupsResponse.hasError(GROUP_ID_1));
         assertEquals(Errors.NONE, deleteGroupsResponse.get(GROUP_ID_1));
-        assertTrue(deleteGroupsResponse.hasError(GROUP_ID_2));
         assertEquals(Errors.GROUP_AUTHORIZATION_FAILED, deleteGroupsResponse.get(GROUP_ID_2));
 
         Map<String, Errors> expectedErrors = new HashMap<>();

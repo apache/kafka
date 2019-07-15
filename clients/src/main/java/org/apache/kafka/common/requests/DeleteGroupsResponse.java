@@ -67,10 +67,6 @@ public class DeleteGroupsResponse extends AbstractResponse {
         return errorMap;
     }
 
-    public boolean hasError(String group) {
-        return get(group).code() != Errors.NONE.code();
-    }
-
     public Errors get(String group) throws IllegalArgumentException {
         DeletableGroupResult result = data.results().find(group);
         if (result == null) {
