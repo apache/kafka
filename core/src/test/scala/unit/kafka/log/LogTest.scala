@@ -116,6 +116,59 @@ class LogTest {
     assertHighWatermark(3L)
   }
 
+  private def assertNonEmptyFetch(log: Log, offset: Long, isolation: FetchIsolation): Unit = {
+    val readInfo = log.read(startOffset = offset,
+      maxLength = Int.MaxValue,
+      isolation = isolation,
+      minOneMessage = true)
+
+    assertFalse(readInfo.firstEntryIncomplete)
+    assertTrue(readInfo.records.sizeInBytes > 0)
+
+    val upperBoundOffset = isolation match {
+      case FetchLogEnd => log.logEndOffset
+      case FetchHighWatermark => log.highWatermark
+      case FetchTxnCommitted => log.lastStableOffset
+    }
+
+    for (record <- readInfo.records.records.asScala)
+      assertTrue(record.offset < upperBoundOffset)
+
+    assertEquals(offset, readInfo.fetchOffsetMetadata.messageOffset)
+    assertValidLogOffsetMetadata(log, readInfo.fetchOffsetMetadata)
+  }
+
+  private def assertEmptyFetch(log: Log, offset: Long, isolation: FetchIsolation): Unit = {
+    val readInfo = log.read(startOffset = offset,
+      maxLength = Int.MaxValue,
+      isolation = isolation,
+      minOneMessage = true)
+    assertFalse(readInfo.firstEntryIncomplete)
+    assertEquals(0, readInfo.records.sizeInBytes)
+    assertEquals(offset, readInfo.fetchOffsetMetadata.messageOffset)
+    assertValidLogOffsetMetadata(log, readInfo.fetchOffsetMetadata)
+  }
+
+  @Test
+  def testFetchUpToLogEndOffset(): Unit = {
+    val logConfig = LogTest.createLogConfig(segmentBytes = 1024 * 1024)
+    val log = createLog(logDir, logConfig)
+
+    log.appendAsLeader(TestUtils.records(List(
+      new SimpleRecord("0".getBytes),
+      new SimpleRecord("1".getBytes),
+      new SimpleRecord("2".getBytes)
+    )), leaderEpoch = 0)
+    log.appendAsLeader(TestUtils.records(List(
+      new SimpleRecord("3".getBytes),
+      new SimpleRecord("4".getBytes)
+    )), leaderEpoch = 0)
+
+    (log.logStartOffset until log.logEndOffset).foreach { offset =>
+      assertNonEmptyFetch(log, offset, FetchLogEnd)
+    }
+  }
+
   @Test
   def testFetchUpToHighWatermark(): Unit = {
     val logConfig = LogTest.createLogConfig(segmentBytes = 1024 * 1024)
@@ -131,48 +184,72 @@ class LogTest {
       new SimpleRecord("4".getBytes)
     )), leaderEpoch = 0)
 
-    def fetch(offset: Long): FetchDataInfo = {
-      log.read(startOffset = offset,
-        maxLength = Int.MaxValue,
-        isolation = FetchHighWatermark,
-        minOneMessage = true)
-    }
-
-    def assertEmptyFetch(offset: Long): Unit = {
-      val readInfo = fetch(offset)
-      assertFalse(readInfo.firstEntryIncomplete)
-      assertEquals(0, readInfo.records.sizeInBytes)
-      assertEquals(offset, readInfo.fetchOffsetMetadata.messageOffset)
-      assertValidLogOffsetMetadata(log, readInfo.fetchOffsetMetadata)
-    }
-
-    def assertNonEmptyFetch(offset: Long): Unit = {
-      val readInfo = fetch(offset)
-      assertFalse(readInfo.firstEntryIncomplete)
-      assertTrue(readInfo.records.sizeInBytes > 0)
-      for (record <- readInfo.records.records.asScala)
-        assertTrue(record.offset < log.highWatermark)
-      assertEquals(offset, readInfo.fetchOffsetMetadata.messageOffset)
-      assertValidLogOffsetMetadata(log, readInfo.fetchOffsetMetadata)
-    }
-
-    def assertHighWatermarkFetches(): Unit = {
+    def assertHighWatermarkBoundedFetches(): Unit = {
       (log.logStartOffset until log.highWatermark).foreach { offset =>
-        assertNonEmptyFetch(offset)
+        assertNonEmptyFetch(log, offset, FetchHighWatermark)
       }
 
       (log.highWatermark to log.logEndOffset).foreach { offset =>
-        assertEmptyFetch(offset)
+        assertEmptyFetch(log, offset, FetchHighWatermark)
       }
     }
 
-    assertHighWatermarkFetches()
+    assertHighWatermarkBoundedFetches()
 
     log.updateHighWatermark(3L)
-    assertHighWatermarkFetches()
+    assertHighWatermarkBoundedFetches()
 
     log.updateHighWatermark(5L)
-    assertHighWatermarkFetches()
+    assertHighWatermarkBoundedFetches()
+  }
+
+  @Test
+  def testFetchUpToLastStableOffset(): Unit = {
+    val logConfig = LogTest.createLogConfig(segmentBytes = 1024 * 1024)
+    val log = createLog(logDir, logConfig)
+    val epoch = 0.toShort
+
+    val producerId1 = 1L
+    val producerId2 = 2L
+
+    val appendProducer1 = appendTransactionalAsLeader(log, producerId1, epoch)
+    val appendProducer2 = appendTransactionalAsLeader(log, producerId2, epoch)
+
+    appendProducer1(5)
+    appendNonTransactionalAsLeader(log, 3)
+    appendProducer2(2)
+    appendProducer1(4)
+    appendNonTransactionalAsLeader(log, 2)
+    appendProducer1(10)
+
+    def assertLsoBoundedFetches(): Unit = {
+      (log.logStartOffset until log.lastStableOffset).foreach { offset =>
+        assertNonEmptyFetch(log, offset, FetchTxnCommitted)
+      }
+
+      (log.lastStableOffset to log.logEndOffset).foreach { offset =>
+        assertEmptyFetch(log, offset, FetchTxnCommitted)
+      }
+    }
+
+    assertLsoBoundedFetches()
+
+    log.updateHighWatermark(log.logEndOffset)
+    assertLsoBoundedFetches()
+
+    appendEndTxnMarkerAsLeader(log, producerId1, epoch, ControlRecordType.COMMIT)
+    assertEquals(0L, log.lastStableOffset)
+
+    log.updateHighWatermark(log.logEndOffset)
+    assertEquals(8L, log.lastStableOffset)
+    assertLsoBoundedFetches()
+
+    appendEndTxnMarkerAsLeader(log, producerId2, epoch, ControlRecordType.ABORT)
+    assertEquals(8L, log.lastStableOffset)
+
+    log.updateHighWatermark(log.logEndOffset)
+    assertEquals(log.logEndOffset, log.lastStableOffset)
+    assertLsoBoundedFetches()
   }
 
   @Test
