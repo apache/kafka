@@ -121,7 +121,7 @@ public class StreamsOptimizedTest {
         final KafkaStreams streams = new KafkaStreams(topology, config);
 
 
-        streams.setStateListener((oldState, newState) -> {
+        streams.setStateListener((newState, oldState) -> {
             if (oldState == State.REBALANCING && newState == State.RUNNING) {
                 final int repartitionTopicCount = getCountOfRepartitionTopicsFound(topology.describe().toString(), repartitionTopicPattern);
                 System.out.println(String.format("REBALANCING -> RUNNING with REPARTITION TOPIC COUNT=%d", repartitionTopicCount));

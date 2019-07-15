@@ -22,7 +22,7 @@ import java.util.concurrent.locks.ReentrantLock
 import kafka.log.Log
 import kafka.server.{FetchDataInfo, LogOffsetMetadata, ReplicaManager}
 import kafka.utils.{MockScheduler, Pool}
-import kafka.utils.TestUtils.fail
+import org.scalatest.Assertions.fail
 import kafka.zk.KafkaZkClient
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.internals.Topic.TRANSACTION_STATE_TOPIC_NAME
@@ -156,7 +156,7 @@ class TransactionStateManagerTest {
     txnRecords += new SimpleRecord(txnMessageKeyBytes2, TransactionLog.valueToBytes(txnMetadata2.prepareNoTransit()))
 
     val startOffset = 15L   // it should work for any start offset
-    val records = MemoryRecords.withRecords(startOffset, CompressionType.NONE, txnRecords: _*)
+    val records = MemoryRecords.withRecords(startOffset, CompressionType.NONE, txnRecords.toArray: _*)
 
     prepareTxnLog(topicPartition, startOffset, records)
 
@@ -538,7 +538,7 @@ class TransactionStateManagerTest {
 
     txnRecords += new SimpleRecord(txnMessageKeyBytes1, TransactionLog.valueToBytes(txnMetadata1.prepareNoTransit()))
     val startOffset = 0L
-    val records = MemoryRecords.withRecords(startOffset, CompressionType.NONE, txnRecords: _*)
+    val records = MemoryRecords.withRecords(startOffset, CompressionType.NONE, txnRecords.toArray: _*)
 
     prepareTxnLog(topicPartition, 0, records)
 

@@ -46,24 +46,9 @@ public class KStreamBranchTest {
     public void testKStreamBranch() {
         final StreamsBuilder builder = new StreamsBuilder();
 
-        final Predicate<Integer, String> isEven = new Predicate<Integer, String>() {
-            @Override
-            public boolean test(final Integer key, final String value) {
-                return (key % 2) == 0;
-            }
-        };
-        final Predicate<Integer, String> isMultipleOfThree = new Predicate<Integer, String>() {
-            @Override
-            public boolean test(final Integer key, final String value) {
-                return (key % 3) == 0;
-            }
-        };
-        final Predicate<Integer, String> isOdd = new Predicate<Integer, String>() {
-            @Override
-            public boolean test(final Integer key, final String value) {
-                return (key % 2) != 0;
-            }
-        };
+        final Predicate<Integer, String> isEven = (key, value) -> (key % 2) == 0;
+        final Predicate<Integer, String> isMultipleOfThree = (key, value) -> (key % 3) == 0;
+        final Predicate<Integer, String> isOdd = (key, value) -> (key % 2) != 0;
 
         final int[] expectedKeys = new int[]{1, 2, 3, 4, 5, 6};
 
@@ -92,24 +77,14 @@ public class KStreamBranchTest {
         assertEquals(2, processors.get(2).processed.size());
     }
 
+    @SuppressWarnings("unchecked")
     @Test
     public void testTypeVariance() {
-        final Predicate<Number, Object> positive = new Predicate<Number, Object>() {
-            @Override
-            public boolean test(final Number key, final Object value) {
-                return key.doubleValue() > 0;
-            }
-        };
+        final Predicate<Number, Object> positive = (key, value) -> key.doubleValue() > 0;
 
-        final Predicate<Number, Object> negative = new Predicate<Number, Object>() {
-            @Override
-            public boolean test(final Number key, final Object value) {
-                return key.doubleValue() < 0;
-            }
-        };
+        final Predicate<Number, Object> negative = (key, value) -> key.doubleValue() < 0;
 
-        @SuppressWarnings("unchecked")
-        final KStream<Integer, String>[] branches = new StreamsBuilder()
+        new StreamsBuilder()
             .<Integer, String>stream("empty")
             .branch(positive, negative);
     }

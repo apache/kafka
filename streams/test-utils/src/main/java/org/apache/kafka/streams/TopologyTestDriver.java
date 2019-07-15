@@ -32,6 +32,9 @@ import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.common.metrics.stats.Count;
+import org.apache.kafka.common.metrics.stats.Rate;
+import org.apache.kafka.common.metrics.stats.Total;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.Deserializer;
@@ -40,7 +43,9 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.errors.LogAndContinueExceptionHandler;
 import org.apache.kafka.streams.errors.TopologyException;
+import org.apache.kafka.streams.internals.KeyValueStoreFacade;
 import org.apache.kafka.streams.internals.QuietStreamsConfig;
+import org.apache.kafka.streams.internals.WindowStoreFacade;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.Punctuator;
@@ -61,11 +66,19 @@ import org.apache.kafka.streams.processor.internals.StoreChangelogReader;
 import org.apache.kafka.streams.processor.internals.StreamTask;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
+import org.apache.kafka.streams.state.ReadOnlySessionStore;
+import org.apache.kafka.streams.state.ReadOnlyWindowStore;
 import org.apache.kafka.streams.state.SessionStore;
+import org.apache.kafka.streams.state.TimestampedKeyValueStore;
+import org.apache.kafka.streams.state.TimestampedWindowStore;
+import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 import org.apache.kafka.streams.test.ConsumerRecordFactory;
 import org.apache.kafka.streams.test.OutputVerifier;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.Closeable;
 import java.io.IOException;
@@ -83,6 +96,7 @@ import java.util.Queue;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.Supplier;
 import java.util.regex.Pattern;
 
 /**
@@ -175,6 +189,8 @@ import java.util.regex.Pattern;
 @InterfaceStability.Evolving
 public class TopologyTestDriver implements Closeable {
 
+    private static final Logger log = LoggerFactory.getLogger(TopologyTestDriver.class);
+
     private final Time mockWallClockTime;
     private final InternalTopologyBuilder internalTopologyBuilder;
 
@@ -183,8 +199,6 @@ public class TopologyTestDriver implements Closeable {
     final StreamTask task;
     private final GlobalStateUpdateTask globalStateTask;
     private final GlobalStateManager globalStateManager;
-
-    private final InternalProcessorContext context;
 
     private final StateDirectory stateDirectory;
     private final Metrics metrics;
@@ -247,7 +261,7 @@ public class TopologyTestDriver implements Closeable {
         processorTopology = internalTopologyBuilder.build(null);
         globalTopology = internalTopologyBuilder.buildGlobalStateTopology();
         final boolean createStateDirectory = processorTopology.hasPersistentLocalStore() ||
-                (globalTopology != null && globalTopology.hasPersistentGlobalStore());
+            (globalTopology != null && globalTopology.hasPersistentGlobalStore());
 
         final Serializer<byte[]> bytesSerializer = new ByteArraySerializer();
         producer = new MockProducer<byte[], byte[]>(true, bytesSerializer, bytesSerializer) {
@@ -266,10 +280,21 @@ public class TopologyTestDriver implements Closeable {
             .timeWindow(streamsConfig.getLong(StreamsConfig.METRICS_SAMPLE_WINDOW_MS_CONFIG), TimeUnit.MILLISECONDS);
 
         metrics = new Metrics(metricConfig, mockWallClockTime);
-        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(
-            metrics,
-            "topology-test-driver-virtual-thread"
-        );
+
+        final String threadName = "topology-test-driver-virtual-thread";
+        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, threadName);
+        final Sensor skippedRecordsSensor = streamsMetrics.threadLevelSensor("skipped-records", Sensor.RecordingLevel.INFO);
+        final String threadLevelGroup = "stream-metrics";
+        skippedRecordsSensor.add(new MetricName("skipped-records-rate",
+                                                threadLevelGroup,
+                                                "The average per-second number of skipped records",
+                                                streamsMetrics.tagMap()),
+                                 new Rate(TimeUnit.SECONDS, new Count()));
+        skippedRecordsSensor.add(new MetricName("skipped-records-total",
+                                                threadLevelGroup,
+                                                "The total number of skipped records",
+                                                streamsMetrics.tagMap()),
+                                 new Total());
         final ThreadCache cache = new ThreadCache(
             new LogContext("topology-test-driver "),
             Math.max(0, streamsConfig.getLong(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG)),
@@ -315,8 +340,8 @@ public class TopologyTestDriver implements Closeable {
                 stateRestoreListener,
                 streamsConfig);
 
-            final GlobalProcessorContextImpl globalProcessorContext
-                = new GlobalProcessorContextImpl(streamsConfig, globalStateManager, streamsMetrics, cache);
+            final GlobalProcessorContextImpl globalProcessorContext =
+                new GlobalProcessorContextImpl(streamsConfig, globalStateManager, streamsMetrics, cache);
             globalStateManager.setGlobalProcessorContext(globalProcessorContext);
 
             globalStateTask = new GlobalStateUpdateTask(
@@ -349,15 +374,17 @@ public class TopologyTestDriver implements Closeable {
                 stateDirectory,
                 cache,
                 mockWallClockTime,
-                () -> producer,
-                metrics.sensor("dummy"));
+                () -> producer);
             task.initializeStateStores();
             task.initializeTopology();
-            context = (InternalProcessorContext) task.context();
-            context.setRecordContext(new ProcessorRecordContext(0L, -1L, -1, ProcessorContextImpl.NONEXIST_TOPIC, new RecordHeaders()));
+            ((InternalProcessorContext) task.context()).setRecordContext(new ProcessorRecordContext(
+                0L,
+                -1L,
+                -1,
+                ProcessorContextImpl.NONEXIST_TOPIC,
+                new RecordHeaders()));
         } else {
             task = null;
-            context = null;
         }
         eosEnabled = streamsConfig.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG).equals(StreamsConfig.EXACTLY_ONCE);
     }
@@ -464,7 +491,8 @@ public class TopologyTestDriver implements Closeable {
             // Forward back into the topology if the produced record is to an internal or a source topic ...
             final String outputTopicName = record.topic();
             if (internalTopics.contains(outputTopicName) || processorTopology.sourceTopics().contains(outputTopicName)
-                    || globalPartitionsByTopic.containsKey(outputTopicName)) {
+                || globalPartitionsByTopic.containsKey(outputTopicName)) {
+
                 final byte[] serializedKey = record.key();
                 final byte[] serializedValue = record.value();
 
@@ -559,18 +587,23 @@ public class TopologyTestDriver implements Closeable {
      * {@link #pipeInput(ConsumerRecord) process an input message}, and/or to check the store afterward.
      * <p>
      * Note, that {@code StateStore} might be {@code null} if a store is added but not connected to any processor.
+     * <p>
+     * <strong>Caution:</strong> Using this method to access stores that are added by the DSL is unsafe as the store
+     * types may change. Stores added by the DSL should only be accessed via the corresponding typed methods
+     * like {@link #getKeyValueStore(String)} etc.
      *
      * @return all stores my name
      * @see #getStateStore(String)
      * @see #getKeyValueStore(String)
+     * @see #getTimestampedKeyValueStore(String)
      * @see #getWindowStore(String)
+     * @see #getTimestampedWindowStore(String)
      * @see #getSessionStore(String)
      */
-    @SuppressWarnings("WeakerAccess")
     public Map<String, StateStore> getAllStateStores() {
         final Map<String, StateStore> allStores = new HashMap<>();
         for (final String storeName : internalTopologyBuilder.allStateStoreName()) {
-            allStores.put(storeName, getStateStore(storeName));
+            allStores.put(storeName, getStateStore(storeName, false));
         }
         return allStores;
     }
@@ -579,21 +612,37 @@ public class TopologyTestDriver implements Closeable {
      * Get the {@link StateStore} with the given name.
      * The store can be a "regular" or global store.
      * <p>
+     * Should be used for custom stores only.
+     * For built-in stores, the corresponding typed methods like {@link #getKeyValueStore(String)} should be used.
+     * <p>
      * This is often useful in test cases to pre-populate the store before the test case instructs the topology to
      * {@link #pipeInput(ConsumerRecord) process an input message}, and/or to check the store afterward.
      *
      * @param name the name of the store
      * @return the state store, or {@code null} if no store has been registered with the given name
+     * @throws IllegalArgumentException if the store is a built-in store like {@link KeyValueStore},
+     * {@link WindowStore}, or {@link SessionStore}
+     *
      * @see #getAllStateStores()
      * @see #getKeyValueStore(String)
+     * @see #getTimestampedKeyValueStore(String)
      * @see #getWindowStore(String)
+     * @see #getTimestampedWindowStore(String)
      * @see #getSessionStore(String)
      */
     @SuppressWarnings("WeakerAccess")
-    public StateStore getStateStore(final String name) {
+    public StateStore getStateStore(final String name) throws IllegalArgumentException {
+        return getStateStore(name, true);
+    }
+
+    private StateStore getStateStore(final String name,
+                                     final boolean throwForBuiltInStores) {
         if (task != null) {
             final StateStore stateStore = ((ProcessorContextImpl) task.context()).getStateMgr().getStore(name);
             if (stateStore != null) {
+                if (throwForBuiltInStores) {
+                    throwIfBuiltInStore(stateStore);
+                }
                 return stateStore;
             }
         }
@@ -601,6 +650,9 @@ public class TopologyTestDriver implements Closeable {
         if (globalStateManager != null) {
             final StateStore stateStore = globalStateManager.getGlobalStore(name);
             if (stateStore != null) {
+                if (throwForBuiltInStores) {
+                    throwIfBuiltInStore(stateStore);
+                }
                 return stateStore;
             }
 
@@ -609,44 +661,133 @@ public class TopologyTestDriver implements Closeable {
         return null;
     }
 
+    private void throwIfBuiltInStore(final StateStore stateStore) {
+        if (stateStore instanceof TimestampedKeyValueStore) {
+            throw new IllegalArgumentException("Store " + stateStore.name()
+                + " is a timestamped key-value store and should be accessed via `getTimestampedKeyValueStore()`");
+        }
+        if (stateStore instanceof ReadOnlyKeyValueStore) {
+            throw new IllegalArgumentException("Store " + stateStore.name()
+                + " is a key-value store and should be accessed via `getKeyValueStore()`");
+        }
+        if (stateStore instanceof TimestampedWindowStore) {
+            throw new IllegalArgumentException("Store " + stateStore.name()
+                + " is a timestamped window store and should be accessed via `getTimestampedWindowStore()`");
+        }
+        if (stateStore instanceof ReadOnlyWindowStore) {
+            throw new IllegalArgumentException("Store " + stateStore.name()
+                + " is a window store and should be accessed via `getWindowStore()`");
+        }
+        if (stateStore instanceof ReadOnlySessionStore) {
+            throw new IllegalArgumentException("Store " + stateStore.name()
+                + " is a session store and should be accessed via `getSessionStore()`");
+        }
+    }
+
     /**
-     * Get the {@link KeyValueStore} with the given name.
+     * Get the {@link KeyValueStore} or {@link TimestampedKeyValueStore} with the given name.
      * The store can be a "regular" or global store.
+     * <p>
+     * If the registered store is a {@link TimestampedKeyValueStore} this method will return a value-only query
+     * interface. <strong>It is highly recommended to update the code for this case to avoid bugs and to use
+     * {@link #getTimestampedKeyValueStore(String)} for full store access instead.</strong>
      * <p>
      * This is often useful in test cases to pre-populate the store before the test case instructs the topology to
      * {@link #pipeInput(ConsumerRecord) process an input message}, and/or to check the store afterward.
      *
      * @param name the name of the store
-     * @return the key value store, or {@code null} if no {@link KeyValueStore} has been registered with the given name
+     * @return the key value store, or {@code null} if no {@link KeyValueStore} or {@link TimestampedKeyValueStore}
+     * has been registered with the given name
      * @see #getAllStateStores()
      * @see #getStateStore(String)
+     * @see #getTimestampedKeyValueStore(String)
      * @see #getWindowStore(String)
+     * @see #getTimestampedWindowStore(String)
      * @see #getSessionStore(String)
      */
     @SuppressWarnings({"unchecked", "WeakerAccess"})
     public <K, V> KeyValueStore<K, V> getKeyValueStore(final String name) {
-        final StateStore store = getStateStore(name);
+        final StateStore store = getStateStore(name, false);
+        if (store instanceof TimestampedKeyValueStore) {
+            log.info("Method #getTimestampedKeyValueStore() should be used to access a TimestampedKeyValueStore.");
+            return new KeyValueStoreFacade<>((TimestampedKeyValueStore<K, V>) store);
+        }
         return store instanceof KeyValueStore ? (KeyValueStore<K, V>) store : null;
     }
 
     /**
-     * Get the {@link WindowStore} with the given name.
+     * Get the {@link TimestampedKeyValueStore} with the given name.
      * The store can be a "regular" or global store.
      * <p>
      * This is often useful in test cases to pre-populate the store before the test case instructs the topology to
      * {@link #pipeInput(ConsumerRecord) process an input message}, and/or to check the store afterward.
      *
      * @param name the name of the store
-     * @return the key value store, or {@code null} if no {@link WindowStore} has been registered with the given name
+     * @return the key value store, or {@code null} if no {@link TimestampedKeyValueStore} has been registered with the given name
      * @see #getAllStateStores()
      * @see #getStateStore(String)
      * @see #getKeyValueStore(String)
-     * @see #getSessionStore(String) (String)
+     * @see #getWindowStore(String)
+     * @see #getTimestampedWindowStore(String)
+     * @see #getSessionStore(String)
      */
-    @SuppressWarnings({"unchecked", "WeakerAccess", "unused"})
+    @SuppressWarnings({"unchecked", "WeakerAccess"})
+    public <K, V> KeyValueStore<K, ValueAndTimestamp<V>> getTimestampedKeyValueStore(final String name) {
+        final StateStore store = getStateStore(name, false);
+        return store instanceof TimestampedKeyValueStore ? (TimestampedKeyValueStore<K, V>) store : null;
+    }
+
+    /**
+     * Get the {@link WindowStore} or {@link TimestampedWindowStore} with the given name.
+     * The store can be a "regular" or global store.
+     * <p>
+     * If the registered store is a {@link TimestampedWindowStore} this method will return a value-only query
+     * interface. <strong>It is highly recommended to update the code for this case to avoid bugs and to use
+     * {@link #getTimestampedWindowStore(String)} for full store access instead.</strong>
+     * <p>
+     * This is often useful in test cases to pre-populate the store before the test case instructs the topology to
+     * {@link #pipeInput(ConsumerRecord) process an input message}, and/or to check the store afterward.
+     *
+     * @param name the name of the store
+     * @return the key value store, or {@code null} if no {@link WindowStore} or {@link TimestampedWindowStore}
+     * has been registered with the given name
+     * @see #getAllStateStores()
+     * @see #getStateStore(String)
+     * @see #getKeyValueStore(String)
+     * @see #getTimestampedKeyValueStore(String)
+     * @see #getTimestampedWindowStore(String)
+     * @see #getSessionStore(String)
+     */
+    @SuppressWarnings({"unchecked", "WeakerAccess"})
     public <K, V> WindowStore<K, V> getWindowStore(final String name) {
-        final StateStore store = getStateStore(name);
+        final StateStore store = getStateStore(name, false);
+        if (store instanceof TimestampedWindowStore) {
+            log.info("Method #getTimestampedWindowStore() should be used to access a TimestampedWindowStore.");
+            return new WindowStoreFacade<>((TimestampedWindowStore<K, V>) store);
+        }
         return store instanceof WindowStore ? (WindowStore<K, V>) store : null;
+    }
+
+    /**
+     * Get the {@link TimestampedWindowStore} with the given name.
+     * The store can be a "regular" or global store.
+     * <p>
+     * This is often useful in test cases to pre-populate the store before the test case instructs the topology to
+     * {@link #pipeInput(ConsumerRecord) process an input message}, and/or to check the store afterward.
+     *
+     * @param name the name of the store
+     * @return the key value store, or {@code null} if no {@link TimestampedWindowStore} has been registered with the given name
+     * @see #getAllStateStores()
+     * @see #getStateStore(String)
+     * @see #getKeyValueStore(String)
+     * @see #getTimestampedKeyValueStore(String)
+     * @see #getWindowStore(String)
+     * @see #getSessionStore(String)
+     */
+    @SuppressWarnings({"unchecked", "WeakerAccess"})
+    public <K, V> WindowStore<K, ValueAndTimestamp<V>> getTimestampedWindowStore(final String name) {
+        final StateStore store = getStateStore(name, false);
+        return store instanceof TimestampedWindowStore ? (TimestampedWindowStore<K, V>) store : null;
     }
 
     /**
@@ -661,11 +802,13 @@ public class TopologyTestDriver implements Closeable {
      * @see #getAllStateStores()
      * @see #getStateStore(String)
      * @see #getKeyValueStore(String)
+     * @see #getTimestampedKeyValueStore(String)
      * @see #getWindowStore(String)
+     * @see #getTimestampedWindowStore(String)
      */
-    @SuppressWarnings({"unchecked", "WeakerAccess", "unused"})
+    @SuppressWarnings({"unchecked", "WeakerAccess"})
     public <K, V> SessionStore<K, V> getSessionStore(final String name) {
-        final StateStore store = getStateStore(name);
+        final StateStore store = getStateStore(name, false);
         return store instanceof SessionStore ? (SessionStore<K, V>) store : null;
     }
 
@@ -689,10 +832,6 @@ public class TopologyTestDriver implements Closeable {
             producer.close();
         }
         stateDirectory.clean();
-    }
-
-    private Producer<byte[], byte[]> get() {
-        return producer;
     }
 
     static class MockTime implements Time {
@@ -727,6 +866,12 @@ public class TopologyTestDriver implements Closeable {
             timeMs.addAndGet(ms);
             highResTimeNs.addAndGet(TimeUnit.MILLISECONDS.toNanos(ms));
         }
+
+        @Override
+        public void waitObject(final Object obj, final Supplier<Boolean> condition, final long timeoutMs) {
+            throw new UnsupportedOperationException();
+        }
+
     }
 
     private MockConsumer<byte[], byte[]> createRestoreConsumer(final Map<String, String> storeToChangelogTopic) {

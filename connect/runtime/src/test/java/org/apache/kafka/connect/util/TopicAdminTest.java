@@ -20,6 +20,8 @@ import org.apache.kafka.clients.NodeApiVersions;
 import org.apache.kafka.clients.admin.MockAdminClient;
 import org.apache.kafka.clients.admin.AdminClientUnitTestEnv;
 import org.apache.kafka.clients.admin.NewTopic;
+import org.apache.kafka.common.message.CreateTopicsResponseData;
+import org.apache.kafka.common.message.CreateTopicsResponseData.CreatableTopicResult;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
@@ -32,7 +34,6 @@ import org.junit.Test;
 
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.Map;
 import java.util.Set;
 
 import static org.junit.Assert.assertEquals;
@@ -65,6 +66,18 @@ public class TopicAdminTest {
         Cluster cluster = createCluster(1);
         try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(new MockTime(), cluster)) {
             env.kafkaClient().prepareResponse(createTopicResponseWithClusterAuthorizationException(newTopic));
+            TopicAdmin admin = new TopicAdmin(null, env.adminClient());
+            boolean created = admin.createTopic(newTopic);
+            assertFalse(created);
+        }
+    }
+
+    @Test
+    public void returnNullWithTopicAuthorizationFailure() {
+        final NewTopic newTopic = TopicAdmin.defineTopic("myTopic").partitions(1).compacted().build();
+        Cluster cluster = createCluster(1);
+        try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(new MockTime(), cluster)) {
+            env.kafkaClient().prepareResponse(createTopicResponseWithTopicAuthorizationException(newTopic));
             TopicAdmin admin = new TopicAdmin(null, env.adminClient());
             boolean created = admin.createTopic(newTopic);
             assertFalse(created);
@@ -135,12 +148,19 @@ public class TopicAdminTest {
         return createTopicResponse(new ApiError(Errors.CLUSTER_AUTHORIZATION_FAILED, "Not authorized to create topic(s)"), topics);
     }
 
+    private CreateTopicsResponse createTopicResponseWithTopicAuthorizationException(NewTopic... topics) {
+        return createTopicResponse(new ApiError(Errors.TOPIC_AUTHORIZATION_FAILED, "Not authorized to create topic(s)"), topics);
+    }
+
     private CreateTopicsResponse createTopicResponse(ApiError error, NewTopic... topics) {
         if (error == null) error = new ApiError(Errors.NONE, "");
-        Map<String, ApiError> topicResults = new HashMap<>();
+        CreateTopicsResponseData response = new CreateTopicsResponseData();
         for (NewTopic topic : topics) {
-            topicResults.put(topic.name(), error);
+            response.topics().add(new CreatableTopicResult().
+                setName(topic.name()).
+                setErrorCode(error.error().code()).
+                setErrorMessage(error.message()));
         }
-        return new CreateTopicsResponse(topicResults);
+        return new CreateTopicsResponse(response);
     }
 }

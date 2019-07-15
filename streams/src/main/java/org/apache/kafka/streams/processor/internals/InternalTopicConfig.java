@@ -26,10 +26,11 @@ import java.util.Objects;
  * the internal topics we create for change-logs and repartitioning etc.
  */
 public abstract class InternalTopicConfig {
+
     final String name;
     final Map<String, String> topicConfigs;
 
-    private int numberOfPartitions = -1;
+    private int numberOfPartitions = StreamsPartitionAssignor.UNKNOWN;
 
     InternalTopicConfig(final String name, final Map<String, String> topicConfigs) {
         Objects.requireNonNull(name, "name can't be null");
@@ -40,7 +41,7 @@ public abstract class InternalTopicConfig {
     }
 
     /**
-     * Get the configured properties for this topic. If rententionMs is set then
+     * Get the configured properties for this topic. If retentionMs is set then
      * we add additionalRetentionMs to work out the desired retention when cleanup.policy=compact,delete
      *
      * @param additionalRetentionMs - added to retention to allow for clock drift etc
@@ -53,9 +54,6 @@ public abstract class InternalTopicConfig {
     }
 
     public int numberOfPartitions() {
-        if (numberOfPartitions == -1) {
-            throw new IllegalStateException("Number of partitions not specified.");
-        }
         return numberOfPartitions;
     }
 

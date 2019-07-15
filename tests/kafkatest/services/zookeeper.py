@@ -30,6 +30,7 @@ from kafkatest.version import DEV_BRANCH
 class ZookeeperService(KafkaPathResolverMixin, Service):
     ROOT = "/mnt/zookeeper"
     DATA = os.path.join(ROOT, "data")
+    HEAP_DUMP_FILE = os.path.join(ROOT, "zk_heap_dump.bin")
 
     logs = {
         "zk_log": {
@@ -37,7 +38,10 @@ class ZookeeperService(KafkaPathResolverMixin, Service):
             "collect_default": True},
         "zk_data": {
             "path": DATA,
-            "collect_default": False}
+            "collect_default": False},
+        "zk_heap_dump_file": {
+            "path": HEAP_DUMP_FILE,
+            "collect_default": True}
     }
 
     def __init__(self, context, num_nodes, zk_sasl = False):
@@ -76,8 +80,10 @@ class ZookeeperService(KafkaPathResolverMixin, Service):
         self.logger.info(config_file)
         node.account.create_file("%s/zookeeper.properties" % ZookeeperService.ROOT, config_file)
 
-        start_cmd = "export KAFKA_OPTS=\"%s\";" % (self.kafka_opts + ' ' + self.security_system_properties) \
+        heap_kafka_opts = "-XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=%s" % self.logs["zk_heap_dump_file"]["path"]
+        other_kafka_opts = self.kafka_opts + ' ' + self.security_system_properties \
             if self.security_config.zk_sasl else self.kafka_opts
+        start_cmd = "export KAFKA_OPTS=\"%s %s\";" % (heap_kafka_opts, other_kafka_opts)
         start_cmd += "%s " % self.path.script("zookeeper-server-start.sh", node)
         start_cmd += "%s/zookeeper.properties &>> %s &" % (ZookeeperService.ROOT, self.logs["zk_log"]["path"])
         node.account.ssh(start_cmd)
@@ -153,7 +159,7 @@ class ZookeeperService(KafkaPathResolverMixin, Service):
 
         node = self.nodes[0]
         result = None
-        for line in node.account.ssh_capture(cmd):
+        for line in node.account.ssh_capture(cmd, allow_fail=True):
             # loop through all lines in the output, but only hold on to the first match
             if result is None:
                 match = re.match("^({.+})$", line)
@@ -182,4 +188,4 @@ class ZookeeperService(KafkaPathResolverMixin, Service):
 
     def java_cli_class_name(self):
         """ The class name of the Zookeeper tool within Kafka. """
-        return "kafka.tools.ZooKeeperMainWrapper"
+        return "org.apache.zookeeper.ZooKeeperMain"

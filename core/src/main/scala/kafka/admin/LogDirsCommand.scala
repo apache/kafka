@@ -48,7 +48,7 @@ object LogDirsCommand {
 
         out.println("Querying brokers for log directories information")
         val describeLogDirsResult: DescribeLogDirsResult = adminClient.describeLogDirs(brokerList.map(Integer.valueOf).toSeq.asJava)
-        val logDirInfosByBroker = describeLogDirsResult.all.get().asScala.mapValues(_.asScala)
+        val logDirInfosByBroker = describeLogDirsResult.all.get().asScala.mapValues(_.asScala).toMap
 
         out.println(s"Received log directory information from brokers ${brokerList.mkString(",")}")
         out.println(formatAsJson(logDirInfosByBroker, topicList.toSet))

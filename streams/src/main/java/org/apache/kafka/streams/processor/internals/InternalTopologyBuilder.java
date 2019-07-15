@@ -30,6 +30,7 @@ import org.apache.kafka.streams.processor.TopicNameExtractor;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.internals.SessionStoreBuilder;
 import org.apache.kafka.streams.state.internals.WindowStoreBuilder;
+import org.apache.kafka.streams.state.internals.TimestampedWindowStoreBuilder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -50,13 +51,10 @@ import java.util.Set;
 import java.util.TreeSet;
 import java.util.regex.Pattern;
 
-
 public class InternalTopologyBuilder {
 
     private static final Logger log = LoggerFactory.getLogger(InternalTopologyBuilder.class);
-
     private static final Pattern EMPTY_ZERO_LENGTH_PATTERN = Pattern.compile("");
-
     private static final String[] NO_PREDECESSORS = {};
 
     // node factories in a topological order
@@ -125,9 +123,6 @@ public class InternalTopologyBuilder {
 
     private Map<Integer, Set<String>> nodeGroups = null;
 
-    // TODO: this is only temporary for 2.0 and should be removed
-    private final Map<StoreBuilder, String> storeToSourceChangelogTopic = new HashMap<>();
-
     public static class StateStoreFactory {
         private final StoreBuilder builder;
         private final Set<String> users = new HashSet<>();
@@ -143,6 +138,8 @@ public class InternalTopologyBuilder {
         long retentionPeriod() {
             if (builder instanceof WindowStoreBuilder) {
                 return ((WindowStoreBuilder) builder).retentionPeriod();
+            } else if (builder instanceof TimestampedWindowStoreBuilder) {
+                return ((TimestampedWindowStoreBuilder) builder).retentionPeriod();
             } else if (builder instanceof SessionStoreBuilder) {
                 return ((SessionStoreBuilder) builder).retentionPeriod();
             } else {
@@ -163,7 +160,9 @@ public class InternalTopologyBuilder {
         }
 
         private boolean isWindowStore() {
-            return builder instanceof WindowStoreBuilder || builder instanceof SessionStoreBuilder;
+            return builder instanceof WindowStoreBuilder
+                || builder instanceof TimestampedWindowStoreBuilder
+                || builder instanceof SessionStoreBuilder;
         }
 
         // Apparently Java strips the generics from this method because we're using the raw type for builder,
@@ -283,7 +282,7 @@ public class InternalTopologyBuilder {
 
         @Override
         Source describe() {
-            return new Source(name, new HashSet<>(topics), pattern);
+            return new Source(name, topics.size() == 0 ? null : new HashSet<>(topics), pattern);
         }
     }
 
@@ -356,10 +355,6 @@ public class InternalTopologyBuilder {
         for (final StoreBuilder storeBuilder : globalStateBuilders.values()) {
             globalStateStores.put(storeBuilder.name(), storeBuilder.build());
         }
-
-        // adjust the topology if optimization is turned on.
-        // TODO: to be removed post 2.0
-        adjust(config);
 
         return this;
     }
@@ -604,20 +599,12 @@ public class InternalTopologyBuilder {
         nodeGroups = null;
     }
 
-    private void connectSourceStoreAndTopic(final String sourceStoreName,
+    public void connectSourceStoreAndTopic(final String sourceStoreName,
                                             final String topic) {
         if (storeToChangelogTopic.containsKey(sourceStoreName)) {
             throw new TopologyException("Source store " + sourceStoreName + " is already added.");
         }
         storeToChangelogTopic.put(sourceStoreName, topic);
-    }
-
-    public final void markSourceStoreAndTopic(final StoreBuilder storeBuilder,
-                                              final String topic) {
-        if (storeToSourceChangelogTopic.containsKey(storeBuilder)) {
-            throw new TopologyException("Source store " + storeBuilder.name() + " is already used.");
-        }
-        storeToSourceChangelogTopic.put(storeBuilder, topic);
     }
 
     public final void addInternalTopic(final String topicName) {
@@ -706,13 +693,15 @@ public class InternalTopologyBuilder {
         // in the map; this scenario is possible, for example, that a state store underlying a source KTable is
         // connecting to a join operator whose source topic is not the original KTable's source topic but an internal repartition topic.
 
-        if (stateStoreNameToSourceTopics.containsKey(stateStoreName) || stateStoreNameToSourceRegex.containsKey(stateStoreName)) {
+        if (stateStoreNameToSourceTopics.containsKey(stateStoreName)
+            || stateStoreNameToSourceRegex.containsKey(stateStoreName)) {
             return;
         }
 
         final Set<String> sourceTopics = new HashSet<>();
         final Set<Pattern> sourcePatterns = new HashSet<>();
-        final Set<SourceNodeFactory> sourceNodesForPredecessor = findSourcesForProcessorPredecessors(processorNodeFactory.predecessors);
+        final Set<SourceNodeFactory> sourceNodesForPredecessor =
+            findSourcesForProcessorPredecessors(processorNodeFactory.predecessors);
 
         for (final SourceNodeFactory sourceNodeFactory : sourceNodesForPredecessor) {
             if (sourceNodeFactory.pattern != null) {
@@ -1019,7 +1008,9 @@ public class InternalTopologyBuilder {
                         if (internalTopicNames.contains(topic)) {
                             // prefix the internal topic name with the application id
                             final String internalTopic = decorateTopic(topic);
-                            repartitionTopics.put(internalTopic, new RepartitionTopicConfig(internalTopic, Collections.emptyMap()));
+                            repartitionTopics.put(
+                                internalTopic,
+                                new RepartitionTopicConfig(internalTopic, Collections.emptyMap()));
                             sourceTopics.add(internalTopic);
                         } else {
                             sourceTopics.add(topic);
@@ -1038,14 +1029,16 @@ public class InternalTopologyBuilder {
                     }
                 }
 
-                // if the node is connected to a state store whose changelog topics are not predefined, add to the changelog topics
+                // if the node is connected to a state store whose changelog topics are not predefined,
+                // add to the changelog topics
                 for (final StateStoreFactory stateFactory : stateFactories.values()) {
                     if (stateFactory.loggingEnabled() && stateFactory.users().contains(node)) {
                         final String topicName = storeToChangelogTopic.containsKey(stateFactory.name()) ?
                                 storeToChangelogTopic.get(stateFactory.name()) :
                                 ProcessorStateManager.storeChangelogTopic(applicationId, stateFactory.name());
                         if (!stateChangelogTopics.containsKey(topicName)) {
-                            final InternalTopicConfig internalTopicConfig = createChangelogTopicConfig(stateFactory, topicName);
+                            final InternalTopicConfig internalTopicConfig =
+                                createChangelogTopicConfig(stateFactory, topicName);
                             stateChangelogTopics.put(topicName, internalTopicConfig);
                         }
                     }
@@ -1063,30 +1056,15 @@ public class InternalTopologyBuilder {
         return Collections.unmodifiableMap(topicGroups);
     }
 
-    // Adjust the generated topology based on the configs.
-    // Not exposed as public API and should be removed post 2.0
-    private void adjust(final StreamsConfig config) {
-        final boolean enableOptimization20 = config.getString(StreamsConfig.TOPOLOGY_OPTIMIZATION).equals(StreamsConfig.OPTIMIZE);
-
-        if (enableOptimization20) {
-            for (final Map.Entry<StoreBuilder, String> entry : storeToSourceChangelogTopic.entrySet()) {
-                final StoreBuilder storeBuilder = entry.getKey();
-                final String topicName = entry.getValue();
-
-                // update store map to disable logging for this store
-                storeBuilder.withLoggingDisabled();
-                addStateStore(storeBuilder, true);
-                connectSourceStoreAndTopic(storeBuilder.name(), topicName);
-            }
-        }
-    }
-
     private void setRegexMatchedTopicsToSourceNodes() {
         if (subscriptionUpdates.hasUpdates()) {
             for (final Map.Entry<String, Pattern> stringPatternEntry : nodeToSourcePatterns.entrySet()) {
-                final SourceNodeFactory sourceNode = (SourceNodeFactory) nodeFactories.get(stringPatternEntry.getKey());
+                final SourceNodeFactory sourceNode =
+                    (SourceNodeFactory) nodeFactories.get(stringPatternEntry.getKey());
                 //need to update nodeToSourceTopics with topics matched from given regex
-                nodeToSourceTopics.put(stringPatternEntry.getKey(), sourceNode.getTopics(subscriptionUpdates.getUpdates()));
+                nodeToSourceTopics.put(
+                    stringPatternEntry.getKey(),
+                    sourceNode.getTopics(subscriptionUpdates.getUpdates()));
                 log.debug("nodeToSourceTopics {}", nodeToSourceTopics);
             }
         }
@@ -1108,7 +1086,9 @@ public class InternalTopologyBuilder {
                     if (storeTopics != null) {
                         updatedTopicsForStateStore.addAll(storeTopics);
                     }
-                    stateStoreNameToSourceTopics.put(storePattern.getKey(), Collections.unmodifiableSet(updatedTopicsForStateStore));
+                    stateStoreNameToSourceTopics.put(
+                        storePattern.getKey(),
+                        Collections.unmodifiableSet(updatedTopicsForStateStore));
                 }
             }
         }
@@ -1205,11 +1185,11 @@ public class InternalTopologyBuilder {
         return applicationId + "-" + topic;
     }
 
-    public SubscriptionUpdates subscriptionUpdates() {
+    SubscriptionUpdates subscriptionUpdates() {
         return subscriptionUpdates;
     }
 
-    public synchronized Pattern sourceTopicPattern() {
+    synchronized Pattern sourceTopicPattern() {
         if (topicPattern == null) {
             final List<String> allSourceTopics = new ArrayList<>();
             if (!nodeToSourceTopics.isEmpty()) {
@@ -1263,7 +1243,9 @@ public class InternalTopologyBuilder {
         return description;
     }
 
-    private void describeGlobalStore(final TopologyDescription description, final Set<String> nodes, final int id) {
+    private void describeGlobalStore(final TopologyDescription description,
+                                     final Set<String> nodes,
+                                     final int id) {
         final Iterator<String> it = nodes.iterator();
         while (it.hasNext()) {
             final String node = it.next();
@@ -1299,6 +1281,9 @@ public class InternalTopologyBuilder {
         @Override
         public int compare(final TopologyDescription.Node node1,
                            final TopologyDescription.Node node2) {
+            if (node1.equals(node2)) {
+                return 0;
+            }
             final int size1 = ((AbstractNode) node1).size;
             final int size2 = ((AbstractNode) node2).size;
 
@@ -1314,7 +1299,8 @@ public class InternalTopologyBuilder {
 
     private final static NodeComparator NODE_COMPARATOR = new NodeComparator();
 
-    private static void updateSize(final AbstractNode node, final int delta) {
+    private static void updateSize(final AbstractNode node,
+                                   final int delta) {
         node.size += delta;
 
         for (final TopologyDescription.Node predecessor : node.predecessors()) {
@@ -1416,6 +1402,7 @@ public class InternalTopologyBuilder {
         int size;
 
         AbstractNode(final String name) {
+            Objects.requireNonNull(name, "name cannot be null");
             this.name = name;
             this.size = 1;
         }
@@ -1452,6 +1439,13 @@ public class InternalTopologyBuilder {
                       final Set<String> topics,
                       final Pattern pattern) {
             super(name);
+            if (topics == null && pattern == null) {
+                throw new IllegalArgumentException("Either topics or pattern must be not-null, but both are null.");
+            }
+            if (topics != null && pattern != null) {
+                throw new IllegalArgumentException("Either topics or pattern must be null, but both are not null.");
+            }
+
             this.topics = topics;
             this.topicPattern = pattern;
         }
@@ -1496,8 +1490,9 @@ public class InternalTopologyBuilder {
             final Source source = (Source) o;
             // omit successor to avoid infinite loops
             return name.equals(source.name)
-                && topics.equals(source.topics)
-                && topicPattern.equals(source.topicPattern);
+                && Objects.equals(topics, source.topics)
+                && (topicPattern == null ? source.topicPattern == null :
+                    topicPattern.pattern().equals(source.topicPattern.pattern()));
         }
 
         @Override
@@ -1523,7 +1518,8 @@ public class InternalTopologyBuilder {
 
         @Override
         public String toString() {
-            return "Processor: " + name + " (stores: " + stores + ")\n      --> " + nodeNames(successors) + "\n      <-- " + nodeNames(predecessors);
+            return "Processor: " + name + " (stores: " + stores + ")\n      --> "
+                + nodeNames(successors) + "\n      <-- " + nodeNames(predecessors);
         }
 
         @Override
@@ -1592,7 +1588,8 @@ public class InternalTopologyBuilder {
             if (topicNameExtractor instanceof StaticTopicNameExtractor) {
                 return "Sink: " + name + " (topic: " + topic() + ")\n      <-- " + nodeNames(predecessors);
             }
-            return "Sink: " + name + " (extractor class: " + topicNameExtractor + ")\n      <-- " + nodeNames(predecessors);
+            return "Sink: " + name + " (extractor class: " + topicNameExtractor + ")\n      <-- "
+                + nodeNames(predecessors);
         }
 
         @Override
@@ -1678,8 +1675,8 @@ public class InternalTopologyBuilder {
     }
 
     public static class TopicsInfo {
-        public final Set<String> sinkTopics;
-        public final Set<String> sourceTopics;
+        final Set<String> sinkTopics;
+        final Set<String> sourceTopics;
         public final Map<String, InternalTopicConfig> stateChangelogTopics;
         public final Map<String, InternalTopicConfig> repartitionSourceTopics;
 
@@ -1724,6 +1721,9 @@ public class InternalTopologyBuilder {
         @Override
         public int compare(final TopologyDescription.GlobalStore globalStore1,
                            final TopologyDescription.GlobalStore globalStore2) {
+            if (globalStore1.equals(globalStore2)) {
+                return 0;
+            }
             return globalStore1.id() - globalStore2.id();
         }
     }
@@ -1734,6 +1734,9 @@ public class InternalTopologyBuilder {
         @Override
         public int compare(final TopologyDescription.Subtopology subtopology1,
                            final TopologyDescription.Subtopology subtopology2) {
+            if (subtopology1.equals(subtopology2)) {
+                return 0;
+            }
             return subtopology1.id() - subtopology2.id();
         }
     }
@@ -1775,10 +1778,8 @@ public class InternalTopologyBuilder {
             int globalStoresIndex = sortedGlobalStores.length - 1;
             while (subtopologiesIndex != -1 && globalStoresIndex != -1) {
                 sb.append("  ");
-                final TopologyDescription.Subtopology subtopology =
-                    sortedSubtopologies[subtopologiesIndex];
-                final TopologyDescription.GlobalStore globalStore =
-                    sortedGlobalStores[globalStoresIndex];
+                final TopologyDescription.Subtopology subtopology = sortedSubtopologies[subtopologiesIndex];
+                final TopologyDescription.GlobalStore globalStore = sortedGlobalStores[globalStoresIndex];
                 if (subtopology.id() == expectedId) {
                     sb.append(subtopology);
                     subtopologiesIndex--;
@@ -1789,15 +1790,13 @@ public class InternalTopologyBuilder {
                 expectedId++;
             }
             while (subtopologiesIndex != -1) {
-                final TopologyDescription.Subtopology subtopology =
-                    sortedSubtopologies[subtopologiesIndex];
+                final TopologyDescription.Subtopology subtopology = sortedSubtopologies[subtopologiesIndex];
                 sb.append("  ");
                 sb.append(subtopology);
                 subtopologiesIndex--;
             }
             while (globalStoresIndex != -1) {
-                final TopologyDescription.GlobalStore globalStore =
-                    sortedGlobalStores[globalStoresIndex];
+                final TopologyDescription.GlobalStore globalStore = sortedGlobalStores[globalStoresIndex];
                 sb.append("  ");
                 sb.append(globalStore);
                 globalStoresIndex--;
@@ -1868,7 +1867,8 @@ public class InternalTopologyBuilder {
         }
     }
 
-    public void updateSubscribedTopics(final Set<String> topics, final String logPrefix) {
+    void updateSubscribedTopics(final Set<String> topics,
+                                final String logPrefix) {
         final SubscriptionUpdates subscriptionUpdates = new SubscriptionUpdates();
         log.debug("{}found {} topics possibly matching regex", logPrefix, topics);
         // update the topic groups with the returned subscription set for regex pattern subscriptions

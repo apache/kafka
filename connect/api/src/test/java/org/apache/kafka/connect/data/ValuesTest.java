@@ -35,6 +35,8 @@ import static org.junit.Assert.fail;
 
 public class ValuesTest {
 
+    private static final long MILLIS_PER_DAY = 24 * 60 * 60 * 1000;
+
     private static final Map<String, String> STRING_MAP = new LinkedHashMap<>();
     private static final Schema STRING_MAP_SCHEMA = SchemaBuilder.map(Schema.STRING_SCHEMA, Schema.STRING_SCHEMA).schema();
 
@@ -76,6 +78,24 @@ public class ValuesTest {
     public void shouldConvertNullValue() {
         assertRoundTrip(Schema.STRING_SCHEMA, Schema.STRING_SCHEMA, null);
         assertRoundTrip(Schema.OPTIONAL_STRING_SCHEMA, Schema.STRING_SCHEMA, null);
+    }
+
+    @Test
+    public void shouldConvertBooleanValues() {
+        assertRoundTrip(Schema.BOOLEAN_SCHEMA, Schema.BOOLEAN_SCHEMA, Boolean.FALSE);
+        SchemaAndValue resultFalse = roundTrip(Schema.BOOLEAN_SCHEMA, "false");
+        assertEquals(Schema.BOOLEAN_SCHEMA, resultFalse.schema());
+        assertEquals(Boolean.FALSE, resultFalse.value());
+
+        assertRoundTrip(Schema.BOOLEAN_SCHEMA, Schema.BOOLEAN_SCHEMA, Boolean.TRUE);
+        SchemaAndValue resultTrue = roundTrip(Schema.BOOLEAN_SCHEMA, "true");
+        assertEquals(Schema.BOOLEAN_SCHEMA, resultTrue.schema());
+        assertEquals(Boolean.TRUE, resultTrue.value());
+    }
+
+    @Test(expected = DataException.class)
+    public void shouldFailToParseInvalidBooleanValueString() {
+        Values.convertToBoolean(Schema.STRING_SCHEMA, "\"green\"");
     }
 
     @Test
@@ -328,6 +348,85 @@ public class ValuesTest {
     }
 
     @Test
+    public void shouldConvertTimeValues() {
+        java.util.Date current = new java.util.Date();
+        long currentMillis = current.getTime() % MILLIS_PER_DAY;
+
+        // java.util.Date - just copy
+        java.util.Date t1 = Values.convertToTime(Time.SCHEMA, current);
+        assertEquals(current, t1);
+
+        // java.util.Date as a Timestamp - discard the date and keep just day's milliseconds
+        t1 = Values.convertToTime(Timestamp.SCHEMA, current);
+        assertEquals(new java.util.Date(currentMillis), t1);
+
+        // ISO8601 strings - currently broken because tokenization breaks at colon
+
+        // Millis as string
+        java.util.Date t3 = Values.convertToTime(Time.SCHEMA, Long.toString(currentMillis));
+        assertEquals(currentMillis, t3.getTime());
+
+        // Millis as long
+        java.util.Date t4 = Values.convertToTime(Time.SCHEMA, currentMillis);
+        assertEquals(currentMillis, t4.getTime());
+    }
+
+    @Test
+    public void shouldConvertDateValues() {
+        java.util.Date current = new java.util.Date();
+        long currentMillis = current.getTime() % MILLIS_PER_DAY;
+        long days = current.getTime() / MILLIS_PER_DAY;
+
+        // java.util.Date - just copy
+        java.util.Date d1 = Values.convertToDate(Date.SCHEMA, current);
+        assertEquals(current, d1);
+
+        // java.util.Date as a Timestamp - discard the day's milliseconds and keep the date
+        java.util.Date currentDate = new java.util.Date(current.getTime() - currentMillis);
+        d1 = Values.convertToDate(Timestamp.SCHEMA, currentDate);
+        assertEquals(currentDate, d1);
+
+        // ISO8601 strings - currently broken because tokenization breaks at colon
+
+        // Days as string
+        java.util.Date d3 = Values.convertToDate(Date.SCHEMA, Long.toString(days));
+        assertEquals(currentDate, d3);
+
+        // Days as long
+        java.util.Date d4 = Values.convertToDate(Date.SCHEMA, days);
+        assertEquals(currentDate, d4);
+    }
+
+    @Test
+    public void shouldConvertTimestampValues() {
+        java.util.Date current = new java.util.Date();
+        long currentMillis = current.getTime() % MILLIS_PER_DAY;
+
+        // java.util.Date - just copy
+        java.util.Date ts1 = Values.convertToTimestamp(Timestamp.SCHEMA, current);
+        assertEquals(current, ts1);
+
+        // java.util.Date as a Timestamp - discard the day's milliseconds and keep the date
+        java.util.Date currentDate = new java.util.Date(current.getTime() - currentMillis);
+        ts1 = Values.convertToTimestamp(Date.SCHEMA, currentDate);
+        assertEquals(currentDate, ts1);
+
+        // java.util.Date as a Time - discard the date and keep the day's milliseconds
+        ts1 = Values.convertToTimestamp(Time.SCHEMA, currentMillis);
+        assertEquals(new java.util.Date(currentMillis), ts1);
+
+        // ISO8601 strings - currently broken because tokenization breaks at colon
+
+        // Millis as string
+        java.util.Date ts3 = Values.convertToTimestamp(Timestamp.SCHEMA, Long.toString(current.getTime()));
+        assertEquals(current, ts3);
+
+        // Millis as long
+        java.util.Date ts4 = Values.convertToTimestamp(Timestamp.SCHEMA, current.getTime());
+        assertEquals(current, ts4);
+    }
+
+    @Test
     public void canConsume() {
     }
 
@@ -383,7 +482,6 @@ public class ValuesTest {
     protected SchemaAndValue roundTrip(Schema desiredSchema, String currentValue) {
         return roundTrip(desiredSchema, new SchemaAndValue(Schema.STRING_SCHEMA, currentValue));
     }
-
 
     protected SchemaAndValue roundTrip(Schema desiredSchema, SchemaAndValue input) {
         String serialized = Values.convertToString(input.schema(), input.value());
@@ -458,5 +556,4 @@ public class ValuesTest {
             assertEquals(result, result2);
         }
     }
-
 }

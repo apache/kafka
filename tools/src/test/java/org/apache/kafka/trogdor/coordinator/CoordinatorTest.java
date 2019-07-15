@@ -30,7 +30,6 @@ import org.apache.kafka.trogdor.common.CapturingCommandRunner;
 import org.apache.kafka.trogdor.common.ExpectedTasks;
 import org.apache.kafka.trogdor.common.ExpectedTasks.ExpectedTaskBuilder;
 import org.apache.kafka.trogdor.common.MiniTrogdorCluster;
-
 import org.apache.kafka.trogdor.fault.NetworkPartitionFaultSpec;
 import org.apache.kafka.trogdor.rest.CoordinatorStatusResponse;
 import org.apache.kafka.trogdor.rest.CreateTaskRequest;
@@ -39,21 +38,22 @@ import org.apache.kafka.trogdor.rest.RequestConflictException;
 import org.apache.kafka.trogdor.rest.StopTaskRequest;
 import org.apache.kafka.trogdor.rest.TaskDone;
 import org.apache.kafka.trogdor.rest.TaskPending;
-import org.apache.kafka.trogdor.rest.TaskRunning;
 import org.apache.kafka.trogdor.rest.TaskRequest;
+import org.apache.kafka.trogdor.rest.TaskRunning;
+import org.apache.kafka.trogdor.rest.TaskState;
 import org.apache.kafka.trogdor.rest.TaskStateType;
 import org.apache.kafka.trogdor.rest.TasksRequest;
-import org.apache.kafka.trogdor.rest.TaskState;
 import org.apache.kafka.trogdor.rest.TasksResponse;
+import org.apache.kafka.trogdor.rest.UptimeResponse;
 import org.apache.kafka.trogdor.rest.WorkerDone;
 import org.apache.kafka.trogdor.rest.WorkerRunning;
 import org.apache.kafka.trogdor.task.NoOpTaskSpec;
 import org.apache.kafka.trogdor.task.SampleTaskSpec;
 import org.junit.Rule;
+import org.junit.Test;
 import org.junit.rules.Timeout;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.junit.Test;
 
 import javax.ws.rs.NotFoundException;
 import java.util.ArrayList;
@@ -63,6 +63,7 @@ import java.util.List;
 import java.util.Optional;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.fail;
@@ -80,6 +81,22 @@ public class CoordinatorTest {
                 build()) {
             CoordinatorStatusResponse status = cluster.coordinatorClient().status();
             assertEquals(cluster.coordinator().status(), status);
+        }
+    }
+
+    @Test
+    public void testCoordinatorUptime() throws Exception {
+        MockTime time = new MockTime(0, 200, 0);
+        Scheduler scheduler = new MockScheduler(time);
+        try (MiniTrogdorCluster cluster = new MiniTrogdorCluster.Builder().
+            addCoordinator("node01").
+            scheduler(scheduler).
+            build()) {
+            UptimeResponse uptime = cluster.coordinatorClient().uptime();
+            assertEquals(cluster.coordinator().uptime(), uptime);
+
+            time.setCurrentTimeMs(250);
+            assertNotEquals(cluster.coordinator().uptime(), uptime);
         }
     }
 
@@ -154,7 +171,7 @@ public class CoordinatorTest {
                 waitFor(agentClient1).
                 waitFor(agentClient2);
 
-            NoOpTaskSpec fooSpec = new NoOpTaskSpec(5, 2);
+            NoOpTaskSpec fooSpec = new NoOpTaskSpec(5, 7);
             coordinatorClient.createTask(new CreateTaskRequest("foo", fooSpec));
             new ExpectedTasks().
                 addTask(new ExpectedTaskBuilder("foo").taskState(
@@ -176,15 +193,15 @@ public class CoordinatorTest {
                 waitFor(agentClient1).
                 waitFor(agentClient2);
 
-            time.sleep(2);
+            time.sleep(7);
             ObjectNode status2 = new ObjectNode(JsonNodeFactory.instance);
             status2.set("node01", new TextNode("done"));
             status2.set("node02", new TextNode("done"));
             new ExpectedTasks().
                 addTask(new ExpectedTaskBuilder("foo").
-                    taskState(new TaskDone(fooSpec, 11, 13,
+                    taskState(new TaskDone(fooSpec, 11, 18,
                         "", false, status2)).
-                    workerState(new WorkerDone("foo", fooSpec, 11, 13, new TextNode("done"), "")).
+                    workerState(new WorkerDone("foo", fooSpec, 11, 18, new TextNode("done"), "")).
                     build()).
                 waitFor(coordinatorClient).
                 waitFor(agentClient1).
@@ -211,7 +228,7 @@ public class CoordinatorTest {
                 waitFor(agentClient1).
                 waitFor(agentClient2);
 
-            NoOpTaskSpec fooSpec = new NoOpTaskSpec(5, 2);
+            NoOpTaskSpec fooSpec = new NoOpTaskSpec(5, 7);
             coordinatorClient.createTask(new CreateTaskRequest("foo", fooSpec));
             new ExpectedTasks().
                 addTask(new ExpectedTaskBuilder("foo").taskState(new TaskPending(fooSpec)).build()).
@@ -236,13 +253,13 @@ public class CoordinatorTest {
             ObjectNode status2 = new ObjectNode(JsonNodeFactory.instance);
             status2.set("node01", new TextNode("done"));
             status2.set("node02", new TextNode("done"));
-            time.sleep(1);
+            time.sleep(7);
             coordinatorClient.stopTask(new StopTaskRequest("foo"));
             new ExpectedTasks().
                 addTask(new ExpectedTaskBuilder("foo").
-                    taskState(new TaskDone(fooSpec, 11, 12, "",
+                    taskState(new TaskDone(fooSpec, 11, 18, "",
                         true, status2)).
-                    workerState(new WorkerDone("foo", fooSpec, 11, 12, new TextNode("done"), "")).
+                    workerState(new WorkerDone("foo", fooSpec, 11, 18, new TextNode("done"), "")).
                     build()).
                 waitFor(coordinatorClient).
                 waitFor(agentClient1).
@@ -275,7 +292,7 @@ public class CoordinatorTest {
                 waitFor(agentClient1).
                 waitFor(agentClient2);
 
-            NoOpTaskSpec fooSpec = new NoOpTaskSpec(2, 2);
+            NoOpTaskSpec fooSpec = new NoOpTaskSpec(2, 12);
             coordinatorClient.destroyTask(new DestroyTaskRequest("foo"));
             coordinatorClient.createTask(new CreateTaskRequest("foo", fooSpec));
             NoOpTaskSpec barSpec = new NoOpTaskSpec(20, 20);
@@ -363,12 +380,15 @@ public class CoordinatorTest {
     @Test
     public void testNetworkPartitionFault() throws Exception {
         CapturingCommandRunner runner = new CapturingCommandRunner();
+        MockTime time = new MockTime(0, 0, 0);
+        Scheduler scheduler = new MockScheduler(time);
         try (MiniTrogdorCluster cluster = new MiniTrogdorCluster.Builder().
                 addCoordinator("node01").
                 addAgent("node01").
                 addAgent("node02").
                 addAgent("node03").
                 commandRunner(runner).
+                scheduler(scheduler).
                 build()) {
             CoordinatorClient coordinatorClient = cluster.coordinatorClient();
             NetworkPartitionFaultSpec spec = new NetworkPartitionFaultSpec(0, Long.MAX_VALUE,
@@ -493,6 +513,110 @@ public class CoordinatorTest {
 
             assertEquals(0, coordinatorClient.tasks(
                 new TasksRequest(null, 3, 0, 0, 0, Optional.empty())).tasks().size());
+        }
+    }
+
+    /**
+     * If an agent fails in the middle of a task and comes back up when the task is considered expired,
+     * we want the task to be marked as DONE and not re-sent should a second failure happen.
+     */
+    @Test
+    public void testAgentFailureAndTaskExpiry() throws Exception {
+        MockTime time = new MockTime(0, 0, 0);
+        Scheduler scheduler = new MockScheduler(time);
+        try (MiniTrogdorCluster cluster = new MiniTrogdorCluster.Builder().
+            addCoordinator("node01").
+            addAgent("node02").
+            scheduler(scheduler).
+            build()) {
+            CoordinatorClient coordinatorClient = cluster.coordinatorClient();
+
+            NoOpTaskSpec fooSpec = new NoOpTaskSpec(1, 500);
+            coordinatorClient.createTask(new CreateTaskRequest("foo", fooSpec));
+            TaskState expectedState = new ExpectedTaskBuilder("foo").taskState(new TaskPending(fooSpec)).build().taskState();
+
+            TaskState resp = coordinatorClient.task(new TaskRequest("foo"));
+            assertEquals(expectedState, resp);
+
+
+            time.sleep(2);
+            new ExpectedTasks().
+                addTask(new ExpectedTaskBuilder("foo").
+                    taskState(new TaskRunning(fooSpec, 2, new TextNode("active"))).
+                    workerState(new WorkerRunning("foo", fooSpec, 2, new TextNode("active"))).
+                    build()).
+                waitFor(coordinatorClient).
+                waitFor(cluster.agentClient("node02"));
+
+            cluster.restartAgent("node02");
+            time.sleep(550);
+            // coordinator heartbeat sees that the agent is back up, re-schedules the task but the agent expires it
+            new ExpectedTasks().
+                addTask(new ExpectedTaskBuilder("foo").
+                    taskState(new TaskDone(fooSpec, 2, 552, "worker expired", false, null)).
+                    workerState(new WorkerDone("foo", fooSpec, 552, 552, null, "worker expired")).
+                    build()).
+                waitFor(coordinatorClient).
+                waitFor(cluster.agentClient("node02"));
+
+            cluster.restartAgent("node02");
+            // coordinator heartbeat sees that the agent is back up but does not re-schedule the task as it is DONE
+            new ExpectedTasks().
+                addTask(new ExpectedTaskBuilder("foo").
+                    taskState(new TaskDone(fooSpec, 2, 552, "worker expired", false, null)).
+                    // no worker states
+                    build()).
+                waitFor(coordinatorClient).
+                waitFor(cluster.agentClient("node02"));
+        }
+    }
+
+    @Test
+    public void testTaskRequestWithOldStartMsGetsUpdated() throws Exception {
+        MockTime time = new MockTime(0, 0, 0);
+        Scheduler scheduler = new MockScheduler(time);
+        try (MiniTrogdorCluster cluster = new MiniTrogdorCluster.Builder().
+            addCoordinator("node01").
+            addAgent("node02").
+            scheduler(scheduler).
+            build()) {
+
+            NoOpTaskSpec fooSpec = new NoOpTaskSpec(1, 500);
+            time.sleep(552);
+
+            CoordinatorClient coordinatorClient = cluster.coordinatorClient();
+            NoOpTaskSpec updatedSpec = new NoOpTaskSpec(552, 500);
+            coordinatorClient.createTask(new CreateTaskRequest("fooSpec", fooSpec));
+            TaskState expectedState = new ExpectedTaskBuilder("fooSpec").taskState(
+                new TaskRunning(updatedSpec, 552, new TextNode("receiving"))
+            ).build().taskState();
+
+            TaskState resp = coordinatorClient.task(new TaskRequest("fooSpec"));
+            assertEquals(expectedState, resp);
+        }
+    }
+
+    @Test
+    public void testTaskRequestWithFutureStartMsDoesNotGetRun() throws Exception {
+        MockTime time = new MockTime(0, 0, 0);
+        Scheduler scheduler = new MockScheduler(time);
+        try (MiniTrogdorCluster cluster = new MiniTrogdorCluster.Builder().
+            addCoordinator("node01").
+            addAgent("node02").
+            scheduler(scheduler).
+            build()) {
+
+            NoOpTaskSpec fooSpec = new NoOpTaskSpec(1000, 500);
+            time.sleep(999);
+
+            CoordinatorClient coordinatorClient = cluster.coordinatorClient();
+            coordinatorClient.createTask(new CreateTaskRequest("fooSpec", fooSpec));
+            TaskState expectedState = new ExpectedTaskBuilder("fooSpec").taskState(
+                new TaskPending(fooSpec)
+            ).build().taskState();
+
+            TaskState resp = coordinatorClient.task(new TaskRequest("fooSpec"));
+            assertEquals(expectedState, resp);
         }
     }
 

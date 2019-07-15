@@ -33,6 +33,7 @@ import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{MetadataResponse, UpdateMetadataRequest}
 
+
 /**
  *  A cache for the state (e.g., current leader) of each partition. This cache is updated through
  *  UpdateMetadataRequest from the controller. Every broker maintains the same cache, asynchronously.
@@ -51,9 +52,10 @@ class MetadataCache(brokerId: Int) extends Logging {
   private val stateChangeLogger = new StateChangeLogger(brokerId, inControllerContext = false, None)
 
   // This method is the main hotspot when it comes to the performance of metadata requests,
-  // we should be careful about adding additional logic here.
+  // we should be careful about adding additional logic here. Relatedly, `brokers` is
+  // `Iterable[Integer]` instead of `Iterable[Int]` to avoid a collection copy.
   // filterUnavailableEndpoints exists to support v0 MetadataResponses
-  private def getEndpoints(snapshot: MetadataSnapshot, brokers: Iterable[Int], listenerName: ListenerName, filterUnavailableEndpoints: Boolean): Seq[Node] = {
+  private def getEndpoints(snapshot: MetadataSnapshot, brokers: Iterable[java.lang.Integer], listenerName: ListenerName, filterUnavailableEndpoints: Boolean): Seq[Node] = {
     val result = new mutable.ArrayBuffer[Node](math.min(snapshot.aliveBrokers.size, brokers.size))
     brokers.foreach { brokerId =>
       val endpoint = getAliveEndpoint(snapshot, brokerId, listenerName) match {
@@ -76,9 +78,9 @@ class MetadataCache(brokerId: Int) extends Logging {
         val leaderBrokerId = partitionState.basePartitionState.leader
         val leaderEpoch = partitionState.basePartitionState.leaderEpoch
         val maybeLeader = getAliveEndpoint(snapshot, leaderBrokerId, listenerName)
-        val replicas = partitionState.basePartitionState.replicas.asScala.map(_.toInt)
+        val replicas = partitionState.basePartitionState.replicas.asScala
         val replicaInfo = getEndpoints(snapshot, replicas, listenerName, errorUnavailableEndpoints)
-        val offlineReplicaInfo = getEndpoints(snapshot, partitionState.offlineReplicas.asScala.map(_.toInt), listenerName, errorUnavailableEndpoints)
+        val offlineReplicaInfo = getEndpoints(snapshot, partitionState.offlineReplicas.asScala, listenerName, errorUnavailableEndpoints)
 
         maybeLeader match {
           case None =>
@@ -94,7 +96,7 @@ class MetadataCache(brokerId: Int) extends Logging {
               offlineReplicaInfo.asJava)
 
           case Some(leader) =>
-            val isr = partitionState.basePartitionState.isr.asScala.map(_.toInt)
+            val isr = partitionState.basePartitionState.isr.asScala
             val isrInfo = getEndpoints(snapshot, isr, listenerName, errorUnavailableEndpoints)
 
             if (replicaInfo.size < replicas.size) {
@@ -137,6 +139,12 @@ class MetadataCache(brokerId: Int) extends Logging {
     getAllTopics(metadataSnapshot)
   }
 
+  def getAllPartitions(): Set[TopicPartition] = {
+    metadataSnapshot.partitionStates.flatMap { case (topicName, partitionsAndStates) =>
+      partitionsAndStates.keys.map(partitionId => new TopicPartition(topicName, partitionId.toInt))
+    }.toSet
+  }
+
   private def getAllTopics(snapshot: MetadataSnapshot): Set[String] = {
     snapshot.partitionStates.keySet
   }
@@ -151,8 +159,8 @@ class MetadataCache(brokerId: Int) extends Logging {
     topics -- metadataSnapshot.partitionStates.keySet
   }
 
-  def isBrokerAlive(brokerId: Int): Boolean = {
-    metadataSnapshot.aliveBrokers.contains(brokerId)
+  def getAliveBroker(brokerId: Int): Option[Broker] = {
+    metadataSnapshot.aliveBrokers.get(brokerId)
   }
 
   def getAliveBrokers: Seq[Broker] = {
@@ -186,6 +194,24 @@ class MetadataCache(brokerId: Int) extends Logging {
           Node.noNode
       }
     }
+  }
+
+  def getPartitionReplicaEndpoints(tp: TopicPartition, listenerName: ListenerName): Map[Int, Node] = {
+    val snapshot = metadataSnapshot
+    snapshot.partitionStates.get(tp.topic()).flatMap(_.get(tp.partition())).map { partitionInfo =>
+      val replicaIds = partitionInfo.basePartitionState.replicas
+      replicaIds.asScala
+        .map(replicaId => replicaId.intValue() -> {
+          snapshot.aliveBrokers.get(replicaId.longValue()) match {
+            case Some(broker) =>
+              broker.getNode(listenerName).getOrElse(Node.noNode())
+            case None =>
+              Node.noNode()
+          }}).toMap
+        .filter(pair => pair match {
+          case (_, node) => !node.isEmpty
+        })
+    }.getOrElse(Map.empty[Int, Node])
   }
 
   def getControllerId: Option[Int] = metadataSnapshot.controllerId

@@ -192,7 +192,7 @@ public class ProducerConfig extends AbstractConfig {
             + " Note that this retry is no different than if the client resent the record upon receiving the error."
             + " Allowing retries without setting <code>" + MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION + "</code> to 1 will potentially change the"
             + " ordering of records because if two batches are sent to a single partition, and the first fails and is retried but the second"
-            + " succeeds, then the records in the second batch may appear first. Note additionall that produce requests will be"
+            + " succeeds, then the records in the second batch may appear first. Note additionally that produce requests will be"
             + " failed before the number of retries has been exhausted if the timeout configured by"
             + " <code>" + DELIVERY_TIMEOUT_MS_CONFIG + "</code> expires first before successful acknowledgement. Users should generally"
             + " prefer to leave this config unset and instead use <code>" + DELIVERY_TIMEOUT_MS_CONFIG + "</code> to control"
@@ -260,7 +260,7 @@ public class ProducerConfig extends AbstractConfig {
                                         ACKS_DOC)
                                 .define(COMPRESSION_TYPE_CONFIG, Type.STRING, "none", Importance.HIGH, COMPRESSION_TYPE_DOC)
                                 .define(BATCH_SIZE_CONFIG, Type.INT, 16384, atLeast(0), Importance.MEDIUM, BATCH_SIZE_DOC)
-                                .define(LINGER_MS_CONFIG, Type.INT, 0, atLeast(0), Importance.MEDIUM, LINGER_MS_DOC)
+                                .define(LINGER_MS_CONFIG, Type.LONG, 0, atLeast(0), Importance.MEDIUM, LINGER_MS_DOC)
                                 .define(DELIVERY_TIMEOUT_MS_CONFIG, Type.INT, 120 * 1000, atLeast(0), Importance.MEDIUM, DELIVERY_TIMEOUT_MS_DOC)
                                 .define(CLIENT_ID_CONFIG, Type.STRING, "", Importance.MEDIUM, CommonClientConfigs.CLIENT_ID_DOC)
                                 .define(SEND_BUFFER_CONFIG, Type.INT, 128 * 1024, atLeast(CommonClientConfigs.SEND_BUFFER_LOWER_BOUND), Importance.MEDIUM, CommonClientConfigs.SEND_BUFFER_DOC)
@@ -402,6 +402,10 @@ public class ProducerConfig extends AbstractConfig {
 
     public static Set<String> configNames() {
         return CONFIG.names();
+    }
+
+    public static ConfigDef configDef() {
+        return  new ConfigDef(CONFIG);
     }
 
     public static void main(String[] args) {

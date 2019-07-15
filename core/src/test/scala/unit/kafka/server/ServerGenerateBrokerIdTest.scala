@@ -18,11 +18,14 @@ package kafka.server
 
 import java.util.Properties
 
+import scala.collection.Seq
+
 import kafka.zk.ZooKeeperTestHarness
 import kafka.utils.TestUtils
 import org.junit.{After, Before, Test}
 import org.junit.Assert._
 import java.io.File
+import org.scalatest.Assertions.intercept
 
 import org.apache.zookeeper.KeeperException.NodeExistsException
 

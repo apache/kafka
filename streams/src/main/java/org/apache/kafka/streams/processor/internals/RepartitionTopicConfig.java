@@ -33,10 +33,8 @@ public class RepartitionTopicConfig extends InternalTopicConfig {
     static {
         final Map<String, String> tempTopicDefaultOverrides = new HashMap<>();
         tempTopicDefaultOverrides.put(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_DELETE);
-        tempTopicDefaultOverrides.put(TopicConfig.SEGMENT_INDEX_BYTES_CONFIG, "52428800");               // 50 MB
-        tempTopicDefaultOverrides.put(TopicConfig.SEGMENT_BYTES_CONFIG, "52428800");                     // 50 MB
-        tempTopicDefaultOverrides.put(TopicConfig.SEGMENT_MS_CONFIG, "600000");                          // 10 min
-        tempTopicDefaultOverrides.put(TopicConfig.RETENTION_MS_CONFIG, String.valueOf(Long.MAX_VALUE));  // Infinity
+        tempTopicDefaultOverrides.put(TopicConfig.SEGMENT_BYTES_CONFIG, "52428800");         // 50 MB
+        tempTopicDefaultOverrides.put(TopicConfig.RETENTION_MS_CONFIG, String.valueOf(-1));  // Infinity
         REPARTITION_TOPIC_DEFAULT_OVERRIDES = Collections.unmodifiableMap(tempTopicDefaultOverrides);
     }
 
@@ -45,7 +43,7 @@ public class RepartitionTopicConfig extends InternalTopicConfig {
     }
 
     /**
-     * Get the configured properties for this topic. If rententionMs is set then
+     * Get the configured properties for this topic. If retentionMs is set then
      * we add additionalRetentionMs to work out the desired retention when cleanup.policy=compact,delete
      *
      * @param additionalRetentionMs - added to retention to allow for clock drift etc

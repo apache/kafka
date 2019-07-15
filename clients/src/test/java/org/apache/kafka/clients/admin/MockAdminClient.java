@@ -21,23 +21,26 @@ import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.ElectionType;
 import org.apache.kafka.common.TopicPartitionInfo;
 import org.apache.kafka.common.TopicPartitionReplica;
 import org.apache.kafka.common.acl.AclBinding;
 import org.apache.kafka.common.acl.AclBindingFilter;
+import org.apache.kafka.common.acl.AclOperation;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicExistsException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.TimeUnit;
+import java.util.Set;
 
 public class MockAdminClient extends AdminClient {
     public static final String DEFAULT_CLUSTER_ID = "I4ZmrWqfT2e-upky_4fdPA";
@@ -125,19 +128,22 @@ public class MockAdminClient extends AdminClient {
         KafkaFutureImpl<Collection<Node>> nodesFuture = new KafkaFutureImpl<>();
         KafkaFutureImpl<Node> controllerFuture = new KafkaFutureImpl<>();
         KafkaFutureImpl<String> brokerIdFuture = new KafkaFutureImpl<>();
+        KafkaFutureImpl<Set<AclOperation>> authorizedOperationsFuture = new KafkaFutureImpl<>();
 
         if (timeoutNextRequests > 0) {
             nodesFuture.completeExceptionally(new TimeoutException());
             controllerFuture.completeExceptionally(new TimeoutException());
             brokerIdFuture.completeExceptionally(new TimeoutException());
+            authorizedOperationsFuture.completeExceptionally(new TimeoutException());
             --timeoutNextRequests;
         } else {
             nodesFuture.complete(brokers);
             controllerFuture.complete(controller);
             brokerIdFuture.complete(clusterId);
+            authorizedOperationsFuture.complete(Collections.emptySet());
         }
 
-        return new DescribeClusterResult(nodesFuture, controllerFuture, brokerIdFuture);
+        return new DescribeClusterResult(nodesFuture, controllerFuture, brokerIdFuture, authorizedOperationsFuture);
     }
 
     @Override
@@ -199,7 +205,11 @@ public class MockAdminClient extends AdminClient {
 
         for (Map.Entry<String, TopicMetadata> topicDescription : allTopics.entrySet()) {
             String topicName = topicDescription.getKey();
-            topicListings.put(topicName, new TopicListing(topicName, topicDescription.getValue().isInternalTopic));
+            if (topicDescription.getValue().fetchesRemainingUntilVisible > 0) {
+                topicDescription.getValue().fetchesRemainingUntilVisible--;
+            } else {
+                topicListings.put(topicName, new TopicListing(topicName, topicDescription.getValue().isInternalTopic));
+            }
         }
 
         KafkaFutureImpl<Map<String, TopicListing>> future = new KafkaFutureImpl<>();
@@ -226,17 +236,21 @@ public class MockAdminClient extends AdminClient {
             for (Map.Entry<String, TopicMetadata> topicDescription : allTopics.entrySet()) {
                 String topicName = topicDescription.getKey();
                 if (topicName.equals(requestedTopic) && !topicDescription.getValue().markedForDeletion) {
-                    TopicMetadata topicMetadata = topicDescription.getValue();
-                    KafkaFutureImpl<TopicDescription> future = new KafkaFutureImpl<>();
-                    future.complete(new TopicDescription(topicName, topicMetadata.isInternalTopic, topicMetadata.partitions));
-                    topicDescriptions.put(topicName, future);
-                    break;
+                    if (topicDescription.getValue().fetchesRemainingUntilVisible > 0) {
+                        topicDescription.getValue().fetchesRemainingUntilVisible--;
+                    } else {
+                        TopicMetadata topicMetadata = topicDescription.getValue();
+                        KafkaFutureImpl<TopicDescription> future = new KafkaFutureImpl<>();
+                        future.complete(new TopicDescription(topicName, topicMetadata.isInternalTopic, topicMetadata.partitions,
+                                Collections.emptySet()));
+                        topicDescriptions.put(topicName, future);
+                        break;
+                    }
                 }
             }
             if (!topicDescriptions.containsKey(requestedTopic)) {
                 KafkaFutureImpl<TopicDescription> future = new KafkaFutureImpl<>();
-                future.completeExceptionally(new UnknownTopicOrPartitionException(
-                    String.format("Topic %s unknown.", requestedTopic)));
+                future.completeExceptionally(new UnknownTopicOrPartitionException("Topic " + requestedTopic + " not found."));
                 topicDescriptions.put(requestedTopic, future);
             }
         }
@@ -328,6 +342,20 @@ public class MockAdminClient extends AdminClient {
         throw new UnsupportedOperationException("Not implemented yet");
     }
 
+    @Deprecated
+    @Override
+    public ElectPreferredLeadersResult electPreferredLeaders(Collection<TopicPartition> partitions, ElectPreferredLeadersOptions options) {
+        throw new UnsupportedOperationException("Not implemented yet");
+    }
+
+    @Override
+    public ElectLeadersResult electLeaders(
+            ElectionType electionType,
+            Set<TopicPartition> partitions,
+            ElectLeadersOptions options) {
+        throw new UnsupportedOperationException("Not implemented yet");
+    }
+
     @Override
     public CreateAclsResult createAcls(Collection<AclBinding> acls, CreateAclsOptions options) {
         throw new UnsupportedOperationException("Not implemented yet");
@@ -366,7 +394,14 @@ public class MockAdminClient extends AdminClient {
     }
 
     @Override
+    @Deprecated
     public AlterConfigsResult alterConfigs(Map<ConfigResource, Config> configs, AlterConfigsOptions options) {
+        throw new UnsupportedOperationException("Not implemented yet");
+    }
+
+    @Override
+    public AlterConfigsResult incrementalAlterConfigs(Map<ConfigResource, Collection<AlterConfigOp>> configs,
+                                                      AlterConfigsOptions options) {
         throw new UnsupportedOperationException("Not implemented yet");
     }
 
@@ -386,13 +421,14 @@ public class MockAdminClient extends AdminClient {
     }
 
     @Override
-    public void close(long duration, TimeUnit unit) {}
+    public void close(Duration timeout) {}
 
 
     private final static class TopicMetadata {
         final boolean isInternalTopic;
         final List<TopicPartitionInfo> partitions;
         final Map<String, String> configs;
+        int fetchesRemainingUntilVisible;
 
         public boolean markedForDeletion;
 
@@ -403,6 +439,7 @@ public class MockAdminClient extends AdminClient {
             this.partitions = partitions;
             this.configs = configs != null ? configs : Collections.emptyMap();
             this.markedForDeletion = false;
+            this.fetchesRemainingUntilVisible = 0;
         }
     }
 
@@ -413,5 +450,13 @@ public class MockAdminClient extends AdminClient {
     @Override
     public Map<MetricName, ? extends Metric> metrics() {
         return mockMetrics;
+    }
+
+    public void setFetchesRemainingUntilVisible(String topicName, int fetchesRemainingUntilVisible) {
+        TopicMetadata metadata = allTopics.get(topicName);
+        if (metadata == null) {
+            throw new RuntimeException("No such topic as " + topicName);
+        }
+        metadata.fetchesRemainingUntilVisible = fetchesRemainingUntilVisible;
     }
 }

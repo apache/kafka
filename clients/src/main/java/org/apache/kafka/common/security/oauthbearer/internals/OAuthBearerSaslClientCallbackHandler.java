@@ -19,9 +19,13 @@ package org.apache.kafka.common.security.oauthbearer.internals;
 import java.io.IOException;
 import java.security.AccessController;
 import java.util.Collections;
+import java.util.Comparator;
+import java.util.Date;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.SortedSet;
+import java.util.TreeSet;
 
 import javax.security.auth.Subject;
 import javax.security.auth.callback.Callback;
@@ -34,6 +38,8 @@ import org.apache.kafka.common.security.auth.SaslExtensions;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerToken;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerTokenCallback;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * An implementation of {@code AuthenticateCallbackHandler} that recognizes
@@ -49,6 +55,7 @@ import org.apache.kafka.common.security.oauthbearer.OAuthBearerTokenCallback;
  * configuration property.
  */
 public class OAuthBearerSaslClientCallbackHandler implements AuthenticateCallbackHandler {
+    private static final Logger log = LoggerFactory.getLogger(OAuthBearerSaslClientCallbackHandler.class);
     private boolean configured = false;
 
     /**
@@ -93,11 +100,35 @@ public class OAuthBearerSaslClientCallbackHandler implements AuthenticateCallbac
         Set<OAuthBearerToken> privateCredentials = subject != null
             ? subject.getPrivateCredentials(OAuthBearerToken.class)
             : Collections.emptySet();
-        if (privateCredentials.size() != 1)
-            throw new IOException(
-                    String.format("Unable to find OAuth Bearer token in Subject's private credentials (size=%d)",
-                            privateCredentials.size()));
-        callback.token(privateCredentials.iterator().next());
+        if (privateCredentials.size() == 0)
+            throw new IOException("No OAuth Bearer tokens in Subject's private credentials");
+        if (privateCredentials.size() == 1)
+            callback.token(privateCredentials.iterator().next());
+        else {
+            /*
+             * There a very small window of time upon token refresh (on the order of milliseconds)
+             * where both an old and a new token appear on the Subject's private credentials.
+             * Rather than implement a lock to eliminate this window, we will deal with it by
+             * checking for the existence of multiple tokens and choosing the one that has the
+             * longest lifetime.  It is also possible that a bug could cause multiple tokens to
+             * exist (e.g. KAFKA-7902), so dealing with the unlikely possibility that occurs
+             * during normal operation also allows us to deal more robustly with potential bugs.
+             */
+            SortedSet<OAuthBearerToken> sortedByLifetime =
+                new TreeSet<>(
+                    new Comparator<OAuthBearerToken>() {
+                        @Override
+                        public int compare(OAuthBearerToken o1, OAuthBearerToken o2) {
+                            return Long.compare(o1.lifetimeMs(), o2.lifetimeMs());
+                        }
+                    });
+            sortedByLifetime.addAll(privateCredentials);
+            log.warn("Found {} OAuth Bearer tokens in Subject's private credentials; the oldest expires at {}, will use the newest, which expires at {}",
+                sortedByLifetime.size(),
+                new Date(sortedByLifetime.first().lifetimeMs()),
+                new Date(sortedByLifetime.last().lifetimeMs()));
+            callback.token(sortedByLifetime.last());
+        }
     }
 
     /**

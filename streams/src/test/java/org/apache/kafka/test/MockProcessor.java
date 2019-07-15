@@ -16,22 +16,23 @@
  */
 package org.apache.kafka.test;
 
-import java.time.Duration;
 import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Cancellable;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.PunctuationType;
-import org.apache.kafka.streams.processor.Punctuator;
+import org.apache.kafka.streams.state.ValueAndTimestamp;
 
+import java.time.Duration;
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Map;
 
 import static org.junit.Assert.assertEquals;
 
 public class MockProcessor<K, V> extends AbstractProcessor<K, V> {
 
     public final ArrayList<String> processed = new ArrayList<>();
-    public final ArrayList<K> processedKeys = new ArrayList<>();
-    public final ArrayList<V> processedValues = new ArrayList<>();
+    public final Map<K, ValueAndTimestamp<V>> lastValueAndTimestampPerKey = new HashMap<>();
 
     public final ArrayList<Long> punctuatedStreamTime = new ArrayList<>();
     public final ArrayList<Long> punctuatedSystemTime = new ArrayList<>();
@@ -43,7 +44,8 @@ public class MockProcessor<K, V> extends AbstractProcessor<K, V> {
 
     private boolean commitRequested = false;
 
-    public MockProcessor(final PunctuationType punctuationType, final long scheduleInterval) {
+    public MockProcessor(final PunctuationType punctuationType,
+                         final long scheduleInterval) {
         this.punctuationType = punctuationType;
         this.scheduleInterval = scheduleInterval;
     }
@@ -56,9 +58,10 @@ public class MockProcessor<K, V> extends AbstractProcessor<K, V> {
     public void init(final ProcessorContext context) {
         super.init(context);
         if (scheduleInterval > 0L) {
-            scheduleCancellable = context.schedule(Duration.ofMillis(scheduleInterval), punctuationType, new Punctuator() {
-                @Override
-                public void punctuate(final long timestamp) {
+            scheduleCancellable = context.schedule(
+                Duration.ofMillis(scheduleInterval),
+                punctuationType,
+                timestamp -> {
                     if (punctuationType == PunctuationType.STREAM_TIME) {
                         assertEquals(timestamp, context().timestamp());
                     }
@@ -67,22 +70,30 @@ public class MockProcessor<K, V> extends AbstractProcessor<K, V> {
 
                     (punctuationType == PunctuationType.STREAM_TIME ? punctuatedStreamTime : punctuatedSystemTime)
                             .add(timestamp);
-                }
-            });
+                });
         }
     }
 
     @Override
     public void process(final K key, final V value) {
-        processedKeys.add(key);
-        processedValues.add(value);
-        processed.add((key == null ? "null" : key) + ":" +
-                (value == null ? "null" : value));
+        if (value != null) {
+            lastValueAndTimestampPerKey.put(key, ValueAndTimestamp.make(value, context().timestamp()));
+        } else {
+            lastValueAndTimestampPerKey.remove(key);
+        }
+
+        processed.add(makeRecord(key, value, context().timestamp()));
 
         if (commitRequested) {
             context().commit();
             commitRequested = false;
         }
+    }
+
+    public static String makeRecord(final Object key, final Object value, final long timestamp) {
+        return (key == null ? "null" : key) +
+            ":" + (value == null ? "null" : value) +
+            " (ts: " + timestamp + ")";
     }
 
     public void checkAndClearProcessResult(final String... expected) {

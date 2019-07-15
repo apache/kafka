@@ -106,14 +106,14 @@ import static org.apache.kafka.streams.internals.ApiUtils.prepareMillisCheckFail
  * <p>
  * A simple example might look like this:
  * <pre>{@code
- * Map<String, Object> props = new HashMap<>();
+ * Properties props = new Properties();
  * props.put(StreamsConfig.APPLICATION_ID_CONFIG, "my-stream-processing-application");
  * props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
  * props.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass());
  * props.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
  *
  * StreamsBuilder builder = new StreamsBuilder();
- * builder.<String, String>stream("my-input-topic").mapValues(value -> value.length().toString()).to("my-output-topic");
+ * builder.<String, String>stream("my-input-topic").mapValues(value -> String.valueOf(value.length())).to("my-output-topic");
  *
  * KafkaStreams streams = new KafkaStreams(builder.build(), props);
  * streams.start();
@@ -155,23 +155,23 @@ public class KafkaStreams implements AutoCloseable {
      *
      * <pre>
      *                 +--------------+
-     *         +<----- | Created (0)  |
+     *         +&lt;----- | Created (0)  |
      *         |       +-----+--------+
      *         |             |
      *         |             v
      *         |       +----+--+------+
      *         |       | Re-          |
-     *         +<----- | Balancing (1)| -------->+
+     *         +&lt;----- | Balancing (1)| --------&gt;+
      *         |       +-----+-+------+          |
      *         |             | ^                 |
      *         |             v |                 |
      *         |       +--------------+          v
-     *         |       | Running (2)  | -------->+
+     *         |       | Running (2)  | --------&gt;+
      *         |       +------+-------+          |
      *         |              |                  |
      *         |              v                  |
      *         |       +------+-------+     +----+-------+
-     *         +-----> | Pending      |<--- | Error (5)  |
+     *         +-----&gt; | Pending      |&lt;--- | Error (5)  |
      *                 | Shutdown (3) |     +------------+
      *                 +------+-------+
      *                        |
@@ -191,7 +191,7 @@ public class KafkaStreams implements AutoCloseable {
      *   the instance will be in the ERROR state. The user will need to close it.
      */
     public enum State {
-        CREATED(1, 3), REBALANCING(2, 3, 5), RUNNING(1, 3, 5), PENDING_SHUTDOWN(4), NOT_RUNNING, ERROR(3, 5);
+        CREATED(1, 3), REBALANCING(2, 3, 5), RUNNING(1, 3, 5), PENDING_SHUTDOWN(4), NOT_RUNNING, ERROR(3);
 
         private final Set<Integer> validTransitions = new HashSet<>();
 
@@ -368,20 +368,26 @@ public class KafkaStreams implements AutoCloseable {
 
     /**
      * Get read-only handle on global metrics registry, including streams client's own metrics plus
-     * its embedded consumer clients' metrics.
+     * its embedded producer, consumer and admin clients' metrics.
      *
      * @return Map of all metrics.
      */
     public Map<MetricName, ? extends Metric> metrics() {
         final Map<MetricName, Metric> result = new LinkedHashMap<>();
+        // producer and consumer clients are per-thread
         for (final StreamThread thread : threads) {
             result.putAll(thread.producerMetrics());
             result.putAll(thread.consumerMetrics());
+            // admin client is shared, so we can actually move it
+            // to result.putAll(adminClient.metrics()).
+            // we did it intentionally just for flexibility.
             result.putAll(thread.adminClientMetrics());
         }
+        // global thread's consumer client
         if (globalStreamThread != null) {
             result.putAll(globalStreamThread.consumerMetrics());
         }
+        // self streams metrics
         result.putAll(metrics.metrics());
         return Collections.unmodifiableMap(result);
     }
@@ -704,7 +710,7 @@ public class KafkaStreams implements AutoCloseable {
         }
 
         // use client id instead of thread client id since this admin client may be shared among threads
-        adminClient = clientSupplier.getAdminClient(config.getAdminConfigs(clientId));
+        adminClient = clientSupplier.getAdminClient(config.getAdminConfigs(StreamThread.getSharedAdminClientId(clientId)));
 
         final Map<Long, StreamThread.State> threadState = new HashMap<>(threads.length);
         final ArrayList<StateStoreProvider> storeProviders = new ArrayList<>();
@@ -720,7 +726,8 @@ public class KafkaStreams implements AutoCloseable {
                                              streamsMetadataState,
                                              cacheSizePerThread,
                                              stateDirectory,
-                                             delegatingStateRestoreListener);
+                                             delegatingStateRestoreListener,
+                                             i + 1);
             threadState.put(threads[i].getId(), threads[i].state());
             storeProviders.add(new StreamThreadStateStoreProvider(threads[i]));
         }
@@ -851,7 +858,6 @@ public class KafkaStreams implements AutoCloseable {
                 // notify all the threads to stop; avoid deadlocks by stopping any
                 // further state reports from the thread since we're shutting down
                 for (final StreamThread thread : threads) {
-                    thread.setStateListener(null);
                     thread.shutdown();
                 }
 
@@ -866,7 +872,6 @@ public class KafkaStreams implements AutoCloseable {
                 }
 
                 if (globalStreamThread != null) {
-                    globalStreamThread.setStateListener(null);
                     globalStreamThread.shutdown();
                 }
 

@@ -33,12 +33,12 @@ import scala.util.Random
 
 class AlterReplicaLogDirsRequestTest extends BaseRequestTest {
   override val logDirCount = 5
-  override val numBrokers = 1
+  override val brokerCount = 1
 
   val topic = "topic"
 
   @Test
-  def testAlterReplicaLogDirsRequest() {
+  def testAlterReplicaLogDirsRequest(): Unit = {
     val partitionNum = 5
 
     // Alter replica dir before topic creation

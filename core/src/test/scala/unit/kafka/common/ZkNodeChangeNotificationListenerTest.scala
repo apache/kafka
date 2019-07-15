@@ -23,6 +23,7 @@ import org.apache.kafka.common.resource.PatternType.LITERAL
 import org.junit.{After, Before, Test}
 
 import scala.collection.mutable.ArrayBuffer
+import scala.collection.Seq
 
 class ZkNodeChangeNotificationListenerTest extends ZooKeeperTestHarness {
 
@@ -62,7 +63,7 @@ class ZkNodeChangeNotificationListenerTest extends ZooKeeperTestHarness {
      * There is no easy way to test purging. Even if we mock kafka time with MockTime, the purging compares kafka time
      * with the time stored in ZooKeeper stat and the embedded ZooKeeper server does not provide a way to mock time.
      * So to test purging we would have to use Time.SYSTEM.sleep(changeExpirationMs + 1) issue a write and check
-     * Assert.assertEquals(1, ZkUtils.getChildren(zkClient, seqNodeRoot).size). However even that the assertion
+     * Assert.assertEquals(1, KafkaZkClient.getChildren(seqNodeRoot).size). However even that the assertion
      * can fail as the second node can be deleted depending on how threads get scheduled.
      */
 

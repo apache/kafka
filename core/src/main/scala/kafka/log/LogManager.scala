@@ -103,7 +103,7 @@ class LogManager(logDirs: Seq[File],
   private val preferredLogDirs = new ConcurrentHashMap[TopicPartition, String]()
 
   private def offlineLogDirs: Iterable[File] = {
-    val logDirsSet = mutable.Set[File](logDirs: _*)
+    val logDirsSet = mutable.Set[File]() ++= logDirs
     _liveLogDirs.asScala.foreach(logDirsSet -=)
     logDirsSet
   }
@@ -607,7 +607,7 @@ class LogManager(logDirs: Seq[File],
       partitionToLog <- logsByDir.get(dir.getAbsolutePath)
       checkpoint <- recoveryPointCheckpoints.get(dir)
     } {
-      checkpoint.write(partitionToLog.mapValues(_.recoveryPoint))
+      checkpoint.write(partitionToLog.map { case (tp, log) => tp -> log.recoveryPoint })
     }
   }
 
@@ -620,9 +620,9 @@ class LogManager(logDirs: Seq[File],
       checkpoint <- logStartOffsetCheckpoints.get(dir)
     } {
       try {
-        val logStartOffsets = partitionToLog.filter { case (_, log) =>
-          log.logStartOffset > log.logSegments.head.baseOffset
-        }.mapValues(_.logStartOffset)
+        val logStartOffsets = partitionToLog.collect {
+          case (k, log) if log.logStartOffset > log.logSegments.head.baseOffset => k -> log.logStartOffset
+        }
         checkpoint.write(logStartOffsets)
       } catch {
         case e: IOException =>
@@ -796,12 +796,15 @@ class LogManager(logDirs: Seq[File],
       val sourceLog = currentLogs.get(topicPartition)
       val destLog = futureLogs.get(topicPartition)
 
+      info(s"Attempting to replace current log $sourceLog with $destLog for $topicPartition")
       if (sourceLog == null)
         throw new KafkaStorageException(s"The current replica for $topicPartition is offline")
       if (destLog == null)
         throw new KafkaStorageException(s"The future replica for $topicPartition is offline")
 
       destLog.renameDir(Log.logDirName(topicPartition))
+      destLog.updateHighWatermark(sourceLog.highWatermark)
+
       // Now that future replica has been successfully renamed to be the current replica
       // Update the cached map and log cleaner as appropriate.
       futureLogs.remove(topicPartition)
@@ -993,10 +996,15 @@ object LogManager {
             brokerTopicStats: BrokerTopicStats,
             logDirFailureChannel: LogDirFailureChannel): LogManager = {
     val defaultProps = KafkaServer.copyKafkaConfigToLog(config)
+
+    LogConfig.validateValues(defaultProps)
     val defaultLogConfig = LogConfig(defaultProps)
 
     // read the log configurations from zookeeper
-    val (topicConfigs, failed) = zkClient.getLogConfigs(zkClient.getAllTopicsInCluster, defaultProps)
+    val (topicConfigs, failed) = zkClient.getLogConfigs(
+      zkClient.getAllTopicsInCluster,
+      defaultProps
+    )
     if (!failed.isEmpty) throw failed.head._2
 
     val cleanerConfig = LogCleaner.cleanerConfig(config)

@@ -28,4 +28,14 @@ import java.util.Collection;
  */
 @InterfaceStability.Evolving
 public class DescribeConsumerGroupsOptions extends AbstractOptions<DescribeConsumerGroupsOptions> {
+    private boolean includeAuthorizedOperations;
+
+    public DescribeConsumerGroupsOptions includeAuthorizedOperations(boolean includeAuthorizedOperations) {
+        this.includeAuthorizedOperations = includeAuthorizedOperations;
+        return this;
+    }
+
+    public boolean includeAuthorizedOperations() {
+        return includeAuthorizedOperations;
+    }
 }

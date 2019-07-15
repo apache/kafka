@@ -62,7 +62,7 @@ class ConsoleConsumer(KafkaPathResolverMixin, JmxMixin, BackgroundThreadService)
                  client_id="console-consumer", print_key=False, jmx_object_names=None, jmx_attributes=None,
                  enable_systest_events=False, stop_timeout_sec=35, print_timestamp=False,
                  isolation_level="read_uncommitted", jaas_override_variables=None,
-                 kafka_opts_override="", client_prop_file_override=""):
+                 kafka_opts_override="", client_prop_file_override="", consumer_properties={}):
         """
         Args:
             context:                    standard context
@@ -86,6 +86,7 @@ class ConsoleConsumer(KafkaPathResolverMixin, JmxMixin, BackgroundThreadService)
             jaas_override_variables     A dict of variables to be used in the jaas.conf template file
             kafka_opts_override         Override parameters of the KAFKA_OPTS environment variable
             client_prop_file_override   Override client.properties file used by the consumer
+            consumer_properties         A dict of values to pass in as --consumer-property key=value
         """
         JmxMixin.__init__(self, num_nodes=num_nodes, jmx_object_names=jmx_object_names, jmx_attributes=(jmx_attributes or []),
                           root=ConsoleConsumer.PERSISTENT_ROOT)
@@ -120,6 +121,7 @@ class ConsoleConsumer(KafkaPathResolverMixin, JmxMixin, BackgroundThreadService)
         self.jaas_override_variables = jaas_override_variables or {}
         self.kafka_opts_override = kafka_opts_override
         self.client_prop_file_override = client_prop_file_override
+        self.consumer_properties = consumer_properties
 
 
     def prop_file(self, node):
@@ -204,6 +206,10 @@ class ConsoleConsumer(KafkaPathResolverMixin, JmxMixin, BackgroundThreadService)
             # check the assertion here as well, in case node.version has been modified
             assert node.version >= V_0_10_0_0
             cmd += " --enable-systest-events"
+
+        if self.consumer_properties is not None:
+            for k, v in self.consumer_properties.items():
+                cmd += " --consumer-property %s=%s" % (k, v)
 
         cmd += " 2>> %(stderr)s | tee -a %(stdout)s &" % args
         return cmd

@@ -47,9 +47,8 @@
           <li><a class="reference internal" href="#available-serdes" id="id3">Available SerDes</a></li>
           <ul>
               <li><a class="reference internal" href="#primitive-and-basic-types" id="id4">Primitive and basic types</a></li>
-              <li><a class="reference internal" href="#avro" id="id5">Avro</a></li>
               <li><a class="reference internal" href="#json" id="id6">JSON</a></li>
-              <li><a class="reference internal" href="#further-serdes" id="id7">Further serdes</a></li>
+              <li><a class="reference internal" href="#implementing-custom-serdes" id="id5">Implementing custom serdes</a></li>
           </ul>
           <li><a class="reference internal" href="#scala-dsl-serdes" id="id8">Kafka Streams DSL for Scala Implicit SerDes</a></li>
       </ul>
@@ -61,9 +60,9 @@
 
 <span class="n">Properties</span> <span class="n">settings</span> <span class="o">=</span> <span class="k">new</span> <span class="n">Properties</span><span class="o">();</span>
 <span class="c1">// Default serde for keys of data records (here: built-in serde for String type)</span>
-<span class="n">settings</span><span class="o">.</span><span class="na">put</span><span class="o">(</span><span class="n">StreamsConfig</span><span class="o">.</span><span class="na">KEY_SERDE_CLASS_CONFIG</span><span class="o">,</span> <span class="n">Serdes</span><span class="o">.</span><span class="na">String</span><span class="o">().</span><span class="na">getClass</span><span class="o">().</span><span class="na">getName</span><span class="o">());</span>
+<span class="n">settings</span><span class="o">.</span><span class="na">put</span><span class="o">(</span><span class="n">StreamsConfig</span><span class="o">.</span><span class="na">DEFAULT_KEY_SERDE_CLASS_CONFIG</span><span class="o">,</span> <span class="n">Serdes</span><span class="o">.</span><span class="na">String</span><span class="o">().</span><span class="na">getClass</span><span class="o">().</span><span class="na">getName</span><span class="o">());</span>
 <span class="c1">// Default serde for values of data records (here: built-in serde for Long type)</span>
-<span class="n">settings</span><span class="o">.</span><span class="na">put</span><span class="o">(</span><span class="n">StreamsConfig</span><span class="o">.</span><span class="na">VALUE_SERDE_CLASS_CONFIG</span><span class="o">,</span> <span class="n">Serdes</span><span class="o">.</span><span class="na">Long</span><span class="o">().</span><span class="na">getClass</span><span class="o">().</span><span class="na">getName</span><span class="o">());</span>
+<span class="n">settings</span><span class="o">.</span><span class="na">put</span><span class="o">(</span><span class="n">StreamsConfig</span><span class="o">.</span><span class="na">DEFAULT_VALUE_SERDE_CLASS_CONFIG</span><span class="o">,</span> <span class="n">Serdes</span><span class="o">.</span><span class="na">Long</span><span class="o">().</span><span class="na">getClass</span><span class="o">().</span><span class="na">getName</span><span class="o">());</span>
 </pre></div>
       </div>
     </div>
@@ -112,7 +111,7 @@
 <span class="nt">&lt;/dependency&gt;</span>
 </pre></div>
         </div>
-        <p>This artifact provides the following serde implementations under the package <a class="reference external" href="https://github.com/apache/kafka/blob/1.0/clients/src/main/java/org/apache/kafka/common/serialization">org.apache.kafka.common.serialization</a>, which you can leverage when e.g., defining default serializers in your Streams configuration.</p>
+        <p>This artifact provides the following serde implementations under the package <a class="reference external" href="https://github.com/apache/kafka/blob/{{dotVersion}}/clients/src/main/java/org/apache/kafka/common/serialization">org.apache.kafka.common.serialization</a>, which you can leverage when e.g., defining default serializers in your Streams configuration.</p>
         <table border="1" class="docutils">
           <colgroup>
             <col width="17%" />
@@ -149,20 +148,17 @@
         </table>
         <div class="admonition tip">
           <p><b>Tip</b></p>
-          <p class="last"><a class="reference external" href="https://github.com/apache/kafka/blob/1.0/clients/src/main/java/org/apache/kafka/common/utils/Bytes.java">Bytes</a> is a wrapper for Java&#8217;s <code class="docutils literal"><span class="pre">byte[]</span></code> (byte array) that supports proper equality and ordering semantics.  You may want to consider using <code class="docutils literal"><span class="pre">Bytes</span></code> instead of <code class="docutils literal"><span class="pre">byte[]</span></code> in your applications.</p>
+          <p class="last"><a class="reference external" href="https://github.com/apache/kafka/blob/{{dotVersion}}/clients/src/main/java/org/apache/kafka/common/utils/Bytes.java">Bytes</a> is a wrapper for Java&#8217;s <code class="docutils literal"><span class="pre">byte[]</span></code> (byte array) that supports proper equality and ordering semantics.  You may want to consider using <code class="docutils literal"><span class="pre">Bytes</span></code> instead of <code class="docutils literal"><span class="pre">byte[]</span></code> in your applications.</p>
         </div>
       </div>
       <div class="section" id="json">
         <h3>JSON<a class="headerlink" href="#json" title="Permalink to this headline"></a></h3>
-        <p>The code examples of Kafka Streams also include a basic serde implementation for JSON:</p>
+        <p>The Kafka Streams code examples also include a basic serde implementation for JSON:</p>
         <ul class="simple">
-          <li><a class="reference external" href="https://github.com/apache/kafka/blob/1.0/streams/examples/src/main/java/org/apache/kafka/streams/examples/pageview/JsonPOJOSerializer.java">JsonPOJOSerializer</a></li>
-          <li><a class="reference external" href="https://github.com/apache/kafka/blob/1.0/streams/examples/src/main/java/org/apache/kafka/streams/examples/pageview/JsonPOJODeserializer.java">JsonPOJODeserializer</a></li>
+          <li><a class="reference external" href="https://github.com/apache/kafka/blob/{{dotVersion}}/streams/examples/src/main/java/org/apache/kafka/streams/examples/pageview/PageViewTypedDemo.java#L83">PageViewTypedDemo</a></li>
         </ul>
-        <p>You can construct a unified JSON serde from the <code class="docutils literal"><span class="pre">JsonPOJOSerializer</span></code> and <code class="docutils literal"><span class="pre">JsonPOJODeserializer</span></code> via
-          <code class="docutils literal"><span class="pre">Serdes.serdeFrom(&lt;serializerInstance&gt;,</span> <span class="pre">&lt;deserializerInstance&gt;)</span></code>.  The
-          <a class="reference external" href="https://github.com/apache/kafka/blob/1.0/streams/examples/src/main/java/org/apache/kafka/streams/examples/pageview/PageViewTypedDemo.java">PageViewTypedDemo</a>
-          example demonstrates how to use this JSON serde.</p>
+        <p>As shown in the example, you can use JSONSerdes inner classes <code class="docutils literal"><span class="pre">Serdes.serdeFrom(&lt;serializerInstance&gt;, &lt;deserializerInstance&gt;)</span></code> to construct JSON compatible serializers and deserializers.
+        </p>
       </div>
       <div class="section" id="implementing-custom-serdes">
         <span id="streams-developer-guide-serdes-custom"></span><h2>Implementing custom SerDes<a class="headerlink" href="#implementing-custom-serdes" title="Permalink to this headline"></a></h2>
@@ -170,13 +166,13 @@
           existing SerDes (see previous section).  Typically, your workflow will be similar to:</p>
         <ol class="arabic simple">
           <li>Write a <em>serializer</em> for your data type <code class="docutils literal"><span class="pre">T</span></code> by implementing
-            <a class="reference external" href="https://github.com/apache/kafka/blob/1.0/clients/src/main/java/org/apache/kafka/common/serialization/Serializer.java">org.apache.kafka.common.serialization.Serializer</a>.</li>
+            <a class="reference external" href="https://github.com/apache/kafka/blob/{{dotVersion}}/clients/src/main/java/org/apache/kafka/common/serialization/Serializer.java">org.apache.kafka.common.serialization.Serializer</a>.</li>
           <li>Write a <em>deserializer</em> for <code class="docutils literal"><span class="pre">T</span></code> by implementing
-            <a class="reference external" href="https://github.com/apache/kafka/blob/1.0/clients/src/main/java/org/apache/kafka/common/serialization/Deserializer.java">org.apache.kafka.common.serialization.Deserializer</a>.</li>
+            <a class="reference external" href="https://github.com/apache/kafka/blob/{{dotVersion}}/clients/src/main/java/org/apache/kafka/common/serialization/Deserializer.java">org.apache.kafka.common.serialization.Deserializer</a>.</li>
           <li>Write a <em>serde</em> for <code class="docutils literal"><span class="pre">T</span></code> by implementing
-            <a class="reference external" href="https://github.com/apache/kafka/blob/1.0/clients/src/main/java/org/apache/kafka/common/serialization/Serde.java">org.apache.kafka.common.serialization.Serde</a>,
+            <a class="reference external" href="https://github.com/apache/kafka/blob/{{dotVersion}}/clients/src/main/java/org/apache/kafka/common/serialization/Serde.java">org.apache.kafka.common.serialization.Serde</a>,
             which you either do manually (see existing SerDes in the previous section) or by leveraging helper functions in
-            <a class="reference external" href="https://github.com/apache/kafka/blob/1.0/clients/src/main/java/org/apache/kafka/common/serialization/Serdes.java">Serdes</a>
+            <a class="reference external" href="https://github.com/apache/kafka/blob/{{dotVersion}}/clients/src/main/java/org/apache/kafka/common/serialization/Serdes.java">Serdes</a>
             such as <code class="docutils literal"><span class="pre">Serdes.serdeFrom(Serializer&lt;T&gt;, Deserializer&lt;T&gt;)</span></code>.
             Note that you will need to implement your own class (that has no generic types) if you want to use your custom serde in the configuration provided to <code class="docutils literal"><span class="pre">KafkaStreams</span></code>.
             If your serde class has generic types or you use <code class="docutils literal"><span class="pre">Serdes.serdeFrom(Serializer&lt;T&gt;, Deserializer&lt;T&gt;)</span></code>, you can pass your serde only

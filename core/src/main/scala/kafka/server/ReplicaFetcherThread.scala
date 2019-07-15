@@ -19,7 +19,6 @@ package kafka.server
 
 import java.util.Optional
 
-import kafka.api
 import kafka.api._
 import kafka.cluster.BrokerEndPoint
 import kafka.log.LogAppendInfo
@@ -41,6 +40,7 @@ class ReplicaFetcherThread(name: String,
                            fetcherId: Int,
                            sourceBroker: BrokerEndPoint,
                            brokerConfig: KafkaConfig,
+                           failedPartitions: FailedPartitions,
                            replicaMgr: ReplicaManager,
                            metrics: Metrics,
                            time: Time,
@@ -49,6 +49,7 @@ class ReplicaFetcherThread(name: String,
   extends AbstractFetcherThread(name = name,
                                 clientId = name,
                                 sourceBroker = sourceBroker,
+                                failedPartitions,
                                 fetchBackOffMs = brokerConfig.replicaFetchBackoffMs,
                                 isInterruptible = false) {
 
@@ -63,7 +64,8 @@ class ReplicaFetcherThread(name: String,
 
   // Visible for testing
   private[server] val fetchRequestVersion: Short =
-    if (brokerConfig.interBrokerProtocolVersion >= KAFKA_2_1_IV2) 10
+    if (brokerConfig.interBrokerProtocolVersion >= KAFKA_2_3_IV1) 11
+    else if (brokerConfig.interBrokerProtocolVersion >= KAFKA_2_1_IV2) 10
     else if (brokerConfig.interBrokerProtocolVersion >= KAFKA_2_0_IV1) 8
     else if (brokerConfig.interBrokerProtocolVersion >= KAFKA_1_1_IV0) 7
     else if (brokerConfig.interBrokerProtocolVersion >= KAFKA_0_11_0_IV1) 5
@@ -75,7 +77,8 @@ class ReplicaFetcherThread(name: String,
 
   // Visible for testing
   private[server] val offsetForLeaderEpochRequestVersion: Short =
-    if (brokerConfig.interBrokerProtocolVersion >= KAFKA_2_1_IV1) 2
+    if (brokerConfig.interBrokerProtocolVersion >= KAFKA_2_3_IV1) 3
+    else if (brokerConfig.interBrokerProtocolVersion >= KAFKA_2_1_IV1) 2
     else if (brokerConfig.interBrokerProtocolVersion >= KAFKA_2_0_IV0) 1
     else 0
 
@@ -96,22 +99,15 @@ class ReplicaFetcherThread(name: String,
   private val fetchSessionHandler = new FetchSessionHandler(logContext, sourceBroker.id)
 
   override protected def latestEpoch(topicPartition: TopicPartition): Option[Int] = {
-    replicaMgr.localReplicaOrException(topicPartition).epochs.map(_.latestEpoch)
+    replicaMgr.localLogOrException(topicPartition).latestEpoch
   }
 
   override protected def logEndOffset(topicPartition: TopicPartition): Long = {
-    replicaMgr.localReplicaOrException(topicPartition).logEndOffset.messageOffset
+    replicaMgr.localLogOrException(topicPartition).logEndOffset
   }
 
   override protected def endOffsetForEpoch(topicPartition: TopicPartition, epoch: Int): Option[OffsetAndEpoch] = {
-    val replica = replicaMgr.localReplicaOrException(topicPartition)
-    replica.epochs.flatMap { epochCache =>
-      val (foundEpoch, foundOffset) = epochCache.endOffsetFor(epoch)
-      if (foundOffset == UNDEFINED_EPOCH_OFFSET)
-        None
-      else
-        Some(OffsetAndEpoch(foundOffset, foundEpoch))
-    }
+    replicaMgr.localLogOrException(topicPartition).endOffsetForEpoch(epoch)
   }
 
   override def initiateShutdown(): Boolean = {
@@ -147,33 +143,32 @@ class ReplicaFetcherThread(name: String,
   override def processPartitionData(topicPartition: TopicPartition,
                                     fetchOffset: Long,
                                     partitionData: FetchData): Option[LogAppendInfo] = {
-    val replica = replicaMgr.localReplicaOrException(topicPartition)
-    val partition = replicaMgr.getPartition(topicPartition).get
+    val partition = replicaMgr.nonOfflinePartition(topicPartition).get
+    val log = partition.localLogOrException
     val records = toMemoryRecords(partitionData.records)
 
     maybeWarnIfOversizedRecords(records, topicPartition)
 
-    if (fetchOffset != replica.logEndOffset.messageOffset)
+    if (fetchOffset != log.logEndOffset)
       throw new IllegalStateException("Offset mismatch for partition %s: fetched offset = %d, log end offset = %d.".format(
-        topicPartition, fetchOffset, replica.logEndOffset.messageOffset))
+        topicPartition, fetchOffset, log.logEndOffset))
 
     if (isTraceEnabled)
       trace("Follower has replica log end offset %d for partition %s. Received %d messages and leader hw %d"
-        .format(replica.logEndOffset.messageOffset, topicPartition, records.sizeInBytes, partitionData.highWatermark))
+        .format(log.logEndOffset, topicPartition, records.sizeInBytes, partitionData.highWatermark))
 
     // Append the leader's messages to the log
     val logAppendInfo = partition.appendRecordsToFollowerOrFutureReplica(records, isFuture = false)
 
     if (isTraceEnabled)
       trace("Follower has replica log end offset %d after appending %d bytes of messages for partition %s"
-        .format(replica.logEndOffset.messageOffset, records.sizeInBytes, topicPartition))
-    val followerHighWatermark = replica.logEndOffset.messageOffset.min(partitionData.highWatermark)
+        .format(log.logEndOffset, records.sizeInBytes, topicPartition))
     val leaderLogStartOffset = partitionData.logStartOffset
-    // for the follower replica, we do not need to keep
-    // its segment base offset the physical position,
-    // these values will be computed upon making the leader
-    replica.highWatermark = new LogOffsetMetadata(followerHighWatermark)
-    replica.maybeIncrementLogStartOffset(leaderLogStartOffset)
+
+    // For the follower replica, we do not need to keep its segment base offset and physical position.
+    // These values will be computed upon becoming leader or handling a preferred read replica fetch.
+    val followerHighWatermark = log.updateHighWatermark(partitionData.highWatermark)
+    log.maybeIncrementLogStartOffset(leaderLogStartOffset)
     if (isTraceEnabled)
       trace(s"Follower set replica high watermark for partition $topicPartition to $followerHighWatermark")
 
@@ -249,7 +244,7 @@ class ReplicaFetcherThread(name: String,
       // We will not include a replica in the fetch request if it should be throttled.
       if (fetchState.isReadyForFetch && !shouldFollowerThrottle(quota, topicPartition)) {
         try {
-          val logStartOffset = replicaMgr.localReplicaOrException(topicPartition).logStartOffset
+          val logStartOffset = replicaMgr.localLogOrException(topicPartition).logStartOffset
           builder.add(topicPartition, new FetchRequest.PartitionData(
             fetchState.fetchOffset, logStartOffset, fetchSize, Optional.of(fetchState.currentLeaderEpoch)))
         } catch {
@@ -281,13 +276,14 @@ class ReplicaFetcherThread(name: String,
    * The logic for finding the truncation offset is implemented in AbstractFetcherThread.getOffsetTruncationState
    */
   override def truncate(tp: TopicPartition, offsetTruncationState: OffsetTruncationState): Unit = {
-    val replica = replicaMgr.localReplicaOrException(tp)
-    val partition = replicaMgr.getPartition(tp).get
+    val partition = replicaMgr.nonOfflinePartition(tp).get
+    val log = partition.localLogOrException
+
     partition.truncateTo(offsetTruncationState.offset, isFuture = false)
 
-    if (offsetTruncationState.offset < replica.highWatermark.messageOffset)
+    if (offsetTruncationState.offset < log.highWatermark)
       warn(s"Truncating $tp to offset ${offsetTruncationState.offset} below high watermark " +
-        s"${replica.highWatermark.messageOffset}")
+        s"${log.highWatermark}")
 
     // mark the future replica for truncation only when we do last truncation
     if (offsetTruncationState.truncationCompleted)
@@ -296,51 +292,39 @@ class ReplicaFetcherThread(name: String,
   }
 
   override protected def truncateFullyAndStartAt(topicPartition: TopicPartition, offset: Long): Unit = {
-    val partition = replicaMgr.getPartition(topicPartition).get
+    val partition = replicaMgr.nonOfflinePartition(topicPartition).get
     partition.truncateFullyAndStartAt(offset, isFuture = false)
   }
 
-  override def fetchEpochsFromLeader(partitions: Map[TopicPartition, EpochData]): Map[TopicPartition, EpochEndOffset] = {
-    def undefinedResponseMap(error: Errors,
-                             requestMap: Map[TopicPartition, EpochData]): Map[TopicPartition, EpochEndOffset] = {
-      requestMap.map { case (tp, _) =>
-        tp -> new EpochEndOffset(error, UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET)
-      }
+  override def fetchEpochEndOffsets(partitions: Map[TopicPartition, EpochData]): Map[TopicPartition, EpochEndOffset] = {
+
+    if (partitions.isEmpty) {
+      debug("Skipping leaderEpoch request since all partitions do not have an epoch")
+      return Map.empty
     }
 
-    if (brokerSupportsLeaderEpochRequest) {
-      // skip request for partitions without epoch, as their topic log message format doesn't support epochs
-      val (partitionsWithEpoch, partitionsWithoutEpoch) = partitions.partition { case (_, epochData) =>
-        epochData.leaderEpoch != UNDEFINED_EPOCH
-      }
-      val resultWithoutEpoch = undefinedResponseMap(Errors.NONE, partitionsWithoutEpoch)
-      if (partitionsWithEpoch.isEmpty) {
-        debug("Skipping leaderEpoch request since all partitions do not have an epoch")
-        return resultWithoutEpoch
-      }
+    val epochRequest = OffsetsForLeaderEpochRequest.Builder.forFollower(offsetForLeaderEpochRequestVersion, partitions.asJava, brokerConfig.brokerId)
+    debug(s"Sending offset for leader epoch request $epochRequest")
 
-      val epochRequest = new OffsetsForLeaderEpochRequest.Builder(offsetForLeaderEpochRequestVersion,
-        partitionsWithEpoch.asJava)
-      val resultWithEpoch = try {
-        val response = leaderEndpoint.sendRequest(epochRequest)
-        val responseBody = response.responseBody.asInstanceOf[OffsetsForLeaderEpochResponse]
-        debug(s"Receive leaderEpoch response $response; " +
-          s"Skipped request for partitions ${partitionsWithoutEpoch.keys}")
-        responseBody.responses.asScala
-      } catch {
-        case t: Throwable =>
-          warn(s"Error when sending leader epoch request for $partitions", t)
+    try {
+      val response = leaderEndpoint.sendRequest(epochRequest)
+      val responseBody = response.responseBody.asInstanceOf[OffsetsForLeaderEpochResponse]
+      debug(s"Received leaderEpoch response $response")
+      responseBody.responses.asScala
+    } catch {
+      case t: Throwable =>
+        warn(s"Error when sending leader epoch request for $partitions", t)
 
-          // if we get any unexpected exception, mark all partitions with an error
-          undefinedResponseMap(Errors.forException(t), partitionsWithEpoch)
-      }
-      resultWithEpoch ++ resultWithoutEpoch
-    } else {
-      // just generate a response with no error but UNDEFINED_OFFSET so that we can fall back to truncating using
-      // high watermark in maybeTruncate()
-      undefinedResponseMap(Errors.NONE, partitions)
+        // if we get any unexpected exception, mark all partitions with an error
+        val error = Errors.forException(t)
+        partitions.map { case (tp, _) =>
+          tp -> new EpochEndOffset(error, UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET)
+        }
     }
   }
+
+  override def isOffsetForLeaderEpochSupported: Boolean = brokerSupportsLeaderEpochRequest
+
 
   /**
    *  To avoid ISR thrashing, we only throttle a replica on the follower if it's in the throttled replica list,
@@ -348,7 +332,7 @@ class ReplicaFetcherThread(name: String,
    */
   private def shouldFollowerThrottle(quota: ReplicaQuota, topicPartition: TopicPartition): Boolean = {
     val isReplicaInSync = fetcherLagStats.isReplicaInSync(topicPartition)
-    quota.isThrottled(topicPartition) && quota.isQuotaExceeded && !isReplicaInSync
+    !isReplicaInSync && quota.isThrottled(topicPartition) && quota.isQuotaExceeded
   }
 
 }

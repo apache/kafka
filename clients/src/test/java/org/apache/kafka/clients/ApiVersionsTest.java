@@ -36,7 +36,7 @@ public class ApiVersionsTest {
         assertEquals(RecordBatch.CURRENT_MAGIC_VALUE, apiVersions.maxUsableProduceMagic());
 
         apiVersions.update("1", NodeApiVersions.create(Collections.singleton(
-                new ApiVersionsResponse.ApiVersion(ApiKeys.PRODUCE.id, (short) 0, (short) 2))));
+                new ApiVersionsResponse.ApiVersion(ApiKeys.PRODUCE, (short) 0, (short) 2))));
         assertEquals(RecordBatch.MAGIC_VALUE_V1, apiVersions.maxUsableProduceMagic());
 
         apiVersions.remove("1");

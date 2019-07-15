@@ -22,31 +22,27 @@ import java.io.PrintStream
 import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.common.serialization.Deserializer
 import org.hamcrest.CoreMatchers
+import org.hamcrest.MatcherAssert._
 import org.junit.Test
-import org.junit.Assert.assertThat
-import org.scalatest.mockito.MockitoSugar
+import org.mockito.Mockito._
 
 class CustomDeserializer extends Deserializer[String] {
-  override def configure(configs: java.util.Map[String, _], isKey: Boolean): Unit = {
-  }
 
   override def deserialize(topic: String, data: Array[Byte]): String = {
-    assertThat("topic must not be null", topic, CoreMatchers.notNullValue())
+    assertThat("topic must not be null", topic, CoreMatchers.notNullValue)
     new String(data)
-  }
-
-  override def close(): Unit = {
   }
 }
 
-class CustomDeserializerTest extends MockitoSugar {
+class CustomDeserializerTest {
 
   @Test
   def checkDeserializerTopicIsNotNull(): Unit = {
     val formatter = new DefaultMessageFormatter()
     formatter.keyDeserializer = Some(new CustomDeserializer)
 
-    formatter.writeTo(new ConsumerRecord("topic_test", 1, 1l, "key".getBytes, "value".getBytes), mock[PrintStream])
+    formatter.writeTo(new ConsumerRecord("topic_test", 1, 1l, "key".getBytes, "value".getBytes),
+      mock(classOf[PrintStream]))
 
     formatter.close()
   }

@@ -61,8 +61,8 @@ import java.util.regex.Pattern;
 import static java.time.Duration.ofMillis;
 import static java.time.Duration.ofSeconds;
 import static org.hamcrest.CoreMatchers.equalTo;
+import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertThat;
 
 @Category({IntegrationTest.class})
 public class RepartitionOptimizingIntegrationTest {
@@ -91,7 +91,6 @@ public class RepartitionOptimizingIntegrationTest {
         final Properties props = new Properties();
         props.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 1024 * 10);
         props.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 5000);
-        props.put(IntegrationTestUtils.INTERNAL_LEAVE_GROUP_ON_CLOSE, true);
 
         streamsConfiguration = StreamsTestUtils.getStreamsConfig(
             "maybe-optimized-test-app",

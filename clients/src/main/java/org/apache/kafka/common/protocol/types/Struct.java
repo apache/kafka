@@ -20,6 +20,7 @@ import org.apache.kafka.common.record.BaseRecords;
 
 import java.nio.ByteBuffer;
 import java.util.Arrays;
+import java.util.Objects;
 
 /**
  * A record that can be serialized and deserialized according to a pre-defined schema
@@ -282,6 +283,16 @@ public class Struct {
         return (ByteBuffer) result;
     }
 
+    public byte[] getByteArray(String name) {
+        Object result = get(name);
+        if (result instanceof byte[])
+            return (byte[]) result;
+        ByteBuffer buf = (ByteBuffer) result;
+        byte[] arr = new byte[buf.remaining()];
+        buf.get(arr);
+        return arr;
+    }
+
     /**
      * Set the given field to the specified value
      *
@@ -344,6 +355,11 @@ public class Struct {
 
     public Struct set(Field.ComplexArray def, Object[] value) {
         return set(def.name, value);
+    }
+
+    public Struct setByteArray(String name, byte[] value) {
+        ByteBuffer buf = value == null ? null : ByteBuffer.wrap(value);
+        return set(name, buf);
     }
 
     public Struct setIfExists(Field.Array def, Object[] value) {
@@ -514,7 +530,7 @@ public class Struct {
             } else {
                 Object thisField = this.get(f);
                 Object otherField = other.get(f);
-                return (thisField == null) ? (otherField == null) : thisField.equals(otherField);
+                result = Objects.equals(thisField, otherField);
             }
             if (!result)
                 return false;

@@ -29,16 +29,17 @@ import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 
 import java.io.File;
+import java.time.Instant;
 
 public class SmokeTestUtil {
 
     final static int END = Integer.MAX_VALUE;
 
     static ProcessorSupplier<Object, Object> printProcessorSupplier(final String topic) {
-        return printProcessorSupplier(topic, false);
+        return printProcessorSupplier(topic, "");
     }
 
-    private static ProcessorSupplier<Object, Object> printProcessorSupplier(final String topic, final boolean printOffset) {
+    static ProcessorSupplier<Object, Object> printProcessorSupplier(final String topic, final String name) {
         return new ProcessorSupplier<Object, Object>() {
             @Override
             public Processor<Object, Object> get() {
@@ -48,7 +49,7 @@ public class SmokeTestUtil {
                     @Override
                     public void init(final ProcessorContext context) {
                         super.init(context);
-                        System.out.println("initializing processor: topic=" + topic + " taskId=" + context.taskId());
+                        System.out.println("[DEV] initializing processor: topic=" + topic + " taskId=" + context.taskId());
                         numRecordsProcessed = 0;
                     }
 
@@ -56,7 +57,7 @@ public class SmokeTestUtil {
                     public void process(final Object key, final Object value) {
                         numRecordsProcessed++;
                         if (numRecordsProcessed % 100 == 0) {
-                            System.out.println(System.currentTimeMillis());
+                            System.out.printf("%s: %s%n", name, Instant.now());
                             System.out.println("processed " + numRecordsProcessed + " records from topic=" + topic);
                         }
                     }

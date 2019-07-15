@@ -21,7 +21,7 @@ package org.apache.kafka.streams.scala
 package kstream
 
 import org.apache.kafka.common.utils.Bytes
-import org.apache.kafka.streams.kstream.{KTable => KTableJ, _}
+import org.apache.kafka.streams.kstream.{Suppressed, ValueTransformerWithKeySupplier, KTable => KTableJ}
 import org.apache.kafka.streams.scala.FunctionsCompatConversions._
 import org.apache.kafka.streams.scala.ImplicitConversions._
 import org.apache.kafka.streams.state.KeyValueStore
@@ -158,6 +158,18 @@ class KTable[K, V](val inner: KTableJ[K, V]) {
    */
   def toStream[KR](mapper: (K, V) => KR): KStream[KR, V] =
     inner.toStream[KR](mapper.asKeyValueMapper)
+
+  /**
+   * Suppress some updates from this changelog stream, determined by the supplied [[Suppressed]] configuration.
+   *
+   * This controls what updates downstream table and stream operations will receive.
+   *
+   * @param suppressed Configuration object determining what, if any, updates to suppress.
+   * @return A new KTable with the desired suppression characteristics.
+   * @see `org.apache.kafka.streams.kstream.KTable#suppress`
+   */
+  def suppress(suppressed: Suppressed[_ >: K]): KTable[K, V] =
+    inner.suppress(suppressed)
 
   /**
    * Create a new `KTable` by transforming the value of each record in this `KTable` into a new value, (with possibly new type).

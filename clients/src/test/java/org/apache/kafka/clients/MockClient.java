@@ -23,6 +23,7 @@ import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.AbstractResponse;
+import org.apache.kafka.common.requests.MetadataRequest;
 import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.test.TestCondition;
@@ -74,15 +75,7 @@ public class MockClient implements KafkaClient {
     private int correlation;
     private final Time time;
     private final MockMetadataUpdater metadataUpdater;
-    private final Set<String> ready = new HashSet<>();
-
-    // Nodes awaiting reconnect backoff, will not be chosen by leastLoadedNode
-    private final TransientSet<Node> blackedOut;
-    // Nodes which will always fail to connect, but can be chosen by leastLoadedNode
-    private final TransientSet<Node> unreachable;
-    // Nodes which have a delay before ultimately succeeding to connect
-    private final TransientSet<Node> delayedReady;
-
+    private final Map<String, ConnectionState> connections = new HashMap<>();
     private final Map<Node, Long> pendingAuthenticationErrors = new HashMap<>();
     private final Map<Node, AuthenticationException> authenticationErrors = new HashMap<>();
     // Use concurrent queue for requests so that requests may be queried from a different thread
@@ -102,36 +95,34 @@ public class MockClient implements KafkaClient {
     public MockClient(Time time, MockMetadataUpdater metadataUpdater) {
         this.time = time;
         this.metadataUpdater = metadataUpdater;
-        this.blackedOut = new TransientSet<>(time);
-        this.unreachable = new TransientSet<>(time);
-        this.delayedReady = new TransientSet<>(time);
+    }
+
+    public boolean isConnected(String idString) {
+        return connectionState(idString).state == ConnectionState.State.CONNECTED;
+    }
+
+    private ConnectionState connectionState(String idString) {
+        ConnectionState connectionState = connections.get(idString);
+        if (connectionState == null) {
+            connectionState = new ConnectionState();
+            connections.put(idString, connectionState);
+        }
+        return connectionState;
     }
 
     @Override
     public boolean isReady(Node node, long now) {
-        return ready.contains(node.idString());
+        return connectionState(node.idString()).isReady(now);
     }
 
     @Override
     public boolean ready(Node node, long now) {
-        if (blackedOut.contains(node, now))
-            return false;
-
-        if (unreachable.contains(node, now)) {
-            blackout(node, 100);
-            return false;
-        }
-
-        if (delayedReady.contains(node, now))
-            return false;
-
-        ready.add(node.idString());
-        return true;
+        return connectionState(node.idString()).ready(now);
     }
 
     @Override
     public long connectionDelay(Node node, long now) {
-        return blackedOut.expirationDelayMs(node, now);
+        return connectionState(node.idString()).connectionDelay(now);
     }
 
     @Override
@@ -140,16 +131,20 @@ public class MockClient implements KafkaClient {
     }
 
     public void blackout(Node node, long durationMs) {
-        blackedOut.add(node, durationMs);
+        connectionState(node.idString()).backoff(time.milliseconds() + durationMs);
     }
 
     public void setUnreachable(Node node, long durationMs) {
         disconnect(node.idString());
-        unreachable.add(node, durationMs);
+        connectionState(node.idString()).setUnreachable(time.milliseconds() + durationMs);
+    }
+
+    public void throttle(Node node, long durationMs) {
+        connectionState(node.idString()).throttle(time.milliseconds() + durationMs);
     }
 
     public void delayReady(Node node, long durationMs) {
-        delayedReady.add(node, durationMs);
+        connectionState(node.idString()).setReadyDelayed(time.milliseconds() + durationMs);
     }
 
     public void authenticationFailed(Node node, long blackoutMs) {
@@ -165,7 +160,7 @@ public class MockClient implements KafkaClient {
 
     @Override
     public boolean connectionFailed(Node node) {
-        return blackedOut.contains(node);
+        return connectionState(node.idString()).isBackingOff(time.milliseconds());
     }
 
     @Override
@@ -186,11 +181,14 @@ public class MockClient implements KafkaClient {
                 iter.remove();
             }
         }
-        ready.remove(node);
+        connectionState(node).disconnect();
     }
 
     @Override
     public void send(ClientRequest request, long now) {
+        if (!connectionState(request.destination()).isReady(now))
+            throw new IllegalStateException("Cannot send " + request + " since the destination is not ready");
+
         // Check if the request is directed to a node with a pending authentication error.
         for (Iterator<Map.Entry<Node, Long>> authErrorIter =
              pendingAuthenticationErrors.entrySet().iterator(); authErrorIter.hasNext(); ) {
@@ -223,7 +221,7 @@ public class MockClient implements KafkaClient {
                     builder.latestAllowedVersion());
             AbstractRequest abstractRequest = request.requestBuilder().build(version);
             if (!futureResp.requestMatcher.matches(abstractRequest))
-                throw new IllegalStateException("Request matcher did not match next-in-line request " + abstractRequest);
+                throw new IllegalStateException("Request matcher did not match next-in-line request " + abstractRequest + " with prepared response " + futureResp.responseBody);
 
             UnsupportedVersionException unsupportedVersionException = null;
             if (futureResp.isUnsupportedRequest)
@@ -276,7 +274,6 @@ public class MockClient implements KafkaClient {
         maybeAwaitWakeup();
         checkTimeoutOfPendingRequests(now);
 
-        List<ClientResponse> copy = new ArrayList<>(this.responses);
         // We skip metadata updates if all nodes are currently blacked out
         if (metadataUpdater.isUpdateNeeded() && leastLoadedNode(now) != null) {
             MetadataUpdate metadataUpdate = metadataUpdates.poll();
@@ -287,9 +284,11 @@ public class MockClient implements KafkaClient {
             }
         }
 
+        List<ClientResponse> copy = new ArrayList<>();
         ClientResponse response;
         while ((response = this.responses.poll()) != null) {
             response.onComplete();
+            copy.add(response);
         }
 
         return copy;
@@ -435,9 +434,7 @@ public class MockClient implements KafkaClient {
     }
 
     public void reset() {
-        ready.clear();
-        blackedOut.clear();
-        unreachable.clear();
+        connections.clear();
         requests.clear();
         responses.clear();
         futureResponses.clear();
@@ -497,7 +494,7 @@ public class MockClient implements KafkaClient {
 
     @Override
     public boolean hasReadyNodes(long now) {
-        return !ready.isEmpty();
+        return connections.values().stream().anyMatch(cxn -> cxn.isReady(now));
     }
 
     @Override
@@ -535,14 +532,14 @@ public class MockClient implements KafkaClient {
 
     @Override
     public void close(String node) {
-        ready.remove(node);
+        connections.remove(node);
     }
 
     @Override
     public Node leastLoadedNode(long now) {
         // Consistent with NetworkClient, we do not return nodes awaiting reconnect backoff
         for (Node node : metadataUpdater.fetchNodes()) {
-            if (!blackedOut.contains(node, now))
+            if (!connectionState(node.idString()).isBackingOff(now))
                 return node;
         }
         return null;
@@ -576,45 +573,6 @@ public class MockClient implements KafkaClient {
                     .map(MetadataResponse.TopicMetadata::topic)
                     .collect(Collectors.toSet());
         }
-    }
-
-    private static class TransientSet<T> {
-        // The elements in the set mapped to their expiration timestamps
-        private final Map<T, Long> elements = new HashMap<>();
-        private final Time time;
-
-        private TransientSet(Time time) {
-            this.time = time;
-        }
-
-        boolean contains(T element) {
-            return contains(element, time.milliseconds());
-        }
-
-        boolean contains(T element, long now) {
-            return expirationDelayMs(element, now) > 0;
-        }
-
-        void add(T element, long durationMs) {
-            elements.put(element, time.milliseconds() + durationMs);
-        }
-
-        long expirationDelayMs(T element, long now) {
-            Long expirationTimeMs = elements.get(element);
-            if (expirationTimeMs == null) {
-                return 0;
-            } else if (now > expirationTimeMs) {
-                elements.remove(element);
-                return 0;
-            } else {
-                return expirationTimeMs - now;
-            }
-        }
-
-        void clear() {
-            elements.clear();
-        }
-
     }
 
     /**
@@ -660,13 +618,26 @@ public class MockClient implements KafkaClient {
             update(time, lastUpdate);
         }
 
+        private void maybeCheckExpectedTopics(MetadataUpdate update, MetadataRequest.Builder builder) {
+            if (update.expectMatchRefreshTopics) {
+                if (builder.isAllTopics())
+                    throw new IllegalStateException("The metadata topics does not match expectation. "
+                            + "Expected topics: " + update.topics()
+                            + ", asked topics: ALL");
+
+                Set<String> requestedTopics = new HashSet<>(builder.topics());
+                if (!requestedTopics.equals(update.topics())) {
+                    throw new IllegalStateException("The metadata topics does not match expectation. "
+                            + "Expected topics: " + update.topics()
+                            + ", asked topics: " + requestedTopics);
+                }
+            }
+        }
+
         @Override
         public void update(Time time, MetadataUpdate update) {
-            if (update.expectMatchRefreshTopics && !metadata.topics().equals(update.topics())) {
-                throw new IllegalStateException("The metadata topics does not match expectation. "
-                        + "Expected topics: " + update.topics()
-                        + ", asked topics: " + metadata.topics());
-            }
+            MetadataRequest.Builder builder = metadata.newMetadataRequestBuilder();
+            maybeCheckExpectedTopics(update, builder);
             metadata.update(update.updateResponse, time.milliseconds());
             this.lastUpdate = update;
         }
@@ -675,6 +646,94 @@ public class MockClient implements KafkaClient {
         public void close() {
             metadata.close();
         }
+    }
+
+    private static class ConnectionState {
+        enum State { CONNECTING, CONNECTED, DISCONNECTED }
+
+        private long throttledUntilMs = 0L;
+        private long readyDelayedUntilMs = 0L;
+        private long backingOffUntilMs = 0L;
+        private long unreachableUntilMs = 0L;
+        private State state = State.DISCONNECTED;
+
+        void backoff(long untilMs) {
+            backingOffUntilMs = untilMs;
+        }
+
+        void throttle(long untilMs) {
+            throttledUntilMs = untilMs;
+        }
+
+        void setUnreachable(long untilMs) {
+            unreachableUntilMs = untilMs;
+        }
+
+        void setReadyDelayed(long untilMs) {
+            readyDelayedUntilMs = untilMs;
+        }
+
+        boolean isReady(long now) {
+            return state == State.CONNECTED && notThrottled(now);
+        }
+
+        boolean isReadyDelayed(long now) {
+            return now < readyDelayedUntilMs;
+        }
+
+        boolean notThrottled(long now) {
+            return now > throttledUntilMs;
+        }
+
+        boolean isBackingOff(long now) {
+            return now < backingOffUntilMs;
+        }
+
+        boolean isUnreachable(long now) {
+            return now < unreachableUntilMs;
+        }
+
+        void disconnect() {
+            state = State.DISCONNECTED;
+        }
+
+        long connectionDelay(long now) {
+            if (state != State.DISCONNECTED)
+                return Long.MAX_VALUE;
+
+            if (backingOffUntilMs > now)
+                return backingOffUntilMs - now;
+
+            return 0;
+        }
+
+        boolean ready(long now) {
+            switch (state) {
+                case CONNECTED:
+                    return notThrottled(now);
+
+                case CONNECTING:
+                    if (isReadyDelayed(now))
+                        return false;
+                    state = State.CONNECTED;
+                    return ready(now);
+
+                case DISCONNECTED:
+                    if (isBackingOff(now)) {
+                        return false;
+                    } else if (isUnreachable(now)) {
+                        backingOffUntilMs = now + 100;
+                        return false;
+                    }
+
+                    state = State.CONNECTING;
+                    return ready(now);
+
+                default:
+                    throw new IllegalArgumentException("Invalid state: " + state);
+            }
+        }
+
     }
 
 }

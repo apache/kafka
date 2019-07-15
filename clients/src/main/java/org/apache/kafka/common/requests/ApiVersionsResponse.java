@@ -84,6 +84,10 @@ public class ApiVersionsResponse extends AbstractResponse {
             this(apiKey.id, apiKey.oldestVersion(), apiKey.latestVersion());
         }
 
+        public ApiVersion(ApiKeys apiKey, short minVersion, short maxVersion) {
+            this(apiKey.id, minVersion, maxVersion);
+        }
+
         public ApiVersion(short apiKey, short minVersion, short maxVersion) {
             this.apiKey = apiKey;
             this.minVersion = minVersion;
