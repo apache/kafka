@@ -26,7 +26,9 @@ import java.util.Map;
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLEngine;
 
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.config.SecurityConfig;
 import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.security.ssl.mock.TestKeyManagerFactory;
@@ -63,17 +65,40 @@ public class SslFactoryTest {
     }
 
     @Test
-    public void testSslFactoryWithCustomKeyManagerConfiguration() throws Exception {
+    public void testSslFactoryWithCustomKeyManagerConfiguration() {
         Provider provider = new TestProvider();
-        Security.addProvider(provider);
+        Map<String, Object> serverSslConfig = TestSslUtils.createSslConfig(
+                TestKeyManagerFactory.ALGORITHM,
+                TestTrustManagerFactory.ALGORITHM
+        );
+        serverSslConfig.put(SecurityConfig.SECURITY_PROVIDER_CLASS_CONFIG, provider.getClass().getName());
+        SslFactory sslFactory = new SslFactory(Mode.SERVER);
+        sslFactory.configure(serverSslConfig);
+        assertNotNull("SslEngineBuilder not created", sslFactory.sslEngineBuilder());
+        Security.removeProvider(provider.getName());
+    }
+
+    @Test(expected = KafkaException.class)
+    public void testSslFactoryWithoutProviderClassConfiguration() {
+        // An exception is thrown as the algorithm is not registered through a provider
         Map<String, Object> serverSslConfig = TestSslUtils.createSslConfig(
                 TestKeyManagerFactory.ALGORITHM,
                 TestTrustManagerFactory.ALGORITHM
         );
         SslFactory sslFactory = new SslFactory(Mode.SERVER);
         sslFactory.configure(serverSslConfig);
-        assertNotNull("SslEngineBuilder not created", sslFactory.sslEngineBuilder());
-        Security.removeProvider(provider.getName());
+    }
+
+    @Test(expected = KafkaException.class)
+    public void testSslFactoryWithIncorrectProviderClassConfiguration() {
+        // An exception is thrown as the algorithm is not registered through a provider
+        Map<String, Object> serverSslConfig = TestSslUtils.createSslConfig(
+                TestKeyManagerFactory.ALGORITHM,
+                TestTrustManagerFactory.ALGORITHM
+        );
+        serverSslConfig.put(SecurityConfig.SECURITY_PROVIDER_CLASS_CONFIG, "com.fake.ProviderClass");
+        SslFactory sslFactory = new SslFactory(Mode.SERVER);
+        sslFactory.configure(serverSslConfig);
     }
 
     @Test

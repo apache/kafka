@@ -19,6 +19,7 @@ package org.apache.kafka.common.security.ssl;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Reconfigurable;
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.config.SecurityConfig;
 import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
 import org.apache.kafka.common.network.Mode;
@@ -90,6 +91,8 @@ public class SslFactory implements Reconfigurable {
         if (clientAuthConfigOverride != null) {
             nextConfigs.put(BrokerSecurityConfigs.SSL_CLIENT_AUTH_CONFIG, clientAuthConfigOverride);
         }
+        nextConfigs.put(SecurityConfig.SECURITY_PROVIDER_CLASS_CONFIG,
+                configs.get(SecurityConfig.SECURITY_PROVIDER_CLASS_CONFIG));
         SslEngineBuilder builder = new SslEngineBuilder(nextConfigs);
         if (keystoreVerifiableUsingTruststore) {
             try {

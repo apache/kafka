@@ -18,6 +18,8 @@ package org.apache.kafka.common.network;
 
 import java.nio.channels.SelectionKey;
 import javax.net.ssl.SSLEngine;
+
+import org.apache.kafka.common.config.SecurityConfig;
 import org.apache.kafka.common.memory.MemoryPool;
 import org.apache.kafka.common.memory.SimpleMemoryPool;
 import org.apache.kafka.common.metrics.Metrics;
@@ -104,6 +106,7 @@ public class SslSelectorTest extends SelectorTest {
                 TestKeyManagerFactory.ALGORITHM,
                 TestTrustManagerFactory.ALGORITHM
         );
+        sslServerConfigs.put(SecurityConfig.SECURITY_PROVIDER_CLASS_CONFIG, provider.getClass().getName());
         EchoServer server = new EchoServer(SecurityProtocol.SSL, sslServerConfigs);
         server.start();
         Time time = new MockTime();

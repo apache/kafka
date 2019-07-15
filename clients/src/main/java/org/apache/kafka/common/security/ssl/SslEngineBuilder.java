@@ -17,6 +17,7 @@
 package org.apache.kafka.common.security.ssl;
 
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.config.SecurityConfig;
 import org.apache.kafka.common.config.SslClientAuth;
 import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
@@ -35,9 +36,11 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Paths;
+import java.security.SecureRandom;
+import java.security.Security;
+import java.security.Provider;
 import java.security.GeneralSecurityException;
 import java.security.KeyStore;
-import java.security.SecureRandom;
 import java.util.Collections;
 import java.util.Date;
 import java.util.List;
@@ -51,6 +54,7 @@ public class SslEngineBuilder {
     private final Map<String, ?> configs;
     private final String protocol;
     private final String provider;
+    private final String securityProviderClass;
     private final String kmfAlgorithm;
     private final String tmfAlgorithm;
     private final SecurityStore keystore;
@@ -66,6 +70,10 @@ public class SslEngineBuilder {
         this.configs = Collections.unmodifiableMap(configs);
         this.protocol = (String) configs.get(SslConfigs.SSL_PROTOCOL_CONFIG);
         this.provider = (String) configs.get(SslConfigs.SSL_PROVIDER_CONFIG);
+        this.securityProviderClass = (String) configs.get(SecurityConfig.SECURITY_PROVIDER_CLASS_CONFIG);
+        if (this.securityProviderClass != null) {
+            addSecurityProvider();
+        }
 
         List<String> cipherSuitesList = (List<String>) configs.get(SslConfigs.SSL_CIPHER_SUITES_CONFIG);
         if (cipherSuitesList != null && !cipherSuitesList.isEmpty()) {
@@ -100,6 +108,16 @@ public class SslEngineBuilder {
                 (Password) configs.get(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG));
 
         this.sslContext = createSSLContext();
+    }
+
+    private void addSecurityProvider() {
+        try {
+            Security.addProvider((Provider) Class.forName(this.securityProviderClass).newInstance());
+        } catch (ClassNotFoundException cnfe) {
+            log.warn("Unrecognized security provider class", cnfe);
+        } catch (IllegalAccessException | InstantiationException e) {
+            log.warn("Unexpected implementation of security provider class", e);
+        }
     }
 
     private static SslClientAuth createSslClientAuth(String key) {

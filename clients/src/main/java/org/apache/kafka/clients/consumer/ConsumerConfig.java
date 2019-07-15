@@ -22,6 +22,7 @@ import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.common.config.ConfigDef.Type;
+import org.apache.kafka.common.config.SecurityConfig;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.requests.IsolationLevel;
 import org.apache.kafka.common.serialization.Deserializer;
@@ -486,6 +487,11 @@ public class ConsumerConfig extends AbstractConfig {
                                         Importance.MEDIUM,
                                         ALLOW_AUTO_CREATE_TOPICS_DOC)
                                 // security support
+                                .define(SecurityConfig.SECURITY_PROVIDER_CLASS_CONFIG,
+                                        Type.STRING,
+                                        null,
+                                        Importance.LOW,
+                                        SecurityConfig.SECURITY_PROVIDER_CLASS_DOC)
                                 .define(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG,
                                         Type.STRING,
                                         CommonClientConfigs.DEFAULT_SECURITY_PROTOCOL,

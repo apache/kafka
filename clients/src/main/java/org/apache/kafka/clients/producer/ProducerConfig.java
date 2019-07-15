@@ -23,6 +23,7 @@ import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.common.config.ConfigDef.Type;
+import org.apache.kafka.common.config.SecurityConfig;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.Serializer;
 
@@ -341,6 +342,11 @@ public class ProducerConfig extends AbstractConfig {
                                         CommonClientConfigs.DEFAULT_SECURITY_PROTOCOL,
                                         Importance.MEDIUM,
                                         CommonClientConfigs.SECURITY_PROTOCOL_DOC)
+                                .define(SecurityConfig.SECURITY_PROVIDER_CLASS_CONFIG,
+                                        Type.STRING,
+                                        null,
+                                        Importance.LOW,
+                                        SecurityConfig.SECURITY_PROVIDER_CLASS_DOC)
                                 .withClientSslSupport()
                                 .withClientSaslSupport()
                                 .define(ENABLE_IDEMPOTENCE_CONFIG,

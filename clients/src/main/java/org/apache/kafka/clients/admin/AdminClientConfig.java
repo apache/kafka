@@ -23,6 +23,7 @@ import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.common.config.ConfigDef.Type;
+import org.apache.kafka.common.config.SecurityConfig;
 import org.apache.kafka.common.metrics.Sensor;
 
 import java.util.Map;
@@ -174,6 +175,11 @@ public class AdminClientConfig extends AbstractConfig {
                                         Importance.MEDIUM,
                                         CLIENT_DNS_LOOKUP_DOC)
                                 // security support
+                                .define(SecurityConfig.SECURITY_PROVIDER_CLASS_CONFIG,
+                                        Type.STRING,
+                                        null,
+                                        Importance.LOW,
+                                        SecurityConfig.SECURITY_PROVIDER_CLASS_DOC)
                                 .define(SECURITY_PROTOCOL_CONFIG,
                                         Type.STRING,
                                         DEFAULT_SECURITY_PROTOCOL,
