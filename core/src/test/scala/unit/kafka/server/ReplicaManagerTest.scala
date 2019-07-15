@@ -977,6 +977,62 @@ class ReplicaManagerTest {
     EasyMock.verify(mockTopicStats1)
   }
 
+  @Test
+  def testOldFollowerLosesMetricsWhenReassignPartitions(): Unit = {
+    val controllerEpoch = 0
+    val leaderEpoch = 0
+    val leaderEpochIncrement = 1
+    val correlationId = 0
+    val controllerId = 0
+    val (rm0, rm1, _, mockTopicStats1) = prepareDifferentReplicaManagersWithMockedBrokerTopicStats()
+
+    EasyMock.expect(mockTopicStats1.removeOldLeaderMetrics(topic)).andVoid.once
+    EasyMock.expect(mockTopicStats1.removeOldFollowerMetrics(topic)).andVoid.once
+    EasyMock.replay(mockTopicStats1)
+
+    try {
+      // make broker 0 the leader of partition 0 and
+      // make broker 1 the leader of partition 1
+      val tp0 = new TopicPartition(topic, 0)
+      val tp1 = new TopicPartition(topic, 1)
+      val partition0Replicas = Seq[Integer](1, 0).asJava
+      val partition1Replicas = Seq[Integer](1, 0).asJava
+
+      val leaderAndIsrRequest1 = new LeaderAndIsrRequest.Builder(ApiKeys.LEADER_AND_ISR.latestVersion,
+        controllerId, 0, brokerEpoch,
+        collection.immutable.Map(
+          tp0 -> new LeaderAndIsrRequest.PartitionState(controllerEpoch, 1, leaderEpoch,
+            partition0Replicas, 0, partition0Replicas, true),
+          tp1 -> new LeaderAndIsrRequest.PartitionState(controllerEpoch, 1, leaderEpoch,
+            partition1Replicas, 0, partition1Replicas, true)
+        ).asJava,
+        Set(new Node(0, "host0", 0), new Node(1, "host1", 1)).asJava).build()
+
+      rm0.becomeLeaderOrFollower(correlationId, leaderAndIsrRequest1, (_, _) => ())
+      rm1.becomeLeaderOrFollower(correlationId, leaderAndIsrRequest1, (_, _) => ())
+
+      // make broker 0 the leader of partition 1 so broker 1 loses its leadership position
+      val leaderAndIsrRequest2 = new LeaderAndIsrRequest.Builder(ApiKeys.LEADER_AND_ISR.latestVersion, controllerId,
+        controllerEpoch, brokerEpoch,
+        collection.immutable.Map(
+          tp0 -> new LeaderAndIsrRequest.PartitionState(controllerEpoch, 0, leaderEpoch + leaderEpochIncrement,
+            partition0Replicas, 0, partition0Replicas, true),
+          tp1 -> new LeaderAndIsrRequest.PartitionState(controllerEpoch, 0, leaderEpoch + leaderEpochIncrement,
+            partition1Replicas, 0, partition1Replicas, true)
+        ).asJava,
+        Set(new Node(0, "host0", 0), new Node(1, "host1", 1)).asJava).build()
+
+      rm0.becomeLeaderOrFollower(correlationId, leaderAndIsrRequest2, (_, _) => ())
+      rm1.becomeLeaderOrFollower(correlationId, leaderAndIsrRequest2, (_, _) => ())
+    } finally {
+      rm0.shutdown()
+      rm1.shutdown()
+    }
+
+    // verify that broker 1 did remove its metrics when no longer being the leader of partition 1
+    EasyMock.verify(mockTopicStats1)
+  }
+
   private def prepareDifferentReplicaManagersWithMockedBrokerTopicStats(): (ReplicaManager, ReplicaManager, BrokerTopicStats, BrokerTopicStats) = {
     val props0 = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect)
     val props1 = TestUtils.createBrokerConfig(1, TestUtils.MockZkConnect)
