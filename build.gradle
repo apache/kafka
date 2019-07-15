@@ -268,8 +268,6 @@ subprojects {
   }
 
   test {
-    jvmArgs '-Duser.language=en -Duser.country=US'
-
     maxParallelForks = userMaxForks ?: Runtime.runtime.availableProcessors()
 
     minHeapSize = "256m"
