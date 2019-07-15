@@ -44,4 +44,7 @@ if [[  -n $JMX_PORT ]]; then
   export JMX_PORT=$JMX_PORT
   export KAFKA_JMX_OPTS="-Djava.rmi.server.hostname=zk$ZKID -Dcom.sun.management.jmxremote -Dcom.sun.management.jmxremote.authenticate=false  -Dcom.sun.management.jmxremote.ssl=false "
 fi
+if [[  -n $JMX_RMI_PORT ]]; then
+  export JMX_RMI_PORT=$JMX_RMI_PORT
+fi
 bin/zookeeper-server-start.sh config/zookeeper-$ZKID.properties 1>> /tmp/zk.log 2>> /tmp/zk.log &

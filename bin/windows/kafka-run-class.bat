@@ -109,6 +109,11 @@ IF ["%JMX_PORT%"] NEQ [""] (
 	set KAFKA_JMX_OPTS=%KAFKA_JMX_OPTS% -Dcom.sun.management.jmxremote.port=%JMX_PORT%
 )
 
+rem JMX RMI port to use
+IF ["%JMX_RMI_PORT%"] NEQ [""] (
+	set KAFKA_JMX_OPTS=%KAFKA_JMX_OPTS% -Dcom.sun.management.jmxremote.rmi.port=%JMX_RMI_PORT%
+)
+
 rem Log directory to use
 IF ["%LOG_DIR%"] EQU [""] (
     set LOG_DIR=%BASE_DIR%/logs
