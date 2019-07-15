@@ -416,6 +416,11 @@ class TopicCommandTest extends ZooKeeperTestHarness with Logging with RackAwareT
       topicService.describeTopic(describeOpts)
     }
 
+    // describe all topics
+    val describeOptsAllTopics = new TopicCommandOptions(Array())
+    // should not throw any error
+    topicService.describeTopic(describeOptsAllTopics)
+
     // describe topic that does not exist with --if-exists
     val describeOptsWithExists = new TopicCommandOptions(Array("--topic", testTopicName, "--if-exists"))
     // should not throw any error
