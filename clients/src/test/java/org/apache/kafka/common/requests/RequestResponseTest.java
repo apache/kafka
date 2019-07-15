@@ -65,6 +65,8 @@ import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData.Altera
 import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData;
 import org.apache.kafka.common.message.IncrementalAlterConfigsResponseData.AlterConfigsResourceResponse;
 import org.apache.kafka.common.message.IncrementalAlterConfigsResponseData;
+import org.apache.kafka.common.message.AlterPartitionReassignmentsRequestData;
+import org.apache.kafka.common.message.AlterPartitionReassignmentsResponseData;
 import org.apache.kafka.common.message.InitProducerIdRequestData;
 import org.apache.kafka.common.message.InitProducerIdResponseData;
 import org.apache.kafka.common.message.JoinGroupRequestData;
@@ -362,6 +364,9 @@ public class RequestResponseTest {
         checkRequest(createIncrementalAlterConfigsRequest(), true);
         checkErrorResponse(createIncrementalAlterConfigsRequest(), new UnknownServerException(), true);
         checkResponse(createIncrementalAlterConfigsResponse(), 0, true);
+        checkRequest(createAlterPartitionReassignmentsRequest(), true);
+        checkErrorResponse(createAlterPartitionReassignmentsRequest(), new UnknownServerException(), true);
+        checkResponse(createAlterPartitionReassignmentsResponse(), 0, true);
     }
 
     @Test
@@ -1622,5 +1627,33 @@ public class RequestResponseTest {
                 .setErrorCode(Errors.INVALID_REQUEST.code())
                 .setErrorMessage("Duplicate Keys"));
         return new IncrementalAlterConfigsResponse(data);
+    }
+
+    private AlterPartitionReassignmentsRequest createAlterPartitionReassignmentsRequest() {
+        AlterPartitionReassignmentsRequestData data = new AlterPartitionReassignmentsRequestData();
+        data.topics().add(
+                new AlterPartitionReassignmentsRequestData.ReassignableTopic().setName("topic").setPartitions(
+                        Collections.singletonList(
+                                new AlterPartitionReassignmentsRequestData.ReassignablePartition().setPartitionIndex(0).setReplicas(null)
+                        )
+                )
+        );
+        return new AlterPartitionReassignmentsRequest.Builder(data).build((short) 0);
+    }
+
+    private AlterPartitionReassignmentsResponse createAlterPartitionReassignmentsResponse() {
+        AlterPartitionReassignmentsResponseData data = new AlterPartitionReassignmentsResponseData();
+        data.responses().add(
+                new AlterPartitionReassignmentsResponseData.ReassignableTopicResponse()
+                        .setName("topic")
+                        .setPartitions(Collections.singletonList(
+                                new AlterPartitionReassignmentsResponseData.ReassignablePartitionResponse()
+                                        .setPartitionIndex(0)
+                                        .setErrorCode(Errors.NO_REASSIGNMENT_IN_PROGRESS.code())
+                                        .setErrorMessage("No reassignment is in progress for topic topic partition 0")
+                                )
+                        )
+        );
+        return new AlterPartitionReassignmentsResponse(data);
     }
 }
