@@ -24,8 +24,8 @@ public class GroupAuthorizationException extends AuthorizationException {
         this.groupId = groupId;
     }
 
-    public GroupAuthorizationException(String groupId) {
-        this("Not authorized to access group: " + groupId, groupId);
+    public GroupAuthorizationException(String message) {
+        this(message, null);
     }
 
     /**
@@ -36,6 +36,10 @@ public class GroupAuthorizationException extends AuthorizationException {
      */
     public String groupId() {
         return groupId;
+    }
+
+    public static GroupAuthorizationException forGroupId(String groupId) {
+        return new GroupAuthorizationException("Not authorized to access group: " + groupId, groupId);
     }
 
 }

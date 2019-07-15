@@ -1302,7 +1302,7 @@ public class TransactionManager {
             } else if (error == Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED) {
                 fatalError(error.exception());
             } else if (findCoordinatorResponse.error() == Errors.GROUP_AUTHORIZATION_FAILED) {
-                abortableError(new GroupAuthorizationException(builder.data().key()));
+                abortableError(GroupAuthorizationException.forGroupId(builder.data().key()));
             } else {
                 fatalError(new KafkaException(String.format("Could not find a coordinator with type %s with key %s due to" +
                         "unexpected error: %s", coordinatorType, builder.data().key(),
@@ -1401,7 +1401,7 @@ public class TransactionManager {
             } else if (error == Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED) {
                 fatalError(error.exception());
             } else if (error == Errors.GROUP_AUTHORIZATION_FAILED) {
-                abortableError(new GroupAuthorizationException(builder.consumerGroupId()));
+                abortableError(GroupAuthorizationException.forGroupId(builder.consumerGroupId()));
             } else {
                 fatalError(new KafkaException("Unexpected error in AddOffsetsToTxnResponse: " + error.message()));
             }
@@ -1463,7 +1463,7 @@ public class TransactionManager {
                     // If the topic is unknown or the coordinator is loading, retry with the current coordinator
                     continue;
                 } else if (error == Errors.GROUP_AUTHORIZATION_FAILED) {
-                    abortableError(new GroupAuthorizationException(builder.consumerGroupId()));
+                    abortableError(GroupAuthorizationException.forGroupId(builder.consumerGroupId()));
                     break;
                 } else if (error == Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED
                         || error == Errors.INVALID_PRODUCER_EPOCH

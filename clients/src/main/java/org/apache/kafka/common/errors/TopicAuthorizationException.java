@@ -31,15 +31,15 @@ public class TopicAuthorizationException extends AuthorizationException {
         this("Not authorized to access topics: " + unauthorizedTopics, unauthorizedTopics);
     }
 
-    public TopicAuthorizationException(String unauthorizedTopic) {
-        this(Collections.singleton(unauthorizedTopic));
+    public TopicAuthorizationException(String message) {
+        this(message, Collections.emptySet());
     }
 
     /**
-     * Get the set of topics which failed authorization. May be null if the set is not known
+     * Get the set of topics which failed authorization. May be empty if the set is not known
      * in the context the exception was raised in.
      *
-     * @return nullable set of unauthorized topics
+     * @return possibly empty set of unauthorized topics
      */
     public Set<String> unauthorizedTopics() {
         return unauthorizedTopics;
