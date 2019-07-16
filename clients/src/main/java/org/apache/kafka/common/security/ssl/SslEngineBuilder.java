@@ -54,7 +54,7 @@ public class SslEngineBuilder {
     private final Map<String, ?> configs;
     private final String protocol;
     private final String provider;
-    private final String securityProviderClass;
+    private final String securityProviderClassNames;
     private final String kmfAlgorithm;
     private final String tmfAlgorithm;
     private final SecurityStore keystore;
@@ -70,8 +70,8 @@ public class SslEngineBuilder {
         this.configs = Collections.unmodifiableMap(configs);
         this.protocol = (String) configs.get(SslConfigs.SSL_PROTOCOL_CONFIG);
         this.provider = (String) configs.get(SslConfigs.SSL_PROVIDER_CONFIG);
-        this.securityProviderClass = (String) configs.get(SecurityConfig.SECURITY_PROVIDER_CLASS_CONFIG);
-        if (this.securityProviderClass != null) {
+        this.securityProviderClassNames = (String) configs.get(SecurityConfig.SECURITY_PROVIDER_CLASS_CONFIG);
+        if (this.securityProviderClassNames != null && !this.securityProviderClassNames.equals("")) {
             addSecurityProvider();
         }
 
@@ -112,7 +112,10 @@ public class SslEngineBuilder {
 
     private void addSecurityProvider() {
         try {
-            Security.addProvider((Provider) Class.forName(this.securityProviderClass).newInstance());
+            String[] securityProviderClassNames = this.securityProviderClassNames.split(",");
+            for (String securityProviderClassName : securityProviderClassNames) {
+                Security.addProvider((Provider) Class.forName(securityProviderClassName).newInstance());
+            }
         } catch (ClassNotFoundException cnfe) {
             log.warn("Unrecognized security provider class", cnfe);
         } catch (IllegalAccessException | InstantiationException e) {

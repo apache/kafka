@@ -96,7 +96,8 @@ public class SslFactoryTest {
                 TestKeyManagerFactory.ALGORITHM,
                 TestTrustManagerFactory.ALGORITHM
         );
-        serverSslConfig.put(SecurityConfig.SECURITY_PROVIDER_CLASS_CONFIG, "com.fake.ProviderClass");
+        serverSslConfig.put(SecurityConfig.SECURITY_PROVIDER_CLASS_CONFIG,
+                "com.fake.ProviderClass1,com.fake.ProviderClass2");
         SslFactory sslFactory = new SslFactory(Mode.SERVER);
         sslFactory.configure(serverSslConfig);
     }
