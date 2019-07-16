@@ -225,7 +225,7 @@ class WorkerSourceTask extends WorkerTask {
                 }
                 if (toSend == null)
                     continue;
-                log.debug("{} About to send " + toSend.size() + " records to Kafka", this);
+                log.trace("{} About to send {} records to Kafka", this, toSend.size());
                 if (!sendRecords())
                     stopRequestedLatch.await(SEND_FAILED_BACKOFF_MS, TimeUnit.MILLISECONDS);
             }
