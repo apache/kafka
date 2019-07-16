@@ -89,13 +89,15 @@ public class ListPartitionReassignmentsRequest extends AbstractRequest {
         ApiError apiError = ApiError.fromThrowable(e);
 
         List<OngoingTopicReassignment> ongoingTopicReassignments = new ArrayList<>();
-        for (ListPartitionReassignmentsTopics topic : data.topics()) {
-            ongoingTopicReassignments.add(
-                    new OngoingTopicReassignment()
-                            .setName(topic.name())
-                            .setPartitions(topic.partitionIndexes().stream().map(partitionIndex ->
-                                    new OngoingPartitionReassignment().setPartitionIndex(partitionIndex)).collect(Collectors.toList()))
-            );
+        if (data.topics() != null) {
+            for (ListPartitionReassignmentsTopics topic : data.topics()) {
+                ongoingTopicReassignments.add(
+                        new OngoingTopicReassignment()
+                                .setName(topic.name())
+                                .setPartitions(topic.partitionIndexes().stream().map(partitionIndex ->
+                                        new OngoingPartitionReassignment().setPartitionIndex(partitionIndex)).collect(Collectors.toList()))
+                );
+            }
         }
         ListPartitionReassignmentsResponseData responseData = new ListPartitionReassignmentsResponseData()
                 .setTopics(ongoingTopicReassignments)

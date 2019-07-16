@@ -976,6 +976,79 @@ public abstract class AdminClient implements AutoCloseable {
             AlterPartitionReassignmentsOptions options);
 
     /**
+     * List all of the current partition reassignments
+     *
+     * This is a convenience method for {@link #listPartitionReassignments(ListPartitionReassignmentsOptions)}
+     * with default options. See the overload for more details.
+     */
+    public ListPartitionReassignmentsResult listPartitionReassignments() {
+        return listPartitionReassignments(new ListPartitionReassignmentsOptions());
+    }
+
+    /**
+     * List the current reassignments for the given partitions
+     *
+     * This is a convenience method for {@link #listPartitionReassignments(Set, ListPartitionReassignmentsOptions)}
+     * with default options. See the overload for more details.
+     */
+    public ListPartitionReassignmentsResult listPartitionReassignments(Set<TopicPartition> partitions) {
+        return listPartitionReassignments(partitions, new ListPartitionReassignmentsOptions());
+    }
+
+    /**
+     * List the current reassignments for the given partitions
+     *
+     * <p>The following exceptions can be anticipated when calling {@code get()} on the futures obtained from
+     * the returned {@code ListPartitionReassignmentsResult}:</p>
+     * <ul>
+     *   <li>{@link org.apache.kafka.common.errors.ClusterAuthorizationException}
+     *   If the authenticated user doesn't have alter access to the cluster.</li>
+     *   <li>{@link org.apache.kafka.common.errors.UnknownTopicOrPartitionException}
+     *   If a given topic or partition does not exist.</li>
+     *   <li>{@link org.apache.kafka.common.errors.TimeoutException}
+     *   If the request timed out before the controller could list the current reassignments.</li>
+     * </ul>
+     *
+     * @param partitions      The topic partitions to list reassignments for.
+     * @param options         The options to use.
+     * @return                The result.
+     */
+    public ListPartitionReassignmentsResult listPartitionReassignments(
+            Set<TopicPartition> partitions,
+            ListPartitionReassignmentsOptions options) {
+        return listPartitionReassignments(Optional.of(partitions), options);
+    }
+
+    /**
+     * List all of the current partition reassignments
+     *
+     * <p>The following exceptions can be anticipated when calling {@code get()} on the futures obtained from
+     * the returned {@code ListPartitionReassignmentsResult}:</p>
+     * <ul>
+     *   <li>{@link org.apache.kafka.common.errors.ClusterAuthorizationException}
+     *   If the authenticated user doesn't have alter access to the cluster.</li>
+     *   <li>{@link org.apache.kafka.common.errors.UnknownTopicOrPartitionException}
+     *   If a given topic or partition does not exist.</li>
+     *   <li>{@link org.apache.kafka.common.errors.TimeoutException}
+     *   If the request timed out before the controller could list the current reassignments.</li>
+     * </ul>
+     *
+     * @param options         The options to use.
+     * @return                The result.
+     */
+    public ListPartitionReassignmentsResult listPartitionReassignments(ListPartitionReassignmentsOptions options) {
+        return listPartitionReassignments(Optional.empty(), options);
+    }
+
+    /**
+     * @param partitions the partitions we want to get reassignment for, or an empty optional if we want to get the reassignments for all partitions in the cluster
+     * @param options         The options to use.
+     * @return                The result.
+     */
+    abstract ListPartitionReassignmentsResult listPartitionReassignments(Optional<Set<TopicPartition>> partitions,
+                                                                         ListPartitionReassignmentsOptions options);
+
+    /**
      * Get the metrics kept by the adminClient
      */
     public abstract Map<MetricName, ? extends Metric> metrics();

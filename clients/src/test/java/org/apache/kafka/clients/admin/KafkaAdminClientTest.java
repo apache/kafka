@@ -64,6 +64,7 @@ import org.apache.kafka.common.message.ElectLeadersResponseData.ReplicaElectionR
 import org.apache.kafka.common.message.IncrementalAlterConfigsResponseData.AlterConfigsResourceResponse;
 import org.apache.kafka.common.message.IncrementalAlterConfigsResponseData;
 import org.apache.kafka.common.message.ListGroupsResponseData;
+import org.apache.kafka.common.message.ListPartitionReassignmentsResponseData;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.AlterPartitionReassignmentsResponse;
 import org.apache.kafka.common.requests.ApiError;
@@ -86,6 +87,7 @@ import org.apache.kafka.common.requests.ElectLeadersResponse;
 import org.apache.kafka.common.requests.FindCoordinatorResponse;
 import org.apache.kafka.common.requests.IncrementalAlterConfigsResponse;
 import org.apache.kafka.common.requests.ListGroupsResponse;
+import org.apache.kafka.common.requests.ListPartitionReassignmentsResponse;
 import org.apache.kafka.common.requests.MetadataRequest;
 import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.requests.OffsetFetchResponse;
@@ -126,6 +128,8 @@ import static java.util.Arrays.asList;
 import static java.util.Collections.singletonList;
 import static org.apache.kafka.common.message.AlterPartitionReassignmentsResponseData.ReassignablePartitionResponse;
 import static org.apache.kafka.common.message.AlterPartitionReassignmentsResponseData.ReassignableTopicResponse;
+import static org.apache.kafka.common.message.ListPartitionReassignmentsResponseData.OngoingTopicReassignment;
+import static org.apache.kafka.common.message.ListPartitionReassignmentsResponseData.OngoingPartitionReassignment;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
@@ -1550,7 +1554,7 @@ public class KafkaAdminClientTest {
             TopicPartition tp2 = new TopicPartition("B", 0);
             Map<TopicPartition, Optional<NewPartitionReassignment>> reassignments = new HashMap<>();
             reassignments.put(tp1, Optional.empty());
-            reassignments.put(tp2, NewPartitionReassignment.of(1,2,3));
+            reassignments.put(tp2, NewPartitionReassignment.of(1, 2, 3));
 
             // 1. server returns less responses than number of partitions we sent
             AlterPartitionReassignmentsResponseData responseData1 = new AlterPartitionReassignmentsResponseData();
@@ -1580,7 +1584,7 @@ public class KafkaAdminClientTest {
                                         .setPartitions(Collections.singletonList(normalPartitionResponse)))
                             );
             MetadataResponse controllerNodeResponse = MetadataResponse.prepareResponse(env.cluster().nodes(),
-                    env.cluster().clusterResource().clusterId(), 1, Collections.<MetadataResponse.TopicMetadata>emptyList());
+                    env.cluster().clusterResource().clusterId(), 1, Collections.emptyList());
             AlterPartitionReassignmentsResponseData normalResponse =
                     new AlterPartitionReassignmentsResponseData()
                             .setResponses(Arrays.asList(
@@ -1676,6 +1680,74 @@ public class KafkaAdminClientTest {
             noErrResult.all().get();
             noErrResult.values().get(tp1).get();
             noErrResult.values().get(tp2).get();
+        }
+    }
+
+    @Test
+    public void testListPartitionReassignments() throws Exception {
+        try (AdminClientUnitTestEnv env = mockClientEnv()) {
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+
+            TopicPartition tp1 = new TopicPartition("A", 0);
+            OngoingPartitionReassignment tp1PartitionReassignment = new OngoingPartitionReassignment()
+                    .setPartitionIndex(0)
+                    .setRemovingReplicas(Arrays.asList(1, 2, 3))
+                    .setAddingReplicas(Arrays.asList(4, 5, 6))
+                    .setReplicas(Arrays.asList(1, 2, 3, 4, 5, 6));
+            OngoingTopicReassignment tp1Reassignment = new OngoingTopicReassignment().setName("A")
+                    .setPartitions(Collections.singletonList(tp1PartitionReassignment));
+
+            TopicPartition tp2 = new TopicPartition("B", 0);
+            OngoingPartitionReassignment tp2PartitionReassignment = new OngoingPartitionReassignment()
+                    .setPartitionIndex(0)
+                    .setRemovingReplicas(Arrays.asList(1, 2, 3))
+                    .setAddingReplicas(Arrays.asList(4, 5, 6))
+                    .setReplicas(Arrays.asList(1, 2, 3, 4, 5, 6));
+            OngoingTopicReassignment tp2Reassignment = new OngoingTopicReassignment().setName("B")
+                    .setPartitions(Collections.singletonList(tp2PartitionReassignment));
+
+            // 1. NOT_CONTROLLER error handling
+            ListPartitionReassignmentsResponseData notControllerData = new ListPartitionReassignmentsResponseData()
+                    .setErrorCode(Errors.NOT_CONTROLLER.code())
+                    .setErrorMessage(Errors.NOT_CONTROLLER.message());
+            MetadataResponse controllerNodeResponse = MetadataResponse.prepareResponse(env.cluster().nodes(),
+                    env.cluster().clusterResource().clusterId(), 1, Collections.emptyList());
+            ListPartitionReassignmentsResponseData reassignmentsData = new ListPartitionReassignmentsResponseData()
+                    .setTopics(Arrays.asList(tp1Reassignment, tp2Reassignment));
+            env.kafkaClient().prepareResponse(new ListPartitionReassignmentsResponse(notControllerData));
+            env.kafkaClient().prepareResponse(controllerNodeResponse);
+            env.kafkaClient().prepareResponse(new ListPartitionReassignmentsResponse(reassignmentsData));
+
+            ListPartitionReassignmentsResult noControllerResult = env.adminClient().listPartitionReassignments();
+            noControllerResult.reassignments().get(); // no error
+
+            // 2. UNKNOWN_TOPIC_OR_EXCEPTION_ERROR
+            ListPartitionReassignmentsResponseData unknownTpData = new ListPartitionReassignmentsResponseData()
+                    .setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code())
+                    .setErrorMessage(Errors.UNKNOWN_TOPIC_OR_PARTITION.message());
+            env.kafkaClient().prepareResponse(new ListPartitionReassignmentsResponse(unknownTpData));
+
+            ListPartitionReassignmentsResult unknownTpResult = env.adminClient().listPartitionReassignments(new HashSet<>(Arrays.asList(tp1, tp2)));
+            TestUtils.assertFutureError(unknownTpResult.reassignments(), UnknownTopicOrPartitionException.class);
+
+            // 3. Success
+            ListPartitionReassignmentsResponseData responseData = new ListPartitionReassignmentsResponseData()
+                    .setTopics(Arrays.asList(tp1Reassignment, tp2Reassignment));
+            env.kafkaClient().prepareResponse(new ListPartitionReassignmentsResponse(responseData));
+            ListPartitionReassignmentsResult responseResult = env.adminClient().listPartitionReassignments();
+
+            Map<TopicPartition, PartitionReassignment> reassignments = responseResult.reassignments().get();
+
+            PartitionReassignment tp1Result = reassignments.get(tp1);
+            assertEquals(tp1PartitionReassignment.addingReplicas(), tp1Result.addingReplicas());
+            assertEquals(tp1PartitionReassignment.removingReplicas(), tp1Result.removingReplicas());
+            assertEquals(tp1PartitionReassignment.replicas(), tp1Result.replicas());
+            assertEquals(tp1PartitionReassignment.replicas(), tp1Result.replicas());
+            PartitionReassignment tp2Result = reassignments.get(tp2);
+            assertEquals(tp2PartitionReassignment.addingReplicas(), tp2Result.addingReplicas());
+            assertEquals(tp2PartitionReassignment.removingReplicas(), tp2Result.removingReplicas());
+            assertEquals(tp2PartitionReassignment.replicas(), tp2Result.replicas());
+            assertEquals(tp2PartitionReassignment.replicas(), tp2Result.replicas());
         }
     }
 
