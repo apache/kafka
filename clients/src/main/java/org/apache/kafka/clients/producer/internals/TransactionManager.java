@@ -944,6 +944,9 @@ public class TransactionManager {
     }
 
     private void lookupCoordinator(FindCoordinatorRequest.CoordinatorType type, String coordinatorKey) {
+        if (type == null)
+            return;
+
         switch (type) {
             case GROUP:
                 consumerGroupCoordinator = null;
@@ -1057,8 +1060,7 @@ public class TransactionManager {
                 clearInFlightCorrelationId();
                 if (response.wasDisconnected()) {
                     log.debug("Disconnected from {}. Will retry.", response.destination());
-                    if (this.needsCoordinator())
-                        lookupCoordinator(this.coordinatorType(), this.coordinatorKey());
+                    lookupCoordinator(this.coordinatorType(), this.coordinatorKey());
                     reenqueue();
                 } else if (response.versionMismatch() != null) {
                     fatalError(response.versionMismatch());
