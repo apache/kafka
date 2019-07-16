@@ -26,6 +26,25 @@ import java.util.Map;
  */
 public abstract class SourceTask implements Task {
 
+    public static class SourcePartitionAndOffset {
+
+        private final Map<String, ?> sourcePartition;
+        private final Map<String, ?> sourceOffset;
+
+        public SourcePartitionAndOffset(Map<String, ?> sourcePartition, Map<String, ?> sourceOffset) {
+            this.sourcePartition = sourcePartition;
+            this.sourceOffset = sourceOffset;
+        }
+
+        public Map<String, ?> getSourcePartition() {
+            return sourcePartition;
+        }
+
+        public Map<String, ?> getSourceOffset() {
+            return sourceOffset;
+        }
+    }
+
     protected SourceTaskContext context;
 
     /**
@@ -57,6 +76,10 @@ public abstract class SourceTask implements Task {
      * @return a list of source records
      */
     public abstract List<SourceRecord> poll() throws InterruptedException;
+
+    public SourcePartitionAndOffset getSourcePartitionAndOffset() {
+        return null;
+    }
 
     /**
      * <p>
