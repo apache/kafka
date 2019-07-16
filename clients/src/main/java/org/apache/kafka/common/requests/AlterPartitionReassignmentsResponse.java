@@ -36,7 +36,7 @@ public class AlterPartitionReassignmentsResponse extends AbstractResponse {
         this(struct, ApiKeys.ALTER_PARTITION_REASSIGNMENTS.latestVersion());
     }
 
-    AlterPartitionReassignmentsResponse(AlterPartitionReassignmentsResponseData data) {
+    public AlterPartitionReassignmentsResponse(AlterPartitionReassignmentsResponseData data) {
         this.data = data;
     }
 
@@ -69,8 +69,6 @@ public class AlterPartitionReassignmentsResponse extends AbstractResponse {
         counts.put(topLevelErr, counts.getOrDefault(topLevelErr, 0) + 1);
 
         for (ReassignableTopicResponse topicResponse : data.responses()) {
-            Errors topicErr = Errors.forCode(topicResponse.errorCode());
-            counts.put(topicErr, counts.getOrDefault(topicErr, 0) + 1);
             for (ReassignablePartitionResponse partitionResponse : topicResponse.partitions()) {
                 Errors error = Errors.forCode(partitionResponse.errorCode());
                 counts.put(error, counts.getOrDefault(error, 0) + 1);

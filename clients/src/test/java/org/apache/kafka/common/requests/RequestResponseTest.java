@@ -1639,8 +1639,6 @@ public class RequestResponseTest {
         data.responses().add(
                 new AlterPartitionReassignmentsResponseData.ReassignableTopicResponse()
                         .setName("topic")
-                        .setErrorCode(Errors.NO_REASSIGNMENT_IN_PROGRESS.code())
-                        .setErrorMessage("No reassignment is in progress for topic topic")
                         .setPartitions(Collections.singletonList(
                                 new AlterPartitionReassignmentsResponseData.ReassignablePartitionResponse()
                                         .setPartitionIndex(0)

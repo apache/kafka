@@ -29,10 +29,6 @@
       "about": "The responses to topics to reassign.", "fields": [
       { "name": "Name", "type": "string", "versions": "0+", "entityType": "topicName",
         "about": "The topic name" },
-      { "name": "ErrorCode", "type": "int16", "versions": "0+",
-        "about": "The error code." },
-      { "name": "ErrorMessage", "type": "string", "versions": "0+", "nullableVersions": "0+",
-        "about": "The error message for this topic, or null if there was no error." },
       { "name": "Partitions", "type": "[]ReassignablePartitionResponse", "versions": "0+",
         "about": "The responses to partitions to reassign", "fields": [
         { "name": "PartitionIndex", "type": "int32", "versions": "0+",

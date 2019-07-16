@@ -103,8 +103,6 @@ public class AlterPartitionReassignmentsRequest extends AbstractRequest {
                     new ReassignableTopicResponse()
                             .setName(topic.name())
                             .setPartitions(partitionResponses)
-                            .setErrorCode(apiError.error().code())
-                            .setErrorMessage(apiError.message())
             );
         }
 

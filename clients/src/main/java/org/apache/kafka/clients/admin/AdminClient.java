@@ -22,6 +22,7 @@ import java.util.Collection;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Properties;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import org.apache.kafka.common.ElectionType;
@@ -934,6 +935,45 @@ public abstract class AdminClient implements AutoCloseable {
             ElectionType electionType,
             Set<TopicPartition> partitions,
             ElectLeadersOptions options);
+
+    /**
+     * Change the reassignments for one or more partitions.
+     * Providing an empty Optional (e.g via {@link Optional#empty()}) will <bold>cancel</bold> the reassignment for the associated partition.
+     *
+     * This is a convenience method for {@link #alterPartitionReassignments(Map, AlterPartitionReassignmentsOptions)}
+     * with default options.  See the overload for more details.
+     */
+    public AlterPartitionReassignmentsResult alterPartitionReassignments(
+            Map<TopicPartition, Optional<NewPartitionReassignment>> reassignments) {
+        return alterPartitionReassignments(reassignments, new AlterPartitionReassignmentsOptions());
+    }
+
+    /**
+     * Change the reassignments for one or more partitions.
+     * Providing an empty Optional (e.g via {@link Optional#empty()}) will <bold>cancel</bold> the reassignment for the associated partition.
+     *
+     * <p>The following exceptions can be anticipated when calling {@code get()} on the futures obtained from
+     * the returned {@code AlterPartitionReassignmentsResult}:</p>
+     * <ul>
+     *   <li>{@link org.apache.kafka.common.errors.ClusterAuthorizationException}
+     *   If the authenticated user didn't have alter access to the cluster.</li>
+     *   <li>{@link org.apache.kafka.common.errors.UnknownTopicOrPartitionException}
+     *   If the topic or partition does not exist within the cluster.</li>
+     *   <li>{@link org.apache.kafka.common.errors.TimeoutException}
+     *   if the request timed out before the controller could record the new assignments.</li>
+     *   <li>{@link org.apache.kafka.common.errors.InvalidReplicaAssignmentException}
+     *   If the specified assignment was not valid.</li>
+     *   <li>{@link org.apache.kafka.common.errors.NoReassignmentInProgressException}
+     *   If there was an attempt to cancel a reassignment for a partition which was not being reassigned.</li>
+     * </ul>
+     *
+     * @param reassignments   The reassignments to add, modify, or remove.
+     * @param options         The options to use.
+     * @return                The result.
+     */
+    public abstract AlterPartitionReassignmentsResult alterPartitionReassignments(
+            Map<TopicPartition, Optional<NewPartitionReassignment>> reassignments,
+            AlterPartitionReassignmentsOptions options);
 
     /**
      * Get the metrics kept by the adminClient
