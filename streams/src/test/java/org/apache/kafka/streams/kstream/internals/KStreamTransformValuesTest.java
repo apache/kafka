@@ -18,6 +18,7 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.streams.KeyValueTimestamp;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.TopologyTestDriver;
@@ -64,7 +65,7 @@ public class KStreamTransformValuesTest {
                 private int total = 0;
 
                 @Override
-                public void init(final ProcessorContext context) {}
+                public void init(final ProcessorContext context) { }
 
                 @Override
                 public Integer transform(final Number value) {
@@ -73,7 +74,7 @@ public class KStreamTransformValuesTest {
                 }
 
                 @Override
-                public void close() {}
+                public void close() { }
             };
 
         final int[] expectedKeys = {1, 10, 100, 1000};
@@ -87,7 +88,10 @@ public class KStreamTransformValuesTest {
                 driver.pipeInput(recordFactory.create(topicName, expectedKey, expectedKey * 10, expectedKey / 2L));
             }
         }
-        final String[] expected = {"1:10 (ts: 0)", "10:110 (ts: 5)", "100:1110 (ts: 50)", "1000:11110 (ts: 500)"};
+        final KeyValueTimestamp[] expected = {new KeyValueTimestamp<>(1, 10, 0),
+            new KeyValueTimestamp<>(10, 110, 5),
+            new KeyValueTimestamp<>(100, 1110, 50),
+            new KeyValueTimestamp<>(1000, 11110, 500)};
 
         assertArrayEquals(expected, supplier.theCapturedProcessor().processed.toArray());
     }
@@ -101,7 +105,7 @@ public class KStreamTransformValuesTest {
                 private int total = 0;
 
                 @Override
-                public void init(final ProcessorContext context) {}
+                public void init(final ProcessorContext context) { }
 
                 @Override
                 public Integer transform(final Integer readOnlyKey, final Number value) {
@@ -110,7 +114,7 @@ public class KStreamTransformValuesTest {
                 }
 
                 @Override
-                public void close() {}
+                public void close() { }
             };
 
         final int[] expectedKeys = {1, 10, 100, 1000};
@@ -124,7 +128,10 @@ public class KStreamTransformValuesTest {
                 driver.pipeInput(recordFactory.create(topicName, expectedKey, expectedKey * 10, expectedKey / 2L));
             }
         }
-        final String[] expected = {"1:11 (ts: 0)", "10:121 (ts: 5)", "100:1221 (ts: 50)", "1000:12221 (ts: 500)"};
+        final KeyValueTimestamp[] expected = {new KeyValueTimestamp<>(1, 11, 0),
+            new KeyValueTimestamp<>(10, 121, 5),
+            new KeyValueTimestamp<>(100, 1221, 50),
+            new KeyValueTimestamp<>(1000, 12221, 500)};
 
         assertArrayEquals(expected, supplier.theCapturedProcessor().processed.toArray());
     }

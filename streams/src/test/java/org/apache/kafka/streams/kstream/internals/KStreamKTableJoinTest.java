@@ -19,6 +19,7 @@ package org.apache.kafka.streams.kstream.internals;
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.streams.KeyValueTimestamp;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.TopologyWrapper;
@@ -48,7 +49,7 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
 
 public class KStreamKTableJoinTest {
-    private final static String[] EMPTY = new String[0];
+    private final static KeyValueTimestamp[] EMPTY = new KeyValueTimestamp[0];
 
     private final String streamTopic = "streamTopic";
     private final String tableTopic = "tableTopic";
@@ -135,7 +136,8 @@ public class KStreamKTableJoinTest {
 
         // push all four items to the primary stream. this should produce two items.
         pushToStream(4, "X");
-        processor.checkAndClearProcessResult("0:X0+Y0 (ts: 0)", "1:X1+Y1 (ts: 1)");
+        processor.checkAndClearProcessResult(new KeyValueTimestamp<>(0, "X0+Y0", 0),
+                new KeyValueTimestamp<>(1, "X1+Y1", 1));
 
         // push all items to the table. this should not produce any item
         pushToTable(4, "YY");
@@ -143,7 +145,10 @@ public class KStreamKTableJoinTest {
 
         // push all four items to the primary stream. this should produce four items.
         pushToStream(4, "X");
-        processor.checkAndClearProcessResult("0:X0+YY0 (ts: 0)", "1:X1+YY1 (ts: 1)", "2:X2+YY2 (ts: 2)", "3:X3+YY3 (ts: 3)");
+        processor.checkAndClearProcessResult(new KeyValueTimestamp<>(0, "X0+YY0", 0),
+                new KeyValueTimestamp<>(1, "X1+YY1", 1),
+                new KeyValueTimestamp<>(2, "X2+YY2", 2),
+                new KeyValueTimestamp<>(3, "X3+YY3", 3));
 
         // push all items to the table. this should not produce any item
         pushToTable(4, "YYY");
@@ -158,7 +163,8 @@ public class KStreamKTableJoinTest {
 
         // push all four items to the primary stream. this should produce two items.
         pushToStream(4, "X");
-        processor.checkAndClearProcessResult("0:X0+Y0 (ts: 0)", "1:X1+Y1 (ts: 1)");
+        processor.checkAndClearProcessResult(new KeyValueTimestamp<>(0, "X0+Y0", 0),
+                new KeyValueTimestamp<>(1, "X1+Y1", 1));
 
     }
 
@@ -170,7 +176,10 @@ public class KStreamKTableJoinTest {
 
         // push all four items to the primary stream. this should produce four items.
         pushToStream(4, "X");
-        processor.checkAndClearProcessResult("0:X0+Y0 (ts: 0)", "1:X1+Y1 (ts: 1)", "2:X2+Y2 (ts: 2)", "3:X3+Y3 (ts: 3)");
+        processor.checkAndClearProcessResult(new KeyValueTimestamp<>(0, "X0+Y0", 0),
+                new KeyValueTimestamp<>(1, "X1+Y1", 1),
+                new KeyValueTimestamp<>(2, "X2+Y2", 2),
+                new KeyValueTimestamp<>(3, "X3+Y3", 3));
 
         // push two items with null to the table as deletes. this should not produce any item.
         pushNullValueToTable();
@@ -178,7 +187,8 @@ public class KStreamKTableJoinTest {
 
         // push all four items to the primary stream. this should produce two items.
         pushToStream(4, "XX");
-        processor.checkAndClearProcessResult("2:XX2+Y2 (ts: 2)", "3:XX3+Y3 (ts: 3)");
+        processor.checkAndClearProcessResult(new KeyValueTimestamp<>(2, "XX2+Y2", 2),
+                new KeyValueTimestamp<>(3, "XX3+Y3", 3));
     }
 
     @Test

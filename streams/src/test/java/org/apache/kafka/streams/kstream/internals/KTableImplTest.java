@@ -21,6 +21,7 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.KeyValueTimestamp;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.TopologyDescription;
@@ -112,10 +113,30 @@ public class KTableImplTest {
         }
 
         final List<MockProcessor<String, Object>> processors = supplier.capturedProcessors(4);
-        assertEquals(asList("A:01 (ts: 5)", "B:02 (ts: 100)", "C:03 (ts: 0)", "D:04 (ts: 0)", "A:05 (ts: 10)", "A:06 (ts: 8)"), processors.get(0).processed);
-        assertEquals(asList("A:1 (ts: 5)", "B:2 (ts: 100)", "C:3 (ts: 0)", "D:4 (ts: 0)", "A:5 (ts: 10)", "A:6 (ts: 8)"), processors.get(1).processed);
-        assertEquals(asList("A:null (ts: 5)", "B:2 (ts: 100)", "C:null (ts: 0)", "D:4 (ts: 0)", "A:null (ts: 10)", "A:6 (ts: 8)"), processors.get(2).processed);
-        assertEquals(asList("A:01 (ts: 5)", "B:02 (ts: 100)", "C:03 (ts: 0)", "D:04 (ts: 0)", "A:05 (ts: 10)", "A:06 (ts: 8)"), processors.get(3).processed);
+        assertEquals(asList(new KeyValueTimestamp<>("A", "01", 5),
+                new KeyValueTimestamp<>("B", "02", 100),
+                new KeyValueTimestamp<>("C", "03", 0),
+                new KeyValueTimestamp<>("D", "04", 0),
+                new KeyValueTimestamp<>("A", "05", 10),
+                new KeyValueTimestamp<>("A", "06", 8)), processors.get(0).processed);
+        assertEquals(asList(new KeyValueTimestamp<>("A", 1, 5),
+                new KeyValueTimestamp<>("B", 2, 100),
+                new KeyValueTimestamp<>("C", 3, 0),
+                new KeyValueTimestamp<>("D", 4, 0),
+                new KeyValueTimestamp<>("A", 5, 10),
+                new KeyValueTimestamp<>("A", 6, 8)), processors.get(1).processed);
+        assertEquals(asList(new KeyValueTimestamp<>("A", null, 5),
+                new KeyValueTimestamp<>("B", 2, 100),
+                new KeyValueTimestamp<>("C", null, 0),
+                new KeyValueTimestamp<>("D", 4, 0),
+                new KeyValueTimestamp<>("A", null, 10),
+                new KeyValueTimestamp<>("A", 6, 8)), processors.get(2).processed);
+        assertEquals(asList(new KeyValueTimestamp<>("A", "01", 5),
+                new KeyValueTimestamp<>("B", "02", 100),
+                new KeyValueTimestamp<>("C", "03", 0),
+                new KeyValueTimestamp<>("D", "04", 0),
+                new KeyValueTimestamp<>("A", "05", 10),
+                new KeyValueTimestamp<>("A", "06", 8)), processors.get(3).processed);
     }
 
     @Test

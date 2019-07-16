@@ -19,6 +19,7 @@ package org.apache.kafka.streams.kstream.internals;
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.streams.KeyValueTimestamp;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.Topology;
@@ -80,8 +81,18 @@ public class KTableFilterTest {
 
         final List<MockProcessor<String, Integer>> processors = supplier.capturedProcessors(2);
 
-        processors.get(0).checkAndClearProcessResult("A:null (ts: 10)", "B:2 (ts: 5)", "C:null (ts: 8)", "D:4 (ts: 14)", "A:null (ts: 18)", "B:null (ts: 15)");
-        processors.get(1).checkAndClearProcessResult("A:1 (ts: 10)", "B:null (ts: 5)", "C:3 (ts: 8)", "D:null (ts: 14)", "A:null (ts: 18)", "B:null (ts: 15)");
+        processors.get(0).checkAndClearProcessResult(new KeyValueTimestamp<>("A", null, 10),
+            new KeyValueTimestamp<>("B", 2, 5),
+            new KeyValueTimestamp<>("C", null, 8),
+            new KeyValueTimestamp<>("D", 4, 14),
+            new KeyValueTimestamp<>("A", null, 18),
+            new KeyValueTimestamp<>("B", null, 15));
+        processors.get(1).checkAndClearProcessResult(new KeyValueTimestamp<>("A", 1, 10),
+            new KeyValueTimestamp<>("B", null, 5),
+            new KeyValueTimestamp<>("C", 3, 8),
+            new KeyValueTimestamp<>("D", null, 14),
+            new KeyValueTimestamp<>("A", null, 18),
+            new KeyValueTimestamp<>("B", null, 15));
     }
 
     @Test
@@ -222,25 +233,32 @@ public class KTableFilterTest {
 
             final List<MockProcessor<String, Integer>> processors = supplier.capturedProcessors(2);
 
-            processors.get(0).checkAndClearProcessResult("A:(1<-null) (ts: 5)", "B:(1<-null) (ts: 10)", "C:(1<-null) (ts: 15)");
-            processors.get(1).checkAndClearProcessResult("A:(null<-null) (ts: 5)", "B:(null<-null) (ts: 10)", "C:(null<-null) (ts: 15)");
+            processors.get(0).checkAndClearProcessResult(new KeyValueTimestamp<>("A", new Change<>(1, null), 5),
+                new KeyValueTimestamp<>("B", new Change<>(1, null), 10),
+                new KeyValueTimestamp<>("C", new Change<>(1, null), 15));
+            processors.get(1).checkAndClearProcessResult(new KeyValueTimestamp<>("A", new Change<>(null, null), 5),
+                new KeyValueTimestamp<>("B", new Change<>(null, null), 10),
+                new KeyValueTimestamp<>("C", new Change<>(null, null), 15));
 
             driver.pipeInput(recordFactory.create(topic1, "A", 2, 15L));
             driver.pipeInput(recordFactory.create(topic1, "B", 2, 8L));
 
-            processors.get(0).checkAndClearProcessResult("A:(2<-null) (ts: 15)", "B:(2<-null) (ts: 8)");
-            processors.get(1).checkAndClearProcessResult("A:(2<-null) (ts: 15)", "B:(2<-null) (ts: 8)");
+            processors.get(0).checkAndClearProcessResult(new KeyValueTimestamp<>("A", new Change<>(2, null), 15),
+                new KeyValueTimestamp<>("B", new Change<>(2, null), 8));
+            processors.get(1).checkAndClearProcessResult(new KeyValueTimestamp<>("A", new Change<>(2, null), 15),
+                new KeyValueTimestamp<>("B", new Change<>(2, null), 8));
 
             driver.pipeInput(recordFactory.create(topic1, "A", 3, 20L));
 
-            processors.get(0).checkAndClearProcessResult("A:(3<-null) (ts: 20)");
-            processors.get(1).checkAndClearProcessResult("A:(null<-null) (ts: 20)");
-
+            processors.get(0).checkAndClearProcessResult(new KeyValueTimestamp<>("A", new Change<>(3, null), 20));
+            processors.get(1).checkAndClearProcessResult(new KeyValueTimestamp<>("A", new Change<>(null, null), 20));
             driver.pipeInput(recordFactory.create(topic1, "A", null, 10L));
             driver.pipeInput(recordFactory.create(topic1, "B", null, 20L));
 
-            processors.get(0).checkAndClearProcessResult("A:(null<-null) (ts: 10)", "B:(null<-null) (ts: 20)");
-            processors.get(1).checkAndClearProcessResult("A:(null<-null) (ts: 10)", "B:(null<-null) (ts: 20)");
+            processors.get(0).checkAndClearProcessResult(new KeyValueTimestamp<>("A", new Change<>(null, null), 10),
+                new KeyValueTimestamp<>("B", new Change<>(null, null), 20));
+            processors.get(1).checkAndClearProcessResult(new KeyValueTimestamp<>("A", new Change<>(null, null), 10),
+                new KeyValueTimestamp<>("B", new Change<>(null, null), 20));
         }
     }
 
@@ -251,7 +269,7 @@ public class KTableFilterTest {
         final String topic1 = "topic1";
 
         final KTableImpl<String, Integer, Integer> table1 =
-                (KTableImpl<String, Integer, Integer>) builder.table(topic1, consumed);
+            (KTableImpl<String, Integer, Integer>) builder.table(topic1, consumed);
         final KTableImpl<String, Integer, Integer> table2 = (KTableImpl<String, Integer, Integer>) table1.filter(predicate);
 
         doTestNotSendingOldValue(builder, table1, table2, topic1);
@@ -289,25 +307,30 @@ public class KTableFilterTest {
 
             final List<MockProcessor<String, Integer>> processors = supplier.capturedProcessors(2);
 
-            processors.get(0).checkAndClearProcessResult("A:(1<-null) (ts: 5)", "B:(1<-null) (ts: 10)", "C:(1<-null) (ts: 15)");
+            processors.get(0).checkAndClearProcessResult(new KeyValueTimestamp<>("A", new Change<>(1, null), 5),
+                new KeyValueTimestamp<>("B", new Change<>(1, null), 10),
+                new KeyValueTimestamp<>("C", new Change<>(1, null), 15));
             processors.get(1).checkEmptyAndClearProcessResult();
 
             driver.pipeInput(recordFactory.create(topic1, "A", 2, 15L));
             driver.pipeInput(recordFactory.create(topic1, "B", 2, 8L));
 
-            processors.get(0).checkAndClearProcessResult("A:(2<-1) (ts: 15)", "B:(2<-1) (ts: 8)");
-            processors.get(1).checkAndClearProcessResult("A:(2<-null) (ts: 15)", "B:(2<-null) (ts: 8)");
+            processors.get(0).checkAndClearProcessResult(new KeyValueTimestamp<>("A", new Change<>(2, 1), 15),
+                new KeyValueTimestamp<>("B", new Change<>(2, 1), 8));
+            processors.get(1).checkAndClearProcessResult(new KeyValueTimestamp<>("A", new Change<>(2, null), 15),
+                new KeyValueTimestamp<>("B", new Change<>(2, null), 8));
 
             driver.pipeInput(recordFactory.create(topic1, "A", 3, 20L));
 
-            processors.get(0).checkAndClearProcessResult("A:(3<-2) (ts: 20)");
-            processors.get(1).checkAndClearProcessResult("A:(null<-2) (ts: 20)");
+            processors.get(0).checkAndClearProcessResult(new KeyValueTimestamp<>("A", new Change<>(3, 2), 20));
+            processors.get(1).checkAndClearProcessResult(new KeyValueTimestamp<>("A", new Change<>(null, 2), 20));
 
             driver.pipeInput(recordFactory.create(topic1, "A", null, 10L));
             driver.pipeInput(recordFactory.create(topic1, "B", null, 20L));
 
-            processors.get(0).checkAndClearProcessResult("A:(null<-3) (ts: 10)", "B:(null<-2) (ts: 20)");
-            processors.get(1).checkAndClearProcessResult("B:(null<-2) (ts: 20)");
+            processors.get(0).checkAndClearProcessResult(new KeyValueTimestamp<>("A", new Change<>(null, 3), 10),
+                new KeyValueTimestamp<>("B", new Change<>(null, 2), 20));
+            processors.get(1).checkAndClearProcessResult(new KeyValueTimestamp<>("B", new Change<>(null, 2), 20));
         }
     }
 
@@ -317,7 +340,7 @@ public class KTableFilterTest {
         final String topic1 = "topic1";
 
         final KTableImpl<String, Integer, Integer> table1 =
-                (KTableImpl<String, Integer, Integer>) builder.table(topic1, consumed);
+            (KTableImpl<String, Integer, Integer>) builder.table(topic1, consumed);
         final KTableImpl<String, Integer, Integer> table2 =
             (KTableImpl<String, Integer, Integer>) table1.filter(predicate);
 
@@ -357,7 +380,9 @@ public class KTableFilterTest {
         }
 
         final List<MockProcessor<String, String>> processors = supplier.capturedProcessors(2);
-        processors.get(0).checkAndClearProcessResult("A:(reject<-null) (ts: 5)", "B:(reject<-null) (ts: 10)", "C:(reject<-null) (ts: 20)");
+        processors.get(0).checkAndClearProcessResult(new KeyValueTimestamp<>("A", new Change<>("reject", null), 5),
+            new KeyValueTimestamp<>("B", new Change<>("reject", null), 10),
+            new KeyValueTimestamp<>("C", new Change<>("reject", null), 20));
         processors.get(1).checkEmptyAndClearProcessResult();
     }
 
