@@ -252,4 +252,5 @@ public interface Consumer<K, V> extends Closeable {
      */
     void wakeup();
 
+    void setHeartbeatCallbacks(ConsumerHeartbeatDataCallbacks callbacks);
 }

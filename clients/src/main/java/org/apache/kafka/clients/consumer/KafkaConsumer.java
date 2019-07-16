@@ -2180,6 +2180,15 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         this.client.wakeup();
     }
 
+    @Override
+    public void setHeartbeatCallbacks(ConsumerHeartbeatDataCallbacks callbacks) {
+        if (coordinator == null) {
+            throw new UnsupportedOperationException();
+        } else {
+            coordinator.setHeartbeatCallbacks(callbacks);
+        }
+    }
+
     private ClusterResourceListeners configureClusterResourceListeners(Deserializer<K> keyDeserializer, Deserializer<V> valueDeserializer, List<?>... candidateLists) {
         ClusterResourceListeners clusterResourceListeners = new ClusterResourceListeners();
         for (List<?> candidateList: candidateLists)

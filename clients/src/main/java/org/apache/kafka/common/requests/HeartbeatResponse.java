@@ -57,6 +57,10 @@ public class HeartbeatResponse extends AbstractResponse {
         return Errors.forCode(data.errorCode());
     }
 
+    public ByteBuffer userDatas() {
+        return data.userDatas();
+    }
+
     @Override
     public Map<Errors, Integer> errorCounts() {
         return Collections.singletonMap(error(), 1);
