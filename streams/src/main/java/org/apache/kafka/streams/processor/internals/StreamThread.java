@@ -472,15 +472,17 @@ public class StreamThread extends Thread {
 
             final ProcessorTopology topology = builder.build(taskId.topicGroupId);
 
-            if (!topology.stateStores().isEmpty()) {
-                return new StandbyTask(taskId,
-                                       partitions,
-                                       topology,
-                                       consumer,
-                                       storeChangelogReader,
-                                       config,
-                                       streamsMetrics,
-                                       stateDirectory);
+            if (!topology.stateStores().isEmpty() && !topology.storeToChangelogTopic().isEmpty()) {
+                return new StandbyTask(
+                    taskId,
+                    partitions,
+                    topology,
+                    consumer,
+                    storeChangelogReader,
+                    config,
+                    streamsMetrics,
+                    stateDirectory
+                );
             } else {
                 log.trace("Skipped standby task {} with assigned partitions {} " +
                     "since it does not have any state stores to materialize", taskId, partitions);
