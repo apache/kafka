@@ -18,6 +18,7 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.MockConsumer;
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.clients.producer.MockProducer;
 import org.apache.kafka.common.KafkaException;
@@ -66,6 +67,7 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.time.Duration;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -675,6 +677,13 @@ public class StreamTaskTest {
         task.process();
         // time stamp will be committed here
         task.commit();
+        
+        //since consumer is mock, there is no real broker
+        //so we need to manually commit the information to stimulate broker
+        final Map<TopicPartition, OffsetAndMetadata> offsetMap = new HashMap<>();
+        offsetMap.put(partition1, new OffsetAndMetadata(1000, "1000"));
+        task.consumer.commitSync(offsetMap);
+
         assertTrue(Long.parseLong(task.consumer.committed(partition1).metadata()) == 1000);
         // reset times here to artificially represent a restart
         task.resetTimes();
