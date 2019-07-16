@@ -118,6 +118,19 @@ public class CommonClientConfigs {
                                                          + "elapses the client will resend the request if necessary or fail the request if "
                                                          + "retries are exhausted.";
 
+    public static final String DEFAULT_LIST_KEY_SERDE_INNER_CLASS = "default.list.key.serde.inner";
+
+    public static final String DEFAULT_LIST_VALUE_SERDE_INNER_CLASS = "default.list.value.serde.inner";
+
+    public static final String DEFAULT_LIST_KEY_SERDE_TYPE_CLASS = "default.list.key.serde.type";
+    public static final String DEFAULT_LIST_VALUE_SERDE_TYPE_CLASS = "default.list.value.serde.type";
+    private static final String DEFAULT_LIST_KEY_SERDE_TYPE_CLASS_DOC = " Default class for key that implements the <code>java.util.List</code> interface. "
+            + "Note when list serde class is used, one needs to set the inner serde class that implements the <code>org.apache.kafka.common.serialization.Serde</code> interface via '"
+            + DEFAULT_LIST_KEY_SERDE_INNER_CLASS + "' or '" + DEFAULT_LIST_VALUE_SERDE_INNER_CLASS + "' as well";
+    private static final String DEFAULT_LIST_VALUE_SERDE_TYPE_CLASS_DOC = " Default class for value that implements the <code>java.util.List</code> interface. "
+            + "Note when list serde class is used, one needs to set the inner serde class that implements the <code>org.apache.kafka.common.serialization.Serde</code> interface via '"
+            + DEFAULT_LIST_KEY_SERDE_INNER_CLASS + "' or '" + DEFAULT_LIST_VALUE_SERDE_INNER_CLASS + "' as well";
+
     public static final String GROUP_ID_CONFIG = "group.id";
     public static final String GROUP_ID_DOC = "A unique string that identifies the consumer group this consumer belongs to. This property is required if the consumer uses either the group management functionality by using <code>subscribe(topic)</code> or the Kafka-based offset management strategy.";
 

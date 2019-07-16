@@ -16,6 +16,10 @@
  */
 package org.apache.kafka.common.serialization;
 
+import org.apache.kafka.clients.CommonClientConfigs;
+import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.utils.Utils;
+
 import java.io.ByteArrayOutputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
@@ -25,8 +29,8 @@ import java.util.Map;
 
 public class ListSerializer<T> implements Serializer<List<T>> {
 
-    private final Serializer<T> serializer;
-    private final Boolean isPrimitive;
+    private Serializer<T> inner;
+    private Boolean isPrimitive;
 
     private List<Class> primitiveSerializers = Arrays.asList(
             LongSerializer.class,
@@ -39,13 +43,22 @@ public class ListSerializer<T> implements Serializer<List<T>> {
     }
 
     public ListSerializer(Serializer<T> serializer) {
-        this.serializer = serializer;
+        this.inner = serializer;
         this.isPrimitive = primitiveSerializers.contains(serializer.getClass());
     }
 
     @Override
     public void configure(Map<String, ?> configs, boolean isKey) {
-        serializer.configure(configs, isKey);
+        if (inner == null) {
+            final String innerSerdePropertyName = isKey ? CommonClientConfigs.DEFAULT_LIST_KEY_SERDE_INNER_CLASS : CommonClientConfigs.DEFAULT_LIST_VALUE_SERDE_INNER_CLASS;
+            final String innerSerde = (String) configs.get(innerSerdePropertyName);
+            try {
+                inner = Utils.newInstance(innerSerde, Serde.class).serializer();
+                inner.configure(configs, isKey);
+            } catch (final ClassNotFoundException e) {
+                throw new ConfigException(innerSerdePropertyName, innerSerde, "Serde class " + innerSerde + " could not be found.");
+            }
+        }
     }
 
     @Override
@@ -58,7 +71,7 @@ public class ListSerializer<T> implements Serializer<List<T>> {
         try (final DataOutputStream out = new DataOutputStream(baos)) {
             out.writeInt(size);
             for (T entry : data) {
-                final byte[] bytes = serializer.serialize(topic, entry);
+                final byte[] bytes = inner.serialize(topic, entry);
                 if (!isPrimitive) {
                     out.writeInt(bytes.length);
                 }
@@ -72,7 +85,7 @@ public class ListSerializer<T> implements Serializer<List<T>> {
 
     @Override
     public void close() {
-        serializer.close();
+        inner.close();
     }
 
 }

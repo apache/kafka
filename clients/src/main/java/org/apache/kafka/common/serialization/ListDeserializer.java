@@ -16,6 +16,10 @@
  */
 package org.apache.kafka.common.serialization;
 
+import com.sun.xml.internal.ws.encoding.soap.DeserializationException;
+import org.apache.kafka.clients.CommonClientConfigs;
+import org.apache.kafka.common.utils.Utils;
+
 import java.io.ByteArrayInputStream;
 import java.io.DataInputStream;
 import java.io.IOException;
@@ -43,13 +47,25 @@ public class ListDeserializer<T> implements Deserializer<List<T>> {
 
     public ListDeserializer(Class listClass, Deserializer<T> deserializer) {
         this.listClass = listClass;
-        this.deserializer = deserializer;
+        this.inner = deserializer;
         this.primitiveSize = primitiveDeserializers.get(deserializer.getClass());
     }
 
     @Override
     public void configure(Map<String, ?> configs, boolean isKey) {
-        deserializer.configure(configs, isKey);
+        if (inner == null) {
+            String listTypePropertyName = isKey ? CommonClientConfigs.DEFAULT_LIST_KEY_SERDE_TYPE_CLASS : CommonClientConfigs.DEFAULT_LIST_VALUE_SERDE_TYPE_CLASS;
+            String innerSerdePropertyName = isKey ? CommonClientConfigs.DEFAULT_LIST_KEY_SERDE_INNER_CLASS : CommonClientConfigs.DEFAULT_LIST_VALUE_SERDE_INNER_CLASS;
+            String listType = (String) configs.get(listTypePropertyName);
+            String innerSerde = (String) configs.get(innerSerdePropertyName);
+            try {
+                listClass = Class.forName(listType);
+                this.inner = Utils.newInstance(innerSerde, Serde.class).deserializer();
+                inner.configure(configs, isKey);
+            } catch (ClassNotFoundException e) {
+                throw new DeserializationException("Could not find a class for \"" + listType + "\"", e);
+            }
+        }
     }
 
     private List<T> getListInstance(int listSize) {
@@ -73,7 +89,7 @@ public class ListDeserializer<T> implements Deserializer<List<T>> {
                 byte[] payload;
                 payload = new byte[primitiveSize == null ? dis.readInt() : primitiveSize];
                 dis.read(payload);
-                deserializedList.add(deserializer.deserialize(topic, payload));
+                deserializedList.add(inner.deserialize(topic, payload));
             }
             return deserializedList;
         } catch (IOException e) {
@@ -83,7 +99,7 @@ public class ListDeserializer<T> implements Deserializer<List<T>> {
 
     @Override
     public void close() {
-        deserializer.close();
+        inner.close();
     }
 
 }
