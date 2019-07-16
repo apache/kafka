@@ -16,24 +16,23 @@
  */
 package org.apache.kafka.connect.mirror;
 
+import org.apache.kafka.clients.admin.AdminClient;
+import org.apache.kafka.clients.admin.ConsumerGroupListing;
+import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.connect.connector.Task;
 import org.apache.kafka.connect.source.SourceConnector;
 import org.apache.kafka.connect.util.ConnectorUtils;
-import org.apache.kafka.common.config.ConfigDef;
-import org.apache.kafka.clients.admin.AdminClient;
-import org.apache.kafka.clients.admin.ConsumerGroupListing;
-
-import java.util.Map;
-import java.util.List;
-import java.util.Set;
-import java.util.HashSet;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.stream.Collectors;
-import java.util.concurrent.ExecutionException;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.util.Collection;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.ExecutionException;
+import java.util.stream.Collectors;
 
 public class MirrorCheckpointConnector extends SourceConnector {
 
@@ -61,10 +60,11 @@ public class MirrorCheckpointConnector extends SourceConnector {
         synchronized (this) {
             sourceAdminClient = AdminClient.create(config.sourceAdminConfig());
         }
+        MirrorUtils.createTopic(config.checkpointsTopic(), config.internalTopicReplicationFactor(), (short) 1, config.targetAdminConfig());
         scheduler = new Scheduler(MirrorCheckpointConnector.class);
         scheduler.execute(this::loadInitialConsumerGroups, "loading initial consumer groups");
         scheduler.scheduleRepeatingDelayed(this::refreshConsumerGroups, config.refreshGroupsInterval(),
-            "refreshing consumer groups");
+                "refreshing consumer groups");
         log.info("Started {} with {} consumer groups.", connectorName, knownConsumerGroups.size());
     }
 
@@ -76,7 +76,7 @@ public class MirrorCheckpointConnector extends SourceConnector {
         scheduler.shutdown();
         synchronized (this) {
             sourceAdminClient.close();
-        } 
+        }
     }
 
     @Override
@@ -92,8 +92,8 @@ public class MirrorCheckpointConnector extends SourceConnector {
         }
         int numTasks = Math.min(maxTasks, knownConsumerGroups.size());
         return ConnectorUtils.groupPartitions(knownConsumerGroups, numTasks).stream()
-            .map(config::taskConfigForConsumerGroups)
-            .collect(Collectors.toList());
+                .map(config::taskConfigForConsumerGroups)
+                .collect(Collectors.toList());
     }
 
     @Override
@@ -117,8 +117,8 @@ public class MirrorCheckpointConnector extends SourceConnector {
         deadConsumerGroups.removeAll(consumerGroups);
         if (!newConsumerGroups.isEmpty() || !deadConsumerGroups.isEmpty()) {
             log.info("Found {} consumer groups for {}. {} are new. {} were removed. Previously had {}.",
-                consumerGroups.size(), sourceAndTarget, newConsumerGroups.size(), deadConsumerGroups.size(),
-                knownConsumerGroups.size());
+                    consumerGroups.size(), sourceAndTarget, newConsumerGroups.size(), deadConsumerGroups.size(),
+                    knownConsumerGroups.size());
             knownConsumerGroups = consumerGroups;
             context.requestTaskReconfiguration();
         }
