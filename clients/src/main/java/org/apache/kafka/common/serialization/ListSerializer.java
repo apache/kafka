@@ -33,8 +33,10 @@ public class ListSerializer<T> implements Serializer<List<T>> {
             IntegerSerializer.class,
             ShortSerializer.class,
             FloatSerializer.class,
-            DoubleSerializer.class,
-            BytesSerializer.class);
+            DoubleSerializer.class);
+
+    public ListSerializer() {
+    }
 
     public ListSerializer(Serializer<T> serializer) {
         this.serializer = serializer;

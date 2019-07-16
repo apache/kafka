@@ -20,25 +20,26 @@ import java.io.ByteArrayInputStream;
 import java.io.DataInputStream;
 import java.io.IOException;
 import java.lang.reflect.Constructor;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 public class ListDeserializer<T> implements Deserializer<List<T>> {
 
-    private final Class listClass;
-    private final Deserializer<T> deserializer;
-    private final Integer primitiveSize;
+    private Deserializer<T> inner;
+    private Class listClass;
+    private Integer primitiveSize;
 
-    private Map<Class, Integer> primitiveDeserializers = Stream.of(new Object[][]{
-            {LongDeserializer.class, 8},
-            {IntegerDeserializer.class, 4},
-            {ShortDeserializer.class, 2},
-            {FloatDeserializer.class, 4},
-            {DoubleDeserializer.class, 8},
-            {BytesDeserializer.class, 1}
-    }).collect(Collectors.toMap(e -> (Class) e[0], e -> (Integer) e[1]));
+    private Map<Class, Integer> primitiveDeserializers = new HashMap<Class, Integer>() {{
+        put(LongDeserializer.class, 8);
+        put(IntegerDeserializer.class, 4);
+        put(ShortDeserializer.class, 2);
+        put(FloatDeserializer.class, 4);
+        put(DoubleDeserializer.class, 8);
+    }};
+
+    public ListDeserializer() {
+    }
 
     public ListDeserializer(Class listClass, Deserializer<T> deserializer) {
         this.listClass = listClass;

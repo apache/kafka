@@ -126,9 +126,6 @@ public class Serdes {
         }
     }
 
-    /*
-     * A serde for nullable {@code List} type
-     */
     public static <T> Serde<List<T>> ListSerde(Class listClass, Serde<T> innerSerde) {
         return new ListSerde<T>(listClass, innerSerde);
     }
@@ -273,4 +270,17 @@ public class Serdes {
     static public Serde<Void> Void() {
         return new VoidSerde();
     }
+
+    static public final class ListSerde<T> extends WrapperSerde<List<T>> {
+
+        public ListSerde() {
+            super(new ListSerializer<>(), new ListDeserializer<>());
+        }
+
+        public ListSerde(Class listClass, Serde<T> serde) {
+            super(new ListSerializer(serde.serializer()), new ListDeserializer<>(listClass, serde.deserializer()));
+        }
+
+    }
+
 }
