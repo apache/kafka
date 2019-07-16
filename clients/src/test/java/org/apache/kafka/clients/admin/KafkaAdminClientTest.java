@@ -60,7 +60,7 @@ import org.apache.kafka.common.message.DescribeGroupsResponseData;
 import org.apache.kafka.common.message.DescribeGroupsResponseData.DescribedGroupMember;
 import org.apache.kafka.common.message.ElectLeadersResponseData.PartitionResult;
 import org.apache.kafka.common.message.ElectLeadersResponseData.ReplicaElectionResult;
-import org.apache.kafka.common.message.IncrementalAlterConfigsResponseData.AlterConfigsResourceResult;
+import org.apache.kafka.common.message.IncrementalAlterConfigsResponseData.AlterConfigsResourceResponse;
 import org.apache.kafka.common.message.IncrementalAlterConfigsResponseData;
 import org.apache.kafka.common.message.ListGroupsResponseData;
 import org.apache.kafka.common.protocol.Errors;
@@ -1490,13 +1490,13 @@ public class KafkaAdminClientTest {
 
             //test error scenarios
             IncrementalAlterConfigsResponseData responseData =  new IncrementalAlterConfigsResponseData();
-            responseData.responses().add(new AlterConfigsResourceResult()
+            responseData.responses().add(new AlterConfigsResourceResponse()
                     .setResourceName("")
                     .setResourceType(ConfigResource.Type.BROKER.id())
                     .setErrorCode(Errors.CLUSTER_AUTHORIZATION_FAILED.code())
                     .setErrorMessage("authorization error"));
 
-            responseData.responses().add(new AlterConfigsResourceResult()
+            responseData.responses().add(new AlterConfigsResourceResponse()
                     .setResourceName("topic1")
                     .setResourceType(ConfigResource.Type.TOPIC.id())
                     .setErrorCode(Errors.INVALID_REQUEST.code())
@@ -1525,7 +1525,7 @@ public class KafkaAdminClientTest {
 
             // Test a call where there are no errors.
             responseData =  new IncrementalAlterConfigsResponseData();
-            responseData.responses().add(new AlterConfigsResourceResult()
+            responseData.responses().add(new AlterConfigsResourceResponse()
                     .setResourceName("")
                     .setResourceType(ConfigResource.Type.BROKER.id())
                     .setErrorCode(Errors.NONE.code())

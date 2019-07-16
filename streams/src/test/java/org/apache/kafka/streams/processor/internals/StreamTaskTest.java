@@ -861,7 +861,7 @@ public class StreamTaskTest {
         task.initializeTopology();
         task.commit();
         final OffsetCheckpoint checkpoint = new OffsetCheckpoint(
-            new File(stateDirectory.directoryForTask(taskId00), ProcessorStateManager.CHECKPOINT_FILE_NAME)
+            new File(stateDirectory.directoryForTask(taskId00), StateManagerUtil.CHECKPOINT_FILE_NAME)
         );
 
         assertThat(checkpoint.read(), equalTo(Collections.singletonMap(changelogPartition, offset)));
@@ -875,7 +875,7 @@ public class StreamTaskTest {
         task.commit();
         final File checkpointFile = new File(
             stateDirectory.directoryForTask(taskId00),
-            ProcessorStateManager.CHECKPOINT_FILE_NAME
+            StateManagerUtil.CHECKPOINT_FILE_NAME
         );
 
         assertFalse(checkpointFile.exists());
@@ -1477,6 +1477,8 @@ public class StreamTaskTest {
     }
 
     private StreamTask createStatefulTask(final StreamsConfig config, final boolean logged) {
+        final StateStore stateStore = new MockKeyValueStore(storeName, logged);
+
         final ProcessorTopology topology = ProcessorTopologyFactories.with(
             asList(source1, source2),
             mkMap(mkEntry(topic1, source1), mkEntry(topic2, source2)),
