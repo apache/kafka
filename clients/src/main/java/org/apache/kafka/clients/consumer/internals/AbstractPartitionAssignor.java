@@ -47,7 +47,7 @@ public abstract class AbstractPartitionAssignor implements PartitionAssignor {
                                                              Map<String, Subscription> subscriptions);
 
     @Override
-    public Subscription subscription(Set<String> topics) {
+    public Subscription subscription(Set<String> topics, List<TopicPartition> ownedPartitions) {
         return new Subscription(new ArrayList<>(topics));
     }
 

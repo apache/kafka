@@ -200,7 +200,7 @@ public class StreamsPartitionAssignorTest {
         mockTaskManager(prevTasks, cachedTasks, processId, builder);
 
         configurePartitionAssignor(Collections.emptyMap());
-        final PartitionAssignor.Subscription subscription = partitionAssignor.subscription(Utils.mkSet("topic1", "topic2"));
+        final PartitionAssignor.Subscription subscription = partitionAssignor.subscription(Utils.mkSet("topic1", "topic2"), new ArrayList<>());
 
         Collections.sort(subscription.topics());
         assertEquals(asList("topic1", "topic2"), subscription.topics());
@@ -841,7 +841,7 @@ public class StreamsPartitionAssignorTest {
             uuid1,
             builder);
         configurePartitionAssignor(Collections.singletonMap(StreamsConfig.APPLICATION_SERVER_CONFIG, userEndPoint));
-        final PartitionAssignor.Subscription subscription = partitionAssignor.subscription(Utils.mkSet("input"));
+        final PartitionAssignor.Subscription subscription = partitionAssignor.subscription(Utils.mkSet("input"), new ArrayList<>());
         final SubscriptionInfo subscriptionInfo = SubscriptionInfo.decode(subscription.userData());
         assertEquals("localhost:8080", subscriptionInfo.userEndPoint());
     }
@@ -1142,7 +1142,7 @@ public class StreamsPartitionAssignorTest {
             builder);
         configurePartitionAssignor(Collections.singletonMap(StreamsConfig.UPGRADE_FROM_CONFIG, StreamsConfig.UPGRADE_FROM_0100));
 
-        final PartitionAssignor.Subscription subscription = partitionAssignor.subscription(Utils.mkSet("topic1"));
+        final PartitionAssignor.Subscription subscription = partitionAssignor.subscription(Utils.mkSet("topic1"), new ArrayList<>());
 
         assertThat(SubscriptionInfo.decode(subscription.userData()).version(), equalTo(1));
     }
@@ -1180,7 +1180,7 @@ public class StreamsPartitionAssignorTest {
             builder);
         configurePartitionAssignor(Collections.singletonMap(StreamsConfig.UPGRADE_FROM_CONFIG, upgradeFromValue));
 
-        final PartitionAssignor.Subscription subscription = partitionAssignor.subscription(Utils.mkSet("topic1"));
+        final PartitionAssignor.Subscription subscription = partitionAssignor.subscription(Utils.mkSet("topic1"), new ArrayList<>());
 
         assertThat(SubscriptionInfo.decode(subscription.userData()).version(), equalTo(2));
     }

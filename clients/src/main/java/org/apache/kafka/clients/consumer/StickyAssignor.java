@@ -371,7 +371,7 @@ public class StickyAssignor extends AbstractPartitionAssignor {
     }
 
     @Override
-    public Subscription subscription(Set<String> topics) {
+    public Subscription subscription(Set<String> topics, List<TopicPartition> ownedPartitions) {
         if (memberAssignment == null)
             return new Subscription(new ArrayList<>(topics));
 

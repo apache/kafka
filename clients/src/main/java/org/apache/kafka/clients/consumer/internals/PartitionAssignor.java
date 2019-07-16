@@ -39,7 +39,7 @@ import static org.apache.kafka.clients.consumer.internals.ConsumerProtocol.CONSU
  * to perform the assignment and the results are forwarded back to each respective members
  *
  * In some cases, it is useful to forward additional metadata to the assignor in order to make
- * assignment decisions. For this, you can override {@link #subscription(Set)} and provide custom
+ * assignment decisions. For this, you can override {@link #subscription(Set, List)} and provide custom
  * userData in the returned Subscription. For example, to have a rack-aware assignor, an implementation
  * can use this user data to forward the rackId belonging to each member.
  */
@@ -51,14 +51,15 @@ public interface PartitionAssignor {
      * {@link #assign(Cluster, Map)}.
      * @param topics Topics subscribed to through {@link org.apache.kafka.clients.consumer.KafkaConsumer#subscribe(java.util.Collection)}
      *               and variants
+     * @param ownedPartitions The partitions currently assigned to this consumer
      * @return Non-null subscription with optional user data
      */
-    Subscription subscription(Set<String> topics);
+    Subscription subscription(Set<String> topics, List<TopicPartition> ownedPartitions);
 
     /**
      * Perform the group assignment given the member subscriptions and current cluster metadata.
      * @param metadata Current topic/broker metadata known by consumer
-     * @param subscriptions Subscriptions from all members provided through {@link #subscription(Set)}
+     * @param subscriptions Subscriptions from all members provided through {@link #subscription(Set, List)}
      * @return A map from the members to their respective assignment. This should have one entry
      *         for all members who in the input subscription map.
      */

@@ -113,7 +113,7 @@ public class StreamsUpgradeTest {
         }
 
         @Override
-        public Subscription subscription(final Set<String> topics) {
+        public Subscription subscription(final Set<String> topics, final List<TopicPartition> ownedPartitions) {
             // Adds the following information to subscription
             // 1. Client UUID (a unique id assigned to an instance of KafkaStreams)
             // 2. Task ids of previously running tasks
