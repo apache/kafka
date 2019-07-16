@@ -442,7 +442,7 @@ object TopicCommand extends Logging {
     if (desiredTopicName.isDefined && topics.isEmpty && !topicOptWithExists) {
       // If given topic doesn't exist then throw exception
       if (desiredTopicName.isDefined) {
-        throw new IllegalArgumentException(s"No topic matching name '${desiredTopicName.get}' found")
+        throw new IllegalArgumentException(s"Topics in [${topics.mkString(",")}] does not exist")
       }
     }
   }
