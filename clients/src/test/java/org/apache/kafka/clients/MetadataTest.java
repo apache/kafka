@@ -403,18 +403,18 @@ public class MetadataTest {
                 Collections.singletonMap(invalidTopic, Errors.INVALID_TOPIC_EXCEPTION), Collections.emptyMap());
         metadata.update(invalidTopicResponse, time.milliseconds());
 
-        InvalidTopicException e = assertThrows(InvalidTopicException.class, () -> metadata.maybeThrowException());
+        InvalidTopicException e = assertThrows(InvalidTopicException.class, () -> metadata.maybeThrowAnyException());
 
         assertEquals(Collections.singleton(invalidTopic), e.invalidTopics());
         // We clear the exception once it has been raised to the user
-        assertNull(metadata.getAndClearMetadataException());
+        metadata.maybeThrowAnyException();
 
         // Reset the invalid topic error
         metadata.update(invalidTopicResponse, time.milliseconds());
 
         // If we get a good update, the error should clear even if we haven't had a chance to raise it to the user
         metadata.update(emptyMetadataResponse(), time.milliseconds());
-        assertNull(metadata.getAndClearMetadataException());
+        metadata.maybeThrowAnyException();
     }
 
     @Test
@@ -426,17 +426,52 @@ public class MetadataTest {
                 Collections.singletonMap(invalidTopic, Errors.TOPIC_AUTHORIZATION_FAILED), Collections.emptyMap());
         metadata.update(unauthorizedTopicResponse, time.milliseconds());
 
-        TopicAuthorizationException e = assertThrows(TopicAuthorizationException.class, () -> metadata.maybeThrowException());
+        TopicAuthorizationException e = assertThrows(TopicAuthorizationException.class, () -> metadata.maybeThrowAnyException());
         assertEquals(Collections.singleton(invalidTopic), e.unauthorizedTopics());
         // We clear the exception once it has been raised to the user
-        assertNull(metadata.getAndClearMetadataException());
+        metadata.maybeThrowAnyException();
 
         // Reset the unauthorized topic error
         metadata.update(unauthorizedTopicResponse, time.milliseconds());
 
         // If we get a good update, the error should clear even if we haven't had a chance to raise it to the user
         metadata.update(emptyMetadataResponse(), time.milliseconds());
-        assertNull(metadata.getAndClearMetadataException());
+        metadata.maybeThrowAnyException();
+    }
+
+    @Test
+    public void testMetadataTopicErrors() {
+        Time time = new MockTime();
+
+        Map<String, Errors> topicErrors = new HashMap<>(3);
+        topicErrors.put("invalidTopic", Errors.INVALID_TOPIC_EXCEPTION);
+        topicErrors.put("sensitiveTopic1", Errors.TOPIC_AUTHORIZATION_FAILED);
+        topicErrors.put("sensitiveTopic2", Errors.TOPIC_AUTHORIZATION_FAILED);
+        MetadataResponse metadataResponse = TestUtils.metadataUpdateWith("clusterId", 1, topicErrors, Collections.emptyMap());
+
+        metadata.update(metadataResponse, time.milliseconds());
+        TopicAuthorizationException e1 = assertThrows(TopicAuthorizationException.class,
+            () -> metadata.maybeThrowExceptionForTopic("sensitiveTopic1"));
+        assertEquals(Collections.singleton("sensitiveTopic1"), e1.unauthorizedTopics());
+        // We clear the exception once it has been raised to the user
+        metadata.maybeThrowAnyException();
+
+        metadata.update(metadataResponse, time.milliseconds());
+        TopicAuthorizationException e2 = assertThrows(TopicAuthorizationException.class,
+            () -> metadata.maybeThrowExceptionForTopic("sensitiveTopic2"));
+        assertEquals(Collections.singleton("sensitiveTopic2"), e2.unauthorizedTopics());
+        metadata.maybeThrowAnyException();
+
+        metadata.update(metadataResponse, time.milliseconds());
+        InvalidTopicException e3 = assertThrows(InvalidTopicException.class,
+            () -> metadata.maybeThrowExceptionForTopic("invalidTopic"));
+        assertEquals(Collections.singleton("invalidTopic"), e3.invalidTopics());
+        metadata.maybeThrowAnyException();
+
+        // Other topics should not throw exception, but they should clear existing exception
+        metadata.update(metadataResponse, time.milliseconds());
+        metadata.maybeThrowExceptionForTopic("anotherTopic");
+        metadata.maybeThrowAnyException();
     }
 
     @Test

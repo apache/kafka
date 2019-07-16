@@ -32,9 +32,11 @@ import org.apache.kafka.connect.runtime.rest.resources.ConnectorsResource;
 import org.apache.kafka.connect.runtime.rest.resources.RootResource;
 import org.apache.kafka.connect.runtime.rest.util.SSLUtils;
 import org.eclipse.jetty.server.Connector;
+import org.eclipse.jetty.server.CustomRequestLog;
 import org.eclipse.jetty.server.Handler;
 import org.eclipse.jetty.server.Server;
 import org.eclipse.jetty.server.ServerConnector;
+import org.eclipse.jetty.server.Slf4jRequestLogWriter;
 import org.eclipse.jetty.server.handler.ContextHandlerCollection;
 import org.eclipse.jetty.server.handler.DefaultHandler;
 import org.eclipse.jetty.server.handler.RequestLogHandler;
@@ -146,7 +148,7 @@ public class RestServer {
         ServerConnector connector;
 
         if (PROTOCOL_HTTPS.equals(protocol)) {
-            SslContextFactory ssl = SSLUtils.createSslContextFactory(config);
+            SslContextFactory ssl = SSLUtils.createServerSideSslContextFactory(config);
             connector = new ServerConnector(jettyServer, ssl);
             connector.setName(String.format("%s_%s%d", PROTOCOL_HTTPS, hostname, port));
         } else {
@@ -181,7 +183,6 @@ public class RestServer {
         log.info("REST server listening at " + jettyServer.getURI() + ", advertising URL " + advertisedUrl());
     }
 
-    @SuppressWarnings("deprecation")
     public void initializeResources(Herder herder) {
         log.info("Initializing REST resources");
 
@@ -217,10 +218,9 @@ public class RestServer {
         }
 
         RequestLogHandler requestLogHandler = new RequestLogHandler();
-        // Use fully qualified name to avoid deprecation warning
-        org.eclipse.jetty.server.Slf4jRequestLog requestLog = new org.eclipse.jetty.server.Slf4jRequestLog();
-        requestLog.setLoggerName(RestServer.class.getCanonicalName());
-        requestLog.setLogLatency(true);
+        Slf4jRequestLogWriter slf4jRequestLogWriter = new Slf4jRequestLogWriter();
+        slf4jRequestLogWriter.setLoggerName(RestServer.class.getCanonicalName());
+        CustomRequestLog requestLog = new CustomRequestLog(slf4jRequestLogWriter, CustomRequestLog.EXTENDED_NCSA_FORMAT + " %msT");
         requestLogHandler.setRequestLog(requestLog);
 
         handlers.setHandlers(new Handler[]{context, new DefaultHandler(), requestLogHandler});

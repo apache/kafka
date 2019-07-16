@@ -19,7 +19,7 @@ package kafka.log
 import java.nio.ByteBuffer
 import java.util.concurrent.TimeUnit
 
-import kafka.api.{ApiVersion, KAFKA_2_0_IV1}
+import kafka.api.{ApiVersion, KAFKA_2_0_IV1, KAFKA_2_3_IV1}
 import kafka.common.LongRef
 import kafka.message._
 import org.apache.kafka.common.errors.{InvalidTimestampException, UnsupportedCompressionTypeException, UnsupportedForMessageFormatException}
@@ -28,13 +28,72 @@ import org.apache.kafka.common.utils.Time
 import org.apache.kafka.test.TestUtils
 import org.junit.Assert._
 import org.junit.Test
-import org.scalatest.Assertions.intercept
+import org.scalatest.Assertions.{assertThrows, intercept}
 
 import scala.collection.JavaConverters._
 
 class LogValidatorTest {
 
   val time = Time.SYSTEM
+
+  @Test
+  def testOnlyOneBatch(): Unit = {
+    checkOnlyOneBatch(RecordBatch.MAGIC_VALUE_V0, CompressionType.GZIP, CompressionType.GZIP)
+    checkOnlyOneBatch(RecordBatch.MAGIC_VALUE_V1, CompressionType.GZIP, CompressionType.GZIP)
+    checkOnlyOneBatch(RecordBatch.MAGIC_VALUE_V2, CompressionType.GZIP, CompressionType.GZIP)
+    checkOnlyOneBatch(RecordBatch.MAGIC_VALUE_V0, CompressionType.GZIP, CompressionType.NONE)
+    checkOnlyOneBatch(RecordBatch.MAGIC_VALUE_V1, CompressionType.GZIP, CompressionType.NONE)
+    checkOnlyOneBatch(RecordBatch.MAGIC_VALUE_V2, CompressionType.GZIP, CompressionType.NONE)
+    checkOnlyOneBatch(RecordBatch.MAGIC_VALUE_V2, CompressionType.NONE, CompressionType.NONE)
+    checkOnlyOneBatch(RecordBatch.MAGIC_VALUE_V2, CompressionType.NONE, CompressionType.GZIP)
+  }
+
+  @Test
+  def testAllowMultiBatch(): Unit = {
+    checkAllowMultiBatch(RecordBatch.MAGIC_VALUE_V0, CompressionType.NONE, CompressionType.NONE)
+    checkAllowMultiBatch(RecordBatch.MAGIC_VALUE_V1, CompressionType.NONE, CompressionType.NONE)
+    checkAllowMultiBatch(RecordBatch.MAGIC_VALUE_V0, CompressionType.NONE, CompressionType.GZIP)
+    checkAllowMultiBatch(RecordBatch.MAGIC_VALUE_V1, CompressionType.NONE, CompressionType.GZIP)
+  }
+
+  @Test
+  def testMisMatchMagic(): Unit = {
+    checkMismatchMagic(RecordBatch.MAGIC_VALUE_V0, RecordBatch.MAGIC_VALUE_V1, CompressionType.GZIP)
+    checkMismatchMagic(RecordBatch.MAGIC_VALUE_V1, RecordBatch.MAGIC_VALUE_V0, CompressionType.GZIP)
+  }
+
+  private def checkOnlyOneBatch(magic: Byte, sourceCompressionType: CompressionType, targetCompressionType: CompressionType) {
+    assertThrows[InvalidRecordException] {
+      validateMessages(createTwoBatchedRecords(magic, 0L, sourceCompressionType), magic, sourceCompressionType, targetCompressionType)
+    }
+  }
+
+  private def checkAllowMultiBatch(magic: Byte, sourceCompressionType: CompressionType, targetCompressionType: CompressionType) {
+    validateMessages(createTwoBatchedRecords(magic, 0L, sourceCompressionType), magic, sourceCompressionType, targetCompressionType)
+  }
+
+  private def checkMismatchMagic(batchMagic: Byte, recordMagic: Byte, compressionType: CompressionType): Unit = {
+    assertThrows[InvalidRecordException] {
+      validateMessages(recordsWithInvalidInnerMagic(batchMagic, recordMagic, compressionType), batchMagic, compressionType, compressionType)
+    }
+  }
+
+  private def validateMessages(records: MemoryRecords, magic: Byte, sourceCompressionType: CompressionType, targetCompressionType: CompressionType): Unit = {
+    LogValidator.validateMessagesAndAssignOffsets(records,
+      new LongRef(0L),
+      time,
+      now = 0L,
+      CompressionCodec.getCompressionCodec(sourceCompressionType.name),
+      CompressionCodec.getCompressionCodec(targetCompressionType.name),
+      compactedTopic = false,
+      magic,
+      TimestampType.CREATE_TIME,
+      1000L,
+      RecordBatch.NO_PRODUCER_EPOCH,
+      isFromClient = true,
+      KAFKA_2_3_IV1
+    )
+  }
 
   @Test
   def testLogAppendTimeNonCompressedV1() {
@@ -1048,25 +1107,6 @@ class LogValidatorTest {
   }
 
   @Test(expected = classOf[InvalidRecordException])
-  def testInvalidInnerMagicVersion(): Unit = {
-    val offset = 1234567
-    val records = recordsWithInvalidInnerMagic(offset)
-    LogValidator.validateMessagesAndAssignOffsets(records,
-      offsetCounter = new LongRef(offset),
-      time = time,
-      now = System.currentTimeMillis(),
-      sourceCodec = SnappyCompressionCodec,
-      targetCodec = SnappyCompressionCodec,
-      compactedTopic = false,
-      magic = RecordBatch.MAGIC_VALUE_V1,
-      timestampType = TimestampType.CREATE_TIME,
-      timestampDiffMaxMs = 5000L,
-      partitionLeaderEpoch = RecordBatch.NO_PARTITION_LEADER_EPOCH,
-      isFromClient = true,
-      interBrokerProtocolVersion = ApiVersion.latestVersion)
-  }
-
-  @Test(expected = classOf[InvalidRecordException])
   def testCompressedBatchWithoutRecordsNotAllowed(): Unit = {
     testBatchWithoutRecordsNotAllowed(DefaultCompressionCodec, DefaultCompressionCodec)
   }
@@ -1137,6 +1177,22 @@ class LogValidatorTest {
     builder.build()
   }
 
+  private def createTwoBatchedRecords(magicValue: Byte,
+                                      timestamp: Long,
+                                      codec: CompressionType): MemoryRecords = {
+    val buf = ByteBuffer.allocate(2048)
+    var builder = MemoryRecords.builder(buf, magicValue, codec, TimestampType.CREATE_TIME, 0L)
+    builder.append(10L, "1".getBytes(), "a".getBytes())
+    builder.close()
+    builder = MemoryRecords.builder(buf, magicValue, codec, TimestampType.CREATE_TIME, 1L)
+    builder.append(11L, "2".getBytes(), "b".getBytes())
+    builder.append(12L, "3".getBytes(), "c".getBytes())
+    builder.close()
+
+    buf.flip()
+    MemoryRecords.readableRecords(buf.slice())
+  }
+
   /* check that offsets are assigned consecutively from the given base offset */
   def checkOffsets(records: MemoryRecords, baseOffset: Long) {
     assertTrue("Message set should not be empty", records.records.asScala.nonEmpty)
@@ -1147,18 +1203,20 @@ class LogValidatorTest {
     }
   }
 
-  private def recordsWithInvalidInnerMagic(initialOffset: Long): MemoryRecords = {
+  private def recordsWithInvalidInnerMagic(batchMagicValue: Byte,
+                                           recordMagicValue: Byte,
+                                           codec: CompressionType): MemoryRecords = {
     val records = (0 until 20).map(id =>
-      LegacyRecord.create(RecordBatch.MAGIC_VALUE_V0,
+      LegacyRecord.create(recordMagicValue,
         RecordBatch.NO_TIMESTAMP,
         id.toString.getBytes,
         id.toString.getBytes))
 
     val buffer = ByteBuffer.allocate(math.min(math.max(records.map(_.sizeInBytes()).sum / 2, 1024), 1 << 16))
-    val builder = MemoryRecords.builder(buffer, RecordBatch.MAGIC_VALUE_V1, CompressionType.GZIP,
+    val builder = MemoryRecords.builder(buffer, batchMagicValue, codec,
       TimestampType.CREATE_TIME, 0L)
 
-    var offset = initialOffset
+    var offset = 1234567
     records.foreach { record =>
       builder.appendUncheckedWithOffset(offset, record)
       offset += 1

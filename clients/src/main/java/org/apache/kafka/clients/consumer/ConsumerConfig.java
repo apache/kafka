@@ -50,50 +50,33 @@ public class ConsumerConfig extends AbstractConfig {
     /**
      * <code>group.id</code>
      */
-    public static final String GROUP_ID_CONFIG = "group.id";
-    private static final String GROUP_ID_DOC = "A unique string that identifies the consumer group this consumer belongs to. This property is required if the consumer uses either the group management functionality by using <code>subscribe(topic)</code> or the Kafka-based offset management strategy.";
+    public static final String GROUP_ID_CONFIG = CommonClientConfigs.GROUP_ID_CONFIG;
+    private static final String GROUP_ID_DOC = CommonClientConfigs.GROUP_ID_DOC;
 
     /**
      * <code>group.instance.id</code>
      */
-    public static final String GROUP_INSTANCE_ID_CONFIG = "group.instance.id";
-    private static final String GROUP_INSTANCE_ID_DOC = "A unique identifier of the consumer instance provided by end user. " +
-            "Only non-empty strings are permitted. If set, the consumer is treated as a static member, " +
-            "which means that only one instance with this ID is allowed in the consumer group at any time. " +
-            "This can be used in combination with a larger session timeout to avoid group rebalances caused by transient unavailability " +
-            "(e.g. process restarts). If not set, the consumer will join the group as a dynamic member, which is the traditional behavior.";
+    public static final String GROUP_INSTANCE_ID_CONFIG = CommonClientConfigs.GROUP_INSTANCE_ID_CONFIG;
+    private static final String GROUP_INSTANCE_ID_DOC = CommonClientConfigs.GROUP_INSTANCE_ID_DOC;
 
     /** <code>max.poll.records</code> */
     public static final String MAX_POLL_RECORDS_CONFIG = "max.poll.records";
     private static final String MAX_POLL_RECORDS_DOC = "The maximum number of records returned in a single call to poll().";
 
     /** <code>max.poll.interval.ms</code> */
-    public static final String MAX_POLL_INTERVAL_MS_CONFIG = "max.poll.interval.ms";
-    private static final String MAX_POLL_INTERVAL_MS_DOC = "The maximum delay between invocations of poll() when using " +
-            "consumer group management. This places an upper bound on the amount of time that the consumer can be idle " +
-            "before fetching more records. If poll() is not called before expiration of this timeout, then the consumer " +
-            "is considered failed and the group will rebalance in order to reassign the partitions to another member. ";
-
+    public static final String MAX_POLL_INTERVAL_MS_CONFIG = CommonClientConfigs.MAX_POLL_INTERVAL_MS_CONFIG;
+    private static final String MAX_POLL_INTERVAL_MS_DOC = CommonClientConfigs.MAX_POLL_INTERVAL_MS_DOC;
     /**
      * <code>session.timeout.ms</code>
      */
-    public static final String SESSION_TIMEOUT_MS_CONFIG = "session.timeout.ms";
-    private static final String SESSION_TIMEOUT_MS_DOC = "The timeout used to detect consumer failures when using " +
-            "Kafka's group management facility. The consumer sends periodic heartbeats to indicate its liveness " +
-            "to the broker. If no heartbeats are received by the broker before the expiration of this session timeout, " +
-            "then the broker will remove this consumer from the group and initiate a rebalance. Note that the value " +
-            "must be in the allowable range as configured in the broker configuration by <code>group.min.session.timeout.ms</code> " +
-            "and <code>group.max.session.timeout.ms</code>.";
+    public static final String SESSION_TIMEOUT_MS_CONFIG = CommonClientConfigs.SESSION_TIMEOUT_MS_CONFIG;
+    private static final String SESSION_TIMEOUT_MS_DOC = CommonClientConfigs.SESSION_TIMEOUT_MS_DOC;
 
     /**
      * <code>heartbeat.interval.ms</code>
      */
-    public static final String HEARTBEAT_INTERVAL_MS_CONFIG = "heartbeat.interval.ms";
-    private static final String HEARTBEAT_INTERVAL_MS_DOC = "The expected time between heartbeats to the consumer " +
-            "coordinator when using Kafka's group management facilities. Heartbeats are used to ensure that the " +
-            "consumer's session stays active and to facilitate rebalancing when new consumers join or leave the group. " +
-            "The value must be set lower than <code>session.timeout.ms</code>, but typically should be set no higher " +
-            "than 1/3 of that value. It can be adjusted even lower to control the expected time for normal rebalances.";
+    public static final String HEARTBEAT_INTERVAL_MS_CONFIG = CommonClientConfigs.HEARTBEAT_INTERVAL_MS_CONFIG;
+    private static final String HEARTBEAT_INTERVAL_MS_DOC = CommonClientConfigs.HEARTBEAT_INTERVAL_MS_DOC;
 
     /**
      * <code>bootstrap.servers</code>
@@ -253,6 +236,17 @@ public class ConsumerConfig extends AbstractConfig {
     private static final String EXCLUDE_INTERNAL_TOPICS_DOC = "Whether internal topics matching a subscribed pattern should " +
             "be excluded from the subscription. It is always possible to explicitly subscribe to an internal topic.";
     public static final boolean DEFAULT_EXCLUDE_INTERNAL_TOPICS = true;
+
+    /**
+     * <code>internal.leave.group.on.close</code>
+     * Whether or not the consumer should leave the group on close. If set to <code>false</code> then a rebalance
+     * won't occur until <code>session.timeout.ms</code> expires.
+     *
+     * <p>
+     * Note: this is an internal configuration and could be changed in the future in a backward incompatible way
+     *
+     */
+    static final String LEAVE_GROUP_ON_CLOSE_CONFIG = "internal.leave.group.on.close";
 
     /** <code>isolation.level</code> */
     public static final String ISOLATION_LEVEL_CONFIG = "isolation.level";
@@ -476,6 +470,10 @@ public class ConsumerConfig extends AbstractConfig {
                                         DEFAULT_EXCLUDE_INTERNAL_TOPICS,
                                         Importance.MEDIUM,
                                         EXCLUDE_INTERNAL_TOPICS_DOC)
+                                .defineInternal(LEAVE_GROUP_ON_CLOSE_CONFIG,
+                                        Type.BOOLEAN,
+                                        true,
+                                        Importance.LOW)
                                 .define(ISOLATION_LEVEL_CONFIG,
                                         Type.STRING,
                                         DEFAULT_ISOLATION_LEVEL,
@@ -542,7 +540,7 @@ public class ConsumerConfig extends AbstractConfig {
     }
 
     public static ConfigDef configDef() {
-        return  CONFIG;
+        return  new ConfigDef(CONFIG);
     }
 
     public static void main(String[] args) {

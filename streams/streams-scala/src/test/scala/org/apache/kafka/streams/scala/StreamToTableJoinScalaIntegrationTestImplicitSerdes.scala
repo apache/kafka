@@ -18,7 +18,7 @@ package org.apache.kafka.streams.scala
 
 import java.util.Properties
 
-import org.apache.kafka.streams._
+import org.apache.kafka.streams.{KafkaStreams, KeyValue, StreamsConfig}
 import org.apache.kafka.streams.scala.ImplicitConversions._
 import org.apache.kafka.streams.scala.kstream._
 import org.apache.kafka.streams.scala.utils.StreamToTableJoinScalaIntegrationTestBase

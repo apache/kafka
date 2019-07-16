@@ -32,6 +32,7 @@ import java.nio.file.Files;
 import java.nio.file.StandardOpenOption;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.Map;
 import java.util.Random;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -43,6 +44,7 @@ import static org.apache.kafka.common.utils.Utils.formatBytes;
 import static org.apache.kafka.common.utils.Utils.getHost;
 import static org.apache.kafka.common.utils.Utils.getPort;
 import static org.apache.kafka.common.utils.Utils.mkSet;
+import static org.apache.kafka.common.utils.Utils.murmur2;
 import static org.apache.kafka.common.utils.Utils.validHostPattern;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
@@ -57,6 +59,21 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 public class UtilsTest {
+
+    @Test
+    public void testMurmur2() {
+        Map<byte[], Integer> cases = new java.util.HashMap<>();
+        cases.put("21".getBytes(), -973932308);
+        cases.put("foobar".getBytes(), -790332482);
+        cases.put("a-little-bit-long-string".getBytes(), -985981536);
+        cases.put("a-little-bit-longer-string".getBytes(), -1486304829);
+        cases.put("lkjh234lh9fiuh90y23oiuhsafujhadof229phr9h19h89h8".getBytes(), -58897971);
+        cases.put(new byte[]{'a', 'b', 'c'}, 479470107);
+
+        for (Map.Entry c : cases.entrySet()) {
+            assertEquals((int) c.getValue(), murmur2((byte[]) c.getKey()));
+        }
+    }
 
     @Test
     public void testGetHost() {

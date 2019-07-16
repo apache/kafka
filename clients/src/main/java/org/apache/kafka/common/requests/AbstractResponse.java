@@ -103,7 +103,7 @@ public abstract class AbstractResponse extends AbstractRequestResponse {
             case DESCRIBE_GROUPS:
                 return new DescribeGroupsResponse(struct, version);
             case LIST_GROUPS:
-                return new ListGroupsResponse(struct);
+                return new ListGroupsResponse(struct, version);
             case SASL_HANDSHAKE:
                 return new SaslHandshakeResponse(struct, version);
             case API_VERSIONS:
@@ -147,7 +147,7 @@ public abstract class AbstractResponse extends AbstractRequestResponse {
             case CREATE_PARTITIONS:
                 return new CreatePartitionsResponse(struct);
             case CREATE_DELEGATION_TOKEN:
-                return new CreateDelegationTokenResponse(struct);
+                return new CreateDelegationTokenResponse(struct, version);
             case RENEW_DELEGATION_TOKEN:
                 return new RenewDelegationTokenResponse(struct);
             case EXPIRE_DELEGATION_TOKEN:
@@ -156,8 +156,8 @@ public abstract class AbstractResponse extends AbstractRequestResponse {
                 return new DescribeDelegationTokenResponse(struct);
             case DELETE_GROUPS:
                 return new DeleteGroupsResponse(struct);
-            case ELECT_PREFERRED_LEADERS:
-                return new ElectPreferredLeadersResponse(struct, version);
+            case ELECT_LEADERS:
+                return new ElectLeadersResponse(struct, version);
             case INCREMENTAL_ALTER_CONFIGS:
                 return new IncrementalAlterConfigsResponse(struct, version);
             default:

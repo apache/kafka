@@ -293,7 +293,7 @@ public class ConsumerNetworkClient implements Closeable {
         // called without the lock to avoid deadlock potential if handlers need to acquire locks
         firePendingCompletedRequests();
 
-        metadata.maybeThrowException();
+        metadata.maybeThrowAnyException();
     }
 
     /**

@@ -23,6 +23,7 @@ import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.KeyValueTimestamp;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.kstream.Consumed;
@@ -105,28 +106,35 @@ public class KStreamWindowAggregateTest {
 
         assertEquals(
             asList(
-                "[A@0/10]:0+1 (ts: 0)",
-                "[B@0/10]:0+2 (ts: 1)",
-                "[C@0/10]:0+3 (ts: 2)",
-                "[D@0/10]:0+4 (ts: 3)",
-                "[A@0/10]:0+1+1 (ts: 4)",
-
-                "[A@0/10]:0+1+1+1 (ts: 5)", "[A@5/15]:0+1 (ts: 5)",
-                "[B@0/10]:0+2+2 (ts: 6)", "[B@5/15]:0+2 (ts: 6)",
-                "[D@0/10]:0+4+4 (ts: 7)", "[D@5/15]:0+4 (ts: 7)",
-                "[B@0/10]:0+2+2+2 (ts: 8)", "[B@5/15]:0+2+2 (ts: 8)",
-                "[C@0/10]:0+3+3 (ts: 9)", "[C@5/15]:0+3 (ts: 9)",
-
-                "[A@5/15]:0+1+1 (ts: 10)", "[A@10/20]:0+1 (ts: 10)",
-                "[B@5/15]:0+2+2+2 (ts: 11)", "[B@10/20]:0+2 (ts: 11)",
-                "[D@5/15]:0+4+4 (ts: 12)", "[D@10/20]:0+4 (ts: 12)",
-                "[B@5/15]:0+2+2+2+2 (ts: 13)", "[B@10/20]:0+2+2 (ts: 13)",
-                "[C@5/15]:0+3+3 (ts: 14)", "[C@10/20]:0+3 (ts: 14)",
-
-                "[B@0/10]:0+2+2+2+1 (ts: 8)",
-                "[B@0/10]:0+2+2+2+1+2 (ts: 8)",
-                "[B@0/10]:0+2+2+2+1+2+3 (ts: 9)",
-                "[B@5/15]:0+2+2+2+2+3 (ts: 13)"
+                new KeyValueTimestamp<>(new Windowed<>("A", new TimeWindow(0, 10)), "0+1", 0),
+                new KeyValueTimestamp<>(new Windowed<>("B", new TimeWindow(0, 10)), "0+2", 1),
+                new KeyValueTimestamp<>(new Windowed<>("C", new TimeWindow(0, 10)), "0+3", 2),
+                new KeyValueTimestamp<>(new Windowed<>("D", new TimeWindow(0, 10)), "0+4", 3),
+                new KeyValueTimestamp<>(new Windowed<>("A", new TimeWindow(0, 10)), "0+1+1", 4),
+                new KeyValueTimestamp<>(new Windowed<>("A", new TimeWindow(0, 10)),  "0+1+1+1",  5),
+                new KeyValueTimestamp<>(new Windowed<>("A", new TimeWindow(5, 15)),  "0+1",  5),
+                new KeyValueTimestamp<>(new Windowed<>("B", new TimeWindow(0, 10)),  "0+2+2",  6),
+                new KeyValueTimestamp<>(new Windowed<>("B", new TimeWindow(5, 15)),  "0+2",  6),
+                new KeyValueTimestamp<>(new Windowed<>("D", new TimeWindow(0, 10)),  "0+4+4",  7),
+                new KeyValueTimestamp<>(new Windowed<>("D", new TimeWindow(5, 15)),  "0+4",  7),
+                new KeyValueTimestamp<>(new Windowed<>("B", new TimeWindow(0, 10)),  "0+2+2+2",  8),
+                new KeyValueTimestamp<>(new Windowed<>("B", new TimeWindow(5, 15)),  "0+2+2",  8),
+                new KeyValueTimestamp<>(new Windowed<>("C", new TimeWindow(0, 10)),  "0+3+3",  9),
+                new KeyValueTimestamp<>(new Windowed<>("C", new TimeWindow(5, 15)),  "0+3",  9),
+                new KeyValueTimestamp<>(new Windowed<>("A", new TimeWindow(5, 15)),  "0+1+1",  10),
+                new KeyValueTimestamp<>(new Windowed<>("A", new TimeWindow(10, 20)),  "0+1",  10),
+                new KeyValueTimestamp<>(new Windowed<>("B", new TimeWindow(5, 15)),  "0+2+2+2",  11),
+                new KeyValueTimestamp<>(new Windowed<>("B", new TimeWindow(10, 20)),  "0+2",  11),
+                new KeyValueTimestamp<>(new Windowed<>("D", new TimeWindow(5, 15)),  "0+4+4",  12),
+                new KeyValueTimestamp<>(new Windowed<>("D", new TimeWindow(10, 20)),  "0+4",  12),
+                new KeyValueTimestamp<>(new Windowed<>("B", new TimeWindow(5, 15)),  "0+2+2+2+2",  13),
+                new KeyValueTimestamp<>(new Windowed<>("B", new TimeWindow(10, 20)),  "0+2+2",  13),
+                new KeyValueTimestamp<>(new Windowed<>("C", new TimeWindow(5, 15)),  "0+3+3",  14),
+                new KeyValueTimestamp<>(new Windowed<>("C", new TimeWindow(10, 20)),  "0+3",  14),
+                new KeyValueTimestamp<>(new Windowed<>("B", new TimeWindow(0, 10)),  "0+2+2+2+1",  8),
+                new KeyValueTimestamp<>(new Windowed<>("B", new TimeWindow(0, 10)),  "0+2+2+2+1+2",  8),
+                new KeyValueTimestamp<>(new Windowed<>("B", new TimeWindow(0, 10)),  "0+2+2+2+1+2+3",  9),
+                new KeyValueTimestamp<>(new Windowed<>("B", new TimeWindow(5, 15)),  "0+2+2+2+2+3",  13)
 
                 ),
             supplier.theCapturedProcessor().processed
@@ -167,15 +175,15 @@ public class KStreamWindowAggregateTest {
             final List<MockProcessor<Windowed<String>, String>> processors = supplier.capturedProcessors(3);
 
             processors.get(0).checkAndClearProcessResult(
-                "[A@0/10]:0+1 (ts: 0)",
-                "[B@0/10]:0+2 (ts: 1)",
-                "[C@0/10]:0+3 (ts: 2)",
-                "[D@0/10]:0+4 (ts: 3)",
-                "[A@0/10]:0+1+1 (ts: 9)",
-                "[A@5/15]:0+1 (ts: 9)"
+                new KeyValueTimestamp<>(new Windowed<>("A", new TimeWindow(0, 10)),  "0+1",  0),
+                new KeyValueTimestamp<>(new Windowed<>("B", new TimeWindow(0, 10)),  "0+2",  1),
+                new KeyValueTimestamp<>(new Windowed<>("C", new TimeWindow(0, 10)),  "0+3",  2),
+                new KeyValueTimestamp<>(new Windowed<>("D", new TimeWindow(0, 10)),  "0+4",  3),
+                new KeyValueTimestamp<>(new Windowed<>("A", new TimeWindow(0, 10)),  "0+1+1",  9),
+                new KeyValueTimestamp<>(new Windowed<>("A", new TimeWindow(5, 15)),  "0+1",  9)
             );
-            processors.get(1).checkAndClearProcessResult(new String[0]);
-            processors.get(2).checkAndClearProcessResult(new String[0]);
+            processors.get(1).checkAndClearProcessResult(new KeyValueTimestamp[0]);
+            processors.get(2).checkAndClearProcessResult(new KeyValueTimestamp[0]);
 
             driver.pipeInput(recordFactory.create(topic1, "A", "1", 5L));
             driver.pipeInput(recordFactory.create(topic1, "B", "2", 6L));
@@ -184,14 +192,19 @@ public class KStreamWindowAggregateTest {
             driver.pipeInput(recordFactory.create(topic1, "C", "3", 9L));
 
             processors.get(0).checkAndClearProcessResult(
-                "[A@0/10]:0+1+1+1 (ts: 9)", "[A@5/15]:0+1+1 (ts: 9)",
-                "[B@0/10]:0+2+2 (ts: 6)", "[B@5/15]:0+2 (ts: 6)",
-                "[D@0/10]:0+4+4 (ts: 7)", "[D@5/15]:0+4 (ts: 7)",
-                "[B@0/10]:0+2+2+2 (ts: 8)", "[B@5/15]:0+2+2 (ts: 8)",
-                "[C@0/10]:0+3+3 (ts: 9)", "[C@5/15]:0+3 (ts: 9)"
+                new KeyValueTimestamp<>(new Windowed<>("A", new TimeWindow(0, 10)),  "0+1+1+1",  9),
+                new KeyValueTimestamp<>(new Windowed<>("A", new TimeWindow(5, 15)),  "0+1+1",  9),
+                new KeyValueTimestamp<>(new Windowed<>("B", new TimeWindow(0, 10)),  "0+2+2",  6),
+                new KeyValueTimestamp<>(new Windowed<>("B", new TimeWindow(5, 15)),  "0+2",  6),
+                new KeyValueTimestamp<>(new Windowed<>("D", new TimeWindow(0, 10)),  "0+4+4",  7),
+                new KeyValueTimestamp<>(new Windowed<>("D", new TimeWindow(5, 15)),  "0+4",  7),
+                new KeyValueTimestamp<>(new Windowed<>("B", new TimeWindow(0, 10)),  "0+2+2+2",  8),
+                new KeyValueTimestamp<>(new Windowed<>("B", new TimeWindow(5, 15)),  "0+2+2",  8),
+                new KeyValueTimestamp<>(new Windowed<>("C", new TimeWindow(0, 10)),  "0+3+3",  9),
+                new KeyValueTimestamp<>(new Windowed<>("C", new TimeWindow(5, 15)),  "0+3",  9)
             );
-            processors.get(1).checkAndClearProcessResult(new String[0]);
-            processors.get(2).checkAndClearProcessResult(new String[0]);
+            processors.get(1).checkAndClearProcessResult(new KeyValueTimestamp[0]);
+            processors.get(2).checkAndClearProcessResult(new KeyValueTimestamp[0]);
 
             driver.pipeInput(recordFactory.create(topic2, "A", "a", 0L));
             driver.pipeInput(recordFactory.create(topic2, "B", "b", 1L));
@@ -199,20 +212,20 @@ public class KStreamWindowAggregateTest {
             driver.pipeInput(recordFactory.create(topic2, "D", "d", 20L));
             driver.pipeInput(recordFactory.create(topic2, "A", "a", 20L));
 
-            processors.get(0).checkAndClearProcessResult(new String[0]);
+            processors.get(0).checkAndClearProcessResult(new KeyValueTimestamp[0]);
             processors.get(1).checkAndClearProcessResult(
-                "[A@0/10]:0+a (ts: 0)",
-                "[B@0/10]:0+b (ts: 1)",
-                "[C@0/10]:0+c (ts: 2)",
-                "[D@15/25]:0+d (ts: 20)",
-                "[D@20/30]:0+d (ts: 20)",
-                "[A@15/25]:0+a (ts: 20)",
-                "[A@20/30]:0+a (ts: 20)"
+                new KeyValueTimestamp<>(new Windowed<>("A", new TimeWindow(0, 10)),  "0+a",  0),
+                new KeyValueTimestamp<>(new Windowed<>("B", new TimeWindow(0, 10)),  "0+b",  1),
+                new KeyValueTimestamp<>(new Windowed<>("C", new TimeWindow(0, 10)),  "0+c",  2),
+                new KeyValueTimestamp<>(new Windowed<>("D", new TimeWindow(15, 25)),  "0+d",  20),
+                new KeyValueTimestamp<>(new Windowed<>("D", new TimeWindow(20, 30)),  "0+d",  20),
+                new KeyValueTimestamp<>(new Windowed<>("A", new TimeWindow(15, 25)),  "0+a",  20),
+                new KeyValueTimestamp<>(new Windowed<>("A", new TimeWindow(20, 30)),  "0+a",  20)
             );
             processors.get(2).checkAndClearProcessResult(
-                "[A@0/10]:0+1+1+1%0+a (ts: 9)",
-                "[B@0/10]:0+2+2+2%0+b (ts: 8)",
-                "[C@0/10]:0+3+3%0+c (ts: 9)");
+                new KeyValueTimestamp<>(new Windowed<>("A", new TimeWindow(0, 10)),  "0+1+1+1%0+a",  9),
+                new KeyValueTimestamp<>(new Windowed<>("B", new TimeWindow(0, 10)),  "0+2+2+2%0+b",  8),
+                new KeyValueTimestamp<>(new Windowed<>("C", new TimeWindow(0, 10)),  "0+3+3%0+c",  9));
 
             driver.pipeInput(recordFactory.create(topic2, "A", "a", 5L));
             driver.pipeInput(recordFactory.create(topic2, "B", "b", 6L));
@@ -220,18 +233,26 @@ public class KStreamWindowAggregateTest {
             driver.pipeInput(recordFactory.create(topic2, "D", "d", 18L));
             driver.pipeInput(recordFactory.create(topic2, "A", "a", 21L));
 
-            processors.get(0).checkAndClearProcessResult(new String[0]);
+            processors.get(0).checkAndClearProcessResult(new KeyValueTimestamp[0]);
             processors.get(1).checkAndClearProcessResult(
-                "[A@0/10]:0+a+a (ts: 5)", "[A@5/15]:0+a (ts: 5)",
-                "[B@0/10]:0+b+b (ts: 6)", "[B@5/15]:0+b (ts: 6)",
-                "[D@0/10]:0+d (ts: 7)", "[D@5/15]:0+d (ts: 7)",
-                "[D@10/20]:0+d (ts: 18)", "[D@15/25]:0+d+d (ts: 20)",
-                "[A@15/25]:0+a+a (ts: 21)", "[A@20/30]:0+a+a (ts: 21)"
+                new KeyValueTimestamp<>(new Windowed<>("A", new TimeWindow(0, 10)),  "0+a+a",  5),
+                new KeyValueTimestamp<>(new Windowed<>("A", new TimeWindow(5, 15)),  "0+a",  5),
+                new KeyValueTimestamp<>(new Windowed<>("B", new TimeWindow(0, 10)),  "0+b+b",  6),
+                new KeyValueTimestamp<>(new Windowed<>("B", new TimeWindow(5, 15)),  "0+b",  6),
+                new KeyValueTimestamp<>(new Windowed<>("D", new TimeWindow(0, 10)),  "0+d",  7),
+                new KeyValueTimestamp<>(new Windowed<>("D", new TimeWindow(5, 15)),  "0+d",  7),
+                new KeyValueTimestamp<>(new Windowed<>("D", new TimeWindow(10, 20)),  "0+d",  18),
+                new KeyValueTimestamp<>(new Windowed<>("D", new TimeWindow(15, 25)),  "0+d+d",  20),
+                new KeyValueTimestamp<>(new Windowed<>("A", new TimeWindow(15, 25)),  "0+a+a",  21),
+                new KeyValueTimestamp<>(new Windowed<>("A", new TimeWindow(20, 30)),  "0+a+a",  21)
             );
             processors.get(2).checkAndClearProcessResult(
-                "[A@0/10]:0+1+1+1%0+a+a (ts: 9)", "[A@5/15]:0+1+1%0+a (ts: 9)",
-                "[B@0/10]:0+2+2+2%0+b+b (ts: 8)", "[B@5/15]:0+2+2%0+b (ts: 8)",
-                "[D@0/10]:0+4+4%0+d (ts: 7)", "[D@5/15]:0+4%0+d (ts: 7)"
+                new KeyValueTimestamp<>(new Windowed<>("A", new TimeWindow(0, 10)),  "0+1+1+1%0+a+a",  9),
+                new KeyValueTimestamp<>(new Windowed<>("A", new TimeWindow(5, 15)),  "0+1+1%0+a",  9),
+                new KeyValueTimestamp<>(new Windowed<>("B", new TimeWindow(0, 10)),  "0+2+2+2%0+b+b",  8),
+                new KeyValueTimestamp<>(new Windowed<>("B", new TimeWindow(5, 15)),  "0+2+2%0+b",  8),
+                new KeyValueTimestamp<>(new Windowed<>("D", new TimeWindow(0, 10)),  "0+4+4%0+d",  7),
+                new KeyValueTimestamp<>(new Windowed<>("D", new TimeWindow(5, 15)),  "0+4%0+d",  7)
             );
         }
     }

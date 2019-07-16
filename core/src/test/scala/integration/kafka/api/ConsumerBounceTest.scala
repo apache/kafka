@@ -31,6 +31,7 @@ import org.junit.{After, Ignore, Test}
 
 import scala.collection.JavaConverters._
 import scala.collection.mutable
+import scala.collection.Seq
 
 /**
  * Integration tests for the consumer that cover basic usage as well as server failures
@@ -132,7 +133,7 @@ class ConsumerBounceTest extends AbstractConsumerTest with Logging {
 
     // wait until all the followers have synced the last HW with leader
     TestUtils.waitUntilTrue(() => servers.forall(server =>
-      server.replicaManager.localReplica(tp).get.highWatermark.messageOffset == numRecords
+      server.replicaManager.localLog(tp).get.highWatermark == numRecords
     ), "Failed to update high watermark for followers after timeout")
 
     val scheduler = new BounceBrokerScheduler(numIters)

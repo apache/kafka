@@ -640,7 +640,8 @@ class ReassignPartitionsCommand(zkClient: KafkaZkClient,
         val replicasAssignedToFutureDir = mutable.Set.empty[TopicPartitionReplica]
         while (remainingTimeMs > 0 && replicasAssignedToFutureDir.size < proposedReplicaAssignment.size) {
           replicasAssignedToFutureDir ++= alterReplicaLogDirsIgnoreReplicaNotAvailable(
-            proposedReplicaAssignment.filterKeys(replica => !replicasAssignedToFutureDir.contains(replica)), adminClientOpt.get, remainingTimeMs)
+            proposedReplicaAssignment.filter { case (replica, _) => !replicasAssignedToFutureDir.contains(replica) },
+            adminClientOpt.get, remainingTimeMs)
           Thread.sleep(100)
           remainingTimeMs = startTimeMs + timeoutMs - System.currentTimeMillis()
         }

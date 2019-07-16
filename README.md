@@ -77,7 +77,7 @@ The release file can be found inside `./core/build/distributions/`.
 ### Cleaning the build ###
     ./gradlew clean
 
-### Running a task with a particular version of Scala (either 2.11.x or 2.12.x) ###
+### Running a task with one of the Scala versions available (2.11.x, 2.12.x or 2.13.x) ###
 *Note that if building the jars with a version other than 2.12.x, you need to set the `SCALA_VERSION` variable or change it in `bin/kafka-run-class.sh` to run the quick start.*
 
 You can pass either the major version (eg 2.12) or the full version (eg 2.12.7):
@@ -86,7 +86,7 @@ You can pass either the major version (eg 2.12) or the full version (eg 2.12.7):
     ./gradlew -PscalaVersion=2.12 test
     ./gradlew -PscalaVersion=2.12 releaseTarGz
 
-### Running a task with all scala versions ###
+### Running a task with all the scala versions enabled by default ###
 
 Append `All` to the task name:
 
@@ -199,6 +199,10 @@ The following options should be set with a `-P` switch, for example `./gradlew -
 * `skipSigning`: skips signing of artifacts.
 * `testLoggingEvents`: unit test events to be logged, separated by comma. For example `./gradlew -PtestLoggingEvents=started,passed,skipped,failed test`.
 * `xmlSpotBugsReport`: enable XML reports for spotBugs. This also disables HTML reports as only one can be enabled at a time.
+
+### Running system tests ###
+
+See [tests/README.md](tests/README.md).
 
 ### Running in Vagrant ###
 

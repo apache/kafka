@@ -208,7 +208,7 @@ public class TaskManager {
                 try {
                     final TaskId id = TaskId.parse(dir.getName());
                     // if the checkpoint file exists, the state is valid.
-                    if (new File(dir, ProcessorStateManager.CHECKPOINT_FILE_NAME).exists()) {
+                    if (new File(dir, StateManagerUtil.CHECKPOINT_FILE_NAME).exists()) {
                         tasks.add(id);
                     }
                 } catch (final TaskIdFormatException e) {
@@ -334,7 +334,7 @@ public class TaskManager {
             log.trace("Resuming partitions {}", assignment);
             consumer.resume(assignment);
             assignStandbyPartitions();
-            return true;
+            return standby.allTasksRunning();
         }
         return false;
     }

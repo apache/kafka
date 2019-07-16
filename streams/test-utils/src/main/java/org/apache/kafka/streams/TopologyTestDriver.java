@@ -32,6 +32,9 @@ import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.common.metrics.stats.Count;
+import org.apache.kafka.common.metrics.stats.Rate;
+import org.apache.kafka.common.metrics.stats.Total;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.Deserializer;
@@ -277,10 +280,21 @@ public class TopologyTestDriver implements Closeable {
             .timeWindow(streamsConfig.getLong(StreamsConfig.METRICS_SAMPLE_WINDOW_MS_CONFIG), TimeUnit.MILLISECONDS);
 
         metrics = new Metrics(metricConfig, mockWallClockTime);
-        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(
-            metrics,
-            "topology-test-driver-virtual-thread"
-        );
+
+        final String threadName = "topology-test-driver-virtual-thread";
+        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, threadName);
+        final Sensor skippedRecordsSensor = streamsMetrics.threadLevelSensor("skipped-records", Sensor.RecordingLevel.INFO);
+        final String threadLevelGroup = "stream-metrics";
+        skippedRecordsSensor.add(new MetricName("skipped-records-rate",
+                                                threadLevelGroup,
+                                                "The average per-second number of skipped records",
+                                                streamsMetrics.tagMap()),
+                                 new Rate(TimeUnit.SECONDS, new Count()));
+        skippedRecordsSensor.add(new MetricName("skipped-records-total",
+                                                threadLevelGroup,
+                                                "The total number of skipped records",
+                                                streamsMetrics.tagMap()),
+                                 new Total());
         final ThreadCache cache = new ThreadCache(
             new LogContext("topology-test-driver "),
             Math.max(0, streamsConfig.getLong(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG)),
@@ -360,8 +374,7 @@ public class TopologyTestDriver implements Closeable {
                 stateDirectory,
                 cache,
                 mockWallClockTime,
-                () -> producer,
-                metrics.sensor("dummy"));
+                () -> producer);
             task.initializeStateStores();
             task.initializeTopology();
             ((InternalProcessorContext) task.context()).setRecordContext(new ProcessorRecordContext(

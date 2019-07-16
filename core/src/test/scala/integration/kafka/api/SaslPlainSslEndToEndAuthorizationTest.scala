@@ -21,6 +21,8 @@ import javax.security.auth.callback._
 import javax.security.auth.Subject
 import javax.security.auth.login.AppConfigurationEntry
 
+import scala.collection.Seq
+
 import kafka.server.KafkaConfig
 import kafka.utils.{TestUtils}
 import kafka.utils.JaasTestUtils._
@@ -107,9 +109,11 @@ class SaslPlainSslEndToEndAuthorizationTest extends SaslEndToEndAuthorizationTes
   this.serverConfig.put(s"$mechanismPrefix${KafkaConfig.SaslServerCallbackHandlerClassProp}", classOf[TestServerCallbackHandler].getName)
   this.producerConfig.put(SaslConfigs.SASL_CLIENT_CALLBACK_HANDLER_CLASS, classOf[TestClientCallbackHandler].getName)
   this.consumerConfig.put(SaslConfigs.SASL_CLIENT_CALLBACK_HANDLER_CLASS, classOf[TestClientCallbackHandler].getName)
+  this.adminClientConfig.put(SaslConfigs.SASL_CLIENT_CALLBACK_HANDLER_CLASS, classOf[TestClientCallbackHandler].getName)
   private val plainLogin = s"org.apache.kafka.common.security.plain.PlainLoginModule username=$KafkaPlainUser required;"
   this.producerConfig.put(SaslConfigs.SASL_JAAS_CONFIG, plainLogin)
   this.consumerConfig.put(SaslConfigs.SASL_JAAS_CONFIG, plainLogin)
+  this.adminClientConfig.put(SaslConfigs.SASL_JAAS_CONFIG, plainLogin)
 
   override protected def kafkaClientSaslMechanism = "PLAIN"
   override protected def kafkaServerSaslMechanisms = List("PLAIN")

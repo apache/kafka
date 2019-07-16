@@ -76,7 +76,9 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
             NM_METHOD_NAMING_CONVENTION: Method names should start with a lower case letter.
             EC_NULL_ARG: Call to equals(null)
             NP_ALWAYS_NULL: Null pointer dereference
-            MS_CANNOT_BE_FINAL: Field isn't final and can't be protected from malicious code -->
+            MS_CANNOT_BE_FINAL: Field isn't final and can't be protected from malicious code
+            IC_INIT_CIRCULARITY: Initialization circularity
+            SE_NO_SUITABLE_CONSTRUCTOR: Class is Serializable but its superclass doesn't define a void constructor -->
         <Source name="~.*\.scala" />
         <Or>
             <Bug pattern="NP_LOAD_OF_KNOWN_NULL_VALUE"/>
@@ -96,12 +98,16 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
             <Bug pattern="EC_NULL_ARG"/>
             <Bug pattern="NP_ALWAYS_NULL"/>
             <Bug pattern="MS_CANNOT_BE_FINAL"/>
+            <Bug pattern="IC_INIT_CIRCULARITY"/>
+            <Bug pattern="SE_NO_SUITABLE_CONSTRUCTOR"/>
         </Or>
     </Match>
 
     <Match>
-        <!-- Add a suppression for the equals() method of NetworkClientBlockingOps. -->
-        <Class name="kafka.utils.NetworkClientBlockingOps"/>
+        <!-- Suppression for the equals() for extensiom methods. -->
+        <Or>
+            <Class name="kafka.api.package$ElectLeadersRequestOps"/>
+        </Or>
         <Bug pattern="EQ_UNUSUAL"/>
     </Match>
 
@@ -331,5 +337,12 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
     </Match>
 
     <!-- END Suppress warnings for unused members that are undetectably used by Jackson -->
+
+    <Match>
+        <!-- Suppress a warning about ignoring return value because this is intentional. -->
+        <Class name="org.apache.kafka.common.config.AbstractConfig$ResolvingMap"/>
+        <Method name="get"/>
+        <Bug pattern="RV_RETURN_VALUE_IGNORED_NO_SIDE_EFFECT"/>
+    </Match>
 
 </FindBugsFilter>

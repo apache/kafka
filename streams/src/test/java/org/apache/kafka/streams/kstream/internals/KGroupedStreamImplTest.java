@@ -575,7 +575,7 @@ public class KGroupedStreamImplTest {
             driver.pipeInput(recordFactory.create(TOPIC, "2", "B", 500L));
             driver.pipeInput(recordFactory.create(TOPIC, "3", "B", 100L));
         }
-        assertThat(supplier.theCapturedProcessor().processedWithTimestamps, equalTo(Arrays.asList(
+        assertThat(supplier.theCapturedProcessor().processed, equalTo(Arrays.asList(
             new KeyValueTimestamp<>(new Windowed<>("1", new TimeWindow(0L, 500L)), 1L, 0L),
             new KeyValueTimestamp<>(new Windowed<>("1", new TimeWindow(0L, 500L)), 2L, 499L),
             new KeyValueTimestamp<>(new Windowed<>("1", new TimeWindow(0L, 500L)), 3L, 499L),
