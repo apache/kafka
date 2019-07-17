@@ -443,7 +443,7 @@ object TopicCommand extends Logging {
     // If no topic name was mentioned, do not need to throw exception.
     if (requestedTopic.isDefined && requireTopicExists && foundTopics.isEmpty) {
       // If given topic doesn't exist then throw exception
-      throw new IllegalArgumentException(s"Topics in [${foundTopics.mkString(",")}] does not exist")
+      throw new IllegalArgumentException(s"Topic '${requestedTopic.get}' does not exist as expected")
     }
   }
 
