@@ -21,22 +21,18 @@ import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.ConsumerGroupDescription;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
-import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.internals.Topic;
-import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.LongDeserializer;
 import org.apache.kafka.common.serialization.LongSerializer;
 import org.apache.kafka.common.serialization.Serdes;
-import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.KeyValueTimestamp;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.Topology;
@@ -45,9 +41,6 @@ import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.streams.kstream.TimeWindows;
-import org.apache.kafka.streams.kstream.Windowed;
-import org.apache.kafka.streams.processor.TimestampExtractor;
-
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestUtils;
@@ -68,14 +61,10 @@ import java.util.Calendar;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Properties;
 import java.util.concurrent.ExecutionException;
 
 import static java.time.Duration.ofMillis;
-import static org.apache.kafka.common.utils.Utils.mkEntry;
-import static org.apache.kafka.common.utils.Utils.mkMap;
-import static org.apache.kafka.common.utils.Utils.mkProperties;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
 
@@ -87,10 +76,6 @@ public abstract class AbstractResetIntegrationTest {
     private static MockTime mockTime;
     private static KafkaStreams streams;
     private static AdminClient adminClient = null;
-    private static final StringSerializer STRING_SERIALIZER = new StringSerializer();
-    private static final StringDeserializer STRING_DESERIALIZER = new StringDeserializer();
-    private static final LongDeserializer LONG_DESERIALIZER = new LongDeserializer();
-
 
     abstract Map<String, Object> getClientSslConfig();
 
@@ -103,19 +88,10 @@ public abstract class AbstractResetIntegrationTest {
     }
 
     private String appID = "abstract-reset-integration-test";
-    private Long recordedTimestamp = 0L;
     private Properties commonClientConfig;
     private Properties streamsConfig;
     private Properties producerConfig;
     private Properties resultConsumerConfig;
-
-    private class MaxTimestampExtractor implements TimestampExtractor {
-        @Override
-        public long extract(ConsumerRecord<Object, Object> record, long maxTimestamp) {
-            recordedTimestamp = maxTimestamp;
-            return maxTimestamp;
-        }
-    }
 
     private void prepareEnvironment() {
         if (adminClient == null) {
@@ -169,7 +145,6 @@ public abstract class AbstractResetIntegrationTest {
         resultConsumerConfig.putAll(commonClientConfig);
 
         streamsConfig = new Properties();
-        streamsConfig.put(StreamsConfig.DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG, MaxTimestampExtractor.class);
         streamsConfig.put(StreamsConfig.STATE_DIR_CONFIG, testFolder.getRoot().getPath());
         streamsConfig.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.Long().getClass());
         streamsConfig.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
@@ -436,40 +411,6 @@ public abstract class AbstractResetIntegrationTest {
         TestUtils.waitForCondition(new ConsumerGroupInactiveCondition(), TIMEOUT_MULTIPLIER * CLEANUP_CONSUMER_TIMEOUT,
                 "Reset Tool consumer group " + appID + " did not time out after " + (TIMEOUT_MULTIPLIER * CLEANUP_CONSUMER_TIMEOUT) + " ms.");
         cleanGlobal(false, null, null);
-    }
-
-    void testPartitionTimeAfterResetWithoutIntermediateUserTopic() throws Exception {
-        appID = testId + "-from-file";
-        streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, appID);
-
-        // RUN
-        streams = new KafkaStreams(setupTopologyWithoutIntermediateUserTopic(), streamsConfig);
-        streams.start();
-        final KeyValueTimestamp<String, String> initOffset = new KeyValueTimestamp<>("k1", "v1", 1000);
-        final List<KeyValueTimestamp<String, String>> listOffsets = (List<KeyValueTimestamp<String, String>>) Collections.singleton(initOffset);
-        produceSynchronouslyToPartitionZero(listOffsets);
-    }
-
-    private static void produceSynchronouslyToPartitionZero(final List<KeyValueTimestamp<String, String>> toProduce) {
-        final Properties producerConfig = mkProperties(mkMap(
-            mkEntry(ProducerConfig.CLIENT_ID_CONFIG, "anything"),
-            mkEntry(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, ((Serializer<String>) STRING_SERIALIZER).getClass().getName()),
-            mkEntry(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, ((Serializer<String>) STRING_SERIALIZER).getClass().getName()),
-            mkEntry(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, cluster.bootstrapServers())
-        ));
-        IntegrationTestUtils.produceSynchronously(producerConfig, false, INPUT_TOPIC, Optional.of(0), toProduce);
-    }
-
-    private void verifyOutput(final String topic, final List<KeyValueTimestamp<String, Long>> keyValueTimestamps) {
-        final Properties properties = mkProperties(
-            mkMap(
-                mkEntry(ConsumerConfig.GROUP_ID_CONFIG, "test-group"),
-                mkEntry(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, cluster.bootstrapServers()),
-                mkEntry(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, ((Deserializer<String>) STRING_DESERIALIZER).getClass().getName()),
-                mkEntry(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ((Deserializer<Long>) LONG_DESERIALIZER).getClass().getName())
-            )
-        );
-        IntegrationTestUtils.verifyKeyValueTimestamps(properties, topic, keyValueTimestamps);
     }
 
     void testReprocessingFromDateTimeAfterResetWithoutIntermediateUserTopic() throws Exception {
