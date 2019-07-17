@@ -245,8 +245,8 @@ class AdminManager(val config: KafkaConfig,
         if (reassignPartitionsInProgress)
           throw new ReassignmentInProgressException("A partition reassignment is in progress.")
 
-        val existingAssignment = zkClient.getReplicaAssignmentForTopics(immutable.Set(topic)).map {
-          case (topicPartition, replicas) => topicPartition.partition -> replicas
+        val existingAssignment = zkClient.getFullReplicaAssignmentForTopics(immutable.Set(topic)).map {
+          case (topicPartition, assignment) => topicPartition.partition -> assignment
         }
         if (existingAssignment.isEmpty)
           throw new UnknownTopicOrPartitionException(s"The topic '$topic' does not exist.")
@@ -261,7 +261,7 @@ class AdminManager(val config: KafkaConfig,
           throw new InvalidPartitionsException(s"Topic already has $oldNumPartitions partitions.")
         }
 
-        val reassignment = Option(newPartition.newAssignments).map(_.asScala.map(_.asScala.map(_.toInt))).map { assignments =>
+        val newPartitionsAssignment = Option(newPartition.newAssignments).map(_.asScala.map(_.asScala.map(_.toInt))).map { assignments =>
           val unknownBrokers = assignments.flatten.toSet -- allBrokerIds
           if (unknownBrokers.nonEmpty)
             throw new InvalidReplicaAssignmentException(
@@ -278,7 +278,7 @@ class AdminManager(val config: KafkaConfig,
         }
 
         val updatedReplicaAssignment = adminZkClient.addPartitions(topic, existingAssignment, allBrokers,
-          newPartition.totalCount, reassignment, validateOnly = validateOnly)
+          newPartition.totalCount, newPartitionsAssignment, validateOnly = validateOnly)
         CreatePartitionsMetadata(topic, updatedReplicaAssignment, ApiError.NONE)
       } catch {
         case e: AdminOperationException =>
