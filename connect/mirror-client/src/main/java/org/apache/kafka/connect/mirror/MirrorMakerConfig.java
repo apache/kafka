@@ -151,36 +151,18 @@ public class MirrorMakerConfig extends AbstractConfig {
     Map<String, String> workerConfig(SourceAndTarget sourceAndTarget) {
         Map<String, String> props = clusterProps(sourceAndTarget.target());
 
-        if (props.get(GROUP_ID_CONFIG) == null) {
-            props.put(GROUP_ID_CONFIG, sourceAndTarget.source() + "-mm2");
-        }
-        if (props.get(OFFSET_STORAGE_TOPIC_CONFIG) == null) {
-            props.put(OFFSET_STORAGE_TOPIC_CONFIG, "mm2-offsets."
+        props.putIfAbsent(GROUP_ID_CONFIG, sourceAndTarget.source() + "-mm2");
+        props.putIfAbsent(OFFSET_STORAGE_TOPIC_CONFIG, "mm2-offsets."
                 + sourceAndTarget.source() + ".internal");
-        }
-        if (props.get(STATUS_STORAGE_TOPIC_CONFIG) == null) {
-            props.put(STATUS_STORAGE_TOPIC_CONFIG, "mm2-status."
+        props.putIfAbsent(STATUS_STORAGE_TOPIC_CONFIG, "mm2-status."
                 + sourceAndTarget.source() + ".internal");
-        }
-        if (props.get(CONFIG_TOPIC_CONFIG) == null) {
-            props.put(CONFIG_TOPIC_CONFIG, "mm2-configs."
+        props.putIfAbsent(CONFIG_TOPIC_CONFIG, "mm2-configs."
                 + sourceAndTarget.source() + ".internal");
-        }
-        if (props.get(SOURCE_CLUSTER_ALIAS) == null) {
-            props.put(SOURCE_CLUSTER_ALIAS, sourceAndTarget.source());
-        }
-        if (props.get(TARGET_CLUSTER_ALIAS) == null) {
-            props.put(TARGET_CLUSTER_ALIAS, sourceAndTarget.target());
-        }
-        if (!props.containsKey(KEY_CONVERTER_CLASS_CONFIG)) {
-            props.put(KEY_CONVERTER_CLASS_CONFIG, BYTE_ARRAY_CONVERTER_CLASS); 
-        }
-        if (!props.containsKey(VALUE_CONVERTER_CLASS_CONFIG)) {
-            props.put(VALUE_CONVERTER_CLASS_CONFIG, BYTE_ARRAY_CONVERTER_CLASS); 
-        }
-        if (!props.containsKey(HEADER_CONVERTER_CLASS_CONFIG)) {
-            props.put(HEADER_CONVERTER_CLASS_CONFIG, BYTE_ARRAY_CONVERTER_CLASS);
-        }
+        props.putIfAbsent(SOURCE_CLUSTER_ALIAS, sourceAndTarget.source());
+        props.putIfAbsent(TARGET_CLUSTER_ALIAS, sourceAndTarget.target());
+        props.putIfAbsent(KEY_CONVERTER_CLASS_CONFIG, BYTE_ARRAY_CONVERTER_CLASS); 
+        props.putIfAbsent(VALUE_CONVERTER_CLASS_CONFIG, BYTE_ARRAY_CONVERTER_CLASS); 
+        props.putIfAbsent(HEADER_CONVERTER_CLASS_CONFIG, BYTE_ARRAY_CONVERTER_CLASS);
 
         return props;
     }
@@ -194,18 +176,10 @@ public class MirrorMakerConfig extends AbstractConfig {
         props.putAll(withPrefix(SOURCE_CLUSTER_PREFIX, clusterProps(sourceAndTarget.source())));
         props.putAll(withPrefix(TARGET_CLUSTER_PREFIX, clusterProps(sourceAndTarget.target())));
 
-        if (props.get(NAME) == null) {
-            props.put(NAME, connectorClass.getSimpleName());
-        }
-        if (props.get(CONNECTOR_CLASS) == null) {
-            props.put(CONNECTOR_CLASS, connectorClass.getName());
-        }
-        if (props.get(SOURCE_CLUSTER_ALIAS) == null) {
-            props.put(SOURCE_CLUSTER_ALIAS, sourceAndTarget.source());
-        }
-        if (props.get(TARGET_CLUSTER_ALIAS) == null) {
-            props.put(TARGET_CLUSTER_ALIAS, sourceAndTarget.target());
-        }
+        props.putIfAbsent(NAME, connectorClass.getSimpleName());
+        props.putIfAbsent(CONNECTOR_CLASS, connectorClass.getName());
+        props.putIfAbsent(SOURCE_CLUSTER_ALIAS, sourceAndTarget.source());
+        props.putIfAbsent(TARGET_CLUSTER_ALIAS, sourceAndTarget.target());
 
         // override with connector-level properties
         props.putAll(toStrings(originalsWithPrefix(sourceAndTarget.source() + "->"
