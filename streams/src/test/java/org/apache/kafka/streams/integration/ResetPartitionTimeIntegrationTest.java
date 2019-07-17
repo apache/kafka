@@ -59,7 +59,6 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.KeyValueTimestamp;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.integration.SuppressionDurabilityIntegrationTest.MetadataValidator;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.Consumed;
@@ -176,13 +175,12 @@ public class ResetPartitionTimeIntegrationTest {
             );
             assertThat(lastRecordedTimestamp, is(5000));
 
-            // restart the driver
+            // restart && reset the driver
             driver.close();
             assertThat(driver.state(), is(KafkaStreams.State.NOT_RUNNING));
+            // still need to reset the driver
             driver = getStartedStreams(streamsConfig, builder, false);
 
-
-            // flush those recovered buffered events out.
             produceSynchronouslyToPartitionZero(
                 input,
                 asList(
@@ -199,17 +197,7 @@ public class ResetPartitionTimeIntegrationTest {
                     new KeyValueTimestamp<>("k8", 1L, 800)
                 )
             );
-            assertThat("suppress has apparently produced some duplicates. There should only be 5 output events.",
-                       eventCount.get(), is(5));
-
-            verifyOutput(
-                outputSuppressed,
-                asList(
-                    new KeyValueTimestamp<>("k3", 1L, scaledTime(3L)),
-                    new KeyValueTimestamp<>("k4", 1L, scaledTime(4L)),
-                    new KeyValueTimestamp<>("k5", 1L, scaledTime(5L))
-                )
-            );
+            assertThat(lastRecordedTimestamp, is(5000));
 
             metadataValidator.raiseExceptionIfAny();
 
@@ -284,8 +272,8 @@ public class ResetPartitionTimeIntegrationTest {
         IntegrationTestUtils.verifyKeyValueTimestamps(properties, topic, keyValueTimestamps);
     }
 
-    private void resetStreams(KafkaStreams driver) {
-    	final String[] parameters = parameterList.toArray(new String[0]);
+    private void resetStreams(KafkaStreams driver, final List<String> parameterList) {
+        final String[] parameters = parameterList.toArray(new String[0]);
 
         final Properties cleanUpConfig = new Properties();
         cleanUpConfig.put(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, 100);
