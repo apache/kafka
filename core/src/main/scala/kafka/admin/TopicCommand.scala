@@ -354,8 +354,8 @@ object TopicCommand extends Logging {
 
     override def describeTopic(opts: TopicCommandOptions): Unit = {
       val topics = getTopics(opts.topic, opts.excludeInternalTopics)
-      val topicOptWithExits = opts.topic.isDefined && opts.ifExists
-      ensureTopicExists(topics, opts.topic, topicOptWithExits)
+      val requireTopicExists = opts.topic.isDefined && opts.ifExists
+      ensureTopicExists(topics, opts.topic, requireTopicExists)
       val liveBrokers = zkClient.getAllBrokersInCluster.map(_.id).toSet
       val describeOptions = new DescribeOptions(opts, liveBrokers)
       val adminZkClient = new AdminZkClient(zkClient)
@@ -433,17 +433,15 @@ object TopicCommand extends Logging {
   /**
     * ensures topic existence and throws exception if topic doesn't exist
     *
-    * @param opts
-    * @param topics
-    * @param topicOptWithExists
+    * @param foundTopics Topics that were found to match the requested topic name.
+    * @param requestedTopic Name of the topic that was requested.
+    * @param requireTopicExists Boolean flag indicating if the topic needs to exist for the operation to be successful.
     */
-  private def ensureTopicExists(topics: Seq[String], desiredTopicName: Option[String], topicOptWithExists: Boolean = false) = {
+  private def ensureTopicExists(foundTopics: Seq[String], requestedTopic: Option[String], requireTopicExists: Boolean = false) = {
     // If no topic name was mentioned, do not need to throw exception.
-    if (desiredTopicName.isDefined && topics.isEmpty && !topicOptWithExists) {
+    if (requestedTopic.isDefined && foundTopics.isEmpty && !requireTopicExists) {
       // If given topic doesn't exist then throw exception
-      if (desiredTopicName.isDefined) {
-        throw new IllegalArgumentException(s"Topics in [${topics.mkString(",")}] does not exist")
-      }
+      throw new IllegalArgumentException(s"Topics in [${foundTopics.mkString(",")}] does not exist")
     }
   }
 
