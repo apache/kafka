@@ -652,7 +652,7 @@ public class Sender implements Runnable {
             } else {
                 final RuntimeException exception;
                 if (error == Errors.TOPIC_AUTHORIZATION_FAILED)
-                    exception = new TopicAuthorizationException(batch.topicPartition.topic());
+                    exception = new TopicAuthorizationException(Collections.singleton(batch.topicPartition.topic()));
                 else if (error == Errors.CLUSTER_AUTHORIZATION_FAILED)
                     exception = new ClusterAuthorizationException("The producer is not authorized to do idempotent sends");
                 else

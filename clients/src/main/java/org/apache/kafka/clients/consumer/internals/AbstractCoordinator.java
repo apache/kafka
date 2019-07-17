@@ -541,9 +541,10 @@ public abstract class AbstractCoordinator implements Closeable {
                 // log the error and re-throw the exception
                 log.error("Attempt to join group failed due to fatal error: {}", error.message());
                 if (error == Errors.GROUP_MAX_SIZE_REACHED) {
-                    future.raise(new GroupMaxSizeReachedException(rebalanceConfig.groupId));
+                    future.raise(new GroupMaxSizeReachedException("Consumer group " + rebalanceConfig.groupId +
+                            " already has the configured maximum number of members."));
                 } else if (error == Errors.GROUP_AUTHORIZATION_FAILED) {
-                    future.raise(new GroupAuthorizationException(rebalanceConfig.groupId));
+                    future.raise(GroupAuthorizationException.forGroupId(rebalanceConfig.groupId));
                 } else {
                     future.raise(error);
                 }
@@ -633,7 +634,7 @@ public abstract class AbstractCoordinator implements Closeable {
                 requestRejoin();
 
                 if (error == Errors.GROUP_AUTHORIZATION_FAILED) {
-                    future.raise(new GroupAuthorizationException(rebalanceConfig.groupId));
+                    future.raise(GroupAuthorizationException.forGroupId(rebalanceConfig.groupId));
                 } else if (error == Errors.REBALANCE_IN_PROGRESS) {
                     log.debug("SyncGroup failed because the group began another rebalance");
                     future.raise(error);
@@ -699,7 +700,7 @@ public abstract class AbstractCoordinator implements Closeable {
                 }
                 future.complete(null);
             } else if (error == Errors.GROUP_AUTHORIZATION_FAILED) {
-                future.raise(new GroupAuthorizationException(rebalanceConfig.groupId));
+                future.raise(GroupAuthorizationException.forGroupId(rebalanceConfig.groupId));
             } else {
                 log.debug("Group coordinator lookup failed: {}", findCoordinatorResponse.data().errorMessage());
                 future.raise(error);
@@ -923,7 +924,7 @@ public abstract class AbstractCoordinator implements Closeable {
                 resetGeneration();
                 future.raise(error);
             } else if (error == Errors.GROUP_AUTHORIZATION_FAILED) {
-                future.raise(new GroupAuthorizationException(rebalanceConfig.groupId));
+                future.raise(GroupAuthorizationException.forGroupId(rebalanceConfig.groupId));
             } else {
                 future.raise(new KafkaException("Unexpected error in heartbeat response: " + error.message()));
             }

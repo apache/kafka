@@ -995,7 +995,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                         }
 
                         if (error == Errors.GROUP_AUTHORIZATION_FAILED) {
-                            future.raise(new GroupAuthorizationException(rebalanceConfig.groupId));
+                            future.raise(GroupAuthorizationException.forGroupId(rebalanceConfig.groupId));
                             return;
                         } else if (error == Errors.TOPIC_AUTHORIZATION_FAILED) {
                             unauthorizedTopics.add(tp.topic());
@@ -1090,7 +1090,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                     markCoordinatorUnknown();
                     future.raise(error);
                 } else if (error == Errors.GROUP_AUTHORIZATION_FAILED) {
-                    future.raise(new GroupAuthorizationException(rebalanceConfig.groupId));
+                    future.raise(GroupAuthorizationException.forGroupId(rebalanceConfig.groupId));
                 } else {
                     future.raise(new KafkaException("Unexpected error in fetch offset response: " + error.message()));
                 }
