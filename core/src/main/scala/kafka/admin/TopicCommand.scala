@@ -354,8 +354,8 @@ object TopicCommand extends Logging {
 
     override def describeTopic(opts: TopicCommandOptions): Unit = {
       val topics = getTopics(opts.topic, opts.excludeInternalTopics)
-      val requireTopicExists = opts.topic.isDefined && opts.ifExists
-      ensureTopicExists(topics, opts.topic, requireTopicExists)
+      val skipIfTopicDoesNotExist = opts.topic.isDefined && opts.ifExists
+      ensureTopicExists(topics, opts.topic, skipIfTopicDoesNotExist)
       val liveBrokers = zkClient.getAllBrokersInCluster.map(_.id).toSet
       val describeOptions = new DescribeOptions(opts, liveBrokers)
       val adminZkClient = new AdminZkClient(zkClient)
@@ -435,11 +435,14 @@ object TopicCommand extends Logging {
     *
     * @param foundTopics Topics that were found to match the requested topic name.
     * @param requestedTopic Name of the topic that was requested.
-    * @param requireTopicExists Boolean flag indicating if the topic needs to exist for the operation to be successful.
+    * @param skipIfTopicDoesNotExist Indiciates if the command should skip execution
+    *                           if a topic with the requested name does not exist. If it is
+    *                           set to true, and the requested topic does not exist, the
+    *                           command should not throw an exception, but quiety return.
     */
-  private def ensureTopicExists(foundTopics: Seq[String], requestedTopic: Option[String], requireTopicExists: Boolean = false) = {
+  private def ensureTopicExists(foundTopics: Seq[String], requestedTopic: Option[String], skipIfTopicDoesNotExist: Boolean = false) = {
     // If no topic name was mentioned, do not need to throw exception.
-    if (requestedTopic.isDefined && foundTopics.isEmpty && !requireTopicExists) {
+    if (requestedTopic.isDefined && foundTopics.isEmpty && !skipIfTopicDoesNotExist) {
       // If given topic doesn't exist then throw exception
       throw new IllegalArgumentException(s"Topics in [${foundTopics.mkString(",")}] does not exist")
     }
