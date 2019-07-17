@@ -152,11 +152,11 @@ class BrokerTopicMetrics(name: Option[String]) extends KafkaMetricsGroup {
   def messagesInRate = metricTypeMap.getAndMaybePut(BrokerTopicStats.MessagesInPerSec,
     newMeter(BrokerTopicStats.MessagesInPerSec, "messages", TimeUnit.SECONDS, tags))
   def bytesInRate = metricTypeMap.getAndMaybePut(BrokerTopicStats.BytesInPerSec,
-    newMeter(BrokerTopicStats.BytesInPerSec, "bytes", TimeUnit.SECONDS, tags)
+    newMeter(BrokerTopicStats.BytesInPerSec, "bytes", TimeUnit.SECONDS, tags))
   def bytesOutRate = metricTypeMap.getAndMaybePut(BrokerTopicStats.BytesOutPerSec,
     newMeter(BrokerTopicStats.BytesOutPerSec, "bytes", TimeUnit.SECONDS, tags))
   def bytesRejectedRate = metricTypeMap.getAndMaybePut(BrokerTopicStats.BytesRejectedPerSec,
-    newMeter(BrokerTopicStats.BytesRejectedPerSec, "bytes", TimeUnit.SECONDS, tags)
+    newMeter(BrokerTopicStats.BytesRejectedPerSec, "bytes", TimeUnit.SECONDS, tags))
   private[server] def replicationBytesInRate =
     if (name.isEmpty) Some(metricTypeMap.getAndMaybePut(
       BrokerTopicStats.ReplicationBytesInPerSec,
@@ -176,7 +176,7 @@ class BrokerTopicMetrics(name: Option[String]) extends KafkaMetricsGroup {
   def totalFetchRequestRate = metricTypeMap.getAndMaybePut(BrokerTopicStats.TotalFetchRequestsPerSec,
     newMeter(BrokerTopicStats.TotalFetchRequestsPerSec, "requests", TimeUnit.SECONDS, tags))
   def fetchMessageConversionsRate = metricTypeMap.getAndMaybePut(BrokerTopicStats.FetchMessageConversionsPerSec,
-    newMeter(BrokerTopicStats.FetchMessageConversionsPerSec, "requests", TimeUnit.SECONDS, tags)
+    newMeter(BrokerTopicStats.FetchMessageConversionsPerSec, "requests", TimeUnit.SECONDS, tags))
   def produceMessageConversionsRate = metricTypeMap.getAndMaybePut(BrokerTopicStats.ProduceMessageConversionsPerSec,
     newMeter(BrokerTopicStats.ProduceMessageConversionsPerSec, "requests", TimeUnit.SECONDS, tags))
 
