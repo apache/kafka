@@ -18,7 +18,6 @@ package org.apache.kafka.streams.tests;
 
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.ConsumerGroupDescription;
-import org.apache.kafka.clients.admin.KafkaAdminClient;
 import org.apache.kafka.clients.admin.ListConsumerGroupOffsetsResult;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -146,7 +145,7 @@ public class EosTestDriver extends SmokeTestUtil {
         props.put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, IsolationLevel.READ_COMMITTED.toString().toLowerCase(Locale.ROOT));
 
         final Map<TopicPartition, Long> committedOffsets;
-        try (final Admin adminClient = KafkaAdminClient.create(props)) {
+        try (final Admin adminClient = Admin.create(props)) {
             ensureStreamsApplicationDown(adminClient);
 
             committedOffsets = getCommittedOffsets(adminClient, withRepartitioning);
