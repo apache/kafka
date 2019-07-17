@@ -812,7 +812,8 @@ class KafkaController(val config: KafkaConfig,
   private def updateAssignedReplicasForPartition(partition: TopicPartition,
                                                  replicas: Seq[Int]) {
     controllerContext.updatePartitionReplicaAssignment(partition, replicas)
-    val setDataResponse = zkClient.setTopicAssignmentRaw(partition.topic, controllerContext.partitionReplicaAssignmentForTopic(partition.topic), controllerContext.epochZkVersion)
+    val newReas = controllerContext.partitionReplicaAssignmentForTopic(partition.topic).mapValues { case (v) => PartitionReplicaAssignment(v, List(), List()) }.toMap
+    val setDataResponse = zkClient.setTopicAssignmentRaw(partition.topic, newReas, controllerContext.epochZkVersion)
     setDataResponse.resultCode match {
       case Code.OK =>
         info(s"Updated assigned replicas for partition $partition being reassigned to ${replicas.mkString(",")}")
@@ -1365,7 +1366,7 @@ class KafkaController(val config: KafkaConfig,
       val existingPartitionReplicaAssignment = newPartitionReplicaAssignment.filter(p =>
         existingPartitions.contains(p._1.partition.toString))
 
-      zkClient.setTopicAssignment(topic, existingPartitionReplicaAssignment, controllerContext.epochZkVersion)
+      zkClient.setTopicAssignment(topic, existingPartitionReplicaAssignment.mapValues { case (v) => PartitionReplicaAssignment(v, List(), List()) }.toMap, controllerContext.epochZkVersion)
     }
 
     if (!isActive) return

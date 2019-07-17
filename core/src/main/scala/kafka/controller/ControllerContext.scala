@@ -22,6 +22,8 @@ import org.apache.kafka.common.TopicPartition
 
 import scala.collection.{Map, Seq, Set, mutable}
 
+case class PartitionReplicaAssignment(replicas: Seq[Int], addingReplicas: Seq[Int], removingReplicas: Seq[Int])
+
 class ControllerContext {
   val stats = new ControllerStats
   var offlinePartitionCount = 0

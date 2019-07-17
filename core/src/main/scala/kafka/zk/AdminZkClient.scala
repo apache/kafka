@@ -20,6 +20,7 @@ import java.util.Properties
 
 import kafka.admin.{AdminOperationException, AdminUtils, BrokerMetadata, RackAwareMode}
 import kafka.common.TopicAlreadyMarkedForDeletionException
+import kafka.controller.PartitionReplicaAssignment
 import kafka.log.LogConfig
 import kafka.server.{ConfigEntityName, ConfigType, DynamicConfig}
 import kafka.utils._
@@ -141,7 +142,8 @@ class AdminZkClient(zkClient: KafkaZkClient) extends Logging {
       if (!isUpdate) {
         zkClient.createTopicAssignment(topic, assignment)
       } else {
-        zkClient.setTopicAssignment(topic, assignment)
+        val persistedAssignments = assignment.mapValues { case (v) => PartitionReplicaAssignment(v, List(), List()) }.toMap
+        zkClient.setTopicAssignment(topic, persistedAssignments)
       }
       debug("Updated path %s with %s for replica assignment".format(TopicZNode.path(topic), assignment))
     } catch {
