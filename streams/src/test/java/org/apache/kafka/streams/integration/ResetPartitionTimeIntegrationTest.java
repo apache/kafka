@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.streams.integration;
 
-import static java.lang.Long.MAX_VALUE;
-import static java.time.Duration.ofMillis;
 import static java.util.Arrays.asList;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
@@ -27,20 +25,17 @@ import static org.apache.kafka.streams.StreamsConfig.EXACTLY_ONCE;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.cleanStateAfterTest;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.cleanStateBeforeTest;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.getStartedStreams;
-import static org.apache.kafka.streams.kstream.Suppressed.untilTimeLimit;
-import static org.apache.kafka.streams.kstream.Suppressed.BufferConfig.maxRecords;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.equalTo;
 
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 import java.util.Properties;
-import java.util.Set;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
 import org.apache.kafka.clients.consumer.ConsumerConfig;
@@ -63,7 +58,6 @@ import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.KStream;
-import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.streams.kstream.Transformer;
@@ -117,7 +111,7 @@ public class ResetPartitionTimeIntegrationTest {
 
     @Test
     public void testPartitionTimeAfterKStreamReset() {
-    	final String testId = "-shouldRecoverPartitionTimeAfterReset";
+        final String testId = "-shouldRecoverPartitionTimeAfterReset";
         final String appId = getClass().getSimpleName().toLowerCase(Locale.getDefault()) + testId;
         final String input = "input" + testId;
         final String storeName = "counts";
@@ -143,20 +137,19 @@ public class ResetPartitionTimeIntegrationTest {
             .transform(metadataValidator)
             .to(outputRaw, Produced.with(STRING_SERDE, Serdes.Long()));
 
-        final Properties streamsConfig = mkProperties(mkMap(
-            mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, appId),
-            mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers()),
-            mkEntry(StreamsConfig.POLL_MS_CONFIG, Integer.toString(DEFAULT_TIMEOUT)),
-            mkEntry(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, Integer.toString(DEFAULT_TIMEOUT)),
-            mkEntry(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, eosEnabled ? EXACTLY_ONCE : AT_LEAST_ONCE),
-            mkEntry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath())
-        ));
+        final Properties streamsConfig = new Properties();
+        streamsConfig.put(StreamsConfig.DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG, MaxTimestampExtractor.class);
+        streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, appId);
+        streamsConfig.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
+        streamsConfig.put(StreamsConfig.POLL_MS_CONFIG, Integer.toString(DEFAULT_TIMEOUT));
+        streamsConfig.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, Integer.toString(DEFAULT_TIMEOUT));
+        streamsConfig.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, eosEnabled ? EXACTLY_ONCE : AT_LEAST_ONCE);
+        streamsConfig.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
+        
 
         KafkaStreams driver = getStartedStreams(streamsConfig, builder, true);
         try {
-            // start by putting some stuff in the buffer
-            // note, we send all input records to partition 0
-            // to make sure that supppress doesn't erroneously send records to other partitions.
+            // start sending some records to have partition time committed 
             produceSynchronouslyToPartitionZero(
                 input,
                 asList(
@@ -174,29 +167,39 @@ public class ResetPartitionTimeIntegrationTest {
                 )
             );
             assertThat(lastRecordedTimestamp, is(5000));
+            lastRecordedTimestamp = -1L;
 
             // restart && reset the driver
             driver.close();
             assertThat(driver.state(), is(KafkaStreams.State.NOT_RUNNING));
-            // still need to reset the driver
-            driver = getStartedStreams(streamsConfig, builder, false);
+            final List<String> parameterList = new ArrayList<>(
+                    Arrays.asList("--application-id", appId,
+                            "--bootstrap-servers", CLUSTER.bootstrapServers(),
+                            "--input-topics", input,
+                            "--execute"));
+            driver = new KafkaStreams(builder.build(), streamsConfig);
+            driver.cleanUp();
+            resetStreams(driver, parameterList);
+            driver.start();
 
+            // resend some records and retrieve the last committed timestamp
             produceSynchronouslyToPartitionZero(
                 input,
                 asList(
-                    new KeyValueTimestamp<>("k6", "v6", 600),
-                    new KeyValueTimestamp<>("k7", "v7", 700),
-                    new KeyValueTimestamp<>("k8", "v8", 800)
+                    new KeyValueTimestamp<>("k6", "v6", 4990),
+                    new KeyValueTimestamp<>("k7", "v7", 4995),
+                    new KeyValueTimestamp<>("k8", "v8", 4999)
                 )
             );
             verifyOutput(
                 outputRaw,
                 asList(
-                    new KeyValueTimestamp<>("k6", 1L, 600),
-                    new KeyValueTimestamp<>("k7", 1L, 700),
-                    new KeyValueTimestamp<>("k8", 1L, 800)
+                    new KeyValueTimestamp<>("k6", 1L, 4990),
+                    new KeyValueTimestamp<>("k7", 1L, 4995),
+                    new KeyValueTimestamp<>("k8", 1L, 4999)
                 )
             );
+            // verify that the lastRecordedTimestamp is 5000
             assertThat(lastRecordedTimestamp, is(5000));
 
             metadataValidator.raiseExceptionIfAny();
@@ -209,8 +212,8 @@ public class ResetPartitionTimeIntegrationTest {
 
     private final class MaxTimestampExtractor implements TimestampExtractor {
         @Override
-        public long extract(ConsumerRecord<Object, Object> record, long maxTimestamp) {
-             lastRecordedTimestamp = maxTimestamp;
+        public long extract(final ConsumerRecord<Object, Object> record, final long maxTimestamp) {
+            lastRecordedTimestamp = maxTimestamp;
             return maxTimestamp;
         }
     }
@@ -272,7 +275,7 @@ public class ResetPartitionTimeIntegrationTest {
         IntegrationTestUtils.verifyKeyValueTimestamps(properties, topic, keyValueTimestamps);
     }
 
-    private void resetStreams(KafkaStreams driver, final List<String> parameterList) {
+    private void resetStreams(final KafkaStreams driver, final List<String> parameterList) {
         final String[] parameters = parameterList.toArray(new String[0]);
 
         final Properties cleanUpConfig = new Properties();
