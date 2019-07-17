@@ -41,7 +41,7 @@ public class MirrorConnectorConfig extends AbstractConfig {
     protected static final String SYNC_TOPIC_ACLS = "sync.topic.acls";
     protected static final String EMIT_HEARTBEATS = "emit.heartbeats";
     protected static final String EMIT_CHECKPOINTS = "emit.checkpoints";
-    
+
     public static final String ENABLED = "enabled";
     private static final String ENABLED_DOC = "Whether to replicate source->target.";
     public static final String SOURCE_CLUSTER_ALIAS = "source.cluster.alias";
@@ -55,10 +55,14 @@ public class MirrorConnectorConfig extends AbstractConfig {
     public static final String REPLICATION_POLICY_SEPARATOR = MirrorClientConfig.REPLICATION_POLICY_SEPARATOR;
     private static final String REPLICATION_POLICY_SEPARATOR_DOC = "Separator used in remote topic naming convention.";
     public static final String REPLICATION_POLICY_SEPARATOR_DEFAULT =
-        MirrorClientConfig.REPLICATION_POLICY_SEPARATOR_DEFAULT;
+            MirrorClientConfig.REPLICATION_POLICY_SEPARATOR_DEFAULT;
     public static final String REPLICATION_FACTOR = "replication.factor";
     private static final String REPLICATION_FACTOR_DOC = "Replication factor for newly created remote topics.";
     public static final int REPLICATION_FACTOR_DEFAULT = 2;
+
+    public static final String INTERNAL_TOPIC_REPLICATION_FACTOR = "internal.topic.replication.factor";
+    public static final String INTERNAL_TOPIC_REPLICATION_FACTOR_DOC = "Replication factor for internal topics.";
+    public static final short INTERNAL_TOPIC_REPLICATION_FACTOR_DEFAULT = 3;
 
     protected static final String TASK_TOPIC_PARTITIONS = "task.assigned.partitions";
     protected static final String TASK_CONSUMER_GROUPS = "task.assigned.groups";
@@ -85,7 +89,7 @@ public class MirrorConnectorConfig extends AbstractConfig {
     private static final String SYNC_TOPIC_CONFIGS_ENABLED_DOC = "Whether to periodically configure remote topics to match their corresponding upstream topics.";
     public static final boolean SYNC_TOPIC_CONFIGS_ENABLED_DEFAULT = true;
     public static final String SYNC_TOPIC_CONFIGS_INTERVAL_SECONDS = SYNC_TOPIC_CONFIGS + INTERVAL_SECONDS_SUFFIX;
-    private static final String SYNC_TOPIC_CONFIGS_INTERVAL_SECONDS_DOC = "Frequency of topic config sync."; 
+    private static final String SYNC_TOPIC_CONFIGS_INTERVAL_SECONDS_DOC = "Frequency of topic config sync.";
     public static final long SYNC_TOPIC_CONFIGS_INTERVAL_SECONDS_DEFAULT = 10 * 60;
 
     public static final String SYNC_TOPIC_ACLS_ENABLED = SYNC_TOPIC_ACLS + ENABLED_SUFFIX;
@@ -117,7 +121,7 @@ public class MirrorConnectorConfig extends AbstractConfig {
     public static final Class GROUP_FILTER_CLASS_DEFAULT = DefaultGroupFilter.class;
     public static final String CONFIG_PROPERTY_FILTER_CLASS = "config.property.filter.class";
     private static final String CONFIG_PROPERTY_FILTER_CLASS_DOC = "ConfigPropertyFilter to use. Selects topic config "
-        + " properties to replicate.";
+            + " properties to replicate.";
     public static final Class CONFIG_PROPERTY_FILTER_CLASS_DEFAULT = DefaultConfigPropertyFilter.class;
 
     public static final String OFFSET_LAG_MAX = "offset.lag.max";
@@ -171,8 +175,8 @@ public class MirrorConnectorConfig extends AbstractConfig {
     Map<String, String> taskConfigForTopicPartitions(List<TopicPartition> topicPartitions) {
         Map<String, String> props = originalsStrings();
         String topicPartitionsString = topicPartitions.stream()
-            .map(MirrorUtils::encodeTopicPartition)
-            .collect(Collectors.joining(","));
+                .map(MirrorUtils::encodeTopicPartition)
+                .collect(Collectors.joining(","));
         props.put(TASK_TOPIC_PARTITIONS, topicPartitionsString);
         return props;
     }
@@ -201,7 +205,7 @@ public class MirrorConnectorConfig extends AbstractConfig {
 
     List<MetricsReporter> metricsReporters() {
         List<MetricsReporter> reporters = getConfiguredInstances(
-            CommonClientConfigs.METRIC_REPORTER_CLASSES_CONFIG, MetricsReporter.class);
+                CommonClientConfigs.METRIC_REPORTER_CLASSES_CONFIG, MetricsReporter.class);
         reporters.add(new JmxReporter("kafka.connect.mirror"));
         return reporters;
     }
@@ -300,6 +304,10 @@ public class MirrorConnectorConfig extends AbstractConfig {
         return getInt(REPLICATION_FACTOR);
     }
 
+    short internalTopicReplicationFactor() {
+        return getShort(INTERNAL_TOPIC_REPLICATION_FACTOR);
+    }
+
     TopicFilter topicFilter() {
         return getConfiguredInstance(TOPIC_FILTER_CLASS, TopicFilter.class);
     }
@@ -313,148 +321,155 @@ public class MirrorConnectorConfig extends AbstractConfig {
     }
 
     protected static final ConfigDef CONNECTOR_CONFIG_DEF = ConnectorConfig.configDef()
-        .define(
-            ENABLED,
-            ConfigDef.Type.BOOLEAN,
-            true,
-            ConfigDef.Importance.LOW,
-            ENABLED_DOC)
-        .define(
-            TOPIC_FILTER_CLASS,
-            ConfigDef.Type.CLASS,
-            TOPIC_FILTER_CLASS_DEFAULT,
-            ConfigDef.Importance.LOW,
-            TOPIC_FILTER_CLASS_DOC)
-        .define(
-            GROUP_FILTER_CLASS,
-            ConfigDef.Type.CLASS,
-            GROUP_FILTER_CLASS_DEFAULT,
-            ConfigDef.Importance.LOW,
-            GROUP_FILTER_CLASS_DOC)
-        .define(
-            CONFIG_PROPERTY_FILTER_CLASS,
-            ConfigDef.Type.CLASS,
-            CONFIG_PROPERTY_FILTER_CLASS_DEFAULT,
-            ConfigDef.Importance.LOW,
-            CONFIG_PROPERTY_FILTER_CLASS_DOC)
-        .define(
-            SOURCE_CLUSTER_ALIAS,
-            ConfigDef.Type.STRING,
-            ConfigDef.Importance.HIGH,
-            SOURCE_CLUSTER_ALIAS_DOC)
-        .define(
-            TARGET_CLUSTER_ALIAS,
-            ConfigDef.Type.STRING,
-            TARGET_CLUSTER_ALIAS_DEFAULT,
-            ConfigDef.Importance.HIGH,
-            TARGET_CLUSTER_ALIAS_DOC)
-        .define(
-            CONSUMER_POLL_TIMEOUT_MILLIS,
-            ConfigDef.Type.LONG,
-            CONSUMER_POLL_TIMEOUT_MILLIS_DEFAULT,
-            ConfigDef.Importance.LOW,
-            CONSUMER_POLL_TIMEOUT_MILLIS_DOC)
-        .define(
-            REFRESH_TOPICS_ENABLED,
-            ConfigDef.Type.BOOLEAN,
-            REFRESH_TOPICS_ENABLED_DEFAULT,
-            ConfigDef.Importance.LOW,
-            REFRESH_TOPICS_ENABLED_DOC)
-        .define(
-            REFRESH_TOPICS_INTERVAL_SECONDS,
-            ConfigDef.Type.LONG,
-            REFRESH_TOPICS_INTERVAL_SECONDS_DEFAULT,
-            ConfigDef.Importance.LOW,
-            REFRESH_TOPICS_INTERVAL_SECONDS_DOC)
-        .define(
-            REFRESH_GROUPS_ENABLED,
-            ConfigDef.Type.BOOLEAN,
-            REFRESH_GROUPS_ENABLED_DEFAULT,
-            ConfigDef.Importance.LOW,
-            REFRESH_GROUPS_ENABLED_DOC)
-        .define(
-            REFRESH_GROUPS_INTERVAL_SECONDS,
-            ConfigDef.Type.LONG,
-            REFRESH_GROUPS_INTERVAL_SECONDS_DEFAULT,
-            ConfigDef.Importance.LOW,
-            REFRESH_GROUPS_INTERVAL_SECONDS_DOC)
-        .define(
-            SYNC_TOPIC_CONFIGS_ENABLED,
-            ConfigDef.Type.BOOLEAN,
-            SYNC_TOPIC_CONFIGS_ENABLED_DEFAULT,
-            ConfigDef.Importance.LOW,
-            SYNC_TOPIC_CONFIGS_ENABLED_DOC)
-        .define(
-            SYNC_TOPIC_CONFIGS_INTERVAL_SECONDS,
-            ConfigDef.Type.LONG,
-            SYNC_TOPIC_CONFIGS_INTERVAL_SECONDS_DEFAULT,
-            ConfigDef.Importance.LOW,
-            SYNC_TOPIC_CONFIGS_INTERVAL_SECONDS_DOC)
-        .define(
-            SYNC_TOPIC_ACLS_ENABLED,
-            ConfigDef.Type.BOOLEAN,
-            SYNC_TOPIC_ACLS_ENABLED_DEFAULT,
-            ConfigDef.Importance.LOW,
-            SYNC_TOPIC_ACLS_ENABLED_DOC)
-        .define(
-            SYNC_TOPIC_ACLS_INTERVAL_SECONDS,
-            ConfigDef.Type.LONG,
-            SYNC_TOPIC_ACLS_INTERVAL_SECONDS_DEFAULT,
-            ConfigDef.Importance.LOW,
-            SYNC_TOPIC_ACLS_INTERVAL_SECONDS_DOC)
-        .define(
-            EMIT_HEARTBEATS_ENABLED,
-            ConfigDef.Type.BOOLEAN,
-            EMIT_HEARTBEATS_ENABLED_DEFAULT,
-            ConfigDef.Importance.LOW,
-            EMIT_HEARTBEATS_ENABLED_DOC)
-        .define(
-            EMIT_HEARTBEATS_INTERVAL_SECONDS,
-            ConfigDef.Type.LONG,
-            EMIT_HEARTBEATS_INTERVAL_SECONDS_DEFAULT,
-            ConfigDef.Importance.LOW,
-            EMIT_HEARTBEATS_INTERVAL_SECONDS_DOC)
-        .define(
-            EMIT_CHECKPOINTS_ENABLED,
-            ConfigDef.Type.BOOLEAN,
-            EMIT_CHECKPOINTS_ENABLED_DEFAULT,
-            ConfigDef.Importance.LOW,
-            EMIT_CHECKPOINTS_ENABLED_DOC)
-        .define(
-            EMIT_CHECKPOINTS_INTERVAL_SECONDS,
-            ConfigDef.Type.LONG,
-            EMIT_CHECKPOINTS_INTERVAL_SECONDS_DEFAULT,
-            ConfigDef.Importance.LOW,
-            EMIT_CHECKPOINTS_INTERVAL_SECONDS_DOC)
-        .define(
-            REPLICATION_POLICY_CLASS,
-            ConfigDef.Type.CLASS,
-            REPLICATION_POLICY_CLASS_DEFAULT,
-            ConfigDef.Importance.LOW,
-            REPLICATION_POLICY_CLASS_DOC)
-        .define(
-            REPLICATION_POLICY_SEPARATOR,
-            ConfigDef.Type.STRING,
-            REPLICATION_POLICY_SEPARATOR_DEFAULT,
-            ConfigDef.Importance.LOW,
-            REPLICATION_POLICY_SEPARATOR_DOC)
-        .define(
-            REPLICATION_FACTOR,
-            ConfigDef.Type.INT,
-            REPLICATION_FACTOR_DEFAULT,
-            ConfigDef.Importance.LOW,
-            REPLICATION_FACTOR_DOC)
-        .define(
-            OFFSET_LAG_MAX,
-            ConfigDef.Type.LONG,
-            OFFSET_LAG_MAX_DEFAULT,
-            ConfigDef.Importance.LOW,
-            OFFSET_LAG_MAX_DOC)
-        .define(
-            CommonClientConfigs.METRIC_REPORTER_CLASSES_CONFIG,
-            ConfigDef.Type.LIST,
-            null,
-            ConfigDef.Importance.LOW,
-            CommonClientConfigs.METRIC_REPORTER_CLASSES_DOC);
+            .define(
+                    ENABLED,
+                    ConfigDef.Type.BOOLEAN,
+                    true,
+                    ConfigDef.Importance.LOW,
+                    ENABLED_DOC)
+            .define(
+                    TOPIC_FILTER_CLASS,
+                    ConfigDef.Type.CLASS,
+                    TOPIC_FILTER_CLASS_DEFAULT,
+                    ConfigDef.Importance.LOW,
+                    TOPIC_FILTER_CLASS_DOC)
+            .define(
+                    GROUP_FILTER_CLASS,
+                    ConfigDef.Type.CLASS,
+                    GROUP_FILTER_CLASS_DEFAULT,
+                    ConfigDef.Importance.LOW,
+                    GROUP_FILTER_CLASS_DOC)
+            .define(
+                    CONFIG_PROPERTY_FILTER_CLASS,
+                    ConfigDef.Type.CLASS,
+                    CONFIG_PROPERTY_FILTER_CLASS_DEFAULT,
+                    ConfigDef.Importance.LOW,
+                    CONFIG_PROPERTY_FILTER_CLASS_DOC)
+            .define(
+                    SOURCE_CLUSTER_ALIAS,
+                    ConfigDef.Type.STRING,
+                    ConfigDef.Importance.HIGH,
+                    SOURCE_CLUSTER_ALIAS_DOC)
+            .define(
+                    TARGET_CLUSTER_ALIAS,
+                    ConfigDef.Type.STRING,
+                    TARGET_CLUSTER_ALIAS_DEFAULT,
+                    ConfigDef.Importance.HIGH,
+                    TARGET_CLUSTER_ALIAS_DOC)
+            .define(
+                    CONSUMER_POLL_TIMEOUT_MILLIS,
+                    ConfigDef.Type.LONG,
+                    CONSUMER_POLL_TIMEOUT_MILLIS_DEFAULT,
+                    ConfigDef.Importance.LOW,
+                    CONSUMER_POLL_TIMEOUT_MILLIS_DOC)
+            .define(
+                    REFRESH_TOPICS_ENABLED,
+                    ConfigDef.Type.BOOLEAN,
+                    REFRESH_TOPICS_ENABLED_DEFAULT,
+                    ConfigDef.Importance.LOW,
+                    REFRESH_TOPICS_ENABLED_DOC)
+            .define(
+                    REFRESH_TOPICS_INTERVAL_SECONDS,
+                    ConfigDef.Type.LONG,
+                    REFRESH_TOPICS_INTERVAL_SECONDS_DEFAULT,
+                    ConfigDef.Importance.LOW,
+                    REFRESH_TOPICS_INTERVAL_SECONDS_DOC)
+            .define(
+                    REFRESH_GROUPS_ENABLED,
+                    ConfigDef.Type.BOOLEAN,
+                    REFRESH_GROUPS_ENABLED_DEFAULT,
+                    ConfigDef.Importance.LOW,
+                    REFRESH_GROUPS_ENABLED_DOC)
+            .define(
+                    REFRESH_GROUPS_INTERVAL_SECONDS,
+                    ConfigDef.Type.LONG,
+                    REFRESH_GROUPS_INTERVAL_SECONDS_DEFAULT,
+                    ConfigDef.Importance.LOW,
+                    REFRESH_GROUPS_INTERVAL_SECONDS_DOC)
+            .define(
+                    SYNC_TOPIC_CONFIGS_ENABLED,
+                    ConfigDef.Type.BOOLEAN,
+                    SYNC_TOPIC_CONFIGS_ENABLED_DEFAULT,
+                    ConfigDef.Importance.LOW,
+                    SYNC_TOPIC_CONFIGS_ENABLED_DOC)
+            .define(
+                    SYNC_TOPIC_CONFIGS_INTERVAL_SECONDS,
+                    ConfigDef.Type.LONG,
+                    SYNC_TOPIC_CONFIGS_INTERVAL_SECONDS_DEFAULT,
+                    ConfigDef.Importance.LOW,
+                    SYNC_TOPIC_CONFIGS_INTERVAL_SECONDS_DOC)
+            .define(
+                    SYNC_TOPIC_ACLS_ENABLED,
+                    ConfigDef.Type.BOOLEAN,
+                    SYNC_TOPIC_ACLS_ENABLED_DEFAULT,
+                    ConfigDef.Importance.LOW,
+                    SYNC_TOPIC_ACLS_ENABLED_DOC)
+            .define(
+                    SYNC_TOPIC_ACLS_INTERVAL_SECONDS,
+                    ConfigDef.Type.LONG,
+                    SYNC_TOPIC_ACLS_INTERVAL_SECONDS_DEFAULT,
+                    ConfigDef.Importance.LOW,
+                    SYNC_TOPIC_ACLS_INTERVAL_SECONDS_DOC)
+            .define(
+                    EMIT_HEARTBEATS_ENABLED,
+                    ConfigDef.Type.BOOLEAN,
+                    EMIT_HEARTBEATS_ENABLED_DEFAULT,
+                    ConfigDef.Importance.LOW,
+                    EMIT_HEARTBEATS_ENABLED_DOC)
+            .define(
+                    EMIT_HEARTBEATS_INTERVAL_SECONDS,
+                    ConfigDef.Type.LONG,
+                    EMIT_HEARTBEATS_INTERVAL_SECONDS_DEFAULT,
+                    ConfigDef.Importance.LOW,
+                    EMIT_HEARTBEATS_INTERVAL_SECONDS_DOC)
+            .define(
+                    EMIT_CHECKPOINTS_ENABLED,
+                    ConfigDef.Type.BOOLEAN,
+                    EMIT_CHECKPOINTS_ENABLED_DEFAULT,
+                    ConfigDef.Importance.LOW,
+                    EMIT_CHECKPOINTS_ENABLED_DOC)
+            .define(
+                    EMIT_CHECKPOINTS_INTERVAL_SECONDS,
+                    ConfigDef.Type.LONG,
+                    EMIT_CHECKPOINTS_INTERVAL_SECONDS_DEFAULT,
+                    ConfigDef.Importance.LOW,
+                    EMIT_CHECKPOINTS_INTERVAL_SECONDS_DOC)
+            .define(
+                    REPLICATION_POLICY_CLASS,
+                    ConfigDef.Type.CLASS,
+                    REPLICATION_POLICY_CLASS_DEFAULT,
+                    ConfigDef.Importance.LOW,
+                    REPLICATION_POLICY_CLASS_DOC)
+            .define(
+                    REPLICATION_POLICY_SEPARATOR,
+                    ConfigDef.Type.STRING,
+                    REPLICATION_POLICY_SEPARATOR_DEFAULT,
+                    ConfigDef.Importance.LOW,
+                    REPLICATION_POLICY_SEPARATOR_DOC)
+            .define(
+                    REPLICATION_FACTOR,
+                    ConfigDef.Type.INT,
+                    REPLICATION_FACTOR_DEFAULT,
+                    ConfigDef.Importance.LOW,
+                    REPLICATION_FACTOR_DOC)
+            .define(
+                    INTERNAL_TOPIC_REPLICATION_FACTOR,
+                    ConfigDef.Type.SHORT,
+                    INTERNAL_TOPIC_REPLICATION_FACTOR_DEFAULT,
+                    ConfigDef.Importance.LOW,
+                    INTERNAL_TOPIC_REPLICATION_FACTOR_DOC)
+            .define(
+                    OFFSET_LAG_MAX,
+                    ConfigDef.Type.LONG,
+                    OFFSET_LAG_MAX_DEFAULT,
+                    ConfigDef.Importance.LOW,
+                    OFFSET_LAG_MAX_DOC)
+            .define(
+                    CommonClientConfigs.METRIC_REPORTER_CLASSES_CONFIG,
+                    ConfigDef.Type.LIST,
+                    null,
+                    ConfigDef.Importance.LOW,
+                    CommonClientConfigs.METRIC_REPORTER_CLASSES_DOC);
+
 
 }

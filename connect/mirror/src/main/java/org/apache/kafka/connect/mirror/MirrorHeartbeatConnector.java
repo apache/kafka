@@ -31,6 +31,7 @@ public class MirrorHeartbeatConnector extends SourceConnector {
     @Override
     public void start(Map<String, String> props) {
         config = new MirrorConnectorConfig(props);
+        MirrorUtils.createTopic(config.heartbeatsTopic(), config.internalTopicReplicationFactor(), (short) 1, config.targetAdminConfig());
     }
 
     @Override

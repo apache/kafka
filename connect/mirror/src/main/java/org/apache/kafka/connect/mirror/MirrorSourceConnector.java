@@ -99,6 +99,7 @@ public class MirrorSourceConnector extends SourceConnector {
             sourceAdminClient = AdminClient.create(config.sourceAdminConfig());
             targetAdminClient = AdminClient.create(config.targetAdminConfig());
         }
+        MirrorUtils.createTopic(config.offsetSyncsTopic(), (short) 1, config.internalTopicReplicationFactor(), config.targetAdminConfig());
         scheduler = new Scheduler(MirrorSourceConnector.class);
         scheduler.execute(this::loadTopicPartitions, "loading initial set of topic-partitions");
         scheduler.execute(this::createTopicPartitions, "creating downstream topic-partitions");
