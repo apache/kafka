@@ -16,6 +16,13 @@
  */
 package org.apache.kafka.connect.mirror;
 
+import org.apache.kafka.common.acl.AccessControlEntry;
+import org.apache.kafka.common.acl.AclBinding;
+import org.apache.kafka.common.acl.AclOperation;
+import org.apache.kafka.common.acl.AclPermissionType;
+import org.apache.kafka.common.resource.PatternType;
+import org.apache.kafka.common.resource.ResourcePattern;
+import org.apache.kafka.common.resource.ResourceType;
 import org.junit.Test;
 
 import static org.junit.Assert.assertTrue;
@@ -48,6 +55,43 @@ public class MirrorSourceConnectorTest {
         assertFalse("should not allow cycles", connector.shouldReplicateTopic("source.target.topic1"));
         assertTrue("should allow anything else", connector.shouldReplicateTopic("topic1"));
         assertTrue("should allow anything else", connector.shouldReplicateTopic("source.topic1"));
+    }
+
+    @Test
+    public void testAclFiltering() {
+        MirrorSourceConnector connector = new MirrorSourceConnector(new SourceAndTarget("source", "target"),
+            new DefaultReplicationPolicy(), x -> true);
+        assertFalse("should not replicate ALLOW WRITE", connector.shouldReplicateAcl(
+            new AclBinding(new ResourcePattern(ResourceType.TOPIC, "test_topic", PatternType.LITERAL),
+            new AccessControlEntry("kafka", "", AclOperation.WRITE, AclPermissionType.ALLOW))));
+        assertTrue("should replicate ALLOW ALL", connector.shouldReplicateAcl(
+            new AclBinding(new ResourcePattern(ResourceType.TOPIC, "test_topic", PatternType.LITERAL),
+            new AccessControlEntry("kafka", "", AclOperation.ALL, AclPermissionType.ALLOW))));
+    }
+
+    @Test
+    public void testAclTransformation() {
+        MirrorSourceConnector connector = new MirrorSourceConnector(new SourceAndTarget("source", "target"),
+            new DefaultReplicationPolicy(), x -> true);
+        AclBinding allowAllAclBinding = new AclBinding(
+            new ResourcePattern(ResourceType.TOPIC, "test_topic", PatternType.LITERAL),
+            new AccessControlEntry("kafka", "", AclOperation.ALL, AclPermissionType.ALLOW));
+        AclBinding processedAllowAllAclBinding = connector.targetAclBinding(allowAllAclBinding);
+        String expectedRemoteTopicName = "source" + DefaultReplicationPolicy.SEPARATOR_DEFAULT
+            + allowAllAclBinding.pattern().name();
+        assertTrue("should change topic name",
+            processedAllowAllAclBinding.pattern().name().equals(expectedRemoteTopicName));
+        assertTrue("should change ALL to READ", processedAllowAllAclBinding.entry().operation() == AclOperation.READ);
+        assertTrue("should not change ALLOW",
+            processedAllowAllAclBinding.entry().permissionType() == AclPermissionType.ALLOW);
+
+        AclBinding denyAllAclBinding = new AclBinding(
+            new ResourcePattern(ResourceType.TOPIC, "test_topic", PatternType.LITERAL),
+            new AccessControlEntry("kafka", "", AclOperation.ALL, AclPermissionType.DENY));
+        AclBinding processedDenyAllAclBinding = connector.targetAclBinding(denyAllAclBinding);
+        assertTrue("should not change ALL", processedDenyAllAclBinding.entry().operation() == AclOperation.ALL);
+        assertTrue("should not change DENY",
+            processedDenyAllAclBinding.entry().permissionType() == AclPermissionType.DENY);
     }
 
 }

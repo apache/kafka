@@ -23,7 +23,10 @@ import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.acl.AclBinding;
 import org.apache.kafka.common.acl.AclBindingFilter;
+import org.apache.kafka.common.acl.AccessControlEntry;
 import org.apache.kafka.common.acl.AccessControlEntryFilter;
+import org.apache.kafka.common.acl.AclPermissionType;
+import org.apache.kafka.common.acl.AclOperation;
 import org.apache.kafka.common.resource.ResourceType;
 import org.apache.kafka.common.resource.ResourcePattern;
 import org.apache.kafka.common.resource.ResourcePatternFilter;
@@ -206,6 +209,7 @@ public class MirrorSourceConnector extends SourceConnector {
         List<AclBinding> bindings = listTopicAclBindings().stream()
             .filter(x -> x.pattern().resourceType() == ResourceType.TOPIC)
             .filter(x -> x.pattern().patternType() == PatternType.LITERAL)
+            .filter(this::shouldReplicateAcl)
             .filter(x -> shouldReplicateTopic(x.pattern().name()))
             .map(this::targetAclBinding)
             .collect(Collectors.toList());
@@ -327,15 +331,30 @@ public class MirrorSourceConnector extends SourceConnector {
         return new Config(entries);
     }
 
+    private static AccessControlEntry downgradeAllowAllACL(AccessControlEntry entry) {
+        return new AccessControlEntry(entry.principal(), entry.host(), AclOperation.READ, entry.permissionType());
+    }
+
     AclBinding targetAclBinding(AclBinding sourceAclBinding) {
         String targetTopic = formatRemoteTopic(sourceAclBinding.pattern().name());
-        return new AclBinding(new ResourcePattern(ResourceType.TOPIC, targetTopic, PatternType.LITERAL),
-            sourceAclBinding.entry());
+        final AccessControlEntry entry;
+        if (sourceAclBinding.entry().permissionType() == AclPermissionType.ALLOW
+                && sourceAclBinding.entry().operation() == AclOperation.ALL) {
+            entry = downgradeAllowAllACL(sourceAclBinding.entry());
+        } else {
+            entry = sourceAclBinding.entry();
+        }
+        return new AclBinding(new ResourcePattern(ResourceType.TOPIC, targetTopic, PatternType.LITERAL), entry);
     }
 
     boolean shouldReplicateTopic(String topic) {
         return (topicFilter.shouldReplicateTopic(topic) || isHeartbeatTopic(topic))
             && !replicationPolicy.isInternalTopic(topic) && !isCycle(topic);
+    }
+
+    boolean shouldReplicateAcl(AclBinding aclBinding) {
+        return !(aclBinding.entry().permissionType() == AclPermissionType.ALLOW
+            && aclBinding.entry().operation() == AclOperation.WRITE);
     }
 
     boolean shouldReplicateTopicConfigurationProperty(String property) {
