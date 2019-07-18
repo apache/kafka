@@ -354,8 +354,7 @@ object TopicCommand extends Logging {
 
     override def describeTopic(opts: TopicCommandOptions): Unit = {
       val topics = getTopics(opts.topic, opts.excludeInternalTopics)
-      val requireTopicExists = !(opts.topic.isDefined && opts.ifExists)
-      ensureTopicExists(topics, opts.topic, requireTopicExists)
+      ensureTopicExists(topics, opts.topic, !opts.ifExists)
       val liveBrokers = zkClient.getAllBrokersInCluster.map(_.id).toSet
       val describeOptions = new DescribeOptions(opts, liveBrokers)
       val adminZkClient = new AdminZkClient(zkClient)
