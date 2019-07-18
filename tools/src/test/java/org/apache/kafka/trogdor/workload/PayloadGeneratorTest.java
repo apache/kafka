@@ -27,7 +27,7 @@ import java.util.Arrays;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
-
+import static org.junit.Assert.assertNull;
 
 public class PayloadGeneratorTest {
     @Rule
@@ -104,7 +104,11 @@ public class PayloadGeneratorTest {
         byte[] val = generator.generate(123);
         generator.generate(456);
         byte[] val2 = generator.generate(123);
-        assertArrayEquals(val, val2);
+        if (val == null) {
+            assertNull(val2);
+        } else {
+            assertArrayEquals(val, val2);
+        }
     }
 
     @Test
@@ -123,6 +127,26 @@ public class PayloadGeneratorTest {
         assertArrayEquals(val1End, val2End);
         assertArrayEquals(val1End, val3End);
     }
+    
+    @Test
+    public void testRandomNullPayloadGenerator() {
+        PayloadIterator iter = new PayloadIterator(
+            new RandomNullPayloadGenerator(4, 10));
+        int notNull = 0;
+        int isNull = 0;
+        while (notNull < 1000 || isNull < 1000) {
+            byte[] cur = iter.next();
+            if (cur == null) {
+                isNull++;
+            } else {
+                notNull++;
+            }
+        }
+        testReproducible(new RandomNullPayloadGenerator(1234, 456));
+        testReproducible(new RandomNullPayloadGenerator(1, 0));
+        testReproducible(new RandomNullPayloadGenerator(10, 6));
+        testReproducible(new RandomNullPayloadGenerator(512, 123));
+    }   
 
     @Test
     public void testPayloadIterator() {
