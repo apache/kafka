@@ -34,6 +34,7 @@ import scala.collection.Seq
 import scala.util.Random
 import java.io.File
 
+import kafka.controller.PartitionReplicaAssignment
 import org.apache.kafka.clients.producer.ProducerRecord
 
 class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
@@ -127,7 +128,10 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
     waitForReassignmentToComplete()
 
     //Then the replica should be on 101
-    assertEquals(Seq(101), zkClient.getPartitionAssignmentForTopics(Set(topicName)).get(topicName).get(partition))
+    val partitionAssignment = zkClient.getPartitionAssignmentForTopics(Set(topicName)).get(topicName).get(partition)
+    assertEquals(Seq(101), partitionAssignment.replicas)
+    assertTrue(partitionAssignment.addingReplicas.isEmpty)
+    assertTrue(partitionAssignment.removingReplicas.isEmpty)
     // The replica should be in the expected log directory on broker 101
     val replica = new TopicPartitionReplica(topicName, 0, 101)
     assertEquals(expectedLogDir, adminClient.describeReplicaLogDirs(Collections.singleton(replica)).all().get.get(replica).getCurrentReplicaLogDir)
@@ -182,7 +186,7 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
 
     // Then the replicas should span all three brokers
     val actual = zkClient.getPartitionAssignmentForTopics(Set(topicName))(topicName)
-    assertEquals(Seq(100, 101, 102), actual.values.flatten.toSeq.distinct.sorted)
+    assertMoveOccurred(Seq(100, 101, 102), actual)
     // The replica should be in the expected log directory on broker 102 and 100
     waitUntilTrue(() => {
       expectedLogDir1 == adminClient.describeReplicaLogDirs(Collections.singleton(replica1)).all().get.get(replica1).getCurrentReplicaLogDir
@@ -211,7 +215,7 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
 
     //Then replicas should only span the first two brokers
     val actual = zkClient.getPartitionAssignmentForTopics(Set(topicName))(topicName)
-    assertEquals(Seq(100, 101), actual.values.flatten.toSeq.distinct.sorted)
+    assertMoveOccurred(Seq(100, 101), actual)
   }
 
   @Test
@@ -252,12 +256,17 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
 
     //Then the proposed changes should have been made
     val actual = zkClient.getPartitionAssignmentForTopics(Set("topic1", "topic2"))
-    assertEquals(Seq(100, 102), actual("topic1")(0))//changed
-    assertEquals(Seq(101, 102), actual("topic1")(1))
-    assertEquals(Seq(100, 102), actual("topic1")(2))//changed
-    assertEquals(Seq(100, 101), actual("topic2")(0))
-    assertEquals(Seq(101, 100), actual("topic2")(1))//changed
-    assertEquals(Seq(100, 102), actual("topic2")(2))//changed
+    def assertCompletedReassignmentReplicaSet(expected: Seq[Int], actual: PartitionReplicaAssignment): Unit = {
+      assertEquals(expected, actual.replicas)
+      assertTrue(actual.addingReplicas.isEmpty)
+      assertTrue(actual.removingReplicas.isEmpty)
+    }
+    assertCompletedReassignmentReplicaSet(Seq(100, 102), actual("topic1")(0)) //changed
+    assertCompletedReassignmentReplicaSet(Seq(101, 102), actual("topic1")(1))
+    assertCompletedReassignmentReplicaSet(Seq(100, 102), actual("topic1")(2)) //changed
+    assertCompletedReassignmentReplicaSet(Seq(100, 101), actual("topic2")(0))
+    assertCompletedReassignmentReplicaSet(Seq(101, 100), actual("topic2")(1)) //changed
+    assertCompletedReassignmentReplicaSet(Seq(100, 102), actual("topic2")(2)) //changed
 
     // The replicas should be in the expected log directories
     val replicaDirs = adminClient.describeReplicaLogDirs(List(replica1, replica2).asJava).all().get()
@@ -299,7 +308,7 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
 
     //Check move occurred
     val actual = zkClient.getPartitionAssignmentForTopics(Set(topicName))(topicName)
-    assertEquals(Seq(101, 102), actual.values.flatten.toSeq.distinct.sorted)
+    assertMoveOccurred(Seq(101, 102), actual)
 
     //Then command should have taken longer than the throttle rate
     assertTrue(s"Expected replication to be > ${expectedDurationSecs * 0.9 * 1000} but was $took",
@@ -402,7 +411,17 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
 
     //Check move occurred
     val actual = zkClient.getPartitionAssignmentForTopics(Set(topicName))(topicName)
-    assertEquals(Seq(101, 102), actual.values.flatten.toSeq.distinct.sorted)
+    assertMoveOccurred(Seq(101, 102), actual)
+  }
+
+  /**
+    * Asserts that a move for a single replica finished successfully
+    */
+  def assertMoveOccurred(expectedReplicas: Seq[Int],
+                         partitionAssignment: Map[Int, PartitionReplicaAssignment]): Unit = {
+    assertEquals(expectedReplicas, partitionAssignment.values.flatMap(_.replicas).toSeq.distinct.sorted)
+    assertEquals(Seq(), partitionAssignment.values.flatMap(_.addingReplicas).toSeq)
+    assertEquals(Seq(), partitionAssignment.values.flatMap(_.removingReplicas).toSeq)
   }
 
   @Test(expected = classOf[AdminCommandFailedException])

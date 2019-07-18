@@ -376,7 +376,7 @@ abstract class AbstractControllerBrokerRequestBatch(config: KafkaConfig,
   def addLeaderAndIsrRequestForBrokers(brokerIds: Seq[Int],
                                        topicPartition: TopicPartition,
                                        leaderIsrAndControllerEpoch: LeaderIsrAndControllerEpoch,
-                                       replicas: Seq[Int],
+                                       replicaAssignment: PartitionReplicaAssignment,
                                        isNew: Boolean): Unit = {
 
     brokerIds.filter(_ >= 0).foreach { brokerId =>
@@ -387,7 +387,9 @@ abstract class AbstractControllerBrokerRequestBatch(config: KafkaConfig,
         leaderIsrAndControllerEpoch.leaderAndIsr.leaderEpoch,
         leaderIsrAndControllerEpoch.leaderAndIsr.isr.map(Integer.valueOf).asJava,
         leaderIsrAndControllerEpoch.leaderAndIsr.zkVersion,
-        replicas.map(Integer.valueOf).asJava,
+        replicaAssignment.replicas.map(Integer.valueOf).asJava,
+        replicaAssignment.addingReplicas.map(Integer.valueOf).asJava,
+        replicaAssignment.removingReplicas.map(Integer.valueOf).asJava,
         isNew || alreadyNew))
     }
 

@@ -368,20 +368,20 @@ object TopicCommand extends Logging {
               val configs = adminZkClient.fetchEntityConfig(ConfigType.Topic, topic).asScala
               if (!opts.reportOverriddenConfigs || configs.nonEmpty) {
                 val numPartitions = topicPartitionAssignment.size
-                val replicationFactor = topicPartitionAssignment.head._2.size
+                val replicationFactor = topicPartitionAssignment.head._2.replicas.size
                 val configsAsString = configs.map { case (k, v) => s"$k=$v" }.mkString(",")
                 val markedForDeletionString = if (markedForDeletion) "\tMarkedForDeletion:true" else ""
                 println(s"Topic:$topic\tPartitionCount:$numPartitions\tReplicationFactor:$replicationFactor\tConfigs:$configsAsString$markedForDeletionString")
               }
             }
             if (describeOptions.describePartitions) {
-              for ((partitionId, assignedReplicas) <- topicPartitionAssignment.toSeq.sortBy(_._1)) {
+              for ((partitionId, partitionAssignment) <- topicPartitionAssignment.toSeq.sortBy(_._1)) {
                 val leaderIsrEpoch = zkClient.getTopicPartitionState(new TopicPartition(topic, partitionId))
                 val partitionDesc = PartitionDescription(
                   topic,
                   partitionId,
                   leader = if (leaderIsrEpoch.isEmpty) None else Option(leaderIsrEpoch.get.leaderAndIsr.leader),
-                  assignedReplicas,
+                  partitionAssignment.replicas,
                   isr = if (leaderIsrEpoch.isEmpty) Seq.empty[Int] else leaderIsrEpoch.get.leaderAndIsr.isr,
                   minIsrCount = 0,
                   markedForDeletion,

@@ -259,13 +259,35 @@ object TopicZNode {
       "removingReplicas" -> removingReplicasAssignmentJson.asJava
     ).asJava)
   }
-  def decode(topic: String, bytes: Array[Byte]): Map[TopicPartition, Seq[Int]] = {
+  def decode(topic: String, bytes: Array[Byte]): Map[TopicPartition, PartitionReplicaAssignment] = {
     Json.parseBytes(bytes).flatMap { js =>
       val assignmentJson = js.asJsonObject
       val partitionsJsonOpt = assignmentJson.get("partitions").map(_.asJsonObject)
+      val addingReplicasJsonOpt = assignmentJson.get("addingReplicas").map(_.asJsonObject)
+      val removingReplicasJsonOpt = assignmentJson.get("removingReplicas").map(_.asJsonObject)
+      // TODO: Refactor
       partitionsJsonOpt.map { partitionsJson =>
         partitionsJson.iterator.map { case (partition, replicas) =>
-          new TopicPartition(topic, partition.toInt) -> replicas.to[Seq[Int]]
+          val addingReplicas = addingReplicasJsonOpt match {
+            case Some(replicasJson) => replicasJson.get(partition) match {
+              case Some(ar) => ar.to[Seq[Int]]
+              case None => Seq.empty[Int]
+            }
+            case None => Seq.empty[Int]
+          }
+          val removingReplicas = removingReplicasJsonOpt match {
+            case Some(replicasJson) => replicasJson.get(partition) match {
+              case Some(ar) => ar.to[Seq[Int]]
+              case None => Seq.empty[Int]
+            }
+            case None => Seq.empty[Int]
+          }
+
+          new TopicPartition(topic, partition.toInt) -> PartitionReplicaAssignment(
+            replicas.to[Seq[Int]],
+            addingReplicas,
+            removingReplicas
+          )
         }
       }
     }.map(_.toMap).getOrElse(Map.empty)

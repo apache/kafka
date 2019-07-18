@@ -169,7 +169,7 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
     val expectedAssignment = assignment map { topicAssignment =>
       val partition = topicAssignment._1.partition
       val assignment = topicAssignment._2
-      partition -> assignment
+      partition -> PartitionReplicaAssignment(assignment, List(), List())
     }
 
     assertEquals(assignment.size, zkClient.getTopicPartitionCount(topic1).get)
