@@ -731,7 +731,7 @@ public class ProcessorTopologyTest {
         private static final long DEFAULT_TIMESTAMP = 1000L;
 
         @Override
-        public long extract(final ConsumerRecord<Object, Object> record, final long previousTimestamp) {
+        public long extract(final ConsumerRecord<Object, Object> record, final long partitionTime) {
             if (record.value().toString().matches(".*@[0-9]+")) {
                 return Long.parseLong(record.value().toString().split("@")[1]);
             }
