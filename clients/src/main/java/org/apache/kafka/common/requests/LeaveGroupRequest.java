@@ -19,6 +19,7 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.message.LeaveGroupRequestData;
 import org.apache.kafka.common.message.LeaveGroupResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
@@ -65,11 +66,13 @@ public class LeaveGroupRequest extends AbstractRequest {
 
     @Override
     public AbstractResponse getErrorResponse(int throttleTimeMs, Throwable e) {
-        LeaveGroupResponseData response = new LeaveGroupResponseData();
-        if (version() >= 2) {
-            response.setThrottleTimeMs(throttleTimeMs);
+        LeaveGroupResponseData responseData = new LeaveGroupResponseData()
+                                                  .setErrorCode(Errors.forException(e).code());
+
+        if (version() >= 1) {
+            responseData.setThrottleTimeMs(throttleTimeMs);
         }
-        return new LeaveGroupResponse(response);
+        return new LeaveGroupResponse(responseData);
     }
 
     public static LeaveGroupRequest parse(ByteBuffer buffer, short version) {
