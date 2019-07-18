@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import java.util.Collections;
+import java.util.Optional;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.protocol.types.ArrayOf;
 import org.apache.kafka.common.protocol.types.Field;
@@ -102,21 +104,21 @@ public class ConsumerProtocol {
         new Field(PARTITIONS_KEY_NAME, new ArrayOf(Type.INT32)));
 
     public static final Schema SUBSCRIPTION_V0 = new Schema(
-            new Field(TOPICS_KEY_NAME, new ArrayOf(Type.STRING)),
-            new Field(USER_DATA_KEY_NAME, Type.NULLABLE_BYTES));
+        new Field(USER_DATA_KEY_NAME, Type.NULLABLE_BYTES),
+        new Field(TOPICS_KEY_NAME, new ArrayOf(Type.STRING)));
 
     public static final Schema SUBSCRIPTION_V1 = new Schema(
-        new Field(TOPICS_KEY_NAME, new ArrayOf(Type.STRING)),
         new Field(USER_DATA_KEY_NAME, Type.NULLABLE_BYTES),
+        new Field(TOPICS_KEY_NAME, new ArrayOf(Type.STRING)),
         new Field(OWNED_PARTITIONS_KEY_NAME, new ArrayOf(TOPIC_ASSIGNMENT_V0)));
 
     public static final Schema ASSIGNMENT_V0 = new Schema(
-            new Field(TOPIC_PARTITIONS_KEY_NAME, new ArrayOf(TOPIC_ASSIGNMENT_V0)),
-            new Field(USER_DATA_KEY_NAME, Type.NULLABLE_BYTES));
+        new Field(USER_DATA_KEY_NAME, Type.NULLABLE_BYTES),
+        new Field(TOPIC_PARTITIONS_KEY_NAME, new ArrayOf(TOPIC_ASSIGNMENT_V0)));
 
     public static final Schema ASSIGNMENT_V1 = new Schema(
-        new Field(TOPIC_PARTITIONS_KEY_NAME, new ArrayOf(TOPIC_ASSIGNMENT_V0)),
         new Field(USER_DATA_KEY_NAME, Type.NULLABLE_BYTES),
+        new Field(TOPIC_PARTITIONS_KEY_NAME, new ArrayOf(TOPIC_ASSIGNMENT_V0)),
         ERROR_CODE);
 
     public enum AssignmentError {
@@ -145,41 +147,8 @@ public class ConsumerProtocol {
         }
     }
 
-    public static ByteBuffer serializeSubscriptionV0(PartitionAssignor.Subscription subscription) {
-        Struct struct = new Struct(SUBSCRIPTION_V0);
-        struct.set(USER_DATA_KEY_NAME, subscription.userData());
-        struct.set(TOPICS_KEY_NAME, subscription.topics().toArray());
-
-        ByteBuffer buffer = ByteBuffer.allocate(CONSUMER_PROTOCOL_HEADER_V0.sizeOf() + SUBSCRIPTION_V0.sizeOf(struct));
-        CONSUMER_PROTOCOL_HEADER_V0.writeTo(buffer);
-        SUBSCRIPTION_V0.write(buffer, struct);
-        buffer.flip();
-        return buffer;
-    }
-
-    public static ByteBuffer serializeSubscriptionV1(PartitionAssignor.Subscription subscription) {
-        Struct struct = new Struct(SUBSCRIPTION_V1);
-        struct.set(USER_DATA_KEY_NAME, subscription.userData());
-        struct.set(TOPICS_KEY_NAME, subscription.topics().toArray());
-        List<Struct> topicAssignments = new ArrayList<>();
-        Map<String, List<Integer>> partitionsByTopic = CollectionUtils.groupPartitionsByTopic(subscription.ownedPartitions());
-        for (Map.Entry<String, List<Integer>> topicEntry : partitionsByTopic.entrySet()) {
-            Struct topicAssignment = new Struct(TOPIC_ASSIGNMENT_V0);
-            topicAssignment.set(TOPIC_KEY_NAME, topicEntry.getKey());
-            topicAssignment.set(PARTITIONS_KEY_NAME, topicEntry.getValue().toArray());
-            topicAssignments.add(topicAssignment);
-        }
-        struct.set(OWNED_PARTITIONS_KEY_NAME, topicAssignments.toArray());
-
-        ByteBuffer buffer = ByteBuffer.allocate(CONSUMER_PROTOCOL_HEADER_V1.sizeOf() + SUBSCRIPTION_V1.sizeOf(struct));
-        CONSUMER_PROTOCOL_HEADER_V1.writeTo(buffer);
-        SUBSCRIPTION_V1.write(buffer, struct);
-        buffer.flip();
-        return buffer;
-    }
-
-    public static ByteBuffer serializeSubscription(PartitionAssignor.Subscription subscription) {
-        switch (subscription.version()) {
+    public static ByteBuffer serializeSubscription(Subscription subscription) {
+        switch (subscription.version) {
             case CONSUMER_PROTOCOL_V0:
                 return serializeSubscriptionV0(subscription);
 
@@ -192,36 +161,7 @@ public class ConsumerProtocol {
         }
     }
 
-    public static PartitionAssignor.Subscription deserializeSubscriptionV0(ByteBuffer buffer) {
-        Struct struct = SUBSCRIPTION_V0.read(buffer);
-        ByteBuffer userData = struct.getBytes(USER_DATA_KEY_NAME);
-        List<String> topics = new ArrayList<>();
-        for (Object topicObj : struct.getArray(TOPICS_KEY_NAME))
-            topics.add((String) topicObj);
-
-        return new PartitionAssignor.Subscription(CONSUMER_PROTOCOL_V0, topics, userData);
-    }
-
-    public static PartitionAssignor.Subscription deserializeSubscriptionV1(ByteBuffer buffer) {
-        Struct struct = SUBSCRIPTION_V1.read(buffer);
-        ByteBuffer userData = struct.getBytes(USER_DATA_KEY_NAME);
-        List<String> topics = new ArrayList<>();
-        for (Object topicObj : struct.getArray(TOPICS_KEY_NAME))
-            topics.add((String) topicObj);
-
-        List<TopicPartition> ownedPartitions = new ArrayList<>();
-        for (Object structObj : struct.getArray(OWNED_PARTITIONS_KEY_NAME)) {
-            Struct assignment = (Struct) structObj;
-            String topic = assignment.getString(TOPIC_KEY_NAME);
-            for (Object partitionObj : assignment.getArray(PARTITIONS_KEY_NAME)) {
-                ownedPartitions.add(new TopicPartition(topic, (Integer) partitionObj));
-            }
-        }
-
-        return new PartitionAssignor.Subscription(CONSUMER_PROTOCOL_V1, topics, userData, ownedPartitions);
-    }
-
-    public static PartitionAssignor.Subscription deserializeSubscription(ByteBuffer buffer) {
+    public static Subscription deserializeSubscription(ByteBuffer buffer) {
         Struct header = CONSUMER_PROTOCOL_HEADER_SCHEMA.read(buffer);
         Short version = header.getShort(VERSION_KEY_NAME);
 
@@ -241,49 +181,8 @@ public class ConsumerProtocol {
         }
     }
 
-    public static ByteBuffer serializeAssignmentV0(PartitionAssignor.Assignment assignment) {
-        Struct struct = new Struct(ASSIGNMENT_V0);
-        struct.set(USER_DATA_KEY_NAME, assignment.userData());
-        List<Struct> topicAssignments = new ArrayList<>();
-        Map<String, List<Integer>> partitionsByTopic = CollectionUtils.groupPartitionsByTopic(assignment.partitions());
-        for (Map.Entry<String, List<Integer>> topicEntry : partitionsByTopic.entrySet()) {
-            Struct topicAssignment = new Struct(TOPIC_ASSIGNMENT_V0);
-            topicAssignment.set(TOPIC_KEY_NAME, topicEntry.getKey());
-            topicAssignment.set(PARTITIONS_KEY_NAME, topicEntry.getValue().toArray());
-            topicAssignments.add(topicAssignment);
-        }
-        struct.set(TOPIC_PARTITIONS_KEY_NAME, topicAssignments.toArray());
-
-        ByteBuffer buffer = ByteBuffer.allocate(CONSUMER_PROTOCOL_HEADER_V0.sizeOf() + ASSIGNMENT_V0.sizeOf(struct));
-        CONSUMER_PROTOCOL_HEADER_V0.writeTo(buffer);
-        ASSIGNMENT_V0.write(buffer, struct);
-        buffer.flip();
-        return buffer;
-    }
-
-    public static ByteBuffer serializeAssignmentV1(PartitionAssignor.Assignment assignment) {
-        Struct struct = new Struct(ASSIGNMENT_V1);
-        struct.set(USER_DATA_KEY_NAME, assignment.userData());
-        List<Struct> topicAssignments = new ArrayList<>();
-        Map<String, List<Integer>> partitionsByTopic = CollectionUtils.groupPartitionsByTopic(assignment.partitions());
-        for (Map.Entry<String, List<Integer>> topicEntry : partitionsByTopic.entrySet()) {
-            Struct topicAssignment = new Struct(TOPIC_ASSIGNMENT_V0);
-            topicAssignment.set(TOPIC_KEY_NAME, topicEntry.getKey());
-            topicAssignment.set(PARTITIONS_KEY_NAME, topicEntry.getValue().toArray());
-            topicAssignments.add(topicAssignment);
-        }
-        struct.set(TOPIC_PARTITIONS_KEY_NAME, topicAssignments.toArray());
-        struct.set(ERROR_CODE, assignment.error().code);
-
-        ByteBuffer buffer = ByteBuffer.allocate(CONSUMER_PROTOCOL_HEADER_V1.sizeOf() + ASSIGNMENT_V1.sizeOf(struct));
-        CONSUMER_PROTOCOL_HEADER_V1.writeTo(buffer);
-        ASSIGNMENT_V1.write(buffer, struct);
-        buffer.flip();
-        return buffer;
-    }
-
-    public static ByteBuffer serializeAssignment(PartitionAssignor.Assignment assignment) {
-        switch (assignment.version()) {
+    public static ByteBuffer serializeAssignment(Assignment assignment) {
+        switch (assignment.version) {
             case CONSUMER_PROTOCOL_V0:
                 return serializeAssignmentV0(assignment);
 
@@ -296,38 +195,7 @@ public class ConsumerProtocol {
         }
     }
 
-    public static PartitionAssignor.Assignment deserializeAssignmentV0(ByteBuffer buffer) {
-        Struct struct = ASSIGNMENT_V0.read(buffer);
-        ByteBuffer userData = struct.getBytes(USER_DATA_KEY_NAME);
-        List<TopicPartition> partitions = new ArrayList<>();
-        for (Object structObj : struct.getArray(TOPIC_PARTITIONS_KEY_NAME)) {
-            Struct assignment = (Struct) structObj;
-            String topic = assignment.getString(TOPIC_KEY_NAME);
-            for (Object partitionObj : assignment.getArray(PARTITIONS_KEY_NAME)) {
-                partitions.add(new TopicPartition(topic, (Integer) partitionObj));
-            }
-        }
-        return new PartitionAssignor.Assignment(CONSUMER_PROTOCOL_V0, partitions, userData);
-    }
-
-    public static PartitionAssignor.Assignment deserializeAssignmentV1(ByteBuffer buffer) {
-        Struct struct = ASSIGNMENT_V1.read(buffer);
-        ByteBuffer userData = struct.getBytes(USER_DATA_KEY_NAME);
-        List<TopicPartition> partitions = new ArrayList<>();
-        for (Object structObj : struct.getArray(TOPIC_PARTITIONS_KEY_NAME)) {
-            Struct assignment = (Struct) structObj;
-            String topic = assignment.getString(TOPIC_KEY_NAME);
-            for (Object partitionObj : assignment.getArray(PARTITIONS_KEY_NAME)) {
-                partitions.add(new TopicPartition(topic, (Integer) partitionObj));
-            }
-        }
-
-        AssignmentError error = AssignmentError.fromCode(struct.get(ERROR_CODE));
-
-        return new PartitionAssignor.Assignment(CONSUMER_PROTOCOL_V1, partitions, userData, error);
-    }
-
-    public static PartitionAssignor.Assignment deserializeAssignment(ByteBuffer buffer) {
+    public static Assignment deserializeAssignment(ByteBuffer buffer) {
         Struct header = CONSUMER_PROTOCOL_HEADER_SCHEMA.read(buffer);
         Short version = header.getShort(VERSION_KEY_NAME);
 
@@ -346,4 +214,287 @@ public class ConsumerProtocol {
                 return deserializeAssignmentV1(buffer);
         }
     }
+
+    static ByteBuffer serializeSubscriptionV0(Subscription subscription) {
+        Struct struct = new Struct(SUBSCRIPTION_V0);
+        struct.set(USER_DATA_KEY_NAME, subscription.userData());
+
+        ConsumerSubscriptionData consumerData = subscription.consumerData;
+        struct.set(TOPICS_KEY_NAME, consumerData.topics().toArray());
+
+        ByteBuffer buffer = ByteBuffer.allocate(CONSUMER_PROTOCOL_HEADER_V0.sizeOf() + SUBSCRIPTION_V0.sizeOf(struct));
+        CONSUMER_PROTOCOL_HEADER_V0.writeTo(buffer);
+        SUBSCRIPTION_V0.write(buffer, struct);
+        buffer.flip();
+        return buffer;
+    }
+
+    static ByteBuffer serializeSubscriptionV1(Subscription subscription) {
+        Struct struct = new Struct(SUBSCRIPTION_V1);
+        struct.set(USER_DATA_KEY_NAME, subscription.userData);
+
+        ConsumerSubscriptionData consumerData = subscription.consumerData;
+        struct.set(TOPICS_KEY_NAME, consumerData.topics().toArray());
+        List<Struct> topicAssignments = new ArrayList<>();
+        Map<String, List<Integer>> partitionsByTopic = CollectionUtils.groupPartitionsByTopic(consumerData.ownedPartitions());
+        for (Map.Entry<String, List<Integer>> topicEntry : partitionsByTopic.entrySet()) {
+            Struct topicAssignment = new Struct(TOPIC_ASSIGNMENT_V0);
+            topicAssignment.set(TOPIC_KEY_NAME, topicEntry.getKey());
+            topicAssignment.set(PARTITIONS_KEY_NAME, topicEntry.getValue().toArray());
+            topicAssignments.add(topicAssignment);
+        }
+        struct.set(OWNED_PARTITIONS_KEY_NAME, topicAssignments.toArray());
+
+        ByteBuffer buffer = ByteBuffer.allocate(CONSUMER_PROTOCOL_HEADER_V1.sizeOf() + SUBSCRIPTION_V1.sizeOf(struct));
+        CONSUMER_PROTOCOL_HEADER_V1.writeTo(buffer);
+        SUBSCRIPTION_V1.write(buffer, struct);
+        buffer.flip();
+        return buffer;
+    }
+
+    static Subscription deserializeSubscriptionV0(ByteBuffer buffer) {
+        Struct struct = SUBSCRIPTION_V0.read(buffer);
+        ByteBuffer userData = struct.getBytes(USER_DATA_KEY_NAME);
+        List<String> topics = new ArrayList<>();
+        for (Object topicObj : struct.getArray(TOPICS_KEY_NAME))
+            topics.add((String) topicObj);
+
+        ConsumerSubscriptionData consumerData = new ConsumerSubscriptionData(topics);
+        return new Subscription(CONSUMER_PROTOCOL_V0, userData, consumerData);
+    }
+
+    static Subscription deserializeSubscriptionV1(ByteBuffer buffer) {
+        Struct struct = SUBSCRIPTION_V1.read(buffer);
+        ByteBuffer userData = struct.getBytes(USER_DATA_KEY_NAME);
+        List<String> topics = new ArrayList<>();
+        for (Object topicObj : struct.getArray(TOPICS_KEY_NAME))
+            topics.add((String) topicObj);
+
+        List<TopicPartition> ownedPartitions = new ArrayList<>();
+        for (Object structObj : struct.getArray(OWNED_PARTITIONS_KEY_NAME)) {
+            Struct assignment = (Struct) structObj;
+            String topic = assignment.getString(TOPIC_KEY_NAME);
+            for (Object partitionObj : assignment.getArray(PARTITIONS_KEY_NAME)) {
+                ownedPartitions.add(new TopicPartition(topic, (Integer) partitionObj));
+            }
+        }
+
+        ConsumerSubscriptionData consumerData = new ConsumerSubscriptionData(topics, ownedPartitions);
+        return new Subscription(CONSUMER_PROTOCOL_V1, userData, consumerData);
+    }
+
+    static ByteBuffer serializeAssignmentV0(Assignment assignment) {
+        Struct struct = new Struct(ASSIGNMENT_V0);
+        struct.set(USER_DATA_KEY_NAME, assignment.userData());
+
+        ConsumerAssignmentData consumerData = assignment.consumerData;
+        List<Struct> topicAssignments = new ArrayList<>();
+        Map<String, List<Integer>> partitionsByTopic = CollectionUtils.groupPartitionsByTopic(consumerData.partitions());
+        for (Map.Entry<String, List<Integer>> topicEntry : partitionsByTopic.entrySet()) {
+            Struct topicAssignment = new Struct(TOPIC_ASSIGNMENT_V0);
+            topicAssignment.set(TOPIC_KEY_NAME, topicEntry.getKey());
+            topicAssignment.set(PARTITIONS_KEY_NAME, topicEntry.getValue().toArray());
+            topicAssignments.add(topicAssignment);
+        }
+        struct.set(TOPIC_PARTITIONS_KEY_NAME, topicAssignments.toArray());
+
+        ByteBuffer buffer = ByteBuffer.allocate(CONSUMER_PROTOCOL_HEADER_V0.sizeOf() + ASSIGNMENT_V0.sizeOf(struct));
+        CONSUMER_PROTOCOL_HEADER_V0.writeTo(buffer);
+        ASSIGNMENT_V0.write(buffer, struct);
+        buffer.flip();
+        return buffer;
+    }
+
+    static ByteBuffer serializeAssignmentV1(Assignment assignment) {
+        Struct struct = new Struct(ASSIGNMENT_V1);
+        struct.set(USER_DATA_KEY_NAME, assignment.userData());
+
+        ConsumerAssignmentData consumerData = assignment.consumerData;
+        List<Struct> topicAssignments = new ArrayList<>();
+        Map<String, List<Integer>> partitionsByTopic = CollectionUtils.groupPartitionsByTopic(consumerData.partitions());
+        for (Map.Entry<String, List<Integer>> topicEntry : partitionsByTopic.entrySet()) {
+            Struct topicAssignment = new Struct(TOPIC_ASSIGNMENT_V0);
+            topicAssignment.set(TOPIC_KEY_NAME, topicEntry.getKey());
+            topicAssignment.set(PARTITIONS_KEY_NAME, topicEntry.getValue().toArray());
+            topicAssignments.add(topicAssignment);
+        }
+        struct.set(TOPIC_PARTITIONS_KEY_NAME, topicAssignments.toArray());
+        struct.set(ERROR_CODE, consumerData.error().code);
+
+        ByteBuffer buffer = ByteBuffer.allocate(CONSUMER_PROTOCOL_HEADER_V1.sizeOf() + ASSIGNMENT_V1.sizeOf(struct));
+        CONSUMER_PROTOCOL_HEADER_V1.writeTo(buffer);
+        ASSIGNMENT_V1.write(buffer, struct);
+        buffer.flip();
+        return buffer;
+    }
+
+    static Assignment deserializeAssignmentV0(ByteBuffer buffer) {
+        Struct struct = ASSIGNMENT_V0.read(buffer);
+        ByteBuffer userData = struct.getBytes(USER_DATA_KEY_NAME);
+        List<TopicPartition> partitions = new ArrayList<>();
+        for (Object structObj : struct.getArray(TOPIC_PARTITIONS_KEY_NAME)) {
+            Struct assignment = (Struct) structObj;
+            String topic = assignment.getString(TOPIC_KEY_NAME);
+            for (Object partitionObj : assignment.getArray(PARTITIONS_KEY_NAME)) {
+                partitions.add(new TopicPartition(topic, (Integer) partitionObj));
+            }
+        }
+
+        ConsumerAssignmentData consumerData = new ConsumerAssignmentData(partitions);
+        return new Assignment(CONSUMER_PROTOCOL_V0, userData, consumerData);
+    }
+
+    static Assignment deserializeAssignmentV1(ByteBuffer buffer) {
+        Struct struct = ASSIGNMENT_V1.read(buffer);
+        ByteBuffer userData = struct.getBytes(USER_DATA_KEY_NAME);
+        List<TopicPartition> partitions = new ArrayList<>();
+        for (Object structObj : struct.getArray(TOPIC_PARTITIONS_KEY_NAME)) {
+            Struct assignment = (Struct) structObj;
+            String topic = assignment.getString(TOPIC_KEY_NAME);
+            for (Object partitionObj : assignment.getArray(PARTITIONS_KEY_NAME)) {
+                partitions.add(new TopicPartition(topic, (Integer) partitionObj));
+            }
+        }
+
+        AssignmentError error = AssignmentError.fromCode(struct.get(ERROR_CODE));
+        ConsumerAssignmentData consumerData = new ConsumerAssignmentData(partitions, error);
+
+        return new Assignment(CONSUMER_PROTOCOL_V1, userData, consumerData);
+    }
+
+    static class Subscription {
+        private final Short version;
+        private final ByteBuffer userData;
+        private final ConsumerSubscriptionData consumerData;
+
+        Subscription(Short version, ByteBuffer userData, ConsumerSubscriptionData consumerData) {
+            this.version = version;
+            this.userData = userData;
+            this.consumerData = consumerData;
+
+            if (version < CONSUMER_PROTOCOL_V0)
+                throw new SchemaException("Unsupported subscription version: " + version);
+
+            if (version < CONSUMER_PROTOCOL_V1 && !consumerData.ownedPartitions().isEmpty())
+                throw new IllegalArgumentException("Subscription version smaller than 1 should not have owned partitions");
+        }
+
+        public Subscription(ByteBuffer userData, ConsumerSubscriptionData consumerData) {
+            this(CONSUMER_PROTOCOL_V1, userData, consumerData);
+        }
+
+        public ByteBuffer userData() {
+            return userData;
+        }
+
+        public ConsumerSubscriptionData consumerSubscriptionData() {
+            return consumerData;
+        }
+    }
+
+    static class Assignment {
+        private final Short version;
+        private final ByteBuffer userData;
+        private final ConsumerAssignmentData consumerData;
+
+        Assignment(Short version, ByteBuffer userData, ConsumerAssignmentData consumerData) {
+            this.version = version;
+            this.userData = userData;
+            this.consumerData = consumerData;
+
+            if (version < CONSUMER_PROTOCOL_V0)
+                throw new SchemaException("Unsupported subscription version: " + version);
+
+            if (version < CONSUMER_PROTOCOL_V1 && consumerData.error != ConsumerProtocol.AssignmentError.NONE)
+                throw new IllegalArgumentException("Assignment version smaller than 1 should not have error code.");
+        }
+
+        public Assignment(ByteBuffer userData, ConsumerAssignmentData consumerData) {
+            this(CONSUMER_PROTOCOL_V1, userData, consumerData);
+        }
+
+        public ByteBuffer userData() {
+            return userData;
+        }
+
+        public ConsumerAssignmentData consumerAssignmentData() {
+            return consumerData;
+        }
+    }
+
+    public static class ConsumerSubscriptionData {
+
+        private final List<String> topics;
+        private final List<TopicPartition> ownedPartitions;
+        private Optional<String> groupInstanceId;
+
+        public ConsumerSubscriptionData(List<String> topics, List<TopicPartition> ownedPartitions) {
+            this.topics = topics;
+            this.ownedPartitions = ownedPartitions;
+            this.groupInstanceId = Optional.empty();
+        }
+
+        public ConsumerSubscriptionData(List<String> topics) {
+            this(topics, Collections.emptyList());
+        }
+
+        public List<String> topics() {
+            return topics;
+        }
+
+        public List<TopicPartition> ownedPartitions() {
+            return ownedPartitions;
+        }
+
+        public void setGroupInstanceId(Optional<String> groupInstanceId) {
+            this.groupInstanceId = groupInstanceId;
+        }
+
+        public Optional<String> groupInstanceId() {
+            return groupInstanceId;
+        }
+
+        @Override
+        public String toString() {
+            return "Subscription(" +
+                ", topics=" + topics +
+                ", ownedPartitions=" + ownedPartitions +
+                ", group.instance.id=" + groupInstanceId + ")";
+        }
+    }
+
+    static class ConsumerAssignmentData {
+        private final List<TopicPartition> partitions;
+        private ConsumerProtocol.AssignmentError error;
+
+        public ConsumerAssignmentData(List<TopicPartition> partitions, AssignmentError error) {
+            this.partitions = partitions;
+            this.error = error;
+        }
+
+        public ConsumerAssignmentData(List<TopicPartition> partitions) {
+            this(partitions, AssignmentError.NONE);
+        }
+
+        public List<TopicPartition> partitions() {
+            return partitions;
+        }
+
+        public ConsumerProtocol.AssignmentError error() {
+            return error;
+        }
+
+        public void setError(ConsumerProtocol.AssignmentError error) {
+            this.error = error;
+        }
+
+        @Override
+        public String toString() {
+            return "Assignment(" +
+                ", partitions=" + partitions +
+                ", error=" + error +
+                ')';
+        }
+    }
+
 }

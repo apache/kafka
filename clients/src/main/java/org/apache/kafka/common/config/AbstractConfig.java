@@ -356,7 +356,7 @@ public class AbstractConfig {
     }
 
     /**
-     * Get a configured instance of the give class specified by the given configuration key. If the object implements
+     * Get a configured instance of the given class specified by the given configuration key. If the object implements
      * Configurable configure it using the configuration.
      *
      * @param key The configuration key for the class
