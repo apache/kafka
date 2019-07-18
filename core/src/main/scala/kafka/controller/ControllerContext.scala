@@ -34,7 +34,7 @@ class ControllerContext {
   var epochZkVersion: Int = KafkaController.InitialControllerEpochZkVersion
 
   var allTopics: Set[String] = Set.empty
-  val partitionAssignments = mutable.Map.empty[String, mutable.Map[Int, Seq[Int]]]
+  val partitionAssignments = mutable.Map.empty[String, mutable.Map[Int, PartitionReplicaAssignment]]
   val partitionLeadershipInfo = mutable.Map.empty[TopicPartition, LeaderIsrAndControllerEpoch]
   val partitionsBeingReassigned = mutable.Map.empty[TopicPartition, ReassignedPartitionsContext]
   val partitionStates = mutable.Map.empty[TopicPartition, PartitionState]
@@ -65,12 +65,6 @@ class ControllerContext {
   val topicsWithDeletionStarted = mutable.Set.empty[String]
   val topicsIneligibleForDeletion = mutable.Set.empty[String]
 
-
-  def partitionReplicaAssignment(topicPartition: TopicPartition): Seq[Int] = {
-    partitionAssignments.getOrElse(topicPartition.topic, mutable.Map.empty)
-      .getOrElse(topicPartition.partition, Seq.empty)
-  }
-
   private def clearTopicsState(): Unit = {
     allTopics = Set.empty
     partitionAssignments.clear()
@@ -82,14 +76,39 @@ class ControllerContext {
     replicaStates.clear()
   }
 
+  def partitionReplicaAssignment(topicPartition: TopicPartition): Seq[Int] = {
+    partitionAssignments.getOrElse(topicPartition.topic, mutable.Map.empty)
+      .get(topicPartition.partition) match {
+        case Some(partitionAssignment) => partitionAssignment.replicas
+        case None => Seq.empty
+      }
+  }
+
   def updatePartitionReplicaAssignment(topicPartition: TopicPartition, newReplicas: Seq[Int]): Unit = {
-    partitionAssignments.getOrElseUpdate(topicPartition.topic, mutable.Map.empty)
-      .put(topicPartition.partition, newReplicas)
+    // TODO: Synchronized?
+    val assignments = partitionAssignments.getOrElseUpdate(topicPartition.topic, mutable.Map.empty)
+    assignments.put(
+      topicPartition.partition,
+      assignments.get(topicPartition.partition) match {
+        case Some(partitionAssignment) =>
+          PartitionReplicaAssignment(
+            newReplicas,
+            partitionAssignment.addingReplicas,
+            partitionAssignment.removingReplicas
+          )
+        case None =>
+          PartitionReplicaAssignment(
+            newReplicas,
+            Seq.empty,
+            Seq.empty
+          )
+      }
+    )
   }
 
   def partitionReplicaAssignmentForTopic(topic : String): Map[TopicPartition, Seq[Int]] = {
     partitionAssignments.getOrElse(topic, Map.empty).map {
-      case (partition, replicas) => (new TopicPartition(topic, partition), replicas)
+      case (partition, assignment) => (new TopicPartition(topic, partition), assignment.replicas)
     }.toMap
   }
 
@@ -133,7 +152,7 @@ class ControllerContext {
   def partitionsOnBroker(brokerId: Int): Set[TopicPartition] = {
     partitionAssignments.flatMap {
       case (topic, topicReplicaAssignment) => topicReplicaAssignment.filter {
-        case (_, replicas) => replicas.contains(brokerId)
+        case (_, partitionAssignments) => partitionAssignments.replicas.contains(brokerId)
       }.map {
         case (partition, _) => new TopicPartition(topic, partition)
       }
@@ -152,7 +171,7 @@ class ControllerContext {
     brokerIds.flatMap { brokerId =>
       partitionAssignments.flatMap {
         case (topic, topicReplicaAssignment) => topicReplicaAssignment.collect {
-          case (partition, replicas)  if replicas.contains(brokerId) =>
+          case (partition, partitionAssignments)  if partitionAssignments.replicas.contains(brokerId) =>
             PartitionAndReplica(new TopicPartition(topic, partition), brokerId)
         }
       }
@@ -161,7 +180,7 @@ class ControllerContext {
 
   def replicasForTopic(topic: String): Set[PartitionAndReplica] = {
     partitionAssignments.getOrElse(topic, mutable.Map.empty).flatMap {
-      case (partition, replicas) => replicas.map(r => PartitionAndReplica(new TopicPartition(topic, partition), r))
+      case (partition, assignments) => assignments.replicas.map(r => PartitionAndReplica(new TopicPartition(topic, partition), r))
     }.toSet
   }
 
@@ -185,10 +204,10 @@ class ControllerContext {
   def onlineAndOfflineReplicas: (Set[PartitionAndReplica], Set[PartitionAndReplica]) = {
     val onlineReplicas = mutable.Set.empty[PartitionAndReplica]
     val offlineReplicas = mutable.Set.empty[PartitionAndReplica]
-    for ((topic, partitionReplicas) <- partitionAssignments;
-         (partitionId, replicas) <- partitionReplicas) {
+    for ((topic, partitionAssignments) <- partitionAssignments;
+         (partitionId, assignments) <- partitionAssignments) {
       val partition = new TopicPartition(topic, partitionId)
-      for (replica <- replicas) {
+      for (replica <- assignments.replicas) {
         val partitionAndReplica = PartitionAndReplica(partition, replica)
         if (isReplicaOnline(replica, partition))
           onlineReplicas.add(partitionAndReplica)
