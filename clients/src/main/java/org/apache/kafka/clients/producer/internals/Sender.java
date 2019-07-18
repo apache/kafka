@@ -439,7 +439,7 @@ public class Sender implements Runnable {
         AbstractRequest.Builder<?> requestBuilder = nextRequestHandler.requestBuilder();
         Node targetNode = null;
         try {
-            targetNode = awaitLeastLoadedNodeReady(requestTimeoutMs, nextRequestHandler.coordinatorType());
+            targetNode = awaitNodeReady(nextRequestHandler.coordinatorType());
             if (targetNode == null) {
                 lookupCoordinatorAndRetry(nextRequestHandler);
                 return true;
@@ -465,13 +465,14 @@ public class Sender implements Runnable {
     }
 
     private void lookupCoordinatorAndRetry(TransactionManager.TxnRequestHandler nextRequestHandler) {
-        if (!nextRequestHandler.needsCoordinator()) {
+        if (nextRequestHandler.needsCoordinator()) {
+            transactionManager.lookupCoordinator(nextRequestHandler);
+        } else {
             // For non-coordinator requests, sleep here to prevent a tight loop when no node is available
             time.sleep(retryBackoffMs);
             metadata.requestUpdate();
         }
 
-        transactionManager.lookupCoordinator(nextRequestHandler);
         transactionManager.retry(nextRequestHandler);
     }
 
@@ -515,12 +516,12 @@ public class Sender implements Runnable {
         return NetworkClientUtils.sendAndReceive(client, request, time);
     }
 
-    private Node awaitLeastLoadedNodeReady(long remainingTimeMs, FindCoordinatorRequest.CoordinatorType coordinatorType) throws IOException {
+    private Node awaitNodeReady(FindCoordinatorRequest.CoordinatorType coordinatorType) throws IOException {
         Node node = coordinatorType != null ?
                 transactionManager.coordinator(coordinatorType) :
                 client.leastLoadedNode(time.milliseconds());
 
-        if (node != null && NetworkClientUtils.awaitReady(client, node, time, remainingTimeMs)) {
+        if (node != null && NetworkClientUtils.awaitReady(client, node, time, requestTimeoutMs)) {
             return node;
         }
         return null;
@@ -530,7 +531,7 @@ public class Sender implements Runnable {
         while (!forceClose && !transactionManager.hasProducerId() && !transactionManager.hasError()) {
             Node node = null;
             try {
-                node = awaitLeastLoadedNodeReady(requestTimeoutMs, null);
+                node = awaitNodeReady(null);
                 if (node != null) {
                     ClientResponse response = sendAndAwaitInitProducerIdRequest(node);
                     InitProducerIdResponse initProducerIdResponse = (InitProducerIdResponse) response.responseBody();
