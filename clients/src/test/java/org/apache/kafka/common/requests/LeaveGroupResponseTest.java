@@ -17,6 +17,7 @@
 package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.message.LeaveGroupResponseData;
+import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.junit.Test;
 
@@ -38,7 +39,7 @@ public class LeaveGroupResponseTest {
         LeaveGroupResponseData responseData = new LeaveGroupResponseData()
                                                   .setErrorCode(Errors.NOT_COORDINATOR.code())
                                                   .setThrottleTimeMs(throttleTimeMs);
-        for (short version = 0; version < LeaveGroupResponseData.SCHEMAS.length; version++) {
+        for (short version = 0; version <= ApiKeys.LEAVE_GROUP.latestVersion(); version++) {
             LeaveGroupResponse leaveGroupResponse = new LeaveGroupResponse(responseData.toStruct(version), version);
 
             assertEquals(expectedErrorCounts, leaveGroupResponse.errorCounts());
@@ -57,9 +58,13 @@ public class LeaveGroupResponseTest {
     public void testShouldThrottle() {
         // A dummy setup is ok.
         LeaveGroupResponse response = new LeaveGroupResponse(new LeaveGroupResponseData());
-        assertFalse(response.shouldClientThrottle((short) 0));
-        assertFalse(response.shouldClientThrottle((short) 1));
-        assertTrue(response.shouldClientThrottle((short) 2));
+        for (short version = 0; version <= ApiKeys.LEAVE_GROUP.latestVersion(); version++) {
+            if (version >= 2) {
+                assertTrue(response.shouldClientThrottle(version));
+            } else {
+                assertFalse(response.shouldClientThrottle(version));
+            }
+        }
     }
 
     @Test
@@ -67,7 +72,7 @@ public class LeaveGroupResponseTest {
         LeaveGroupResponseData responseData = new LeaveGroupResponseData()
             .setErrorCode(Errors.NONE.code())
             .setThrottleTimeMs(throttleTimeMs);
-        for (short version = 0; version < LeaveGroupResponseData.SCHEMAS.length; version++) {
+        for (short version = 0; version <= ApiKeys.LEAVE_GROUP.latestVersion(); version++) {
             LeaveGroupResponse primaryResponse = new LeaveGroupResponse(responseData.toStruct(version), version);
 
             LeaveGroupResponse secondaryResponse = new LeaveGroupResponse(responseData.toStruct(version), version);
