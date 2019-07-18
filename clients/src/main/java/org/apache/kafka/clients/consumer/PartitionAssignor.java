@@ -48,7 +48,15 @@ import static org.apache.kafka.clients.consumer.internals.ConsumerProtocol.CONSU
  */
 public interface PartitionAssignor {
 
-    ByteBuffer userData();
+    /**
+     * Return serialized data that will included in the serializable subscription object and can
+     * be leveraged in {@link #assign(Cluster, Map)} ((e.g. local host/rack information)
+     *
+     * @return Non-null subscription with optional user data
+     */
+    default ByteBuffer userData() {
+        return ByteBuffer.wrap(new byte[0]);
+    }
 
     /**
      * Perform the group assignment given the member subscriptions and current cluster metadata.
