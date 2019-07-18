@@ -47,16 +47,8 @@ import static org.apache.kafka.clients.consumer.internals.ConsumerProtocol.CONSU
  * can use this user data to forward the rackId belonging to each member.
  */
 public interface PartitionAssignor {
-    
-    /**
-     * Return a serializable object representing the local member's subscription. This can include
-     * additional information as well (e.g. local host/rack information) which can be leveraged in
-     * {@link #assign(Cluster, Map)}.
-     * @param topics Topics subscribed to through {@link org.apache.kafka.clients.consumer.KafkaConsumer#subscribe(java.util.Collection)}
-     *               and variants
-     * @return Non-null subscription with optional user data
-     */
-    Subscription subscription(ConsumerSubscriptionData subscriptionData);
+
+    ByteBuffer userData();
 
     /**
      * Perform the group assignment given the member subscriptions and current cluster metadata.
