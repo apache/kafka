@@ -381,7 +381,7 @@ class WorkerSourceTask extends WorkerTask {
         return result;
     }
 
-    private synchronized void commitTaskRecord(SourceRecord record) {
+    private void commitTaskRecord(SourceRecord record) {
         try {
             task.commitRecord(record);
         } catch (Throwable t) {
@@ -568,7 +568,7 @@ class WorkerSourceTask extends WorkerTask {
                 finishedAllWrites();
             }
         }
-        public synchronized void completeRecord() {
+        public void completeRecord() {
             if (counter > 0 && --counter == 0) {
                 finishedAllWrites();
             }
