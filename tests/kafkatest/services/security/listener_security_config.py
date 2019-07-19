@@ -40,4 +40,4 @@ class ListenerSecurityConfig:
         self.interbroker_listener_overrides = interbroker_listener_overrides
 
     def requires_sasl_mechanism_prefix(self, config):
-        return config in SASL_MECHANISM_PREFIXED_CONFIGS
+        return config in ListenerSecurityConfig.SASL_MECHANISM_PREFIXED_CONFIGS
