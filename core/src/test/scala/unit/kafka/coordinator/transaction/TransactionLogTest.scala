@@ -18,8 +18,7 @@ package kafka.coordinator.transaction
 
 
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.record.{CompressionType, SimpleRecord, MemoryRecords}
-
+import org.apache.kafka.common.record.{CompressionType, MemoryRecords, SimpleRecord}
 import org.junit.Assert.assertEquals
 import org.junit.Test
 import org.scalatest.Assertions.intercept
@@ -28,7 +27,8 @@ import scala.collection.JavaConverters._
 
 class TransactionLogTest {
 
-  val producerEpoch: Short = 0
+  val producerEpoch: Short = 1
+  val lastProducerEpoch: Short = 0
   val transactionTimeoutMs: Int = 1000
 
   val topicPartitions: Set[TopicPartition] = Set[TopicPartition](new TopicPartition("topic1", 0),
@@ -66,42 +66,46 @@ class TransactionLogTest {
       4L -> PrepareAbort,
       5L -> CompleteAbort)
 
-    // generate transaction log messages
-    val txnRecords = pidMappings.map { case (transactionalId, producerId) =>
-      val txnMetadata = TransactionMetadata(transactionalId, producerId, producerEpoch, transactionTimeoutMs,
-        transactionStates(producerId), 0)
 
-      if (!txnMetadata.state.equals(Empty))
-        txnMetadata.addPartitions(topicPartitions)
+    (0 to TransactionLog.ValueSchema.CurrentVersion).foreach { version =>
+      // generate transaction log messages
+      val txnRecords = pidMappings.map { case (transactionalId, producerId) =>
+        val txnMetadata = TransactionMetadata(transactionalId, producerId, producerEpoch, lastProducerEpoch,
+          transactionTimeoutMs, transactionStates(producerId), 0)
 
-      val keyBytes = TransactionLog.keyToBytes(transactionalId)
-      val valueBytes = TransactionLog.valueToBytes(txnMetadata.prepareNoTransit())
+        if (!txnMetadata.state.equals(Empty))
+          txnMetadata.addPartitions(topicPartitions)
 
-      new SimpleRecord(keyBytes, valueBytes)
-    }.toSeq
+        val keyBytes = TransactionLog.keyToBytes(transactionalId)
+        val valueBytes = TransactionLog.valueToBytes(txnMetadata.prepareNoTransit(), version.toShort)
 
-    val records = MemoryRecords.withRecords(0, CompressionType.NONE, txnRecords: _*)
+        new SimpleRecord(keyBytes, valueBytes)
+      }.toSeq
 
-    var count = 0
-    for (record <- records.records.asScala) {
-      val txnKey = TransactionLog.readTxnRecordKey(record.key)
-      val transactionalId = txnKey.transactionalId
-      val txnMetadata = TransactionLog.readTxnRecordValue(transactionalId, record.value)
+      val records = MemoryRecords.withRecords(0, CompressionType.NONE, txnRecords: _*)
 
-      assertEquals(pidMappings(transactionalId), txnMetadata.producerId)
-      assertEquals(producerEpoch, txnMetadata.producerEpoch)
-      assertEquals(transactionTimeoutMs, txnMetadata.txnTimeoutMs)
-      assertEquals(transactionStates(txnMetadata.producerId), txnMetadata.state)
+      var count = 0
+      for (record <- records.records.asScala) {
+        val txnKey = TransactionLog.readTxnRecordKey(record.key)
+        val transactionalId = txnKey.transactionalId
+        val txnMetadata = TransactionLog.readTxnRecordValue(transactionalId, record.value)
 
-      if (txnMetadata.state.equals(Empty))
-        assertEquals(Set.empty[TopicPartition], txnMetadata.topicPartitions)
-      else
-        assertEquals(topicPartitions, txnMetadata.topicPartitions)
+        assertEquals(pidMappings(transactionalId), txnMetadata.producerId)
+        assertEquals(producerEpoch, txnMetadata.producerEpoch)
+        assertEquals(if (version >= 1) lastProducerEpoch else -1, txnMetadata.lastProducerEpoch)
+        assertEquals(transactionTimeoutMs, txnMetadata.txnTimeoutMs)
+        assertEquals(transactionStates(txnMetadata.producerId), txnMetadata.state)
 
-      count = count + 1
+        if (txnMetadata.state.equals(Empty))
+          assertEquals(Set.empty[TopicPartition], txnMetadata.topicPartitions)
+        else
+          assertEquals(topicPartitions, txnMetadata.topicPartitions)
+
+        count = count + 1
+      }
+
+      assertEquals(pidMappings.size, count)
     }
 
-    assertEquals(pidMappings.size, count)
   }
-
 }

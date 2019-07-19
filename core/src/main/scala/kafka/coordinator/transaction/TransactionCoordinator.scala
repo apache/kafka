@@ -32,6 +32,8 @@ import org.apache.kafka.common.utils.{LogContext, Time}
 
 object TransactionCoordinator {
 
+  val NO_PRODUCER_ID: Long = -1L
+
   def apply(config: KafkaConfig,
             replicaManager: ReplicaManager,
             scheduler: Scheduler,
@@ -104,6 +106,8 @@ class TransactionCoordinator(brokerId: Int,
 
   def handleInitProducerId(transactionalId: String,
                            transactionTimeoutMs: Int,
+                           producerId: Long,
+                           currentProducerEpoch: Short,
                            responseCallback: InitProducerIdCallback): Unit = {
 
     if (transactionalId == null) {
@@ -125,22 +129,30 @@ class TransactionCoordinator(brokerId: Int,
           val createdMetadata = new TransactionMetadata(transactionalId = transactionalId,
             producerId = producerId,
             producerEpoch = RecordBatch.NO_PRODUCER_EPOCH,
+            lastProducerEpoch = RecordBatch.NO_PRODUCER_EPOCH,
             txnTimeoutMs = transactionTimeoutMs,
             state = Empty,
             topicPartitions = collection.mutable.Set.empty[TopicPartition],
             txnLastUpdateTimestamp = time.milliseconds())
           txnManager.putTransactionStateIfNotExists(transactionalId, createdMetadata)
 
-        case Some(epochAndTxnMetadata) => Right(epochAndTxnMetadata)
+        case Some(epochAndTxnMetadata) =>
+          if (producerId != NO_PRODUCER_ID && epochAndTxnMetadata.transactionMetadata.producerId != producerId)
+            Left(Errors.INVALID_PRODUCER_EPOCH)
+          else
+            Right(epochAndTxnMetadata)
       }
 
-      val result: ApiResult[(Int, TxnTransitMetadata)] = coordinatorEpochAndMetadata.right.flatMap {
-        existingEpochAndMetadata =>
+      val result: ApiResult[(Int, TxnTransitMetadata)] = coordinatorEpochAndMetadata match {
+        case Left(error) => Left(error)
+
+        case Right(existingEpochAndMetadata) =>
           val coordinatorEpoch = existingEpochAndMetadata.coordinatorEpoch
           val txnMetadata = existingEpochAndMetadata.transactionMetadata
 
           txnMetadata.inLock {
-            prepareInitProduceIdTransit(transactionalId, transactionTimeoutMs, coordinatorEpoch, txnMetadata)
+            prepareInitProduceIdTransit(transactionalId, transactionTimeoutMs, coordinatorEpoch,
+              txnMetadata, currentProducerEpoch)
           }
       }
 
@@ -186,7 +198,8 @@ class TransactionCoordinator(brokerId: Int,
   private def prepareInitProduceIdTransit(transactionalId: String,
                                           transactionTimeoutMs: Int,
                                           coordinatorEpoch: Int,
-                                          txnMetadata: TransactionMetadata): ApiResult[(Int, TxnTransitMetadata)] = {
+                                          txnMetadata: TransactionMetadata,
+                                          currentProducerEpoch: Short): ApiResult[(Int, TxnTransitMetadata)] = {
     if (txnMetadata.pendingTransitionInProgress) {
       // return a retriable exception to let the client backoff and retry
       Left(Errors.CONCURRENT_TRANSACTIONS)
@@ -198,14 +211,19 @@ class TransactionCoordinator(brokerId: Int,
           Left(Errors.CONCURRENT_TRANSACTIONS)
 
         case CompleteAbort | CompleteCommit | Empty =>
-          val transitMetadata = if (txnMetadata.isProducerEpochExhausted) {
+          val transitMetadataResult = if (txnMetadata.isProducerEpochExhausted) {
             val newProducerId = producerIdManager.generateProducerId()
-            txnMetadata.prepareProducerIdRotation(newProducerId, transactionTimeoutMs, time.milliseconds())
+            Right(txnMetadata.prepareProducerIdRotation(newProducerId, transactionTimeoutMs, time.milliseconds()))
           } else {
-            txnMetadata.prepareIncrementProducerEpoch(transactionTimeoutMs, time.milliseconds())
+            txnMetadata.prepareIncrementProducerEpoch(transactionTimeoutMs, currentProducerEpoch, time.milliseconds())
           }
 
-          Right(coordinatorEpoch, transitMetadata)
+          transitMetadataResult match {
+            case Right(transitMetadata) =>
+              Right(coordinatorEpoch, transitMetadata)
+            case Left(error) =>
+              Left(error)
+          }
 
         case Ongoing =>
           // indicate to abort the current ongoing txn first. Note that this epoch is never returned to the
