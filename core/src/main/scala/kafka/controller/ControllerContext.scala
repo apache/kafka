@@ -22,9 +22,34 @@ import org.apache.kafka.common.TopicPartition
 
 import scala.collection.{Map, Seq, Set, mutable}
 
+object PartitionReplicaAssignment {
+  def fromOldAndNewReplicas(oldReplicas: Seq[Int], newReplicas: Seq[Int]): PartitionReplicaAssignment = {
+    val fullReplicaSet = (newReplicas ++ oldReplicas).distinct
+    PartitionReplicaAssignment(
+      fullReplicaSet,
+      fullReplicaSet.filterNot(oldReplicas.contains(_)),
+      fullReplicaSet.filterNot(newReplicas.contains(_))
+    )
+  }
+}
+
 case class PartitionReplicaAssignment(replicas: Seq[Int], addingReplicas: Seq[Int], removingReplicas: Seq[Int]) {
   def isBeingReassigned: Boolean = {
     addingReplicas.nonEmpty || removingReplicas.nonEmpty
+  }
+
+  /**
+    * Returns the partition replica assignment previous to this one.
+    * It is different than this one only when the partition is undergoing reassignment
+    * Note that this will not preserve the original ordering: (TODO:)
+    * e.g RS = [1,2,3]; Reassign to [3, 2, 4] -- R=[1, 3, 2, 4], AR=[4], RR=[1]; PreviousAssignment = [1, 3, 2]
+    */
+  def previousAssignment: PartitionReplicaAssignment = {
+    PartitionReplicaAssignment(
+      replicas.filterNot(addingReplicas.contains(_)),
+      Seq(),
+      Seq()
+    )
   }
 
   /**
@@ -130,6 +155,12 @@ class ControllerContext {
   def partitionReplicaAssignmentForTopic(topic : String): Map[TopicPartition, Seq[Int]] = {
     partitionAssignments.getOrElse(topic, Map.empty).map {
       case (partition, assignment) => (new TopicPartition(topic, partition), assignment.replicas)
+    }.toMap
+  }
+
+  def partitionFullReplicaAssignmentForTopic(topic : String): Map[TopicPartition, PartitionReplicaAssignment] = {
+    partitionAssignments.getOrElse(topic, Map.empty).map {
+      case (partition, assignment) => (new TopicPartition(topic, partition), assignment)
     }.toMap
   }
 

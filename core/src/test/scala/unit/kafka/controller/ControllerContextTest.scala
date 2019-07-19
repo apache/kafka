@@ -158,5 +158,32 @@ class ControllerContextTest {
     val partition = PartitionReplicaAssignment(List(1, 2, 3, 4, 5, 6), List(), List())
     assertFalse(partition.isBeingReassigned)
     assertEquals(List(1, 2, 3, 4, 5, 6), partition.targetReplicas)
+
+    val reassigningPartition4 = PartitionReplicaAssignment.fromOldAndNewReplicas(
+      List(1, 2, 3, 4), List(4, 2, 5, 3)
+    )
+    assertEquals(List(4, 2, 5, 3, 1), reassigningPartition4.replicas)
+    assertEquals(List(4, 2, 5, 3), reassigningPartition4.targetReplicas)
+    assertEquals(List(5), reassigningPartition4.addingReplicas)
+    assertEquals(List(1), reassigningPartition4.removingReplicas)
+    assertTrue(reassigningPartition4.isBeingReassigned)
+
+    val reassigningPartition5 = PartitionReplicaAssignment.fromOldAndNewReplicas(
+      List(1, 2, 3), List(3, 1, 2)
+    )
+    assertEquals(List(3, 1, 2), reassigningPartition5.replicas)
+    assertEquals(List(3, 1, 2), reassigningPartition5.targetReplicas)
+    assertEquals(List(), reassigningPartition5.addingReplicas)
+    assertEquals(List(), reassigningPartition5.removingReplicas)
+    assertFalse(reassigningPartition5.isBeingReassigned)
+
+    val reassigningPartition6 = PartitionReplicaAssignment.fromOldAndNewReplicas(
+      List(1, 2, 3), List(4, 5, 6)
+    )
+    assertEquals(List(4, 5, 6, 1, 2, 3), reassigningPartition6.replicas)
+    assertEquals(List(4, 5, 6), reassigningPartition6.targetReplicas)
+    assertEquals(List(4, 5, 6), reassigningPartition6.addingReplicas)
+    assertEquals(List(1, 2, 3), reassigningPartition6.removingReplicas)
+    assertTrue(reassigningPartition6.isBeingReassigned)
   }
 }

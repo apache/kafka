@@ -647,6 +647,65 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
     assertEquals(Seq.empty, zkClient.getReplicasForPartition(new TopicPartition("customers", 0)))
   }
 
+
+  /**
+    * Set a reassignment through the `/topics/<topic>` znode and set the `reassign_partitions` znode while the brokers are down.
+    * Verify that the reassignment is triggered by the Controller during start-up with the `reassign_partitions` taking precedence
+    */
+  @Test
+  def shouldTriggerReassignmentWithZnodePrecedenceOnControllerStartup(): Unit = {
+    startBrokers(Seq(0, 1, 2))
+    createTopic(zkClient, "orders", Map(0 -> List(0, 1), 1 -> List(1, 2), 2 -> List(0, 1)), servers)
+    servers.foreach(_.shutdown())
+
+    val move = Map(
+      new TopicPartition("orders", 0) -> Seq(2, 1), // moves
+      new TopicPartition("orders", 1) -> Seq(1, 2), // stays
+      new TopicPartition("customers", 0) -> Seq(1, 2) // non-existent topic, triggers topic deleted path
+    )
+
+    zkClient.setTopicAssignment("orders", Map(
+      new TopicPartition("orders", 0) -> PartitionReplicaAssignment(List(0, 1), List(2), List(0)), // should be overwritten
+      new TopicPartition("orders", 1) -> PartitionReplicaAssignment(List(1, 2), List(3), List(1)), // should be overwritten
+      new TopicPartition("orders", 2) -> PartitionReplicaAssignment(List(0, 1, 2), List(2), List(0)) // moves
+    ))
+    // Set znode directly to avoid non-existent topic validation
+    zkClient.setOrCreatePartitionReassignment(move, ZkVersion.MatchAnyVersion)
+
+    servers.foreach(_.startup())
+    waitForReassignmentToComplete()
+
+    assertEquals(Seq(2, 1), zkClient.getReplicasForPartition(new TopicPartition("orders", 0)))
+    assertEquals(Seq(1, 2), zkClient.getReplicasForPartition(new TopicPartition("orders", 1)))
+    assertEquals(Seq(1, 2), zkClient.getReplicasForPartition(new TopicPartition("orders", 2)))
+    assertEquals(Seq.empty, zkClient.getReplicasForPartition(new TopicPartition("customers", 0)))
+  }
+//
+//  /**
+//    * 1. Trigger ZK reassignment for partitions 0, 1
+//    * 2. Trigger API reassignment for partitions 1, 2
+//    * Ensure ZK node is emptied out after the API reassignment of 1 finishes
+//    */
+//  @Test
+//  def shouldDeleteReassignmentZnodeAfterApiReassignmentForPartitionCompletes(): Unit = {
+//
+//  }
+//
+//  @Test
+//  def shouldReassignThroughApi(): Unit = {
+//
+//  }
+//
+//  @Test
+//  def shouldBeAbleToCancelThroughApi(): Unit = {
+//
+//  }
+//
+//  @Test
+//  def shouldBeAbleToCancelZKTriggeredAssignmentThroughApi(): Unit = {
+//
+//  }
+
   def waitForReassignmentToComplete(pause: Long = 100L) {
     waitUntilTrue(() => !zkClient.reassignPartitionsInProgress,
       s"Znode ${ReassignPartitionsZNode.path} wasn't deleted", pause = pause)
