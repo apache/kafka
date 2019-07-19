@@ -137,7 +137,7 @@ def annotate_data_lost(data_lost, msg, number_validated):
             "This suggests they were lost on their way to the consumer." % number_validated
     return msg
 
-def validate_delivery(acked, consumed, idempotence_enabled=False, check_lost_data=None):
+def validate_delivery(acked, consumed, idempotence_enabled=False, check_lost_data=None, data_loss_tolerance=0):
     """Check that each acked message was consumed."""
     success = True
     msg = ""
@@ -155,7 +155,13 @@ def validate_delivery(acked, consumed, idempotence_enabled=False, check_lost_dat
         if check_lost_data:
             to_validate = list(missing)[0:1000 if len(missing) > 1000 else len(missing)]
             data_lost = check_lost_data(to_validate)
-            msg = annotate_data_lost(data_lost, msg, len(to_validate))
+
+            # With older versions of message format before KIP-101, data loss could occur due to truncation.
+            # These records won't be in the data logs. Tolerate limited data loss for this case.
+            if len(data_lost) == len(to_validate) and len(missing) <= data_loss_tolerance:
+                success = True
+            else:
+                msg = annotate_data_lost(data_lost, msg, len(to_validate))
 
     # Are there duplicates?
     if len(set(consumed)) != len(consumed):
