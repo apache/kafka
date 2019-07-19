@@ -551,7 +551,7 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         SourceRecord record1 = new SourceRecord(PARTITION, OFFSET, "topic", 1, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
         SourceRecord record2 = new SourceRecord(PARTITION, OFFSET, "topic", 2, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
 
-        expectSendRecordProducerCallbackFail(new TopicAuthorizationException("unauthorized-topic"));
+        expectSendRecordProducerCallbackFail();
 
         PowerMock.replayAll();
 
@@ -728,23 +728,23 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         return expectSendRecordTaskCommitRecordSucceed(false, isRetry);
     }
 
-    private Capture<ProducerRecord<byte[], byte[]>> expectSendRecordProducerCallbackFail(Exception producerCallbackException) throws InterruptedException {
-        return expectSendRecord(false, false, false, producerCallbackException);
+    private Capture<ProducerRecord<byte[], byte[]>> expectSendRecordProducerCallbackFail() throws InterruptedException {
+        return expectSendRecord(false, false, false, false);
     }
 
     private Capture<ProducerRecord<byte[], byte[]>> expectSendRecordTaskCommitRecordSucceed(boolean anyTimes, boolean isRetry) throws InterruptedException {
-        return expectSendRecord(anyTimes, isRetry, true, null);
+        return expectSendRecord(anyTimes, isRetry, true, true);
     }
 
     private Capture<ProducerRecord<byte[], byte[]>> expectSendRecordTaskCommitRecordFail(boolean anyTimes, boolean isRetry) throws InterruptedException {
-        return expectSendRecord(anyTimes, isRetry, false, null);
+        return expectSendRecord(anyTimes, isRetry, true, false);
     }
 
     private Capture<ProducerRecord<byte[], byte[]>> expectSendRecord(
         boolean anyTimes,
         boolean isRetry,
-        boolean succeed,
-        Exception producerCallbackException
+        boolean sendSuccess,
+        boolean commitSuccess
     ) throws InterruptedException {
         expectConvertKeyValue(anyTimes);
         expectApplyTransformationChain(anyTimes);
@@ -769,11 +769,11 @@ public class WorkerSourceTaskTest extends ThreadedTest {
             public Future<RecordMetadata> answer() throws Throwable {
                 synchronized (producerCallbacks) {
                     for (org.apache.kafka.clients.producer.Callback cb : producerCallbacks.getValues()) {
-                        if (producerCallbackException != null) {
-                            cb.onCompletion(null, producerCallbackException);
-                        } else {
+                        if (sendSuccess) {
                             cb.onCompletion(new RecordMetadata(new TopicPartition("foo", 0), 0, 0,
                                 0L, 0L, 0, 0), null);
+                        } else {
+                            cb.onCompletion(null, new TopicAuthorizationException("foo"));
                         }
                     }
                     producerCallbacks.reset();
@@ -786,9 +786,9 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         else
             expect.andAnswer(expectResponse);
 
-        if (producerCallbackException == null) {
+        if (sendSuccess) {
             // 3. As a result of a successful producer send callback, we'll notify the source task of the record commit
-            expectTaskCommitRecord(anyTimes, succeed);
+            expectTaskCommitRecord(anyTimes, commitSuccess);
         }
 
         return sent;
