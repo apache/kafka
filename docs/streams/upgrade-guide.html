@@ -84,7 +84,7 @@
         As of 2.3.0 we've updated how to turn on optimizations. Now to enable optimizations, you need to do two things.
         First add this line to your properties <code>properties.setProperty(StreamsConfig.TOPOLOGY_OPTIMIZATION, StreamsConfig.OPTIMIZE);</code>, as you have done before.
         Second, when constructing your <code>KafkaStreams</code> instance, you'll need to pass your configuration properties when building your
-        topology via the overloaded <code>StreamsBuilder.build(Properties)</code> method.
+        topology by using the overloaded <code>StreamsBuilder.build(Properties)</code> method.
         For example <code>KafkaStreams myStream = new KafkaStreams(streamsBuilder.build(properties), properties)</code>.
     </p>
 
