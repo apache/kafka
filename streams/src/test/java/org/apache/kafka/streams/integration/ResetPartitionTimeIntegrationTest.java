@@ -95,7 +95,7 @@ public class ResetPartitionTimeIntegrationTest {
     private static final LongDeserializer LONG_DESERIALIZER = new LongDeserializer();
     private static final int DEFAULT_TIMEOUT = 100;
     private final boolean eosEnabled;
-    private long lastRecordedTimestamp = -1L;
+    private static long lastRecordedTimestamp = -1L;
 
     @Parameters(name = "{index}: eosEnabled={0}")
     public static Collection<Object[]> parameters() {
@@ -210,7 +210,7 @@ public class ResetPartitionTimeIntegrationTest {
         }
     }
 
-    private final class MaxTimestampExtractor implements TimestampExtractor {
+    public static final class MaxTimestampExtractor implements TimestampExtractor {
         @Override
         public long extract(final ConsumerRecord<Object, Object> record, final long maxTimestamp) {
             lastRecordedTimestamp = maxTimestamp;

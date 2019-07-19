@@ -715,24 +715,37 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         taskClosed = true;
     }
 
-    private void retrieveCommittedTimestamp(final TopicPartition partition) {
+    private boolean retrieveCommittedTimestamp(final TopicPartition partition) {
         final OffsetAndMetadata metadata = consumer.committed(partition);
 
-        if (metadata != null) {
-            final long committedTimestamp = Long.parseLong(metadata.metadata());
-            partitionGroup.setPartitionTimestamp(partition, committedTimestamp);
-            log.debug("A committed timestamp was detected: setting the partition time of partition {}"
-                      + " to {} in stream task {}", partition, committedTimestamp, this);
+        if (metadata != null && metadata.metadata().length() != 0) {
+            try {
+                final long committedTimestamp = Long.parseLong(metadata.metadata());
+                partitionGroup.setPartitionTimestamp(partition, committedTimestamp);
+                log.debug("A committed timestamp was detected: setting the partition time of partition {}"
+                          + " to {} in stream task {}", partition, committedTimestamp, this);
+                return true;
+            } catch (final NumberFormatException exc) {
+                log.info("No committed timestamp retrieved because no long integer was found stored in metadata " + exc);
+                return false;
+            }
         }
+        return true;
     }
 
     /**
      * Retrieves formerly committed timestamps and updates the local queue's partition time.
+     * 
+     * @return a boolean result which indicates all timestamps were successfully restored.
      */
-    public void setAssignmentToStoredTimestamps() {
+    public boolean setAssignmentToStoredTimestamps() {
+        boolean allSuccessfullyChanged = true;
         for (final TopicPartition partition : consumer.assignment()) {
-            retrieveCommittedTimestamp(partition);
+            if (!retrieveCommittedTimestamp(partition)) {
+                allSuccessfullyChanged = false;
+            }
         }
+        return allSuccessfullyChanged;
     }
 
     /**

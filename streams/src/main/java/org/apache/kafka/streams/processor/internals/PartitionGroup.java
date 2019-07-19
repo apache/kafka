@@ -85,10 +85,16 @@ public class PartitionGroup {
     }
 
     long getPartitionTimestamp(final TopicPartition partition) {
+        if (partitionQueues.get(partition) == null) {
+            return RecordQueue.UNKNOWN;
+        }
         return partitionQueues.get(partition).partitionTime();
     }
 
     void setPartitionTimestamp(final TopicPartition partition, final long timestamp) {
+        if (partitionQueues.get(partition) == null) {
+            return;
+        }
         if (streamTime < timestamp) {
             streamTime = timestamp;
         }
