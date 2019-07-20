@@ -29,8 +29,6 @@ import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.equalTo;
 
-import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
 import java.util.Locale;
@@ -67,7 +65,6 @@ import org.apache.kafka.streams.processor.TimestampExtractor;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.TestUtils;
-import org.junit.Assert;
 import org.junit.ClassRule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
@@ -76,8 +73,6 @@ import org.junit.runners.Parameterized;
 import org.junit.runners.Parameterized.Parameters;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import kafka.tools.StreamsResetter;
 
 @RunWith(Parameterized.class)
 @Category({IntegrationTest.class})
@@ -93,7 +88,7 @@ public class ResetPartitionTimeIntegrationTest {
     private static final StringSerializer STRING_SERIALIZER = new StringSerializer();
     private static final Serde<String> STRING_SERDE = Serdes.String();
     private static final LongDeserializer LONG_DESERIALIZER = new LongDeserializer();
-    private static final int DEFAULT_TIMEOUT = 100;
+    private static final int DEFAULT_TIMEOUT = 1000;
     private final boolean eosEnabled;
     private static long lastRecordedTimestamp = -1L;
 
@@ -153,54 +148,40 @@ public class ResetPartitionTimeIntegrationTest {
             produceSynchronouslyToPartitionZero(
                 input,
                 asList(
-                    new KeyValueTimestamp<>("k1", "v1", 4000),
-                    new KeyValueTimestamp<>("k2", "v2", 4500),
                     new KeyValueTimestamp<>("k3", "v3", 5000)
                 )
             );
             verifyOutput(
                 outputRaw,
                 asList(
-                    new KeyValueTimestamp<>("k1", 1L, 4000),
-                    new KeyValueTimestamp<>("k2", 1L, 4500),
                     new KeyValueTimestamp<>("k3", 1L, 5000)
                 )
             );
-            assertThat(lastRecordedTimestamp, is(5000));
+            assertThat(lastRecordedTimestamp, is(5000L));
             lastRecordedTimestamp = -1L;
 
             // restart && reset the driver
             driver.close();
             assertThat(driver.state(), is(KafkaStreams.State.NOT_RUNNING));
-            final List<String> parameterList = new ArrayList<>(
-                    Arrays.asList("--application-id", appId,
-                            "--bootstrap-servers", CLUSTER.bootstrapServers(),
-                            "--input-topics", input,
-                            "--execute"));
-            driver = new KafkaStreams(builder.build(), streamsConfig);
             driver.cleanUp();
-            resetStreams(driver, parameterList);
+            driver = new KafkaStreams(builder.build(), streamsConfig);
             driver.start();
 
             // resend some records and retrieve the last committed timestamp
             produceSynchronouslyToPartitionZero(
                 input,
                 asList(
-                    new KeyValueTimestamp<>("k6", "v6", 4990),
-                    new KeyValueTimestamp<>("k7", "v7", 4995),
-                    new KeyValueTimestamp<>("k8", "v8", 4999)
+                    new KeyValueTimestamp<>("k4", "v4", 4999)
                 )
             );
             verifyOutput(
                 outputRaw,
                 asList(
-                    new KeyValueTimestamp<>("k6", 1L, 4990),
-                    new KeyValueTimestamp<>("k7", 1L, 4995),
-                    new KeyValueTimestamp<>("k8", 1L, 4999)
+                    new KeyValueTimestamp<>("k4", 1L, 4999)
                 )
             );
             // verify that the lastRecordedTimestamp is 5000
-            assertThat(lastRecordedTimestamp, is(5000));
+            assertThat(lastRecordedTimestamp, is(5000L));
 
             metadataValidator.raiseExceptionIfAny();
 
@@ -213,8 +194,14 @@ public class ResetPartitionTimeIntegrationTest {
     public static final class MaxTimestampExtractor implements TimestampExtractor {
         @Override
         public long extract(final ConsumerRecord<Object, Object> record, final long maxTimestamp) {
-            lastRecordedTimestamp = maxTimestamp;
-            return maxTimestamp;
+            System.out.println("Going through extract with timestamp: " + maxTimestamp + " and record timestamp: " + record.timestamp());
+            if (record.timestamp() > maxTimestamp) {
+                // we do so because maxTimestamp will by RecordQueue logic turn into this record's timestamp
+                lastRecordedTimestamp = record.timestamp();
+            } else {
+                lastRecordedTimestamp = maxTimestamp;
+            }
+            return record.timestamp();
         }
     }
 
@@ -273,17 +260,6 @@ public class ResetPartitionTimeIntegrationTest {
             )
         );
         IntegrationTestUtils.verifyKeyValueTimestamps(properties, topic, keyValueTimestamps);
-    }
-
-    private void resetStreams(final KafkaStreams driver, final List<String> parameterList) {
-        final String[] parameters = parameterList.toArray(new String[0]);
-
-        final Properties cleanUpConfig = new Properties();
-        cleanUpConfig.put(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, 100);
-        cleanUpConfig.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, "" + 1000);
-
-        final int exitCode = new StreamsResetter().run(parameters, cleanUpConfig);
-        Assert.assertEquals(0, exitCode);
     }
 
     private static void produceSynchronouslyToPartitionZero(final String topic, final List<KeyValueTimestamp<String, String>> toProduce) {
