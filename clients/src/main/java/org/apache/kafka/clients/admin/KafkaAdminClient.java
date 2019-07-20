@@ -67,6 +67,7 @@ import org.apache.kafka.common.message.CreateDelegationTokenResponseData;
 import org.apache.kafka.common.message.CreateTopicsRequestData;
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopicCollection;
 import org.apache.kafka.common.message.CreateTopicsResponseData.CreatableTopicResult;
+import org.apache.kafka.common.message.DeleteGroupsRequestData;
 import org.apache.kafka.common.message.DeleteTopicsRequestData;
 import org.apache.kafka.common.message.DeleteTopicsResponseData.DeletableTopicResult;
 import org.apache.kafka.common.message.DescribeGroupsRequestData;
@@ -2996,7 +2997,10 @@ public class KafkaAdminClient extends AdminClient {
 
             @Override
             AbstractRequest.Builder createRequest(int timeoutMs) {
-                return new DeleteGroupsRequest.Builder(Collections.singleton(context.getGroupId()));
+                return new DeleteGroupsRequest.Builder(
+                    new DeleteGroupsRequestData()
+                        .setGroupsNames(Collections.singletonList(context.getGroupId()))
+                );
             }
 
             @Override
