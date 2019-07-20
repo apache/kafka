@@ -173,13 +173,15 @@ public class ResetPartitionTimeIntegrationTest {
             produceSynchronouslyToPartitionZero(
                 input,
                 asList(
-                    new KeyValueTimestamp<>("k4", "v4", 4999)
+                    new KeyValueTimestamp<>("k4", "v4", 4998),
+                    new KeyValueTimestamp<>("k5", "v5", 4999)
                 )
             );
             verifyOutput(
                 outputRaw,
                 asList(
-                    new KeyValueTimestamp<>("k4", 1L, 4999)
+                    new KeyValueTimestamp<>("k4", 1L, 4998),
+                    new KeyValueTimestamp<>("k5", 1L, 4999)
                 )
             );
             // verify that the lastRecordedTimestamp is 5000
