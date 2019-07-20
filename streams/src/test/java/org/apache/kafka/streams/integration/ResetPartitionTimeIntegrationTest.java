@@ -194,7 +194,6 @@ public class ResetPartitionTimeIntegrationTest {
     public static final class MaxTimestampExtractor implements TimestampExtractor {
         @Override
         public long extract(final ConsumerRecord<Object, Object> record, final long maxTimestamp) {
-            System.out.println("Going through extract with timestamp: " + maxTimestamp + " and record timestamp: " + record.timestamp());
             if (record.timestamp() > maxTimestamp) {
                 // we do so because maxTimestamp will by RecordQueue logic turn into this record's timestamp
                 lastRecordedTimestamp = record.timestamp();

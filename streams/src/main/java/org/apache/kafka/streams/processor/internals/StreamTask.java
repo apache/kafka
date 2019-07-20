@@ -449,8 +449,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
             metadataTimestamp = RecordQueue.UNKNOWN;
         }
         final long localPartitionTime = getPartitionTime(partition);
-        System.out.println("Found old timestamp to be: " + metadataTimestamp + " and local partition time to be: " + 
-            localPartitionTime + " for partition " + partition);
         return localPartitionTime < metadataTimestamp ? metadataTimestamp : localPartitionTime;
     }
 
@@ -473,7 +471,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         for (final Map.Entry<TopicPartition, Long> entry : consumedOffsets.entrySet()) {
             final TopicPartition partition = entry.getKey();
             final long offset = entry.getValue() + 1;
-            System.out.println("Committing timestamp for partition " + partition + " and timestamp is " + getNextPartitionTime(partition));
             consumedOffsetsAndMetadata.put(partition, new OffsetAndMetadata(offset,
                                                                             ((Long) getNextPartitionTime(partition)).toString()));
             stateMgr.putOffsetLimit(partition, offset);
