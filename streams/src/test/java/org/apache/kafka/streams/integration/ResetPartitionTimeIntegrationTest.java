@@ -89,7 +89,7 @@ public class ResetPartitionTimeIntegrationTest {
     private static final StringSerializer STRING_SERIALIZER = new StringSerializer();
     private static final Serde<String> STRING_SERDE = Serdes.String();
     private static final LongDeserializer LONG_DESERIALIZER = new LongDeserializer();
-    private static final int DEFAULT_TIMEOUT = 50;
+    private static final int DEFAULT_TIMEOUT = 100;
     private final boolean eosEnabled;
     private static long lastRecordedTimestamp = -1L;
 
@@ -106,7 +106,7 @@ public class ResetPartitionTimeIntegrationTest {
     }
 
     @Test
-    public void testPartitionTimeAfterKStreamReset() {
+    public void testPartitionTimeAfterKStreamReset() throws InterruptedException {
         final String testId = "-shouldRecoverPartitionTimeAfterReset";
         final String appId = getClass().getSimpleName().toLowerCase(Locale.getDefault()) + testId;
         final String input = "input" + testId;
@@ -160,6 +160,7 @@ public class ResetPartitionTimeIntegrationTest {
             );
             assertThat(lastRecordedTimestamp, is(5000L));
             lastRecordedTimestamp = -1L;
+            Thread.sleep(1000); // wait for commit to finish
 
             // restart && reset the driver
             driver.close();
