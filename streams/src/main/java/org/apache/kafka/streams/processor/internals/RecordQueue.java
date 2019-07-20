@@ -77,6 +77,7 @@ public class RecordQueue {
     }
 
     public long partitionTime() {
+        System.out.println("Returning partitionTime: " + partitionTime + " for partition " + partition.toString() + " in RecordQueue");
         return partitionTime;
     }
 
@@ -201,6 +202,7 @@ public class RecordQueue {
             if (timestamp > partitionTime) {
                 partitionTime = timestamp;
             }
+            System.out.println("RecordQueue: partitionTime has current value: " + partitionTime);
             headRecord = new StampedRecord(deserialized, timestamp);
         }
     }

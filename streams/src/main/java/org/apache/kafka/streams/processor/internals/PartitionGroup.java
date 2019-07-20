@@ -86,8 +86,10 @@ public class PartitionGroup {
 
     long getPartitionTimestamp(final TopicPartition partition) {
         if (partitionQueues.get(partition) == null) {
+            System.out.println("Returning -1 for partition: " + partition.toString() + " since map has no value for partition " + partition.toString());
             return RecordQueue.UNKNOWN;
         }
+        System.out.println("Returning " + partitionQueues.get(partition).partitionTime() + " for partition: " + partition.toString());
         return partitionQueues.get(partition).partitionTime();
     }
 

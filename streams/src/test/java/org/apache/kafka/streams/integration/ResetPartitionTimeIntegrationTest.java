@@ -39,6 +39,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.LongDeserializer;
 import org.apache.kafka.common.serialization.Serde;
@@ -88,7 +89,7 @@ public class ResetPartitionTimeIntegrationTest {
     private static final StringSerializer STRING_SERIALIZER = new StringSerializer();
     private static final Serde<String> STRING_SERDE = Serdes.String();
     private static final LongDeserializer LONG_DESERIALIZER = new LongDeserializer();
-    private static final int DEFAULT_TIMEOUT = 1000;
+    private static final int DEFAULT_TIMEOUT = 50;
     private final boolean eosEnabled;
     private static long lastRecordedTimestamp = -1L;
 
@@ -200,6 +201,8 @@ public class ResetPartitionTimeIntegrationTest {
             } else {
                 lastRecordedTimestamp = maxTimestamp;
             }
+            System.out.println("TimestampExtractor: partition time being returned: " + record.timestamp() + " and lastRecordedTimestamp: " + lastRecordedTimestamp + " for partition " + 
+                (new TopicPartition(record.topic(), record.partition()).toString()));
             return record.timestamp();
         }
     }
