@@ -26,12 +26,14 @@ import org.apache.kafka.common.message.TxnOffsetCommitResponseData.TxnOffsetComm
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
+import org.apache.kafka.common.record.RecordBatch;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
@@ -46,7 +48,6 @@ public class TxnOffsetCommitRequest extends AbstractRequest {
         public Builder(TxnOffsetCommitRequestData data) {
             super(ApiKeys.TXN_OFFSET_COMMIT);
             this.data = data;
-
         }
 
         @Override
@@ -95,7 +96,10 @@ public class TxnOffsetCommitRequest extends AbstractRequest {
                 topicPartitionMap.getOrDefault(topicPartition.topic(), new ArrayList<>());
             partitions.add(new TxnOffsetCommitRequestPartition()
                                .setPartitionIndex(topicPartition.partition())
-                               .setCommittedOffset(offset.offset));
+                               .setCommittedOffset(offset.offset)
+                               .setCommittedLeaderEpoch(offset.leaderEpoch.orElse(RecordBatch.NO_PARTITION_LEADER_EPOCH))
+                               .setCommittedMetadata(offset.metadata)
+            );
             topicPartitionMap.put(topicPartition.topic(), partitions);
         }
         return topicPartitionMap.entrySet().stream()
@@ -160,6 +164,22 @@ public class TxnOffsetCommitRequest extends AbstractRequest {
                     ", leaderEpoch=" + leaderEpoch +
                     ", metadata='" + metadata + "')";
         }
-    }
 
+        @Override
+        public boolean equals(Object other) {
+            if (!(other instanceof CommittedOffset)) {
+                return false;
+            }
+            CommittedOffset otherOffset = (CommittedOffset) other;
+
+            return this.offset == otherOffset.offset
+                       && this.leaderEpoch.equals(otherOffset.leaderEpoch)
+                       && this.metadata.equals(otherOffset.metadata);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(offset, leaderEpoch, metadata);
+        }
+    }
 }
