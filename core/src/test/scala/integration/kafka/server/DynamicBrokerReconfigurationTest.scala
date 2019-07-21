@@ -18,7 +18,7 @@
 
 package kafka.server
 
-import java.io.{Closeable, File, FileWriter}
+import java.io.{Closeable, File, FileWriter, IOException, Reader, StringReader}
 import java.nio.file.{Files, Paths, StandardCopyOption}
 import java.lang.management.ManagementFactory
 import java.security.KeyStore
@@ -49,6 +49,7 @@ import org.apache.kafka.common.{ClusterResource, ClusterResourceListener, Reconf
 import org.apache.kafka.common.config.{ConfigException, ConfigResource}
 import org.apache.kafka.common.config.SslConfigs._
 import org.apache.kafka.common.config.types.Password
+import org.apache.kafka.common.config.provider.FileConfigProvider
 import org.apache.kafka.common.errors.{AuthenticationException, InvalidRequestException}
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.metrics.{KafkaMetric, MetricsReporter}
@@ -217,31 +218,81 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
   }
 
   @Test
-  def testKeyStoreAlter_ConfigProvider(): Unit = {
-    val topic2 = "testtopic2"
-    TestUtils.createTopic(zkClient, topic2, numPartitions, replicationFactor = numServers, servers)
+  def testUpdatesUsingConfigProvider(): Unit = {
+    val LOG_CLEANER_THREADS_VAL = "${file:log.cleaner.threads:log}"
+    val SSL_TRUSTSTORE_TYPE_VAL = "${file:ssl.truststore.type:storetype}"
+    val SSL_KEYSSTORE_PASSWORD_VAL = "${file:ssl.keystore.password:password}"
 
-    // Start a producer and consumer that work with the current broker keystore.
-    // This should continue working while changes are made
-    val (producerThread, consumerThread) = startProduceConsume(retries = 0)
-    TestUtils.waitUntilTrue(() => consumerThread.received >= 10, "Messages not received")
+    def executeConfigCommand(props: Properties): Unit = {
+      val propsFile = TestUtils.tempFile()
+      val propsWriter = new FileWriter(propsFile)
+      try {
+        clientProps(SecurityProtocol.SSL).asScala.foreach {
+          case (k, v) => propsWriter.write(s"$k=$v\n")
+        }
+      } finally {
+        propsWriter.close()
+      }
 
-    // Producer with new truststore should fail to connect before keystore update
-    val producer1 = ProducerBuilder().trustStoreProps(sslProperties2).maxRetries(0).build()
-    verifyAuthenticationFailure(producer1)
+      servers.foreach { server =>
+        val args = Array("--bootstrap-server", TestUtils.bootstrapServers(servers, new ListenerName(SecureInternal)),
+          "--command-config", propsFile.getAbsolutePath,
+          "--alter", "--add-config",
+          props.asScala.map { case (k, v) => s"$k=$v" }.mkString(","),
+          "--entity-type", "brokers",
+          "--entity-name", server.config.brokerId.toString)
+        ConfigCommand.main(args)
+      }
+    }
 
-    sslProperties2.setProperty("ssl.keystore.password", "${file:/usr/kerberos:password}")
-    // Update broker keystore for external listener
-    alterSslKeystoreUsingConfigCommand(sslProperties2, SecureExternal)
+    val configPrefix = listenerPrefix(SecureExternal)
+    var brokerConfigs = describeConfig(adminClients.head, servers).entries.asScala
+    // the following are values before updated
+    assertTrue("Initial value of log cleaner threads", (brokerConfigs.find(_.name == KafkaConfig.LogCleanerThreadsProp).get).value == "1")
+    assertTrue("Initial value of ssl truststore type", brokerConfigs.find(_.name == configPrefix+KafkaConfig.SslTruststoreTypeProp) == None)
+    assertTrue("Initial value of ssl keystore password", (brokerConfigs.find(_.name == configPrefix+KafkaConfig.SslKeystorePasswordProp).get).value == null)
 
-    // New producer with old truststore should fail to connect
-    val producer2 = ProducerBuilder().trustStoreProps(sslProperties1).maxRetries(0).build()
-    verifyAuthenticationFailure(producer2)
+    // setup ssl properties
+    val secProps = securityProps(sslProperties1, KEYSTORE_PROPS, configPrefix)
 
-    // Produce/consume should work with new truststore with new producer/consumer
-    val producer = ProducerBuilder().trustStoreProps(sslProperties2).maxRetries(0).build()
-    val consumer = ConsumerBuilder("group1").trustStoreProps(sslProperties2).topic(topic2).build()
-    verifyProduceConsume(producer, consumer, 10, topic2)
+    // configure configure config providers and properties need be updated
+    val updatedProps = new Properties
+    updatedProps.setProperty("config.providers", "file")
+    updatedProps.setProperty("config.providers.file.class", "kafka.server.MockFileConfigProvider")
+
+    // 1. update Integer property using config provider
+    updatedProps.put(KafkaConfig.LogCleanerThreadsProp, LOG_CLEANER_THREADS_VAL)
+    updatedProps.put(KafkaConfig.LogCleanerDedupeBufferSizeProp, "20000000")
+
+    // 2. update String property using config provider
+    updatedProps.put(configPrefix+KafkaConfig.SslTruststoreTypeProp, SSL_TRUSTSTORE_TYPE_VAL)
+
+    // merge two properties
+    updatedProps.putAll(secProps)
+
+    // 3. update password property using config provider
+    updatedProps.put(configPrefix+KafkaConfig.SslKeystorePasswordProp, SSL_KEYSSTORE_PASSWORD_VAL)
+
+    executeConfigCommand(updatedProps)
+    waitForConfig(KafkaConfig.LogCleanerThreadsProp, "2")
+    waitForConfig(configPrefix+KafkaConfig.SslTruststoreTypeProp, "JKS")
+    waitForConfig(configPrefix+KafkaConfig.SslKeystorePasswordProp, "ServerPassword")
+
+    // fetch from ZK, values should be unresolved
+    val props = fetchBrokerConfigsFromZooKeeper(servers.head)
+    assertTrue("log cleaner thread is not updated in ZK", props.getProperty(KafkaConfig.LogCleanerThreadsProp) == LOG_CLEANER_THREADS_VAL)
+    assertTrue("store type is not updated in ZK", props.getProperty(configPrefix+KafkaConfig.SslTruststoreTypeProp) == SSL_TRUSTSTORE_TYPE_VAL)
+    assertTrue("keystore password is not updated in ZK", props.getProperty(configPrefix+KafkaConfig.SslKeystorePasswordProp) == SSL_KEYSSTORE_PASSWORD_VAL)
+
+    // describe using AdminClient. values should be resolved
+    brokerConfigs = describeConfig(adminClients.head, servers).entries.asScala
+    assertTrue("log cleaner thread is not updated", (brokerConfigs.find(_.name == KafkaConfig.LogCleanerThreadsProp).get).value == "2")
+    assertTrue("store type is not updated", (brokerConfigs.find(_.name == configPrefix+KafkaConfig.SslTruststoreTypeProp).get).value == "JKS")
+    // val sslKeyStorePassword = brokerConfigs.find(_.name == configPrefix+KafkaConfig.SslKeystorePasswordProp).get
+    // assertTrue("keystore password is not updated", sslKeyStorePassword.value == "ServerPassword")
+
+    // execute another update with same properties and verify the update not occuring from traces.
+    executeConfigCommand(updatedProps)
   }
 
   @Test
@@ -258,7 +309,6 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
     val producer1 = ProducerBuilder().trustStoreProps(sslProperties2).maxRetries(0).build()
     verifyAuthenticationFailure(producer1)
 
-    sslProperties2.setProperty("ssl.keystore.password", "${file:/usr/kerberos:password}")
     // Update broker keystore for external listener
     alterSslKeystoreUsingConfigCommand(sslProperties2, SecureExternal)
 
@@ -286,7 +336,6 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
     verifyProduceConsume(producer, consumer, 10, topic2)
 
     // Verify that keystores can be updated using same file name.
-    sslProperties2.setProperty("ssl.keystore.password", "ServerPassword")
     val reusableProps = sslProperties2.clone().asInstanceOf[Properties]
     val reusableFile = File.createTempFile("keystore", ".jks")
     reusableProps.setProperty(SSL_KEYSTORE_LOCATION_CONFIG, reusableFile.getPath)
@@ -367,7 +416,7 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
     verifySslProduceConsume(sslProperties2, "alter-truststore-5")
 
     // Update internal keystore/truststore and validate new client connections from broker (e.g. controller).
-    // Alter internal keystore testKeyStoreAlter_ConfigProvider from `sslProperties1` to `sslProperties2`, force disconnect of a controller connection
+    // Alter internal keystore from `sslProperties1` to `sslProperties2`, force disconnect of a controller connection
     // and verify that metadata is propagated for new topic.
     val props2 = securityProps(sslProperties2, KEYSTORE_PROPS, prefix)
     props2 ++= securityProps(combinedStoreProps, TRUSTSTORE_PROPS, prefix)
@@ -393,9 +442,7 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
     verifyThreads("kafka-log-cleaner-thread-", countPerBroker = 1)
 
     val props = new Properties
-    props.put(KafkaConfig.LogCleanerThreadsProp, "${file:/usr/kerberos:log}")
-    props.setProperty("config.providers", "file")
-    props.setProperty("config.providers.file.class", "org.apache.kafka.common.config.provider.MockFileConfigProvider")
+    props.put(KafkaConfig.LogCleanerThreadsProp, "2")
     props.put(KafkaConfig.LogCleanerDedupeBufferSizeProp, "20000000")
     props.put(KafkaConfig.LogCleanerDedupeBufferLoadFactorProp, "0.8")
     props.put(KafkaConfig.LogCleanerIoBufferSizeProp, "300000")
@@ -1199,8 +1246,6 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
   private def alterSslKeystoreUsingConfigCommand(props: Properties, listener: String): Unit = {
     val configPrefix = listenerPrefix(listener)
     val newProps = securityProps(props, KEYSTORE_PROPS, configPrefix)
-    newProps.setProperty("config.providers", "file")
-    newProps.setProperty("config.providers.file.class", "org.apache.kafka.common.config.provider.MockFileConfigProvider")
     val propsFile = TestUtils.tempFile()
     val propsWriter = new FileWriter(propsFile)
     try {
@@ -1275,7 +1320,9 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
         val exception = intercept[ExecutionException](alterResult.values.get(brokerResource).get)
         assertTrue(exception.getCause.isInstanceOf[InvalidRequestException])
       }
-      servers.foreach { server => assertEquals(oldProps, server.config.values.asScala.filterKeys(newProps.containsKey)) }
+      servers.foreach { server =>
+        assertEquals(oldProps, server.config.values.asScala.filter { case (k, _) => newProps.containsKey(k) })
+      }
     } else {
       alterResult.all.get
       waitForConfig(aPropToVerify._1, aPropToVerify._2)
@@ -1688,5 +1735,13 @@ class TestMetricsReporter extends MetricsReporter with Reconfigurable with Close
     assertTrue("Metric not found", matchingMetrics.nonEmpty)
     val total = matchingMetrics.foldLeft(0.0)((total, metric) => total + metric.metricValue.asInstanceOf[Double])
     assertTrue("Invalid metric value", total > 0.0)
+  }
+}
+
+
+class MockFileConfigProvider extends FileConfigProvider {
+  @throws(classOf[IOException])
+  override def reader(path: String): Reader = {
+    new StringReader("key=testKey\npassword=ServerPassword\nlog=2\nstoretype=JKS");
   }
 }
