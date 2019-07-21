@@ -38,8 +38,6 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicReference;
 
-import static org.apache.kafka.streams.processor.internals.StreamTask.INTERNAL_COMMIT;
-
 abstract class AssignedTasks<T extends Task> {
     final Logger log;
     private final String taskTypeName;
@@ -285,17 +283,18 @@ abstract class AssignedTasks<T extends Task> {
     int commit() {
         int committed = 0;
         RuntimeException firstException = null;
-        Map<TopicPartition, OffsetAndMetadata> needsExternalCommit = new HashMap<>();
+        Map<TopicPartition, OffsetAndMetadata> pendingOffsets = new HashMap<>();
 
-        Producer<>
+//        Producer<>
 
         for (final Iterator<T> it = running().iterator(); it.hasNext(); ) {
             final T task = it.next();
             try {
                 if (task.commitNeeded()) {
-                    Map<TopicPartition, OffsetAndMetadata> uncommitted = task.commit();
-                    if (uncommitted != INTERNAL_COMMIT) {
-                        needsExternalCommit.putAll(uncommitted);
+                    if (eosProducer != null) {
+                        pendingOffsets.putAll(task.getPendingOffsets());
+                    } else {
+                        task.commit();
                     }
                     committed++;
                 }
@@ -323,8 +322,8 @@ abstract class AssignedTasks<T extends Task> {
             throw firstException;
         }
 
-        if (!needsExternalCommit.isEmpty()) {
-            eosProducer.sendOffsetsToTransaction(needsExternalCommit);
+        if (!pendingOffsets.isEmpty()) {
+            eosProducer.sendOffsetsToTransaction(pendingOffsets);
             eosProducer.commitTransaction();
             eosProducer.beginTransaction();
         }

@@ -22,6 +22,7 @@ import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
+import sun.reflect.generics.reflectiveObjects.NotImplementedException;
 
 import java.util.Collection;
 import java.util.Map;
@@ -40,7 +41,11 @@ public interface Task {
 
     void initializeTopology();
 
-    Map<TopicPartition, OffsetAndMetadata> commit();
+    void commit();
+
+    default Map<TopicPartition, OffsetAndMetadata> getPendingOffsets() {
+        throw new NotImplementedException();
+    }
 
     void suspend();
 

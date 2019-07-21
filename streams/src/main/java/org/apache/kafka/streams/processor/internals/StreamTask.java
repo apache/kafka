@@ -83,7 +83,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
     private Sensor closeTaskSensor;
     private long idleStartTime;
     private Producer<byte[], byte[]> producer;
-    private final boolean isThreadProducer;
+    private final boolean isTaskProducer;
     private boolean commitRequested = false;
     private boolean transactionInFlight = false;
 
@@ -154,8 +154,8 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
                       final ThreadCache cache,
                       final Time time,
                       final ProducerSupplier producerSupplier,
-                      boolean isThreadProducer) {
-        this(id, partitions, topology, consumer, changelogReader, config, metrics, stateDirectory, cache, time, producerSupplier, null, isThreadProducer);
+                      boolean isTaskProducer) {
+        this(id, partitions, topology, consumer, changelogReader, config, metrics, stateDirectory, cache, time, producerSupplier, null, isTaskProducer);
     }
 
     public StreamTask(final TaskId id,
@@ -170,10 +170,10 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
                       final Time time,
                       final ProducerSupplier producerSupplier,
                       final RecordCollector recordCollector,
-                      boolean isThreadProducer) {
+                      boolean isTaskProducer) {
         super(id, partitions, topology, consumer, changelogReader, false, stateDirectory, config);
 
-        this.isThreadProducer = isThreadProducer;
+        this.isTaskProducer = isTaskProducer;
         this.time = time;
         this.producerSupplier = producerSupplier;
         this.producer = producerSupplier.get();
@@ -233,7 +233,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
 
         // initialize transactions if eos is turned on, which will block if the previous transaction has not
         // completed yet; do not start the first transaction until the topology has been initialized later
-        if (eosEnabled) {
+        if (isTaskProducer) {
             initializeTransactions();
         }
     }
@@ -257,7 +257,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
     public void initializeTopology() {
         initTopology();
 
-        if (eosEnabled) {
+        if (isTaskProducer) {
             try {
                 this.producer.beginTransaction();
             } catch (final ProducerFencedException fatal) {
@@ -283,7 +283,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
     @Override
     public void resume() {
         log.debug("Resuming");
-        if (eosEnabled) {
+        if (isTaskProducer) {
             if (producer != null) {
                 throw new IllegalStateException("Task producer should be null.");
             }
@@ -439,11 +439,10 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
      *
      * @throws TaskMigratedException if committing offsets failed (non-EOS)
      *                               or if the task producer got fenced (EOS)
-     * @return a map of topic partition to offsets if needExternal commit
      */
     @Override
-    public Map<TopicPartition, OffsetAndMetadata> commit() {
-        return commit(true);
+    public void commit() {
+        commit(true);
     }
 
     /**
@@ -451,7 +450,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
      *                               or if the task producer got fenced (EOS)
      */
     // visible for testing
-    Map<TopicPartition, OffsetAndMetadata> commit(final boolean startNewTransaction) {
+    void commit(final boolean startNewTransaction) {
         final long startNs = time.nanoseconds();
         log.debug("Committing");
 
@@ -461,19 +460,10 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
             stateMgr.checkpoint(activeTaskCheckpointableOffsets());
         }
 
-        final Map<TopicPartition, OffsetAndMetadata> consumedOffsetsAndMetadata = new HashMap<>(consumedOffsets.size());
-        for (final Map.Entry<TopicPartition, Long> entry : consumedOffsets.entrySet()) {
-            final TopicPartition partition = entry.getKey();
-            final long offset = entry.getValue() + 1;
-            consumedOffsetsAndMetadata.put(partition, new OffsetAndMetadata(offset));
-            stateMgr.putOffsetLimit(partition, offset);
-        }
+        final Map<TopicPartition, OffsetAndMetadata> consumedOffsetsAndMetadata = getPendingOffsets();
 
         try {
-            if (eosEnabled) {
-                if (isThreadProducer) {
-                    return consumedOffsetsAndMetadata;
-                }
+            if (isTaskProducer) {
                 producer.sendOffsetsToTransaction(consumedOffsetsAndMetadata, applicationId);
                 producer.commitTransaction();
                 transactionInFlight = false;
@@ -491,7 +481,18 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         commitNeeded = false;
         commitRequested = false;
         taskMetrics.taskCommitTimeSensor.record(time.nanoseconds() - startNs);
-        return null;
+    }
+
+    @Override
+    public Map<TopicPartition, OffsetAndMetadata> getPendingOffsets() {
+        final Map<TopicPartition, OffsetAndMetadata> consumedOffsetsAndMetadata = new HashMap<>(consumedOffsets.size());
+        for (final Map.Entry<TopicPartition, Long> entry : consumedOffsets.entrySet()) {
+            final TopicPartition partition = entry.getKey();
+            final long offset = entry.getValue() + 1;
+            consumedOffsetsAndMetadata.put(partition, new OffsetAndMetadata(offset));
+            stateMgr.putOffsetLimit(partition, offset);
+        }
+        return consumedOffsetsAndMetadata;
     }
 
     @Override
@@ -869,9 +870,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
 
     private void initializeTransactions() {
         try {
-            if (!isThreadProducer) {
-                producer.initTransactions(consumer);
-            }
+            producer.initTransactions(consumer);
         } catch (final TimeoutException retriable) {
             log.error(
                 "Timeout exception caught when initializing transactions for task {}. " +

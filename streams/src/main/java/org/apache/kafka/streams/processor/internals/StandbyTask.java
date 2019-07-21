@@ -97,10 +97,9 @@ public class StandbyTask extends AbstractTask {
      * - checkpoint store
      * - update offset limits
      * </pre>
-     * @return
      */
     @Override
-    public Map<TopicPartition, OffsetAndMetadata> commit() {
+    public void commit() {
         log.trace("Committing");
         flushAndCheckpointState();
         // reinitialize offset limits

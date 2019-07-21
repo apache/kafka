@@ -451,7 +451,8 @@ public class StreamThread extends Thread {
                 stateDirectory,
                 cache,
                 time,
-                () -> createProducer(taskId), false);
+                () -> createProducer(taskId),
+                threadProducer == null);
         }
 
         private Producer<byte[], byte[]> createProducer(final TaskId id) {
@@ -590,10 +591,16 @@ public class StreamThread extends Thread {
 
         Producer<byte[], byte[]> threadProducer = null;
         final boolean eosEnabled = StreamsConfig.EXACTLY_ONCE.equals(config.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG));
-        if (!eosEnabled) {
+        final String upgradeFrom = config.getString(StreamsConfig.UPGRADE_FROM_CONFIG);
+
+        if (useThreadProducer(eosEnabled, upgradeFrom)) {
             final Map<String, Object> producerConfigs = config.getProducerConfigs(getThreadProducerClientId(threadClientId));
             log.info("Creating shared producer client");
             threadProducer = clientSupplier.getProducer(producerConfigs);
+            if (eosEnabled) {
+                threadProducer.initTransactions();
+                threadProducer.beginTransaction();
+            }
         }
 
         final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, threadClientId);
@@ -661,6 +668,26 @@ public class StreamThread extends Thread {
             logContext,
             assignmentErrorCode)
             .updateThreadMetadata(getSharedAdminClientId(clientId));
+    }
+
+    private static boolean useThreadProducer(final boolean eosEnabled, final String upgradeFrom) {
+        switch (upgradeFrom) {
+            case StreamsConfig.UPGRADE_FROM_0100:
+            case StreamsConfig.UPGRADE_FROM_0101:
+            case StreamsConfig.UPGRADE_FROM_0102:
+            case StreamsConfig.UPGRADE_FROM_0110:
+            case StreamsConfig.UPGRADE_FROM_10:
+            case StreamsConfig.UPGRADE_FROM_11:
+            case StreamsConfig.UPGRADE_FROM_20:
+            case StreamsConfig.UPGRADE_FROM_21:
+            case StreamsConfig.UPGRADE_FROM_22:
+            case StreamsConfig.UPGRADE_FROM_23:
+                // If upgrading from an older version, we shall continue using the eos producer setup.
+                return !eosEnabled;
+            default:
+                // If not upgrading, start from 2.4 there will be no task level producer setup.
+                return true;
+        }
     }
 
     public StreamThread(final Time time,
@@ -759,6 +786,7 @@ public class StreamThread extends Thread {
         }
         boolean cleanRun = false;
         try {
+
             runLoop();
             cleanRun = true;
         } catch (final KafkaException e) {

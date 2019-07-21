@@ -55,7 +55,7 @@ public class OffsetFetchRequest extends AbstractRequest {
             this.data = new OffsetFetchRequestData()
                             .setGroupId(groupId)
                             .setTopics(new ArrayList<>(offsetFetchRequestTopicMap.values()))
-                            .setIsolationLevel(isolationLevel.id());
+                            .setWaitTransaction(isolationLevel.id());
         }
 
         public static Builder allTopicPartitions(String groupId, IsolationLevel isolationLevel) {
@@ -94,8 +94,8 @@ public class OffsetFetchRequest extends AbstractRequest {
         return data.groupId();
     }
 
-    public IsolationLevel isolationLevel() {
-        return IsolationLevel.forId(data.isolationLevel());
+    public IsolationLevel waitTransaction() {
+        return IsolationLevel.forId(data.waitTransaction());
     }
 
     public static OffsetFetchRequest forAllPartitions(String groupId, IsolationLevel isolationLevel) {

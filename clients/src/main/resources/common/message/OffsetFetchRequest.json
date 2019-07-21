@@ -35,7 +35,7 @@
       { "name": "PartitionIndexes", "type": "[]int32", "versions": "0+",
         "about": "The partition indexes we would like to fetch offsets for." }
     ]},
-    { "name": "WaitTransaction", "type": "boolean", "versions": "6+",
-      "default": "false", "about": "Whether to wait for pending transaction." }
+    { "name": "WaitTransaction", "type": "int8", "versions": "6+",
+      "default": "0", "about": "Whether to wait for pending transaction." }
   ]
 }
