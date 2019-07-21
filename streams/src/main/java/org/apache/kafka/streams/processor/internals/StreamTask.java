@@ -343,7 +343,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
 
             updateProcessorContext(record, currNode);
             currNode.process(record.key(), record.value());
-            System.out.println("MY STANDARD OUT: Current record: " + record.toString());
 
             log.trace("Completed processing one record [{}]", record);
 
@@ -442,10 +441,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
     }
 
     private long getNextPartitionTime(final TopicPartition partition) {
-        System.out.println("MY STANDARD OUT: Picking up timestamp for partition time restore");
         final OffsetAndMetadata oldCommittedMetadata = consumer.committed(partition);
-        System.out.println("MY STANDARD OUT: Has returned: " + oldCommittedMetadata.toString() 
-            + " for partition " + partition.toString());
         final long metadataTimestamp;
         if (oldCommittedMetadata != null && oldCommittedMetadata.metadata().length() != 0) {
             metadataTimestamp = Long.parseLong(oldCommittedMetadata.metadata());
@@ -480,7 +476,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
                                                                             ((Long) partitionTime).toString()));
             stateMgr.putOffsetLimit(partition, offset);
         }
-        System.out.println("MY STANDARD OUT: Committing offsets");
 
         try {
             if (eosEnabled) {
