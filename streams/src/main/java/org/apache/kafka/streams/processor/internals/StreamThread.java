@@ -29,6 +29,7 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
@@ -61,6 +62,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import static java.lang.String.format;
 import static java.util.Collections.singleton;
 
 public class StreamThread extends Thread {
@@ -564,6 +566,8 @@ public class StreamThread extends Thread {
     final Consumer<byte[], byte[]> consumer;
     final InternalTopologyBuilder builder;
 
+    final boolean eosEnabled;
+
     public static StreamThread create(final InternalTopologyBuilder builder,
                                       final StreamsConfig config,
                                       final KafkaClientSupplier clientSupplier,
@@ -597,10 +601,6 @@ public class StreamThread extends Thread {
             final Map<String, Object> producerConfigs = config.getProducerConfigs(getThreadProducerClientId(threadClientId));
             log.info("Creating shared producer client");
             threadProducer = clientSupplier.getProducer(producerConfigs);
-            if (eosEnabled) {
-                threadProducer.initTransactions();
-                threadProducer.beginTransaction();
-            }
         }
 
         final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, threadClientId);
@@ -666,7 +666,8 @@ public class StreamThread extends Thread {
             builder,
             threadClientId,
             logContext,
-            assignmentErrorCode)
+            assignmentErrorCode,
+            eosEnabled)
             .updateThreadMetadata(getSharedAdminClientId(clientId));
     }
 
@@ -701,7 +702,8 @@ public class StreamThread extends Thread {
                         final InternalTopologyBuilder builder,
                         final String threadClientId,
                         final LogContext logContext,
-                        final AtomicInteger assignmentErrorCode) {
+                        final AtomicInteger assignmentErrorCode,
+                        boolean eosEnabled) {
         super(threadClientId);
 
         this.stateLock = new Object();
@@ -742,6 +744,8 @@ public class StreamThread extends Thread {
         this.commitTimeMs = config.getLong(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG);
 
         this.numIterations = 1;
+
+        this.eosEnabled = eosEnabled;
     }
 
     private static final class InternalConsumerConfig extends ConsumerConfig {
@@ -786,7 +790,7 @@ public class StreamThread extends Thread {
         }
         boolean cleanRun = false;
         try {
-
+            maybeInitializeTransactions();
             runLoop();
             cleanRun = true;
         } catch (final KafkaException e) {
@@ -800,6 +804,26 @@ public class StreamThread extends Thread {
             throw e;
         } finally {
             completeShutdown(cleanRun);
+        }
+    }
+
+    private void maybeInitializeTransactions() {
+        try {
+            if (eosEnabled) {
+                producer.initTransactions(consumer);
+            }
+        } catch (final TimeoutException retriable) {
+            log.error(
+                "Timeout exception caught when initializing transactions for current stream thread. " +
+                    "This might happen if the broker is slow to respond, if the network connection to " +
+                    "the broker was interrupted, or if similar circumstances arise. " +
+                    "You can increase producer parameter `max.block.ms` to increase this timeout.",
+                retriable
+            );
+            throw new StreamsException(
+                format("%sFailed to initialize stream thread due to timeout.", logPrefix),
+                retriable
+            );
         }
     }
 

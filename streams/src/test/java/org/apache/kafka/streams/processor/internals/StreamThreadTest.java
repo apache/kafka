@@ -353,8 +353,8 @@ public class StreamThreadTest {
             internalTopologyBuilder,
             clientId,
             new LogContext(""),
-            new AtomicInteger()
-        );
+            new AtomicInteger(),
+            false);
         thread.setNow(mockTime.milliseconds());
         thread.maybeCommit();
         mockTime.sleep(commitInterval - 10L);
@@ -479,8 +479,8 @@ public class StreamThreadTest {
             internalTopologyBuilder,
             clientId,
             new LogContext(""),
-            new AtomicInteger()
-        );
+            new AtomicInteger(),
+            false);
         thread.setNow(mockTime.milliseconds());
         thread.maybeCommit();
         mockTime.sleep(commitInterval - 10L);
@@ -514,8 +514,8 @@ public class StreamThreadTest {
             internalTopologyBuilder,
             clientId,
             new LogContext(""),
-            new AtomicInteger()
-        );
+            new AtomicInteger(),
+            false);
         thread.setNow(mockTime.milliseconds());
         thread.maybeCommit();
         mockTime.sleep(commitInterval + 1);
@@ -664,8 +664,8 @@ public class StreamThreadTest {
             internalTopologyBuilder,
             clientId,
             new LogContext(""),
-            new AtomicInteger()
-        ).updateThreadMetadata(getSharedAdminClientId(clientId));
+            new AtomicInteger(),
+            false).updateThreadMetadata(getSharedAdminClientId(clientId));
         thread.setStateListener(
             (t, newState, oldState) -> {
                 if (oldState == StreamThread.State.CREATED && newState == StreamThread.State.STARTING) {
@@ -697,8 +697,8 @@ public class StreamThreadTest {
             internalTopologyBuilder,
             clientId,
             new LogContext(""),
-            new AtomicInteger()
-        ).updateThreadMetadata(getSharedAdminClientId(clientId));
+            new AtomicInteger(),
+            false).updateThreadMetadata(getSharedAdminClientId(clientId));
         thread.shutdown();
         EasyMock.verify(taskManager);
     }
@@ -769,8 +769,8 @@ public class StreamThreadTest {
             internalTopologyBuilder,
             clientId,
             new LogContext(""),
-            new AtomicInteger()
-        ).updateThreadMetadata(getSharedAdminClientId(clientId));
+            new AtomicInteger(),
+            false).updateThreadMetadata(getSharedAdminClientId(clientId));
 
         mockStreamThreadConsumer.setStreamThread(thread);
         mockStreamThreadConsumer.assign(assignedPartitions);
@@ -803,8 +803,8 @@ public class StreamThreadTest {
             internalTopologyBuilder,
             clientId,
             new LogContext(""),
-            new AtomicInteger()
-        ).updateThreadMetadata(getSharedAdminClientId(clientId));
+            new AtomicInteger(),
+            false).updateThreadMetadata(getSharedAdminClientId(clientId));
         thread.shutdown();
         // Execute the run method. Verification of the mock will check that shutdown was only done once
         thread.run();
@@ -1634,8 +1634,8 @@ public class StreamThreadTest {
                 internalTopologyBuilder,
                 clientId,
                 new LogContext(""),
-                new AtomicInteger()
-                );
+                new AtomicInteger(),
+                false);
         final MetricName testMetricName = new MetricName("test_metric", "", "", new HashMap<>());
         final Metric testMetric = new KafkaMetric(
             new Object(),
@@ -1673,8 +1673,8 @@ public class StreamThreadTest {
                 internalTopologyBuilder,
                 clientId,
                 new LogContext(""),
-                new AtomicInteger()
-                );
+                new AtomicInteger(),
+                false);
         final MetricName testMetricName = new MetricName("test_metric", "", "", new HashMap<>());
         final Metric testMetric = new KafkaMetric(
             new Object(),
