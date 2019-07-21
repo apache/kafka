@@ -1017,17 +1017,6 @@ public abstract class AbstractCoordinator implements Closeable {
                 this.metricGrpName,
                 "The number of seconds since the last coordinator heartbeat was sent"),
                 lastHeartbeat);
-
-            Measurable heartbeatRate = 
-                new Measurable() {
-                    public double measure(MetricConfig config, long now) {
-                        return measureLatency(config, now) > rebalanceTimeoutMs ? 0 : measureLatency(config, now) / rebalanceTimeoutMs;
-                    }
-                };
-            metrics.addMetric(metrics.metricName("heartbeat-rate",
-                this.metricGrpName,
-                "Gives the successful heartbeat rate."),
-                heartbeatRate);
         }
     }
 

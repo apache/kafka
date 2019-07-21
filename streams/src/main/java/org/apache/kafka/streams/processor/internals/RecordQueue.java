@@ -157,15 +157,6 @@ public class RecordQueue {
     }
 
     /**
-     * Returns the tracked partition time
-     *
-     * @return partition time
-     */
-    long partitionTime() {
-        return partitionTime;
-    }
-
-    /**
      * Clear the fifo queue of its elements, also clear the time tracker's kept stamped elements
      */
     public void clear() {

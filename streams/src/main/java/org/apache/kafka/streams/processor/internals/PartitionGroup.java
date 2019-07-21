@@ -84,6 +84,10 @@ public class PartitionGroup {
         streamTime = RecordQueue.UNKNOWN;
     }
 
+    long timestamp() {
+        return streamTime;
+    }
+
     long getPartitionTimestamp(final TopicPartition partition) {
         if (partitionQueues.get(partition) == null) {
             return RecordQueue.UNKNOWN;
