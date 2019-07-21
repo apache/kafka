@@ -54,8 +54,11 @@ import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.message.CreateTopicsResponseData.CreatableTopicResult;
 import org.apache.kafka.common.message.CreateTopicsResponseData;
-import org.apache.kafka.common.message.DeleteTopicsResponseData.DeletableTopicResult;
+import org.apache.kafka.common.message.DeleteGroupsResponseData;
+import org.apache.kafka.common.message.DeleteGroupsResponseData.DeletableGroupResult;
+import org.apache.kafka.common.message.DeleteGroupsResponseData.DeletableGroupResultCollection;
 import org.apache.kafka.common.message.DeleteTopicsResponseData;
+import org.apache.kafka.common.message.DeleteTopicsResponseData.DeletableTopicResult;
 import org.apache.kafka.common.message.DescribeGroupsResponseData;
 import org.apache.kafka.common.message.DescribeGroupsResponseData.DescribedGroupMember;
 import org.apache.kafka.common.message.ElectLeadersResponseData.PartitionResult;
@@ -1438,9 +1441,14 @@ public class KafkaAdminClientTest {
 
             env.kafkaClient().prepareResponse(prepareFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
 
-            final Map<String, Errors> validResponse = new HashMap<>();
-            validResponse.put("group-0", Errors.NONE);
-            env.kafkaClient().prepareResponse(new DeleteGroupsResponse(validResponse));
+            final DeletableGroupResultCollection validResponse = new DeletableGroupResultCollection();
+            validResponse.add(new DeletableGroupResult()
+                                  .setGroupId("group-0")
+                                  .setErrorCode(Errors.NONE.code()));
+            env.kafkaClient().prepareResponse(new DeleteGroupsResponse(
+                new DeleteGroupsResponseData()
+                    .setResults(validResponse)
+            ));
 
             final DeleteConsumerGroupsResult result = env.adminClient().deleteConsumerGroups(groupIds);
 
@@ -1453,28 +1461,45 @@ public class KafkaAdminClientTest {
             final DeleteConsumerGroupsResult errorResult = env.adminClient().deleteConsumerGroups(groupIds);
             TestUtils.assertFutureError(errorResult.deletedGroups().get("group-0"), GroupAuthorizationException.class);
 
-            //Retriable  errors should be retried
+            //Retriable errors should be retried
             env.kafkaClient().prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, env.cluster().controller()));
 
-            final Map<String, Errors> errorResponse1 = new HashMap<>();
-            errorResponse1.put("group-0", Errors.COORDINATOR_NOT_AVAILABLE);
-            env.kafkaClient().prepareResponse(new DeleteGroupsResponse(errorResponse1));
+            final DeletableGroupResultCollection errorResponse1 = new DeletableGroupResultCollection();
+            errorResponse1.add(new DeletableGroupResult()
+                                   .setGroupId("group-0")
+                                   .setErrorCode(Errors.COORDINATOR_NOT_AVAILABLE.code())
+            );
+            env.kafkaClient().prepareResponse(new DeleteGroupsResponse(
+                new DeleteGroupsResponseData()
+                    .setResults(errorResponse1)));
 
-            final Map<String, Errors> errorResponse2 = new HashMap<>();
-            errorResponse2.put("group-0", Errors.COORDINATOR_LOAD_IN_PROGRESS);
-            env.kafkaClient().prepareResponse(new DeleteGroupsResponse(errorResponse2));
+            final DeletableGroupResultCollection errorResponse2 = new DeletableGroupResultCollection();
+            errorResponse2.add(new DeletableGroupResult()
+                                   .setGroupId("group-0")
+                                   .setErrorCode(Errors.COORDINATOR_LOAD_IN_PROGRESS.code())
+            );
+            env.kafkaClient().prepareResponse(new DeleteGroupsResponse(
+                new DeleteGroupsResponseData()
+                    .setResults(errorResponse2)));
 
             /*
              * We need to return two responses here, one for NOT_COORDINATOR call when calling delete a consumer group
              * api using coordinator that has moved. This will retry whole operation. So we need to again respond with a
              * FindCoordinatorResponse.
              */
-            Map<String, Errors> coordinatorMoved = new HashMap<>();
-            coordinatorMoved.put("UnitTestError", Errors.NOT_COORDINATOR);
-            env.kafkaClient().prepareResponse(new DeleteGroupsResponse(coordinatorMoved));
+            final DeletableGroupResultCollection coordinatorMoved = new DeletableGroupResultCollection();
+            coordinatorMoved.add(new DeletableGroupResult()
+                                     .setGroupId("UnitTestError")
+                                     .setErrorCode(Errors.NOT_COORDINATOR.code())
+            );
+            env.kafkaClient().prepareResponse(new DeleteGroupsResponse(
+                new DeleteGroupsResponseData()
+                    .setResults(coordinatorMoved)));
             env.kafkaClient().prepareResponse(prepareFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
 
-            env.kafkaClient().prepareResponse(new DeleteGroupsResponse(validResponse));
+            env.kafkaClient().prepareResponse(new DeleteGroupsResponse(
+                new DeleteGroupsResponseData()
+                    .setResults(validResponse)));
 
             final DeleteConsumerGroupsResult errorResult1 = env.adminClient().deleteConsumerGroups(groupIds);
 

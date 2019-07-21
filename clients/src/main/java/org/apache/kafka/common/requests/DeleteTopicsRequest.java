@@ -20,44 +20,11 @@ import org.apache.kafka.common.message.DeleteTopicsRequestData;
 import org.apache.kafka.common.message.DeleteTopicsResponseData;
 import org.apache.kafka.common.message.DeleteTopicsResponseData.DeletableTopicResult;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.types.ArrayOf;
-import org.apache.kafka.common.protocol.types.Field;
-import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
 
-import static org.apache.kafka.common.protocol.types.Type.INT32;
-import static org.apache.kafka.common.protocol.types.Type.STRING;
-
 public class DeleteTopicsRequest extends AbstractRequest {
-    private static final String TOPICS_KEY_NAME = "topics";
-    private static final String TIMEOUT_KEY_NAME = "timeout";
-
-    /* DeleteTopic api */
-    private static final Schema DELETE_TOPICS_REQUEST_V0 = new Schema(
-            new Field(TOPICS_KEY_NAME, new ArrayOf(STRING), "An array of topics to be deleted."),
-            new Field(TIMEOUT_KEY_NAME, INT32, "The time in ms to wait for a topic to be completely deleted on the " +
-                    "controller node. Values <= 0 will trigger topic deletion and return immediately"));
-
-    /* v1 request is the same as v0. Throttle time has been added to the response */
-    private static final Schema DELETE_TOPICS_REQUEST_V1 = DELETE_TOPICS_REQUEST_V0;
-
-    /**
-     * The version number is bumped to indicate that on quota violation brokers send out responses before throttling.
-     */
-    private static final Schema DELETE_TOPICS_REQUEST_V2 = DELETE_TOPICS_REQUEST_V1;
-
-    /**
-     * v3 request is the same that as v2. The response is different based on the request version.
-     * In v3 version a TopicDeletionDisabledException is returned
-     */
-    private static final Schema DELETE_TOPICS_REQUEST_V3 = DELETE_TOPICS_REQUEST_V2;
-
-    public static Schema[] schemaVersions() {
-        return new Schema[]{DELETE_TOPICS_REQUEST_V0, DELETE_TOPICS_REQUEST_V1,
-            DELETE_TOPICS_REQUEST_V2, DELETE_TOPICS_REQUEST_V3};
-    }
 
     private DeleteTopicsRequestData data;
     private final short version;

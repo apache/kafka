@@ -31,8 +31,8 @@ import java.util.ArrayDeque;
 
 /**
  * RecordQueue is a FIFO queue of {@link StampedRecord} (ConsumerRecord + timestamp). It also keeps track of the
- * partition timestamp defined as the minimum timestamp of records in its queue; in addition, its partition
- * timestamp is monotonically increasing such that once it is advanced, it will not be decremented.
+ * partition timestamp defined as the largest timestamp seen on the partition so far; this is passed to the
+ * timestamp extractor.
  */
 public class RecordQueue {
 
@@ -148,12 +148,21 @@ public class RecordQueue {
     }
 
     /**
-     * Returns the tracked partition timestamp
+     * Returns the head record's timestamp
      *
      * @return timestamp
      */
-    public long timestamp() {
+    public long headRecordTimestamp() {
         return headRecord == null ? UNKNOWN : headRecord.timestamp;
+    }
+
+    /**
+     * Returns the tracked partition time
+     *
+     * @return partition time
+     */
+    long partitionTime() {
+        return partitionTime;
     }
 
     /**
@@ -202,6 +211,8 @@ public class RecordQueue {
                 partitionTime = timestamp;
             }
             headRecord = new StampedRecord(deserialized, timestamp);
+
+            partitionTime = Math.max(partitionTime, timestamp);
         }
     }
 }
