@@ -975,10 +975,6 @@ public abstract class AbstractCoordinator implements Closeable {
         public final Sensor joinLatency;
         public final Sensor syncLatency;
 
-        public double measureLatency(MetricConfig config, long now) {
-            return TimeUnit.SECONDS.convert(now - heartbeat.lastHeartbeatSend(), TimeUnit.MILLISECONDS);
-        }
-
         public GroupCoordinatorMetrics(Metrics metrics, String metricGrpPrefix) {
             this.metricGrpName = metricGrpPrefix + "-coordinator-metrics";
 
@@ -1010,7 +1006,7 @@ public abstract class AbstractCoordinator implements Closeable {
             Measurable lastHeartbeat =
                 new Measurable() {
                     public double measure(MetricConfig config, long now) {
-                        return measureLatency(config, now);
+                        return TimeUnit.SECONDS.convert(now - heartbeat.lastHeartbeatSend(), TimeUnit.MILLISECONDS);
                     }
                 };
             metrics.addMetric(metrics.metricName("last-heartbeat-seconds-ago",
