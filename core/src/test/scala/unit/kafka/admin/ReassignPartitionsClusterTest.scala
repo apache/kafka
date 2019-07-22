@@ -680,6 +680,42 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
     assertEquals(Seq(1, 2), zkClient.getReplicasForPartition(new TopicPartition("orders", 2)))
     assertEquals(Seq.empty, zkClient.getReplicasForPartition(new TopicPartition("customers", 0)))
   }
+
+  @Test
+  def shouldListReassignmentsTriggeredByZk(): Unit = {
+    // Given a single replica on server 100
+    startBrokers(Seq(100, 101))
+    adminClient = createAdminClient(servers)
+    val partition = 0
+    // Get a random log directory on broker 101
+    val expectedLogDir = getRandomLogDirAssignment(101)
+    createTopic(zkClient, topicName, Map(partition -> Seq(100)), servers = servers)
+    // Given throttle set so replication will take at least 2 sec (to ensure we don't minimize race condition and test flakiness)
+    val throttle: Long = 1000 * 1000
+    produceMessages(topicName, numMessages = 20, acks = 0, valueLength = 100 * 1000)
+
+    // When we move the replica on 100 to broker 101
+    val topicJson: String = s"""{"version":1,"partitions":[{"topic":"$topicName","partition":0,"replicas":[101],"log_dirs":["$expectedLogDir"]}]}"""
+    ReassignPartitionsCommand.executeAssignment(zkClient, Some(adminClient), topicJson, Throttle(throttle))
+    // Then the replica should be removing
+    val tp = new TopicPartition(topicName, partition)
+    val reassigningPartitionsResult = adminClient.listPartitionReassignments(Set(tp).asJava).reassignments().get().get(tp)
+    assertEquals(Seq(101, 100), reassigningPartitionsResult.replicas().asScala)
+    assertEquals(Seq(101), reassigningPartitionsResult.addingReplicas().asScala)
+    assertEquals(Seq(100), reassigningPartitionsResult.removingReplicas().asScala)
+
+    waitForReassignmentToComplete()
+
+    // Then the replica should be on 101
+    val partitionAssignment = zkClient.getPartitionAssignmentForTopics(Set(topicName)).get(topicName).get(partition)
+    assertEquals(Seq(101), partitionAssignment.replicas)
+    assertTrue(partitionAssignment.addingReplicas.isEmpty)
+    assertTrue(partitionAssignment.removingReplicas.isEmpty)
+    // The replica should be in the expected log directory on broker 101
+    val replica = new TopicPartitionReplica(topicName, 0, 101)
+    assertEquals(expectedLogDir, adminClient.describeReplicaLogDirs(Collections.singleton(replica)).all().get.get(replica).getCurrentReplicaLogDir)
+  }
+
 //
 //  /**
 //    * 1. Trigger ZK reassignment for partitions 0, 1

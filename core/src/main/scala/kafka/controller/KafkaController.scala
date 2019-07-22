@@ -22,7 +22,7 @@ import com.yammer.metrics.core.Gauge
 import kafka.admin.AdminOperationException
 import kafka.api._
 import kafka.common._
-import kafka.controller.KafkaController.ElectLeadersCallback
+import kafka.controller.KafkaController.{ElectLeadersCallback, ListReassignmentsCallback}
 import kafka.metrics.{KafkaMetricsGroup, KafkaTimer}
 import kafka.server._
 import kafka.utils._
@@ -54,6 +54,7 @@ object KafkaController extends Logging {
   val InitialControllerEpochZkVersion = 0
 
   type ElectLeadersCallback = Map[TopicPartition, Either[ApiError, Int]] => Unit
+  type ListReassignmentsCallback = Either[Map[TopicPartition, PartitionReplicaAssignment], ApiError] => Unit
 }
 
 class KafkaController(val config: KafkaConfig,
@@ -1665,6 +1666,30 @@ class KafkaController(val config: KafkaConfig,
     }
   }
 
+  private def processListPartitionReassignments(partitionsOpt: Option[Set[TopicPartition]], callback: ListReassignmentsCallback): Unit = {
+    if (!isActive) {
+      callback(Right(new ApiError(Errors.NOT_CONTROLLER)))
+    } else {
+      val results: mutable.Map[TopicPartition, PartitionReplicaAssignment] = mutable.Map.empty
+      val partitionsToList = partitionsOpt match {
+        case Some(partitions) => partitions
+        case None => controllerContext.partitionsBeingReassigned.keys
+      }
+
+      partitionsToList.foreach { tp =>
+        val assignment = controllerContext.partitionFullReplicaAssignment(tp)
+        if (assignment.replicas.isEmpty) {
+          callback(Right(new ApiError(Errors.UNKNOWN_TOPIC_OR_PARTITION)))
+          return
+        } else if (assignment.isBeingReassigned) {
+          results += tp -> assignment
+        }
+      }
+
+      callback(Left(results))
+    }
+  }
+
   private def processIsrChangeNotification(): Unit = {
     def processUpdateNotifications(partitions: Seq[TopicPartition]) {
       val liveBrokers: Seq[Int] = controllerContext.liveOrShuttingDownBrokerIds.toSeq
@@ -1692,6 +1717,11 @@ class KafkaController(val config: KafkaConfig,
     callback: ElectLeadersCallback
   ): Unit = {
     eventManager.put(ReplicaLeaderElection(Some(partitions), electionType, AdminClientTriggered, callback))
+  }
+
+  def listPartitionReassignments(partitions: Option[Set[TopicPartition]],
+                                 callback: ListReassignmentsCallback): Unit = {
+    eventManager.put(ListPartitionReassignments(partitions, callback))
   }
 
   private def preemptReplicaLeaderElection(
@@ -1843,6 +1873,8 @@ class KafkaController(val config: KafkaConfig,
           processTopicDeletion()
         case LegacyZkPartitionReassignment =>
           processPartitionReassignment(None)
+        case ListPartitionReassignments(partitions, callback) =>
+          processListPartitionReassignments(partitions, callback)
         case PartitionReassignmentIsrChange(partition) =>
           processPartitionReassignmentIsrChange(partition)
         case IsrChangeNotification =>
@@ -2106,6 +2138,15 @@ case class ReplicaLeaderElection(
 ) extends ControllerEvent {
   override def state: ControllerState = ControllerState.ManualLeaderBalance
 }
+
+/**
+  * @param partitionsOpt - an Optional set of partitions. If not present, all reassigning partitions are to be listed
+  */
+case class ListPartitionReassignments(partitionsOpt: Option[Set[TopicPartition]],
+                                      callback: ListReassignmentsCallback) extends ControllerEvent {
+  override def state: ControllerState = ControllerState.ListPartitionReassignment
+}
+
 
 // Used only in test cases
 abstract class MockEvent(val state: ControllerState) extends ControllerEvent {

@@ -30,7 +30,7 @@ import kafka.api.ElectLeadersRequestOps
 import kafka.api.{ApiVersion, KAFKA_0_11_0_IV0, KAFKA_2_3_IV0}
 import kafka.cluster.Partition
 import kafka.common.OffsetAndMetadata
-import kafka.controller.KafkaController
+import kafka.controller.{KafkaController, PartitionReplicaAssignment}
 import kafka.coordinator.group.{GroupCoordinator, JoinGroupResult, SyncGroupResult}
 import kafka.coordinator.transaction.{InitProducerIdResult, TransactionCoordinator}
 import kafka.message.ZStdCompressionCodec
@@ -2294,10 +2294,44 @@ class KafkaApis(val requestChannel: RequestChannel,
     authorizeClusterDescribe(request)
     val listPartitionReassignmentsRequest = request.body[ListPartitionReassignmentsRequest]
 
-    println("TODO")
-    sendResponseMaybeThrottle(request, requestThrottleMs =>
-      new ListPartitionReassignmentsResponse(new ListPartitionReassignmentsResponseData().setThrottleTimeMs(requestThrottleMs).toStruct(0)))
-    println("TODO")
+    def sendResponseCallback(result: Either[Map[TopicPartition, PartitionReplicaAssignment], ApiError]): Unit = {
+      val responseData = result match {
+        case Right(error) => new ListPartitionReassignmentsResponseData().setErrorMessage(error.message()).setErrorCode(error.error().code())
+
+        case Left(assignments) =>
+          val topicReassignments = assignments.groupBy(_._1.topic()).map {
+            case (topic, reassignmentsByTp) =>
+              val partitionReassignments = reassignmentsByTp.map {
+                case (topicPartition, assignment) =>
+                  new ListPartitionReassignmentsResponseData.OngoingPartitionReassignment()
+                    .setPartitionIndex(topicPartition.partition())
+                    .setAddingReplicas(assignment.addingReplicas.toList.asJava.asInstanceOf[java.util.List[java.lang.Integer]])
+                    .setRemovingReplicas(assignment.removingReplicas.toList.asJava.asInstanceOf[java.util.List[java.lang.Integer]])
+                    .setReplicas(assignment.replicas.toList.asJava.asInstanceOf[java.util.List[java.lang.Integer]])
+              }.toList
+
+              new ListPartitionReassignmentsResponseData.OngoingTopicReassignment().setName(topic)
+                .setPartitions(partitionReassignments.asJava)
+          }.toList
+
+          new ListPartitionReassignmentsResponseData().setTopics(topicReassignments.asJava)
+      }
+
+      sendResponseMaybeThrottle(request, requestThrottleMs =>
+        new ListPartitionReassignmentsResponse(responseData.setThrottleTimeMs(requestThrottleMs).toStruct(0))
+      )
+    }
+
+    val partitionsOpt = listPartitionReassignmentsRequest.data().topics() match {
+      case topics: Any =>
+        Some(topics.iterator().asScala.flatMap { topic =>
+          topic.partitionIndexes().iterator().asScala
+            .map { tp => new TopicPartition(topic.name(), tp) }
+        }.toSet)
+      case _ => None
+    }
+
+    controller.listPartitionReassignments(partitionsOpt, sendResponseCallback)
   }
 
   private def configsAuthorizationApiError(session: RequestChannel.Session, resource: ConfigResource): ApiError = {
