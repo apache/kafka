@@ -169,8 +169,7 @@ public class ClientCompatibilityTest {
             .type(Boolean.class)
             .dest("brokerAutocreateDisabled")
             .metavar("BROKER_AUTOCREATE_DISABLED")
-            .help("Whether the ability to autocreate topics has been disabled on the broker.");
-           
+            .help("Whether the ability to autocreate topics has been disabled on the broker.");       
 
         Namespace res = null;
         try {
@@ -236,6 +235,7 @@ public class ClientCompatibilityTest {
         long prodTimeMs = Time.SYSTEM.milliseconds();
         testAdminClient();
         testProduce();
+        testAutoCreateOnProduce();
         testConsume(prodTimeMs);
         testAutoCreateOnProduce();
     }
@@ -256,6 +256,7 @@ public class ClientCompatibilityTest {
     }
     
     public void testAutoCreateOnProduce() throws Throwable {
+
         Properties producerProps = new Properties();
         producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, testConfig.bootstrapServer);
         producerProps.put(ProducerConfig.AUTO_CREATE_TOPICS_ENABLE_CONFIG, true);

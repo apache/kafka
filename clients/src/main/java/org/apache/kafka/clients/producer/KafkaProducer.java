@@ -1055,7 +1055,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                 CreateTopicsRequestData.CreatableTopic newTopic = createTopic(topic);
                 autocreateTopic(newTopic, cluster, remainingWaitMs);
                 lastAutoCreateAttempt = time.milliseconds();
-                if (autocreateResponse != null && autocreateResponse.versionMismatch() != null){
+                if (autocreateResponse != null && autocreateResponse.versionMismatch() != null) {
                     throw autocreateResponse.versionMismatch();
                 }
             }
@@ -1112,7 +1112,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             setTopics(topics).
             setTimeoutMs(timeoutMs).
             setValidateOnly(false));
-            RequestCompletionHandler callback = new RequestCompletionHandler() {
+        RequestCompletionHandler callback = new RequestCompletionHandler() {
             public void onComplete(ClientResponse response) {
                 autocreateResponse = response;
             }
