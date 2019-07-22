@@ -94,6 +94,13 @@ class ChangeLoggingWindowBytesStore
         return wrapped().fetchAll(timeFrom, timeTo);
     }
 
+    /**
+     *
+     * @deprecated as timestamp is not provided for the (key, value) pair, this causes inconsistency
+     * to identify the window frame to which the key belongs.
+     * Use WindowStore#put(key, value, timestamp) instead.
+     *
+     */
     @Override
     public void put(final Bytes key, final byte[] value) {
         // Note: It's incorrect to bypass the wrapped store here by delegating to another method,

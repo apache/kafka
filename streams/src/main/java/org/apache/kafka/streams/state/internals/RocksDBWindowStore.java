@@ -48,6 +48,13 @@ public class RocksDBWindowStore
         super.init(context, root);
     }
 
+    /**
+     *
+     * @deprecated as timestamp is not provided for the (key, value) pair, this causes inconsistency
+     * to identify the window frame to which the key belongs.
+     * Use WindowStore#put(key, value, timestamp) instead.
+     *
+     */
     @Override
     public void put(final Bytes key, final byte[] value) {
         put(key, value, context.timestamp());
