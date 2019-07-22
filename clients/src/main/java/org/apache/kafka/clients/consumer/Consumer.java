@@ -253,9 +253,7 @@ public interface Consumer<K, V> extends Closeable {
      */
     void wakeup();
 
-    int generation();
-
-    String groupId();
-
-    Optional<String> groupInstanceId();
+    default GroupMetadata groupMetadata() {
+        return null;
+    }
 }

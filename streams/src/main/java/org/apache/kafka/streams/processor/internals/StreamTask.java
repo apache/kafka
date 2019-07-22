@@ -478,8 +478,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
             throw new TaskMigratedException(this, error);
         }
 
-        commitNeeded = false;
-        commitRequested = false;
+        markCommitDone();
         taskMetrics.taskCommitTimeSensor.record(time.nanoseconds() - startNs);
     }
 
@@ -493,6 +492,12 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
             stateMgr.putOffsetLimit(partition, offset);
         }
         return consumedOffsetsAndMetadata;
+    }
+
+    @Override
+    public void markCommitDone() {
+        commitNeeded = false;
+        commitRequested = false;
     }
 
     @Override
@@ -609,7 +614,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
     }
 
     private void maybeAbortTransactionAndCloseRecordCollector(final boolean isZombie) {
-        if (eosEnabled && !isZombie) {
+        if (isTaskProducer && !isZombie) {
             try {
                 if (transactionInFlight) {
                     producer.abortTransaction();
@@ -627,7 +632,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
             }
         }
 
-        if (eosEnabled) {
+        if (isTaskProducer) {
             try {
                 recordCollector.close();
             } catch (final Throwable e) {
@@ -871,6 +876,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
     private void initializeTransactions() {
         try {
             producer.initTransactions(consumer);
+            producer.beginTransaction();
         } catch (final TimeoutException retriable) {
             log.error(
                 "Timeout exception caught when initializing transactions for task {}. " +

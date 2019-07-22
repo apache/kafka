@@ -47,6 +47,10 @@ public interface Task {
         throw new NotImplementedException();
     }
 
+    default void markCommitDone() {
+        throw new NotImplementedException();
+    }
+
     void suspend();
 
     void resume();

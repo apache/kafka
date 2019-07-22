@@ -284,8 +284,10 @@ abstract class AssignedTasks<T extends Task> {
         int committed = 0;
         RuntimeException firstException = null;
         Map<TopicPartition, OffsetAndMetadata> pendingOffsets = new HashMap<>();
+        List<Task> tasks = new ArrayList<>();
 
-//        Producer<>
+        // Another idea is to extract all pending offsets if we are not using eos thread producer,
+        // and batch the consumer commit to simplify the logic.
 
         for (final Iterator<T> it = running().iterator(); it.hasNext(); ) {
             final T task = it.next();
@@ -293,6 +295,7 @@ abstract class AssignedTasks<T extends Task> {
                 if (task.commitNeeded()) {
                     if (eosProducer != null) {
                         pendingOffsets.putAll(task.getPendingOffsets());
+                        tasks.add(task);
                     } else {
                         task.commit();
                     }
@@ -325,6 +328,9 @@ abstract class AssignedTasks<T extends Task> {
         if (!pendingOffsets.isEmpty()) {
             eosProducer.sendOffsetsToTransaction(pendingOffsets);
             eosProducer.commitTransaction();
+            for (Task task : tasks) {
+                task.markCommitDone();
+            }
             eosProducer.beginTransaction();
         }
 

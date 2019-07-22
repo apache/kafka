@@ -137,9 +137,6 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
      *                               or if the task producer got fenced (EOS)
      */
     int maybeCommitPerUserRequested() {
-
-        super.commit();
-
         int committed = 0;
         RuntimeException firstException = null;
 

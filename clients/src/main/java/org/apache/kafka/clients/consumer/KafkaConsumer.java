@@ -23,6 +23,7 @@ import org.apache.kafka.clients.GroupRebalanceConfig;
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.NetworkClient;
 import org.apache.kafka.clients.consumer.internals.ConsumerCoordinator;
+import org.apache.kafka.clients.consumer.internals.ConsumerGroupMetadata;
 import org.apache.kafka.clients.consumer.internals.ConsumerInterceptors;
 import org.apache.kafka.clients.consumer.internals.ConsumerMetadata;
 import org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient;
@@ -2307,19 +2308,13 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         return clientId;
     }
 
-    public String groupId() {
-        return groupId;
-    }
-
-    public int generationId() {
-        return coordinator.generationId();
-    }
-
-    public Optional<String> groupInstanceId() {
-        return coordinator.groupInstanceId();
-    }
-
-    public Map<TopicPartition, OffsetAndMetadata> fetchPartitionOffsets(final long timeout) {
-        return coordinator.fetchCommittedOffsets(subscriptions.assignedPartitions(), time.timer(timeout));
+    @Override
+    public GroupMetadata groupMetadata() {
+        return new ConsumerGroupMetadata(
+            coordinator.generationId(),
+            groupId,
+            coordinator.memberId(),
+            coordinator.groupInstanceId()
+        );
     }
 }

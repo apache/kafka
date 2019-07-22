@@ -25,6 +25,7 @@ import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetCommitCallback;
+import org.apache.kafka.clients.consumer.internals.ConsumerGroupMetadata;
 import org.apache.kafka.clients.producer.internals.BufferPool;
 import org.apache.kafka.clients.producer.internals.ProducerInterceptors;
 import org.apache.kafka.clients.producer.internals.ProducerMetadata;
@@ -258,6 +259,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     private final ApiVersions apiVersions;
     private final TransactionManager transactionManager;
     private Consumer<byte[], byte[]> consumer;
+    private ConsumerGroupMetadata staticConsumerMetadata;
 
     /**
      * A producer is instantiated by providing a set of key-value pairs as configuration. Valid configuration strings
@@ -628,6 +630,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
 
     public void initTransactions(Consumer<byte[], byte[]> consumer) {
         this.consumer = consumer;
+        this.staticConsumerMetadata = (ConsumerGroupMetadata) consumer.groupMetadata();
         throwIfNoTransactionManager();
         throwIfProducerClosed();
 
@@ -641,8 +644,8 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     private void maybeAllocateTransactionalId() {
         String allocatedTransactionalId = transactionManager.transactionalId();
         if (allocatedTransactionalId == null || allocatedTransactionalId.isEmpty()) {
-            String transactionalId = consumer.groupInstanceId().isPresent() ?
-                                         consumer.groupInstanceId().get(): UUID.randomUUID().toString();
+            String transactionalId = staticConsumerMetadata.groupInstanceId().isPresent() ?
+                                         staticConsumerMetadata.groupInstanceId().get(): UUID.randomUUID().toString();
             transactionManager.setTransactionalId(transactionalId);
         }
     }
@@ -699,13 +702,14 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         }
         throwIfNoTransactionManager();
         throwIfProducerClosed();
+        ConsumerGroupMetadata dynamicMetadata = (ConsumerGroupMetadata) consumer.groupMetadata();
         TransactionalRequestResult result = transactionManager.sendOffsetsToTransaction(offsets, consumerGroupId);
         sender.wakeup();
         result.await();
     }
 
     public void sendOffsetsToTransaction(Map<TopicPartition, OffsetAndMetadata> offsets) throws ProducerFencedException {
-       sendOffsetsToTransaction(offsets, consumer.groupId());
+       sendOffsetsToTransaction(offsets, staticConsumerMetadata.groupId());
     }
 
     /**
