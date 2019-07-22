@@ -23,9 +23,9 @@ import java.util.Collection;
 import java.util.Map;
 
 /**
- * The result of the {@link AdminClient#deleteConsumerGroups(Collection)} call.
+ * The result of the {@link Admin#deleteConsumerGroups(Collection)} call.
  *
- * The API of this class is evolving, see {@link AdminClient} for details.
+ * The API of this class is evolving, see {@link Admin} for details.
  */
 @InterfaceStability.Evolving
 public class DeleteConsumerGroupsResult {

@@ -28,7 +28,7 @@ import kafka.utils.{CommandDefaultOptions, CommandLineUtils, Exit, PasswordEncod
 import kafka.utils.Implicits._
 import kafka.zk.{AdminZkClient, KafkaZkClient}
 import org.apache.kafka.clients.CommonClientConfigs
-import org.apache.kafka.clients.admin.{AlterConfigsOptions, ConfigEntry, DescribeConfigsOptions, AdminClient => JAdminClient, Config => JConfig}
+import org.apache.kafka.clients.admin.{Admin, AlterConfigsOptions, ConfigEntry, DescribeConfigsOptions, AdminClient => JAdminClient, Config => JConfig}
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.config.types.Password
 import org.apache.kafka.common.errors.InvalidConfigurationException
@@ -295,7 +295,7 @@ object ConfigCommand extends Config {
     }
   }
 
-  private[admin] def alterBrokerConfig(adminClient: JAdminClient, opts: ConfigCommandOptions, entityName: String) {
+  private[admin] def alterBrokerConfig(adminClient: Admin, opts: ConfigCommandOptions, entityName: String) {
     val configsToBeAdded = parseConfigsToBeAdded(opts).asScala.map { case (k, v) => (k, new ConfigEntry(k, v)) }
     val configsToBeDeleted = parseConfigsToBeDeleted(opts)
 
@@ -324,7 +324,7 @@ object ConfigCommand extends Config {
       println(s"Completed updating default config for brokers in the cluster,")
   }
 
-  private def describeBrokerConfig(adminClient: JAdminClient, opts: ConfigCommandOptions, entityName: String) {
+  private def describeBrokerConfig(adminClient: Admin, opts: ConfigCommandOptions, entityName: String) {
     val configs = brokerConfig(adminClient, entityName, includeSynonyms = true)
     if (entityName.nonEmpty)
       println(s"Configs for broker $entityName are:")
@@ -336,7 +336,7 @@ object ConfigCommand extends Config {
     }
   }
 
-  private def brokerConfig(adminClient: JAdminClient, entityName: String, includeSynonyms: Boolean): Seq[ConfigEntry] = {
+  private def brokerConfig(adminClient: Admin, entityName: String, includeSynonyms: Boolean): Seq[ConfigEntry] = {
     val configResource = new ConfigResource(ConfigResource.Type.BROKER, entityName)
     val configSource = if (!entityName.isEmpty)
       ConfigEntry.ConfigSource.DYNAMIC_BROKER_CONFIG

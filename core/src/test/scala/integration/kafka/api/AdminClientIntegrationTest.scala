@@ -67,7 +67,7 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
   @Rule
   def globalTimeout = Timeout.millis(120000)
 
-  var client: AdminClient = null
+  var client: Admin = null
 
   val topic = "topic"
   val partition = 0
@@ -121,7 +121,7 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
     config
   }
 
-  def waitForTopics(client: AdminClient, expectedPresent: Seq[String], expectedMissing: Seq[String]): Unit = {
+  def waitForTopics(client: Admin, expectedPresent: Seq[String], expectedMissing: Seq[String]): Unit = {
     TestUtils.waitUntilTrue(() => {
         val topics = client.listTopics.names.get()
         expectedPresent.forall(topicName => topics.contains(topicName)) &&
@@ -1823,7 +1823,7 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
 
 object AdminClientIntegrationTest {
 
-  def checkValidAlterConfigs(client: AdminClient, topicResource1: ConfigResource, topicResource2: ConfigResource): Unit = {
+  def checkValidAlterConfigs(client: Admin, topicResource1: ConfigResource, topicResource2: ConfigResource): Unit = {
     // Alter topics
     var topicConfigEntries1 = Seq(
       new ConfigEntry(LogConfig.FlushMsProp, "1000")
@@ -1885,7 +1885,7 @@ object AdminClientIntegrationTest {
     assertEquals("0.9", configs.get(topicResource2).get(LogConfig.MinCleanableDirtyRatioProp).value)
   }
 
-  def checkInvalidAlterConfigs(zkClient: KafkaZkClient, servers: Seq[KafkaServer], client: AdminClient): Unit = {
+  def checkInvalidAlterConfigs(zkClient: KafkaZkClient, servers: Seq[KafkaServer], client: Admin): Unit = {
     // Create topics
     val topic1 = "invalid-alter-configs-topic-1"
     val topicResource1 = new ConfigResource(ConfigResource.Type.TOPIC, topic1)
