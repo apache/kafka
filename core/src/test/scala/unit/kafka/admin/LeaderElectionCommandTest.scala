@@ -20,12 +20,13 @@ import java.io.File
 import java.nio.charset.StandardCharsets
 import java.nio.file.Files
 import java.nio.file.Path
+
 import kafka.common.AdminCommandFailedException
 import kafka.server.KafkaConfig
 import kafka.server.KafkaServer
 import kafka.utils.TestUtils
 import kafka.zk.ZooKeeperTestHarness
-import org.apache.kafka.clients.admin.{Admin, AdminClientConfig}
+import org.apache.kafka.clients.admin.{Admin, AdminClient, AdminClientConfig}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.TimeoutException
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException
@@ -34,6 +35,7 @@ import org.junit.After
 import org.junit.Assert._
 import org.junit.Before
 import org.junit.Test
+
 import scala.collection.JavaConverters._
 import scala.collection.Seq
 import scala.concurrent.duration._
@@ -69,7 +71,7 @@ final class LeaderElectionCommandTest extends ZooKeeperTestHarness {
 
   @Test
   def testAllTopicPartition(): Unit = {
-    TestUtils.resource(Admin.create(createConfig(servers).asJava)) { client =>
+    TestUtils.resource(AdminClient.create(createConfig(servers).asJava)) { client =>
       val topic = "unclean-topic"
       val partition = 0
       val assignment = Seq(broker2, broker3)
@@ -100,7 +102,7 @@ final class LeaderElectionCommandTest extends ZooKeeperTestHarness {
 
   @Test
   def testTopicPartition(): Unit = {
-    TestUtils.resource(Admin.create(createConfig(servers).asJava)) { client =>
+    TestUtils.resource(AdminClient.create(createConfig(servers).asJava)) { client =>
       val topic = "unclean-topic"
       val partition = 0
       val assignment = Seq(broker2, broker3)
@@ -132,7 +134,7 @@ final class LeaderElectionCommandTest extends ZooKeeperTestHarness {
 
   @Test
   def testPathToJsonFile(): Unit = {
-    TestUtils.resource(Admin.create(createConfig(servers).asJava)) { client =>
+    TestUtils.resource(AdminClient.create(createConfig(servers).asJava)) { client =>
       val topic = "unclean-topic"
       val partition = 0
       val assignment = Seq(broker2, broker3)
@@ -165,7 +167,7 @@ final class LeaderElectionCommandTest extends ZooKeeperTestHarness {
 
   @Test
   def testPreferredReplicaElection(): Unit = {
-    TestUtils.resource(Admin.create(createConfig(servers).asJava)) { client =>
+    TestUtils.resource(AdminClient.create(createConfig(servers).asJava)) { client =>
       val topic = "unclean-topic"
       val partition = 0
       val assignment = Seq(broker2, broker3)

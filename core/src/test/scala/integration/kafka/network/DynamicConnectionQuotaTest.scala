@@ -25,7 +25,7 @@ import java.util.concurrent._
 
 import kafka.server.{BaseRequestTest, KafkaConfig}
 import kafka.utils.{CoreUtils, TestUtils}
-import org.apache.kafka.clients.admin.{Admin, AdminClientConfig}
+import org.apache.kafka.clients.admin.{Admin, AdminClient, AdminClientConfig}
 import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
@@ -190,7 +190,7 @@ class DynamicConnectionQuotaTest extends BaseRequestTest {
     val config = new Properties()
     config.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers)
     config.put(AdminClientConfig.METADATA_MAX_AGE_CONFIG, "10")
-    val adminClient = Admin.create(config)
+    val adminClient = AdminClient.create(config)
     adminClient
   }
 

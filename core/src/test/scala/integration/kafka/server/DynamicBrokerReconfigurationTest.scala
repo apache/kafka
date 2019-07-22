@@ -1075,7 +1075,7 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
     val bootstrapServers = TestUtils.bootstrapServers(servers, new ListenerName(listenerName))
     config.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers)
     config.put(AdminClientConfig.METADATA_MAX_AGE_CONFIG, "10")
-    val adminClient = Admin.create(config)
+    val adminClient = AdminClient.create(config)
     adminClients += adminClient
     adminClient
   }

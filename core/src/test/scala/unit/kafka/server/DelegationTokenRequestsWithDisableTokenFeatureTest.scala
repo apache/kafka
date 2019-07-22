@@ -20,7 +20,7 @@ import java.util
 
 import kafka.api.{KafkaSasl, SaslSetup}
 import kafka.utils.{JaasTestUtils, TestUtils}
-import org.apache.kafka.clients.admin.{Admin, AdminClientConfig}
+import org.apache.kafka.clients.admin.{Admin, AdminClient, AdminClientConfig}
 import org.apache.kafka.common.errors.DelegationTokenDisabledException
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.junit.{After, Before, Test}
@@ -56,7 +56,7 @@ class DelegationTokenRequestsWithDisableTokenFeatureTest extends BaseRequestTest
 
   @Test
   def testDelegationTokenRequests(): Unit = {
-    adminClient = Admin.create(createAdminConfig)
+    adminClient = AdminClient.create(createAdminConfig)
 
     val createResult = adminClient.createDelegationToken()
     intercept[ExecutionException](createResult.delegationToken().get()).getCause.isInstanceOf[DelegationTokenDisabledException]

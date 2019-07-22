@@ -25,7 +25,7 @@ import kafka.server.{ConfigType, KafkaConfig}
 import kafka.utils.{Exit, Logging, TestUtils}
 import kafka.zk.{ConfigEntityChangeNotificationZNode, DeleteTopicsTopicZNode}
 import org.apache.kafka.clients.CommonClientConfigs
-import org.apache.kafka.clients.admin.{Admin, ListTopicsOptions, NewTopic}
+import org.apache.kafka.clients.admin.{Admin, AdminClient, ListTopicsOptions, NewTopic}
 import org.apache.kafka.common.config.{ConfigException, ConfigResource, TopicConfig}
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.network.ListenerName
@@ -105,7 +105,7 @@ class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Loggin
     // create adminClient
     val props = new Properties()
     props.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, brokerList)
-    adminClient = Admin.create(props)
+    adminClient = AdminClient.create(props)
     topicService = AdminClientTopicService(adminClient)
     testTopicName = s"${testName.getMethodName}-${Random.alphanumeric.take(10).mkString}"
   }

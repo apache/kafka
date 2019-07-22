@@ -28,7 +28,7 @@ import kafka.utils.Implicits._
 import kafka.utils._
 import kafka.zk.{AdminZkClient, KafkaZkClient}
 import org.apache.kafka.clients.CommonClientConfigs
-import org.apache.kafka.clients.admin.{Admin, ListTopicsOptions, NewPartitions, NewTopic}
+import org.apache.kafka.clients.admin.{Admin, ListTopicsOptions, NewPartitions, NewTopic, AdminClient => JAdminClient}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.config.ConfigResource.Type
 import org.apache.kafka.common.config.{ConfigResource, TopicConfig}
@@ -163,7 +163,7 @@ object TopicCommand extends Logging {
         case Some(serverList) => commandConfig.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, serverList)
         case None =>
       }
-      Admin.create(commandConfig)
+      JAdminClient.create(commandConfig)
     }
 
     def apply(commandConfig: Properties, bootstrapServer: Option[String]): AdminClientTopicService =

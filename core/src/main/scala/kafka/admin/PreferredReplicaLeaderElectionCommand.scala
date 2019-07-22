@@ -209,7 +209,7 @@ object PreferredReplicaLeaderElectionCommand extends Logging {
   class AdminClientCommand(adminClientProps: Properties)
     extends Command with Logging {
 
-    val adminClient = org.apache.kafka.clients.admin.Admin.create(adminClientProps)
+    val adminClient = org.apache.kafka.clients.admin.AdminClient.create(adminClientProps)
 
     override def electPreferredLeaders(partitionsFromUser: Option[Set[TopicPartition]]): Unit = {
       val partitions = partitionsFromUser match {

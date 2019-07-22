@@ -531,7 +531,7 @@ object ConsumerGroupCommand extends Logging {
     private def createAdminClient(): Admin = {
       val props = if (opts.options.has(opts.commandConfigOpt)) Utils.loadProps(opts.options.valueOf(opts.commandConfigOpt)) else new Properties()
       props.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, opts.options.valueOf(opts.bootstrapServerOpt))
-      admin.Admin.create(props)
+      admin.AdminClient.create(props)
     }
 
     private def getConsumer(groupId: String) = {

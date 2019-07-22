@@ -171,7 +171,7 @@ object EndToEndLatency {
     println("Topic \"%s\" does not exist. Will create topic with %d partition(s) and replication factor = %d"
               .format(topic, defaultNumPartitions, defaultReplicationFactor))
 
-    val adminClient = admin.Admin.create(props)
+    val adminClient = admin.AdminClient.create(props)
     val newTopic = new NewTopic(topic, defaultNumPartitions, defaultReplicationFactor)
     try adminClient.createTopics(Collections.singleton(newTopic)).all().get()
     finally Utils.closeQuietly(adminClient, "AdminClient")

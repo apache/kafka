@@ -138,7 +138,7 @@ object LogCompactionTester {
   def createTopics(brokerUrl: String, topics: Seq[String]): Unit = {
     val adminConfig = new Properties
     adminConfig.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, brokerUrl)
-    val adminClient = admin.Admin.create(adminConfig)
+    val adminClient = admin.AdminClient.create(adminConfig)
 
     try {
       val topicConfigs = Map(TopicConfig.CLEANUP_POLICY_CONFIG -> TopicConfig.CLEANUP_POLICY_COMPACT)

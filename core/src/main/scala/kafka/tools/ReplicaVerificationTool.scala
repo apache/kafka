@@ -223,7 +223,7 @@ object ReplicaVerificationTool extends Logging {
   private def createAdminClient(brokerUrl: String): Admin = {
     val props = new Properties()
     props.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, brokerUrl)
-    admin.Admin.create(props)
+    admin.AdminClient.create(props)
   }
 
   private def initialOffsets(topicPartitions: Seq[TopicPartition], consumerConfig: Properties,

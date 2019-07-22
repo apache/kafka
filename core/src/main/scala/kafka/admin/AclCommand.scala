@@ -24,7 +24,7 @@ import joptsimple.util.EnumConverter
 import kafka.security.auth._
 import kafka.server.KafkaConfig
 import kafka.utils._
-import org.apache.kafka.clients.admin.{Admin, AdminClientConfig}
+import org.apache.kafka.clients.admin.{Admin, AdminClientConfig, AdminClient => JAdminClient}
 import org.apache.kafka.common.acl._
 import org.apache.kafka.common.resource.{PatternType, ResourcePattern, ResourcePatternFilter, Resource => JResource, ResourceType => JResourceType}
 import org.apache.kafka.common.security.JaasUtils
@@ -86,7 +86,7 @@ object AclCommand extends Logging {
       else
         new Properties()
       props.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, opts.options.valueOf(opts.bootstrapServerOpt))
-      val adminClient = Admin.create(props)
+      val adminClient = JAdminClient.create(props)
 
       try {
         f(adminClient)
