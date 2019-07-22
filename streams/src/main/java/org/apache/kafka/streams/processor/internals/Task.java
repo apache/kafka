@@ -39,6 +39,10 @@ public interface Task {
 
     boolean commitNeeded();
 
+    default boolean commitRequested() {
+        return false;
+    }
+
     void initializeTopology();
 
     void commit();

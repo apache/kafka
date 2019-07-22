@@ -860,7 +860,8 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
     /**
      * Whether or not a request has been made to commit the current state
      */
-    boolean commitRequested() {
+    @Override
+    public boolean commitRequested() {
         return commitRequested;
     }
 

@@ -281,6 +281,20 @@ abstract class AssignedTasks<T extends Task> {
      *                               or if the task producer got fenced (EOS)
      */
     int commit() {
+        return commitInternal(
+            log,
+            eosProducer,
+            task -> task.commitNeeded()
+        );
+    }
+
+    public interface CommitHelper {
+        boolean needsCommit(Task task);
+    }
+
+    protected int commitInternal(Logger log,
+                                 Producer<byte[], byte[]> eosProducer,
+                                 CommitHelper commitHelper) {
         int committed = 0;
         RuntimeException firstException = null;
         Map<TopicPartition, OffsetAndMetadata> pendingOffsets = new HashMap<>();
@@ -292,7 +306,7 @@ abstract class AssignedTasks<T extends Task> {
         for (final Iterator<T> it = running().iterator(); it.hasNext(); ) {
             final T task = it.next();
             try {
-                if (task.commitNeeded()) {
+                if (commitHelper.needsCommit(task)) {
                     if (eosProducer != null) {
                         pendingOffsets.putAll(task.getPendingOffsets());
                         tasks.add(task);
@@ -312,9 +326,7 @@ abstract class AssignedTasks<T extends Task> {
                 throw e;
             } catch (final RuntimeException t) {
                 log.error("Failed to commit {} {} due to the following error:",
-                        taskTypeName,
-                        task.id(),
-                        t);
+                          taskTypeName, task.id(), t);
                 if (firstException == null) {
                     firstException = t;
                 }
