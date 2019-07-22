@@ -81,28 +81,9 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
                                   final StateDirectory stateDirectory,
                                   final StateRestoreListener stateRestoreListener,
                                   final StreamsConfig config) {
-        this(logContext,
-             topology,
-             globalConsumer,
-             stateDirectory,
-             stateRestoreListener,
-             config,
-             stateDirectory.globalStateDir(),
-             new OffsetCheckpoint(new File(stateDirectory.globalStateDir(),
-                 CHECKPOINT_FILE_NAME)));
-    }
-
-    public GlobalStateManagerImpl(final LogContext logContext,
-                                  final ProcessorTopology topology,
-                                  final Consumer<byte[], byte[]> globalConsumer,
-                                  final StateDirectory stateDirectory,
-                                  final StateRestoreListener stateRestoreListener,
-                                  final StreamsConfig config,
-                                  final File baseDirectory,
-                                  final OffsetCheckpoint chkptFile) {
         eosEnabled = StreamsConfig.EXACTLY_ONCE.equals(config.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG));
-        baseDir = baseDirectory;
-        checkpointFile = chkptFile;
+        baseDir = stateDirectory.globalStateDir();
+        checkpointFile = new OffsetCheckpoint(new File(baseDir, CHECKPOINT_FILE_NAME));
         checkpointFileCache = new HashMap<>();
 
         // Find non persistent store's topics
