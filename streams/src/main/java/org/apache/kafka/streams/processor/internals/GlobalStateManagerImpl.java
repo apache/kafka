@@ -81,9 +81,28 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
                                   final StateDirectory stateDirectory,
                                   final StateRestoreListener stateRestoreListener,
                                   final StreamsConfig config) {
+        this(logContext,
+             topology,
+             globalConsumer,
+             stateDirectory,
+             stateRestoreListener,
+             config,
+             stateDirectory.globalStateDir(),
+             new OffsetCheckpoint(new File(stateDirectory.globalStateDir(),
+                 CHECKPOINT_FILE_NAME)));
+    }
+
+    public GlobalStateManagerImpl(final LogContext logContext,
+                                  final ProcessorTopology topology,
+                                  final Consumer<byte[], byte[]> globalConsumer,
+                                  final StateDirectory stateDirectory,
+                                  final StateRestoreListener stateRestoreListener,
+                                  final StreamsConfig config,
+                                  final File baseDirectory,
+                                  final OffsetCheckpoint chkptFile) {
         eosEnabled = StreamsConfig.EXACTLY_ONCE.equals(config.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG));
-        baseDir = stateDirectory.globalStateDir();
-        checkpointFile = new OffsetCheckpoint(new File(baseDir, CHECKPOINT_FILE_NAME));
+        baseDir = baseDirectory;
+        checkpointFile = chkptFile;
         checkpointFileCache = new HashMap<>();
 
         // Find non persistent store's topics
@@ -131,10 +150,18 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
         }
 
         final List<StateStore> stateStores = topology.globalStateStores();
+        final Map<String, String> storeNameToTopic = topology.storeToChangelogTopic();
+        final Set<String> topics = new HashSet<String>();
         for (final StateStore stateStore : stateStores) {
             globalStoreNames.add(stateStore.name());
+            final String sourceTopic = storeNameToTopic.get(stateStore.name());
+            topics.add(sourceTopic);
             stateStore.init(globalProcessorContext, stateStore);
         }
+
+        // now prune non-relevant topic-partitions from checkpointFileCache
+        checkpointFileCache.keySet().removeIf(e -> !topics.contains(e.topic()));
+
         return Collections.unmodifiableSet(globalStoreNames);
     }
 
