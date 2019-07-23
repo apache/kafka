@@ -19,6 +19,7 @@ package org.apache.kafka.clients.producer.internals;
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.RequestCompletionHandler;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.clients.consumer.internals.ConsumerGroupMetadata;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
@@ -999,6 +1000,8 @@ public class TransactionManager {
             pendingTxnOffsetCommits.put(entry.getKey(), committedOffset);
         }
 
+
+        ConsumerGroupMetadata metadata = (ConsumerGroupMetadata) consumer.groupMetadata();
         TxnOffsetCommitRequest.Builder builder = new TxnOffsetCommitRequest.Builder(
             new TxnOffsetCommitRequestData()
                 .setTransactionalId(transactionalId)
@@ -1006,7 +1009,9 @@ public class TransactionManager {
                 .setProducerId(producerIdAndEpoch.producerId)
                 .setProducerEpoch(producerIdAndEpoch.epoch)
                 .setTopics(TxnOffsetCommitRequest.getTopics(pendingTxnOffsetCommits))
-                .setGenerationId(consumer.generation())
+                .setGenerationId(metadata.generation())
+                .setMemberId(metadata.memberId())
+                .setGroupInstanceId(metadata.groupInstanceId().orElse(null))
         );
         return new TxnOffsetCommitHandler(result, builder);
     }

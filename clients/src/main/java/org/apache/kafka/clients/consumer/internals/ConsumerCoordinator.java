@@ -1162,7 +1162,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         }
     }
 
-    static class MetadataSnapshot {
+    private static class MetadataSnapshot {
         private final int version;
         private final Map<String, Integer> partitionsPerTopic;
 

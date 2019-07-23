@@ -652,7 +652,7 @@ public class StreamThread extends Thread {
         }
 
         final Consumer<byte[], byte[]> mainConsumer = clientSupplier.getConsumer(consumerConfigs);
-        taskManager.setMainConsumer(mainConsumer);
+        taskManager.setConsumer(mainConsumer);
 
         return new StreamThread(
             time,
@@ -809,7 +809,8 @@ public class StreamThread extends Thread {
 
     private void maybeInitializeTransactions() {
         try {
-            if (eosEnabled) {
+            // This is a thread-level txn producer
+            if (eosEnabled && producer != null) {
                 producer.initTransactions(consumer);
             }
         } catch (final TimeoutException retriable) {

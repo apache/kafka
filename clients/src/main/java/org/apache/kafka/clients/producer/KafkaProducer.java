@@ -628,6 +628,34 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         result.await(maxBlockTimeMs, TimeUnit.MILLISECONDS);
     }
 
+    /**
+     * Needs to be called before any other methods when the producer is transactional
+     * and needs to access corresponding consumer state.
+     *
+     * This method does the following:
+     *   1. Ensures any transactions initiated by previous instances of the producer with the same
+     *      transactional.id are completed. If the previous instance had failed with a transaction in
+     *      progress, it will be aborted. If the last transaction had begun completion,
+     *      but not yet finished, this method awaits its completion.
+     *   2. Gets the internal producer id and epoch, used in all future transactional
+     *      messages issued by the producer.
+     *   3. Acquire static consumer group metedata(groupId, groupInstanceId, etc)
+     *   4. Initialize transactional id if it hasn't been set yet.
+     *
+     * Note that this method will raise {@link TimeoutException} if the transactional state cannot
+     * be initialized before expiration of {@code max.block.ms}. Additionally, it will raise {@link InterruptException}
+     * if interrupted. It is safe to retry in either case, but once the transactional state has been successfully
+     * initialized, this method should no longer be used.
+     *
+     * @throws IllegalStateException if no transactional.id has been configured
+     * @throws org.apache.kafka.common.errors.UnsupportedVersionException fatal error indicating the broker
+     *         does not support transactions (i.e. if its version is lower than 0.11.0.0)
+     * @throws org.apache.kafka.common.errors.AuthorizationException fatal error indicating that the configured
+     *         transactional.id is not authorized. See the exception for more details
+     * @throws KafkaException if the producer has encountered a previous fatal error or for any other unexpected error
+     * @throws TimeoutException if the time taken for initialize the transaction has surpassed <code>max.block.ms</code>.
+     * @throws InterruptException if the thread is interrupted while blocked
+     */
     public void initTransactions(Consumer<byte[], byte[]> consumer) {
         this.consumer = consumer;
         this.staticConsumerMetadata = (ConsumerGroupMetadata) consumer.groupMetadata();
@@ -644,9 +672,9 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     private void maybeAllocateTransactionalId() {
         String allocatedTransactionalId = transactionManager.transactionalId();
         if (allocatedTransactionalId == null || allocatedTransactionalId.isEmpty()) {
-            String transactionalId = staticConsumerMetadata.groupInstanceId().isPresent() ?
+            String transactionalIdSuffix = staticConsumerMetadata.groupInstanceId().isPresent() ?
                                          staticConsumerMetadata.groupInstanceId().get(): UUID.randomUUID().toString();
-            transactionManager.setTransactionalId(transactionalId);
+            transactionManager.setTransactionalId(staticConsumerMetadata.groupId() + "-" + transactionalIdSuffix);
         }
     }
 
@@ -700,16 +728,24 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             throw new IllegalArgumentException("Consumer instance is defined, " +
                                                    "please use sendOffsetsToTransaction(Map) without passing in consumer group id instead");
         }
-        throwIfNoTransactionManager();
-        throwIfProducerClosed();
-        ConsumerGroupMetadata dynamicMetadata = (ConsumerGroupMetadata) consumer.groupMetadata();
-        TransactionalRequestResult result = transactionManager.sendOffsetsToTransaction(offsets, consumerGroupId);
-        sender.wakeup();
-        result.await();
+        sendOffsetToTransactionInternal(offsets, consumerGroupId);
     }
 
     public void sendOffsetsToTransaction(Map<TopicPartition, OffsetAndMetadata> offsets) throws ProducerFencedException {
-       sendOffsetsToTransaction(offsets, staticConsumerMetadata.groupId());
+        if (consumer == null) {
+            throw new IllegalArgumentException("Consumer instance is undefined, " +
+                                                   "please use sendOffsetsToTransaction(Map, String) to pass in consumer group id instead");
+        }
+        sendOffsetToTransactionInternal(offsets, staticConsumerMetadata.groupId());
+    }
+
+    private void sendOffsetToTransactionInternal(Map<TopicPartition, OffsetAndMetadata> offsets,
+                                                 String consumerGroupId) {
+        throwIfNoTransactionManager();
+        throwIfProducerClosed();
+        TransactionalRequestResult result = transactionManager.sendOffsetsToTransaction(offsets, consumerGroupId);
+        sender.wakeup();
+        result.await();
     }
 
     /**

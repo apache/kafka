@@ -65,7 +65,7 @@ public class TaskManager {
     private Map<TaskId, Set<TopicPartition>> assignedActiveTasks;
     private Map<TaskId, Set<TopicPartition>> assignedStandbyTasks;
 
-    private Consumer<byte[], byte[]> mainConsumer;
+    private Consumer<byte[], byte[]> consumer;
 
     TaskManager(final ChangelogReader changelogReader,
                 final UUID processId,
@@ -95,7 +95,7 @@ public class TaskManager {
     }
 
     void createTasks(final Collection<TopicPartition> assignment) {
-        if (mainConsumer == null) {
+        if (consumer == null) {
             throw new IllegalStateException(logPrefix + "consumer has not been initialized while adding stream tasks. This should not happen.");
         }
 
@@ -108,7 +108,7 @@ public class TaskManager {
         addStandbyTasks();
         // Pause all the partitions until the underlying state store is ready for all the active tasks.
         log.trace("Pausing partitions: {}", assignment);
-        mainConsumer.pause(assignment);
+        consumer.pause(assignment);
     }
 
     private void addStreamTasks(final Collection<TopicPartition> assignment) {
@@ -145,7 +145,7 @@ public class TaskManager {
         // -> other thread will call removeSuspendedTasks(); eventually
         log.trace("New active tasks to be created: {}", newTasks);
 
-        for (final StreamTask task : taskCreator.createTasks(mainConsumer, newTasks)) {
+        for (final StreamTask task : taskCreator.createTasks(consumer, newTasks)) {
             active.addNewTask(task);
         }
     }
@@ -174,7 +174,7 @@ public class TaskManager {
         // -> other thread will call removeSuspendedStandbyTasks(); eventually
         log.trace("New standby tasks to be created: {}", newStandbyTasks);
 
-        for (final StandbyTask task : standbyTaskCreator.createTasks(mainConsumer, newStandbyTasks)) {
+        for (final StandbyTask task : standbyTaskCreator.createTasks(consumer, newStandbyTasks)) {
             standby.addNewTask(task);
         }
     }
@@ -313,8 +313,8 @@ public class TaskManager {
         return standby.runningTaskMap();
     }
 
-    void setMainConsumer(final Consumer<byte[], byte[]> mainConsumer) {
-        this.mainConsumer = mainConsumer;
+    void setConsumer(final Consumer<byte[], byte[]> consumer) {
+        this.consumer = consumer;
     }
 
     /**
@@ -330,9 +330,9 @@ public class TaskManager {
         active.updateRestored(restored);
 
         if (active.allTasksRunning()) {
-            final Set<TopicPartition> assignment = mainConsumer.assignment();
+            final Set<TopicPartition> assignment = consumer.assignment();
             log.trace("Resuming partitions {}", assignment);
-            mainConsumer.resume(assignment);
+            consumer.resume(assignment);
             assignStandbyPartitions();
             return standby.allTasksRunning();
         }

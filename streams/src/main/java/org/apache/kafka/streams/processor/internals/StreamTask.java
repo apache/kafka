@@ -66,7 +66,6 @@ import static org.apache.kafka.streams.kstream.internals.metrics.Sensors.recordL
 public class StreamTask extends AbstractTask implements ProcessorNodePunctuator {
 
     private static final ConsumerRecord<Object, Object> DUMMY_RECORD = new ConsumerRecord<>(ProcessorContextImpl.NONEXIST_TOPIC, -1, -1L, null, null);
-    public static final Map<TopicPartition, OffsetAndMetadata> INTERNAL_COMMIT = null;
 
     private final Time time;
     private final long maxTaskIdleMs;

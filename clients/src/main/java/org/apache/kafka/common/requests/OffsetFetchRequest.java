@@ -52,6 +52,7 @@ public class OffsetFetchRequest extends AbstractRequest {
                 offsetFetchRequestTopicMap.put(topicName, topic);
             });
 
+            // we use isolation level to decide whether to back off when seeing pending offsets.
             this.data = new OffsetFetchRequestData()
                             .setGroupId(groupId)
                             .setTopics(new ArrayList<>(offsetFetchRequestTopicMap.values()))
