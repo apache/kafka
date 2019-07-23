@@ -41,10 +41,10 @@ import org.apache.kafka.common.TopicPartition;
 public interface PartitionAssignor {
 
     /**
-     * Return serialized data that will included in the serializable subscription object sent in the
+     * Return serialized data that will be included in the serializable subscription object sent in the
      * joinGroup and can be leveraged in {@link #assign(Cluster, GroupSubscription)} ((e.g. local host/rack information)
      *
-     * @return Non-null subscription with optional user data
+     * @return Non-null optional join subscription user data
      */
     default ByteBuffer joinMetadata() {
         return ByteBuffer.wrap(new byte[0]);

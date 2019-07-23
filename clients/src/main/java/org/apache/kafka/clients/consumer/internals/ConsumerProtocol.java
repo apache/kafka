@@ -106,21 +106,20 @@ public class ConsumerProtocol {
         new Field(PARTITIONS_KEY_NAME, new ArrayOf(Type.INT32)));
 
     public static final Schema SUBSCRIPTION_V0 = new Schema(
-        new Field(USER_DATA_KEY_NAME, Type.NULLABLE_BYTES),
-        new Field(TOPICS_KEY_NAME, new ArrayOf(Type.STRING)));
+        new Field(TOPICS_KEY_NAME, new ArrayOf(Type.STRING)),
+        new Field(USER_DATA_KEY_NAME, Type.NULLABLE_BYTES));
 
     public static final Schema SUBSCRIPTION_V1 = new Schema(
-        new Field(USER_DATA_KEY_NAME, Type.NULLABLE_BYTES),
         new Field(TOPICS_KEY_NAME, new ArrayOf(Type.STRING)),
+        new Field(USER_DATA_KEY_NAME, Type.NULLABLE_BYTES),
         new Field(OWNED_PARTITIONS_KEY_NAME, new ArrayOf(TOPIC_ASSIGNMENT_V0)));
 
     public static final Schema ASSIGNMENT_V0 = new Schema(
-        new Field(USER_DATA_KEY_NAME, Type.NULLABLE_BYTES),
-        new Field(TOPIC_PARTITIONS_KEY_NAME, new ArrayOf(TOPIC_ASSIGNMENT_V0)));
+        new Field(TOPIC_PARTITIONS_KEY_NAME, new ArrayOf(TOPIC_ASSIGNMENT_V0)),
+        new Field(USER_DATA_KEY_NAME, Type.NULLABLE_BYTES));
 
-    public static final Schema ASSIGNMENT_V1 = new Schema(
-        new Field(USER_DATA_KEY_NAME, Type.NULLABLE_BYTES),
-        new Field(TOPIC_PARTITIONS_KEY_NAME, new ArrayOf(TOPIC_ASSIGNMENT_V0)));
+
+    public static final Schema ASSIGNMENT_V1 = ASSIGNMENT_V0; // assignment schema does not change in v1
 
 
     public static ByteBuffer serializeSubscription(Subscription subscription, Short version) {
@@ -332,7 +331,6 @@ public class ConsumerProtocol {
         }
 
         ConsumerAssignmentData consumerData = new ConsumerAssignmentData(partitions);
-
         return new Assignment(userData, consumerData);
     }
 
