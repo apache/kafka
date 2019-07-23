@@ -20,7 +20,6 @@ import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.LeaveGroupRequestData;
 import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity;
 import org.apache.kafka.common.message.LeaveGroupResponseData;
-import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.junit.Before;
 import org.junit.Test;
@@ -58,39 +57,6 @@ public class LeaveGroupRequestTest {
             groupId,
             members
         );
-    }
-
-    @Test
-    public void testLeaveConstructor() {
-        final String groupId = "group_id";
-        final String memberId = "member_id";
-        final int throttleTimeMs = 10;
-
-        final LeaveGroupRequestData expectedData = new LeaveGroupRequestData()
-                                                       .setGroupId(groupId)
-                                                       .setMemberId(memberId);
-
-        final LeaveGroupRequest.Builder builder =
-            new LeaveGroupRequest.Builder(groupId, Collections.singletonList(
-                new MemberIdentity().setMemberId(memberId)
-            ));
-
-        for (short version = 0; version <= ApiKeys.LEAVE_GROUP.latestVersion(); version++) {
-            LeaveGroupRequest request = builder.build(version);
-            assertEquals(expectedData, request.data());
-
-            int expectedThrottleTime = version >= 1 ? throttleTimeMs
-                                           : AbstractResponse.DEFAULT_THROTTLE_TIME;
-            LeaveGroupResponse expectedResponse = new LeaveGroupResponse(
-                new LeaveGroupResponseData()
-                    .setErrorCode(Errors.NOT_CONTROLLER.code())
-                    .setThrottleTimeMs(expectedThrottleTime)
-            );
-
-            assertEquals(expectedResponse, request.getErrorResponse(throttleTimeMs,
-                                                                    Errors.NOT_CONTROLLER.exception()));
-        }
-
     }
 
     @Test
@@ -141,7 +107,7 @@ public class LeaveGroupRequestTest {
             assertEquals(expectedData, request.data());
             assertEquals(singleMember, request.members());
 
-            int expectedThrottleTime = version == 2 ? throttleTimeMs
+            int expectedThrottleTime = version >= 1 ? throttleTimeMs
                                            : AbstractResponse.DEFAULT_THROTTLE_TIME;
             LeaveGroupResponse expectedResponse = new LeaveGroupResponse(
                 new LeaveGroupResponseData()
@@ -153,7 +119,7 @@ public class LeaveGroupRequestTest {
                                                                     Errors.NOT_CONTROLLER.exception()));
         }
     }
-    
+
     @Test(expected = IllegalArgumentException.class)
     public void testBuildEmptyMembers() {
         new LeaveGroupRequest.Builder(groupId, Collections.emptyList());

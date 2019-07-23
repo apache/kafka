@@ -53,8 +53,8 @@ public class LeaveGroupResponse extends AbstractResponse {
 
     public LeaveGroupResponse(List<MemberResponse> memberResponses,
                               Errors topLevelError,
-                              int throttleTimeMs,
-                              short version) {
+                              final int throttleTimeMs,
+                              final short version) {
         if (version <= 2) {
             if (memberResponses.size() != 1) {
                 throw new IllegalStateException("Singleton leave group request shouldn't have more than one " +
@@ -65,13 +65,15 @@ public class LeaveGroupResponse extends AbstractResponse {
                                   memberResponses.get(0).errorCode();
 
             this.data = new LeaveGroupResponseData()
-                            .setErrorCode(errorCode)
-                            .setThrottleTimeMs(throttleTimeMs);
+                            .setErrorCode(errorCode);
         } else {
             this.data = new LeaveGroupResponseData()
                             .setErrorCode(topLevelError.code())
-                            .setThrottleTimeMs(throttleTimeMs)
                             .setMembers(memberResponses);
+        }
+
+        if (version >= 1) {
+            this.data.setThrottleTimeMs(throttleTimeMs);
         }
     }
 
