@@ -93,7 +93,7 @@ public class LeaveGroupResponseTest {
             new MemberResponse()
                 .setErrorCode(Errors.NOT_COORDINATOR.code())
         );
-        for (short version = 0; version < LeaveGroupResponseData.SCHEMAS.length; version++) {
+        for (short version = 0; version <= ApiKeys.LEAVE_GROUP.latestVersion(); version++) {
             try {
                 LeaveGroupResponse multiLeaveResponse = new LeaveGroupResponse(memberResponses,
                                                                                Errors.NONE,
@@ -126,7 +126,6 @@ public class LeaveGroupResponseTest {
 
     @Test
     public void testShouldThrottle() {
-        // A dummy setup is ok.
         LeaveGroupResponse response = new LeaveGroupResponse(new LeaveGroupResponseData());
         for (short version = 0; version <= ApiKeys.LEAVE_GROUP.latestVersion(); version++) {
             if (version >= 2) {
@@ -156,17 +155,15 @@ public class LeaveGroupResponseTest {
 
     @Test
     public void testEqualityWithMemberResponses() {
-
-        for (short version = 0; version < LeaveGroupResponseData.SCHEMAS.length; version++) {
+        for (short version = 0; version <= ApiKeys.LEAVE_GROUP.latestVersion(); version++) {
             List<MemberResponse> localResponses = version > 2 ? memberResponses : memberResponses.subList(0, 1);
             LeaveGroupResponse primaryResponse = new LeaveGroupResponse(localResponses,
                                                                         Errors.NONE,
                                                                         throttleTimeMs,
                                                                         version);
 
-            if (localResponses.size() > 1) {
-                Collections.reverse(localResponses);
-            }
+            // The order of members should not alter result data.
+            Collections.reverse(localResponses);
             LeaveGroupResponse reversedResponse = new LeaveGroupResponse(localResponses,
                                                                          Errors.NONE,
                                                                          throttleTimeMs,

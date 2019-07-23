@@ -20,6 +20,7 @@ import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.LeaveGroupRequestData;
 import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity;
 import org.apache.kafka.common.message.LeaveGroupResponseData;
+import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.junit.Before;
 import org.junit.Test;
@@ -65,7 +66,7 @@ public class LeaveGroupRequestTest {
                                                        .setGroupId(groupId)
                                                        .setMembers(members);
 
-        for (short version = 0; version < LeaveGroupRequestData.SCHEMAS.length; version++) {
+        for (short version = 0; version <= ApiKeys.LEAVE_GROUP.latestVersion(); version++) {
             try {
                 LeaveGroupRequest request = builder.build(version);
                 if (version <= 2) {

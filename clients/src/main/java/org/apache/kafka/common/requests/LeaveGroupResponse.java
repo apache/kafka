@@ -116,6 +116,7 @@ public class LeaveGroupResponse extends AbstractResponse {
         }
     }
 
+    @Override
     public Map<Errors, Integer> errorCounts() {
         Map<Errors, Integer> combinedErrorCounts = new HashMap<>();
         // Top level error.

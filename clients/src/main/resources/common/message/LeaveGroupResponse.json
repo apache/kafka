@@ -26,11 +26,12 @@
       "about": "The duration in milliseconds for which the request was throttled due to a quota violation, or zero if the request did not violate any quota." },
     { "name": "ErrorCode", "type": "int16", "versions": "0+",
       "about": "The error code, or 0 if there was no error." },
+
     { "name": "Members", "type": "[]MemberResponse", "versions": "3+",
       "about": "List of leaving member responses.", "fields": [
       { "name": "MemberId", "type": "string", "versions": "3+",
         "about": "The member ID to remove from the group." },
-      { "name": "GroupInstanceId", "type": "string", "versions": "3+", "nullableVersions": "3",
+      { "name": "GroupInstanceId", "type": "string", "versions": "3+", "nullableVersions": "3+",
         "about": "The group instance ID to remove from the group." },
       { "name": "ErrorCode", "type": "int16", "versions": "3+",
         "about": "The error code, or 0 if there was no error." }

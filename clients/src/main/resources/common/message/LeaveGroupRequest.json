@@ -25,12 +25,12 @@
       "about": "The ID of the group to leave." },
     { "name": "MemberId", "type": "string", "versions": "0-2",
       "about": "The member ID to remove from the group." },
-    { "name": "Members", "type": "[]MemberIdentity", "versions": "3",
+    { "name": "Members", "type": "[]MemberIdentity", "versions": "3+",
       "about": "List of leaving member identities.", "fields": [
-      { "name": "MemberId", "type": "string", "versions": "3",
+      { "name": "MemberId", "type": "string", "versions": "3+",
         "about": "The member ID to remove from the group." },
       { "name": "GroupInstanceId", "type": "string",
-        "versions": "3", "nullableVersions": "3", "default": "null",
+        "versions": "3+", "nullableVersions": "3+", "default": "null",
         "about": "The group instance ID to remove from the group." }
     ]}
   ]
