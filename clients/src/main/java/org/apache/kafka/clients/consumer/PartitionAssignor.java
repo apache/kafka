@@ -66,6 +66,15 @@ public interface PartitionAssignor {
     void onAssignment(Assignment assignment);
 
     /**
+     * Callback which is invoked when a group member receives its assignment from the leader.
+     * @param assignment The local member's assignment as provided by the leader in {@link #assign(Cluster, GroupSubscription)}
+     * @param generation The consumer group generation associated with this partition assignment (optional)
+     */
+    default void onAssignment(Assignment assignment, int generation) {
+        onAssignment(assignment);
+    }
+
+    /**
      * Indicate which rebalance protocol this assignor works with;
      * By default it should always work with {@link RebalanceProtocol#EAGER}.
      */

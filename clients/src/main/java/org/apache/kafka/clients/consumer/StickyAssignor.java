@@ -365,9 +365,9 @@ public class StickyAssignor extends AbstractPartitionAssignor {
     }
 
     @Override
-    public void onAssignment(Assignment assignment) {
+    public void onAssignment(Assignment assignment, int generation) {
         memberAssignment = assignment.consumerData().partitions();
-        this.generation = 0;
+        this.generation = generation;
     }
 
     @Override

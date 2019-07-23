@@ -285,9 +285,9 @@ object DumpLogSegments {
           val userData = hex(Utils.toArray(partitionAssignment.userData()))
 
           if (userData.isEmpty)
-            s"${member.memberId}=${partitionAssignment.partitions()}"
+            s"${member.memberId}=${partitionAssignment.consumerData().partitions()}"
           else
-            s"${member.memberId}=${partitionAssignment.partitions()}:$userData"
+            s"${member.memberId}=${partitionAssignment.consumerData().partitions()}:$userData"
         } else {
           s"${member.memberId}=${hex(member.assignment)}"
         }
