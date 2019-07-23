@@ -1222,6 +1222,13 @@ public class TransactionManager {
                 } else if (error == Errors.ILLEGAL_GENERATION) {
                     fatalError(error.exception());
                     return;
+                } else if (error == Errors.FENCED_INSTANCE_ID) {
+                    fatalError(error.exception());
+                    return;
+                }  else if (error == Errors.UNKNOWN_MEMBER_ID) {
+                    // What should we do? The consumer internal is not available here.
+                    reenqueue();
+                    return;
                 } else if (error == Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED) {
                     fatalError(error.exception());
                     return;

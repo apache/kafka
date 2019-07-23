@@ -21,7 +21,7 @@ import org.apache.kafka.common.utils.LogContext;
 class AssignedStandbyTasks extends AssignedTasks<StandbyTask> {
 
     AssignedStandbyTasks(final LogContext logContext) {
-        super(logContext, "standby task");
+        super(logContext, "standby task", null, null);
     }
 
 }

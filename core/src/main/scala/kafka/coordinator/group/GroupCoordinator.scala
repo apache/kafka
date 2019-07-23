@@ -555,6 +555,8 @@ class GroupCoordinator(val brokerId: Int,
                              producerId: Long,
                              producerEpoch: Short,
                              offsetMetadata: immutable.Map[TopicPartition, OffsetAndMetadata],
+                             memberId: String,
+                             groupInstanceId: Option[String],
                              generation: Int,
                              responseCallback: immutable.Map[TopicPartition, Errors] => Unit): Unit = {
     validateGroupStatus(groupId, ApiKeys.TXN_OFFSET_COMMIT) match {
@@ -563,7 +565,7 @@ class GroupCoordinator(val brokerId: Int,
         val group = groupManager.getGroup(groupId).getOrElse {
           groupManager.addGroup(new GroupMetadata(groupId, Empty, time))
         }
-        doCommitOffsets(group, NoMemberId, None, generation, producerId, producerEpoch, offsetMetadata, responseCallback)
+        doCommitOffsets(group, memberId, groupInstanceId, generation, producerId, producerEpoch, offsetMetadata, responseCallback)
     }
   }
 

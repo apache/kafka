@@ -51,7 +51,7 @@ public interface Task {
         throw new NotImplementedException();
     }
 
-    default void markCommitDone() {
+    default void markCommitDone(long commitLatency) {
         throw new NotImplementedException();
     }
 

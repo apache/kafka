@@ -20,6 +20,7 @@ import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.errors.LockException;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
@@ -45,6 +46,7 @@ abstract class AssignedTasks<T extends Task> {
     private final Map<TaskId, T> suspended = new HashMap<>();
     private final Set<TaskId> previousActiveTasks = new HashSet<>();
     private final Producer<byte[], byte[]> eosProducer;
+    private final Time time;
 
     // IQ may access this map.
     final Map<TaskId, T> running = new ConcurrentHashMap<>();
@@ -52,10 +54,12 @@ abstract class AssignedTasks<T extends Task> {
 
     AssignedTasks(final LogContext logContext,
                   final String taskTypeName,
-                  final Producer<byte[], byte[]> eosProducer) {
+                  final Producer<byte[], byte[]> eosProducer,
+                  final Time time) {
         this.taskTypeName = taskTypeName;
         this.log = logContext.logger(getClass());
         this.eosProducer = eosProducer;
+        this.time = time;
     }
 
     void addNewTask(final T task) {
@@ -284,29 +288,26 @@ abstract class AssignedTasks<T extends Task> {
         return commitInternal(
             log,
             eosProducer,
-            task -> task.commitNeeded()
+            Task::commitNeeded
         );
     }
 
-    public interface CommitHelper {
+    public interface TaskStatus {
         boolean needsCommit(Task task);
     }
 
     protected int commitInternal(Logger log,
                                  Producer<byte[], byte[]> eosProducer,
-                                 CommitHelper commitHelper) {
+                                 TaskStatus taskStatus) {
         int committed = 0;
         RuntimeException firstException = null;
         Map<TopicPartition, OffsetAndMetadata> pendingOffsets = new HashMap<>();
         List<Task> tasks = new ArrayList<>();
 
-        // Another idea is to extract all pending offsets if we are not using eos thread producer,
-        // and batch the consumer commit to simplify the logic.
-
         for (final Iterator<T> it = running().iterator(); it.hasNext(); ) {
             final T task = it.next();
             try {
-                if (commitHelper.needsCommit(task)) {
+                if (taskStatus.needsCommit(task)) {
                     if (eosProducer != null) {
                         pendingOffsets.putAll(task.getPendingOffsets());
                         tasks.add(task);
@@ -338,10 +339,12 @@ abstract class AssignedTasks<T extends Task> {
         }
 
         if (!pendingOffsets.isEmpty()) {
+            final long startNs = time.nanoseconds();
             eosProducer.sendOffsetsToTransaction(pendingOffsets);
             eosProducer.commitTransaction();
+            long commitLatency = time.nanoseconds() - startNs;
             for (Task task : tasks) {
-                task.markCommitDone();
+                task.markCommitDone(commitLatency);
             }
             eosProducer.beginTransaction();
         }

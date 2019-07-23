@@ -16,11 +16,11 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.apache.kafka.streams.processor.TaskId;
 
@@ -39,8 +39,10 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
     private final Map<TopicPartition, StreamTask> restoringByPartition = new HashMap<>();
     private final Producer<byte[], byte[]> threadProducer;
 
-    AssignedStreamsTasks(final LogContext logContext, final Producer<byte[], byte[]> threadProducer) {
-        super(logContext, "stream task", threadProducer);
+    AssignedStreamsTasks(final LogContext logContext,
+                         final Producer<byte[], byte[]> threadProducer,
+                         final Time time) {
+        super(logContext, "stream task", threadProducer, time);
         this.threadProducer = threadProducer;
     }
 

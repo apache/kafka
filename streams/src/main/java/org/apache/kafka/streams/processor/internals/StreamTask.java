@@ -477,8 +477,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
             throw new TaskMigratedException(this, error);
         }
 
-        markCommitDone();
-        taskMetrics.taskCommitTimeSensor.record(time.nanoseconds() - startNs);
+        markCommitDone(time.nanoseconds() - startNs);
     }
 
     @Override
@@ -494,9 +493,10 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
     }
 
     @Override
-    public void markCommitDone() {
+    public void markCommitDone(long commitLatency) {
         commitNeeded = false;
         commitRequested = false;
+        taskMetrics.taskCommitTimeSensor.record(commitLatency);
     }
 
     @Override

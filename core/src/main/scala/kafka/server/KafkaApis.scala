@@ -2092,17 +2092,19 @@ class KafkaApis(val requestChannel: RequestChannel,
         sendResponseCallback(Map.empty)
       else {
         val offsetMetadata = convertTxnOffsets(authorizedTopicCommittedOffsets.toMap)
-        val generationId =
-          if (txnOffsetCommitRequest.version >= 3)
-          txnOffsetCommitRequest.data.generationId
+        val memberId = if (txnOffsetCommitRequest.version >= 3)
+          txnOffsetCommitRequest.data.memberId
         else
-          OffsetCommitRequest.DEFAULT_GENERATION_ID
+          JoinGroupRequest.UNKNOWN_MEMBER_ID
+
         groupCoordinator.handleTxnCommitOffsets(
           txnOffsetCommitRequest.data.groupId,
           txnOffsetCommitRequest.data.producerId,
           txnOffsetCommitRequest.data.producerEpoch,
           offsetMetadata,
-          generationId,
+          memberId,
+          Option(txnOffsetCommitRequest.data.groupInstanceId),
+          txnOffsetCommitRequest.data.generationId,
           sendResponseCallback)
       }
     }

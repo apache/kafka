@@ -616,15 +616,12 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
     pendingTransactionalOffsetCommits.contains(producerId)
 
   def hasPendingOffsetCommitsForTopicPartition(topicPartitionsOpt: Option[Seq[TopicPartition]]) : Boolean = {
-    topicPartitionsOpt match {
-      case None =>
-        false
-      case Some(topicPartitions) =>
-        pendingTransactionalOffsetCommits.find(offsetAndMetadata => {
-          topicPartitions.exists(topicPartition =>
-            offsetAndMetadata._2.contains(topicPartition)
-          )
-        }).getOrElse(false)
+    topicPartitionsOpt exists { topicPartitions =>
+      pendingTransactionalOffsetCommits.seq exists (offsetAndMetadata => {
+        topicPartitions.exists( topicPartition =>
+          offsetAndMetadata._2.contains(topicPartition)
+        )
+      })
     }
   }
 
