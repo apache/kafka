@@ -131,7 +131,7 @@ class TestUpgrade(ProduceConsumeValidateTest):
 
         # With older message formats before KIP-101, message loss may occur due to truncation
         # after leader change. Tolerate limited data loss for this case to avoid transient test failures.
-        self.data_loss_tolerance = 0 if from_kafka_version >= V_0_11_0_0 else 100
+        self.may_truncate_acked_records = False if from_kafka_version >= V_0_11_0_0 else True
 
         new_consumer = from_kafka_version >= V_0_9_0_0
         # TODO - reduce the timeout

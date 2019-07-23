@@ -48,7 +48,7 @@ class ProduceConsumeValidateTest(Test):
         self.enable_idempotence = False
 
         # Allow tests to tolerate some data loss by overriding this for tests using older message formats
-        self.data_loss_tolerance = 0
+        self.may_truncate_acked_records = False
 
     def start_producer_and_consumer(self):
         # Start background producer and consumer
@@ -129,7 +129,7 @@ class ProduceConsumeValidateTest(Test):
 
         succeeded, error_msg = validate_delivery(self.producer.acked, messages_consumed,
                                                  self.enable_idempotence, check_lost_data,
-                                                 self.data_loss_tolerance)
+                                                 self.may_truncate_acked_records)
 
         # Collect all logs if validation fails
         if not succeeded:
