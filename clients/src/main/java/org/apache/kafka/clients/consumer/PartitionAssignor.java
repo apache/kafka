@@ -18,10 +18,10 @@ package org.apache.kafka.clients.consumer;
 
 import java.nio.ByteBuffer;
 import java.util.Optional;
-import java.util.Set;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.TopicPartition;
 
@@ -34,7 +34,7 @@ import org.apache.kafka.common.TopicPartition;
  * to perform the assignment and the results are forwarded back to each respective members
  *
  * In some cases, it is useful to forward additional metadata to the assignor in order to make
- * assignment decisions. For this, you can override {@link #subscriptionUserdata()} and provide custom
+ * assignment decisions. For this, you can override {@link #subscriptionUserdata(Set)} and provide custom
  * userData in the returned Subscription. For example, to have a rack-aware assignor, an implementation
  * can use this user data to forward the rackId belonging to each member.
  */
@@ -46,14 +46,14 @@ public interface PartitionAssignor {
      *
      * @return Non-null optional join subscription user data
      */
-    default ByteBuffer subscriptionUserdata() {
+    default ByteBuffer subscriptionUserdata(Set<String> topics) {
         return ByteBuffer.wrap(new byte[0]);
     }
 
     /**
      * Perform the group assignment given the member subscriptions and current cluster metadata.
      * @param metadata Current topic/broker metadata known by consumer
-     * @param subscriptions Subscriptions from all members including metadata provided through {@link #subscriptionUserdata()}
+     * @param subscriptions Subscriptions from all members including metadata provided through {@link #subscriptionUserdata(Set)}
      * @return A map from the members to their respective assignment. This should have one entry
      *         for all members who in the input subscription map.
      */
@@ -112,58 +112,65 @@ public interface PartitionAssignor {
     }
 
     final class Subscription {
-        private final ByteBuffer userData;
         private final ConsumerSubscriptionData consumerData;
+        private final ByteBuffer userData;
 
-        public Subscription(ByteBuffer userData, ConsumerSubscriptionData consumerData) {
-            this.userData = userData;
+        public Subscription(ConsumerSubscriptionData consumerData, ByteBuffer userData) {
             this.consumerData = consumerData;
+            this.userData = userData;
         }
 
-        public ByteBuffer userData() {
-            return userData;
+        public Subscription(ConsumerSubscriptionData consumerData) {
+            this(consumerData, ByteBuffer.wrap(new byte[0]));
         }
 
         public ConsumerSubscriptionData consumerData() {
             return consumerData;
         }
-    }
-
-    final class Assignment {
-        private final ByteBuffer userData;
-        private final ConsumerAssignmentData consumerData;
-
-        public Assignment(ByteBuffer userData, ConsumerAssignmentData consumerData) {
-            this.userData = userData;
-            this.consumerData = consumerData;
-        }
 
         public ByteBuffer userData() {
             return userData;
+        }
+    }
+
+    final class Assignment {
+        private final ConsumerAssignmentData consumerData;
+        private final ByteBuffer userData;
+
+        public Assignment(ConsumerAssignmentData consumerData, ByteBuffer userData) {
+            this.consumerData = consumerData;
+            this.userData = userData;
+        }
+
+        public Assignment(ConsumerAssignmentData consumerData) {
+            this(consumerData, ByteBuffer.wrap(new byte[0]));
         }
 
         public ConsumerAssignmentData consumerData() {
             return consumerData;
         }
+
+        public ByteBuffer userData() {
+            return userData;
+        }
     }
 
     final class ConsumerSubscriptionData {
-
-        private final Set<String> topics;
+        private final List<String> topics;
         private final List<TopicPartition> ownedPartitions;
         private Optional<String> groupInstanceId;
 
-        public ConsumerSubscriptionData(Set<String> topics, List<TopicPartition> ownedPartitions) {
+        public ConsumerSubscriptionData(List<String> topics, List<TopicPartition> ownedPartitions) {
             this.topics = topics;
             this.ownedPartitions = ownedPartitions;
             this.groupInstanceId = Optional.empty();
         }
 
-        public ConsumerSubscriptionData(Set<String> topics) {
+        public ConsumerSubscriptionData(List<String> topics) {
             this(topics, Collections.emptyList());
         }
 
-        public Set<String> topics() {
+        public List<String> topics() {
             return topics;
         }
 

@@ -23,6 +23,7 @@ import java.nio.ByteBuffer
 import java.util.Collections
 import java.util.Optional
 import java.util.concurrent.locks.ReentrantLock
+
 import kafka.api._
 import kafka.cluster.Partition
 import kafka.common.OffsetAndMetadata
@@ -31,8 +32,8 @@ import kafka.server.{FetchDataInfo, KafkaConfig, LogOffsetMetadata, ReplicaManag
 import kafka.server.HostedPartition
 import kafka.utils.{KafkaScheduler, MockTime, TestUtils}
 import kafka.zk.KafkaZkClient
+import org.apache.kafka.clients.consumer.PartitionAssignor.{ConsumerSubscriptionData, Subscription}
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol
-import org.apache.kafka.clients.consumer.internals.PartitionAssignor.Subscription
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.protocol.Errors
@@ -43,6 +44,7 @@ import org.easymock.{Capture, EasyMock, IAnswer}
 import org.junit.Assert.{assertEquals, assertFalse, assertNull, assertTrue}
 import org.junit.{Before, Test}
 import org.scalatest.Assertions.fail
+
 import scala.collection.JavaConverters._
 import scala.collection._
 
@@ -1448,7 +1450,7 @@ class GroupMetadataManagerTest {
     val group = new GroupMetadata(groupId, Empty, time)
     groupMetadataManager.addGroup(group)
 
-    val subscription = new Subscription(List(topic).asJava)
+    val subscription = new Subscription(new ConsumerSubscriptionData(List(topic).asJava))
     val member = new MemberMetadata(memberId, groupId, groupInstanceId, clientId, clientHost, rebalanceTimeout, sessionTimeout,
       protocolType, List(("protocol", ConsumerProtocol.serializeSubscription(subscription).array())))
     group.add(member, _ => ())

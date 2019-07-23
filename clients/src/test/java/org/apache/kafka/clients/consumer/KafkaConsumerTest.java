@@ -21,6 +21,10 @@ import org.apache.kafka.clients.ClientRequest;
 import org.apache.kafka.clients.GroupRebalanceConfig;
 import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.clients.MockClient;
+import org.apache.kafka.clients.consumer.PartitionAssignor.Assignment;
+import org.apache.kafka.clients.consumer.PartitionAssignor.ConsumerAssignmentData;
+import org.apache.kafka.clients.consumer.PartitionAssignor.ConsumerSubscriptionData;
+import org.apache.kafka.clients.consumer.PartitionAssignor.Subscription;
 import org.apache.kafka.clients.consumer.internals.ConsumerCoordinator;
 import org.apache.kafka.clients.consumer.internals.ConsumerInterceptors;
 import org.apache.kafka.clients.consumer.internals.ConsumerMetadata;
@@ -28,7 +32,6 @@ import org.apache.kafka.clients.consumer.internals.ConsumerMetrics;
 import org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient;
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
 import org.apache.kafka.clients.consumer.internals.Fetcher;
-import org.apache.kafka.clients.consumer.internals.PartitionAssignor;
 import org.apache.kafka.clients.consumer.internals.SubscriptionState;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
@@ -1457,7 +1460,7 @@ public class KafkaConsumerTest {
                 coordinator);
 
         // join group
-        final ByteBuffer byteBuffer = ConsumerProtocol.serializeSubscription(new PartitionAssignor.Subscription(singletonList(topic)));
+        final ByteBuffer byteBuffer = ConsumerProtocol.serializeSubscription(new Subscription(new ConsumerSubscriptionData(singletonList(topic))));
 
         // This member becomes the leader
         String memberId = "memberId";
@@ -1693,7 +1696,7 @@ public class KafkaConsumerTest {
 
                 ByteBuffer protocolMetadata = ByteBuffer.wrap(protocolIterator.next().metadata());
                 PartitionAssignor.Subscription subscription = ConsumerProtocol.deserializeSubscription(protocolMetadata);
-                return subscribedTopics.equals(new HashSet<>(subscription.topics()));
+                return subscribedTopics.equals(new HashSet<>(subscription.consumerData().topics()));
             }
         }, joinGroupFollowerResponse(assignor, 1, "memberId", "leaderId", Errors.NONE), coordinator);
 
@@ -1777,7 +1780,7 @@ public class KafkaConsumerTest {
     }
 
     private SyncGroupResponse syncGroupResponse(List<TopicPartition> partitions, Errors error) {
-        ByteBuffer buf = ConsumerProtocol.serializeAssignment(new PartitionAssignor.Assignment(partitions));
+        ByteBuffer buf = ConsumerProtocol.serializeAssignment(new Assignment(new ConsumerAssignmentData(partitions)));
         return new SyncGroupResponse(
                 new SyncGroupResponseData()
                         .setErrorCode(error.code())

@@ -19,7 +19,6 @@ package org.apache.kafka.streams.tests;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
-import org.apache.kafka.clients.consumer.internals.PartitionAssignor;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
@@ -113,7 +112,7 @@ public class StreamsUpgradeTest {
         }
 
         @Override
-        public Subscription subscription(final Set<String> topics) {
+        public ByteBuffer subscriptionUserdata(final Set<String> topics) {
             // Adds the following information to subscription
             // 1. Client UUID (a unique id assigned to an instance of KafkaStreams)
             // 2. Task ids of previously running tasks
@@ -133,11 +132,11 @@ public class StreamsUpgradeTest {
 
             taskManager.updateSubscriptionsFromMetadata(topics);
 
-            return new Subscription(new ArrayList<>(topics), data.encode());
+            return data.encode();
         }
 
         @Override
-        public void onAssignment(final PartitionAssignor.Assignment assignment) {
+        public void onAssignment(final Assignment assignment) {
             try {
                 super.onAssignment(assignment);
                 return;
@@ -163,7 +162,7 @@ public class StreamsUpgradeTest {
             final AssignmentInfo info = AssignmentInfo.decode(
                 assignment.userData().putInt(0, AssignmentInfo.LATEST_SUPPORTED_VERSION));
 
-            final List<TopicPartition> partitions = new ArrayList<>(assignment.partitions());
+            final List<TopicPartition> partitions = new ArrayList<>(assignment.consumerData().partitions());
             partitions.sort(PARTITION_COMPARATOR);
 
             // version 1 field
@@ -183,15 +182,16 @@ public class StreamsUpgradeTest {
         }
 
         @Override
-        public Map<String, Assignment> assign(final Cluster metadata,
-                                              final Map<String, Subscription> subscriptions) {
+        public GroupAssignment assign(final Cluster metadata,
+                                      final GroupSubscription groupSubscription) {
+            final Map<String, Subscription> subscriptions = groupSubscription.groupSubscription();
             Map<String, Assignment> assignment = null;
 
             final Map<String, Subscription> downgradedSubscriptions = new HashMap<>();
             for (final Subscription subscription : subscriptions.values()) {
                 final SubscriptionInfo info = SubscriptionInfo.decode(subscription.userData());
                 if (info.version() < SubscriptionInfo.LATEST_SUPPORTED_VERSION + 1) {
-                    assignment = super.assign(metadata, subscriptions);
+                    assignment = super.assign(metadata, groupSubscription).groupAssignments();
                     break;
                 }
             }
@@ -211,7 +211,7 @@ public class StreamsUpgradeTest {
                     downgradedSubscriptions.put(
                         entry.getKey(),
                         new Subscription(
-                            subscription.topics(),
+                            new ConsumerSubscriptionData(subscription.consumerData().topics()),
                             new SubscriptionInfo(
                                 info.processId(),
                                 info.prevTasks(),
@@ -219,7 +219,7 @@ public class StreamsUpgradeTest {
                                 info.userEndPoint())
                                 .encode()));
                 }
-                assignment = super.assign(metadata, downgradedSubscriptions);
+                assignment = super.assign(metadata, new GroupSubscription(downgradedSubscriptions)).groupAssignments();
                 bumpUsedVersion = true;
                 bumpSupportedVersion = true;
             }
@@ -230,7 +230,7 @@ public class StreamsUpgradeTest {
                 newAssignment.put(
                     entry.getKey(),
                     new Assignment(
-                        singleAssignment.partitions(),
+                        new ConsumerAssignmentData(singleAssignment.consumerData().partitions()),
                         new FutureAssignmentInfo(
                             bumpUsedVersion,
                             bumpSupportedVersion,
@@ -238,7 +238,7 @@ public class StreamsUpgradeTest {
                             .encode()));
             }
 
-            return newAssignment;
+            return new GroupAssignment(newAssignment);
         }
     }
 

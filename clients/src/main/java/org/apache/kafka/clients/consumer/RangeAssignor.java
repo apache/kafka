@@ -52,7 +52,7 @@ public class RangeAssignor extends AbstractPartitionAssignor {
         Map<String, List<String>> res = new HashMap<>();
         for (Map.Entry<String, Subscription> subscriptionEntry : consumerMetadata.entrySet()) {
             String consumerId = subscriptionEntry.getKey();
-            for (String topic : subscriptionEntry.getValue().topics())
+            for (String topic : subscriptionEntry.getValue().consumerData().topics())
                 put(res, topic, consumerId);
         }
         return res;

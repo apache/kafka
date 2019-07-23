@@ -24,6 +24,10 @@ import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetCommitCallback;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
+import org.apache.kafka.clients.consumer.PartitionAssignor;
+import org.apache.kafka.clients.consumer.PartitionAssignor.ConsumerAssignmentData;
+import org.apache.kafka.clients.consumer.PartitionAssignor.ConsumerSubscriptionData;
+import org.apache.kafka.clients.consumer.PartitionAssignor.Subscription;
 import org.apache.kafka.clients.consumer.RetriableCommitFailedException;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Metric;
@@ -670,9 +674,9 @@ public class ConsumerCoordinatorTest {
                 JoinGroupRequestData.JoinGroupRequestProtocol protocolMetadata = protocolIterator.next();
 
                 ByteBuffer metadata = ByteBuffer.wrap(protocolMetadata.metadata());
-                PartitionAssignor.Subscription subscription = ConsumerProtocol.deserializeSubscription(metadata);
+                Subscription subscription = ConsumerProtocol.deserializeSubscription(metadata);
                 metadata.rewind();
-                return subscription.topics().containsAll(updatedSubscription);
+                return subscription.consumerData().topics().containsAll(updatedSubscription);
             }
         }, joinGroupLeaderResponse(2, consumerId, updatedSubscriptions, Errors.NONE));
         client.prepareResponse(syncGroupResponse(newAssigned, Errors.NONE));
@@ -2385,7 +2389,7 @@ public class ConsumerCoordinatorTest {
                                                       Errors error) {
         List<JoinGroupResponseData.JoinGroupResponseMember> metadata = new ArrayList<>();
         for (Map.Entry<String, List<String>> subscriptionEntry : subscriptions.entrySet()) {
-            PartitionAssignor.Subscription subscription = new PartitionAssignor.Subscription(subscriptionEntry.getValue());
+            PartitionAssignor.Subscription subscription = new PartitionAssignor.Subscription(new ConsumerSubscriptionData(subscriptionEntry.getValue()));
             ByteBuffer buf = ConsumerProtocol.serializeSubscription(subscription);
             metadata.add(new JoinGroupResponseData.JoinGroupResponseMember()
                     .setMemberId(subscriptionEntry.getKey())
@@ -2416,7 +2420,7 @@ public class ConsumerCoordinatorTest {
     }
 
     private SyncGroupResponse syncGroupResponse(List<TopicPartition> partitions, Errors error) {
-        ByteBuffer buf = ConsumerProtocol.serializeAssignment(new PartitionAssignor.Assignment(partitions));
+        ByteBuffer buf = ConsumerProtocol.serializeAssignment(new PartitionAssignor.Assignment(new ConsumerAssignmentData(partitions)));
         return new SyncGroupResponse(
                 new SyncGroupResponseData()
                         .setErrorCode(error.code())

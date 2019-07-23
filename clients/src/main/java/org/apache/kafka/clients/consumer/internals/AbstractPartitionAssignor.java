@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import org.apache.kafka.clients.consumer.PartitionAssignor;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.TopicPartition;
 import org.slf4j.Logger;
@@ -47,15 +48,11 @@ public abstract class AbstractPartitionAssignor implements PartitionAssignor {
                                                              Map<String, Subscription> subscriptions);
 
     @Override
-    public Subscription subscription(Set<String> topics) {
-        return new Subscription(new ArrayList<>(topics));
-    }
-
-    @Override
-    public Map<String, Assignment> assign(Cluster metadata, Map<String, Subscription> subscriptions) {
+    public GroupAssignment assign(Cluster metadata, GroupSubscription groupSubscription) {
+        Map<String, Subscription> subscriptions = groupSubscription.groupSubscription();
         Set<String> allSubscribedTopics = new HashSet<>();
         for (Map.Entry<String, Subscription> subscriptionEntry : subscriptions.entrySet())
-            allSubscribedTopics.addAll(subscriptionEntry.getValue().topics());
+            allSubscribedTopics.addAll(subscriptionEntry.getValue().consumerData().topics());
 
         Map<String, Integer> partitionsPerTopic = new HashMap<>();
         for (String topic : allSubscribedTopics) {
@@ -71,8 +68,9 @@ public abstract class AbstractPartitionAssignor implements PartitionAssignor {
         // this class maintains no user data, so just wrap the results
         Map<String, Assignment> assignments = new HashMap<>();
         for (Map.Entry<String, List<TopicPartition>> assignmentEntry : rawAssignments.entrySet())
-            assignments.put(assignmentEntry.getKey(), new Assignment(assignmentEntry.getValue()));
-        return assignments;
+            assignments.put(assignmentEntry.getKey(), new Assignment(new ConsumerAssignmentData(assignmentEntry.getValue())));
+
+        return new GroupAssignment(assignments);
     }
 
     @Override

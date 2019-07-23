@@ -205,8 +205,8 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         JoinGroupRequestData.JoinGroupRequestProtocolCollection protocolSet = new JoinGroupRequestData.JoinGroupRequestProtocolCollection();
 
         for (PartitionAssignor assignor : assignors) {
-            ConsumerSubscriptionData consumerData = new ConsumerSubscriptionData(joinedSubscription, subscriptions.assignedPartitionList());
-            Subscription subscription = new Subscription(assignor.subscriptionUserdata(), consumerData);
+            ConsumerSubscriptionData consumerData = new ConsumerSubscriptionData(new ArrayList<>(joinedSubscription), subscriptions.assignedPartitionList());
+            Subscription subscription = new Subscription(consumerData, assignor.subscriptionUserdata(joinedSubscription));
             ByteBuffer metadata = ConsumerProtocol.serializeSubscription(subscription, ConsumerProtocol.CONSUMER_PROTOCOL_V1);
 
             protocolSet.add(new JoinGroupRequestData.JoinGroupRequestProtocol()

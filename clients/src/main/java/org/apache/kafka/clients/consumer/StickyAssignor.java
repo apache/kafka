@@ -247,7 +247,7 @@ public class StickyAssignor extends AbstractPartitionAssignor {
         for (Entry<String, Subscription> entry: subscriptions.entrySet()) {
             String consumerId = entry.getKey();
             consumer2AllPotentialPartitions.put(consumerId, new ArrayList<>());
-            entry.getValue().topics().stream().filter(topic -> partitionsPerTopic.get(topic) != null).forEach(topic -> {
+            entry.getValue().consumerData().topics().stream().filter(topic -> partitionsPerTopic.get(topic) != null).forEach(topic -> {
                 for (int i = 0; i < partitionsPerTopic.get(topic); ++i) {
                     TopicPartition topicPartition = new TopicPartition(topic, i);
                     consumer2AllPotentialPartitions.get(consumerId).add(topicPartition);
@@ -286,7 +286,7 @@ public class StickyAssignor extends AbstractPartitionAssignor {
                         // if this topic partition of this consumer no longer exists remove it from currentAssignment of the consumer
                         partitionIter.remove();
                         currentPartitionConsumer.remove(partition);
-                    } else if (!subscriptions.get(entry.getKey()).topics().contains(partition.topic())) {
+                    } else if (!subscriptions.get(entry.getKey()).consumerData().topics().contains(partition.topic())) {
                         // if this partition cannot remain assigned to its current consumer because the consumer
                         // is no longer subscribed to its topic remove it from currentAssignment of the consumer
                         partitionIter.remove();
@@ -365,18 +365,14 @@ public class StickyAssignor extends AbstractPartitionAssignor {
     }
 
     @Override
-    public void onAssignment(Assignment assignment, int generation) {
-        memberAssignment = assignment.partitions();
-        this.generation = generation;
+    public void onAssignment(Assignment assignment) {
+        memberAssignment = assignment.consumerData().partitions();
+        this.generation = 0;
     }
 
     @Override
-    public Subscription subscription(Set<String> topics) {
-        if (memberAssignment == null)
-            return new Subscription(new ArrayList<>(topics));
-
-        return new Subscription(new ArrayList<>(topics),
-                serializeTopicPartitionAssignment(new ConsumerUserData(memberAssignment, Optional.of(generation))));
+    public ByteBuffer subscriptionUserdata(Set<String> topics) {
+        return serializeTopicPartitionAssignment(new ConsumerUserData(memberAssignment, Optional.of(generation)));
     }
 
     @Override
