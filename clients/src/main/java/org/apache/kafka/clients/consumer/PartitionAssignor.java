@@ -16,14 +16,13 @@
  */
 package org.apache.kafka.clients.consumer;
 
+import java.nio.ByteBuffer;
 import java.util.Optional;
 import java.util.Set;
-import org.apache.kafka.common.Cluster;
-
-import java.nio.ByteBuffer;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.TopicPartition;
 
 /**
@@ -91,7 +90,7 @@ public interface PartitionAssignor {
     final class GroupAssignment {
         private final Map<String, Assignment> assignments;
 
-        GroupAssignment(Map<String, Assignment> assignments) {
+        public GroupAssignment(Map<String, Assignment> assignments) {
             this.assignments = assignments;
         }
 
@@ -103,7 +102,7 @@ public interface PartitionAssignor {
     final class GroupSubscription {
         private final Map<String, Subscription> subscriptions;
 
-        GroupSubscription(Map<String, Subscription> subscriptions) {
+        public GroupSubscription(Map<String, Subscription> subscriptions) {
             this.subscriptions = subscriptions;
         }
 

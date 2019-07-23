@@ -24,6 +24,7 @@ import org.apache.kafka.clients.consumer.OffsetCommitCallback;
 import org.apache.kafka.clients.consumer.PartitionAssignor;
 import org.apache.kafka.clients.consumer.PartitionAssignor.Assignment;
 import org.apache.kafka.clients.consumer.PartitionAssignor.ConsumerSubscriptionData;
+import org.apache.kafka.clients.consumer.PartitionAssignor.GroupSubscription;
 import org.apache.kafka.clients.consumer.PartitionAssignor.RebalanceProtocol;
 import org.apache.kafka.clients.consumer.PartitionAssignor.Subscription;
 import org.apache.kafka.clients.consumer.RetriableCommitFailedException;
@@ -497,14 +498,14 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
         log.debug("Performing assignment using strategy {} with subscriptions {}", assignor.name(), subscriptions);
 
-        Map<String, Assignment> assignments = assignor.assign(metadata.fetch(), subscriptions);
+        Map<String, Assignment> assignments = assignor.assign(metadata.fetch(), new GroupSubscription(subscriptions)).groupAssignments();
 
         switch (protocol) {
             case EAGER:
                 break;
 
             case COOPERATIVE:
-                adjustAssignment(ownedPartitions, assignments);
+                // TODO need to validate assignment -- make sure no partitions to be revoked were also assigned during this rebalance
                 break;
         }
 
@@ -548,40 +549,6 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         }
 
         return groupAssignment;
-    }
-
-    private void adjustAssignment(final Map<TopicPartition, String> ownedPartitions,
-                                  final Map<String, Assignment> assignments) {
-        boolean revocationsNeeded = false;
-        Set<TopicPartition> assignedPartitions = new HashSet<>();
-        for (final Map.Entry<String, Assignment> entry : assignments.entrySet()) {
-            final Assignment assignment = entry.getValue();
-            assignedPartitions.addAll(assignment.partitions());
-
-            // update the assignment if the partition is owned by another different owner
-            List<TopicPartition> updatedPartitions = assignment.partitions().stream()
-                .filter(tp -> ownedPartitions.containsKey(tp) && !entry.getKey().equals(ownedPartitions.get(tp)))
-                .collect(Collectors.toList());
-            if (!updatedPartitions.equals(assignment.partitions())) {
-                assignment.updatePartitions(updatedPartitions);
-                revocationsNeeded = true;
-            }
-        }
-
-        // for all owned but not assigned partitions, blindly add them to assignment
-        for (final Map.Entry<TopicPartition, String> entry : ownedPartitions.entrySet()) {
-            final TopicPartition tp = entry.getKey();
-            if (!assignedPartitions.contains(tp)) {
-                assignments.get(entry.getValue()).partitions().add(tp);
-            }
-        }
-
-        // if revocations are triggered, tell everyone to re-join immediately.
-        if (revocationsNeeded) {
-            for (final Assignment assignment : assignments.values()) {
-                assignment.setError(ConsumerProtocol.AssignmentError.NEED_REJOIN);
-            }
-        }
     }
 
     @Override

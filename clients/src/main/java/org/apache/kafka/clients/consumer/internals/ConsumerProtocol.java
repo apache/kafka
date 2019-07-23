@@ -17,6 +17,7 @@
 package org.apache.kafka.clients.consumer.internals;
 
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 import org.apache.kafka.clients.consumer.PartitionAssignor.Assignment;
 import org.apache.kafka.clients.consumer.PartitionAssignor.ConsumerAssignmentData;
@@ -33,7 +34,6 @@ import org.apache.kafka.common.utils.CollectionUtils;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
-import java.util.List;
 import java.util.Map;
 
 /**

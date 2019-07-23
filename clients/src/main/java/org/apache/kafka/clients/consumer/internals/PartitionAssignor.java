@@ -204,23 +204,14 @@ public interface PartitionAssignor {
         private final Short version;
         private List<TopicPartition> partitions;
         private final ByteBuffer userData;
-        private ConsumerProtocol.AssignmentError error;
 
-        Assignment(Short version, List<TopicPartition> partitions, ByteBuffer userData, ConsumerProtocol.AssignmentError error) {
+        Assignment(Short version, List<TopicPartition> partitions, ByteBuffer userData) {
             this.version = version;
             this.partitions = partitions;
             this.userData = userData;
-            this.error = error;
 
             if (version < CONSUMER_PROTOCOL_V0)
                 throw new SchemaException("Unsupported subscription version: " + version);
-
-            if (version < CONSUMER_PROTOCOL_V1 && error != ConsumerProtocol.AssignmentError.NONE)
-                throw new IllegalArgumentException("Assignment version smaller than 1 should not have error code.");
-        }
-
-        Assignment(Short version, List<TopicPartition> partitions, ByteBuffer userData) {
-            this(version, partitions, userData, ConsumerProtocol.AssignmentError.NONE);
         }
 
         public Assignment(List<TopicPartition> partitions, ByteBuffer userData) {
@@ -239,16 +230,8 @@ public interface PartitionAssignor {
             return partitions;
         }
 
-        public ConsumerProtocol.AssignmentError error() {
-            return error;
-        }
-
         public void updatePartitions(List<TopicPartition> partitions) {
             this.partitions = partitions;
-        }
-
-        public void setError(ConsumerProtocol.AssignmentError error) {
-            this.error = error;
         }
 
         public ByteBuffer userData() {
@@ -260,11 +243,8 @@ public interface PartitionAssignor {
             return "Assignment(" +
                     "version=" + version +
                     ", partitions=" + partitions +
-                    ", error=" + error +
                     ')';
         }
     }
-
-
 
 }
