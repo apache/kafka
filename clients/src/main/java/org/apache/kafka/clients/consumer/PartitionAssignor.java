@@ -53,7 +53,7 @@ public interface PartitionAssignor {
     /**
      * Perform the group assignment given the member subscriptions and current cluster metadata.
      * @param metadata Current topic/broker metadata known by consumer
-     * @param subscriptions Subscriptions from all members including metadata provided through {@link #joinMetadata())}
+     * @param subscriptions Subscriptions from all members including metadata provided through {@link #joinMetadata()}
      * @return A map from the members to their respective assignment. This should have one entry
      *         for all members who in the input subscription map.
      */
