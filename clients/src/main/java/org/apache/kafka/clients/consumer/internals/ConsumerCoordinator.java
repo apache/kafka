@@ -21,10 +21,12 @@ import org.apache.kafka.clients.consumer.CommitFailedException;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetCommitCallback;
+import org.apache.kafka.clients.consumer.PartitionAssignor;
+import org.apache.kafka.clients.consumer.PartitionAssignor.Assignment;
+import org.apache.kafka.clients.consumer.PartitionAssignor.ConsumerSubscriptionData;
+import org.apache.kafka.clients.consumer.PartitionAssignor.RebalanceProtocol;
+import org.apache.kafka.clients.consumer.PartitionAssignor.Subscription;
 import org.apache.kafka.clients.consumer.RetriableCommitFailedException;
-import org.apache.kafka.clients.consumer.internals.PartitionAssignor.Assignment;
-import org.apache.kafka.clients.consumer.internals.PartitionAssignor.RebalanceProtocol;
-import org.apache.kafka.clients.consumer.internals.PartitionAssignor.Subscription;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
@@ -202,8 +204,9 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         JoinGroupRequestData.JoinGroupRequestProtocolCollection protocolSet = new JoinGroupRequestData.JoinGroupRequestProtocolCollection();
 
         for (PartitionAssignor assignor : assignors) {
-            Subscription subscription = assignor.subscription(joinedSubscription);
-            ByteBuffer metadata = ConsumerProtocol.serializeSubscription(subscription);
+            ConsumerSubscriptionData consumerData = new ConsumerSubscriptionData(joinedSubscription, subscriptions.assignedPartitionList());
+            Subscription subscription = new Subscription(assignor.joinMetadata(), consumerData);
+            ByteBuffer metadata = ConsumerProtocol.serializeSubscription(subscription, ConsumerProtocol.CONSUMER_PROTOCOL_V1);
 
             protocolSet.add(new JoinGroupRequestData.JoinGroupRequestProtocol()
                     .setName(assignor.name())
@@ -265,13 +268,16 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         if (assignor == null)
             throw new IllegalStateException("Coordinator selected invalid assignment protocol: " + assignmentStrategy);
 
+        // make a copy of the owned partitions before updating with the new assignment
         Set<TopicPartition> ownedPartitions = new HashSet<>(subscriptions.assignedPartitions());
-
         Assignment assignment = ConsumerProtocol.deserializeAssignment(assignmentBuffer);
-        if (!subscriptions.assignFromSubscribed(assignment.partitions())) {
+        List<TopicPartition> partitions = assignment.consumerData().partitions();
+
+        // update the subscriptions with the new assignment
+        if (!subscriptions.assignFromSubscribed(partitions)) {
             log.warn("We received an assignment {} that doesn't match our current subscription {}; it is likely " +
                 "that the subscription has changed since we joined the group. Will try re-join the group with current subscription",
-                assignment.partitions(), subscriptions.prettyString());
+                partitions, subscriptions.prettyString());
 
             requestRejoin();
 
@@ -285,7 +291,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         maybeUpdateJoinedSubscription(assignedPartitions);
 
         // give the assignor a chance to update internal state based on the received assignment
-        assignor.onAssignment(assignment, generation);
+        assignor.onAssignment(assignment);
 
         // reschedule the auto commit starting from now
         if (autoCommitEnabled)
@@ -313,10 +319,6 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
             case COOPERATIVE:
                 assignAndRevoke(listener, assignedPartitions, ownedPartitions);
-
-                if (assignment.error() == ConsumerProtocol.AssignmentError.NEED_REJOIN) {
-                    requestRejoin();
-                }
 
                 break;
         }
@@ -480,10 +482,11 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         Map<TopicPartition, String> ownedPartitions = new HashMap<>();
         for (JoinGroupResponseData.JoinGroupResponseMember memberSubscription : allSubscriptions) {
             Subscription subscription = ConsumerProtocol.deserializeSubscription(ByteBuffer.wrap(memberSubscription.metadata()));
-            subscription.setGroupInstanceId(Optional.ofNullable(memberSubscription.groupInstanceId()));
+            ConsumerSubscriptionData consumerData = subscription.consumerData();
+            consumerData.setGroupInstanceId(Optional.ofNullable(memberSubscription.groupInstanceId()));
             subscriptions.put(memberSubscription.memberId(), subscription);
-            allSubscribedTopics.addAll(subscription.topics());
-            ownedPartitions.putAll(subscription.ownedPartitions().stream().collect(Collectors.toMap(item -> item, item -> memberSubscription.memberId())));
+            allSubscribedTopics.addAll(consumerData.topics());
+            ownedPartitions.putAll(consumerData.ownedPartitions().stream().collect(Collectors.toMap(item -> item, item -> memberSubscription.memberId())));
         }
 
         // the leader will begin watching for changes to any of the topics the group is interested in,
@@ -514,7 +517,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         //       we may need to modify the PartitionAssignor API to better support this case.
         Set<String> assignedTopics = new HashSet<>();
         for (Assignment assigned : assignments.values()) {
-            for (TopicPartition tp : assigned.partitions())
+            for (TopicPartition tp : assigned.consumerData().partitions())
                 assignedTopics.add(tp.topic());
         }
 
@@ -540,7 +543,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
         Map<String, ByteBuffer> groupAssignment = new HashMap<>();
         for (Map.Entry<String, Assignment> assignmentEntry : assignments.entrySet()) {
-            ByteBuffer buffer = ConsumerProtocol.serializeAssignment(assignmentEntry.getValue());
+            ByteBuffer buffer = ConsumerProtocol.serializeAssignment(assignmentEntry.getValue(), ConsumerProtocol.CONSUMER_PROTOCOL_V1);
             groupAssignment.put(assignmentEntry.getKey(), buffer);
         }
 

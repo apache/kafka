@@ -16,52 +16,45 @@
  */
 package org.apache.kafka.clients.consumer;
 
-import org.apache.kafka.clients.consumer.internals.ConsumerProtocol.ConsumerSubscriptionData;
-import org.apache.kafka.clients.consumer.internals.PartitionAssignor.Assignment;
-import org.apache.kafka.clients.consumer.internals.PartitionAssignor.Subscription;
+import java.util.Optional;
+import java.util.Set;
 import org.apache.kafka.common.Cluster;
-import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.protocol.types.SchemaException;
 
 import java.nio.ByteBuffer;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
-import java.util.Set;
-
-import static org.apache.kafka.clients.consumer.internals.ConsumerProtocol.CONSUMER_PROTOCOL_V0;
-import static org.apache.kafka.clients.consumer.internals.ConsumerProtocol.CONSUMER_PROTOCOL_V1;
+import org.apache.kafka.common.TopicPartition;
 
 /**
  * This interface is used to define custom partition assignment for use in
  * {@link org.apache.kafka.clients.consumer.KafkaConsumer}. Members of the consumer group subscribe
  * to the topics they are interested in and forward their subscriptions to a Kafka broker serving
  * as the group coordinator. The coordinator selects one member to perform the group assignment and
- * propagates the subscriptions of all members to it. Then {@link #assign(Cluster, Map)} is called
+ * propagates the subscriptions of all members to it. Then {@link #assign(Cluster, GroupSubscription)} is called
  * to perform the assignment and the results are forwarded back to each respective members
  *
  * In some cases, it is useful to forward additional metadata to the assignor in order to make
- * assignment decisions. For this, you can override {@link #subscription(Set)} and provide custom
+ * assignment decisions. For this, you can override {@link #joinMetadata()} and provide custom
  * userData in the returned Subscription. For example, to have a rack-aware assignor, an implementation
  * can use this user data to forward the rackId belonging to each member.
  */
 public interface PartitionAssignor {
 
     /**
-     * Return serialized data that will included in the serializable subscription object and can
-     * be leveraged in {@link #assign(Cluster, Map)} ((e.g. local host/rack information)
+     * Return serialized data that will included in the serializable subscription object sent in the
+     * joinGroup and can be leveraged in {@link #assign(Cluster, GroupSubscription)} ((e.g. local host/rack information)
      *
      * @return Non-null subscription with optional user data
      */
-    default ByteBuffer userData() {
+    default ByteBuffer joinMetadata() {
         return ByteBuffer.wrap(new byte[0]);
     }
 
     /**
      * Perform the group assignment given the member subscriptions and current cluster metadata.
      * @param metadata Current topic/broker metadata known by consumer
-     * @param subscriptions Subscriptions from all members provided through {@link #subscription(Set)}
+     * @param subscriptions Subscriptions from all members including metadata provided through {@link #joinMetadata())}
      * @return A map from the members to their respective assignment. This should have one entry
      *         for all members who in the input subscription map.
      */
@@ -69,7 +62,7 @@ public interface PartitionAssignor {
 
     /**
      * Callback which is invoked when a group member receives its assignment from the leader.
-     * @param assignment The local member's assignment as provided by the leader in {@link #assign(Cluster, Map)}
+     * @param assignment The local member's assignment as provided by the leader in {@link #assign(Cluster, GroupSubscription)}
      */
     void onAssignment(Assignment assignment);
 
@@ -95,6 +88,126 @@ public interface PartitionAssignor {
      */
     String name();
 
+    final class GroupAssignment {
+        private final Map<String, Assignment> assignments;
+
+        GroupAssignment(Map<String, Assignment> assignments) {
+            this.assignments = assignments;
+        }
+
+        public Map<String, Assignment> groupAssignments() {
+            return assignments;
+        }
+    }
+
+    final class GroupSubscription {
+        private final Map<String, Subscription> subscriptions;
+
+        GroupSubscription(Map<String, Subscription> subscriptions) {
+            this.subscriptions = subscriptions;
+        }
+
+        public Map<String, Subscription> groupSubscription() {
+            return subscriptions;
+        }
+    }
+
+    final class Subscription {
+        private final ByteBuffer userData;
+        private final ConsumerSubscriptionData consumerData;
+
+        public Subscription(ByteBuffer userData, ConsumerSubscriptionData consumerData) {
+            this.userData = userData;
+            this.consumerData = consumerData;
+        }
+
+        public ByteBuffer userData() {
+            return userData;
+        }
+
+        public ConsumerSubscriptionData consumerData() {
+            return consumerData;
+        }
+    }
+
+    final class Assignment {
+        private final ByteBuffer userData;
+        private final ConsumerAssignmentData consumerData;
+
+        public Assignment(ByteBuffer userData, ConsumerAssignmentData consumerData) {
+            this.userData = userData;
+            this.consumerData = consumerData;
+        }
+
+        public ByteBuffer userData() {
+            return userData;
+        }
+
+        public ConsumerAssignmentData consumerData() {
+            return consumerData;
+        }
+    }
+
+    final class ConsumerSubscriptionData {
+
+        private final Set<String> topics;
+        private final List<TopicPartition> ownedPartitions;
+        private Optional<String> groupInstanceId;
+
+        public ConsumerSubscriptionData(Set<String> topics, List<TopicPartition> ownedPartitions) {
+            this.topics = topics;
+            this.ownedPartitions = ownedPartitions;
+            this.groupInstanceId = Optional.empty();
+        }
+
+        public ConsumerSubscriptionData(Set<String> topics) {
+            this(topics, Collections.emptyList());
+        }
+
+        public Set<String> topics() {
+            return topics;
+        }
+
+        public List<TopicPartition> ownedPartitions() {
+            return ownedPartitions;
+        }
+
+        public void setGroupInstanceId(Optional<String> groupInstanceId) {
+            this.groupInstanceId = groupInstanceId;
+        }
+
+        public Optional<String> groupInstanceId() {
+            return groupInstanceId;
+        }
+
+        @Override
+        public String toString() {
+            return "Subscription(" +
+                ", topics=" + topics +
+                ", ownedPartitions=" + ownedPartitions +
+                ", group.instance.id=" + groupInstanceId + ")";
+        }
+    }
+
+    final class ConsumerAssignmentData {
+        private final List<TopicPartition> partitions;
+
+        public ConsumerAssignmentData(List<TopicPartition> partitions) {
+            this.partitions = partitions;
+        }
+
+        public List<TopicPartition> partitions() {
+            return partitions;
+        }
+
+        @Override
+        public String toString() {
+            return "Assignment(" +
+                ", partitions=" + partitions +
+                ')';
+        }
+    }
+
     enum RebalanceProtocol {
         EAGER((byte) 0), COOPERATIVE((byte) 1);
 
@@ -117,31 +230,6 @@ public interface PartitionAssignor {
                 default:
                     throw new IllegalArgumentException("Unknown rebalance protocol id: " + id);
             }
-        }
-    }
-
-    final class GroupAssignment {
-        private final Map<String, Assignment> assignments;
-
-        GroupAssignment(Map<String, Assignment> assignments) {
-            this.assignments = assignments;
-        }
-
-        public Map<String, Assignment> groupAssignments() {
-            return assignments;
-        }
-    }
-
-    // Consumer is responsible for this state
-    final class GroupSubscription {
-        private final Map<String, Subscription> subscriptions;
-
-        GroupSubscription(Map<String, Subscription> subscriptions) {
-            this.subscriptions = subscriptions;
-        }
-
-        public Map<String, Subscription> groupSubscription() {
-            return subscriptions;
         }
     }
 
