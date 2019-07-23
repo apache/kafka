@@ -34,7 +34,7 @@ import org.apache.kafka.common.TopicPartition;
  * to perform the assignment and the results are forwarded back to each respective members
  *
  * In some cases, it is useful to forward additional metadata to the assignor in order to make
- * assignment decisions. For this, you can override {@link #joinMetadata()} and provide custom
+ * assignment decisions. For this, you can override {@link #subscriptionUserdata()} and provide custom
  * userData in the returned Subscription. For example, to have a rack-aware assignor, an implementation
  * can use this user data to forward the rackId belonging to each member.
  */
@@ -46,14 +46,14 @@ public interface PartitionAssignor {
      *
      * @return Non-null optional join subscription user data
      */
-    default ByteBuffer joinMetadata() {
+    default ByteBuffer subscriptionUserdata() {
         return ByteBuffer.wrap(new byte[0]);
     }
 
     /**
      * Perform the group assignment given the member subscriptions and current cluster metadata.
      * @param metadata Current topic/broker metadata known by consumer
-     * @param subscriptions Subscriptions from all members including metadata provided through {@link #joinMetadata()}
+     * @param subscriptions Subscriptions from all members including metadata provided through {@link #subscriptionUserdata()}
      * @return A map from the members to their respective assignment. This should have one entry
      *         for all members who in the input subscription map.
      */
