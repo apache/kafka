@@ -251,6 +251,4 @@ public interface Consumer<K, V> extends Closeable {
      * @see KafkaConsumer#wakeup()
      */
     void wakeup();
-
-    void setHeartbeatCallbacks(ConsumerHeartbeatDataCallbacks callbacks);
 }

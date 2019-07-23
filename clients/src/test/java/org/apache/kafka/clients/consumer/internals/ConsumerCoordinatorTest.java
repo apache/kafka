@@ -222,7 +222,7 @@ public class ConsumerCoordinatorTest {
 
         // normal heartbeat
         time.sleep(sessionTimeoutMs);
-        RequestFuture<Map<String,ByteBuffer>> future = coordinator.sendHeartbeatRequest(); // should send out the heartbeat
+        RequestFuture<Void> future = coordinator.sendHeartbeatRequest(); // should send out the heartbeat
         assertEquals(1, consumerClient.pendingRequestCount());
         assertFalse(future.isDone());
 
@@ -258,7 +258,7 @@ public class ConsumerCoordinatorTest {
 
         // COORDINATOR_NOT_AVAILABLE will mark coordinator as unknown
         time.sleep(sessionTimeoutMs);
-        RequestFuture<Map<String,ByteBuffer>> future = coordinator.sendHeartbeatRequest(); // should send out the heartbeat
+        RequestFuture<Void> future = coordinator.sendHeartbeatRequest(); // should send out the heartbeat
         assertEquals(1, consumerClient.pendingRequestCount());
         assertFalse(future.isDone());
 
@@ -352,7 +352,7 @@ public class ConsumerCoordinatorTest {
 
         // not_coordinator will mark coordinator as unknown
         time.sleep(sessionTimeoutMs);
-        RequestFuture<Map<String,ByteBuffer>> future = coordinator.sendHeartbeatRequest(); // should send out the heartbeat
+        RequestFuture<Void> future = coordinator.sendHeartbeatRequest(); // should send out the heartbeat
         assertEquals(1, consumerClient.pendingRequestCount());
         assertFalse(future.isDone());
 
@@ -376,7 +376,7 @@ public class ConsumerCoordinatorTest {
         subscriptions.assignFromSubscribed(Collections.singletonList(t1p));
 
         time.sleep(sessionTimeoutMs);
-        RequestFuture<Map<String,ByteBuffer>> future = coordinator.sendHeartbeatRequest(); // should send out the heartbeat
+        RequestFuture<Void> future = coordinator.sendHeartbeatRequest(); // should send out the heartbeat
         assertEquals(1, consumerClient.pendingRequestCount());
         assertFalse(future.isDone());
 
@@ -400,7 +400,7 @@ public class ConsumerCoordinatorTest {
         subscriptions.assignFromSubscribed(Collections.singletonList(t1p));
 
         time.sleep(sessionTimeoutMs);
-        RequestFuture<Map<String,ByteBuffer>> future = coordinator.sendHeartbeatRequest(); // should send out the heartbeat
+        RequestFuture<Void> future = coordinator.sendHeartbeatRequest(); // should send out the heartbeat
         assertEquals(1, consumerClient.pendingRequestCount());
         assertFalse(future.isDone());
 
@@ -421,7 +421,7 @@ public class ConsumerCoordinatorTest {
 
         // coordinator disconnect will mark coordinator as unknown
         time.sleep(sessionTimeoutMs);
-        RequestFuture<Map<String,ByteBuffer>> future = coordinator.sendHeartbeatRequest(); // should send out the heartbeat
+        RequestFuture<Void> future = coordinator.sendHeartbeatRequest(); // should send out the heartbeat
         assertEquals(1, consumerClient.pendingRequestCount());
         assertFalse(future.isDone());
 
@@ -2333,6 +2333,7 @@ public class ConsumerCoordinatorTest {
                 new LogContext(),
                 consumerClient,
                 assignors,
+                null,
                 metadata,
                 subscriptions,
                 metrics,

@@ -1497,13 +1497,13 @@ class KafkaApis(val requestChannel: RequestChannel,
     val heartbeatRequest = request.body[HeartbeatRequest]
 
     // the callback for sending a heartbeat response
-    def sendResponseCallback(error: Errors, userDatasForLeader: Option[Map[String, ByteBuffer]]) {
+    def sendResponseCallback(error: Errors, userDatasForLeader: Option[Map[String, Array[Byte]]]) {
       def createResponse(requestThrottleMs: Int): AbstractResponse = {
         val response = new HeartbeatResponse(
             new HeartbeatResponseData()
               .setThrottleTimeMs(requestThrottleMs)
               .setErrorCode(error.code)
-              .setUserDatas(HeartbeatResponseData.serializeUserDatas(scala.collection.JavaConverters.mapAsJavaMap(userDatasForLeader.orNull)))
+              .setUserDatas(HeartbeatUserData.serializeUserDatas(scala.collection.JavaConverters.mapAsJavaMap(userDatasForLeader.orNull)))
         )
         trace("Sending heartbeat response %s for correlation id %d to client %s."
           .format(response, request.header.correlationId, request.header.clientId))

@@ -50,7 +50,7 @@ class GroupCoordinatorTest {
   type SyncGroupCallbackParams = (Array[Byte], Errors)
   type SyncGroupCallback = SyncGroupResult => Unit
   type HeartbeatCallbackParams = Errors
-  type HeartbeatCallback = (Errors, Option[scala.collection.Map[String, ByteBuffer]]) => Unit
+  type HeartbeatCallback = (Errors, Option[scala.collection.Map[String, Array[Byte]]]) => Unit
   type CommitOffsetCallbackParams = Map[TopicPartition, Errors]
   type CommitOffsetCallback = Map[TopicPartition, Errors] => Unit
   type LeaveGroupCallbackParams = Errors

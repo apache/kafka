@@ -68,7 +68,7 @@ private[group] class MemberMetadata(var memberId: String,
   var awaitingJoinCallback: JoinGroupResult => Unit = null
   var awaitingSyncCallback: SyncGroupResult => Unit = null
   var latestHeartbeat: Long = -1
-  var lastHeartbeatUserData: ByteBuffer = null
+  var lastHeartbeatUserData: Array[Byte] = null
   var isLeaving: Boolean = false
   var isNew: Boolean = false
   val isStaticMember: Boolean = groupInstanceId.isDefined

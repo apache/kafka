@@ -285,6 +285,9 @@ public class Struct {
 
     public byte[] getByteArray(String name) {
         Object result = get(name);
+        if (result == null) {
+            return null;
+        }
         if (result instanceof byte[])
             return (byte[]) result;
         ByteBuffer buf = (ByteBuffer) result;

@@ -105,6 +105,12 @@ public class ConsumerConfig extends AbstractConfig {
     private static final String PARTITION_ASSIGNMENT_STRATEGY_DOC = "The class name of the partition assignment strategy that the client will use to distribute partition ownership amongst consumer instances when group management is used";
 
     /**
+     * <code>partition.assignment.strategy</code>
+     */
+    public static final String HEARTBEAT_CALLBACK_CONFIG = "heartbeat.callback";
+    private static final String HEARTBEAT_CALLBACK_DOC = "TODO";
+
+    /**
      * <code>auto.offset.reset</code>
      */
     public static final String AUTO_OFFSET_RESET_CONFIG = "auto.offset.reset";
@@ -305,6 +311,10 @@ public class ConsumerConfig extends AbstractConfig {
                                         new ConfigDef.NonNullValidator(),
                                         Importance.MEDIUM,
                                         PARTITION_ASSIGNMENT_STRATEGY_DOC)
+                                .define(HEARTBEAT_CALLBACK_CONFIG,
+                                        Type.CLASS,
+                                        Importance.MEDIUM,
+                                        HEARTBEAT_CALLBACK_DOC)
                                 .define(METADATA_MAX_AGE_CONFIG,
                                         Type.LONG,
                                         5 * 60 * 1000,

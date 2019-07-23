@@ -498,9 +498,9 @@ class GroupCoordinator(val brokerId: Int,
   def handleHeartbeat(groupId: String,
                       memberId: String,
                       groupInstanceId: Option[String],
-                      userData: Option[ByteBuffer],
+                      userData: Option[Array[Byte]],
                       generationId: Int,
-                      responseCallback: (Errors, Option[Map[String, ByteBuffer]])=> Unit) {
+                      responseCallback: (Errors, Option[Map[String, Array[Byte]]])=> Unit) {
     validateGroupStatus(groupId, ApiKeys.HEARTBEAT).foreach { error =>
       if (error == Errors.COORDINATOR_LOAD_IN_PROGRESS)
         // the group is still loading, so respond just blindly
@@ -544,7 +544,7 @@ class GroupCoordinator(val brokerId: Int,
                 val member = group.get(memberId)
                 completeAndScheduleNextHeartbeatExpiration(group, member, userData.orNull)
                 if (group.isLeader(memberId)) {
-                  val heartBeatDatas: Map[String, ByteBuffer] =
+                  val heartBeatDatas: Map[String, Array[Byte]] =
                     group.allMemberMetadata
                       .filter(meta => meta.lastHeartbeatUserData != null)
                       .map(meta => meta.memberId -> meta.lastHeartbeatUserData)
@@ -802,11 +802,11 @@ class GroupCoordinator(val brokerId: Int,
   /**
    * Complete existing DelayedHeartbeats for the given member and schedule the next one
    */
-  private def completeAndScheduleNextHeartbeatExpiration(group: GroupMetadata, member: MemberMetadata, userData: ByteBuffer) {
+  private def completeAndScheduleNextHeartbeatExpiration(group: GroupMetadata, member: MemberMetadata, userData: Array[Byte]) {
     completeAndScheduleNextExpiration(group, member, member.sessionTimeoutMs, userData)
   }
 
-  private def completeAndScheduleNextExpiration(group: GroupMetadata, member: MemberMetadata, timeoutMs: Long, userData: ByteBuffer) {
+  private def completeAndScheduleNextExpiration(group: GroupMetadata, member: MemberMetadata, timeoutMs: Long, userData: Array[Byte]) {
     // complete current heartbeat expectation
     member.latestHeartbeat = time.milliseconds()
     member.lastHeartbeatUserData = userData

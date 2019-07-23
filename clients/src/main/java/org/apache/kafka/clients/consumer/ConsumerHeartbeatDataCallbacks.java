@@ -20,7 +20,17 @@ import java.nio.ByteBuffer;
 import java.util.Map;
 
 public interface ConsumerHeartbeatDataCallbacks {
+    enum GroupHealth {
+        HEALTHY, UNHEALTHY;
+    }
+
     ByteBuffer memberUserData();
 
-    void leaderAllMemberUserDatas(Map<String, ByteBuffer> userDatas);
+    /**
+     * Inform the leader of all collected heartbeat userdatas since the last rebalance.
+     *
+     * @param userDatas
+     * @return the leader's assessment of the group health, based on the provided userdata
+     */
+    GroupHealth leaderAllMemberUserDatas(Map<String, ByteBuffer> userDatas);
 }

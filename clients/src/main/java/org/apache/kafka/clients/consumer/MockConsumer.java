@@ -436,11 +436,6 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
         wakeup.set(true);
     }
 
-    @Override
-    public void setHeartbeatCallbacks(ConsumerHeartbeatDataCallbacks callbacks) {
-
-    }
-
     /**
      * Schedule a task to be executed during a poll(). One enqueued task will be executed per {@link #poll(Duration)}
      * invocation. You can use this repeatedly to mock out multiple responses to poll invocations.

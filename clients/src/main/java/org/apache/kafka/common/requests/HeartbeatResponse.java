@@ -22,7 +22,9 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
+import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.Map;
 
 
@@ -39,6 +41,7 @@ public class HeartbeatResponse extends AbstractResponse {
      * GROUP_AUTHORIZATION_FAILED (30)
      */
     private final HeartbeatResponseData data;
+    private Map<String, ByteBuffer> userDatas = null;
 
     public HeartbeatResponse(HeartbeatResponseData data) {
         this.data = data;
@@ -57,8 +60,14 @@ public class HeartbeatResponse extends AbstractResponse {
         return Errors.forCode(data.errorCode());
     }
 
-    public ByteBuffer userDatas() {
-        return data.userDatas();
+    public Map<String,ByteBuffer> userDatas() {
+        if (userDatas == null) {
+            userDatas = HeartbeatUserData.deserializeUserDatas(data.userDatas());
+            if (userDatas == null) {
+                userDatas = Collections.emptyMap();
+            }
+        }
+        return userDatas;
     }
 
     @Override

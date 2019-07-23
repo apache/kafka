@@ -53,6 +53,7 @@ import org.apache.kafka.common.requests.FindCoordinatorRequest.CoordinatorType;
 import org.apache.kafka.common.requests.FindCoordinatorResponse;
 import org.apache.kafka.common.requests.HeartbeatRequest;
 import org.apache.kafka.common.requests.HeartbeatResponse;
+import org.apache.kafka.common.requests.HeartbeatUserData;
 import org.apache.kafka.common.requests.JoinGroupRequest;
 import org.apache.kafka.common.requests.JoinGroupResponse;
 import org.apache.kafka.common.requests.LeaveGroupRequest;
@@ -60,6 +61,7 @@ import org.apache.kafka.common.requests.LeaveGroupResponse;
 import org.apache.kafka.common.requests.OffsetCommitRequest;
 import org.apache.kafka.common.requests.SyncGroupRequest;
 import org.apache.kafka.common.requests.SyncGroupResponse;
+import org.apache.kafka.common.serialization.ByteBufferSerializer;
 import org.apache.kafka.common.utils.KafkaThread;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
@@ -148,6 +150,28 @@ public abstract class AbstractCoordinator implements Closeable {
         this.rebalanceConfig = rebalanceConfig;
         this.log = logContext.logger(AbstractCoordinator.class);
         this.client = client;
+        this.consumerHeartbeatDataCallbacks = null;
+        this.time = time;
+        this.heartbeat = new Heartbeat(rebalanceConfig, time);
+        this.sensors = new GroupCoordinatorMetrics(metrics, metricGrpPrefix);
+    }
+
+    /**
+     * Initialize the coordination manager.
+     */
+    public AbstractCoordinator(GroupRebalanceConfig rebalanceConfig,
+                               LogContext logContext,
+                               ConsumerNetworkClient client,
+                               ConsumerHeartbeatDataCallbacks heartbeatDataCallbacks,
+                               Metrics metrics,
+                               String metricGrpPrefix,
+                               Time time) {
+        Objects.requireNonNull(rebalanceConfig.groupId,
+                               "Expected a non-null group id for coordinator construction");
+        this.rebalanceConfig = rebalanceConfig;
+        this.log = logContext.logger(AbstractCoordinator.class);
+        this.client = client;
+        this.consumerHeartbeatDataCallbacks = heartbeatDataCallbacks;
         this.time = time;
         this.heartbeat = new Heartbeat(rebalanceConfig, time);
         this.sensors = new GroupCoordinatorMetrics(metrics, metricGrpPrefix);
@@ -884,12 +908,8 @@ public abstract class AbstractCoordinator implements Closeable {
         }
     }
 
-    public void setHeartbeatCallbacks(ConsumerHeartbeatDataCallbacks callbacks) {
-        this.consumerHeartbeatDataCallbacks = callbacks;
-    }
-
     // visible for testing
-    synchronized RequestFuture<Map<String,ByteBuffer>> sendHeartbeatRequest() {
+    synchronized RequestFuture<Void> sendHeartbeatRequest() {
         log.debug("Sending Heartbeat request to coordinator {}", coordinator);
         HeartbeatRequest.Builder requestBuilder =
                 new HeartbeatRequest.Builder(new HeartbeatRequestData()
@@ -897,7 +917,7 @@ public abstract class AbstractCoordinator implements Closeable {
                         .setMemberId(this.generation.memberId)
                         .setGroupInstanceId(this.rebalanceConfig.groupInstanceId.orElse(null))
                         .setGenerationId(this.generation.generationId)
-                        .setUserData(getHeartbeatData())
+                        .setUserData(HeartbeatUserData.serializeOneUserData(getHeartbeatData()))
                 );
         return client.send(coordinator, requestBuilder)
                 .compose(new HeartbeatResponseHandler());
@@ -907,15 +927,27 @@ public abstract class AbstractCoordinator implements Closeable {
         return consumerHeartbeatDataCallbacks == null ? null : consumerHeartbeatDataCallbacks.memberUserData();
     }
 
-    private class HeartbeatResponseHandler extends CoordinatorResponseHandler<HeartbeatResponse, Map<String,ByteBuffer>> {
+    private class HeartbeatResponseHandler extends CoordinatorResponseHandler<HeartbeatResponse, Void> {
         @Override
-        public void handle(HeartbeatResponse heartbeatResponse, RequestFuture<Map<String,ByteBuffer>> future) {
+        public void handle(HeartbeatResponse heartbeatResponse, RequestFuture<Void> future) {
             sensors.heartbeatLatency.record(response.requestLatencyMs());
             Errors error = heartbeatResponse.error();
             if (error == Errors.NONE) {
                 log.debug("Received successful Heartbeat response");
-                final Map<String, ByteBuffer> datas = HeartbeatResponseData.deserializeUserDatas(heartbeatResponse.userDatas());
-                future.complete(datas);
+                final Map<String, ByteBuffer> datas = heartbeatResponse.userDatas();
+                if (datas != null && consumerHeartbeatDataCallbacks != null) {
+                    final ConsumerHeartbeatDataCallbacks.GroupHealth health = consumerHeartbeatDataCallbacks.leaderAllMemberUserDatas(datas);
+                    if (health == ConsumerHeartbeatDataCallbacks.GroupHealth.HEALTHY) {
+                        future.complete(null);
+                    } else {
+                        log.info("Group has become unhealthy. Rejoining to cause a rebalance.");
+                        requestRejoin();
+                        future.raise(new RuntimeException("Group has become unhealthy."));
+                    }
+                } else {
+                    future.complete(null);
+                }
+                future.complete(null);
             } else if (error == Errors.COORDINATOR_NOT_AVAILABLE
                     || error == Errors.NOT_COORDINATOR) {
                 log.info("Attempt to heartbeat failed since coordinator {} is either not started or not valid.",
@@ -1119,14 +1151,11 @@ public abstract class AbstractCoordinator implements Closeable {
                         } else {
                             heartbeat.sentHeartbeat(now);
 
-                            sendHeartbeatRequest().addListener(new RequestFutureListener<Map<String,ByteBuffer>>() {
+                            sendHeartbeatRequest().addListener(new RequestFutureListener<Void>() {
                                 @Override
-                                public void onSuccess(Map<String,ByteBuffer> value) {
+                                public void onSuccess(Void value) {
                                     synchronized (AbstractCoordinator.this) {
                                         heartbeat.receiveHeartbeat();
-                                        if (value != null && consumerHeartbeatDataCallbacks != null) {
-                                            consumerHeartbeatDataCallbacks.leaderAllMemberUserDatas(value);
-                                        }
                                     }
                                 }
 

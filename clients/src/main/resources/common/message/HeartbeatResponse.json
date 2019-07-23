@@ -25,6 +25,9 @@
     { "name": "ThrottleTimeMs", "type": "int32", "versions": "1+", "ignorable": true,
       "about": "The duration in milliseconds for which the request was throttled due to a quota violation, or zero if the request did not violate any quota." },
     { "name": "ErrorCode", "type": "int16", "versions": "0+",
-      "about": "The error code, or 0 if there was no error." }
+      "about": "The error code, or 0 if there was no error." },
+    { "name": "UserDatas", "type": "bytes", "versions": "3+",
+      "nullableVersions": "3+", "default": "null",
+      "about": "Serialized Map<MemberId,UserData>." }
   ]
 }
