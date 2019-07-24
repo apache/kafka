@@ -26,7 +26,7 @@ import kafka.server._
 import kafka.utils.JaasTestUtils.ScramLoginModule
 import kafka.utils.{JaasTestUtils, Logging, TestUtils}
 import kafka.zk.ConfigEntityChangeNotificationZNode
-import org.apache.kafka.clients.admin.{AdminClient, AdminClientConfig}
+import org.apache.kafka.clients.admin.{Admin, AdminClient, AdminClientConfig}
 import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer}
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.{Cluster, Reconfigurable}
@@ -54,7 +54,7 @@ class CustomQuotaCallbackTest extends IntegrationTestHarness with SaslSetup {
   private val kafkaClientSaslMechanism = "SCRAM-SHA-256"
   override protected val serverSaslProperties = Some(kafkaServerSaslProperties(kafkaServerSaslMechanisms, kafkaClientSaslMechanism))
   override protected val clientSaslProperties = Some(kafkaClientSaslProperties(kafkaClientSaslMechanism))
-  private val adminClients = new ArrayBuffer[AdminClient]()
+  private val adminClients = new ArrayBuffer[Admin]()
   private var producerWithoutQuota: KafkaProducer[Array[Byte], Array[Byte]] = _
 
   val defaultRequestQuota = 1000
@@ -181,7 +181,7 @@ class CustomQuotaCallbackTest extends IntegrationTestHarness with SaslSetup {
     TestUtils.createTopic(zkClient, topic, assignment, servers)
   }
 
-  private def createAdminClient(): AdminClient = {
+  private def createAdminClient(): Admin = {
     val config = new util.HashMap[String, Object]
     config.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG,
       TestUtils.bootstrapServers(servers, new ListenerName("BROKER")))

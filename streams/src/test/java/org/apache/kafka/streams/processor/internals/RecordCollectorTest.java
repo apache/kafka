@@ -33,7 +33,7 @@ import org.apache.kafka.common.header.internals.RecordHeader;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
-import org.apache.kafka.common.metrics.stats.Sum;
+import org.apache.kafka.common.metrics.stats.WindowedSum;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.LogContext;
@@ -215,7 +215,7 @@ public class RecordCollectorTest {
         final Sensor sensor = metrics.sensor("skipped-records");
         final LogCaptureAppender logCaptureAppender = LogCaptureAppender.createAndRegister();
         final MetricName metricName = new MetricName("name", "group", "description", Collections.emptyMap());
-        sensor.add(metricName, new Sum());
+        sensor.add(metricName, new WindowedSum());
         final RecordCollector collector = new RecordCollectorImpl(
             "test",
             logContext,

@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.test;
 
+import org.apache.kafka.streams.KeyValueTimestamp;
 import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Cancellable;
 import org.apache.kafka.streams.processor.ProcessorContext;
@@ -31,7 +32,7 @@ import static org.junit.Assert.assertEquals;
 
 public class MockProcessor<K, V> extends AbstractProcessor<K, V> {
 
-    public final ArrayList<String> processed = new ArrayList<>();
+    public final ArrayList<KeyValueTimestamp<Object, Object>> processed = new ArrayList<>();
     public final Map<K, ValueAndTimestamp<V>> lastValueAndTimestampPerKey = new HashMap<>();
 
     public final ArrayList<Long> punctuatedStreamTime = new ArrayList<>();
@@ -76,13 +77,15 @@ public class MockProcessor<K, V> extends AbstractProcessor<K, V> {
 
     @Override
     public void process(final K key, final V value) {
+        KeyValueTimestamp<Object, Object> keyValueTimestamp = new KeyValueTimestamp<>(key, value, context().timestamp());
+
         if (value != null) {
             lastValueAndTimestampPerKey.put(key, ValueAndTimestamp.make(value, context().timestamp()));
         } else {
             lastValueAndTimestampPerKey.remove(key);
         }
 
-        processed.add(makeRecord(key, value, context().timestamp()));
+        processed.add(keyValueTimestamp);
 
         if (commitRequested) {
             context().commit();
@@ -90,13 +93,7 @@ public class MockProcessor<K, V> extends AbstractProcessor<K, V> {
         }
     }
 
-    public static String makeRecord(final Object key, final Object value, final long timestamp) {
-        return (key == null ? "null" : key) +
-            ":" + (value == null ? "null" : value) +
-            " (ts: " + timestamp + ")";
-    }
-
-    public void checkAndClearProcessResult(final String... expected) {
+    public void checkAndClearProcessResult(final KeyValueTimestamp... expected) {
         assertEquals("the number of outputs:" + processed, expected.length, processed.size());
         for (int i = 0; i < expected.length; i++) {
             assertEquals("output[" + i + "]:", expected[i], processed.get(i));
