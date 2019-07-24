@@ -2139,19 +2139,21 @@ class Log(@volatile var dir: File,
    * @throws IOException if the file can't be renamed and still exists
    */
   private def deleteSegmentFiles(segments: Iterable[LogSegment], asyncDelete: Boolean) {
-    info(s"Deleting segments $segments")
     segments.foreach(_.changeFileSuffixes("", Log.DeletedFileSuffix))
 
     def deleteSegments() {
+      info(s"Deleting segments $segments")
       maybeHandleIOException(s"Error while deleting segments for $topicPartition in dir ${dir.getParent}") {
         segments.foreach(_.deleteIfExists())
       }
     }
 
-    if (asyncDelete)
+    if (asyncDelete) {
+      info(s"Scheduling segments for deletion $segments")
       scheduler.schedule("delete-file", () => deleteSegments, delay = config.fileDeleteDelayMs)
-    else
+    } else {
       deleteSegments()
+    }
   }
 
   /**
