@@ -35,7 +35,7 @@ import com.fasterxml.jackson.annotation.JsonTypeInfo;
     @JsonSubTypes.Type(value = SequentialPayloadGenerator.class, name = "sequential"),
     @JsonSubTypes.Type(value = UniformRandomPayloadGenerator.class, name = "uniformRandom"),
     @JsonSubTypes.Type(value = NullPayloadGenerator.class, name = "null"),
-    @JsonSubTypes.Type(value = RandomNullPayloadGenerator.class, name = "randomNull")
+    @JsonSubTypes.Type(value = RandomComponentPayloadGenerator.class, name = "randomComponent")
     })
 public interface PayloadGenerator {
     /**

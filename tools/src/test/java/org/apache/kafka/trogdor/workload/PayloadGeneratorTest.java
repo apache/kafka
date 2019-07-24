@@ -24,6 +24,8 @@ import org.junit.rules.Timeout;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.Arrays;
+import java.util.ArrayList;
+import java.util.List;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
@@ -129,9 +131,28 @@ public class PayloadGeneratorTest {
     }
     
     @Test
-    public void testRandomNullPayloadGenerator() {
+    public void testRandomComponentPayloadGenerator() {
+        NullPayloadGenerator nullGenerator = new NullPayloadGenerator();
+        RandomGeneratorConfig nullConfig = new RandomGeneratorConfig(50, nullGenerator);
+        
+        UniformRandomPayloadGenerator uniformGenerator =
+            new UniformRandomPayloadGenerator(5, 123, 0);
+        RandomGeneratorConfig uniformConfig = new RandomGeneratorConfig(50, uniformGenerator);
+        
+        SequentialPayloadGenerator sequentialGenerator =
+            new SequentialPayloadGenerator(4, 10);
+        RandomGeneratorConfig sequentialConfig = new RandomGeneratorConfig(75, sequentialGenerator);
+        
+        ConstantPayloadGenerator constantGenerator =
+            new ConstantPayloadGenerator(4, new byte[0]);
+        RandomGeneratorConfig constantConfig = new RandomGeneratorConfig(25, constantGenerator);
+        
+        List<RandomGeneratorConfig> components1 = new ArrayList<>(Arrays.asList(nullConfig, uniformConfig));
+        List<RandomGeneratorConfig> components2 = new ArrayList<>(Arrays.asList(sequentialConfig, constantConfig));
+        byte[] expected = new byte[4];
+
         PayloadIterator iter = new PayloadIterator(
-            new RandomNullPayloadGenerator(4, 10));
+            new RandomComponentPayloadGenerator(4, components1));
         int notNull = 0;
         int isNull = 0;
         while (notNull < 1000 || isNull < 1000) {
@@ -142,10 +163,31 @@ public class PayloadGeneratorTest {
                 notNull++;
             }
         }
-        testReproducible(new RandomNullPayloadGenerator(1234, 456));
-        testReproducible(new RandomNullPayloadGenerator(1, 0));
-        testReproducible(new RandomNullPayloadGenerator(10, 6));
-        testReproducible(new RandomNullPayloadGenerator(512, 123));
+        
+        iter = new PayloadIterator(
+            new RandomComponentPayloadGenerator(123, components2));
+        int isZeroBytes = 0;
+        int isNotZeroBytes = 0;
+        while (isZeroBytes < 500 || isNotZeroBytes < 1500) {
+            byte[] cur = iter.next();
+            if (Arrays.equals(expected, cur)) {
+                isZeroBytes++;
+            } else {
+                isNotZeroBytes++;
+            }
+        }
+        
+        RandomGeneratorConfig uniformConfig2 = new RandomGeneratorConfig(25, uniformGenerator);
+        RandomGeneratorConfig sequentialConfig2 = new RandomGeneratorConfig(25, sequentialGenerator);
+        RandomGeneratorConfig nullConfig2 = new RandomGeneratorConfig(25, nullGenerator);
+        
+        List<RandomGeneratorConfig> components3 = new ArrayList<>(Arrays.asList(sequentialConfig2, uniformConfig2, nullConfig));
+        List<RandomGeneratorConfig> components4 = new ArrayList<>(Arrays.asList(uniformConfig2, sequentialConfig2, constantConfig, nullConfig2));
+        
+        testReproducible(new RandomComponentPayloadGenerator(4, components1));
+        testReproducible(new RandomComponentPayloadGenerator(123, components2));
+        testReproducible(new RandomComponentPayloadGenerator(50, components3));
+        testReproducible(new RandomComponentPayloadGenerator(0, components4));
     }   
 
     @Test
