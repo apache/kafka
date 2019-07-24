@@ -139,8 +139,8 @@ public class LeaveGroupResponseTest {
     @Test
     public void testEqualityWithStruct() {
         LeaveGroupResponseData responseData = new LeaveGroupResponseData()
-                                                  .setErrorCode(Errors.NONE.code())
-                                                  .setThrottleTimeMs(throttleTimeMs);
+            .setErrorCode(Errors.NONE.code())
+            .setThrottleTimeMs(throttleTimeMs);
         for (short version = 0; version <= ApiKeys.LEAVE_GROUP.latestVersion(); version++) {
             LeaveGroupResponse primaryResponse = new LeaveGroupResponse(responseData.toStruct(version), version);
 

@@ -253,7 +253,7 @@ class GroupCoordinator(val brokerId: Int,
       } else if (group.isPendingMember(memberId)) {
         // A rejoining pending member will be accepted. Note that pending member will never be a static member.
         if (groupInstanceId.isDefined) {
-          throw new IllegalStateException(s"the static member $groupInstanceId was unexpectedly to be assigned " +
+          throw new IllegalStateException(s"the static member $groupInstanceId was not expected to be assigned " +
             s"into pending member bucket with member id $memberId")
         } else {
           addMemberAndRebalance(rebalanceTimeoutMs, sessionTimeoutMs, memberId, groupInstanceId,
@@ -429,7 +429,9 @@ class GroupCoordinator(val brokerId: Int,
       case None =>
         groupManager.getGroup(groupId) match {
           case None =>
-            responseCallback(noMemberLevelError(Errors.UNKNOWN_MEMBER_ID, leavingMembers))
+            responseCallback(leaveError(Errors.NONE, leavingMembers.map {leavingMember =>
+              memberLeaveError(leavingMember, Errors.UNKNOWN_MEMBER_ID)
+            }))
           case Some(group) =>
             group.inLock {
               if (group.is(Dead)) {
@@ -443,7 +445,7 @@ class GroupCoordinator(val brokerId: Int,
                     memberLeaveError(leavingMember, Errors.FENCED_INSTANCE_ID)
                   } else if (group.isPendingMember(memberId)) {
                     if (groupInstanceId.isDefined) {
-                      throw new IllegalStateException(s"the static member $groupInstanceId was unexpectedly to be leaving " +
+                      throw new IllegalStateException(s"the static member $groupInstanceId was not expected to be leaving " +
                         s"from pending member bucket with member id $memberId")
                     } else {
                       // if a pending member is leaving, it needs to be removed from the pending list, heartbeat cancelled

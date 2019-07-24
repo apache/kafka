@@ -37,7 +37,6 @@ import java.util.Objects;
  * - {@link Errors#COORDINATOR_NOT_AVAILABLE}
  * - {@link Errors#NOT_COORDINATOR}
  * - {@link Errors#GROUP_AUTHORIZATION_FAILED}
- * - {@link Errors#UNKNOWN_MEMBER_ID} returned when the group is not found
  *
  * Member level errors:
  * - {@link Errors#FENCED_INSTANCE_ID}
@@ -122,20 +121,16 @@ public class LeaveGroupResponse extends AbstractResponse {
         // Top level error.
         Errors topLevelError = Errors.forCode(data.errorCode());
         if (topLevelError != Errors.NONE) {
-            combinedErrorCounts.put(topLevelError, 1);
+            updateErrorCounts(combinedErrorCounts, topLevelError);
         }
 
         // Member level error.
-        Map<String, Errors> errorMap = new HashMap<>();
-
         for (MemberResponse memberResponse : data.members()) {
             Errors memberError = Errors.forCode(memberResponse.errorCode());
             if (memberError != Errors.NONE) {
-                errorMap.put(memberResponse.memberId(), memberError);
+                updateErrorCounts(combinedErrorCounts, memberError);
             }
         }
-
-        combinedErrorCounts.putAll(errorCounts(errorMap));
         return combinedErrorCounts;
     }
 
