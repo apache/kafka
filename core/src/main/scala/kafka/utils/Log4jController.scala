@@ -61,7 +61,7 @@ object Log4jController {
     else false
   }
 
-  def resetLogLevel(loggerName: String): Boolean = {
+  def unsetLogLevel(loggerName: String): Boolean = {
     val log = existingLogger(loggerName)
     if (!loggerName.trim.isEmpty && log != null) {
       log.setLevel(null)

@@ -1900,7 +1900,7 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
   /**
     * 1. Assume ROOT logger == TRACE
     * 2. Change kafka.controller.KafkaController logger to INFO
-    * 3. Reset kafka.controller.KafkaController via AlterConfigOp.OpType.DELETE (resets it to the root logger - TRACE)
+    * 3. Unset kafka.controller.KafkaController via AlterConfigOp.OpType.DELETE (resets it to the root logger - TRACE)
     * 4. Change ROOT logger to ERROR
     * 5. Ensure the kafka.controller.KafkaController logger's level is ERROR (the curent root logger level)
     */
@@ -1926,7 +1926,7 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
     assertEquals(initialRootLogLevel, changedControllerLoggerConfig.get("root").value())
     assertEquals(LogLevelConfig.INFO_LOG_LEVEL, changedControllerLoggerConfig.get("kafka.controller.KafkaController").value())
 
-    // step 3 - reset KafkaController logger
+    // step 3 - unset KafkaController logger
     val deleteControllerLoggerEntry = Seq(
       new AlterConfigOp(new ConfigEntry("kafka.controller.KafkaController", ""), AlterConfigOp.OpType.DELETE)
     ).asJavaCollection
@@ -2030,7 +2030,7 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
   def teardownBrokerLoggers(): Unit = {
     if (changedBrokerLoggers.nonEmpty) {
       val validLoggers = describeBrokerLoggers().entries().asScala.filterNot(_.name().equals("root")).map(_.name).toSet
-      val resetBrokerLoggersEntries = changedBrokerLoggers
+      val unsetBrokerLoggersEntries = changedBrokerLoggers
         .intersect(validLoggers)
         .map { logger => new AlterConfigOp(new ConfigEntry(logger, ""), AlterConfigOp.OpType.DELETE) }
         .asJavaCollection
@@ -2039,7 +2039,7 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
       alterBrokerLoggers(List(
         new AlterConfigOp(new ConfigEntry("root", LogLevelConfig.FATAL_LOG_LEVEL), AlterConfigOp.OpType.SET)
       ).asJavaCollection)
-      alterBrokerLoggers(resetBrokerLoggersEntries)
+      alterBrokerLoggers(unsetBrokerLoggersEntries)
 
       changedBrokerLoggers.clear()
     }

@@ -443,7 +443,7 @@ class AdminManager(val config: KafkaConfig,
       val logLevel = alterConfigOp.configEntry().value()
       alterConfigOp.opType() match {
         case OpType.SET => Log4jController.logLevel(loggerName, logLevel)
-        case OpType.DELETE => Log4jController.resetLogLevel(loggerName)
+        case OpType.DELETE => Log4jController.unsetLogLevel(loggerName)
       }
     }
   }
@@ -545,7 +545,7 @@ class AdminManager(val config: KafkaConfig,
         case OpType.DELETE =>
           validateLoggerNameExists(loggerName)
           if (loggerName == Log4jController.ROOT_LOGGER)
-            throw new InvalidRequestException(s"Resetting the log level of the ${Log4jController.ROOT_LOGGER} logger is not allowed")
+            throw new InvalidRequestException(s"Removing the log level of the ${Log4jController.ROOT_LOGGER} logger is not allowed")
         case OpType.APPEND => throw new InvalidRequestException(s"${OpType.APPEND} operation is not allowed for the ${ConfigResource.Type.BROKER_LOGGER} resource")
         case OpType.SUBTRACT => throw new InvalidRequestException(s"${OpType.SUBTRACT} operation is not allowed for the ${ConfigResource.Type.BROKER_LOGGER} resource")
       }
