@@ -2100,21 +2100,21 @@ class Log(@volatile var dir: File,
   }
 
   /**
-    * This method deletes the given log segments by doing the following for each of them:
-    * <ol>
-    *   <li>It removes the segment from the segment map so that it will no longer be used for reads.
-    *   <li>It renames the index and log files by appending .deleted to the respective file name
-    *   <li>It can either schedule an asynchronous delete operation to occur in the future or perform the deletion synchronously
-    * </ol>
-    * Asynchronous deletion allows reads to happen concurrently without synchronization and without the possibility of
-    * physically deleting a file while it is being read.
-    *
-    * This method does not need to convert IOException to KafkaStorageException because it is either called before all logs are loaded
-    * or the immediate caller will catch and handle IOException
-    *
-    * @param segments The log segments to schedule for deletion
-    * @param asyncDelete Whether the segment files should be deleted asynchronously
-    */
+   * This method deletes the given log segments by doing the following for each of them:
+   * <ol>
+   *   <li>It removes the segment from the segment map so that it will no longer be used for reads.
+   *   <li>It renames the index and log files by appending .deleted to the respective file name
+   *   <li>It can either schedule an asynchronous delete operation to occur in the future or perform the deletion synchronously
+   * </ol>
+   * Asynchronous deletion allows reads to happen concurrently without synchronization and without the possibility of
+   * physically deleting a file while it is being read.
+   *
+   * This method does not need to convert IOException to KafkaStorageException because it is either called before all logs are loaded
+   * or the immediate caller will catch and handle IOException
+   *
+   * @param segments The log segments to schedule for deletion
+   * @param asyncDelete Whether the segment files should be deleted asynchronously
+   */
   private def removeAndDeleteSegments(segments: Iterable[LogSegment], asyncDelete: Boolean): Unit = {
     lock synchronized {
       // As most callers hold an iterator into the `segments` collection and `removeAndDeleteSegment` mutates it by
