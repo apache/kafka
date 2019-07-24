@@ -747,9 +747,9 @@ class Log(@volatile var dir: File,
     if (!hasCleanShutdownFile) {
       // okay we need to actually recover this log
       val unflushed = logSegments(this.recoveryPoint, Long.MaxValue).toIterator
-      var continue = true
+      var truncated = false
 
-      while (unflushed.hasNext && continue) {
+      while (unflushed.hasNext && !truncated) {
         val segment = unflushed.next
         info(s"Recovering unflushed segment ${segment.baseOffset}")
         val truncatedBytes =
@@ -766,7 +766,7 @@ class Log(@volatile var dir: File,
           // we had an invalid message, delete all remaining log
           warn(s"Corruption found in segment ${segment.baseOffset}, truncating to offset ${segment.readNextOffset}")
           removeAndDeleteSegments(unflushed.toList, asyncDelete = true)
-          continue = false
+          truncated = true
         }
       }
     }
@@ -2138,7 +2138,7 @@ class Log(@volatile var dir: File,
    *
    * @throws IOException if the file can't be renamed and still exists
    */
-  private def deleteSegmentFiles(segments: List[LogSegment], asyncDelete: Boolean) {
+  private def deleteSegmentFiles(segments: Iterable[LogSegment], asyncDelete: Boolean) {
     info(s"Deleting segments $segments")
     segments.foreach(_.changeFileSuffixes("", Log.DeletedFileSuffix))
 
