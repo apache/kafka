@@ -220,6 +220,7 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
   @Test
   def testUpdatesUsingConfigProvider(): Unit = {
     val LOG_CLEANER_THREADS_VAL = "${file:log.cleaner.threads:log}"
+    val LOG_CLEANER_THREADS_UPD_VAL = "${file:log.cleaner.threads:updlog}"
     val SSL_TRUSTSTORE_TYPE_VAL = "${file:ssl.truststore.type:storetype}"
     val SSL_KEYSSTORE_PASSWORD_VAL = "${file:ssl.keystore.password:password}"
 
@@ -259,6 +260,8 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
     val updatedProps = new Properties
     updatedProps.setProperty("config.providers", "file")
     updatedProps.setProperty("config.providers.file.class", "kafka.server.MockFileConfigProvider")
+    // configure MetricReport
+    updatedProps.put(KafkaConfig.MetricReporterClassesProp, classOf[TestMetricsReporter].getName)
 
     // 1. update Integer property using config provider
     updatedProps.put(KafkaConfig.LogCleanerThreadsProp, LOG_CLEANER_THREADS_VAL)
@@ -278,6 +281,13 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
     waitForConfig(configPrefix+KafkaConfig.SslTruststoreTypeProp, "JKS")
     waitForConfig(configPrefix+KafkaConfig.SslKeystorePasswordProp, "ServerPassword")
 
+    // wait for MetricsReporter
+    val reporters = TestMetricsReporter.waitForReporters(servers.size)
+    reporters.foreach { reporter =>
+      reporter.verifyStateUpdUsingConfigProvider(reconfigureCount = 0, deleteCount = 0, logCleanerThreads = 2)
+      assertFalse("No metrics found", reporter.kafkaMetrics.isEmpty)
+    }
+
     // fetch from ZK, values should be unresolved
     val props = fetchBrokerConfigsFromZooKeeper(servers.head)
     assertTrue("log cleaner thread is not updated in ZK", props.getProperty(KafkaConfig.LogCleanerThreadsProp) == LOG_CLEANER_THREADS_VAL)
@@ -288,11 +298,23 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
     brokerConfigs = describeConfig(adminClients.head, servers).entries.asScala
     assertTrue("log cleaner thread is not updated", (brokerConfigs.find(_.name == KafkaConfig.LogCleanerThreadsProp).get).value == "2")
     assertTrue("store type is not updated", (brokerConfigs.find(_.name == configPrefix+KafkaConfig.SslTruststoreTypeProp).get).value == "JKS")
-    // val sslKeyStorePassword = brokerConfigs.find(_.name == configPrefix+KafkaConfig.SslKeystorePasswordProp).get
-    // assertTrue("keystore password is not updated", sslKeyStorePassword.value == "ServerPassword")
 
-    // execute another update with same properties and verify the update not occuring from traces.
+    // verify the update
+    // 1. verify update not occuring if the value of property is same using same updatedProps.
     executeConfigCommand(updatedProps)
+    waitForConfig(KafkaConfig.LogCleanerThreadsProp, "2")
+    reporters.foreach { reporter =>
+      reporter.verifyStateUpdUsingConfigProvider(reconfigureCount = 0, deleteCount = 0, logCleanerThreads = 2)
+    }
+
+    // 2. verify udpate occure if the value of property changing.
+    updatedProps.put(KafkaConfig.LogCleanerThreadsProp, LOG_CLEANER_THREADS_UPD_VAL)
+    updatedProps.put(KafkaConfig.LogCleanerDedupeBufferSizeProp, "30000000")
+    executeConfigCommand(updatedProps)
+    waitForConfig(KafkaConfig.LogCleanerThreadsProp, "3")
+    reporters.foreach { reporter =>
+      reporter.verifyStateUpdUsingConfigProvider(reconfigureCount = 1, deleteCount = 0, logCleanerThreads = 3)
+    }
   }
 
   @Test
@@ -812,12 +834,12 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
     servers.foreach { server =>
       assertEquals(classOf[TestMetricsReporter].getName, server.config.originals.get(KafkaConfig.MetricReporterClassesProp))
     }
-    newReporters.foreach(_.verifyState(reconfigureCount = 1, deleteCount = 0, pollingInterval = 2000))
+    newReporters.foreach(_.verifyState(reconfigureCount = 0, deleteCount = 0, pollingInterval = 2000))
 
     // Verify that validation failure of custom config fails reconfiguration and leaves config unchanged
     newProps.put(TestMetricsReporter.PollingIntervalProp, "invalid")
     reconfigureServers(newProps, perBrokerConfig = false, (TestMetricsReporter.PollingIntervalProp, "2000"), expectFailure = true)
-    newReporters.foreach(_.verifyState(reconfigureCount = 1, deleteCount = 0, pollingInterval = 2000))
+    newReporters.foreach(_.verifyState(reconfigureCount = 0, deleteCount = 0, pollingInterval = 2000))
 
     // Delete reporters
     configureMetricsReporters(Seq.empty[Class[_]], newProps)
@@ -830,7 +852,13 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
     alterConfigsOnServer(servers.head, newProps)
     TestUtils.waitUntilTrue(() => !TestMetricsReporter.testReporters.isEmpty, "Metrics reporter not created")
     val perBrokerReporter = TestMetricsReporter.waitForReporters(1).head
-    perBrokerReporter.verifyState(reconfigureCount = 1, deleteCount = 0, pollingInterval = 4000)
+    perBrokerReporter.verifyState(reconfigureCount = 0, deleteCount = 0, pollingInterval = 4000)
+
+    // update TestMetricsReporter.PollingIntervalProp to 3000
+    newProps.put(TestMetricsReporter.PollingIntervalProp, "3000")
+    alterConfigsOnServer(servers.head, newProps)
+    perBrokerReporter.verifyState(reconfigureCount = 1, deleteCount = 0, pollingInterval = 3000)
+
     servers.tail.foreach { server => assertEquals("", server.config.originals.get(KafkaConfig.MetricReporterClassesProp)) }
 
     // Verify that produce/consume worked throughout this test without any retries in producer
@@ -1246,7 +1274,7 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
   private def alterSslKeystoreUsingConfigCommand(props: Properties, listener: String): Unit = {
     val configPrefix = listenerPrefix(listener)
     val newProps = securityProps(props, KEYSTORE_PROPS, configPrefix)
-    
+
     val propsFile = TestUtils.tempFile()
     val propsWriter = new FileWriter(propsFile)
     try {
@@ -1657,6 +1685,7 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
 
 object TestMetricsReporter {
   val PollingIntervalProp = "polling.interval"
+  val LogCleanerThreadsProp = "log.cleaner.threads"
   val testReporters = new ConcurrentLinkedQueue[TestMetricsReporter]()
   val configuredBrokers = mutable.Set[Int]()
 
@@ -1678,6 +1707,9 @@ class TestMetricsReporter extends MetricsReporter with Reconfigurable with Close
   @volatile var closeCount = 0
   @volatile var clusterUpdateCount = 0
   @volatile var pollingInterval: Int = -1
+  @volatile var isPollingInterval: Boolean = false
+  @volatile var logCleanerThreads: Int = -1
+  @volatile var isLogCleanerThreads: Boolean = false
   testReporters.add(this)
 
   override def init(metrics: util.List[KafkaMetric]): Unit = {
@@ -1688,7 +1720,14 @@ class TestMetricsReporter extends MetricsReporter with Reconfigurable with Close
   override def configure(configs: util.Map[String, _]): Unit = {
     configuredBrokers += configs.get(KafkaConfig.BrokerIdProp).toString.toInt
     configureCount += 1
-    pollingInterval = configs.get(PollingIntervalProp).toString.toInt
+    if (configs.get(PollingIntervalProp) != null) {
+      pollingInterval = configs.get(PollingIntervalProp).toString.toInt
+      isPollingInterval = true
+    }
+    if (configs.get(LogCleanerThreadsProp) != null) {
+      logCleanerThreads = configs.get(LogCleanerThreadsProp).toString.toInt
+      isLogCleanerThreads = true
+    }
   }
 
   override def metricChange(metric: KafkaMetric): Unit = {
@@ -1704,18 +1743,28 @@ class TestMetricsReporter extends MetricsReporter with Reconfigurable with Close
   }
 
   override def reconfigurableConfigs(): util.Set[String] = {
-    Set(PollingIntervalProp).asJava
+    Set(PollingIntervalProp, LogCleanerThreadsProp).asJava
   }
 
   override def validateReconfiguration(configs: util.Map[String, _]): Unit = {
-    val pollingInterval = configs.get(PollingIntervalProp).toString
-    if (configs.get(PollingIntervalProp).toString.toInt <= 0)
-      throw new ConfigException(s"Invalid polling interval $pollingInterval")
+    if(isPollingInterval) {
+      val pollingInterval = configs.get(PollingIntervalProp).toString.toInt
+      if (pollingInterval <= 0)
+        throw new ConfigException(s"Invalid polling interval $pollingInterval")
+    }
+    if(isLogCleanerThreads) {
+      val logCleanerThreads = configs.get(LogCleanerThreadsProp).toString.toInt
+      if(logCleanerThreads <= 0)
+        throw new ConfigException(s"Invalid log cleaner thread $logCleanerThreads")
+    }
   }
 
   override def reconfigure(configs: util.Map[String, _]): Unit = {
     reconfigureCount += 1
-    pollingInterval = configs.get(PollingIntervalProp).toString.toInt
+    if (configs.get(PollingIntervalProp) != null)
+      pollingInterval = configs.get(PollingIntervalProp).toString.toInt
+    if (configs.get(LogCleanerThreadsProp) != null)
+      logCleanerThreads = configs.get(LogCleanerThreadsProp).toString.toInt
   }
 
   override def close(): Unit = {
@@ -1725,10 +1774,19 @@ class TestMetricsReporter extends MetricsReporter with Reconfigurable with Close
   def verifyState(reconfigureCount: Int, deleteCount: Int, pollingInterval: Int): Unit = {
     assertEquals(1, initializeCount)
     assertEquals(1, configureCount)
-    assertEquals(reconfigureCount, reconfigureCount)
+    assertEquals(reconfigureCount, this.reconfigureCount)
     assertEquals(deleteCount, closeCount)
     assertEquals(1, clusterUpdateCount)
     assertEquals(pollingInterval, this.pollingInterval)
+  }
+
+  def verifyStateUpdUsingConfigProvider(reconfigureCount: Int, deleteCount: Int, logCleanerThreads: Int): Unit = {
+    assertEquals(1, initializeCount)
+    assertEquals(1, configureCount)
+    assertEquals(reconfigureCount, this.reconfigureCount)
+    assertEquals(deleteCount, closeCount)
+    assertEquals(1, clusterUpdateCount)
+    assertEquals(logCleanerThreads, this.logCleanerThreads)
   }
 
   def verifyMetricValue(name: String, group: String): Unit = {
@@ -1743,6 +1801,6 @@ class TestMetricsReporter extends MetricsReporter with Reconfigurable with Close
 class MockFileConfigProvider extends FileConfigProvider {
   @throws(classOf[IOException])
   override def reader(path: String): Reader = {
-    new StringReader("key=testKey\npassword=ServerPassword\nlog=2\nstoretype=JKS");
+    new StringReader("key=testKey\npassword=ServerPassword\nlog=2\nupdlog=3\nstoretype=JKS");
   }
 }
