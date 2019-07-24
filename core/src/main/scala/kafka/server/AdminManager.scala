@@ -538,7 +538,7 @@ class AdminManager(val config: KafkaConfig,
           if (!LogLevelConfig.VALID_LOG_LEVELS.contains(logLevel)) {
             val validLevelsStr = LogLevelConfig.VALID_LOG_LEVELS.asScala.mkString(", ")
             throw new ConfigException(
-              s"Cannot set the log level of $loggerName to $logLevel as it is not a supported log level." +
+              s"Cannot set the log level of $loggerName to $logLevel as it is not a supported log level. " +
               s"Valid log levels are $validLevelsStr"
             )
           }
