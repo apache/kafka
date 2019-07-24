@@ -310,7 +310,7 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
     }
 
     @Override
-    public ByteBuffer subscriptionUserdata(final Set<String> topics) {
+    public ByteBuffer subscriptionUserData(final Set<String> topics) {
         // Adds the following information to subscription
         // 1. Client UUID (a unique id assigned to an instance of KafkaStreams)
         // 2. Task ids of previously running tasks

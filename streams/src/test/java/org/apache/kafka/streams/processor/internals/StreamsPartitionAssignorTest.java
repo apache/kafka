@@ -1338,6 +1338,6 @@ public class StreamsPartitionAssignorTest {
     }
 
     private PartitionAssignor.Subscription buildSubscription(final Set<String> topics) {
-        return new PartitionAssignor.Subscription(new ConsumerSubscriptionData(new ArrayList<>(topics)), partitionAssignor.subscriptionUserdata(topics));
+        return new PartitionAssignor.Subscription(new ConsumerSubscriptionData(new ArrayList<>(topics)), partitionAssignor.subscriptionUserData(topics));
     }
 }
