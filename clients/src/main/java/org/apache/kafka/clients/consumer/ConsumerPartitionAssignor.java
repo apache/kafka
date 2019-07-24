@@ -62,16 +62,9 @@ public interface ConsumerPartitionAssignor {
     /**
      * Callback which is invoked when a group member receives its assignment from the leader.
      * @param assignment The local member's assignment as provided by the leader in {@link #assign(Cluster, GroupSubscription)}
-     */
-    void onAssignment(Assignment assignment);
-
-    /**
-     * Callback which is invoked when a group member receives its assignment from the leader.
-     * @param assignment The local member's assignment as provided by the leader in {@link #assign(Cluster, GroupSubscription)}
      * @param metadata Additional metadata on the consumer (optional)
      */
     default void onAssignment(Assignment assignment, ConsumerGroupMetadata metadata) {
-        onAssignment(assignment);
     }
 
     /**
@@ -91,7 +84,8 @@ public interface ConsumerPartitionAssignor {
     }
 
     /**
-     * Unique name for this assignor (e.g. "range" or "roundrobin" or "sticky")
+     * Unique name for this assignor (e.g. "range" or "roundrobin" or "sticky"). Note, this is not required
+     * to be the same as the class name specified in {@link ConsumerConfig#PARTITION_ASSIGNMENT_STRATEGY_CONFIG}
      * @return non-null unique name
      */
     String name();
