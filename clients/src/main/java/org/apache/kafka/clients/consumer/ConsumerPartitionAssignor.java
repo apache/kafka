@@ -44,10 +44,10 @@ public interface ConsumerPartitionAssignor {
      * Return serialized data that will be included in the serializable subscription object sent in the
      * joinGroup and can be leveraged in {@link #assign(Cluster, GroupSubscription)} ((e.g. local host/rack information)
      *
-     * @return Optional join subscription user data
+     * @return non-null optional join subscription user data
      */
     default ByteBuffer subscriptionUserData(Set<String> topics) {
-        return null;
+        return ByteBuffer.wrap(new byte[0]);
     }
 
     /**
@@ -114,7 +114,7 @@ public interface ConsumerPartitionAssignor {
         }
 
         public Subscription(List<String> topics) {
-            this(topics, null, Collections.emptyList());
+            this(topics, ByteBuffer.wrap(new byte[0]), Collections.emptyList());
         }
 
         public List<String> topics() {
@@ -148,7 +148,7 @@ public interface ConsumerPartitionAssignor {
         }
 
         public Assignment(List<TopicPartition> partitions) {
-            this(partitions, null);
+            this(partitions, ByteBuffer.wrap(new byte[0]));
         }
 
         public List<TopicPartition> partitions() {
