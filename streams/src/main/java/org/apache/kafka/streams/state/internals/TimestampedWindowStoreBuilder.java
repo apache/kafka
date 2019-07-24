@@ -112,6 +112,7 @@ public class TimestampedWindowStoreBuilder<K, V>
          * Use WindowStore#put(key, value, timestamp) instead.
          *
          */
+        @Deprecated
         @Override
         public void put(final Bytes key,
                         final byte[] value) {

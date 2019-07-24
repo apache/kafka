@@ -46,6 +46,7 @@ class WindowToTimestampedWindowByteStoreAdapter implements WindowStore<Bytes, by
      * Use WindowStore#put(key, value, timestamp) instead.
      *
      */
+    @Deprecated
     @Override
     public void put(final Bytes key,
                     final byte[] valueWithTimestamp) {

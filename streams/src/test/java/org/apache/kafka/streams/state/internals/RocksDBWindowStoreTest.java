@@ -75,6 +75,7 @@ public class RocksDBWindowStoreTest extends WindowBytesStoreTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldOnlyIterateOpenSegments() {
         long currentTime = 0;
         setCurrentTime(currentTime);
@@ -102,6 +103,7 @@ public class RocksDBWindowStoreTest extends WindowBytesStoreTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void testRolling() {
 
         // to validate segments
@@ -377,6 +379,7 @@ public class RocksDBWindowStoreTest extends WindowBytesStoreTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void testSegmentMaintenance() {
 
         windowStore = buildWindowStore(RETENTION_PERIOD, WINDOW_SIZE, true, Serdes.Integer(),
@@ -503,6 +506,7 @@ public class RocksDBWindowStoreTest extends WindowBytesStoreTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void testRestore() throws Exception {
         final long startTime = SEGMENT_INTERVAL * 2;
         final long increment = SEGMENT_INTERVAL / 2;

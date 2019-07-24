@@ -328,6 +328,7 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
          * Use WindowStore#put(key, value, timestamp) instead.
          *
          */
+        @Deprecated
         @Override
         public void put(final K key,
                         final V value) {
@@ -534,6 +535,7 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
          * Use WindowStore#put(key, value, timestamp) instead.
          *
          */
+        @Deprecated
         @Override
         public void put(final K key,
                         final V value) {

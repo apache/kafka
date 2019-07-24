@@ -43,6 +43,7 @@ public class WindowStoreFacade<K, V> extends ReadOnlyWindowStoreFacade<K, V> imp
      * Use WindowStore#put(key, value, timestamp) instead.
      *
      */
+    @Deprecated
     @Override
     public void put(final K key,
                     final V value) {

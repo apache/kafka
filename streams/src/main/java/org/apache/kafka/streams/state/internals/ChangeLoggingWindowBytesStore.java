@@ -101,6 +101,7 @@ class ChangeLoggingWindowBytesStore
      * Use WindowStore#put(key, value, timestamp) instead.
      *
      */
+    @Deprecated
     @Override
     public void put(final Bytes key, final byte[] value) {
         // Note: It's incorrect to bypass the wrapped store here by delegating to another method,

@@ -55,6 +55,7 @@ public class RocksDBWindowStore
      * Use WindowStore#put(key, value, timestamp) instead.
      *
      */
+    @Deprecated
     @Override
     public void put(final Bytes key, final byte[] value) {
         put(key, value, context.timestamp());

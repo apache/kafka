@@ -138,6 +138,7 @@ class CachingWindowStore
      * Use WindowStore#put(key, value, timestamp) instead.
      *
      */
+    @Deprecated
     @Override
     public synchronized void put(final Bytes key,
                                  final byte[] value) {
