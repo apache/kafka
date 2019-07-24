@@ -746,9 +746,10 @@ class Log(@volatile var dir: File,
     // if we have the clean shutdown marker, skip recovery
     if (!hasCleanShutdownFile) {
       // okay we need to actually recover this log
-      val unflushed = logSegments(this.recoveryPoint, Long.MaxValue).iterator
-      while (unflushed.hasNext) {
-        val segment = unflushed.next
+      val unflushedSegments = logSegments(this.recoveryPoint, Long.MaxValue)
+      val unflushedSegmentsIterator = unflushedSegments.toIterator
+      while (unflushedSegmentsIterator.hasNext) {
+        val segment = unflushedSegmentsIterator.next
         info(s"Recovering unflushed segment ${segment.baseOffset}")
         val truncatedBytes =
           try {
@@ -763,7 +764,7 @@ class Log(@volatile var dir: File,
         if (truncatedBytes > 0) {
           // we had an invalid message, delete all remaining log
           warn(s"Corruption found in segment ${segment.baseOffset}, truncating to offset ${segment.readNextOffset}")
-          removeAndDeleteSegments(unflushed.toList)
+          removeAndDeleteSegments(unflushedSegments)
         }
       }
     }
@@ -773,7 +774,7 @@ class Log(@volatile var dir: File,
       if (logEndOffset < logStartOffset) {
         warn(s"Deleting all segments because logEndOffset ($logEndOffset) is smaller than logStartOffset ($logStartOffset). " +
           "This could happen if segment files were deleted from the file system.")
-        removeAndDeleteSegments(logSegments.toList)
+        removeAndDeleteSegments(logSegments)
       }
     }
 
@@ -1653,7 +1654,7 @@ class Log(@volatile var dir: File,
         lock synchronized {
           checkIfMemoryMappedBufferClosed()
           // remove the segments for lookups
-          removeAndDeleteSegments(deletable.toList)
+          removeAndDeleteSegments(deletable)
           maybeIncrementLogStartOffset(segments.firstEntry.getValue.baseOffset)
         }
       }
@@ -1960,7 +1961,8 @@ class Log(@volatile var dir: File,
         checkIfMemoryMappedBufferClosed()
         removeLogMetrics()
 
-        removeAndDeleteSegments(logSegments.toList)
+        // delete all segments
+        removeAndDeleteSegments(logSegments, asyncDelete = false)
         segments.clear()
 
         leaderEpochCache.foreach(_.clear())
@@ -2013,7 +2015,7 @@ class Log(@volatile var dir: File,
             truncateFullyAndStartAt(targetOffset)
           } else {
             val deletable = logSegments.filter(segment => segment.baseOffset > targetOffset)
-            removeAndDeleteSegments(deletable.toList)
+            removeAndDeleteSegments(deletable)
             activeSegment.truncateTo(targetOffset)
             updateLogEndOffset(targetOffset)
             this.recoveryPoint = math.min(targetOffset, this.recoveryPoint)
@@ -2037,8 +2039,7 @@ class Log(@volatile var dir: File,
       debug(s"Truncate and start at offset $newOffset")
       lock synchronized {
         checkIfMemoryMappedBufferClosed()
-
-        removeAndDeleteSegments(logSegments.toList)
+        removeAndDeleteSegments(logSegments)
         addSegment(LogSegment.open(dir,
           baseOffset = newOffset,
           config = config,
@@ -2100,8 +2101,11 @@ class Log(@volatile var dir: File,
     logString.toString
   }
 
-  private def removeAndDeleteSegments(segments: List[LogSegment], asyncDelete: Boolean = true): Unit = {
-    segments.foreach { segment =>
+  private def removeAndDeleteSegments(segments: Iterable[LogSegment], asyncDelete: Boolean = true): Unit = {
+    // As most callers hold an iterator into the `segments` collection and `removeAndDeleteSegment` mutates it by
+    // removing the deleted segment, we should force materialization of the iterator here, so that results of the
+    // iteration remain valid and deterministic.
+    segments.toList.foreach { segment =>
       removeAndDeleteSegment(segment, asyncDelete)
     }
   }
@@ -2114,7 +2118,7 @@ class Log(@volatile var dir: File,
    *   <li>It can either schedule an asynchronous delete operation to occur in the future or perform the deletion synchronously
    * </ol>
    * Asynchronous deletion allows reads to happen concurrently without synchronization and without the possibility of
-   * physically deleting a file while it is being read from.
+   * physically deleting a file while it is being read.
    *
    * This method does not need to convert IOException to KafkaStorageException because it is either called before all logs are loaded
    * or the immediate caller will catch and handle IOException
