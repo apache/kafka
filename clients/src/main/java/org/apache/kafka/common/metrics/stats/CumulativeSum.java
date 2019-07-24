@@ -14,25 +14,37 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.processor.internals.metrics;
+package org.apache.kafka.common.metrics.stats;
 
 import org.apache.kafka.common.metrics.MeasurableStat;
 import org.apache.kafka.common.metrics.MetricConfig;
 
 /**
- * A non-SampledStat version of Count for measuring -total metrics in streams
+ * An non-sampled cumulative total maintained over all time.
+ * This is a non-sampled version of {@link WindowedSum}.
+ *
+ * See also {@link CumulativeCount} if you just want to increment the value by 1 on each recording.
  */
-public class CumulativeCount implements MeasurableStat {
+public class CumulativeSum implements MeasurableStat {
 
-    private double count = 0.0;
+    private double total;
 
-    @Override
-    public void record(final MetricConfig config, final double value, final long timeMs) {
-        count += 1;
+    public CumulativeSum() {
+        total = 0.0;
+    }
+
+    public CumulativeSum(double value) {
+        total = value;
     }
 
     @Override
-    public double measure(final MetricConfig config, final long now) {
-        return count;
+    public void record(MetricConfig config, double value, long now) {
+        total += value;
     }
+
+    @Override
+    public double measure(MetricConfig config, long now) {
+        return total;
+    }
+
 }

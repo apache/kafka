@@ -14,13 +14,21 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common.metrics;
+package org.apache.kafka.common.metrics.stats;
+
+import org.apache.kafka.common.metrics.MetricConfig;
 
 /**
- * A MeasurableStat is a {@link Stat} that is also {@link Measurable} (i.e. can produce a single floating point value).
- * This is the interface used for most of the simple statistics such as {@link org.apache.kafka.common.metrics.stats.Avg},
- * {@link org.apache.kafka.common.metrics.stats.Max}, {@link org.apache.kafka.common.metrics.stats.CumulativeCount}, etc.
+ * A non-sampled version of {@link WindowedCount} maintained over all time.
+ *
+ * This is a special kind of {@link CumulativeSum} that always records {@code 1} instead of the provided value.
+ * In other words, it counts the number of
+ * {@link CumulativeCount#record(MetricConfig, double, long)} invocations,
+ * instead of summing the recorded values.
  */
-public interface MeasurableStat extends Stat, Measurable {
-
+public class CumulativeCount extends CumulativeSum {
+    @Override
+    public void record(final MetricConfig config, final double value, final long timeMs) {
+        super.record(config, 1, timeMs);
+    }
 }
