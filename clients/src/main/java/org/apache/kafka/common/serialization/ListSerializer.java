@@ -50,6 +50,7 @@ public class ListSerializer<T> implements Serializer<List<T>> {
     @Override
     public void configure(Map<String, ?> configs, boolean isKey) {
         if (inner == null) {
+
             final String innerSerdePropertyName = isKey ? CommonClientConfigs.DEFAULT_LIST_KEY_SERDE_INNER_CLASS : CommonClientConfigs.DEFAULT_LIST_VALUE_SERDE_INNER_CLASS;
             final String innerSerde = (String) configs.get(innerSerdePropertyName);
             try {

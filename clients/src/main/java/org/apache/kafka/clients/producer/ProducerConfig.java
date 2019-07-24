@@ -215,6 +215,12 @@ public class ProducerConfig extends AbstractConfig {
             + " prefer to leave this config unset and instead use <code>" + DELIVERY_TIMEOUT_MS_CONFIG + "</code> to control"
             + " retry behavior.";
 
+    /**
+     * <code>list.key.serializer.inner</code>
+     */
+    public static final String LIST_KEY_SERIALIZER_INNER_CLASS_CONFIG = "list.key.serializer.inner";
+    public static final String LIST_KEY_SERIALIZER_INNER_CLASS_DOC = "Inner serializer class for key that implements the <code>org.apache.kafka.common.serialization.Serializer</code> interface.";
+
     /** <code>key.serializer</code> */
     public static final String KEY_SERIALIZER_CLASS_CONFIG = "key.serializer";
     public static final String KEY_SERIALIZER_CLASS_DOC = "Serializer class for key that implements the <code>org.apache.kafka.common.serialization.Serializer</code> interface.";

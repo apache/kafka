@@ -224,6 +224,18 @@ public class ConsumerConfig extends AbstractConfig {
     public static final String CHECK_CRCS_CONFIG = "check.crcs";
     private static final String CHECK_CRCS_DOC = "Automatically check the CRC32 of the records consumed. This ensures no on-the-wire or on-disk corruption to the messages occurred. This check adds some overhead, so it may be disabled in cases seeking extreme performance.";
 
+    /**
+     * <code>list.key.serializer.inner</code>
+     */
+    public static final String LIST_KEY_DEERIALIZER_INNER_CLASS_CONFIG = "list.key.deserializer.inner";
+    public static final String LIST_KEY_DESERIALIZER_INNER_CLASS_DOC = "Inner deserializer class for key that implements the <code>org.apache.kafka.common.serialization.Deserializer</code> interface.";
+
+    /**
+     * <code>list.key.serializer.type</code>
+     */
+    public static final String LIST_KEY_DESERIALIZER_TYPE_CLASS_CONFIG = "list.key.deserializer.type";
+    public static final String LIST_KEY_DESERIALIZER_TYPE_CLASS_DOC = "Deserializer's list class for key that implements the <code>org.apache.kafka.common.serialization.Deserializer</code> interface.";
+
     /** <code>key.deserializer</code> */
     public static final String KEY_DESERIALIZER_CLASS_CONFIG = "key.deserializer";
     public static final String KEY_DESERIALIZER_CLASS_DOC = "Deserializer class for key that implements the <code>org.apache.kafka.common.serialization.Deserializer</code> interface.";
