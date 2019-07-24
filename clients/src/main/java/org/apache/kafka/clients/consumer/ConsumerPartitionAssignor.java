@@ -161,21 +161,34 @@ public interface ConsumerPartitionAssignor {
     }
 
     class ConsumerGroupMetadata {
-        private String memberId;
+        private String groupId;
         private int generationId;
+        private String memberId;
+        Optional<String> groupInstanceId;
 
-        public ConsumerGroupMetadata(String memberId, int generationId) {
-            this.memberId = memberId;
+        public ConsumerGroupMetadata(String groupId, int generationId, String memberId, Optional<String> groupInstanceId) {
+            this.groupId = groupId;
             this.generationId = generationId;
+            this.memberId = memberId;
+            this.groupInstanceId = groupInstanceId;
+        }
+
+        public String groupId() {
+            return groupId;
+        }
+
+        public int generationId() {
+            return generationId;
         }
 
         public String memberId() {
             return memberId;
         }
 
-        public int generationId() {
-            return generationId;
+        public Optional<String> groupInstanceId() {
+            return groupInstanceId;
         }
+
     }
 
     final class GroupSubscription {

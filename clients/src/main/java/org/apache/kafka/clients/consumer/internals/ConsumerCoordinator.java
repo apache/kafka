@@ -290,7 +290,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         maybeUpdateJoinedSubscription(assignedPartitions);
 
         // give the assignor a chance to update internal state based on the received assignment
-        ConsumerGroupMetadata metadata = new ConsumerGroupMetadata(memberId, generation);
+        ConsumerGroupMetadata metadata = new ConsumerGroupMetadata(rebalanceConfig.groupId, generation, memberId, rebalanceConfig.groupInstanceId);
         assignor.onAssignment(assignment, metadata);
 
         // reschedule the auto commit starting from now
