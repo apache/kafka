@@ -60,6 +60,8 @@ public class LeaveGroupResponse extends AbstractResponse {
                                                     "response, while actually get " + memberResponses.size());
             }
 
+            // Populate member level error for older version clients because
+            // they could only see top level.
             short errorCode = topLevelError != Errors.NONE ? topLevelError.code() :
                                   memberResponses.get(0).errorCode();
 
