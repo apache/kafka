@@ -2139,10 +2139,10 @@ class Log(@volatile var dir: File,
    * @throws IOException if the file can't be renamed and still exists
    */
   private def deleteSegmentFiles(segments: List[LogSegment], asyncDelete: Boolean) {
+    info(s"Deleting segments $segments")
     segments.foreach(_.changeFileSuffixes("", Log.DeletedFileSuffix))
 
     def deleteSegments() {
-      info(s"Deleting segments $segments")
       maybeHandleIOException(s"Error while deleting segments for $topicPartition in dir ${dir.getParent}") {
         segments.foreach(_.deleteIfExists())
       }
