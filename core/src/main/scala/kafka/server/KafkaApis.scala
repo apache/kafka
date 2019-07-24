@@ -51,6 +51,7 @@ import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopic
 import org.apache.kafka.common.message.CreateTopicsResponseData
 import org.apache.kafka.common.message.CreateTopicsResponseData.{CreatableTopicResult, CreatableTopicResultCollection}
 import org.apache.kafka.common.message.AlterPartitionReassignmentsResponseData
+import org.apache.kafka.common.message.AlterPartitionReassignmentsResponseData.{ReassignablePartitionResponse, ReassignableTopicResponse}
 import org.apache.kafka.common.message.ListPartitionReassignmentsResponseData
 import org.apache.kafka.common.message.DeleteTopicsResponseData
 import org.apache.kafka.common.message.DeleteTopicsResponseData.{DeletableTopicResult, DeletableTopicResultCollection}
@@ -2284,10 +2285,41 @@ class KafkaApis(val requestChannel: RequestChannel,
     authorizeClusterAlter(request)
     val alterPartitionReassignmentsRequest = request.body[AlterPartitionReassignmentsRequest]
 
-    println("TODO")
-    sendResponseMaybeThrottle(request, requestThrottleMs =>
-      new AlterPartitionReassignmentsResponse(new AlterPartitionReassignmentsResponseData().setThrottleTimeMs(requestThrottleMs).toStruct(0)))
-    println("TODO")
+    def sendResponseCallback(result: Either[Map[TopicPartition, ApiError], ApiError]): Unit = {
+      val responseData = result match {
+        case Right(topLevelError) =>
+          new AlterPartitionReassignmentsResponseData().setErrorMessage(topLevelError.message()).setErrorCode(topLevelError.error().code())
+
+        case Left(assignments) =>
+          val topicResponses = assignments.groupBy(_._1.topic()).map {
+            case (topic, reassignmentsByTp) =>
+              val partitionResponses = reassignmentsByTp.map {
+                case (topicPartition, error) =>
+                  new ReassignablePartitionResponse().setPartitionIndex(topicPartition.partition())
+                    .setErrorCode(error.error().code()).setErrorMessage(error.message())
+              }
+              new ReassignableTopicResponse().setName(topic).setPartitions(partitionResponses.toList.asJava)
+          }
+          new AlterPartitionReassignmentsResponseData().setResponses(topicResponses.toList.asJava)
+      }
+
+      sendResponseMaybeThrottle(request, requestThrottleMs =>
+        new AlterPartitionReassignmentsResponse(responseData.setThrottleTimeMs(requestThrottleMs).toStruct(0))
+      )
+    }
+
+    val reassignments = alterPartitionReassignmentsRequest.data().topics().asScala.flatMap {
+      reassignableTopic => reassignableTopic.partitions().asScala.map {
+        reassignablePartition =>
+          val tp = new TopicPartition(reassignableTopic.name(), reassignablePartition.partitionIndex())
+          if (reassignablePartition.replicas() == null)
+            tp -> None // revert call
+          else
+            tp -> Some(reassignablePartition.replicas().asScala.map(_.toInt))
+      }
+    }.toMap
+
+    controller.alterPartitionReassignments(reassignments, sendResponseCallback)
   }
 
   def handleListPartitionReassignmentsRequest(request: RequestChannel.Request): Unit = {

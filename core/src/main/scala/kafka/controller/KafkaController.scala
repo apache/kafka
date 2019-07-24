@@ -22,7 +22,7 @@ import com.yammer.metrics.core.Gauge
 import kafka.admin.AdminOperationException
 import kafka.api._
 import kafka.common._
-import kafka.controller.KafkaController.{ElectLeadersCallback, ListReassignmentsCallback}
+import kafka.controller.KafkaController.{AlterReassignmentsCallback, ElectLeadersCallback, ListReassignmentsCallback}
 import kafka.metrics.{KafkaMetricsGroup, KafkaTimer}
 import kafka.server._
 import kafka.utils._
@@ -55,6 +55,7 @@ object KafkaController extends Logging {
 
   type ElectLeadersCallback = Map[TopicPartition, Either[ApiError, Int]] => Unit
   type ListReassignmentsCallback = Either[Map[TopicPartition, PartitionReplicaAssignment], ApiError] => Unit
+  type AlterReassignmentsCallback = Either[Map[TopicPartition, ApiError], ApiError] => Unit
 }
 
 class KafkaController(val config: KafkaConfig,
@@ -514,19 +515,21 @@ class KafkaController(val config: KafkaConfig,
    * AR = The replica we are adding as part of this reassignment
    * RR = The replica we are removing as part of this reassignment
    *
-   * We can explain a reassignment in two consecutive phases and a possible cleanup phase, each with its own steps:
+   * We can explain a reassignment in two consecutive phases and a possibly-prerequisite cleanup phase, each with its own steps:
    *
    *
    * Cleanup Phase: In the cases where this reassignment has to override an ongoing reassignment.
    *   . The ongoing reassignment is in phase A
    *   . ORS denotes the original replica set, prior to the ongoing reassignment
    *   . URS denotes the unnecessary replicas, ones which are currently part of the ongoing reassignment but will not be part of the new one
-   *   1 Set RS = ORS, AR = [], RS = [] in memory
-   *   2 Send LeaderAndIsr request with RS = ORS, AR = [], RS = [] to all brokers in ORS
+   *   . OVRS denotes the overlapping replica set - replicas which are part of the ongoing reassignment and will be part of the overriding reassignment
+   *       (it is essentially (RS - ORS) - URS)
+   *   1 Set RS = ORS + OVRS, AR = OVRS, RS = [] in memory
+   *   2 Send LeaderAndIsr request with RS = ORS + OVRS, AR = [], RS = [] to all brokers in ORS + OVRS
    *     (because the ongoing reassignment is in phase A, we know we wouldn't have a leader in URS)
    *   3 Replicas in URS -> Offline (force those replicas out of ISR)
    *   4 Replicas in URS -> NonExistentReplica (force those replicas to be deleted)
-   *   5 TODO: Update ZK ?
+   *   5 Update ZK with RS = ORS + OVRS, AR = OVRS, RS = []
    *
    * Phase A: Initial trigger (when RAR != ISR)
    *   0. Update memory with RS = ORS + TRS, AR = TRS - ORS and RR = ORS - TRS
@@ -571,7 +574,7 @@ class KafkaController(val config: KafkaConfig,
     maybeRevertOngoingReassignment(topicPartition, reassignedPartitionContext)
 
     val partitionAssignment = PartitionReplicaAssignment.fromOldAndNewReplicas(
-      oldReplicas = controllerContext.partitionReplicaAssignment(topicPartition),
+      oldReplicas = controllerContext.partitionFullReplicaAssignment(topicPartition).previousAssignment.replicas,
       newReplicas = reassignedPartitionContext.newReplicas)
     assert(reassignedPartitionContext.newReplicas == partitionAssignment.targetReplicas,
       s"newReplicas ${reassignedPartitionContext.newReplicas} were not equal to the expected targetReplicas ${partitionAssignment.targetReplicas}")
@@ -622,41 +625,34 @@ class KafkaController(val config: KafkaConfig,
   private def maybeRevertOngoingReassignment(topicPartition: TopicPartition, reassignedPartitionContext: ReassignedPartitionsContext): Unit = {
     reassignedPartitionContext.ongoingReassignmentOpt match {
       case Some(ongoingAssignment) =>
-        val originalAssignment = reassignedPartitionContext.originalAssignment
+        val originalAssignment = ongoingAssignment.previousAssignment
         assert(ongoingAssignment.isBeingReassigned)
         assert(!originalAssignment.isBeingReassigned)
-        debug(s"Reverting previous reassignment $originalAssignment as we are in the " +
-          s"process of overriding the ongoing reassignment with target replicas ${ongoingAssignment.targetReplicas.mkString(",")}")
 
-        // Set RS = ORS, AR = [], RR = [] in memory.
-        controllerContext.updatePartitionFullReplicaAssignment(topicPartition, originalAssignment)
-
-        // stop the unneeded replicas that are artifacts of the old reassignment
-        // given 1,2,3,4,5,6, an original assignment of 1,2,3 and an overriding reassignment of 2,3,4
-        // unnecessaryReplicas=4,5,6
         val unnecessaryReplicas = ongoingAssignment.replicas.filterNot(originalAssignment.replicas.contains(_))
-        // replicasToRemove=5,6
-        val replicasToRemove = unnecessaryReplicas.filterNot(reassignedPartitionContext.newReplicas.contains(_))
+        val (overlappingReplicas, replicasToRemove) = unnecessaryReplicas.partition(reassignedPartitionContext.newReplicas.contains(_))
+        val intermediateReplicaAssignment = PartitionReplicaAssignment(originalAssignment.replicas ++ overlappingReplicas, overlappingReplicas, Seq())
 
-        if (replicasToRemove.nonEmpty) {
-          // Send LeaderAndIsr with new RS (using old replicas) and same ISR to every broker in old replicas
-          // Increment the leader epoch in zookeeper and a LeaderAndIsr request will be sent.
-          //   This will prevent the leader from adding any replica outside RS back in the isr
-          // TODO: This won't send to all potential replicas. In the above example, 4 wold not get this LeaderAndIsr request
-          updateLeaderEpochAndSendRequest(topicPartition, originalAssignment.replicas, originalAssignment)
+        if (isDebugEnabled)
+          debug(s"Reverting previous reassignment $originalAssignment (we were in the " +
+            s"process of an ongoing reassignment with target replicas ${ongoingAssignment.targetReplicas.mkString(",")} (" +
+            s"Overlapping replicas: ${overlappingReplicas.mkString(",")}; Replicas to remove: ${replicasToRemove.mkString(",")})")
 
-          // replicas in URS -> Offline (force those replicas out of isr)
-          // replicas in URS -> NonExistentReplica (force those replicas to be deleted)
-          stopRemovedReplicasOfReassignedPartition(topicPartition, replicasToRemove)
-          reassignedPartitionContext.ongoingReassignmentOpt = None
-          //          // Update ZK with RS = TRS, AR = [], RR = [].
-          //          updateReplicaAssignmentForPartition(topicPartition, controllerContext.partitionFullReplicaAssignment(topicPartition))
-          //          // B7. Remove the ISR reassign listener and maybe update the /admin/reassign_partitions path in ZK to remove this partition from it.
-          //          removePartitionFromReassignedPartitions(topicPartition)
-          //          sendUpdateMetadataRequest(controllerContext.liveOrShuttingDownBrokerIds.toSeq, Set(topicPartition))
-        } else {
-          debug(s"Skipped reverting previous reassignment $originalAssignment as it contained the same replicas as the new one")
-        }
+        // Set RS = ORS + OVRS, AR = OVRS, RR = [] in memory.
+        controllerContext.updatePartitionFullReplicaAssignment(topicPartition, intermediateReplicaAssignment)
+
+        // Send LeaderAndIsr with new RS (using old replicas and overlapping replicas) and same ISR to every broker in ORS + OVRS
+        // Increment the leader epoch in zookeeper and a LeaderAndIsr request will be sent.
+        // This will prevent the leader from adding any replica outside RS back in the ISR
+        updateLeaderEpochAndSendRequest(topicPartition, intermediateReplicaAssignment.replicas, intermediateReplicaAssignment)
+
+        // replicas in URS -> Offline (force those replicas out of isr)
+        // replicas in URS -> NonExistentReplica (force those replicas to be deleted)
+        stopRemovedReplicasOfReassignedPartition(topicPartition, replicasToRemove)
+        reassignedPartitionContext.ongoingReassignmentOpt = None
+
+        // Update ZK with RS = ORS + OVRS, AR = OVRS, RR = [].
+        updateReplicaAssignmentForPartition(topicPartition, controllerContext.partitionFullReplicaAssignment(topicPartition))
       case None => // nothing to revert
     }
   }
@@ -666,18 +662,26 @@ class KafkaController(val config: KafkaConfig,
    * reassigned replicas (as defined in `ControllerContext.partitionsBeingReassigned`) and if the topic has not been
    * deleted.
    *
+   * Called when:
+   * 1. zNode is first created
+   * 2. Controller fail over
+   * 3. AlterPartitionReassignments API is called
+   *
    * `partitionsBeingReassigned` must be populated with all partitions being reassigned before this method is invoked
    * as explained in the method documentation of `removePartitionFromReassignedPartitions` (which is invoked by this
    * method).
    *
    * @throws IllegalStateException if a partition is not in `partitionsBeingReassigned`
    */
-  private def maybeTriggerPartitionReassignment(topicPartitions: Set[TopicPartition]) {
+  private def maybeTriggerPartitionReassignment(topicPartitions: Set[TopicPartition]): Map[TopicPartition, ApiError] = {
+    val reassignmentResults: mutable.Map[TopicPartition, ApiError] = mutable.Map.empty
     val partitionsToBeRemovedFromReassignment = scala.collection.mutable.Set.empty[TopicPartition]
+
     topicPartitions.foreach { tp =>
       if (topicDeletionManager.isTopicQueuedUpForDeletion(tp.topic)) {
         info(s"Skipping reassignment of $tp since the topic is currently being deleted")
         partitionsToBeRemovedFromReassignment.add(tp)
+        reassignmentResults.put(tp, new ApiError(Errors.UNKNOWN_TOPIC_OR_PARTITION, "The partition does not exist."))
       } else {
         val reassignedPartitionContext = controllerContext.partitionsBeingReassigned.get(tp).getOrElse {
           throw new IllegalStateException(s"Initiating reassign replicas for partition $tp not present in " +
@@ -692,6 +696,7 @@ class KafkaController(val config: KafkaConfig,
             info(s"Partition $tp to be reassigned is already assigned to replicas " +
               s"${newReplicas.mkString(",")}. Ignoring request for partition reassignment.")
             partitionsToBeRemovedFromReassignment.add(tp)
+            reassignmentResults.put(tp, ApiError.NONE)
           } else {
             try {
               // STAN: maybe print out previous assignment?
@@ -702,6 +707,7 @@ class KafkaController(val config: KafkaConfig,
               topicDeletionManager.markTopicIneligibleForDeletion(Set(topic),
                 reason = "topic reassignment in progress")
               onPartitionReassignment(tp, reassignedPartitionContext)
+              reassignmentResults.put(tp, ApiError.NONE)
             } catch {
               case e: ControllerMovedException =>
                 error(s"Error completing reassignment of partition $tp because controller has moved to another broker", e)
@@ -709,15 +715,18 @@ class KafkaController(val config: KafkaConfig,
               case e: Throwable =>
                 error(s"Error completing reassignment of partition $tp", e)
                 partitionsToBeRemovedFromReassignment.add(tp)
+                reassignmentResults.put(tp, new ApiError(Errors.UNKNOWN_SERVER_ERROR))
             }
           }
         } else {
             error(s"Ignoring request to reassign partition $tp that doesn't exist.")
             partitionsToBeRemovedFromReassignment.add(tp)
+            reassignmentResults.put(tp, new ApiError(Errors.UNKNOWN_TOPIC_OR_PARTITION, "The partition does not exist."))
         }
       }
     }
     removePartitionsFromReassignedPartitions(partitionsToBeRemovedFromReassignment)
+    reassignmentResults
   }
 
   /**
@@ -784,8 +793,7 @@ class KafkaController(val config: KafkaConfig,
           val reassignIsrChangeHandler = new PartitionReassignmentIsrChangeHandler(eventManager, topicPartition)
           // TODO: Mention that we lose ordering on original assignment during controller failover
           controllerContext.partitionsBeingReassigned.put(topicPartition, ReassignedPartitionsContext(replicaAssignment.targetReplicas,
-            reassignIsrChangeHandler, persistedInZk = false, originalAssignment = replicaAssignment.previousAssignment,
-            ongoingReassignmentOpt = None))
+            reassignIsrChangeHandler, persistedInZk = false, ongoingReassignmentOpt = None))
         }
     }
     controllerContext.partitionLeadershipInfo.clear()
@@ -830,33 +838,19 @@ class KafkaController(val config: KafkaConfig,
     val partitionsBeingReassigned = zkClient.getPartitionReassignment
     info(s"Partitions being reassigned through the deprecated znode: $partitionsBeingReassigned")
 
-    // TODO: There's a problem guaranteeing that ZK reassignment (triggered during an offline controller) cleanly overrides a previous reassignment
-    //  set by the API prior to the failover. In particular, we cannot guarantee the original order of the replicas
     partitionsBeingReassigned.foreach {
       case (tp, newReplicas) =>
         val reassignIsrChangeHandler = new PartitionReassignmentIsrChangeHandler(eventManager, tp)
         val assignment = controllerContext.partitionFullReplicaAssignment(tp)
+        val ongoingReassignmentOption = if (assignment.isBeingReassigned)
+          Some(assignment)
+        else
+          None
 
-        if (assignment.isBeingReassigned && assignment.targetReplicas == newReplicas) {
-          // the reassignment state was already saved -- nothing to do
-        } else {
-          val (origAssignment, ongoingReassignmentOption) =
-            if (assignment.isBeingReassigned && assignment.targetReplicas != newReplicas) {
-              // we are overriding an API-triggered reassignment with a ZK-triggered one
-              (controllerContext.partitionsBeingReassigned(tp).originalAssignment,
-                Some(controllerContext.partitionFullReplicaAssignment(tp)))
-            } else {
-              // no reassignment in progress
-              (controllerContext.partitionFullReplicaAssignment(tp),
-                None)
-            }
-
-          controllerContext.partitionsBeingReassigned += (
-            tp -> ReassignedPartitionsContext(newReplicas, reassignIsrChangeHandler,
-              persistedInZk = true,
-              originalAssignment = origAssignment,
-              ongoingReassignmentOpt = ongoingReassignmentOption))
-        }
+        controllerContext.partitionsBeingReassigned += (
+          tp -> ReassignedPartitionsContext(newReplicas, reassignIsrChangeHandler,
+            persistedInZk = true,
+            ongoingReassignmentOpt = ongoingReassignmentOption))
     }
   }
 
@@ -1045,7 +1039,7 @@ class KafkaController(val config: KafkaConfig,
       info(s"No more partitions need to be reassigned. Deleting zk path ${ReassignPartitionsZNode.path}")
       zkClient.deletePartitionReassignment(controllerContext.epochZkVersion)
       // Ensure we detect future reassignments
-      eventManager.put(LegacyZkPartitionReassignment)
+      eventManager.put(PartitionReassignment(None, None))
     } else {
       val reassignment = updatedPartitionsBeingReassigned.map { case (k, v) => k -> v.newReplicas }
       try zkClient.setOrCreatePartitionReassignment(reassignment, controllerContext.epochZkVersion)
@@ -1578,67 +1572,112 @@ class KafkaController(val config: KafkaConfig,
   }
 
   /**
-    * Process a partition reassignment.
-    * A partition reassignment can be triggered through the AlterPartitionReassignment API (in which case reassignmentsOpt is present)
-    * or through the /admin/reassign_partitions znode (in which case reassignmentsOpt is None).
-    * In both cases, we need to populate `partitionsBeingReassigned` with all partitions being reassigned
-    * before invoking `maybeTriggerPartitionReassignment` (see method documentation for the reason)
-    */
-  private def processPartitionReassignment(reassignmentsOpt: Option[Map[TopicPartition, Seq[Int]]]): Unit = {
-    if (!isActive) return
-
-    def saveAssignment(partition: TopicPartition, targetReplicas: Seq[Int], zkTriggered: Boolean): Unit = {
-      val reassignIsrChangeHandler = new PartitionReassignmentIsrChangeHandler(eventManager, partition)
-      val replicaAssignment = controllerContext.partitionFullReplicaAssignment(partition)
-      val newContext = if (controllerContext.partitionsBeingReassigned.contains(partition)) {
-        info(s"Overriding old reassignment for partition $partition " +
-          s"(with target replicas ${replicaAssignment.targetReplicas.mkString(",")}) " +
-          s"to new target replicas (${targetReplicas.mkString(",")})")
-        assert(replicaAssignment.isBeingReassigned)
-
-        val oldContext = controllerContext.partitionsBeingReassigned(partition)
-        oldContext.unregisterReassignIsrChangeHandler(zkClient)
-
-        ReassignedPartitionsContext(targetReplicas, reassignIsrChangeHandler,
-          persistedInZk = zkTriggered || oldContext.persistedInZk,
-          originalAssignment = oldContext.originalAssignment,
-          // Pass down the ongoing reassignment info in order to revert it
-          ongoingReassignmentOpt = Some(replicaAssignment))
-      } else {
-        ReassignedPartitionsContext(targetReplicas, reassignIsrChangeHandler,
-          persistedInZk = zkTriggered,
-          originalAssignment = replicaAssignment,
-          ongoingReassignmentOpt = None)
+   * Process a partition reassignment.
+   * A partition reassignment can be triggered through the AlterPartitionReassignment API (in which case reassignmentsOpt is present)
+   *   or through the /admin/reassign_partitions znode (in which case reassignmentsOpt is None).
+   * In both cases, we need to populate `partitionsBeingReassigned` with all partitions being reassigned
+   *   before invoking `maybeTriggerPartitionReassignment` (see method documentation for the reason)
+   *
+   * @param reassignmentsOpt - optional map of reassignments, expected when an API reassignment is issued
+   *                           The map consists of topic partitions to an optional sequence of target replicas.
+   *                           An empty target replicas option denotes a revert of an on-going reassignment.
+   * @param callback - optional callback, expected when an API reassignment is issued
+   */
+  private def processPartitionReassignment(reassignmentsOpt: Option[Map[TopicPartition, Option[Seq[Int]]]],
+                                           callback: Option[AlterReassignmentsCallback]): Unit = {
+    if (!isActive) {
+      callback match {
+        case Some(cb) => cb(Right(new ApiError(Errors.NOT_CONTROLLER)))
+        case None =>
       }
-
-      controllerContext.partitionsBeingReassigned.put(partition, newContext)
+      return
     }
 
+    val reassignmentResults: mutable.Map[TopicPartition, ApiError] = mutable.Map.empty
     val partitionsToBeReassigned = reassignmentsOpt match {
-
       case Some(reassignments) => // API triggered
-        reassignments.foreach { case (tp, targetReplicas) =>
-          saveAssignment(tp, targetReplicas, zkTriggered = false)
+        val (savedReassignments, _) = reassignments.partition { case (tp, targetReplicas) =>
+          savePartitionReassignment(reassignmentResults, tp, targetReplicas, zkTriggered = false)
         }
-        reassignments.keySet
+        savedReassignments.keySet
 
       case None => // ZK triggered
         // We need to register the watcher if the path doesn't exist in order to detect future reassignments and we get
         // the `path exists` check for free
         if (zkClient.registerZNodeChangeHandlerAndCheckExistence(partitionReassignmentHandler)) {
           val partitionReassignment = zkClient.getPartitionReassignment
-
-          partitionReassignment.foreach { case (tp, targetReplicas) =>
-            saveAssignment(tp, targetReplicas, zkTriggered = true)
+          val (savedReassignments, _) = partitionReassignment.partition { case (tp, targetReplicas) =>
+            savePartitionReassignment(reassignmentResults, tp, Some(targetReplicas), zkTriggered = true)
           }
-          partitionReassignment.keySet
+          savedReassignments.keySet
         } else {
           Set.empty[TopicPartition]
         }
     }
 
-    maybeTriggerPartitionReassignment(partitionsToBeReassigned)
+    reassignmentResults ++= maybeTriggerPartitionReassignment(partitionsToBeReassigned)
+    callback match {
+      case Some(cb) => cb(Left(reassignmentResults))
+      case None =>
+    }
   }
+
+  private def savePartitionReassignment(reassignmentResults: mutable.Map[TopicPartition, ApiError], partition: TopicPartition,
+                                        targetReplicasOpt: Option[Seq[Int]], zkTriggered: Boolean): Boolean = {
+    val reassignIsrChangeHandler = new PartitionReassignmentIsrChangeHandler(eventManager, partition)
+    val replicaAssignment = controllerContext.partitionFullReplicaAssignment(partition)
+    val reassignmentIsInProgress = controllerContext.partitionsBeingReassigned.contains(partition)
+
+    val newContextOpt = targetReplicasOpt match {
+      case Some(targetReplicas) =>
+        if (reassignmentIsInProgress) {
+          info(s"Overriding old reassignment for partition $partition " +
+            s"(with target replicas ${replicaAssignment.targetReplicas.mkString(",")}) " +
+            s"to new target replicas (${targetReplicas.mkString(",")})")
+          assert(replicaAssignment.isBeingReassigned)
+
+          val oldContext = controllerContext.partitionsBeingReassigned(partition)
+          oldContext.unregisterReassignIsrChangeHandler(zkClient)
+
+          Some(ReassignedPartitionsContext(targetReplicas, reassignIsrChangeHandler,
+            persistedInZk = zkTriggered || oldContext.persistedInZk,
+            ongoingReassignmentOpt = Some(replicaAssignment))
+          )
+        } else {
+          Some(ReassignedPartitionsContext(targetReplicas, reassignIsrChangeHandler,
+            persistedInZk = zkTriggered,
+            ongoingReassignmentOpt = None)
+          )
+        }
+      case None => // revert
+        if (reassignmentIsInProgress) {
+          val originalAssignment = replicaAssignment.previousAssignment
+          info(s"Reverting old reassignment for partition $partition " +
+            s"(with target replicas ${replicaAssignment.targetReplicas.mkString(",")}) " +
+            s"to original replicas (${originalAssignment.replicas.mkString(",")})")
+          assert(replicaAssignment.isBeingReassigned)
+
+          val oldContext = controllerContext.partitionsBeingReassigned(partition)
+          oldContext.unregisterReassignIsrChangeHandler(zkClient)
+
+          Some(ReassignedPartitionsContext(originalAssignment.replicas, reassignIsrChangeHandler,
+            persistedInZk = oldContext.persistedInZk,
+            ongoingReassignmentOpt = Some(replicaAssignment)
+          ))
+        } else {
+          reassignmentResults.put(partition, new ApiError(Errors.NO_REASSIGNMENT_IN_PROGRESS))
+          None
+        }
+    }
+
+    newContextOpt match {
+      case Some(newContext) =>
+        controllerContext.partitionsBeingReassigned.put(partition, newContext)
+        true
+      case None => false
+    }
+  }
+
 
   private def processPartitionReassignmentIsrChange(partition: TopicPartition): Unit = {
     if (!isActive) return
@@ -1722,6 +1761,11 @@ class KafkaController(val config: KafkaConfig,
   def listPartitionReassignments(partitions: Option[Set[TopicPartition]],
                                  callback: ListReassignmentsCallback): Unit = {
     eventManager.put(ListPartitionReassignments(partitions, callback))
+  }
+
+  def alterPartitionReassignments(partitions: Map[TopicPartition, Option[Seq[Int]]],
+                                  callback: AlterReassignmentsCallback): Unit = {
+    eventManager.put(PartitionReassignment(Some(partitions), Some(callback)))
   }
 
   private def preemptReplicaLeaderElection(
@@ -1871,8 +1915,8 @@ class KafkaController(val config: KafkaConfig,
           processPartitionModifications(topic)
         case TopicDeletion =>
           processTopicDeletion()
-        case LegacyZkPartitionReassignment =>
-          processPartitionReassignment(None)
+        case PartitionReassignment(reassignments, callback) =>
+          processPartitionReassignment(reassignments, callback)
         case ListPartitionReassignments(partitions, callback) =>
           processListPartitionReassignments(partitions, callback)
         case PartitionReassignmentIsrChange(partition) =>
@@ -1954,7 +1998,7 @@ class PartitionReassignmentHandler(eventManager: ControllerEventManager) extends
   // Note that the event is also enqueued when the znode is deleted, but we do it explicitly instead of relying on
   // handleDeletion(). This approach is more robust as it doesn't depend on the watcher being re-registered after
   // it's consumed during data changes (we ensure re-registration when the znode is deleted).
-  override def handleCreation(): Unit = eventManager.put(LegacyZkPartitionReassignment)
+  override def handleCreation(): Unit = eventManager.put(PartitionReassignment(None, None))
 }
 
 class PartitionReassignmentIsrChangeHandler(eventManager: ControllerEventManager, partition: TopicPartition) extends ZNodeChangeHandler {
@@ -1992,13 +2036,11 @@ class ControllerChangeHandler(eventManager: ControllerEventManager) extends ZNod
   * @param reassignIsrChangeHandler - a handler for tracking ISR changes in this partition
   * @param persistedInZk - a boolean indicating whether this partition is stored in the /admin/reassign_partitions znode
   *                        it is needed to ensure that an API reassignment that overrides a znode reassignment still cleans up after itself
-  * @param originalAssignment - the original assignment for this partition
-  * @param ongoingReassignmentOpt - the ongoing reassignment for this partition, if one is present.
+  * @param ongoingReassignmentOpt - the ongoing reassignment for this partition, if one is present -- it will be reverted.
   */
 case class ReassignedPartitionsContext(var newReplicas: Seq[Int] = Seq.empty,
                                        reassignIsrChangeHandler: PartitionReassignmentIsrChangeHandler,
                                        persistedInZk: Boolean,
-                                       originalAssignment: PartitionReplicaAssignment,
                                        var ongoingReassignmentOpt: Option[PartitionReplicaAssignment]) {
 
   def registerReassignIsrChangeHandler(zkClient: KafkaZkClient): Unit =
@@ -2118,7 +2160,8 @@ case object TopicDeletion extends ControllerEvent {
   override def state: ControllerState = ControllerState.TopicDeletion
 }
 
-case object LegacyZkPartitionReassignment extends ControllerEvent {
+case class PartitionReassignment(reassignments: Option[Map[TopicPartition, Option[Seq[Int]]]],
+                                 callback: Option[AlterReassignmentsCallback]) extends ControllerEvent {
   override def state: ControllerState = ControllerState.PartitionReassignment
 }
 

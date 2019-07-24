@@ -41,8 +41,7 @@ case class PartitionReplicaAssignment(replicas: Seq[Int], addingReplicas: Seq[In
   /**
     * Returns the partition replica assignment previous to this one.
     * It is different than this one only when the partition is undergoing reassignment
-    * Note that this will not preserve the original ordering: (TODO:)
-    * e.g RS = [1,2,3]; Reassign to [3, 2, 4] -- R=[1, 3, 2, 4], AR=[4], RR=[1]; PreviousAssignment = [1, 3, 2]
+    * Note that this will not preserve the original ordering
     */
   def previousAssignment: PartitionReplicaAssignment = {
     PartitionReplicaAssignment(
@@ -71,7 +70,6 @@ class ControllerContext {
   var allTopics: Set[String] = Set.empty
   val partitionAssignments = mutable.Map.empty[String, mutable.Map[Int, PartitionReplicaAssignment]]
   val partitionLeadershipInfo = mutable.Map.empty[TopicPartition, LeaderIsrAndControllerEpoch]
-  // TODO: Probably add isAdminClientTriggered here
   val partitionsBeingReassigned = mutable.Map.empty[TopicPartition, ReassignedPartitionsContext]
   val partitionStates = mutable.Map.empty[TopicPartition, PartitionState]
   val replicaStates = mutable.Map.empty[PartitionAndReplica, ReplicaState]

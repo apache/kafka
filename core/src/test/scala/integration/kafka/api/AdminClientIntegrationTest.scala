@@ -1819,6 +1819,30 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
   }
 
   @Test
+  def testInvalidAlterPartitionReassignments(): Unit = {
+    client = AdminClient.create(createConfig)
+    val topic = "alter-reassignments-topic-1"
+    val tp1 = new TopicPartition(topic, 0)
+    val tp2 = new TopicPartition(topic, 1)
+    val tp3 = new TopicPartition(topic, 2)
+    createTopic(topic, numPartitions = 3)
+
+    val validAssignment = new NewPartitionReassignment((0 until brokerCount).map(_.asInstanceOf[Integer]).asJava)
+
+    val nonExistentTp1 = new TopicPartition("topicA", 0)
+    val nonExistentTp2 = new TopicPartition(topic, 3)
+    val nonExistentPartitionsResult = client.alterPartitionReassignments(Map(
+      tp1 -> java.util.Optional.of(validAssignment),
+      tp2 -> java.util.Optional.of(validAssignment),
+      tp3 -> java.util.Optional.of(validAssignment),
+      nonExistentTp1 -> java.util.Optional.of(validAssignment),
+      nonExistentTp2 -> java.util.Optional.of(validAssignment)
+    ).asJava).values()
+    assertFutureExceptionTypeEquals(nonExistentPartitionsResult.get(nonExistentTp1), classOf[UnknownTopicOrPartitionException])
+    assertFutureExceptionTypeEquals(nonExistentPartitionsResult.get(nonExistentTp2), classOf[UnknownTopicOrPartitionException])
+  }
+
+  @Test
   def testLongTopicNames(): Unit = {
     val client = AdminClient.create(createConfig)
     val longTopicName = String.join("", Collections.nCopies(249, "x"));
