@@ -50,7 +50,6 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.regex.Pattern;
-import java.util.stream.Collectors;
 
 public class InternalTopologyBuilder {
 
@@ -1195,9 +1194,9 @@ public class InternalTopologyBuilder {
             final List<String> allSourceTopics = new ArrayList<>();
             if (!nodeToSourceTopics.isEmpty()) {
                 for (final List<String> topics : nodeToSourceTopics.values()) {
-                    final List<String> filteredTopics = filterAndRemoveGlobalSourceTopics(topics);
-                    allSourceTopics.addAll(maybeDecorateInternalSourceTopics(filteredTopics));
+                    allSourceTopics.addAll(maybeDecorateInternalSourceTopics(topics));
                 }
+                allSourceTopics.removeAll(globalTopics);
             }
             Collections.sort(allSourceTopics);
 
@@ -1205,12 +1204,6 @@ public class InternalTopologyBuilder {
         }
 
         return topicPattern;
-    }
-
-    private List<String> filterAndRemoveGlobalSourceTopics(final Collection<String> sourceTopics) {
-        return sourceTopics.stream()
-                .filter(topic -> !globalTopics.contains(topic))
-                .collect(Collectors.toList());
     }
 
     // package-private for testing only

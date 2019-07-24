@@ -248,12 +248,19 @@ public class InternalTopologyBuilderTest {
         builder.setApplicationId("X");
         builder.addSource(null, "source-1", null, null, null, "topic-1");
         builder.addSource(null, "source-2", null, null, null, "topic-2");
-        builder.addGlobalStore(new MockKeyValueStoreBuilder("global-store", false).withLoggingDisabled(), "globalSource", null, null, null, "globalTopic", "global-processor", new MockProcessorSupplier());
-
+        builder.addGlobalStore(
+                new MockKeyValueStoreBuilder("global-store", false).withLoggingDisabled(),
+                "globalSource",
+                null,
+                null,
+                null,
+                "globalTopic",
+                "global-processor",
+                new MockProcessorSupplier());
 
         final Pattern expectedPattern = Pattern.compile("topic-1|topic-2");
 
-        assertEquals(expectedPattern.pattern(), builder.sourceTopicPattern().pattern());
+        assertThat(builder.sourceTopicPattern().pattern(), equalTo(expectedPattern.pattern()));
     }
 
     @Test
