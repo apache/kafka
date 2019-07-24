@@ -16,8 +16,9 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import java.nio.ByteBuffer;
 import org.apache.kafka.clients.CommonClientConfigs;
-import org.apache.kafka.clients.consumer.internals.PartitionAssignor;
+import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.KafkaException;
@@ -56,7 +57,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import static org.apache.kafka.common.utils.Utils.getHost;
 import static org.apache.kafka.common.utils.Utils.getPort;
 
-public class StreamsPartitionAssignor implements PartitionAssignor, Configurable {
+public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Configurable {
 
     final static int UNKNOWN = -1;
     private final static int VERSION_ONE = 1;
@@ -309,7 +310,7 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
     }
 
     @Override
-    public Subscription subscription(final Set<String> topics) {
+    public ByteBuffer subscriptionUserData(Set<String> topics) {
         // Adds the following information to subscription
         // 1. Client UUID (a unique id assigned to an instance of KafkaStreams)
         // 2. Task ids of previously running tasks
@@ -327,7 +328,7 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
 
         taskManager.updateSubscriptionsFromMetadata(topics);
 
-        return new Subscription(new ArrayList<>(topics), data.encode());
+        return data.encode();
     }
 
     private Map<String, Assignment> errorAssignment(final Map<UUID, ClientMetadata> clientsMetadata,
@@ -371,8 +372,8 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
      * 3. within each client, tasks are assigned to consumer clients in round-robin manner.
      */
     @Override
-    public Map<String, Assignment> assign(final Cluster metadata,
-                                          final Map<String, Subscription> subscriptions) {
+    public GroupAssignment assign(Cluster metadata, GroupSubscription groupSubscriptions) {
+        final Map<String, Subscription> subscriptions = groupSubscriptions.groupSubscription();
         // construct the client metadata from the decoded subscription info
         final Map<UUID, ClientMetadata> clientMetadataMap = new HashMap<>();
         final Set<String> futureConsumers = new HashSet<>();
@@ -446,7 +447,7 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
                     !metadata.topics().contains(topic)) {
                     log.error("Missing source topic {} durign assignment. Returning error {}.",
                               topic, Error.INCOMPLETE_SOURCE_TOPIC_METADATA.name());
-                    return errorAssignment(clientMetadataMap, topic, Error.INCOMPLETE_SOURCE_TOPIC_METADATA.code);
+                    return new GroupAssignment(errorAssignment(clientMetadataMap, topic, Error.INCOMPLETE_SOURCE_TOPIC_METADATA.code));
                 }
             }
             for (final InternalTopicConfig topic: topicsInfo.repartitionSourceTopics.values()) {
@@ -644,7 +645,7 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
             assignment = computeNewAssignment(clientMetadataMap, partitionsForTask, partitionsByHostState, minReceivedMetadataVersion);
         }
 
-        return assignment;
+        return new GroupAssignment(assignment);
     }
 
     private Map<String, Assignment> computeNewAssignment(final Map<UUID, ClientMetadata> clientsMetadata,

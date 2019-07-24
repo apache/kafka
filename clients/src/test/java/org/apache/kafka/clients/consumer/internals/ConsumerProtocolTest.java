@@ -16,8 +16,8 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
-import org.apache.kafka.clients.consumer.internals.PartitionAssignor.Assignment;
-import org.apache.kafka.clients.consumer.internals.PartitionAssignor.Subscription;
+import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.Assignment;
+import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.Subscription;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.protocol.types.ArrayOf;
 import org.apache.kafka.common.protocol.types.Field;
@@ -85,8 +85,8 @@ public class ConsumerProtocolTest {
 
     @Test
     public void deserializeOldSubscriptionVersion() {
-        Subscription subscription = new Subscription((short) 0, Arrays.asList("foo", "bar"), null);
-        ByteBuffer buffer = ConsumerProtocol.serializeSubscription(subscription);
+        Subscription subscription = new Subscription(Arrays.asList("foo", "bar"), null);
+        ByteBuffer buffer = ConsumerProtocol.serializeSubscriptionV0(subscription);
         Subscription parsedSubscription = ConsumerProtocol.deserializeSubscription(buffer);
         assertEquals(parsedSubscription.topics(), parsedSubscription.topics());
         assertNull(parsedSubscription.userData());
@@ -95,7 +95,7 @@ public class ConsumerProtocolTest {
 
     @Test
     public void deserializeNewSubscriptionWithOldVersion() {
-        Subscription subscription = new Subscription((short) 1, Arrays.asList("foo", "bar"), null, Collections.singletonList(tp2));
+        Subscription subscription = new Subscription(Arrays.asList("foo", "bar"), null, Collections.singletonList(tp2));
         ByteBuffer buffer = ConsumerProtocol.serializeSubscription(subscription);
         // ignore the version assuming it is the old byte code, as it will blindly deserialize as V0
         Struct header = CONSUMER_PROTOCOL_HEADER_SCHEMA.read(buffer);
@@ -161,29 +161,6 @@ public class ConsumerProtocolTest {
     }
 
     @Test
-    public void deserializeOldAssignmentVersion() {
-        List<TopicPartition> partitions = Arrays.asList(tp1, tp2);
-        ByteBuffer buffer = ConsumerProtocol.serializeAssignment(new Assignment((short) 0, partitions, null));
-        Assignment parsedAssignment = ConsumerProtocol.deserializeAssignment(buffer);
-        assertEquals(toSet(partitions), toSet(parsedAssignment.partitions()));
-        assertNull(parsedAssignment.userData());
-        assertEquals(ConsumerProtocol.AssignmentError.NONE, parsedAssignment.error());
-    }
-
-    @Test
-    public void deserializeNewAssignmentWithOldVersion() {
-        List<TopicPartition> partitions = Collections.singletonList(tp1);
-        ByteBuffer buffer = ConsumerProtocol.serializeAssignment(new Assignment((short) 1, partitions, null, ConsumerProtocol.AssignmentError.NEED_REJOIN));
-        // ignore the version assuming it is the old byte code, as it will blindly deserialize as 0
-        Struct header = CONSUMER_PROTOCOL_HEADER_SCHEMA.read(buffer);
-        header.getShort(VERSION_KEY_NAME);
-        Assignment parsedAssignment = ConsumerProtocol.deserializeAssignmentV0(buffer);
-        assertEquals(toSet(partitions), toSet(parsedAssignment.partitions()));
-        assertNull(parsedAssignment.userData());
-        assertEquals(ConsumerProtocol.AssignmentError.NONE, parsedAssignment.error());
-    }
-
-    @Test
     public void deserializeFutureAssignmentVersion() {
         // verify that a new version which adds a field is still parseable
         short version = 100;
@@ -191,7 +168,6 @@ public class ConsumerProtocolTest {
         Schema assignmentSchemaV100 = new Schema(
                 new Field(TOPIC_PARTITIONS_KEY_NAME, new ArrayOf(TOPIC_ASSIGNMENT_V0)),
                 new Field(USER_DATA_KEY_NAME, Type.BYTES),
-                ERROR_CODE,
                 new Field("foo", Type.STRING));
 
         Struct assignmentV100 = new Struct(assignmentSchemaV100);
@@ -200,7 +176,6 @@ public class ConsumerProtocolTest {
                         .set(ConsumerProtocol.TOPIC_KEY_NAME, tp1.topic())
                         .set(ConsumerProtocol.PARTITIONS_KEY_NAME, new Object[]{tp1.partition()})});
         assignmentV100.set(USER_DATA_KEY_NAME, ByteBuffer.wrap(new byte[0]));
-        assignmentV100.set(ERROR_CODE.name, ConsumerProtocol.AssignmentError.NEED_REJOIN.code());
         assignmentV100.set("foo", "bar");
 
         Struct headerV100 = new Struct(CONSUMER_PROTOCOL_HEADER_SCHEMA);
@@ -212,8 +187,7 @@ public class ConsumerProtocolTest {
 
         buffer.flip();
 
-        PartitionAssignor.Assignment assignment = ConsumerProtocol.deserializeAssignment(buffer);
+        Assignment assignment = ConsumerProtocol.deserializeAssignment(buffer);
         assertEquals(toSet(Collections.singletonList(tp1)), toSet(assignment.partitions()));
-        assertEquals(ConsumerProtocol.AssignmentError.NEED_REJOIN, assignment.error());
     }
 }
