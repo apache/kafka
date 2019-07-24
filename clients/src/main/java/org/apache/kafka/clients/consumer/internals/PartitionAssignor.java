@@ -43,6 +43,7 @@ import static org.apache.kafka.clients.consumer.internals.ConsumerProtocol.CONSU
  * userData in the returned Subscription. For example, to have a rack-aware assignor, an implementation
  * can use this user data to forward the rackId belonging to each member.
  */
+@Deprecated
 public interface PartitionAssignor {
 
     /**
