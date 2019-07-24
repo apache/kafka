@@ -2148,12 +2148,10 @@ class Log(@volatile var dir: File,
       }
     }
 
-    if (asyncDelete) {
-      info(s"Scheduling segment for deletion $segments")
+    if (asyncDelete)
       scheduler.schedule("delete-file", () => deleteSegments, delay = config.fileDeleteDelayMs)
-    } else {
+    else
       deleteSegments()
-    }
   }
 
   /**
