@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.clients.consumer;
 
+import static org.apache.kafka.clients.consumer.internals.PartitionAssignorAdapter.getAssignorInstances;
+
 import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.ClientDnsLookup;
 import org.apache.kafka.clients.ClientUtils;
@@ -765,9 +767,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                     retryBackoffMs,
                     config.getInt(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG),
                     heartbeatIntervalMs); //Will avoid blocking an extended period of time to prevent heartbeat thread starvation
-            this.assignors = config.getConfiguredInstances(
-                    ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG,
-                    PartitionAssignor.class);
+            this.assignors = getAssignorInstances(config, ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG);
 
             // no coordinator will be constructed for the default (null) group id
             this.coordinator = groupId == null ? null :

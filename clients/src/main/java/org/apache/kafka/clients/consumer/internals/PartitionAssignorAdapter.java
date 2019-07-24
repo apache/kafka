@@ -17,15 +17,24 @@
 package org.apache.kafka.clients.consumer.internals;
 
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import org.apache.kafka.clients.consumer.PartitionAssignor;
 import org.apache.kafka.common.Cluster;
+import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.config.AbstractConfig;
+import org.apache.kafka.common.utils.Utils;
 
 public class PartitionAssignorAdapter implements PartitionAssignor {
 
-    org.apache.kafka.clients.consumer.internals.PartitionAssignor oldAssignor;
+    final org.apache.kafka.clients.consumer.internals.PartitionAssignor oldAssignor;
+
+    PartitionAssignorAdapter(final org.apache.kafka.clients.consumer.internals.PartitionAssignor oldAssignor) {
+        this.oldAssignor = oldAssignor;
+    }
 
     @Override
     public ByteBuffer subscriptionUserData(Set<String> topics) {
@@ -77,4 +86,40 @@ public class PartitionAssignorAdapter implements PartitionAssignor {
         }
         return new GroupAssignment(newAssignments);
     }
+
+    public static List<PartitionAssignor> getAssignorInstances(AbstractConfig config, String key) {
+        List<PartitionAssignor> assignorInstances = new ArrayList<>();
+        Class<PartitionAssignor> newClass = PartitionAssignor.class;
+        Class<org.apache.kafka.clients.consumer.internals.PartitionAssignor> oldClass = org.apache.kafka.clients.consumer.internals.PartitionAssignor.class;
+
+        List<String> classNames = config.getList(key);
+        if (classNames == null)
+            return assignorInstances;
+
+        for (Object klass : classNames) {
+            Object assignor;
+            if (klass instanceof String) {
+                try {
+                    assignor = Utils.newInstance((String) klass, newClass);
+                } catch (ClassNotFoundException e) {
+                    throw new KafkaException(klass + " ClassNotFoundException exception occurred", e);
+                }
+            } else if (klass instanceof Class<?>) {
+                assignor = Utils.newInstance((Class<?>) klass);
+            } else {
+                throw new KafkaException("List contains element of type " + klass.getClass().getName() + ", expected String or Class");
+            }
+
+            if (newClass.isInstance(assignor)) {
+                assignorInstances.add(newClass.cast(assignor));
+            } else if (oldClass.isInstance(assignor)) {
+                assignorInstances.add(new PartitionAssignorAdapter(oldClass.cast(assignor)));
+            } else {
+                throw new KafkaException(klass + " is not an instance of " + oldClass.getName()
+                + " or an instance of " + newClass.getName());
+            }
+        }
+        return assignorInstances;
+    }
+
 }
