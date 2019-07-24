@@ -310,7 +310,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
     }
 
     @Override
-    public ByteBuffer subscriptionUserData(Set<String> topics) {
+    public ByteBuffer subscriptionUserData(final Set<String> topics) {
         // Adds the following information to subscription
         // 1. Client UUID (a unique id assigned to an instance of KafkaStreams)
         // 2. Task ids of previously running tasks
@@ -372,7 +372,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
      * 3. within each client, tasks are assigned to consumer clients in round-robin manner.
      */
     @Override
-    public GroupAssignment assign(Cluster metadata, GroupSubscription groupSubscriptions) {
+    public GroupAssignment assign(final Cluster metadata, final GroupSubscription groupSubscriptions) {
         final Map<String, Subscription> subscriptions = groupSubscriptions.groupSubscription();
         // construct the client metadata from the decoded subscription info
         final Map<UUID, ClientMetadata> clientMetadataMap = new HashMap<>();

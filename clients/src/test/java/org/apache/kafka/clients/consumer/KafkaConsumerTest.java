@@ -21,7 +21,6 @@ import org.apache.kafka.clients.ClientRequest;
 import org.apache.kafka.clients.GroupRebalanceConfig;
 import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.clients.MockClient;
-import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor;
 import org.apache.kafka.clients.consumer.internals.ConsumerCoordinator;
 import org.apache.kafka.clients.consumer.internals.ConsumerInterceptors;
 import org.apache.kafka.clients.consumer.internals.ConsumerMetadata;
@@ -512,7 +511,7 @@ public class KafkaConsumerTest {
         MockClient client = new MockClient(time, metadata);
 
         initMetadata(client, Collections.singletonMap(topic, 1));
-       ConsumerPartitionAssignor assignor = new RoundRobinAssignor();
+        ConsumerPartitionAssignor assignor = new RoundRobinAssignor();
 
         KafkaConsumer<String, String> consumer = newConsumer(time, client, subscription, metadata, assignor, true, groupInstanceId);
         consumer.assign(singleton(tp0));
@@ -587,7 +586,7 @@ public class KafkaConsumerTest {
         initMetadata(client, Collections.singletonMap(topic, 1));
         Node node = metadata.fetch().nodes().get(0);
 
-       ConsumerPartitionAssignor assignor = new RoundRobinAssignor();
+        ConsumerPartitionAssignor assignor = new RoundRobinAssignor();
 
         KafkaConsumer<String, String> consumer = newConsumer(time, client, subscription, metadata, assignor,
                 true, groupId, groupInstanceId);
@@ -611,7 +610,7 @@ public class KafkaConsumerTest {
         initMetadata(client, Collections.singletonMap(topic, 1));
         Node node = metadata.fetch().nodes().get(0);
 
-       ConsumerPartitionAssignor assignor = new RoundRobinAssignor();
+        ConsumerPartitionAssignor assignor = new RoundRobinAssignor();
 
         KafkaConsumer<String, String> consumer = newConsumer(time, client, subscription, metadata, assignor,
                 true, groupId, groupInstanceId);
@@ -636,7 +635,7 @@ public class KafkaConsumerTest {
         initMetadata(client, Collections.singletonMap(topic, 1));
         Node node = metadata.fetch().nodes().get(0);
 
-       ConsumerPartitionAssignor assignor = new RoundRobinAssignor();
+        ConsumerPartitionAssignor assignor = new RoundRobinAssignor();
 
         KafkaConsumer<String, String> consumer = newConsumer(time, client, subscription, metadata, assignor,
                 true, groupId, groupInstanceId);
@@ -663,7 +662,7 @@ public class KafkaConsumerTest {
         initMetadata(client, Collections.singletonMap(topic, 1));
         Node node = metadata.fetch().nodes().get(0);
 
-       ConsumerPartitionAssignor assignor = new RoundRobinAssignor();
+        ConsumerPartitionAssignor assignor = new RoundRobinAssignor();
 
         KafkaConsumer<String, String> consumer = newConsumer(time, client, subscription, metadata, assignor,
                 true, groupId, Optional.empty());
@@ -686,7 +685,7 @@ public class KafkaConsumerTest {
         initMetadata(client, Collections.singletonMap(topic, 2));
         Node node = metadata.fetch().nodes().get(0);
 
-       ConsumerPartitionAssignor assignor = new RoundRobinAssignor();
+        ConsumerPartitionAssignor assignor = new RoundRobinAssignor();
 
         KafkaConsumer<String, String> consumer = newConsumer(time, client, subscription, metadata, assignor, true, groupInstanceId);
         consumer.assign(singletonList(tp0));
@@ -724,7 +723,7 @@ public class KafkaConsumerTest {
         initMetadata(client, Collections.singletonMap(topic, 1));
         Node node = metadata.fetch().nodes().get(0);
 
-       ConsumerPartitionAssignor assignor = new RoundRobinAssignor();
+        ConsumerPartitionAssignor assignor = new RoundRobinAssignor();
 
         KafkaConsumer<String, String> consumer = newConsumer(time, client, subscription, metadata, assignor, true, groupInstanceId);
         consumer.subscribe(singleton(topic), getConsumerRebalanceListener(consumer));
@@ -764,7 +763,7 @@ public class KafkaConsumerTest {
         initMetadata(client, partitionCounts);
         Node node = metadata.fetch().nodes().get(0);
 
-       ConsumerPartitionAssignor assignor = new RoundRobinAssignor();
+        ConsumerPartitionAssignor assignor = new RoundRobinAssignor();
 
         KafkaConsumer<String, String> consumer = newConsumer(time, client, subscription, metadata, assignor, true, groupInstanceId);
         prepareRebalance(client, node, singleton(topic), assignor, singletonList(tp0), null);
@@ -782,7 +781,7 @@ public class KafkaConsumerTest {
 
     @Test
     public void testChangingRegexSubscription() {
-       ConsumerPartitionAssignor assignor = new RoundRobinAssignor();
+        ConsumerPartitionAssignor assignor = new RoundRobinAssignor();
 
         String otherTopic = "other";
         TopicPartition otherTopicPartition = new TopicPartition(otherTopic, 0);
