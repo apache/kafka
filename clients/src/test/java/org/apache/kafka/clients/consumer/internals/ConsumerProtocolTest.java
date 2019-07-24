@@ -88,7 +88,7 @@ public class ConsumerProtocolTest {
     @Test
     public void deserializeOldSubscriptionVersion() {
         ConsumerSubscriptionData subscription = new ConsumerSubscriptionData(Arrays.asList("foo", "bar"), null);
-        ByteBuffer buffer = ConsumerProtocol.serializeSubscription(new Subscription(subscription), CONSUMER_PROTOCOL_V0);
+        ByteBuffer buffer = ConsumerProtocol.serializeSubscription(new Subscription(subscription, null), CONSUMER_PROTOCOL_V0);
         Subscription parsedSubscription = ConsumerProtocol.deserializeSubscription(buffer);
         assertEquals(parsedSubscription.consumerData().topics(), parsedSubscription.consumerData().topics());
         assertNull(parsedSubscription.userData());

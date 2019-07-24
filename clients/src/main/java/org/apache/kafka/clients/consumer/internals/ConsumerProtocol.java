@@ -308,7 +308,7 @@ public class ConsumerProtocol {
     }
 
     static Assignment deserializeAssignmentV1(ByteBuffer buffer) {
-        return deserializeAssignmentV1(buffer);
+        return deserializeAssignmentV0(buffer);
     }
 
 }

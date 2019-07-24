@@ -22,7 +22,6 @@ import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.clients.NodeApiVersions;
 import org.apache.kafka.clients.admin.DeleteAclsResult.FilterResults;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
-import org.apache.kafka.clients.consumer.PartitionAssignor;
 import org.apache.kafka.clients.consumer.PartitionAssignor.Assignment;
 import org.apache.kafka.clients.consumer.PartitionAssignor.ConsumerAssignmentData;
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
