@@ -137,9 +137,9 @@ public class StreamsUpgradeTest {
         }
 
         @Override
-        public void onAssignment(final ConsumerPartitionAssignor.Assignment assignment) {
+        public void onAssignment(final ConsumerPartitionAssignor.Assignment assignment,  ConsumerGroupMetadata metadata) {
             try {
-                super.onAssignment(assignment);
+                super.onAssignment(assignment, metadata);
                 return;
             } catch (final TaskAssignmentException cannotProcessFutureVersion) {
                 // continue

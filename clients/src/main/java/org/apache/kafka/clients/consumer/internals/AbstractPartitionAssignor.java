@@ -72,11 +72,6 @@ public abstract class AbstractPartitionAssignor implements ConsumerPartitionAssi
         return new GroupAssignment(assignments);
     }
 
-    @Override
-    public void onAssignment(Assignment assignment) {
-        // this assignor maintains no internal state, so nothing to do
-    }
-
     protected static <K, V> void put(Map<K, List<V>> map, K key, V value) {
         List<V> list = map.computeIfAbsent(key, k -> new ArrayList<>());
         list.add(value);

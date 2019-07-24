@@ -680,7 +680,7 @@ public class StreamsPartitionAssignorTest {
         EasyMock.expectLastCall();
         EasyMock.replay(taskManager);
 
-        partitionAssignor.onAssignment(assignment);
+        partitionAssignor.onAssignment(assignment, null);
 
         EasyMock.verify(taskManager);
 
@@ -989,7 +989,7 @@ public class StreamsPartitionAssignorTest {
         EasyMock.expectLastCall();
         EasyMock.replay(taskManager);
 
-        partitionAssignor.onAssignment(createAssignment(hostState));
+        partitionAssignor.onAssignment(createAssignment(hostState), null);
 
         EasyMock.verify(taskManager);
     }
