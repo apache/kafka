@@ -44,7 +44,7 @@ public interface ConsumerPartitionAssignor {
      * Return serialized data that will be included in the serializable subscription object sent in the
      * joinGroup and can be leveraged in {@link #assign(Cluster, GroupSubscription)} ((e.g. local host/rack information)
      *
-     * @return Non-null optional join subscription user data
+     * @return Optional join subscription user data
      */
     default ByteBuffer subscriptionUserData(Set<String> topics) {
         return null;
@@ -163,18 +163,10 @@ public interface ConsumerPartitionAssignor {
     class ConsumerGroupMetadata {
         private String memberId;
         private int generationId;
-        private String groupId;
-        private Optional<String> groupInstanceId;
-
-        ConsumerGroupMetadata(String memberId, int generationId, String groupId, Optional<String> groupInstanceId) {
-            this.memberId = memberId;
-            this.generationId = generationId;
-            this.groupId = groupId;
-            this.groupInstanceId = groupInstanceId;
-        }
 
         public ConsumerGroupMetadata(String memberId, int generationId) {
-            this(memberId, generationId, "", Optional.empty());
+            this.memberId = memberId;
+            this.generationId = generationId;
         }
 
         public String memberId() {
