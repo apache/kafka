@@ -29,7 +29,7 @@ import org.apache.kafka.clients.admin.DeleteAclsResult.FilterResult;
 import org.apache.kafka.clients.admin.DeleteAclsResult.FilterResults;
 import org.apache.kafka.clients.admin.DescribeReplicaLogDirsResult.ReplicaLogDirInfo;
 import org.apache.kafka.clients.admin.internals.AdminMetadataManager;
-import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor;
+import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.Assignment;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
 import org.apache.kafka.common.Cluster;
@@ -2724,7 +2724,7 @@ public class KafkaAdminClient extends AdminClient {
                     for (DescribedGroupMember groupMember : members) {
                         Set<TopicPartition> partitions = Collections.emptySet();
                         if (groupMember.memberAssignment().length > 0) {
-                            final ConsumerPartitionAssignor.Assignment assignment = ConsumerProtocol.
+                            final Assignment assignment = ConsumerProtocol.
                                 deserializeAssignment(ByteBuffer.wrap(groupMember.memberAssignment()));
                             partitions = new HashSet<>(assignment.partitions());
                         }
