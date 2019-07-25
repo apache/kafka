@@ -663,12 +663,13 @@ class KafkaApisTest {
       anyObject()
     ))
 
-    createKafkaApis().handleLeaveGroupRequest(
-      buildRequest(
-        new LeaveGroupRequest.Builder(
-          groupId,
-          leaveMemberList.asJava)
-      )._2)
+    val (_, leaveRequest) = buildRequest(
+      new LeaveGroupRequest.Builder(
+        groupId,
+        leaveMemberList.asJava)
+    )
+
+    createKafkaApis().handleLeaveGroupRequest(leaveRequest)
 
     EasyMock.replay(groupCoordinator)
   }
@@ -689,12 +690,14 @@ class KafkaApisTest {
       anyObject()
     ))
 
-    createKafkaApis().handleLeaveGroupRequest(
-      buildRequest(
-        new LeaveGroupRequest.Builder(
-          groupId,
-          singleLeaveMember.asJava,
-        ))._2)
+    val (_, leaveRequest) = buildRequest(
+      new LeaveGroupRequest.Builder(
+        groupId,
+        singleLeaveMember.asJava)
+    )
+
+    createKafkaApis().handleLeaveGroupRequest(leaveRequest)
+
     EasyMock.replay(groupCoordinator)
   }
 
