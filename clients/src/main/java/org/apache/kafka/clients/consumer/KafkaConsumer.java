@@ -770,12 +770,17 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                     ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG,
                     PartitionAssignor.class);
 
+            final ConsumerHeartbeatDataCallbacks heartbeatDataCallbacks = config.getConfiguredInstance(
+                ConsumerConfig.HEARTBEAT_CALLBACK_CONFIG,
+                ConsumerHeartbeatDataCallbacks.class);
+
             // no coordinator will be constructed for the default (null) group id
             this.coordinator = groupId == null ? null :
                 new ConsumerCoordinator(groupRebalanceConfig,
                         logContext,
                         this.client,
                         assignors,
+                        heartbeatDataCallbacks,
                         this.metadata,
                         this.subscriptions,
                         metrics,

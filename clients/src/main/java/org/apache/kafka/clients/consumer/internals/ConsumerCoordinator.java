@@ -18,6 +18,7 @@ package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.GroupRebalanceConfig;
 import org.apache.kafka.clients.consumer.CommitFailedException;
+import org.apache.kafka.clients.consumer.ConsumerHeartbeatDataCallbacks;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetCommitCallback;
@@ -129,6 +130,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                                LogContext logContext,
                                ConsumerNetworkClient client,
                                List<PartitionAssignor> assignors,
+                               ConsumerHeartbeatDataCallbacks heartbeatDataCallbacks,
                                ConsumerMetadata metadata,
                                SubscriptionState subscriptions,
                                Metrics metrics,
@@ -140,6 +142,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         super(rebalanceConfig,
               logContext,
               client,
+              heartbeatDataCallbacks,
               metrics,
               metricGrpPrefix,
               time);

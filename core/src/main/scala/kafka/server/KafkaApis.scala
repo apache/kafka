@@ -1511,12 +1511,14 @@ class KafkaApis(val requestChannel: RequestChannel,
     val heartbeatRequest = request.body[HeartbeatRequest]
 
     // the callback for sending a heartbeat response
-    def sendResponseCallback(error: Errors) {
+    def sendResponseCallback(error: Errors, userDatasForLeader: Option[Map[String, Array[Byte]]]) {
       def createResponse(requestThrottleMs: Int): AbstractResponse = {
         val response = new HeartbeatResponse(
             new HeartbeatResponseData()
               .setThrottleTimeMs(requestThrottleMs)
-              .setErrorCode(error.code))
+              .setErrorCode(error.code)
+              .setUserDatas(HeartbeatUserData.serializeUserDatas(scala.collection.JavaConverters.mapAsJavaMap(userDatasForLeader.orNull)))
+        )
         trace("Sending heartbeat response %s for correlation id %d to client %s."
           .format(response, request.header.correlationId, request.header.clientId))
         response
@@ -1528,7 +1530,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       // Only enable static membership when IBP >= 2.3, because it is not safe for the broker to use the static member logic
       // until we are sure that all brokers support it. If static group being loaded by an older coordinator, it will discard
       // the group.instance.id field, so static members could accidentally become "dynamic", which leads to wrong states.
-      sendResponseCallback(Errors.UNSUPPORTED_VERSION)
+      sendResponseCallback(Errors.UNSUPPORTED_VERSION, None)
     } else if (!authorize(request.session, Read, Resource(Group, heartbeatRequest.data.groupId, LITERAL))) {
       sendResponseMaybeThrottle(request, requestThrottleMs =>
         new HeartbeatResponse(
@@ -1541,6 +1543,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         heartbeatRequest.data.groupId,
         heartbeatRequest.data.memberId,
         Option(heartbeatRequest.data.groupInstanceId),
+        Option(heartbeatRequest.data.userData),
         heartbeatRequest.data.generationId,
         sendResponseCallback)
     }

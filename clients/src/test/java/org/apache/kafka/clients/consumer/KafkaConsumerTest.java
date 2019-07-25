@@ -1906,6 +1906,7 @@ public class KafkaConsumerTest {
                                                                           loggerFactory,
                                                                           consumerClient,
                                                                           assignors,
+                                                                          null,
                                                                           metadata,
                                                                           subscription,
                                                                           metrics,

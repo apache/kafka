@@ -17,6 +17,7 @@
 
 package kafka.coordinator.group
 
+import java.nio.ByteBuffer
 import java.util.concurrent.{ConcurrentHashMap, TimeUnit}
 
 import kafka.common.OffsetAndMetadata
@@ -194,12 +195,12 @@ class GroupCoordinatorConcurrencyTest extends AbstractCoordinatorConcurrencyTest
 
   class HeartbeatOperation extends GroupOperation[HeartbeatCallbackParams, HeartbeatCallback] {
     override def responseCallback(responsePromise: Promise[HeartbeatCallbackParams]): HeartbeatCallback = {
-      val callback: HeartbeatCallback = error => responsePromise.success(error)
+      val callback: HeartbeatCallback = (error, _) => responsePromise.success(error)
       callback
     }
     override def runWithCallback(member: GroupMember, responseCallback: HeartbeatCallback): Unit = {
       groupCoordinator.handleHeartbeat(member.groupId, member.memberId,
-        member.groupInstanceId, member.generationId, responseCallback)
+        member.groupInstanceId, None, member.generationId, responseCallback)
     }
     override def awaitAndVerify(member: GroupMember): Unit = {
        val error = await(member, DefaultSessionTimeout)
@@ -282,7 +283,7 @@ object GroupCoordinatorConcurrencyTest {
   type SyncGroupCallbackParams = (Array[Byte], Errors)
   type SyncGroupCallback = SyncGroupResult => Unit
   type HeartbeatCallbackParams = Errors
-  type HeartbeatCallback = Errors => Unit
+  type HeartbeatCallback = (Errors, Option[Map[String, Array[Byte]]]) => Unit
   type CommitOffsetCallbackParams = Map[TopicPartition, Errors]
   type CommitOffsetCallback = Map[TopicPartition, Errors] => Unit
   type LeaveGroupCallbackParams = Errors

@@ -16,6 +16,7 @@
  */
 package kafka.coordinator.group
 
+import java.nio.ByteBuffer
 import java.util.Properties
 import java.util.concurrent.atomic.AtomicBoolean
 
@@ -186,7 +187,7 @@ class GroupCoordinator(val brokerId: Int,
           val member = group.replaceGroupInstance(oldMemberId, newMemberId, groupInstanceId)
           // Heartbeat of old member id will expire without effect since the group no longer contains that member id.
           // New heartbeat shall be scheduled with new member id.
-          completeAndScheduleNextHeartbeatExpiration(group, member)
+          completeAndScheduleNextHeartbeatExpiration(group, member, null)
 
           val knownStaticMember = group.get(newMemberId)
           group.updateMember(knownStaticMember, protocols, responseCallback)
@@ -229,7 +230,7 @@ class GroupCoordinator(val brokerId: Int,
       }
     }
   }
-  
+
   private def doJoinGroup(group: GroupMetadata,
                           memberId: String,
                           groupInstanceId: Option[String],
@@ -410,7 +411,7 @@ class GroupCoordinator(val brokerId: Int,
             // if the group is stable, we just return the current assignment
             val memberMetadata = group.get(memberId)
             responseCallback(SyncGroupResult(memberMetadata.assignment, Errors.NONE))
-            completeAndScheduleNextHeartbeatExpiration(group, group.get(memberId))
+            completeAndScheduleNextHeartbeatExpiration(group, group.get(memberId), null)
 
           case Dead =>
             throw new IllegalStateException(s"Reached unexpected condition for Dead group ${group.groupId}")
@@ -497,20 +498,21 @@ class GroupCoordinator(val brokerId: Int,
   def handleHeartbeat(groupId: String,
                       memberId: String,
                       groupInstanceId: Option[String],
+                      userData: Option[Array[Byte]],
                       generationId: Int,
-                      responseCallback: Errors => Unit) {
+                      responseCallback: (Errors, Option[Map[String, Array[Byte]]])=> Unit) {
     validateGroupStatus(groupId, ApiKeys.HEARTBEAT).foreach { error =>
       if (error == Errors.COORDINATOR_LOAD_IN_PROGRESS)
         // the group is still loading, so respond just blindly
-        responseCallback(Errors.NONE)
+        responseCallback(Errors.NONE, None)
       else
-        responseCallback(error)
+        responseCallback(error, None)
       return
     }
 
     groupManager.getGroup(groupId) match {
       case None =>
-        responseCallback(Errors.UNKNOWN_MEMBER_ID)
+        responseCallback(Errors.UNKNOWN_MEMBER_ID, None)
 
       case Some(group) => group.inLock {
         if (group.is(Dead)) {
@@ -518,30 +520,39 @@ class GroupCoordinator(val brokerId: Int,
           // from the coordinator metadata; this is likely that the group has migrated to some other
           // coordinator OR the group is in a transient unstable phase. Let the member retry
           // finding the correct coordinator and rejoin.
-          responseCallback(Errors.COORDINATOR_NOT_AVAILABLE)
+          responseCallback(Errors.COORDINATOR_NOT_AVAILABLE, None)
         } else if (group.isStaticMemberFenced(memberId, groupInstanceId)) {
-          responseCallback(Errors.FENCED_INSTANCE_ID)
+          responseCallback(Errors.FENCED_INSTANCE_ID, None)
         } else if (!group.has(memberId)) {
-          responseCallback(Errors.UNKNOWN_MEMBER_ID)
+          responseCallback(Errors.UNKNOWN_MEMBER_ID, None)
         } else if (generationId != group.generationId) {
-          responseCallback(Errors.ILLEGAL_GENERATION)
+          responseCallback(Errors.ILLEGAL_GENERATION, None)
         } else {
           group.currentState match {
             case Empty =>
-              responseCallback(Errors.UNKNOWN_MEMBER_ID)
+              responseCallback(Errors.UNKNOWN_MEMBER_ID, None)
 
             case CompletingRebalance =>
-                responseCallback(Errors.REBALANCE_IN_PROGRESS)
+                responseCallback(Errors.REBALANCE_IN_PROGRESS, None)
 
             case PreparingRebalance =>
                 val member = group.get(memberId)
-                completeAndScheduleNextHeartbeatExpiration(group, member)
-                responseCallback(Errors.REBALANCE_IN_PROGRESS)
+                completeAndScheduleNextHeartbeatExpiration(group, member, userData.orNull)
+                responseCallback(Errors.REBALANCE_IN_PROGRESS, None)
 
             case Stable =>
                 val member = group.get(memberId)
-                completeAndScheduleNextHeartbeatExpiration(group, member)
-                responseCallback(Errors.NONE)
+                completeAndScheduleNextHeartbeatExpiration(group, member, userData.orNull)
+                if (group.isLeader(memberId)) {
+                  val heartBeatDatas: Map[String, Array[Byte]] =
+                    group.allMemberMetadata
+                      .filter(meta => meta.lastHeartbeatUserData != null)
+                      .map(meta => meta.memberId -> meta.lastHeartbeatUserData)
+                      .toMap
+                  responseCallback(Errors.NONE, Some(heartBeatDatas))
+                } else {
+                  responseCallback(Errors.NONE, None)
+                }
 
             case Dead =>
               throw new IllegalStateException(s"Reached unexpected condition for Dead group $groupId")
@@ -633,7 +644,7 @@ class GroupCoordinator(val brokerId: Int,
             // During PreparingRebalance phase, we still allow a commit request since we rely
             // on heartbeat response to eventually notify the rebalance in progress signal to the consumer
             val member = group.get(memberId)
-            completeAndScheduleNextHeartbeatExpiration(group, member)
+            completeAndScheduleNextHeartbeatExpiration(group, member, null)
             groupManager.storeOffsets(group, memberId, offsetMetadata, responseCallback)
 
           case CompletingRebalance =>
@@ -752,7 +763,7 @@ class GroupCoordinator(val brokerId: Int,
         prepareRebalance(group, s"Freshly-loaded group is over capacity ($groupConfig.groupMaxSize). Rebalacing in order to give a chance for consumers to commit offsets")
       }
 
-      group.allMemberMetadata.foreach(completeAndScheduleNextHeartbeatExpiration(group, _))
+      group.allMemberMetadata.foreach(completeAndScheduleNextHeartbeatExpiration(group, _, null))
     }
   }
 
@@ -783,7 +794,7 @@ class GroupCoordinator(val brokerId: Int,
         // This is because if any member's session expired while we were still awaiting either
         // the leader sync group or the storage callback, its expiration will be ignored and no
         // future heartbeat expectations will not be scheduled.
-        completeAndScheduleNextHeartbeatExpiration(group, member)
+        completeAndScheduleNextHeartbeatExpiration(group, member, null)
       }
     }
   }
@@ -791,13 +802,14 @@ class GroupCoordinator(val brokerId: Int,
   /**
    * Complete existing DelayedHeartbeats for the given member and schedule the next one
    */
-  private def completeAndScheduleNextHeartbeatExpiration(group: GroupMetadata, member: MemberMetadata) {
-    completeAndScheduleNextExpiration(group, member, member.sessionTimeoutMs)
+  private def completeAndScheduleNextHeartbeatExpiration(group: GroupMetadata, member: MemberMetadata, userData: Array[Byte]) {
+    completeAndScheduleNextExpiration(group, member, member.sessionTimeoutMs, userData)
   }
 
-  private def completeAndScheduleNextExpiration(group: GroupMetadata, member: MemberMetadata, timeoutMs: Long) {
+  private def completeAndScheduleNextExpiration(group: GroupMetadata, member: MemberMetadata, timeoutMs: Long, userData: Array[Byte]) {
     // complete current heartbeat expectation
     member.latestHeartbeat = time.milliseconds()
+    member.lastHeartbeatUserData = userData
     val memberKey = MemberKey(member.groupId, member.memberId)
     heartbeatPurgatory.checkAndComplete(memberKey)
 
@@ -851,7 +863,7 @@ class GroupCoordinator(val brokerId: Int,
     // timeout during a long rebalance), they may simply retry which will lead to a lot of defunct
     // members in the rebalance. To prevent this going on indefinitely, we timeout JoinGroup requests
     // for new members. If the new member is still there, we expect it to retry.
-    completeAndScheduleNextExpiration(group, member, NewMemberJoinTimeoutMs)
+    completeAndScheduleNextExpiration(group, member, NewMemberJoinTimeoutMs, null)
 
     if (member.isStaticMember)
       group.addStaticMember(groupInstanceId, memberId)
@@ -988,7 +1000,7 @@ class GroupCoordinator(val brokerId: Int,
               error = Errors.NONE)
 
             group.maybeInvokeJoinCallback(member, joinResult)
-            completeAndScheduleNextHeartbeatExpiration(group, member)
+            completeAndScheduleNextHeartbeatExpiration(group, member, null)
             member.isNew = false
           }
         }

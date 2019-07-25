@@ -2333,6 +2333,7 @@ public class ConsumerCoordinatorTest {
                 new LogContext(),
                 consumerClient,
                 assignors,
+                null,
                 metadata,
                 subscriptions,
                 metrics,

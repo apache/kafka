@@ -18,6 +18,7 @@ package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.GroupRebalanceConfig;
+import org.apache.kafka.clients.consumer.ConsumerHeartbeatDataCallbacks;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.errors.AuthenticationException;
@@ -33,6 +34,7 @@ import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.common.message.FindCoordinatorRequestData;
 import org.apache.kafka.common.message.HeartbeatRequestData;
+import org.apache.kafka.common.message.HeartbeatResponseData;
 import org.apache.kafka.common.message.JoinGroupRequestData;
 import org.apache.kafka.common.message.JoinGroupResponseData;
 import org.apache.kafka.common.message.LeaveGroupRequestData;
@@ -51,6 +53,7 @@ import org.apache.kafka.common.requests.FindCoordinatorRequest.CoordinatorType;
 import org.apache.kafka.common.requests.FindCoordinatorResponse;
 import org.apache.kafka.common.requests.HeartbeatRequest;
 import org.apache.kafka.common.requests.HeartbeatResponse;
+import org.apache.kafka.common.requests.HeartbeatUserData;
 import org.apache.kafka.common.requests.JoinGroupRequest;
 import org.apache.kafka.common.requests.JoinGroupResponse;
 import org.apache.kafka.common.requests.LeaveGroupRequest;
@@ -58,6 +61,7 @@ import org.apache.kafka.common.requests.LeaveGroupResponse;
 import org.apache.kafka.common.requests.OffsetCommitRequest;
 import org.apache.kafka.common.requests.SyncGroupRequest;
 import org.apache.kafka.common.requests.SyncGroupResponse;
+import org.apache.kafka.common.serialization.ByteBufferSerializer;
 import org.apache.kafka.common.utils.KafkaThread;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
@@ -67,6 +71,7 @@ import org.slf4j.Logger;
 
 import java.io.Closeable;
 import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -106,6 +111,7 @@ import java.util.concurrent.atomic.AtomicReference;
  */
 public abstract class AbstractCoordinator implements Closeable {
     public static final String HEARTBEAT_THREAD_PREFIX = "kafka-coordinator-heartbeat-thread";
+    private ConsumerHeartbeatDataCallbacks consumerHeartbeatDataCallbacks;
 
     private enum MemberState {
         UNJOINED,    // the client is not part of a group
@@ -144,6 +150,28 @@ public abstract class AbstractCoordinator implements Closeable {
         this.rebalanceConfig = rebalanceConfig;
         this.log = logContext.logger(AbstractCoordinator.class);
         this.client = client;
+        this.consumerHeartbeatDataCallbacks = null;
+        this.time = time;
+        this.heartbeat = new Heartbeat(rebalanceConfig, time);
+        this.sensors = new GroupCoordinatorMetrics(metrics, metricGrpPrefix);
+    }
+
+    /**
+     * Initialize the coordination manager.
+     */
+    public AbstractCoordinator(GroupRebalanceConfig rebalanceConfig,
+                               LogContext logContext,
+                               ConsumerNetworkClient client,
+                               ConsumerHeartbeatDataCallbacks heartbeatDataCallbacks,
+                               Metrics metrics,
+                               String metricGrpPrefix,
+                               Time time) {
+        Objects.requireNonNull(rebalanceConfig.groupId,
+                               "Expected a non-null group id for coordinator construction");
+        this.rebalanceConfig = rebalanceConfig;
+        this.log = logContext.logger(AbstractCoordinator.class);
+        this.client = client;
+        this.consumerHeartbeatDataCallbacks = heartbeatDataCallbacks;
         this.time = time;
         this.heartbeat = new Heartbeat(rebalanceConfig, time);
         this.sensors = new GroupCoordinatorMetrics(metrics, metricGrpPrefix);
@@ -889,9 +917,15 @@ public abstract class AbstractCoordinator implements Closeable {
                         .setGroupId(rebalanceConfig.groupId)
                         .setMemberId(this.generation.memberId)
                         .setGroupInstanceId(this.rebalanceConfig.groupInstanceId.orElse(null))
-                        .setGenerationId(this.generation.generationId));
+                        .setGenerationId(this.generation.generationId)
+                        .setUserData(HeartbeatUserData.serializeOneUserData(getHeartbeatData()))
+                );
         return client.send(coordinator, requestBuilder)
                 .compose(new HeartbeatResponseHandler());
+    }
+
+    private ByteBuffer getHeartbeatData() {
+        return consumerHeartbeatDataCallbacks == null ? null : consumerHeartbeatDataCallbacks.memberUserData();
     }
 
     private class HeartbeatResponseHandler extends CoordinatorResponseHandler<HeartbeatResponse, Void> {
@@ -901,6 +935,19 @@ public abstract class AbstractCoordinator implements Closeable {
             Errors error = heartbeatResponse.error();
             if (error == Errors.NONE) {
                 log.debug("Received successful Heartbeat response");
+                final Map<String, ByteBuffer> datas = heartbeatResponse.userDatas();
+                if (datas != null && consumerHeartbeatDataCallbacks != null) {
+                    final ConsumerHeartbeatDataCallbacks.GroupHealth health = consumerHeartbeatDataCallbacks.leaderAllMemberUserDatas(datas);
+                    if (health == ConsumerHeartbeatDataCallbacks.GroupHealth.HEALTHY) {
+                        future.complete(null);
+                    } else {
+                        log.info("Group has become unhealthy. Rejoining to cause a rebalance.");
+                        requestRejoin();
+                        future.raise(new RuntimeException("Group has become unhealthy."));
+                    }
+                } else {
+                    future.complete(null);
+                }
                 future.complete(null);
             } else if (error == Errors.COORDINATOR_NOT_AVAILABLE
                     || error == Errors.NOT_COORDINATOR) {
