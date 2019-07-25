@@ -432,7 +432,7 @@ public class ProcessorContextImplTest {
         return timestampedKeyValueStoreMock;
     }
 
-    @SuppressWarnings({"unchecked","deprecation"})
+    @SuppressWarnings({"unchecked", "deprecation"})
     private WindowStore<String, Long> windowStoreMock() {
         final WindowStore<String, Long> windowStore = mock(WindowStore.class);
 
@@ -455,7 +455,7 @@ public class ProcessorContextImplTest {
         return windowStore;
     }
 
-    @SuppressWarnings({"unchecked","deprecation"})
+    @SuppressWarnings({"unchecked", "deprecation"})
     private TimestampedWindowStore<String, Long> timestampedWindowStoreMock() {
         final TimestampedWindowStore<String, Long> windowStore = mock(TimestampedWindowStore.class);
 
