@@ -16,42 +16,83 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
-import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertThrows;
+import static org.junit.Assert.assertTrue;
 
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
 import java.util.Set;
+import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor;
+import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.StickyAssignor;
 import org.apache.kafka.common.Cluster;
+import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.serialization.StringDeserializer;
 import org.junit.Test;
 
 public class PartitionAssignorAdapterTest {
 
     private List<String> classNames;
+    private List<Object> classTypes;
+
+    private Class<StickyAssignor> assignorClass = StickyAssignor.class;
+    private Class<PartitionAssignorAdapter> adapterClass = PartitionAssignorAdapter.class;
 
     @Test
     public void shouldInstantiateNewAssignors() {
         classNames = Arrays.asList(StickyAssignor.class.getName());
         List<ConsumerPartitionAssignor> assignors = PartitionAssignorAdapter.getAssignorInstances(classNames);
-        assertFalse(assignors.isEmpty());
+        assertTrue(assignorClass.isInstance(assignors.get(0)));
     }
 
     @Test
     public void shouldAdaptOldAssignors() {
         classNames = Arrays.asList(OldPartitionAssignor.class.getName());
         List<ConsumerPartitionAssignor> assignors = PartitionAssignorAdapter.getAssignorInstances(classNames);
-        assertFalse(assignors.isEmpty());
+        assertTrue(adapterClass.isInstance(assignors.get(0)));
     }
 
     @Test
-    public void shouldThrowOnNonAssignor() {
+    public void shouldThrowClassCastExceptionOnNonAssignor() {
         classNames = Arrays.asList(NotAnAssignor.class.getName());
         assertThrows(ClassCastException.class, () -> PartitionAssignorAdapter.getAssignorInstances(classNames));
+    }
+
+    @Test
+    public void shouldThrowKafkaExceptionOnAssignorNotFound() {
+        classNames = Arrays.asList("Non-existent assignor");
+        assertThrows(KafkaException.class, () -> PartitionAssignorAdapter.getAssignorInstances(classNames));
+    }
+
+    @Test
+    public void shouldInstantiateFromListOfOldAndNewClassTypes() {
+        Properties props = new Properties();
+        props.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
+
+        classTypes = Arrays.asList(StickyAssignor.class, OldPartitionAssignor.class);
+
+        props.put(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG, classTypes);
+        KafkaConsumer<String, String> consumer = new KafkaConsumer<>(
+            props, new StringDeserializer(), new StringDeserializer());
+
+        consumer.close();
+    }
+
+    @Test
+    public void shouldThrowKafkaExceptionOnListWithNonAssignorClassType() {
+        Properties props = new Properties();
+        props.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
+
+        classTypes = Arrays.asList(StickyAssignor.class, OldPartitionAssignor.class, NotAnAssignor.class);
+
+        props.put(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG, classTypes);
+        assertThrows(KafkaException.class, () -> new KafkaConsumer<>(
+            props, new StringDeserializer(), new StringDeserializer()));
     }
 
     @SuppressWarnings("deprecation")
