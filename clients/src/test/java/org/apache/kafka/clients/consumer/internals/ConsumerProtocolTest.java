@@ -53,7 +53,7 @@ public class ConsumerProtocolTest {
 
     @Test
     public void serializeDeserializeMetadata() {
-        Subscription subscription = new Subscription(Arrays.asList("foo", "bar"));
+        Subscription subscription = new Subscription(Arrays.asList("foo", "bar"), ByteBuffer.wrap(new byte[0]));
         ByteBuffer buffer = ConsumerProtocol.serializeSubscription(subscription);
         Subscription parsedSubscription = ConsumerProtocol.deserializeSubscription(buffer);
         assertEquals(subscription.topics(), parsedSubscription.topics());
@@ -63,7 +63,7 @@ public class ConsumerProtocolTest {
 
     @Test
     public void serializeDeserializeMetadataAndGroupInstanceId() {
-        Subscription subscription = new Subscription(Arrays.asList("foo", "bar"));
+        Subscription subscription = new Subscription(Arrays.asList("foo", "bar"), ByteBuffer.wrap(new byte[0]));
         ByteBuffer buffer = ConsumerProtocol.serializeSubscription(subscription);
 
         Subscription parsedSubscription = ConsumerProtocol.deserializeSubscription(buffer);
@@ -144,7 +144,7 @@ public class ConsumerProtocolTest {
     @Test
     public void serializeDeserializeAssignment() {
         List<TopicPartition> partitions = Arrays.asList(tp1, tp2);
-        ByteBuffer buffer = ConsumerProtocol.serializeAssignment(new Assignment(partitions));
+        ByteBuffer buffer = ConsumerProtocol.serializeAssignment(new Assignment(partitions, ByteBuffer.wrap(new byte[0])));
         Assignment parsedAssignment = ConsumerProtocol.deserializeAssignment(buffer);
         assertEquals(toSet(partitions), toSet(parsedAssignment.partitions()));
         assertEquals(0, parsedAssignment.userData().limit());
