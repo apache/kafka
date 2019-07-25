@@ -27,9 +27,9 @@ import java.util.List;
 import java.util.Locale;
 
 /**
- * An MBean to control log levels of lo4j loggers.
+ * An MBean to control log levels of log4j loggers.
  *
- * <p />Note: The changes made by this rest extension are not persisted across worker restarts.
+ * <p />Note: The changes made by this MBean are not persisted across worker restarts.
  */
 public class Log4jController implements Log4jControllerMBean {
 
@@ -49,11 +49,6 @@ public class Log4jController implements Log4jControllerMBean {
         return logLevels;
     }
 
-    /**
-     * get the log level of a logger given its name.
-     * @param name name of the logger whose logging level is desired
-     * @return the logging level (the effective level is returned if the immediate level of this logger is not set).
-     */
     @Override
     public String getLogLevel(String name) {
         if (name.trim().isEmpty()) {
@@ -69,12 +64,6 @@ public class Log4jController implements Log4jControllerMBean {
         return String.valueOf(level);
     }
 
-    /**
-     * set the log level of a logger given its name.
-     * @param name name of the logger
-     * @param level the level to be set
-     * @return true, if level was successfully set; false otherwise.
-     */
     @Override
     public Boolean setLogLevel(String name, String level) {
         if (name.trim().isEmpty() || level.trim().isEmpty()) {

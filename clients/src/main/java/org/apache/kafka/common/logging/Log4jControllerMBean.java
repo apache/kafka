@@ -18,12 +18,29 @@ package org.apache.kafka.common.logging;
 
 import java.util.List;
 
+/**
+ * An MBean that allows the user to dynamically alter log4j levels at runtime.
+ */
 public interface Log4jControllerMBean {
 
+    /**
+     * @return a list of all registered loggers
+     */
     List<String> getLoggers();
 
+    /**
+     * get the log level of a logger given its name.
+     * @param logger name of the logger whose logging level is desired
+     * @return the logging level (the effective level is returned if the immediate level of this logger is not set).
+     */
     String getLogLevel(String logger);
 
+    /**
+     * set the log level of a logger given its name.
+     * @param logger name of the logger
+     * @param level the level to be set
+     * @return true, if level was successfully set; false otherwise.
+     */
     Boolean setLogLevel(String logger, String level);
 
 }

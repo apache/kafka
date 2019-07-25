@@ -39,8 +39,10 @@ public class LogLevelManager {
 
         try {
             Object mbean = new Log4jController();
-            ObjectName objName = new ObjectName(String.format("%s:type=%s.Log4jController", applicationName, applicationName));
+            String name = String.format("%s:type=Log4jController", applicationName);
+            ObjectName objName = new ObjectName(name);
             ManagementFactory.getPlatformMBeanServer().registerMBean(mbean, objName);
+            log.info("Registered {} MBean", name);
         } catch (Exception e) {
             log.error("Could not register mbean for application" + applicationName, e);
         }
