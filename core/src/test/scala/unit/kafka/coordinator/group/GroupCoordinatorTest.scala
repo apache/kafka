@@ -874,6 +874,22 @@ class GroupCoordinatorTest {
   }
 
   @Test
+  def shouldGetDifferentStaticMemberIdBasedOnTimestamp() {
+    staticMembersJoinAndRebalance(leaderInstanceId, followerInstanceId)
+
+    val timeAdvance = 1
+    for (_ <- 1 to 20) {
+      EasyMock.reset(replicaManager)
+
+      val joinGroupResult = staticJoinGroup(groupId, JoinGroupRequest.UNKNOWN_MEMBER_ID,
+        leaderInstanceId, protocolType, protocols, clockAdvance = timeAdvance)
+      val joinTimeAsStr = (timer.time.milliseconds() - timeAdvance).toString
+      assertTrue(joinGroupResult.memberId.startsWith(leaderInstanceId.get))
+      assertTrue(joinGroupResult.memberId.contains(joinTimeAsStr))
+    }
+  }
+
+  @Test
   def testOffsetCommitDeadGroup() {
     val memberId = "memberId"
 
