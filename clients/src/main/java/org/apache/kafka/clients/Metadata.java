@@ -35,6 +35,7 @@ import org.slf4j.Logger;
 import java.io.Closeable;
 import java.net.InetSocketAddress;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -44,6 +45,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
+import java.util.function.Supplier;
 
 /**
  * A class encapsulating some of the logic around metadata.
@@ -66,7 +68,8 @@ public class Metadata implements Closeable {
     private long lastRefreshMs;
     private long lastSuccessfulRefreshMs;
     private KafkaException fatalException;
-    private KafkaException recoverableException;
+    private Set<String> invalidTopics;
+    private Set<String> unauthorizedTopics;
     private MetadataCache cache = MetadataCache.empty();
     private boolean needUpdate;
     private final ClusterResourceListeners clusterResourceListeners;
@@ -97,6 +100,8 @@ public class Metadata implements Closeable {
         this.clusterResourceListeners = clusterResourceListeners;
         this.isClosed = false;
         this.lastSeenLeaderEpochs = new HashMap<>();
+        this.invalidTopics = Collections.emptySet();
+        this.unauthorizedTopics = Collections.emptySet();
     }
 
     /**
@@ -204,16 +209,6 @@ public class Metadata implements Closeable {
         }
     }
 
-    /**
-     * If any non-retriable exceptions were encountered during metadata update, clear and return the exception.
-     */
-    public synchronized KafkaException getAndClearMetadataException() {
-        KafkaException metadataException = Optional.ofNullable(fatalException).orElse(recoverableException);
-        fatalException = null;
-        recoverableException = null;
-        return metadataException;
-    }
-
     public synchronized void bootstrap(List<InetSocketAddress> addresses, long now) {
         this.needUpdate = true;
         this.lastRefreshMs = now;
@@ -271,8 +266,7 @@ public class Metadata implements Closeable {
     }
 
     private void maybeSetMetadataError(Cluster cluster) {
-        // if we encounter any invalid topics, cache the exception to later throw to the user
-        recoverableException = null;
+        clearRecoverableErrors();
         checkInvalidTopics(cluster);
         checkUnauthorizedTopics(cluster);
     }
@@ -280,16 +274,14 @@ public class Metadata implements Closeable {
     private void checkInvalidTopics(Cluster cluster) {
         if (!cluster.invalidTopics().isEmpty()) {
             log.error("Metadata response reported invalid topics {}", cluster.invalidTopics());
-            // We may be able to recover from this exception if metadata for this topic is no longer needed
-            recoverableException = new InvalidTopicException(cluster.invalidTopics());
+            invalidTopics = new HashSet<>(cluster.invalidTopics());
         }
     }
 
     private void checkUnauthorizedTopics(Cluster cluster) {
         if (!cluster.unauthorizedTopics().isEmpty()) {
             log.error("Topic authorization failed for topics {}", cluster.unauthorizedTopics());
-            // We may be able to recover from this exception if metadata for this topic is no longer needed
-            recoverableException = new TopicAuthorizationException(new HashSet<>(cluster.unauthorizedTopics()));
+            unauthorizedTopics = new HashSet<>(cluster.unauthorizedTopics());
         }
     }
 
@@ -360,10 +352,67 @@ public class Metadata implements Closeable {
         }
     }
 
-    public synchronized void maybeThrowException() {
-        KafkaException metadataException = getAndClearMetadataException();
+    /**
+     * If any non-retriable exceptions were encountered during metadata update, clear and throw the exception.
+     * This is used by the consumer to propagate any fatal exceptions or topic exceptions for any of the topics
+     * in the consumer's Metadata.
+     */
+    public synchronized void maybeThrowAnyException() {
+        clearErrorsAndMaybeThrowException(this::recoverableException);
+    }
+
+    /**
+     * If any fatal exceptions were encountered during metadata update, throw the exception. This is used by
+     * the producer to abort waiting for metadata if there were fatal exceptions (e.g. authentication failures)
+     * in the last metadata update.
+     */
+    public synchronized void maybeThrowFatalException() {
+        KafkaException metadataException = this.fatalException;
+        if (metadataException != null) {
+            fatalException = null;
+            throw metadataException;
+        }
+    }
+
+    /**
+     * If any non-retriable exceptions were encountered during metadata update, throw exception if the exception
+     * is fatal or related to the specified topic. All exceptions from the last metadata update are cleared.
+     * This is used by the producer to propagate topic metadata errors for send requests.
+     */
+    public synchronized void maybeThrowExceptionForTopic(String topic) {
+        clearErrorsAndMaybeThrowException(() -> recoverableExceptionForTopic(topic));
+    }
+
+    private void clearErrorsAndMaybeThrowException(Supplier<KafkaException> recoverableExceptionSupplier) {
+        KafkaException metadataException = Optional.ofNullable(fatalException).orElseGet(recoverableExceptionSupplier);
+        fatalException = null;
+        clearRecoverableErrors();
         if (metadataException != null)
             throw metadataException;
+    }
+
+    // We may be able to recover from this exception if metadata for this topic is no longer needed
+    private KafkaException recoverableException() {
+        if (!unauthorizedTopics.isEmpty())
+            return new TopicAuthorizationException(unauthorizedTopics);
+        else if (!invalidTopics.isEmpty())
+            return new InvalidTopicException(invalidTopics);
+        else
+            return null;
+    }
+
+    private KafkaException recoverableExceptionForTopic(String topic) {
+        if (unauthorizedTopics.contains(topic))
+            return new TopicAuthorizationException(Collections.singleton(topic));
+        else if (invalidTopics.contains(topic))
+            return new InvalidTopicException(Collections.singleton(topic));
+        else
+            return null;
+    }
+
+    private void clearRecoverableErrors() {
+        invalidTopics = Collections.emptySet();
+        unauthorizedTopics = Collections.emptySet();
     }
 
     /**

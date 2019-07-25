@@ -26,6 +26,7 @@ import kafka.zk.ZooKeeperTestHarness
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.junit.{After, Before}
 
+import scala.collection.Seq
 import scala.collection.mutable.{ArrayBuffer, Buffer}
 import java.util.Properties
 

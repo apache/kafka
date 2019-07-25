@@ -18,7 +18,7 @@ package org.apache.kafka.common.metrics;
 
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.metrics.stats.Avg;
-import org.apache.kafka.common.metrics.stats.Total;
+import org.apache.kafka.common.metrics.stats.CumulativeSum;
 import org.junit.Test;
 
 import javax.management.MBeanServer;
@@ -43,7 +43,7 @@ public class JmxReporterTest {
 
             Sensor sensor = metrics.sensor("kafka.requests");
             sensor.add(metrics.metricName("pack.bean1.avg", "grp1"), new Avg());
-            sensor.add(metrics.metricName("pack.bean2.total", "grp2"), new Total());
+            sensor.add(metrics.metricName("pack.bean2.total", "grp2"), new CumulativeSum());
 
             assertTrue(server.isRegistered(new ObjectName(":type=grp1")));
             assertEquals(Double.NaN, server.getAttribute(new ObjectName(":type=grp1"), "pack.bean1.avg"));
@@ -79,11 +79,11 @@ public class JmxReporterTest {
             metrics.addReporter(new JmxReporter());
 
             Sensor sensor = metrics.sensor("kafka.requests");
-            sensor.add(metrics.metricName("name", "group", "desc", "id", "foo*"), new Total());
-            sensor.add(metrics.metricName("name", "group", "desc", "id", "foo+"), new Total());
-            sensor.add(metrics.metricName("name", "group", "desc", "id", "foo?"), new Total());
-            sensor.add(metrics.metricName("name", "group", "desc", "id", "foo:"), new Total());
-            sensor.add(metrics.metricName("name", "group", "desc", "id", "foo%"), new Total());
+            sensor.add(metrics.metricName("name", "group", "desc", "id", "foo*"), new CumulativeSum());
+            sensor.add(metrics.metricName("name", "group", "desc", "id", "foo+"), new CumulativeSum());
+            sensor.add(metrics.metricName("name", "group", "desc", "id", "foo?"), new CumulativeSum());
+            sensor.add(metrics.metricName("name", "group", "desc", "id", "foo:"), new CumulativeSum());
+            sensor.add(metrics.metricName("name", "group", "desc", "id", "foo%"), new CumulativeSum());
 
             assertTrue(server.isRegistered(new ObjectName(":type=group,id=\"foo\\*\"")));
             assertEquals(0.0, server.getAttribute(new ObjectName(":type=group,id=\"foo\\*\""), "name"));

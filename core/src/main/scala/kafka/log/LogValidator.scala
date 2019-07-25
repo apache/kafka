@@ -26,7 +26,7 @@ import org.apache.kafka.common.errors.{InvalidTimestampException, UnsupportedCom
 import org.apache.kafka.common.record.{AbstractRecords, CompressionType, InvalidRecordException, MemoryRecords, Record, RecordBatch, RecordConversionStats, TimestampType, BufferSupplier}
 import org.apache.kafka.common.utils.Time
 
-import scala.collection.mutable
+import scala.collection.{Seq, mutable}
 import scala.collection.JavaConverters._
 
 private[kafka] object LogValidator extends Logging {

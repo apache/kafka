@@ -146,38 +146,63 @@ class BrokerTopicMetrics(name: Option[String]) extends KafkaMetricsGroup {
     case Some(topic) => Map("topic" -> topic)
   }
 
-  val messagesInRate = newMeter(BrokerTopicStats.MessagesInPerSec, "messages", TimeUnit.SECONDS, tags)
-  val bytesInRate = newMeter(BrokerTopicStats.BytesInPerSec, "bytes", TimeUnit.SECONDS, tags)
-  val bytesOutRate = newMeter(BrokerTopicStats.BytesOutPerSec, "bytes", TimeUnit.SECONDS, tags)
-  val bytesRejectedRate = newMeter(BrokerTopicStats.BytesRejectedPerSec, "bytes", TimeUnit.SECONDS, tags)
-  private[server] val replicationBytesInRate =
-    if (name.isEmpty) Some(newMeter(BrokerTopicStats.ReplicationBytesInPerSec, "bytes", TimeUnit.SECONDS, tags))
+  // an internal map for "lazy initialization" of certain metrics
+  private val metricTypeMap = new Pool[String, Meter]
+
+  def messagesInRate = metricTypeMap.getAndMaybePut(BrokerTopicStats.MessagesInPerSec,
+    newMeter(BrokerTopicStats.MessagesInPerSec, "messages", TimeUnit.SECONDS, tags))
+  def bytesInRate = metricTypeMap.getAndMaybePut(BrokerTopicStats.BytesInPerSec,
+    newMeter(BrokerTopicStats.BytesInPerSec, "bytes", TimeUnit.SECONDS, tags))
+  def bytesOutRate = metricTypeMap.getAndMaybePut(BrokerTopicStats.BytesOutPerSec,
+    newMeter(BrokerTopicStats.BytesOutPerSec, "bytes", TimeUnit.SECONDS, tags))
+  def bytesRejectedRate = metricTypeMap.getAndMaybePut(BrokerTopicStats.BytesRejectedPerSec,
+    newMeter(BrokerTopicStats.BytesRejectedPerSec, "bytes", TimeUnit.SECONDS, tags))
+  private[server] def replicationBytesInRate =
+    if (name.isEmpty) Some(metricTypeMap.getAndMaybePut(
+      BrokerTopicStats.ReplicationBytesInPerSec,
+      newMeter(BrokerTopicStats.ReplicationBytesInPerSec, "bytes", TimeUnit.SECONDS, tags)))
     else None
-  private[server] val replicationBytesOutRate =
-    if (name.isEmpty) Some(newMeter(BrokerTopicStats.ReplicationBytesOutPerSec, "bytes", TimeUnit.SECONDS, tags))
+  private[server] def replicationBytesOutRate =
+    if (name.isEmpty) Some(metricTypeMap.getAndMaybePut(
+      BrokerTopicStats.ReplicationBytesOutPerSec,
+      newMeter(BrokerTopicStats.ReplicationBytesOutPerSec, "bytes", TimeUnit.SECONDS, tags)))
     else None
-  val failedProduceRequestRate = newMeter(BrokerTopicStats.FailedProduceRequestsPerSec, "requests", TimeUnit.SECONDS, tags)
-  val failedFetchRequestRate = newMeter(BrokerTopicStats.FailedFetchRequestsPerSec, "requests", TimeUnit.SECONDS, tags)
-  val totalProduceRequestRate = newMeter(BrokerTopicStats.TotalProduceRequestsPerSec, "requests", TimeUnit.SECONDS, tags)
-  val totalFetchRequestRate = newMeter(BrokerTopicStats.TotalFetchRequestsPerSec, "requests", TimeUnit.SECONDS, tags)
-  val fetchMessageConversionsRate = newMeter(BrokerTopicStats.FetchMessageConversionsPerSec, "requests", TimeUnit.SECONDS, tags)
-  val produceMessageConversionsRate = newMeter(BrokerTopicStats.ProduceMessageConversionsPerSec, "requests", TimeUnit.SECONDS, tags)
+  def failedProduceRequestRate = metricTypeMap.getAndMaybePut(BrokerTopicStats.FailedProduceRequestsPerSec,
+    newMeter(BrokerTopicStats.FailedProduceRequestsPerSec, "requests", TimeUnit.SECONDS, tags))
+  def failedFetchRequestRate = metricTypeMap.getAndMaybePut(BrokerTopicStats.FailedFetchRequestsPerSec,
+    newMeter(BrokerTopicStats.FailedFetchRequestsPerSec, "requests", TimeUnit.SECONDS, tags))
+  def totalProduceRequestRate = metricTypeMap.getAndMaybePut(BrokerTopicStats.TotalProduceRequestsPerSec,
+    newMeter(BrokerTopicStats.TotalProduceRequestsPerSec, "requests", TimeUnit.SECONDS, tags))
+  def totalFetchRequestRate = metricTypeMap.getAndMaybePut(BrokerTopicStats.TotalFetchRequestsPerSec,
+    newMeter(BrokerTopicStats.TotalFetchRequestsPerSec, "requests", TimeUnit.SECONDS, tags))
+  def fetchMessageConversionsRate = metricTypeMap.getAndMaybePut(BrokerTopicStats.FetchMessageConversionsPerSec,
+    newMeter(BrokerTopicStats.FetchMessageConversionsPerSec, "requests", TimeUnit.SECONDS, tags))
+  def produceMessageConversionsRate = metricTypeMap.getAndMaybePut(BrokerTopicStats.ProduceMessageConversionsPerSec,
+    newMeter(BrokerTopicStats.ProduceMessageConversionsPerSec, "requests", TimeUnit.SECONDS, tags))
+
+  // this method helps check with metricTypeMap first before deleting a metric
+  def removeMetricHelper(metricType: String, tags: scala.collection.Map[String, String]): Unit = {
+    val metric: Meter = metricTypeMap.remove(metricType)
+    if (metric != null) {
+      removeMetric(metricType, tags)
+    }
+  }
 
   def close() {
-    removeMetric(BrokerTopicStats.MessagesInPerSec, tags)
-    removeMetric(BrokerTopicStats.BytesInPerSec, tags)
-    removeMetric(BrokerTopicStats.BytesOutPerSec, tags)
-    removeMetric(BrokerTopicStats.BytesRejectedPerSec, tags)
+    removeMetricHelper(BrokerTopicStats.MessagesInPerSec, tags)
+    removeMetricHelper(BrokerTopicStats.BytesInPerSec, tags)
+    removeMetricHelper(BrokerTopicStats.BytesOutPerSec, tags)
+    removeMetricHelper(BrokerTopicStats.BytesRejectedPerSec, tags)
     if (replicationBytesInRate.isDefined)
-      removeMetric(BrokerTopicStats.ReplicationBytesInPerSec, tags)
+      removeMetricHelper(BrokerTopicStats.ReplicationBytesInPerSec, tags)
     if (replicationBytesOutRate.isDefined)
-      removeMetric(BrokerTopicStats.ReplicationBytesOutPerSec, tags)
-    removeMetric(BrokerTopicStats.FailedProduceRequestsPerSec, tags)
-    removeMetric(BrokerTopicStats.FailedFetchRequestsPerSec, tags)
-    removeMetric(BrokerTopicStats.TotalProduceRequestsPerSec, tags)
-    removeMetric(BrokerTopicStats.TotalFetchRequestsPerSec, tags)
-    removeMetric(BrokerTopicStats.FetchMessageConversionsPerSec, tags)
-    removeMetric(BrokerTopicStats.ProduceMessageConversionsPerSec, tags)
+      removeMetricHelper(BrokerTopicStats.ReplicationBytesOutPerSec, tags)
+    removeMetricHelper(BrokerTopicStats.FailedProduceRequestsPerSec, tags)
+    removeMetricHelper(BrokerTopicStats.FailedFetchRequestsPerSec, tags)
+    removeMetricHelper(BrokerTopicStats.TotalProduceRequestsPerSec, tags)
+    removeMetricHelper(BrokerTopicStats.TotalFetchRequestsPerSec, tags)
+    removeMetricHelper(BrokerTopicStats.FetchMessageConversionsPerSec, tags)
+    removeMetricHelper(BrokerTopicStats.ProduceMessageConversionsPerSec, tags)
   }
 }
 
@@ -218,6 +243,27 @@ class BrokerTopicStats {
     }
   }
 
+  // This method only removes metrics only used for leader
+  def removeOldLeaderMetrics(topic: String) {
+    val topicMetrics = topicStats(topic)
+    if (topicMetrics != null) {
+      topicMetrics.removeMetricHelper(BrokerTopicStats.MessagesInPerSec, topicMetrics.tags)
+      topicMetrics.removeMetricHelper(BrokerTopicStats.BytesInPerSec, topicMetrics.tags)
+      topicMetrics.removeMetricHelper(BrokerTopicStats.BytesRejectedPerSec, topicMetrics.tags)
+      topicMetrics.removeMetricHelper(BrokerTopicStats.FailedProduceRequestsPerSec, topicMetrics.tags)
+      topicMetrics.removeMetricHelper(BrokerTopicStats.TotalProduceRequestsPerSec, topicMetrics.tags)
+      topicMetrics.removeMetricHelper(BrokerTopicStats.ProduceMessageConversionsPerSec, topicMetrics.tags)
+      topicMetrics.removeMetricHelper(BrokerTopicStats.ReplicationBytesOutPerSec, topicMetrics.tags)
+    }
+  }
+
+  // This method only removes metrics only used for follower
+  def removeOldFollowerMetrics(topic: String): Unit = {
+    val topicMetrics = topicStats(topic)
+    if (topicMetrics != null)
+      topicMetrics.removeMetricHelper(BrokerTopicStats.ReplicationBytesInPerSec, topicMetrics.tags)
+  }
+
   def removeMetrics(topic: String) {
     val metrics = stats.remove(topic)
     if (metrics != null)
@@ -232,7 +278,6 @@ class BrokerTopicStats {
       allTopicsStats.bytesOutRate.mark(value)
     }
   }
-
 
   def close(): Unit = {
     allTopicsStats.close()

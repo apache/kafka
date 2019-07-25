@@ -24,7 +24,9 @@ import java.nio.charset.{Charset, StandardCharsets}
 import java.nio.file.{Files, StandardOpenOption}
 import java.security.cert.X509Certificate
 import java.time.Duration
-import java.util.{Collections, Properties}
+import java.util.Arrays
+import java.util.Collections
+import java.util.Properties
 import java.util.concurrent.{Callable, ExecutionException, Executors, TimeUnit}
 
 import javax.net.ssl.X509TrustManager
@@ -62,8 +64,10 @@ import org.junit.Assert._
 import org.scalatest.Assertions.fail
 
 import scala.collection.JavaConverters._
-import scala.collection.{Map, mutable}
+import scala.collection.{Map, Seq, mutable}
 import scala.collection.mutable.{ArrayBuffer, ListBuffer}
+import scala.concurrent.duration.FiniteDuration
+import scala.concurrent.{Await, ExecutionContext, Future}
 
 /**
  * Utility functions to help with testing
@@ -204,10 +208,14 @@ object TestUtils extends Logging {
     * Shutdown `servers` and delete their log directories.
     */
   def shutdownServers(servers: Seq[KafkaServer]) {
-    servers.par.foreach { s =>
-      s.shutdown()
-      CoreUtils.delete(s.config.logDirs)
+    import ExecutionContext.Implicits._
+    val future = Future.traverse(servers) { s =>
+      Future {
+        s.shutdown()
+        CoreUtils.delete(s.config.logDirs)
+      }
     }
+    Await.result(future, FiniteDuration(5, TimeUnit.MINUTES))
   }
 
   /**
@@ -1105,7 +1113,7 @@ object TestUtils extends Logging {
     waitUntilTrue(() => servers.forall(server =>
       server.config.logDirs.forall { logDir =>
         topicPartitions.forall { tp =>
-          !java.util.Arrays.asList(new File(logDir).list()).asScala.exists { partitionDirectoryName =>
+          !Arrays.asList(new File(logDir).list()).asScala.exists { partitionDirectoryName =>
             partitionDirectoryName.startsWith(tp.topic + "-" + tp.partition) &&
               partitionDirectoryName.endsWith(Log.DeleteDirSuffix)
           }
@@ -1418,7 +1426,7 @@ object TestUtils extends Logging {
     }
   }
 
-  def alterConfigs(servers: Seq[KafkaServer], adminClient: AdminClient, props: Properties,
+  def alterConfigs(servers: Seq[KafkaServer], adminClient: Admin, props: Properties,
                    perBrokerConfig: Boolean): AlterConfigsResult = {
     val configEntries = props.asScala.map { case (k, v) => new ConfigEntry(k, v) }.toList.asJava
     val newConfig = new Config(configEntries)
@@ -1433,8 +1441,8 @@ object TestUtils extends Logging {
     adminClient.alterConfigs(configs)
   }
 
-  def incrementalAlterConfigs(servers: Seq[KafkaServer], adminClient: AdminClient, props: Properties,
-                   perBrokerConfig: Boolean, opType: OpType = OpType.SET): AlterConfigsResult  = {
+  def incrementalAlterConfigs(servers: Seq[KafkaServer], adminClient: Admin, props: Properties,
+                              perBrokerConfig: Boolean, opType: OpType = OpType.SET): AlterConfigsResult  = {
     val configEntries = props.asScala.map { case (k, v) => new AlterConfigOp(new ConfigEntry(k, v), opType) }.toList.asJavaCollection
     val configs = if (perBrokerConfig) {
       servers.map { server =>
@@ -1447,11 +1455,63 @@ object TestUtils extends Logging {
     adminClient.incrementalAlterConfigs(configs)
   }
 
-  def alterTopicConfigs(adminClient: AdminClient, topic: String, topicConfigs: Properties): AlterConfigsResult = {
+  def alterTopicConfigs(adminClient: Admin, topic: String, topicConfigs: Properties): AlterConfigsResult = {
     val configEntries = topicConfigs.asScala.map { case (k, v) => new ConfigEntry(k, v) }.toList.asJava
     val newConfig = new Config(configEntries)
     val configs = Map(new ConfigResource(ConfigResource.Type.TOPIC, topic) -> newConfig).asJava
     adminClient.alterConfigs(configs)
+  }
+
+  def currentLeader(client: Admin, topicPartition: TopicPartition): Option[Int] = {
+    Option(
+      client
+        .describeTopics(Arrays.asList(topicPartition.topic))
+        .all
+        .get
+        .get(topicPartition.topic)
+        .partitions
+        .get(topicPartition.partition)
+        .leader
+    ).map(_.id)
+  }
+
+  def waitForLeaderToBecome(client: Admin, topicPartition: TopicPartition, leader: Option[Int]): Unit = {
+    TestUtils.waitUntilTrue(
+      () => currentLeader(client, topicPartition) == leader,
+      s"Expected leader to become $leader", 10000
+    )
+  }
+
+  def waitForBrokersOutOfIsr(client: Admin, partition: Set[TopicPartition], brokerIds: Set[Int]): Unit = {
+    TestUtils.waitUntilTrue(
+      () => {
+        val description = client.describeTopics(partition.map(_.topic).asJava).all.get.asScala
+        val isr = description
+          .values
+          .flatMap(_.partitions.asScala.flatMap(_.isr.asScala))
+          .map(_.id)
+          .toSet
+
+        brokerIds.intersect(isr).isEmpty
+      },
+      s"Expected brokers $brokerIds to no longer in the ISR for $partition"
+    )
+  }
+
+  def waitForBrokersInIsr(client: Admin, partition: TopicPartition, brokerIds: Set[Int]): Unit = {
+    TestUtils.waitUntilTrue(
+      () => {
+        val description = client.describeTopics(Set(partition.topic).asJava).all.get.asScala
+        val isr = description
+          .values
+          .flatMap(_.partitions.asScala.flatMap(_.isr.asScala))
+          .map(_.id)
+          .toSet
+
+        brokerIds.subsetOf(isr)
+      },
+      s"Expected brokers $brokerIds to be in the ISR for $partition"
+    )
   }
 
   /**

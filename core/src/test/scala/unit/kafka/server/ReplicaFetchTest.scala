@@ -17,6 +17,8 @@
 
 package kafka.server
 
+import scala.collection.Seq
+
 import org.junit.{After, Before, Test}
 import kafka.zk.ZooKeeperTestHarness
 import kafka.utils.TestUtils

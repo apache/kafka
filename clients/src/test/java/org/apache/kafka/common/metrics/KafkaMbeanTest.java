@@ -17,8 +17,8 @@
 package org.apache.kafka.common.metrics;
 
 import org.apache.kafka.common.MetricName;
-import org.apache.kafka.common.metrics.stats.Count;
-import org.apache.kafka.common.metrics.stats.Sum;
+import org.apache.kafka.common.metrics.stats.WindowedCount;
+import org.apache.kafka.common.metrics.stats.WindowedSum;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -51,9 +51,9 @@ public class KafkaMbeanTest {
         metrics.addReporter(new JmxReporter());
         sensor = metrics.sensor("kafka.requests");
         countMetricName = metrics.metricName("pack.bean1.count", "grp1");
-        sensor.add(countMetricName, new Count());
+        sensor.add(countMetricName, new WindowedCount());
         sumMetricName = metrics.metricName("pack.bean1.sum", "grp1");
-        sensor.add(sumMetricName, new Sum());
+        sensor.add(sumMetricName, new WindowedSum());
     }
 
     @After

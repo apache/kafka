@@ -103,7 +103,7 @@ public abstract class AbstractResponse extends AbstractRequestResponse {
             case DESCRIBE_GROUPS:
                 return new DescribeGroupsResponse(struct, version);
             case LIST_GROUPS:
-                return new ListGroupsResponse(struct);
+                return new ListGroupsResponse(struct, version);
             case SASL_HANDSHAKE:
                 return new SaslHandshakeResponse(struct, version);
             case API_VERSIONS:
@@ -155,7 +155,7 @@ public abstract class AbstractResponse extends AbstractRequestResponse {
             case DESCRIBE_DELEGATION_TOKEN:
                 return new DescribeDelegationTokenResponse(struct);
             case DELETE_GROUPS:
-                return new DeleteGroupsResponse(struct);
+                return new DeleteGroupsResponse(struct, version);
             case ELECT_LEADERS:
                 return new ElectLeadersResponse(struct, version);
             case INCREMENTAL_ALTER_CONFIGS:

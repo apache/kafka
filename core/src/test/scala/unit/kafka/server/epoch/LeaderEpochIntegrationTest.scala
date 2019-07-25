@@ -278,7 +278,7 @@ class LeaderEpochIntegrationTest extends ZooKeeperTestHarness with Logging {
 
     def leaderOffsetsFor(partitions: Map[TopicPartition, Int]): Map[TopicPartition, EpochEndOffset] = {
       val partitionData = partitions.mapValues(
-        new OffsetsForLeaderEpochRequest.PartitionData(Optional.empty(), _))
+        new OffsetsForLeaderEpochRequest.PartitionData(Optional.empty(), _)).toMap
 
       val request = OffsetsForLeaderEpochRequest.Builder.forFollower(
         ApiKeys.OFFSET_FOR_LEADER_EPOCH.latestVersion, partitionData.asJava, 1)

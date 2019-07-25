@@ -18,6 +18,7 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.streams.KeyValueTimestamp;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.TopologyWrapper;
@@ -51,7 +52,7 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 public class KTableKTableInnerJoinTest {
-    private final static String[] EMPTY = new String[0];
+    private final static KeyValueTimestamp[] EMPTY = new KeyValueTimestamp[0];
 
     private final String topic1 = "topic1";
     private final String topic2 = "topic2";
@@ -67,7 +68,7 @@ public class KTableKTableInnerJoinTest {
     public void testJoin() {
         final StreamsBuilder builder = new StreamsBuilder();
 
-        final int[] expectedKeys = new int[]{0, 1, 2, 3};
+        final int[] expectedKeys = new int[] {0, 1, 2, 3};
 
         final KTable<Integer, String> table1;
         final KTable<Integer, String> table2;
@@ -84,7 +85,7 @@ public class KTableKTableInnerJoinTest {
     public void testQueryableJoin() {
         final StreamsBuilder builder = new StreamsBuilder();
 
-        final int[] expectedKeys = new int[]{0, 1, 2, 3};
+        final int[] expectedKeys = new int[] {0, 1, 2, 3};
 
         final KTable<Integer, String> table1;
         final KTable<Integer, String> table2;
@@ -101,7 +102,7 @@ public class KTableKTableInnerJoinTest {
     public void testQueryableNotSendingOldValues() {
         final StreamsBuilder builder = new StreamsBuilder();
 
-        final int[] expectedKeys = new int[]{0, 1, 2, 3};
+        final int[] expectedKeys = new int[] {0, 1, 2, 3};
 
         final KTable<Integer, String> table1;
         final KTable<Integer, String> table2;
@@ -120,7 +121,7 @@ public class KTableKTableInnerJoinTest {
     public void testNotSendingOldValues() {
         final StreamsBuilder builder = new StreamsBuilder();
 
-        final int[] expectedKeys = new int[]{0, 1, 2, 3};
+        final int[] expectedKeys = new int[] {0, 1, 2, 3};
 
         final KTable<Integer, String> table1;
         final KTable<Integer, String> table2;
@@ -139,7 +140,7 @@ public class KTableKTableInnerJoinTest {
     public void testSendingOldValues() {
         final StreamsBuilder builder = new StreamsBuilder();
 
-        final int[] expectedKeys = new int[]{0, 1, 2, 3};
+        final int[] expectedKeys = new int[] {0, 1, 2, 3};
 
         final KTable<Integer, String> table1;
         final KTable<Integer, String> table2;
@@ -179,16 +180,16 @@ public class KTableKTableInnerJoinTest {
             driver.pipeInput(recordFactory.create(topic2, null, "AnotherVal", 73L));
             // left: X0:0 (ts: 5), X1:1 (ts: 6)
             // right: Y0:0 (ts: 0), Y1:1 (ts: 10)
-            proc.checkAndClearProcessResult("0:(X0+Y0<-null) (ts: 5)", "1:(X1+Y1<-null) (ts: 10)");
-
+            proc.checkAndClearProcessResult(new KeyValueTimestamp<>(0, new Change<>("X0+Y0", null), 5),
+                new KeyValueTimestamp<>(1, new Change<>("X1+Y1", null), 10));
             // push all four items to the primary stream. this should produce two items.
             for (final int expectedKey : expectedKeys) {
                 driver.pipeInput(recordFactory.create(topic1, expectedKey, "XX" + expectedKey, 7L));
             }
             // left: XX0:0 (ts: 7), XX1:1 (ts: 7), XX2:2 (ts: 7), XX3:3 (ts: 7)
             // right: Y0:0 (ts: 0), Y1:1 (ts: 10)
-            proc.checkAndClearProcessResult("0:(XX0+Y0<-X0+Y0) (ts: 7)", "1:(XX1+Y1<-X1+Y1) (ts: 10)");
-
+            proc.checkAndClearProcessResult(new KeyValueTimestamp<>(0, new Change<>("XX0+Y0", "X0+Y0"), 7),
+                new KeyValueTimestamp<>(1, new Change<>("XX1+Y1", "X1+Y1"), 10));
             // push all items to the other stream. this should produce four items.
             for (final int expectedKey : expectedKeys) {
                 driver.pipeInput(recordFactory.create(topic2, expectedKey, "YY" + expectedKey, expectedKey * 5L));
@@ -196,8 +197,10 @@ public class KTableKTableInnerJoinTest {
             // left: XX0:0 (ts: 7), XX1:1 (ts: 7), XX2:2 (ts: 7), XX3:3 (ts: 7)
             // right: YY0:0 (ts: 0), YY1:1 (ts: 5), YY2:2 (ts: 10), YY3:3 (ts: 15)
             proc.checkAndClearProcessResult(
-                "0:(XX0+YY0<-XX0+Y0) (ts: 7)", "1:(XX1+YY1<-XX1+Y1) (ts: 7)",
-                "2:(XX2+YY2<-null) (ts: 10)", "3:(XX3+YY3<-null) (ts: 15)");
+                new KeyValueTimestamp<>(0, new Change<>("XX0+YY0", "XX0+Y0"), 7),
+                new KeyValueTimestamp<>(1, new Change<>("XX1+YY1", "XX1+Y1"), 7),
+                new KeyValueTimestamp<>(2, new Change<>("XX2+YY2", null), 10),
+                new KeyValueTimestamp<>(3, new Change<>("XX3+YY3", null), 15));
 
             // push all four items to the primary stream. this should produce four items.
             for (final int expectedKey : expectedKeys) {
@@ -206,24 +209,26 @@ public class KTableKTableInnerJoinTest {
             // left: XXX0:0 (ts: 6), XXX1:1 (ts: 6), XXX2:2 (ts: 6), XXX3:3 (ts: 6)
             // right: YY0:0 (ts: 0), YY1:1 (ts: 5), YY2:2 (ts: 10), YY3:3 (ts: 15)
             proc.checkAndClearProcessResult(
-                "0:(XXX0+YY0<-XX0+YY0) (ts: 6)", "1:(XXX1+YY1<-XX1+YY1) (ts: 6)",
-                "2:(XXX2+YY2<-XX2+YY2) (ts: 10)", "3:(XXX3+YY3<-XX3+YY3) (ts: 15)");
+                new KeyValueTimestamp<>(0, new Change<>("XXX0+YY0", "XX0+YY0"), 6),
+                new KeyValueTimestamp<>(1, new Change<>("XXX1+YY1", "XX1+YY1"), 6),
+                new KeyValueTimestamp<>(2, new Change<>("XXX2+YY2", "XX2+YY2"), 10),
+                new KeyValueTimestamp<>(3, new Change<>("XXX3+YY3", "XX3+YY3"), 15));
 
             // push two items with null to the other stream as deletes. this should produce two item.
             driver.pipeInput(recordFactory.create(topic2, expectedKeys[0], null, 5L));
             driver.pipeInput(recordFactory.create(topic2, expectedKeys[1], null, 7L));
             // left: XXX0:0 (ts: 6), XXX1:1 (ts: 6), XXX2:2 (ts: 6), XXX3:3 (ts: 6)
             // right: YY2:2 (ts: 10), YY3:3 (ts: 15)
-            proc.checkAndClearProcessResult("0:(null<-XXX0+YY0) (ts: 6)", "1:(null<-XXX1+YY1) (ts: 7)");
-
+            proc.checkAndClearProcessResult(new KeyValueTimestamp<>(0, new Change<>(null, "XXX0+YY0"), 6),
+                new KeyValueTimestamp<>(1, new Change<>(null, "XXX1+YY1"), 7));
             // push all four items to the primary stream. this should produce two items.
             for (final int expectedKey : expectedKeys) {
                 driver.pipeInput(recordFactory.create(topic1, expectedKey, "XXXX" + expectedKey, 13L));
             }
             // left: XXXX0:0 (ts: 13), XXXX1:1 (ts: 13), XXXX2:2 (ts: 13), XXXX3:3 (ts: 13)
             // right: YY2:2 (ts: 10), YY3:3 (ts: 15)
-            proc.checkAndClearProcessResult("2:(XXXX2+YY2<-XXX2+YY2) (ts: 13)", "3:(XXXX3+YY3<-XXX3+YY3) (ts: 15)");
-
+            proc.checkAndClearProcessResult(new KeyValueTimestamp<>(2, new Change<>("XXXX2+YY2", "XXX2+YY2"), 13),
+                new KeyValueTimestamp<>(3, new Change<>("XXXX3+YY3", "XXX3+YY3"), 15));
             // push four items to the primary stream with null. this should produce two items.
             driver.pipeInput(recordFactory.create(topic1, expectedKeys[0], null, 0L));
             driver.pipeInput(recordFactory.create(topic1, expectedKeys[1], null, 42L));
@@ -231,7 +236,8 @@ public class KTableKTableInnerJoinTest {
             driver.pipeInput(recordFactory.create(topic1, expectedKeys[3], null, 20L));
             // left:
             // right: YY2:2 (ts: 10), YY3:3 (ts: 15)
-            proc.checkAndClearProcessResult("2:(null<-XXXX2+YY2) (ts: 10)", "3:(null<-XXXX3+YY3) (ts: 20)");
+            proc.checkAndClearProcessResult(new KeyValueTimestamp<>(2, new Change<>(null, "XXXX2+YY2"), 10),
+                new KeyValueTimestamp<>(3, new Change<>(null, "XXXX3+YY3"), 20));
         }
     }
 
@@ -289,16 +295,16 @@ public class KTableKTableInnerJoinTest {
             driver.pipeInput(recordFactory.create(topic2, null, "AnotherVal", 73L));
             // left: X0:0 (ts: 5), X1:1 (ts: 6)
             // right: Y0:0 (ts: 0), Y1:1 (ts: 10)
-            proc.checkAndClearProcessResult("0:(X0+Y0<-null) (ts: 5)", "1:(X1+Y1<-null) (ts: 10)");
-
+            proc.checkAndClearProcessResult(new KeyValueTimestamp<>(0, new Change<>("X0+Y0", null), 5),
+                new KeyValueTimestamp<>(1, new Change<>("X1+Y1", null), 10));
             // push all four items to the primary stream. this should produce two items.
             for (final int expectedKey : expectedKeys) {
                 driver.pipeInput(recordFactory.create(topic1, expectedKey, "XX" + expectedKey, 7L));
             }
             // left: XX0:0 (ts: 7), XX1:1 (ts: 7), XX2:2 (ts: 7), XX3:3 (ts: 7)
             // right: Y0:0 (ts: 0), Y1:1 (ts: 10)
-            proc.checkAndClearProcessResult("0:(XX0+Y0<-null) (ts: 7)", "1:(XX1+Y1<-null) (ts: 10)");
-
+            proc.checkAndClearProcessResult(new KeyValueTimestamp<>(0, new Change<>("XX0+Y0", null), 7),
+                new KeyValueTimestamp<>(1, new Change<>("XX1+Y1", null), 10));
             // push all items to the other stream. this should produce four items.
             for (final int expectedKey : expectedKeys) {
                 driver.pipeInput(recordFactory.create(topic2, expectedKey, "YY" + expectedKey, expectedKey * 5L));
@@ -306,8 +312,10 @@ public class KTableKTableInnerJoinTest {
             // left: XX0:0 (ts: 7), XX1:1 (ts: 7), XX2:2 (ts: 7), XX3:3 (ts: 7)
             // right: YY0:0 (ts: 0), YY1:1 (ts: 5), YY2:2 (ts: 10), YY3:3 (ts: 15)
             proc.checkAndClearProcessResult(
-                "0:(XX0+YY0<-null) (ts: 7)", "1:(XX1+YY1<-null) (ts: 7)",
-                "2:(XX2+YY2<-null) (ts: 10)", "3:(XX3+YY3<-null) (ts: 15)");
+                new KeyValueTimestamp<>(0, new Change<>("XX0+YY0", null), 7),
+                new KeyValueTimestamp<>(1, new Change<>("XX1+YY1", null), 7),
+                new KeyValueTimestamp<>(2, new Change<>("XX2+YY2", null), 10),
+                new KeyValueTimestamp<>(3, new Change<>("XX3+YY3", null), 15));
 
             // push all four items to the primary stream. this should produce four items.
             for (final int expectedKey : expectedKeys) {
@@ -316,24 +324,26 @@ public class KTableKTableInnerJoinTest {
             // left: XXX0:0 (ts: 6), XXX1:1 (ts: 6), XXX2:2 (ts: 6), XXX3:3 (ts: 6)
             // right: YY0:0 (ts: 0), YY1:1 (ts: 5), YY2:2 (ts: 10), YY3:3 (ts: 15)
             proc.checkAndClearProcessResult(
-                "0:(XXX0+YY0<-null) (ts: 6)", "1:(XXX1+YY1<-null) (ts: 6)",
-                "2:(XXX2+YY2<-null) (ts: 10)", "3:(XXX3+YY3<-null) (ts: 15)");
+                new KeyValueTimestamp<>(0, new Change<>("XXX0+YY0", null), 6),
+                new KeyValueTimestamp<>(1, new Change<>("XXX1+YY1", null), 6),
+                new KeyValueTimestamp<>(2, new Change<>("XXX2+YY2", null), 10),
+                new KeyValueTimestamp<>(3, new Change<>("XXX3+YY3", null), 15));
 
             // push two items with null to the other stream as deletes. this should produce two item.
             driver.pipeInput(recordFactory.create(topic2, expectedKeys[0], null, 5L));
             driver.pipeInput(recordFactory.create(topic2, expectedKeys[1], null, 7L));
             // left: XXX0:0 (ts: 6), XXX1:1 (ts: 6), XXX2:2 (ts: 6), XXX3:3 (ts: 6)
             // right: YY2:2 (ts: 10), YY3:3 (ts: 15)
-            proc.checkAndClearProcessResult("0:(null<-null) (ts: 6)", "1:(null<-null) (ts: 7)");
-
+            proc.checkAndClearProcessResult(new KeyValueTimestamp<>(0, new Change<>(null, null), 6),
+                new KeyValueTimestamp<>(1, new Change<>(null, null), 7));
             // push all four items to the primary stream. this should produce two items.
             for (final int expectedKey : expectedKeys) {
                 driver.pipeInput(recordFactory.create(topic1, expectedKey, "XXXX" + expectedKey, 13L));
             }
             // left: XXXX0:0 (ts: 13), XXXX1:1 (ts: 13), XXXX2:2 (ts: 13), XXXX3:3 (ts: 13)
             // right: YY2:2 (ts: 10), YY3:3 (ts: 15)
-            proc.checkAndClearProcessResult("2:(XXXX2+YY2<-null) (ts: 13)", "3:(XXXX3+YY3<-null) (ts: 15)");
-
+            proc.checkAndClearProcessResult(new KeyValueTimestamp<>(2, new Change<>("XXXX2+YY2", null), 13),
+                new KeyValueTimestamp<>(3, new Change<>("XXXX3+YY3", null), 15));
             // push four items to the primary stream with null. this should produce two items.
             driver.pipeInput(recordFactory.create(topic1, expectedKeys[0], null, 0L));
             driver.pipeInput(recordFactory.create(topic1, expectedKeys[1], null, 42L));
@@ -341,7 +351,8 @@ public class KTableKTableInnerJoinTest {
             driver.pipeInput(recordFactory.create(topic1, expectedKeys[3], null, 20L));
             // left:
             // right: YY2:2 (ts: 10), YY3:3 (ts: 15)
-            proc.checkAndClearProcessResult("2:(null<-null) (ts: 10)", "3:(null<-null) (ts: 20)");
+            proc.checkAndClearProcessResult(new KeyValueTimestamp<>(2, new Change<>(null, null), 10),
+                new KeyValueTimestamp<>(3, new Change<>(null, null), 20));
         }
     }
 

@@ -34,50 +34,14 @@
       "about": "The controller epoch." },
     { "name": "BrokerEpoch", "type": "int64", "versions": "5+", "ignorable": true, "default": "-1",
       "about": "The broker epoch." },
+    { "name": "LegacyPartitionStates", "type": "[]UpdateMetadataPartitionState", "versions": "0-4",
+      "about": "In older versions of this RPC, each partition that we would like to update." },
     { "name": "TopicStates", "type": "[]UpdateMetadataRequestTopicState", "versions": "5+",
-      "about": "Each topic that we would like to update.", "fields": [
-      { "name": "TopicName", "type": "string", "versions": "0+", "entityType": "topicName",
+      "about": "In newer versions of this RPC, each topic that we would like to update.", "fields": [
+      { "name": "TopicName", "type": "string", "versions": "5+", "entityType": "topicName",
         "about": "The topic name." },
       { "name": "PartitionStates", "type": "[]UpdateMetadataPartitionState", "versions": "5+",
-        "about": "The partition that we would like to update.", "fields": [
-        { "name": "PartitionIndex", "type": "int32", "versions": "5+",
-          "about": "The partition index." },
-        { "name": "ControllerEpoch", "type": "int32", "versions": "5+",
-          "about": "The controller epoch." },
-        { "name": "Leader", "type": "int32", "versions": "5+", "entityType": "brokerId",
-          "about": "The ID of the broker which is the current partition leader." },
-        { "name": "LeaderEpoch", "type": "int32", "versions": "5+",
-          "about": "The leader epoch of this partition." },
-        { "name": "Isr", "type": "[]int32", "versions": "5+", "entityType": "brokerId",
-          "about": "The brokers which are in the ISR for this partition." },
-        { "name": "ZkVersion", "type": "int32", "versions": "5+",
-          "about": "The Zookeeper version." },
-        { "name": "Replicas", "type": "[]int32", "versions": "5+", "entityType": "brokerId",
-          "about": "All the replicas of this partition." },
-        { "name": "OfflineReplicas", "type": "[]int32", "versions": "5+",
-          "about": "The replicas of this partition which are offline." }
-      ]}
-    ]},
-    { "name": "PartitionStatesV0", "type": "[]UpdateMetadataRequestPartitionStateV0", "versions": "0-4",
-      "about": "Each partition that we would like to update.", "fields": [
-      { "name": "TopicName", "type": "string", "versions": "0-4", "entityType": "topicName",
-        "about": "The topic name." },
-      { "name": "PartitionIndex", "type": "int32", "versions": "0-4",
-        "about": "The partition index." },
-      { "name": "ControllerEpoch", "type": "int32", "versions": "0-4",
-        "about": "The controller epoch." },
-      { "name": "Leader", "type": "int32", "versions": "0-4", "entityType": "brokerId",
-        "about": "The ID of the broker which is the current partition leader." },
-      { "name": "LeaderEpoch", "type": "int32", "versions": "0-4",
-        "about": "The leader epoch of this partition." },
-      { "name": "Isr", "type": "[]int32", "versions": "0-4", "entityType": "brokerId",
-        "about": "The brokers which are in the ISR for this partition." },
-      { "name": "ZkVersion", "type": "int32", "versions": "0-4",
-        "about": "The Zookeeper version." },
-      { "name": "Replicas", "type": "[]int32", "versions": "0-4", "entityType": "brokerId",
-        "about": "All the replicas of this partition." },
-      { "name": "OfflineReplicas", "type": "[]int32", "versions": "4", "entityType": "brokerId",
-        "about": "The replicas of this partition which are offline." }
+        "about": "The partition that we would like to update." }
     ]},
     { "name": "Brokers", "type": "[]UpdateMetadataRequestBroker", "versions": "0+", "fields": [
         { "name": "Id", "type": "int32", "versions": "0+", "entityType": "brokerId",
@@ -101,6 +65,28 @@
         ]},
         { "name": "Rack", "type": "string", "versions": "2+", "nullableVersions": "0+", "ignorable": true,
           "about": "The rack which this broker belongs to." }
+    ]}
+  ],
+  "commonStructs": [
+    { "name": "UpdateMetadataPartitionState", "versions": "0+", "fields": [
+      { "name": "TopicName", "type": "string", "versions": "0-4", "entityType": "topicName",
+        "about": "In older versions of this RPC, the topic name." },
+      { "name": "PartitionIndex", "type": "int32", "versions": "0+",
+        "about": "The partition index." },
+      { "name": "ControllerEpoch", "type": "int32", "versions": "0+",
+        "about": "The controller epoch." },
+      { "name": "Leader", "type": "int32", "versions": "0+", "entityType": "brokerId",
+        "about": "The ID of the broker which is the current partition leader." },
+      { "name": "LeaderEpoch", "type": "int32", "versions": "0+",
+        "about": "The leader epoch of this partition." },
+      { "name": "Isr", "type": "[]int32", "versions": "0+", "entityType": "brokerId",
+        "about": "The brokers which are in the ISR for this partition." },
+      { "name": "ZkVersion", "type": "int32", "versions": "0+",
+        "about": "The Zookeeper version." },
+      { "name": "Replicas", "type": "[]int32", "versions": "0+", "entityType": "brokerId",
+        "about": "All the replicas of this partition." },
+      { "name": "OfflineReplicas", "type": "[]int32", "versions": "4+", "entityType": "brokerId",
+        "about": "The replicas of this partition which are offline." }
     ]}
   ]
 }

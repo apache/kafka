@@ -221,10 +221,12 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
 
   override def getAcls(principal: KafkaPrincipal): Map[Resource, Set[Acl]] = {
     inReadLock(lock) {
-      aclCache.mapValues { versionedAcls =>
-        versionedAcls.acls.filter(_.principal == principal)
-      }.filter { case (_, acls) =>
-        acls.nonEmpty
+      unorderedAcls.flatMap { case (k, versionedAcls) =>
+        val aclsForPrincipal = versionedAcls.acls.filter(_.principal == principal)
+        if (aclsForPrincipal.nonEmpty)
+          Some(k -> aclsForPrincipal)
+        else
+          None
       }
     }
   }
@@ -243,7 +245,8 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
         .from(Resource(resourceType, resourceName, PatternType.PREFIXED))
         .to(Resource(resourceType, resourceName.take(1), PatternType.PREFIXED))
         .filterKeys(resource => resourceName.startsWith(resource.name))
-        .flatMap { case (resource, versionedAcls) => versionedAcls.acls }
+        .values
+        .flatMap { _.acls }
         .toSet
 
       prefixed ++ wildcard ++ literal
@@ -252,7 +255,7 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
 
   override def getAcls(): Map[Resource, Set[Acl]] = {
     inReadLock(lock) {
-      aclCache.mapValues(_.acls)
+      unorderedAcls.map { case (k, v) => k -> v.acls }
     }
   }
 
@@ -355,6 +358,10 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
       false
     }
   }
+
+  // Returns Map instead of SortedMap since most callers don't care about ordering. In Scala 2.13, mapping from SortedMap
+  // to Map is restricted by default
+  private def unorderedAcls: Map[Resource, VersionedAcls] = aclCache
 
   private def getAclsFromCache(resource: Resource): VersionedAcls = {
     aclCache.getOrElse(resource, throw new IllegalArgumentException(s"ACLs do not exist in the cache for resource $resource"))

@@ -29,7 +29,7 @@ import java.util.stream.Collectors;
 /**
  * A class representing a alter configuration entry containing name, value and operation type.
  *
- * The API of this class is evolving, see {@link AdminClient} for details.
+ * The API of this class is evolving, see {@link Admin} for details.
  */
 @InterfaceStability.Evolving
 public class AlterConfigOp {

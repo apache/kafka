@@ -20,6 +20,7 @@ import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.GroupRebalanceConfig;
 import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.clients.consumer.CommitFailedException;
+import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetCommitCallback;
@@ -125,9 +126,9 @@ public class ConsumerCoordinatorTest {
     private final MockTime time = new MockTime();
     private GroupRebalanceConfig rebalanceConfig;
 
-    private final PartitionAssignor.RebalanceProtocol protocol;
+    private final ConsumerPartitionAssignor.RebalanceProtocol protocol;
     private final MockPartitionAssignor partitionAssignor;
-    private final List<PartitionAssignor> assignors;
+    private final List<ConsumerPartitionAssignor> assignors;
     private MockClient client;
     private MetadataResponse metadataResponse = TestUtils.metadataUpdateWith(1, new HashMap<String, Integer>() {
         {
@@ -144,7 +145,7 @@ public class ConsumerCoordinatorTest {
     private MockCommitCallback mockOffsetCommitCallback;
     private ConsumerCoordinator coordinator;
 
-    public ConsumerCoordinatorTest(final PartitionAssignor.RebalanceProtocol protocol) {
+    public ConsumerCoordinatorTest(final ConsumerPartitionAssignor.RebalanceProtocol protocol) {
         this.protocol = protocol;
         this.partitionAssignor = new MockPartitionAssignor(Collections.singletonList(protocol));
         this.assignors = Collections.singletonList(partitionAssignor);
@@ -153,7 +154,7 @@ public class ConsumerCoordinatorTest {
     @Parameterized.Parameters(name = "rebalance protocol = {0}")
     public static Collection<Object[]> data() {
         final List<Object[]> values = new ArrayList<>();
-        for (final PartitionAssignor.RebalanceProtocol protocol: PartitionAssignor.RebalanceProtocol.values()) {
+        for (final ConsumerPartitionAssignor.RebalanceProtocol protocol: ConsumerPartitionAssignor.RebalanceProtocol.values()) {
             values.add(new Object[]{protocol});
         }
         return values;
@@ -197,21 +198,21 @@ public class ConsumerCoordinatorTest {
     }
 
     @Test
-    public void testSelectRebalanceProtocol() {
-        List<PartitionAssignor> assignors = new ArrayList<>();
-        assignors.add(new MockPartitionAssignor(Collections.singletonList(PartitionAssignor.RebalanceProtocol.EAGER)));
-        assignors.add(new MockPartitionAssignor(Collections.singletonList(PartitionAssignor.RebalanceProtocol.COOPERATIVE)));
+    public void testSelectRebalanceProtcol() {
+        List<ConsumerPartitionAssignor> assignors = new ArrayList<>();
+        assignors.add(new MockPartitionAssignor(Collections.singletonList(ConsumerPartitionAssignor.RebalanceProtocol.EAGER)));
+        assignors.add(new MockPartitionAssignor(Collections.singletonList(ConsumerPartitionAssignor.RebalanceProtocol.COOPERATIVE)));
 
         // no commonly supported protocols
         assertThrows(IllegalArgumentException.class, () -> buildCoordinator(rebalanceConfig, new Metrics(), assignors, false));
 
         assignors.clear();
-        assignors.add(new MockPartitionAssignor(Arrays.asList(PartitionAssignor.RebalanceProtocol.EAGER, PartitionAssignor.RebalanceProtocol.COOPERATIVE)));
-        assignors.add(new MockPartitionAssignor(Arrays.asList(PartitionAssignor.RebalanceProtocol.EAGER, PartitionAssignor.RebalanceProtocol.COOPERATIVE)));
+        assignors.add(new MockPartitionAssignor(Arrays.asList(ConsumerPartitionAssignor.RebalanceProtocol.EAGER, ConsumerPartitionAssignor.RebalanceProtocol.COOPERATIVE)));
+        assignors.add(new MockPartitionAssignor(Arrays.asList(ConsumerPartitionAssignor.RebalanceProtocol.EAGER, ConsumerPartitionAssignor.RebalanceProtocol.COOPERATIVE)));
 
         // select higher indexed (more advanced) protocols
         try (ConsumerCoordinator coordinator = buildCoordinator(rebalanceConfig, new Metrics(), assignors, false)) {
-            assertEquals(PartitionAssignor.RebalanceProtocol.COOPERATIVE, coordinator.getProtocol());
+            assertEquals(ConsumerPartitionAssignor.RebalanceProtocol.COOPERATIVE, coordinator.getProtocol());
         }
     }
 
@@ -661,7 +662,7 @@ public class ConsumerCoordinatorTest {
                 JoinGroupRequestData.JoinGroupRequestProtocol protocolMetadata = protocolIterator.next();
 
                 ByteBuffer metadata = ByteBuffer.wrap(protocolMetadata.metadata());
-                PartitionAssignor.Subscription subscription = ConsumerProtocol.deserializeSubscription(metadata);
+                ConsumerPartitionAssignor.Subscription subscription = ConsumerProtocol.deserializeSubscription(metadata);
                 metadata.rewind();
                 return subscription.topics().containsAll(updatedSubscription);
             }
@@ -2320,7 +2321,7 @@ public class ConsumerCoordinatorTest {
 
     private ConsumerCoordinator buildCoordinator(final GroupRebalanceConfig rebalanceConfig,
                                                  final Metrics metrics,
-                                                 final List<PartitionAssignor> assignors,
+                                                 final List<ConsumerPartitionAssignor> assignors,
                                                  final boolean autoCommitEnabled) {
         return new ConsumerCoordinator(
                 rebalanceConfig,
@@ -2379,7 +2380,7 @@ public class ConsumerCoordinatorTest {
                                                       Errors error) {
         List<JoinGroupResponseData.JoinGroupResponseMember> metadata = new ArrayList<>();
         for (Map.Entry<String, List<String>> subscriptionEntry : subscriptions.entrySet()) {
-            PartitionAssignor.Subscription subscription = new PartitionAssignor.Subscription(subscriptionEntry.getValue());
+            ConsumerPartitionAssignor.Subscription subscription = new ConsumerPartitionAssignor.Subscription(subscriptionEntry.getValue());
             ByteBuffer buf = ConsumerProtocol.serializeSubscription(subscription);
             metadata.add(new JoinGroupResponseData.JoinGroupResponseMember()
                     .setMemberId(subscriptionEntry.getKey())
@@ -2410,7 +2411,7 @@ public class ConsumerCoordinatorTest {
     }
 
     private SyncGroupResponse syncGroupResponse(List<TopicPartition> partitions, Errors error) {
-        ByteBuffer buf = ConsumerProtocol.serializeAssignment(new PartitionAssignor.Assignment(partitions));
+        ByteBuffer buf = ConsumerProtocol.serializeAssignment(new ConsumerPartitionAssignor.Assignment(partitions));
         return new SyncGroupResponse(
                 new SyncGroupResponseData()
                         .setErrorCode(error.code())

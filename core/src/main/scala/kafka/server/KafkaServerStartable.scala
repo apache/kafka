@@ -22,6 +22,8 @@ import java.util.Properties
 import kafka.metrics.KafkaMetricsReporter
 import kafka.utils.{Exit, Logging, VerifiableProperties}
 
+import scala.collection.Seq
+
 object KafkaServerStartable {
   def fromProps(serverProps: Properties) = {
     val reporters = KafkaMetricsReporter.startReporters(new VerifiableProperties(serverProps))
