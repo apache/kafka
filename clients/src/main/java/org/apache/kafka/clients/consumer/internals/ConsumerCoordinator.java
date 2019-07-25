@@ -495,15 +495,6 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
         Map<String, Assignment> assignments = assignor.assign(metadata.fetch(), new GroupSubscription(subscriptions)).groupAssignment();
 
-        switch (protocol) {
-            case EAGER:
-                break;
-
-            case COOPERATIVE:
-                // TODO need to validate assignment -- make sure no partitions to be revoked were also assigned during this rebalance
-                break;
-        }
-
         // user-customized assignor may have created some topics that are not in the subscription list
         // and assign their partitions to the members; in this case we would like to update the leader's
         // own metadata with the newly added topics so that it will not trigger a subsequent rebalance

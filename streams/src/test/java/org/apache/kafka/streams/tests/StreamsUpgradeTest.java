@@ -137,7 +137,7 @@ public class StreamsUpgradeTest {
         }
 
         @Override
-        public void onAssignment(final ConsumerPartitionAssignor.Assignment assignment,  ConsumerGroupMetadata metadata) {
+        public void onAssignment(final ConsumerPartitionAssignor.Assignment assignment, final ConsumerGroupMetadata metadata) {
             try {
                 super.onAssignment(assignment, metadata);
                 return;

@@ -778,7 +778,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
      * @throws TaskAssignmentException if there is no task id for one of the partitions specified
      */
     @Override
-    public void onAssignment(final Assignment assignment, ConsumerGroupMetadata metadata) {
+    public void onAssignment(final Assignment assignment, final ConsumerGroupMetadata metadata) {
         final List<TopicPartition> partitions = new ArrayList<>(assignment.partitions());
         partitions.sort(PARTITION_COMPARATOR);
 

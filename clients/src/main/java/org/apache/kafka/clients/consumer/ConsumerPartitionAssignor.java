@@ -41,8 +41,8 @@ import org.apache.kafka.common.TopicPartition;
 public interface ConsumerPartitionAssignor {
 
     /**
-     * Return serialized data that will be included in the serializable subscription object sent in the
-     * joinGroup and can be leveraged in {@link #assign(Cluster, GroupSubscription)} ((e.g. local host/rack information)
+     * Return serialized data that will be included in the {@link Subscription} sent to the leader
+     * and can be leveraged in {@link #assign(Cluster, GroupSubscription)} ((e.g. local host/rack information)
      *
      * @return non-null optional join subscription user data
      */
@@ -55,7 +55,7 @@ public interface ConsumerPartitionAssignor {
      * @param metadata Current topic/broker metadata known by consumer
      * @param subscriptions Subscriptions from all members including metadata provided through {@link #subscriptionUserData(Set)}
      * @return A map from the members to their respective assignment. This should have one entry
-     *         for all members who in the input subscription map.
+     *         for each member in the input subscription map.
      */
     GroupAssignment assign(Cluster metadata, GroupSubscription subscriptions);
 
