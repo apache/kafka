@@ -437,7 +437,7 @@ class GroupCoordinator(val brokerId: Int,
               if (group.is(Dead)) {
                 responseCallback(noMemberLevelError(Errors.COORDINATOR_NOT_AVAILABLE, leavingMembers))
               } else {
-                responseCallback(leaveError(Errors.NONE, leavingMembers.map { leavingMember =>
+                val memberErrors = leavingMembers.map { leavingMember =>
                   val memberId = leavingMember.memberId
                   val groupInstanceId = Option(leavingMember.groupInstanceId)
                   if (memberId != JoinGroupRequest.UNKNOWN_MEMBER_ID
@@ -468,7 +468,8 @@ class GroupCoordinator(val brokerId: Int,
                     removeMemberAndUpdateGroup(group, member, s"removing member $memberId on LeaveGroup")
                     memberLeaveError(leavingMember, Errors.NONE)
                   }
-                }))
+                }
+                responseCallback(leaveError(Errors.NONE, memberErrors))
               }
             }
         }
@@ -1129,23 +1130,23 @@ object GroupCoordinator {
       error = error)
   }
 
-  def memberLeaveError(memberIdentity: MemberIdentity,
-                       error: Errors): LeaveMemberResponse = {
+  private def memberLeaveError(memberIdentity: MemberIdentity,
+                               error: Errors): LeaveMemberResponse = {
     LeaveMemberResponse(
       memberId = memberIdentity.memberId,
       groupInstanceId = Option(memberIdentity.groupInstanceId),
       error = error)
   }
 
-  def leaveError(topLevelError: Errors,
-                 memberResponses: List[LeaveMemberResponse]): LeaveGroupResult = {
+  private def leaveError(topLevelError: Errors,
+                         memberResponses: List[LeaveMemberResponse]): LeaveGroupResult = {
     LeaveGroupResult(
       topLevelError = topLevelError,
       memberResponses = memberResponses)
   }
 
-  def noMemberLevelError(topLevelError: Errors,
-                         leavingMembers: List[MemberIdentity]): LeaveGroupResult = {
+  private def noMemberLevelError(topLevelError: Errors,
+                                 leavingMembers: List[MemberIdentity]): LeaveGroupResult = {
     val memberResponses = leavingMembers.map {leavingMember =>
       memberLeaveError(leavingMember, Errors.NONE)
     }

@@ -1562,7 +1562,7 @@ class KafkaApis(val requestChannel: RequestChannel,
               member => new MemberResponse()
                 .setMemberId(member.memberId)
                 .setGroupInstanceId(member.groupInstanceId)
-                .setErrorCode(Errors.GROUP_AUTHORIZATION_FAILED.code)).asJava
+                .setErrorCode(Errors.NONE.code)).asJava
           )
         )
       })
