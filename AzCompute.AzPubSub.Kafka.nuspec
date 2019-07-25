@@ -1,0 +1,19 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<package xmlns="http://schemas.microsoft.com/packaging/2011/08/nuspec.xsd">
+  <metadata>
+    <id>AzCompute.AzPubSub.Kafka</id>
+    <version>2.4.0</version>
+    <authors>azpubsub</authors>
+    <owners>azpubsub</owners>
+    <requireLicenseAcceptance>false</requireLicenseAcceptance>
+    <licenseUrl>http://www.apache.org/licenses/LICENSE-2.0.html</licenseUrl>
+    <description>Apache Kafka Broker to be used for the AzPubSub service.</description>
+    <releaseNotes>Initial release with Kafka 2.4</releaseNotes>
+    <copyright>http://www.apache.org/licenses/</copyright>
+    <tags>kafka apache AzPubSub</tags>
+  </metadata>
+  <files>
+    <file src="distributions\kafka_2.12-2.4.1-SNAPSHOT\libs\*" target="KafkaBroker\libs" />
+    <file src="distributions\kafka_2.12-2.4.1-SNAPSHOT\bin\windows\*" target="KafkaBroker\bin\windows" />
+  </files>
+</package>
