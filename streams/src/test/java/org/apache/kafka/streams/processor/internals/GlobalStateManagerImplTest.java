@@ -179,13 +179,14 @@ public class GlobalStateManagerImplTest {
         expectedOffsets.put(t3, 1L);
         expectedOffsets.put(t4, 1L);
 
+        // add an old topic (a topic not associated with any global state store)
         final HashMap<TopicPartition, Long> startOffsets = new HashMap<>(expectedOffsets);
-        final OffsetCheckpoint checkpoint = new OffsetCheckpoint(checkpointFile);
         final TopicPartition tOld = new TopicPartition("oldTopic", 1);
         startOffsets.put(tOld, 1L);
 
         // start with a checkpoint file will all topic-partitions: expected and old (not
         // associated with any global state store).
+        final OffsetCheckpoint checkpoint = new OffsetCheckpoint(checkpointFile);
         checkpoint.write(startOffsets);
 
         stateManager.initialize();
