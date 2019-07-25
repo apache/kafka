@@ -2479,7 +2479,7 @@ class GroupCoordinatorTest {
     groupCoordinator.groupManager.addGroup(new GroupMetadata(deadGroupId, Dead, new MockTime()))
     val leaveGroupResults = batchLeaveGroup(deadGroupId,
       List(new MemberIdentity().setMemberId(memberId), new MemberIdentity().setMemberId(memberId)))
-    verifyLeaveGroupResult(leaveGroupResults, Errors.COORDINATOR_NOT_AVAILABLE, List(Errors.NONE, Errors.NONE))
+    verifyLeaveGroupResult(leaveGroupResults, Errors.COORDINATOR_NOT_AVAILABLE)
   }
 
   @Test
@@ -2536,7 +2536,7 @@ class GroupCoordinatorTest {
     val leaveGroupResults = batchLeaveGroup("invalid-group", List(new MemberIdentity()
       .setGroupInstanceId(leaderInstanceId.get), new MemberIdentity().setGroupInstanceId(followerInstanceId.get)))
 
-    verifyLeaveGroupResult(leaveGroupResults, Errors.NOT_COORDINATOR, List(Errors.NONE, Errors.NONE))
+    verifyLeaveGroupResult(leaveGroupResults, Errors.NOT_COORDINATOR)
   }
 
   @Test
@@ -3144,7 +3144,7 @@ class GroupCoordinatorTest {
 object GroupCoordinatorTest {
   def verifyLeaveGroupResult(leaveGroupResult: LeaveGroupResult,
                              expectedTopLevelError: Errors = Errors.NONE,
-                             expectedMemberLevelErrors: List[Errors] = List(Errors.NONE)) {
+                             expectedMemberLevelErrors: List[Errors] = List.empty) {
     assertEquals(expectedTopLevelError, leaveGroupResult.topLevelError)
     if (expectedMemberLevelErrors.nonEmpty) {
       assertEquals(expectedMemberLevelErrors.size, leaveGroupResult.memberResponses.size)

@@ -877,9 +877,9 @@ public abstract class AbstractCoordinator implements Closeable {
         @Override
         public void handle(LeaveGroupResponse leaveResponse, RequestFuture<Void> future) {
             final List<MemberResponse> members = leaveResponse.memberResponses();
-            if (members.size() != 1) {
+            if (members.size() > 1) {
                 future.raise(new IllegalStateException("The expected leave group response " +
-                                                           "should only contain one member info, however get " + members));
+                                                           "should only contain no more than one member info, however get " + members));
             }
 
             final Errors error = leaveResponse.error();

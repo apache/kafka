@@ -33,7 +33,6 @@ import static org.apache.kafka.common.requests.AbstractResponse.DEFAULT_THROTTLE
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
 
 public class LeaveGroupResponseTest {
 
@@ -58,7 +57,6 @@ public class LeaveGroupResponseTest {
                                             .setErrorCode(Errors.FENCED_INSTANCE_ID.code())
         );
     }
-
 
     @Test
     public void testConstructorWithStruct() {
@@ -89,38 +87,28 @@ public class LeaveGroupResponseTest {
         expectedErrorCounts.put(Errors.UNKNOWN_MEMBER_ID, 1);
         expectedErrorCounts.put(Errors.FENCED_INSTANCE_ID, 1);
 
-        List<MemberResponse> expectedSingleMemberResponses = Collections.singletonList(
-            new MemberResponse()
-                .setErrorCode(Errors.NOT_COORDINATOR.code())
-        );
         for (short version = 0; version <= ApiKeys.LEAVE_GROUP.latestVersion(); version++) {
-            try {
-                LeaveGroupResponse multiLeaveResponse = new LeaveGroupResponse(memberResponses,
-                                                                               Errors.NONE,
-                                                                               throttleTimeMs,
-                                                                               version);
-                if (version <= 2) {
-                    fail("Version " + version + " leave group response should not accept multi member response.");
-                }
-                assertEquals(expectedErrorCounts, multiLeaveResponse.errorCounts());
-                assertEquals(throttleTimeMs, multiLeaveResponse.throttleTimeMs());
-                assertEquals(memberResponses, multiLeaveResponse.memberResponses());
-                assertEquals(Errors.UNKNOWN_MEMBER_ID, multiLeaveResponse.error());
-            } catch (IllegalStateException e) {
-                LeaveGroupResponse singleLeaveResponse = new LeaveGroupResponse(memberResponses.subList(0, 1),
-                                                                                Errors.NOT_COORDINATOR,
-                                                                                throttleTimeMs,
-                                                                                version);
-                assertEquals(Collections.singletonMap(Errors.NOT_COORDINATOR, 1), singleLeaveResponse.errorCounts());
-                if (version >= 1) {
-                    assertEquals(throttleTimeMs, singleLeaveResponse.throttleTimeMs());
-                } else {
-                    assertEquals(DEFAULT_THROTTLE_TIME, singleLeaveResponse.throttleTimeMs());
-                }
-                assertEquals(expectedSingleMemberResponses, singleLeaveResponse.memberResponses());
-                assertEquals(Errors.NOT_COORDINATOR, singleLeaveResponse.error());
+            LeaveGroupResponse leaveGroupResponse = new LeaveGroupResponse(memberResponses,
+                                                                           Errors.NONE,
+                                                                           throttleTimeMs,
+                                                                           version);
 
+            if (version >= 3) {
+                assertEquals(expectedErrorCounts, leaveGroupResponse.errorCounts());
+                assertEquals(memberResponses, leaveGroupResponse.memberResponses());
+            } else {
+                assertEquals(Collections.singletonMap(Errors.UNKNOWN_MEMBER_ID, 1),
+                             leaveGroupResponse.errorCounts());
+                assertEquals(Collections.emptyList(), leaveGroupResponse.memberResponses());
             }
+
+            if (version >= 1) {
+                assertEquals(throttleTimeMs, leaveGroupResponse.throttleTimeMs());
+            } else {
+                assertEquals(DEFAULT_THROTTLE_TIME, leaveGroupResponse.throttleTimeMs());
+            }
+
+            assertEquals(Errors.UNKNOWN_MEMBER_ID, leaveGroupResponse.error());
         }
     }
 

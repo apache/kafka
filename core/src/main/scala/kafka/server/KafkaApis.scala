@@ -1557,13 +1557,6 @@ class KafkaApis(val requestChannel: RequestChannel,
         new LeaveGroupResponse(new LeaveGroupResponseData()
           .setThrottleTimeMs(requestThrottleMs)
           .setErrorCode(Errors.GROUP_AUTHORIZATION_FAILED.code)
-          .setMembers(
-            members.map (
-              member => new MemberResponse()
-                .setMemberId(member.memberId)
-                .setGroupInstanceId(member.groupInstanceId)
-                .setErrorCode(Errors.NONE.code)).asJava
-          )
         )
       })
     } else {

@@ -23,7 +23,6 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -41,6 +40,11 @@ import java.util.Objects;
  * Member level errors:
  * - {@link Errors#FENCED_INSTANCE_ID}
  * - {@link Errors#UNKNOWN_MEMBER_ID}
+ *
+ * If the top level error code is set, normally this indicates that broker early stops the request
+ * handling due to some severe global error, so it is expected to see the member level errors to be empty.
+ * For older version response, we may populate member level error towards top level because older client
+ * couldn't parse member level.
  */
 public class LeaveGroupResponse extends AbstractResponse {
 
@@ -55,15 +59,8 @@ public class LeaveGroupResponse extends AbstractResponse {
                               final int throttleTimeMs,
                               final short version) {
         if (version <= 2) {
-            if (memberResponses.size() != 1) {
-                throw new IllegalStateException("Singleton leave group request shouldn't have more than one " +
-                                                    "response, while actually get " + memberResponses.size());
-            }
-
-            // Populate member level error for older version clients because
-            // they could only see top level.
-            short errorCode = topLevelError != Errors.NONE ? topLevelError.code() :
-                                  memberResponses.get(0).errorCode();
+            // Populate member level error.
+            final short errorCode = getError(topLevelError, memberResponses).code();
 
             this.data = new LeaveGroupResponseData()
                             .setErrorCode(errorCode);
@@ -93,21 +90,18 @@ public class LeaveGroupResponse extends AbstractResponse {
     }
 
     public List<MemberResponse> memberResponses() {
-        if (data.members().isEmpty()) {
-            return Collections.singletonList(
-                new MemberResponse().setErrorCode(data.errorCode())
-            );
-        } else {
-            return data.members();
-        }
+        return data.members();
     }
 
     public Errors error() {
-        Errors topLevelError = Errors.forCode(data.errorCode());
+        return getError(Errors.forCode(data.errorCode()), data.members());
+    }
+
+    private static Errors getError(Errors topLevelError, List<MemberResponse> memberResponses) {
         if (topLevelError != Errors.NONE) {
             return topLevelError;
         } else {
-            for (MemberResponse memberResponse : data.members()) {
+            for (MemberResponse memberResponse : memberResponses) {
                 Errors memberError = Errors.forCode(memberResponse.errorCode());
                 if (memberError != Errors.NONE) {
                     return memberError;

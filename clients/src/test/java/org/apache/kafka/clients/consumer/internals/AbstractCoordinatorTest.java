@@ -917,6 +917,7 @@ public class AbstractCoordinatorTest {
 
     private LeaveGroupResponse leaveGroupResponse(List<MemberResponse> members) {
         return new LeaveGroupResponse(new LeaveGroupResponseData()
+                .setErrorCode(Errors.NONE.code())
                 .setMembers(members));
     }
 

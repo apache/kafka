@@ -425,7 +425,7 @@ class GroupCoordinator(val brokerId: Int,
                        responseCallback: LeaveGroupResult => Unit) {
     validateGroupStatus(groupId, ApiKeys.LEAVE_GROUP) match {
       case Some(error) =>
-        responseCallback(noMemberLevelError(error, leavingMembers))
+        responseCallback(leaveError(error, List.empty))
       case None =>
         groupManager.getGroup(groupId) match {
           case None =>
@@ -435,7 +435,7 @@ class GroupCoordinator(val brokerId: Int,
           case Some(group) =>
             group.inLock {
               if (group.is(Dead)) {
-                responseCallback(noMemberLevelError(Errors.COORDINATOR_NOT_AVAILABLE, leavingMembers))
+                responseCallback(leaveError(Errors.COORDINATOR_NOT_AVAILABLE, List.empty))
               } else {
                 val memberErrors = leavingMembers.map { leavingMember =>
                   val memberId = leavingMember.memberId
@@ -1143,14 +1143,6 @@ object GroupCoordinator {
     LeaveGroupResult(
       topLevelError = topLevelError,
       memberResponses = memberResponses)
-  }
-
-  private def noMemberLevelError(topLevelError: Errors,
-                                 leavingMembers: List[MemberIdentity]): LeaveGroupResult = {
-    val memberResponses = leavingMembers.map {leavingMember =>
-      memberLeaveError(leavingMember, Errors.NONE)
-    }
-    leaveError(topLevelError, memberResponses)
   }
 }
 
