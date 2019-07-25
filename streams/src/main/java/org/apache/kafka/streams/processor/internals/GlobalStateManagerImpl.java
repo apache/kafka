@@ -140,7 +140,7 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
             stateStore.init(globalProcessorContext, stateStore);
         }
 
-        // now prune non-relevant topic-partitions from checkpointFileCache
+        // prune topic-partitions not associated with any global state store from checkpointFileCache
         checkpointFileCache.keySet().removeIf(e -> !topics.contains(e.topic()));
         return Collections.unmodifiableSet(globalStoreNames);
     }
