@@ -22,8 +22,8 @@ import org.apache.kafka.common.config.ConfigValue;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Avg;
+import org.apache.kafka.common.metrics.stats.CumulativeSum;
 import org.apache.kafka.common.metrics.stats.Max;
-import org.apache.kafka.common.metrics.stats.Total;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
@@ -1483,7 +1483,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
             });
 
             rebalanceCompletedCounts = metricGroup.sensor("completed-rebalance-count");
-            rebalanceCompletedCounts.add(metricGroup.metricName(registry.rebalanceCompletedTotal), new Total());
+            rebalanceCompletedCounts.add(metricGroup.metricName(registry.rebalanceCompletedTotal), new CumulativeSum());
 
             rebalanceTime = metricGroup.sensor("rebalance-time");
             rebalanceTime.add(metricGroup.metricName(registry.rebalanceTimeMax), new Max());

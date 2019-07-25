@@ -28,9 +28,10 @@ import org.apache.kafka.common.errors.ProducerFencedException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Avg;
-import org.apache.kafka.common.metrics.stats.Count;
+import org.apache.kafka.common.metrics.stats.CumulativeCount;
 import org.apache.kafka.common.metrics.stats.Max;
 import org.apache.kafka.common.metrics.stats.Rate;
+import org.apache.kafka.common.metrics.stats.WindowedCount;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.DeserializationExceptionHandler;
@@ -43,7 +44,6 @@ import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.TimestampExtractor;
-import org.apache.kafka.streams.processor.internals.metrics.CumulativeCount;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.processor.internals.metrics.ThreadMetrics;
 import org.apache.kafka.streams.state.internals.ThreadCache;
@@ -112,7 +112,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
             );
             taskCommitTimeSensor.add(
                 new MetricName("commit-rate", group, "The average number of occurrence of commit operation per second.", tagMap),
-                new Rate(TimeUnit.SECONDS, new Count())
+                new Rate(TimeUnit.SECONDS, new WindowedCount())
             );
             taskCommitTimeSensor.add(
                 new MetricName("commit-total", group, "The total number of occurrence of commit operations.", tagMap),
@@ -123,7 +123,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
             taskEnforcedProcessSensor = metrics.taskLevelSensor(taskName, "enforced-processing", Sensor.RecordingLevel.DEBUG, parent);
             taskEnforcedProcessSensor.add(
                     new MetricName("enforced-processing-rate", group, "The average number of occurrence of enforced-processing operation per second.", tagMap),
-                    new Rate(TimeUnit.SECONDS, new Count())
+                    new Rate(TimeUnit.SECONDS, new WindowedCount())
             );
             taskEnforcedProcessSensor.add(
                     new MetricName("enforced-processing-total", group, "The total number of occurrence of enforced-processing operations.", tagMap),
@@ -798,14 +798,14 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
      * @throws TaskMigratedException if the task producer got fenced (EOS only)
      */
     public boolean maybePunctuateStreamTime() {
-        final long timestamp = partitionGroup.timestamp();
+        final long streamTime = partitionGroup.streamTime();
 
         // if the timestamp is not known yet, meaning there is not enough data accumulated
         // to reason stream partition time, then skip.
-        if (timestamp == RecordQueue.UNKNOWN) {
+        if (streamTime == RecordQueue.UNKNOWN) {
             return false;
         } else {
-            final boolean punctuated = streamTimePunctuationQueue.mayPunctuate(timestamp, PunctuationType.STREAM_TIME, this);
+            final boolean punctuated = streamTimePunctuationQueue.mayPunctuate(streamTime, PunctuationType.STREAM_TIME, this);
 
             if (punctuated) {
                 commitNeeded = true;
@@ -823,9 +823,9 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
      * @throws TaskMigratedException if the task producer got fenced (EOS only)
      */
     public boolean maybePunctuateSystemTime() {
-        final long timestamp = time.milliseconds();
+        final long systemTime = time.milliseconds();
 
-        final boolean punctuated = systemTimePunctuationQueue.mayPunctuate(timestamp, PunctuationType.WALL_CLOCK_TIME, this);
+        final boolean punctuated = systemTimePunctuationQueue.mayPunctuate(systemTime, PunctuationType.WALL_CLOCK_TIME, this);
 
         if (punctuated) {
             commitNeeded = true;

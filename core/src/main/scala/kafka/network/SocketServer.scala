@@ -39,8 +39,7 @@ import org.apache.kafka.common.config.ConfigException
 import org.apache.kafka.common.{KafkaException, Reconfigurable}
 import org.apache.kafka.common.memory.{MemoryPool, SimpleMemoryPool}
 import org.apache.kafka.common.metrics._
-import org.apache.kafka.common.metrics.stats.Meter
-import org.apache.kafka.common.metrics.stats.Total
+import org.apache.kafka.common.metrics.stats.{CumulativeSum, Meter}
 import org.apache.kafka.common.network.KafkaChannel.ChannelMuteEvent
 import org.apache.kafka.common.network.{ChannelBuilder, ChannelBuilders, KafkaChannel, ListenerName, ListenerReconfigurable, Selectable, Send, Selector => KSelector}
 import org.apache.kafka.common.protocol.ApiKeys
@@ -712,7 +711,7 @@ private[kafka] class Processor(val id: Int,
     Map(NetworkProcessorMetricTag -> id.toString)
   )
 
-  val expiredConnectionsKilledCount = new Total()
+  val expiredConnectionsKilledCount = new CumulativeSum()
   private val expiredConnectionsKilledCountMetricName = metrics.metricName("expired-connections-killed-count", "socket-server-metrics", metricTags)
   metrics.addMetric(expiredConnectionsKilledCountMetricName, expiredConnectionsKilledCount)
 

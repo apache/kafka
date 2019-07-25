@@ -46,6 +46,10 @@ import org.apache.kafka.common.message.CreateTopicsRequestData.CreateableTopicCo
 import org.apache.kafka.common.message.CreateTopicsRequestData;
 import org.apache.kafka.common.message.CreateTopicsResponseData.CreatableTopicResult;
 import org.apache.kafka.common.message.CreateTopicsResponseData;
+import org.apache.kafka.common.message.DeleteGroupsRequestData;
+import org.apache.kafka.common.message.DeleteGroupsResponseData;
+import org.apache.kafka.common.message.DeleteGroupsResponseData.DeletableGroupResult;
+import org.apache.kafka.common.message.DeleteGroupsResponseData.DeletableGroupResultCollection;
 import org.apache.kafka.common.message.DeleteTopicsRequestData;
 import org.apache.kafka.common.message.DeleteTopicsResponseData.DeletableTopicResult;
 import org.apache.kafka.common.message.DeleteTopicsResponseData;
@@ -907,13 +911,21 @@ public class RequestResponseTest {
     }
 
     private DeleteGroupsRequest createDeleteGroupsRequest() {
-        return new DeleteGroupsRequest.Builder(Collections.singleton("test-group")).build();
+        return new DeleteGroupsRequest.Builder(
+            new DeleteGroupsRequestData()
+                .setGroupsNames(Collections.singletonList("test-group"))
+        ).build();
     }
 
     private DeleteGroupsResponse createDeleteGroupsResponse() {
-        Map<String, Errors> result = new HashMap<>();
-        result.put("test-group", Errors.NONE);
-        return new DeleteGroupsResponse(result);
+        DeletableGroupResultCollection result = new DeletableGroupResultCollection();
+        result.add(new DeletableGroupResult()
+                       .setGroupId("test-group")
+                       .setErrorCode(Errors.NONE.code()));
+        return new DeleteGroupsResponse(
+            new DeleteGroupsResponseData()
+                .setResults(result)
+        );
     }
 
     @SuppressWarnings("deprecation")

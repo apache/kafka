@@ -95,7 +95,8 @@ public class ProducerMetadata extends Metadata {
         long currentTimeMs = time.milliseconds();
         long deadlineMs = currentTimeMs + timeoutMs < 0 ? Long.MAX_VALUE : currentTimeMs + timeoutMs;
         time.waitObject(this, () -> {
-            maybeThrowException();
+            // Throw fatal exceptions, if there are any. Recoverable topic errors will be handled by the caller.
+            maybeThrowFatalException();
             return updateVersion() > lastVersion || isClosed();
         }, deadlineMs);
 
