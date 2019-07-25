@@ -26,7 +26,7 @@ import java.util.Map;
 public class SubscriptionResponseWrapperSerde<V> implements Serde<SubscriptionResponseWrapper<V>> {
     private final SubscriptionResponseWrapperSerializer<V> serializer;
     private final SubscriptionResponseWrapperDeserializer<V> deserializer;
-    public static int versionBits = 7;
+    public final static int VERSION_BITS = 7;
 
     public SubscriptionResponseWrapperSerde(final Serde<V> foreignValueSerde) {
         this.serializer = new SubscriptionResponseWrapperSerializer<>(foreignValueSerde.serializer());
@@ -77,7 +77,7 @@ public class SubscriptionResponseWrapperSerde<V> implements Serde<SubscriptionRe
             final ByteBuffer buf = ByteBuffer.allocate(1 + hashLength + serializedDataLength);
 
             if (originalHash != null) {
-                buf.put((byte) (data.getVersion() | (byte) 0x00));
+                buf.put(data.getVersion());
                 buf.putLong(originalHash[0]);
                 buf.putLong(originalHash[1]);
             } else {

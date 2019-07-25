@@ -331,10 +331,10 @@ class KTable[K, V](val inner: KTableJ[K, V]) {
     * one for each matched record-pair with the same key
     */
   def join[VR, KO, VO](other: KTable[KO, VO],
-                       keyExtractor: ValueMapper[V, KO],
+                       keyExtractor: Function[V, KO],
                        joiner: ValueJoiner[V, VO, VR],
                        materialized: Materialized[K, VR, KeyValueStore[Bytes, Array[Byte]]]): KTable[K, VR] =
-    inner.join(other.inner, keyExtractor, joiner, materialized)
+    inner.join(other.inner, keyExtractor.asJavaFunction, joiner, materialized)
 
   /**
     * Join records of this [[KTable]] with another [[KTable]]'s records using non-windowed left join. Records from this
@@ -349,10 +349,10 @@ class KTable[K, V](val inner: KTableJ[K, V]) {
     * one for each matched record-pair with the same key
     */
   def leftJoin[VR, KO, VO](other: KTable[KO, VO],
-                           keyExtractor: ValueMapper[V, KO],
+                           keyExtractor: Function[V, KO],
                            joiner: ValueJoiner[V, VO, VR],
                            materialized: Materialized[K, VR, KeyValueStore[Bytes, Array[Byte]]]): KTable[K, VR] =
-    inner.leftJoin(other.inner, keyExtractor, joiner, materialized)
+    inner.leftJoin(other.inner, keyExtractor.asJavaFunction, joiner, materialized)
 
   /**
    * Get the name of the local state store used that can be used to query this [[KTable]].

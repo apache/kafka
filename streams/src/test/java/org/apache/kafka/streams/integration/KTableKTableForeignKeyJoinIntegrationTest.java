@@ -40,7 +40,6 @@ import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Named;
 import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.streams.kstream.ValueJoiner;
-import org.apache.kafka.streams.kstream.ValueMapper;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.QueryableStoreTypes;
@@ -63,6 +62,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
+import java.util.function.Function;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -122,7 +122,7 @@ public class KTableKTableForeignKeyJoinIntegrationTest {
         CLUSTER.deleteTopicsAndWait(OUTPUT);
 
         CLUSTER.createTopic(LEFT_TABLE, 3, 1);
-        CLUSTER.createTopic(RIGHT_TABLE, 7, 1);
+        CLUSTER.createTopic(RIGHT_TABLE, 3, 1);
         CLUSTER.createTopic(OUTPUT, 3, 1);
 
         IntegrationTestUtils.purgeLocalStreamsState(streamsConfig);
@@ -130,12 +130,6 @@ public class KTableKTableForeignKeyJoinIntegrationTest {
 
     @After
     public void after() throws IOException {
-        Set<String> topics = CLUSTER.getAllTopicsInCluster();
-
-        for (final String topic : topics) {
-            System.out.println(topic);
-        }
-
         if (streams != null) {
             streams.close();
             streams = null;
@@ -610,7 +604,7 @@ public class KTableKTableForeignKeyJoinIntegrationTest {
     // Do not change unless you want to change all the test results as well.
     private ValueJoiner<Float, Long, String> joiner = (value1, value2) -> "value1=" + value1 + ",value2=" + value2;
     //Do not change. See above comment.
-    private ValueMapper<Float, String> tableOneKeyExtractor = value -> Integer.toString((int) value.floatValue());
+    private Function<Float, String> tableOneKeyExtractor = value -> Integer.toString((int) value.floatValue());
 
     private void validateQueryableStoresContainExpectedKeyValues(final Set<KeyValue<Integer, String>> expectedResult,
                                                                  final String queryableStoreName) {

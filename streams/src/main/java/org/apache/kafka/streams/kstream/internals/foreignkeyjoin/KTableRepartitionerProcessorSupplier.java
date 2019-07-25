@@ -19,12 +19,13 @@ package org.apache.kafka.streams.kstream.internals.foreignkeyjoin;
 
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Murmur3;
-import org.apache.kafka.streams.kstream.ValueMapper;
 import org.apache.kafka.streams.kstream.internals.Change;
 import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
+
+import java.util.function.Function;
 
 import static org.apache.kafka.streams.kstream.internals.foreignkeyjoin.SubscriptionWrapper.Instruction.PROPAGATE_ONLY_IF_FK_VAL_AVAILABLE;
 import static org.apache.kafka.streams.kstream.internals.foreignkeyjoin.SubscriptionWrapper.Instruction.PROPAGATE_NULL_IF_NO_FK_VAL_AVAILABLE;
@@ -33,14 +34,14 @@ import static org.apache.kafka.streams.kstream.internals.foreignkeyjoin.Subscrip
 
 public class KTableRepartitionerProcessorSupplier<K, KO, V> implements ProcessorSupplier<K, Change<V>> {
 
-    private final ValueMapper<V, KO> mapper;
+    private final Function<V, KO> foreignKeyExtractor;
     private final Serializer<V> valueSerializer;
     private final boolean leftJoin;
 
-    public KTableRepartitionerProcessorSupplier(final ValueMapper<V, KO> extractor,
+    public KTableRepartitionerProcessorSupplier(final Function<V, KO> foreignKeyExtractor,
                                                 final Serializer<V> valueSerializer,
                                                 final boolean leftJoin) {
-        this.mapper = extractor;
+        this.foreignKeyExtractor = foreignKeyExtractor;
         this.valueSerializer = valueSerializer;
         this.leftJoin = leftJoin;
     }
@@ -64,9 +65,9 @@ public class KTableRepartitionerProcessorSupplier<K, KO, V> implements Processor
                     Murmur3.hash128(valueSerializer.serialize(context().topic(), change.newValue));
 
             if (change.oldValue != null) {
-                final KO oldForeignKey = mapper.apply(change.oldValue);
+                final KO oldForeignKey = foreignKeyExtractor.apply(change.oldValue);
                 if (change.newValue != null) {
-                    final KO newForeignKey = mapper.apply(change.newValue);
+                    final KO newForeignKey = foreignKeyExtractor.apply(change.newValue);
 
                     //Requires equal to be defined...
                     if (oldForeignKey.equals(newForeignKey)) {
@@ -97,7 +98,7 @@ public class KTableRepartitionerProcessorSupplier<K, KO, V> implements Processor
                 } else {
                     instruction = PROPAGATE_ONLY_IF_FK_VAL_AVAILABLE;
                 }
-                context().forward(mapper.apply(change.newValue), new SubscriptionWrapper<>(currentHash, instruction, key));
+                context().forward(foreignKeyExtractor.apply(change.newValue), new SubscriptionWrapper<>(currentHash, instruction, key));
             }
         }
 

@@ -26,7 +26,7 @@ import java.util.Map;
 public class SubscriptionWrapperSerde<K> implements Serde {
     private final SubscriptionWrapperSerializer<K> serializer;
     private final SubscriptionWrapperDeserializer<K> deserializer;
-    public static int versionBits = 7;
+    public final static int VERSION_BITS = 7;
 
     public SubscriptionWrapperSerde(final Serde<K> primaryKeySerde) {
         this.serializer = new SubscriptionWrapperSerializer<>(primaryKeySerde.serializer());
@@ -72,7 +72,7 @@ public class SubscriptionWrapperSerde<K> implements Serde {
             final ByteBuffer buf;
             if (data.getHash() != null) {
                 buf = ByteBuffer.allocate(2 + 2 * Long.BYTES + primaryKeySerializedData.length);
-                buf.put((byte) (data.getVersion() | (byte) 0x00));
+                buf.put(data.getVersion());
             } else {
                 //Don't store hash as it's null.
                 buf = ByteBuffer.allocate(2 + primaryKeySerializedData.length);

@@ -42,6 +42,7 @@ public class SubscriptionWrapperSerdeTest {
     }
 
     @Test
+    @SuppressWarnings("unchecked")
     public void shouldSerdeNullHashTest() {
         final String originalKey = "originalKey";
         final SubscriptionWrapperSerde swSerde = new SubscriptionWrapperSerde<>(Serdes.String());
@@ -56,19 +57,21 @@ public class SubscriptionWrapperSerdeTest {
     }
 
     @Test (expected = NullPointerException.class)
+    @SuppressWarnings("unchecked")
     public void shouldThrowExceptionOnNullKeyTest() {
         final String originalKey = null;
         final SubscriptionWrapperSerde swSerde = new SubscriptionWrapperSerde<>(Serdes.String());
-        final long[] hashedValue = Murmur3.hash128(new byte[] {(byte) 0xFF, (byte) 0xAA, (byte) 0x00, (byte) 0x19});;
+        final long[] hashedValue = Murmur3.hash128(new byte[] {(byte) 0xFF, (byte) 0xAA, (byte) 0x00, (byte) 0x19});
         final SubscriptionWrapper wrapper = new SubscriptionWrapper<>(hashedValue, SubscriptionWrapper.Instruction.PROPAGATE_ONLY_IF_FK_VAL_AVAILABLE, originalKey);
         swSerde.serializer().serialize(null, wrapper);
     }
 
     @Test (expected = NullPointerException.class)
+    @SuppressWarnings("unchecked")
     public void shouldThrowExceptionOnNullInstructionTest() {
         final String originalKey = "originalKey";
         final SubscriptionWrapperSerde swSerde = new SubscriptionWrapperSerde<>(Serdes.String());
-        final long[] hashedValue = Murmur3.hash128(new byte[] {(byte) 0xFF, (byte) 0xAA, (byte) 0x00, (byte) 0x19});;
+        final long[] hashedValue = Murmur3.hash128(new byte[] {(byte) 0xFF, (byte) 0xAA, (byte) 0x00, (byte) 0x19});
         final SubscriptionWrapper wrapper = new SubscriptionWrapper<>(hashedValue, null, originalKey);
         swSerde.serializer().serialize(null, wrapper);
     }

@@ -31,6 +31,8 @@ import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.QueryableStoreType;
 import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
 
+import java.util.function.Function;
+
 /**
  * {@code KTable} is an abstraction of a <i>changelog stream</i> from a primary-keyed table.
  * Each record in this changelog stream is an update on the primary-keyed table with the record key as the primary key.
@@ -2135,13 +2137,13 @@ public interface KTable<K, V> {
      * @return
      */
     <VR, KO, VO> KTable<K, VR> join(final KTable<KO, VO> other,
-                                    final ValueMapper<V, KO> foreignKeyExtractor,
+                                    final Function<V, KO> foreignKeyExtractor,
                                     final ValueJoiner<V, VO, VR> joiner,
                                     final Named named,
                                     final Materialized<K, VR, KeyValueStore<Bytes, byte[]>> materialized);
 
     <VR, KO, VO> KTable<K, VR> join(final KTable<KO, VO> other,
-                                    final ValueMapper<V, KO> foreignKeyExtractor,
+                                    final Function<V, KO> foreignKeyExtractor,
                                     final ValueJoiner<V, VO, VR> joiner,
                                     final Materialized<K, VR, KeyValueStore<Bytes, byte[]>> materialized);
 
@@ -2163,13 +2165,13 @@ public interface KTable<K, V> {
      * @return a {@code KTable} that contains only those records that satisfy the given predicate
      */
     <VR, KO, VO> KTable<K, VR> leftJoin(final KTable<KO, VO> other,
-                                        final ValueMapper<V, KO> foreignKeyExtractor,
+                                        final Function<V, KO> foreignKeyExtractor,
                                         final ValueJoiner<V, VO, VR> joiner,
                                         final Named named,
                                         final Materialized<K, VR, KeyValueStore<Bytes, byte[]>> materialized);
 
     <VR, KO, VO> KTable<K, VR> leftJoin(final KTable<KO, VO> other,
-                                        final ValueMapper<V, KO> foreignKeyExtractor,
+                                        final Function<V, KO> foreignKeyExtractor,
                                         final ValueJoiner<V, VO, VR> joiner,
                                         final Materialized<K, VR, KeyValueStore<Bytes, byte[]>> materialized);
 

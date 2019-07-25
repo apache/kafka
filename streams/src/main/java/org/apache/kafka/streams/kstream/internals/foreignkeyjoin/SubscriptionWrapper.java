@@ -24,7 +24,7 @@ import java.util.Objects;
 public class SubscriptionWrapper<K> {
     final static byte CURRENT_VERSION = 0;
     //This is the maximum version because SubscriptionWrapperSerde uses
-    final private static byte MAXIMUM_VERSION_INCLUSIVE = (byte) Math.pow(2, SubscriptionWrapperSerde.versionBits);
+    final private static byte MAXIMUM_VERSION_INCLUSIVE = (byte) Math.pow(2, SubscriptionWrapperSerde.VERSION_BITS);
 
     final private long[] hash;
     final private Instruction instruction;

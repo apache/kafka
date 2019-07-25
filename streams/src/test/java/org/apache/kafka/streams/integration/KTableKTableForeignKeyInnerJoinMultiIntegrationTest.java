@@ -38,7 +38,6 @@ import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.streams.kstream.ValueJoiner;
-import org.apache.kafka.streams.kstream.ValueMapper;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.TestUtils;
@@ -55,6 +54,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Properties;
 import java.util.Set;
+import java.util.function.Function;
 
 import static org.junit.Assert.assertEquals;
 
@@ -82,7 +82,7 @@ public class KTableKTableForeignKeyInnerJoinMultiIntegrationTest {
     @BeforeClass
     public static void beforeTest() throws Exception {
         //Use multiple partitions to ensure distribution of keys.
-        CLUSTER.createTopic(TABLE_1, 3, 1);
+        CLUSTER.createTopic(TABLE_1, 7, 1);
         CLUSTER.createTopic(TABLE_2, 7, 1);
         CLUSTER.createTopic(TABLE_3, 7, 1);
         CLUSTER.createTopic(OUTPUT, 7, 1);
@@ -231,8 +231,8 @@ public class KTableKTableForeignKeyInnerJoinMultiIntegrationTest {
             throw new RuntimeException("Current implementation of joinOnForeignKey requires a materialized store");
         }
 
-        final ValueMapper<Float, String> tableOneKeyExtractor = value -> Integer.toString((int) value.floatValue());
-        final ValueMapper<String, Integer> joinedTableKeyExtractor = value -> {
+        final Function<Float, String> tableOneKeyExtractor = value -> Integer.toString((int) value.floatValue());
+        final Function<String, Integer> joinedTableKeyExtractor = value -> {
             //Hardwired to return the desired foreign key as a test shortcut
             if (value.contains("value2=10"))
                 return 10;
