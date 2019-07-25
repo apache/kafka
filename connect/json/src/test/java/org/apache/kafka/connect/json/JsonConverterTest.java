@@ -786,6 +786,24 @@ public class JsonConverterTest {
         assertEquals(new SchemaAndValue(Schema.STRING_SCHEMA, "foo-bar-baz"), converter.toConnectHeader(TOPIC, "headerName", "{ \"schema\": { \"type\": \"string\" }, \"payload\": \"foo-bar-baz\" }".getBytes()));
     }
 
+    // Value `null` is valid for an optional filed, even though the filed has a default value.
+    // Only when field is required, the converter return default value fallback when value is `null`.
+
+    @Test
+    public void nullValueWithDefaultValueAndOptionalToJson() {
+        Schema schema = SchemaBuilder.string().optional().defaultValue("default-string").build();
+        JsonNode converted = parse(converter.fromConnectData(TOPIC, schema, null));
+        JsonNode expected = parse("{\"schema\":{\"type\":\"string\",\"optional\":true,\"default\":\"default-string\"},\"payload\":null}");
+        assertEquals(expected, converted);
+    }
+
+    @Test
+    public void nullValueWithDefaultValueAndRequiredToJson() {
+        Schema schema = SchemaBuilder.string().required().defaultValue("default-string").build();
+        JsonNode converted = parse(converter.fromConnectData(TOPIC, schema, null));
+        JsonNode expected = parse("{\"schema\":{\"type\":\"string\",\"optional\":false,\"default\":\"default-string\"},\"payload\":\"default-string\"}");
+        assertEquals(expected, converted);
+    }
 
     private JsonNode parse(byte[] json) {
         try {
