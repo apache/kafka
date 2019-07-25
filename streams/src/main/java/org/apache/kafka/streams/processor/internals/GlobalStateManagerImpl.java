@@ -132,16 +132,16 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
 
         final List<StateStore> stateStores = topology.globalStateStores();
         final Map<String, String> storeNameToTopic = topology.storeToChangelogTopic();
-        final Set<String> topics = new HashSet<String>();
+        final Set<String> stateStoreTopics = new HashSet<>();
         for (final StateStore stateStore : stateStores) {
             globalStoreNames.add(stateStore.name());
             final String sourceTopic = storeNameToTopic.get(stateStore.name());
-            topics.add(sourceTopic);
+            stateStoreTopics.add(sourceTopic);
             stateStore.init(globalProcessorContext, stateStore);
         }
 
-        // now prune non-relevant topic-partitions from checkpointFileCache
-        checkpointFileCache.keySet().removeIf(e -> !topics.contains(e.topic()));
+        // prune topic-partitions not associated with any global state store from checkpointFileCache
+        checkpointFileCache.keySet().removeIf(e -> !stateStoreTopics.contains(e.topic()));
         return Collections.unmodifiableSet(globalStoreNames);
     }
 
