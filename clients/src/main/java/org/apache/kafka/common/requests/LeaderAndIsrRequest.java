@@ -342,14 +342,14 @@ public class LeaderAndIsrRequest extends AbstractControlRequest {
                               List<Integer> replicas,
                               boolean isNew) {
             this(controllerEpoch,
-                    leader,
-                    leaderEpoch,
-                    isr,
-                    zkVersion,
-                    replicas,
-                    Collections.emptyList(),
-                    Collections.emptyList(),
-                    isNew);
+                 leader,
+                 leaderEpoch,
+                 isr,
+                 zkVersion,
+                 replicas,
+                 Collections.emptyList(),
+                 Collections.emptyList(),
+                 isNew);
         }
 
         public PartitionState(int controllerEpoch,

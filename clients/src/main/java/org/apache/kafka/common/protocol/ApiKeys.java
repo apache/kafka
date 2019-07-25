@@ -199,9 +199,9 @@ public enum ApiKeys {
     INCREMENTAL_ALTER_CONFIGS(44, "IncrementalAlterConfigs", IncrementalAlterConfigsRequestData.SCHEMAS,
                               IncrementalAlterConfigsResponseData.SCHEMAS),
     ALTER_PARTITION_REASSIGNMENTS(45, "AlterPartitionReassignments", AlterPartitionReassignmentsRequestData.SCHEMAS,
-                                AlterPartitionReassignmentsResponseData.SCHEMAS),
+                                  AlterPartitionReassignmentsResponseData.SCHEMAS),
     LIST_PARTITION_REASSIGNMENTS(46, "ListPartitionReassignments", ListPartitionReassignmentsRequestData.SCHEMAS,
-                                ListPartitionReassignmentsResponseData.SCHEMAS);
+                                 ListPartitionReassignmentsResponseData.SCHEMAS);
 
     private static final ApiKeys[] ID_TO_TYPE;
     private static final int MIN_API_KEY = 0;

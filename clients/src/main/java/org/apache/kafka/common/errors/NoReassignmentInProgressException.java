@@ -18,14 +18,14 @@
 package org.apache.kafka.common.errors;
 
 /**
- * Thrown if a request cannot cancel a reassignment because one is not in progress.
+ * Thrown if a reassignment cannot be cancelled because none is in progress.
  */
 public class NoReassignmentInProgressException extends ApiException {
-    public NoReassignmentInProgressException(String msg) {
-        super(msg);
+    public NoReassignmentInProgressException(String message) {
+        super(message);
     }
 
-    public NoReassignmentInProgressException(String msg, Throwable cause) {
-        super(msg, cause);
+    public NoReassignmentInProgressException(String message, Throwable cause) {
+        super(message, cause);
     }
 }
