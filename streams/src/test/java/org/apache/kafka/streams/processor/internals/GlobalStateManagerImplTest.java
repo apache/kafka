@@ -172,6 +172,30 @@ public class GlobalStateManagerImplTest {
     }
 
     @Test
+    public void shouldIgnoreOldTopicPartitions() throws IOException {
+        final HashMap<TopicPartition, Long> expectedOffsets = new HashMap<>();
+        expectedOffsets.put(t1, 1L);
+        expectedOffsets.put(t2, 1L);
+        expectedOffsets.put(t3, 1L);
+        expectedOffsets.put(t4, 1L);
+
+        final HashMap<TopicPartition, Long> startOffsets = new HashMap<>(expectedOffsets);
+        final OffsetCheckpoint checkpoint = new OffsetCheckpoint(checkpointFile);
+        final TopicPartition tOld = new TopicPartition("oldTopic", 1);
+        startOffsets.put(tOld, 1L);
+
+        // start with a checkpoint file will all topic-partitions: expected and old (not
+        // associated with any global state store).
+        checkpoint.write(startOffsets);
+
+        stateManager.initialize();
+        final Map<TopicPartition, Long> offsets = stateManager.checkpointed();
+
+        // checkpointed offsets only contain topic-partitions associated with state stores
+        assertEquals(expectedOffsets, offsets);
+    }
+
+    @Test
     public void shouldNotDeleteCheckpointFileAfterLoaded() throws IOException {
         writeCheckpoint();
         stateManager.initialize();
