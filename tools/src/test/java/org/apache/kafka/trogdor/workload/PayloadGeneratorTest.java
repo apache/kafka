@@ -30,6 +30,7 @@ import java.util.List;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertThrows;
 
 public class PayloadGeneratorTest {
     @Rule
@@ -188,7 +189,33 @@ public class PayloadGeneratorTest {
         testReproducible(new RandomComponentPayloadGenerator(123, components2));
         testReproducible(new RandomComponentPayloadGenerator(50, components3));
         testReproducible(new RandomComponentPayloadGenerator(0, components4));
-    }   
+    } 
+    
+    @Test
+    public void testRandomComponentPayloadGeneratorErrors() {
+        NullPayloadGenerator nullGenerator = new NullPayloadGenerator();
+        RandomGeneratorConfig nullConfig = new RandomGeneratorConfig(25, nullGenerator);
+        UniformRandomPayloadGenerator uniformGenerator =
+            new UniformRandomPayloadGenerator(5, 123, 0);
+        RandomGeneratorConfig uniformConfig = new RandomGeneratorConfig(25, uniformGenerator);
+        ConstantPayloadGenerator constantGenerator =
+            new ConstantPayloadGenerator(4, new byte[0]);
+        RandomGeneratorConfig constantConfig = new RandomGeneratorConfig(-25, constantGenerator);
+        
+        List<RandomGeneratorConfig> components1 = new ArrayList<>(Arrays.asList(nullConfig, uniformConfig));
+        List<RandomGeneratorConfig> components2 = new ArrayList<>(Arrays.asList(
+             nullConfig, constantConfig, uniformConfig, nullConfig, uniformConfig, uniformConfig));
+     
+        assertThrows(IllegalArgumentException.class, () -> {
+            new PayloadIterator(new RandomComponentPayloadGenerator(1, new ArrayList<>()));
+        });
+        assertThrows(IllegalArgumentException.class, () -> {
+            new PayloadIterator(new RandomComponentPayloadGenerator(13, components2));
+        });
+        assertThrows(IllegalArgumentException.class, () -> {
+            new PayloadIterator(new RandomComponentPayloadGenerator(123, components1));
+        });
+    }  
 
     @Test
     public void testPayloadIterator() {

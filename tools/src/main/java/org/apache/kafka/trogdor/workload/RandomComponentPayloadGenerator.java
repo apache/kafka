@@ -67,8 +67,8 @@ public class RandomComponentPayloadGenerator implements PayloadGenerator {
     public RandomComponentPayloadGenerator(@JsonProperty("seed") long seed,
                                            @JsonProperty("components") List<RandomGeneratorConfig> components) {
         this.seed = seed;
-        if (components == null) {
-            throw new IllegalArgumentException("Components must be a non-null list of RandomGeneratorConfigs such that the percent fields sum to 100");
+        if (components == null || components.isEmpty()) {
+            throw new IllegalArgumentException("Components must be a specified, non-empty list of RandomGeneratorConfigs.");
         } else {
             int sum = 0;
             for (RandomGeneratorConfig generator : components) {
@@ -78,7 +78,7 @@ public class RandomComponentPayloadGenerator implements PayloadGenerator {
                 sum += generator.percent();
             }
             if (sum != 100) {
-                throw new IllegalArgumentException("Components must be a non-null list of RandomGeneratorConfigs such that the percent fields sum to 100");
+                throw new IllegalArgumentException("Components must be a list of RandomGeneratorConfigs such that the percent fields sum to 100");
             }
         }
         this.components = new ArrayList<>(components);
