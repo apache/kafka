@@ -19,7 +19,6 @@ package kafka.log
 import java.io.{File, IOException}
 import java.nio.file.{Files, NoSuchFileException}
 import java.nio.file.attribute.FileTime
-import java.util.concurrent.TimeUnit
 
 import kafka.common.LogSegmentOffsetOverflowException
 import kafka.metrics.{KafkaMetricsGroup, KafkaTimer}
@@ -686,5 +685,5 @@ object LogSegment {
 }
 
 object LogFlushStats extends KafkaMetricsGroup {
-  val logFlushTimer = new KafkaTimer(newTimer("LogFlushRateAndTimeMs", TimeUnit.MILLISECONDS, TimeUnit.SECONDS))
+  val logFlushTimer = new KafkaTimer(newTimer("LogFlushRateAndTime"))
 }

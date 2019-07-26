@@ -16,7 +16,7 @@
  */
 package kafka.metrics
 
-import com.yammer.metrics.core.Timer
+import com.codahale.metrics.Timer
 
 /**
  * A wrapper around metrics timer object that provides a convenient mechanism
@@ -32,4 +32,3 @@ class KafkaTimer(metric: Timer) {
     finally ctx.stop()
   }
 }
-

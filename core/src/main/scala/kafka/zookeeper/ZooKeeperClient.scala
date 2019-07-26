@@ -18,11 +18,9 @@
 package kafka.zookeeper
 
 import java.util
-import java.util.Locale
 import java.util.concurrent.locks.{ReentrantLock, ReentrantReadWriteLock}
 import java.util.concurrent._
 
-import com.yammer.metrics.core.{Gauge, MetricName}
 import kafka.metrics.KafkaMetricsGroup
 import kafka.utils.CoreUtils.{inLock, inReadLock, inWriteLock}
 import kafka.utils.{KafkaScheduler, Logging}
@@ -95,7 +93,7 @@ class ZooKeeperClient(connectString: String,
     stateToEventTypeMap.map { case (state, eventType) =>
       val name = s"ZooKeeper${eventType}PerSec"
       metricNames += name
-      state -> newMeter(name, eventType.toLowerCase(Locale.ROOT), TimeUnit.SECONDS)
+      state -> newMeter(name)
     }
   }
 
@@ -103,9 +101,7 @@ class ZooKeeperClient(connectString: String,
   // Fail-fast if there's an error during construction (so don't call initialize, which retries forever)
   @volatile private var zooKeeper = new ZooKeeper(connectString, sessionTimeoutMs, ZooKeeperClientWatcher)
 
-  newGauge("SessionState", new Gauge[String] {
-    override def value: String = Option(connectionState.toString).getOrElse("DISCONNECTED")
-  })
+  newGauge[String]("SessionState", () => Option(connectionState.toString).getOrElse("DISCONNECTED"))
 
   metricNames += "SessionState"
 
@@ -117,7 +113,7 @@ class ZooKeeperClient(connectString: String,
       throw e
   }
 
-  override def metricName(name: String, metricTags: scala.collection.Map[String, String]): MetricName = {
+  override def metricName(name: String, metricTags: scala.collection.Map[String, String]): String = {
     explicitMetricName(metricGroup, metricType, name, metricTags)
   }
 

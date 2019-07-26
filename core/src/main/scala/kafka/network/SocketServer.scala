@@ -26,7 +26,6 @@ import java.util.concurrent._
 import java.util.concurrent.atomic._
 import java.util.function.Supplier
 
-import com.yammer.metrics.core.Gauge
 import kafka.cluster.{BrokerEndPoint, EndPoint}
 import kafka.metrics.KafkaMetricsGroup
 import kafka.network.RequestChannel.{CloseConnectionResponse, EndThrottlingResponse, NoOpResponse, SendResponse, StartThrottlingResponse}
@@ -124,10 +123,9 @@ class SocketServer(val config: KafkaConfig,
       }
     }
 
-    newGauge(s"${DataPlaneMetricPrefix}NetworkProcessorAvgIdlePercent",
-      new Gauge[Double] {
-
-        def value = SocketServer.this.synchronized {
+    newGauge[Double](s"${DataPlaneMetricPrefix}NetworkProcessorAvgIdlePercent",
+      () => {
+        SocketServer.this.synchronized {
           val ioWaitRatioMetricNames = dataPlaneProcessors.values.asScala.map { p =>
             metrics.metricName("io-wait-ratio", MetricsGroup, p.metricTags)
           }
@@ -137,10 +135,9 @@ class SocketServer(val config: KafkaConfig,
         }
       }
     )
-    newGauge(s"${ControlPlaneMetricPrefix}NetworkProcessorAvgIdlePercent",
-      new Gauge[Double] {
-
-        def value = SocketServer.this.synchronized {
+    newGauge[Double](s"${ControlPlaneMetricPrefix}NetworkProcessorAvgIdlePercent",
+      () => {
+        SocketServer.this.synchronized {
           val ioWaitRatioMetricName = controlPlaneProcessorOpt.map { p =>
             metrics.metricName("io-wait-ratio", "socket-server-metrics", p.metricTags)
           }
@@ -150,33 +147,21 @@ class SocketServer(val config: KafkaConfig,
         }
       }
     )
-    newGauge("MemoryPoolAvailable",
-      new Gauge[Long] {
-        def value = memoryPool.availableMemory()
-      }
-    )
-    newGauge("MemoryPoolUsed",
-      new Gauge[Long] {
-        def value = memoryPool.size() - memoryPool.availableMemory()
-      }
-    )
-    newGauge(s"${DataPlaneMetricPrefix}ExpiredConnectionsKilledCount",
-      new Gauge[Double] {
-
-        def value = SocketServer.this.synchronized {
-          val expiredConnectionsKilledCountMetricNames = dataPlaneProcessors.values.asScala.map { p =>
-            metrics.metricName("expired-connections-killed-count", "socket-server-metrics", p.metricTags)
-          }
-          expiredConnectionsKilledCountMetricNames.map { metricName =>
-            Option(metrics.metric(metricName)).fold(0.0)(m => m.metricValue.asInstanceOf[Double])
-          }.sum
+    newGauge[Long]("MemoryPoolAvailable", () => memoryPool.availableMemory())
+    newGauge[Long]("MemoryPoolUsed", () => memoryPool.size() - memoryPool.availableMemory())
+    newGauge[Double](s"${DataPlaneMetricPrefix}ExpiredConnectionsKilledCount",
+      () => SocketServer.this.synchronized {
+        val expiredConnectionsKilledCountMetricNames = dataPlaneProcessors.values.asScala.map { p =>
+          metrics.metricName("expired-connections-killed-count", "socket-server-metrics", p.metricTags)
         }
+        expiredConnectionsKilledCountMetricNames.map { metricName =>
+          Option(metrics.metric(metricName)).fold(0.0)(m => m.metricValue.asInstanceOf[Double])
+        }.sum
       }
     )
-    newGauge(s"${ControlPlaneMetricPrefix}ExpiredConnectionsKilledCount",
-      new Gauge[Double] {
-
-        def value = SocketServer.this.synchronized {
+    newGauge[Double](s"${ControlPlaneMetricPrefix}ExpiredConnectionsKilledCount",
+      () => {
+        SocketServer.this.synchronized {
           val expiredConnectionsKilledCountMetricNames = controlPlaneProcessorOpt.map { p =>
             metrics.metricName("expired-connections-killed-count", "socket-server-metrics", p.metricTags)
           }
@@ -482,7 +467,7 @@ private[kafka] class Acceptor(val endPoint: EndPoint,
   private val processors = new ArrayBuffer[Processor]()
   private val processorsStarted = new AtomicBoolean
   private val blockedPercentMeter = newMeter(s"${metricPrefix}AcceptorBlockedPercent",
-    "blocked time", TimeUnit.NANOSECONDS, Map(ListenerMetricTag -> endPoint.listenerName.value))
+    Map(ListenerMetricTag -> endPoint.listenerName.value))
 
   private[network] def addProcessors(newProcessors: Buffer[Processor], processorThreadPrefix: String): Unit = synchronized {
     processors ++= newProcessors
@@ -700,14 +685,12 @@ private[kafka] class Processor(val id: Int,
     NetworkProcessorMetricTag -> id.toString
   ).asJava
 
-  newGauge(IdlePercentMetricName,
-    new Gauge[Double] {
-      def value = {
-        Option(metrics.metric(metrics.metricName("io-wait-ratio", MetricsGroup, metricTags)))
-          .fold(0.0)(m => Math.min(m.metricValue.asInstanceOf[Double], 1.0))
-      }
+  newGauge[Double](IdlePercentMetricName,
+    () => {
+      Option(metrics.metric(metrics.metricName("io-wait-ratio", MetricsGroup, metricTags)))
+        .fold(0.0)(m => Math.min(m.metricValue.asInstanceOf[Double], 1.0))
     },
-    // for compatibility, only add a networkProcessor tag to the Yammer Metrics alias (the equivalent Selector metric
+    // for compatibility, only add a networkProcessor tag to the Dropwizard Metrics alias (the equivalent Selector metric
     // also includes the listener name)
     Map(NetworkProcessorMetricTag -> id.toString)
   )
@@ -983,7 +966,7 @@ private[kafka] class Processor(val id: Int,
    */
   def accept(socketChannel: SocketChannel,
              mayBlock: Boolean,
-             acceptorIdlePercentMeter: com.yammer.metrics.core.Meter): Boolean = {
+             acceptorIdlePercentMeter: com.codahale.metrics.Meter): Boolean = {
     val accepted = {
       if (newConnections.offer(socketChannel))
         true
@@ -1111,7 +1094,7 @@ class ConnectionQuotas(config: KafkaConfig, time: Time) extends Logging {
   private val maxConnectionsPerListener = mutable.Map[ListenerName, ListenerConnectionQuota]()
   @volatile private var totalCount = 0
 
-  def inc(listenerName: ListenerName, address: InetAddress, acceptorBlockedPercentMeter: com.yammer.metrics.core.Meter) {
+  def inc(listenerName: ListenerName, address: InetAddress, acceptorBlockedPercentMeter: com.codahale.metrics.Meter) {
     counts.synchronized {
       waitForConnectionSlot(listenerName, acceptorBlockedPercentMeter)
 
@@ -1193,7 +1176,7 @@ class ConnectionQuotas(config: KafkaConfig, time: Time) extends Logging {
   }
 
   private def waitForConnectionSlot(listenerName: ListenerName,
-                                    acceptorBlockedPercentMeter: com.yammer.metrics.core.Meter): Unit = {
+                                    acceptorBlockedPercentMeter: com.codahale.metrics.Meter): Unit = {
     counts.synchronized {
       if (!connectionSlotAvailable(listenerName)) {
         val startNs = time.nanoseconds

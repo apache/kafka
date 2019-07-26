@@ -21,7 +21,6 @@ import java.util.concurrent._
 import java.util.concurrent.atomic._
 import java.util.concurrent.locks.{Lock, ReentrantLock}
 
-import com.yammer.metrics.core.Gauge
 import kafka.metrics.KafkaMetricsGroup
 import kafka.utils.CoreUtils.inLock
 import kafka.utils._
@@ -199,21 +198,8 @@ final class DelayedOperationPurgatory[T <: DelayedOperation](purgatoryName: Stri
 
   private val metricsTags = Map("delayedOperation" -> purgatoryName)
 
-  newGauge(
-    "PurgatorySize",
-    new Gauge[Int] {
-      def value: Int = watched
-    },
-    metricsTags
-  )
-
-  newGauge(
-    "NumDelayedOperations",
-    new Gauge[Int] {
-      def value: Int = numDelayed
-    },
-    metricsTags
-  )
+  newGauge[Int]("PurgatorySize", () => watched, metricsTags)
+  newGauge[Int]("NumDelayedOperations", () => numDelayed, metricsTags)
 
   if (reaperEnabled)
     expirationReaper.start()

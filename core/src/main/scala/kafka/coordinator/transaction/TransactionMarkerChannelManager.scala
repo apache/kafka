@@ -30,7 +30,6 @@ import org.apache.kafka.common.security.JaasContext
 import org.apache.kafka.common.utils.{LogContext, Time}
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.WriteTxnMarkersRequest.TxnMarkerEntry
-import com.yammer.metrics.core.Gauge
 import java.util
 import java.util.concurrent.{BlockingQueue, ConcurrentHashMap, LinkedBlockingQueue}
 
@@ -143,19 +142,9 @@ class TransactionMarkerChannelManager(config: KafkaConfig,
 
   override val requestTimeoutMs: Int = config.requestTimeoutMs
 
-  newGauge(
-    "UnknownDestinationQueueSize",
-    new Gauge[Int] {
-      def value: Int = markersQueueForUnknownBroker.totalNumMarkers
-    }
-  )
+  newGauge[Int]("UnknownDestinationQueueSize", () => markersQueueForUnknownBroker.totalNumMarkers)
 
-  newGauge(
-    "LogAppendRetryQueueSize",
-    new Gauge[Int] {
-      def value: Int = txnLogAppendRetryQueue.size
-    }
-  )
+  newGauge[Int]("LogAppendRetryQueueSize", () => txnLogAppendRetryQueue.size)
 
   override def generateRequests() = drainQueuedTransactionMarkers()
 

@@ -20,10 +20,10 @@ package kafka.server
 import kafka.network._
 import kafka.utils._
 import kafka.metrics.KafkaMetricsGroup
-import java.util.concurrent.{CountDownLatch, TimeUnit}
+import java.util.concurrent.CountDownLatch
 import java.util.concurrent.atomic.AtomicInteger
 
-import com.yammer.metrics.core.Meter
+import com.codahale.metrics.Meter
 import org.apache.kafka.common.internals.FatalExitError
 import org.apache.kafka.common.utils.{KafkaThread, Time}
 
@@ -102,7 +102,7 @@ class KafkaRequestHandlerPool(val brokerId: Int,
 
   private val threadPoolSize: AtomicInteger = new AtomicInteger(numThreads)
   /* a meter to track the average free capacity of the request handlers */
-  private val aggregateIdleMeter = newMeter(requestHandlerAvgIdleMetricName, "percent", TimeUnit.NANOSECONDS)
+  private val aggregateIdleMeter = newMeter(requestHandlerAvgIdleMetricName)
 
   this.logIdent = "[" + logAndThreadNamePrefix + " Kafka Request Handler on Broker " + brokerId + "], "
   val runnables = new mutable.ArrayBuffer[KafkaRequestHandler](numThreads)
@@ -150,35 +150,35 @@ class BrokerTopicMetrics(name: Option[String]) extends KafkaMetricsGroup {
   private val metricTypeMap = new Pool[String, Meter]
 
   def messagesInRate = metricTypeMap.getAndMaybePut(BrokerTopicStats.MessagesInPerSec,
-    newMeter(BrokerTopicStats.MessagesInPerSec, "messages", TimeUnit.SECONDS, tags))
+    newMeter(BrokerTopicStats.MessagesInPerSec, tags))
   def bytesInRate = metricTypeMap.getAndMaybePut(BrokerTopicStats.BytesInPerSec,
-    newMeter(BrokerTopicStats.BytesInPerSec, "bytes", TimeUnit.SECONDS, tags))
+    newMeter(BrokerTopicStats.BytesInPerSec, tags))
   def bytesOutRate = metricTypeMap.getAndMaybePut(BrokerTopicStats.BytesOutPerSec,
-    newMeter(BrokerTopicStats.BytesOutPerSec, "bytes", TimeUnit.SECONDS, tags))
+    newMeter(BrokerTopicStats.BytesOutPerSec, tags))
   def bytesRejectedRate = metricTypeMap.getAndMaybePut(BrokerTopicStats.BytesRejectedPerSec,
-    newMeter(BrokerTopicStats.BytesRejectedPerSec, "bytes", TimeUnit.SECONDS, tags))
+    newMeter(BrokerTopicStats.BytesRejectedPerSec, tags))
   private[server] def replicationBytesInRate =
     if (name.isEmpty) Some(metricTypeMap.getAndMaybePut(
       BrokerTopicStats.ReplicationBytesInPerSec,
-      newMeter(BrokerTopicStats.ReplicationBytesInPerSec, "bytes", TimeUnit.SECONDS, tags)))
+      newMeter(BrokerTopicStats.ReplicationBytesInPerSec, tags)))
     else None
   private[server] def replicationBytesOutRate =
     if (name.isEmpty) Some(metricTypeMap.getAndMaybePut(
       BrokerTopicStats.ReplicationBytesOutPerSec,
-      newMeter(BrokerTopicStats.ReplicationBytesOutPerSec, "bytes", TimeUnit.SECONDS, tags)))
+      newMeter(BrokerTopicStats.ReplicationBytesOutPerSec, tags)))
     else None
   def failedProduceRequestRate = metricTypeMap.getAndMaybePut(BrokerTopicStats.FailedProduceRequestsPerSec,
-    newMeter(BrokerTopicStats.FailedProduceRequestsPerSec, "requests", TimeUnit.SECONDS, tags))
+    newMeter(BrokerTopicStats.FailedProduceRequestsPerSec, tags))
   def failedFetchRequestRate = metricTypeMap.getAndMaybePut(BrokerTopicStats.FailedFetchRequestsPerSec,
-    newMeter(BrokerTopicStats.FailedFetchRequestsPerSec, "requests", TimeUnit.SECONDS, tags))
+    newMeter(BrokerTopicStats.FailedFetchRequestsPerSec, tags))
   def totalProduceRequestRate = metricTypeMap.getAndMaybePut(BrokerTopicStats.TotalProduceRequestsPerSec,
-    newMeter(BrokerTopicStats.TotalProduceRequestsPerSec, "requests", TimeUnit.SECONDS, tags))
+    newMeter(BrokerTopicStats.TotalProduceRequestsPerSec, tags))
   def totalFetchRequestRate = metricTypeMap.getAndMaybePut(BrokerTopicStats.TotalFetchRequestsPerSec,
-    newMeter(BrokerTopicStats.TotalFetchRequestsPerSec, "requests", TimeUnit.SECONDS, tags))
+    newMeter(BrokerTopicStats.TotalFetchRequestsPerSec, tags))
   def fetchMessageConversionsRate = metricTypeMap.getAndMaybePut(BrokerTopicStats.FetchMessageConversionsPerSec,
-    newMeter(BrokerTopicStats.FetchMessageConversionsPerSec, "requests", TimeUnit.SECONDS, tags))
+    newMeter(BrokerTopicStats.FetchMessageConversionsPerSec, tags))
   def produceMessageConversionsRate = metricTypeMap.getAndMaybePut(BrokerTopicStats.ProduceMessageConversionsPerSec,
-    newMeter(BrokerTopicStats.ProduceMessageConversionsPerSec, "requests", TimeUnit.SECONDS, tags))
+    newMeter(BrokerTopicStats.ProduceMessageConversionsPerSec, tags))
 
   // this method helps check with metricTypeMap first before deleting a metric
   def removeMetricHelper(metricType: String, tags: scala.collection.Map[String, String]): Unit = {
