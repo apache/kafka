@@ -58,9 +58,9 @@ public class PartitionAssignorAdapterTest {
     }
 
     @Test
-    public void shouldThrowClassCastExceptionOnNonAssignor() {
+    public void shouldThrowKafkaExceptionOnNonAssignor() {
         classNames = Arrays.asList(NotAnAssignor.class.getName());
-        assertThrows(ClassCastException.class, () -> PartitionAssignorAdapter.getAssignorInstances(classNames));
+        assertThrows(KafkaException.class, () -> PartitionAssignorAdapter.getAssignorInstances(classNames));
     }
 
     @Test

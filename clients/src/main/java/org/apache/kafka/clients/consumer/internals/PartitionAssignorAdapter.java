@@ -86,44 +86,37 @@ public class PartitionAssignorAdapter implements ConsumerPartitionAssignor {
     }
 
     public static List<ConsumerPartitionAssignor> getAssignorInstances(List<String> classNames) {
-        List<ConsumerPartitionAssignor> assignorInstances = new ArrayList<>();
-        Class<ConsumerPartitionAssignor> newClass = ConsumerPartitionAssignor.class;
-        Class<PartitionAssignor> oldClass = PartitionAssignor.class;
+        List<ConsumerPartitionAssignor> assignors = new ArrayList<>();
 
         if (classNames == null)
-            return assignorInstances;
+            return assignors;
 
         for (Object klass : classNames) {
-            Object assignor;
+            // first try to get the class if passed in as a string
             if (klass instanceof String) {
                 try {
-                    assignor = Utils.newInstance((String) klass, newClass);
-                } catch (ClassCastException maybeOldAssignor) {
-                    try {
-                        assignor = Utils.newInstance((String) klass, oldClass);
-                    } catch (ClassNotFoundException noAssignorFound) {
-                        throw new KafkaException(klass + " ClassNotFoundException exception occurred", noAssignorFound);
-                    }
-                } catch (ClassNotFoundException noAssignorFound) {
-                    throw new KafkaException(klass + " ClassNotFoundException exception occurred", noAssignorFound);
+                    klass = Class.forName((String) klass, true, Utils.getContextOrKafkaClassLoader());
+                } catch (ClassNotFoundException classNotFound) {
+                    throw new KafkaException(klass + " ClassNotFoundException exception occurred", classNotFound);
                 }
+            }
 
-            } else if (klass instanceof Class<?>) {
-                assignor = Utils.newInstance((Class<?>) klass);
+            if (klass instanceof Class<?>) {
+                if (ConsumerPartitionAssignor.class.isAssignableFrom((Class<?>) klass)) {
+                    assignors.add((ConsumerPartitionAssignor) Utils.newInstance((Class<?>) klass));
+                } else if (PartitionAssignor.class.isAssignableFrom((Class<?>) klass)) {
+                    assignors
+                        .add(new PartitionAssignorAdapter((PartitionAssignor) Utils.newInstance((Class<?>) klass)));
+                    LOG.warn(
+                        "The PartitionAssignor interface has been deprecated, please implement the ConsumerPartitionAssignor interface instead.");
+                } else {
+                    throw new KafkaException(klass + " is not an instance of " + PartitionAssignor.class.getName()
+                        + " or an instance of " + ConsumerPartitionAssignor.class.getName());
+                }
             } else {
                 throw new KafkaException("List contains element of type " + klass.getClass().getName() + ", expected String or Class");
             }
-
-            if (newClass.isInstance(assignor)) {
-                assignorInstances.add(newClass.cast(assignor));
-            } else if (oldClass.isInstance(assignor)) {
-                assignorInstances.add(new PartitionAssignorAdapter(oldClass.cast(assignor)));
-                LOG.warn("The PartitionAssignor interface has been deprecated, please implement the ConsumerPartitionAssignor interface instead.");
-            } else {
-                throw new KafkaException(klass + " is not an instance of " + oldClass.getName()
-                    + " or an instance of " + newClass.getName());
-            }
         }
-        return assignorInstances;
+        return assignors;
     }
 }

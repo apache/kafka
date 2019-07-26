@@ -46,7 +46,7 @@ public interface ConsumerPartitionAssignor {
      *
      * @param topics Topics subscribed to through {@link org.apache.kafka.clients.consumer.KafkaConsumer#subscribe(java.util.Collection)}
      *               and variants
-     * @return optional join subscription user data
+     * @return optional subscription user data
      */
     default ByteBuffer subscriptionUserData(Set<String> topics) {
         return null;
