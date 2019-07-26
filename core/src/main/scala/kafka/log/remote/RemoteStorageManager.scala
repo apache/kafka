@@ -17,6 +17,7 @@
 package kafka.log.remote
 
 import java.io.IOException
+import java._
 
 import kafka.log.LogSegment
 import org.apache.kafka.common.record.Records
@@ -35,7 +36,7 @@ trait RemoteStorageManager extends Configurable with AutoCloseable {
    * @return
    */
   @throws(classOf[IOException])
-  def copyLogSegment(topicPartition: TopicPartition, logSegment: LogSegment): Seq[RemoteLogIndexEntry]
+  def copyLogSegment(topicPartition: TopicPartition, logSegment: LogSegment): util.List[RemoteLogIndexEntry]
 
   /**
    * Cancels the unfinished LogSegment copying of this given topic-partition
@@ -47,9 +48,11 @@ trait RemoteStorageManager extends Configurable with AutoCloseable {
   /**
    * List the remote log segment files of the specified topicPartition
    * The RLM of a follower uses this method to find out the remote data
+   *
+   * @return List of remote segments, sorted by baseOffset in ascending order.
    */
   @throws(classOf[IOException])
-  def listRemoteSegments(topicPartition: TopicPartition): Seq[RemoteLogSegmentInfo]
+  def listRemoteSegments(topicPartition: TopicPartition): util.List[RemoteLogSegmentInfo]
 
   /**
    * Called by the RLM to retrieve the RemoteLogIndex entries of the specified remoteLogSegment.
@@ -58,7 +61,7 @@ trait RemoteStorageManager extends Configurable with AutoCloseable {
    * @return
    */
   @throws(classOf[IOException])
-  def getRemoteLogIndexEntries(remoteLogSegment: RemoteLogSegmentInfo): Seq[RemoteLogIndexEntry]
+  def getRemoteLogIndexEntries(remoteLogSegment: RemoteLogSegmentInfo): util.List[RemoteLogIndexEntry]
 
   /**
    * Deletes remote LogSegment file provided by the RLM

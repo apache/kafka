@@ -16,6 +16,7 @@
  */
 package kafka.log.remote
 
+import java._
 import java.io.{Closeable, File}
 import java.nio.ByteBuffer
 import java.nio.channels.FileChannel
@@ -25,6 +26,8 @@ import java.util.concurrent.locks.ReentrantLock
 import kafka.utils.CoreUtils.inLock
 import kafka.utils.Logging
 import org.apache.kafka.common.utils.Utils
+
+import scala.collection.JavaConverters
 
 /**
  * The remote log index maintains the information of log records for each topic partition maintained in the remote log.
@@ -59,8 +62,8 @@ class RemoteLogIndex(@volatile var file: File, val startOffset: Long) extends Lo
 
   private var _lastOffset: Option[Long] = loadLastOffset()
 
-  def append(entries: Seq[RemoteLogIndexEntry]): Seq[Long] = {
-    val positions: Seq[Long] = entries.map(entry => append(entry))
+  def append(entries: util.List[RemoteLogIndexEntry]): Seq[Long] = {
+    val positions: Seq[Long] = JavaConverters.asScalaIterator(entries.iterator()).map(entry => append(entry)).toSeq
     flush()
     positions
   }

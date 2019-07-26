@@ -21,12 +21,15 @@ import java.nio.file.{Files, Path}
 import java.util.concurrent.locks.ReentrantLock
 import java.util.concurrent.{ConcurrentNavigableMap, ConcurrentSkipListMap}
 import java.util.function.{Consumer, Predicate}
+import java._
 
 import kafka.log.remote.TopicPartitionRemoteIndex.{REMOTE_OFFSET_INDEX_SUFFIX, REMOTE_TIME_INDEX_SUFFIX}
 import kafka.log.{Log, OffsetIndex, TimeIndex}
 import kafka.utils.{CoreUtils, Logging}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.utils.Utils
+
+import scala.collection.{JavaConversions, JavaConverters}
 
 class TopicPartitionRemoteIndex(val topicPartition: TopicPartition, logDir: File) extends AutoCloseable with Logging {
 
@@ -63,12 +66,12 @@ class TopicPartitionRemoteIndex(val topicPartition: TopicPartition, logDir: File
     }
   }
 
-  def appendEntries(entries: Seq[RemoteLogIndexEntry], baseOffsetStr: String): Option[Long] = {
+  def appendEntries(entries: util.List[RemoteLogIndexEntry], baseOffsetStr: String): Option[Long] = {
     val baseOffset = baseOffsetStr.toLong
     require(baseOffset >= 0, "baseOffsetStr must not be a negative number")
 
-    val firstOffset = entries.head.firstOffset
-    val lastOffset = entries.last.lastOffset
+    val firstOffset = entries.get(0).firstOffset
+    val lastOffset = entries.get(entries.size() - 1).lastOffset
     if (baseOffset > firstOffset) throw new IllegalArgumentException(s"base offset '$baseOffsetStr' can not be greater than start off set of the given entry $baseOffset'")
 
     CoreUtils.inLock(lock) {
@@ -108,7 +111,7 @@ class TopicPartitionRemoteIndex(val topicPartition: TopicPartition, logDir: File
 
         var position: Long = 0
 
-        entries.filter(entry => entry.firstOffset >= resultantStartOffset)
+        JavaConverters.asScalaIterator(entries.iterator()).filter(entry => entry.firstOffset >= resultantStartOffset)
           .foreach(entry => {
             position = remoteLogIndex.append(entry)
             remoteOffsetIndex.append(entry.firstOffset, position.toInt)

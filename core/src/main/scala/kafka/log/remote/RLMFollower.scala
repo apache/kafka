@@ -25,6 +25,9 @@ import kafka.log.Log
 import kafka.utils.Logging
 import org.apache.kafka.common.TopicPartition
 
+import scala.collection.JavaConverters
+import scala.concurrent.JavaConversions
+
 class RLMFollower(remoteStorageManager: RemoteStorageManager, logFetcher: TopicPartition => Option[Log], rlmIndexer: RLMIndexer) extends Logging {
 
   private def createConcurrentSet[T](): util.Set[T] = util.Collections.newSetFromMap(
@@ -38,20 +41,17 @@ class RLMFollower(remoteStorageManager: RemoteStorageManager, logFetcher: TopicP
         watchedTopicPartitions.forEach(new Consumer[TopicPartition] {
           override def accept(tp: TopicPartition): Unit = {
             val remoteLogSegmentInfos = remoteStorageManager.listRemoteSegments(tp)
-              .sortWith((seg1, seg2) => seg1.baseOffset < seg2.baseOffset)
 
             // find the offset for a topic that is already written here.
             rlmIndexer.getOrLoadIndexOffset(tp).foreach(offset => {
-              val infos: util.List[RemoteLogSegmentInfo] = scala.collection.JavaConverters.seqAsJavaListConverter(remoteLogSegmentInfos).asJava
-              var index: Int = util.Collections.binarySearch(infos, offset, new Comparator[Any] {
+              var index: Int = util.Collections.binarySearch(remoteLogSegmentInfos, offset, new Comparator[Any] {
                 override def compare(o1: Any, o2: Any): Int = {
                   java.lang.Long.compare(o1.asInstanceOf[RemoteLogSegmentInfo].baseOffset, o2.asInstanceOf[RemoteLogSegmentInfo].baseOffset)
                 }
               })
 
               if (index < 0) index = -(index + 1)
-
-              remoteLogSegmentInfos.slice(index, infos.size()).foreach(segInfo => {
+              remoteLogSegmentInfos.subList(index, remoteLogSegmentInfos.size()).forEach( segInfo => {
                 val indexEntries = remoteStorageManager.getRemoteLogIndexEntries(segInfo)
                 logFetcher(tp).map(log => log.dir).foreach(dir => {
                   rlmIndexer.maybeBuildIndexes(tp, indexEntries, dir, Log.filenamePrefixFromOffset(segInfo.baseOffset))

@@ -16,6 +16,8 @@
  */
 package unit.kafka.log
 
+import java._
+
 import kafka.log.remote.{RemoteLogIndex, RemoteLogIndexEntry}
 import kafka.utils.TestUtils
 import org.junit.Assert._
@@ -23,7 +25,6 @@ import org.junit.{After, Before, Test}
 import org.scalatest.junit.JUnitSuite
 import unit.kafka.log.RemoteLogIndexTest.generateEntries
 
-import scala.collection.mutable.ListBuffer
 import scala.util.Random
 
 class RemoteLogIndexTest extends JUnitSuite {
@@ -49,7 +50,7 @@ class RemoteLogIndexTest extends JUnitSuite {
     var i: Integer = 0
     while (i < entries.size) {
       println("######### " + i)
-      assertEquals(entries(i), index.lookupEntry(positions(i)).get)
+      assertEquals(entries.get(i), index.lookupEntry(positions(i)).get)
       i += 1
     }
     println("after adding few entries, position: " + index.nextEntryPosition())
@@ -60,11 +61,11 @@ class RemoteLogIndexTest extends JUnitSuite {
 
 object RemoteLogIndexTest {
 
-  def generateEntries(numEntries: Int, offsetStep: Integer = 100, baseOffset: Long = 1000): Seq[RemoteLogIndexEntry] = {
+  def generateEntries(numEntries: Int, offsetStep: Integer = 100, baseOffset: Long = 1000): util.List[RemoteLogIndexEntry] = {
     require(offsetStep > 1, "offsetStep should be greater than 1")
     require(baseOffset >= 0, " base offset can not be negative")
 
-    val entries = new ListBuffer[RemoteLogIndexEntry]
+    val entries = new util.ArrayList[RemoteLogIndexEntry]
     val rdi = "rdi://foo/bar/" + System.currentTimeMillis()
     val rdiBytes = rdi.getBytes
     var firstOffset = baseOffset
@@ -77,10 +78,10 @@ object RemoteLogIndexTest {
       firstOffset += offsetStep
       firstTimestamp += 1
 
-      entries += entry
+      entries.add(entry)
     }
 
-    entries.toList
+    entries
   }
 
 }

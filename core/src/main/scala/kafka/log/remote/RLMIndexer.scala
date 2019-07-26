@@ -64,8 +64,8 @@ class RLMIndexer(rsm: RemoteStorageManager, logFetcher: TopicPartition => Option
     })
   }
 
-  def maybeBuildIndexes(tp: TopicPartition, entries: Seq[RemoteLogIndexEntry], parentDir: File, baseOffsetStr: String): Boolean = {
-    if (entries.nonEmpty) {
+  def maybeBuildIndexes(tp: TopicPartition, entries: util.List[RemoteLogIndexEntry], parentDir: File, baseOffsetStr: String): Boolean = {
+    if (!entries.isEmpty) {
       val indexEntry = remoteIndexes.computeIfAbsent(tp, new Function[TopicPartition, TopicPartitionRemoteIndex] {
         override def apply(x: TopicPartition): TopicPartitionRemoteIndex = TopicPartitionRemoteIndex.open(x, parentDir)
       })

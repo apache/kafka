@@ -29,6 +29,7 @@ import org.junit.Test
 import org.scalatest.junit.JUnitSuite
 import unit.kafka.log.RemoteLogIndexTest.generateEntries
 
+import scala.collection.JavaConverters
 import scala.collection.mutable.ListBuffer
 
 class TopicPartitionRemoteIndexTest extends JUnitSuite with Logging {
@@ -59,7 +60,7 @@ class TopicPartitionRemoteIndexTest extends JUnitSuite with Logging {
     val entries = generateEntries(entriesCt, offsetStep, baseOffset)
     rlmIndex.appendEntries(entries, baseOffset.toString)
 
-    entries.foreach(entry => {
+    entries.forEach(entry => {
       assertEquals(entry, rlmIndex.lookupEntryForOffset(entry.firstOffset).get)
     })
   }
@@ -79,14 +80,14 @@ class TopicPartitionRemoteIndexTest extends JUnitSuite with Logging {
     for (i <- 1 to threadCt) {
       val baseOffset = lastOffset + 1
       val entries = generateEntries(entriesCt, stepOffset, baseOffset)
-      lastOffset = entries.last.lastOffset
+      lastOffset = entries.get(entries.size() - 1).lastOffset
       workers += new Runnable() {
         override def run(): Unit = {
-          val firstOffset = entries.head.firstOffset
+          val firstOffset = entries.get(0).firstOffset
           val mayBeAddedOffset = rlmIndex.appendEntries(entries, Log.filenamePrefixFromOffset(firstOffset))
 
           val result = if (mayBeAddedOffset.isDefined) {
-            entries.count(entry => {
+            JavaConverters.asScalaIterator(entries.iterator()).count(entry => {
               entry.equals(rlmIndex.lookupEntryForOffset(entry.firstOffset).get)
             }) == entries.size
           } else {

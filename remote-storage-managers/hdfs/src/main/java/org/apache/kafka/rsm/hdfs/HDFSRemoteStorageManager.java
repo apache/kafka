@@ -33,6 +33,7 @@ import org.apache.kafka.common.record.FileRecords;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.Records;
+import scala.collection.JavaConverters;
 
 import static kafka.log.remote.RemoteLogManager.REMOTE_STORAGE_MANAGER_CONFIG_PREFIX;
 
@@ -46,14 +47,12 @@ import java.nio.channels.FileChannel;
 import java.nio.channels.WritableByteChannel;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-
-import scala.collection.JavaConverters;
-import scala.collection.Seq;
 
 public class HDFSRemoteStorageManager implements RemoteStorageManager {
     // TODO: Use the utilities in AbstractConfig. Should we support dynamic config?
@@ -78,9 +77,8 @@ public class HDFSRemoteStorageManager implements RemoteStorageManager {
     private Configuration hadoopConf = null;
     private ThreadLocal<FileSystem> fs = new ThreadLocal<>();
 
-    // TODO: Review RSM interface. Should we throw custom exceptions instead of IOException?
     @Override
-    public Seq<RemoteLogIndexEntry> copyLogSegment(TopicPartition topicPartition, LogSegment logSegment)
+    public List<RemoteLogIndexEntry> copyLogSegment(TopicPartition topicPartition, LogSegment logSegment)
             throws IOException {
         long baseOffset = logSegment.baseOffset();
         long lastOffset = logSegment.readNextOffset() - 1;
@@ -88,7 +86,7 @@ public class HDFSRemoteStorageManager implements RemoteStorageManager {
         // directly return empty seq if the log segment is empty
         // we don't need to copy empty segment
         if (lastOffset <= baseOffset)
-            return JavaConverters.asScalaIteratorConverter((new ArrayList<RemoteLogIndexEntry>()).iterator()).asScala().toSeq();
+            return Collections.emptyList();
 
         String desDir = getSegmentRemoteDir(topicPartition, baseOffset, lastOffset);
 
@@ -132,7 +130,7 @@ public class HDFSRemoteStorageManager implements RemoteStorageManager {
             throw new FileAlreadyExistsException(String.format("Directory <%s> already exists on HDFS.", desDir));
         }
 
-        return JavaConverters.asScalaIteratorConverter(remoteIndex.iterator()).asScala().toSeq();
+        return remoteIndex;
     }
 
     @Override
@@ -141,7 +139,7 @@ public class HDFSRemoteStorageManager implements RemoteStorageManager {
     }
 
     @Override
-    public Seq<RemoteLogSegmentInfo> listRemoteSegments(TopicPartition topicPartition) throws IOException {
+    public List<RemoteLogSegmentInfo> listRemoteSegments(TopicPartition topicPartition) throws IOException {
         ArrayList<RemoteLogSegmentInfo> segments = new ArrayList<>();
 
         FileSystem fs = getFS();
@@ -162,11 +160,14 @@ public class HDFSRemoteStorageManager implements RemoteStorageManager {
             }
         }
 
-        return JavaConverters.asScalaIteratorConverter(segments.iterator()).asScala().toSeq();
+        Collections.sort(segments, (a, b) -> {
+            return Long.compare(a.baseOffset(), b.baseOffset());
+        });
+        return segments;
     }
 
     @Override
-    public Seq<RemoteLogIndexEntry> getRemoteLogIndexEntries(RemoteLogSegmentInfo remoteLogSegment) throws IOException {
+    public List<RemoteLogIndexEntry> getRemoteLogIndexEntries(RemoteLogSegmentInfo remoteLogSegment) throws IOException {
         HDFSRemoteLogSegmentInfo segment = (HDFSRemoteLogSegmentInfo) remoteLogSegment;
         FileSystem fs = getFS();
 
@@ -181,7 +182,7 @@ public class HDFSRemoteStorageManager implements RemoteStorageManager {
 
             try (RandomAccessFile raFile = new RandomAccessFile(tmpFile, "r")) {
                 FileChannel channel = raFile.getChannel();
-                return RemoteLogIndexEntry.readAll(channel);
+                return JavaConverters.seqAsJavaList(RemoteLogIndexEntry.readAll(channel));
             }
         } finally {
             if (tmpFile != null && tmpFile.exists()) {

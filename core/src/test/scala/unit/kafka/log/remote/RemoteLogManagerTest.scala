@@ -183,13 +183,13 @@ object MockRemoteStorageManager {
 class MockRemoteStorageManager extends RemoteStorageManager {
 
   override def copyLogSegment(topicPartition: TopicPartition,
-                              logSegment: LogSegment): Seq[RemoteLogIndexEntry] = Seq.empty
+                              logSegment: LogSegment): util.List[RemoteLogIndexEntry] = Collections.emptyList()
 
   override def cancelCopyingLogSegment(topicPartition: TopicPartition): Unit = {}
 
-  override def listRemoteSegments(topicPartition: TopicPartition): Seq[RemoteLogSegmentInfo] = Seq.empty
+  override def listRemoteSegments(topicPartition: TopicPartition): util.List[RemoteLogSegmentInfo] = Collections.emptyList()
 
-  override def getRemoteLogIndexEntries(remoteLogSegment: RemoteLogSegmentInfo): Seq[RemoteLogIndexEntry] = Seq.empty
+  override def getRemoteLogIndexEntries(remoteLogSegment: RemoteLogSegmentInfo): util.List[RemoteLogIndexEntry] = Collections.emptyList()
 
   override def deleteLogSegment(remoteLogSegment: RemoteLogSegmentInfo): Boolean = true
 
