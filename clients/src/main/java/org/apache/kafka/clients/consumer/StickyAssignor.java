@@ -365,18 +365,17 @@ public class StickyAssignor extends AbstractPartitionAssignor {
     }
 
     @Override
-    public void onAssignment(Assignment assignment, int generation) {
+    public void onAssignment(Assignment assignment, ConsumerGroupMetadata metadata) {
         memberAssignment = assignment.partitions();
-        this.generation = generation;
+        this.generation = metadata.generationId();
     }
 
     @Override
-    public Subscription subscription(Set<String> topics) {
+    public ByteBuffer subscriptionUserData(Set<String> topics) {
         if (memberAssignment == null)
-            return new Subscription(new ArrayList<>(topics));
+            return null;
 
-        return new Subscription(new ArrayList<>(topics),
-                serializeTopicPartitionAssignment(new ConsumerUserData(memberAssignment, Optional.of(generation))));
+        return serializeTopicPartitionAssignment(new ConsumerUserData(memberAssignment, Optional.of(generation)));
     }
 
     @Override
