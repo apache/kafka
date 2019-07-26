@@ -36,7 +36,7 @@ public class Log4jController implements Log4jControllerMBean {
     @Override
     public List<String> getLoggers() {
         List<String> logLevels = new ArrayList<>();
-        Enumeration loggers = LogManager.getCurrentLoggers();
+        Enumeration loggers = currentLoggers();
         while (loggers.hasMoreElements()) {
             Logger logger = (Logger) loggers.nextElement();
             if (logger != null) {
@@ -45,7 +45,7 @@ public class Log4jController implements Log4jControllerMBean {
             }
         }
         Collections.sort(logLevels);
-        logLevels.add(0, "root=" + LogManager.getRootLogger().getLevel());
+        logLevels.add(0, "root=" + rootLogLevel());
         return logLevels;
     }
 
@@ -70,7 +70,7 @@ public class Log4jController implements Log4jControllerMBean {
             return false;
         }
 
-        Logger log = newLogger(name);
+        Logger log = loggerByName(name);
         if (log == null) {
             return false;
         } else {
@@ -79,7 +79,8 @@ public class Log4jController implements Log4jControllerMBean {
         }
     }
 
-    private Level getCurrentLevel(Logger logger) {
+    // Visible for testing
+    Level getCurrentLevel(Logger logger) {
         Level level = logger.getLevel();
         if (level == null) {
             return logger.getEffectiveLevel();
@@ -88,7 +89,8 @@ public class Log4jController implements Log4jControllerMBean {
         }
     }
 
-    private Logger loggerByName(String name) {
+    // Visible for testing
+    Logger loggerByName(String name) {
         if ("root".equals(name)) {
             return Logger.getRootLogger();
         } else {
@@ -96,11 +98,13 @@ public class Log4jController implements Log4jControllerMBean {
         }
     }
 
-    private Logger newLogger(String name) {
-        if ("root".equals(name)) {
-            return Logger.getRootLogger();
-        } else {
-            return LogManager.getLogger(name);
-        }
+    // Visible for testing
+    Enumeration currentLoggers() {
+        return LogManager.getCurrentLoggers();
+    }
+
+    // Visible for testing
+    Level rootLogLevel() {
+        return LogManager.getRootLogger().getLevel();
     }
 }
