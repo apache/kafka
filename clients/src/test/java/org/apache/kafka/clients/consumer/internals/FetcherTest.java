@@ -327,7 +327,6 @@ public class FetcherTest {
 
         fetcher.clearBufferedDataForUnassignedPartitions(newAssignedTopicPartitions);
         assertFalse(fetcher.hasCompletedFetches());
-        assertFalse(fetcher.hasParsedFetchesCache());
     }
 
     @Test
@@ -999,7 +998,7 @@ public class FetcherTest {
     }
 
     @Test
-    public void testPartialFetchOnParsedFetchCache() {
+    public void testPartialFetchWithPausedPartitions() {
         // this test sends creates a completed fetch with 3 records and a max poll of 2 records to assert
         // that a fetch that must be returned over at least 2 polls can be cached successfully when its partition is
         // paused, then returned successfully after its been resumed again later
@@ -1017,7 +1016,7 @@ public class FetcherTest {
         fetchedRecords = fetchedRecords();
 
         assertEquals("Should return 2 records from fetch with 3 records", 2, fetchedRecords.get(tp0).size());
-        assertFalse("Should have no cached parsed fetches", fetcher.hasParsedFetchesCache());
+        assertFalse("Should have no completed fetches", fetcher.hasCompletedFetches());
 
         subscriptions.pause(tp0);
         consumerClient.poll(time.timer(0));
@@ -1025,7 +1024,7 @@ public class FetcherTest {
         fetchedRecords = fetchedRecords();
 
         assertEquals("Should return no records for paused partitions", 0, fetchedRecords.size());
-        assertTrue("Should have 1 entry in the parsed fetches cache", fetcher.hasParsedFetchesCache());
+        assertTrue("Should have 1 entry in completed fetches", fetcher.hasCompletedFetches());
 
         subscriptions.resume(tp0);
 
@@ -1034,7 +1033,7 @@ public class FetcherTest {
         fetchedRecords = fetchedRecords();
 
         assertEquals("Should return last remaining record", 1, fetchedRecords.get(tp0).size());
-        assertFalse("Should have no cached parsed fetches", fetcher.hasParsedFetchesCache());
+        assertFalse("Should have no completed fetches", fetcher.hasCompletedFetches());
     }
 
     @Test
