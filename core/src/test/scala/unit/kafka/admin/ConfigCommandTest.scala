@@ -406,7 +406,7 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
           new AlterConfigOp(new ConfigEntry("kafka.server.ReplicaManager", ""), AlterConfigOp.OpType.DELETE),
           new AlterConfigOp(new ConfigEntry("kafka.server.KafkaApi", ""), AlterConfigOp.OpType.DELETE)
         )
-        assertTrue(s"Expected expectedConfigOps=${expectedConfigOps} \n got ${alterConfigOps.asScala}", expectedConfigOps.equals(alterConfigOps.asScala))
+        assertTrue(s"Expected expectedConfigOps=${expectedConfigOps} \n got ${alterConfigOps.asScala.toList}", expectedConfigOps.equals(alterConfigOps.asScala.toList))
         alteredConfigs = true
         alterResult
       }
