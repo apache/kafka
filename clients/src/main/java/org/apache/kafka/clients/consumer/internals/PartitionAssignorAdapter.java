@@ -18,6 +18,7 @@ package org.apache.kafka.clients.consumer.internals;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -25,6 +26,7 @@ import java.util.Set;
 import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor;
 import org.apache.kafka.common.Cluster;
+import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
@@ -85,7 +87,7 @@ public class PartitionAssignorAdapter implements ConsumerPartitionAssignor {
         return new GroupAssignment(newAssignments);
     }
 
-    public static List<ConsumerPartitionAssignor> getAssignorInstances(List<String> assignorClasses) {
+    public static List<ConsumerPartitionAssignor> getAssignorInstances(List<String> assignorClasses, Map<String, Object> configs) {
         List<ConsumerPartitionAssignor> assignors = new ArrayList<>();
 
         if (assignorClasses == null)
@@ -102,13 +104,16 @@ public class PartitionAssignorAdapter implements ConsumerPartitionAssignor {
             }
 
             if (klass instanceof Class<?>) {
-                if (ConsumerPartitionAssignor.class.isAssignableFrom((Class<?>) klass)) {
-                    assignors.add((ConsumerPartitionAssignor) Utils.newInstance((Class<?>) klass));
-                } else if (PartitionAssignor.class.isAssignableFrom((Class<?>) klass)) {
-                    assignors
-                        .add(new PartitionAssignorAdapter((PartitionAssignor) Utils.newInstance((Class<?>) klass)));
-                    LOG.warn(
-                        "The PartitionAssignor interface has been deprecated, please implement the ConsumerPartitionAssignor interface instead.");
+                Object assignor = Utils.newInstance((Class<?>) klass);
+                if (assignor instanceof Configurable)
+                    ((Configurable) assignor).configure(configs);
+
+                if (assignor instanceof ConsumerPartitionAssignor) {
+                    assignors.add((ConsumerPartitionAssignor) assignor);
+                } else if (assignor instanceof PartitionAssignor) {
+                    assignors.add(new PartitionAssignorAdapter((PartitionAssignor) assignor));
+                    LOG.warn("The PartitionAssignor interface has been deprecated, "
+                        + "please implement the ConsumerPartitionAssignor interface instead.");
                 } else {
                     throw new KafkaException(klass + " is not an instance of " + PartitionAssignor.class.getName()
                         + " or an instance of " + ConsumerPartitionAssignor.class.getName());

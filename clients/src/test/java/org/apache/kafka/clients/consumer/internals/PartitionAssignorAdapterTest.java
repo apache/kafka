@@ -16,11 +16,13 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import static org.apache.kafka.clients.consumer.internals.PartitionAssignorAdapter.getAssignorInstances;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -46,27 +48,27 @@ public class PartitionAssignorAdapterTest {
     @Test
     public void shouldInstantiateNewAssignors() {
         classNames = Arrays.asList(StickyAssignor.class.getName());
-        List<ConsumerPartitionAssignor> assignors = PartitionAssignorAdapter.getAssignorInstances(classNames);
+        List<ConsumerPartitionAssignor> assignors = getAssignorInstances(classNames, Collections.emptyMap());
         assertTrue(assignorClass.isInstance(assignors.get(0)));
     }
 
     @Test
     public void shouldAdaptOldAssignors() {
         classNames = Arrays.asList(OldPartitionAssignor.class.getName());
-        List<ConsumerPartitionAssignor> assignors = PartitionAssignorAdapter.getAssignorInstances(classNames);
+        List<ConsumerPartitionAssignor> assignors = getAssignorInstances(classNames, Collections.emptyMap());
         assertTrue(adapterClass.isInstance(assignors.get(0)));
     }
 
     @Test
     public void shouldThrowKafkaExceptionOnNonAssignor() {
         classNames = Arrays.asList(NotAnAssignor.class.getName());
-        assertThrows(KafkaException.class, () -> PartitionAssignorAdapter.getAssignorInstances(classNames));
+        assertThrows(KafkaException.class, () -> getAssignorInstances(classNames, Collections.emptyMap()));
     }
 
     @Test
     public void shouldThrowKafkaExceptionOnAssignorNotFound() {
         classNames = Arrays.asList("Non-existent assignor");
-        assertThrows(KafkaException.class, () -> PartitionAssignorAdapter.getAssignorInstances(classNames));
+        assertThrows(KafkaException.class, () -> getAssignorInstances(classNames, Collections.emptyMap()));
     }
 
     @Test
