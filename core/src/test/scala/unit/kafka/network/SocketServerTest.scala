@@ -21,12 +21,12 @@ import java.io._
 import java.net._
 import java.nio.ByteBuffer
 import java.nio.channels.SocketChannel
+import java.util.concurrent.TimeUnit
 import java.util.{HashMap, Properties, Random}
 
-import com.yammer.metrics.core.{Gauge, Meter}
-import com.yammer.metrics.{Metrics => YammerMetrics}
+import com.codahale.metrics.{Gauge, Meter}
+import javax.management.ObjectName
 import javax.net.ssl._
-
 import kafka.security.CredentialProvider
 import kafka.server.{KafkaConfig, ThrottledChannel}
 import kafka.utils.Implicits._
@@ -68,7 +68,7 @@ class SocketServerTest {
   val localAddress = InetAddress.getLoopbackAddress
 
   // Clean-up any metrics left around by previous tests
-  TestUtils.clearYammerMetrics()
+  TestUtils.clearDropwizardMetrics()
 
   val server = new SocketServer(config, metrics, Time.SYSTEM, credentialProvider)
   server.startup()
@@ -692,7 +692,7 @@ class SocketServerTest {
       val request = receiveRequest(channel)
 
       val requestMetrics = channel.metrics(request.header.apiKey.name)
-      def totalTimeHistCount(): Long = requestMetrics.totalTimeHist.count
+      def totalTimeHistCount(): Long = requestMetrics.totalTimeHist.getCount
       val expectedTotalTimeCount = totalTimeHistCount() + 1
 
       // send a large buffer to ensure that the broker detects the client disconnection while writing to the socket channel.
@@ -782,7 +782,7 @@ class SocketServerTest {
         s"Idle connection `${request.context.connectionId}` was not closed by selector")
 
       val requestMetrics = channel.metrics(request.header.apiKey.name)
-      def totalTimeHistCount(): Long = requestMetrics.totalTimeHist.count
+      def totalTimeHistCount(): Long = requestMetrics.totalTimeHist.getCount
       val expectedTotalTimeCount = totalTimeHistCount() + 1
 
       processRequest(channel, request)
@@ -802,16 +802,14 @@ class SocketServerTest {
     val version2 = (version - 1).toShort
     for (_ <- 0 to 1) server.dataPlaneRequestChannel.metrics(ApiKeys.PRODUCE.name).requestRate(version).mark()
     server.dataPlaneRequestChannel.metrics(ApiKeys.PRODUCE.name).requestRate(version2).mark()
-    assertEquals(2, server.dataPlaneRequestChannel.metrics(ApiKeys.PRODUCE.name).requestRate(version).count())
+    assertEquals(2, server.dataPlaneRequestChannel.metrics(ApiKeys.PRODUCE.name).requestRate(version).getCount)
     server.dataPlaneRequestChannel.updateErrorMetrics(ApiKeys.PRODUCE, Map(Errors.NONE -> 1))
     val nonZeroMeters = Map(s"kafka.network:type=RequestMetrics,name=RequestsPerSec,request=Produce,version=$version" -> 2,
         s"kafka.network:type=RequestMetrics,name=RequestsPerSec,request=Produce,version=$version2" -> 1,
         "kafka.network:type=RequestMetrics,name=ErrorsPerSec,request=Produce,error=NONE" -> 1)
 
-    def requestMetricMeters = YammerMetrics
-      .defaultRegistry
-      .allMetrics.asScala
-      .collect { case (k, metric: Meter) if k.getType == "RequestMetrics" => (k.toString, metric.count) }
+    def requestMetricMeters = kafka.metrics.getKafkaMetrics
+      .collect { case (k, metric: Meter) if ObjectName.getInstance(k).getKeyProperty("type") == "RequestMetrics" => (k.toString, metric.getCount) }
 
     assertEquals(nonZeroMeters, requestMetricMeters.filter { case (_, value) => value != 0 })
     server.shutdown()
@@ -822,11 +820,12 @@ class SocketServerTest {
   def testMetricCollectionAfterShutdown(): Unit = {
     server.shutdown()
 
-    val nonZeroMetricNamesAndValues = YammerMetrics
-      .defaultRegistry
-      .allMetrics.asScala
-      .filter { case (k, _) => k.getName.endsWith("IdlePercent") || k.getName.endsWith("NetworkProcessorAvgIdlePercent") }
-      .collect { case (k, metric: Gauge[_]) => (k, metric.value().asInstanceOf[Double]) }
+    val nonZeroMetricNamesAndValues = kafka.metrics.getKafkaMetrics
+      .filter { case (k, _) =>
+        val name = ObjectName.getInstance(k).getKeyProperty("name")
+        name.endsWith("IdlePercent") || name.endsWith("NetworkProcessorAvgIdlePercent")
+      }
+      .collect { case (k, metric: Gauge[_]) => (k, metric.getValue.asInstanceOf[Double]) }
       .filter { case (_, value) => value != 0.0 && !value.equals(Double.NaN) }
 
     assertEquals(Map.empty, nonZeroMetricNamesAndValues)
@@ -843,13 +842,13 @@ class SocketServerTest {
     }
 
     // legacy metrics not tagged
-    val yammerMetricsNames = YammerMetrics.defaultRegistry.allMetrics.asScala
-      .filterKeys(_.getType.equals("Processor"))
+    val dropwizardMetricsNames = kafka.metrics.getKafkaMetrics
+      .filterKeys(ObjectName.getInstance(_).getKeyProperty("type").equals("Processor"))
       .collect { case (k, _: Gauge[_]) => k }
-    assertFalse(yammerMetricsNames.isEmpty)
+    assertFalse(dropwizardMetricsNames.isEmpty)
 
-    yammerMetricsNames.foreach { yammerMetricName =>
-      assertFalse(yammerMetricName.getMBeanName.contains("listener="))
+    dropwizardMetricsNames.foreach { dropwizardMetricName =>
+      assertFalse(dropwizardMetricName.contains("listener="))
     }
   }
 
@@ -1181,11 +1180,11 @@ class SocketServerTest {
 
   private def verifyAcceptorBlockedPercent(listenerName: String, expectBlocked: Boolean): Unit = {
     val blockedPercentMetricMBeanName = "kafka.network:type=Acceptor,name=AcceptorBlockedPercent,listener=PLAINTEXT"
-    val blockedPercentMetrics = YammerMetrics.defaultRegistry.allMetrics.asScala
-      .filterKeys(_.getMBeanName == blockedPercentMetricMBeanName).values
+    val blockedPercentMetrics = kafka.metrics.getKafkaMetrics
+      .filterKeys(_ == blockedPercentMetricMBeanName).values
     assertEquals(1, blockedPercentMetrics.size)
     val blockedPercentMetric = blockedPercentMetrics.head.asInstanceOf[Meter]
-    val blockedPercent = blockedPercentMetric.meanRate
+    val blockedPercent = blockedPercentMetric.getMeanRate / 1000000000.0
     if (expectBlocked) {
       assertTrue(s"Acceptor blocked percent not recorded: $blockedPercent", blockedPercent > 0.0)
       assertTrue(s"Unexpected blocked percent in acceptor: $blockedPercent", blockedPercent <= 1.0)

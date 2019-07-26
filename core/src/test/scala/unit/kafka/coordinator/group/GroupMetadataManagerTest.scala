@@ -17,8 +17,7 @@
 
 package kafka.coordinator.group
 
-import com.yammer.metrics.Metrics
-import com.yammer.metrics.core.Gauge
+import com.codahale.metrics.Gauge
 import java.nio.ByteBuffer
 import java.util.Collections
 import java.util.Optional
@@ -2028,16 +2027,16 @@ class GroupMetadataManagerTest {
   }
 
   private def getGauge(manager: GroupMetadataManager, name: String): Gauge[Int]  = {
-    Metrics.defaultRegistry().allMetrics().get(manager.metricName(name, Map.empty)).asInstanceOf[Gauge[Int]]
+    kafka.metrics.getKafkaMetrics(manager.metricName(name, Map.empty)).asInstanceOf[Gauge[Int]]
   }
 
   private def expectMetrics(manager: GroupMetadataManager,
                             expectedNumGroups: Int,
                             expectedNumGroupsPreparingRebalance: Int,
                             expectedNumGroupsCompletingRebalance: Int): Unit = {
-    assertEquals(expectedNumGroups, getGauge(manager, "NumGroups").value)
-    assertEquals(expectedNumGroupsPreparingRebalance, getGauge(manager, "NumGroupsPreparingRebalance").value)
-    assertEquals(expectedNumGroupsCompletingRebalance, getGauge(manager, "NumGroupsCompletingRebalance").value)
+    assertEquals(expectedNumGroups, getGauge(manager, "NumGroups").getValue)
+    assertEquals(expectedNumGroupsPreparingRebalance, getGauge(manager, "NumGroupsPreparingRebalance").getValue)
+    assertEquals(expectedNumGroupsCompletingRebalance, getGauge(manager, "NumGroupsCompletingRebalance").getValue)
   }
 
   @Test

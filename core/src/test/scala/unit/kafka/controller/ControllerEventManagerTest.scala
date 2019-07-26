@@ -20,14 +20,11 @@ package kafka.controller
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.atomic.AtomicInteger
 
-import com.yammer.metrics.Metrics
-import com.yammer.metrics.core.{Histogram, MetricName, Timer}
+import com.codahale.metrics.{Histogram, Timer}
 import kafka.utils.TestUtils
 import org.apache.kafka.common.utils.MockTime
 import org.junit.Assert.{assertEquals, assertTrue, fail}
 import org.junit.{After, Test}
-
-import scala.collection.JavaConverters._
 
 class ControllerEventManagerTest {
 
@@ -48,10 +45,9 @@ class ControllerEventManagerTest {
       override def preempt(event: ControllerEvent): Unit = {}
     }
 
-    def allEventManagerMetrics: Set[MetricName] = {
-      Metrics.defaultRegistry.allMetrics.asScala.keySet
-        .filter(_.getMBeanName.startsWith("kafka.controller:type=ControllerEventManager"))
-        .toSet
+    def allEventManagerMetrics: Set[String] = {
+      kafka.metrics.getKafkaMetrics.keySet
+        .filter(_.startsWith("kafka.controller:type=ControllerEventManager"))
     }
 
     controllerEventManager = new ControllerEventManager(0, eventProcessor,
@@ -79,7 +75,7 @@ class ControllerEventManagerTest {
     }
 
     // The metric should not already exist
-    assertTrue(Metrics.defaultRegistry.allMetrics.asScala.filterKeys(_.getMBeanName == metricName).values.isEmpty)
+    assertTrue(kafka.metrics.getKafkaMetrics.filterKeys(_ == metricName).values.isEmpty)
 
     controllerEventManager = new ControllerEventManager(0, eventProcessor,
       time, controllerStats.rateAndTimeMetrics)
@@ -89,26 +85,26 @@ class ControllerEventManagerTest {
     controllerEventManager.put(TopicChange)
     latch.countDown()
 
-    val queueTimeHistogram = Metrics.defaultRegistry.allMetrics.asScala.filterKeys(_.getMBeanName == metricName).values.headOption
+    val queueTimeHistogram = kafka.metrics.getKafkaMetrics.filterKeys(_ == metricName).values.headOption
       .getOrElse(fail(s"Unable to find metric $metricName")).asInstanceOf[Histogram]
 
     TestUtils.waitUntilTrue(() => controllerEventManager.isEmpty,
       "Timed out waiting for processing of all events")
 
-    assertEquals(2, queueTimeHistogram.count)
-    assertEquals(0, queueTimeHistogram.min, 0.01)
-    assertEquals(500, queueTimeHistogram.max, 0.01)
+    assertEquals(2, queueTimeHistogram.getCount)
+    assertEquals(0, queueTimeHistogram.getSnapshot.getMin, 0.01)
+    assertEquals(500, queueTimeHistogram.getSnapshot.getMax, 0.01)
   }
 
   @Test
   def testSuccessfulEvent(): Unit = {
-    check("kafka.controller:type=ControllerStats,name=AutoLeaderBalanceRateAndTimeMs",
+    check("kafka.controller:type=ControllerStats,name=AutoLeaderBalanceRateAndTime",
       AutoPreferredReplicaLeaderElection, () => ())
   }
 
   @Test
   def testEventThatThrowsException(): Unit = {
-    check("kafka.controller:type=ControllerStats,name=LeaderElectionRateAndTimeMs",
+    check("kafka.controller:type=ControllerStats,name=LeaderElectionRateAndTime",
       BrokerChange, () => throw new NullPointerException)
   }
 
@@ -132,7 +128,7 @@ class ControllerEventManagerTest {
       new MockTime(), controllerStats.rateAndTimeMetrics)
     controllerEventManager.start()
 
-    val initialTimerCount = timer(metricName).count
+    val initialTimerCount = timer(metricName).getCount
 
     controllerEventManager.put(event)
     TestUtils.waitUntilTrue(() => controllerEventManager.state == event.state,
@@ -143,11 +139,11 @@ class ControllerEventManagerTest {
       "Controller state has not changed back to Idle")
     assertEquals(1, eventProcessedListenerCount.get)
 
-    assertEquals("Timer has not been updated", initialTimerCount + 1, timer(metricName).count)
+    assertEquals("Timer has not been updated", initialTimerCount + 1, timer(metricName).getCount)
   }
 
   private def timer(metricName: String): Timer = {
-    Metrics.defaultRegistry.allMetrics.asScala.filterKeys(_.getMBeanName == metricName).values.headOption
+    kafka.metrics.getKafkaMetrics.filterKeys(_ == metricName).values.headOption
       .getOrElse(fail(s"Unable to find metric $metricName")).asInstanceOf[Timer]
   }
 

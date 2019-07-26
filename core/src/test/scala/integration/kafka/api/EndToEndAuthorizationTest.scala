@@ -17,11 +17,11 @@
 
 package kafka.api
 
-import com.yammer.metrics.Metrics
-import com.yammer.metrics.core.Gauge
+import com.codahale.metrics.Gauge
 import java.io.File
 import java.util.concurrent.ExecutionException
 
+import javax.management.ObjectName
 import kafka.admin.AclCommand
 import kafka.security.auth._
 import kafka.server._
@@ -211,7 +211,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
   }
 
   protected def confirmReauthenticationMetrics() : Unit = {
-    val expiredConnectionsKilledCountTotal = getGauge("ExpiredConnectionsKilledCount").value()
+    val expiredConnectionsKilledCountTotal = getGauge("ExpiredConnectionsKilledCount").getValue()
     servers.foreach { s =>
         val numExpiredKilled = TestUtils.totalMetricValue(s, "expired-connections-killed-count")
         assertTrue("Should have been zero expired connections killed: " + numExpiredKilled + "(total=" + expiredConnectionsKilledCountTotal + ")", numExpiredKilled == 0)
@@ -223,8 +223,8 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
   }
 
   private def getGauge(metricName: String) = {
-    Metrics.defaultRegistry.allMetrics.asScala
-           .filterKeys(k => k.getName == metricName)
+    kafka.metrics.getKafkaMetrics
+           .filterKeys(ObjectName.getInstance(_).getKeyProperty("name") == metricName)
            .headOption
            .getOrElse { fail( "Unable to find metric " + metricName ) }
            ._2.asInstanceOf[Gauge[Double]]

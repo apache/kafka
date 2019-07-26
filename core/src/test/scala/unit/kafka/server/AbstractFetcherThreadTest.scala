@@ -21,7 +21,7 @@ import java.nio.ByteBuffer
 import java.util.Optional
 import java.util.concurrent.atomic.AtomicInteger
 
-import com.yammer.metrics.Metrics
+import javax.management.ObjectName
 import kafka.cluster.BrokerEndPoint
 import kafka.log.LogAppendInfo
 import kafka.message.NoCompressionCodec
@@ -52,10 +52,10 @@ class AbstractFetcherThreadTest {
 
   @Before
   def cleanMetricRegistry(): Unit = {
-    TestUtils.clearYammerMetrics()
+    TestUtils.clearDropwizardMetrics()
   }
 
-  private def allMetricsNames: Set[String] = Metrics.defaultRegistry().allMetrics().asScala.keySet.map(_.getName)
+  private def allMetricsNames: Set[String] = kafka.metrics.getKafkaMetrics.keySet.map(ObjectName.getInstance(_).getKeyProperty("name"))
 
   private def mkBatch(baseOffset: Long, leaderEpoch: Int, records: SimpleRecord*): RecordBatch = {
     MemoryRecords.withRecords(baseOffset, CompressionType.NONE, leaderEpoch, records: _*)
@@ -86,7 +86,7 @@ class AbstractFetcherThreadTest {
     fetcher.shutdown()
 
     // after shutdown, they should be gone
-    assertTrue(Metrics.defaultRegistry().allMetrics().isEmpty)
+    assertTrue(kafka.metrics.getKafkaMetrics.isEmpty)
   }
 
   @Test
@@ -101,8 +101,7 @@ class AbstractFetcherThreadTest {
 
     fetcher.doWork()
 
-    assertTrue("Failed waiting for consumer lag metric",
-      allMetricsNames(FetcherMetrics.ConsumerLag))
+    assertTrue("Failed waiting for consumer lag metric", allMetricsNames(FetcherMetrics.ConsumerLag))
 
     // remove the partition to simulate leader migration
     fetcher.removePartitions(Set(partition))
