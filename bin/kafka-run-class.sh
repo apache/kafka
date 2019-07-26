@@ -112,9 +112,13 @@ else
       CLASSPATH="$file":"$CLASSPATH"
     fi
   done
-  if [ "$SHORT_VERSION_NO_DOTS" = "0100" ] || [ "$SHORT_VERSION_NO_DOTS" = "0101" ] ; then
+  if [ "$SHORT_VERSION_NO_DOTS" = "0100" ]; then
     CLASSPATH="/opt/kafka-$UPGRADE_KAFKA_STREAMS_TEST_VERSION/libs/zkclient-0.8.jar":"$CLASSPATH"
     CLASSPATH="/opt/kafka-$UPGRADE_KAFKA_STREAMS_TEST_VERSION/libs/zookeeper-3.4.6.jar":"$CLASSPATH"
+  fi
+  if [ "$SHORT_VERSION_NO_DOTS" = "0101" ]; then
+    CLASSPATH="/opt/kafka-$UPGRADE_KAFKA_STREAMS_TEST_VERSION/libs/zkclient-0.9.jar":"$CLASSPATH"
+    CLASSPATH="/opt/kafka-$UPGRADE_KAFKA_STREAMS_TEST_VERSION/libs/zookeeper-3.4.8.jar":"$CLASSPATH"
   fi
 fi
 
