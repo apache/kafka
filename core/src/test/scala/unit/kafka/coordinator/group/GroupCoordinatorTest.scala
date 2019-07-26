@@ -874,7 +874,7 @@ class GroupCoordinatorTest {
   }
 
   @Test
-  def shouldGetDifferentStaticMemberIdBasedOnTimestamp(): Unit = {
+  def shouldGetDifferentStaticMemberIdAfterEachRejoin(): Unit = {
     val initialResult = staticMembersJoinAndRebalance(leaderInstanceId, followerInstanceId)
 
     val timeAdvance = 1
@@ -884,9 +884,7 @@ class GroupCoordinatorTest {
 
       val joinGroupResult = staticJoinGroup(groupId, JoinGroupRequest.UNKNOWN_MEMBER_ID,
         leaderInstanceId, protocolType, protocols, clockAdvance = timeAdvance)
-      val joinTimeAsStr = (timer.time.milliseconds() - timeAdvance).toString
       assertTrue(joinGroupResult.memberId.startsWith(leaderInstanceId.get))
-      assertTrue(joinGroupResult.memberId.contains(joinTimeAsStr))
       assertNotEquals(lastMemberId, joinGroupResult.memberId)
       lastMemberId = joinGroupResult.memberId
     }

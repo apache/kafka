@@ -365,7 +365,7 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
       case None =>
         clientId + GroupMetadata.MemberIdDelimiter + UUID.randomUUID().toString
       case Some(instanceId) =>
-        instanceId + GroupMetadata.MemberIdDelimiter + time.milliseconds()
+        instanceId + GroupMetadata.MemberIdDelimiter + UUID.randomUUID().toString
     }
   }
 
