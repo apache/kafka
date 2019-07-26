@@ -184,7 +184,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
       Errors.forCode(errorCode)
     }),
     ApiKeys.HEARTBEAT -> ((resp: HeartbeatResponse) => resp.error),
-    ApiKeys.LEAVE_GROUP -> ((resp: LeaveGroupResponse) => Errors.forCode(resp.data.members().get(0).errorCode)),
+    ApiKeys.LEAVE_GROUP -> ((resp: LeaveGroupResponse) => resp.error),
     ApiKeys.DELETE_GROUPS -> ((resp: DeleteGroupsResponse) => resp.get(group)),
     ApiKeys.LEADER_AND_ISR -> ((resp: requests.LeaderAndIsrResponse) => resp.responses.asScala.find(_._1 == tp).get._2),
     ApiKeys.STOP_REPLICA -> ((resp: requests.StopReplicaResponse) => resp.responses.asScala.find(_._1 == tp).get._2),
