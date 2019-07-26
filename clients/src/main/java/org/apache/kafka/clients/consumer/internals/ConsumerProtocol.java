@@ -16,6 +16,9 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import java.util.Collections;
+import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.Assignment;
+import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.Subscription;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.protocol.types.ArrayOf;
 import org.apache.kafka.common.protocol.types.Field;
@@ -49,7 +52,6 @@ import java.util.Map;
  *     Topic            => String
  *     Partitions       => [int32]
  *   UserData           => Bytes
- *   ErrorCode          => [int16]
  * </pre>
  *
  * Version 0 format:
@@ -85,10 +87,10 @@ public class ConsumerProtocol {
     public static final String TOPIC_PARTITIONS_KEY_NAME = "topic_partitions";
     public static final String USER_DATA_KEY_NAME = "user_data";
 
-    public static final Field.Int16 ERROR_CODE = new Field.Int16("error_code", "Assignment error code");
-
     public static final short CONSUMER_PROTOCOL_V0 = 0;
     public static final short CONSUMER_PROTOCOL_V1 = 1;
+
+    public static final short CONSUMER_PROTOCL_LATEST_VERSION = CONSUMER_PROTOCOL_V1;
 
     public static final Schema CONSUMER_PROTOCOL_HEADER_SCHEMA = new Schema(
             new Field(VERSION_KEY_NAME, Type.INT16));
@@ -116,36 +118,9 @@ public class ConsumerProtocol {
 
     public static final Schema ASSIGNMENT_V1 = new Schema(
         new Field(TOPIC_PARTITIONS_KEY_NAME, new ArrayOf(TOPIC_ASSIGNMENT_V0)),
-        new Field(USER_DATA_KEY_NAME, Type.NULLABLE_BYTES),
-        ERROR_CODE);
+        new Field(USER_DATA_KEY_NAME, Type.NULLABLE_BYTES));
 
-    public enum AssignmentError {
-        NONE(0),
-        NEED_REJOIN(1);
-
-        private final short code;
-
-        AssignmentError(final int code) {
-            this.code = (short) code;
-        }
-
-        public short code() {
-            return code;
-        }
-
-        public static AssignmentError fromCode(final short code) {
-            switch (code) {
-                case 0:
-                    return NONE;
-                case 1:
-                    return NEED_REJOIN;
-                default:
-                    throw new IllegalArgumentException("Unknown error code: " + code);
-            }
-        }
-    }
-
-    public static ByteBuffer serializeSubscriptionV0(PartitionAssignor.Subscription subscription) {
+    public static ByteBuffer serializeSubscriptionV0(Subscription subscription) {
         Struct struct = new Struct(SUBSCRIPTION_V0);
         struct.set(USER_DATA_KEY_NAME, subscription.userData());
         struct.set(TOPICS_KEY_NAME, subscription.topics().toArray());
@@ -157,7 +132,7 @@ public class ConsumerProtocol {
         return buffer;
     }
 
-    public static ByteBuffer serializeSubscriptionV1(PartitionAssignor.Subscription subscription) {
+    public static ByteBuffer serializeSubscriptionV1(Subscription subscription) {
         Struct struct = new Struct(SUBSCRIPTION_V1);
         struct.set(USER_DATA_KEY_NAME, subscription.userData());
         struct.set(TOPICS_KEY_NAME, subscription.topics().toArray());
@@ -178,8 +153,12 @@ public class ConsumerProtocol {
         return buffer;
     }
 
-    public static ByteBuffer serializeSubscription(PartitionAssignor.Subscription subscription) {
-        switch (subscription.version()) {
+    public static ByteBuffer serializeSubscription(Subscription subscription) {
+        return serializeSubscription(subscription, CONSUMER_PROTOCL_LATEST_VERSION);
+    }
+
+    public static ByteBuffer serializeSubscription(Subscription subscription, short version) {
+        switch (version) {
             case CONSUMER_PROTOCOL_V0:
                 return serializeSubscriptionV0(subscription);
 
@@ -192,17 +171,17 @@ public class ConsumerProtocol {
         }
     }
 
-    public static PartitionAssignor.Subscription deserializeSubscriptionV0(ByteBuffer buffer) {
+    public static Subscription deserializeSubscriptionV0(ByteBuffer buffer) {
         Struct struct = SUBSCRIPTION_V0.read(buffer);
         ByteBuffer userData = struct.getBytes(USER_DATA_KEY_NAME);
         List<String> topics = new ArrayList<>();
         for (Object topicObj : struct.getArray(TOPICS_KEY_NAME))
             topics.add((String) topicObj);
 
-        return new PartitionAssignor.Subscription(CONSUMER_PROTOCOL_V0, topics, userData);
+        return new Subscription(topics, userData, Collections.emptyList());
     }
 
-    public static PartitionAssignor.Subscription deserializeSubscriptionV1(ByteBuffer buffer) {
+    public static Subscription deserializeSubscriptionV1(ByteBuffer buffer) {
         Struct struct = SUBSCRIPTION_V1.read(buffer);
         ByteBuffer userData = struct.getBytes(USER_DATA_KEY_NAME);
         List<String> topics = new ArrayList<>();
@@ -218,10 +197,10 @@ public class ConsumerProtocol {
             }
         }
 
-        return new PartitionAssignor.Subscription(CONSUMER_PROTOCOL_V1, topics, userData, ownedPartitions);
+        return new Subscription(topics, userData, ownedPartitions);
     }
 
-    public static PartitionAssignor.Subscription deserializeSubscription(ByteBuffer buffer) {
+    public static Subscription deserializeSubscription(ByteBuffer buffer) {
         Struct header = CONSUMER_PROTOCOL_HEADER_SCHEMA.read(buffer);
         Short version = header.getShort(VERSION_KEY_NAME);
 
@@ -241,7 +220,7 @@ public class ConsumerProtocol {
         }
     }
 
-    public static ByteBuffer serializeAssignmentV0(PartitionAssignor.Assignment assignment) {
+    public static ByteBuffer serializeAssignmentV0(Assignment assignment) {
         Struct struct = new Struct(ASSIGNMENT_V0);
         struct.set(USER_DATA_KEY_NAME, assignment.userData());
         List<Struct> topicAssignments = new ArrayList<>();
@@ -261,7 +240,7 @@ public class ConsumerProtocol {
         return buffer;
     }
 
-    public static ByteBuffer serializeAssignmentV1(PartitionAssignor.Assignment assignment) {
+    public static ByteBuffer serializeAssignmentV1(Assignment assignment) {
         Struct struct = new Struct(ASSIGNMENT_V1);
         struct.set(USER_DATA_KEY_NAME, assignment.userData());
         List<Struct> topicAssignments = new ArrayList<>();
@@ -273,7 +252,6 @@ public class ConsumerProtocol {
             topicAssignments.add(topicAssignment);
         }
         struct.set(TOPIC_PARTITIONS_KEY_NAME, topicAssignments.toArray());
-        struct.set(ERROR_CODE, assignment.error().code);
 
         ByteBuffer buffer = ByteBuffer.allocate(CONSUMER_PROTOCOL_HEADER_V1.sizeOf() + ASSIGNMENT_V1.sizeOf(struct));
         CONSUMER_PROTOCOL_HEADER_V1.writeTo(buffer);
@@ -282,8 +260,12 @@ public class ConsumerProtocol {
         return buffer;
     }
 
-    public static ByteBuffer serializeAssignment(PartitionAssignor.Assignment assignment) {
-        switch (assignment.version()) {
+    public static ByteBuffer serializeAssignment(Assignment assignment) {
+        return serializeAssignment(assignment, CONSUMER_PROTOCL_LATEST_VERSION);
+    }
+
+    public static ByteBuffer serializeAssignment(Assignment assignment, short version) {
+        switch (version) {
             case CONSUMER_PROTOCOL_V0:
                 return serializeAssignmentV0(assignment);
 
@@ -296,7 +278,7 @@ public class ConsumerProtocol {
         }
     }
 
-    public static PartitionAssignor.Assignment deserializeAssignmentV0(ByteBuffer buffer) {
+    public static Assignment deserializeAssignmentV0(ByteBuffer buffer) {
         Struct struct = ASSIGNMENT_V0.read(buffer);
         ByteBuffer userData = struct.getBytes(USER_DATA_KEY_NAME);
         List<TopicPartition> partitions = new ArrayList<>();
@@ -307,27 +289,14 @@ public class ConsumerProtocol {
                 partitions.add(new TopicPartition(topic, (Integer) partitionObj));
             }
         }
-        return new PartitionAssignor.Assignment(CONSUMER_PROTOCOL_V0, partitions, userData);
+        return new Assignment(partitions, userData);
     }
 
-    public static PartitionAssignor.Assignment deserializeAssignmentV1(ByteBuffer buffer) {
-        Struct struct = ASSIGNMENT_V1.read(buffer);
-        ByteBuffer userData = struct.getBytes(USER_DATA_KEY_NAME);
-        List<TopicPartition> partitions = new ArrayList<>();
-        for (Object structObj : struct.getArray(TOPIC_PARTITIONS_KEY_NAME)) {
-            Struct assignment = (Struct) structObj;
-            String topic = assignment.getString(TOPIC_KEY_NAME);
-            for (Object partitionObj : assignment.getArray(PARTITIONS_KEY_NAME)) {
-                partitions.add(new TopicPartition(topic, (Integer) partitionObj));
-            }
-        }
-
-        AssignmentError error = AssignmentError.fromCode(struct.get(ERROR_CODE));
-
-        return new PartitionAssignor.Assignment(CONSUMER_PROTOCOL_V1, partitions, userData, error);
+    public static Assignment deserializeAssignmentV1(ByteBuffer buffer) {
+        return deserializeAssignmentV0(buffer);
     }
 
-    public static PartitionAssignor.Assignment deserializeAssignment(ByteBuffer buffer) {
+    public static Assignment deserializeAssignment(ByteBuffer buffer) {
         Struct header = CONSUMER_PROTOCOL_HEADER_SCHEMA.read(buffer);
         Short version = header.getShort(VERSION_KEY_NAME);
 

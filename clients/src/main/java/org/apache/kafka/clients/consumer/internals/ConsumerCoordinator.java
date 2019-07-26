@@ -18,13 +18,16 @@ package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.GroupRebalanceConfig;
 import org.apache.kafka.clients.consumer.CommitFailedException;
+import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor;
+import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
+import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.GroupSubscription;
+import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.Subscription;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetCommitCallback;
 import org.apache.kafka.clients.consumer.RetriableCommitFailedException;
-import org.apache.kafka.clients.consumer.internals.PartitionAssignor.Assignment;
-import org.apache.kafka.clients.consumer.internals.PartitionAssignor.RebalanceProtocol;
-import org.apache.kafka.clients.consumer.internals.PartitionAssignor.Subscription;
+import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.Assignment;
+import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.RebalanceProtocol;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
@@ -78,7 +81,7 @@ import java.util.stream.Collectors;
 public final class ConsumerCoordinator extends AbstractCoordinator {
     private final GroupRebalanceConfig rebalanceConfig;
     private final Logger log;
-    private final List<PartitionAssignor> assignors;
+    private final List<ConsumerPartitionAssignor> assignors;
     private final ConsumerMetadata metadata;
     private final ConsumerCoordinatorMetrics sensors;
     private final SubscriptionState subscriptions;
@@ -128,7 +131,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     public ConsumerCoordinator(GroupRebalanceConfig rebalanceConfig,
                                LogContext logContext,
                                ConsumerNetworkClient client,
-                               List<PartitionAssignor> assignors,
+                               List<ConsumerPartitionAssignor> assignors,
                                ConsumerMetadata metadata,
                                SubscriptionState subscriptions,
                                Metrics metrics,
@@ -170,13 +173,13 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         if (!assignors.isEmpty()) {
             List<RebalanceProtocol> supportedProtocols = new ArrayList<>(assignors.get(0).supportedProtocols());
 
-            for (PartitionAssignor assignor : assignors) {
+            for (ConsumerPartitionAssignor assignor : assignors) {
                 supportedProtocols.retainAll(assignor.supportedProtocols());
             }
 
             if (supportedProtocols.isEmpty()) {
                 throw new IllegalArgumentException("Specified assignors " +
-                    assignors.stream().map(PartitionAssignor::name).collect(Collectors.toSet()) +
+                    assignors.stream().map(ConsumerPartitionAssignor::name).collect(Collectors.toSet()) +
                     " do not have commonly supported rebalance protocol");
             }
 
@@ -201,8 +204,10 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         this.joinedSubscription = subscriptions.subscription();
         JoinGroupRequestData.JoinGroupRequestProtocolCollection protocolSet = new JoinGroupRequestData.JoinGroupRequestProtocolCollection();
 
-        for (PartitionAssignor assignor : assignors) {
-            Subscription subscription = assignor.subscription(joinedSubscription);
+        for (ConsumerPartitionAssignor assignor : assignors) {
+            Subscription subscription = new Subscription(new ArrayList<>(joinedSubscription),
+                                                         assignor.subscriptionUserData(joinedSubscription),
+                                                         subscriptions.assignedPartitionsList());
             ByteBuffer metadata = ConsumerProtocol.serializeSubscription(subscription);
 
             protocolSet.add(new JoinGroupRequestData.JoinGroupRequestProtocol()
@@ -220,8 +225,8 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             metadata.requestUpdateForNewTopics();
     }
 
-    private PartitionAssignor lookupAssignor(String name) {
-        for (PartitionAssignor assignor : this.assignors) {
+    private ConsumerPartitionAssignor lookupAssignor(String name) {
+        for (ConsumerPartitionAssignor assignor : this.assignors) {
             if (assignor.name().equals(name))
                 return assignor;
         }
@@ -261,7 +266,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         if (!isLeader)
             assignmentSnapshot = null;
 
-        PartitionAssignor assignor = lookupAssignor(assignmentStrategy);
+        ConsumerPartitionAssignor assignor = lookupAssignor(assignmentStrategy);
         if (assignor == null)
             throw new IllegalStateException("Coordinator selected invalid assignment protocol: " + assignmentStrategy);
 
@@ -285,7 +290,8 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         maybeUpdateJoinedSubscription(assignedPartitions);
 
         // give the assignor a chance to update internal state based on the received assignment
-        assignor.onAssignment(assignment, generation);
+        ConsumerGroupMetadata metadata = new ConsumerGroupMetadata(rebalanceConfig.groupId, generation, memberId, rebalanceConfig.groupInstanceId);
+        assignor.onAssignment(assignment, metadata);
 
         // reschedule the auto commit starting from now
         if (autoCommitEnabled)
@@ -313,10 +319,6 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
             case COOPERATIVE:
                 assignAndRevoke(listener, assignedPartitions, ownedPartitions);
-
-                if (assignment.error() == ConsumerProtocol.AssignmentError.NEED_REJOIN) {
-                    requestRejoin();
-                }
 
                 break;
         }
@@ -470,20 +472,17 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     protected Map<String, ByteBuffer> performAssignment(String leaderId,
                                                         String assignmentStrategy,
                                                         List<JoinGroupResponseData.JoinGroupResponseMember> allSubscriptions) {
-        PartitionAssignor assignor = lookupAssignor(assignmentStrategy);
+        ConsumerPartitionAssignor assignor = lookupAssignor(assignmentStrategy);
         if (assignor == null)
             throw new IllegalStateException("Coordinator selected invalid assignment protocol: " + assignmentStrategy);
 
         Set<String> allSubscribedTopics = new HashSet<>();
         Map<String, Subscription> subscriptions = new HashMap<>();
-        // collect all the owned partitions
-        Map<TopicPartition, String> ownedPartitions = new HashMap<>();
         for (JoinGroupResponseData.JoinGroupResponseMember memberSubscription : allSubscriptions) {
             Subscription subscription = ConsumerProtocol.deserializeSubscription(ByteBuffer.wrap(memberSubscription.metadata()));
             subscription.setGroupInstanceId(Optional.ofNullable(memberSubscription.groupInstanceId()));
             subscriptions.put(memberSubscription.memberId(), subscription);
             allSubscribedTopics.addAll(subscription.topics());
-            ownedPartitions.putAll(subscription.ownedPartitions().stream().collect(Collectors.toMap(item -> item, item -> memberSubscription.memberId())));
         }
 
         // the leader will begin watching for changes to any of the topics the group is interested in,
@@ -494,16 +493,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
         log.debug("Performing assignment using strategy {} with subscriptions {}", assignor.name(), subscriptions);
 
-        Map<String, Assignment> assignments = assignor.assign(metadata.fetch(), subscriptions);
-
-        switch (protocol) {
-            case EAGER:
-                break;
-
-            case COOPERATIVE:
-                adjustAssignment(ownedPartitions, assignments);
-                break;
-        }
+        Map<String, Assignment> assignments = assignor.assign(metadata.fetch(), new GroupSubscription(subscriptions)).groupAssignment();
 
         // user-customized assignor may have created some topics that are not in the subscription list
         // and assign their partitions to the members; in this case we would like to update the leader's
@@ -545,40 +535,6 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         }
 
         return groupAssignment;
-    }
-
-    private void adjustAssignment(final Map<TopicPartition, String> ownedPartitions,
-                                  final Map<String, Assignment> assignments) {
-        boolean revocationsNeeded = false;
-        Set<TopicPartition> assignedPartitions = new HashSet<>();
-        for (final Map.Entry<String, Assignment> entry : assignments.entrySet()) {
-            final Assignment assignment = entry.getValue();
-            assignedPartitions.addAll(assignment.partitions());
-
-            // update the assignment if the partition is owned by another different owner
-            List<TopicPartition> updatedPartitions = assignment.partitions().stream()
-                .filter(tp -> ownedPartitions.containsKey(tp) && !entry.getKey().equals(ownedPartitions.get(tp)))
-                .collect(Collectors.toList());
-            if (!updatedPartitions.equals(assignment.partitions())) {
-                assignment.updatePartitions(updatedPartitions);
-                revocationsNeeded = true;
-            }
-        }
-
-        // for all owned but not assigned partitions, blindly add them to assignment
-        for (final Map.Entry<TopicPartition, String> entry : ownedPartitions.entrySet()) {
-            final TopicPartition tp = entry.getKey();
-            if (!assignedPartitions.contains(tp)) {
-                assignments.get(entry.getValue()).partitions().add(tp);
-            }
-        }
-
-        // if revocations are triggered, tell everyone to re-join immediately.
-        if (revocationsNeeded) {
-            for (final Assignment assignment : assignments.values()) {
-                assignment.setError(ConsumerProtocol.AssignmentError.NEED_REJOIN);
-            }
-        }
     }
 
     @Override

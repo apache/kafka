@@ -29,7 +29,7 @@ import java.util.Map;
 import java.util.Map.Entry;
 
 /**
- * A new topic to be created via {@link AdminClient#createTopics(Collection)}.
+ * A new topic to be created via {@link Admin#createTopics(Collection)}.
  */
 public class NewTopic {
 

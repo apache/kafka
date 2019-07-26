@@ -28,7 +28,7 @@ import kafka.utils.Implicits._
 import kafka.utils._
 import kafka.zk.{AdminZkClient, KafkaZkClient}
 import org.apache.kafka.clients.CommonClientConfigs
-import org.apache.kafka.clients.admin.{ListTopicsOptions, NewPartitions, NewTopic, AdminClient => JAdminClient}
+import org.apache.kafka.clients.admin.{Admin, ListTopicsOptions, NewPartitions, NewTopic, AdminClient => JAdminClient}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.config.ConfigResource.Type
 import org.apache.kafka.common.config.{ConfigResource, TopicConfig}
@@ -158,7 +158,7 @@ object TopicCommand extends Logging {
   }
 
   object AdminClientTopicService {
-    def createAdminClient(commandConfig: Properties, bootstrapServer: Option[String]): JAdminClient = {
+    def createAdminClient(commandConfig: Properties, bootstrapServer: Option[String]): Admin = {
       bootstrapServer match {
         case Some(serverList) => commandConfig.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, serverList)
         case None =>
@@ -170,7 +170,7 @@ object TopicCommand extends Logging {
       new AdminClientTopicService(createAdminClient(commandConfig, bootstrapServer))
   }
 
-  case class AdminClientTopicService private (adminClient: JAdminClient) extends TopicService {
+  case class AdminClientTopicService private (adminClient: Admin) extends TopicService {
 
     override def createTopic(topic: CommandTopicPartition): Unit = {
       if (topic.replicationFactor.exists(rf => rf > Short.MaxValue || rf < 1))
