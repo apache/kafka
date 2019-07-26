@@ -52,7 +52,7 @@ public class PartitionAssignorAdapter implements ConsumerPartitionAssignor {
 
     @Override
     public void onAssignment(Assignment assignment, ConsumerGroupMetadata metadata) {
-        oldAssignor.onAssignment(oldToNewAssignment(assignment), metadata.generationId());
+        oldAssignor.onAssignment(newToOldAssignment(assignment), metadata.generationId());
     }
 
     @Override
@@ -60,7 +60,7 @@ public class PartitionAssignorAdapter implements ConsumerPartitionAssignor {
         return oldAssignor.name();
     }
 
-    private static PartitionAssignor.Assignment oldToNewAssignment(Assignment assignment) {
+    private static PartitionAssignor.Assignment newToOldAssignment(Assignment assignment) {
         return new PartitionAssignor.Assignment(assignment.partitions(), assignment.userData());
     }
 
@@ -85,13 +85,13 @@ public class PartitionAssignorAdapter implements ConsumerPartitionAssignor {
         return new GroupAssignment(newAssignments);
     }
 
-    public static List<ConsumerPartitionAssignor> getAssignorInstances(List<String> classNames) {
+    public static List<ConsumerPartitionAssignor> getAssignorInstances(List<String> assignorClasses) {
         List<ConsumerPartitionAssignor> assignors = new ArrayList<>();
 
-        if (classNames == null)
+        if (assignorClasses == null)
             return assignors;
 
-        for (Object klass : classNames) {
+        for (Object klass : assignorClasses) {
             // first try to get the class if passed in as a string
             if (klass instanceof String) {
                 try {
