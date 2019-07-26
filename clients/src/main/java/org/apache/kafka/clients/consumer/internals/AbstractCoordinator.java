@@ -313,6 +313,7 @@ public abstract class AbstractCoordinator implements Closeable {
      * Ensure the group is active (i.e., joined and synced)
      *
      * @param timer Timer bounding how long this method can block
+     * @throws KafkaException if the callback throws exception
      * @return true iff the group is active
      */
     boolean ensureActiveGroup(final Timer timer) {
@@ -361,6 +362,7 @@ public abstract class AbstractCoordinator implements Closeable {
      * Visible for testing.
      *
      * @param timer Timer bounding how long this method can block
+     * @throws KafkaException if the callback throws exception
      * @return true iff the operation succeeded
      */
     boolean joinGroupIfNeeded(final Timer timer) {
@@ -818,6 +820,9 @@ public abstract class AbstractCoordinator implements Closeable {
         close(time.timer(0));
     }
 
+    /**
+     * @throws KafkaException if the rebalance callback throws exception
+     */
     protected void close(Timer timer) {
         try {
             closeHeartbeatThread();
@@ -844,6 +849,7 @@ public abstract class AbstractCoordinator implements Closeable {
     /**
      * Leave the current group and reset local generation/memberId.
      * @param leaveReason reason to attempt leaving the group
+     * @throws KafkaException if the callback throws exception
      */
     public synchronized void maybeLeaveGroup(String leaveReason) {
         // Starting from 2.3, only dynamic members will send LeaveGroupRequest to the broker,

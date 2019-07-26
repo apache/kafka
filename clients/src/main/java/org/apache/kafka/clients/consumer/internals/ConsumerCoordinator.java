@@ -418,6 +418,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
      * Returns early if the timeout expires
      *
      * @param timer Timer bounding how long this method can block
+     * @throws KafkaException if the rebalance callback throws exception
      * @return true iff the operation succeeded
      */
     public boolean poll(Timer timer) {
@@ -662,6 +663,9 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         }
     }
 
+    /**
+     * @throws KafkaException if the rebalance callback throws exception
+     */
     @Override
     public void resetGeneration(String errorMessage) {
         if (subscriptions.partitionsAutoAssigned()) {
@@ -679,6 +683,9 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         super.resetGeneration(errorMessage);
     }
 
+    /**
+     * @throws KafkaException if the callback throws exception
+     */
     @Override
     public boolean rejoinNeededOrPending() {
         if (!subscriptions.partitionsAutoAssigned())
@@ -788,6 +795,9 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         return null;
     }
 
+    /**
+     * @throws KafkaException if the rebalance callback throws exception
+     */
     public void close(final Timer timer) {
         // we do not need to re-enable wakeups since we are closing already
         client.disableWakeups();
@@ -1248,8 +1258,11 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
         private MetadataSnapshot(SubscriptionState subscription, Cluster cluster, int version) {
             Map<String, Integer> partitionsPerTopic = new HashMap<>();
-            for (String topic : subscription.groupSubscription())
-                partitionsPerTopic.put(topic, cluster.partitionCountForTopic(topic));
+            for (String topic : subscription.groupSubscription()) {
+                Integer numPartitions = cluster.partitionCountForTopic(topic);
+                if (numPartitions != null)
+                    partitionsPerTopic.put(topic, numPartitions);
+            }
             this.partitionsPerTopic = partitionsPerTopic;
             this.version = version;
         }
