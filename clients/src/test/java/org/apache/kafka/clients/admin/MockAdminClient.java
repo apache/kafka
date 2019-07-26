@@ -428,7 +428,7 @@ public class MockAdminClient extends AdminClient {
     }
 
     @Override
-    ListPartitionReassignmentsResult listPartitionReassignments(Optional<Set<TopicPartition>> partitions, ListPartitionReassignmentsOptions options) {
+    public ListPartitionReassignmentsResult listPartitionReassignments(Optional<Set<TopicPartition>> partitions, ListPartitionReassignmentsOptions options) {
         throw new UnsupportedOperationException("Not implemented yet");
     }
 
