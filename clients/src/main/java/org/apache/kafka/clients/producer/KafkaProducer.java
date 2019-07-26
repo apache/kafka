@@ -1251,7 +1251,8 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         Integer partition = record.partition();
         return partition != null ?
                 partition :
-                partitioner.partition(record.topic(), record.key(), serializedKey, record.value(), serializedValue, cluster);
+                partitioner.partition(
+                        record.topic(), record.key(), serializedKey, record.value(), serializedValue, cluster);
     }
 
     private void throwIfNoTransactionManager() {

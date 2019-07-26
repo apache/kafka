@@ -25,9 +25,9 @@ import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ConcurrentHashMap;
 import org.apache.kafka.common.utils.Utils;
 
-public class StickyPartitioner {
+public class StickyPartitionCache {
     private final ConcurrentMap<String, Integer> indexCache;
-    public StickyPartitioner() {
+    public StickyPartitionCache() {
         this.indexCache = new ConcurrentHashMap<>();
     }
 

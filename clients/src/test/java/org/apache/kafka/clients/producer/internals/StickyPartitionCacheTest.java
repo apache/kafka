@@ -28,14 +28,14 @@ import static java.util.Arrays.asList;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;
 
-public class StickyPartitionerTest {
+public class StickyPartitionCacheTest {
     private Node node0 = new Node(0, "localhost", 99);
     private Node node1 = new Node(1, "localhost", 100);
     private Node node2 = new Node(2, "localhost", 101);
     private Node[] nodes = new Node[] {node0, node1, node2};
 
     @Test
-    public void testStickyPartition() {
+    public void testStickyPartitionCache() {
         final String topicA = "topicA";
         final String topicB = "topicB";
 
@@ -46,26 +46,26 @@ public class StickyPartitionerTest {
         );
         Cluster testCluster = new Cluster("clusterId", asList(node0, node1, node2), allPartitions,
             Collections.<String>emptySet(), Collections.<String>emptySet());
-        StickyPartitioner stickyPartitioner = new StickyPartitioner();
+        StickyPartitionCache stickyPartitionCache = new StickyPartitionCache();
 
-        int partA = stickyPartitioner.partition(topicA, testCluster);
-        assertEquals(partA, stickyPartitioner.partition(topicA, testCluster));
+        int partA = stickyPartitionCache.partition(topicA, testCluster);
+        assertEquals(partA, stickyPartitionCache.partition(topicA, testCluster));
 
-        int partB = stickyPartitioner.partition(topicB, testCluster);
-        assertEquals(partB, stickyPartitioner.partition(topicB, testCluster));
+        int partB = stickyPartitionCache.partition(topicB, testCluster);
+        assertEquals(partB, stickyPartitionCache.partition(topicB, testCluster));
 
-        int changedPartA = stickyPartitioner.nextPartition(topicA, testCluster, partA);
-        assertEquals(changedPartA, stickyPartitioner.partition(topicA, testCluster));
+        int changedPartA = stickyPartitionCache.nextPartition(topicA, testCluster, partA);
+        assertEquals(changedPartA, stickyPartitionCache.partition(topicA, testCluster));
         assertNotEquals(partA, changedPartA);
-        int changedPartA2 = stickyPartitioner.partition(topicA, testCluster);
+        int changedPartA2 = stickyPartitionCache.partition(topicA, testCluster);
         assertEquals(changedPartA2, changedPartA);
 
         // We do not want to change partitions because the previous partition does not match the current sticky one.
-        int changedPartA3 = stickyPartitioner.nextPartition(topicA, testCluster, partA);
+        int changedPartA3 = stickyPartitionCache.nextPartition(topicA, testCluster, partA);
         assertEquals(changedPartA3, changedPartA2);
 
         // Check that the we can still use the partitioner when there is only one partition
-        int changedPartB = stickyPartitioner.nextPartition(topicB, testCluster, partB);
-        assertEquals(changedPartB, stickyPartitioner.partition(topicB, testCluster));
+        int changedPartB = stickyPartitionCache.nextPartition(topicB, testCluster, partB);
+        assertEquals(changedPartB, stickyPartitionCache.partition(topicB, testCluster));
     }
 }

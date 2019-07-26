@@ -33,7 +33,7 @@ import org.apache.kafka.common.utils.Utils;
  */
 public class DefaultPartitioner implements Partitioner {
 
-    private final StickyPartitioner stickyPartitioner = new StickyPartitioner();
+    private final StickyPartitionCache stickyPartitionCache = new StickyPartitionCache();
 
     public void configure(Map<String, ?> configs) {}
 
@@ -50,7 +50,7 @@ public class DefaultPartitioner implements Partitioner {
      */
     public int partition(String topic, Object key, byte[] keyBytes, Object value, byte[] valueBytes, Cluster cluster) {
         if (keyBytes == null) {
-            return stickyPartitioner.partition(topic, cluster);
+            return stickyPartitionCache.partition(topic, cluster);
         } 
         List<PartitionInfo> partitions = cluster.partitionsForTopic(topic);
         int numPartitions = partitions.size();
@@ -64,6 +64,6 @@ public class DefaultPartitioner implements Partitioner {
      * Change the current sticky partition when the previous sticky partition batch is full. 
      */
     public void batchCompleted(String topic, Cluster cluster, int prevPartition) {
-        stickyPartitioner.nextPartition(topic, cluster, prevPartition);
+        stickyPartitionCache.nextPartition(topic, cluster, prevPartition);
     }
 }
