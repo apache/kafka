@@ -39,7 +39,7 @@ import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData
 import org.apache.kafka.common.message.InitProducerIdRequestData
 import org.apache.kafka.common.message.JoinGroupRequestData
 import org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocolCollection
-import org.apache.kafka.common.message.LeaveGroupRequestData
+import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity
 import org.apache.kafka.common.message.ListGroupsRequestData
 import org.apache.kafka.common.message.OffsetCommitRequestData
 import org.apache.kafka.common.message.SaslAuthenticateRequestData
@@ -325,9 +325,10 @@ class RequestQuotaTest extends BaseRequestTest {
 
         case ApiKeys.LEAVE_GROUP =>
           new LeaveGroupRequest.Builder(
-            new LeaveGroupRequestData()
-              .setGroupId("test-leave-group")
-              .setMemberId(JoinGroupRequest.UNKNOWN_MEMBER_ID)
+            "test-leave-group",
+            Collections.singletonList(
+              new MemberIdentity()
+                .setMemberId(JoinGroupRequest.UNKNOWN_MEMBER_ID))
           )
 
         case ApiKeys.SYNC_GROUP =>

@@ -31,7 +31,7 @@ import kafka.api.{ApiVersion, KAFKA_0_11_0_IV0, KAFKA_2_3_IV0}
 import kafka.cluster.Partition
 import kafka.common.OffsetAndMetadata
 import kafka.controller.KafkaController
-import kafka.coordinator.group.{GroupCoordinator, JoinGroupResult, SyncGroupResult}
+import kafka.coordinator.group.{GroupCoordinator, JoinGroupResult, LeaveGroupResult, SyncGroupResult}
 import kafka.coordinator.transaction.{InitProducerIdResult, TransactionCoordinator}
 import kafka.message.ZStdCompressionCodec
 import kafka.network.RequestChannel
@@ -62,6 +62,7 @@ import org.apache.kafka.common.message.HeartbeatResponseData
 import org.apache.kafka.common.message.InitProducerIdResponseData
 import org.apache.kafka.common.message.JoinGroupResponseData
 import org.apache.kafka.common.message.LeaveGroupResponseData
+import org.apache.kafka.common.message.LeaveGroupResponseData.MemberResponse
 import org.apache.kafka.common.message.ListGroupsResponseData
 import org.apache.kafka.common.message.OffsetCommitRequestData
 import org.apache.kafka.common.message.OffsetCommitResponseData
@@ -1514,9 +1515,9 @@ class KafkaApis(val requestChannel: RequestChannel,
     def sendResponseCallback(error: Errors) {
       def createResponse(requestThrottleMs: Int): AbstractResponse = {
         val response = new HeartbeatResponse(
-            new HeartbeatResponseData()
-              .setThrottleTimeMs(requestThrottleMs)
-              .setErrorCode(error.code))
+          new HeartbeatResponseData()
+            .setThrottleTimeMs(requestThrottleMs)
+            .setErrorCode(error.code))
         trace("Sending heartbeat response %s for correlation id %d to client %s."
           .format(response, request.header.correlationId, request.header.clientId))
         response
@@ -1549,29 +1550,37 @@ class KafkaApis(val requestChannel: RequestChannel,
   def handleLeaveGroupRequest(request: RequestChannel.Request) {
     val leaveGroupRequest = request.body[LeaveGroupRequest]
 
-    // the callback for sending a leave-group response
-    def sendResponseCallback(error: Errors) {
-      def createResponse(requestThrottleMs: Int): AbstractResponse = {
-        val response = new LeaveGroupResponse(new LeaveGroupResponseData()
-          .setThrottleTimeMs(requestThrottleMs)
-          .setErrorCode(error.code()))
-        trace("Sending leave group response %s for correlation id %d to client %s."
-          .format(response, request.header.correlationId, request.header.clientId))
-        response
-      }
-      sendResponseMaybeThrottle(request, createResponse)
-    }
+    val members = leaveGroupRequest.members().asScala.toList
 
-    if (!authorize(request.session, Read, Resource(Group, leaveGroupRequest.data().groupId(), LITERAL))) {
-      sendResponseMaybeThrottle(request, requestThrottleMs =>
+    if (!authorize(request.session, Read, Resource(Group, leaveGroupRequest.data.groupId, LITERAL))) {
+      sendResponseMaybeThrottle(request, requestThrottleMs => {
         new LeaveGroupResponse(new LeaveGroupResponseData()
           .setThrottleTimeMs(requestThrottleMs)
-          .setErrorCode(Errors.GROUP_AUTHORIZATION_FAILED.code())))
+          .setErrorCode(Errors.GROUP_AUTHORIZATION_FAILED.code)
+        )
+      })
     } else {
-      // let the coordinator to handle leave-group
+      def sendResponseCallback(leaveGroupResult : LeaveGroupResult) {
+        val memberResponses = leaveGroupResult.memberResponses.map(
+          leaveGroupResult =>
+            new MemberResponse()
+              .setErrorCode(leaveGroupResult.error.code)
+              .setMemberId(leaveGroupResult.memberId)
+              .setGroupInstanceId(leaveGroupResult.groupInstanceId.orNull)
+        )
+        def createResponse(requestThrottleMs: Int): AbstractResponse = {
+          new LeaveGroupResponse(
+            memberResponses.asJava,
+            leaveGroupResult.topLevelError,
+            requestThrottleMs,
+            leaveGroupRequest.version)
+        }
+        sendResponseMaybeThrottle(request, createResponse)
+      }
+
       groupCoordinator.handleLeaveGroup(
-        leaveGroupRequest.data().groupId(),
-        leaveGroupRequest.data().memberId(),
+        leaveGroupRequest.data.groupId,
+        members,
         sendResponseCallback)
     }
   }
