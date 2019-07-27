@@ -172,8 +172,12 @@ private[kafka] object LogValidator {
         // Validate the timestamp
         validateTimestamp(record, now, messageTimestampType, messageTimestampDiffMaxMs)
         // Check if we need to overwrite offset, no in place assignment situation 3
-        if (logEntry.offset != expectedInnerOffset.getAndIncrement())
+        if (logEntry.offset != expectedInnerOffset.getAndIncrement()){
           inPlaceAssignment = false
+          if (record.magic() == messageFormatVersion) {
+            record.ensureValid()
+          }
+        }
         if (record.timestamp > maxTimestamp)
           maxTimestamp = record.timestamp
       }
