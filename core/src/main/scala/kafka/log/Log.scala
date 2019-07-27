@@ -844,6 +844,8 @@ class Log(@volatile var dir: File,
       // and we can skip the loading. This is an optimization for users which are not yet using
       // idempotent/transactional features yet.
       if (lastOffset > producerStateManager.mapEndOffset && !isEmptyBeforeTruncation) {
+        val segmentOfLastOffset = floorLogSegment(lastOffset)
+
         logSegments(producerStateManager.mapEndOffset, lastOffset).foreach { segment =>
           val startOffset = Utils.max(segment.baseOffset, producerStateManager.mapEndOffset, logStartOffset)
           producerStateManager.updateMapEndOffset(startOffset)
@@ -851,7 +853,18 @@ class Log(@volatile var dir: File,
           if (offsetsToSnapshot.contains(Some(segment.baseOffset)))
             producerStateManager.takeSnapshot()
 
-          val fetchDataInfo = segment.read(startOffset, Int.MaxValue)
+          val maxPosition = if (segmentOfLastOffset.contains(segment)) {
+            Option(segment.translateOffset(lastOffset))
+              .map(_.position)
+              .getOrElse(segment.size)
+          } else {
+            segment.size
+          }
+
+          val fetchDataInfo = segment.read(startOffset,
+            maxSize = Int.MaxValue,
+            maxPosition = maxPosition,
+            minOneMessage = false)
           if (fetchDataInfo != null)
             loadProducersFromLog(producerStateManager, fetchDataInfo.records)
         }
@@ -1390,9 +1403,9 @@ class Log(@volatile var dir: File,
   }
 
   private def emptyFetchDataInfo(fetchOffsetMetadata: LogOffsetMetadata,
-                                 isolation: FetchIsolation): FetchDataInfo = {
+                                 includeAbortedTxns: Boolean): FetchDataInfo = {
     val abortedTransactions =
-      if (isolation == FetchTxnCommitted) Some(List.empty[AbortedTransaction])
+      if (includeAbortedTxns) Some(List.empty[AbortedTransaction])
       else None
     FetchDataInfo(fetchOffsetMetadata,
       MemoryRecords.EMPTY,
@@ -1424,7 +1437,7 @@ class Log(@volatile var dir: File,
       val endOffsetMetadata = nextOffsetMetadata
       val endOffset = nextOffsetMetadata.messageOffset
       if (startOffset == endOffset)
-        return emptyFetchDataInfo(endOffsetMetadata, isolation)
+        return emptyFetchDataInfo(endOffsetMetadata, includeAbortedTxns)
 
       var segmentEntry = segments.floorEntry(startOffset)
 
@@ -1441,7 +1454,7 @@ class Log(@volatile var dir: File,
 
       if (startOffset > maxOffsetMetadata.messageOffset) {
         val startOffsetMetadata = convertToOffsetMetadataOrThrow(startOffset)
-        return emptyFetchDataInfo(startOffsetMetadata, isolation)
+        return emptyFetchDataInfo(startOffsetMetadata, includeAbortedTxns)
       }
 
       // Do the read on the segment with a base offset less than the target offset
@@ -1450,21 +1463,10 @@ class Log(@volatile var dir: File,
       while (segmentEntry != null) {
         val segment = segmentEntry.getValue
 
-        // If the fetch occurs on the active segment, there might be a race condition where two fetch requests occur after
-        // the message is appended but before the nextOffsetMetadata is updated. In that case the second fetch may
-        // cause OffsetOutOfRangeException. To solve that, we cap the reading up to exposed position instead of the log
-        // end of the active segment.
         val maxPosition = {
+          // Use the max offset position if it is on this segment; otherwise, the segment size is the limit.
           if (maxOffsetMetadata.segmentBaseOffset == segment.baseOffset) {
             maxOffsetMetadata.relativePositionInSegment
-          } else if (segmentEntry == segments.lastEntry) {
-            val exposedPos = nextOffsetMetadata.relativePositionInSegment.toLong
-            // Check the segment again in case a new segment has just rolled out.
-            if (segmentEntry != segments.lastEntry)
-              // New log segment has rolled out, we can read up to the file end.
-              segment.size
-            else
-              exposedPos
           } else {
             segment.size
           }
@@ -2103,6 +2105,14 @@ class Log(@volatile var dir: File,
       }.getOrElse(segments.headMap(to))
       view.values.asScala
     }
+  }
+
+  /**
+   * Get the largest log segment with a base offset less than the given offset, if one exists.
+   * @return the optional log segment
+   */
+  private def floorLogSegment(offset: Long): Option[LogSegment] = {
+    Option(segments.floorEntry(offset)).map(_.getValue)
   }
 
   override def toString: String = {
