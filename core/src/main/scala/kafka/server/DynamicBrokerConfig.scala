@@ -181,12 +181,7 @@ object DynamicBrokerConfig {
   private[server] def resolveVariableConfigs(propsOriginal: Properties): Properties = {
     val props = new Properties
     val config = new AbstractConfig(new ConfigDef(), propsOriginal, false)
-    val resolvedProps = config.originals
-    for ((key, value) <- resolvedProps.asScala) {
-      if (!key.startsWith("config.provider")) {
-        props.put(key, value)
-      }
-    }
+    props.putAll(config.originals.asScala.filter(!_._1.startsWith(AbstractConfig.CONFIG_PROVIDERS_CONFIG)).asJava)
     props
   }
 }

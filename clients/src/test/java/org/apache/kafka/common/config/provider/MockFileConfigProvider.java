@@ -24,6 +24,6 @@ public class MockFileConfigProvider extends FileConfigProvider {
 
     @Override
     protected Reader reader(String path) throws IOException {
-        return new StringReader("key=testKey\npassword=ServerPassword\na=b\nlog=2");
+        return new StringReader("key=testKey\npassword=randomPassword");
     }
 }
