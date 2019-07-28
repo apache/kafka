@@ -1336,7 +1336,7 @@ class KafkaApis(val requestChannel: RequestChannel,
   private def authorizedOperations(session: RequestChannel.Session, resource: Resource): Int = {
     val authorizedOps = authorizer match {
       case None => resource.resourceType.supportedOperations
-      case Some(auth) => resource.resourceType.supportedOperations
+      case Some(_) => resource.resourceType.supportedOperations
         .filter(operation => authorize(session, operation, resource))
     }
 
