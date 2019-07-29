@@ -18,6 +18,7 @@ package org.apache.kafka.common.security.authenticator;
 
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.SaslConfigs;
+import org.apache.kafka.common.config.SecurityConfig;
 import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.security.JaasContext;
@@ -112,6 +113,7 @@ public class LoginManager {
                     STATIC_INSTANCES.put(loginMetadata, loginManager);
                 }
             }
+            SecurityConfig.addConfiguredSecurityProviders(configs);
             return loginManager.acquire();
         }
     }

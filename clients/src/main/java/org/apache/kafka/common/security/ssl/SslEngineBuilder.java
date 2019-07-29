@@ -37,8 +37,6 @@ import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.security.SecureRandom;
-import java.security.Security;
-import java.security.Provider;
 import java.security.GeneralSecurityException;
 import java.security.KeyStore;
 import java.util.Collections;
@@ -54,7 +52,6 @@ public class SslEngineBuilder {
     private final Map<String, ?> configs;
     private final String protocol;
     private final String provider;
-    private final String securityProviderClassNames;
     private final String kmfAlgorithm;
     private final String tmfAlgorithm;
     private final SecurityStore keystore;
@@ -70,10 +67,7 @@ public class SslEngineBuilder {
         this.configs = Collections.unmodifiableMap(configs);
         this.protocol = (String) configs.get(SslConfigs.SSL_PROTOCOL_CONFIG);
         this.provider = (String) configs.get(SslConfigs.SSL_PROVIDER_CONFIG);
-        this.securityProviderClassNames = (String) configs.get(SecurityConfig.SECURITY_PROVIDER_CLASS_CONFIG);
-        if (this.securityProviderClassNames != null && !this.securityProviderClassNames.equals("")) {
-            addSecurityProvider();
-        }
+        SecurityConfig.addConfiguredSecurityProviders(this.configs);
 
         List<String> cipherSuitesList = (List<String>) configs.get(SslConfigs.SSL_CIPHER_SUITES_CONFIG);
         if (cipherSuitesList != null && !cipherSuitesList.isEmpty()) {
@@ -108,19 +102,6 @@ public class SslEngineBuilder {
                 (Password) configs.get(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG));
 
         this.sslContext = createSSLContext();
-    }
-
-    private void addSecurityProvider() {
-        try {
-            String[] securityProviderClassNames = this.securityProviderClassNames.split(",");
-            for (String securityProviderClassName : securityProviderClassNames) {
-                Security.addProvider((Provider) Class.forName(securityProviderClassName).newInstance());
-            }
-        } catch (ClassNotFoundException cnfe) {
-            log.warn("Unrecognized security provider class", cnfe);
-        } catch (IllegalAccessException | InstantiationException e) {
-            log.warn("Unexpected implementation of security provider class", e);
-        }
     }
 
     private static SslClientAuth createSslClientAuth(String key) {
