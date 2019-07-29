@@ -263,7 +263,8 @@ private[log] class ProducerAppendInfo(val topicPartition: TopicPartition,
     nextSeq == lastSeq + 1L || (nextSeq == 0 && lastSeq == Int.MaxValue)
   }
 
-  def append(batch: RecordBatch): Option[CompletedTxn] = {
+  def append(batch: RecordBatch,
+             firstOffsetMetadataOpt: Option[LogOffsetMetadata]): Option[CompletedTxn] = {
     if (batch.isControlBatch) {
       val recordIterator = batch.iterator
       if (recordIterator.hasNext) {
@@ -276,8 +277,9 @@ private[log] class ProducerAppendInfo(val topicPartition: TopicPartition,
         None
       }
     } else {
-      append(batch.producerEpoch, batch.baseSequence, batch.lastSequence, batch.maxTimestamp, batch.baseOffset, batch.lastOffset,
-        batch.isTransactional)
+      val firstOffsetMetadata = firstOffsetMetadataOpt.getOrElse(LogOffsetMetadata(batch.baseOffset))
+      append(batch.producerEpoch, batch.baseSequence, batch.lastSequence, batch.maxTimestamp,
+        firstOffsetMetadata, batch.lastOffset, batch.isTransactional)
       None
     }
   }
@@ -286,9 +288,10 @@ private[log] class ProducerAppendInfo(val topicPartition: TopicPartition,
              firstSeq: Int,
              lastSeq: Int,
              lastTimestamp: Long,
-             firstOffset: Long,
+             firstOffsetMetadata: LogOffsetMetadata,
              lastOffset: Long,
              isTransactional: Boolean): Unit = {
+    val firstOffset = firstOffsetMetadata.messageOffset
     maybeValidateAppend(epoch, firstSeq, firstOffset)
     updatedEntry.addBatch(epoch, lastSeq, lastOffset, (lastOffset - firstOffset).toInt, lastTimestamp)
 
@@ -296,12 +299,12 @@ private[log] class ProducerAppendInfo(val topicPartition: TopicPartition,
       case Some(_) if !isTransactional =>
         // Received a non-transactional message while a transaction is active
         throw new InvalidTxnStateException(s"Expected transactional write from producer $producerId at " +
-          s"offset $firstOffset in partition $topicPartition")
+          s"offset $firstOffsetMetadata in partition $topicPartition")
 
       case None if isTransactional =>
         // Began a new transaction
         updatedEntry.currentTxnFirstOffset = Some(firstOffset)
-        transactions += new TxnMetadata(producerId, firstOffset)
+        transactions += TxnMetadata(producerId, firstOffsetMetadata)
 
       case _ => // nothing to do
     }
@@ -335,18 +338,6 @@ private[log] class ProducerAppendInfo(val topicPartition: TopicPartition,
   def toEntry: ProducerStateEntry = updatedEntry
 
   def startedTransactions: List[TxnMetadata] = transactions.toList
-
-  def maybeCacheTxnFirstOffsetMetadata(logOffsetMetadata: LogOffsetMetadata): Unit = {
-    // we will cache the log offset metadata if it corresponds to the starting offset of
-    // the last transaction that was started. This is optimized for leader appends where it
-    // is only possible to have one transaction started for each log append, and the log
-    // offset metadata will always match in that case since no data from other producers
-    // is mixed into the append
-    transactions.headOption.foreach { txn =>
-      if (txn.firstOffset.messageOffset == logOffsetMetadata.messageOffset)
-        txn.firstOffset = logOffsetMetadata
-    }
-  }
 
   override def toString: String = {
     "ProducerAppendInfo(" +

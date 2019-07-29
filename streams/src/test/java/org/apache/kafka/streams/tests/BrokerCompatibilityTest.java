@@ -121,7 +121,7 @@ public class BrokerCompatibilityTest {
         producerProperties.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
 
         try {
-            try (final KafkaProducer<String, String> producer = new KafkaProducer<>(producerProperties);) {
+            try (final KafkaProducer<String, String> producer = new KafkaProducer<>(producerProperties)) {
                 producer.send(new ProducerRecord<>(SOURCE_TOPIC, "key", "value"));
 
                 System.out.println("wait for result");

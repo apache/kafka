@@ -24,7 +24,7 @@ import joptsimple.util.EnumConverter
 import kafka.security.auth._
 import kafka.server.KafkaConfig
 import kafka.utils._
-import org.apache.kafka.clients.admin.{AdminClientConfig, AdminClient => JAdminClient}
+import org.apache.kafka.clients.admin.{Admin, AdminClientConfig, AdminClient => JAdminClient}
 import org.apache.kafka.common.acl._
 import org.apache.kafka.common.resource.{PatternType, ResourcePattern, ResourcePatternFilter, Resource => JResource, ResourceType => JResourceType}
 import org.apache.kafka.common.security.JaasUtils
@@ -80,7 +80,7 @@ object AclCommand extends Logging {
 
   class AdminClientService(val opts: AclCommandOptions) extends AclCommandService with Logging {
 
-    private def withAdminClient(opts: AclCommandOptions)(f: JAdminClient => Unit) {
+    private def withAdminClient(opts: AclCommandOptions)(f: Admin => Unit) {
       val props = if (opts.options.has(opts.commandConfigOpt))
         Utils.loadProps(opts.options.valueOf(opts.commandConfigOpt))
       else
@@ -153,7 +153,7 @@ object AclCommand extends Logging {
       new AccessControlEntry(acl.principal.toString, acl.host, acl.operation.toJava, acl.permissionType.toJava)
     }
 
-    private def removeAcls(adminClient: JAdminClient, acls: Set[Acl], filter: ResourcePatternFilter): Unit = {
+    private def removeAcls(adminClient: Admin, acls: Set[Acl], filter: ResourcePatternFilter): Unit = {
       if (acls.isEmpty)
         adminClient.deleteAcls(List(new AclBindingFilter(filter, AccessControlEntryFilter.ANY)).asJava).all().get()
       else {
@@ -166,7 +166,7 @@ object AclCommand extends Logging {
       new AccessControlEntryFilter(acl.principal.toString, acl.host, acl.operation.toJava, acl.permissionType.toJava)
     }
 
-    private def getAcls(adminClient: JAdminClient, filters: Set[ResourcePatternFilter]): Map[ResourcePattern, Set[AccessControlEntry]] = {
+    private def getAcls(adminClient: Admin, filters: Set[ResourcePatternFilter]): Map[ResourcePattern, Set[AccessControlEntry]] = {
       val aclBindings =
         if (filters.isEmpty) adminClient.describeAcls(AclBindingFilter.ANY).values().get().asScala.toList
         else {
@@ -280,9 +280,9 @@ object AclCommand extends Logging {
     private def getAcls(authorizer: Authorizer, filter: ResourcePatternFilter,
                         listPrincipal: Option[KafkaPrincipal] = None): Map[Resource, Set[Acl]] =
       if (listPrincipal.isEmpty)
-        authorizer.getAcls().filter { case (resource, acl) => filter.matches(resource.toPattern) }
+        authorizer.getAcls().filter { case (resource, _) => filter.matches(resource.toPattern) }
       else
-        authorizer.getAcls(listPrincipal.get).filter { case (resource, acl) => filter.matches(resource.toPattern) }
+        authorizer.getAcls(listPrincipal.get).filter { case (resource, _) => filter.matches(resource.toPattern) }
 
   }
 

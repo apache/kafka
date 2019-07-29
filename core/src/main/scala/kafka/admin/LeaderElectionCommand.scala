@@ -25,8 +25,7 @@ import kafka.utils.CommandLineUtils
 import kafka.utils.CoreUtils
 import kafka.utils.Json
 import kafka.utils.Logging
-import org.apache.kafka.clients.admin.AdminClientConfig
-import org.apache.kafka.clients.admin.{AdminClient => JAdminClient}
+import org.apache.kafka.clients.admin.{Admin, AdminClientConfig, AdminClient => JAdminClient}
 import org.apache.kafka.common.ElectionType
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.ClusterAuthorizationException
@@ -117,7 +116,7 @@ object LeaderElectionCommand extends Logging {
   }
 
   private[this] def electLeaders(
-    client: JAdminClient,
+    client: Admin,
     electionType: ElectionType,
     topicPartitions: Option[Set[TopicPartition]]
   ): Unit = {
@@ -148,8 +147,8 @@ object LeaderElectionCommand extends Logging {
     val noop = mutable.Set.empty[TopicPartition]
     val failed = mutable.Map.empty[TopicPartition, Throwable]
 
-    electionResults.foreach { case (topicPartition, error) =>
-      val _: Unit = if (error.isPresent) {
+    electionResults.foreach[Unit] { case (topicPartition, error) =>
+      if (error.isPresent) {
         error.get match {
           case _: ElectionNotNeededException => noop += topicPartition
           case _ => failed += topicPartition -> error.get

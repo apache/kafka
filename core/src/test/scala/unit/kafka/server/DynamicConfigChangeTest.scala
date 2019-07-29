@@ -31,7 +31,7 @@ import kafka.admin.AdminOperationException
 import kafka.zk.ConfigEntityChangeNotificationZNode
 import org.apache.kafka.common.TopicPartition
 
-import scala.collection.Map
+import scala.collection.{Map, Seq}
 import scala.collection.JavaConverters._
 
 class DynamicConfigChangeTest extends KafkaServerTestHarness {

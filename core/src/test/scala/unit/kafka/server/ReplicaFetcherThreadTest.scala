@@ -518,7 +518,6 @@ class ReplicaFetcherThreadTest {
     val replicaManager: ReplicaManager = createMock(classOf[ReplicaManager])
 
     val initialFetchOffset = 100
-    val initialLeo = 300
 
     //Stubs
     expect(partition.truncateTo(capture(truncated), anyBoolean())).anyTimes()

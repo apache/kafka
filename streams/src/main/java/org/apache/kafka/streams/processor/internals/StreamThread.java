@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import org.apache.kafka.clients.admin.AdminClient;
+import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
@@ -190,14 +190,20 @@ public class StreamThread extends Thread {
             oldState = state;
 
             if (state == State.PENDING_SHUTDOWN && newState != State.DEAD) {
+                log.debug("Ignoring request to transit from PENDING_SHUTDOWN to {}: " +
+                              "only DEAD state is a valid next state", newState);
                 // when the state is already in PENDING_SHUTDOWN, all other transitions will be
                 // refused but we do not throw exception here
                 return null;
             } else if (state == State.DEAD) {
+                log.debug("Ignoring request to transit from DEAD to {}: " +
+                              "no valid next state after DEAD", newState);
                 // when the state is already in NOT_RUNNING, all its transitions
                 // will be refused but we do not throw exception here
                 return null;
             } else if (state == State.PARTITIONS_REVOKED && newState == State.PARTITIONS_REVOKED) {
+                log.debug("Ignoring request to transit from PARTITIONS_REVOKED to PARTITIONS_REVOKED: " +
+                              "self transition is not allowed");
                 // when the state is already in PARTITIONS_REVOKED, its transition to itself will be
                 // refused but we do not throw exception here
                 return null;
@@ -268,17 +274,23 @@ public class StreamThread extends Thread {
             final long start = time.milliseconds();
             try {
                 if (streamThread.setState(State.PARTITIONS_ASSIGNED) == null) {
-                    return;
-                }
-                if (streamThread.assignmentErrorCode.get() == StreamsPartitionAssignor.Error.NONE.code()) {
+                    log.debug(
+                        "Skipping task creation in rebalance because we are already in {} state.",
+                        streamThread.state()
+                    );
+                } else if (streamThread.assignmentErrorCode.get() != StreamsPartitionAssignor.Error.NONE.code()) {
+                    log.debug(
+                        "Encountered assignment error during partition assignment: {}. Skipping task initialization",
+                        streamThread.assignmentErrorCode
+                    );
+                } else {
+                    log.debug("Creating tasks based on assignment.");
                     taskManager.createTasks(assignment);
                 }
             } catch (final Throwable t) {
                 log.error(
                     "Error caught during partition assignment, " +
-                        "will abort the current process and re-throw at the end of rebalance: {}",
-                    t
-                );
+                        "will abort the current process and re-throw at the end of rebalance", t);
                 streamThread.setRebalanceException(t);
             } finally {
                 log.info("partition assignment took {} ms.\n" +
@@ -495,7 +507,7 @@ public class StreamThread extends Thread {
 
             final ProcessorTopology topology = builder.build(taskId.topicGroupId);
 
-            if (!topology.stateStores().isEmpty()) {
+            if (!topology.stateStores().isEmpty() && !topology.storeToChangelogTopic().isEmpty()) {
                 return new StandbyTask(
                     taskId,
                     partitions,
@@ -554,7 +566,7 @@ public class StreamThread extends Thread {
     public static StreamThread create(final InternalTopologyBuilder builder,
                                       final StreamsConfig config,
                                       final KafkaClientSupplier clientSupplier,
-                                      final AdminClient adminClient,
+                                      final Admin adminClient,
                                       final UUID processId,
                                       final String clientId,
                                       final Metrics metrics,
@@ -809,7 +821,6 @@ public class StreamThread extends Thread {
     // Visible for testing
     void runOnce() {
         final ConsumerRecords<byte[], byte[]> records;
-
         now = time.milliseconds();
 
         if (state == State.PARTITIONS_ASSIGNED) {
@@ -828,6 +839,15 @@ public class StreamThread extends Thread {
             // any other state should not happen
             log.error("Unexpected state {} during normal iteration", state);
             throw new StreamsException(logPrefix + "Unexpected state " + state + " during normal iteration");
+        }
+
+        // Shutdown hook could potentially be triggered and transit the thread state to PENDING_SHUTDOWN during #pollRequests().
+        // The task manager internal states could be uninitialized if the state transition happens during #onPartitionsAssigned().
+        // Should only proceed when the thread is still running after #pollRequests(), because no external state mutation
+        // could affect the task manager state beyond this point within #runOnce().
+        if (!isRunning()) {
+            log.debug("State already transits to {}, skipping the run once call after poll request", state);
+            return;
         }
 
         final long pollLatency = advanceNowAndComputeLatency();

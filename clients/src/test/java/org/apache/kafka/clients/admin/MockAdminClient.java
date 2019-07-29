@@ -205,7 +205,11 @@ public class MockAdminClient extends AdminClient {
 
         for (Map.Entry<String, TopicMetadata> topicDescription : allTopics.entrySet()) {
             String topicName = topicDescription.getKey();
-            topicListings.put(topicName, new TopicListing(topicName, topicDescription.getValue().isInternalTopic));
+            if (topicDescription.getValue().fetchesRemainingUntilVisible > 0) {
+                topicDescription.getValue().fetchesRemainingUntilVisible--;
+            } else {
+                topicListings.put(topicName, new TopicListing(topicName, topicDescription.getValue().isInternalTopic));
+            }
         }
 
         KafkaFutureImpl<Map<String, TopicListing>> future = new KafkaFutureImpl<>();
@@ -232,12 +236,16 @@ public class MockAdminClient extends AdminClient {
             for (Map.Entry<String, TopicMetadata> topicDescription : allTopics.entrySet()) {
                 String topicName = topicDescription.getKey();
                 if (topicName.equals(requestedTopic) && !topicDescription.getValue().markedForDeletion) {
-                    TopicMetadata topicMetadata = topicDescription.getValue();
-                    KafkaFutureImpl<TopicDescription> future = new KafkaFutureImpl<>();
-                    future.complete(new TopicDescription(topicName, topicMetadata.isInternalTopic, topicMetadata.partitions,
-                            Collections.emptySet()));
-                    topicDescriptions.put(topicName, future);
-                    break;
+                    if (topicDescription.getValue().fetchesRemainingUntilVisible > 0) {
+                        topicDescription.getValue().fetchesRemainingUntilVisible--;
+                    } else {
+                        TopicMetadata topicMetadata = topicDescription.getValue();
+                        KafkaFutureImpl<TopicDescription> future = new KafkaFutureImpl<>();
+                        future.complete(new TopicDescription(topicName, topicMetadata.isInternalTopic, topicMetadata.partitions,
+                                Collections.emptySet()));
+                        topicDescriptions.put(topicName, future);
+                        break;
+                    }
                 }
             }
             if (!topicDescriptions.containsKey(requestedTopic)) {
@@ -420,6 +428,7 @@ public class MockAdminClient extends AdminClient {
         final boolean isInternalTopic;
         final List<TopicPartitionInfo> partitions;
         final Map<String, String> configs;
+        int fetchesRemainingUntilVisible;
 
         public boolean markedForDeletion;
 
@@ -430,6 +439,7 @@ public class MockAdminClient extends AdminClient {
             this.partitions = partitions;
             this.configs = configs != null ? configs : Collections.emptyMap();
             this.markedForDeletion = false;
+            this.fetchesRemainingUntilVisible = 0;
         }
     }
 
@@ -440,5 +450,13 @@ public class MockAdminClient extends AdminClient {
     @Override
     public Map<MetricName, ? extends Metric> metrics() {
         return mockMetrics;
+    }
+
+    public void setFetchesRemainingUntilVisible(String topicName, int fetchesRemainingUntilVisible) {
+        TopicMetadata metadata = allTopics.get(topicName);
+        if (metadata == null) {
+            throw new RuntimeException("No such topic as " + topicName);
+        }
+        metadata.fetchesRemainingUntilVisible = fetchesRemainingUntilVisible;
     }
 }

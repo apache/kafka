@@ -16,13 +16,16 @@
  */
 package kafka.admin
 
+import java.util.Properties
+
+import scala.collection.Seq
+
 import kafka.log.Log
 import kafka.zk.{TopicPartitionZNode, ZooKeeperTestHarness}
 import kafka.utils.TestUtils
 import kafka.server.{KafkaConfig, KafkaServer}
 import org.junit.Assert._
 import org.junit.{After, Test}
-import java.util.Properties
 
 import kafka.admin.TopicCommand.ZookeeperTopicService
 import kafka.common.TopicAlreadyMarkedForDeletionException

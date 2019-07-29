@@ -19,6 +19,7 @@ package org.apache.kafka.streams.kstream.internals;
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.streams.KeyValueTimestamp;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.TopologyTestDriver;
@@ -74,7 +75,12 @@ public class KTableSourceTest {
         }
 
         assertEquals(
-            asList("A:1 (ts: 10)", "B:2 (ts: 11)", "C:3 (ts: 12)", "D:4 (ts: 13)", "A:null (ts: 14)", "B:null (ts: 15)"),
+            asList(new KeyValueTimestamp<>("A", 1, 10L),
+                new KeyValueTimestamp<>("B", 2, 11L),
+                new KeyValueTimestamp<>("C", 3, 12L),
+                new KeyValueTimestamp<>("D", 4, 13L),
+                new KeyValueTimestamp<>("A", null, 14L),
+                new KeyValueTimestamp<>("B", null, 15L)),
             supplier.theCapturedProcessor().processed);
     }
 
@@ -160,18 +166,22 @@ public class KTableSourceTest {
             driver.pipeInput(recordFactory.create(topic1, "A", "01", 10L));
             driver.pipeInput(recordFactory.create(topic1, "B", "01", 20L));
             driver.pipeInput(recordFactory.create(topic1, "C", "01", 15L));
-            proc1.checkAndClearProcessResult("A:(01<-null) (ts: 10)", "B:(01<-null) (ts: 20)", "C:(01<-null) (ts: 15)");
+            proc1.checkAndClearProcessResult(new KeyValueTimestamp<>("A", new Change<>("01", null), 10),
+                new KeyValueTimestamp<>("B", new Change<>("01", null), 20),
+                new KeyValueTimestamp<>("C", new Change<>("01", null), 15));
 
             driver.pipeInput(recordFactory.create(topic1, "A", "02", 8L));
             driver.pipeInput(recordFactory.create(topic1, "B", "02", 22L));
-            proc1.checkAndClearProcessResult("A:(02<-null) (ts: 8)", "B:(02<-null) (ts: 22)");
+            proc1.checkAndClearProcessResult(new KeyValueTimestamp<>("A", new Change<>("02", null), 8),
+                new KeyValueTimestamp<>("B", new Change<>("02", null), 22));
 
             driver.pipeInput(recordFactory.create(topic1, "A", "03", 12L));
-            proc1.checkAndClearProcessResult("A:(03<-null) (ts: 12)");
+            proc1.checkAndClearProcessResult(new KeyValueTimestamp<>("A", new Change<>("03", null), 12));
 
             driver.pipeInput(recordFactory.create(topic1, "A", (String) null, 15L));
             driver.pipeInput(recordFactory.create(topic1, "B", (String) null, 20L));
-            proc1.checkAndClearProcessResult("A:(null<-null) (ts: 15)", "B:(null<-null) (ts: 20)");
+            proc1.checkAndClearProcessResult(new KeyValueTimestamp<>("A", new Change<>(null, null), 15),
+                new KeyValueTimestamp<>("B", new Change<>(null, null), 20));
         }
     }
 
@@ -194,18 +204,22 @@ public class KTableSourceTest {
             driver.pipeInput(recordFactory.create(topic1, "A", "01", 10L));
             driver.pipeInput(recordFactory.create(topic1, "B", "01", 20L));
             driver.pipeInput(recordFactory.create(topic1, "C", "01", 15L));
-            proc1.checkAndClearProcessResult("A:(01<-null) (ts: 10)", "B:(01<-null) (ts: 20)", "C:(01<-null) (ts: 15)");
+            proc1.checkAndClearProcessResult(new KeyValueTimestamp<>("A", new Change<>("01", null), 10),
+                new KeyValueTimestamp<>("B", new Change<>("01", null), 20),
+                new KeyValueTimestamp<>("C", new Change<>("01", null), 15));
 
             driver.pipeInput(recordFactory.create(topic1, "A", "02", 8L));
             driver.pipeInput(recordFactory.create(topic1, "B", "02", 22L));
-            proc1.checkAndClearProcessResult("A:(02<-01) (ts: 8)", "B:(02<-01) (ts: 22)");
+            proc1.checkAndClearProcessResult(new KeyValueTimestamp<>("A", new Change<>("02", "01"), 8),
+                new KeyValueTimestamp<>("B", new Change<>("02", "01"), 22));
 
             driver.pipeInput(recordFactory.create(topic1, "A", "03", 12L));
-            proc1.checkAndClearProcessResult("A:(03<-02) (ts: 12)");
+            proc1.checkAndClearProcessResult(new KeyValueTimestamp<>("A", new Change<>("03", "02"), 12));
 
             driver.pipeInput(recordFactory.create(topic1, "A", (String) null, 15L));
             driver.pipeInput(recordFactory.create(topic1, "B", (String) null, 20L));
-            proc1.checkAndClearProcessResult("A:(null<-03) (ts: 15)", "B:(null<-02) (ts: 20)");
+            proc1.checkAndClearProcessResult(new KeyValueTimestamp<>("A", new Change<>(null, "03"), 15),
+                new KeyValueTimestamp<>("B", new Change<>(null, "02"), 20));
         }
     }
 }

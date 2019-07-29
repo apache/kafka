@@ -245,7 +245,7 @@ class LogSegment private[log] (val log: FileRecords,
     if (batch.hasProducerId) {
       val producerId = batch.producerId
       val appendInfo = producerStateManager.prepareUpdate(producerId, isFromClient = false)
-      val maybeCompletedTxn = appendInfo.append(batch)
+      val maybeCompletedTxn = appendInfo.append(batch, firstOffsetMetadataOpt = None)
       producerStateManager.update(appendInfo)
       maybeCompletedTxn.foreach { completedTxn =>
         val lastStableOffset = producerStateManager.lastStableOffset(completedTxn)

@@ -44,7 +44,7 @@ import java.util.function.Function;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.metrics.stats.Avg;
-import org.apache.kafka.common.metrics.stats.Count;
+import org.apache.kafka.common.metrics.stats.CumulativeSum;
 import org.apache.kafka.common.metrics.stats.Max;
 import org.apache.kafka.common.metrics.stats.Meter;
 import org.apache.kafka.common.metrics.stats.Min;
@@ -52,9 +52,9 @@ import org.apache.kafka.common.metrics.stats.Percentile;
 import org.apache.kafka.common.metrics.stats.Percentiles;
 import org.apache.kafka.common.metrics.stats.Percentiles.BucketSizing;
 import org.apache.kafka.common.metrics.stats.Rate;
+import org.apache.kafka.common.metrics.stats.WindowedCount;
+import org.apache.kafka.common.metrics.stats.WindowedSum;
 import org.apache.kafka.common.metrics.stats.SimpleRate;
-import org.apache.kafka.common.metrics.stats.Sum;
-import org.apache.kafka.common.metrics.stats.Total;
 import org.apache.kafka.common.metrics.stats.Value;
 import org.apache.kafka.common.utils.MockTime;
 import org.junit.After;
@@ -119,15 +119,15 @@ public class MetricsTest {
         s.add(metrics.metricName("test.min", "grp1"), new Min());
         s.add(new Meter(TimeUnit.SECONDS, metrics.metricName("test.rate", "grp1"),
                 metrics.metricName("test.total", "grp1")));
-        s.add(new Meter(TimeUnit.SECONDS, new Count(), metrics.metricName("test.occurences", "grp1"),
+        s.add(new Meter(TimeUnit.SECONDS, new WindowedCount(), metrics.metricName("test.occurences", "grp1"),
                 metrics.metricName("test.occurences.total", "grp1")));
-        s.add(metrics.metricName("test.count", "grp1"), new Count());
+        s.add(metrics.metricName("test.count", "grp1"), new WindowedCount());
         s.add(new Percentiles(100, -100, 100, BucketSizing.CONSTANT,
                              new Percentile(metrics.metricName("test.median", "grp1"), 50.0),
                              new Percentile(metrics.metricName("test.perc99_9", "grp1"), 99.9)));
 
         Sensor s2 = metrics.sensor("test.sensor2");
-        s2.add(metrics.metricName("s2.total", "grp1"), new Total());
+        s2.add(metrics.metricName("s2.total", "grp1"), new CumulativeSum());
         s2.record(5.0);
 
         int sum = 0;
@@ -162,15 +162,15 @@ public class MetricsTest {
     @Test
     public void testHierarchicalSensors() {
         Sensor parent1 = metrics.sensor("test.parent1");
-        parent1.add(metrics.metricName("test.parent1.count", "grp1"), new Count());
+        parent1.add(metrics.metricName("test.parent1.count", "grp1"), new WindowedCount());
         Sensor parent2 = metrics.sensor("test.parent2");
-        parent2.add(metrics.metricName("test.parent2.count", "grp1"), new Count());
+        parent2.add(metrics.metricName("test.parent2.count", "grp1"), new WindowedCount());
         Sensor child1 = metrics.sensor("test.child1", parent1, parent2);
-        child1.add(metrics.metricName("test.child1.count", "grp1"), new Count());
+        child1.add(metrics.metricName("test.child1.count", "grp1"), new WindowedCount());
         Sensor child2 = metrics.sensor("test.child2", parent1);
-        child2.add(metrics.metricName("test.child2.count", "grp1"), new Count());
+        child2.add(metrics.metricName("test.child2.count", "grp1"), new WindowedCount());
         Sensor grandchild = metrics.sensor("test.grandchild", child1);
-        grandchild.add(metrics.metricName("test.grandchild.count", "grp1"), new Count());
+        grandchild.add(metrics.metricName("test.grandchild.count", "grp1"), new WindowedCount());
 
         /* increment each sensor one time */
         parent1.record();
@@ -222,15 +222,15 @@ public class MetricsTest {
     public void testRemoveSensor() {
         int size = metrics.metrics().size();
         Sensor parent1 = metrics.sensor("test.parent1");
-        parent1.add(metrics.metricName("test.parent1.count", "grp1"), new Count());
+        parent1.add(metrics.metricName("test.parent1.count", "grp1"), new WindowedCount());
         Sensor parent2 = metrics.sensor("test.parent2");
-        parent2.add(metrics.metricName("test.parent2.count", "grp1"), new Count());
+        parent2.add(metrics.metricName("test.parent2.count", "grp1"), new WindowedCount());
         Sensor child1 = metrics.sensor("test.child1", parent1, parent2);
-        child1.add(metrics.metricName("test.child1.count", "grp1"), new Count());
+        child1.add(metrics.metricName("test.child1.count", "grp1"), new WindowedCount());
         Sensor child2 = metrics.sensor("test.child2", parent2);
-        child2.add(metrics.metricName("test.child2.count", "grp1"), new Count());
+        child2.add(metrics.metricName("test.child2.count", "grp1"), new WindowedCount());
         Sensor grandChild1 = metrics.sensor("test.gchild2", child2);
-        grandChild1.add(metrics.metricName("test.gchild2.count", "grp1"), new Count());
+        grandChild1.add(metrics.metricName("test.gchild2.count", "grp1"), new WindowedCount());
 
         Sensor sensor = metrics.getSensor("test.parent1");
         assertNotNull(sensor);
@@ -268,10 +268,10 @@ public class MetricsTest {
     @Test
     public void testRemoveInactiveMetrics() {
         Sensor s1 = metrics.sensor("test.s1", null, 1);
-        s1.add(metrics.metricName("test.s1.count", "grp1"), new Count());
+        s1.add(metrics.metricName("test.s1.count", "grp1"), new WindowedCount());
 
         Sensor s2 = metrics.sensor("test.s2", null, 3);
-        s2.add(metrics.metricName("test.s2.count", "grp1"), new Count());
+        s2.add(metrics.metricName("test.s2.count", "grp1"), new WindowedCount());
 
         Metrics.ExpireSensorTask purger = metrics.new ExpireSensorTask();
         purger.run();
@@ -309,7 +309,7 @@ public class MetricsTest {
 
         // After purging, it should be possible to recreate a metric
         s1 = metrics.sensor("test.s1", null, 1);
-        s1.add(metrics.metricName("test.s1.count", "grp1"), new Count());
+        s1.add(metrics.metricName("test.s1.count", "grp1"), new WindowedCount());
         assertNotNull("Sensor test.s1 must be present", metrics.getSensor("test.s1"));
         assertNotNull("MetricName test.s1.count must be present",
                 metrics.metrics().get(metrics.metricName("test.s1.count", "grp1")));
@@ -318,8 +318,8 @@ public class MetricsTest {
     @Test
     public void testRemoveMetric() {
         int size = metrics.metrics().size();
-        metrics.addMetric(metrics.metricName("test1", "grp1"), new Count());
-        metrics.addMetric(metrics.metricName("test2", "grp1"), new Count());
+        metrics.addMetric(metrics.metricName("test1", "grp1"), new WindowedCount());
+        metrics.addMetric(metrics.metricName("test2", "grp1"), new WindowedCount());
 
         assertNotNull(metrics.removeMetric(metrics.metricName("test1", "grp1")));
         assertNull(metrics.metrics().get(metrics.metricName("test1", "grp1")));
@@ -333,7 +333,7 @@ public class MetricsTest {
 
     @Test
     public void testEventWindowing() {
-        Count count = new Count();
+        WindowedCount count = new WindowedCount();
         MetricConfig config = new MetricConfig().eventWindow(1).samples(2);
         count.record(config, 1.0, time.milliseconds());
         count.record(config, 1.0, time.milliseconds());
@@ -344,7 +344,7 @@ public class MetricsTest {
 
     @Test
     public void testTimeWindowing() {
-        Count count = new Count();
+        WindowedCount count = new WindowedCount();
         MetricConfig config = new MetricConfig().timeWindow(1, TimeUnit.MILLISECONDS).samples(2);
         count.record(config, 1.0, time.milliseconds());
         time.sleep(1);
@@ -397,8 +397,8 @@ public class MetricsTest {
      */
     @Test
     public void testSampledStatReturnsInitialValueWhenNoValuesExist() {
-        Count count = new Count();
-        Rate.SampledTotal sampledTotal = new Rate.SampledTotal();
+        WindowedCount count = new WindowedCount();
+        WindowedSum sampledTotal = new WindowedSum();
         long windowMs = 100;
         int samples = 2;
         MetricConfig config = new MetricConfig().timeWindow(windowMs, TimeUnit.MILLISECONDS).samples(samples);
@@ -415,14 +415,14 @@ public class MetricsTest {
     @Test(expected = IllegalArgumentException.class)
     public void testDuplicateMetricName() {
         metrics.sensor("test").add(metrics.metricName("test", "grp1"), new Avg());
-        metrics.sensor("test2").add(metrics.metricName("test", "grp1"), new Total());
+        metrics.sensor("test2").add(metrics.metricName("test", "grp1"), new CumulativeSum());
     }
 
     @Test
     public void testQuotas() {
         Sensor sensor = metrics.sensor("test");
-        sensor.add(metrics.metricName("test1.total", "grp1"), new Total(), new MetricConfig().quota(Quota.upperBound(5.0)));
-        sensor.add(metrics.metricName("test2.total", "grp1"), new Total(), new MetricConfig().quota(Quota.lowerBound(0.0)));
+        sensor.add(metrics.metricName("test1.total", "grp1"), new CumulativeSum(), new MetricConfig().quota(Quota.upperBound(5.0)));
+        sensor.add(metrics.metricName("test2.total", "grp1"), new CumulativeSum(), new MetricConfig().quota(Quota.lowerBound(0.0)));
         sensor.record(5.0);
         try {
             sensor.record(1.0);
@@ -503,7 +503,7 @@ public class MetricsTest {
         MetricName countRateMetricName = metrics.metricName("test.count.rate", "grp1");
         MetricName countTotalMetricName = metrics.metricName("test.count.total", "grp1");
         s.add(new Meter(TimeUnit.SECONDS, rateMetricName, totalMetricName));
-        s.add(new Meter(TimeUnit.SECONDS, new Count(), countRateMetricName, countTotalMetricName));
+        s.add(new Meter(TimeUnit.SECONDS, new WindowedCount(), countRateMetricName, countTotalMetricName));
         KafkaMetric totalMetric = metrics.metrics().get(totalMetricName);
         KafkaMetric countTotalMetric = metrics.metrics().get(countTotalMetricName);
 
@@ -825,10 +825,10 @@ public class MetricsTest {
                     sensor.add(metrics.metricName("test.metric.avg", "avg", tags), new Avg());
                     break;
                 case TOTAL:
-                    sensor.add(metrics.metricName("test.metric.total", "total", tags), new Total());
+                    sensor.add(metrics.metricName("test.metric.total", "total", tags), new CumulativeSum());
                     break;
                 case COUNT:
-                    sensor.add(metrics.metricName("test.metric.count", "count", tags), new Count());
+                    sensor.add(metrics.metricName("test.metric.count", "count", tags), new WindowedCount());
                     break;
                 case MAX:
                     sensor.add(metrics.metricName("test.metric.max", "max", tags), new Max());
@@ -843,7 +843,7 @@ public class MetricsTest {
                     sensor.add(metrics.metricName("test.metric.simpleRate", "simpleRate", tags), new SimpleRate());
                     break;
                 case SUM:
-                    sensor.add(metrics.metricName("test.metric.sum", "sum", tags), new Sum());
+                    sensor.add(metrics.metricName("test.metric.sum", "sum", tags), new WindowedSum());
                     break;
                 case VALUE:
                     sensor.add(metrics.metricName("test.metric.value", "value", tags), new Value());

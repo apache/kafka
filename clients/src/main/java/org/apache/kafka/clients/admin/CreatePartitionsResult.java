@@ -23,9 +23,9 @@ import org.apache.kafka.common.annotation.InterfaceStability;
 import java.util.Map;
 
 /**
- * The result of the {@link AdminClient#createPartitions(Map)} call.
+ * The result of the {@link Admin#createPartitions(Map)} call.
  *
- * The API of this class is evolving, see {@link AdminClient} for details.
+ * The API of this class is evolving, see {@link Admin} for details.
  */
 @InterfaceStability.Evolving
 public class CreatePartitionsResult {

@@ -20,14 +20,21 @@ package kafka.log
 import java.io._
 import java.util.{Collections, Properties}
 
-import kafka.server.{FetchDataInfo, LogOffsetMetadata}
+import kafka.server.FetchDataInfo
 import kafka.server.checkpoints.OffsetCheckpointFile
 import kafka.utils._
-import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.apache.kafka.common.errors.OffsetOutOfRangeException
 import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.junit.Assert._
 import org.junit.{After, Before, Test}
+import org.mockito.ArgumentMatchers.any
+import org.mockito.Mockito.{doAnswer, spy}
+import org.mockito.invocation.InvocationOnMock
+import org.mockito.stubbing.Answer
+
+import scala.collection.mutable
+import scala.util.{Failure, Try}
 
 class LogManagerTest {
 
@@ -95,6 +102,47 @@ class LogManagerTest {
     log.appendAsLeader(TestUtils.singletonRecords("test".getBytes()), leaderEpoch = 0)
   }
 
+  @Test
+  def testCreateLogWithLogDirFallback() {
+    // Configure a number of directories one level deeper in logDir,
+    // so they all get cleaned up in tearDown().
+    val dirs = (0 to 4)
+      .map(_.toString)
+      .map(logDir.toPath.resolve(_).toFile)
+
+    // Create a new LogManager with the configured directories and an overridden createLogDirectory.
+    logManager.shutdown()
+    logManager = spy(createLogManager(dirs))
+    val brokenDirs = mutable.Set[File]()
+    doAnswer(new Answer[Try[File]] {
+      override def answer(invocation: InvocationOnMock): Try[File] = {
+        // The first half of directories tried will fail, the rest goes through.
+        val logDir = invocation.getArgument[File](0)
+        if (brokenDirs.contains(logDir) || brokenDirs.size < dirs.length / 2) {
+          brokenDirs.add(logDir)
+          Failure(new Throwable("broken dir"))
+        } else {
+          invocation.callRealMethod().asInstanceOf[Try[File]]
+        }
+      }
+    }).when(logManager).createLogDirectory(any(), any())
+    logManager.startup()
+
+    // Request creating a new log.
+    // LogManager should try using all configured log directories until one succeeds.
+    logManager.getOrCreateLog(new TopicPartition(name, 0), logConfig, isNew = true)
+
+    // Verify that half the directories were considered broken,
+    assertEquals(dirs.length / 2, brokenDirs.size)
+
+    // and that exactly one log file was created,
+    val containsLogFile: File => Boolean = dir => new File(dir, name + "-0").exists()
+    assertEquals("More than one log file created", 1, dirs.count(containsLogFile))
+
+    // and that it wasn't created in one of the broken directories.
+    assertFalse(brokenDirs.exists(containsLogFile))
+  }
+
   /**
    * Test that get on a non-existent returns None and no log is created.
    */
@@ -119,8 +167,7 @@ class LogManagerTest {
       offset = info.lastOffset
     }
     assertTrue("There should be more than one segment now.", log.numberOfSegments > 1)
-    log.highWatermarkMetadata = LogOffsetMetadata(log.logEndOffset)
-    log.highWatermark = log.logEndOffset
+    log.updateHighWatermark(log.logEndOffset)
 
     log.logSegments.foreach(_.log.file.setLastModified(time.milliseconds))
 
@@ -174,8 +221,7 @@ class LogManagerTest {
       offset = info.firstOffset.get
     }
 
-    log.highWatermarkMetadata = LogOffsetMetadata(log.logEndOffset)
-    log.highWatermark = log.logEndOffset
+    log.updateHighWatermark(log.logEndOffset)
     assertEquals("Check we have the expected number of segments.", numMessages * setSize / config.segmentSize, log.numberOfSegments)
 
     // this cleanup shouldn't find any expired segments but should delete some to reduce size

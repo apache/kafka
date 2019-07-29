@@ -25,6 +25,7 @@ import kafka.zk.{KafkaZkClient, StateChangeHandlers}
 import kafka.zookeeper.{StateChangeHandler, ZNodeChildChangeHandler}
 import org.apache.kafka.common.utils.Time
 
+import scala.collection.Seq
 import scala.util.{Failure, Try}
 
 /**

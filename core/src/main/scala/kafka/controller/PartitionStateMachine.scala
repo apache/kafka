@@ -28,8 +28,7 @@ import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.ControllerMovedException
 import org.apache.zookeeper.KeeperException
 import org.apache.zookeeper.KeeperException.Code
-import scala.collection.breakOut
-import scala.collection.mutable
+import scala.collection.{Map, Seq, mutable}
 
 abstract class PartitionStateMachine(controllerContext: ControllerContext) extends Logging {
   /**
@@ -165,7 +164,7 @@ class ZkPartitionStateMachine(config: KafkaConfig,
           throw e
         case e: Throwable =>
           error(s"Error while moving some partitions to $targetState state", e)
-          partitions.map(_ -> Left(e))(breakOut)
+          partitions.iterator.map(_ -> Left(e)).toMap
       }
     } else {
       Map.empty
@@ -368,7 +367,7 @@ class ZkPartitionStateMachine(config: KafkaConfig,
       zkClient.getTopicPartitionStatesRaw(partitions)
     } catch {
       case e: Exception =>
-        return (partitions.map(_ -> Left(e))(breakOut), Seq.empty)
+        return (partitions.iterator.map(_ -> Left(e)).toMap, Seq.empty)
     }
     val failedElections = mutable.Map.empty[TopicPartition, Either[Exception, LeaderAndIsr]]
     val validLeaderAndIsrs = mutable.Buffer.empty[(TopicPartition, LeaderAndIsr)]
@@ -470,7 +469,7 @@ class ZkPartitionStateMachine(config: KafkaConfig,
       }
     } else {
       val (logConfigs, failed) = zkClient.getLogConfigs(
-        partitionsWithNoLiveInSyncReplicas.map { case (partition, _) => partition.topic }(breakOut),
+        partitionsWithNoLiveInSyncReplicas.iterator.map { case (partition, _) => partition.topic }.toSet,
         config.originals()
       )
 

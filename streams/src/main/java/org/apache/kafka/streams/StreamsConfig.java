@@ -17,7 +17,7 @@
 package org.apache.kafka.streams;
 
 import org.apache.kafka.clients.CommonClientConfigs;
-import org.apache.kafka.clients.admin.AdminClient;
+import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
@@ -58,7 +58,7 @@ import static org.apache.kafka.common.requests.IsolationLevel.READ_COMMITTED;
 
 /**
  * Configuration for a {@link KafkaStreams} instance.
- * Can also be used to configure the Kafka Streams internal {@link KafkaConsumer}, {@link KafkaProducer} and {@link AdminClient}.
+ * Can also be used to configure the Kafka Streams internal {@link KafkaConsumer}, {@link KafkaProducer} and {@link Admin}.
  * To avoid consumer/producer/admin property conflicts, you should prefix those properties using
  * {@link #consumerPrefix(String)}, {@link #producerPrefix(String)} and {@link #adminClientPrefix(String)}, respectively.
  * <p>
@@ -198,7 +198,7 @@ public class StreamsConfig extends AbstractConfig {
     public static final String PRODUCER_PREFIX = "producer.";
 
     /**
-     * Prefix used to isolate {@link org.apache.kafka.clients.admin.AdminClient admin} configs from other client configs.
+     * Prefix used to isolate {@link Admin admin} configs from other client configs.
      * It is recommended to use {@link #adminClientPrefix(String)} to add this prefix to {@link ProducerConfig producer
      * properties}.
      */
@@ -1116,7 +1116,7 @@ public class StreamsConfig extends AbstractConfig {
     }
 
     /**
-     * Get the configs for the {@link org.apache.kafka.clients.admin.AdminClient admin client}.
+     * Get the configs for the {@link Admin admin client}.
      * @param clientId clientId
      * @return Map of the admin client configuration.
      */
