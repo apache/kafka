@@ -235,26 +235,28 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     }
 
     private void maybeUpdateJoinedSubscription(Set<TopicPartition> assignedPartitions) {
-        // Check if the assignment contains some topics that were not in the original
-        // subscription, if yes we will obey what leader has decided and add these topics
-        // into the subscriptions as long as they still match the subscribed pattern
+        if (subscriptions.hasPatternSubscription()) {
+            // Check if the assignment contains some topics that were not in the original
+            // subscription, if yes we will obey what leader has decided and add these topics
+            // into the subscriptions as long as they still match the subscribed pattern
 
-        Set<String> addedTopics = new HashSet<>();
-        // this is a copy because its handed to listener below
-        for (TopicPartition tp : assignedPartitions) {
-            if (!joinedSubscription.contains(tp.topic()))
-                addedTopics.add(tp.topic());
-        }
+            Set<String> addedTopics = new HashSet<>();
+            // this is a copy because its handed to listener below
+            for (TopicPartition tp : assignedPartitions) {
+                if (!joinedSubscription.contains(tp.topic()))
+                    addedTopics.add(tp.topic());
+            }
 
-        if (!addedTopics.isEmpty()) {
-            Set<String> newSubscription = new HashSet<>(subscriptions.subscription());
-            Set<String> newJoinedSubscription = new HashSet<>(joinedSubscription);
-            newSubscription.addAll(addedTopics);
-            newJoinedSubscription.addAll(addedTopics);
+            if (!addedTopics.isEmpty()) {
+                Set<String> newSubscription = new HashSet<>(subscriptions.subscription());
+                Set<String> newJoinedSubscription = new HashSet<>(joinedSubscription);
+                newSubscription.addAll(addedTopics);
+                newJoinedSubscription.addAll(addedTopics);
 
-            if (this.subscriptions.subscribeFromPattern(newSubscription))
-                metadata.requestUpdateForNewTopics();
-            this.joinedSubscription = newJoinedSubscription;
+                if (this.subscriptions.subscribeFromPattern(newSubscription))
+                    metadata.requestUpdateForNewTopics();
+                this.joinedSubscription = newJoinedSubscription;
+            }
         }
     }
 
@@ -330,7 +332,9 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
         Assignment assignment = ConsumerProtocol.deserializeAssignment(assignmentBuffer);
 
-        if (!subscriptions.assignFromSubscribed(assignment.partitions())) {
+        Set<TopicPartition> assignedPartitions = new HashSet<>(assignment.partitions());
+
+        if (!subscriptions.checkAssignmentMatchedSubscription(assignedPartitions)) {
             log.warn("We received an assignment {} that doesn't match our current subscription {}; it is likely " +
                 "that the subscription has changed since we joined the group. Will try re-join the group with current subscription",
                 assignment.partitions(), subscriptions.prettyString());
@@ -339,8 +343,6 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
             return;
         }
-
-        Set<TopicPartition> assignedPartitions = subscriptions.assignedPartitions();
 
         // The leader may have assigned partitions which match our subscription pattern, but which
         // were not explicitly requested, so we update the joined subscription here.
@@ -358,9 +360,13 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         final AtomicReference<Exception> firstException = new AtomicReference<>(null);
         Set<TopicPartition> addedPartitions = new HashSet<>(assignedPartitions);
         addedPartitions.removeAll(ownedPartitions);
+
+        // note that we should only change the assignment AFTER we've triggered the rebalance callback
         switch (protocol) {
             case EAGER:
                 // assign partitions that are not yet owned
+                subscriptions.assignFromSubscribed(assignedPartitions);
+
                 firstException.compareAndSet(null, maybeInvokePartitionsAssigned(addedPartitions));
 
                 break;
@@ -378,6 +384,8 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
                 // revoked partitions that was previously owned but no longer assigned
                 firstException.compareAndSet(null, maybeInvokePartitionsRevoked(revokedPartitions));
+
+                subscriptions.assignFromSubscribed(assignedPartitions);
 
                 // add partitions that were not previously owned but are now assigned
                 firstException.compareAndSet(null, maybeInvokePartitionsAssigned(addedPartitions));
@@ -627,13 +635,17 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         // execute the user's callback before rebalance
         final Set<TopicPartition> revokedPartitions;
         final AtomicReference<Exception> firstException = new AtomicReference<>(null);
+
+        // note we should only change the assignment AFTER the callback is triggered
+        // so that users can still access the pre-assigned partitions to commit offsets etc.
         switch (protocol) {
             case EAGER:
                 // revoke all partitions
                 revokedPartitions = new HashSet<>(subscriptions.assignedPartitions());
+                firstException.compareAndSet(null, maybeInvokePartitionsRevoked(revokedPartitions));
+
                 subscriptions.assignFromSubscribed(Collections.emptySet());
 
-                firstException.compareAndSet(null, maybeInvokePartitionsRevoked(revokedPartitions));
                 break;
 
             case COOPERATIVE:
@@ -644,10 +656,10 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                     .collect(Collectors.toSet());
 
                 if (!revokedPartitions.isEmpty()) {
+                    firstException.compareAndSet(null, maybeInvokePartitionsRevoked(revokedPartitions));
+
                     ownedPartitions.removeAll(revokedPartitions);
                     subscriptions.assignFromSubscribed(ownedPartitions);
-
-                    firstException.compareAndSet(null, maybeInvokePartitionsRevoked(revokedPartitions));
                 }
 
                 break;

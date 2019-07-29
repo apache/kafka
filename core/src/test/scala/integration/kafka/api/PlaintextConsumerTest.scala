@@ -205,6 +205,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     var committedPosition: Long = -1
 
     val listener = new TestConsumerReassignmentListener {
+      override def onPartitionsLost(partitions: util.Collection[TopicPartition]): Unit = {}
       override def onPartitionsRevoked(partitions: util.Collection[TopicPartition]): Unit = {
         if (!partitions.isEmpty) {
           // on the second rebalance (after we have joined the group initially), sleep longer
