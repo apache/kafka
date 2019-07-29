@@ -35,7 +35,8 @@ import org.apache.kafka.common.message.FindCoordinatorRequestData;
 import org.apache.kafka.common.message.HeartbeatRequestData;
 import org.apache.kafka.common.message.JoinGroupRequestData;
 import org.apache.kafka.common.message.JoinGroupResponseData;
-import org.apache.kafka.common.message.LeaveGroupRequestData;
+import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity;
+import org.apache.kafka.common.message.LeaveGroupResponseData.MemberResponse;
 import org.apache.kafka.common.message.SyncGroupRequestData;
 import org.apache.kafka.common.metrics.Measurable;
 import org.apache.kafka.common.metrics.MetricConfig;
@@ -843,7 +844,8 @@ public abstract class AbstractCoordinator implements Closeable {
      * Leave the current group and reset local generation/memberId.
      * @param leaveReason reason to attempt leaving the group
      */
-    public synchronized void maybeLeaveGroup(String leaveReason) {
+    public synchronized RequestFuture<Void> maybeLeaveGroup(String leaveReason) {
+        RequestFuture<Void> future = null;
         // Starting from 2.3, only dynamic members will send LeaveGroupRequest to the broker,
         // consumer with valid group.instance.id is viewed as static member that never sends LeaveGroup,
         // and the membership expiration is only controlled by session timeout.
@@ -853,14 +855,18 @@ public abstract class AbstractCoordinator implements Closeable {
             // attempt any resending if the request fails or times out.
             log.info("Member {} sending LeaveGroup request to coordinator {} due to {}",
                      generation.memberId, coordinator, leaveReason);
-            LeaveGroupRequest.Builder request = new LeaveGroupRequest.Builder(new LeaveGroupRequestData()
-                    .setGroupId(rebalanceConfig.groupId).setMemberId(generation.memberId));
-            client.send(coordinator, request)
+            LeaveGroupRequest.Builder request = new LeaveGroupRequest.Builder(
+                rebalanceConfig.groupId,
+                Collections.singletonList(new MemberIdentity()
+                                              .setMemberId(generation.memberId))
+            );
+            future = client.send(coordinator, request)
                     .compose(new LeaveGroupResponseHandler());
             client.pollNoWakeup();
         }
 
         resetGeneration();
+        return future;
     }
 
     protected boolean isDynamicMember() {
@@ -870,12 +876,18 @@ public abstract class AbstractCoordinator implements Closeable {
     private class LeaveGroupResponseHandler extends CoordinatorResponseHandler<LeaveGroupResponse, Void> {
         @Override
         public void handle(LeaveGroupResponse leaveResponse, RequestFuture<Void> future) {
-            Errors error = leaveResponse.error();
+            final List<MemberResponse> members = leaveResponse.memberResponses();
+            if (members.size() > 1) {
+                future.raise(new IllegalStateException("The expected leave group response " +
+                                                           "should only contain no more than one member info, however get " + members));
+            }
+
+            final Errors error = leaveResponse.error();
             if (error == Errors.NONE) {
                 log.debug("LeaveGroup request returned successfully");
                 future.complete(null);
             } else {
-                log.debug("LeaveGroup request failed with error: {}", error.message());
+                log.error("LeaveGroup request failed with error: {}", error.message());
                 future.raise(error);
             }
         }

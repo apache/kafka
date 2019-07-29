@@ -21,8 +21,10 @@ import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.AddPartitionsToTxnRequestData.AddPartitionsToTxnTopic;
 import org.apache.kafka.common.message.AddPartitionsToTxnRequestData.AddPartitionsToTxnTopicCollection;
 import org.apache.kafka.common.message.JoinGroupResponseData.JoinGroupResponseMember;
+import org.apache.kafka.common.message.LeaveGroupResponseData.MemberResponse;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
+import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.Message;
 import org.apache.kafka.common.protocol.types.ArrayOf;
 import org.apache.kafka.common.protocol.types.BoundField;
@@ -48,6 +50,10 @@ import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 public final class MessageTest {
+
+    private final String memberId = "memberId";
+    private final String instanceId = "instanceId";
+
     @Rule
     final public Timeout globalTimeout = Timeout.millis(120000);
 
@@ -115,7 +121,7 @@ public final class MessageTest {
     public void testHeartbeatVersions() throws Exception {
         Supplier<HeartbeatRequestData> newRequest = () -> new HeartbeatRequestData()
                 .setGroupId("groupId")
-                .setMemberId("memberId")
+                .setMemberId(memberId)
                 .setGenerationId(15);
         testAllMessageRoundTrips(newRequest.get());
         testAllMessageRoundTrips(newRequest.get().setGroupInstanceId(null));
@@ -126,7 +132,7 @@ public final class MessageTest {
     public void testJoinGroupRequestVersions() throws Exception {
         Supplier<JoinGroupRequestData> newRequest = () -> new JoinGroupRequestData()
                 .setGroupId("groupId")
-                .setMemberId("memberId")
+                .setMemberId(memberId)
                 .setProtocolType("consumer")
                 .setProtocols(new JoinGroupRequestData.JoinGroupRequestProtocolCollection())
                 .setSessionTimeoutMs(10000);
@@ -138,7 +144,6 @@ public final class MessageTest {
 
     @Test
     public void testJoinGroupResponseVersions() throws Exception {
-        String memberId = "memberId";
         Supplier<JoinGroupResponseData> newResponse = () -> new JoinGroupResponseData()
                 .setMemberId(memberId)
                 .setLeader(memberId)
@@ -154,15 +159,30 @@ public final class MessageTest {
     }
 
     @Test
+    public void testLeaveGroupResponseVersions() throws Exception {
+        Supplier<LeaveGroupResponseData> newResponse = () -> new LeaveGroupResponseData()
+                                                                 .setErrorCode(Errors.NOT_COORDINATOR.code());
+
+        testAllMessageRoundTrips(newResponse.get());
+        testAllMessageRoundTripsFromVersion((short) 1, newResponse.get().setThrottleTimeMs(1000));
+
+        testAllMessageRoundTripsFromVersion((short) 3, newResponse.get().setMembers(
+            Collections.singletonList(new MemberResponse()
+            .setMemberId(memberId)
+            .setGroupInstanceId(instanceId))
+        ));
+    }
+
+    @Test
     public void testSyncGroupDefaultGroupInstanceId() throws Exception {
         Supplier<SyncGroupRequestData> request = () -> new SyncGroupRequestData()
                 .setGroupId("groupId")
-                .setMemberId("memberId")
+                .setMemberId(memberId)
                 .setGenerationId(15)
                 .setAssignments(new ArrayList<>());
         testAllMessageRoundTrips(request.get());
         testAllMessageRoundTrips(request.get().setGroupInstanceId(null));
-        testAllMessageRoundTripsFromVersion((short) 3, request.get().setGroupInstanceId("instanceId"));
+        testAllMessageRoundTripsFromVersion((short) 3, request.get().setGroupInstanceId(instanceId));
     }
 
     @Test
@@ -173,12 +193,12 @@ public final class MessageTest {
 
         Supplier<OffsetCommitRequestData> request = () -> new OffsetCommitRequestData()
                 .setGroupId("groupId")
-                .setMemberId("memberId")
+                .setMemberId(memberId)
                 .setTopics(new ArrayList<>())
                 .setGenerationId(15);
         testAllMessageRoundTripsFromVersion((short) 1, request.get());
         testAllMessageRoundTripsFromVersion((short) 1, request.get().setGroupInstanceId(null));
-        testAllMessageRoundTripsFromVersion((short) 7, request.get().setGroupInstanceId("instanceId"));
+        testAllMessageRoundTripsFromVersion((short) 7, request.get().setGroupInstanceId(instanceId));
     }
 
     @Test
@@ -317,7 +337,7 @@ public final class MessageTest {
      * Test that the JSON response files match the schemas accessible through the ApiKey class.
      */
     @Test
-    public void testResponseSchemas() throws Exception {
+    public void testResponseSchemas() {
         for (ApiKeys apiKey : ApiKeys.values()) {
             Schema[] manualSchemas = apiKey.responseSchemas;
             Schema[] generatedSchemas = ApiMessageType.fromApiKey(apiKey.id).responseSchemas();
@@ -439,17 +459,17 @@ public final class MessageTest {
         verifySizeRaisesUve((short) 0, "groupInstanceId", new HeartbeatRequestData()
                 .setGroupId("groupId")
                 .setGenerationId(15)
-                .setMemberId("memberId")
-                .setGroupInstanceId("instanceId"));
+                .setMemberId(memberId)
+                .setGroupInstanceId(instanceId));
         verifySizeSucceeds((short) 0, new HeartbeatRequestData()
                 .setGroupId("groupId")
                 .setGenerationId(15)
-                .setMemberId("memberId")
+                .setMemberId(memberId)
                 .setGroupInstanceId(null));
         verifySizeSucceeds((short) 0, new HeartbeatRequestData()
                 .setGroupId("groupId")
                 .setGenerationId(15)
-                .setMemberId("memberId"));
+                .setMemberId(memberId));
     }
 
     private void verifySizeRaisesUve(short version, String problemFieldName,

@@ -46,7 +46,7 @@ import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData
 import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData.{AlterConfigsResource, AlterableConfig, AlterableConfigCollection}
 import org.apache.kafka.common.message.JoinGroupRequestData
 import org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocolCollection
-import org.apache.kafka.common.message.LeaveGroupRequestData
+import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity
 import org.apache.kafka.common.message.OffsetCommitRequestData
 import org.apache.kafka.common.message.SyncGroupRequestData
 import org.apache.kafka.common.network.ListenerName
@@ -398,9 +398,10 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
       .setMemberId(JoinGroupRequest.UNKNOWN_MEMBER_ID)).build()
 
   private def leaveGroupRequest = new LeaveGroupRequest.Builder(
-    new LeaveGroupRequestData()
-      .setGroupId(group)
-      .setMemberId(JoinGroupRequest.UNKNOWN_MEMBER_ID)).build()
+    group, Collections.singletonList(
+      new MemberIdentity()
+        .setMemberId(JoinGroupRequest.UNKNOWN_MEMBER_ID)
+    )).build()
 
   private def deleteGroupsRequest = new DeleteGroupsRequest.Builder(
     new DeleteGroupsRequestData()
