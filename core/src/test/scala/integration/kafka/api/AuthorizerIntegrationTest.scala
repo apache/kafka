@@ -44,6 +44,8 @@ import org.apache.kafka.common.message.FindCoordinatorRequestData
 import org.apache.kafka.common.message.HeartbeatRequestData
 import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData
 import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData.{AlterConfigsResource, AlterableConfig, AlterableConfigCollection}
+import org.apache.kafka.common.message.AlterPartitionReassignmentsRequestData
+import org.apache.kafka.common.message.ListPartitionReassignmentsRequestData
 import org.apache.kafka.common.message.JoinGroupRequestData
 import org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocolCollection
 import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity
@@ -164,7 +166,9 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
       ApiKeys.DESCRIBE_LOG_DIRS -> classOf[DescribeLogDirsResponse],
       ApiKeys.CREATE_PARTITIONS -> classOf[CreatePartitionsResponse],
       ApiKeys.ELECT_LEADERS -> classOf[ElectLeadersResponse],
-      ApiKeys.INCREMENTAL_ALTER_CONFIGS -> classOf[IncrementalAlterConfigsResponse]
+      ApiKeys.INCREMENTAL_ALTER_CONFIGS -> classOf[IncrementalAlterConfigsResponse],
+      ApiKeys.ALTER_PARTITION_REASSIGNMENTS -> classOf[AlterPartitionReassignmentsResponse],
+      ApiKeys.LIST_PARTITION_REASSIGNMENTS -> classOf[ListPartitionReassignmentsResponse]
     )
 
   val requestKeyToError = Map[ApiKeys, Nothing => Errors](
@@ -212,7 +216,9 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     ApiKeys.CREATE_PARTITIONS -> ((resp: CreatePartitionsResponse) => resp.errors.asScala.find(_._1 == topic).get._2.error),
     ApiKeys.ELECT_LEADERS -> ((resp: ElectLeadersResponse) => Errors.forCode(resp.data().errorCode())),
     ApiKeys.INCREMENTAL_ALTER_CONFIGS -> ((resp: IncrementalAlterConfigsResponse) =>
-      IncrementalAlterConfigsResponse.fromResponseData(resp.data()).get(new ConfigResource(ConfigResource.Type.TOPIC, tp.topic)).error)
+      IncrementalAlterConfigsResponse.fromResponseData(resp.data()).get(new ConfigResource(ConfigResource.Type.TOPIC, tp.topic)).error),
+    ApiKeys.ALTER_PARTITION_REASSIGNMENTS -> ((resp: AlterPartitionReassignmentsResponse) => Errors.forCode(resp.data().errorCode())),
+    ApiKeys.LIST_PARTITION_REASSIGNMENTS -> ((resp: ListPartitionReassignmentsResponse) => Errors.forCode(resp.data().errorCode()))
   )
 
   val requestKeysToAcls = Map[ApiKeys, Map[Resource, Set[Acl]]](
@@ -252,7 +258,9 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     ApiKeys.DESCRIBE_LOG_DIRS -> clusterDescribeAcl,
     ApiKeys.CREATE_PARTITIONS -> topicAlterAcl,
     ApiKeys.ELECT_LEADERS -> clusterAlterAcl,
-    ApiKeys.INCREMENTAL_ALTER_CONFIGS -> topicAlterConfigsAcl
+    ApiKeys.INCREMENTAL_ALTER_CONFIGS -> topicAlterConfigsAcl,
+    ApiKeys.ALTER_PARTITION_REASSIGNMENTS -> clusterAlterAcl,
+    ApiKeys.LIST_PARTITION_REASSIGNMENTS -> clusterDescribeAcl
   )
 
   @Before
@@ -485,6 +493,26 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     10000
   ).build()
 
+  private def alterPartitionReassignmentsRequest = new AlterPartitionReassignmentsRequest.Builder(
+    new AlterPartitionReassignmentsRequestData().setTopics(
+      List(new AlterPartitionReassignmentsRequestData.ReassignableTopic()
+        .setName(topic)
+        .setPartitions(
+          List(new AlterPartitionReassignmentsRequestData.ReassignablePartition().setPartitionIndex(tp.partition())).asJava
+        )).asJava
+    )
+  ).build()
+
+  private def listPartitionReassignmentsRequest = new ListPartitionReassignmentsRequest.Builder(
+    new ListPartitionReassignmentsRequestData().setTopics(
+      List(new ListPartitionReassignmentsRequestData.ListPartitionReassignmentsTopics()
+        .setName(topic)
+        .setPartitionIndexes(
+          List(new Integer(tp.partition)).asJava
+        )).asJava
+    )
+  ).build()
+
   @Test
   def testAuthorizationWithTopicExisting() {
     val requestKeyToRequest = mutable.LinkedHashMap[ApiKeys, AbstractRequest](
@@ -520,7 +548,9 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
       // Check StopReplica last since some APIs depend on replica availability
       ApiKeys.STOP_REPLICA -> stopReplicaRequest,
       ApiKeys.ELECT_LEADERS -> electLeadersRequest,
-      ApiKeys.INCREMENTAL_ALTER_CONFIGS -> incrementalAlterConfigsRequest
+      ApiKeys.INCREMENTAL_ALTER_CONFIGS -> incrementalAlterConfigsRequest,
+      ApiKeys.ALTER_PARTITION_REASSIGNMENTS -> alterPartitionReassignmentsRequest,
+      ApiKeys.LIST_PARTITION_REASSIGNMENTS -> listPartitionReassignmentsRequest
     )
 
     for ((key, request) <- requestKeyToRequest) {

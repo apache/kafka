@@ -233,12 +233,53 @@ public final class MessageTest {
 
     }
 
+    @Test
+    public void testLeaderAndIsrVersions() throws Exception {
+        // Version 3 adds two new fields - AddingReplicas and RemovingReplicas
+        LeaderAndIsrRequestData.LeaderAndIsrRequestTopicState partitionStateNoAddingRemovingReplicas =
+                new LeaderAndIsrRequestData.LeaderAndIsrRequestTopicState()
+                        .setName("topic")
+                        .setPartitionStatesV0(
+                                Collections.singletonList(
+                                        new LeaderAndIsrRequestData.LeaderAndIsrRequestPartition()
+                                                .setPartitionIndex(0)
+                                                .setReplicas(Collections.singletonList(0))
+                                )
+                        );
+        LeaderAndIsrRequestData.LeaderAndIsrRequestTopicState partitionStateWithAddingRemovingReplicas =
+                new LeaderAndIsrRequestData.LeaderAndIsrRequestTopicState()
+                        .setName("topic")
+                        .setPartitionStatesV0(
+                                Collections.singletonList(
+                                        new LeaderAndIsrRequestData.LeaderAndIsrRequestPartition()
+                                                .setPartitionIndex(0)
+                                                .setReplicas(Collections.singletonList(0))
+                                                .setAddingReplicas(Collections.singletonList(1))
+                                                .setRemovingReplicas(Collections.singletonList(1))
+                                )
+                        );
+        testAllMessageRoundTripsBetweenVersions(
+                (short) 2,
+                (short) 3,
+                new LeaderAndIsrRequestData().setTopicStates(Collections.singletonList(partitionStateWithAddingRemovingReplicas)),
+                new LeaderAndIsrRequestData().setTopicStates(Collections.singletonList(partitionStateNoAddingRemovingReplicas)));
+        testAllMessageRoundTripsFromVersion((short) 3, new LeaderAndIsrRequestData().setTopicStates(Collections.singletonList(partitionStateWithAddingRemovingReplicas)));
+    }
+
     private void testAllMessageRoundTrips(Message message) throws Exception {
         testAllMessageRoundTripsFromVersion(message.lowestSupportedVersion(), message);
     }
 
     private void testAllMessageRoundTripsBeforeVersion(short beforeVersion, Message message, Message expected) throws Exception {
-        for (short version = 0; version < beforeVersion; version++) {
+        testAllMessageRoundTripsBetweenVersions((short) 0, beforeVersion, message, expected);
+    }
+
+    /**
+     * @param startVersion - the version we want to start at, inclusive
+     * @param endVersion - the version we want to end at, exclusive
+     */
+    private void testAllMessageRoundTripsBetweenVersions(short startVersion, short endVersion, Message message, Message expected) throws Exception {
+        for (short version = startVersion; version < endVersion; version++) {
             testMessageRoundTrip(version, message, expected);
         }
     }
