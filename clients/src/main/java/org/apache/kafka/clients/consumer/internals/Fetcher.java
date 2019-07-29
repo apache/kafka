@@ -81,6 +81,7 @@ import org.slf4j.helpers.MessageFormatter;
 
 import java.io.Closeable;
 import java.nio.ByteBuffer;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -93,6 +94,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.PriorityQueue;
+import java.util.Queue;
 import java.util.Set;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -580,12 +582,13 @@ public class Fetcher<K, V> implements Closeable {
      */
     public Map<TopicPartition, List<ConsumerRecord<K, V>>> fetchedRecords() {
         Map<TopicPartition, List<ConsumerRecord<K, V>>> fetched = new HashMap<>();
+        Queue<PartitionRecords> pausedCompletedFetches = new ArrayDeque<>();
         int recordsRemaining = maxPollRecords;
 
         try {
             while (recordsRemaining > 0) {
                 if (nextInLineRecords == null || nextInLineRecords.isFetched) {
-                    PartitionRecords records = maybeGetPartitionRecords();
+                    PartitionRecords records = maybeGetPartitionRecords(pausedCompletedFetches);
 
                     if (records == null) break;
 
@@ -600,14 +603,14 @@ public class Fetcher<K, V> implements Closeable {
                             // potential data loss due to an exception in a following record.
                             FetchResponse.PartitionData partition = records.completedFetch.partitionData;
                             if (fetched.isEmpty() && (partition.records == null || partition.records.sizeInBytes() == 0)) {
-                                completedFetches.remove(records);
+                                completedFetches.poll();
                             }
                             throw e;
                         }
                     } else {
                         nextInLineRecords = records;
                     }
-                    completedFetches.remove(records);
+                    completedFetches.poll();
                 } else {
                     List<ConsumerRecord<K, V>> records = fetchRecords(nextInLineRecords, recordsRemaining);
 
@@ -632,6 +635,10 @@ public class Fetcher<K, V> implements Closeable {
         } catch (KafkaException e) {
             if (fetched.isEmpty())
                 throw e;
+        } finally {
+            // add any polled completed fetches for paused partitions back to the completed fetches queue to be
+            // re-evaluated in the next poll
+            completedFetches.addAll(pausedCompletedFetches);
         }
 
         return fetched;
@@ -639,20 +646,21 @@ public class Fetcher<K, V> implements Closeable {
 
     /**
      * Return the next PartitionRecords from the queue of completed fetches. If the records belong to a partition that
-     * is currently paused then moved on to the next. If the queue is empty or all partitions are paused then return
-     * null.
+     * is currently paused then cache it in the pausedCompletedFetches queue reference and move on to the next. If the
+     * queue is empty or all partitions are paused then return null.
      */
-    private PartitionRecords maybeGetPartitionRecords() {
-        PartitionRecords partRecords = null;
-        for (PartitionRecords records : completedFetches) {
+    private PartitionRecords maybeGetPartitionRecords(Queue<PartitionRecords> pausedCompletedFetches) {
+        for (Iterator<PartitionRecords> iter = completedFetches.iterator(); iter.hasNext(); ) {
+            PartitionRecords records = iter.next();
             if (subscriptions.isPaused(records.partition)) {
                 log.debug("Skipping the completed fetch for partition {} because its partition is paused", records.partition);
+                pausedCompletedFetches.add(records);
+                iter.remove();
             } else {
-                partRecords = records;
-                break;
+                return records;
             }
         }
-        return partRecords;
+        return null;
     }
 
     private List<ConsumerRecord<K, V>> fetchRecords(PartitionRecords partitionRecords, int maxRecords) {
