@@ -338,8 +338,8 @@ object TopicCommand extends Logging {
           }
           println("WARNING: If partitions are increased for a topic that has a key, the partition " +
             "logic or ordering of the messages will be affected")
-          val existingAssignment = zkClient.getReplicaAssignmentForTopics(immutable.Set(topic)).map {
-            case (topicPartition, replicas) => topicPartition.partition -> replicas
+          val existingAssignment = zkClient.getFullReplicaAssignmentForTopics(immutable.Set(topic)).map {
+            case (topicPartition, assignment) => topicPartition.partition -> assignment
           }
           if (existingAssignment.isEmpty)
             throw new InvalidTopicException(s"The topic $topic does not exist")

@@ -1376,9 +1376,11 @@ class KafkaController(val config: KafkaConfig,
 
       val existingPartitions = zkClient.getChildren(TopicPartitionsZNode.path(topic))
       val existingPartitionReplicaAssignment = newPartitionReplicaAssignment.filter(p =>
-        existingPartitions.contains(p._1.partition.toString))
+        existingPartitions.contains(p._1.partition.toString)).map { case (tp, _) =>
+        tp -> controllerContext.partitionFullReplicaAssignment(tp)
+      }
 
-      zkClient.setTopicAssignment(topic, existingPartitionReplicaAssignment.mapValues { case (v) => PartitionReplicaAssignment(v, List(), List()) }.toMap, controllerContext.epochZkVersion)
+      zkClient.setTopicAssignment(topic, existingPartitionReplicaAssignment, controllerContext.epochZkVersion)
     }
 
     if (!isActive) return
