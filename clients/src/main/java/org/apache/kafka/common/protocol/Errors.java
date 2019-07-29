@@ -311,7 +311,7 @@ public enum Errors {
     ELIGIBLE_LEADERS_NOT_AVAILABLE(83, "Eligible topic partition leaders are not available",
             EligibleLeadersNotAvailableException::new),
     ELECTION_NOT_NEEDED(84, "Leader election not needed for topic partition", ElectionNotNeededException::new),
-    NO_REASSIGNMENT_IN_PROGRESS(85, "A partition reassignment is not in progress.",
+    NO_REASSIGNMENT_IN_PROGRESS(85, "No partition reassignment is in progress.",
             NoReassignmentInProgressException::new);
 
     private static final Logger log = LoggerFactory.getLogger(Errors.class);

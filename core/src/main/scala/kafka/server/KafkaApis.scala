@@ -2298,20 +2298,26 @@ class KafkaApis(val requestChannel: RequestChannel,
     authorizeClusterAlter(request)
     val alterPartitionReassignmentsRequest = request.body[AlterPartitionReassignmentsRequest]
 
-    println("TODO")
     sendResponseMaybeThrottle(request, requestThrottleMs =>
-      new AlterPartitionReassignmentsResponse(new AlterPartitionReassignmentsResponseData().setThrottleTimeMs(requestThrottleMs).toStruct(0)))
-    println("TODO")
+      new AlterPartitionReassignmentsResponse(
+        new AlterPartitionReassignmentsResponseData().setThrottleTimeMs(requestThrottleMs)
+          .setErrorCode(Errors.UNSUPPORTED_VERSION.code()).setErrorMessage(Errors.UNSUPPORTED_VERSION.message())
+          .toStruct(0)
+      )
+    )
   }
 
   def handleListPartitionReassignmentsRequest(request: RequestChannel.Request): Unit = {
     authorizeClusterDescribe(request)
     val listPartitionReassignmentsRequest = request.body[ListPartitionReassignmentsRequest]
 
-    println("TODO")
     sendResponseMaybeThrottle(request, requestThrottleMs =>
-      new ListPartitionReassignmentsResponse(new ListPartitionReassignmentsResponseData().setThrottleTimeMs(requestThrottleMs).toStruct(0)))
-    println("TODO")
+      new ListPartitionReassignmentsResponse(
+        new ListPartitionReassignmentsResponseData().setThrottleTimeMs(requestThrottleMs)
+          .setErrorCode(Errors.UNSUPPORTED_VERSION.code()).setErrorMessage(Errors.UNSUPPORTED_VERSION.message())
+          .toStruct(0)
+      )
+    )
   }
 
   private def configsAuthorizationApiError(session: RequestChannel.Session, resource: ConfigResource): ApiError = {

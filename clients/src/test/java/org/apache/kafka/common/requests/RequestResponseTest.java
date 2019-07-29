@@ -1664,10 +1664,12 @@ public class RequestResponseTest {
 
     private ListPartitionReassignmentsRequest createListPartitionReassignmentsRequest() {
         ListPartitionReassignmentsRequestData data = new ListPartitionReassignmentsRequestData();
-        data.topics().add(
+        data.setTopics(
+            Collections.singletonList(
                 new ListPartitionReassignmentsRequestData.ListPartitionReassignmentsTopics()
-                        .setName("topic")
-                        .setPartitionIndexes(Collections.singletonList(1))
+                    .setName("topic")
+                    .setPartitionIndexes(Collections.singletonList(1))
+            )
         );
         return new ListPartitionReassignmentsRequest.Builder(data).build((short) 0);
     }
