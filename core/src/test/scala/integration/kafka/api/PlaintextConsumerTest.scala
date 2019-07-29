@@ -185,14 +185,12 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     // rebalance to get the initial assignment
     awaitRebalance(consumer, listener)
     assertEquals(1, listener.callsToAssigned)
-    assertEquals(1, listener.callsToRevoked)
 
     Thread.sleep(3500)
 
     // we should fall out of the group and need to rebalance
     awaitRebalance(consumer, listener)
     assertEquals(2, listener.callsToAssigned)
-    assertEquals(2, listener.callsToRevoked)
   }
 
   @Test
@@ -208,7 +206,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
 
     val listener = new TestConsumerReassignmentListener {
       override def onPartitionsRevoked(partitions: util.Collection[TopicPartition]): Unit = {
-        if (callsToRevoked > 0) {
+        if (!partitions.isEmpty) {
           // on the second rebalance (after we have joined the group initially), sleep longer
           // than session timeout and then try a commit. We should still be in the group,
           // so the commit should succeed

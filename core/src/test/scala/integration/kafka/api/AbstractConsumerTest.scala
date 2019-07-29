@@ -332,28 +332,28 @@ abstract class AbstractConsumerTest extends BaseRequestTest {
     @volatile var thrownException: Option[Throwable] = None
     @volatile var receivedMessages = 0
 
-    @volatile private var partitionAssignment: Set[TopicPartition] = partitionsToAssign
+    @volatile private var partitionAssignment: mutable.Set[TopicPartition] = new mutable.HashSet[TopicPartition]()
     @volatile private var subscriptionChanged = false
     private var topicsSubscription = topicsToSubscribe
 
     val rebalanceListener: ConsumerRebalanceListener = new ConsumerRebalanceListener {
       override def onPartitionsAssigned(partitions: util.Collection[TopicPartition]) = {
-        partitionAssignment = collection.immutable.Set(consumer.assignment().asScala.toArray: _*)
+        partitionAssignment ++= partitions.toArray(new Array[TopicPartition](0))
       }
 
       override def onPartitionsRevoked(partitions: util.Collection[TopicPartition]) = {
-        partitionAssignment = Set.empty[TopicPartition]
+        partitionAssignment --= partitions.toArray(new Array[TopicPartition](0))
       }
     }
 
-    if (partitionAssignment.isEmpty) {
+    if (partitionsToAssign.isEmpty) {
       consumer.subscribe(topicsToSubscribe.asJava, rebalanceListener)
     } else {
       consumer.assign(partitionAssignment.asJava)
     }
 
     def consumerAssignment(): Set[TopicPartition] = {
-      partitionAssignment
+      partitionAssignment.toSet
     }
 
     /**

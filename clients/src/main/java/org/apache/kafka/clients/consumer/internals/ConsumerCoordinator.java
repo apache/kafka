@@ -259,19 +259,17 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     }
 
     private Exception maybeInvokePartitionsAssigned(final Set<TopicPartition> assignedPartitions) {
-        if (!assignedPartitions.isEmpty()) {
-            log.info("Adding newly assigned partitions: {}", Utils.join(assignedPartitions, ", "));
+        log.info("Adding newly assigned partitions: {}", Utils.join(assignedPartitions, ", "));
 
-            ConsumerRebalanceListener listener = subscriptions.rebalanceListener();
-            try {
-                listener.onPartitionsAssigned(assignedPartitions);
-            } catch (WakeupException | InterruptException e) {
-                throw e;
-            } catch (Exception e) {
-                log.error("User provided listener {} failed on invocation of onPartitionsAssigned for partitions {}",
-                    listener.getClass().getName(), assignedPartitions, e);
-                return e;
-            }
+        ConsumerRebalanceListener listener = subscriptions.rebalanceListener();
+        try {
+            listener.onPartitionsAssigned(assignedPartitions);
+        } catch (WakeupException | InterruptException e) {
+            throw e;
+        } catch (Exception e) {
+            log.error("User provided listener {} failed on invocation of onPartitionsAssigned for partitions {}",
+                listener.getClass().getName(), assignedPartitions, e);
+            return e;
         }
 
         return null;
@@ -378,11 +376,11 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                     Utils.join(addedPartitions, ", "),
                     Utils.join(revokedPartitions, ", "));
 
-                // add partitions that were not previously owned but are now assigned
-                firstException.compareAndSet(null, maybeInvokePartitionsAssigned(addedPartitions));
-
                 // revoked partitions that was previously owned but no longer assigned
                 firstException.compareAndSet(null, maybeInvokePartitionsRevoked(revokedPartitions));
+
+                // add partitions that were not previously owned but are now assigned
+                firstException.compareAndSet(null, maybeInvokePartitionsAssigned(addedPartitions));
 
                 // if revoked any partitions, need to re-join the group afterwards
                 if (!revokedPartitions.isEmpty()) {

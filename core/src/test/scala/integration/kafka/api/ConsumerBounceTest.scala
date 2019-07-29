@@ -384,13 +384,8 @@ class ConsumerBounceTest extends AbstractConsumerTest with Logging {
 
     def subscribeAndPoll(consumer: KafkaConsumer[Array[Byte], Array[Byte]], revokeSemaphore: Option[Semaphore] = None): Future[Any] = {
       executor.submit(CoreUtils.runnable {
-          consumer.subscribe(Collections.singletonList(topic), new ConsumerRebalanceListener {
-            def onPartitionsAssigned(partitions: Collection[TopicPartition]) {
-            }
-            def onPartitionsRevoked(partitions: Collection[TopicPartition]) {
-              revokeSemaphore.foreach(s => s.release())
-            }
-          })
+        consumer.subscribe(Collections.singletonList(topic))
+        revokeSemaphore.foreach(s => s.release())
         // requires to used deprecated `poll(long)` to trigger metadata update
           consumer.poll(0L)
         }, 0)
