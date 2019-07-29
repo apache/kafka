@@ -321,13 +321,6 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
             super(inner);
         }
 
-        /**
-         *
-         * @deprecated as timestamp is not provided for the (key, value) pair, this causes inconsistency
-         * to identify the window frame to which the key belongs.
-         * Use WindowStore#put(key, value, timestamp) instead.
-         *
-         */
         @Deprecated
         @Override
         public void put(final K key,
@@ -528,13 +521,6 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
             super(inner);
         }
 
-        /**
-         *
-         * @deprecated as timestamp is not provided for the (key, value) pair, this causes inconsistency
-         * to identify the window frame to which the key belongs.
-         * Use WindowStore#put(key, value, timestamp) instead.
-         *
-         */
         @Deprecated
         @Override
         public void put(final K key,

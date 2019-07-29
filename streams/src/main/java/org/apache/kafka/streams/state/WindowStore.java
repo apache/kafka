@@ -47,9 +47,9 @@ public interface WindowStore<K, V> extends StateStore, ReadOnlyWindowStore<K, V>
      *              if the serialized bytes are also null it is interpreted as deletes
      * @throws NullPointerException if the given key is {@code null}
      *
-     * @deprecated as timestamp is not provided for the (key, value) pair, this causes inconsistency
+     * @deprecated as timestamp is not provided for the key-value pair, this causes inconsistency
      * to identify the window frame to which the key belongs.
-     * Use WindowStore#put(key, value, timestamp) instead.
+     * Use {@link #put(Object, Object, long)} instead.
      *
      */
     @Deprecated
