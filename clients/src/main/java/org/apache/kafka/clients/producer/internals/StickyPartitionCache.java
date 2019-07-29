@@ -58,9 +58,10 @@ public class StickyPartitionCache {
                     random = Utils.toPositive(ThreadLocalRandom.current().nextInt());
                     part = availablePartitions.get(random % availablePartitions.size()).partition();
                 }
-            }   
-            indexCache.put(topic, part);
-            return part;
+            }
+            indexCache.putIfAbsent(topic, part);   
+            indexCache.replace(topic, prevPartition, part);
+            return indexCache.get(topic);
         }
         return indexCache.get(topic);
     }
