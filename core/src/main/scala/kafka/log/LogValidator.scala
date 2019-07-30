@@ -166,18 +166,15 @@ private[kafka] object LogValidator {
 
     records.deepEntries(true, BufferSupplier.NO_CACHING).asScala.foreach { logEntry =>
       val record = logEntry.record
+      record.ensureValid()
       validateKey(record, compactedTopic)
 
       if (record.magic > Record.MAGIC_VALUE_V0 && messageFormatVersion > Record.MAGIC_VALUE_V0) {
         // Validate the timestamp
         validateTimestamp(record, now, messageTimestampType, messageTimestampDiffMaxMs)
         // Check if we need to overwrite offset, no in place assignment situation 3
-        if (logEntry.offset != expectedInnerOffset.getAndIncrement()){
+        if (logEntry.offset != expectedInnerOffset.getAndIncrement())
           inPlaceAssignment = false
-          if (record.magic() == messageFormatVersion) {
-            record.ensureValid()
-          }
-        }
         if (record.timestamp > maxTimestamp)
           maxTimestamp = record.timestamp
       }
