@@ -20,7 +20,7 @@ package kafka.log
 import java.io._
 import java.util.{Collections, Properties}
 
-import kafka.server.FetchDataInfo
+import kafka.server.{FetchDataInfo, FetchLogEnd}
 import kafka.server.checkpoints.OffsetCheckpointFile
 import kafka.utils._
 import org.apache.kafka.common.errors.OffsetOutOfRangeException
@@ -465,7 +465,7 @@ class LogManagerTest {
   }
 
   private def readLog(log: Log, offset: Long, maxLength: Int = 1024): FetchDataInfo = {
-    log.read(offset, maxLength, maxOffset = None, minOneMessage = true, includeAbortedTxns = false)
+    log.read(offset, maxLength, isolation = FetchLogEnd, minOneMessage = true)
   }
 
 }

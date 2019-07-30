@@ -196,12 +196,12 @@ public class RequestResponseTest {
         checkErrorResponse(createMetadataRequest(3, Collections.singletonList("topic1")), new UnknownServerException(), true);
         checkResponse(createMetadataResponse(), 4, true);
         checkErrorResponse(createMetadataRequest(4, Collections.singletonList("topic1")), new UnknownServerException(), true);
-        checkRequest(OffsetFetchRequest.forAllPartitions("group1"), true);
-        checkErrorResponse(OffsetFetchRequest.forAllPartitions("group1"), new NotCoordinatorException("Not Coordinator"), true);
+        checkRequest(OffsetFetchRequest.Builder.allTopicPartitions("group1").build(), true);
+        checkErrorResponse(OffsetFetchRequest.Builder.allTopicPartitions("group1").build(), new NotCoordinatorException("Not Coordinator"), true);
         checkRequest(createOffsetFetchRequest(0), true);
         checkRequest(createOffsetFetchRequest(1), true);
         checkRequest(createOffsetFetchRequest(2), true);
-        checkRequest(OffsetFetchRequest.forAllPartitions("group1"), true);
+        checkRequest(OffsetFetchRequest.Builder.allTopicPartitions("group1").build(), true);
         checkErrorResponse(createOffsetFetchRequest(0), new UnknownServerException(), true);
         checkErrorResponse(createOffsetFetchRequest(1), new UnknownServerException(), true);
         checkErrorResponse(createOffsetFetchRequest(2), new UnknownServerException(), true);
@@ -732,8 +732,10 @@ public class RequestResponseTest {
     @Test
     public void testOffsetFetchRequestBuilderToString() {
         String allTopicPartitionsString = OffsetFetchRequest.Builder.allTopicPartitions("someGroup").toString();
-        assertTrue(allTopicPartitionsString.contains("<ALL>"));
-        String string = new OffsetFetchRequest.Builder("group1", Collections.singletonList(new TopicPartition("test11", 1))).toString();
+
+        assertTrue(allTopicPartitionsString.contains("groupId='someGroup', topics=null"));
+        String string = new OffsetFetchRequest.Builder("group1",
+            Collections.singletonList(new TopicPartition("test11", 1))).toString();
         assertTrue(string.contains("test11"));
         assertTrue(string.contains("group1"));
     }
