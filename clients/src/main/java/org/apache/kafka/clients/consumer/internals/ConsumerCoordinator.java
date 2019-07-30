@@ -682,7 +682,6 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             // if reset due to error then we have to give up all owned partitions as if they've lost;
             // otherwise we can give them up as revoked
             Set<TopicPartition> droppedPartitions = new HashSet<>(subscriptions.assignedPartitions());
-            subscriptions.assignFromSubscribed(Collections.emptySet());
 
             Exception e;
 
@@ -691,6 +690,8 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             } else {
                 e = maybeInvokePartitionsRevoked(droppedPartitions);
             }
+
+            subscriptions.assignFromSubscribed(Collections.emptySet());
 
             if (e != null) {
                 throw new KafkaException("User rebalance callback throws an error", e);
@@ -718,10 +719,11 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
             if (!noLongerExistingPartitions.isEmpty()) {
                 ownedPartitions.removeAll(noLongerExistingPartitions);
-                subscriptions.assignFromSubscribed(ownedPartitions);
 
                 Exception e = maybeInvokePartitionsLost("topic metadata has changed and therefore some topics may not exist any more",
                     noLongerExistingPartitions);
+
+                subscriptions.assignFromSubscribed(ownedPartitions);
 
                 if (e != null) {
                     throw new KafkaException("User rebalance callback throws an error", e);

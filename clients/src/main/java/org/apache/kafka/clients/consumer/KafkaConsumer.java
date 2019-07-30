@@ -2170,8 +2170,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         acquire();
         try {
             if (!closed) {
-                closed = true;
                 close(timeout.toMillis(), false);
+                closed = true;
             }
         } finally {
             release();
