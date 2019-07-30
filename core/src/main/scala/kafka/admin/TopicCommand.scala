@@ -28,8 +28,7 @@ import kafka.utils.Implicits._
 import kafka.utils._
 import kafka.zk.{AdminZkClient, KafkaZkClient}
 import org.apache.kafka.clients.CommonClientConfigs
-import org.apache.kafka.clients.{admin => jadmin}
-import org.apache.kafka.clients.admin.{Admin, ListTopicsOptions, NewPartitions, NewTopic, AdminClient => JAdminClient}
+import org.apache.kafka.clients.admin.{Admin, ListTopicsOptions, NewPartitions, NewTopic, AdminClient => JAdminClient, Config => JConfig}
 import org.apache.kafka.common.{Node, TopicPartition, TopicPartitionInfo}
 import org.apache.kafka.common.config.ConfigResource.Type
 import org.apache.kafka.common.config.{ConfigResource, TopicConfig}
@@ -95,7 +94,7 @@ object TopicCommand extends Logging {
 
   case class PartitionDescription(topic: String,
                                   info: TopicPartitionInfo,
-                                  config: Option[jadmin.Config],
+                                  config: Option[JConfig],
                                   markedForDeletion: Boolean) {
 
     private def minIsrCount: Option[Int] = {
