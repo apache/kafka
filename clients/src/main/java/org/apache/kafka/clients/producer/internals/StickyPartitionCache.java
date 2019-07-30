@@ -25,6 +25,10 @@ import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ConcurrentHashMap;
 import org.apache.kafka.common.utils.Utils;
 
+/**
+ * An internal class that implements a cache used for sticky partitioning behavior. The cache can return the current
+ * sticky partition for a given topic or change the sticky partition for a given topic. This class should not be used externally. 
+ */
 public class StickyPartitionCache {
     private final ConcurrentMap<String, Integer> indexCache;
     public StickyPartitionCache() {
@@ -42,25 +46,27 @@ public class StickyPartitionCache {
     public int nextPartition(String topic, Cluster cluster, int prevPartition) {
         List<PartitionInfo> partitions = cluster.partitionsForTopic(topic);
         int numPartitions = partitions.size();
-        if (numPartitions == 1) {
-            indexCache.put(topic, 0);
-            return 0;
-        } else if (indexCache.get(topic) == null || prevPartition == indexCache.get(topic)) {
-            Integer part = indexCache.get(topic);
+        Integer oldPart = indexCache.get(topic);
+        Integer newPart = oldPart;
+        if (oldPart == null || oldPart == prevPartition) {
             List<PartitionInfo> availablePartitions = cluster.availablePartitionsForTopic(topic);
             Integer random = Utils.toPositive(ThreadLocalRandom.current().nextInt());
             if (availablePartitions.size() < 1) {
-                part = random % numPartitions;
+                newPart = random % numPartitions;
             } else if (availablePartitions.size() == 1) {
-                part = availablePartitions.get(0).partition();
+                newPart = availablePartitions.get(0).partition();
             } else {
-                while (part == indexCache.get(topic)) {
+                while (newPart == oldPart) {
                     random = Utils.toPositive(ThreadLocalRandom.current().nextInt());
-                    part = availablePartitions.get(random % availablePartitions.size()).partition();
+                    newPart = availablePartitions.get(random % availablePartitions.size()).partition();
                 }
             }
-            indexCache.putIfAbsent(topic, part);   
-            indexCache.replace(topic, prevPartition, part);
+            // Only change the sticky partition if it is null or prevPartition matches the current sticky partition.
+            if (oldPart == null) {
+                indexCache.putIfAbsent(topic, newPart);
+            } else {
+                indexCache.replace(topic, prevPartition, newPart);
+            }
             return indexCache.get(topic);
         }
         return indexCache.get(topic);

@@ -68,4 +68,46 @@ public class StickyPartitionCacheTest {
         int changedPartB = stickyPartitionCache.nextPartition(topicB, testCluster, partB);
         assertEquals(changedPartB, stickyPartitionCache.partition(topicB, testCluster));
     }
+    
+    @Test
+    public void unavailablePartitionsTest() {
+        final String topicA = "topicA";
+        final String topicB = "topicB";
+        final String topicC = "topicC";
+        
+        // Partition 1 in topic A and partition 0 in topic B are unavailable partitions.
+        List<PartitionInfo> allPartitions = asList(new PartitionInfo(topicA, 0, node0, nodes, nodes),
+            new PartitionInfo(topicA, 1, null, nodes, nodes),
+            new PartitionInfo(topicA, 2, node2, nodes, nodes),
+            new PartitionInfo(topicB, 0, null, nodes, nodes),
+            new PartitionInfo(topicB, 1, node0, nodes, nodes),
+            new PartitionInfo(topicC, 0, null, nodes, nodes)
+        );
+        
+        Cluster testCluster = new Cluster("clusterId", asList(node0, node1), allPartitions,
+            Collections.<String>emptySet(), Collections.<String>emptySet());
+        StickyPartitionCache stickyPartitionCache = new StickyPartitionCache();
+        
+        // Assure we never choose partition 1 because it is unavailable.
+        int partA = stickyPartitionCache.partition(topicA, testCluster);
+        assertNotEquals(1, partA);
+        for (int aPartitions = 0; aPartitions < 100; aPartitions++) {
+            partA = stickyPartitionCache.nextPartition(topicA, testCluster, partA);
+            assertNotEquals(1, stickyPartitionCache.partition(topicA, testCluster));
+        }
+        
+        // Assure we always choose partition 1 for topic B.
+        int partB = stickyPartitionCache.partition(topicB, testCluster);
+        assertEquals(1, partB);
+        for (int bPartitions = 0; bPartitions < 100; bPartitions++) {
+            partB = stickyPartitionCache.nextPartition(topicB, testCluster, partB);
+            assertEquals(1, stickyPartitionCache.partition(topicB, testCluster));
+        }
+        
+        // Assure that we still choose the partition when there are no partitions available.
+        int partC = stickyPartitionCache.partition(topicC, testCluster);
+        assertEquals(0, partC);
+        partC = stickyPartitionCache.nextPartition(topicC, testCluster, partC);
+        assertEquals(0, partC);
+    }
 }
