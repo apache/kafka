@@ -24,14 +24,14 @@ import com.fasterxml.jackson.annotation.JsonProperty;
  * Contains a percent value represented as an integer between 1 and 100 and a PayloadGenerator to specify
  * how often that PayloadGenerator should be used. 
  */
-public class RandomGeneratorConfig {
+public class RandomComponent {
     private final int percent;
     private final PayloadGenerator component;
     
 
     @JsonCreator
-    public RandomGeneratorConfig(@JsonProperty("percent") int percent,
-                                         @JsonProperty("component") PayloadGenerator component) {
+    public RandomComponent(@JsonProperty("percent") int percent,
+                           @JsonProperty("component") PayloadGenerator component) {
         this.percent = percent;
         this.component = component;
     }

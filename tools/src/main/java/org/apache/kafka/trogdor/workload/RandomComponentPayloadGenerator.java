@@ -28,9 +28,9 @@ import java.util.Random;
 /**
  * A PayloadGenerator which generates pseudo-random payloads based on other PayloadGenerators.
  *
- * Given a seed and non-null list of RandomGeneratorConfigs, RandomComponentPayloadGenerator
+ * Given a seed and non-null list of RandomComponents, RandomComponentPayloadGenerator
  * will use any given generator in its list of components a percentage of the time based on the 
- * percent field in the RandomGeneratorConfig. These percent fields must be integers greater than 0 
+ * percent field in the RandomComponent. These percent fields must be integers greater than 0 
  * and together add up to 100. The payloads generated can be reproduced from run to run.
  * 
  * An example of how to include this generator in a Trogdor taskSpec is shown below.
@@ -60,29 +60,27 @@ import java.util.Random;
  */
 public class RandomComponentPayloadGenerator implements PayloadGenerator {
     private final long seed;
-    private final List<RandomGeneratorConfig> components;
+    private final List<RandomComponent> components;
     private final Random random = new Random();
 
     @JsonCreator
     public RandomComponentPayloadGenerator(@JsonProperty("seed") long seed,
-                                           @JsonProperty("components") List<RandomGeneratorConfig> components) {
+                                           @JsonProperty("components") List<RandomComponent> components) {
         this.seed = seed;
         if (components == null || components.isEmpty()) {
-            throw new IllegalArgumentException("Components must be a specified, non-empty list of RandomGeneratorConfigs.");
-        } else {
-            int sum = 0;
-            for (RandomGeneratorConfig generator : components) {
-                if (generator.percent() < 1) {
-                    throw new IllegalArgumentException("Percent value must be greater than zero.");
-                }
-                sum += generator.percent();
+            throw new IllegalArgumentException("Components must be a specified, non-empty list of RandomComponents.");
+        }
+        int sum = 0;
+        for (RandomComponent component : components) {
+            if (component.percent() < 1) {
+                throw new IllegalArgumentException("Percent value must be greater than zero.");
             }
-            if (sum != 100) {
-                throw new IllegalArgumentException("Components must be a list of RandomGeneratorConfigs such that the percent fields sum to 100");
-            }
+            sum += component.percent();
+        }
+        if (sum != 100) {
+            throw new IllegalArgumentException("Components must be a list of RandomComponents such that the percent fields sum to 100");
         }
         this.components = new ArrayList<>(components);
-
     }
 
     @JsonProperty
@@ -91,23 +89,26 @@ public class RandomComponentPayloadGenerator implements PayloadGenerator {
     }
 
     @JsonProperty
-    public List<RandomGeneratorConfig> components() {
+    public List<RandomComponent> components() {
         return components;
     }
 
     @Override
-    public synchronized byte[] generate(long position) {
-        random.setSeed(seed + position);
-        int randPercent = random.nextInt(100);
+    public byte[] generate(long position) {
+        int randPercent;
+        synchronized (random) {
+            random.setSeed(seed + position);
+            randPercent = random.nextInt(100);
+        }
         int curPercent = 0;
-        RandomGeneratorConfig gen = components.get(0);
-        for (RandomGeneratorConfig generator : components) {
-            curPercent += generator.percent();
+        RandomComponent com = components.get(0);
+        for (RandomComponent component : components) {
+            curPercent += component.percent();
             if (curPercent > randPercent) {
-                gen = generator;
+                com = component;
                 break;
             }
         }
-        return gen.component().generate(position);
+        return com.component().generate(position);
     }
 }
