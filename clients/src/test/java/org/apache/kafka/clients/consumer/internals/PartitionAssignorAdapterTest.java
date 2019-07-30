@@ -157,7 +157,7 @@ public class PartitionAssignorAdapterTest {
                 }
                 assignments.put(entry.getKey(), new Assignment(partitions, null));
             }
-           return assignments;
+            return assignments;
         }
 
         @Override
