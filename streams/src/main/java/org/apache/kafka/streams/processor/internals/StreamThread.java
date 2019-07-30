@@ -305,7 +305,7 @@ public class StreamThread extends Thread {
         }
 
         @Override
-        public void  onPartitionsRevoked(final Collection<TopicPartition> assignment) {
+        public void onPartitionsRevoked(final Collection<TopicPartition> assignment) {
             log.debug("at state {}: partitions {} revoked at the beginning of consumer rebalance.\n" +
                     "\tcurrent assigned active tasks: {}\n" +
                     "\tcurrent assigned standby tasks: {}\n",
