@@ -30,7 +30,7 @@ import kafka.zk.{AdminZkClient, KafkaZkClient}
 import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.clients.{admin => jadmin}
 import org.apache.kafka.clients.admin.{Admin, ListTopicsOptions, NewPartitions, NewTopic, AdminClient => JAdminClient}
-import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.{Node, TopicPartition, TopicPartitionInfo}
 import org.apache.kafka.common.config.ConfigResource.Type
 import org.apache.kafka.common.config.{ConfigResource, TopicConfig}
 import org.apache.kafka.common.errors.{InvalidTopicException, TopicExistsException}
@@ -93,10 +93,8 @@ object TopicCommand extends Logging {
     def ifTopicDoesntExist(): Boolean = opts.ifNotExists
   }
 
-  case class PartitionDescription(topicPartition: TopicPartition,
-                                  leader: Option[Int],
-                                  replicas: Seq[Int],
-                                  isr: Seq[Int],
+  case class PartitionDescription(topic: String,
+                                  info: TopicPartitionInfo,
                                   config: Option[jadmin.Config],
                                   markedForDeletion: Boolean) {
 
@@ -105,27 +103,31 @@ object TopicCommand extends Logging {
     }
 
     def hasUnderReplicatedPartitions: Boolean = {
-      isr.size < replicas.size
+      info.isr.size < info.replicas.size
+    }
+
+    def hasLeader: Boolean = {
+      info.leader != null
     }
 
     def hasUnderMinIsrPartitions: Boolean = {
-      leader.isEmpty || minIsrCount.exists(isr.size < _)
+      !hasLeader || minIsrCount.exists(info.isr.size < _)
     }
 
     def isAtMinIsrPartitions: Boolean =  {
-      minIsrCount.contains(isr.size)
+      minIsrCount.contains(info.isr.size)
     }
 
     def hasUnavailablePartitions(liveBrokers: Set[Int]): Boolean = {
-      leader.isEmpty || !liveBrokers.contains(leader.get)
+      !hasLeader || !liveBrokers.contains(info.leader.id)
     }
 
     def printDescription(): Unit = {
-      print("\tTopic: " + topicPartition.topic)
-      print("\tPartition: " + topicPartition.partition)
-      print("\tLeader: " + leader.getOrElse("none"))
-      print("\tReplicas: " + replicas.mkString(","))
-      print("\tIsr: " + isr.mkString(","))
+      print("\tTopic: " + topic)
+      print("\tPartition: " + info.partition)
+      print("\tLeader: " + (if (hasLeader) info.leader.id else "none"))
+      print("\tReplicas: " + info.replicas.asScala.mkString(","))
+      print("\tIsr: " + info.isr.asScala.mkString(","))
       print(if (markedForDeletion) "\tMarkedForDeletion: true" else "")
       println()
     }
@@ -273,12 +275,7 @@ object TopicCommand extends Logging {
 
         if (describeOptions.describePartitions) {
           for (partition <- sortedPartitions) {
-            val tp = new TopicPartition(topicName, partition.partition)
-            val leaderOpt = Option(partition.leader).map(_.id)
-            val replicas = partition.replicas.asScala.map(_.id)
-            val isr = partition.isr.asScala.map(_.id)
-            val partitionDesc = PartitionDescription(tp, leaderOpt, replicas, isr,
-              config = Some(config), markedForDeletion = false)
+            val partitionDesc = PartitionDescription(topicName, partition, Some(config), markedForDeletion = false)
             describeOptions.maybePrintPartitionDescription(partitionDesc)
           }
         }
@@ -375,7 +372,8 @@ object TopicCommand extends Logging {
     override def describeTopic(opts: TopicCommandOptions): Unit = {
       val topics = getTopics(opts.topic, opts.excludeInternalTopics)
       ensureTopicExists(topics, opts.topic, !opts.ifExists)
-      val liveBrokerIds = zkClient.getAllBrokersInCluster.map(_.id).toSet
+      val liveBrokers = zkClient.getAllBrokersInCluster.map(broker => broker.id -> broker).toMap
+      val liveBrokerIds = liveBrokers.keySet
       val describeOptions = new DescribeOptions(opts, liveBrokerIds)
       val adminZkClient = new AdminZkClient(zkClient)
 
@@ -404,8 +402,18 @@ object TopicCommand extends Logging {
                   case None => (None, Seq.empty[Int])
                 }
 
-                val partitionDesc = PartitionDescription(tp, leaderOpt, assignedReplicas, isr,
-                  config = None, markedForDeletion)
+                def asNode(brokerId: Int): Node = {
+                  liveBrokers.get(brokerId) match {
+                    case Some(broker) => broker.node(broker.endPoints.head.listenerName)
+                    case None => new Node(brokerId, "", -1)
+                  }
+                }
+
+                val info = new TopicPartitionInfo(partitionId, leaderOpt.map(asNode).orNull,
+                  assignedReplicas.map(asNode).toList.asJava,
+                  isr.map(asNode).toList.asJava)
+
+                val partitionDesc = PartitionDescription(topic, info, config = None, markedForDeletion)
                 describeOptions.maybePrintPartitionDescription(partitionDesc)
               }
             }
