@@ -18,6 +18,8 @@ package org.apache.kafka.streams.processor;
 
 import org.apache.kafka.common.annotation.InterfaceStability;
 
+import java.util.Collection;
+
 /**
  * An interface that allows to dynamically determine the name of the Kafka topic to send at the sink node of the topology.
  */
@@ -33,5 +35,5 @@ public interface TopicNameExtractor<K, V> {
      * @param recordContext current context metadata of the record
      * @return              the topic name this record should be sent to
      */
-    String extract(final K key, final V value, final RecordContext recordContext);
+    Collection<String> extract(final K key, final V value, final RecordContext recordContext);
 }

@@ -22,6 +22,8 @@ import org.apache.kafka.streams.kstream.internals.ChangedSerializer;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.TopicNameExtractor;
 
+import java.util.Collection;
+
 public class SinkNode<K, V> extends ProcessorNode<K, V> {
 
     private Serializer<K> keySerializer;
@@ -83,8 +85,14 @@ public class SinkNode<K, V> extends ProcessorNode<K, V> {
             throw new StreamsException("Invalid (negative) timestamp of " + timestamp + " for output record <" + key + ":" + value + ">.");
         }
 
-        final String topic = topicExtractor.extract(key, value, this.context.recordContext());
+        final Collection<String> topics = topicExtractor.extract(key, value, this.context.recordContext());
 
+        for (final String topic : topics) {
+            sendToTopic(key, value, collector, timestamp, topic);
+        }
+    }
+
+    private void sendToTopic(final K key, final V value, final RecordCollector collector, final long timestamp, final String topic) {
         try {
             collector.send(topic, key, value, context.headers(), timestamp, keySerializer, valSerializer, partitioner);
         } catch (final ClassCastException e) {
