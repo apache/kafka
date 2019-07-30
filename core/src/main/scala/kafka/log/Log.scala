@@ -2108,7 +2108,7 @@ class Log(@volatile var dir: File,
   }
 
   /**
-   * Get the largest log segment with a base offset less than the given offset, if one exists.
+   * Get the largest log segment with a base offset less than or equal to the given offset, if one exists.
    * @return the optional log segment
    */
   private def floorLogSegment(offset: Long): Option[LogSegment] = {
