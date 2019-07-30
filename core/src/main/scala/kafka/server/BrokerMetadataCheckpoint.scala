@@ -60,6 +60,10 @@ class BrokerMetadataCheckpoint(val file: File) extends Logging {
     Files.deleteIfExists(new File(file + ".tmp").toPath()) // try to delete any existing temp files for cleanliness
 
     lock synchronized {
+      if (!file.exists()) {
+        warn("No meta.properties file under dir %s".format(file.getAbsolutePath()))
+        return None
+      }
       try {
         val brokerMetaProps = new VerifiableProperties(Utils.loadProps(file.getAbsolutePath()))
         val version = brokerMetaProps.getIntInRange("version", (0, Int.MaxValue))
@@ -71,9 +75,6 @@ class BrokerMetadataCheckpoint(val file: File) extends Logging {
             throw new IOException("Unrecognized version of the server meta.properties file: " + version)
         }
       } catch {
-        case _: NoSuchFileException =>
-          warn("No meta.properties file under dir %s".format(file.getAbsolutePath()))
-          None
         case e1: Exception =>
           error("Failed to read meta.properties file under dir %s due to %s".format(file.getAbsolutePath(), e1.getMessage))
           throw e1
