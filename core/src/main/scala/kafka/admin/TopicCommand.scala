@@ -28,7 +28,7 @@ import kafka.utils.Implicits._
 import kafka.utils._
 import kafka.zk.{AdminZkClient, KafkaZkClient}
 import org.apache.kafka.clients.CommonClientConfigs
-import org.apache.kafka.clients.admin.{Admin, ListTopicsOptions, NewPartitions, NewTopic, AdminClient => JAdminClient, Config => JConfig}
+import org.apache.kafka.clients.admin.{Admin, ConfigEntry, ListTopicsOptions, NewPartitions, NewTopic, AdminClient => JAdminClient, Config => JConfig}
 import org.apache.kafka.common.{Node, TopicPartition, TopicPartitionInfo}
 import org.apache.kafka.common.config.ConfigResource.Type
 import org.apache.kafka.common.config.{ConfigResource, TopicConfig}
@@ -90,6 +90,23 @@ object TopicCommand extends Logging {
     def hasReplicaAssignment: Boolean = replicaAssignment.isDefined
     def hasPartitions: Boolean = partitions.isDefined
     def ifTopicDoesntExist(): Boolean = opts.ifNotExists
+  }
+
+  case class TopicDescription(topic: String,
+                              numPartitions: Int,
+                              replicationFactor: Int,
+                              config: JConfig,
+                              markedForDeletion: Boolean) {
+
+    def printDescription(): Unit = {
+      val configsAsString = config.entries.asScala.filter(!_.isDefault).map { ce => s"${ce.name}=${ce.value}" }.mkString(",")
+      print(s"Topic: $topic")
+      print(s"\tPartitionCount: $numPartitions")
+      print(s"\tReplicationFactor: $replicationFactor")
+      print(s"\tConfigs: $configsAsString")
+      print(if (markedForDeletion) "\tMarkedForDeletion: true" else "")
+      println()
+    }
   }
 
   case class PartitionDescription(topic: String,
@@ -267,8 +284,8 @@ object TopicCommand extends Logging {
           if (!opts.reportOverriddenConfigs || hasNonDefault) {
             val numPartitions = td.partitions().size
             val replicationFactor = td.partitions.iterator.next().replicas.size
-            val configsAsString = config.entries.asScala.filter(!_.isDefault).map { ce => s"${ce.name}=${ce.value}" }.mkString(",")
-            println(s"Topic:$topicName\tPartitionCount:$numPartitions\tReplicationFactor:$replicationFactor\tConfigs:$configsAsString")
+            val topicDesc = TopicDescription(topicName, numPartitions, replicationFactor, config, markedForDeletion = false)
+            topicDesc.printDescription()
           }
         }
 
@@ -385,12 +402,9 @@ object TopicCommand extends Logging {
               if (!opts.reportOverriddenConfigs || configs.nonEmpty) {
                 val numPartitions = topicPartitionAssignment.size
                 val replicationFactor = topicPartitionAssignment.head._2.size
-                val configsAsString = configs.map { case (k, v) => s"$k=$v" }.mkString(",")
-                println(s"Topic: $topic" +
-                  s"\tPartitionCount: $numPartitions" +
-                  s"\tReplicationFactor: $replicationFactor" +
-                  s"\tConfigs: $configsAsString" +
-                  (if (markedForDeletion) "\tMarkedForDeletion: true" else ""))
+                val config = new JConfig(configs.map{ case (k, v) => new ConfigEntry(k, v) }.asJavaCollection)
+                val topicDesc = TopicDescription(topic, numPartitions, replicationFactor, config, markedForDeletion)
+                topicDesc.printDescription()
               }
             }
             if (describeOptions.describePartitions) {
