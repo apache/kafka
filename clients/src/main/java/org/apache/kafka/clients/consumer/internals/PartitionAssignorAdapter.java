@@ -31,6 +31,10 @@ import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+/**
+ * This adapter class is used to ensure backwards compatibility for those who have implemented the {@link PartitionAssignor}
+ * interface, which has been deprecated in favor of the new {@link org.apache.kafka.clients.consumer.ConsumerPartitionAssignor}
+ */
 @SuppressWarnings("deprecation")
 public class PartitionAssignorAdapter implements ConsumerPartitionAssignor {
 
@@ -48,12 +52,12 @@ public class PartitionAssignorAdapter implements ConsumerPartitionAssignor {
 
     @Override
     public GroupAssignment assign(Cluster metadata, GroupSubscription groupSubscription) {
-        return oldToNewGroupAssignment(oldAssignor.assign(metadata, newToOldGroupSubscription(groupSubscription)));
+        return toNewGroupAssignment(oldAssignor.assign(metadata, toOldGroupSubscription(groupSubscription)));
     }
 
     @Override
     public void onAssignment(Assignment assignment, ConsumerGroupMetadata metadata) {
-        oldAssignor.onAssignment(newToOldAssignment(assignment), metadata.generationId());
+        oldAssignor.onAssignment(toOldAssignment(assignment), metadata.generationId());
     }
 
     @Override
@@ -61,13 +65,13 @@ public class PartitionAssignorAdapter implements ConsumerPartitionAssignor {
         return oldAssignor.name();
     }
 
-    private static PartitionAssignor.Assignment newToOldAssignment(Assignment assignment) {
-        return new PartitionAssignor.Assignment(assignment.partitions(), assignment.userData());
+    private static PartitionAssignor.Assignment toOldAssignment(Assignment newAssignment) {
+        return new PartitionAssignor.Assignment(newAssignment.partitions(), newAssignment.userData());
     }
 
-    private Map<String, PartitionAssignor.Subscription> newToOldGroupSubscription(GroupSubscription subscriptions) {
+    private Map<String, PartitionAssignor.Subscription> toOldGroupSubscription(GroupSubscription newSubscriptions) {
         Map<String, PartitionAssignor.Subscription> oldSubscriptions = new HashMap<>();
-        for (Map.Entry<String, Subscription> entry : subscriptions.groupSubscription().entrySet()) {
+        for (Map.Entry<String, Subscription> entry : newSubscriptions.groupSubscription().entrySet()) {
             String member = entry.getKey();
             Subscription newSubscription = entry.getValue();
             oldSubscriptions.put(member, new PartitionAssignor.Subscription(
@@ -76,9 +80,9 @@ public class PartitionAssignorAdapter implements ConsumerPartitionAssignor {
         return oldSubscriptions;
     }
 
-    private GroupAssignment oldToNewGroupAssignment(Map<String, PartitionAssignor.Assignment> assignments) {
+    private GroupAssignment toNewGroupAssignment(Map<String, PartitionAssignor.Assignment> oldAssignments) {
         Map<String, Assignment> newAssignments = new HashMap<>();
-        for (Map.Entry<String, PartitionAssignor.Assignment> entry : assignments.entrySet()) {
+        for (Map.Entry<String, PartitionAssignor.Assignment> entry : oldAssignments.entrySet()) {
             String member = entry.getKey();
             PartitionAssignor.Assignment oldAssignment = entry.getValue();
             newAssignments.put(member, new Assignment(oldAssignment.partitions(), oldAssignment.userData()));
@@ -86,6 +90,12 @@ public class PartitionAssignorAdapter implements ConsumerPartitionAssignor {
         return new GroupAssignment(newAssignments);
     }
 
+    /**
+     * Get a list of configured instances of {@link org.apache.kafka.clients.consumer.ConsumerPartitionAssignor}
+     * based on the class names/types specified by {@link org.apache.kafka.clients.consumer.ConsumerConfig#PARTITION_ASSIGNMENT_STRATEGY_CONFIG}
+     * where any instances of the old {@link PartitionAssignor} interface are wrapped in an adapter to the new
+     * {@link org.apache.kafka.clients.consumer.ConsumerPartitionAssignor} interface
+     */
     public static List<ConsumerPartitionAssignor> getAssignorInstances(List<String> assignorClasses, Map<String, Object> configs) {
         List<ConsumerPartitionAssignor> assignors = new ArrayList<>();
 
