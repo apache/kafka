@@ -17,6 +17,7 @@
 package org.apache.kafka.clients.consumer.internals;
 
 import static org.apache.kafka.clients.consumer.internals.PartitionAssignorAdapter.getAssignorInstances;
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
@@ -30,10 +31,14 @@ import java.util.Properties;
 import java.util.Set;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor;
+import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.Assignment;
+import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.GroupSubscription;
+import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.Subscription;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.StickyAssignor;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.junit.Test;
 
@@ -42,26 +47,23 @@ public class PartitionAssignorAdapterTest {
     private List<String> classNames;
     private List<Object> classTypes;
 
-    private Class<StickyAssignor> assignorClass = StickyAssignor.class;
-    private Class<PartitionAssignorAdapter> adapterClass = PartitionAssignorAdapter.class;
-
     @Test
     public void shouldInstantiateNewAssignors() {
         classNames = Arrays.asList(StickyAssignor.class.getName());
         List<ConsumerPartitionAssignor> assignors = getAssignorInstances(classNames, Collections.emptyMap());
-        assertTrue(assignorClass.isInstance(assignors.get(0)));
+        assertTrue(StickyAssignor.class.isInstance(assignors.get(0)));
     }
 
     @Test
     public void shouldAdaptOldAssignors() {
         classNames = Arrays.asList(OldPartitionAssignor.class.getName());
         List<ConsumerPartitionAssignor> assignors = getAssignorInstances(classNames, Collections.emptyMap());
-        assertTrue(adapterClass.isInstance(assignors.get(0)));
+        assertTrue(PartitionAssignorAdapter.class.isInstance(assignors.get(0)));
     }
 
     @Test
     public void shouldThrowKafkaExceptionOnNonAssignor() {
-        classNames = Arrays.asList(NotAnAssignor.class.getName());
+        classNames = Arrays.asList(String.class.getName());
         assertThrows(KafkaException.class, () -> getAssignorInstances(classNames, Collections.emptyMap()));
     }
 
@@ -90,13 +92,53 @@ public class PartitionAssignorAdapterTest {
         Properties props = new Properties();
         props.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
 
-        classTypes = Arrays.asList(StickyAssignor.class, OldPartitionAssignor.class, NotAnAssignor.class);
+        classTypes = Arrays.asList(StickyAssignor.class, OldPartitionAssignor.class, String.class);
 
         props.put(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG, classTypes);
         assertThrows(KafkaException.class, () -> new KafkaConsumer<>(
             props, new StringDeserializer(), new StringDeserializer()));
     }
 
+    @Test
+    public void testNewToOldAssignment() {
+        classNames = Arrays.asList(OldPartitionAssignor.class.getName());
+        ConsumerPartitionAssignor oldAssignor = getAssignorInstances(classNames, Collections.emptyMap()).get(0);
+
+        TopicPartition tp = new TopicPartition("tp", 1);
+        Assignment newAssignment = new Assignment(Arrays.asList(tp), null);
+
+        oldAssignor.onAssignment(newAssignment, null);
+    }
+
+    @Test
+    public void testAssign() {
+        classNames = Arrays.asList(OldPartitionAssignor.class.getName(), NewPartitionAssignor.class.getName());
+        List<ConsumerPartitionAssignor> assignors = getAssignorInstances(classNames, Collections.emptyMap());
+
+        ConsumerPartitionAssignor oldAssignor = assignors.get(0);
+        ConsumerPartitionAssignor newAssignor = assignors.get(1);
+
+        Map<String, Subscription> subscriptions = new HashMap<>();
+        subscriptions.put("C1", new Subscription(Arrays.asList("topic1")));
+        subscriptions.put("C2", new Subscription(Arrays.asList("topic1", "topic2")));
+        subscriptions.put("C3", new Subscription(Arrays.asList("topic2", "topic3")));
+        GroupSubscription groupSubscription = new GroupSubscription(subscriptions);
+
+        Map<String, Assignment> oldAssignments = oldAssignor.assign(null, groupSubscription).groupAssignment();
+        Map<String, Assignment> newAssignments = newAssignor.assign(null, groupSubscription).groupAssignment();
+
+        for (Map.Entry<String, Assignment> entry : oldAssignments.entrySet()) {
+            Assignment oldAssignment = entry.getValue();
+            Assignment newAssignment = newAssignments.get(entry.getKey());
+
+            assertEquals(oldAssignment.partitions(), newAssignment.partitions());
+            assertEquals(oldAssignment.userData(), newAssignment.userData());
+        }
+    }
+
+    /*
+     * Dummy assignor just gives each consumer partition 1 of each topic it's subscribed to
+     */
     @SuppressWarnings("deprecation")
     public static class OldPartitionAssignor implements PartitionAssignor {
 
@@ -107,11 +149,20 @@ public class PartitionAssignorAdapterTest {
 
         @Override
         public Map<String, Assignment> assign(Cluster metadata, Map<String, Subscription> subscriptions) {
-            return new HashMap<>();
+            Map<String, Assignment> assignments = new HashMap<>();
+            for (Map.Entry<String, Subscription> entry : subscriptions.entrySet()) {
+                List<TopicPartition> partitions = new ArrayList<>();
+                for (String topic : entry.getValue().topics()) {
+                    partitions.add(new TopicPartition(topic, 1));
+                }
+                assignments.put(entry.getKey(), new Assignment(partitions, null));
+            }
+           return assignments;
         }
 
         @Override
         public void onAssignment(Assignment assignment) {
+            // no state to keep
         }
 
         @Override
@@ -120,11 +171,30 @@ public class PartitionAssignorAdapterTest {
         }
     }
 
-    public static class NotAnAssignor {
+    /*
+     * Dummy assignor just gives each consumer partition 1 of each topic it's subscribed to
+     */
+    public static class NewPartitionAssignor implements ConsumerPartitionAssignor {
 
-        public NotAnAssignor() {
-            throw new IllegalStateException("Should not have been instantiated!");
+        @Override
+        public GroupAssignment assign(Cluster metadata, GroupSubscription groupSubscription) {
+            Map<String, Subscription> subscriptions = groupSubscription.groupSubscription();
+            Map<String, Assignment> assignments = new HashMap<>();
+            for (Map.Entry<String, Subscription> entry : subscriptions.entrySet()) {
+                List<TopicPartition> partitions = new ArrayList<>();
+                for (String topic : entry.getValue().topics()) {
+                    partitions.add(new TopicPartition(topic, 1));
+                }
+                assignments.put(entry.getKey(), new Assignment(partitions));
+            }
+            return new GroupAssignment(assignments);
         }
+
+        @Override
+        public String name() {
+            return "new-assignor";
+        }
+
     }
 
 }

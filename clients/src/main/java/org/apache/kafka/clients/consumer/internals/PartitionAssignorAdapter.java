@@ -18,7 +18,6 @@ package org.apache.kafka.clients.consumer.internals;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -48,8 +47,8 @@ public class PartitionAssignorAdapter implements ConsumerPartitionAssignor {
     }
 
     @Override
-    public GroupAssignment assign(Cluster metadata, GroupSubscription subscriptions) {
-        return oldToNewGroupAssignment(oldAssignor.assign(metadata, newToOldGroupSubscription(subscriptions)));
+    public GroupAssignment assign(Cluster metadata, GroupSubscription groupSubscription) {
+        return oldToNewGroupAssignment(oldAssignor.assign(metadata, newToOldGroupSubscription(groupSubscription)));
     }
 
     @Override
