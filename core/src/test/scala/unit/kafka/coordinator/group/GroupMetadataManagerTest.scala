@@ -2063,13 +2063,13 @@ class GroupMetadataManagerTest {
   @Test
   def testPartitionLoadMetric(): Unit = {
     val server = ManagementFactory.getPlatformMBeanServer
-    val mBeanName = "kafka.coordinator.group:type=group-metadata-manager-metrics"
-    val reporter = new JmxReporter("kafka.coordinator.group")
+    val mBeanName = "kafka.server:type=group-coordinator-metrics"
+    val reporter = new JmxReporter("kafka.server")
     metrics.addReporter(reporter)
 
     assertTrue(server.isRegistered(new ObjectName(mBeanName)))
-    assertEquals(Double.NaN, server.getAttribute(new ObjectName(mBeanName), "group-load-time-max"))
-    assertEquals(Double.NaN, server.getAttribute(new ObjectName(mBeanName), "group-load-time-avg"))
+    assertEquals(Double.NaN, server.getAttribute(new ObjectName(mBeanName), "partition-load-time-max"))
+    assertEquals(Double.NaN, server.getAttribute(new ObjectName(mBeanName), "partition-load-time-avg"))
     assertTrue(reporter.containsMbean(mBeanName))
 
     val groupMetadataTopicPartition = groupTopicPartition
@@ -2097,17 +2097,17 @@ class GroupMetadataManagerTest {
     // max of one 30sec window
     val durationMs = List(9000, 3000, 7000, 7000, 7000)
     durationMs.foreach(loadWithDelay)
-    assertEquals(9000.0, server.getAttribute(new ObjectName(mBeanName), "group-load-time-max"))
+    assertEquals(9000.0, server.getAttribute(new ObjectName(mBeanName), "partition-load-time-max"))
 
     // last window was complete, so compute new max of this window
     val durationMs2 = List(6000, 2000, 4000)
     durationMs2.foreach(loadWithDelay)
-    assertEquals(6000.0, server.getAttribute(new ObjectName(mBeanName), "group-load-time-max"))
+    assertEquals(6000.0, server.getAttribute(new ObjectName(mBeanName), "partition-load-time-max"))
 
     // even if a window records no new value, the max is the same as the previous window
     time.sleep(31000)
-    assertEquals(6000.0, server.getAttribute(new ObjectName(mBeanName), "group-load-time-max"))
+    assertEquals(6000.0, server.getAttribute(new ObjectName(mBeanName), "partition-load-time-max"))
 
-    assertTrue(server.getAttribute(new ObjectName(mBeanName), "group-load-time-avg").asInstanceOf[Double] >= 0.0)
+    assertTrue(server.getAttribute(new ObjectName(mBeanName), "partition-load-time-avg").asInstanceOf[Double] >= 0.0)
   }
 }

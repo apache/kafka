@@ -1031,23 +1031,23 @@
       </tr>
       <tr>
         <td>Max time to load group metadata</td>
-        <td>kafka.coordinator.group:type=GroupMetadataManager,name=GroupLoadTimeMax</td>
-        <td>maximum time, in milliseconds, it took to load offsets and group metadata from one consumer offset partition in the last 30 seconds</td>
+        <td>kafka.server:type=group-metadata-manager-metrics,name=partition-load-time-max</td>
+        <td>maximum time, in milliseconds, it took to load offsets and group metadata from the consumer offset partitions loaded in the last 30 seconds</td>
       </tr>
       <tr>
         <td>Avg time to load group metadata</td>
-        <td>kafka.coordinator.group:type=GroupMetadataManager,name=GroupLoadTimeAvg</td>
-        <td>average time, in milliseconds, it took to load offsets and group metadata from one consumer offset partition in the last 30 seconds</td>
+        <td>kafka.server:type=group-metadata-manager-metrics,name=partition-load-time-avg</td>
+        <td>average time, in milliseconds, it took to load offsets and group metadata from the consumer offset partitions loaded in the last 30 seconds</td>
       </tr>
       <tr>
         <td>Max time to load transaction metadata</td>
-        <td>kafka.coordinator.transaction:type=TransactionStateManager,name=TransactionLoadTimeMax</td>
-        <td>maximum time, in milliseconds, it took to load transaction metadata from one consumer offset partition in the last 30 seconds</td>
+        <td>kafka.server:type=transaction-state-manager-metrics,name=partition-load-time-max</td>
+        <td>maximum time, in milliseconds, it took to load transaction metadata from the consumer offset partitions loaded in the last 30 seconds</td>
       </tr>
       <tr>
         <td>Avg time to load transaction metadata</td>
-        <td>kafka.coordinator.transaction:type=TransactionStateManager,name=TransactionLoadTimeAvg</td>
-        <td>average time, in milliseconds, it took to load transaction metadata from one consumer offset partition in the last 30 seconds</td>
+        <td>kafka.server:type=transaction-state-manager-metrics,name=partition-load-time-avg</td>
+        <td>average time, in milliseconds, it took to load transaction metadata from the consumer offset partitions loaded in the last 30 seconds</td>
       </tr>
   </tbody></table>
 

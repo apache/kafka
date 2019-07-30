@@ -635,13 +635,13 @@ class TransactionStateManagerTest {
   @Test
   def testPartitionLoadMetric(): Unit = {
     val server = ManagementFactory.getPlatformMBeanServer
-    val mBeanName = "kafka.coordinator.transaction:type=transaction-state-manager-metrics"
-    val reporter = new JmxReporter("kafka.coordinator.transaction")
+    val mBeanName = "kafka.server:type=transaction-coordinator-metrics"
+    val reporter = new JmxReporter("kafka.server")
     metrics.addReporter(reporter)
 
     assertTrue(server.isRegistered(new ObjectName(mBeanName)))
-    assertEquals(Double.NaN, server.getAttribute(new ObjectName(mBeanName), "transaction-load-time-max"))
-    assertEquals(Double.NaN, server.getAttribute(new ObjectName(mBeanName), "transaction-load-time-avg"))
+    assertEquals(Double.NaN, server.getAttribute(new ObjectName(mBeanName), "partition-load-time-max"))
+    assertEquals(Double.NaN, server.getAttribute(new ObjectName(mBeanName), "partition-load-time-avg"))
     assertTrue(reporter.containsMbean(mBeanName))
 
     txnMetadata1.state = Ongoing
@@ -657,7 +657,7 @@ class TransactionStateManagerTest {
     transactionManager.loadTransactionsForTxnTopicPartition(partitionId, 0, (_, _, _, _, _) => ())
     scheduler.tick()
 
-    assertTrue(server.getAttribute(new ObjectName(mBeanName), "transaction-load-time-max").asInstanceOf[Double] >= 0)
-    assertTrue(server.getAttribute(new ObjectName(mBeanName), "transaction-load-time-avg").asInstanceOf[Double] >= 0)
+    assertTrue(server.getAttribute(new ObjectName(mBeanName), "partition-load-time-max").asInstanceOf[Double] >= 0)
+    assertTrue(server.getAttribute(new ObjectName(mBeanName), "partition-load-time-avg").asInstanceOf[Double] >= 0)
   }
 }

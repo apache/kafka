@@ -87,11 +87,15 @@ class GroupMetadataManager(brokerId: Int,
 
   /* setup metrics*/
   private val metricConfig: MetricConfig = new MetricConfig().samples(1)
-  val partitionLoadSensor = metrics.sensor("GroupLoadTime", metricConfig)
+  val partitionLoadSensor = metrics.sensor("PartitionLoadTime", metricConfig)
 
-  private val partitionMaxMetricName = metrics.metricName("group-load-time-max", "group-metadata-manager-metrics")
+  private val partitionMaxMetricName = metrics.metricName("partition-load-time-max",
+    "group-coordinator-metrics",
+    "The max time it took to load the partitions in the last 30sec")
   partitionLoadSensor.add(partitionMaxMetricName, new Max())
-  private val partitionAvgMetricName = metrics.metricName("group-load-time-avg", "group-metadata-manager-metrics")
+  private val partitionAvgMetricName = metrics.metricName("partition-load-time-avg",
+    "group-coordinator-metrics",
+    "The avg time it took to load the partitions in the last 30sec")
   partitionLoadSensor.add(partitionAvgMetricName, new Avg())
 
   this.logIdent = s"[GroupMetadataManager brokerId=$brokerId] "
