@@ -109,7 +109,7 @@ object TopicCommand extends Logging {
     }
 
     def hasUnderMinIsrPartitions: Boolean = {
-      minIsrCount.exists(isr.size < _)
+      leader.isEmpty || minIsrCount.exists(isr.size < _)
     }
 
     def isAtMinIsrPartitions: Boolean =  {
