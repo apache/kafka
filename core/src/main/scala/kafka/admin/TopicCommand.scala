@@ -120,7 +120,10 @@ object TopicCommand extends Logging {
       opts.reportUnavailablePartitions && hasUnavailablePartitions(partitionDescription)
     }
     private def hasUnderMinIsrPartitions(partitionDescription: PartitionDescription) = {
-      partitionDescription.isr.size < partitionDescription.minIsrCount
+      if (partitionDescription.leader.isDefined)
+        partitionDescription.isr.size < partitionDescription.minIsrCount
+      else
+        partitionDescription.minIsrCount > 0
     }
     private def hasAtMinIsrPartitions(partitionDescription: PartitionDescription) = {
       partitionDescription.isr.size == partitionDescription.minIsrCount
