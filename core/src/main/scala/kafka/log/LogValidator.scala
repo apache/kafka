@@ -202,9 +202,6 @@ private[kafka] object LogValidator {
         shallowOffsetOfMaxTimestamp = info.shallowOffsetOfMaxTimestamp,
         messageSizeMaybeChanged = true)
     } else {
-      // ensure the inner messages are valid
-      validatedRecords.foreach(_.ensureValid)
-
       // we can update the wrapper message only and write the compressed payload as is
       val entry = records.shallowEntries.iterator.next()
       val offset = offsetCounter.addAndGet(validatedRecords.size) - 1
