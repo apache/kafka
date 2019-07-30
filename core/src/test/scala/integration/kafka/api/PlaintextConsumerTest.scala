@@ -1640,6 +1640,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
 
     // stop polling and close one of the consumers, should trigger partition re-assignment among alive consumers
     timeoutPoller.shutdown()
+    consumerPollers -= timeoutPoller
     if (closeConsumer)
       timeoutConsumer.close()
 

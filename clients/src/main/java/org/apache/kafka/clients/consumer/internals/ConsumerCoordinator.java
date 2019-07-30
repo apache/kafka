@@ -424,7 +424,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
      * Returns early if the timeout expires
      *
      * @param timer Timer bounding how long this method can block
-     * @throws KafkaException if the rebalance callback throws exception
+     * @throws KafkaException if the rebalance callback throws an exception
      * @return true iff the operation succeeded
      */
     public boolean poll(Timer timer) {
@@ -595,10 +595,10 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     /**
      * Used by COOPERATIVE rebalance protocol only.
      *
-     * Validate the user assignor returned assignments such that there are no partitions which are going to
-     * be assigned to a different consumer other than its current owner (i.e. who includes it in its owned
-     * partitions list encoded in subscription); also if there are any revoked partitions set the error code to let
-     * everyone retry.
+     * Validate the assignments returned by the assignor such that no owned partitions are going to
+     * be reassigned to a different consumer directly: if the assignor wants to reassign an owned partition,
+     * it must first remove it from the new assignment of the current owner so that it is not assigned to any
+     * member, and then in the next rebalance it can finally reassign those partitions not owned by anyone to consumers.
      */
     private void validateCooperativeAssignment(final Map<String, List<TopicPartition>> ownedPartitions,
                                                final Map<String, Assignment> assignments) {
@@ -677,20 +677,27 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
      * @throws KafkaException if the rebalance callback throws exception
      */
     @Override
-    public void resetGeneration(String errorMessage) {
+    public void resetGeneration(String causeMessage, boolean dueToError) {
         if (subscriptions.partitionsAutoAssigned()) {
-            // lost all partitions if it is based on subscriptions
-            Set<TopicPartition> lostPartitions = new HashSet<>(subscriptions.assignedPartitions());
+            // if reset due to error then we have to give up all owned partitions as if they've lost;
+            // otherwise we can give them up as revoked
+            Set<TopicPartition> droppedPartitions = new HashSet<>(subscriptions.assignedPartitions());
             subscriptions.assignFromSubscribed(Collections.emptySet());
 
-            Exception e = maybeInvokePartitionsLost(errorMessage, lostPartitions);
+            Exception e;
+
+            if (dueToError) {
+                e = maybeInvokePartitionsLost(causeMessage, droppedPartitions);
+            } else {
+                e = maybeInvokePartitionsRevoked(droppedPartitions);
+            }
 
             if (e != null) {
                 throw new KafkaException("User rebalance callback throws an error", e);
             }
         }
 
-        super.resetGeneration(errorMessage);
+        super.resetGeneration(causeMessage, dueToError);
     }
 
     /**
@@ -701,19 +708,20 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         if (!subscriptions.partitionsAutoAssigned())
             return false;
 
-        // we need to rejoin if we performed the assignment and metadata has changed
+        // we need to rejoin if we performed the assignment and metadata has changed;
+        // also for those owned-but-no-longer-existed partitions we should drop them as lost
         if (assignmentSnapshot != null && !assignmentSnapshot.matches(metadataSnapshot)) {
             Set<TopicPartition> ownedPartitions = new HashSet<>(subscriptions.assignedPartitions());
-            Set<TopicPartition> lostPartitions = ownedPartitions.stream()
+            Set<TopicPartition> noLongerExistingPartitions = ownedPartitions.stream()
                 .filter(tp -> !metadataSnapshot.partitionsPerTopic().containsKey(tp.topic()))
                 .collect(Collectors.toSet());
 
-            if (!lostPartitions.isEmpty()) {
-                ownedPartitions.removeAll(lostPartitions);
+            if (!noLongerExistingPartitions.isEmpty()) {
+                ownedPartitions.removeAll(noLongerExistingPartitions);
                 subscriptions.assignFromSubscribed(ownedPartitions);
 
                 Exception e = maybeInvokePartitionsLost("topic metadata has changed and therefore some topics may not exist any more",
-                    lostPartitions);
+                    noLongerExistingPartitions);
 
                 if (e != null) {
                     throw new KafkaException("User rebalance callback throws an error", e);

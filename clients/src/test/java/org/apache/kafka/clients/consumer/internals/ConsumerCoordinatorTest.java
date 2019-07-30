@@ -726,8 +726,8 @@ public class ConsumerCoordinatorTest {
         assertEquals(toSet(oldAssigned), subscriptions.assignedPartitions());
         assertEquals(revokedCount, rebalanceListener.revokedCount);
         assertEquals(revoked.isEmpty() ? null : revoked, rebalanceListener.revoked);
-        assertEquals(added.isEmpty() ? 2 : 3, rebalanceListener.assignedCount);
-        assertEquals(added.isEmpty() ? getAdded(oldAssigned, newAssigned) : added, rebalanceListener.assigned);
+        assertEquals(3, rebalanceListener.assignedCount);
+        assertEquals(added, rebalanceListener.assigned);
         assertEquals(1, rebalanceListener.lostCount);
         assertEquals(lost, rebalanceListener.lost);
     }
@@ -1221,7 +1221,7 @@ public class ConsumerCoordinatorTest {
 
         assertFalse(coordinator.rejoinNeededOrPending());
         assertEquals(0, rebalanceListener.revokedCount);
-        assertEquals(1, rebalanceListener.assignedCount);
+        assertEquals(2, rebalanceListener.assignedCount);
     }
 
     @Test
@@ -1261,7 +1261,7 @@ public class ConsumerCoordinatorTest {
         coordinator.poll(time.timer(Long.MAX_VALUE));
         assertFalse(coordinator.rejoinNeededOrPending());
         // callback not triggered since there's nothing to be assigned
-        assertNull(rebalanceListener.assigned);
+        assertEquals(Collections.emptySet(), rebalanceListener.assigned);
         assertTrue("Metadata refresh not requested for unavailable partitions", metadata.updateRequested());
 
         Map<String, Errors> topicErrors = new HashMap<>();
@@ -1340,8 +1340,8 @@ public class ConsumerCoordinatorTest {
         Collection<TopicPartition> added = getAdded(assigned, assigned);
         assertEquals(revoked.isEmpty() ? 0 : 1, rebalanceListener.revokedCount);
         assertEquals(revoked.isEmpty() ? null : revoked, rebalanceListener.revoked);
-        assertEquals(added.isEmpty() ? 1 : 2, rebalanceListener.assignedCount);
-        assertEquals(added.isEmpty() ? null : added, rebalanceListener.assigned);
+        assertEquals(2, rebalanceListener.assignedCount);
+        assertEquals(added, rebalanceListener.assigned);
     }
 
     @Test
@@ -2370,8 +2370,8 @@ public class ConsumerCoordinatorTest {
         assertEquals("leaveGroupRequested should be " + shouldLeaveGroup, shouldLeaveGroup, leaveGroupRequested.get());
 
         if (shouldLeaveGroup) {
-            assertEquals(1, rebalanceListener.lostCount);
-            assertEquals(singleton(t1p), rebalanceListener.lost);
+            assertEquals(1, rebalanceListener.revokedCount);
+            assertEquals(singleton(t1p), rebalanceListener.revoked);
         }
     }
 

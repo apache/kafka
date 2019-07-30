@@ -797,15 +797,23 @@ public abstract class AbstractCoordinator implements Closeable {
     }
 
 
+    public synchronized void resetGeneration(String causeMessage, boolean dueToError) {
+        if (dueToError) {
+            log.debug("Resetting generation and requesting re-join group due to {}", causeMessage);
+        } else {
+            log.debug("Resetting generation pro-actively due to {}", causeMessage);
+        }
+
+        this.generation = Generation.NO_GENERATION;
+        this.state = MemberState.UNJOINED;
+        this.rejoinNeeded = true;
+    }
+
     /**
      * Reset the generation and memberId because we have fallen out of the group.
      */
     protected synchronized void resetGeneration(String errorMessage) {
-        log.debug("Resetting generation and requesting re-join group due to {}", errorMessage);
-
-        this.generation = Generation.NO_GENERATION;
-        this.rejoinNeeded = true;
-        this.state = MemberState.UNJOINED;
+        resetGeneration(errorMessage, true);
     }
 
     protected synchronized void requestRejoin() {
@@ -868,7 +876,7 @@ public abstract class AbstractCoordinator implements Closeable {
             client.pollNoWakeup();
         }
 
-        resetGeneration("consumer proactively leaving group");
+        resetGeneration("consumer proactively leaving group", false);
     }
 
     protected boolean isDynamicMember() {
