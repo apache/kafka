@@ -32,6 +32,7 @@ import org.apache.kafka.common.protocol.Message;
 import org.apache.kafka.common.protocol.types.ArrayOf;
 import org.apache.kafka.common.protocol.types.BoundField;
 import org.apache.kafka.common.protocol.types.Schema;
+import org.apache.kafka.common.protocol.types.SchemaException;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.protocol.types.Type;
 import org.apache.kafka.common.utils.Utils;
@@ -49,6 +50,7 @@ import java.util.function.Supplier;
 
 import static java.util.Collections.singletonList;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -289,8 +291,13 @@ public final class MessageTest {
         OffsetFetchRequestData allPartitionData = new OffsetFetchRequestData()
                                                       .setGroupId(groupId)
                                                       .setTopics(null);
-        for (short version = 2; version <= ApiKeys.OFFSET_FETCH.latestVersion(); version++) {
-            testAllMessageRoundTripsFromVersion(version, allPartitionData);
+        for (short version = 0; version <= ApiKeys.OFFSET_FETCH.latestVersion(); version++) {
+            if (version < 2) {
+                final short finalVersion = version;
+                assertThrows(SchemaException.class, () -> testAllMessageRoundTripsFromVersion(finalVersion, allPartitionData));
+            } else {
+                testAllMessageRoundTripsFromVersion(version, allPartitionData);
+            }
         }
 
         Supplier<OffsetFetchResponseData> response =
