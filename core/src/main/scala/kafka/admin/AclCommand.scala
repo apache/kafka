@@ -280,9 +280,9 @@ object AclCommand extends Logging {
     private def getAcls(authorizer: Authorizer, filter: ResourcePatternFilter,
                         listPrincipal: Option[KafkaPrincipal] = None): Map[Resource, Set[Acl]] =
       if (listPrincipal.isEmpty)
-        authorizer.getAcls().filter { case (resource, acl) => filter.matches(resource.toPattern) }
+        authorizer.getAcls().filter { case (resource, _) => filter.matches(resource.toPattern) }
       else
-        authorizer.getAcls(listPrincipal.get).filter { case (resource, acl) => filter.matches(resource.toPattern) }
+        authorizer.getAcls(listPrincipal.get).filter { case (resource, _) => filter.matches(resource.toPattern) }
 
   }
 

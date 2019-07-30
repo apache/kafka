@@ -55,6 +55,7 @@ import org.apache.kafka.common.message.DeleteTopicsResponseData.DeletableTopicRe
 import org.apache.kafka.common.message.DeleteTopicsResponseData;
 import org.apache.kafka.common.message.DescribeGroupsRequestData;
 import org.apache.kafka.common.message.DescribeGroupsResponseData;
+import org.apache.kafka.common.message.DescribeGroupsResponseData.DescribedGroup;
 import org.apache.kafka.common.message.ElectLeadersResponseData.PartitionResult;
 import org.apache.kafka.common.message.ElectLeadersResponseData.ReplicaElectionResult;
 import org.apache.kafka.common.message.FindCoordinatorRequestData;
@@ -65,11 +66,15 @@ import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData.Altera
 import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData;
 import org.apache.kafka.common.message.IncrementalAlterConfigsResponseData.AlterConfigsResourceResponse;
 import org.apache.kafka.common.message.IncrementalAlterConfigsResponseData;
+import org.apache.kafka.common.message.AlterPartitionReassignmentsRequestData;
+import org.apache.kafka.common.message.AlterPartitionReassignmentsResponseData;
+import org.apache.kafka.common.message.ListPartitionReassignmentsRequestData;
+import org.apache.kafka.common.message.ListPartitionReassignmentsResponseData;
 import org.apache.kafka.common.message.InitProducerIdRequestData;
 import org.apache.kafka.common.message.InitProducerIdResponseData;
 import org.apache.kafka.common.message.JoinGroupRequestData;
 import org.apache.kafka.common.message.JoinGroupResponseData;
-import org.apache.kafka.common.message.LeaveGroupRequestData;
+import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity;
 import org.apache.kafka.common.message.LeaveGroupResponseData;
 import org.apache.kafka.common.message.ListGroupsRequestData;
 import org.apache.kafka.common.message.ListGroupsResponseData;
@@ -125,7 +130,6 @@ import java.util.Optional;
 import java.util.Set;
 
 import static java.util.Arrays.asList;
-import static java.util.Collections.singletonList;
 import static org.apache.kafka.common.requests.FetchMetadata.INVALID_SESSION_ID;
 import static org.apache.kafka.test.TestUtils.toBuffer;
 import static org.junit.Assert.assertEquals;
@@ -184,14 +188,14 @@ public class RequestResponseTest {
         checkErrorResponse(createListOffsetRequest(2), new UnknownServerException(), true);
         checkResponse(createListOffsetResponse(2), 2, true);
         checkRequest(MetadataRequest.Builder.allTopics().build((short) 2), true);
-        checkRequest(createMetadataRequest(1, singletonList("topic1")), true);
-        checkErrorResponse(createMetadataRequest(1, singletonList("topic1")), new UnknownServerException(), true);
+        checkRequest(createMetadataRequest(1, Collections.singletonList("topic1")), true);
+        checkErrorResponse(createMetadataRequest(1, Collections.singletonList("topic1")), new UnknownServerException(), true);
         checkResponse(createMetadataResponse(), 2, true);
-        checkErrorResponse(createMetadataRequest(2, singletonList("topic1")), new UnknownServerException(), true);
+        checkErrorResponse(createMetadataRequest(2, Collections.singletonList("topic1")), new UnknownServerException(), true);
         checkResponse(createMetadataResponse(), 3, true);
-        checkErrorResponse(createMetadataRequest(3, singletonList("topic1")), new UnknownServerException(), true);
+        checkErrorResponse(createMetadataRequest(3, Collections.singletonList("topic1")), new UnknownServerException(), true);
         checkResponse(createMetadataResponse(), 4, true);
-        checkErrorResponse(createMetadataRequest(4, singletonList("topic1")), new UnknownServerException(), true);
+        checkErrorResponse(createMetadataRequest(4, Collections.singletonList("topic1")), new UnknownServerException(), true);
         checkRequest(OffsetFetchRequest.forAllPartitions("group1"), true);
         checkErrorResponse(OffsetFetchRequest.forAllPartitions("group1"), new NotCoordinatorException("Not Coordinator"), true);
         checkRequest(createOffsetFetchRequest(0), true);
@@ -262,7 +266,7 @@ public class RequestResponseTest {
         checkOlderFetchVersions();
         checkResponse(createMetadataResponse(), 0, true);
         checkResponse(createMetadataResponse(), 1, true);
-        checkErrorResponse(createMetadataRequest(1, singletonList("topic1")), new UnknownServerException(), true);
+        checkErrorResponse(createMetadataRequest(1, Collections.singletonList("topic1")), new UnknownServerException(), true);
         checkRequest(createOffsetCommitRequest(0), true);
         checkErrorResponse(createOffsetCommitRequest(0), new UnknownServerException(), true);
         checkRequest(createOffsetCommitRequest(1), true);
@@ -362,6 +366,12 @@ public class RequestResponseTest {
         checkRequest(createIncrementalAlterConfigsRequest(), true);
         checkErrorResponse(createIncrementalAlterConfigsRequest(), new UnknownServerException(), true);
         checkResponse(createIncrementalAlterConfigsResponse(), 0, true);
+        checkRequest(createAlterPartitionReassignmentsRequest(), true);
+        checkErrorResponse(createAlterPartitionReassignmentsRequest(), new UnknownServerException(), true);
+        checkResponse(createAlterPartitionReassignmentsResponse(), 0, true);
+        checkRequest(createListPartitionReassignmentsRequest(), true);
+        checkErrorResponse(createListPartitionReassignmentsRequest(), new UnknownServerException(), true);
+        checkResponse(createListPartitionReassignmentsResponse(), 0, true);
     }
 
     @Test
@@ -723,8 +733,7 @@ public class RequestResponseTest {
     public void testOffsetFetchRequestBuilderToString() {
         String allTopicPartitionsString = OffsetFetchRequest.Builder.allTopicPartitions("someGroup").toString();
         assertTrue(allTopicPartitionsString.contains("<ALL>"));
-        String string = new OffsetFetchRequest.Builder("group1",
-                singletonList(new TopicPartition("test11", 1))).toString();
+        String string = new OffsetFetchRequest.Builder("group1", Collections.singletonList(new TopicPartition("test11", 1))).toString();
         assertTrue(string.contains("test11"));
         assertTrue(string.contains("group1"));
     }
@@ -896,14 +905,22 @@ public class RequestResponseTest {
         DescribeGroupsResponseData describeGroupsResponseData = new DescribeGroupsResponseData();
         DescribeGroupsResponseData.DescribedGroupMember member = DescribeGroupsResponse.groupMember("memberId", null,
                 clientId, clientHost, new byte[0], new byte[0]);
-        DescribeGroupsResponseData.DescribedGroup metadata = DescribeGroupsResponse.groupMetadata("test-group", Errors.NONE,
-                "STABLE", "consumer", "roundrobin", asList(member), Collections.emptySet());
+        DescribedGroup metadata = DescribeGroupsResponse.groupMetadata("test-group",
+                                                                       Errors.NONE,
+                                                                       "STABLE",
+                                                                       "consumer",
+                                                                       "roundrobin",
+                                                                       Collections.singletonList(member),
+                                                                       Collections.emptySet());
         describeGroupsResponseData.groups().add(metadata);
         return new DescribeGroupsResponse(describeGroupsResponseData);
     }
 
     private LeaveGroupRequest createLeaveGroupRequest() {
-        return new LeaveGroupRequest.Builder(new LeaveGroupRequestData().setGroupId("group1").setMemberId("consumer1")).build();
+        return new LeaveGroupRequest.Builder(
+            "group1", Collections.singletonList(new MemberIdentity()
+                                                    .setMemberId("consumer1"))
+            ).build();
     }
 
     private LeaveGroupResponse createLeaveGroupResponse() {
@@ -1040,7 +1057,7 @@ public class RequestResponseTest {
     }
 
     private OffsetFetchRequest createOffsetFetchRequest(int version) {
-        return new OffsetFetchRequest.Builder("group1", singletonList(new TopicPartition("test11", 1)))
+        return new OffsetFetchRequest.Builder("group1", Collections.singletonList(new TopicPartition("test11", 1)))
                 .build((short) version);
     }
 
@@ -1188,7 +1205,7 @@ public class RequestResponseTest {
     private SaslHandshakeResponse createSaslHandshakeResponse() {
         return new SaslHandshakeResponse(
                 new SaslHandshakeResponseData()
-                .setErrorCode(Errors.NONE.code()).setMechanisms(singletonList("GSSAPI")));
+                .setErrorCode(Errors.NONE.code()).setMechanisms(Collections.singletonList("GSSAPI")));
     }
 
     private SaslAuthenticateRequest createSaslAuthenticateRequest() {
@@ -1622,5 +1639,62 @@ public class RequestResponseTest {
                 .setErrorCode(Errors.INVALID_REQUEST.code())
                 .setErrorMessage("Duplicate Keys"));
         return new IncrementalAlterConfigsResponse(data);
+    }
+
+    private AlterPartitionReassignmentsRequest createAlterPartitionReassignmentsRequest() {
+        AlterPartitionReassignmentsRequestData data = new AlterPartitionReassignmentsRequestData();
+        data.topics().add(
+                new AlterPartitionReassignmentsRequestData.ReassignableTopic().setName("topic").setPartitions(
+                        Collections.singletonList(
+                                new AlterPartitionReassignmentsRequestData.ReassignablePartition().setPartitionIndex(0).setReplicas(null)
+                        )
+                )
+        );
+        return new AlterPartitionReassignmentsRequest.Builder(data).build((short) 0);
+    }
+
+    private AlterPartitionReassignmentsResponse createAlterPartitionReassignmentsResponse() {
+        AlterPartitionReassignmentsResponseData data = new AlterPartitionReassignmentsResponseData();
+        data.responses().add(
+                new AlterPartitionReassignmentsResponseData.ReassignableTopicResponse()
+                        .setName("topic")
+                        .setPartitions(Collections.singletonList(
+                                new AlterPartitionReassignmentsResponseData.ReassignablePartitionResponse()
+                                        .setPartitionIndex(0)
+                                        .setErrorCode(Errors.NO_REASSIGNMENT_IN_PROGRESS.code())
+                                        .setErrorMessage("No reassignment is in progress for topic topic partition 0")
+                                )
+                        )
+        );
+        return new AlterPartitionReassignmentsResponse(data);
+    }
+
+    private ListPartitionReassignmentsRequest createListPartitionReassignmentsRequest() {
+        ListPartitionReassignmentsRequestData data = new ListPartitionReassignmentsRequestData();
+        data.setTopics(
+            Collections.singletonList(
+                new ListPartitionReassignmentsRequestData.ListPartitionReassignmentsTopics()
+                    .setName("topic")
+                    .setPartitionIndexes(Collections.singletonList(1))
+            )
+        );
+        return new ListPartitionReassignmentsRequest.Builder(data).build((short) 0);
+    }
+
+    private ListPartitionReassignmentsResponse createListPartitionReassignmentsResponse() {
+        ListPartitionReassignmentsResponseData data = new ListPartitionReassignmentsResponseData();
+        data.topics().add(
+                new ListPartitionReassignmentsResponseData.OngoingTopicReassignment()
+                        .setName("topic")
+                        .setPartitions(Collections.singletonList(
+                                new ListPartitionReassignmentsResponseData.OngoingPartitionReassignment()
+                                        .setPartitionIndex(0)
+                                        .setReplicas(Arrays.asList(1, 2))
+                                        .setAddingReplicas(Collections.singletonList(2))
+                                        .setRemovingReplicas(Collections.singletonList(1))
+                                )
+                        )
+        );
+        return new ListPartitionReassignmentsResponse(data);
     }
 }
