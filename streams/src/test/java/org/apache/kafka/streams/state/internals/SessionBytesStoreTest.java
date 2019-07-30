@@ -473,8 +473,8 @@ public abstract class SessionBytesStoreTest {
     }
 
     @Test
-    public void shouldNotThrowRemovingNonexistentKey() {
-        sessionStore.put(new Windowed<>("a", new SessionWindow(0, 1)), 0L);
+    public void shouldNotThrowExceptionRemovingNonexistentKey() {
+        sessionStore.remove(new Windowed<>("a", new SessionWindow(0, 1)));
     }
 
     @Test(expected = NullPointerException.class)
