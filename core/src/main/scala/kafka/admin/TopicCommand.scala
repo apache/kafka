@@ -122,7 +122,7 @@ object TopicCommand extends Logging {
       info.isr.size < info.replicas.size
     }
 
-    def hasLeader: Boolean = {
+    private def hasLeader: Boolean = {
       info.leader != null
     }
 
