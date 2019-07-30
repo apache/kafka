@@ -166,6 +166,7 @@ private[kafka] object LogValidator {
 
     records.deepEntries(true, BufferSupplier.NO_CACHING).asScala.foreach { logEntry =>
       val record = logEntry.record
+      record.ensureValid()
       validateKey(record, compactedTopic)
 
       if (record.magic > Record.MAGIC_VALUE_V0 && messageFormatVersion > Record.MAGIC_VALUE_V0) {
