@@ -2087,7 +2087,7 @@ class GroupMetadataManagerTest {
     val groupMetadataRecord = buildStableGroupRecordWithMember(generation = 15,
       protocolType = "consumer", protocol = "range", memberId)
     val records = MemoryRecords.withRecords(startOffset, CompressionType.NONE,
-      offsetCommitRecords ++ Seq(groupMetadataRecord): _*)
+      (offsetCommitRecords ++ Seq(groupMetadataRecord)).toArray: _*)
 
     def loadWithDelay(duration: Int): Unit = {
       EasyMock.reset(replicaManager)
