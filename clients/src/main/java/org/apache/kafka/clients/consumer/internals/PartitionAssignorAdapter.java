@@ -69,7 +69,7 @@ public class PartitionAssignorAdapter implements ConsumerPartitionAssignor {
         return new PartitionAssignor.Assignment(newAssignment.partitions(), newAssignment.userData());
     }
 
-    private Map<String, PartitionAssignor.Subscription> toOldGroupSubscription(GroupSubscription newSubscriptions) {
+    private static Map<String, PartitionAssignor.Subscription> toOldGroupSubscription(GroupSubscription newSubscriptions) {
         Map<String, PartitionAssignor.Subscription> oldSubscriptions = new HashMap<>();
         for (Map.Entry<String, Subscription> entry : newSubscriptions.groupSubscription().entrySet()) {
             String member = entry.getKey();
@@ -80,7 +80,7 @@ public class PartitionAssignorAdapter implements ConsumerPartitionAssignor {
         return oldSubscriptions;
     }
 
-    private GroupAssignment toNewGroupAssignment(Map<String, PartitionAssignor.Assignment> oldAssignments) {
+    private static GroupAssignment toNewGroupAssignment(Map<String, PartitionAssignor.Assignment> oldAssignments) {
         Map<String, Assignment> newAssignments = new HashMap<>();
         for (Map.Entry<String, PartitionAssignor.Assignment> entry : oldAssignments.entrySet()) {
             String member = entry.getKey();
