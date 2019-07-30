@@ -28,6 +28,7 @@ import kafka.utils.Implicits._
 import kafka.utils._
 import kafka.zk.{AdminZkClient, KafkaZkClient}
 import org.apache.kafka.clients.CommonClientConfigs
+import org.apache.kafka.clients.{admin => jadmin}
 import org.apache.kafka.clients.admin.{Admin, ListTopicsOptions, NewPartitions, NewTopic, AdminClient => JAdminClient}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.config.ConfigResource.Type
@@ -78,8 +79,6 @@ object TopicCommand extends Logging {
     }
   }
 
-
-
   class CommandTopicPartition(opts: TopicCommandOptions) {
     val name: String = opts.topic.get
     val partitions: Option[Integer] = opts.partitions
@@ -94,53 +93,77 @@ object TopicCommand extends Logging {
     def ifTopicDoesntExist(): Boolean = opts.ifNotExists
   }
 
-  case class PartitionDescription(
-                                   topic: String,
-                                   partition: Int,
-                                   leader: Option[Int],
-                                   assignedReplicas: Seq[Int],
-                                   isr: Seq[Int],
-                                   minIsrCount: Int,
-                                   markedForDeletion: Boolean,
-                                   describeConfigs: Boolean)
+  case class PartitionDescription(topicPartition: TopicPartition,
+                                  leader: Option[Int],
+                                  replicas: Seq[Int],
+                                  isr: Seq[Int],
+                                  config: Option[jadmin.Config],
+                                  markedForDeletion: Boolean) {
+
+    private def minIsrCount: Option[Int] = {
+      config.map(_.get(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG).value.toInt)
+    }
+
+    def hasUnderReplicatedPartitions: Boolean = {
+      isr.size < replicas.size
+    }
+
+    def hasUnderMinIsrPartitions: Boolean = {
+      minIsrCount.exists(isr.size < _)
+    }
+
+    def isAtMinIsrPartitions: Boolean =  {
+      minIsrCount.contains(isr.size)
+    }
+
+    def hasUnavailablePartitions(liveBrokers: Set[Int]): Boolean = {
+      leader.isEmpty || !liveBrokers.contains(leader.get)
+    }
+
+    def printDescription(): Unit = {
+      print("\tTopic: " + topicPartition.topic)
+      print("\tPartition: " + topicPartition.partition)
+      print("\tLeader: " + leader.getOrElse("none"))
+      print("\tReplicas: " + replicas.mkString(","))
+      print("\tIsr: " + isr.mkString(","))
+      print(if (markedForDeletion) "\tMarkedForDeletion: true" else "")
+      println()
+    }
+
+  }
 
   class DescribeOptions(opts: TopicCommandOptions, liveBrokers: Set[Int]) {
-    val describeConfigs: Boolean = !opts.reportUnavailablePartitions && !opts.reportUnderReplicatedPartitions && !opts.reportUnderMinIsrPartitions && !opts.reportAtMinIsrPartitions
+    val describeConfigs: Boolean =
+      !opts.reportUnavailablePartitions &&
+      !opts.reportUnderReplicatedPartitions &&
+      !opts.reportUnderMinIsrPartitions &&
+      !opts.reportAtMinIsrPartitions
     val describePartitions: Boolean = !opts.reportOverriddenConfigs
-    private def hasUnderReplicatedPartitions(partitionDescription: PartitionDescription) = {
-      partitionDescription.isr.size < partitionDescription.assignedReplicas.size
+
+    private def shouldPrintUnderReplicatedPartitions(partitionDescription: PartitionDescription): Boolean = {
+      opts.reportUnderReplicatedPartitions && partitionDescription.hasUnderReplicatedPartitions
     }
-    private def shouldPrintUnderReplicatedPartitions(partitionDescription: PartitionDescription) = {
-      opts.reportUnderReplicatedPartitions && hasUnderReplicatedPartitions(partitionDescription)
+    private def shouldPrintUnavailablePartitions(partitionDescription: PartitionDescription): Boolean = {
+      opts.reportUnavailablePartitions && partitionDescription.hasUnavailablePartitions(liveBrokers)
     }
-    private def hasUnavailablePartitions(partitionDescription: PartitionDescription) = {
-      partitionDescription.leader.isEmpty || !liveBrokers.contains(partitionDescription.leader.get)
+    private def shouldPrintUnderMinIsrPartitions(partitionDescription: PartitionDescription): Boolean = {
+      opts.reportUnderMinIsrPartitions && partitionDescription.hasUnderMinIsrPartitions
     }
-    private def shouldPrintUnavailablePartitions(partitionDescription: PartitionDescription) = {
-      opts.reportUnavailablePartitions && hasUnavailablePartitions(partitionDescription)
-    }
-    private def hasUnderMinIsrPartitions(partitionDescription: PartitionDescription) = {
-      if (partitionDescription.leader.isDefined)
-        partitionDescription.isr.size < partitionDescription.minIsrCount
-      else
-        partitionDescription.minIsrCount > 0
-    }
-    private def hasAtMinIsrPartitions(partitionDescription: PartitionDescription) = {
-      partitionDescription.isr.size == partitionDescription.minIsrCount
-    }
-    private def shouldPrintUnderMinIsrPartitions(partitionDescription: PartitionDescription) = {
-      opts.reportUnderMinIsrPartitions && hasUnderMinIsrPartitions(partitionDescription)
-    }
-    private def shouldPrintAtMinIsrPartitions(partitionDescription: PartitionDescription) = {
-      opts.reportAtMinIsrPartitions && hasAtMinIsrPartitions(partitionDescription)
+    private def shouldPrintAtMinIsrPartitions(partitionDescription: PartitionDescription): Boolean = {
+      opts.reportAtMinIsrPartitions && partitionDescription.isAtMinIsrPartitions
     }
 
-    def shouldPrintTopicPartition(partitionDesc: PartitionDescription): Boolean = {
+    private def shouldPrintTopicPartition(partitionDesc: PartitionDescription): Boolean = {
       describeConfigs ||
         shouldPrintUnderReplicatedPartitions(partitionDesc) ||
         shouldPrintUnavailablePartitions(partitionDesc) ||
         shouldPrintUnderMinIsrPartitions(partitionDesc) ||
         shouldPrintAtMinIsrPartitions(partitionDesc)
+    }
+
+    def maybePrintPartitionDescription(desc: PartitionDescription): Unit = {
+      if (shouldPrintTopicPartition(desc))
+        desc.printDescription()
     }
   }
 
@@ -234,35 +257,29 @@ object TopicCommand extends Logging {
       val describeOptions = new DescribeOptions(opts, liveBrokers.toSet)
 
       for (td <- topicDescriptions) {
-        val sortedPartitions = td.partitions().asScala.sortBy(_.partition())
+        val topicName = td.name
+        val config = allConfigs.get(new ConfigResource(Type.TOPIC, topicName)).get()
+        val sortedPartitions = td.partitions.asScala.sortBy(_.partition)
+
         if (describeOptions.describeConfigs) {
-          val config = allConfigs.get(new ConfigResource(Type.TOPIC, td.name())).get()
           val hasNonDefault = config.entries().asScala.exists(!_.isDefault)
           if (!opts.reportOverriddenConfigs || hasNonDefault) {
             val numPartitions = td.partitions().size
-            val replicationFactor = td.partitions().iterator().next().replicas().size
-            val configsAsString = config.entries().asScala.filter(!_.isDefault).map { ce => s"${ce.name()}=${ce.value()}" }.mkString(",")
-            println(s"Topic:${td.name()}\tPartitionCount:$numPartitions\tReplicationFactor:$replicationFactor\tConfigs:$configsAsString")
+            val replicationFactor = td.partitions.iterator.next().replicas.size
+            val configsAsString = config.entries.asScala.filter(!_.isDefault).map { ce => s"${ce.name}=${ce.value}" }.mkString(",")
+            println(s"Topic:$topicName\tPartitionCount:$numPartitions\tReplicationFactor:$replicationFactor\tConfigs:$configsAsString")
           }
         }
-        if (describeOptions.describePartitions) {
-          val computedMinIsrCount = if (opts.reportUnderMinIsrPartitions || opts.reportAtMinIsrPartitions)
-            allConfigs.get(new ConfigResource(ConfigResource.Type.TOPIC, td.name())).get().get(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG).value().toInt else 0
-          for (partition <- sortedPartitions) {
-            val partitionDesc = PartitionDescription(
-              topic = td.name(),
-              partition.partition(),
-              leader = Option(partition.leader()).map(_.id()),
-              assignedReplicas = partition.replicas().asScala.map(_.id()),
-              isr = partition.isr().asScala.map(_.id()),
-              minIsrCount = computedMinIsrCount,
-              markedForDeletion = false,
-              describeOptions.describeConfigs
-            )
 
-            if (describeOptions.shouldPrintTopicPartition(partitionDesc)) {
-              printPartition(partitionDesc)
-            }
+        if (describeOptions.describePartitions) {
+          for (partition <- sortedPartitions) {
+            val tp = new TopicPartition(topicName, partition.partition)
+            val leaderOpt = Option(partition.leader).map(_.id)
+            val replicas = partition.replicas.asScala.map(_.id)
+            val isr = partition.isr.asScala.map(_.id)
+            val partitionDesc = PartitionDescription(tp, leaderOpt, replicas, isr,
+              config = Some(config), markedForDeletion = false)
+            describeOptions.maybePrintPartitionDescription(partitionDesc)
           }
         }
       }
@@ -358,8 +375,8 @@ object TopicCommand extends Logging {
     override def describeTopic(opts: TopicCommandOptions): Unit = {
       val topics = getTopics(opts.topic, opts.excludeInternalTopics)
       ensureTopicExists(topics, opts.topic, !opts.ifExists)
-      val liveBrokers = zkClient.getAllBrokersInCluster.map(_.id).toSet
-      val describeOptions = new DescribeOptions(opts, liveBrokers)
+      val liveBrokerIds = zkClient.getAllBrokersInCluster.map(_.id).toSet
+      val describeOptions = new DescribeOptions(opts, liveBrokerIds)
       val adminZkClient = new AdminZkClient(zkClient)
 
       for (topic <- topics) {
@@ -372,27 +389,24 @@ object TopicCommand extends Logging {
                 val numPartitions = topicPartitionAssignment.size
                 val replicationFactor = topicPartitionAssignment.head._2.size
                 val configsAsString = configs.map { case (k, v) => s"$k=$v" }.mkString(",")
-                val markedForDeletionString = if (markedForDeletion) "\tMarkedForDeletion:true" else ""
-                println(s"Topic:$topic\tPartitionCount:$numPartitions\tReplicationFactor:$replicationFactor\tConfigs:$configsAsString$markedForDeletionString")
+                println(s"Topic: $topic" +
+                  s"\tPartitionCount: $numPartitions" +
+                  s"\tReplicationFactor: $replicationFactor" +
+                  s"\tConfigs: $configsAsString" +
+                  (if (markedForDeletion) "\tMarkedForDeletion: true" else ""))
               }
             }
             if (describeOptions.describePartitions) {
               for ((partitionId, assignedReplicas) <- topicPartitionAssignment.toSeq.sortBy(_._1)) {
-                val leaderIsrEpoch = zkClient.getTopicPartitionState(new TopicPartition(topic, partitionId))
-                val partitionDesc = PartitionDescription(
-                  topic,
-                  partitionId,
-                  leader = if (leaderIsrEpoch.isEmpty) None else Option(leaderIsrEpoch.get.leaderAndIsr.leader),
-                  assignedReplicas,
-                  isr = if (leaderIsrEpoch.isEmpty) Seq.empty[Int] else leaderIsrEpoch.get.leaderAndIsr.isr,
-                  minIsrCount = 0,
-                  markedForDeletion,
-                  describeOptions.describeConfigs
-                )
-
-                if (describeOptions.shouldPrintTopicPartition(partitionDesc)) {
-                  printPartition(partitionDesc)
+                val tp = new TopicPartition(topic, partitionId)
+                val (leaderOpt, isr) =  zkClient.getTopicPartitionState(tp).map(_.leaderAndIsr) match {
+                  case Some(leaderAndIsr) => (leaderAndIsr.leaderOpt, leaderAndIsr.isr)
+                  case None => (None, Seq.empty[Int])
                 }
+
+                val partitionDesc = PartitionDescription(tp, leaderOpt, assignedReplicas, isr,
+                  config = None, markedForDeletion)
+                describeOptions.maybePrintPartitionDescription(partitionDesc)
               }
             }
           case None =>
@@ -447,18 +461,6 @@ object TopicCommand extends Logging {
       // If given topic doesn't exist then throw exception
       throw new IllegalArgumentException(s"Topic '${requestedTopic.get}' does not exist as expected")
     }
-  }
-
-  private def printPartition(tp: PartitionDescription): Unit = {
-    val markedForDeletionString =
-    if (tp.markedForDeletion && !tp.describeConfigs) "\tMarkedForDeletion: true" else ""
-    print("\tTopic: " + tp.topic)
-    print("\tPartition: " + tp.partition)
-    print("\tLeader: " + (if(tp.leader.isDefined) tp.leader.get else "none"))
-    print("\tReplicas: " + tp.assignedReplicas.mkString(","))
-    print("\tIsr: " + tp.isr.mkString(","))
-    print(markedForDeletionString)
-    println()
   }
 
   private def doGetTopics(allTopics: Seq[String], topicWhitelist: Option[String], excludeInternalTopics: Boolean): Seq[String] = {
@@ -565,26 +567,27 @@ object TopicCommand extends Logging {
                                         "broker_id_for_part2_replica1 : broker_id_for_part2_replica2 , ...")
                            .ofType(classOf[String])
     private val reportUnderReplicatedPartitionsOpt = parser.accepts("under-replicated-partitions",
-                                                            "if set when describing topics, only show under replicated partitions")
+      "if set when describing topics, only show under replicated partitions")
     private val reportUnavailablePartitionsOpt = parser.accepts("unavailable-partitions",
-                                                            "if set when describing topics, only show partitions whose leader is not available")
+      "if set when describing topics, only show partitions whose leader is not available")
     private val reportUnderMinIsrPartitionsOpt = parser.accepts("under-min-isr-partitions",
-                                                            "if set when describing topics, only show partitions whose isr count is less than the configured minimum. Not supported with the --zookeeper option.")
+      "if set when describing topics, only show partitions whose isr count is less than the configured minimum. Not supported with the --zookeeper option.")
     private val reportAtMinIsrPartitionsOpt = parser.accepts("at-min-isr-partitions",
-                                                            "if set when describing topics, only show partitions whose isr count is equal to the configured minimum. Not supported with the --zookeeper option.")
+      "if set when describing topics, only show partitions whose isr count is equal to the configured minimum. Not supported with the --zookeeper option.")
     private val topicsWithOverridesOpt = parser.accepts("topics-with-overrides",
-                                                "if set when describing topics, only show topics that have overridden configs")
+      "if set when describing topics, only show topics that have overridden configs")
     private val ifExistsOpt = parser.accepts("if-exists",
-                                     "if set when altering or deleting or describing topics, the action will only execute if the topic exists. Not supported with the --bootstrap-server option.")
+      "if set when altering or deleting or describing topics, the action will only execute if the topic exists. Not supported with the --bootstrap-server option.")
     private val ifNotExistsOpt = parser.accepts("if-not-exists",
-                                        "if set when creating topics, the action will only execute if the topic does not already exist. Not supported with the --bootstrap-server option.")
+      "if set when creating topics, the action will only execute if the topic does not already exist. Not supported with the --bootstrap-server option.")
 
     private val disableRackAware = parser.accepts("disable-rack-aware", "Disable rack aware replica assignment")
 
     // This is not currently used, but we keep it for compatibility
     parser.accepts("force", "Suppress console prompts")
 
-    private val excludeInternalTopicOpt = parser.accepts("exclude-internal", "exclude internal topics when running list or describe command. The internal topics will be listed by default")
+    private val excludeInternalTopicOpt = parser.accepts("exclude-internal",
+      "exclude internal topics when running list or describe command. The internal topics will be listed by default")
 
     options = parser.parse(args : _*)
 
