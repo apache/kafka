@@ -2313,6 +2313,44 @@ public class SenderTest {
         verify(client, times(2)).poll(eq(RETRY_BACKOFF_MS), anyLong());
     }
 
+    @Test
+    public void testTooLargeBatchesAreSafelyRemoved() throws InterruptedException {
+        ProducerIdAndEpoch producerIdAndEpoch = new ProducerIdAndEpoch(123456L, (short) 0);
+        TransactionManager txnManager = new TransactionManager(logContext, "testSplitBatchAndSend", 60000, 100);
+
+        setupWithTransactionState(txnManager, false, null);
+        doInitTransactions(txnManager, producerIdAndEpoch);
+
+        txnManager.beginTransaction();
+        txnManager.maybeAddPartitionToTransaction(tp0);
+        client.prepareResponse(new AddPartitionsToTxnResponse(0, Collections.singletonMap(tp0, Errors.NONE)));
+        sender.runOnce();
+
+        // create a producer batch with more than one record so it is eligible to split
+        Future<RecordMetadata> request1 =
+                accumulator.append(tp0, time.milliseconds(), "key1".getBytes(), "value1".getBytes(), null, null,
+                        MAX_BLOCK_TIMEOUT, false).future;
+        Future<RecordMetadata> request2 =
+                accumulator.append(tp0, time.milliseconds(), "key2".getBytes(), "value2".getBytes(), null, null,
+                        MAX_BLOCK_TIMEOUT, false).future;
+
+        sender.runOnce();  // send request
+        assertEquals(1, sender.inFlightBatches(tp0).size());
+        // return a MESSAGE_TOO_LARGE error
+        client.respond(produceResponse(tp0, -1, Errors.MESSAGE_TOO_LARGE, -1));
+        sender.runOnce();
+
+        // process retried response
+        sender.runOnce();
+        client.respond(produceResponse(tp0, 0, Errors.NONE, 0));
+        sender.runOnce();
+
+        // In-flight batches should be empty. Sleep past the expiration time of the batch and run once, no error should be thrown
+        assertEquals(0, sender.inFlightBatches(tp0).size());
+        time.sleep(2000);
+        sender.runOnce();
+    }
+
     class AssertEndTxnRequestMatcher implements MockClient.RequestMatcher {
 
         private TransactionResult requiredResult;
