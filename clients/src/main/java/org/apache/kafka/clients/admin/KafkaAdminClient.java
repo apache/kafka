@@ -3124,6 +3124,7 @@ public class KafkaAdminClient extends AdminClient {
                     partitionReassignments = new TreeMap<>();
                     topicsToReassignments.put(topic, partitionReassignments);
                 }
+
                 partitionReassignments.put(partition, reassignment);
             }
         }
@@ -3172,6 +3173,7 @@ public class KafkaAdminClient extends AdminClient {
                 Errors topLevelError = Errors.forCode(response.data().errorCode());
                 switch (topLevelError) {
                     case NONE:
+                        receivedResponsesCount += validateTopicResponses(response.data().responses(), errors);
                         break;
                     case NOT_CONTROLLER:
                         handleNotControllerError(topLevelError);
@@ -3188,8 +3190,6 @@ public class KafkaAdminClient extends AdminClient {
                         }
                         break;
                 }
-                if (topLevelError == Errors.NONE)
-                    receivedResponsesCount += validateTopicResponses(response.data().responses(), errors);
 
                 if (errors.values().stream().noneMatch(Objects::nonNull)
                         && receivedResponsesCount != expectedResponsesCount) {
