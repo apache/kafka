@@ -22,6 +22,9 @@ import org.apache.kafka.common.message.AddPartitionsToTxnRequestData.AddPartitio
 import org.apache.kafka.common.message.AddPartitionsToTxnRequestData.AddPartitionsToTxnTopicCollection;
 import org.apache.kafka.common.message.JoinGroupResponseData.JoinGroupResponseMember;
 import org.apache.kafka.common.message.LeaveGroupResponseData.MemberResponse;
+import org.apache.kafka.common.message.OffsetFetchRequestData.OffsetFetchRequestTopic;
+import org.apache.kafka.common.message.OffsetFetchResponseData.OffsetFetchResponsePartition;
+import org.apache.kafka.common.message.OffsetFetchResponseData.OffsetFetchResponseTopic;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
@@ -29,6 +32,7 @@ import org.apache.kafka.common.protocol.Message;
 import org.apache.kafka.common.protocol.types.ArrayOf;
 import org.apache.kafka.common.protocol.types.BoundField;
 import org.apache.kafka.common.protocol.types.Schema;
+import org.apache.kafka.common.protocol.types.SchemaException;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.protocol.types.Type;
 import org.apache.kafka.common.utils.Utils;
@@ -46,6 +50,7 @@ import java.util.function.Supplier;
 
 import static java.util.Collections.singletonList;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -264,6 +269,67 @@ public final class MessageTest {
                 new LeaderAndIsrRequestData().setTopicStates(Collections.singletonList(partitionStateWithAddingRemovingReplicas)),
                 new LeaderAndIsrRequestData().setTopicStates(Collections.singletonList(partitionStateNoAddingRemovingReplicas)));
         testAllMessageRoundTripsFromVersion((short) 3, new LeaderAndIsrRequestData().setTopicStates(Collections.singletonList(partitionStateWithAddingRemovingReplicas)));
+    }
+
+    @Test
+    public void testOffsetFetchVersions() throws Exception {
+        String groupId = "groupId";
+        String topicName = "topic";
+
+        testAllMessageRoundTrips(new OffsetFetchRequestData()
+                                     .setTopics(new ArrayList<>())
+                                     .setGroupId(groupId));
+
+        testAllMessageRoundTrips(new OffsetFetchRequestData()
+                                     .setGroupId(groupId)
+                                     .setTopics(Collections.singletonList(
+                                         new OffsetFetchRequestTopic()
+                                             .setName(topicName)
+                                             .setPartitionIndexes(Collections.singletonList(5))))
+        );
+
+        OffsetFetchRequestData allPartitionData = new OffsetFetchRequestData()
+                                                      .setGroupId(groupId)
+                                                      .setTopics(null);
+        for (short version = 0; version <= ApiKeys.OFFSET_FETCH.latestVersion(); version++) {
+            if (version < 2) {
+                final short finalVersion = version;
+                assertThrows(SchemaException.class, () -> testAllMessageRoundTripsFromVersion(finalVersion, allPartitionData));
+            } else {
+                testAllMessageRoundTripsFromVersion(version, allPartitionData);
+            }
+        }
+
+        Supplier<OffsetFetchResponseData> response =
+            () -> new OffsetFetchResponseData()
+                      .setTopics(Collections.singletonList(
+                          new OffsetFetchResponseTopic()
+                              .setName(topicName)
+                              .setPartitions(Collections.singletonList(
+                                  new OffsetFetchResponsePartition()
+                                      .setPartitionIndex(5)
+                                      .setMetadata(null)
+                                      .setCommittedOffset(100)
+                                      .setCommittedLeaderEpoch(3)
+                                      .setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code())))))
+                      .setErrorCode(Errors.NOT_COORDINATOR.code())
+                      .setThrottleTimeMs(10);
+        for (short version = 0; version <= ApiKeys.OFFSET_FETCH.latestVersion(); version++) {
+            OffsetFetchResponseData responseData = response.get();
+            if (version <= 1) {
+                responseData.setErrorCode(Errors.NONE.code());
+            }
+
+            if (version <= 2) {
+                responseData.setThrottleTimeMs(0);
+            }
+
+            if (version <= 4) {
+                responseData.topics().get(0).partitions().get(0).setCommittedLeaderEpoch(-1);
+            }
+
+            testAllMessageRoundTripsFromVersion(version, responseData);
+        }
     }
 
     private void testAllMessageRoundTrips(Message message) throws Exception {

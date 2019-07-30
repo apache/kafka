@@ -21,7 +21,7 @@ import java.util.Properties
 import java.util.concurrent.atomic._
 
 import kafka.log._
-import kafka.server.{BrokerTopicStats, LogDirFailureChannel}
+import kafka.server.{BrokerTopicStats, FetchLogEnd, LogDirFailureChannel}
 import kafka.utils._
 import org.apache.kafka.clients.consumer.OffsetOutOfRangeException
 import org.apache.kafka.common.record.FileRecords
@@ -132,10 +132,9 @@ object StressTestLog {
     override def work() {
       try {
         log.read(currentOffset,
-          maxLength = 1024,
-          maxOffset = Some(currentOffset + 1),
-          minOneMessage = true,
-          includeAbortedTxns = false).records match {
+          maxLength = 1,
+          isolation = FetchLogEnd,
+          minOneMessage = true).records match {
           case read: FileRecords if read.sizeInBytes > 0 => {
             val first = read.batches.iterator.next()
             require(first.lastOffset == currentOffset, "We should either read nothing or the message we asked for.")
