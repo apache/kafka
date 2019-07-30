@@ -102,23 +102,23 @@ public class PartitionAssignorAdapterTest {
     }
 
     @Test
-    public void testNewToOldAssignment() {
-        classNames = Arrays.asList(OldPartitionAssignor.class.getName());
-        ConsumerPartitionAssignor oldAssignor = getAssignorInstances(classNames, Collections.emptyMap()).get(0);
+    @SuppressWarnings("deprecation")
+    public void testOnAssignment() {
+        OldPartitionAssignor oldAssignor = new OldPartitionAssignor();
+        ConsumerPartitionAssignor adaptedAssignor = new PartitionAssignorAdapter(oldAssignor);
 
-        TopicPartition tp = new TopicPartition("tp", 1);
-        Assignment newAssignment = new Assignment(Arrays.asList(tp));
+        TopicPartition tp1 = new TopicPartition("tp1", 1);
+        TopicPartition tp2 = new TopicPartition("tp2", 2);
+        List<TopicPartition> partitions = Arrays.asList(tp1, tp2);
 
-        oldAssignor.onAssignment(newAssignment, new ConsumerGroupMetadata("", 1, "", Optional.empty()));
+        adaptedAssignor.onAssignment(new Assignment(partitions), new ConsumerGroupMetadata("", 1, "", Optional.empty()));
+
+        assertEquals(oldAssignor.partitions, partitions);
     }
 
     @Test
     public void testAssign() {
-        classNames = Arrays.asList(OldPartitionAssignor.class.getName(), NewPartitionAssignor.class.getName());
-        List<ConsumerPartitionAssignor> assignors = getAssignorInstances(classNames, Collections.emptyMap());
-
-        ConsumerPartitionAssignor oldAssignor = assignors.get(0);
-        ConsumerPartitionAssignor newAssignor = assignors.get(1);
+        ConsumerPartitionAssignor adaptedAssignor = new PartitionAssignorAdapter(new OldPartitionAssignor());
 
         Map<String, Subscription> subscriptions = new HashMap<>();
         subscriptions.put("C1", new Subscription(Arrays.asList("topic1")));
@@ -126,16 +126,11 @@ public class PartitionAssignorAdapterTest {
         subscriptions.put("C3", new Subscription(Arrays.asList("topic2", "topic3")));
         GroupSubscription groupSubscription = new GroupSubscription(subscriptions);
 
-        Map<String, Assignment> oldAssignments = oldAssignor.assign(null, groupSubscription).groupAssignment();
-        Map<String, Assignment> newAssignments = newAssignor.assign(null, groupSubscription).groupAssignment();
+        Map<String, Assignment> assignments = adaptedAssignor.assign(null, groupSubscription).groupAssignment();
 
-        for (Map.Entry<String, Assignment> entry : oldAssignments.entrySet()) {
-            Assignment oldAssignment = entry.getValue();
-            Assignment newAssignment = newAssignments.get(entry.getKey());
-
-            assertEquals(oldAssignment.partitions(), newAssignment.partitions());
-            assertEquals(oldAssignment.userData(), newAssignment.userData());
-        }
+        assertEquals(assignments.get("C1").partitions(), Arrays.asList(new TopicPartition("topic1", 1)));
+        assertEquals(assignments.get("C2").partitions(), Arrays.asList(new TopicPartition("topic1", 1), new TopicPartition("topic2", 1)));
+        assertEquals(assignments.get("C3").partitions(), Arrays.asList(new TopicPartition("topic2", 1), new TopicPartition("topic3", 1)));
     }
 
     /*
@@ -143,6 +138,8 @@ public class PartitionAssignorAdapterTest {
      */
     @SuppressWarnings("deprecation")
     public static class OldPartitionAssignor implements PartitionAssignor {
+
+        List<TopicPartition> partitions = null;
 
         @Override
         public Subscription subscription(Set<String> topics) {
@@ -164,39 +161,13 @@ public class PartitionAssignorAdapterTest {
 
         @Override
         public void onAssignment(Assignment assignment) {
-            // no state to keep
+            partitions = assignment.partitions();
         }
 
         @Override
         public String name() {
             return "old-assignor";
         }
-    }
-
-    /*
-     * Dummy assignor just gives each consumer partition 1 of each topic it's subscribed to
-     */
-    public static class NewPartitionAssignor implements ConsumerPartitionAssignor {
-
-        @Override
-        public GroupAssignment assign(Cluster metadata, GroupSubscription groupSubscription) {
-            Map<String, Subscription> subscriptions = groupSubscription.groupSubscription();
-            Map<String, Assignment> assignments = new HashMap<>();
-            for (Map.Entry<String, Subscription> entry : subscriptions.entrySet()) {
-                List<TopicPartition> partitions = new ArrayList<>();
-                for (String topic : entry.getValue().topics()) {
-                    partitions.add(new TopicPartition(topic, 1));
-                }
-                assignments.put(entry.getKey(), new Assignment(partitions));
-            }
-            return new GroupAssignment(assignments);
-        }
-
-        @Override
-        public String name() {
-            return "new-assignor";
-        }
-
     }
 
 }
