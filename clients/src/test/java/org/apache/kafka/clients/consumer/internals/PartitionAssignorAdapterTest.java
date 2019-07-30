@@ -27,9 +27,11 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor;
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.Assignment;
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.GroupSubscription;
@@ -105,9 +107,9 @@ public class PartitionAssignorAdapterTest {
         ConsumerPartitionAssignor oldAssignor = getAssignorInstances(classNames, Collections.emptyMap()).get(0);
 
         TopicPartition tp = new TopicPartition("tp", 1);
-        Assignment newAssignment = new Assignment(Arrays.asList(tp), null);
+        Assignment newAssignment = new Assignment(Arrays.asList(tp));
 
-        oldAssignor.onAssignment(newAssignment, null);
+        oldAssignor.onAssignment(newAssignment, new ConsumerGroupMetadata("", 1, "", Optional.empty()));
     }
 
     @Test
