@@ -3167,7 +3167,6 @@ public class KafkaAdminClient extends AdminClient {
             public void handleResponse(AbstractResponse abstractResponse) {
                 AlterPartitionReassignmentsResponse response = (AlterPartitionReassignmentsResponse) abstractResponse;
                 Map<TopicPartition, ApiException> errors = new HashMap<>();
-                int expectedResponsesCount = topicsToReassignments.values().stream().mapToInt(Map::size).sum();
                 int receivedResponsesCount = 0;
 
                 Errors topLevelError = Errors.forCode(response.data().errorCode());
@@ -3191,19 +3190,22 @@ public class KafkaAdminClient extends AdminClient {
                         break;
                 }
 
-                if (errors.values().stream().noneMatch(Objects::nonNull)
-                        && receivedResponsesCount != expectedResponsesCount) {
-                    String quantifier = receivedResponsesCount > expectedResponsesCount ? "many" : "less";
-                    throw new UnknownServerException("The server returned too " + quantifier + " results." +
-                            "Expected " + expectedResponsesCount + " but received " + receivedResponsesCount);
-                }
-
+                assertResponseCountMatch(errors, receivedResponsesCount);
                 for (Map.Entry<TopicPartition, ApiException> entry : errors.entrySet()) {
                     ApiException exception = entry.getValue();
                     if (exception == null)
                         futures.get(entry.getKey()).complete(null);
                     else
                         futures.get(entry.getKey()).completeExceptionally(exception);
+                }
+            }
+
+            private void assertResponseCountMatch(Map<TopicPartition, ApiException> errors, int receivedResponsesCount) {
+                int expectedResponsesCount = topicsToReassignments.values().stream().mapToInt(Map::size).sum();
+                if (errors.values().stream().noneMatch(Objects::nonNull) && receivedResponsesCount != expectedResponsesCount) {
+                    String quantifier = receivedResponsesCount > expectedResponsesCount ? "many" : "less";
+                    throw new UnknownServerException("The server returned too " + quantifier + " results." +
+                        "Expected " + expectedResponsesCount + " but received " + receivedResponsesCount);
                 }
             }
 
