@@ -179,19 +179,21 @@ public interface ConsumerPartitionAssignor {
     }
 
     /**
-     * {@link RebalanceProtocol#EAGER} rebalance protocol will let a consumer to always revoke all its owned partitions
-     * before participating the rebalance event, and therefore allows a complete reshuffling of the assignment.
+     * The rebalance protocol defines partition assignment and revocation semantics. The purpose is to establish a
+     * consistent set of rules that all consumers in a group follow in order to transfer ownership of a partition.
+     * {@link ConsumerPartitionAssignor} implementors can claim supporting one or more rebalance protocols via the
+     * {@link ConsumerPartitionAssignor#supportedProtocols()}, and it is their responsible to respect the rules
+     * of those protocols in their {@link ConsumerPartitionAssignor#assign(Cluster, GroupSubscription)} implementations.
+     * Failures to follow the rules of the supported protocols would lead to runtime error or undefined behavior.
      *
-     * {@link RebalanceProtocol#COOPERATIVE} rebalance protocol will let a consumer to retain its currently assigned
-     * partitions before participating the rebalance event, as a result the assignor would not reassign its owned
-     * partitions immediately but may only indicate it to revoke first before the next rebalance event, and therefore is
-     * suitable for cooperative adjustments of assignments.
-     * {@link ConsumerPartitionAssignor} implementors who claim to support {@link RebalanceProtocol#COOPERATIVE} protocol
-     * from {@link ConsumerPartitionAssignor#supportedProtocols()} needs to make sure its
-     * {@link ConsumerPartitionAssignor#assign(Cluster, GroupSubscription)} logic respects the specified
-     * {@link Subscription#ownedPartitions()} list and not reassign them to other consumers; instead it can decide
-     * whether to remove them from the new assignment of the current owner consumer so that they can be revoked first
-     * before reassigned to other consumers in future rebalances.
+     * The {@link RebalanceProtocol#EAGER} rebalance protocol requires a consumer to always revoke all its owned
+     * partitions before participating in a rebalance event. It therefore allows a complete reshuffling of the assignment.
+     *
+     * {@link RebalanceProtocol#COOPERATIVE} rebalance protocol allows a consumer to retain its currently owned
+     * partitions before participating in a rebalance event. The assignor should not reassign any owned partitions
+     * immediately, but instead may indicate consumers the need for partition revocation so that the revoked
+     * partitions can be reassigned to other consumers in the next rebalance event. This is designed for sticky assignment
+     * logic which attempts to minimize partition reassignment with cooperative adjustments.
      */
     enum RebalanceProtocol {
         EAGER((byte) 0), COOPERATIVE((byte) 1);

@@ -378,8 +378,8 @@ public abstract class AbstractCoordinator implements Closeable {
             // refresh which changes the matched subscription set) can occur while another rebalance is
             // still in progress.
             if (needsJoinPrepare) {
-                onJoinPrepare(generation.generationId, generation.memberId);
                 needsJoinPrepare = false;
+                onJoinPrepare(generation.generationId, generation.memberId);
             }
 
             final RequestFuture<ByteBuffer> future = initiateJoinGroup();
@@ -861,6 +861,11 @@ public abstract class AbstractCoordinator implements Closeable {
      * @throws KafkaException if the callback throws exception
      */
     public synchronized RequestFuture<Void> maybeLeaveGroup(String leaveReason) {
+        // we need to reset generation first in order to trigger
+        // the rebalance callback if necessary, before sending the leave group
+        // which may trigger the rebalance
+        resetGeneration("consumer proactively leaving group", false);
+
         RequestFuture<Void> future = null;
         // Starting from 2.3, only dynamic members will send LeaveGroupRequest to the broker,
         // consumer with valid group.instance.id is viewed as static member that never sends LeaveGroup,
@@ -880,8 +885,6 @@ public abstract class AbstractCoordinator implements Closeable {
                     .compose(new LeaveGroupResponseHandler());
             client.pollNoWakeup();
         }
-
-        resetGeneration("consumer proactively leaving group", false);
 
         return future;
     }

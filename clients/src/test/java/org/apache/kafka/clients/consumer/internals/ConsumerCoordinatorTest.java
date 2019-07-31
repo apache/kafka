@@ -101,6 +101,7 @@ import java.util.regex.Pattern;
 import static java.util.Collections.singleton;
 import static java.util.Collections.singletonList;
 import static java.util.Collections.singletonMap;
+import static org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.RebalanceProtocol.COOPERATIVE;
 import static org.apache.kafka.test.TestUtils.toSet;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -202,18 +203,18 @@ public class ConsumerCoordinatorTest {
     public void testSelectRebalanceProtcol() {
         List<ConsumerPartitionAssignor> assignors = new ArrayList<>();
         assignors.add(new MockPartitionAssignor(Collections.singletonList(ConsumerPartitionAssignor.RebalanceProtocol.EAGER)));
-        assignors.add(new MockPartitionAssignor(Collections.singletonList(ConsumerPartitionAssignor.RebalanceProtocol.COOPERATIVE)));
+        assignors.add(new MockPartitionAssignor(Collections.singletonList(COOPERATIVE)));
 
         // no commonly supported protocols
         assertThrows(IllegalArgumentException.class, () -> buildCoordinator(rebalanceConfig, new Metrics(), assignors, false));
 
         assignors.clear();
-        assignors.add(new MockPartitionAssignor(Arrays.asList(ConsumerPartitionAssignor.RebalanceProtocol.EAGER, ConsumerPartitionAssignor.RebalanceProtocol.COOPERATIVE)));
-        assignors.add(new MockPartitionAssignor(Arrays.asList(ConsumerPartitionAssignor.RebalanceProtocol.EAGER, ConsumerPartitionAssignor.RebalanceProtocol.COOPERATIVE)));
+        assignors.add(new MockPartitionAssignor(Arrays.asList(ConsumerPartitionAssignor.RebalanceProtocol.EAGER, COOPERATIVE)));
+        assignors.add(new MockPartitionAssignor(Arrays.asList(ConsumerPartitionAssignor.RebalanceProtocol.EAGER, COOPERATIVE)));
 
         // select higher indexed (more advanced) protocols
         try (ConsumerCoordinator coordinator = buildCoordinator(rebalanceConfig, new Metrics(), assignors, false)) {
-            assertEquals(ConsumerPartitionAssignor.RebalanceProtocol.COOPERATIVE, coordinator.getProtocol());
+            assertEquals(COOPERATIVE, coordinator.getProtocol());
         }
     }
 
@@ -701,6 +702,7 @@ public class ConsumerCoordinatorTest {
         Collection<TopicPartition> lost = Collections.singleton(t2p);
         revoked = getRevoked(newAssigned, oldAssigned);
         revoked.removeAll(lost);
+        assertEquals(protocol == COOPERATIVE, revoked.isEmpty());
         revokedCount += revoked.isEmpty() ? 0 : 1;
         Collection<TopicPartition> added = getAdded(newAssigned, oldAssigned);
 

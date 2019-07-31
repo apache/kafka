@@ -18,6 +18,7 @@ package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.GroupRebalanceConfig;
 import org.apache.kafka.clients.consumer.CommitFailedException;
+import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor;
 import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.GroupSubscription;
@@ -434,8 +435,8 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
         if (subscriptions.partitionsAutoAssigned()) {
             if (protocol == null) {
-                throw new IllegalStateException("User configured ConsumerConfig#PARTITION_ASSIGNMENT_STRATEGY_CONFIG to empty " +
-                    "while trying to subscribe for group protocol to auto assign partitions");
+                throw new IllegalStateException("User configured " + ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG +
+                    " to empty while trying to subscribe for group protocol to auto assign partitions");
             }
             // Always update the heartbeat last poll time so that the heartbeat thread does not leave the
             // group proactively due to application inactivity even if (say) the coordinator cannot be found.
@@ -634,15 +635,15 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
         // execute the user's callback before rebalance
         final Set<TopicPartition> revokedPartitions;
-        final AtomicReference<Exception> firstException = new AtomicReference<>(null);
 
         // note we should only change the assignment AFTER the callback is triggered
         // so that users can still access the pre-assigned partitions to commit offsets etc.
+        Exception exception = null;
         switch (protocol) {
             case EAGER:
                 // revoke all partitions
                 revokedPartitions = new HashSet<>(subscriptions.assignedPartitions());
-                firstException.compareAndSet(null, maybeInvokePartitionsRevoked(revokedPartitions));
+                exception = maybeInvokePartitionsRevoked(revokedPartitions);
 
                 subscriptions.assignFromSubscribed(Collections.emptySet());
 
@@ -656,7 +657,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                     .collect(Collectors.toSet());
 
                 if (!revokedPartitions.isEmpty()) {
-                    firstException.compareAndSet(null, maybeInvokePartitionsRevoked(revokedPartitions));
+                    exception = maybeInvokePartitionsRevoked(revokedPartitions);
 
                     ownedPartitions.removeAll(revokedPartitions);
                     subscriptions.assignFromSubscribed(ownedPartitions);
@@ -668,8 +669,8 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         isLeader = false;
         subscriptions.resetGroupSubscription();
 
-        if (firstException.get() != null) {
-            throw new KafkaException("User rebalance callback throws an error", firstException.get());
+        if (exception != null) {
+            throw new KafkaException("User rebalance callback throws an error", exception);
         }
     }
 
