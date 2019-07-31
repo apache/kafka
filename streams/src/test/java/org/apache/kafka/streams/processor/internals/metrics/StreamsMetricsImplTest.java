@@ -27,6 +27,7 @@ import org.easymock.EasyMock;
 import org.easymock.EasyMockSupport;
 import org.junit.Test;
 
+import java.time.Duration;
 import java.util.Collections;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
@@ -261,27 +262,38 @@ public class StreamsMetricsImplTest extends EasyMockSupport {
     @Test
     public void shouldAddAmountRateAndSum() {
         StreamsMetricsImpl
-            .addAmountRateAndTotalMetricsToSensor(sensor, group, tags, metricNamePrefix, description1, description2);
+            .addRateOfSumAndSumMetricsToSensor(sensor, group, tags, metricNamePrefix, description1, description2);
 
-        verifyAmountRateMetric(description1);
-        time.sleep(60000); // advance mock time to get empty samples in the metric for next verification
-        verifySumMetric(description2);
+        final double valueToRecord1 = 18.0;
+        final double valueToRecord2 = 72.0;
+        final long defaultWindowSizeInSeconds = Duration.ofMillis(new MetricConfig().timeWindowMs()).getSeconds();
+        final double expectedRateMetricValue = (valueToRecord1 + valueToRecord2) / defaultWindowSizeInSeconds;
+        verifyMetric(metricNamePrefix + "-rate", description1, valueToRecord1, valueToRecord2, expectedRateMetricValue);
+        final double expectedSumMetricValue = 2 * valueToRecord1 + 2 * valueToRecord2; // values are recorded once for each metric verification
+        verifyMetric(metricNamePrefix + "-total", description2, valueToRecord1, valueToRecord2, expectedSumMetricValue);
         assertThat(metrics.metrics().size(), equalTo(2 + 1)); // one metric is added automatically in the constructor of Metrics
     }
 
     @Test
     public void shouldAddSum() {
-        StreamsMetricsImpl.addTotalMetricToSensor(sensor, group, tags, metricNamePrefix, description1);
+        StreamsMetricsImpl.addSumMetricToSensor(sensor, group, tags, metricNamePrefix, description1);
 
-        verifySumMetric(description1);
+        final double valueToRecord1 = 18.0;
+        final double valueToRecord2 = 42.0;
+        final double expectedSumMetricValue = valueToRecord1 + valueToRecord2;
+        verifyMetric(metricNamePrefix + "-total", description1, valueToRecord1, valueToRecord2, expectedSumMetricValue);
         assertThat(metrics.metrics().size(), equalTo(1 + 1)); // one metric is added automatically in the constructor of Metrics
     }
 
     @Test
     public void shouldAddAmountRate() {
-        StreamsMetricsImpl.addAmountRateMetricToSensor(sensor, group, tags, metricNamePrefix, description1);
+        StreamsMetricsImpl.addRateOfSumMetricToSensor(sensor, group, tags, metricNamePrefix, description1);
 
-        verifyAmountRateMetric(description1);
+        final double valueToRecord1 = 18.0;
+        final double valueToRecord2 = 72.0;
+        final long defaultWindowSizeInSeconds = Duration.ofMillis(new MetricConfig().timeWindowMs()).getSeconds();
+        final double expectedRateMetricValue = (valueToRecord1 + valueToRecord2) / defaultWindowSizeInSeconds;
+        verifyMetric(metricNamePrefix + "-rate", description1, valueToRecord1, valueToRecord2, expectedRateMetricValue);
         assertThat(metrics.metrics().size(), equalTo(1 + 1)); // one metric is added automatically in the constructor of Metrics
     }
 
@@ -306,46 +318,29 @@ public class StreamsMetricsImplTest extends EasyMockSupport {
         StreamsMetricsImpl
             .addAvgAndSumMetricsToSensor(sensor, group, tags, metricNamePrefix, description1, description2);
 
-        verifyAvgMetric(description1);
-        time.sleep(60000); // advance mock time to get empty samples in the metric for next verification
-        verifySumMetric(description2);
+        final double valueToRecord1 = 18.0;
+        final double valueToRecord2 = 42.0;
+        final double expectedAvgMetricValue = (valueToRecord1 + valueToRecord2) / 2;
+        verifyMetric(metricNamePrefix + "-avg", description1, valueToRecord1, valueToRecord2, expectedAvgMetricValue);
+        final double expectedSumMetricValue = 2 * valueToRecord1 + 2 * valueToRecord2; // values are recorded once for each metric verification
+        verifyMetric(metricNamePrefix + "-total", description2, valueToRecord1, valueToRecord2, expectedSumMetricValue);
         assertThat(metrics.metrics().size(), equalTo(2 + 1)); // one metric is added automatically in the constructor of Metrics
     }
 
-    private void verifySumMetric(final String description) {
+    private void verifyMetric(final String name,
+                              final String description,
+                              final double valueToRecord1,
+                              final double valueToRecord2,
+                              final double expectedMetricValue) {
         final KafkaMetric metric = metrics
-            .metric(new MetricName(metricNamePrefix + "-total", group, description, tags));
+            .metric(new MetricName(name, group, description, tags));
         assertThat(metric, is(notNullValue()));
         assertThat(metric.metricName().description(), equalTo(description));
-        final double value1 = 42.0;
-        sensor.record(value1, time.milliseconds());
-        final double value2 = 18.0;
-        sensor.record(value2, time.milliseconds());
+        sensor.record(valueToRecord1, time.milliseconds());
+        sensor.record(valueToRecord2, time.milliseconds());
         assertThat(
             metric.measurable().measure(new MetricConfig(), time.milliseconds()),
-            equalTo(value1 + value2)
+            equalTo(expectedMetricValue)
         );
-    }
-
-    private void verifyAmountRateMetric(final String description) {
-        final KafkaMetric rateMetric = metrics
-            .metric(new MetricName(metricNamePrefix + "-rate", group, description, tags));
-        assertThat(rateMetric, is(notNullValue()));
-        final double value1 = 72.0;
-        sensor.record(value1, time.milliseconds());
-        final double value2 = 18.0;
-        sensor.record(value2, time.milliseconds());
-        assertThat(rateMetric.measurable().measure(new MetricConfig(), time.milliseconds()), equalTo(3.0));
-    }
-
-    private void verifyAvgMetric(final String description) {
-        final KafkaMetric avgMetric = metrics
-            .metric(new MetricName(metricNamePrefix + "-avg", group, description, tags));
-        assertThat(avgMetric, is(notNullValue()));
-        final double value1 = 42.0;
-        sensor.record(value1, time.milliseconds());
-        final double value2 = 18.0;
-        sensor.record(value2, time.milliseconds());
-        assertThat(avgMetric.measurable().measure(new MetricConfig(), time.milliseconds()), equalTo(30.0));
     }
 }

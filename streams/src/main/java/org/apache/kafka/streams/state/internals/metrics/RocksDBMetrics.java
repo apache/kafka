@@ -25,10 +25,10 @@ import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetric
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.MIN_SUFFIX;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.RATIO_SUFFIX;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.STATE_LEVEL_GROUP;
-import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addAmountRateMetricToSensor;
-import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addAmountRateAndTotalMetricsToSensor;
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addRateOfSumMetricToSensor;
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addRateOfSumAndSumMetricsToSensor;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addAvgAndSumMetricsToSensor;
-import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addTotalMetricToSensor;
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addSumMetricToSensor;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addValueMetricToSensor;
 
 public class RocksDBMetrics {
@@ -65,7 +65,7 @@ public class RocksDBMetrics {
         "Total number of bytes read from the RocksDB state store";
     private static final String MEMTABLE_BYTES_FLUSHED_RATE_DESCRIPTION =
         "Average number of bytes flushed per second from the memtable to disk";
-    private static final String MEMTABLE_BYTES_FLUSHED_AVG_DESCRIPTION =
+    private static final String MEMTABLE_BYTES_FLUSHED_TOTAL_DESCRIPTION =
         "Total number of bytes flushed from the memtable to disk";
     private static final String MEMTABLE_HIT_RATIO_DESCRIPTION =
         "Ratio of memtable hits relative to all lookups to the memtable";
@@ -75,7 +75,7 @@ public class RocksDBMetrics {
         "Minimum time spent on flushing the memtable to disk in ms";
     private static final String MEMTABLE_FLUSH_TIME_MAX_DESCRIPTION =
         "Maximum time spent on flushing the memtable to disk in ms";
-    private static final String WRITE_STALL_DURATION_AVG_DESCRIPTION = "Moving average duration of write stalls in ms";
+    private static final String WRITE_STALL_DURATION_AVG_DESCRIPTION = "Average duration of write stalls in ms";
     private static final String WRITE_STALL_DURATION_TOTAL_DESCRIPTION = "Total duration of write stalls in ms";
     private static final String BLOCK_CACHE_DATA_HIT_RATIO_DESCRIPTION =
         "Ratio of block cache hits for data relative to all lookups for data to the block cache";
@@ -118,7 +118,7 @@ public class RocksDBMetrics {
     public static Sensor bytesWrittenToDatabaseSensor(final StreamsMetricsImpl streamsMetrics,
                                                       final RocksDBMetricContext metricContext) {
         final Sensor sensor = createSensor(streamsMetrics, metricContext, BYTES_WRITTEN_TO_DB);
-        addAmountRateAndTotalMetricsToSensor(
+        addRateOfSumAndSumMetricsToSensor(
             sensor,
             STATE_LEVEL_GROUP,
             streamsMetrics
@@ -133,7 +133,7 @@ public class RocksDBMetrics {
     public static Sensor bytesReadFromDatabaseSensor(final StreamsMetricsImpl streamsMetrics,
                                                      final RocksDBMetricContext metricContext) {
         final Sensor sensor = createSensor(streamsMetrics, metricContext, BYTES_READ_FROM_DB);
-        addAmountRateAndTotalMetricsToSensor(
+        addRateOfSumAndSumMetricsToSensor(
             sensor,
             STATE_LEVEL_GROUP,
             streamsMetrics
@@ -148,14 +148,14 @@ public class RocksDBMetrics {
     public static Sensor memtableBytesFlushedSensor(final StreamsMetricsImpl streamsMetrics,
                                                     final RocksDBMetricContext metricContext) {
         final Sensor sensor = createSensor(streamsMetrics, metricContext, MEMTABLE_BYTES_FLUSHED);
-        addAmountRateAndTotalMetricsToSensor(
+        addRateOfSumAndSumMetricsToSensor(
             sensor,
             STATE_LEVEL_GROUP,
             streamsMetrics
                 .storeLevelTagMap(metricContext.taskName(), metricContext.storeType(), metricContext.storeName()),
             MEMTABLE_BYTES_FLUSHED,
             MEMTABLE_BYTES_FLUSHED_RATE_DESCRIPTION,
-            MEMTABLE_BYTES_FLUSHED_AVG_DESCRIPTION
+            MEMTABLE_BYTES_FLUSHED_TOTAL_DESCRIPTION
         );
         return sensor;
     }
@@ -275,7 +275,7 @@ public class RocksDBMetrics {
     public static Sensor bytesReadDuringCompactionSensor(final StreamsMetricsImpl streamsMetrics,
                                                          final RocksDBMetricContext metricContext) {
         final Sensor sensor = createSensor(streamsMetrics, metricContext, BYTES_READ_DURING_COMPACTION);
-        addAmountRateMetricToSensor(
+        addRateOfSumMetricToSensor(
             sensor,
             STATE_LEVEL_GROUP,
             streamsMetrics
@@ -289,7 +289,7 @@ public class RocksDBMetrics {
     public static Sensor bytesWrittenDuringCompactionSensor(final StreamsMetricsImpl streamsMetrics,
                                                             final RocksDBMetricContext metricContext) {
         final Sensor sensor = createSensor(streamsMetrics, metricContext, BYTES_WRITTEN_DURING_COMPACTION);
-        addAmountRateMetricToSensor(
+        addRateOfSumMetricToSensor(
             sensor,
             STATE_LEVEL_GROUP,
             streamsMetrics
@@ -359,7 +359,7 @@ public class RocksDBMetrics {
     public static Sensor numberOfFileErrorsSensor(final StreamsMetricsImpl streamsMetrics,
                                                   final RocksDBMetricContext metricContext) {
         final Sensor sensor = createSensor(streamsMetrics, metricContext, NUMBER_OF_FILE_ERRORS);
-        addTotalMetricToSensor(
+        addSumMetricToSensor(
             sensor,
             STATE_LEVEL_GROUP,
             streamsMetrics

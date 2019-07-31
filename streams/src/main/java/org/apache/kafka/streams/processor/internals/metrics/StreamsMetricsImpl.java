@@ -23,11 +23,12 @@ import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.Sensor.RecordingLevel;
 import org.apache.kafka.common.metrics.stats.Avg;
 import org.apache.kafka.common.metrics.stats.CumulativeCount;
+import org.apache.kafka.common.metrics.stats.CumulativeSum;
 import org.apache.kafka.common.metrics.stats.Max;
 import org.apache.kafka.common.metrics.stats.Rate;
-import org.apache.kafka.common.metrics.stats.Sum;
 import org.apache.kafka.common.metrics.stats.Value;
 import org.apache.kafka.common.metrics.stats.WindowedCount;
+import org.apache.kafka.common.metrics.stats.WindowedSum;
 import org.apache.kafka.streams.StreamsMetrics;
 
 import java.util.Arrays;
@@ -480,31 +481,31 @@ public class StreamsMetricsImpl implements StreamsMetrics {
         );
     }
 
-    public static void addAmountRateAndTotalMetricsToSensor(final Sensor sensor,
-                                                            final String group,
-                                                            final Map<String, String> tags,
-                                                            final String operation,
-                                                            final String descriptionOfRate,
-                                                            final String descriptionOfTotal) {
-        addAmountRateMetricToSensor(sensor, group, tags, operation, descriptionOfRate);
-        addTotalMetricToSensor(sensor, group, tags, operation, descriptionOfTotal);
+    public static void addRateOfSumAndSumMetricsToSensor(final Sensor sensor,
+                                                         final String group,
+                                                         final Map<String, String> tags,
+                                                         final String operation,
+                                                         final String descriptionOfRate,
+                                                         final String descriptionOfTotal) {
+        addRateOfSumMetricToSensor(sensor, group, tags, operation, descriptionOfRate);
+        addSumMetricToSensor(sensor, group, tags, operation, descriptionOfTotal);
     }
 
-    public static void addAmountRateMetricToSensor(final Sensor sensor,
-                                                   final String group,
-                                                   final Map<String, String> tags,
-                                                   final String operation,
-                                                   final String description) {
+    public static void addRateOfSumMetricToSensor(final Sensor sensor,
+                                                  final String group,
+                                                  final Map<String, String> tags,
+                                                  final String operation,
+                                                  final String description) {
         sensor.add(new MetricName(operation + RATE_SUFFIX, group, description, tags),
-                   new Rate(TimeUnit.SECONDS, new Sum()));
+                   new Rate(TimeUnit.SECONDS, new WindowedSum()));
     }
 
-    public static void addTotalMetricToSensor(final Sensor sensor,
-                                              final String group,
-                                              final Map<String, String> tags,
-                                              final String operation,
-                                              final String description) {
-        sensor.add(new MetricName(operation + TOTAL_SUFFIX, group, description, tags), new Sum());
+    public static void addSumMetricToSensor(final Sensor sensor,
+                                            final String group,
+                                            final Map<String, String> tags,
+                                            final String operation,
+                                            final String description) {
+        sensor.add(new MetricName(operation + TOTAL_SUFFIX, group, description, tags), new CumulativeSum());
     }
 
     public static void addValueMetricToSensor(final Sensor sensor,
@@ -522,7 +523,10 @@ public class StreamsMetricsImpl implements StreamsMetrics {
                                                    final String descriptionOfAvg,
                                                    final String descriptionOfTotal) {
         sensor.add(new MetricName(metricNamePrefix + AVG_SUFFIX, group, descriptionOfAvg, tags), new Avg());
-        sensor.add(new MetricName(metricNamePrefix + TOTAL_SUFFIX, group, descriptionOfTotal, tags), new Sum());
+        sensor.add(
+            new MetricName(metricNamePrefix + TOTAL_SUFFIX, group, descriptionOfTotal, tags),
+            new CumulativeSum()
+        );
     }
 
     /**

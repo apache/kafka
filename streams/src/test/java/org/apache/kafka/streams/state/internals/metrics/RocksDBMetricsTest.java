@@ -127,7 +127,7 @@ public class RocksDBMetricsTest {
     @Test
     public void shouldGetWriteStallDurationSensor() {
         final String metricNamePrefix = "write-stall-duration";
-        final String descriptionOfAvg = "Moving average duration of write stalls in ms";
+        final String descriptionOfAvg = "Average duration of write stalls in ms";
         final String descriptionOfTotal = "Total duration of write stalls in ms";
         setupStreamsMetricsMock(metricNamePrefix);
         StreamsMetricsImpl.addAvgAndSumMetricsToSensor(
@@ -213,7 +213,7 @@ public class RocksDBMetricsTest {
         final String metricNamePrefix = "number-file-errors";
         final String description = "Total number of file errors occurred";
         setupStreamsMetricsMock(metricNamePrefix);
-        StreamsMetricsImpl.addTotalMetricToSensor(sensor, STATE_LEVEL_GROUP, tags, metricNamePrefix, description);
+        StreamsMetricsImpl.addSumMetricToSensor(sensor, STATE_LEVEL_GROUP, tags, metricNamePrefix, description);
 
         replayCallAndVerify(RocksDBMetrics::numberOfFileErrorsSensor);
     }
@@ -223,7 +223,7 @@ public class RocksDBMetricsTest {
                                           final String descriptionOfRate,
                                           final SensorCreator sensorCreator) {
         setupStreamsMetricsMock(metricNamePrefix);
-        StreamsMetricsImpl.addAmountRateAndTotalMetricsToSensor(
+        StreamsMetricsImpl.addRateOfSumAndSumMetricsToSensor(
             sensor,
             STATE_LEVEL_GROUP,
             tags,
@@ -239,7 +239,7 @@ public class RocksDBMetricsTest {
                                   final String description,
                                   final SensorCreator sensorCreator) {
         setupStreamsMetricsMock(metricNamePrefix);
-        StreamsMetricsImpl.addAmountRateMetricToSensor(sensor, STATE_LEVEL_GROUP, tags, metricNamePrefix, description);
+        StreamsMetricsImpl.addRateOfSumMetricToSensor(sensor, STATE_LEVEL_GROUP, tags, metricNamePrefix, description);
 
         replayCallAndVerify(sensorCreator);
     }
