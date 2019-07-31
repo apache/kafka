@@ -180,6 +180,15 @@ class BrokerTopicMetrics(name: Option[String]) extends KafkaMetricsGroup {
   def produceMessageConversionsRate = metricTypeMap.getAndMaybePut(BrokerTopicStats.ProduceMessageConversionsPerSec,
     newMeter(BrokerTopicStats.ProduceMessageConversionsPerSec, "requests", TimeUnit.SECONDS, tags))
 
+  def noKeyCompactedTopicRecordsPerSec = metricTypeMap.getAndMaybePut(BrokerTopicStats.NoKeyCompactedTopicRecordsPerSec,
+    newMeter(BrokerTopicStats.NoKeyCompactedTopicRecordsPerSec, "requests", TimeUnit.SECONDS, tags))
+  def invalidMagicNumberRecordsPerSec = metricTypeMap.getAndMaybePut(BrokerTopicStats.InvalidMagicNumberRecordsPerSec,
+    newMeter(BrokerTopicStats.InvalidMagicNumberRecordsPerSec, "requests", TimeUnit.SECONDS, tags))
+  def invalidMessageCrcRecordsPerSec = metricTypeMap.getAndMaybePut(BrokerTopicStats.InvalidMessageCrcRecordsPerSec,
+    newMeter(BrokerTopicStats.InvalidMessageCrcRecordsPerSec, "requests", TimeUnit.SECONDS, tags))
+  def nonIncreasingOffsetRecordsPerSec = metricTypeMap.getAndMaybePut(BrokerTopicStats.NonIncreasingOffsetRecordsPerSec,
+    newMeter(BrokerTopicStats.NonIncreasingOffsetRecordsPerSec, "requests", TimeUnit.SECONDS, tags))
+
   // this method helps check with metricTypeMap first before deleting a metric
   def removeMetricHelper(metricType: String, tags: scala.collection.Map[String, String]): Unit = {
     val metric: Meter = metricTypeMap.remove(metricType)
@@ -203,6 +212,10 @@ class BrokerTopicMetrics(name: Option[String]) extends KafkaMetricsGroup {
     removeMetricHelper(BrokerTopicStats.TotalFetchRequestsPerSec, tags)
     removeMetricHelper(BrokerTopicStats.FetchMessageConversionsPerSec, tags)
     removeMetricHelper(BrokerTopicStats.ProduceMessageConversionsPerSec, tags)
+    removeMetricHelper(BrokerTopicStats.NoKeyCompactedTopicRecordsPerSec, tags)
+    removeMetricHelper(BrokerTopicStats.InvalidMagicNumberRecordsPerSec, tags)
+    removeMetricHelper(BrokerTopicStats.InvalidMessageCrcRecordsPerSec, tags)
+    removeMetricHelper(BrokerTopicStats.NonIncreasingOffsetRecordsPerSec, tags)
   }
 }
 
@@ -219,6 +232,13 @@ object BrokerTopicStats {
   val TotalFetchRequestsPerSec = "TotalFetchRequestsPerSec"
   val FetchMessageConversionsPerSec = "FetchMessageConversionsPerSec"
   val ProduceMessageConversionsPerSec = "ProduceMessageConversionsPerSec"
+
+  // These following topics are for LogValidator for better debugging on failed records
+  val NoKeyCompactedTopicRecordsPerSec = "NoKeyCompactedTopicRecordsPerSec"
+  val InvalidMagicNumberRecordsPerSec = "InvalidMagicNumberRecordsPerSec"
+  val InvalidMessageCrcRecordsPerSec = "InvalidMessageCrcRecordsPerSec"
+  val NonIncreasingOffsetRecordsPerSec = "NonIncreasingOffsetRecordsPerSec"
+
   private val valueFactory = (k: String) => new BrokerTopicMetrics(Some(k))
 }
 

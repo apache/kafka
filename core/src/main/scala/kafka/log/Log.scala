@@ -1034,6 +1034,7 @@ class Log(@volatile var dir: File,
           val now = time.milliseconds
           val validateAndOffsetAssignResult = try {
             LogValidator.validateMessagesAndAssignOffsets(validRecords,
+              topicPartition,
               offset,
               time,
               now,
@@ -1045,7 +1046,8 @@ class Log(@volatile var dir: File,
               config.messageTimestampDifferenceMaxMs,
               leaderEpoch,
               isFromClient,
-              interBrokerProtocolVersion)
+              interBrokerProtocolVersion,
+              brokerTopicStats)
           } catch {
             case e: IOException =>
               throw new KafkaException(s"Error validating messages while appending to log $name", e)
@@ -1350,7 +1352,13 @@ class Log(@volatile var dir: File,
       }
 
       // check the validity of the message by checking CRC
-      batch.ensureValid()
+      try {
+        batch.ensureValid()
+      } catch {
+        case e: InvalidRecordException =>
+          brokerTopicStats.topicStats(topicPartition.topic).invalidMessageCrcRecordsPerSec.mark()
+          throw e
+      }
 
       if (batch.maxTimestamp > maxTimestamp) {
         maxTimestamp = batch.maxTimestamp
