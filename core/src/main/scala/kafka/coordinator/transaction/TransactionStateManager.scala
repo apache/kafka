@@ -101,14 +101,12 @@ class TransactionStateManager(brokerId: Int,
   private val metricConfig: MetricConfig = new MetricConfig().samples(1)
   private val partitionLoadSensor = metrics.sensor("PartitionLoadTime", metricConfig)
 
-  private val partitionMaxMetricName = metrics.metricName("partition-load-time-max",
+  partitionLoadSensor.add(metrics.metricName("partition-load-time-max",
     "transaction-coordinator-metrics",
-    "The max time it took to load the partitions in the last 30sec")
-  partitionLoadSensor.add(partitionMaxMetricName, new Max())
-  private val partitionAvgMetricName = metrics.metricName("partition-load-time-avg",
+    "The max time it took to load the partitions in the last 30sec"), new Max())
+  partitionLoadSensor.add(metrics.metricName("partition-load-time-avg",
     "transaction-coordinator-metrics",
-    "The avg time it took to load the partitions in the last 30sec")
-  partitionLoadSensor.add(partitionAvgMetricName, new Avg())
+    "The avg time it took to load the partitions in the last 30sec"), new Avg())
 
   // visible for testing only
   private[transaction] def addLoadingPartition(partitionId: Int, coordinatorEpoch: Int): Unit = {
