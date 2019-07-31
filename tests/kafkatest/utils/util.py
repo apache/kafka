@@ -163,7 +163,8 @@ def validate_delivery(acked, consumed, idempotence_enabled=False, check_lost_dat
             # These records won't be in the data logs. Tolerate limited data loss for this case.
             if len(missing) < max_truncate_count and len(data_lost) == len(missing):
                msg += "The %s missing messages were not present in Kafka's data files. This suggests data loss " \
-                   "due to truncation. The messages lost: %s\n" % (len(data_lost), str(data_lost))
+                   "due to truncation, which is possible with older message formats and hence are ignored " \
+                   "by this test. The messages lost: %s\n" % (len(data_lost), str(data_lost))
             else:
                 msg = annotate_data_lost(data_lost, msg, len(to_validate))
                 success = False
