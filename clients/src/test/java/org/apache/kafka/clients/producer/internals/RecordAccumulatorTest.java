@@ -927,7 +927,7 @@ public class RecordAccumulatorTest {
             // Only one batch is created because the partition is sticky.
             assertEquals(1, numBatches);
 
-            switchPartition = result.retryForNewBatch;
+            switchPartition = result.abortForNewBatch;
             // We only appended if we do not retry.
             if (!switchPartition) {
                 appends++;
@@ -941,7 +941,7 @@ public class RecordAccumulatorTest {
         switchPartition = false;
         
         // KafkaProducer would call this method in this case, make second batch
-        partitioner.batchCompleted(topic, cluster, partition);
+        partitioner.onNewBatch(topic, cluster, partition);
         partition = partitioner.partition(topic, null, null, "value", value, cluster);
         tp = new TopicPartition(topic, partition);
         accum.append(tp, 0L, null, value, Record.EMPTY_HEADERS, null, maxBlockTimeMs, false);
@@ -959,7 +959,7 @@ public class RecordAccumulatorTest {
             // Only two batches because the new partition is also sticky.
             assertEquals(2, numBatches);
             
-            switchPartition = result.retryForNewBatch;
+            switchPartition = result.abortForNewBatch;
             // We only appended if we do not retry.
             if (!switchPartition) {
                 appends++;

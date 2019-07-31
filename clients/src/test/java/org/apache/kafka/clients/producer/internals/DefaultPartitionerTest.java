@@ -28,23 +28,24 @@ import static java.util.Arrays.asList;
 import static org.junit.Assert.assertEquals;
 
 public class DefaultPartitionerTest {
-    private byte[] keyBytes = "key".getBytes();
-    private Partitioner partitioner = new DefaultPartitioner();
-    private Node node0 = new Node(0, "localhost", 99);
-    private Node node1 = new Node(1, "localhost", 100);
-    private Node node2 = new Node(2, "localhost", 101);
-    private Node[] nodes = new Node[] {node0, node1, node2};
-    private String topic = "test";
+    private final static byte[] KEY_BYTES = "key".getBytes();
+    private final static Node[] NODES = new Node[] {
+        new Node(0, "localhost", 99),
+        new Node(1, "localhost", 100),
+        new Node(12, "localhost", 101)
+    };
+    private final static String TOPIC = "test";
     // Intentionally make the partition list not in partition order to test the edge cases.
-    private List<PartitionInfo> partitions = asList(new PartitionInfo(topic, 1, null, nodes, nodes),
-                                                    new PartitionInfo(topic, 2, node1, nodes, nodes),
-                                                    new PartitionInfo(topic, 0, node0, nodes, nodes));
-    private Cluster cluster = new Cluster("clusterId", asList(node0, node1, node2), partitions,
-            Collections.<String>emptySet(), Collections.<String>emptySet());
+    private final static List<PartitionInfo> PARTITIONS = asList(new PartitionInfo(TOPIC, 1, null, NODES, NODES),
+                                                    new PartitionInfo(TOPIC, 2, NODES[1], NODES, NODES),
+                                                    new PartitionInfo(TOPIC, 0, NODES[0], NODES, NODES));
 
     @Test
     public void testKeyPartitionIsStable() {
-        int partition = partitioner.partition("test",  null, keyBytes, null, null, cluster);
-        assertEquals("Same key should yield same partition", partition, partitioner.partition("test", null, keyBytes, null, null, cluster));
+        final Partitioner partitioner = new DefaultPartitioner();
+        final Cluster cluster = new Cluster("clusterId", asList(NODES), PARTITIONS,
+            Collections.<String>emptySet(), Collections.<String>emptySet());
+        int partition = partitioner.partition("test",  null, KEY_BYTES, null, null, cluster);
+        assertEquals("Same key should yield same partition", partition, partitioner.partition("test", null, KEY_BYTES, null, null, cluster));
     }
 }

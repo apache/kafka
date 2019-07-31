@@ -30,6 +30,8 @@ import org.apache.kafka.common.utils.Utils;
  * <li>If a partition is specified in the record, use it
  * <li>If no partition is specified but a key is present choose a partition based on a hash of the key
  * <li>If no partition or key is present choose the sticky partition that changes when the batch is full.
+ * 
+ * See KIP-480 for details about sticky partitioning.
  */
 public class DefaultPartitioner implements Partitioner {
 
@@ -39,7 +41,6 @@ public class DefaultPartitioner implements Partitioner {
 
     /**
      * Compute the partition for the given record.
-     * This method has been deprecated for DefaultPartitioner in favor of computePartition.
      *
      * @param topic The topic name
      * @param key The key to partition on (or null if no key)
@@ -63,7 +64,7 @@ public class DefaultPartitioner implements Partitioner {
     /**
      * Change the current sticky partition when the previous sticky partition batch is full. 
      */
-    public void batchCompleted(String topic, Cluster cluster, int prevPartition) {
+    public void onNewBatch(String topic, Cluster cluster, int prevPartition) {
         stickyPartitionCache.nextPartition(topic, cluster, prevPartition);
     }
 }

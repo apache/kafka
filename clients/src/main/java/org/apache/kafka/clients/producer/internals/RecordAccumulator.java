@@ -179,7 +179,8 @@ public final class RecordAccumulator {
      * @param headers the Headers for the record
      * @param callback The user-supplied callback to execute when the request is complete
      * @param maxTimeToBlock The maximum time in milliseconds to block for buffer memory to be available
-     * @param retryOnNewBatch A boolean that indicates whether we return and run onNewBatch before trying to append again
+     * @param abortOnNewBatch A boolean that indicates returning before a new batch is created and 
+     *                        running the the partitioner's onNewBatch method before trying to append again
      */
     public RecordAppendResult append(TopicPartition tp,
                                      long timestamp,
@@ -188,7 +189,7 @@ public final class RecordAccumulator {
                                      Header[] headers,
                                      Callback callback,
                                      long maxTimeToBlock,
-                                     boolean retryOnNewBatch) throws InterruptedException {
+                                     boolean abortOnNewBatch) throws InterruptedException {
         // We keep track of the number of appending thread to make sure we do not miss batches in
         // abortIncompleteBatches().
         appendsInProgress.incrementAndGet();
@@ -206,7 +207,7 @@ public final class RecordAccumulator {
             }
 
             // we don't have an in-progress record batch try to allocate a new batch
-            if (retryOnNewBatch) {
+            if (abortOnNewBatch) {
                     // Return a result that will cause another call to append.
                 return new RecordAppendResult(null, false, false, true);
             }
@@ -794,13 +795,13 @@ public final class RecordAccumulator {
         public final FutureRecordMetadata future;
         public final boolean batchIsFull;
         public final boolean newBatchCreated;
-        public final boolean retryForNewBatch;
+        public final boolean abortForNewBatch;
 
-        public RecordAppendResult(FutureRecordMetadata future, boolean batchIsFull, boolean newBatchCreated, boolean retryForNewBatch) {
+        public RecordAppendResult(FutureRecordMetadata future, boolean batchIsFull, boolean newBatchCreated, boolean abortForNewBatch) {
             this.future = future;
             this.batchIsFull = batchIsFull;
             this.newBatchCreated = newBatchCreated;
-            this.retryForNewBatch = retryForNewBatch;
+            this.abortForNewBatch = abortForNewBatch;
         }
     }
 

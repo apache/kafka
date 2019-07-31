@@ -52,6 +52,6 @@ public interface Partitioner extends Configurable, Closeable {
      * @param cluster The current cluster metadata
      * @param prevPartition The partition of the batch that was just completed
      */
-    default public void batchCompleted(String topic, Cluster cluster, int prevPartition) {
+    default public void onNewBatch(String topic, Cluster cluster, int prevPartition) {
     }
 }

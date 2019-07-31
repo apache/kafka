@@ -916,8 +916,8 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             RecordAccumulator.RecordAppendResult result = accumulator.append(tp, timestamp, serializedKey,
                     serializedValue, headers, interceptCallback, remainingWaitMs, true);
             
-            if (result.retryForNewBatch) {
-                partitioner.batchCompleted(record.topic(), cluster, partition);
+            if (result.abortForNewBatch) {
+                partitioner.onNewBatch(record.topic(), cluster, partition);
                 partition = partition(record, serializedKey, serializedValue, cluster);
                 tp = new TopicPartition(record.topic(), partition);
                 if (log.isTraceEnabled()) {

@@ -26,8 +26,8 @@ import java.util.concurrent.ConcurrentHashMap;
 import org.apache.kafka.common.utils.Utils;
 
 /**
- * An internal class that implements a cache used for sticky partitioning behavior. The cache can return the current
- * sticky partition for a given topic or change the sticky partition for a given topic. This class should not be used externally. 
+ * An internal class that implements a cache used for sticky partitioning behavior. The cache tracks the current sticky
+ * partition for any given topic. This class should not be used externally. 
  */
 public class StickyPartitionCache {
     private final ConcurrentMap<String, Integer> indexCache;
