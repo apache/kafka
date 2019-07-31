@@ -290,14 +290,14 @@ class TopicCommandTest extends ZooKeeperTestHarness with Logging with RackAwareT
 
     val output = TestUtils.grabConsoleOutput(
       topicService.describeTopic(new TopicCommandOptions(Array("--topic", testTopicName))))
-    assertTrue("The output should contain the modified config", output.contains("Configs:cleanup.policy=compact"))
+    assertTrue("The output should contain the modified config", output.contains("Configs: cleanup.policy=compact"))
 
     topicService.alterTopic(new TopicCommandOptions(
       Array("--topic", testTopicName, "--config", "cleanup.policy=delete")))
 
     val output2 = TestUtils.grabConsoleOutput(
       topicService.describeTopic(new TopicCommandOptions(Array("--topic", testTopicName))))
-    assertTrue("The output should contain the modified config", output2.contains("Configs:cleanup.policy=delete"))
+    assertTrue("The output should contain the modified config", output2.contains("Configs: cleanup.policy=delete"))
   }
 
   @Test
