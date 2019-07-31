@@ -2170,6 +2170,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         acquire();
         try {
             if (!closed) {
+                // need to close before setting the flag since the close function
+                // itself may trigger rebalance callback that needs the consumer to be open still
                 close(timeout.toMillis(), false);
                 closed = true;
             }

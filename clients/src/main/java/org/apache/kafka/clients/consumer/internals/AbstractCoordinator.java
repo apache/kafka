@@ -378,6 +378,8 @@ public abstract class AbstractCoordinator implements Closeable {
             // refresh which changes the matched subscription set) can occur while another rebalance is
             // still in progress.
             if (needsJoinPrepare) {
+                // need to set the flag before calling onJoinPrepare since the user callback may throw
+                // exception, in which case upon retry we should not retry onJoinPrepare either.
                 needsJoinPrepare = false;
                 onJoinPrepare(generation.generationId, generation.memberId);
             }
