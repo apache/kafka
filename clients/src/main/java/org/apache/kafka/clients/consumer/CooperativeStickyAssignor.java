@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.clients.consumer;
 
-import java.nio.ByteBuffer;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -44,24 +43,13 @@ import org.apache.kafka.common.TopicPartition;
  * {@link CooperativeStickyAssignor#supportedProtocols supportedProtocols()}.
  * <p>
  * IMPORTANT: if upgrading from 2.3 or earlier, you must follow a specific upgrade path in order to safely turn on
- * cooperative rebalancing. See the upgrade-guide for details.
+ * cooperative rebalancing. See the upgrade guide for details.
  */
 public class CooperativeStickyAssignor extends AbstractStickyAssignor {
 
     @Override
     public String name() {
-        return "sticky";
-    }
-
-    @Override
-    public void onAssignment(Assignment assignment, ConsumerGroupMetadata metadata) {
-        // the cooperative assignor does not need to maintain state as owned partitions are known by ConsumerCoordinator
-    }
-
-    @Override
-    public ByteBuffer subscriptionUserData(Set<String> topics) {
-        // the cooperative assignor does not need to add userdata as owned partitions will be set by ConsumerCoordinator
-        return null;
+        return "cooperative";
     }
 
     @Override

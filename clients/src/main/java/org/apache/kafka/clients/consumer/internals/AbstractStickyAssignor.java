@@ -51,7 +51,7 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
         }
     }
 
-    protected static final class MemberData {
+    public static final class MemberData {
         public final List<TopicPartition> partitions;
         public final Optional<Integer> generation;
         public MemberData(List<TopicPartition> partitions, Optional<Integer> generation) {

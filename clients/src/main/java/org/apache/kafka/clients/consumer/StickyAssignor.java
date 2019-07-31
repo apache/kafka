@@ -219,7 +219,8 @@ public class StickyAssignor extends AbstractStickyAssignor {
         return deserializeTopicPartitionAssignment(userData);
     }
 
-    private static ByteBuffer serializeTopicPartitionAssignment(MemberData memberData) {
+    // visible for testing
+    static ByteBuffer serializeTopicPartitionAssignment(MemberData memberData) {
         Struct struct = new Struct(STICKY_ASSIGNOR_USER_DATA_V1);
         List<Struct> topicAssignments = new ArrayList<>();
         for (Map.Entry<String, List<Integer>> topicEntry : CollectionUtils.groupPartitionsByTopic(memberData.partitions).entrySet()) {
