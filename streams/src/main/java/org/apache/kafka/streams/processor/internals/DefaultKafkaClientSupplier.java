@@ -18,7 +18,7 @@ package org.apache.kafka.streams.processor.internals;
 
 import java.util.Map;
 
-import org.apache.kafka.clients.admin.AdminClient;
+import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.producer.KafkaProducer;
@@ -29,9 +29,9 @@ import org.apache.kafka.streams.KafkaClientSupplier;
 
 public class DefaultKafkaClientSupplier implements KafkaClientSupplier {
     @Override
-    public AdminClient getAdminClient(final Map<String, Object> config) {
+    public Admin getAdminClient(final Map<String, Object> config) {
         // create a new client upon each call; but expect this call to be only triggered once so this should be fine
-        return AdminClient.create(config);
+        return Admin.create(config);
     }
 
     @Override

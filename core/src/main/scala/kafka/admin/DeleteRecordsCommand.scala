@@ -100,7 +100,7 @@ object DeleteRecordsCommand {
     adminClient.close()
   }
 
-  private def createAdminClient(opts: DeleteRecordsCommandOptions): admin.AdminClient = {
+  private def createAdminClient(opts: DeleteRecordsCommandOptions): admin.Admin = {
     val props = if (opts.options.has(opts.commandConfigOpt))
       Utils.loadProps(opts.options.valueOf(opts.commandConfigOpt))
     else

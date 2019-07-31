@@ -318,9 +318,7 @@ class Partition(val topicPartition: TopicPartition,
       info(s"No checkpointed highwatermark is found for partition $topicPartition")
       0L
     }
-    val initialHighWatermark = math.min(checkpointHighWatermark, log.logEndOffset)
-    log.highWatermarkMetadata = LogOffsetMetadata(initialHighWatermark)
-
+    val initialHighWatermark = log.updateHighWatermark(checkpointHighWatermark)
     info(s"Log loaded for partition $topicPartition with initial high watermark $initialHighWatermark")
     log
   }
@@ -518,8 +516,6 @@ class Partition(val topicPartition: TopicPartition,
       }
 
       if (isNewLeader) {
-        // construct the high watermark metadata for the new leader replica
-        leaderLog.initializeHighWatermarkOffsetMetadata()
         // mark local replica as the leader after converting hw
         leaderReplicaIdOpt = Some(localBrokerId)
         // reset log end offset for remote replicas
@@ -757,25 +753,21 @@ class Partition(val topicPartition: TopicPartition,
       curTime - replica.lastCaughtUpTimeMs <= replicaLagTimeMaxMs || inSyncReplicaIds.contains(replica.brokerId)
     }.map(_.logEndOffsetMetadata)
     val newHighWatermark = (replicaLogEndOffsets + leaderLog.logEndOffsetMetadata).min(new LogOffsetMetadata.OffsetOrdering)
-    val oldHighWatermark = leaderLog.highWatermarkMetadata
+    leaderLog.maybeIncrementHighWatermark(newHighWatermark) match {
+      case Some(oldHighWatermark) =>
+        debug(s"High watermark updated from $oldHighWatermark to $newHighWatermark")
+        true
 
-    // Ensure that the high watermark increases monotonically. We also update the high watermark when the new
-    // offset metadata is on a newer segment, which occurs whenever the log is rolled to a new segment.
-    if (oldHighWatermark.messageOffset < newHighWatermark.messageOffset ||
-      (oldHighWatermark.messageOffset == newHighWatermark.messageOffset && oldHighWatermark.onOlderSegment(newHighWatermark))) {
-      leaderLog.highWatermarkMetadata = newHighWatermark
-      debug(s"High watermark updated to $newHighWatermark")
-      true
-    } else {
-      def logEndOffsetString: ((Int, LogOffsetMetadata)) => String = {
-        case (brokerId, logEndOffsetMetadata) => s"replica $brokerId: $logEndOffsetMetadata"
-      }
+      case None =>
+        def logEndOffsetString: ((Int, LogOffsetMetadata)) => String = {
+          case (brokerId, logEndOffsetMetadata) => s"replica $brokerId: $logEndOffsetMetadata"
+        }
 
-      val replicaInfo = remoteReplicas.map(replica => (replica.brokerId, replica.logEndOffsetMetadata))
-      val localLogInfo = (localBrokerId, localLogOrException.logEndOffsetMetadata)
-      trace(s"Skipping update high watermark since new hw $newHighWatermark is not larger than old hw $oldHighWatermark. " +
-        s"All current LEOs are ${(replicaInfo + localLogInfo).map(logEndOffsetString)}")
-      false
+        val replicaInfo = remoteReplicas.map(replica => (replica.brokerId, replica.logEndOffsetMetadata))
+        val localLogInfo = (localBrokerId, localLogOrException.logEndOffsetMetadata)
+        trace(s"Skipping update high watermark since new hw $newHighWatermark is not larger than old value. " +
+          s"All current LEOs are ${(replicaInfo + localLogInfo).map(logEndOffsetString)}")
+        false
     }
   }
 
@@ -956,25 +948,13 @@ class Partition(val topicPartition: TopicPartition,
     // decide whether to only fetch from leader
     val localLog = localLogWithEpochOrException(currentLeaderEpoch, fetchOnlyFromLeader)
 
-    /* Read the LogOffsetMetadata prior to performing the read from the log.
-     * We use the LogOffsetMetadata to determine if a particular replica is in-sync or not.
-     * Using the log end offset after performing the read can lead to a race condition
-     * where data gets appended to the log immediately after the replica has consumed from it
-     * This can cause a replica to always be out of sync.
-     */
+    // Note we use the log end offset prior to the read. This ensures that any appends following
+    // the fetch do not prevent a follower from coming into sync.
     val initialHighWatermark = localLog.highWatermark
     val initialLogStartOffset = localLog.logStartOffset
     val initialLogEndOffset = localLog.logEndOffset
     val initialLastStableOffset = localLog.lastStableOffset
-
-    val maxOffsetOpt = fetchIsolation match {
-      case FetchLogEnd => None
-      case FetchHighWatermark => Some(initialHighWatermark)
-      case FetchTxnCommitted => Some(initialLastStableOffset)
-    }
-
-    val fetchedData = localLog.read(fetchOffset, maxBytes, maxOffsetOpt, minOneMessage,
-          includeAbortedTxns = fetchIsolation == FetchTxnCommitted)
+    val fetchedData = localLog.read(fetchOffset, maxBytes, fetchIsolation, minOneMessage)
 
     LogReadInfo(
       fetchedData = fetchedData,
@@ -1034,15 +1014,7 @@ class Partition(val topicPartition: TopicPartition,
                           fetchOnlyFromLeader: Boolean): LogOffsetSnapshot = inReadLock(leaderIsrUpdateLock) {
     // decide whether to only fetch from leader
     val localLog = localLogWithEpochOrException(currentLeaderEpoch, fetchOnlyFromLeader)
-    localLog.offsetSnapshot
-  }
-
-  def fetchOffsetSnapshotOrError(currentLeaderEpoch: Optional[Integer],
-                                 fetchOnlyFromLeader: Boolean): Either[LogOffsetSnapshot, Errors] = {
-    inReadLock(leaderIsrUpdateLock) {
-      getLocalLog(currentLeaderEpoch, fetchOnlyFromLeader)
-        .left.map(_.offsetSnapshot)
-    }
+    localLog.fetchOffsetSnapshot
   }
 
   def legacyFetchOffsetsForTimestamp(timestamp: Long,

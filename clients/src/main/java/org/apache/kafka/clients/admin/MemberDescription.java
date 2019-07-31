@@ -30,11 +30,11 @@ public class MemberDescription {
     private final String host;
     private final MemberAssignment assignment;
 
-    MemberDescription(String memberId,
-                      Optional<String> groupInstanceId,
-                      String clientId,
-                      String host,
-                      MemberAssignment assignment) {
+    public MemberDescription(String memberId,
+                             Optional<String> groupInstanceId,
+                             String clientId,
+                             String host,
+                             MemberAssignment assignment) {
         this.memberId = memberId == null ? "" : memberId;
         this.groupInstanceId = groupInstanceId;
         this.clientId = clientId == null ? "" : clientId;
@@ -43,6 +43,12 @@ public class MemberDescription {
             new MemberAssignment(Collections.emptySet()) : assignment;
     }
 
+    public MemberDescription(String memberId,
+                             String clientId,
+                             String host,
+                             MemberAssignment assignment) {
+        this(memberId, Optional.empty(), clientId, host, assignment);
+    }
 
     @Override
     public boolean equals(Object o) {
@@ -50,6 +56,7 @@ public class MemberDescription {
         if (o == null || getClass() != o.getClass()) return false;
         MemberDescription that = (MemberDescription) o;
         return memberId.equals(that.memberId) &&
+            groupInstanceId.equals(that.groupInstanceId) &&
             clientId.equals(that.clientId) &&
             host.equals(that.host) &&
             assignment.equals(that.assignment);
@@ -57,7 +64,7 @@ public class MemberDescription {
 
     @Override
     public int hashCode() {
-        return Objects.hash(memberId, clientId, host, assignment);
+        return Objects.hash(memberId, groupInstanceId, clientId, host, assignment);
     }
 
     /**
@@ -98,6 +105,7 @@ public class MemberDescription {
     @Override
     public String toString() {
         return "(memberId=" + memberId +
+            ", groupInstanceId=" + groupInstanceId.orElse("null") +
             ", clientId=" + clientId +
             ", host=" + host +
             ", assignment=" + assignment + ")";

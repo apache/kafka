@@ -395,7 +395,7 @@ class SaslSslAdminClientIntegrationTest extends AdminClientIntegrationTest with 
     testAclCreateGetDelete(expectAuth = false)
   }
 
-  private def waitForDescribeAcls(client: AdminClient, filter: AclBindingFilter, acls: Set[AclBinding]): Unit = {
+  private def waitForDescribeAcls(client: Admin, filter: AclBindingFilter, acls: Set[AclBinding]): Unit = {
     var lastResults: util.Collection[AclBinding] = null
     TestUtils.waitUntilTrue(() => {
       lastResults = client.describeAcls(filter).values.get()

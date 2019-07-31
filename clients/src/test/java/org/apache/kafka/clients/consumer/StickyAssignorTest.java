@@ -30,7 +30,7 @@ import java.util.Random;
 import java.util.Set;
 
 import org.apache.kafka.clients.consumer.StickyAssignor.ConsumerUserData;
-import org.apache.kafka.clients.consumer.internals.PartitionAssignor.Subscription;
+import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.Subscription;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.utils.CollectionUtils;

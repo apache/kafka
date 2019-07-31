@@ -22,11 +22,12 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.Sensor.RecordingLevel;
 import org.apache.kafka.common.metrics.stats.Avg;
-import org.apache.kafka.common.metrics.stats.Count;
+import org.apache.kafka.common.metrics.stats.CumulativeCount;
 import org.apache.kafka.common.metrics.stats.Max;
 import org.apache.kafka.common.metrics.stats.Rate;
 import org.apache.kafka.common.metrics.stats.Sum;
 import org.apache.kafka.common.metrics.stats.Value;
+import org.apache.kafka.common.metrics.stats.WindowedCount;
 import org.apache.kafka.streams.StreamsMetrics;
 
 import java.util.Arrays;
@@ -461,7 +462,7 @@ public class StreamsMetricsImpl implements StreamsMetrics {
                 descriptionOfRate,
                 tags
             ),
-            new Rate(TimeUnit.SECONDS, new Count())
+            new Rate(TimeUnit.SECONDS, new WindowedCount())
         );
     }
 

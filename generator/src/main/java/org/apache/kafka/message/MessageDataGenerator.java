@@ -937,9 +937,17 @@ public final class MessageDataGenerator {
         buffer.incrementIndent();
         headerGenerator.addImport(MessageGenerator.UNSUPPORTED_VERSION_EXCEPTION_CLASS);
         if (field.type().isArray()) {
-            buffer.printf("if (!%s.isEmpty()) {%n", field.camelCaseName());
+            if (fieldDefault(field).equals("null")) {
+                buffer.printf("if (%s != null) {%n", field.camelCaseName());
+            } else {
+                buffer.printf("if (!%s.isEmpty()) {%n", field.camelCaseName());
+            }
         } else if (field.type().isBytes()) {
-            buffer.printf("if (%s.length != 0) {%n", field.camelCaseName());
+            if (fieldDefault(field).equals("null")) {
+                buffer.printf("if (%s != null) {%n", field.camelCaseName());
+            } else {
+                buffer.printf("if (%s.length != 0) {%n", field.camelCaseName());
+            }
         } else if (field.type().isString()) {
             if (fieldDefault(field).equals("null")) {
                 buffer.printf("if (%s != null) {%n", field.camelCaseName());
@@ -1221,19 +1229,19 @@ public final class MessageDataGenerator {
             }
         } else if (field.type() instanceof FieldType.StringFieldType) {
             if (field.defaultString().equals("null")) {
-                if (!(field.nullableVersions().contains(field.versions()))) {
-                    throw new RuntimeException("null cannot be the default for field " +
-                        field.name() + ", because not all versions of this field are " +
-                        "nullable.");
-                }
+                validateNullDefault(field);
                 return "null";
             } else {
                 return "\"" + field.defaultString() + "\"";
             }
         } else if (field.type().isBytes()) {
-            if (!field.defaultString().isEmpty()) {
+            if (field.defaultString().equals("null")) {
+                validateNullDefault(field);
+                return "null";
+            } else if (!field.defaultString().isEmpty()) {
                 throw new RuntimeException("Invalid default for bytes field " +
-                    field.name() + ": custom defaults are not supported for bytes fields.");
+                        field.name() + ".  The only valid default for a bytes field " +
+                        "is empty or null.");
             }
             headerGenerator.addImport(MessageGenerator.BYTES_CLASS);
             return "Bytes.EMPTY";
@@ -1244,9 +1252,13 @@ public final class MessageDataGenerator {
             }
             return "new " + field.type().toString() + "()";
         } else if (field.type().isArray()) {
-            if (!field.defaultString().isEmpty()) {
+            if (field.defaultString().equals("null")) {
+                validateNullDefault(field);
+                return "null";
+            } else if (!field.defaultString().isEmpty()) {
                 throw new RuntimeException("Invalid default for array field " +
-                    field.name() + ": custom defaults are not supported for array fields.");
+                    field.name() + ".  The only valid default for an array field " +
+                        "is the empty array or null.");
             }
             FieldType.ArrayType arrayType = (FieldType.ArrayType) field.type();
             if (structRegistry.isStructArrayWithKeys(field)) {
@@ -1257,6 +1269,14 @@ public final class MessageDataGenerator {
             }
         } else {
             throw new RuntimeException("Unsupported field type " + field.type());
+        }
+    }
+
+    private void validateNullDefault(FieldSpec field) {
+        if (!(field.nullableVersions().contains(field.versions()))) {
+            throw new RuntimeException("null cannot be the default for field " +
+                    field.name() + ", because not all versions of this field are " +
+                    "nullable.");
         }
     }
 

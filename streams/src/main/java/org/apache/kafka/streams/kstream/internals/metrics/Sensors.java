@@ -19,10 +19,10 @@ package org.apache.kafka.streams.kstream.internals.metrics;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Avg;
+import org.apache.kafka.common.metrics.stats.CumulativeSum;
 import org.apache.kafka.common.metrics.stats.Max;
 import org.apache.kafka.common.metrics.stats.Rate;
-import org.apache.kafka.common.metrics.stats.Sum;
-import org.apache.kafka.common.metrics.stats.Total;
+import org.apache.kafka.common.metrics.stats.WindowedSum;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 
@@ -106,7 +106,7 @@ public class Sensors {
                 "The average number of occurrence of suppression-emit operation per second.",
                 tags
             ),
-            new Rate(TimeUnit.SECONDS, new Sum())
+            new Rate(TimeUnit.SECONDS, new WindowedSum())
         );
         sensor.add(
             new MetricName(
@@ -115,7 +115,7 @@ public class Sensors {
                 "The total number of occurrence of suppression-emit operations.",
                 tags
             ),
-            new Total()
+            new CumulativeSum()
         );
         return sensor;
     }

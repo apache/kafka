@@ -16,9 +16,8 @@
  */
 package org.apache.kafka.streams.tests;
 
-import org.apache.kafka.clients.admin.AdminClient;
+import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.ConsumerGroupDescription;
-import org.apache.kafka.clients.admin.KafkaAdminClient;
 import org.apache.kafka.clients.admin.ListConsumerGroupOffsetsResult;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -146,7 +145,7 @@ public class EosTestDriver extends SmokeTestUtil {
         props.put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, IsolationLevel.READ_COMMITTED.toString().toLowerCase(Locale.ROOT));
 
         final Map<TopicPartition, Long> committedOffsets;
-        try (final AdminClient adminClient = KafkaAdminClient.create(props)) {
+        try (final Admin adminClient = Admin.create(props)) {
             ensureStreamsApplicationDown(adminClient);
 
             committedOffsets = getCommittedOffsets(adminClient, withRepartitioning);
@@ -218,7 +217,7 @@ public class EosTestDriver extends SmokeTestUtil {
         System.out.flush();
     }
 
-    private static void ensureStreamsApplicationDown(final AdminClient adminClient) {
+    private static void ensureStreamsApplicationDown(final Admin adminClient) {
 
         final long maxWaitTime = System.currentTimeMillis() + MAX_IDLE_TIME_MS;
         ConsumerGroupDescription description;
@@ -236,7 +235,7 @@ public class EosTestDriver extends SmokeTestUtil {
     }
 
 
-    private static Map<TopicPartition, Long> getCommittedOffsets(final AdminClient adminClient,
+    private static Map<TopicPartition, Long> getCommittedOffsets(final Admin adminClient,
                                                                  final boolean withRepartitioning) {
         final Map<TopicPartition, OffsetAndMetadata> topicPartitionOffsetAndMetadataMap;
 
@@ -617,7 +616,7 @@ public class EosTestDriver extends SmokeTestUtil {
     }
 
 
-    private static ConsumerGroupDescription getConsumerGroupDescription(final AdminClient adminClient) {
+    private static ConsumerGroupDescription getConsumerGroupDescription(final Admin adminClient) {
         final ConsumerGroupDescription description;
         try {
             description = adminClient.describeConsumerGroups(Collections.singleton(EosTestClient.APP_ID))

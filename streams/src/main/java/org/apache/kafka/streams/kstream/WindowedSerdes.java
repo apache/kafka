@@ -16,8 +16,10 @@
  */
 package org.apache.kafka.streams.kstream;
 
+import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.serialization.Serializer;
 
 public class WindowedSerdes {
 
@@ -75,5 +77,23 @@ public class WindowedSerdes {
      */
     static public <T> Serde<Windowed<T>> sessionWindowedSerdeFrom(final Class<T> type) {
         return new SessionWindowedSerde<>(Serdes.serdeFrom(type));
+    }
+
+    static void verifyInnerSerializerNotNull(final Serializer inner,
+                                             final Serializer wrapper) {
+        if (inner == null) {
+            throw new NullPointerException("Inner serializer is `null`. " +
+                "User code must use constructor `" + wrapper.getClass().getSimpleName() + "(final Serializer<T> inner)` " +
+                "instead of the no-arg constructor.");
+        }
+    }
+
+    static void verifyInnerDeserializerNotNull(final Deserializer inner,
+                                               final Deserializer wrapper) {
+        if (inner == null) {
+            throw new NullPointerException("Inner deserializer is `null`. " +
+                "User code must use constructor `" + wrapper.getClass().getSimpleName() + "(final Deserializer<T> inner)` " +
+                "instead of the no-arg constructor.");
+        }
     }
 }
