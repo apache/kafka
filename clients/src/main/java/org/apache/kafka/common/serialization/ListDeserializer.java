@@ -16,8 +16,8 @@
  */
 package org.apache.kafka.common.serialization;
 
-import com.sun.xml.internal.ws.encoding.soap.DeserializationException;
 import org.apache.kafka.clients.CommonClientConfigs;
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.utils.Utils;
 
 import java.io.ByteArrayInputStream;
@@ -34,12 +34,13 @@ public class ListDeserializer<T> implements Deserializer<List<T>> {
     private Class listClass;
     private Integer primitiveSize;
 
-    private Map<Class, Integer> primitiveDeserializers = new HashMap<Class, Integer>() {{
-        put(LongDeserializer.class, 8);
-        put(IntegerDeserializer.class, 4);
+    private Map<Class, Integer> fixedLengthDeserializers = new HashMap<Class, Integer>() {{
         put(ShortDeserializer.class, 2);
+        put(IntegerDeserializer.class, 4);
         put(FloatDeserializer.class, 4);
+        put(LongDeserializer.class, 8);
         put(DoubleDeserializer.class, 8);
+        put(UUIDDeserializer.class, 16);
     }};
 
     public ListDeserializer() {
@@ -48,7 +49,7 @@ public class ListDeserializer<T> implements Deserializer<List<T>> {
     public ListDeserializer(Class listClass, Deserializer<T> deserializer) {
         this.listClass = listClass;
         this.inner = deserializer;
-        this.primitiveSize = primitiveDeserializers.get(deserializer.getClass());
+        this.primitiveSize = fixedLengthDeserializers.get(deserializer.getClass());
     }
 
     @Override
@@ -60,18 +61,28 @@ public class ListDeserializer<T> implements Deserializer<List<T>> {
             String innerSerde = (String) configs.get(innerSerdePropertyName);
             try {
                 listClass = Class.forName(listType);
-                this.inner = Utils.newInstance(innerSerde, Serde.class).deserializer();
-                inner.configure(configs, isKey);
             } catch (ClassNotFoundException e) {
-                throw new DeserializationException("Could not find a class for \"" + listType + "\"", e);
+                throw new ConfigException(listTypePropertyName, listType, "List type class " + listType + " could not be found.");
             }
+            try {
+                inner = Utils.newInstance(innerSerde, Serde.class).deserializer();
+            } catch (ClassNotFoundException e) {
+                throw new ConfigException(innerSerdePropertyName, innerSerde, "Serde class " + innerSerde + " could not be found.");
+            }
+            inner.configure(configs, isKey);
         }
     }
 
     private List<T> getListInstance(int listSize) {
         try {
-            Constructor<?> listConstructor = listClass.getConstructor(Integer.TYPE);
-            return (List<T>) listConstructor.newInstance(listSize);
+            Constructor<?> listConstructor;
+            try {
+                listConstructor = listClass.getConstructor(Integer.TYPE);
+                return (List<T>) listConstructor.newInstance(listSize);
+            } catch (NoSuchMethodException e) {
+                listConstructor = listClass.getConstructor();
+                return (List<T>) listConstructor.newInstance();
+            }
         } catch (Exception e) {
             throw new RuntimeException("Could not construct a list instance of \"" + listClass.getCanonicalName() + "\"", e);
         }
@@ -79,7 +90,7 @@ public class ListDeserializer<T> implements Deserializer<List<T>> {
 
     @Override
     public List<T> deserialize(String topic, byte[] data) {
-        if (data == null || data.length == 0) {
+        if (data == null) {
             return null;
         }
         try (final DataInputStream dis = new DataInputStream(new ByteArrayInputStream(data))) {

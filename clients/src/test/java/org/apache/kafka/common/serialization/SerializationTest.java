@@ -27,7 +27,19 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Map;
+import java.util.Stack;
+import java.util.UUID;
 
+import static org.hamcrest.CoreMatchers.equalTo;
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.core.IsNull.nullValue;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -107,20 +119,60 @@ public class SerializationTest {
     }
 
     @Test
-    public void listSerdeShouldRoundtripInput() {
+    public void listSerdeShouldRoundtripPrimitiveInput() {
         List<Integer> testData = Arrays.asList(1, 2, 3);
         Serde<List<Integer>> listSerde = Serdes.ListSerde(ArrayList.class, Serdes.Integer());
-        assertEquals("Should get the original " + List.class +
-                        " after serialization and deserialization", testData,
+        assertEquals("Should get the original collection of primitive integers"
+                        + " after serialization and deserialization", testData,
+                listSerde.deserializer().deserialize(topic, listSerde.serializer().serialize(topic, testData)));
+    }
+
+    @Test
+    public void listSerdeShouldRountripNonPrimitiveInput() {
+        List<String> testData = Arrays.asList("A", "B", "C");
+        Serde<List<String>> listSerde = Serdes.ListSerde(ArrayList.class, Serdes.String());
+        assertEquals("Should get the original collection after serialization and deserialization on an empty list", testData,
+                listSerde.deserializer().deserialize(topic, listSerde.serializer().serialize(topic, testData)));
+    }
+
+    @Test
+    public void listSerdeShouldReturnEmptyCollection() {
+        List<Integer> testData = Arrays.asList();
+        Serde<List<Integer>> listSerde = Serdes.ListSerde(ArrayList.class, Serdes.Integer());
+        assertEquals("Should get empty collection after serialization and deserialization on an empty list", testData,
                 listSerde.deserializer().deserialize(topic, listSerde.serializer().serialize(topic, testData)));
     }
 
     @Test
     public void listSerdeShouldReturnNull() {
-        List<Integer> testData = Arrays.asList();
+        List<Integer> testData = null;
         Serde<List<Integer>> listSerde = Serdes.ListSerde(ArrayList.class, Serdes.Integer());
-        assertEquals("Should get null after serialization and deserialization on an empty list", null,
+        assertEquals("Should get null after serialization and deserialization on an empty list", testData,
                 listSerde.deserializer().deserialize(topic, listSerde.serializer().serialize(topic, testData)));
+    }
+
+    @Test
+    public void listSerdeSerializerShouldReturnByteArrayOfSize() {
+        List<Integer> testData = Arrays.asList(1, 2, 3);
+        Serde<List<Integer>> listSerde = Serdes.ListSerde(ArrayList.class, Serdes.Integer());
+        assertEquals("Should get length of 16 bytes (integer size of the list + 3 integer entries) after serialization", 16,
+                listSerde.serializer().serialize(topic, testData).length);
+    }
+
+    @Test
+    public void listSerdeShouldReturnLinkedList() {
+        List<Integer> testData = new LinkedList<>();
+        Serde<List<Integer>> listSerde = Serdes.ListSerde(LinkedList.class, Serdes.Integer());
+        assertTrue("Should return List instance of type LinkedList",
+                listSerde.deserializer().deserialize(topic, listSerde.serializer().serialize(topic, testData)) instanceof LinkedList);
+    }
+
+    @Test
+    public void listSerdeShouldReturnStack() {
+        List<Integer> testData = new Stack<>();
+        Serde<List<Integer>> listSerde = Serdes.ListSerde(Stack.class, Serdes.Integer());
+        assertTrue("Should return List instance of type Stack",
+                listSerde.deserializer().deserialize(topic, listSerde.serializer().serialize(topic, testData)) instanceof Stack);
     }
 
     @Test(expected = SerializationException.class)

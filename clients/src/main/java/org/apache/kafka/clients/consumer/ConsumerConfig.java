@@ -228,13 +228,15 @@ public class ConsumerConfig extends AbstractConfig {
      * <code>list.key.serializer.inner</code>
      */
     public static final String LIST_KEY_DEERIALIZER_INNER_CLASS_CONFIG = "list.key.deserializer.inner";
-    public static final String LIST_KEY_DESERIALIZER_INNER_CLASS_DOC = "Inner deserializer class for key that implements the <code>org.apache.kafka.common.serialization.Deserializer</code> interface.";
+    public static final String LIST_KEY_DESERIALIZER_INNER_CLASS_DOC = "Inner deserializer class for key that implements the <code>java.util.List</code> interface. "
+            + "This configuration will be read if and only if <code>key.deserializer</code> configuration is set to <code>org.apache.kafka.common.serialization.ListDeserializer</code>";
 
     /**
      * <code>list.key.serializer.type</code>
      */
     public static final String LIST_KEY_DESERIALIZER_TYPE_CLASS_CONFIG = "list.key.deserializer.type";
-    public static final String LIST_KEY_DESERIALIZER_TYPE_CLASS_DOC = "Deserializer's list class for key that implements the <code>org.apache.kafka.common.serialization.Deserializer</code> interface.";
+    public static final String LIST_KEY_DESERIALIZER_TYPE_CLASS_DOC = "Deserializer's list class for key that implements the <code>org.apache.kafka.common.serialization.Deserializer</code> interface."
+            + "This configuration will be read if and only if <code>key.deserializer</code> configuration is set to <code>org.apache.kafka.common.serialization.ListDeserializer</code>";
 
     /** <code>key.deserializer</code> */
     public static final String KEY_DESERIALIZER_CLASS_CONFIG = "key.deserializer";
@@ -567,6 +569,14 @@ public class ConsumerConfig extends AbstractConfig {
                                         CommonClientConfigs.DEFAULT_SECURITY_PROTOCOL,
                                         Importance.MEDIUM,
                                         CommonClientConfigs.SECURITY_PROTOCOL_DOC)
+                .define(LIST_KEY_DESERIALIZER_TYPE_CLASS_CONFIG,
+                        Type.STRING,
+                        Importance.MEDIUM,
+                        LIST_KEY_DESERIALIZER_TYPE_CLASS_DOC)
+                .define(LIST_KEY_DEERIALIZER_INNER_CLASS_CONFIG,
+                        Type.STRING,
+                        Importance.MEDIUM,
+                        LIST_KEY_DESERIALIZER_INNER_CLASS_DOC)
                                 .withClientSslSupport()
                                 .withClientSaslSupport();
     }

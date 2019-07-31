@@ -30,31 +30,37 @@ import java.util.Map;
 public class ListSerializer<T> implements Serializer<List<T>> {
 
     private Serializer<T> inner;
-    private Boolean isPrimitive;
+    private boolean isFixedLength;
 
-    private List<Class> primitiveSerializers = Arrays.asList(
-            LongSerializer.class,
-            IntegerSerializer.class,
+    private List<Class> fixedLengthSerializers = Arrays.asList(
             ShortSerializer.class,
+            IntegerSerializer.class,
             FloatSerializer.class,
-            DoubleSerializer.class);
+            LongSerializer.class,
+            DoubleSerializer.class,
+            UUIDSerializer.class);
 
     public ListSerializer() {
     }
 
     public ListSerializer(Serializer<T> serializer) {
         this.inner = serializer;
-        this.isPrimitive = primitiveSerializers.contains(serializer.getClass());
+        this.isFixedLength = fixedLengthSerializers.contains(serializer.getClass());
     }
 
     @Override
     public void configure(Map<String, ?> configs, boolean isKey) {
         if (inner == null) {
-
             final String innerSerdePropertyName = isKey ? CommonClientConfigs.DEFAULT_LIST_KEY_SERDE_INNER_CLASS : CommonClientConfigs.DEFAULT_LIST_VALUE_SERDE_INNER_CLASS;
-            final String innerSerde = (String) configs.get(innerSerdePropertyName);
+            final Object innerSerde = configs.get(innerSerdePropertyName);
             try {
-                inner = Utils.newInstance(innerSerde, Serde.class).serializer();
+                if (innerSerde instanceof String) {
+                    inner = Utils.newInstance((String) innerSerde, Serde.class).serializer();
+                } else if (innerSerde instanceof Class) {
+                    inner = ((Serde<T>) Utils.newInstance((Class) innerSerde)).serializer();
+                } else {
+                    throw new ClassNotFoundException();
+                }
                 inner.configure(configs, isKey);
             } catch (final ClassNotFoundException e) {
                 throw new ConfigException(innerSerdePropertyName, innerSerde, "Serde class " + innerSerde + " could not be found.");
@@ -64,16 +70,16 @@ public class ListSerializer<T> implements Serializer<List<T>> {
 
     @Override
     public byte[] serialize(String topic, List<T> data) {
-        if (data == null || data.size() == 0) {
+        if (data == null) {
             return null;
         }
         final int size = data.size();
-        final ByteArrayOutputStream baos = new ByteArrayOutputStream();
-        try (final DataOutputStream out = new DataOutputStream(baos)) {
+        try (final ByteArrayOutputStream baos = new ByteArrayOutputStream();
+             final DataOutputStream out = new DataOutputStream(baos)) {
             out.writeInt(size);
             for (T entry : data) {
                 final byte[] bytes = inner.serialize(topic, entry);
-                if (!isPrimitive) {
+                if (!isFixedLength) {
                     out.writeInt(bytes.length);
                 }
                 out.write(bytes);
