@@ -142,8 +142,8 @@ object TopicCommand extends Logging {
       print("\tTopic: " + topic)
       print("\tPartition: " + info.partition)
       print("\tLeader: " + (if (hasLeader) info.leader.id else "none"))
-      print("\tReplicas: " + info.replicas.asScala.mkString(","))
-      print("\tIsr: " + info.isr.asScala.mkString(","))
+      print("\tReplicas: " + info.replicas.asScala.map(_.id).mkString(","))
+      print("\tIsr: " + info.isr.asScala.map(_.id).mkString(","))
       print(if (markedForDeletion) "\tMarkedForDeletion: true" else "")
       println()
     }
