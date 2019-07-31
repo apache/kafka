@@ -45,18 +45,19 @@ public class StickyPartitionCache {
 
     public int nextPartition(String topic, Cluster cluster, int prevPartition) {
         List<PartitionInfo> partitions = cluster.partitionsForTopic(topic);
-        int numPartitions = partitions.size();
         Integer oldPart = indexCache.get(topic);
         Integer newPart = oldPart;
+        // Check that the current sticky partition for the topic is either not set or that the partition that 
+        // triggered the new batch matches the sticky partition that needs to be changed.
         if (oldPart == null || oldPart == prevPartition) {
             List<PartitionInfo> availablePartitions = cluster.availablePartitionsForTopic(topic);
             Integer random = Utils.toPositive(ThreadLocalRandom.current().nextInt());
             if (availablePartitions.size() < 1) {
-                newPart = random % numPartitions;
+                newPart = random % partitions.size();
             } else if (availablePartitions.size() == 1) {
                 newPart = availablePartitions.get(0).partition();
             } else {
-                while (newPart.equals(oldPart)) {
+                while (newPart == null || newPart.equals(oldPart)) {
                     random = Utils.toPositive(ThreadLocalRandom.current().nextInt());
                     newPart = availablePartitions.get(random % availablePartitions.size()).partition();
                 }

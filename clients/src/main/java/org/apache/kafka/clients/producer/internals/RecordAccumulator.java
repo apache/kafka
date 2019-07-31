@@ -208,7 +208,7 @@ public final class RecordAccumulator {
 
             // we don't have an in-progress record batch try to allocate a new batch
             if (abortOnNewBatch) {
-                    // Return a result that will cause another call to append.
+                // Return a result that will cause another call to append.
                 return new RecordAppendResult(null, false, false, true);
             }
             
