@@ -976,7 +976,7 @@ class KafkaController(val config: KafkaConfig,
               finalLeaderIsrAndControllerEpoch = Some(LeaderIsrAndControllerEpoch(leaderAndIsr, epoch))
               info(s"Updated leader epoch for partition $partition to ${leaderAndIsr.leaderEpoch}")
               true
-            case (partition, Left(e)) =>
+            case (_, Left(e)) =>
               throw e
           }.getOrElse(false)
         case None =>

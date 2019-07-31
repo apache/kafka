@@ -21,9 +21,9 @@ import java.util.Arrays;
 import org.apache.kafka.common.annotation.InterfaceStability;
 
 /**
- * Options for {@link org.apache.kafka.clients.admin.AdminClient#electLeaders(ElectionType, Set, ElectLeadersOptions)}.
+ * Options for {@link org.apache.kafka.clients.admin.Admin#electLeaders(ElectionType, Set, ElectLeadersOptions)}.
  *
- * The API of this class is evolving, see {@link org.apache.kafka.clients.admin.AdminClient} for details.
+ * The API of this class is evolving, see {@link org.apache.kafka.clients.admin.Admin} for details.
  */
 @InterfaceStability.Evolving
 public enum ElectionType {

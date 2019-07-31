@@ -21,7 +21,7 @@
 	<li>The <a href="#consumerapi">Consumer</a> API allows applications to read streams of data from topics in the Kafka cluster.
 	<li>The <a href="#streamsapi">Streams</a> API allows transforming streams of data from input topics to output topics.
 	<li>The <a href="#connectapi">Connect</a> API allows implementing connectors that continually pull from some source system or application into Kafka or push from Kafka into some sink system or application.
-	<li>The <a href="#adminapi">AdminClient</a> API allows managing and inspecting topics, brokers, and other Kafka objects.
+	<li>The <a href="#adminapi">Admin</a> API allows managing and inspecting topics, brokers, and other Kafka objects.
 	</ol>
 
 	Kafka exposes all its functionality over a language independent protocol which has clients available in many programming languages. However only the Java clients are maintained as part of the main Kafka project, the others are available as independent open source projects. A list of non-Java clients is available <a href="https://cwiki.apache.org/confluence/display/KAFKA/Clients">here</a>.
@@ -100,11 +100,11 @@
 	Those who want to implement custom connectors can see the <a href="/{{version}}/javadoc/index.html?org/apache/kafka/connect" title="Kafka {{dotVersion}} Javadoc">javadoc</a>.
 	<p>
 
-	<h3><a id="adminapi" href="#adminapi">2.5 AdminClient API</a></h3>
+	<h3><a id="adminapi" href="#adminapi">2.5 Admin API</a></h3>
 
-	The AdminClient API supports managing and inspecting topics, brokers, acls, and other Kafka objects.
+	The Admin API supports managing and inspecting topics, brokers, acls, and other Kafka objects.
 	<p>
-	To use the AdminClient API, add the following Maven dependency:
+	To use the Admin API, add the following Maven dependency:
 	<pre class="brush: xml;">
 		&lt;dependency&gt;
 			&lt;groupId&gt;org.apache.kafka&lt;/groupId&gt;
@@ -112,7 +112,7 @@
 			&lt;version&gt;{{fullDotVersion}}&lt;/version&gt;
 		&lt;/dependency&gt;
 	</pre>
-	For more information about the AdminClient APIs, see the <a href="/{{version}}/javadoc/index.html?org/apache/kafka/clients/admin/AdminClient.html" title="Kafka {{dotVersion}} Javadoc">javadoc</a>.
+	For more information about the Admin APIs, see the <a href="/{{version}}/javadoc/index.html?org/apache/kafka/clients/admin/Admin.html" title="Kafka {{dotVersion}} Javadoc">javadoc</a>.
 	<p>
 
 </script>

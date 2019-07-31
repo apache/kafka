@@ -34,7 +34,7 @@ import kafka.message.{BrokerCompressionCodec, CompressionCodec, NoCompressionCod
 import kafka.metrics.KafkaMetricsGroup
 import kafka.server.checkpoints.LeaderEpochCheckpointFile
 import kafka.server.epoch.LeaderEpochFileCache
-import kafka.server.{BrokerTopicStats, FetchDataInfo, LogDirFailureChannel, LogOffsetMetadata, OffsetAndEpoch}
+import kafka.server.{BrokerTopicStats, FetchDataInfo, FetchHighWatermark, FetchIsolation, FetchLogEnd, FetchTxnCommitted, LogDirFailureChannel, LogOffsetMetadata, OffsetAndEpoch}
 import kafka.utils._
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.record.FileRecords.TimestampAndOffset
@@ -746,8 +746,10 @@ class Log(@volatile var dir: File,
     // if we have the clean shutdown marker, skip recovery
     if (!hasCleanShutdownFile) {
       // okay we need to actually recover this log
-      val unflushed = logSegments(this.recoveryPoint, Long.MaxValue).iterator
-      while (unflushed.hasNext) {
+      val unflushed = logSegments(this.recoveryPoint, Long.MaxValue).toIterator
+      var truncated = false
+
+      while (unflushed.hasNext && !truncated) {
         val segment = unflushed.next
         info(s"Recovering unflushed segment ${segment.baseOffset}")
         val truncatedBytes =
@@ -763,7 +765,8 @@ class Log(@volatile var dir: File,
         if (truncatedBytes > 0) {
           // we had an invalid message, delete all remaining log
           warn(s"Corruption found in segment ${segment.baseOffset}, truncating to offset ${segment.readNextOffset}")
-          unflushed.foreach(deleteSegment)
+          removeAndDeleteSegments(unflushed.toList, asyncDelete = true)
+          truncated = true
         }
       }
     }
@@ -773,7 +776,7 @@ class Log(@volatile var dir: File,
       if (logEndOffset < logStartOffset) {
         warn(s"Deleting all segments because logEndOffset ($logEndOffset) is smaller than logStartOffset ($logStartOffset). " +
           "This could happen if segment files were deleted from the file system.")
-        logSegments.foreach(deleteSegment)
+        removeAndDeleteSegments(logSegments, asyncDelete = true)
       }
     }
 
@@ -841,6 +844,8 @@ class Log(@volatile var dir: File,
       // and we can skip the loading. This is an optimization for users which are not yet using
       // idempotent/transactional features yet.
       if (lastOffset > producerStateManager.mapEndOffset && !isEmptyBeforeTruncation) {
+        val segmentOfLastOffset = floorLogSegment(lastOffset)
+
         logSegments(producerStateManager.mapEndOffset, lastOffset).foreach { segment =>
           val startOffset = Utils.max(segment.baseOffset, producerStateManager.mapEndOffset, logStartOffset)
           producerStateManager.updateMapEndOffset(startOffset)
@@ -848,7 +853,18 @@ class Log(@volatile var dir: File,
           if (offsetsToSnapshot.contains(Some(segment.baseOffset)))
             producerStateManager.takeSnapshot()
 
-          val fetchDataInfo = segment.read(startOffset, Some(lastOffset), Int.MaxValue)
+          val maxPosition = if (segmentOfLastOffset.contains(segment)) {
+            Option(segment.translateOffset(lastOffset))
+              .map(_.position)
+              .getOrElse(segment.size)
+          } else {
+            segment.size
+          }
+
+          val fetchDataInfo = segment.read(startOffset,
+            maxSize = Int.MaxValue,
+            maxPosition = maxPosition,
+            minOneMessage = false)
           if (fetchDataInfo != null)
             loadProducersFromLog(producerStateManager, fetchDataInfo.records)
         }
@@ -1386,43 +1402,60 @@ class Log(@volatile var dir: File,
     }
   }
 
+  private def emptyFetchDataInfo(fetchOffsetMetadata: LogOffsetMetadata,
+                                 includeAbortedTxns: Boolean): FetchDataInfo = {
+    val abortedTransactions =
+      if (includeAbortedTxns) Some(List.empty[AbortedTransaction])
+      else None
+    FetchDataInfo(fetchOffsetMetadata,
+      MemoryRecords.EMPTY,
+      firstEntryIncomplete = false,
+      abortedTransactions = abortedTransactions)
+  }
+
   /**
    * Read messages from the log.
    *
    * @param startOffset The offset to begin reading at
    * @param maxLength The maximum number of bytes to read
-   * @param maxOffset The offset to read up to, exclusive. (i.e. this offset NOT included in the resulting message set)
+   * @param isolation The fetch isolation, which controls the maximum offset we are allowed to read
    * @param minOneMessage If this is true, the first message will be returned even if it exceeds `maxLength` (if one exists)
-   * @param includeAbortedTxns Whether or not to lookup aborted transactions for fetched data
    * @throws OffsetOutOfRangeException If startOffset is beyond the log end offset or before the log start offset
    * @return The fetch data information including fetch starting offset metadata and messages read.
    */
   def read(startOffset: Long,
            maxLength: Int,
-           maxOffset: Option[Long],
-           minOneMessage: Boolean,
-           includeAbortedTxns: Boolean): FetchDataInfo = {
+           isolation: FetchIsolation,
+           minOneMessage: Boolean): FetchDataInfo = {
     maybeHandleIOException(s"Exception while reading from $topicPartition in dir ${dir.getParent}") {
       trace(s"Reading $maxLength bytes from offset $startOffset of length $size bytes")
 
-      // Because we don't use lock for reading, the synchronization is a little bit tricky.
+      val includeAbortedTxns = isolation == FetchTxnCommitted
+
+      // Because we don't use the lock for reading, the synchronization is a little bit tricky.
       // We create the local variables to avoid race conditions with updates to the log.
-      val currentNextOffsetMetadata = nextOffsetMetadata
-      val next = currentNextOffsetMetadata.messageOffset
-      if (startOffset == next) {
-        val abortedTransactions =
-          if (includeAbortedTxns) Some(List.empty[AbortedTransaction])
-          else None
-        return FetchDataInfo(currentNextOffsetMetadata, MemoryRecords.EMPTY, firstEntryIncomplete = false,
-          abortedTransactions = abortedTransactions)
-      }
+      val endOffsetMetadata = nextOffsetMetadata
+      val endOffset = nextOffsetMetadata.messageOffset
+      if (startOffset == endOffset)
+        return emptyFetchDataInfo(endOffsetMetadata, includeAbortedTxns)
 
       var segmentEntry = segments.floorEntry(startOffset)
 
       // return error on attempt to read beyond the log end offset or read below log start offset
-      if (startOffset > next || segmentEntry == null || startOffset < logStartOffset)
+      if (startOffset > endOffset || segmentEntry == null || startOffset < logStartOffset)
         throw new OffsetOutOfRangeException(s"Received request for offset $startOffset for partition $topicPartition, " +
-          s"but we only have log segments in the range $logStartOffset to $next.")
+          s"but we only have log segments in the range $logStartOffset to $endOffset.")
+
+      val maxOffsetMetadata = isolation match {
+        case FetchLogEnd => nextOffsetMetadata
+        case FetchHighWatermark => fetchHighWatermarkMetadata
+        case FetchTxnCommitted => fetchLastStableOffsetMetadata
+      }
+
+      if (startOffset > maxOffsetMetadata.messageOffset) {
+        val startOffsetMetadata = convertToOffsetMetadataOrThrow(startOffset)
+        return emptyFetchDataInfo(startOffsetMetadata, includeAbortedTxns)
+      }
 
       // Do the read on the segment with a base offset less than the target offset
       // but if that segment doesn't contain any messages with an offset greater than that
@@ -1430,24 +1463,16 @@ class Log(@volatile var dir: File,
       while (segmentEntry != null) {
         val segment = segmentEntry.getValue
 
-        // If the fetch occurs on the active segment, there might be a race condition where two fetch requests occur after
-        // the message is appended but before the nextOffsetMetadata is updated. In that case the second fetch may
-        // cause OffsetOutOfRangeException. To solve that, we cap the reading up to exposed position instead of the log
-        // end of the active segment.
         val maxPosition = {
-          if (segmentEntry == segments.lastEntry) {
-            val exposedPos = nextOffsetMetadata.relativePositionInSegment.toLong
-            // Check the segment again in case a new segment has just rolled out.
-            if (segmentEntry != segments.lastEntry)
-            // New log segment has rolled out, we can read up to the file end.
-              segment.size
-            else
-              exposedPos
+          // Use the max offset position if it is on this segment; otherwise, the segment size is the limit.
+          if (maxOffsetMetadata.segmentBaseOffset == segment.baseOffset) {
+            maxOffsetMetadata.relativePositionInSegment
           } else {
             segment.size
           }
         }
-        val fetchInfo = segment.read(startOffset, maxOffset, maxLength, maxPosition, minOneMessage)
+
+        val fetchInfo = segment.read(startOffset, maxLength, maxPosition, minOneMessage)
         if (fetchInfo == null) {
           segmentEntry = segments.higherEntry(segmentEntry.getKey)
         } else {
@@ -1620,9 +1645,8 @@ class Log(@volatile var dir: File,
   private def convertToOffsetMetadataOrThrow(offset: Long): LogOffsetMetadata = {
     val fetchDataInfo = read(offset,
       maxLength = 1,
-      maxOffset = None,
-      minOneMessage = false,
-      includeAbortedTxns = false)
+      isolation = FetchLogEnd,
+      minOneMessage = false)
     fetchDataInfo.fetchOffsetMetadata
   }
 
@@ -1653,7 +1677,7 @@ class Log(@volatile var dir: File,
         lock synchronized {
           checkIfMemoryMappedBufferClosed()
           // remove the segments for lookups
-          deletable.foreach(deleteSegment)
+          removeAndDeleteSegments(deletable, asyncDelete = true)
           maybeIncrementLogStartOffset(segments.firstEntry.getValue.baseOffset)
         }
       }
@@ -1829,7 +1853,7 @@ class Log(@volatile var dir: File,
                  s"=max(provided offset = $expectedNextOffset, LEO = $logEndOffset) while it already " +
                  s"exists and is active with size 0. Size of time index: ${activeSegment.timeIndex.entries}," +
                  s" size of offset index: ${activeSegment.offsetIndex.entries}.")
-            deleteSegment(activeSegment)
+            removeAndDeleteSegments(Seq(activeSegment), asyncDelete = true)
           } else {
             throw new KafkaException(s"Trying to roll a new log segment for topic partition $topicPartition with start offset $newOffset" +
                                      s" =max(provided offset = $expectedNextOffset, LEO = $logEndOffset) while it already exists. Existing " +
@@ -1959,8 +1983,7 @@ class Log(@volatile var dir: File,
       lock synchronized {
         checkIfMemoryMappedBufferClosed()
         removeLogMetrics()
-        logSegments.foreach(_.deleteIfExists())
-        segments.clear()
+        removeAndDeleteSegments(logSegments, asyncDelete = false)
         leaderEpochCache.foreach(_.clear())
         Utils.delete(dir)
         // File handlers will be closed if this log is deleted
@@ -2011,7 +2034,7 @@ class Log(@volatile var dir: File,
             truncateFullyAndStartAt(targetOffset)
           } else {
             val deletable = logSegments.filter(segment => segment.baseOffset > targetOffset)
-            deletable.foreach(deleteSegment)
+            removeAndDeleteSegments(deletable, asyncDelete = true)
             activeSegment.truncateTo(targetOffset)
             updateLogEndOffset(targetOffset)
             this.recoveryPoint = math.min(targetOffset, this.recoveryPoint)
@@ -2035,8 +2058,7 @@ class Log(@volatile var dir: File,
       debug(s"Truncate and start at offset $newOffset")
       lock synchronized {
         checkIfMemoryMappedBufferClosed()
-        val segmentsToDelete = logSegments.toList
-        segmentsToDelete.foreach(deleteSegment)
+        removeAndDeleteSegments(logSegments, asyncDelete = true)
         addSegment(LogSegment.open(dir,
           baseOffset = newOffset,
           config = config,
@@ -2085,6 +2107,14 @@ class Log(@volatile var dir: File,
     }
   }
 
+  /**
+   * Get the largest log segment with a base offset less than or equal to the given offset, if one exists.
+   * @return the optional log segment
+   */
+  private def floorLogSegment(offset: Long): Option[LogSegment] = {
+    Option(segments.floorEntry(offset)).map(_.getValue)
+  }
+
   override def toString: String = {
     val logString = new StringBuilder
     logString.append(s"Log(dir=$dir")
@@ -2099,30 +2129,36 @@ class Log(@volatile var dir: File,
   }
 
   /**
-   * This method performs an asynchronous log segment delete by doing the following:
+   * This method deletes the given log segments by doing the following for each of them:
    * <ol>
    *   <li>It removes the segment from the segment map so that it will no longer be used for reads.
    *   <li>It renames the index and log files by appending .deleted to the respective file name
-   *   <li>It schedules an asynchronous delete operation to occur in the future
+   *   <li>It can either schedule an asynchronous delete operation to occur in the future or perform the deletion synchronously
    * </ol>
-   * This allows reads to happen concurrently without synchronization and without the possibility of physically
-   * deleting a file while it is being read from.
+   * Asynchronous deletion allows reads to happen concurrently without synchronization and without the possibility of
+   * physically deleting a file while it is being read.
    *
    * This method does not need to convert IOException to KafkaStorageException because it is either called before all logs are loaded
    * or the immediate caller will catch and handle IOException
    *
-   * @param segment The log segment to schedule for deletion
+   * @param segments The log segments to schedule for deletion
+   * @param asyncDelete Whether the segment files should be deleted asynchronously
    */
-  private def deleteSegment(segment: LogSegment) {
-    info(s"Scheduling log segment [baseOffset ${segment.baseOffset}, size ${segment.size}] for deletion.")
+  private def removeAndDeleteSegments(segments: Iterable[LogSegment], asyncDelete: Boolean): Unit = {
     lock synchronized {
-      segments.remove(segment.baseOffset)
-      asyncDeleteSegment(segment)
+      // As most callers hold an iterator into the `segments` collection and `removeAndDeleteSegment` mutates it by
+      // removing the deleted segment, we should force materialization of the iterator here, so that results of the
+      // iteration remain valid and deterministic.
+      val toDelete = segments.toList
+      toDelete.foreach { segment =>
+        this.segments.remove(segment.baseOffset)
+      }
+      deleteSegmentFiles(toDelete, asyncDelete)
     }
   }
 
   /**
-   * Perform an asynchronous delete on the given file.
+   * Perform physical deletion for the given file. Allows the file to be deleted asynchronously or synchronously.
    *
    * This method assumes that the file exists and the method is not thread-safe.
    *
@@ -2131,15 +2167,22 @@ class Log(@volatile var dir: File,
    *
    * @throws IOException if the file can't be renamed and still exists
    */
-  private def asyncDeleteSegment(segment: LogSegment) {
-    segment.changeFileSuffixes("", Log.DeletedFileSuffix)
-    def deleteSeg() {
-      info(s"Deleting segment ${segment.baseOffset}")
+  private def deleteSegmentFiles(segments: Iterable[LogSegment], asyncDelete: Boolean) {
+    segments.foreach(_.changeFileSuffixes("", Log.DeletedFileSuffix))
+
+    def deleteSegments() {
+      info(s"Deleting segments $segments")
       maybeHandleIOException(s"Error while deleting segments for $topicPartition in dir ${dir.getParent}") {
-        segment.deleteIfExists()
+        segments.foreach(_.deleteIfExists())
       }
     }
-    scheduler.schedule("delete-file", deleteSeg _, delay = config.fileDeleteDelayMs)
+
+    if (asyncDelete) {
+      info(s"Scheduling segments for deletion $segments")
+      scheduler.schedule("delete-file", () => deleteSegments, delay = config.fileDeleteDelayMs)
+    } else {
+      deleteSegments()
+    }
   }
 
   /**
@@ -2194,8 +2237,8 @@ class Log(@volatile var dir: File,
         // remove the index entry
         if (seg.baseOffset != sortedNewSegments.head.baseOffset)
           segments.remove(seg.baseOffset)
-        // delete segment
-        asyncDeleteSegment(seg)
+        // delete segment files
+        deleteSegmentFiles(List(seg), asyncDelete = true)
       }
       // okay we are safe now, remove the swap suffix
       sortedNewSegments.foreach(_.changeFileSuffixes(Log.SwapFileSuffix, ""))

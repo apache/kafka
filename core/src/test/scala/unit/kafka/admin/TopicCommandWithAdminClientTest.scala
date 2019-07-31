@@ -25,7 +25,7 @@ import kafka.server.{ConfigType, KafkaConfig}
 import kafka.utils.{Exit, Logging, TestUtils}
 import kafka.zk.{ConfigEntityChangeNotificationZNode, DeleteTopicsTopicZNode}
 import org.apache.kafka.clients.CommonClientConfigs
-import org.apache.kafka.clients.admin.{ListTopicsOptions, NewTopic, AdminClient => JAdminClient}
+import org.apache.kafka.clients.admin.{Admin, AdminClient, ListTopicsOptions, NewTopic}
 import org.apache.kafka.common.config.{ConfigException, ConfigResource, TopicConfig}
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.network.ListenerName
@@ -59,7 +59,7 @@ class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Loggin
   private val defaultReplicationFactor = 1.toShort
 
   private var topicService: AdminClientTopicService = _
-  private var adminClient: JAdminClient = _
+  private var adminClient: Admin = _
   private var testTopicName: String = _
 
   private val _testName = new TestName
@@ -105,7 +105,7 @@ class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Loggin
     // create adminClient
     val props = new Properties()
     props.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, brokerList)
-    adminClient = JAdminClient.create(props)
+    adminClient = AdminClient.create(props)
     topicService = AdminClientTopicService(adminClient)
     testTopicName = s"${testName.getMethodName}-${Random.alphanumeric.take(10).mkString}"
   }
@@ -602,7 +602,7 @@ class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Loggin
           topicService.describeTopic(new TopicCommandOptions(Array("--topic", testTopicName, "--unavailable-partitions"))))
       val rows = output.split("\n")
       assertTrue(rows(0).startsWith(s"\tTopic: $testTopicName"))
-      assertTrue(rows(0).endsWith("Leader: none\tReplicas: 0\tIsr: "))
+      assertTrue(rows(0).contains("Leader: none\tReplicas: 0\tIsr:"))
     } finally {
       restartDeadBrokers()
     }

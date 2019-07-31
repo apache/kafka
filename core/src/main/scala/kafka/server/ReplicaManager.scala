@@ -1231,6 +1231,19 @@ class ReplicaManager(val config: KafkaConfig,
         else
           Set.empty[Partition]
 
+        /*
+         * KAFKA-8392
+         * For topic partitions of which the broker is no longer a leader, delete metrics related to
+         * those topics. Note that this means the broker stops being either a replica or a leader of
+         * partitions of said topics
+         */
+        val leaderTopicSet = leaderPartitionsIterator.map(_.topic).toSet
+        val followerTopicSet = partitionsBecomeFollower.map(_.topic).toSet
+        followerTopicSet.diff(leaderTopicSet).foreach(brokerTopicStats.removeOldLeaderMetrics)
+
+        // remove metrics for brokers which are not followers of a topic
+        leaderTopicSet.diff(followerTopicSet).foreach(brokerTopicStats.removeOldFollowerMetrics)
+
         leaderAndIsrRequest.partitionStates.asScala.keys.foreach { topicPartition =>
           /*
            * If there is offline log directory, a Partition object may have been created by getOrCreatePartition()

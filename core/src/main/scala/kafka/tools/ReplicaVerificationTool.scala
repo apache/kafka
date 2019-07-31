@@ -30,7 +30,7 @@ import kafka.api._
 import kafka.utils.Whitelist
 import kafka.utils._
 import org.apache.kafka.clients._
-import org.apache.kafka.clients.admin.{ListTopicsOptions, TopicDescription}
+import org.apache.kafka.clients.admin.{Admin, ListTopicsOptions, TopicDescription}
 import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer}
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.{NetworkReceive, Selectable, Selector}
@@ -211,16 +211,16 @@ object ReplicaVerificationTool extends Logging {
 
   }
 
-  private def listTopicsMetadata(adminClient: admin.AdminClient): Seq[TopicDescription] = {
+  private def listTopicsMetadata(adminClient: Admin): Seq[TopicDescription] = {
     val topics = adminClient.listTopics(new ListTopicsOptions().listInternal(true)).names.get
     adminClient.describeTopics(topics).all.get.values.asScala.toBuffer
   }
 
-  private def brokerDetails(adminClient: admin.AdminClient): Map[Int, Node] = {
+  private def brokerDetails(adminClient: Admin): Map[Int, Node] = {
     adminClient.describeCluster.nodes.get.asScala.map(n => (n.id, n)).toMap
   }
 
-  private def createAdminClient(brokerUrl: String): admin.AdminClient = {
+  private def createAdminClient(brokerUrl: String): Admin = {
     val props = new Properties()
     props.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, brokerUrl)
     admin.AdminClient.create(props)

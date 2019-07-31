@@ -24,6 +24,11 @@
     <li>The <code>bin/kafka-preferred-replica-election.sh</code> command line tool has been deprecated. It has been replaced by <code>bin/kafka-leader-election.sh</code>.</li>
     <li>The methods <code>electPreferredLeaders</code> in the Java <code>AdminClient</code> class have been deprecated in favor of the methods <code>electLeaders</code>.</li>
     <li>Scala code leveraging the <code>NewTopic(String, int, short)</code> constructor with literal values will need to explicitly call <code>toShort</code> on the second literal.</li>
+    <li>The argument in the constructor <code>GroupAuthorizationException(String)</code> is now used to specify an exception message.
+        Previously it referred to the group that failed authorization. This was done for consistency with other exception types and to
+        avoid potential misuse. The constructor <code>TopicAuthorizationException(String)</code> which was previously used for a single
+        unauthorized topic was changed similarly.
+    </li>
 </ul>
 
 <h4><a id="upgrade_2_3_0" href="#upgrade_2_3_0">Upgrading from 0.8.x, 0.9.x, 0.10.0.x, 0.10.1.x, 0.10.2.x, 0.11.0.x, 1.0.x, 1.1.x, 2.0.x or 2.1.x or 2.2.x to 2.3.0</a></h4>

@@ -18,25 +18,32 @@ package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.GroupRebalanceConfig;
 import org.apache.kafka.clients.MockClient;
+import org.apache.kafka.clients.NodeApiVersions;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.FencedInstanceIdException;
+import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.message.HeartbeatResponseData;
 import org.apache.kafka.common.message.JoinGroupRequestData;
 import org.apache.kafka.common.message.JoinGroupResponseData;
+import org.apache.kafka.common.message.LeaveGroupResponseData;
+import org.apache.kafka.common.message.LeaveGroupResponseData.MemberResponse;
 import org.apache.kafka.common.message.SyncGroupResponseData;
 import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.AbstractRequest;
+import org.apache.kafka.common.requests.ApiVersionsResponse;
 import org.apache.kafka.common.requests.FindCoordinatorResponse;
 import org.apache.kafka.common.requests.HeartbeatRequest;
 import org.apache.kafka.common.requests.HeartbeatResponse;
 import org.apache.kafka.common.requests.JoinGroupRequest;
 import org.apache.kafka.common.requests.JoinGroupResponse;
 import org.apache.kafka.common.requests.LeaveGroupRequest;
+import org.apache.kafka.common.requests.LeaveGroupResponse;
 import org.apache.kafka.common.requests.SyncGroupRequest;
 import org.apache.kafka.common.requests.SyncGroupResponse;
 import org.apache.kafka.common.utils.LogContext;
@@ -48,6 +55,7 @@ import org.apache.kafka.test.TestUtils;
 import org.junit.Test;
 
 import java.nio.ByteBuffer;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -63,6 +71,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import static java.util.Collections.emptyMap;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNotSame;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertThrows;
@@ -75,7 +84,6 @@ public class AbstractCoordinatorTest {
     private static final int SESSION_TIMEOUT_MS = 10000;
     private static final int HEARTBEAT_INTERVAL_MS = 3000;
     private static final int RETRY_BACKOFF_MS = 100;
-    private static final int LONG_RETRY_BACKOFF_MS = 10000;
     private static final int REQUEST_TIMEOUT_MS = 40000;
     private static final String GROUP_ID = "dummy-group";
     private static final String METRIC_GROUP_PREFIX = "consumer";
@@ -86,6 +94,10 @@ public class AbstractCoordinatorTest {
     private Node coordinatorNode;
     private ConsumerNetworkClient consumerClient;
     private DummyCoordinator coordinator;
+
+    private final String memberId = "memberId";
+    private final String leaderId = "leaderId";
+    private final int defaultGeneration = -1;
 
     private void setupCoordinator() {
         setupCoordinator(RETRY_BACKOFF_MS, REBALANCE_TIMEOUT_MS,
@@ -164,7 +176,7 @@ public class AbstractCoordinatorTest {
             assertFalse(firstAttempt.get());
             assertTrue(consumerClient.hasPendingRequests(coordinatorNode));
 
-            mockClient.respond(joinGroupFollowerResponse(1, "memberId", "leaderId", Errors.NONE));
+            mockClient.respond(joinGroupFollowerResponse(1, memberId, leaderId, Errors.NONE));
             mockClient.prepareResponse(syncGroupResponse(Errors.NONE));
 
             Timer secondAttemptTimer = mockTime.timer(REQUEST_TIMEOUT_MS);
@@ -183,10 +195,7 @@ public class AbstractCoordinatorTest {
         mockClient.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
         coordinator.ensureCoordinatorReady(mockTime.timer(0));
 
-        final String memberId = "memberId";
-        final int generation = -1;
-
-        mockClient.prepareResponse(joinGroupFollowerResponse(generation, memberId, JoinGroupResponse.UNKNOWN_MEMBER_ID, Errors.GROUP_MAX_SIZE_REACHED));
+        mockClient.prepareResponse(joinGroupFollowerResponse(defaultGeneration, memberId, JoinGroupResponse.UNKNOWN_MEMBER_ID, Errors.GROUP_MAX_SIZE_REACHED));
 
         RequestFuture<ByteBuffer> future = coordinator.sendJoinGroupRequest();
         assertTrue(consumerClient.poll(future, mockTime.timer(REQUEST_TIMEOUT_MS)));
@@ -232,23 +241,14 @@ public class AbstractCoordinatorTest {
         mockClient.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
         coordinator.ensureCoordinatorReady(mockTime.timer(0));
 
-        final String memberId = "memberId";
-        final int generation = -1;
+        mockClient.prepareResponse(joinGroupFollowerResponse(defaultGeneration, memberId, JoinGroupResponse.UNKNOWN_MEMBER_ID, Errors.MEMBER_ID_REQUIRED));
 
-        mockClient.prepareResponse(joinGroupFollowerResponse(generation, memberId, JoinGroupResponse.UNKNOWN_MEMBER_ID, Errors.MEMBER_ID_REQUIRED));
-
-        mockClient.prepareResponse(new MockClient.RequestMatcher() {
-            @Override
-            public boolean matches(AbstractRequest body) {
-                if (!(body instanceof JoinGroupRequest)) {
-                    return false;
-                }
-                JoinGroupRequest joinGroupRequest = (JoinGroupRequest) body;
-                if (!joinGroupRequest.data().memberId().equals(memberId)) {
-                    return false;
-                }
-                return true;
+        mockClient.prepareResponse(body -> {
+            if (!(body instanceof JoinGroupRequest)) {
+                return false;
             }
+            JoinGroupRequest joinGroupRequest = (JoinGroupRequest) body;
+            return joinGroupRequest.data().memberId().equals(memberId);
         }, joinGroupResponse(Errors.UNKNOWN_MEMBER_ID));
 
         RequestFuture<ByteBuffer> future = coordinator.sendJoinGroupRequest();
@@ -256,7 +256,7 @@ public class AbstractCoordinatorTest {
         assertEquals(Errors.MEMBER_ID_REQUIRED.message(), future.exception().getMessage());
         assertTrue(coordinator.rejoinNeededOrPending());
         assertTrue(coordinator.hasValidMemberId());
-        assertTrue(coordinator.hasMatchingGenerationId(generation));
+        assertTrue(coordinator.hasMatchingGenerationId(defaultGeneration));
         future = coordinator.sendJoinGroupRequest();
         assertTrue(consumerClient.poll(future, mockTime.timer(REBALANCE_TIMEOUT_MS)));
     }
@@ -267,10 +267,7 @@ public class AbstractCoordinatorTest {
         mockClient.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
         coordinator.ensureCoordinatorReady(mockTime.timer(0));
 
-        final String memberId = "memberId";
-        final int generation = -1;
-
-        mockClient.prepareResponse(joinGroupFollowerResponse(generation, memberId, JoinGroupResponse.UNKNOWN_MEMBER_ID, Errors.FENCED_INSTANCE_ID));
+        mockClient.prepareResponse(joinGroupFollowerResponse(defaultGeneration, memberId, JoinGroupResponse.UNKNOWN_MEMBER_ID, Errors.FENCED_INSTANCE_ID));
 
         RequestFuture<ByteBuffer> future = coordinator.sendJoinGroupRequest();
         assertTrue(consumerClient.poll(future, mockTime.timer(REQUEST_TIMEOUT_MS)));
@@ -284,7 +281,6 @@ public class AbstractCoordinatorTest {
         setupCoordinator();
         mockClient.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
 
-        final String memberId = "memberId";
         final int generation = -1;
 
         mockClient.prepareResponse(joinGroupFollowerResponse(generation, memberId, JoinGroupResponse.UNKNOWN_MEMBER_ID, Errors.NONE));
@@ -298,7 +294,6 @@ public class AbstractCoordinatorTest {
         setupCoordinator();
         mockClient.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
 
-        final String memberId = "memberId";
         final int generation = -1;
 
         mockClient.prepareResponse(joinGroupFollowerResponse(generation, memberId, JoinGroupResponse.UNKNOWN_MEMBER_ID, Errors.NONE));
@@ -325,17 +320,14 @@ public class AbstractCoordinatorTest {
         mockClient.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
         coordinator.ensureCoordinatorReady(mockTime.timer(0));
 
-        final String memberId = "memberId";
-        final int generation = -1;
-
-        mockClient.prepareResponse(joinGroupFollowerResponse(generation, memberId, JoinGroupResponse.UNKNOWN_MEMBER_ID, Errors.UNKNOWN_MEMBER_ID));
+        mockClient.prepareResponse(joinGroupFollowerResponse(defaultGeneration, memberId, JoinGroupResponse.UNKNOWN_MEMBER_ID, Errors.UNKNOWN_MEMBER_ID));
 
         RequestFuture<ByteBuffer> future = coordinator.sendJoinGroupRequest();
 
         assertTrue(consumerClient.poll(future, mockTime.timer(REQUEST_TIMEOUT_MS)));
         assertEquals(Errors.UNKNOWN_MEMBER_ID.message(), future.exception().getMessage());
         assertTrue(coordinator.rejoinNeededOrPending());
-        assertTrue(coordinator.hasMatchingGenerationId(generation));
+        assertTrue(coordinator.hasMatchingGenerationId(defaultGeneration));
     }
 
     @Test
@@ -348,19 +340,16 @@ public class AbstractCoordinatorTest {
         setupCoordinator(RETRY_BACKOFF_MS, Integer.MAX_VALUE, groupInstanceId);
 
         mockClient.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
-        mockClient.prepareResponse(joinGroupFollowerResponse(1, "memberId", "leaderId", Errors.NONE));
+        mockClient.prepareResponse(joinGroupFollowerResponse(1, memberId, leaderId, Errors.NONE));
         mockClient.prepareResponse(syncGroupResponse(Errors.NONE));
 
         final RuntimeException e = new RuntimeException();
 
         // raise the error when the coordinator tries to send leave group request.
-        mockClient.prepareResponse(new MockClient.RequestMatcher() {
-            @Override
-            public boolean matches(AbstractRequest body) {
-                if (body instanceof LeaveGroupRequest)
-                    throw e;
-                return false;
-            }
+        mockClient.prepareResponse(body -> {
+            if (body instanceof LeaveGroupRequest)
+                throw e;
+            return false;
         }, heartbeatResponse(Errors.UNKNOWN_SERVER_ERROR));
 
         try {
@@ -379,23 +368,105 @@ public class AbstractCoordinatorTest {
     }
 
     @Test
+    public void testHandleNormalLeaveGroupResponse() {
+        MemberResponse memberResponse = new MemberResponse()
+                                            .setMemberId(memberId)
+                                            .setErrorCode(Errors.NONE.code());
+        LeaveGroupResponse response =
+            leaveGroupResponse(Collections.singletonList(memberResponse));
+        RequestFuture<Void> leaveGroupFuture = setupLeaveGroup(response);
+        assertNotNull(leaveGroupFuture);
+        assertTrue(leaveGroupFuture.succeeded());
+    }
+
+    @Test
+    public void testHandleMultipleMembersLeaveGroupResponse() {
+        MemberResponse memberResponse = new MemberResponse()
+                                            .setMemberId(memberId)
+                                            .setErrorCode(Errors.NONE.code());
+        LeaveGroupResponse response =
+            leaveGroupResponse(Arrays.asList(memberResponse, memberResponse));
+        RequestFuture<Void> leaveGroupFuture = setupLeaveGroup(response);
+        assertNotNull(leaveGroupFuture);
+        assertTrue(leaveGroupFuture.exception() instanceof IllegalStateException);
+    }
+
+    @Test
+    public void testHandleLeaveGroupResponseWithEmptyMemberResponse() {
+        LeaveGroupResponse response =
+            leaveGroupResponse(Collections.emptyList());
+        RequestFuture<Void> leaveGroupFuture = setupLeaveGroup(response);
+        assertNotNull(leaveGroupFuture);
+        assertTrue(leaveGroupFuture.succeeded());
+    }
+
+    @Test
+    public void testHandleLeaveGroupResponseWithException() {
+        MemberResponse memberResponse = new MemberResponse()
+                                            .setMemberId(memberId)
+                                            .setErrorCode(Errors.UNKNOWN_MEMBER_ID.code());
+        LeaveGroupResponse response =
+            leaveGroupResponse(Collections.singletonList(memberResponse));
+        RequestFuture<Void> leaveGroupFuture = setupLeaveGroup(response);
+        assertNotNull(leaveGroupFuture);
+        assertTrue(leaveGroupFuture.exception() instanceof UnknownMemberIdException);
+    }
+
+    @Test
+    public void testHandleSingleLeaveGroupRequest() {
+        setupCoordinator(RETRY_BACKOFF_MS, Integer.MAX_VALUE, Optional.empty());
+        mockClient.setNodeApiVersions(NodeApiVersions.create(Collections.singletonList(
+            new ApiVersionsResponse.ApiVersion(ApiKeys.LEAVE_GROUP, (short) 2, (short) 2))));
+
+        LeaveGroupResponse expectedResponse = leaveGroupResponse(Collections.singletonList(
+            new MemberResponse()
+                .setErrorCode(Errors.NONE.code())
+                .setMemberId(memberId)));
+        mockClient.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
+        mockClient.prepareResponse(joinGroupFollowerResponse(1, memberId, leaderId, Errors.NONE));
+        mockClient.prepareResponse(syncGroupResponse(Errors.NONE));
+        mockClient.prepareResponse(body -> {
+            if (body instanceof LeaveGroupRequest) {
+                LeaveGroupRequest request = (LeaveGroupRequest) body;
+                return request.data().memberId().equals(memberId)
+                    && request.data().members().isEmpty();
+            } else {
+                return false;
+            }
+        }, expectedResponse);
+
+        coordinator.ensureActiveGroup();
+        RequestFuture<Void> leaveGroupFuture = coordinator.maybeLeaveGroup("test single leave group");
+        assertTrue(leaveGroupFuture.succeeded());
+    }
+
+    private RequestFuture<Void> setupLeaveGroup(LeaveGroupResponse leaveGroupResponse) {
+        setupCoordinator(RETRY_BACKOFF_MS, Integer.MAX_VALUE, Optional.empty());
+
+        mockClient.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
+        mockClient.prepareResponse(joinGroupFollowerResponse(1, memberId, leaderId, Errors.NONE));
+        mockClient.prepareResponse(syncGroupResponse(Errors.NONE));
+        mockClient.prepareResponse(leaveGroupResponse);
+
+        coordinator.ensureActiveGroup();
+        return coordinator.maybeLeaveGroup("test maybe leave group");
+    }
+
+    @Test
     public void testUncaughtExceptionInHeartbeatThread() throws Exception {
         setupCoordinator();
 
         mockClient.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
-        mockClient.prepareResponse(joinGroupFollowerResponse(1, "memberId", "leaderId", Errors.NONE));
+        mockClient.prepareResponse(joinGroupFollowerResponse(1, memberId, leaderId, Errors.NONE));
         mockClient.prepareResponse(syncGroupResponse(Errors.NONE));
 
         final RuntimeException e = new RuntimeException();
 
         // raise the error when the background thread tries to send a heartbeat
-        mockClient.prepareResponse(new MockClient.RequestMatcher() {
-            @Override
-            public boolean matches(AbstractRequest body) {
-                if (body instanceof HeartbeatRequest)
-                    throw e;
-                return false;
-            }
+        mockClient.prepareResponse(body -> {
+            if (body instanceof HeartbeatRequest)
+                throw e;
+            return false;
         }, heartbeatResponse(Errors.UNKNOWN_SERVER_ERROR));
 
         try {
@@ -414,21 +485,19 @@ public class AbstractCoordinatorTest {
 
     @Test
     public void testPollHeartbeatAwakesHeartbeatThread() throws Exception {
-        setupCoordinator(LONG_RETRY_BACKOFF_MS);
+        final int longRetryBackoffMs = 10000;
+        setupCoordinator(longRetryBackoffMs);
 
         mockClient.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
-        mockClient.prepareResponse(joinGroupFollowerResponse(1, "memberId", "leaderId", Errors.NONE));
+        mockClient.prepareResponse(joinGroupFollowerResponse(1, memberId, leaderId, Errors.NONE));
         mockClient.prepareResponse(syncGroupResponse(Errors.NONE));
 
         coordinator.ensureActiveGroup();
 
         final CountDownLatch heartbeatDone = new CountDownLatch(1);
-        mockClient.prepareResponse(new MockClient.RequestMatcher() {
-            @Override
-            public boolean matches(AbstractRequest body) {
-                heartbeatDone.countDown();
-                return body instanceof HeartbeatRequest;
-            }
+        mockClient.prepareResponse(body -> {
+            heartbeatDone.countDown();
+            return body instanceof HeartbeatRequest;
         }, heartbeatResponse(Errors.NONE));
 
         mockTime.sleep(HEARTBEAT_INTERVAL_MS);
@@ -473,7 +542,7 @@ public class AbstractCoordinatorTest {
                     throw new WakeupException();
                 return isJoinGroupRequest;
             }
-        }, joinGroupFollowerResponse(1, "memberId", "leaderId", Errors.NONE));
+        }, joinGroupFollowerResponse(1, memberId, leaderId, Errors.NONE));
         mockClient.prepareResponse(syncGroupResponse(Errors.NONE));
         AtomicBoolean heartbeatReceived = prepareFirstHeartbeat();
 
@@ -511,7 +580,7 @@ public class AbstractCoordinatorTest {
                     throw new WakeupException();
                 return isJoinGroupRequest;
             }
-        }, joinGroupFollowerResponse(1, "memberId", "leaderId", Errors.NONE));
+        }, joinGroupFollowerResponse(1, memberId, leaderId, Errors.NONE));
         mockClient.prepareResponse(syncGroupResponse(Errors.NONE));
         AtomicBoolean heartbeatReceived = prepareFirstHeartbeat();
 
@@ -540,16 +609,13 @@ public class AbstractCoordinatorTest {
         setupCoordinator();
 
         mockClient.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
-        mockClient.prepareResponse(new MockClient.RequestMatcher() {
-            @Override
-            public boolean matches(AbstractRequest body) {
-                boolean isJoinGroupRequest = body instanceof JoinGroupRequest;
-                if (isJoinGroupRequest)
-                    // wakeup after the request returns
-                    consumerClient.wakeup();
-                return isJoinGroupRequest;
-            }
-        }, joinGroupFollowerResponse(1, "memberId", "leaderId", Errors.NONE));
+        mockClient.prepareResponse(body -> {
+            boolean isJoinGroupRequest = body instanceof JoinGroupRequest;
+            if (isJoinGroupRequest)
+                // wakeup after the request returns
+                consumerClient.wakeup();
+            return isJoinGroupRequest;
+        }, joinGroupFollowerResponse(1, memberId, leaderId, Errors.NONE));
         mockClient.prepareResponse(syncGroupResponse(Errors.NONE));
         AtomicBoolean heartbeatReceived = prepareFirstHeartbeat();
 
@@ -576,16 +642,13 @@ public class AbstractCoordinatorTest {
         setupCoordinator();
 
         mockClient.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
-        mockClient.prepareResponse(new MockClient.RequestMatcher() {
-            @Override
-            public boolean matches(AbstractRequest body) {
-                boolean isJoinGroupRequest = body instanceof JoinGroupRequest;
-                if (isJoinGroupRequest)
-                    // wakeup after the request returns
-                    consumerClient.wakeup();
-                return isJoinGroupRequest;
-            }
-        }, joinGroupFollowerResponse(1, "memberId", "leaderId", Errors.NONE));
+        mockClient.prepareResponse(body -> {
+            boolean isJoinGroupRequest = body instanceof JoinGroupRequest;
+            if (isJoinGroupRequest)
+                // wakeup after the request returns
+                consumerClient.wakeup();
+            return isJoinGroupRequest;
+        }, joinGroupFollowerResponse(1, memberId, leaderId, Errors.NONE));
         mockClient.prepareResponse(syncGroupResponse(Errors.NONE));
         AtomicBoolean heartbeatReceived = prepareFirstHeartbeat();
 
@@ -614,7 +677,7 @@ public class AbstractCoordinatorTest {
         setupCoordinator();
 
         mockClient.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
-        mockClient.prepareResponse(joinGroupFollowerResponse(1, "memberId", "leaderId", Errors.NONE));
+        mockClient.prepareResponse(joinGroupFollowerResponse(1, memberId, leaderId, Errors.NONE));
         mockClient.prepareResponse(new MockClient.RequestMatcher() {
             private int invocations = 0;
             @Override
@@ -652,7 +715,7 @@ public class AbstractCoordinatorTest {
         setupCoordinator();
 
         mockClient.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
-        mockClient.prepareResponse(joinGroupFollowerResponse(1, "memberId", "leaderId", Errors.NONE));
+        mockClient.prepareResponse(joinGroupFollowerResponse(1, memberId, leaderId, Errors.NONE));
         mockClient.prepareResponse(new MockClient.RequestMatcher() {
             private int invocations = 0;
             @Override
@@ -692,16 +755,13 @@ public class AbstractCoordinatorTest {
         setupCoordinator();
 
         mockClient.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
-        mockClient.prepareResponse(joinGroupFollowerResponse(1, "memberId", "leaderId", Errors.NONE));
-        mockClient.prepareResponse(new MockClient.RequestMatcher() {
-            @Override
-            public boolean matches(AbstractRequest body) {
-                boolean isSyncGroupRequest = body instanceof SyncGroupRequest;
-                if (isSyncGroupRequest)
-                    // wakeup after the request returns
-                    consumerClient.wakeup();
-                return isSyncGroupRequest;
-            }
+        mockClient.prepareResponse(joinGroupFollowerResponse(1, memberId, leaderId, Errors.NONE));
+        mockClient.prepareResponse(body -> {
+            boolean isSyncGroupRequest = body instanceof SyncGroupRequest;
+            if (isSyncGroupRequest)
+                // wakeup after the request returns
+                consumerClient.wakeup();
+            return isSyncGroupRequest;
         }, syncGroupResponse(Errors.NONE));
         AtomicBoolean heartbeatReceived = prepareFirstHeartbeat();
 
@@ -728,16 +788,13 @@ public class AbstractCoordinatorTest {
         setupCoordinator();
 
         mockClient.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
-        mockClient.prepareResponse(joinGroupFollowerResponse(1, "memberId", "leaderId", Errors.NONE));
-        mockClient.prepareResponse(new MockClient.RequestMatcher() {
-            @Override
-            public boolean matches(AbstractRequest body) {
-                boolean isSyncGroupRequest = body instanceof SyncGroupRequest;
-                if (isSyncGroupRequest)
-                    // wakeup after the request returns
-                    consumerClient.wakeup();
-                return isSyncGroupRequest;
-            }
+        mockClient.prepareResponse(joinGroupFollowerResponse(1, memberId, leaderId, Errors.NONE));
+        mockClient.prepareResponse(body -> {
+            boolean isSyncGroupRequest = body instanceof SyncGroupRequest;
+            if (isSyncGroupRequest)
+                // wakeup after the request returns
+                consumerClient.wakeup();
+            return isSyncGroupRequest;
         }, syncGroupResponse(Errors.NONE));
         AtomicBoolean heartbeatReceived = prepareFirstHeartbeat();
 
@@ -765,7 +822,7 @@ public class AbstractCoordinatorTest {
 
         coordinator.wakeupOnJoinComplete = true;
         mockClient.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
-        mockClient.prepareResponse(joinGroupFollowerResponse(1, "memberId", "leaderId", Errors.NONE));
+        mockClient.prepareResponse(joinGroupFollowerResponse(1, memberId, leaderId, Errors.NONE));
         mockClient.prepareResponse(syncGroupResponse(Errors.NONE));
         AtomicBoolean heartbeatReceived = prepareFirstHeartbeat();
 
@@ -806,14 +863,11 @@ public class AbstractCoordinatorTest {
 
     private AtomicBoolean prepareFirstHeartbeat() {
         final AtomicBoolean heartbeatReceived = new AtomicBoolean(false);
-        mockClient.prepareResponse(new MockClient.RequestMatcher() {
-            @Override
-            public boolean matches(AbstractRequest body) {
-                boolean isHeartbeatRequest = body instanceof HeartbeatRequest;
-                if (isHeartbeatRequest)
-                    heartbeatReceived.set(true);
-                return isHeartbeatRequest;
-            }
+        mockClient.prepareResponse(body -> {
+            boolean isHeartbeatRequest = body instanceof HeartbeatRequest;
+            if (isHeartbeatRequest)
+                heartbeatReceived.set(true);
+            return isHeartbeatRequest;
         }, heartbeatResponse(Errors.UNKNOWN_SERVER_ERROR));
         return heartbeatReceived;
     }
@@ -859,6 +913,12 @@ public class AbstractCoordinatorTest {
                         .setErrorCode(error.code())
                         .setAssignment(new byte[0])
         );
+    }
+
+    private LeaveGroupResponse leaveGroupResponse(List<MemberResponse> members) {
+        return new LeaveGroupResponse(new LeaveGroupResponseData()
+                .setErrorCode(Errors.NONE.code())
+                .setMembers(members));
     }
 
     public static class DummyCoordinator extends AbstractCoordinator {

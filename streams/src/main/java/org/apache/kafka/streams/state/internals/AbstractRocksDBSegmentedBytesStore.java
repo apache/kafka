@@ -233,6 +233,7 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
                 final S segment = entry.getKey();
                 final WriteBatch batch = entry.getValue();
                 segment.write(batch);
+                batch.close();
             }
         } catch (final RocksDBException e) {
             throw new ProcessorStateException("Error restoring batch to store " + this.name, e);
