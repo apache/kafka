@@ -50,8 +50,8 @@ import org.apache.kafka.common.metrics.stats.Avg;
 import org.apache.kafka.common.metrics.stats.Max;
 import org.apache.kafka.common.metrics.stats.Meter;
 import org.apache.kafka.common.metrics.stats.Min;
-import org.apache.kafka.common.metrics.stats.WindowedCount;
 import org.apache.kafka.common.metrics.stats.Value;
+import org.apache.kafka.common.metrics.stats.WindowedCount;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.BufferSupplier;
@@ -588,8 +588,7 @@ public class Fetcher<K, V> implements Closeable {
         try {
             while (recordsRemaining > 0) {
                 if (nextInLineRecords == null || nextInLineRecords.isFetched) {
-                    PartitionRecords records = maybeGetPartitionRecords(pausedCompletedFetches);
-
+                    PartitionRecords records = completedFetches.peek();
                     if (records == null) break;
 
                     if (records.notInitialized()) {
@@ -611,10 +610,16 @@ public class Fetcher<K, V> implements Closeable {
                         nextInLineRecords = records;
                     }
                     completedFetches.poll();
+                } else if (subscriptions.isPaused(nextInLineRecords.partition)) {
+                    // when the partition is paused we add the records back to the completedFetches queue instead of draining
+                    // them so that they can be returned on a subsequent poll if the partition is resumed at that time
+                    log.debug("Skipping fetching records for assigned partition {} because it is paused", nextInLineRecords.partition);
+                    pausedCompletedFetches.add(nextInLineRecords);
+                    nextInLineRecords = null;
                 } else {
                     List<ConsumerRecord<K, V>> records = fetchRecords(nextInLineRecords, recordsRemaining);
 
-                    if (!records.isEmpty() && nextInLineRecords != null) {
+                    if (!records.isEmpty()) {
                         TopicPartition partition = nextInLineRecords.partition;
                         List<ConsumerRecord<K, V>> currentRecords = fetched.get(partition);
                         if (currentRecords == null) {
@@ -644,25 +649,6 @@ public class Fetcher<K, V> implements Closeable {
         return fetched;
     }
 
-    /**
-     * Return the next PartitionRecords from the queue of completed fetches. If the records belong to a partition that
-     * is currently paused then cache it in the pausedCompletedFetches queue reference and move on to the next. If the
-     * queue is empty or all partitions are paused then return null.
-     */
-    private PartitionRecords maybeGetPartitionRecords(Queue<PartitionRecords> pausedCompletedFetches) {
-        for (Iterator<PartitionRecords> iter = completedFetches.iterator(); iter.hasNext(); ) {
-            PartitionRecords records = iter.next();
-            if (subscriptions.isPaused(records.partition)) {
-                log.debug("Skipping the completed fetch for partition {} because its partition is paused", records.partition);
-                pausedCompletedFetches.add(records);
-                iter.remove();
-            } else {
-                return records;
-            }
-        }
-        return null;
-    }
-
     private List<ConsumerRecord<K, V>> fetchRecords(PartitionRecords partitionRecords, int maxRecords) {
         if (!subscriptions.isAssigned(partitionRecords.partition)) {
             // this can happen when a rebalance happened before fetched records are returned to the consumer's poll call
@@ -673,15 +659,6 @@ public class Fetcher<K, V> implements Closeable {
             // poll call or if the offset is being reset
             log.debug("Not returning fetched records for assigned partition {} since it is no longer fetchable",
                     partitionRecords.partition);
-
-            // when the partition is paused we add the records back to the completedFetches queue instead of draining
-            // them so that they can be returned on a subsequent poll if the partition is resumed at that time
-            if (subscriptions.isPaused(partitionRecords.partition)) {
-                log.debug("Skipping fetching records for assigned partition {} because it is paused", partitionRecords.partition);
-                completedFetches.add(partitionRecords);
-                nextInLineRecords = null;
-                return emptyList();
-            }
         } else {
             SubscriptionState.FetchPosition position = subscriptions.position(partitionRecords.partition);
             if (partitionRecords.nextFetchOffset == position.offset) {
