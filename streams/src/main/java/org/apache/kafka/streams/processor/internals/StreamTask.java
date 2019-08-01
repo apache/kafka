@@ -739,7 +739,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
             try {
                 final long committedTimestamp = Long.parseLong(metadata.metadata());
                 System.out.println("StreamTask: We are setting partitionTime to: " + committedTimestamp + " for partition " + partition);
-                partitionGroup.setPartitionTimestamp(partition, committedTimestamp);
+                partitionGroup.setPartitionTime(partition, committedTimestamp);
                 log.debug("A committed timestamp was detected: setting the partition time of partition {}"
                           + " to {} in stream task {}", partition, committedTimestamp, this);
             } catch (final NumberFormatException exc) {
