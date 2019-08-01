@@ -28,16 +28,9 @@ import org.apache.kafka.common.TopicPartition;
 /**
  * A cooperative version of the {@link AbstractStickyAssignor AbstractStickyAssignor}. This follows the same (sticky)
  * assignment logic as {@link StickyAssignor StickyAssignor} but allows for cooperative rebalancing while the
- * {@link StickyAssignor StickyAssignor} follows the eager rebalancing protocol.
- *
- * In eager rebalancing, a consumer will revoke all its owned partitions before sending a JoinGroup request and
- * relinquish any associated resources before getting its new assignment. Of course when using a sticky assignor, many
- * of the partitions in its new assignment (if not all) may also have been assigned previously, meaning the consumer
- * needlessly had its partitions revoked and reassigned. Incremental cooperative rebalancing tries to improve the total
- * rebalancing latency by allowing a consumer to hang on to its owned partitions before sending the JoinGroup, and only
- * revoke those partitions that will ultimately be assigned to another consumer after the rebalance.
- *
- *
+ * {@link StickyAssignor StickyAssignor} follows the eager rebalancing protocol. See
+ * {@link ConsumerPartitionAssignor.RebalanceProtocol} for an explanation of the rebalancing protocols.
+ * <p>
  * To turn on cooperative rebalancing you must set all your consumers to use this {@code PartitionAssignor},
  * or implement a custom one that returns {@code RebalanceProtocol.COOPERATIVE} in
  * {@link CooperativeStickyAssignor#supportedProtocols supportedProtocols()}.
