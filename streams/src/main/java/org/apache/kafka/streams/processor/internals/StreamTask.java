@@ -326,6 +326,9 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
      */
     @SuppressWarnings("unchecked")
     public boolean process() {
+        if (partitionGroup.streamTime() == -1L) {
+            initializeTaskTime();
+        }
         // get the next record to process
         final StampedRecord record = partitionGroup.nextRecord(recordInfo);
 

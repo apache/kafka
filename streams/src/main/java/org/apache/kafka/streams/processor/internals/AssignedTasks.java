@@ -71,7 +71,6 @@ abstract class AssignedTasks<T extends Task> {
             try {
                 if (!entry.getValue().initializeStateStores()) {
                     log.debug("Transitioning {} {} to restoring", taskTypeName, entry.getKey());
-                    ((Task) entry.getValue()).initializeTaskTime();
                     ((AssignedStreamsTasks) this).addToRestoring((StreamTask) entry.getValue());
                 } else {
                     transitionToRunning(entry.getValue());
