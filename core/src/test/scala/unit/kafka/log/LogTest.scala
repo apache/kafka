@@ -30,7 +30,7 @@ import kafka.server.checkpoints.LeaderEpochCheckpointFile
 import kafka.server.epoch.{EpochEntry, LeaderEpochFileCache}
 import kafka.server.{BrokerTopicStats, FetchDataInfo, FetchHighWatermark, FetchIsolation, FetchLogEnd, FetchTxnCommitted, KafkaConfig, LogDirFailureChannel, LogOffsetMetadata}
 import kafka.utils._
-import org.apache.kafka.common.{KafkaException, TopicPartition}
+import org.apache.kafka.common.{InvalidRecordException, KafkaException, TopicPartition}
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.record.FileRecords.TimestampAndOffset
 import org.apache.kafka.common.record.MemoryRecords.RecordFilter
@@ -1806,19 +1806,19 @@ class LogTest {
       log.appendAsLeader(messageSetWithUnkeyedMessage, leaderEpoch = 0)
       fail("Compacted topics cannot accept a message without a key.")
     } catch {
-      case _: CorruptRecordException => // this is good
+      case _: InvalidRecordException => // this is good
     }
     try {
       log.appendAsLeader(messageSetWithOneUnkeyedMessage, leaderEpoch = 0)
       fail("Compacted topics cannot accept a message without a key.")
     } catch {
-      case _: CorruptRecordException => // this is good
+      case _: InvalidRecordException => // this is good
     }
     try {
       log.appendAsLeader(messageSetWithCompressedUnkeyedMessage, leaderEpoch = 0)
       fail("Compacted topics cannot accept a message without a key.")
     } catch {
-      case _: CorruptRecordException => // this is good
+      case _: InvalidRecordException => // this is good
     }
 
     // the following should succeed without any InvalidMessageException
