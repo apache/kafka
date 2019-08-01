@@ -93,7 +93,7 @@ public class PartitionGroup {
 
     void setPartitionTime(final TopicPartition partition, final long partitionTime) {
         if (partitionQueues.get(partition) == null) {
-            throw new NullPointerException("Partition " + partition + " not found.");
+            return;
         }
         if (streamTime < partitionTime) {
             streamTime = partitionTime;
