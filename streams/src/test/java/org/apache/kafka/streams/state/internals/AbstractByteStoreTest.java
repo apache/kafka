@@ -18,20 +18,12 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.utils.Bytes;
-import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.ProcessorContext;
-import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.KeyValueStoreTestDriver;
 import org.apache.kafka.test.InternalMockProcessorContext;
 import org.junit.After;
 import org.junit.Before;
-import org.junit.Test;
-
-import java.util.HashMap;
-import java.util.Map;
-
-import static org.junit.Assert.assertEquals;
 
 public abstract class AbstractByteStoreTest {
 
@@ -53,39 +45,6 @@ public abstract class AbstractByteStoreTest {
     public void after() {
         store.close();
         driver.clear();
-    }
-
-    static Map<Bytes, byte[]> getContents(final KeyValueIterator<Bytes, byte[]> iter) {
-        final HashMap<Bytes, byte[]> result = new HashMap<>();
-        while (iter.hasNext()) {
-            final KeyValue<Bytes, byte[]> entry = iter.next();
-            result.put(entry.key, entry.value);
-        }
-        return result;
-    }
-
-    @Test
-    public void doDefaultComparatorPrefixScan() {
-        final byte[] value = new byte[]{0x00};
-
-        final Bytes key = Bytes.wrap(new byte[]{(byte) 0xFF});
-        final Bytes key2 = Bytes.wrap(new byte[]{(byte) 0xFF, (byte) 0x00});
-        final Bytes key3 = Bytes.wrap(new byte[]{(byte) 0xFF, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF});
-        final Bytes key4 = Bytes.wrap(new byte[]{(byte) 0x01, (byte) 0xFF});
-        final Bytes key5 = Bytes.wrap(new byte[]{(byte) 0x00});
-
-        store.put(key, value);
-        store.put(key2, value);
-        store.put(key3, value);
-        store.put(key4, value);
-        store.put(key5, value);
-
-        final Map<Bytes, byte[]> expectedContents = new HashMap<>();
-        expectedContents.put(key, value);
-        expectedContents.put(key2, value);
-        expectedContents.put(key3, value);
-
-        assertEquals(expectedContents, getContents(store.prefixScan(key)));
     }
 }
 

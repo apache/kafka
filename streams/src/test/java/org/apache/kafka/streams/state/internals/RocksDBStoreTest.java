@@ -418,17 +418,6 @@ public class RocksDBStoreTest {
         }
     }
 
-    @Test
-    public void shouldThrowNullPointerExceptionOnPrefix() {
-        rocksDBStore.init(context, rocksDBStore);
-        try {
-            rocksDBStore.prefixScan(null);
-            fail("Should have thrown NullPointerException null prefix key");
-        } catch (final NullPointerException e) {
-            // this is good
-        }
-    }
-
     @Test(expected = ProcessorStateException.class)
     public void shouldThrowProcessorStateExceptionOnPutDeletedDir() throws IOException {
         rocksDBStore.init(context, rocksDBStore);

@@ -24,6 +24,7 @@ import org.junit.Test;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 
+@SuppressWarnings({"unchecked", "rawtypes"})
 public class SubscriptionWrapperSerdeTest {
 
     @Test
@@ -36,7 +37,7 @@ public class SubscriptionWrapperSerdeTest {
         final byte[] serialized = swSerde.serializer().serialize(null, wrapper);
         final SubscriptionWrapper deserialized = (SubscriptionWrapper) swSerde.deserializer().deserialize(null, serialized);
 
-        assertEquals(deserialized.getInstruction(), SubscriptionWrapper.Instruction.DELETE_KEY_AND_PROPAGATE);
+        assertEquals(SubscriptionWrapper.Instruction.DELETE_KEY_AND_PROPAGATE, deserialized.getInstruction());
         assertArrayEquals(hashedValue, deserialized.getHash());
         assertEquals(originalKey, deserialized.getPrimaryKey());
     }
@@ -51,7 +52,7 @@ public class SubscriptionWrapperSerdeTest {
         final byte[] serialized = swSerde.serializer().serialize(null, wrapper);
         final SubscriptionWrapper deserialized = (SubscriptionWrapper) swSerde.deserializer().deserialize(null, serialized);
 
-        assertEquals(deserialized.getInstruction(), SubscriptionWrapper.Instruction.PROPAGATE_ONLY_IF_FK_VAL_AVAILABLE);
+        assertEquals(SubscriptionWrapper.Instruction.PROPAGATE_ONLY_IF_FK_VAL_AVAILABLE, deserialized.getInstruction());
         assertArrayEquals(hashedValue, deserialized.getHash());
         assertEquals(originalKey, deserialized.getPrimaryKey());
     }

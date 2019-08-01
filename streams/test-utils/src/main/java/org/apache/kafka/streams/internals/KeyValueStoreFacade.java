@@ -68,11 +68,6 @@ public class KeyValueStoreFacade<K, V> extends ReadOnlyKeyValueStoreFacade<K, V>
     }
 
     @Override
-    public KeyValueIterator<K, V> prefixScan(final K prefix) {
-        return new KeyValueIteratorFacade<>(inner.prefixScan(prefix));
-    }
-
-    @Override
     public void flush() {
         inner.flush();
     }

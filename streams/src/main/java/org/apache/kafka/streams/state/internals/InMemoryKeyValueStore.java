@@ -16,21 +16,20 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import java.util.Comparator;
-import java.util.List;
-import java.util.concurrent.ConcurrentNavigableMap;
-import java.util.concurrent.ConcurrentSkipListMap;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
-
-import java.util.Iterator;
-import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentNavigableMap;
+import java.util.concurrent.ConcurrentSkipListMap;
 
 public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
     private final String name;
@@ -132,27 +131,6 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
         return new DelegatingPeekingKeyValueIterator<>(
             name,
             new InMemoryKeyValueIterator(map.entrySet().iterator()));
-    }
-
-    @Override
-    public KeyValueIterator<Bytes, byte[]> prefixScan(final Bytes prefix) {
-        final Bytes prefixEnd = Bytes.increment(prefix);
-        final Comparator<? super Bytes> comparator = map.comparator();
-
-        //We currently don't set a comparator for the map in this class, so the comparator will always be null.
-        final int result = comparator == null ? prefix.compareTo(prefixEnd) : comparator.compare(prefix, prefixEnd);
-
-        final ConcurrentNavigableMap<Bytes, byte[]> subMapResults;
-        if (result > 0) {
-            //Prefix increment would cause a wrap-around. Get the submap from toKey to the end of the map
-            subMapResults = map.tailMap(prefix, true);
-        } else {
-            subMapResults = map.subMap(prefix, true, prefixEnd, false);
-        }
-
-        return new DelegatingPeekingKeyValueIterator<>(
-                name,
-                new InMemoryKeyValueIterator(subMapResults.entrySet().iterator()));
     }
 
     @Override

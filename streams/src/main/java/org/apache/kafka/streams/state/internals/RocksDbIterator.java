@@ -81,19 +81,7 @@ class RocksDbIterator extends AbstractIterator<KeyValue<Bytes, byte[]>> implemen
 
     @Override
     public Bytes peekNextKey() {
-        //TODO - bellemare - if I call hasNext() directly, I end up with stack overflow:
-        /*
-        <clip>
-            at org.apache.kafka.streams.state.internals.RocksDBPrefixIterator.hasNext(RocksDBPrefixIterator.java:45)
-            at org.apache.kafka.streams.state.internals.RocksDbIterator.peekNextKey(RocksDbIterator.java:84)
-            at org.apache.kafka.streams.state.internals.RocksDBPrefixIterator.hasNext(RocksDBPrefixIterator.java:45)
-            at org.apache.kafka.streams.state.internals.RocksDbIterator.peekNextKey(RocksDbIterator.java:84)
-        </clip>
-        */
-        if (!open) {
-            throw new InvalidStateStoreException(String.format("RocksDB iterator for store %s has closed", storeName));
-        }
-        if (!super.hasNext()) {
+        if (!hasNext()) {
             throw new NoSuchElementException();
         }
         return next.key;

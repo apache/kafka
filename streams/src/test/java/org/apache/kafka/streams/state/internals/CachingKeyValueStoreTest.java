@@ -249,24 +249,12 @@ public class CachingKeyValueStoreTest extends AbstractKeyValueStoreTest {
     }
 
     @Test
-    public void shouldIterateOverPrefix() {
-        store.put(bytesKey("prefix-key"), bytesValue("prefix-value"));
-        store.put(bytesKey("prefix-key2"), bytesValue("prefix-value2"));
-        final KeyValueIterator<Bytes, byte[]> prefixResults = store.prefixScan(bytesKey("prefix-key"));
-        assertTrue(prefixResults.hasNext());
-        assertEquals(new String(prefixResults.next().value), "prefix-value");
-        assertTrue(prefixResults.hasNext());
-        assertEquals(new String(prefixResults.next().value), "prefix-value2");
-    }
-
-    @Test
     public void shouldDeleteItemsFromCache() {
         store.put(bytesKey("a"), bytesValue("a"));
         store.delete(bytesKey("a"));
         assertNull(store.get(bytesKey("a")));
         assertFalse(store.range(bytesKey("a"), bytesKey("b")).hasNext());
         assertFalse(store.all().hasNext());
-        assertFalse(store.prefixScan(bytesKey("a")).hasNext());
     }
 
     @Test
@@ -277,7 +265,6 @@ public class CachingKeyValueStoreTest extends AbstractKeyValueStoreTest {
         assertNull(store.get(bytesKey("a")));
         assertFalse(store.range(bytesKey("a"), bytesKey("b")).hasNext());
         assertFalse(store.all().hasNext());
-        assertFalse(store.prefixScan(bytesKey("a")).hasNext());
     }
 
     @Test
@@ -310,12 +297,6 @@ public class CachingKeyValueStoreTest extends AbstractKeyValueStoreTest {
     public void shouldThrowIfTryingToDoAllQueryOnClosedCachingStore() {
         store.close();
         store.all();
-    }
-
-    @Test(expected = InvalidStateStoreException.class)
-    public void shouldThrowIfTryingToDoPrefixQueryOnClosedCachingStore() {
-        store.close();
-        store.prefixScan(bytesKey("a"));
     }
 
     @Test(expected = InvalidStateStoreException.class)

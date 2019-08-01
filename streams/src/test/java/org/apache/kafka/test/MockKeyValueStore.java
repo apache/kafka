@@ -133,11 +133,6 @@ public class MockKeyValueStore implements KeyValueStore {
     }
 
     @Override
-    public KeyValueIterator prefixScan(Object prefix) {
-        return null;
-    }
-
-    @Override
     public long approximateNumEntries() {
         return 0;
     }

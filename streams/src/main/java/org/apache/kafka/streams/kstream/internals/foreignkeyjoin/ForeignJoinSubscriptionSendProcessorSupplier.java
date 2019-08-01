@@ -17,6 +17,7 @@
 
 package org.apache.kafka.streams.kstream.internals.foreignkeyjoin;
 
+import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Murmur3;
 import org.apache.kafka.streams.kstream.internals.Change;
@@ -24,26 +25,32 @@ import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
-
 import java.util.function.Function;
+import java.util.Arrays;
 
 import static org.apache.kafka.streams.kstream.internals.foreignkeyjoin.SubscriptionWrapper.Instruction.PROPAGATE_ONLY_IF_FK_VAL_AVAILABLE;
 import static org.apache.kafka.streams.kstream.internals.foreignkeyjoin.SubscriptionWrapper.Instruction.PROPAGATE_NULL_IF_NO_FK_VAL_AVAILABLE;
 import static org.apache.kafka.streams.kstream.internals.foreignkeyjoin.SubscriptionWrapper.Instruction.DELETE_KEY_AND_PROPAGATE;
 import static org.apache.kafka.streams.kstream.internals.foreignkeyjoin.SubscriptionWrapper.Instruction.DELETE_KEY_NO_PROPAGATE;
 
-public class KTableRepartitionerProcessorSupplier<K, KO, V> implements ProcessorSupplier<K, Change<V>> {
+public class ForeignJoinSubscriptionSendProcessorSupplier<K, KO, V> implements ProcessorSupplier<K, Change<V>> {
 
     private final Function<V, KO> foreignKeyExtractor;
+    private final String repartitionTopicName;
     private final Serializer<V> valueSerializer;
     private final boolean leftJoin;
+    private Serializer<KO> foreignKeySerializer;
 
-    public KTableRepartitionerProcessorSupplier(final Function<V, KO> foreignKeyExtractor,
-                                                final Serializer<V> valueSerializer,
-                                                final boolean leftJoin) {
+    public ForeignJoinSubscriptionSendProcessorSupplier(final Function<V, KO> foreignKeyExtractor,
+                                                        final Serde<KO> foreignKeySerde,
+                                                        final String repartitionTopicName,
+                                                        final Serializer<V> valueSerializer,
+                                                        final boolean leftJoin) {
         this.foreignKeyExtractor = foreignKeyExtractor;
         this.valueSerializer = valueSerializer;
         this.leftJoin = leftJoin;
+        this.repartitionTopicName = repartitionTopicName;
+        foreignKeySerializer = foreignKeySerde == null ? null : foreignKeySerde.serializer();
     }
 
     @Override
@@ -53,35 +60,38 @@ public class KTableRepartitionerProcessorSupplier<K, KO, V> implements Processor
 
     private class UnbindChangeProcessor extends AbstractProcessor<K, Change<V>> {
         
+        @SuppressWarnings("unchecked")
         @Override
         public void init(final ProcessorContext context) {
             super.init(context);
+            // get default key serde if it wasn't supplied directly at construction
+            if (foreignKeySerializer == null) {
+                foreignKeySerializer = (Serializer<KO>) context.keySerde().serializer();
+            }
         }
 
         @Override
         public void process(final K key, final Change<V> change) {
             final long[] currentHash = change.newValue == null ?
                     null :
-                    Murmur3.hash128(valueSerializer.serialize(context().topic(), change.newValue));
+                    Murmur3.hash128(valueSerializer.serialize(repartitionTopicName, change.newValue));
 
             if (change.oldValue != null) {
                 final KO oldForeignKey = foreignKeyExtractor.apply(change.oldValue);
                 if (change.newValue != null) {
                     final KO newForeignKey = foreignKeyExtractor.apply(change.newValue);
 
-                    //Requires equal to be defined...
-                    if (oldForeignKey.equals(newForeignKey)) {
-                        //Same foreign key. Just propagate onwards.
-                        context().forward(newForeignKey, new SubscriptionWrapper<>(currentHash, PROPAGATE_NULL_IF_NO_FK_VAL_AVAILABLE, key));
-                    } else {
+                    final byte[] serialOldForeignKey = foreignKeySerializer.serialize(repartitionTopicName, oldForeignKey);
+                    final byte[] serialNewForeignKey = foreignKeySerializer.serialize(repartitionTopicName, newForeignKey);
+                    if (!Arrays.equals(serialNewForeignKey, serialOldForeignKey)) {
                         //Different Foreign Key - delete the old key value and propagate the new one.
                         //Delete it from the oldKey's state store
                         context().forward(oldForeignKey, new SubscriptionWrapper<>(currentHash, DELETE_KEY_NO_PROPAGATE, key));
                         //Add to the newKey's state store. Additionally, propagate null if no FK is found there,
                         //since we must "unset" any output set by the previous FK-join. This is true for both INNER
                         //and LEFT join.
-                        context().forward(newForeignKey, new SubscriptionWrapper<>(currentHash, PROPAGATE_NULL_IF_NO_FK_VAL_AVAILABLE, key));
                     }
+                    context().forward(newForeignKey, new SubscriptionWrapper<>(currentHash, PROPAGATE_NULL_IF_NO_FK_VAL_AVAILABLE, key));
                 } else {
                     //A simple propagatable delete. Delete from the state store and propagate the delete onwards.
                     context().forward(oldForeignKey, new SubscriptionWrapper<>(currentHash, DELETE_KEY_AND_PROPAGATE, key));
@@ -101,8 +111,5 @@ public class KTableRepartitionerProcessorSupplier<K, KO, V> implements Processor
                 context().forward(foreignKeyExtractor.apply(change.newValue), new SubscriptionWrapper<>(currentHash, instruction, key));
             }
         }
-
-        @Override
-        public void close() {}
     }
 }

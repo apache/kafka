@@ -82,10 +82,11 @@ public class KTableKTableForeignKeyInnerJoinMultiIntegrationTest {
     @BeforeClass
     public static void beforeTest() throws Exception {
         //Use multiple partitions to ensure distribution of keys.
-        CLUSTER.createTopic(TABLE_1, 7, 1);
-        CLUSTER.createTopic(TABLE_2, 7, 1);
+
+        CLUSTER.createTopic(TABLE_1, 3, 1);
+        CLUSTER.createTopic(TABLE_2, 5, 1);
         CLUSTER.createTopic(TABLE_3, 7, 1);
-        CLUSTER.createTopic(OUTPUT, 7, 1);
+        CLUSTER.createTopic(OUTPUT, 11, 1);
 
         PRODUCER_CONFIG_1.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         PRODUCER_CONFIG_1.put(ProducerConfig.ACKS_CONFIG, "all");

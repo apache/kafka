@@ -115,9 +115,4 @@ public class ChangeLoggingKeyValueBytesStore
              final byte[] value) {
         changeLogger.logChange(key, value);
     }
-
-    @Override
-    public KeyValueIterator<Bytes, byte[]> prefixScan(final Bytes prefix) {
-        return wrapped().prefixScan(prefix);
-    }
 }

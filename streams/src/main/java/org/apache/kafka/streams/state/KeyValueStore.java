@@ -27,7 +27,7 @@ import java.util.List;
  * @param <K> The key type
  * @param <V> The value type
  */
-public interface KeyValueStore<K, V> extends StateStore, ReadOnlyKeyValueStore<K, V>, PrefixScanKeyValueStore<K, V> {
+public interface KeyValueStore<K, V> extends StateStore, ReadOnlyKeyValueStore<K, V> {
 
     /**
      * Update the value associated with this key.

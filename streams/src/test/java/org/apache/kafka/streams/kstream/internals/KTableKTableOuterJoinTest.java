@@ -40,7 +40,9 @@ import java.util.HashSet;
 import java.util.Properties;
 import java.util.Set;
 
+import static java.util.Collections.singleton;
 import static org.apache.kafka.test.StreamsTestUtils.getMetricByName;
+import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.hasItem;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
@@ -75,8 +77,7 @@ public class KTableKTableOuterJoinTest {
         final Collection<Set<String>> copartitionGroups =
             TopologyWrapper.getInternalTopologyBuilder(builder.build()).copartitionGroups();
 
-        assertEquals(1, copartitionGroups.size());
-        assertEquals(new HashSet<>(Arrays.asList(topic1, topic2)), copartitionGroups.iterator().next());
+        assertThat(new HashSet<>(copartitionGroups), equalTo(singleton(new HashSet<>(Arrays.asList(topic1, topic2)))));
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             // push two items to the primary stream. the other table is empty

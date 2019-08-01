@@ -158,10 +158,12 @@ public class Bytes implements Comparable<Bytes> {
                 carry = 0;
             }
         }
-        if (carry == 0)
+        if (carry == 0) {
             return wrap(Arrays.copyOf(ret, inputArr.length));
-        ret[0] = 1;
-        return wrap(ret);
+        } else {
+            ret[0] = 1;
+            return wrap(ret);
+        }
     }
 
     /**

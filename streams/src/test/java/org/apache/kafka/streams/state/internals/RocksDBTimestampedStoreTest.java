@@ -203,21 +203,6 @@ public class RocksDBTimestampedStoreTest extends RocksDBStoreTest {
         }
         assertFalse(it.hasNext());
         it.close();
-
-        final KeyValueIterator<Bytes, byte[]> itPrefix = rocksDBStore.prefixScan(new Bytes("key1".getBytes()));
-        {
-            final KeyValue<Bytes, byte[]> keyValue = itPrefix.next();
-            assertArrayEquals("key1".getBytes(), keyValue.key.get());
-            // unknown timestamp == -1 plus value == 1
-            assertArrayEquals(new byte[]{-1, -1, -1, -1, -1, -1, -1, -1, '1'}, keyValue.value);
-        }
-        {
-            final KeyValue<Bytes, byte[]> keyValue = itPrefix.next();
-            assertArrayEquals("key11".getBytes(), keyValue.key.get());
-            assertArrayEquals(new byte[]{'t', 'i', 'm', 'e', 's', 't', 'a', 'm', 'p', '+', '1', '1', '1', '1', '1', '1', '1', '1', '1', '1', '1'}, keyValue.value);
-        }
-        assertFalse(itPrefix.hasNext());
-        itPrefix.close();
     }
 
     private void verifyOldAndNewColumnFamily() throws Exception {

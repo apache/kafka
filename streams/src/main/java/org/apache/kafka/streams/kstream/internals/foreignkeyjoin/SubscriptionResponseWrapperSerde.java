@@ -21,26 +21,14 @@ import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serializer;
 
 import java.nio.ByteBuffer;
-import java.util.Map;
 
 public class SubscriptionResponseWrapperSerde<V> implements Serde<SubscriptionResponseWrapper<V>> {
     private final SubscriptionResponseWrapperSerializer<V> serializer;
     private final SubscriptionResponseWrapperDeserializer<V> deserializer;
-    public final static int VERSION_BITS = 7;
 
     public SubscriptionResponseWrapperSerde(final Serde<V> foreignValueSerde) {
-        this.serializer = new SubscriptionResponseWrapperSerializer<>(foreignValueSerde.serializer());
-        this.deserializer = new SubscriptionResponseWrapperDeserializer<>(foreignValueSerde.deserializer());
-    }
-
-    @Override
-    public void configure(final Map configs, final boolean isKey) {
-
-    }
-
-    @Override
-    public void close() {
-
+        serializer = new SubscriptionResponseWrapperSerializer<>(foreignValueSerde.serializer());
+        deserializer = new SubscriptionResponseWrapperDeserializer<>(foreignValueSerde.deserializer());
     }
 
     @Override
@@ -53,16 +41,11 @@ public class SubscriptionResponseWrapperSerde<V> implements Serde<SubscriptionRe
         return deserializer;
     }
 
-    private static class SubscriptionResponseWrapperSerializer<V> implements Serializer<SubscriptionResponseWrapper<V>> {
+    private static final class SubscriptionResponseWrapperSerializer<V> implements Serializer<SubscriptionResponseWrapper<V>> {
         private final Serializer<V> serializer;
 
-        public SubscriptionResponseWrapperSerializer(final Serializer<V> serializer) {
+        private SubscriptionResponseWrapperSerializer(final Serializer<V> serializer) {
             this.serializer = serializer;
-        }
-
-        @Override
-        public void configure(final Map configs, final boolean isKey) {
-            //Do nothing
         }
 
         @Override
@@ -90,22 +73,13 @@ public class SubscriptionResponseWrapperSerde<V> implements Serde<SubscriptionRe
             return buf.array();
         }
 
-        @Override
-        public void close() {
-            //Do nothing
-        }
     }
 
-    private static class SubscriptionResponseWrapperDeserializer<V> implements Deserializer<SubscriptionResponseWrapper<V>> {
-        final private Deserializer<V> deserializer;
+    private static final class SubscriptionResponseWrapperDeserializer<V> implements Deserializer<SubscriptionResponseWrapper<V>> {
+        private final Deserializer<V> deserializer;
 
-        public SubscriptionResponseWrapperDeserializer(final Deserializer<V> deserializer) {
+        private SubscriptionResponseWrapperDeserializer(final Deserializer<V> deserializer) {
             this.deserializer = deserializer;
-        }
-
-        @Override
-        public void configure(final Map<String, ?> configs, final boolean isKey) {
-            //Do nothing
         }
 
         @Override
@@ -139,10 +113,6 @@ public class SubscriptionResponseWrapperSerde<V> implements Serde<SubscriptionRe
             return new SubscriptionResponseWrapper<>(hash, value, version);
         }
 
-        @Override
-        public void close() {
-            //Do nothing
-        }
     }
 
 }

@@ -208,19 +208,6 @@ public class RocksDBTimestampedStore extends RocksDBStore implements Timestamped
             return new RocksDBDualCFIterator(name, innerIterWithTimestamp, innerIterNoTimestamp);
         }
 
-        /**
-         * @throws UnsupportedOperationException
-         */
-        @Override
-        public KeyValueIterator<Bytes, byte[]> prefix(final Bytes prefix) {
-            return new RocksDBDualCFPrefixIterator(
-                    name,
-                    db.newIterator(newColumnFamily),
-                    db.newIterator(oldColumnFamily),
-                    prefix
-            );
-        }
-
         @Override
         public long approximateNumEntries() throws RocksDBException {
             return db.getLongProperty(oldColumnFamily, "rocksdb.estimate-num-keys")
