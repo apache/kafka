@@ -639,9 +639,13 @@ class TransactionStateManagerTest {
     val reporter = new JmxReporter("kafka.server")
     metrics.addReporter(reporter)
 
+    def partitionLoadTime(attribute: String): Double = {
+      server.getAttribute(new ObjectName(mBeanName), attribute).asInstanceOf[Double]
+    }
+
     assertTrue(server.isRegistered(new ObjectName(mBeanName)))
-    assertEquals(Double.NaN, server.getAttribute(new ObjectName(mBeanName), "partition-load-time-max"))
-    assertEquals(Double.NaN, server.getAttribute(new ObjectName(mBeanName), "partition-load-time-avg"))
+    assertEquals(Double.NaN, partitionLoadTime( "partition-load-time-max"), 0)
+    assertEquals(Double.NaN, partitionLoadTime("partition-load-time-avg"), 0)
     assertTrue(reporter.containsMbean(mBeanName))
 
     txnMetadata1.state = Ongoing
@@ -657,7 +661,7 @@ class TransactionStateManagerTest {
     transactionManager.loadTransactionsForTxnTopicPartition(partitionId, 0, (_, _, _, _, _) => ())
     scheduler.tick()
 
-    assertTrue(server.getAttribute(new ObjectName(mBeanName), "partition-load-time-max").asInstanceOf[Double] >= 0)
-    assertTrue(server.getAttribute(new ObjectName(mBeanName), "partition-load-time-avg").asInstanceOf[Double] >= 0)
+    assertTrue(partitionLoadTime("partition-load-time-max") >= 0)
+    assertTrue(partitionLoadTime( "partition-load-time-avg") >= 0)
   }
 }

@@ -86,8 +86,7 @@ class GroupMetadataManager(brokerId: Int,
   private val openGroupsForProducer = mutable.HashMap[Long, mutable.Set[String]]()
 
   /* setup metrics*/
-  private val metricConfig: MetricConfig = new MetricConfig().samples(1)
-  val partitionLoadSensor = metrics.sensor("PartitionLoadTime", metricConfig)
+  val partitionLoadSensor = metrics.sensor("PartitionLoadTime")
 
   partitionLoadSensor.add(metrics.metricName("partition-load-time-max",
     "group-coordinator-metrics",
@@ -513,8 +512,9 @@ class GroupMetadataManager(brokerId: Int,
       val startMs = time.milliseconds()
       doLoadGroupsAndOffsets(topicPartition, onGroupLoaded)
       val endMs = time.milliseconds()
-      partitionLoadSensor.record(endMs - startMs, endMs, false)
-      info(s"Finished loading offsets and group metadata from $topicPartition in ${endMs - startMs} milliseconds.")
+      val timeLapse = endMs - startMs
+      partitionLoadSensor.record(timeLapse, endMs, false)
+      info(s"Finished loading offsets and group metadata from $topicPartition in $timeLapse milliseconds.")
     } catch {
       case t: Throwable => error(s"Error loading offsets from $topicPartition", t)
     } finally {

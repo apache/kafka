@@ -98,8 +98,7 @@ class TransactionStateManager(brokerId: Int,
   private val transactionTopicPartitionCount = getTransactionTopicPartitionCount
 
   /** setup metrics*/
-  private val metricConfig: MetricConfig = new MetricConfig().samples(1)
-  private val partitionLoadSensor = metrics.sensor("PartitionLoadTime", metricConfig)
+  private val partitionLoadSensor = metrics.sensor("PartitionLoadTime")
 
   partitionLoadSensor.add(metrics.metricName("partition-load-time-max",
     "transaction-coordinator-metrics",
@@ -354,8 +353,9 @@ class TransactionStateManager(brokerId: Int,
               }
             }
             val endMs = time.milliseconds()
-            partitionLoadSensor.record(endMs - startMs, endMs, false)
-            info(s"Finished loading ${loadedTransactions.size} transaction metadata from $topicPartition in ${endMs - startMs} milliseconds")
+            val timeLapse = endMs - startMs
+            partitionLoadSensor.record(timeLapse, endMs, false)
+            info(s"Finished loading ${loadedTransactions.size} transaction metadata from $topicPartition in $timeLapse milliseconds")
           }
         } catch {
           case t: Throwable => error(s"Error loading transactions from transaction log $topicPartition", t)

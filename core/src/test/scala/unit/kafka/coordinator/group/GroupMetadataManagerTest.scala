@@ -2056,10 +2056,6 @@ class GroupMetadataManagerTest {
     expectMetrics(groupMetadataManager, 1, 0, 1)
   }
 
-  def addDelay(durationMs: Long)(groupMetadata: GroupMetadata): Unit ={
-    time.sleep(durationMs)
-  }
-
   @Test
   def testPartitionLoadMetric(): Unit = {
     val server = ManagementFactory.getPlatformMBeanServer
@@ -2067,9 +2063,13 @@ class GroupMetadataManagerTest {
     val reporter = new JmxReporter("kafka.server")
     metrics.addReporter(reporter)
 
+    def partitionLoadTime(attribute: String): Double = {
+      server.getAttribute(new ObjectName(mBeanName), attribute).asInstanceOf[Double]
+    }
+
     assertTrue(server.isRegistered(new ObjectName(mBeanName)))
-    assertEquals(Double.NaN, server.getAttribute(new ObjectName(mBeanName), "partition-load-time-max"))
-    assertEquals(Double.NaN, server.getAttribute(new ObjectName(mBeanName), "partition-load-time-avg"))
+    assertEquals(Double.NaN, partitionLoadTime( "partition-load-time-max"), 0)
+    assertEquals(Double.NaN, partitionLoadTime("partition-load-time-avg"), 0)
     assertTrue(reporter.containsMbean(mBeanName))
 
     val groupMetadataTopicPartition = groupTopicPartition
@@ -2087,27 +2087,11 @@ class GroupMetadataManagerTest {
     val records = MemoryRecords.withRecords(startOffset, CompressionType.NONE,
       (offsetCommitRecords ++ Seq(groupMetadataRecord)).toArray: _*)
 
-    def loadWithDelay(duration: Int): Unit = {
-      EasyMock.reset(replicaManager)
-      expectGroupMetadataLoad(groupMetadataTopicPartition, startOffset, records)
-      EasyMock.replay(replicaManager)
-      groupMetadataManager.loadGroupsAndOffsets(groupMetadataTopicPartition, addDelay(duration))
-    }
+    expectGroupMetadataLoad(groupMetadataTopicPartition, startOffset, records)
+    EasyMock.replay(replicaManager)
+    groupMetadataManager.loadGroupsAndOffsets(groupMetadataTopicPartition, _ => ())
 
-    // max of one 30sec window
-    val durationMs = List(9000, 3000, 7000, 7000, 7000)
-    durationMs.foreach(loadWithDelay)
-    assertEquals(9000.0, server.getAttribute(new ObjectName(mBeanName), "partition-load-time-max"))
-
-    // last window was complete, so compute new max of this window
-    val durationMs2 = List(6000, 2000, 4000)
-    durationMs2.foreach(loadWithDelay)
-    assertEquals(6000.0, server.getAttribute(new ObjectName(mBeanName), "partition-load-time-max"))
-
-    // even if a window records no new value, the max is the same as the previous window
-    time.sleep(31000)
-    assertEquals(6000.0, server.getAttribute(new ObjectName(mBeanName), "partition-load-time-max"))
-
-    assertTrue(server.getAttribute(new ObjectName(mBeanName), "partition-load-time-avg").asInstanceOf[Double] >= 0.0)
+    assertTrue(partitionLoadTime("partition-load-time-max") >= 0.0)
+    assertTrue(partitionLoadTime( "partition-load-time-avg") >= 0.0)
   }
 }
