@@ -31,6 +31,7 @@ import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.producer.Callback;
+import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.MetricName;
@@ -347,6 +348,27 @@ public final class RecordAccumulator {
             else
                 deque.addFirst(batch);
         }
+    }
+
+    public ProducerBatch dropRecordsAndReenqueueNewBatch(ProducerBatch batch, Set<Integer> errorRecords, long now) {
+        ProducerBatch[] batches = batch.dropRecords(errorRecords);
+        ProducerBatch batchToDrop = batches[0];
+        ProducerBatch batchToKeep = batches[1];
+
+        incomplete.add(batchToDrop);
+        incomplete.add(batchToKeep);
+
+        batchToKeep.reenqueued(now);
+        Deque<ProducerBatch> partitionDeque = getOrCreateDeque(batch.topicPartition);
+        synchronized (partitionDeque) {
+            if (transactionManager != null && transactionManager.hasProducerIdAndEpoch(batchToKeep.producerId(), batchToKeep.producerEpoch())) {
+                transactionManager.addInFlightBatch(batchToKeep);
+                insertInSequenceOrder(partitionDeque, batchToKeep);
+            } else
+                partitionDeque.addLast(batchToKeep);
+        }
+
+        return batchToDrop;
     }
 
     /**

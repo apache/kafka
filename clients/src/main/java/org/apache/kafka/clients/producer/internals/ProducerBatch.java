@@ -41,6 +41,7 @@ import java.util.ArrayList;
 import java.util.Deque;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -117,6 +118,20 @@ public final class ProducerBatch {
             thunks.add(new Thunk(callback, future));
             this.recordCount++;
             return future;
+        }
+    }
+
+    /**
+     * Append the record to the current record set with an existing future
+     * Used for {@link #dropRecords(Set)} when dropping failed records from a batch
+     */
+    private void tryAppendForDropping(long timestamp, ByteBuffer key, ByteBuffer value, Header[] headers, Thunk thunk) {
+        if (recordsBuilder.hasRoomFor(timestamp, key, value, headers)) {
+            this.recordsBuilder.append(timestamp, key, value, headers);
+            this.maxRecordSize = Math.max(this.maxRecordSize, AbstractRecords.estimateSizeInBytesUpperBound(magic(),
+                    recordsBuilder.compressionType(), key, value, headers));
+            thunks.add(thunk);
+            this.recordCount++;
         }
     }
 
@@ -235,6 +250,46 @@ public final class ProducerBatch {
         }
 
         produceFuture.done();
+    }
+
+    public ProducerBatch[] dropRecords(Set<Integer> errorRecords) {
+        MemoryRecords memoryRecords = recordsBuilder.build();
+
+        Iterator<MutableRecordBatch> recordBatchIterator = memoryRecords.batches().iterator();
+        if (!recordBatchIterator.hasNext())
+            throw new IllegalStateException("Cannot drop records from an empty producer batch.");
+
+        RecordBatch recordBatch = recordBatchIterator.next();
+
+        if (recordBatchIterator.hasNext())
+            throw new IllegalArgumentException("A producer batch should only have one record batch.");
+
+        Iterator<Thunk> thunkIterator = thunks.iterator();
+
+        ProducerBatch batchToDrop = null;
+        ProducerBatch batchToKeep = null;
+
+        for (Record record : recordBatch) {
+            assert thunkIterator.hasNext();
+            Thunk thunk = thunkIterator.next();
+
+            if (errorRecords.contains((int) record.offset())) {
+                if (batchToDrop == null)
+                    batchToDrop = createBatchOffAccumulatorForRecord(record, recordBatch.sizeInBytes());
+                batchToDrop.tryAppendForDropping(record.timestamp(), record.key(), record.value(), record.headers(), thunk);
+            } else {
+                if (batchToKeep == null)
+                    batchToKeep = createBatchOffAccumulatorForRecord(record, recordBatch.sizeInBytes());
+                batchToKeep.tryAppendForDropping(record.timestamp(), record.key(), record.value(), record.headers(), thunk);
+            }
+        }
+
+        if (batchToKeep != null && hasSequence()) {
+            ProducerIdAndEpoch producerIdAndEpoch = new ProducerIdAndEpoch(producerId(), producerEpoch());
+            batchToKeep.setProducerState(producerIdAndEpoch, baseSequence(), isTransactional());
+        }
+
+        return new ProducerBatch[]{batchToDrop, batchToKeep};
     }
 
     public Deque<ProducerBatch> split(int splitBatchSize) {

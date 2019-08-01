@@ -24,6 +24,7 @@ import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.NetworkClientUtils;
 import org.apache.kafka.clients.RequestCompletionHandler;
 import org.apache.kafka.common.Cluster;
+import org.apache.kafka.common.InvalidRecordException;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.Node;
@@ -60,6 +61,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -660,6 +662,19 @@ public class Sender implements Runnable {
                 //
                 // The only thing we can do is to return success to the user and not return a valid offset and timestamp.
                 completeBatch(batch, response);
+
+            // only execute the batch dropping and retrial logic if all records
+            } else if (!response.errorRecords.isEmpty() && response.errorRecords.size() < batch.recordCount) {
+                if (!response.errorMessage.isEmpty())
+                    log.error(response.errorMessage);
+                else
+                    log.error(response.error.message());
+
+                // remove this batch from in flight batches and deallocate it
+                maybeRemoveFromInflightBatches(batch);
+                this.accumulator.deallocate(batch);
+                ProducerBatch batchToDrop = this.accumulator.dropRecordsAndReenqueueNewBatch(batch, new HashSet<>(response.errorRecords), now);
+                failBatch(batchToDrop, response, new InvalidRecordException("Batch is dropped"), true);
             } else {
                 final RuntimeException exception;
                 if (error == Errors.TOPIC_AUTHORIZATION_FAILED)
