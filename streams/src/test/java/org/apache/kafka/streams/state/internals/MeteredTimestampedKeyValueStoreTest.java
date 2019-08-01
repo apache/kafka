@@ -215,22 +215,6 @@ public class MeteredTimestampedKeyValueStoreTest {
     }
 
     @Test
-    public void shouldGetPrefixFromInnerStoreAndRecordPrefixMetric() {
-        expect(inner.prefixScan(keyBytes)).andReturn(
-                new KeyValueIteratorStub<>(Collections.singletonList(byteKeyValueTimestampPair).iterator()));
-        init();
-
-        final KeyValueIterator<String, ValueAndTimestamp<String>> iterator = metered.prefixScan(key);
-        assertThat(iterator.next().value, equalTo(valueAndTimestamp));
-        assertFalse(iterator.hasNext());
-        iterator.close();
-
-        final KafkaMetric metric = metric("prefix-rate");
-        assertTrue((Double) metric.metricValue() > 0);
-        verify(inner);
-    }
-
-    @Test
     public void shouldFlushInnerWhenFlushTimeRecords() {
         inner.flush();
         expectLastCall().once();

@@ -74,4 +74,5 @@ public interface ReadOnlyKeyValueStore<K, V> {
      * @throws InvalidStateStoreException if the store is not initialized
      */
     long approximateNumEntries();
+
 }

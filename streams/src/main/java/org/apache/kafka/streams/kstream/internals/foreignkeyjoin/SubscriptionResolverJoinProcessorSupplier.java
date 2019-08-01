@@ -76,8 +76,8 @@ public class SubscriptionResolverJoinProcessorSupplier<K, V, VO, VR> implements 
                 //registered schema.
                 final String dummySerializationTopic = context().topic() + "-join-resolver";
                 final long[] currentHash = currentValueWithTimestamp == null ?
-                        null :
-                        Murmur3.hash128(valueSerializer.serialize(dummySerializationTopic, currentValueWithTimestamp.value()));
+                    null :
+                    Murmur3.hash128(valueSerializer.serialize(dummySerializationTopic, currentValueWithTimestamp.value()));
 
                 final long[] messageHash = value.getOriginalValueHash();
 
@@ -86,7 +86,8 @@ public class SubscriptionResolverJoinProcessorSupplier<K, V, VO, VR> implements 
                     final VR result;
 
                     if (value.getForeignValue() == null && !leftJoin ||
-                            leftJoin && currentValueWithTimestamp == null && value.getForeignValue() == null) {
+                        leftJoin && currentValueWithTimestamp == null && value.getForeignValue() == null) {
+
                         result = null; //Emit tombstone
                     } else {
                         result = joiner.apply(currentValueWithTimestamp == null ? null : currentValueWithTimestamp.value(), value.getForeignValue());

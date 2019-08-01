@@ -124,11 +124,6 @@ public class KeyValueToTimestampedKeyValueByteStoreAdapter implements KeyValueSt
     }
 
     @Override
-    public KeyValueIterator<Bytes, byte[]> prefixScan(final Bytes prefix) {
-        return new KeyValueToTimestampedKeyValueIteratorAdapter<>(store.prefixScan(prefix));
-    }
-
-    @Override
     public long approximateNumEntries() {
         return store.approximateNumEntries();
     }

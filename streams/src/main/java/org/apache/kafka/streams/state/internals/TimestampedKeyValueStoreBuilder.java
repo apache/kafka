@@ -139,11 +139,6 @@ public class TimestampedKeyValueStoreBuilder<K, V>
         }
 
         @Override
-        public KeyValueIterator<Bytes, byte[]> prefixScan(final Bytes prefix) {
-            return wrapped.prefixScan(prefix);
-        }
-
-        @Override
         public long approximateNumEntries() {
             return wrapped.approximateNumEntries();
         }

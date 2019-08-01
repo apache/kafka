@@ -18,18 +18,17 @@ package org.apache.kafka.streams.kstream.internals.foreignkeyjoin;
 
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 
+import java.util.Arrays;
 import java.util.Objects;
 
 
 public class SubscriptionWrapper<K> {
-    final static byte CURRENT_VERSION = 0;
-    //This is the maximum version because SubscriptionWrapperSerde uses
-    final private static byte MAXIMUM_VERSION_INCLUSIVE = (byte) Math.pow(2, SubscriptionWrapperSerde.versionBits);
+    static final byte CURRENT_VERSION = 0;
 
-    final private long[] hash;
-    final private Instruction instruction;
-    final private byte version;
-    final private K primaryKey;
+    private final long[] hash;
+    private final Instruction instruction;
+    private final byte version;
+    private final K primaryKey;
 
     public enum Instruction {
         //Send nothing. Do not propagate.
@@ -47,12 +46,12 @@ public class SubscriptionWrapper<K> {
         //Send (k, fk-val) only if fk-val exists.
         PROPAGATE_ONLY_IF_FK_VAL_AVAILABLE((byte) 0x03);
 
-        private byte value;
+        private final byte value;
         Instruction(final byte value) {
             this.value = value;
         }
 
-        public byte getByte() {
+        public byte getValue() {
             return value;
         }
 
@@ -97,6 +96,16 @@ public class SubscriptionWrapper<K> {
 
     public byte getVersion() {
         return version;
+    }
+
+    @Override
+    public String toString() {
+        return "SubscriptionWrapper{" +
+            "version=" + version +
+            ", primaryKey=" + primaryKey +
+            ", instruction=" + instruction +
+            ", hash=" + Arrays.toString(hash) +
+            '}';
     }
 }
 

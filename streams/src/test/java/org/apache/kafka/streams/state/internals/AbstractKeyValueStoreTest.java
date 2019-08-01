@@ -111,34 +111,6 @@ public abstract class AbstractKeyValueStoreTest {
     }
 
     @Test
-    public void shouldNotIncludeDeletedFromPrefixResult() {
-        store.close();
-
-        final Serializer<String> serializer = new StringSerializer() {
-            private int numCalls = 0;
-
-            @Override
-            public byte[] serialize(final String topic, final String data) {
-                if (++numCalls > 3) {
-                    fail("Value serializer is called; it should never happen");
-                }
-
-                return super.serialize(topic, data);
-            }
-        };
-
-        context.setValueSerde(Serdes.serdeFrom(serializer, new StringDeserializer()));
-        store = createKeyValueStore(driver.context());
-
-        store.put(0, "zero");
-        store.delete(0);
-
-        // should not include deleted records in iterator
-        final Map<Integer, String> expectedContents = new HashMap<>();
-        assertEquals(expectedContents, getContents(store.prefixScan(0)));
-    }
-
-    @Test
     public void shouldDeleteIfSerializedValueIsNull() {
         store.close();
 
@@ -213,10 +185,6 @@ public abstract class AbstractKeyValueStoreTest {
         expectedContents.put(0, "zero");
         expectedContents.put(1, "one");
         assertEquals(expectedContents, getContents(store.all()));
-
-        final HashMap<Integer, String> expectedPrefixScanContents = new HashMap<>();
-        expectedPrefixScanContents.put(4, "four");
-        assertEquals(expectedPrefixScanContents, getContents(store.prefixScan(4)));
     }
 
     @Test
@@ -373,11 +341,6 @@ public abstract class AbstractKeyValueStoreTest {
         store.range(2, null);
     }
 
-    @Test(expected = NullPointerException.class)
-    public void shouldThrowNullPointerExceptionOnPrefixNull() {
-        store.prefixScan(null);
-    }
-
     @Test
     public void testSize() {
         assertEquals("A newly created store should have no entries", 0, store.approximateNumEntries());
@@ -434,36 +397,10 @@ public abstract class AbstractKeyValueStoreTest {
     }
 
     @Test
-    public void shouldReturnSameResultsForGetAndPrefixWithEqualKeys() {
-        final List<KeyValue<Integer, String>> entries = new ArrayList<>();
-        entries.add(new KeyValue<>(1, "one"));
-        entries.add(new KeyValue<>(2, "two"));
-        entries.add(new KeyValue<>(3, "three"));
-
-        store.putAll(entries);
-
-        final Iterator<KeyValue<Integer, String>> iterator = store.prefixScan(2);
-
-        assertEquals(iterator.next().value, store.get(2));
-        assertFalse(iterator.hasNext());
-    }
-
-    @Test
     public void shouldNotThrowConcurrentModificationExceptionDuringRange() {
         store.put(0, "zero");
 
         final KeyValueIterator<Integer, String> results = store.range(0, 2);
-
-        store.put(1, "one");
-
-        assertEquals(new KeyValue<>(0, "zero"), results.next());
-    }
-
-    @Test
-    public void shouldNotThrowConcurrentModificationExceptionDuringPrefix() {
-        store.put(0, "zero");
-
-        final KeyValueIterator<Integer, String> results = store.prefixScan(0);
 
         store.put(1, "one");
 
@@ -482,14 +419,5 @@ public abstract class AbstractKeyValueStoreTest {
         assertThat(messages, hasItem("Returning empty iterator for fetch with invalid key range: from > to. "
             + "This may be due to serdes that don't preserve ordering when lexicographically comparing the serialized bytes. "
             + "Note that the built-in numerical serdes do not follow this for negative numbers"));
-    }
-
-    @Test
-    public void shouldNotThrowInvalidPrefixExceptionWithNegativePrefix() {
-        LogCaptureAppender.setClassLoggerToDebug(InMemoryWindowStore.class);
-        final LogCaptureAppender appender = LogCaptureAppender.createAndRegister();
-
-        final KeyValueIterator<Integer, String> iterator = store.prefixScan(-1);
-        assertFalse(iterator.hasNext());
     }
 }

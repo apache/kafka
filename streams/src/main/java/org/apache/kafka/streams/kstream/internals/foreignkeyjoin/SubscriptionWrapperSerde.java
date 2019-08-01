@@ -21,47 +21,30 @@ import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serializer;
 
 import java.nio.ByteBuffer;
-import java.util.Map;
 
-public class SubscriptionWrapperSerde<K> implements Serde {
+public class SubscriptionWrapperSerde<K> implements Serde<SubscriptionWrapper<K>> {
     private final SubscriptionWrapperSerializer<K> serializer;
     private final SubscriptionWrapperDeserializer<K> deserializer;
-    public static int versionBits = 7;
 
     public SubscriptionWrapperSerde(final Serde<K> primaryKeySerde) {
-        this.serializer = new SubscriptionWrapperSerializer<>(primaryKeySerde.serializer());
-        this.deserializer = new SubscriptionWrapperDeserializer<>(primaryKeySerde.deserializer());
+        serializer = new SubscriptionWrapperSerializer<>(primaryKeySerde.serializer());
+        deserializer = new SubscriptionWrapperDeserializer<>(primaryKeySerde.deserializer());
     }
 
     @Override
-    public void configure(final Map configs, final boolean isKey) {
-
-    }
-
-    @Override
-    public void close() {
-
-    }
-
-    @Override
-    public Serializer serializer() {
+    public Serializer<SubscriptionWrapper<K>> serializer() {
         return serializer;
     }
 
     @Override
-    public Deserializer deserializer() {
+    public Deserializer<SubscriptionWrapper<K>> deserializer() {
         return deserializer;
     }
 
     private static class SubscriptionWrapperSerializer<K> implements Serializer<SubscriptionWrapper<K>> {
-        final private Serializer<K> primaryKeySerializer;
+        private final Serializer<K> primaryKeySerializer;
         SubscriptionWrapperSerializer(final Serializer<K> primaryKeySerializer) {
             this.primaryKeySerializer = primaryKeySerializer;
-        }
-
-        @Override
-        public void configure(final Map configs, final boolean isKey) {
-            //Do nothing
         }
 
         @Override
@@ -72,14 +55,14 @@ public class SubscriptionWrapperSerde<K> implements Serde {
             final ByteBuffer buf;
             if (data.getHash() != null) {
                 buf = ByteBuffer.allocate(2 + 2 * Long.BYTES + primaryKeySerializedData.length);
-                buf.put((byte) (data.getVersion() | (byte) 0x00));
+                buf.put(data.getVersion());
             } else {
                 //Don't store hash as it's null.
                 buf = ByteBuffer.allocate(2 + primaryKeySerializedData.length);
                 buf.put((byte) (data.getVersion() | (byte) 0x80));
             }
 
-            buf.put(data.getInstruction().getByte());
+            buf.put(data.getInstruction().getValue());
             final long[] elem = data.getHash();
             if (data.getHash() != null) {
                 buf.putLong(elem[0]);
@@ -89,25 +72,16 @@ public class SubscriptionWrapperSerde<K> implements Serde {
             return buf.array();
         }
 
-        @Override
-        public void close() {
-            //Do nothing
-        }
     }
 
-    private static class SubscriptionWrapperDeserializer<K> implements Deserializer<SubscriptionWrapper> {
-        final private Deserializer<K> primaryKeyDeserializer;
+    private static class SubscriptionWrapperDeserializer<K> implements Deserializer<SubscriptionWrapper<K>> {
+        private final Deserializer<K> primaryKeyDeserializer;
         SubscriptionWrapperDeserializer(final Deserializer<K> primaryKeyDeserializer) {
             this.primaryKeyDeserializer = primaryKeyDeserializer;
         }
 
         @Override
-        public void configure(final Map<String, ?> configs, final boolean isKey) {
-            //Do nothing
-        }
-
-        @Override
-        public SubscriptionWrapper deserialize(final String topic, final byte[] data) {
+        public SubscriptionWrapper<K> deserialize(final String topic, final byte[] data) {
             //{7-bits-version}{1-bit-isHashNull}{1-byte-instruction}{Optional-16-byte-Hash}{PK-serialized}
             final ByteBuffer buf = ByteBuffer.wrap(data);
             final byte versionAndIsHashNull = buf.get();
@@ -133,15 +107,6 @@ public class SubscriptionWrapperSerde<K> implements Serde {
             return new SubscriptionWrapper<>(hash, inst, primaryKey, version);
         }
 
-        @Override
-        public void close() {
-            //Do nothing
-        }
     }
 
-    private static byte[] numToBytes(final int num) {
-        final ByteBuffer wrapped = ByteBuffer.allocate(Integer.BYTES);
-        wrapped.putInt(num);
-        return wrapped.array();
-    }
 }

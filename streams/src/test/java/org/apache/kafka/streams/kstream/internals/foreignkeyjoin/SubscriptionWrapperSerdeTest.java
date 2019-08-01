@@ -24,6 +24,7 @@ import org.junit.Test;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 
+@SuppressWarnings({"unchecked", "rawtypes"})
 public class SubscriptionWrapperSerdeTest {
 
     @Test
@@ -36,7 +37,7 @@ public class SubscriptionWrapperSerdeTest {
         final byte[] serialized = swSerde.serializer().serialize(null, wrapper);
         final SubscriptionWrapper deserialized = (SubscriptionWrapper) swSerde.deserializer().deserialize(null, serialized);
 
-        assertEquals(deserialized.getInstruction(), SubscriptionWrapper.Instruction.DELETE_KEY_AND_PROPAGATE);
+        assertEquals(SubscriptionWrapper.Instruction.DELETE_KEY_AND_PROPAGATE, deserialized.getInstruction());
         assertArrayEquals(hashedValue, deserialized.getHash());
         assertEquals(originalKey, deserialized.getPrimaryKey());
     }
@@ -50,7 +51,7 @@ public class SubscriptionWrapperSerdeTest {
         final byte[] serialized = swSerde.serializer().serialize(null, wrapper);
         final SubscriptionWrapper deserialized = (SubscriptionWrapper) swSerde.deserializer().deserialize(null, serialized);
 
-        assertEquals(deserialized.getInstruction(), SubscriptionWrapper.Instruction.PROPAGATE_ONLY_IF_FK_VAL_AVAILABLE);
+        assertEquals(SubscriptionWrapper.Instruction.PROPAGATE_ONLY_IF_FK_VAL_AVAILABLE, deserialized.getInstruction());
         assertArrayEquals(hashedValue, deserialized.getHash());
         assertEquals(originalKey, deserialized.getPrimaryKey());
     }
@@ -59,7 +60,7 @@ public class SubscriptionWrapperSerdeTest {
     public void shouldThrowExceptionOnNullKeyTest() {
         final String originalKey = null;
         final SubscriptionWrapperSerde swSerde = new SubscriptionWrapperSerde<>(Serdes.String());
-        final long[] hashedValue = Murmur3.hash128(new byte[] {(byte) 0xFF, (byte) 0xAA, (byte) 0x00, (byte) 0x19});;
+        final long[] hashedValue = Murmur3.hash128(new byte[] {(byte) 0xFF, (byte) 0xAA, (byte) 0x00, (byte) 0x19});
         final SubscriptionWrapper wrapper = new SubscriptionWrapper<>(hashedValue, SubscriptionWrapper.Instruction.PROPAGATE_ONLY_IF_FK_VAL_AVAILABLE, originalKey);
         swSerde.serializer().serialize(null, wrapper);
     }
@@ -68,7 +69,7 @@ public class SubscriptionWrapperSerdeTest {
     public void shouldThrowExceptionOnNullInstructionTest() {
         final String originalKey = "originalKey";
         final SubscriptionWrapperSerde swSerde = new SubscriptionWrapperSerde<>(Serdes.String());
-        final long[] hashedValue = Murmur3.hash128(new byte[] {(byte) 0xFF, (byte) 0xAA, (byte) 0x00, (byte) 0x19});;
+        final long[] hashedValue = Murmur3.hash128(new byte[] {(byte) 0xFF, (byte) 0xAA, (byte) 0x00, (byte) 0x19});
         final SubscriptionWrapper wrapper = new SubscriptionWrapper<>(hashedValue, null, originalKey);
         swSerde.serializer().serialize(null, wrapper);
     }

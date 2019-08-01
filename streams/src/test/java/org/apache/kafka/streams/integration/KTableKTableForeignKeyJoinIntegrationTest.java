@@ -130,12 +130,6 @@ public class KTableKTableForeignKeyJoinIntegrationTest {
 
     @After
     public void after() throws IOException {
-        Set<String> topics = CLUSTER.getAllTopicsInCluster();
-
-        for (final String topic : topics) {
-            System.out.println(topic);
-        }
-
         if (streams != null) {
             streams.close();
             streams = null;

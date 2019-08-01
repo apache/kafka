@@ -19,15 +19,12 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.state.KeyValueIterator;
-
-import java.util.Comparator;
-import java.util.Iterator;
-import java.util.Map;
-import java.util.NavigableMap;
-import java.util.TreeMap;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.util.Iterator;
+import java.util.Map;
+import java.util.TreeMap;
 
 public class MemoryNavigableLRUCache extends MemoryLRUCache {
 
@@ -59,31 +56,9 @@ public class MemoryNavigableLRUCache extends MemoryLRUCache {
         return new MemoryNavigableLRUCache.CacheIterator(treeMap.navigableKeySet().iterator(), treeMap);
     }
 
-    @Override
-    public KeyValueIterator<Bytes, byte[]> prefixScan(final Bytes prefix) {
-        final Bytes prefixEnd = Bytes.increment(prefix);
-        final TreeMap<Bytes, byte[]> treeMap = toTreeMap();
-        final Comparator<? super Bytes> comparator = treeMap.comparator();
-
-        //We currently don't set a comparator for the treeMap, so the comparator will always be null.
-        final int result = comparator == null ? prefix.compareTo(prefixEnd) : comparator.compare(prefix, prefixEnd);
-
-        final NavigableMap<Bytes, byte[]> subMapResults;
-        if (result > 0) {
-            //Prefix increment would cause a wrap-around. Get the submap from toKey to the end of the map
-            subMapResults = treeMap.tailMap(prefix, true);
-        } else {
-            subMapResults = treeMap.subMap(prefix, true, prefixEnd, false);
-        }
-
-        return new DelegatingPeekingKeyValueIterator<>(name(),
-                new MemoryNavigableLRUCache.CacheIterator(subMapResults.navigableKeySet().iterator(), subMapResults));
-    }
-
     private synchronized TreeMap<Bytes, byte[]> toTreeMap() {
         return new TreeMap<>(this.map);
     }
-
 
     private static class CacheIterator implements KeyValueIterator<Bytes, byte[]> {
         private final Iterator<Bytes> keys;
