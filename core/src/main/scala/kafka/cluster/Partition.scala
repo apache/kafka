@@ -33,7 +33,7 @@ import org.apache.kafka.common.protocol.Errors
 
 import scala.collection.JavaConverters._
 import com.yammer.metrics.core.Gauge
-import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.{NewOffsetMetaData, TopicPartition}
 import org.apache.kafka.common.record.MemoryRecords
 import org.apache.kafka.common.requests.PartitionState
 import org.apache.kafka.common.utils.Time
@@ -48,7 +48,7 @@ class Partition(val topic: String,
   val topicPartition = new TopicPartition(topic, partitionId)
 
   private val localBrokerId = replicaManager.config.brokerId
-  private val logManager = replicaManager.logManager
+  val logManager = replicaManager.logManager
   private val zkUtils = replicaManager.zkUtils
   private val assignedReplicaMap = new Pool[Int, Replica]
   // The read lock is only required when multiple reads are executed and needs to be in a consistent manner
@@ -96,7 +96,7 @@ class Partition(val topic: String,
     tags
   )
 
-  private def isLeaderReplicaLocal: Boolean = leaderReplicaIfLocal.isDefined
+  def isLeaderReplicaLocal: Boolean = leaderReplicaIfLocal.isDefined
 
   def isUnderReplicated: Boolean =
     isLeaderReplicaLocal && inSyncReplicas.size < assignedReplicas.size
@@ -232,13 +232,14 @@ class Partition(val topic: String,
   /**
    * Update the log end offset of a certain replica of this partition
    */
-  def updateReplicaLogReadResult(replicaId: Int, logReadResult: LogReadResult) {
+  def updateReplicaLogReadResult(replicaId: Int, logReadResult: LogReadResult,
+                                 leaderOffsetMetaData: NewOffsetMetaData, followerOffsetMetaData: NewOffsetMetaData) {
     getReplica(replicaId) match {
       case Some(replica) =>
         replica.updateLogReadResult(logReadResult)
         // check if we need to expand ISR to include this replica
         // if it is not in the ISR yet
-        maybeExpandIsr(replicaId, logReadResult)
+        maybeExpandIsr(replicaId, logReadResult, leaderOffsetMetaData, followerOffsetMetaData)
 
         debug("Recorded replica %d log end offset (LEO) position %d for partition %s."
           .format(replicaId, logReadResult.info.fetchOffsetMetadata.messageOffset, topicPartition))
@@ -253,6 +254,14 @@ class Partition(val topic: String,
     }
   }
 
+  private def validNewOffsetMetaData(offsetMetaData: NewOffsetMetaData): Boolean = {
+    if (offsetMetaData.let != -1 && offsetMetaData.lst != -1) {
+      return true
+    } else {
+      return false
+    }
+  }
+
   /**
    * Check and maybe expand the ISR of the partition.
    * A replica will be added to ISR if its LEO >= current hw of the partition.
@@ -263,22 +272,43 @@ class Partition(val topic: String,
    *
    * This function can be triggered when a replica's LEO has incremented
    */
-  def maybeExpandIsr(replicaId: Int, logReadResult: LogReadResult) {
+  def maybeExpandIsr(replicaId: Int, logReadResult: LogReadResult,
+                     leaderOffsetMetaData: NewOffsetMetaData, followerOffsetMetaData: NewOffsetMetaData) {
+    val currentTime: Long = time.milliseconds
     val leaderHWIncremented = inWriteLock(leaderIsrUpdateLock) {
       // check if this replica needs to be added to the ISR
       leaderReplicaIfLocal match {
         case Some(leaderReplica) =>
           val replica = getReplica(replicaId).get
           val leaderHW = leaderReplica.highWatermark
-          if(!inSyncReplicas.contains(replica) &&
-             assignedReplicas.map(_.brokerId).contains(replicaId) &&
-             replica.logEndOffset.offsetDiff(leaderHW) >= 0) {
-            val newInSyncReplicas = inSyncReplicas + replica
-            info(s"Expanding ISR for partition $topicPartition from ${inSyncReplicas.map(_.brokerId).mkString(",")} " +
-              s"to ${newInSyncReplicas.map(_.brokerId).mkString(",")}")
-            // update ISR in ZK and cache
-            updateIsr(newInSyncReplicas)
-            replicaManager.isrExpandRate.mark()
+
+          if (replicaManager.config.smartExtendEnable) {
+            if (!inSyncReplicas.contains(replica) &&
+              assignedReplicas.map(_.brokerId).contains(replicaId) &&
+              replica.logEndOffset.offsetDiff(leaderHW) >= 0 &&
+              validNewOffsetMetaData(followerOffsetMetaData) &&
+              ((currentTime - followerOffsetMetaData.lst) > replicaManager.config.replicaIsrLstEntryTimeMaxMs ||
+                Math.abs(leaderOffsetMetaData.lso - followerOffsetMetaData.lso) < replicaManager.config.ReplicaIsrEntryISRMaxLag)) {
+
+              val newInSyncReplicas = inSyncReplicas + replica
+              info(s"Expanding ISR for partition $topicPartition from ${inSyncReplicas.map(_.brokerId).mkString(",")} " +
+                s"to ${newInSyncReplicas.map(_.brokerId).mkString(",")} + leader=" + leaderOffsetMetaData + " follower="
+                + followerOffsetMetaData + " currentTime=" + currentTime + " smartExtendEnable=" + replicaManager.config.smartExtendEnable)
+              // update ISR in ZK and cache
+              updateIsr(newInSyncReplicas)
+              replicaManager.isrExpandRate.mark()
+            }
+          } else {
+            if (!inSyncReplicas.contains(replica) &&
+              assignedReplicas.map(_.brokerId).contains(replicaId) &&
+              replica.logEndOffset.offsetDiff(leaderHW) >= 0) {
+              val newInSyncReplicas = inSyncReplicas + replica
+              info(s"Expanding ISR for partition $topicPartition from ${inSyncReplicas.map(_.brokerId).mkString(",")} " +
+                s"to ${newInSyncReplicas.map(_.brokerId).mkString(",")}")
+              // update ISR in ZK and cache
+              updateIsr(newInSyncReplicas)
+              replicaManager.isrExpandRate.mark()
+            }
           }
 
           // check if the HW of the partition can now be incremented

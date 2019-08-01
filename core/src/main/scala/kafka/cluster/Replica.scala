@@ -92,6 +92,12 @@ class Replica(val brokerId: Int,
     }
   }
 
+  def logStartOffset =
+    if (isLocal)
+      log.get.logStartOffset
+    else
+      throw new KafkaException(s"Should logStartOffset $topicPartition's local replica $brokerId")
+
   def logEndOffset =
     if (isLocal)
       log.get.logEndOffsetMetadata

@@ -22,7 +22,7 @@ import java.util.concurrent.atomic.{AtomicBoolean, AtomicLong}
 
 import com.yammer.metrics.core.Gauge
 import kafka.api._
-import kafka.cluster.{Partition, Replica}
+import kafka.cluster.{BrokerEndPoint, Partition, Replica}
 import kafka.common._
 import kafka.controller.KafkaController
 import kafka.log.{Log, LogAppendInfo, LogManager}
@@ -30,11 +30,11 @@ import kafka.metrics.KafkaMetricsGroup
 import kafka.server.QuotaFactory.UnboundedQuota
 import kafka.utils._
 import org.apache.kafka.common.errors.{ControllerMovedException, CorruptRecordException, InvalidTimestampException, InvalidTopicException, NotLeaderForPartitionException, OffsetOutOfRangeException, RecordBatchTooLargeException, RecordTooLargeException, ReplicaNotAvailableException, UnknownTopicOrPartitionException}
-import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.{NewOffsetMetaData, TopicPartition}
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record._
-import org.apache.kafka.common.requests.{LeaderAndIsrRequest, PartitionState, StopReplicaRequest, UpdateMetadataRequest}
+import org.apache.kafka.common.requests._
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.common.requests.FetchRequest.PartitionData
@@ -125,6 +125,9 @@ class ReplicaManager(val config: KafkaConfig,
   private val isrChangeSet: mutable.Set[TopicPartition] = new mutable.HashSet[TopicPartition]()
   private val lastIsrChangeMs = new AtomicLong(System.currentTimeMillis())
   private val lastIsrPropagationMs = new AtomicLong(System.currentTimeMillis())
+  var newOffsetMetaDataMap : mutable.Map[Int, mutable.Map[TopicPartition, NewOffsetMetaData]] = new mutable.HashMap[Int, mutable.Map[TopicPartition, NewOffsetMetaData]]()
+
+  private val offsetMapLock = new Object
 
   val delayedProducePurgatory = DelayedOperationPurgatory[DelayedProduce](
     purgatoryName = "Produce", localBrokerId, config.producerPurgatoryPurgeIntervalRequests)
@@ -153,6 +156,61 @@ class ReplicaManager(val config: KafkaConfig,
   )
   val isrExpandRate = newMeter("IsrExpandsPerSec",  "expands", TimeUnit.SECONDS)
   val isrShrinkRate = newMeter("IsrShrinksPerSec",  "shrinks", TimeUnit.SECONDS)
+
+  def updateNewOffsetMetaData(brokerId: Int, metaData: mutable.HashMap[TopicPartition, NewOffsetMetaData]): Unit = {
+    offsetMapLock synchronized {
+      if (newOffsetMetaDataMap.contains(brokerId)) {
+        metaData.map { metaInfo =>
+          newOffsetMetaDataMap(brokerId).put(metaInfo._1, metaInfo._2)
+        }
+      } else {
+        newOffsetMetaDataMap.put(brokerId, metaData)
+      }
+    }
+  }
+
+  def clearNewOffsetMetaData(partions: mutable.Set[Partition]): Unit = {
+    info("clearNewOffsetMetaData partions=" + partions)
+    offsetMapLock synchronized {
+      partions.map { partition =>
+        newOffsetMetaDataMap.map { brokerInfo =>
+          brokerInfo._2.map { metaData =>
+            if (metaData._1.equals(partition.topicPartition)) {
+              newOffsetMetaDataMap(brokerInfo._1).put(metaData._1, new NewOffsetMetaData(-2, -1, -1, -1, -1))
+            }
+          }
+        }
+      }
+    }
+  }
+
+  def getOffsetMetaDataForPartition(brokerId: Int, topicPartition: TopicPartition): NewOffsetMetaData = {
+    offsetMapLock synchronized {
+      if (newOffsetMetaDataMap.nonEmpty && newOffsetMetaDataMap.contains(brokerId)) {
+        if (newOffsetMetaDataMap(brokerId).contains(topicPartition)) {
+          return newOffsetMetaDataMap(brokerId).get(topicPartition).get
+        } else {
+          return new NewOffsetMetaData(brokerId, -1, -1, -1, -1)
+        }
+      } else {
+        return new NewOffsetMetaData(brokerId, -1, -1, -1, -1)
+      }
+    }
+  }
+
+  def getNewOffsetMetaData(brokerId: Int): mutable.Map[TopicPartition, NewOffsetMetaData] = {
+    return offsetMapLock synchronized { newOffsetMetaDataMap(brokerId) }
+  }
+
+  def newOffsetMetaDataContains(brokerId: Int): Boolean = {
+    return offsetMapLock synchronized {
+      if (newOffsetMetaDataMap.contains(brokerId)) {
+        return true
+      } else {
+        return false
+      }
+    }
+  }
 
   def underReplicatedPartitionCount(): Int = {
       getLeaderPartitions().count(_.isUnderReplicated)
@@ -761,6 +819,20 @@ class ReplicaManager(val config: KafkaConfig,
           "%d epoch %d with correlation id %d for partition %s")
           .format(localBrokerId, controllerId, epoch, correlationId, partition.topicPartition))
       }
+
+      if (config.smartExtendEnable) {
+        // Init partition newOffsetMetaDataMap for Leader
+        val metaData = new mutable.HashMap[TopicPartition, NewOffsetMetaData]
+        partitionsToMakeLeaders.map { partition =>
+          val lso: Long = partition.leaderReplicaIfLocal.get.logStartOffset
+          val leo: Long = partition.leaderReplicaIfLocal.get.logEndOffset.messageOffset
+          val lst: Long = partition.logManager.getLog(partition.topicPartition).get.segments.firstEntry().getValue.log.creationTime()
+          val let: Long = partition.logManager.getLog(partition.topicPartition).get.segments.lastEntry().getValue.log.file.lastModified()
+          metaData.put(partition.topicPartition, new NewOffsetMetaData(partition.leaderReplicaIdOpt.get, leo, lst, let, lso))
+        }
+        info("makeLeaders updateNewOffsetMetaData broker=" + localBrokerId + " metaData=" + metaData)
+        updateNewOffsetMetaData(localBrokerId, metaData)
+      }
     } catch {
       case e: Throwable =>
         partitionState.keys.foreach { partition =>
@@ -854,6 +926,7 @@ class ReplicaManager(val config: KafkaConfig,
       logManager.truncateTo(partitionsToMakeFollower.map { partition =>
         (partition.topicPartition, partition.getOrCreateReplica().highWatermark.messageOffset)
       }.toMap)
+
       partitionsToMakeFollower.foreach { partition =>
         val topicPartitionOperationKey = new TopicPartitionOperationKey(partition.topicPartition)
         tryCompleteDelayedProduce(topicPartitionOperationKey)
@@ -874,12 +947,63 @@ class ReplicaManager(val config: KafkaConfig,
         }
       }
       else {
-        // we do not need to check if the leader exists again since this has been done at the beginning of this process
-        val partitionsToMakeFollowerWithLeaderAndOffset = partitionsToMakeFollower.map(partition =>
-          partition.topicPartition -> BrokerAndInitialOffset(
-            metadataCache.getAliveBrokers.find(_.id == partition.leaderReplicaIdOpt.get).get.getBrokerEndPoint(config.interBrokerListenerName),
-            partition.getReplica().get.logEndOffset.messageOffset)).toMap
-        replicaFetcherManager.addFetcherForPartitions(partitionsToMakeFollowerWithLeaderAndOffset)
+        debug("makefollowers config.smartExtendEnable=" + config.smartExtendEnable)
+        if (config.smartExtendEnable) {
+          try {
+            // 1. clear NewOffsetMetaData.
+            clearNewOffsetMetaData(partitionsToMakeFollower)
+
+            // 2. get offset from leader.
+            val ResponseOffsetMap = getBestOffset(partitionsToMakeFollower, metadataCache, config.getStartOffsetRetries)
+
+            if (ResponseOffsetMap.nonEmpty) {
+              val partitionsToMakeFollowerWithLeaderAndOffset = partitionsToMakeFollower.map(partition =>
+                partition.topicPartition -> BrokerAndInitialOffset(
+                  metadataCache.getAliveBrokers.find(_.id == partition.leaderReplicaIdOpt.get).get.getBrokerEndPoint(config.interBrokerListenerName),
+                  ResponseOffsetMap.get(partition.topicPartition).get.baseOffset)).toMap
+
+              // 3. trunc log
+              val partitionOffsets: mutable.Map[TopicPartition, Long] = mutable.Map[TopicPartition, Long]()
+              ResponseOffsetMap.map { partition =>
+                if (partition._2.error == Errors.OFFSET_HW) {
+                  partitionOffsets.put(partition._1, partition._2.baseOffset)
+                }
+              }
+
+              if (partitionOffsets.nonEmpty) {
+                info("makefollowers trunc log, partitionOffsets size=" + partitionOffsets.size + " ResponseOffsetMap size=" +
+                  ResponseOffsetMap.size + " partitionOffsets=" + partitionOffsets + " ResponseOffsetMap=" + ResponseOffsetMap)
+                partitionOffsets.map { partitionInfo =>
+                  logManager.truncateFullyAndStartAt(partitionInfo._1, partitionInfo._2)
+                }
+              }
+              replicaFetcherManager.addFetcherForPartitions(partitionsToMakeFollowerWithLeaderAndOffset)
+            } else {
+              val partitionsToMakeFollowerWithLeaderAndOffset = partitionsToMakeFollower.map(partition =>
+                partition.topicPartition -> BrokerAndInitialOffset(
+                  metadataCache.getAliveBrokers.find(_.id == partition.leaderReplicaIdOpt.get).get.getBrokerEndPoint(config.interBrokerListenerName),
+                  partition.getReplica().get.logEndOffset.messageOffset)).toMap
+              error("makefollowers getStartOffset fail, and use old mode partitionsToMakeFollowerWithLeaderAndOffset=" + partitionsToMakeFollowerWithLeaderAndOffset)
+              replicaFetcherManager.addFetcherForPartitions(partitionsToMakeFollowerWithLeaderAndOffset)
+            }
+          } catch {
+            case e: Exception =>
+              val partitionsToMakeFollowerWithLeaderAndOffset = partitionsToMakeFollower.map(partition =>
+                partition.topicPartition -> BrokerAndInitialOffset(
+                  metadataCache.getAliveBrokers.find(_.id == partition.leaderReplicaIdOpt.get).get.getBrokerEndPoint(config.interBrokerListenerName),
+                  partition.getReplica().get.logEndOffset.messageOffset)).toMap
+              error("ReplicaManager makefollowers getStartOffset fail, and use old mode partitionsToMakeFollowerWithLeaderAndOffset=" + partitionsToMakeFollowerWithLeaderAndOffset
+                + " Exception=" + e.getMessage)
+              replicaFetcherManager.addFetcherForPartitions(partitionsToMakeFollowerWithLeaderAndOffset)
+          }
+        } else {
+          // we do not need to check if the leader exists again since this has been done at the beginning of this process
+          val partitionsToMakeFollowerWithLeaderAndOffset = partitionsToMakeFollower.map(partition =>
+            partition.topicPartition -> BrokerAndInitialOffset(
+              metadataCache.getAliveBrokers.find(_.id == partition.leaderReplicaIdOpt.get).get.getBrokerEndPoint(config.interBrokerListenerName),
+              partition.getReplica().get.logEndOffset.messageOffset)).toMap
+          replicaFetcherManager.addFetcherForPartitions(partitionsToMakeFollowerWithLeaderAndOffset)
+        }
 
         partitionsToMakeFollower.foreach { partition =>
           stateChangeLogger.trace(("Broker %d started fetcher to new leader as part of become-follower request from controller " +
@@ -905,6 +1029,61 @@ class ReplicaManager(val config: KafkaConfig,
     partitionsToMakeFollower
   }
 
+  private def getBestOffset(partitionsToMakeFollower: mutable.Set[Partition], metadataCache: MetadataCache, retries: Int):
+  mutable.Map[TopicPartition, GetStartOffsetResponse.StartOffsetResponse] = {
+    var successGetBestOffset: Boolean = false
+    var remainingRetries = retries
+    var smartExtendManager: SmartExtendManager = null
+    var ResponseOffsetMap: mutable.Map[TopicPartition, GetStartOffsetResponse.StartOffsetResponse] = mutable.Map.empty
+    while (!successGetBestOffset && remainingRetries > 0) {
+      remainingRetries = remainingRetries - 1
+      try {
+        info("start getBestOffset=" + partitionsToMakeFollower + " metadataCache=" + metadataCache)
+        smartExtendManager = new SmartExtendManager(config)
+        val brokerPartitionMap: mutable.Map[BrokerEndPoint, mutable.Set[Partition]] = mutable.Map.empty
+        partitionsToMakeFollower.map { partition =>
+          val remoteEndPoint: BrokerEndPoint = metadataCache.getAliveBrokers.find(_.id == partition.leaderReplicaIdOpt.get).get.getBrokerEndPoint(config.interBrokerListenerName)
+          if (brokerPartitionMap.get(remoteEndPoint).isEmpty) {
+            val partitionSet: mutable.Set[Partition] = mutable.Set.empty
+            partitionSet.add(partition)
+            brokerPartitionMap.put(remoteEndPoint, partitionSet)
+          } else {
+            val partitionSet: mutable.Set[Partition] = brokerPartitionMap.get(remoteEndPoint).get
+            partitionSet.add(partition)
+            brokerPartitionMap.put(remoteEndPoint, partitionSet)
+          }
+        }
+
+        brokerPartitionMap.map { brokerInfo =>
+          val ResponseOffsetBroker = smartExtendManager.sendRequest(brokerInfo._1, brokerInfo._2).asScala
+          ResponseOffsetBroker.map { offsetInfo =>
+            if (offsetInfo._2.error == Errors.UNKNOWN && offsetInfo._2.baseOffset == -1) {
+              throw new KafkaException("offsetInfo._2.error=Errors.UNKNOWN and offsetInfo._2.baseOffset=-1 broker="
+                + brokerInfo)
+            }
+            ResponseOffsetMap.put(offsetInfo._1, offsetInfo._2)
+          }
+        }
+        info("finish getBestOffset ResponseOffsetMap=" + ResponseOffsetMap)
+        successGetBestOffset = true
+      } catch {
+        case e: Exception =>
+          error("ReplicaManager getBestOffset Exception=" + e.getMessage + " in " + remainingRetries + "/" + retries)
+          Thread.sleep(100)
+          ResponseOffsetMap = mutable.Map.empty
+        case t: Throwable =>
+          error("ReplicaManager getBestOffset Throwable=" + t.getMessage + " in " + remainingRetries + "/" + retries)
+          Thread.sleep(100)
+          ResponseOffsetMap = mutable.Map.empty
+      } finally {
+        if (smartExtendManager != null) {
+          smartExtendManager.close
+        }
+      }
+    }
+    ResponseOffsetMap
+  }
+
   private def maybeShrinkIsr(): Unit = {
     trace("Evaluating ISR list of partitions to see which replicas can be removed from the ISR")
     allPartitions.values.foreach(partition => partition.maybeShrinkIsr(config.replicaLagTimeMaxMs))
@@ -915,7 +1094,9 @@ class ReplicaManager(val config: KafkaConfig,
     readResults.foreach { case (topicPartition, readResult) =>
       getPartition(topicPartition) match {
         case Some(partition) =>
-          partition.updateReplicaLogReadResult(replicaId, readResult)
+          val leaderOffsetMetaData: NewOffsetMetaData = getOffsetMetaDataForPartition(partition.leaderReplicaIdOpt.get, topicPartition)
+          val followerOffsetMetaData: NewOffsetMetaData = getOffsetMetaDataForPartition(replicaId, topicPartition)
+          partition.updateReplicaLogReadResult(replicaId, readResult, leaderOffsetMetaData, followerOffsetMetaData)
 
           // for producer requests with ack > 1, we need to check
           // if they can be unblocked after some follower's log end offsets have moved
@@ -926,8 +1107,12 @@ class ReplicaManager(val config: KafkaConfig,
     }
   }
 
-  private def getLeaderPartitions(): List[Partition] = {
+  def getLeaderPartitions(): List[Partition] = {
     allPartitions.values.filter(_.leaderReplicaIfLocal.isDefined).toList
+  }
+
+  def getFollowerPartitions(): Set[Partition] = {
+    allPartitions.values.filterNot(_.leaderReplicaIfLocal.isDefined).toSet
   }
 
   def getHighWatermark(topicPartition: TopicPartition): Option[Long] = {

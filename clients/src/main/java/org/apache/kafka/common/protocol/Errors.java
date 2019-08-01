@@ -66,6 +66,8 @@ import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
+import org.apache.kafka.common.errors.LogAndEndOffsetException;
+import org.apache.kafka.common.errors.HwException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -166,7 +168,9 @@ public enum Errors {
             " the message was sent to an incompatible broker. See the broker logs for more details.")),
     UNSUPPORTED_FOR_MESSAGE_FORMAT(43,
         new UnsupportedForMessageFormatException("The message format version on the broker does not support the request.")),
-    POLICY_VIOLATION(44, new PolicyViolationException("Request parameters do not satisfy the configured policy."));
+    POLICY_VIOLATION(44, new PolicyViolationException("Request parameters do not satisfy the configured policy.")),
+    OFFSET_LEO(45, new LogAndEndOffsetException("Follower log end offset is start offset")),
+    OFFSET_HW(46, new HwException("HW is start offset"));
 
     private static final Logger log = LoggerFactory.getLogger(Errors.class);
 

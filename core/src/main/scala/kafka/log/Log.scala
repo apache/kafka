@@ -110,7 +110,7 @@ class Log(@volatile var dir: File,
   @volatile private var nextOffsetMetadata: LogOffsetMetadata = _
 
   /* the actual segments of the log */
-  private val segments: ConcurrentNavigableMap[java.lang.Long, LogSegment] = new ConcurrentSkipListMap[java.lang.Long, LogSegment]
+  val segments: ConcurrentNavigableMap[java.lang.Long, LogSegment] = new ConcurrentSkipListMap[java.lang.Long, LogSegment]
   locally {
     val startMs = time.milliseconds
 

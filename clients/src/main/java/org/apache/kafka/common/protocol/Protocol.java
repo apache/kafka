@@ -986,6 +986,37 @@ public class Protocol {
     public static final Schema[] DELETE_TOPICS_REQUEST = new Schema[] {DELETE_TOPICS_REQUEST_V0};
     public static final Schema[] DELETE_TOPICS_RESPONSE = new Schema[] {DELETE_TOPICS_RESPONSE_V0};
 
+    public static final Schema GET_START_OFFSET_REQUEST_TOPIC_DATA_PARTITION_V0 = new Schema(
+            new Field("partition", INT32, "partition."),
+            new Field("leo", INT64, "leo."),
+            new Field("brokerid", INT32, "brokerid."),
+            new Field("lst", INT64, "lst."),
+            new Field("let", INT64, "let."),
+            new Field("lso", INT64, "lso.")
+    );
+
+    public static final Schema GET_START_OFFSET_REQUEST_TOPIC_DATA_V0 = new Schema(
+            new Field("topic", STRING, "Topic to fetch."),
+            new Field("data", new ArrayOf(GET_START_OFFSET_REQUEST_TOPIC_DATA_PARTITION_V0), "Partitions to fetch."));
+
+    public static final Schema GET_START_OFFSET_REQUEST_V0 = new Schema(
+            new Field("topic_data", new ArrayOf(GET_START_OFFSET_REQUEST_TOPIC_DATA_V0), "topic_data."));
+
+
+    public static final Schema GET_START_OFFSET_RESPONSE_V0 = new Schema(new Field("responses",
+            new ArrayOf(new Schema(new Field("topic", STRING),
+                    new Field("partition_responses",
+                            new ArrayOf(new Schema(
+                                    new Field("partition", INT32),
+                                    new Field("error_code", INT16),
+                                    new Field("base_offset", INT64))
+                            ))))));
+
+
+
+    public static final Schema[] GET_START_OFFSET_REQUEST = new Schema[] {GET_START_OFFSET_REQUEST_V0};
+    public static final Schema[] GET_START_OFFSET_RESPONSE = new Schema[] {GET_START_OFFSET_RESPONSE_V0};
+
     /* an array of all requests and responses with all schema versions; a null value in the inner array means that the
      * particular version is not supported */
     public static final Schema[][] REQUESTS = new Schema[ApiKeys.MAX_API_KEY + 1][];
@@ -1017,6 +1048,7 @@ public class Protocol {
         REQUESTS[ApiKeys.API_VERSIONS.id] = API_VERSIONS_REQUEST;
         REQUESTS[ApiKeys.CREATE_TOPICS.id] = CREATE_TOPICS_REQUEST;
         REQUESTS[ApiKeys.DELETE_TOPICS.id] = DELETE_TOPICS_REQUEST;
+        REQUESTS[ApiKeys.GET_START_OFFSET.id] = GET_START_OFFSET_REQUEST;
 
         RESPONSES[ApiKeys.PRODUCE.id] = PRODUCE_RESPONSE;
         RESPONSES[ApiKeys.FETCH.id] = FETCH_RESPONSE;
@@ -1039,6 +1071,7 @@ public class Protocol {
         RESPONSES[ApiKeys.API_VERSIONS.id] = API_VERSIONS_RESPONSE;
         RESPONSES[ApiKeys.CREATE_TOPICS.id] = CREATE_TOPICS_RESPONSE;
         RESPONSES[ApiKeys.DELETE_TOPICS.id] = DELETE_TOPICS_RESPONSE;
+        RESPONSES[ApiKeys.GET_START_OFFSET.id] = GET_START_OFFSET_RESPONSE;
 
         /* set the minimum and maximum version of each api */
         for (ApiKeys api : ApiKeys.values()) {

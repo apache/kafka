@@ -74,6 +74,8 @@ object ErrorMapping {
   // 40: INVALID_CONFIG
   // 41: NOT_CONTROLLER
   // 42: INVALID_REQUEST
+  val OffsetLeo: Short = 45
+  val OffsetHw: Short = 46
 
   private val exceptionToCode =
     Map[Class[Throwable], Short](
@@ -98,7 +100,9 @@ object ErrorMapping {
       classOf[NotEnoughReplicasAfterAppendException].asInstanceOf[Class[Throwable]] -> NotEnoughReplicasAfterAppendCode,
       classOf[TopicAuthorizationException].asInstanceOf[Class[Throwable]] -> TopicAuthorizationCode,
       classOf[GroupAuthorizationException].asInstanceOf[Class[Throwable]] -> GroupAuthorizationCode,
-      classOf[ClusterAuthorizationException].asInstanceOf[Class[Throwable]] -> ClusterAuthorizationCode
+      classOf[ClusterAuthorizationException].asInstanceOf[Class[Throwable]] -> ClusterAuthorizationCode,
+      classOf[LogAndEndOffsetException].asInstanceOf[Class[Throwable]] -> OffsetLeo,
+      classOf[HwException].asInstanceOf[Class[Throwable]] -> OffsetHw
     ).withDefaultValue(UnknownCode)
 
   /* invert the mapping */
