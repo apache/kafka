@@ -863,12 +863,7 @@ public abstract class AbstractCoordinator implements Closeable {
      * @throws KafkaException if the callback throws exception
      */
     public synchronized RequestFuture<Void> maybeLeaveGroup(String leaveReason) {
-        // we need to reset generation first in order to trigger
-        // the rebalance callback if necessary, before sending the leave group
-        // which may trigger the rebalance
-        resetGeneration("consumer proactively leaving group", false);
-
-        RequestFuture<Void> future = null;
+        LeaveGroupRequest.Builder request = null;
         // Starting from 2.3, only dynamic members will send LeaveGroupRequest to the broker,
         // consumer with valid group.instance.id is viewed as static member that never sends LeaveGroup,
         // and the membership expiration is only controlled by session timeout.
@@ -878,17 +873,26 @@ public abstract class AbstractCoordinator implements Closeable {
             // attempt any resending if the request fails or times out.
             log.info("Member {} sending LeaveGroup request to coordinator {} due to {}",
                      generation.memberId, coordinator, leaveReason);
-            LeaveGroupRequest.Builder request = new LeaveGroupRequest.Builder(
+            request = new LeaveGroupRequest.Builder(
                 rebalanceConfig.groupId,
-                Collections.singletonList(new MemberIdentity()
-                                              .setMemberId(generation.memberId))
+                Collections.singletonList(new MemberIdentity().setMemberId(generation.memberId))
             );
-            future = client.send(coordinator, request)
-                    .compose(new LeaveGroupResponseHandler());
-            client.pollNoWakeup();
         }
 
-        return future;
+        // we need to reset generation first in order to trigger
+        // the rebalance callback if necessary, before sending
+        // the leave group which may trigger the rebalance
+        resetGeneration("consumer proactively leaving group", false);
+
+        if (request != null) {
+            RequestFuture<Void> future = client.send(coordinator, request)
+                .compose(new LeaveGroupResponseHandler());
+            client.pollNoWakeup();
+
+            return future;
+        }
+
+        return null;
     }
 
     protected boolean isDynamicMember() {
