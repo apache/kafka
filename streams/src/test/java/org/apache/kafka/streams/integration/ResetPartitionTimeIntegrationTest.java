@@ -202,8 +202,6 @@ public class ResetPartitionTimeIntegrationTest {
             } else {
                 lastRecordedTimestamp = maxTimestamp;
             }
-            System.out.println("TimestampExtractor: partition time being returned: " + record.timestamp() + " and lastRecordedTimestamp: " + lastRecordedTimestamp + " for partition " + 
-                (new TopicPartition(record.topic(), record.partition()).toString()));
             return record.timestamp();
         }
     }

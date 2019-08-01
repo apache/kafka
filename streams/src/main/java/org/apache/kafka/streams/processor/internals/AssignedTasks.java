@@ -63,7 +63,6 @@ abstract class AssignedTasks<T extends Task> {
      * @throws TaskMigratedException if the task producer got fenced (EOS only)
      */
     void initializeNewTasks() {
-        System.out.println("AssignedTasks: NewTasks was called. So it should work from here on out.");
         if (!created.isEmpty()) {
             log.debug("Initializing {}s {}", taskTypeName, created.keySet());
         }
@@ -72,8 +71,7 @@ abstract class AssignedTasks<T extends Task> {
             try {
                 if (!entry.getValue().initializeStateStores()) {
                     log.debug("Transitioning {} {} to restoring", taskTypeName, entry.getKey());
-                    System.out.println("AssignedTasks: " + ((StreamTask) entry.getValue()).toString());
-                    ((StreamTask) entry.getValue()).initializeTaskTime();
+                    ((Task) entry.getValue()).initializeTaskTime();
                     ((AssignedStreamsTasks) this).addToRestoring((StreamTask) entry.getValue());
                 } else {
                     transitionToRunning(entry.getValue());
