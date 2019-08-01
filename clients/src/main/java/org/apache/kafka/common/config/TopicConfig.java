@@ -84,10 +84,16 @@ public class TopicConfig {
         "single record in that case.</p>";
 
     public static final String INDEX_INTERVAL_BYTES_CONFIG = "index.interval.bytes";
-    public static final String INDEX_INTERVAL_BYTES_DOCS = "This setting controls how frequently " +
-        "Kafka adds an index entry to its offset index. The default setting ensures that we index a " +
-        "message roughly every 4096 bytes. More indexing allows reads to jump closer to the exact " +
-        "position in the log but makes the index larger. You probably don't need to change this.";
+
+    public static final String INDEX_INTERVAL_BYTES_DOC = "This setting controls how frequently " +
+            "Kafka adds an index entry to its offset index. The default setting ensures that we index a " +
+            "message roughly every 4096 bytes. More indexing allows reads to jump closer to the exact " +
+            "position in the log but makes the index larger. You probably don't need to change this.";
+    /**
+     * @deprecated since 2.4 Use {@link TopicConfig#INDEX_INTERVAL_BYTES_DOC} instead.
+     */
+    @Deprecated
+    public static final String INDEX_INTERVAL_BYTES_DOCS = INDEX_INTERVAL_BYTES_DOC;
 
     public static final String FILE_DELETE_DELAY_MS_CONFIG = "file.delete.delay.ms";
     public static final String FILE_DELETE_DELAY_MS_DOC = "The time to wait before deleting a file from the " +
