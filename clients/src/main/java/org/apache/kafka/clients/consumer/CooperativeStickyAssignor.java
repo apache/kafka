@@ -92,14 +92,6 @@ public class CooperativeStickyAssignor extends AbstractStickyAssignor {
             allRevokedPartitions.addAll(revokedPartitions);
         }
 
-        // for all owned but not assigned partitions, blindly add them to assignment
-        for (final Map.Entry<TopicPartition, String> entry : allOwnedPartitions.entrySet()) {
-            final TopicPartition tp = entry.getKey();
-            if (!allAssignedPartitions.containsKey(tp)) {
-                assignments.get(entry.getValue()).add(tp);
-            }
-        }
-
         // remove any partitions to be revoked from the current assignment
         for (TopicPartition tp : allRevokedPartitions) {
             // if partition is being migrated to another consumer, don't assign it there yet
