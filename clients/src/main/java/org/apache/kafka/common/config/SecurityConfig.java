@@ -23,6 +23,9 @@ import java.security.Provider;
 import java.security.Security;
 import java.util.Map;
 
+/**
+ * Contains the common security config for SSL and SASL
+ */
 public class SecurityConfig {
     private static final Logger LOGGER = LoggerFactory.getLogger(SecurityConfig.class);
 

@@ -18,13 +18,13 @@ package org.apache.kafka.common.security.ssl.mock;
 
 import java.security.Provider;
 
-public class TestProvider1 extends Provider {
+public class TestPlainSaslServerProvider extends Provider {
 
-    public TestProvider1() {
-        this("TestProvider1", 0.1, "provider for test cases");
+    public TestPlainSaslServerProvider() {
+        this("TestPlainSaslServerProvider", 0.1, "test plain sasl server provider");
     }
 
-    protected TestProvider1(String name, double version, String info) {
+    protected TestPlainSaslServerProvider(String name, double version, String info) {
         super(name, version, info);
     }
 

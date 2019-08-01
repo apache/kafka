@@ -16,8 +16,8 @@
  */
 package org.apache.kafka.common.config;
 
-import org.apache.kafka.common.security.ssl.mock.TestProvider;
-import org.apache.kafka.common.security.ssl.mock.TestProvider1;
+import org.apache.kafka.common.security.ssl.mock.TestPlainSaslServerProvider;
+import org.apache.kafka.common.security.ssl.mock.TestScramSaslServerProvider;
 import org.hamcrest.MatcherAssert;
 import org.junit.After;
 import org.junit.Before;
@@ -30,12 +30,12 @@ import java.util.Map;
 
 public class SecurityConfigTest {
 
-    private Provider provider = new TestProvider();
-    private Provider provider1 = new TestProvider1();
+    private Provider testScramSaslServerProvider = new TestScramSaslServerProvider();
+    private Provider testPlainSaslServerProvider = new TestPlainSaslServerProvider();
 
     private void clearTestProviders() {
-        Security.removeProvider(provider.getName());
-        Security.removeProvider(provider1.getName());
+        Security.removeProvider(testScramSaslServerProvider.getName());
+        Security.removeProvider(testPlainSaslServerProvider.getName());
     }
 
     @Before
@@ -63,17 +63,17 @@ public class SecurityConfigTest {
     // expected to be added at the start of the list of available providers and with the relative ordering maintained
     @Test
     public void testAddCustomSecurityProvider() {
-        String customProviderClasses = provider.getClass().getName() + "," + provider1.getClass().getName();
+        String customProviderClasses = testScramSaslServerProvider.getClass().getName() + "," + testPlainSaslServerProvider.getClass().getName();
         Map<String, String> configs = new HashMap<>();
         configs.put(SecurityConfig.SECURITY_PROVIDER_CLASS_CONFIG, customProviderClasses);
         SecurityConfig.addConfiguredSecurityProviders(configs);
 
         Provider[] providers = Security.getProviders();
-        int providerIndex = getProviderIndexFromName(provider.getName(), providers);
-        int provider1Index = getProviderIndexFromName(provider1.getName(), providers);
+        int providerIndex = getProviderIndexFromName(testScramSaslServerProvider.getName(), providers);
+        int provider1Index = getProviderIndexFromName(testPlainSaslServerProvider.getName(), providers);
 
         // validations
-        MatcherAssert.assertThat(provider.getName() + " provider not found at expected index", providerIndex == 0);
-        MatcherAssert.assertThat(provider1.getName() + " provider not found at expected index", provider1Index == 1);
+        MatcherAssert.assertThat(testScramSaslServerProvider.getName() + " testProvider not found at expected index", providerIndex == 0);
+        MatcherAssert.assertThat(testPlainSaslServerProvider.getName() + " testProvider not found at expected index", provider1Index == 1);
     }
 }
