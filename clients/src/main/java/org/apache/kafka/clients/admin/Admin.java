@@ -1047,7 +1047,7 @@ public interface Admin extends AutoCloseable {
                                                                 ListPartitionReassignmentsOptions options);
 
     /**
-     * Remove members from the group by given member infos.
+     * Remove members from the consumer group by given member identities.
      * <p>
      * For possible error codes, refer to {@link LeaveGroupResponse}.
      *
@@ -1055,7 +1055,7 @@ public interface Admin extends AutoCloseable {
      * @param options The options to carry removing members' information.
      * @return The MembershipChangeResult.
      */
-    MembershipChangeResult removeMemberFromGroup(String groupId, RemoveMemberFromGroupOptions options);
+    MembershipChangeResult removeMemberFromConsumerGroup(String groupId, RemoveMemberFromConsumerGroupOptions options);
 
     /**
      * Get the metrics kept by the adminClient

@@ -1612,9 +1612,9 @@ public class KafkaAdminClientTest {
 
             String groupId = "groupId";
             List<String> membersToRemove = Arrays.asList(instanceOne, instanceTwo);
-            final MembershipChangeResult unknownErrorResult = env.adminClient().removeMemberFromGroup(
+            final MembershipChangeResult unknownErrorResult = env.adminClient().removeMemberFromConsumerGroup(
                 groupId,
-                new RemoveMemberFromGroupOptions(membersToRemove)
+                new RemoveMemberFromConsumerGroupOptions(membersToRemove)
             );
 
             RemoveMemberFromGroupResult result = unknownErrorResult.all();
@@ -1631,9 +1631,9 @@ public class KafkaAdminClientTest {
                                                                          .setErrorCode(Errors.GROUP_AUTHORIZATION_FAILED.code())
                                                                          .setMembers(memberResponses)));
 
-            final MembershipChangeResult topLevelErrorResult = env.adminClient().removeMemberFromGroup(
+            final MembershipChangeResult topLevelErrorResult = env.adminClient().removeMemberFromConsumerGroup(
                 groupId,
-                new RemoveMemberFromGroupOptions(membersToRemove)
+                new RemoveMemberFromConsumerGroupOptions(membersToRemove)
             );
             TestUtils.assertFutureError(topLevelErrorResult.future(), GroupAuthorizationException.class);
 
@@ -1643,9 +1643,9 @@ public class KafkaAdminClientTest {
                                                                          .setErrorCode(Errors.NONE.code())
                                                                          .setMembers(memberResponses)));
 
-            final MembershipChangeResult memberLevelErrorResult = env.adminClient().removeMemberFromGroup(
+            final MembershipChangeResult memberLevelErrorResult = env.adminClient().removeMemberFromConsumerGroup(
                 groupId,
-                new RemoveMemberFromGroupOptions(membersToRemove)
+                new RemoveMemberFromConsumerGroupOptions(membersToRemove)
             );
 
             result = memberLevelErrorResult.all();
@@ -1661,9 +1661,9 @@ public class KafkaAdminClientTest {
             env.kafkaClient().prepareResponse(new LeaveGroupResponse(new LeaveGroupResponseData()
                                                                          .setErrorCode(Errors.NONE.code())));
 
-            final MembershipChangeResult noErrorResult = env.adminClient().removeMemberFromGroup(
+            final MembershipChangeResult noErrorResult = env.adminClient().removeMemberFromConsumerGroup(
                 groupId,
-                new RemoveMemberFromGroupOptions(membersToRemove)
+                new RemoveMemberFromConsumerGroupOptions(membersToRemove)
             );
             result = noErrorResult.all();
             assertFalse(result.hasError());

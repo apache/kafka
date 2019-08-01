@@ -1249,7 +1249,7 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
 
           // Test delete non-exist consumer instance
           val invalidInstanceId = "invalid-instance-id"
-          var removeMemberResult = client.removeMemberFromGroup(testGroupId, new RemoveMemberFromGroupOptions(
+          var removeMemberResult = client.removeMemberFromConsumerGroup(testGroupId, new RemoveMemberFromConsumerGroupOptions(
             Collections.singletonList(invalidInstanceId)
           )).all()
 
@@ -1277,7 +1277,7 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
             classOf[GroupNotEmptyException])
 
           // Test delete correct member
-          removeMemberResult = client.removeMemberFromGroup(testGroupId, new RemoveMemberFromGroupOptions(
+          removeMemberResult = client.removeMemberFromConsumerGroup(testGroupId, new RemoveMemberFromConsumerGroupOptions(
             Collections.singletonList(testInstanceId)
           )).all()
 

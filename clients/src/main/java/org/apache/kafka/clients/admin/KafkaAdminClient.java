@@ -3343,14 +3343,14 @@ public class KafkaAdminClient extends AdminClient {
     }
 
     @Override
-    public MembershipChangeResult removeMemberFromGroup(String groupId,
-                                                        RemoveMemberFromGroupOptions options) {
+    public MembershipChangeResult removeMemberFromConsumerGroup(String groupId,
+                                                                RemoveMemberFromConsumerGroupOptions options) {
         final long startFindCoordinatorMs = time.milliseconds();
         final long deadline = calcDeadlineMs(startFindCoordinatorMs, options.timeoutMs());
 
         KafkaFutureImpl<RemoveMemberFromGroupResult> future = new KafkaFutureImpl<>();
 
-        ConsumerGroupOperationContext<RemoveMemberFromGroupResult, RemoveMemberFromGroupOptions> context =
+        ConsumerGroupOperationContext<RemoveMemberFromGroupResult, RemoveMemberFromConsumerGroupOptions> context =
             new ConsumerGroupOperationContext<>(groupId, options, deadline, future);
 
         Call findCoordinatorCall = getFindCoordinatorCall(context,
@@ -3360,9 +3360,10 @@ public class KafkaAdminClient extends AdminClient {
         return new MembershipChangeResult(future);
     }
 
-    private Call getRemoveMembersFromGroupCall(
-        ConsumerGroupOperationContext<RemoveMemberFromGroupResult, RemoveMemberFromGroupOptions> context) {
-        return new Call("removeMembersFromGroup",
+
+    private Call getRemoveMembersFromGroupCall(ConsumerGroupOperationContext
+                                                   <RemoveMemberFromGroupResult, RemoveMemberFromConsumerGroupOptions> context) {
+        return new Call("leaveGroup",
                         context.getDeadline(),
                         new ConstantNodeIdProvider(context.getNode().get().id())) {
             @Override
@@ -3397,6 +3398,8 @@ public class KafkaAdminClient extends AdminClient {
                     new RemoveMemberFromGroupResult(error,
                                                     context.getOptions().getMembers(),
                                                     response.memberResponses());
+
+
                 context.getFuture().complete(membershipChangeResult);
             }
 

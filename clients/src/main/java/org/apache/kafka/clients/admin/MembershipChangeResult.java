@@ -18,18 +18,21 @@ package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.annotation.InterfaceStability;
+import org.apache.kafka.common.message.LeaveGroupRequestData;
+import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity;
 
+import java.util.Map;
 import java.util.concurrent.ExecutionException;
 
 /**
- * The result of the {@link KafkaAdminClient#removeMemberFromGroup(String, RemoveMemberFromGroupOptions)} call.
+ * The result of the {@link KafkaAdminClient#removeMemberFromConsumerGroup(String, RemoveMemberFromConsumerGroupOptions)} call.
  *
  * The API of this class is evolving, see {@link AdminClient} for details.
  */
 @InterfaceStability.Evolving
 public class MembershipChangeResult {
 
-    private KafkaFuture<RemoveMemberFromGroupResult> future;
+    private KafkaFuture<Map<MemberIdentity, KafkaFuture<Void>>> future;
 
     MembershipChangeResult(KafkaFuture<RemoveMemberFromGroupResult> future) {
         this.future = future;

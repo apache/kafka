@@ -16,14 +16,18 @@
  */
 package org.apache.kafka.clients.admin;
 
+import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity;
 import org.apache.kafka.common.message.LeaveGroupResponseData.MemberResponse;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.LeaveGroupResponse;
 
+import java.lang.reflect.Member;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Result of a batch member removal operation.
@@ -31,6 +35,8 @@ import java.util.List;
 public class RemoveMemberFromGroupResult {
 
     private final Errors error;
+    private final Map<MemberIdentity, KafkaFuture<Void>> memberFutures;
+
     private final List<MemberIdentity> membersToRemove;
     private final List<MemberIdentity> succeedMembers;
     private final List<MemberResponse> failedMembers;
@@ -40,9 +46,15 @@ public class RemoveMemberFromGroupResult {
                                 List<MemberResponse> memberResponses) {
         this.error = error;
         this.membersToRemove = membersToRemove;
+        this.memberFutures = new HashMap<>(membersToRemove.size());
+
         if (!hasError()) {
-            succeedMembers = membersToRemove;
-            failedMembers = Collections.emptyList();
+            for (MemberIdentity memberIdentity : membersToRemove) {
+                memberFutures.put(memberIdentity, new KafkaFuture.Function<>())
+
+            }
+//            succeedMembers = membersToRemove;
+//            failedMembers = Collections.emptyList();
         } else {
             succeedMembers = new ArrayList<>();
             failedMembers = new ArrayList<>();
