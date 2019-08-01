@@ -22,8 +22,9 @@ import kafka.api.{ApiVersion, KAFKA_2_1_IV0}
 import kafka.common.LongRef
 import kafka.message.{CompressionCodec, NoCompressionCodec, ZStdCompressionCodec}
 import kafka.utils.Logging
-import org.apache.kafka.common.errors.{InvalidTimestampException, UnsupportedCompressionTypeException, UnsupportedForMessageFormatException}
-import org.apache.kafka.common.record.{AbstractRecords, CompressionType, InvalidRecordException, MemoryRecords, Record, RecordBatch, RecordConversionStats, TimestampType, BufferSupplier}
+import org.apache.kafka.common.InvalidRecordException
+import org.apache.kafka.common.errors.{CorruptRecordException, InvalidTimestampException, UnsupportedCompressionTypeException, UnsupportedForMessageFormatException}
+import org.apache.kafka.common.record.{AbstractRecords, BufferSupplier, CompressionType, MemoryRecords, Record, RecordBatch, RecordConversionStats, TimestampType}
 import org.apache.kafka.common.utils.Time
 
 import scala.collection.{Seq, mutable}
@@ -138,8 +139,14 @@ private[kafka] object LogValidator extends Logging {
     // set for magic v0 and v1. For non-compressed messages, there is no inner record for magic v0 and v1,
     // so we depend on the batch-level CRC check in Log.analyzeAndValidateRecords(). For magic v2 and above,
     // there is no record-level CRC to check.
-    if (batch.magic <= RecordBatch.MAGIC_VALUE_V1 && batch.isCompressed)
-      record.ensureValid()
+    if (batch.magic <= RecordBatch.MAGIC_VALUE_V1 && batch.isCompressed) {
+      try {
+        record.ensureValid()
+      } catch {
+        case e: InvalidRecordException =>
+          throw new CorruptRecordException(e.getMessage)
+      }
+    }
 
     validateKey(record, compactedTopic)
     validateTimestamp(batch, record, now, timestampType, timestampDiffMaxMs)

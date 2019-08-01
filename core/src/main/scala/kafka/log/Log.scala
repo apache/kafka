@@ -42,7 +42,7 @@ import org.apache.kafka.common.record._
 import org.apache.kafka.common.requests.FetchResponse.AbortedTransaction
 import org.apache.kafka.common.requests.{EpochEndOffset, ListOffsetRequest}
 import org.apache.kafka.common.utils.{Time, Utils}
-import org.apache.kafka.common.{KafkaException, TopicPartition}
+import org.apache.kafka.common.{InvalidRecordException, KafkaException, TopicPartition}
 
 import scala.collection.JavaConverters._
 import scala.collection.mutable.{ArrayBuffer, ListBuffer}
@@ -1350,7 +1350,12 @@ class Log(@volatile var dir: File,
       }
 
       // check the validity of the message by checking CRC
-      batch.ensureValid()
+      try {
+        batch.ensureValid()
+      } catch {
+        case e: InvalidRecordException =>
+          throw new CorruptRecordException(e.getMessage)
+      }
 
       if (batch.maxTimestamp > maxTimestamp) {
         maxTimestamp = batch.maxTimestamp

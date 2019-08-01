@@ -14,11 +14,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common.record;
+package org.apache.kafka.common;
 
-import org.apache.kafka.common.errors.CorruptRecordException;
+import org.apache.kafka.common.errors.ApiException;
 
-public class InvalidRecordException extends CorruptRecordException {
+public class InvalidRecordException extends ApiException {
 
     private static final long serialVersionUID = 1;
 

@@ -34,7 +34,8 @@ case class ProducePartitionStatus(requiredOffset: Long, responseStatus: Partitio
   @volatile var acksPending = false
 
   override def toString = s"[acksPending: $acksPending, error: ${responseStatus.error.code}, " +
-    s"startOffset: ${responseStatus.baseOffset}, requiredOffset: $requiredOffset]"
+    s"startOffset: ${responseStatus.baseOffset}, requiredOffset: $requiredOffset, " +
+    s"error_records: ${responseStatus.errorRecords}, error_message: ${responseStatus.errorMessage}]"
 }
 
 /**
