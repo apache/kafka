@@ -72,12 +72,8 @@ public class RecordQueue {
         this.log = logContext.logger(RecordQueue.class);
     }
  
-    public void setPartitionTime(final long timestamp) {
-        partitionTime = timestamp;
-    }
-
-    public long partitionTime() {
-        return partitionTime;
+    public void setPartitionTime(final long partitionTime) {
+        this.partitionTime = partitionTime;
     }
 
     /**
@@ -197,13 +193,16 @@ public class RecordQueue {
                 skipRecordsSensor.record();
                 continue;
             }
-
-            if (timestamp > partitionTime) {
-                partitionTime = timestamp;
-            }
             headRecord = new StampedRecord(deserialized, timestamp);
 
             partitionTime = Math.max(partitionTime, timestamp);
         }
+    }
+
+    /**
+     * @return the local partitionTime for this particular RecordQueue
+     */
+    long partitionTime() {
+        return partitionTime;
     }
 }

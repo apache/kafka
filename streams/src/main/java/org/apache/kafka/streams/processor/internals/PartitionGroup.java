@@ -84,25 +84,21 @@ public class PartitionGroup {
         streamTime = RecordQueue.UNKNOWN;
     }
 
-    long timestamp() {
-        return streamTime;
-    }
-
-    long getPartitionTimestamp(final TopicPartition partition) {
+    long partitionTimestamp(final TopicPartition partition) {
         if (partitionQueues.get(partition) == null) {
-            return RecordQueue.UNKNOWN;
+            throw new NullPointerException("Partition " + partition + " not found.");
         }
         return partitionQueues.get(partition).partitionTime();
     }
 
-    void setPartitionTimestamp(final TopicPartition partition, final long timestamp) {
+    void setPartitionTime(final TopicPartition partition, final long partitionTime) {
         if (partitionQueues.get(partition) == null) {
-            return;
+            throw new NullPointerException("Partition " + partition + " not found.");
         }
-        if (streamTime < timestamp) {
-            streamTime = timestamp;
+        if (streamTime < partitionTime) {
+            streamTime = partitionTime;
         }
-        partitionQueues.get(partition).setPartitionTime(timestamp);
+        partitionQueues.get(partition).setPartitionTime(partitionTime);
     }
 
     /**

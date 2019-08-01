@@ -656,12 +656,12 @@ public class StreamTaskTest {
         assertTrue(Long.parseLong(task.consumer.committed(partition1).metadata()) == 1000);
         // reset times here to artificially represent a restart
         task.resetTimes();
-        assertTrue(task.getPartitionTime(partition1) == RecordQueue.UNKNOWN);
+        assertTrue(task.partitionTime(partition1) == RecordQueue.UNKNOWN);
 
         // timestamp would be updated here
-        task.setAssignmentToStoredTimestamps();
-        assertTrue(task.getPartitionTime(partition1) == 1000);
-        assertTrue(task.getStreamTime() == 1000);
+        task.initializeTaskTime();
+        assertTrue(task.partitionTime(partition1) == 1000);
+        assertTrue(task.streamTime() == 1000);
     }
 
     @Test
@@ -685,12 +685,12 @@ public class StreamTaskTest {
         assertTrue(Long.parseLong(task.consumer.committed(partition1).metadata()) == 1000);
         // reset times here to artificially represent a restart
         task.resetTimes();
-        assertTrue(task.getPartitionTime(partition1) == RecordQueue.UNKNOWN);
+        assertTrue(task.partitionTime(partition1) == RecordQueue.UNKNOWN);
 
         // timestamp would be updated here
-        task.setAssignmentToStoredTimestamps();
-        assertTrue(task.getPartitionTime(partition1) == 1000);
-        assertTrue(task.getStreamTime() == 1000);
+        task.initializeTaskTime();
+        assertTrue(task.partitionTime(partition1) == 1000);
+        assertTrue(task.streamTime() == 1000);
     }
 
     @Test

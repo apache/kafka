@@ -128,6 +128,11 @@ public abstract class AbstractTask implements Task {
         return stateMgr.getStore(name);
     }
 
+    @Override
+    public void initializeTaskTime() {
+        //no-op
+    }
+
     /**
      * Produces a string representation containing useful information about a Task.
      * This is useful in debugging scenarios.

@@ -444,11 +444,14 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         final OffsetAndMetadata oldCommittedMetadata = consumer.committed(partition);
         final long metadataTimestamp;
         if (oldCommittedMetadata != null && oldCommittedMetadata.metadata().length() != 0) {
+            System.out.println("StreamTime: We managed to find some metadata for processing");
             metadataTimestamp = Long.parseLong(oldCommittedMetadata.metadata());
         } else {
+            System.out.println("No committed metadata was found");
             metadataTimestamp = RecordQueue.UNKNOWN;
         }
-        final long localPartitionTime = getPartitionTime(partition);
+        final long localPartitionTime = partitionTime(partition);
+        System.out.println("StreamTime: localTimestamp is: " + localPartitionTime + " and metadataTimestamp is: " + metadataTimestamp);
         return localPartitionTime < metadataTimestamp ? metadataTimestamp : localPartitionTime;
     }
 
@@ -472,6 +475,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
             final TopicPartition partition = entry.getKey();
             final long offset = entry.getValue() + 1;
             final long partitionTime = getNextPartitionTime(partition);
+            System.out.println("StreamTask: getNextPartitionTime has retrieved partitionTime: " + partitionTime);
             consumedOffsetsAndMetadata.put(partition, new OffsetAndMetadata(offset,
                                                                             ((Long) partitionTime).toString()));
             stateMgr.putOffsetLimit(partition, offset);
@@ -728,22 +732,20 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         taskClosed = true;
     }
 
-    private boolean retrieveCommittedTimestamp(final TopicPartition partition) {
+    private void retrieveCommittedTimestamp(final TopicPartition partition) {
         final OffsetAndMetadata metadata = consumer.committed(partition);
 
         if (metadata != null && metadata.metadata().length() != 0) {
             try {
                 final long committedTimestamp = Long.parseLong(metadata.metadata());
+                System.out.println("StreamTask: We are setting partitionTime to: " + committedTimestamp + " for partition " + partition);
                 partitionGroup.setPartitionTimestamp(partition, committedTimestamp);
                 log.debug("A committed timestamp was detected: setting the partition time of partition {}"
                           + " to {} in stream task {}", partition, committedTimestamp, this);
-                return true;
             } catch (final NumberFormatException exc) {
-                log.info("No committed timestamp retrieved because no long integer was found stored in metadata " + exc);
-                return false;
+                log.error("Could not initialize partition time. Committed metadata is corrupted.", exc);
             }
         }
-        return true;
     }
 
     /**
@@ -751,14 +753,11 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
      * 
      * @return a boolean result which indicates all timestamps were successfully restored.
      */
-    public boolean setAssignmentToStoredTimestamps() {
-        boolean allSuccessfullyChanged = true;
+    public void initializeTaskTime() {
+        System.out.println("StreamTask: Calling setAssigned for timestamps");
         for (final TopicPartition partition : consumer.assignment()) {
-            if (!retrieveCommittedTimestamp(partition)) {
-                allSuccessfullyChanged = false;
-            }
+            retrieveCommittedTimestamp(partition);
         }
-        return allSuccessfullyChanged;
     }
 
     /**
@@ -901,13 +900,13 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
     }
 
     // used for testing
-    long getStreamTime() {
-        return partitionGroup.timestamp();
+    long streamTime() {
+        return partitionGroup.streamTime();
     }
 
     // used for testing
-    long getPartitionTime(final TopicPartition partition) {
-        return partitionGroup.getPartitionTimestamp(partition);
+    long partitionTime(final TopicPartition partition) {
+        return partitionGroup.partitionTimestamp(partition);
     }
 
     // used for testing
