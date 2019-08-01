@@ -94,7 +94,7 @@ public class ResetPartitionTimeIntegrationTest {
     private static final LongDeserializer LONG_DESERIALIZER = new LongDeserializer();
     private static final int DEFAULT_TIMEOUT = 100;
     private final boolean eosEnabled;
-    private static long lastRecordedTimestamp = -1L;
+    private static long lastRecordedTimestamp = -2L;
 
     @Parameters(name = "{index}: eosEnabled={0}")
     public static Collection<Object[]> parameters() {
@@ -158,8 +158,8 @@ public class ResetPartitionTimeIntegrationTest {
                     new KeyValueTimestamp<>("k3", 1L, 5000)
                 )
             );
-            assertThat(lastRecordedTimestamp, is(5000L));
-            lastRecordedTimestamp = -1L;
+            assertThat(lastRecordedTimestamp, is(-1L));
+            lastRecordedTimestamp = -2L;
             Thread.sleep(1000); // wait for commit to finish
 
             driver.close();
@@ -195,12 +195,7 @@ public class ResetPartitionTimeIntegrationTest {
     public static final class MaxTimestampExtractor implements TimestampExtractor {
         @Override
         public long extract(final ConsumerRecord<Object, Object> record, final long maxTimestamp) {
-            if (record.timestamp() > maxTimestamp) {
-                // we do so because maxTimestamp will by RecordQueue logic turn into this record's timestamp
-                lastRecordedTimestamp = record.timestamp();
-            } else {
-                lastRecordedTimestamp = maxTimestamp;
-            }
+            lastRecordedTimestamp = maxTimestamp;
             return record.timestamp();
         }
     }
