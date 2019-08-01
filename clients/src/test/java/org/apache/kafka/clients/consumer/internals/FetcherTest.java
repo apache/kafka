@@ -914,10 +914,13 @@ public class FetcherTest {
         Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> fetchedRecords = fetchedRecords();
         assertEquals("Should not return any records when partition is paused", 0, fetchedRecords.size());
         assertTrue("Should still contain completed fetches", fetcher.hasCompletedFetches());
+        assertFalse("Should not have any available (non-paused) completed fetches", fetcher.hasAvailableFetches());
         assertNull(fetchedRecords.get(tp0));
         assertEquals(0, fetcher.sendFetches());
 
         subscriptions.resume(tp0);
+
+        assertTrue("Should have available (non-paused) completed fetches", fetcher.hasAvailableFetches());
 
         consumerClient.poll(time.timer(0));
         fetchedRecords = fetchedRecords();
@@ -995,6 +998,7 @@ public class FetcherTest {
         fetchedRecords = fetchedRecords();
         assertEquals("Should return no records for all paused partitions", 0, fetchedRecords.size());
         assertTrue("Should still contain completed fetches", fetcher.hasCompletedFetches());
+        assertFalse("Should not have any available (non-paused) completed fetches", fetcher.hasAvailableFetches());
     }
 
     @Test
@@ -1025,6 +1029,7 @@ public class FetcherTest {
 
         assertEquals("Should return no records for paused partitions", 0, fetchedRecords.size());
         assertTrue("Should have 1 entry in completed fetches", fetcher.hasCompletedFetches());
+        assertFalse("Should not have any available (non-paused) completed fetches", fetcher.hasAvailableFetches());
 
         subscriptions.resume(tp0);
 

@@ -218,11 +218,20 @@ public class Fetcher<K, V> implements Closeable {
     }
 
     /**
-     * Return whether we have any completed fetches pending return to the user. This method is thread-safe.
+     * Return whether we have any completed fetches pending return to the user. This method is thread-safe. Has
+     * visibility for testing.
      * @return true if there are completed fetches, false otherwise
      */
-    public boolean hasCompletedFetches() {
+    protected boolean hasCompletedFetches() {
         return !completedFetches.isEmpty();
+    }
+
+    /**
+     * Return whether we have any completed fetches that are fetchable. This method is thread-safe.
+     * @return true if there are completed fetches that can be returned, false otherwise
+     */
+    public boolean hasAvailableFetches() {
+        return completedFetches.stream().anyMatch(fetch -> subscriptions.isFetchable(fetch.partition));
     }
 
     /**
