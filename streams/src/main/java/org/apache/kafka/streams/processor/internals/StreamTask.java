@@ -591,7 +591,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
                 commit(false);
             } finally {
                 if (eosEnabled) {
-
                     stateMgr.checkpoint(activeTaskCheckpointableOffsets());
 
                     try {

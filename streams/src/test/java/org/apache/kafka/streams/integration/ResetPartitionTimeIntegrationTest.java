@@ -77,13 +77,17 @@ import org.slf4j.LoggerFactory;
 @RunWith(Parameterized.class)
 @Category({IntegrationTest.class})
 public class ResetPartitionTimeIntegrationTest {
-
+    private static final int NUM_BROKERS = 1;
+    private static final Properties BROKER_CONFIG;
+    static {
+        BROKER_CONFIG = new Properties();
+        BROKER_CONFIG.put("transaction.state.log.replication.factor", (short) 1);
+        BROKER_CONFIG.put("transaction.state.log.min.isr", 1);
+    }
     @ClassRule
-    public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(
-        3,
-        mkProperties(mkMap()),
-        0L
-    );
+    public static final EmbeddedKafkaCluster CLUSTER =
+        new EmbeddedKafkaCluster(NUM_BROKERS, BROKER_CONFIG, 0L);
+
     private static final StringDeserializer STRING_DESERIALIZER = new StringDeserializer();
     private static final StringSerializer STRING_SERIALIZER = new StringSerializer();
     private static final Serde<String> STRING_SERDE = Serdes.String();
@@ -112,8 +116,6 @@ public class ResetPartitionTimeIntegrationTest {
         final String storeName = "counts";
         final String outputRaw = "output-raw" + testId;
 
-        // create multiple partitions as a trap, in case the buffer doesn't properly set the
-        // partition on the records, but instead relies on the default key partitioner
         cleanStateBeforeTest(CLUSTER, 2, input, outputRaw);
 
         final StreamsBuilder builder = new StreamsBuilder();
@@ -125,7 +127,6 @@ public class ResetPartitionTimeIntegrationTest {
             .count(Materialized.<String, Long, KeyValueStore<Bytes, byte[]>>as(storeName).withCachingDisabled())
             .toStream();
 
-        // expect all post-suppress records to keep the right input topic
         final MetadataValidator metadataValidator = new MetadataValidator(input);
 
         valueCounts
@@ -161,7 +162,6 @@ public class ResetPartitionTimeIntegrationTest {
             lastRecordedTimestamp = -1L;
             Thread.sleep(1000); // wait for commit to finish
 
-            // restart && reset the driver
             driver.close();
             assertThat(driver.state(), is(KafkaStreams.State.NOT_RUNNING));
             driver.cleanUp();
