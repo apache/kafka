@@ -22,17 +22,19 @@ import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.Subscription;
 import org.apache.kafka.clients.consumer.internals.AbstractStickyAssignor;
 import org.apache.kafka.clients.consumer.internals.AbstractStickyAssignorTest;
 import org.apache.kafka.common.TopicPartition;
-;
 
 public class CooperativeStickyAssignorTest extends AbstractStickyAssignorTest {
 
+    private CooperativeStickyAssignor cooperativeAssignor;
+
     @Override
     public AbstractStickyAssignor createAssignor() {
-        return new CooperativeStickyAssignor();
+        cooperativeAssignor = new CooperativeStickyAssignor();
+        return cooperativeAssignor;
     }
 
     @Override
-    public Subscription buildSubscription(List<String> topics, List<TopicPartition> partitions, int generation) {
-        return new Subscription(topics, assignor.subscriptionUserData(new HashSet<>(topics)), partitions);
+    public Subscription buildSubscription(List<String> topics, List<TopicPartition> partitions) {
+        return new Subscription(topics, cooperativeAssignor.subscriptionUserData(new HashSet<>(topics)), partitions);
     }
 }

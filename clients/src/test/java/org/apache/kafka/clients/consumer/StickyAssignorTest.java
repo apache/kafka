@@ -17,6 +17,7 @@
 package org.apache.kafka.clients.consumer;
 
 import static org.apache.kafka.clients.consumer.StickyAssignor.serializeTopicPartitionAssignment;
+import static org.apache.kafka.clients.consumer.internals.AbstractStickyAssignor.DEFAULT_GENERATION;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -33,13 +34,22 @@ import org.apache.kafka.common.utils.CollectionUtils;
 
 public class StickyAssignorTest extends AbstractStickyAssignorTest {
 
+    private StickyAssignor stickyAssignor;
+
     @Override
     public AbstractStickyAssignor createAssignor() {
-        return new StickyAssignor();
+        stickyAssignor = new StickyAssignor();
+        return stickyAssignor;
     }
 
     @Override
-    public Subscription buildSubscription(List<String> topics, List<TopicPartition> partitions, int generation) {
+    public Subscription buildSubscription(List<String> topics, List<TopicPartition> partitions) {
+        return new Subscription(topics,
+            serializeTopicPartitionAssignment(new MemberData(partitions, Optional.of(DEFAULT_GENERATION))));
+    }
+
+    @Override
+    public Subscription buildSubscriptionWithGeneration(List<String> topics, List<TopicPartition> partitions, int generation) {
         return new Subscription(topics,
             serializeTopicPartitionAssignment(new MemberData(partitions, Optional.of(generation))));
     }

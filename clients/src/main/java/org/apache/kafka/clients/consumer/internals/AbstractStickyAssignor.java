@@ -38,7 +38,7 @@ import org.slf4j.LoggerFactory;
 public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
     private static final Logger log = LoggerFactory.getLogger(AbstractStickyAssignor.class);
 
-    protected static final int DEFAULT_GENERATION = -1;
+    public static final int DEFAULT_GENERATION = -1;
 
     private PartitionMovements partitionMovements;
 
@@ -587,7 +587,7 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
         sortedCurrentSubscriptions.add(oldConsumer);
     }
 
-    boolean isSticky() {
+    public boolean isSticky() {
         return partitionMovements.isSticky();
     }
 

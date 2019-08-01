@@ -102,8 +102,11 @@ public class CooperativeStickyAssignor extends AbstractStickyAssignor {
 
         // remove any partitions to be revoked from the current assignment
         for (TopicPartition tp : allRevokedPartitions) {
-            String assignedConsumer = allAssignedPartitions.get(tp);
-            assignments.get(assignedConsumer).remove(tp);
+            // if partition is being migrated to another consumer, don't assign it there yet
+            if (allAssignedPartitions.containsKey(tp)) {
+                String assignedConsumer = allAssignedPartitions.get(tp);
+                assignments.get(assignedConsumer).remove(tp);
+            }
         }
 
     }
