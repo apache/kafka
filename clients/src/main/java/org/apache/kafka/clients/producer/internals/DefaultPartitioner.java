@@ -62,7 +62,8 @@ public class DefaultPartitioner implements Partitioner {
     public void close() {}
     
     /**
-     * Change the current sticky partition when the previous sticky partition batch is full. 
+     * If a batch completed for the current sticky partition, change the sticky partition. 
+     * Alternately, if no sticky partition has been determined, set one.
      */
     public void onNewBatch(String topic, Cluster cluster, int prevPartition) {
         stickyPartitionCache.nextPartition(topic, cluster, prevPartition);

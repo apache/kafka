@@ -1898,6 +1898,7 @@ public class SenderTest {
         doInitTransactions(txnManager, producerIdAndEpoch);
 
         txnManager.beginTransaction();
+        txnManager.failIfNotReadyForSend();
         txnManager.maybeAddPartitionToTransaction(tp);
         client.prepareResponse(new AddPartitionsToTxnResponse(0, Collections.singletonMap(tp, Errors.NONE)));
         sender.runOnce();
@@ -2217,6 +2218,7 @@ public class SenderTest {
             doInitTransactions(txnManager, producerIdAndEpoch);
 
             txnManager.beginTransaction();
+            txnManager.failIfNotReadyForSend();
             txnManager.maybeAddPartitionToTransaction(tp);
             client.prepareResponse(new AddPartitionsToTxnResponse(0, Collections.singletonMap(tp, Errors.NONE)));
             sender.runOnce();
@@ -2249,6 +2251,7 @@ public class SenderTest {
             doInitTransactions(txnManager, producerIdAndEpoch);
 
             txnManager.beginTransaction();
+            txnManager.failIfNotReadyForSend();
             txnManager.maybeAddPartitionToTransaction(tp);
             client.prepareResponse(new AddPartitionsToTxnResponse(0, Collections.singletonMap(tp, Errors.NONE)));
             sender.runOnce();
@@ -2280,6 +2283,7 @@ public class SenderTest {
             doInitTransactions(txnManager, producerIdAndEpoch);
 
             txnManager.beginTransaction();
+            txnManager.failIfNotReadyForSend();
             txnManager.maybeAddPartitionToTransaction(tp);
             client.prepareResponse(new AddPartitionsToTxnResponse(0, Collections.singletonMap(tp, Errors.NONE)));
             sender.runOnce();

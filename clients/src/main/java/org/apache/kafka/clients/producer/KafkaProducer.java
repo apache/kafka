@@ -908,20 +908,24 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             ensureValidRecordSize(serializedSize);
             long timestamp = record.timestamp() == null ? time.milliseconds() : record.timestamp();
             if (log.isTraceEnabled()) {
-                log.trace("Sending record {} with callback {} to topic {} partition {}", record, callback, record.topic(), partition);
+                log.trace("Attempting to append record {} with callback {} to topic {} partition {}", record, callback, record.topic(), partition);
             }
             // producer callback will make sure to call both 'callback' and interceptor callback
             Callback interceptCallback = new InterceptorCallback<>(callback, this.interceptors, tp);
 
+            if (transactionManager != null && transactionManager.isTransactional()) {
+                transactionManager.failIfNotReadyForSend();
+            }
             RecordAccumulator.RecordAppendResult result = accumulator.append(tp, timestamp, serializedKey,
                     serializedValue, headers, interceptCallback, remainingWaitMs, true);
             
             if (result.abortForNewBatch) {
-                partitioner.onNewBatch(record.topic(), cluster, partition);
+                int prevPartition = partition;
+                partitioner.onNewBatch(record.topic(), cluster, prevPartition);
                 partition = partition(record, serializedKey, serializedValue, cluster);
                 tp = new TopicPartition(record.topic(), partition);
                 if (log.isTraceEnabled()) {
-                    log.trace("Retrying on a new batch, sending the record to topic {} partition {}", record.topic(), partition);
+                    log.trace("Retrying because of a new batch, sending the record to topic {} partition {}. The old partition was {}", record.topic(), partition, prevPartition);
                 }
                 // producer callback will make sure to call both 'callback' and interceptor callback
                 interceptCallback = new InterceptorCallback<>(callback, this.interceptors, tp);

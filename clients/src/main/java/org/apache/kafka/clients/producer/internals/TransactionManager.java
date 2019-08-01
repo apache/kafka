@@ -338,8 +338,6 @@ public class TransactionManager {
     }
 
     public synchronized void maybeAddPartitionToTransaction(TopicPartition topicPartition) {
-        failIfNotReadyForSend();
-
         if (isPartitionAdded(topicPartition) || isPartitionPendingAdd(topicPartition))
             return;
 
@@ -352,7 +350,7 @@ public class TransactionManager {
         return lastError;
     }
 
-    synchronized void failIfNotReadyForSend() {
+    public synchronized void failIfNotReadyForSend() {
         if (hasError())
             throw new KafkaException("Cannot perform send because at least one previous transactional or " +
                     "idempotent request has failed with errors.", lastError);
