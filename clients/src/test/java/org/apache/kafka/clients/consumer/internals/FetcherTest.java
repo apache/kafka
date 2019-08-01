@@ -1042,6 +1042,27 @@ public class FetcherTest {
     }
 
     @Test
+    public void testFetchDiscardedAfterPausedPartitionResumedAndSeekedToNewOffset() {
+        buildFetcher();
+        assignFromUser(singleton(tp0));
+        subscriptions.seek(tp0, 0);
+
+        assertEquals(1, fetcher.sendFetches());
+        subscriptions.pause(tp0);
+        client.prepareResponse(fullFetchResponse(tp0, this.records, Errors.NONE, 100L, 0));
+
+        subscriptions.seek(tp0, 3);
+        subscriptions.resume(tp0);
+        consumerClient.poll(time.timer(0));
+
+        assertTrue("Should have 1 entry in completed fetches", fetcher.hasCompletedFetches());
+        Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> fetchedRecords = fetchedRecords();
+        assertEquals("Should not return any records because we seeked to a new offset", 0, fetchedRecords.size());
+        assertNull(fetchedRecords.get(tp0));
+        assertFalse("Should have no completed fetches", fetcher.hasCompletedFetches());
+    }
+
+    @Test
     public void testFetchNotLeaderForPartition() {
         buildFetcher();
         assignFromUser(singleton(tp0));
