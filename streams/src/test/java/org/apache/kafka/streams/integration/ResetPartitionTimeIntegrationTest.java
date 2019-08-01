@@ -31,7 +31,6 @@ import static org.hamcrest.Matchers.equalTo;
 
 import java.util.Collection;
 import java.util.List;
-import java.util.Locale;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.concurrent.atomic.AtomicReference;
@@ -109,9 +108,9 @@ public class ResetPartitionTimeIntegrationTest {
     }
 
     @Test
-    public void testPartitionTimeAfterKStreamReset() throws InterruptedException {
+    public void testPartitionTimeAfterKStreamReset() throws Exception {
         final String testId = "-shouldRecoverPartitionTimeAfterReset";
-        final String appId = getClass().getSimpleName().toLowerCase(Locale.getDefault()) + testId;
+        final String appId = "appId" + testId;
         final String input = "input" + testId;
         final String storeName = "counts";
         final String outputRaw = "output-raw" + testId;
@@ -143,7 +142,7 @@ public class ResetPartitionTimeIntegrationTest {
         streamsConfig.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
         
 
-        KafkaStreams driver = getStartedStreams(streamsConfig, builder, true);
+        KafkaStreams kafkaStreams = getStartedStreams(streamsConfig, builder, true);
         try {
             // start sending some records to have partition time committed 
             produceSynchronouslyToPartitionZero(
@@ -162,11 +161,10 @@ public class ResetPartitionTimeIntegrationTest {
             lastRecordedTimestamp = -2L;
             Thread.sleep(1000); // wait for commit to finish
 
-            driver.close();
-            assertThat(driver.state(), is(KafkaStreams.State.NOT_RUNNING));
-            driver.cleanUp();
-            driver = new KafkaStreams(builder.build(), streamsConfig);
-            driver.start();
+            kafkaStreams.close();
+            assertThat(kafkaStreams.state(), is(KafkaStreams.State.NOT_RUNNING));
+            kafkaStreams = new KafkaStreams(builder.build(), streamsConfig);
+            kafkaStreams.start();
 
             // resend some records and retrieve the last committed timestamp
             produceSynchronouslyToPartitionZero(
@@ -187,15 +185,15 @@ public class ResetPartitionTimeIntegrationTest {
             metadataValidator.raiseExceptionIfAny();
 
         } finally {
-            driver.close();
-            cleanStateAfterTest(CLUSTER, driver);
+            kafkaStreams.close();
+            cleanStateAfterTest(CLUSTER, kafkaStreams);
         }
     }
 
     public static final class MaxTimestampExtractor implements TimestampExtractor {
         @Override
-        public long extract(final ConsumerRecord<Object, Object> record, final long maxTimestamp) {
-            lastRecordedTimestamp = maxTimestamp;
+        public long extract(final ConsumerRecord<Object, Object> record, final long partitionTime) {
+            lastRecordedTimestamp = partitionTime;
             return record.timestamp();
         }
     }

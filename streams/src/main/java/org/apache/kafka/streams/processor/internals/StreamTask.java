@@ -748,7 +748,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
      * @return a boolean result which indicates all timestamps were successfully restored.
      */
     public void initializeTaskTime() {
-        for (final TopicPartition partition : consumer.assignment()) {
+        for (final TopicPartition partition : partitionGroup.partitions()) {
             retrieveCommittedTimestamp(partition);
         }
     }
