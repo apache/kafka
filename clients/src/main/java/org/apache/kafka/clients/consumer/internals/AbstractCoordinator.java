@@ -46,6 +46,7 @@ import org.apache.kafka.common.metrics.stats.Avg;
 import org.apache.kafka.common.metrics.stats.Max;
 import org.apache.kafka.common.metrics.stats.Meter;
 import org.apache.kafka.common.metrics.stats.WindowedCount;
+import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.FindCoordinatorRequest;
 import org.apache.kafka.common.requests.FindCoordinatorRequest.CoordinatorType;
@@ -526,7 +527,7 @@ public abstract class AbstractCoordinator implements Closeable {
                 future.raise(error);
             } else if (error == Errors.UNKNOWN_MEMBER_ID) {
                 // reset the member id and retry immediately
-                resetGeneration("encountering " + error + " on join response");
+                resetGenerationOnResponseError(ApiKeys.JOIN_GROUP, error);
                 log.debug("Attempt to join group failed due to unknown member id.");
                 future.raise(error);
             } else if (error == Errors.COORDINATOR_NOT_AVAILABLE
@@ -649,7 +650,7 @@ public abstract class AbstractCoordinator implements Closeable {
                 } else if (error == Errors.UNKNOWN_MEMBER_ID
                         || error == Errors.ILLEGAL_GENERATION) {
                     log.debug("SyncGroup failed: {}", error.message());
-                    resetGeneration("encountering " + error + " on sync group response");
+                    resetGenerationOnResponseError(ApiKeys.SYNC_GROUP, error);
                     future.raise(error);
                 } else if (error == Errors.COORDINATOR_NOT_AVAILABLE
                         || error == Errors.NOT_COORDINATOR) {
@@ -799,24 +800,20 @@ public abstract class AbstractCoordinator implements Closeable {
         return generation != null && generation.hasMemberId();
     }
 
-
-    public synchronized void resetGeneration(String causeMessage, boolean dueToError) {
-        if (dueToError) {
-            log.debug("Resetting generation and requesting re-join group due to {}", causeMessage);
-        } else {
-            log.debug("Resetting generation pro-actively due to {}", causeMessage);
-        }
-
+    private synchronized void resetGeneration() {
         this.generation = Generation.NO_GENERATION;
         this.state = MemberState.UNJOINED;
         this.rejoinNeeded = true;
     }
 
-    /**
-     * Reset the generation and memberId because we have fallen out of the group.
-     */
-    protected synchronized void resetGeneration(String errorMessage) {
-        resetGeneration(errorMessage, true);
+    synchronized void resetGenerationOnResponseError(ApiKeys api, Errors error) {
+        log.debug("Resetting generation after encountering " + error + " from " + api + " response");
+        resetGeneration();
+    }
+
+    synchronized void resetGenerationOnLeaveGroup() {
+        log.debug("Resetting generation due to consumer pro-actively leaving the group");
+        resetGeneration();
     }
 
     protected synchronized void requestRejoin() {
@@ -857,12 +854,16 @@ public abstract class AbstractCoordinator implements Closeable {
         }
     }
 
+    public synchronized RequestFuture<Void> maybeLeaveGroup(String leaveReason) {
+        return maybeLeaveGroup(leaveReason, false);
+    }
+
     /**
      * Leave the current group and reset local generation/memberId.
      * @param leaveReason reason to attempt leaving the group
      * @throws KafkaException if the callback throws exception
      */
-    public synchronized RequestFuture<Void> maybeLeaveGroup(String leaveReason) {
+    public synchronized RequestFuture<Void> maybeLeaveGroup(String leaveReason, boolean dueToHeartbeatExpiration) {
         LeaveGroupRequest.Builder request = null;
         // Starting from 2.3, only dynamic members will send LeaveGroupRequest to the broker,
         // consumer with valid group.instance.id is viewed as static member that never sends LeaveGroup,
@@ -879,10 +880,15 @@ public abstract class AbstractCoordinator implements Closeable {
             );
         }
 
-        // we need to reset generation first in order to trigger
-        // the rebalance callback if necessary, before sending
-        // the leave group which may trigger the rebalance
-        resetGeneration("consumer proactively leaving group", false);
+        // we need to reset generation first in order to trigger the rebalance callback if necessary, before sending
+        // the leave group which may trigger the rebalance; if leave-group is caused by heartbeat poll expiration
+        // at the heartbeat thread, we should not trigger the rebalance callback and will wait until the caller thread
+        // calling consumer.poll to trigger it.
+        if (dueToHeartbeatExpiration) {
+            resetGeneration();
+        } else {
+            resetGenerationOnLeaveGroup();
+        }
 
         if (request != null) {
             RequestFuture<Void> future = client.send(coordinator, request)
@@ -952,14 +958,14 @@ public abstract class AbstractCoordinator implements Closeable {
                 future.raise(error);
             } else if (error == Errors.ILLEGAL_GENERATION) {
                 log.info("Attempt to heartbeat failed since generation {} is not current", generation.generationId);
-                resetGeneration("encountering " + error + " on heartbeat response");
+                resetGenerationOnResponseError(ApiKeys.HEARTBEAT, error);
                 future.raise(error);
             } else if (error == Errors.FENCED_INSTANCE_ID) {
                 log.error("Received fatal exception: group.instance.id gets fenced");
                 future.raise(error);
             } else if (error == Errors.UNKNOWN_MEMBER_ID) {
                 log.info("Attempt to heartbeat failed for since member id {} is not valid.", generation.memberId);
-                resetGeneration("encountering " + error + " on heartbeat response");
+                resetGenerationOnResponseError(ApiKeys.HEARTBEAT, error);
                 future.raise(error);
             } else if (error == Errors.GROUP_AUTHORIZATION_FAILED) {
                 future.raise(GroupAuthorizationException.forGroupId(rebalanceConfig.groupId));
@@ -1135,7 +1141,7 @@ public abstract class AbstractCoordinator implements Closeable {
                                                     "the poll loop is spending too much time processing messages. " +
                                                     "You can address this either by increasing max.poll.interval.ms or by reducing " +
                                                     "the maximum size of batches returned in poll() with max.poll.records.";
-                            maybeLeaveGroup(leaveReason);
+                            maybeLeaveGroup(leaveReason, true);
                         } else if (!heartbeat.shouldHeartbeat(now)) {
                             // poll again after waiting for the retry backoff in case the heartbeat failed or the
                             // coordinator disconnected

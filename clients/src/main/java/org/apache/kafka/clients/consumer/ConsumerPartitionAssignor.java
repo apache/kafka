@@ -184,7 +184,7 @@ public interface ConsumerPartitionAssignor {
      * The rebalance protocol defines partition assignment and revocation semantics. The purpose is to establish a
      * consistent set of rules that all consumers in a group follow in order to transfer ownership of a partition.
      * {@link ConsumerPartitionAssignor} implementors can claim supporting one or more rebalance protocols via the
-     * {@link ConsumerPartitionAssignor#supportedProtocols()}, and it is their responsible to respect the rules
+     * {@link ConsumerPartitionAssignor#supportedProtocols()}, and it is their responsibility to respect the rules
      * of those protocols in their {@link ConsumerPartitionAssignor#assign(Cluster, GroupSubscription)} implementations.
      * Failures to follow the rules of the supported protocols would lead to runtime error or undefined behavior.
      *

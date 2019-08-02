@@ -391,6 +391,9 @@ public class ConsumerCoordinatorTest {
         assertTrue(future.failed());
         assertEquals(Errors.ILLEGAL_GENERATION.exception(), future.exception());
         assertTrue(coordinator.rejoinNeededOrPending());
+
+        coordinator.poll(time.timer(0));
+
         assertEquals(1, rebalanceListener.lostCount);
         assertEquals(Collections.singleton(t1p), rebalanceListener.lost);
     }
@@ -417,6 +420,9 @@ public class ConsumerCoordinatorTest {
         assertTrue(future.failed());
         assertEquals(Errors.UNKNOWN_MEMBER_ID.exception(), future.exception());
         assertTrue(coordinator.rejoinNeededOrPending());
+
+        coordinator.poll(time.timer(0));
+
         assertEquals(1, rebalanceListener.lostCount);
         assertEquals(Collections.singleton(t1p), rebalanceListener.lost);
     }

@@ -49,6 +49,7 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Avg;
 import org.apache.kafka.common.metrics.stats.Max;
+import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.requests.OffsetCommitRequest;
@@ -384,7 +385,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                     Utils.join(addedPartitions, ", "),
                     Utils.join(revokedPartitions, ", "));
 
-                // revoked partitions that was previously owned but no longer assigned
+                // revoke partitions that was previously owned but no longer assigned
                 firstException.compareAndSet(null, maybeInvokePartitionsRevoked(revokedPartitions));
 
                 subscriptions.assignFromSubscribed(assignedPartitions);
@@ -640,32 +641,45 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         // note we should only change the assignment AFTER the callback is triggered
         // so that users can still access the pre-assigned partitions to commit offsets etc.
         Exception exception = null;
-        switch (protocol) {
-            case EAGER:
-                // revoke all partitions
-                revokedPartitions = new HashSet<>(subscriptions.assignedPartitions());
-                exception = maybeInvokePartitionsRevoked(revokedPartitions);
 
-                subscriptions.assignFromSubscribed(Collections.emptySet());
+        if (generation == Generation.NO_GENERATION.generationId &&
+            memberId.equals(Generation.NO_GENERATION.memberId)) {
 
-                break;
+            revokedPartitions = new HashSet<>(subscriptions.assignedPartitions());
+            exception = maybeInvokePartitionsLost(
+                "generation has been reset because consumer has been kicked out of the group",
+                revokedPartitions);
 
-            case COOPERATIVE:
-                // only revoke those partitions that are not in the subscription any more.
-                Set<TopicPartition> ownedPartitions = new HashSet<>(subscriptions.assignedPartitions());
-                revokedPartitions = ownedPartitions.stream()
-                    .filter(tp -> !subscriptions.subscription().contains(tp.topic()))
-                    .collect(Collectors.toSet());
-
-                if (!revokedPartitions.isEmpty()) {
+            subscriptions.assignFromSubscribed(Collections.emptySet());
+        } else {
+            switch (protocol) {
+                case EAGER:
+                    // revoke all partitions
+                    revokedPartitions = new HashSet<>(subscriptions.assignedPartitions());
                     exception = maybeInvokePartitionsRevoked(revokedPartitions);
 
-                    ownedPartitions.removeAll(revokedPartitions);
-                    subscriptions.assignFromSubscribed(ownedPartitions);
-                }
+                    subscriptions.assignFromSubscribed(Collections.emptySet());
 
-                break;
+                    break;
+
+                case COOPERATIVE:
+                    // only revoke those partitions that are not in the subscription any more.
+                    Set<TopicPartition> ownedPartitions = new HashSet<>(subscriptions.assignedPartitions());
+                    revokedPartitions = ownedPartitions.stream()
+                        .filter(tp -> !subscriptions.subscription().contains(tp.topic()))
+                        .collect(Collectors.toSet());
+
+                    if (!revokedPartitions.isEmpty()) {
+                        exception = maybeInvokePartitionsRevoked(revokedPartitions);
+
+                        ownedPartitions.removeAll(revokedPartitions);
+                        subscriptions.assignFromSubscribed(ownedPartitions);
+                    }
+
+                    break;
+            }
         }
+
 
         isLeader = false;
         subscriptions.resetGroupSubscription();
@@ -675,20 +689,15 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         }
     }
 
-    /**
-     * @throws KafkaException if the rebalance callback throws exception
-     */
-    @Override
-    public void resetGeneration(String causeMessage, boolean dueToError) {
-        if (subscriptions.partitionsAutoAssigned()) {
-            // if reset due to error then we have to give up all owned partitions as if they've lost;
-            // otherwise we can give them up as revoked
-            Set<TopicPartition> droppedPartitions = new HashSet<>(subscriptions.assignedPartitions());
+    private void resetAssignment(boolean lostPartitions) {
+        Set<TopicPartition> droppedPartitions = new HashSet<>(subscriptions.assignedPartitions());
+
+        if (subscriptions.partitionsAutoAssigned() && !droppedPartitions.isEmpty()) {
 
             Exception e;
 
-            if (dueToError) {
-                e = maybeInvokePartitionsLost(causeMessage, droppedPartitions);
+            if (lostPartitions) {
+                e = maybeInvokePartitionsLost("reset generation", droppedPartitions);
             } else {
                 e = maybeInvokePartitionsRevoked(droppedPartitions);
             }
@@ -699,8 +708,29 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                 throw new KafkaException("User rebalance callback throws an error", e);
             }
         }
+    }
 
-        super.resetGeneration(causeMessage, dueToError);
+    /**
+     * @throws KafkaException if the rebalance callback throws exception
+     */
+    @Override
+    synchronized void resetGenerationOnResponseError(ApiKeys api, Errors error) {
+        // heartbeat error handling is executed by heartbeat thread, in which case
+        // we would not drop partitions and trigger rebalance callback as it should
+        // only be triggered by the caller thread
+        if (api != ApiKeys.HEARTBEAT) {
+            resetAssignment(true);
+        }
+        super.resetGenerationOnResponseError(api, error);
+    }
+
+    /**
+     * @throws KafkaException if the rebalance callback throws exception
+     */
+    @Override
+    synchronized void resetGenerationOnLeaveGroup() {
+        resetAssignment(false);
+        super.resetGenerationOnLeaveGroup();
     }
 
     /**
@@ -1149,7 +1179,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                         } else if (error == Errors.UNKNOWN_MEMBER_ID
                                 || error == Errors.ILLEGAL_GENERATION) {
                             // need to reset generation and re-join group
-                            resetGeneration("encountering " + error + " on offset commit response");
+                            resetGenerationOnResponseError(ApiKeys.OFFSET_COMMIT, error);
                             future.raise(new CommitFailedException());
                             return;
                         } else {
