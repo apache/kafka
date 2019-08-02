@@ -33,7 +33,11 @@ import org.slf4j.LoggerFactory;
 
 /**
  * This adapter class is used to ensure backwards compatibility for those who have implemented the {@link PartitionAssignor}
- * interface, which has been deprecated in favor of the new {@link org.apache.kafka.clients.consumer.ConsumerPartitionAssignor}
+ * interface, which has been deprecated in favor of the new {@link org.apache.kafka.clients.consumer.ConsumerPartitionAssignor}.
+ * <p>
+ * Note that maintaining compatibility for an internal interface here is a special case, as {@code PartitionAssignor}
+ * was meant to be a public API although it was placed in the internals package. Users should not expect internal
+ * interfaces or classes to not be removed or maintain compatibility in any way.
  */
 @SuppressWarnings("deprecation")
 public class PartitionAssignorAdapter implements ConsumerPartitionAssignor {
