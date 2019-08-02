@@ -93,11 +93,10 @@ public class ResetPartitionTimeIntegrationTest {
     }
 
     @Test
-    public void testPartitionTimeAfterKStreamReset() throws Exception {
-        final String testId = "-shouldRecoverPartitionTimeAfterReset";
-        final String appId = "appId" + testId;
-        final String input = "input" + testId;
-        final String outputRaw = "output-raw" + testId;
+    public void shouldPreservePartitionTimeOnKafkaStreamRestart() throws Exception {
+        final String appId = "appId";
+        final String input = "input";
+        final String outputRaw = "output-raw";
 
         cleanStateBeforeTest(CLUSTER, 2, input, outputRaw);
 

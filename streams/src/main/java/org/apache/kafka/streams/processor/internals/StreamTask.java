@@ -449,7 +449,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
             metadataTimestamp = RecordQueue.UNKNOWN;
         }
         final long localPartitionTime = partitionTime(partition);
-        return localPartitionTime < metadataTimestamp ? metadataTimestamp : localPartitionTime;
+        return metadataTimestamp >= localPartitionTime ? metadataTimestamp : localPartitionTime;
     }
 
     /**

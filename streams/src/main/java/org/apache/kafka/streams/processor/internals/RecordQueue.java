@@ -72,7 +72,7 @@ public class RecordQueue {
         this.log = logContext.logger(RecordQueue.class);
     }
  
-    public void setPartitionTime(final long partitionTime) {
+    void setPartitionTime(final long partitionTime) {
         this.partitionTime = partitionTime;
     }
 
