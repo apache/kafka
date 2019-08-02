@@ -120,7 +120,15 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
     @Override
     public void remove(final Windowed<Bytes> sessionKey) {
         final ConcurrentNavigableMap<Bytes, ConcurrentNavigableMap<Long, byte[]>> keyMap = endTimeMap.get(sessionKey.window().end());
+        if (keyMap == null) {
+            return;
+        }
+
         final ConcurrentNavigableMap<Long, byte[]> startTimeMap = keyMap.get(sessionKey.key());
+        if (startTimeMap == null) {
+            return;
+        }
+
         startTimeMap.remove(sessionKey.window().start());
 
         if (startTimeMap.isEmpty()) {

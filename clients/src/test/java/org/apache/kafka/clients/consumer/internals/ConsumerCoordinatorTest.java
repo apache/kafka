@@ -44,6 +44,7 @@ import org.apache.kafka.common.internals.Topic;
 import org.apache.kafka.common.message.HeartbeatResponseData;
 import org.apache.kafka.common.message.JoinGroupRequestData;
 import org.apache.kafka.common.message.JoinGroupResponseData;
+import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity;
 import org.apache.kafka.common.message.LeaveGroupResponseData;
 import org.apache.kafka.common.message.OffsetCommitRequestData;
 import org.apache.kafka.common.message.OffsetCommitResponseData;
@@ -51,7 +52,6 @@ import org.apache.kafka.common.message.SyncGroupResponseData;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.RecordBatch;
-import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.FindCoordinatorResponse;
 import org.apache.kafka.common.requests.HeartbeatResponse;
 import org.apache.kafka.common.requests.JoinGroupRequest;
@@ -473,14 +473,11 @@ public class ConsumerCoordinatorTest {
         partitionAssignor.prepare(singletonMap(consumerId, assigned));
 
         client.prepareResponse(joinGroupLeaderResponse(1, consumerId, memberSubscriptions, Errors.NONE));
-        client.prepareResponse(new MockClient.RequestMatcher() {
-            @Override
-            public boolean matches(AbstractRequest body) {
-                SyncGroupRequest sync = (SyncGroupRequest) body;
-                return sync.data.memberId().equals(consumerId) &&
-                        sync.data.generationId() == 1 &&
-                        sync.groupAssignments().containsKey(consumerId);
-            }
+        client.prepareResponse(body -> {
+            SyncGroupRequest sync = (SyncGroupRequest) body;
+            return sync.data.memberId().equals(consumerId) &&
+                    sync.data.generationId() == 1 &&
+                    sync.groupAssignments().containsKey(consumerId);
         }, syncGroupResponse(assigned, Errors.NONE));
         coordinator.poll(time.timer(Long.MAX_VALUE));
 
@@ -514,28 +511,22 @@ public class ConsumerCoordinatorTest {
         client.prepareResponse(
                 joinGroupLeaderResponse(
                     1, consumerId, singletonMap(consumerId, oldSubscription), Errors.NONE));
-        client.prepareResponse(new MockClient.RequestMatcher() {
-            @Override
-            public boolean matches(AbstractRequest body) {
-                SyncGroupRequest sync = (SyncGroupRequest) body;
-                return sync.data.memberId().equals(consumerId) &&
-                        sync.data.generationId() == 1 &&
-                        sync.groupAssignments().containsKey(consumerId);
-            }
+        client.prepareResponse(body -> {
+            SyncGroupRequest sync = (SyncGroupRequest) body;
+            return sync.data.memberId().equals(consumerId) &&
+                    sync.data.generationId() == 1 &&
+                    sync.groupAssignments().containsKey(consumerId);
         }, syncGroupResponse(oldAssignment, Errors.NONE));
 
         // Second correct assignment for subscription
         client.prepareResponse(
                 joinGroupLeaderResponse(
                     1, consumerId, singletonMap(consumerId, newSubscription), Errors.NONE));
-        client.prepareResponse(new MockClient.RequestMatcher() {
-            @Override
-            public boolean matches(AbstractRequest body) {
-                SyncGroupRequest sync = (SyncGroupRequest) body;
-                return sync.data.memberId().equals(consumerId) &&
-                        sync.data.generationId() == 1 &&
-                        sync.groupAssignments().containsKey(consumerId);
-            }
+        client.prepareResponse(body -> {
+            SyncGroupRequest sync = (SyncGroupRequest) body;
+            return sync.data.memberId().equals(consumerId) &&
+                    sync.data.generationId() == 1 &&
+                    sync.groupAssignments().containsKey(consumerId);
         }, syncGroupResponse(newAssignment, Errors.NONE));
 
         // Poll once so that the join group future gets created and complete
@@ -587,14 +578,11 @@ public class ConsumerCoordinatorTest {
         partitionAssignor.prepare(singletonMap(consumerId, assigned));
 
         client.prepareResponse(joinGroupLeaderResponse(1, consumerId, memberSubscriptions, Errors.NONE));
-        client.prepareResponse(new MockClient.RequestMatcher() {
-            @Override
-            public boolean matches(AbstractRequest body) {
-                SyncGroupRequest sync = (SyncGroupRequest) body;
-                return sync.data.memberId().equals(consumerId) &&
-                        sync.data.generationId() == 1 &&
-                        sync.groupAssignments().containsKey(consumerId);
-            }
+        client.prepareResponse(body -> {
+            SyncGroupRequest sync = (SyncGroupRequest) body;
+            return sync.data.memberId().equals(consumerId) &&
+                    sync.data.generationId() == 1 &&
+                    sync.groupAssignments().containsKey(consumerId);
         }, syncGroupResponse(assigned, Errors.NONE));
         // expect client to force updating the metadata, if yes gives it both topics
         client.prepareMetadataUpdate(metadataResponse);
@@ -634,15 +622,12 @@ public class ConsumerCoordinatorTest {
         final List<String> updatedSubscription = Arrays.asList(topic1, topic2);
 
         client.prepareResponse(joinGroupLeaderResponse(1, consumerId, initialSubscription, Errors.NONE));
-        client.prepareResponse(new MockClient.RequestMatcher() {
-            @Override
-            public boolean matches(AbstractRequest body) {
-                final Map<String, Integer> updatedPartitions = new HashMap<>();
-                for (String topic : updatedSubscription)
-                    updatedPartitions.put(topic, 1);
-                client.updateMetadata(TestUtils.metadataUpdateWith(1, updatedPartitions));
-                return true;
-            }
+        client.prepareResponse(body -> {
+            final Map<String, Integer> updatedPartitions = new HashMap<>();
+            for (String topic : updatedSubscription)
+                updatedPartitions.put(topic, 1);
+            client.updateMetadata(TestUtils.metadataUpdateWith(1, updatedPartitions));
+            return true;
         }, syncGroupResponse(oldAssigned, Errors.NONE));
         coordinator.poll(time.timer(Long.MAX_VALUE));
 
@@ -661,20 +646,17 @@ public class ConsumerCoordinatorTest {
         partitionAssignor.prepare(singletonMap(consumerId, newAssigned));
 
         // we expect to see a second rebalance with the new-found topics
-        client.prepareResponse(new MockClient.RequestMatcher() {
-            @Override
-            public boolean matches(AbstractRequest body) {
-                JoinGroupRequest join = (JoinGroupRequest) body;
-                Iterator<JoinGroupRequestData.JoinGroupRequestProtocol> protocolIterator =
-                        join.data().protocols().iterator();
-                assertTrue(protocolIterator.hasNext());
-                JoinGroupRequestData.JoinGroupRequestProtocol protocolMetadata = protocolIterator.next();
+        client.prepareResponse(body -> {
+            JoinGroupRequest join = (JoinGroupRequest) body;
+            Iterator<JoinGroupRequestData.JoinGroupRequestProtocol> protocolIterator =
+                    join.data().protocols().iterator();
+            assertTrue(protocolIterator.hasNext());
+            JoinGroupRequestData.JoinGroupRequestProtocol protocolMetadata = protocolIterator.next();
 
-                ByteBuffer metadata = ByteBuffer.wrap(protocolMetadata.metadata());
-                ConsumerPartitionAssignor.Subscription subscription = ConsumerProtocol.deserializeSubscription(metadata);
-                metadata.rewind();
-                return subscription.topics().containsAll(updatedSubscription);
-            }
+            ByteBuffer metadata = ByteBuffer.wrap(protocolMetadata.metadata());
+            ConsumerPartitionAssignor.Subscription subscription = ConsumerProtocol.deserializeSubscription(metadata);
+            metadata.rewind();
+            return subscription.topics().containsAll(updatedSubscription);
         }, joinGroupLeaderResponse(2, consumerId, updatedSubscriptions, Errors.NONE));
         client.prepareResponse(syncGroupResponse(newAssigned, Errors.NONE));
 
@@ -707,14 +689,11 @@ public class ConsumerCoordinatorTest {
         client.prepareMetadataUpdate(metadataResponse);
 
         client.prepareResponse(joinGroupFollowerResponse(1, consumerId, "leader", Errors.NONE));
-        client.prepareResponse(new MockClient.RequestMatcher() {
-            @Override
-            public boolean matches(AbstractRequest body) {
-                SyncGroupRequest sync = (SyncGroupRequest) body;
-                return sync.data.memberId().equals(consumerId) &&
-                    sync.data.generationId() == 1 &&
-                    sync.groupAssignments().isEmpty();
-            }
+        client.prepareResponse(body -> {
+            SyncGroupRequest sync = (SyncGroupRequest) body;
+            return sync.data.memberId().equals(consumerId) &&
+                sync.data.generationId() == 1 &&
+                sync.groupAssignments().isEmpty();
         }, syncGroupResponse(singletonList(t1p), Errors.NONE));
 
         partitionAssignor.prepare(singletonMap(consumerId, singletonList(t1p)));
@@ -786,14 +765,11 @@ public class ConsumerCoordinatorTest {
 
         // normal join group
         client.prepareResponse(joinGroupFollowerResponse(1, consumerId, "leader", Errors.NONE));
-        client.prepareResponse(new MockClient.RequestMatcher() {
-            @Override
-            public boolean matches(AbstractRequest body) {
-                SyncGroupRequest sync = (SyncGroupRequest) body;
-                return sync.data.memberId().equals(consumerId) &&
-                        sync.data.generationId() == 1 &&
-                        sync.groupAssignments().isEmpty();
-            }
+        client.prepareResponse(body -> {
+            SyncGroupRequest sync = (SyncGroupRequest) body;
+            return sync.data.memberId().equals(consumerId) &&
+                    sync.data.generationId() == 1 &&
+                    sync.groupAssignments().isEmpty();
         }, syncGroupResponse(assigned, Errors.NONE));
 
         coordinator.joinGroupIfNeeded(time.timer(Long.MAX_VALUE));
@@ -854,14 +830,11 @@ public class ConsumerCoordinatorTest {
 
         // normal join group
         client.prepareResponse(joinGroupFollowerResponse(1, consumerId, "leader", Errors.NONE));
-        client.prepareResponse(new MockClient.RequestMatcher() {
-            @Override
-            public boolean matches(AbstractRequest body) {
-                SyncGroupRequest sync = (SyncGroupRequest) body;
-                return sync.data.memberId().equals(consumerId) &&
-                        sync.data.generationId() == 1 &&
-                        sync.groupAssignments().isEmpty();
-            }
+        client.prepareResponse(body -> {
+            SyncGroupRequest sync = (SyncGroupRequest) body;
+            return sync.data.memberId().equals(consumerId) &&
+                    sync.data.generationId() == 1 &&
+                    sync.groupAssignments().isEmpty();
         }, syncGroupResponse(assigned, Errors.NONE));
         // expect client to force updating the metadata, if yes gives it both topics
         client.prepareMetadataUpdate(metadataResponse);
@@ -885,15 +858,12 @@ public class ConsumerCoordinatorTest {
         joinAsFollowerAndReceiveAssignment(consumerId, coordinator, singletonList(t1p));
 
         final AtomicBoolean received = new AtomicBoolean(false);
-        client.prepareResponse(new MockClient.RequestMatcher() {
-            @Override
-            public boolean matches(AbstractRequest body) {
-                received.set(true);
-                LeaveGroupRequest leaveRequest = (LeaveGroupRequest) body;
-                return leaveRequest.data().memberId().equals(consumerId) &&
-                        leaveRequest.data().groupId().equals(groupId);
-            }
-        }, new LeaveGroupResponse(new LeaveGroupResponseData().setErrorCode(Errors.NONE.code())));
+        client.prepareResponse(body -> {
+            received.set(true);
+            LeaveGroupRequest leaveRequest = (LeaveGroupRequest) body;
+            return validateLeaveGroup(groupId, consumerId, leaveRequest);
+        }, new LeaveGroupResponse(
+            new LeaveGroupResponseData().setErrorCode(Errors.NONE.code())));
         coordinator.close(time.timer(0));
         assertTrue(received.get());
     }
@@ -906,20 +876,25 @@ public class ConsumerCoordinatorTest {
         joinAsFollowerAndReceiveAssignment(consumerId, coordinator, singletonList(t1p));
 
         final AtomicBoolean received = new AtomicBoolean(false);
-        client.prepareResponse(new MockClient.RequestMatcher() {
-            @Override
-            public boolean matches(AbstractRequest body) {
-                received.set(true);
-                LeaveGroupRequest leaveRequest = (LeaveGroupRequest) body;
-                return leaveRequest.data().memberId().equals(consumerId) &&
-                        leaveRequest.data().groupId().equals(groupId);
-            }
+        client.prepareResponse(body -> {
+            received.set(true);
+            LeaveGroupRequest leaveRequest = (LeaveGroupRequest) body;
+            return validateLeaveGroup(groupId, consumerId, leaveRequest);
         }, new LeaveGroupResponse(new LeaveGroupResponseData().setErrorCode(Errors.NONE.code())));
         coordinator.maybeLeaveGroup("test maybe leave group");
         assertTrue(received.get());
 
         AbstractCoordinator.Generation generation = coordinator.generation();
         assertNull(generation);
+    }
+
+    private boolean validateLeaveGroup(String groupId,
+                                       String consumerId,
+                                       LeaveGroupRequest leaveRequest) {
+        List<MemberIdentity> members = leaveRequest.data().members();
+        return leaveRequest.data().groupId().equals(groupId) &&
+                   members.size() == 1 &&
+                   members.get(0).memberId().equals(consumerId);
     }
 
     /**
@@ -944,13 +919,10 @@ public class ConsumerCoordinatorTest {
         coordinator.joinGroupIfNeeded(time.timer(0));
 
         final AtomicBoolean received = new AtomicBoolean(false);
-        client.prepareResponse(new MockClient.RequestMatcher() {
-            @Override
-            public boolean matches(AbstractRequest body) {
-                received.set(true);
-                LeaveGroupRequest leaveRequest = (LeaveGroupRequest) body;
-                return leaveRequest.data().memberId().equals(consumerId);
-            }
+        client.prepareResponse(body -> {
+            received.set(true);
+            LeaveGroupRequest leaveRequest = (LeaveGroupRequest) body;
+            return validateLeaveGroup(groupId, consumerId, leaveRequest);
         }, new LeaveGroupResponse(new LeaveGroupResponseData().setErrorCode(Errors.NONE.code())));
 
         coordinator.maybeLeaveGroup("pending member leaves");
@@ -986,12 +958,9 @@ public class ConsumerCoordinatorTest {
         client.prepareResponse(syncGroupResponse(Collections.<TopicPartition>emptyList(), Errors.UNKNOWN_MEMBER_ID));
 
         // now we should see a new join with the empty UNKNOWN_MEMBER_ID
-        client.prepareResponse(new MockClient.RequestMatcher() {
-            @Override
-            public boolean matches(AbstractRequest body) {
-                JoinGroupRequest joinRequest = (JoinGroupRequest) body;
-                return joinRequest.data().memberId().equals(JoinGroupRequest.UNKNOWN_MEMBER_ID);
-            }
+        client.prepareResponse(body -> {
+            JoinGroupRequest joinRequest = (JoinGroupRequest) body;
+            return joinRequest.data().memberId().equals(JoinGroupRequest.UNKNOWN_MEMBER_ID);
         }, joinGroupFollowerResponse(2, consumerId, "leader", Errors.NONE));
         client.prepareResponse(syncGroupResponse(singletonList(t1p), Errors.NONE));
 
@@ -1038,12 +1007,9 @@ public class ConsumerCoordinatorTest {
         client.prepareResponse(syncGroupResponse(Collections.<TopicPartition>emptyList(), Errors.ILLEGAL_GENERATION));
 
         // then let the full join/sync finish successfully
-        client.prepareResponse(new MockClient.RequestMatcher() {
-            @Override
-            public boolean matches(AbstractRequest body) {
-                JoinGroupRequest joinRequest = (JoinGroupRequest) body;
-                return joinRequest.data().memberId().equals(JoinGroupRequest.UNKNOWN_MEMBER_ID);
-            }
+        client.prepareResponse(body -> {
+            JoinGroupRequest joinRequest = (JoinGroupRequest) body;
+            return joinRequest.data().memberId().equals(JoinGroupRequest.UNKNOWN_MEMBER_ID);
         }, joinGroupFollowerResponse(2, consumerId, "leader", Errors.NONE));
         client.prepareResponse(syncGroupResponse(singletonList(t1p), Errors.NONE));
 
@@ -1106,22 +1072,19 @@ public class ConsumerCoordinatorTest {
         partitionAssignor.prepare(singletonMap(consumerId, Arrays.asList(tp1)));
 
         client.prepareResponse(joinGroupLeaderResponse(1, consumerId, memberSubscriptions, Errors.NONE));
-        client.prepareResponse(new MockClient.RequestMatcher() {
-            @Override
-            public boolean matches(AbstractRequest body) {
-                SyncGroupRequest sync = (SyncGroupRequest) body;
-                if (sync.data.memberId().equals(consumerId) &&
-                        sync.data.generationId() == 1 &&
-                        sync.groupAssignments().containsKey(consumerId)) {
-                    // trigger the metadata update including both topics after the sync group request has been sent
-                    Map<String, Integer> topicPartitionCounts = new HashMap<>();
-                    topicPartitionCounts.put(topic1, 1);
-                    topicPartitionCounts.put(topic2, 1);
-                    client.updateMetadata(TestUtils.metadataUpdateWith(1, topicPartitionCounts));
-                    return true;
-                }
-                return false;
+        client.prepareResponse(body -> {
+            SyncGroupRequest sync = (SyncGroupRequest) body;
+            if (sync.data.memberId().equals(consumerId) &&
+                    sync.data.generationId() == 1 &&
+                    sync.groupAssignments().containsKey(consumerId)) {
+                // trigger the metadata update including both topics after the sync group request has been sent
+                Map<String, Integer> topicPartitionCounts = new HashMap<>();
+                topicPartitionCounts.put(topic1, 1);
+                topicPartitionCounts.put(topic2, 1);
+                client.updateMetadata(TestUtils.metadataUpdateWith(1, topicPartitionCounts));
+                return true;
             }
+            return false;
         }, syncGroupResponse(Collections.singletonList(tp1), Errors.NONE));
         coordinator.poll(time.timer(Long.MAX_VALUE));
 
@@ -1581,13 +1544,10 @@ public class ConsumerCoordinatorTest {
         subscriptions.assignFromUser(singleton(t1p));
 
         // the client should not reuse generation/memberId from auto-subscribed generation
-        client.prepareResponse(new MockClient.RequestMatcher() {
-            @Override
-            public boolean matches(AbstractRequest body) {
-                OffsetCommitRequest commitRequest = (OffsetCommitRequest) body;
-                return commitRequest.data().memberId().equals(OffsetCommitRequest.DEFAULT_MEMBER_ID) &&
-                        commitRequest.data().generationId() == OffsetCommitRequest.DEFAULT_GENERATION_ID;
-            }
+        client.prepareResponse(body -> {
+            OffsetCommitRequest commitRequest = (OffsetCommitRequest) body;
+            return commitRequest.data().memberId().equals(OffsetCommitRequest.DEFAULT_MEMBER_ID) &&
+                    commitRequest.data().generationId() == OffsetCommitRequest.DEFAULT_GENERATION_ID;
         }, offsetCommitResponse(singletonMap(t1p, Errors.NONE)));
 
         AtomicBoolean success = new AtomicBoolean(false);
@@ -2302,21 +2262,15 @@ public class ConsumerCoordinatorTest {
     private void gracefulCloseTest(ConsumerCoordinator coordinator, boolean shouldLeaveGroup) throws Exception {
         final AtomicBoolean commitRequested = new AtomicBoolean();
         final AtomicBoolean leaveGroupRequested = new AtomicBoolean();
-        client.prepareResponse(new MockClient.RequestMatcher() {
-            @Override
-            public boolean matches(AbstractRequest body) {
-                commitRequested.set(true);
-                OffsetCommitRequest commitRequest = (OffsetCommitRequest) body;
-                return commitRequest.data().groupId().equals(groupId);
-            }
+        client.prepareResponse(body -> {
+            commitRequested.set(true);
+            OffsetCommitRequest commitRequest = (OffsetCommitRequest) body;
+            return commitRequest.data().groupId().equals(groupId);
         }, new OffsetCommitResponse(new OffsetCommitResponseData()));
-        client.prepareResponse(new MockClient.RequestMatcher() {
-            @Override
-            public boolean matches(AbstractRequest body) {
-                leaveGroupRequested.set(true);
-                LeaveGroupRequest leaveRequest = (LeaveGroupRequest) body;
-                return leaveRequest.data().groupId().equals(groupId);
-            }
+        client.prepareResponse(body -> {
+            leaveGroupRequested.set(true);
+            LeaveGroupRequest leaveRequest = (LeaveGroupRequest) body;
+            return leaveRequest.data().groupId().equals(groupId);
         }, new LeaveGroupResponse(new LeaveGroupResponseData()
                 .setErrorCode(Errors.NONE.code())));
 
@@ -2494,37 +2448,31 @@ public class ConsumerCoordinatorTest {
     }
 
     private MockClient.RequestMatcher offsetCommitRequestMatcher(final Map<TopicPartition, Long> expectedOffsets) {
-        return new MockClient.RequestMatcher() {
-            @Override
-            public boolean matches(AbstractRequest body) {
-                OffsetCommitRequest req = (OffsetCommitRequest) body;
-                Map<TopicPartition, Long> offsets = req.offsets();
-                if (offsets.size() != expectedOffsets.size())
-                    return false;
+        return body -> {
+            OffsetCommitRequest req = (OffsetCommitRequest) body;
+            Map<TopicPartition, Long> offsets = req.offsets();
+            if (offsets.size() != expectedOffsets.size())
+                return false;
 
-                for (Map.Entry<TopicPartition, Long> expectedOffset : expectedOffsets.entrySet()) {
-                    if (!offsets.containsKey(expectedOffset.getKey())) {
+            for (Map.Entry<TopicPartition, Long> expectedOffset : expectedOffsets.entrySet()) {
+                if (!offsets.containsKey(expectedOffset.getKey())) {
+                    return false;
+                } else {
+                    Long actualOffset = offsets.get(expectedOffset.getKey());
+                    if (!actualOffset.equals(expectedOffset.getValue())) {
                         return false;
-                    } else {
-                        Long actualOffset = offsets.get(expectedOffset.getKey());
-                        if (!actualOffset.equals(expectedOffset.getValue())) {
-                            return false;
-                        }
                     }
                 }
-                return true;
             }
+            return true;
         };
     }
 
     private OffsetCommitCallback callback(final Map<TopicPartition, OffsetAndMetadata> expectedOffsets,
                                           final AtomicBoolean success) {
-        return new OffsetCommitCallback() {
-            @Override
-            public void onComplete(Map<TopicPartition, OffsetAndMetadata> offsets, Exception exception) {
-                if (expectedOffsets.equals(offsets) && exception == null)
-                    success.set(true);
-            }
+        return (offsets, exception) -> {
+            if (expectedOffsets.equals(offsets) && exception == null)
+                success.set(true);
         };
     }
 

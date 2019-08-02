@@ -271,15 +271,14 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
         for (rType <- resourceTypes) {
           val resourceType = Try(ResourceType.fromString(rType))
           resourceType match {
-            case Success(resourceTypeObj) => {
+            case Success(resourceTypeObj) =>
               val resourceNames = zkClient.getResourceNames(store.patternType, resourceTypeObj)
               for (resourceName <- resourceNames) {
                 val resource = new Resource(resourceTypeObj, resourceName, store.patternType)
                 val versionedAcls = getAclsFromZk(resource)
                 updateCache(resource, versionedAcls)
               }
-            }
-            case Failure(f) => warn(s"Ignoring unknown ResourceType: $rType")
+            case Failure(_) => warn(s"Ignoring unknown ResourceType: $rType")
           }
         }
       })

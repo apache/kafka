@@ -328,7 +328,7 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
       case None => false
       case Some(state) =>
         state match {
-          case LogCleaningPaused(s) =>
+          case _: LogCleaningPaused =>
             true
           case _ =>
             false
