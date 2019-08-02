@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.consumer;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -69,17 +70,19 @@ public class CooperativeStickyAssignor extends AbstractStickyAssignor {
     private void adjustAssignment(final Map<String, Subscription> subscriptions,
                                   final Map<String, List<TopicPartition>> assignments) {
 
-        Map<TopicPartition, String> allAssignedPartitions = new HashMap<>();
+        Map<TopicPartition, String> allAddedPartitions = new HashMap<>();
         Set<TopicPartition> allRevokedPartitions = new HashSet<>();
 
         for (final Map.Entry<String, List<TopicPartition>> entry : assignments.entrySet()) {
-            final String consumer = entry.getKey();
+            String consumer = entry.getKey();
 
-            final List<TopicPartition> ownedPartitions = subscriptions.get(consumer).ownedPartitions();
+            List<TopicPartition> ownedPartitions = subscriptions.get(consumer).ownedPartitions();
+            List<TopicPartition> assignedPartitions = entry.getValue();
 
-            final List<TopicPartition> assignedPartitions = entry.getValue();
-            for (TopicPartition tp : assignedPartitions) {
-                allAssignedPartitions.put(tp, consumer);
+            List<TopicPartition> addedPartitions = new ArrayList<>(assignedPartitions);
+            addedPartitions.removeAll(ownedPartitions);
+            for (TopicPartition tp : addedPartitions) {
+                allAddedPartitions.put(tp, consumer);
             }
 
             final Set<TopicPartition> revokedPartitions = new HashSet<>(ownedPartitions);
@@ -90,12 +93,11 @@ public class CooperativeStickyAssignor extends AbstractStickyAssignor {
         // remove any partitions to be revoked from the current assignment
         for (TopicPartition tp : allRevokedPartitions) {
             // if partition is being migrated to another consumer, don't assign it there yet
-            if (allAssignedPartitions.containsKey(tp)) {
-                String assignedConsumer = allAssignedPartitions.get(tp);
+            if (allAddedPartitions.containsKey(tp)) {
+                String assignedConsumer = allAddedPartitions.get(tp);
                 assignments.get(assignedConsumer).remove(tp);
             }
         }
-
     }
 
 }

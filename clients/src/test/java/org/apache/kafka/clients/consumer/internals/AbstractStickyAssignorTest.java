@@ -23,12 +23,9 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Random;
 import java.util.Set;
 
-import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
-import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.Assignment;
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.Subscription;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.CollectionUtils;
@@ -37,6 +34,7 @@ import org.junit.Before;
 import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 public abstract class AbstractStickyAssignorTest {
@@ -70,7 +68,7 @@ public abstract class AbstractStickyAssignorTest {
         assertEquals(Collections.singleton(consumerId), assignment.keySet());
         assertTrue(assignment.get(consumerId).isEmpty());
 
-        verifyValidityAndBalance(subscriptions, assignment);
+        verifyValidityAndBalance(subscriptions, assignment, partitionsPerTopic);
         assertTrue(isFullyBalanced(assignment));
     }
 
@@ -85,7 +83,7 @@ public abstract class AbstractStickyAssignorTest {
         assertEquals(Collections.singleton(consumerId), assignment.keySet());
         assertTrue(assignment.get(consumerId).isEmpty());
 
-        verifyValidityAndBalance(subscriptions, assignment);
+        verifyValidityAndBalance(subscriptions, assignment, partitionsPerTopic);
         assertTrue(isFullyBalanced(assignment));
     }
 
@@ -98,7 +96,7 @@ public abstract class AbstractStickyAssignorTest {
         Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic, subscriptions);
         assertEquals(partitions(tp(topic, 0), tp(topic, 1), tp(topic, 2)), assignment.get(consumerId));
 
-        verifyValidityAndBalance(subscriptions, assignment);
+        verifyValidityAndBalance(subscriptions, assignment, partitionsPerTopic);
         assertTrue(isFullyBalanced(assignment));
     }
 
@@ -114,7 +112,7 @@ public abstract class AbstractStickyAssignorTest {
         Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic, subscriptions);
         assertEquals(partitions(tp(topic, 0), tp(topic, 1), tp(topic, 2)), assignment.get(consumerId));
 
-        verifyValidityAndBalance(subscriptions, assignment);
+        verifyValidityAndBalance(subscriptions, assignment, partitionsPerTopic);
         assertTrue(isFullyBalanced(assignment));
     }
 
@@ -131,7 +129,7 @@ public abstract class AbstractStickyAssignorTest {
         Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic, subscriptions);
         assertEquals(partitions(tp(topic1, 0), tp(topic2, 0), tp(topic2, 1)), assignment.get(consumerId));
 
-        verifyValidityAndBalance(subscriptions, assignment);
+        verifyValidityAndBalance(subscriptions, assignment, partitionsPerTopic);
         assertTrue(isFullyBalanced(assignment));
     }
 
@@ -150,7 +148,7 @@ public abstract class AbstractStickyAssignorTest {
         assertEquals(partitions(tp(topic, 0)), assignment.get(consumer1));
         assertEquals(Collections.<TopicPartition>emptyList(), assignment.get(consumer2));
 
-        verifyValidityAndBalance(subscriptions, assignment);
+        verifyValidityAndBalance(subscriptions, assignment, partitionsPerTopic);
         assertTrue(isFullyBalanced(assignment));
     }
 
@@ -169,7 +167,7 @@ public abstract class AbstractStickyAssignorTest {
         assertEquals(partitions(tp(topic, 0)), assignment.get(consumer1));
         assertEquals(partitions(tp(topic, 1)), assignment.get(consumer2));
 
-        verifyValidityAndBalance(subscriptions, assignment);
+        verifyValidityAndBalance(subscriptions, assignment, partitionsPerTopic);
         assertTrue(isFullyBalanced(assignment));
     }
 
@@ -194,7 +192,7 @@ public abstract class AbstractStickyAssignorTest {
         assertEquals(partitions(tp(topic2, 0), tp(topic2, 1)), assignment.get(consumer2));
         assertEquals(partitions(tp(topic1, 1)), assignment.get(consumer3));
 
-        verifyValidityAndBalance(subscriptions, assignment);
+        verifyValidityAndBalance(subscriptions, assignment, partitionsPerTopic);
         assertTrue(isFullyBalanced(assignment));
     }
 
@@ -216,13 +214,11 @@ public abstract class AbstractStickyAssignorTest {
         assertEquals(partitions(tp(topic1, 0), tp(topic1, 2), tp(topic2, 1)), assignment.get(consumer1));
         assertEquals(partitions(tp(topic1, 1), tp(topic2, 0), tp(topic2, 2)), assignment.get(consumer2));
 
-        verifyValidityAndBalance(subscriptions, assignment);
+        verifyValidityAndBalance(subscriptions, assignment, partitionsPerTopic);
         assertTrue(isFullyBalanced(assignment));
     }
 
-    /*
     @Test
-    // TODO differs in cooperative
     public void testAddRemoveConsumerOneTopic() {
         String consumer1 = "consumer1";
 
@@ -233,17 +229,17 @@ public abstract class AbstractStickyAssignorTest {
         Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic, subscriptions);
         assertEquals(partitions(tp(topic, 0), tp(topic, 1), tp(topic, 2)), assignment.get(consumer1));
 
-        verifyValidityAndBalance(subscriptions, assignment);
+        verifyValidityAndBalance(subscriptions, assignment, partitionsPerTopic);
         assertTrue(isFullyBalanced(assignment));
 
         String consumer2 = "consumer2";
         subscriptions.put(consumer1, buildSubscription(topics(topic), assignment.get(consumer1)));
         subscriptions.put(consumer2, buildSubscription(topics(topic), Collections.emptyList()));
         assignment = assignor.assign(partitionsPerTopic, subscriptions);
+
+        verifyValidityAndBalance(subscriptions, assignment, partitionsPerTopic);
         assertEquals(partitions(tp(topic, 2), tp(topic, 1)), assignment.get(consumer1));
         assertEquals(partitions(tp(topic, 0)), assignment.get(consumer2));
-
-        verifyValidityAndBalance(subscriptions, assignment);
         assertTrue(isFullyBalanced(assignment));
         assertTrue(assignor.isSticky());
 
@@ -253,11 +249,11 @@ public abstract class AbstractStickyAssignorTest {
         assertEquals(new HashSet<>(partitions(tp(topic, 2), tp(topic, 1), tp(topic, 0))),
             new HashSet<>(assignment.get(consumer2)));
 
-        verifyValidityAndBalance(subscriptions, assignment);
+        verifyValidityAndBalance(subscriptions, assignment, partitionsPerTopic);
         assertTrue(isFullyBalanced(assignment));
         assertTrue(assignor.isSticky());
     }
-*/
+
     /**
      * This unit test performs sticky assignment for a scenario that round robin assignor handles poorly.
      * Topics (partitions per topic): topic1 (2), topic2 (1), topic3 (2), topic4 (1), topic5 (2)
@@ -293,7 +289,7 @@ public abstract class AbstractStickyAssignorTest {
             new Subscription(topics("topic1", "topic2", "topic3", "topic4", "topic5")));
 
         Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic, subscriptions);
-        verifyValidityAndBalance(subscriptions, assignment);
+        verifyValidityAndBalance(subscriptions, assignment, partitionsPerTopic);
     }
 
     @Test
@@ -309,7 +305,7 @@ public abstract class AbstractStickyAssignorTest {
         Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic, subscriptions);
         // verify balance
         assertTrue(isFullyBalanced(assignment));
-        verifyValidityAndBalance(subscriptions, assignment);
+        verifyValidityAndBalance(subscriptions, assignment, partitionsPerTopic);
         // verify stickiness
         List<TopicPartition> consumer1Assignment1 = assignment.get(consumer1);
         List<TopicPartition> consumer2Assignment1 = assignment.get(consumer2);
@@ -323,7 +319,7 @@ public abstract class AbstractStickyAssignorTest {
 
         assignment = assignor.assign(partitionsPerTopic, subscriptions);
         // verify balance
-        verifyValidityAndBalance(subscriptions, assignment);
+        verifyValidityAndBalance(subscriptions, assignment, partitionsPerTopic);
         assertTrue(isFullyBalanced(assignment));
         // verify stickiness
         List<TopicPartition> consumer1assignment = assignment.get(consumer1);
@@ -339,7 +335,7 @@ public abstract class AbstractStickyAssignorTest {
 
         assignment = assignor.assign(partitionsPerTopic, subscriptions);
         // verify balance
-        verifyValidityAndBalance(subscriptions, assignment);
+        verifyValidityAndBalance(subscriptions, assignment, partitionsPerTopic);
         assertTrue(isFullyBalanced(assignment));
         // verify stickiness
         List<TopicPartition> consumer1Assignment3 = assignment.get(consumer1);
@@ -366,7 +362,7 @@ public abstract class AbstractStickyAssignorTest {
         }
 
         Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic, subscriptions);
-        verifyValidityAndBalance(subscriptions, assignment);
+        verifyValidityAndBalance(subscriptions, assignment, partitionsPerTopic);
 
         for (int i = 1; i < 20; i++) {
             String consumer = getConsumerName(i, 20);
@@ -376,7 +372,7 @@ public abstract class AbstractStickyAssignorTest {
         subscriptions.remove("consumer10");
 
         assignment = assignor.assign(partitionsPerTopic, subscriptions);
-        verifyValidityAndBalance(subscriptions, assignment);
+        verifyValidityAndBalance(subscriptions, assignment, partitionsPerTopic);
         assertTrue(assignor.isSticky());
     }
 
@@ -391,13 +387,13 @@ public abstract class AbstractStickyAssignorTest {
                 new Subscription(topics("topic")));
 
         Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic, subscriptions);
-        verifyValidityAndBalance(subscriptions, assignment);
+        verifyValidityAndBalance(subscriptions, assignment, partitionsPerTopic);
 
         // add a new consumer
         subscriptions.put(getConsumerName(10, 10), new Subscription(topics("topic")));
 
         assignment = assignor.assign(partitionsPerTopic, subscriptions);
-        verifyValidityAndBalance(subscriptions, assignment);
+        verifyValidityAndBalance(subscriptions, assignment, partitionsPerTopic);
         assertTrue(assignor.isSticky());
     }
 
@@ -415,7 +411,7 @@ public abstract class AbstractStickyAssignorTest {
         }
 
         Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic, subscriptions);
-        verifyValidityAndBalance(subscriptions, assignment);
+        verifyValidityAndBalance(subscriptions, assignment, partitionsPerTopic);
 
         for (int i = 1; i < 9; i++) {
             String consumer = getConsumerName(i, 9);
@@ -425,7 +421,7 @@ public abstract class AbstractStickyAssignorTest {
         subscriptions.remove(getConsumerName(5, 9));
 
         assignment = assignor.assign(partitionsPerTopic, subscriptions);
-        verifyValidityAndBalance(subscriptions, assignment);
+        verifyValidityAndBalance(subscriptions, assignment, partitionsPerTopic);
         assertTrue(assignor.isSticky());
     }
 
@@ -447,7 +443,7 @@ public abstract class AbstractStickyAssignorTest {
         }
 
         Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic, subscriptions);
-        verifyValidityAndBalance(subscriptions, assignment);
+        verifyValidityAndBalance(subscriptions, assignment, partitionsPerTopic);
 
         for (int i = 1; i < consumerCount; i++) {
             String consumer = getConsumerName(i, consumerCount);
@@ -460,7 +456,7 @@ public abstract class AbstractStickyAssignorTest {
         }
 
         assignment = assignor.assign(partitionsPerTopic, subscriptions);
-        verifyValidityAndBalance(subscriptions, assignment);
+        verifyValidityAndBalance(subscriptions, assignment, partitionsPerTopic);
         assertTrue(assignor.isSticky());
     }
 
@@ -478,60 +474,15 @@ public abstract class AbstractStickyAssignorTest {
         }
 
         Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic, subscriptions);
-        verifyValidityAndBalance(subscriptions, assignment);
+        verifyValidityAndBalance(subscriptions, assignment, partitionsPerTopic);
 
         subscriptions.get(getConsumerName(0, 3)).topics().add(getTopicName(1, 5));
 
         assignment = assignor.assign(partitionsPerTopic, subscriptions);
-        verifyValidityAndBalance(subscriptions, assignment);
+        verifyValidityAndBalance(subscriptions, assignment, partitionsPerTopic);
         assertTrue(assignor.isSticky());
     }
 
-    /*
-    @Test
-    // cooperative fails because assignment after adjustment is no longer balanced
-    public void testReassignmentWithRandomSubscriptionsAndChanges() {
-        final int minNumConsumers = 20;
-        final int maxNumConsumers = 40;
-        final int minNumTopics = 10;
-        final int maxNumTopics = 20;
-
-        for (int round = 1; round <= 100; ++round) {
-            int numTopics = minNumTopics + new Random().nextInt(maxNumTopics - minNumTopics);
-
-            ArrayList<String> topics = new ArrayList<>();
-            for (int i = 0; i < numTopics; ++i)
-                topics.add(getTopicName(i, maxNumTopics));
-
-            Map<String, Integer> partitionsPerTopic = new HashMap<>();
-            for (int i = 0; i < numTopics; ++i)
-                partitionsPerTopic.put(getTopicName(i, maxNumTopics), i + 1);
-
-            int numConsumers = minNumConsumers + new Random().nextInt(maxNumConsumers - minNumConsumers);
-
-            for (int i = 0; i < numConsumers; ++i) {
-                List<String> sub = Utils.sorted(getRandomSublist(topics));
-                subscriptions.put(getConsumerName(i, maxNumConsumers), new Subscription(sub));
-            }
-
-            assignor = createAssignor();
-
-            Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic, subscriptions);
-            verifyValidityAndBalance(subscriptions, assignment);
-
-            subscriptions.clear();
-            for (int i = 0; i < numConsumers; ++i) {
-                List<String> sub = Utils.sorted(getRandomSublist(topics));
-                String consumer = getConsumerName(i, maxNumConsumers);
-                subscriptions.put(consumer, buildSubscription(sub, assignment.get(consumer)));
-            }
-
-            assignment = assignor.assign(partitionsPerTopic, subscriptions);
-            verifyValidityAndBalance(subscriptions, assignment);
-            assertTrue(assignor.isSticky());
-        }
-    }
-*/
     @Test
     public void testMoveExistingAssignments() {
         Map<String, Integer> partitionsPerTopic = new HashMap<>();
@@ -549,7 +500,7 @@ public abstract class AbstractStickyAssignorTest {
                 partitions(tp("topic04", 0), tp("topic05", 0), tp("topic06", 0))));
 
         Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic, subscriptions);
-        verifyValidityAndBalance(subscriptions, assignment);
+        verifyValidityAndBalance(subscriptions, assignment, partitionsPerTopic);
     }
 
     @Test
@@ -567,7 +518,7 @@ public abstract class AbstractStickyAssignorTest {
         subscriptions.put(consumer4, new Subscription(topics("topic01")));
 
         Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic, subscriptions);
-        verifyValidityAndBalance(subscriptions, assignment);
+        verifyValidityAndBalance(subscriptions, assignment, partitionsPerTopic);
         Map<String, TopicPartition> partitionsAssigned = new HashMap<>();
 
         Set<Map.Entry<String, List<TopicPartition>>> assignments = assignment.entrySet();
@@ -591,7 +542,7 @@ public abstract class AbstractStickyAssignorTest {
 
 
         assignment = assignor.assign(partitionsPerTopic, subscriptions);
-        verifyValidityAndBalance(subscriptions, assignment);
+        verifyValidityAndBalance(subscriptions, assignment, partitionsPerTopic);
         assertTrue(assignor.isSticky());
 
         assignments = assignment.entrySet();
@@ -630,7 +581,7 @@ public abstract class AbstractStickyAssignorTest {
         assertEquals(assignment.size(), 1);
         assertTrue(assignment.get(consumerId).isEmpty());
     }
-/*
+
     @Test
     public void testConflictingPreviousAssignments() {
         String consumer1 = "consumer1";
@@ -655,11 +606,54 @@ public abstract class AbstractStickyAssignorTest {
         List<TopicPartition> c2partitions = assignment.get(consumer2);
 
         assertTrue(c1partitions.size() == 1 && c2partitions.size() == 1);
-        verifyValidityAndBalance(subscriptions, assignment);
+        verifyValidityAndBalance(subscriptions, assignment, partitionsPerTopic);
         assertTrue(isFullyBalanced(assignment));
         assertTrue(assignor.isSticky());
     }
-*/
+
+    @Test
+    public void testReassignmentWithRandomSubscriptionsAndChanges() {
+        final int minNumConsumers = 20;
+        final int maxNumConsumers = 40;
+        final int minNumTopics = 10;
+        final int maxNumTopics = 20;
+
+        for (int round = 1; round <= 100; ++round) {
+            int numTopics = minNumTopics + new Random().nextInt(maxNumTopics - minNumTopics);
+
+            ArrayList<String> topics = new ArrayList<>();
+            for (int i = 0; i < numTopics; ++i)
+                topics.add(getTopicName(i, maxNumTopics));
+
+            Map<String, Integer> partitionsPerTopic = new HashMap<>();
+            for (int i = 0; i < numTopics; ++i)
+                partitionsPerTopic.put(getTopicName(i, maxNumTopics), i + 1);
+
+            int numConsumers = minNumConsumers + new Random().nextInt(maxNumConsumers - minNumConsumers);
+
+            for (int i = 0; i < numConsumers; ++i) {
+                List<String> sub = Utils.sorted(getRandomSublist(topics));
+                subscriptions.put(getConsumerName(i, maxNumConsumers), new Subscription(sub));
+            }
+
+            assignor = createAssignor();
+
+            Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic, subscriptions);
+            verifyValidityAndBalance(subscriptions, assignment, partitionsPerTopic);
+
+            subscriptions.clear();
+            for (int i = 0; i < numConsumers; ++i) {
+                List<String> sub = Utils.sorted(getRandomSublist(topics));
+                String consumer = getConsumerName(i, maxNumConsumers);
+                subscriptions.put(consumer, buildSubscription(sub, assignment.get(consumer)));
+            }
+
+            assignment = assignor.assign(partitionsPerTopic, subscriptions);
+            verifyValidityAndBalance(subscriptions, assignment, partitionsPerTopic);
+            assertTrue(assignor.isSticky());
+        }
+    }
+
     private String getTopicName(int i, int maxNum) {
         return getCanonicalName("t", i, maxNum);
     }
@@ -721,7 +715,7 @@ public abstract class AbstractStickyAssignorTest {
     }
 
     /**
-     * Verifies that the given assignment is valid and balanced with respect to the given subscriptions
+     * Verifies that the given assignment is valid with respect to the given subscriptions
      * Validity requirements:
      * - each consumer is subscribed to topics of all partitions assigned to it, and
      * - each partition is assigned to no more than one consumer
@@ -731,8 +725,11 @@ public abstract class AbstractStickyAssignorTest {
      *
      * @param subscriptions: topic subscriptions of each consumer
      * @param assignments: given assignment for balance check
+     * @param partitionsPerTopic: number of partitions per topic
      */
-    protected static void verifyValidityAndBalance(Map<String, Subscription> subscriptions, Map<String, List<TopicPartition>> assignments) {
+    protected void verifyValidityAndBalance(Map<String, Subscription> subscriptions,
+                                            Map<String, List<TopicPartition>> assignments,
+                                            Map<String, Integer> partitionsPerTopic) {
         int size = subscriptions.size();
         assert size == assignments.size();
 
@@ -770,20 +767,33 @@ public abstract class AbstractStickyAssignorTest {
 
                 if (len > otherLen) {
                     for (String topic: map.keySet())
-                        assertTrue("Error: Some partitions can be moved from c" + i + " to c" + j + " to achieve a better balance"
-                                + "\nc" + i + " has " + len + " partitions, and c" + j + " has " + otherLen + " partitions."
-                                + "\nSubscriptions: " + subscriptions.toString() + "\nAssignments: " + assignments.toString(),
-                            !otherMap.containsKey(topic));
+                        if (otherMap.containsKey(topic))
+                            //assertTrue(true);
+                        assertFalse("Error: Some partitions can be moved from c" + i + " to c" + j
+                                + " to achieve a better balance"
+                                + "\nc" + i + " has " + len + " partitions, and c" + j + " has " + otherLen
+                                + " partitions."
+                                + "\nSubscriptions: " + subscriptions.toString() + "\nAssignments: " + assignments
+                                .toString(),
+                            otherMap.containsKey(topic));
+
+
+
                 }
 
                 if (otherLen > len) {
                     for (String topic: otherMap.keySet())
-                        assertTrue("Error: Some partitions can be moved from c" + j + " to c" + i + " to achieve a better balance"
+                        if (otherMap.containsKey(topic))
+                            //assertTrue(true);
+                        assertFalse("Error: Some partitions can be moved from c" + j + " to c" + i + " to achieve a better balance"
                                 + "\nc" + i + " has " + len + " partitions, and c" + j + " has " + otherLen + " partitions."
                                 + "\nSubscriptions: " + subscriptions.toString() + "\nAssignments: " + assignments.toString(),
-                            !map.containsKey(topic));
+                            map.containsKey(topic));
+
+
                 }
             }
         }
     }
+
 }

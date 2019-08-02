@@ -40,39 +40,15 @@ import org.junit.Test;
 
 public class StickyAssignorTest extends AbstractStickyAssignorTest {
 
-    private StickyAssignor stickyAssignor;
-
     @Override
     public AbstractStickyAssignor createAssignor() {
-        stickyAssignor = new StickyAssignor();
-        return stickyAssignor;
+        return new StickyAssignor();
     }
 
     @Override
     public Subscription buildSubscription(List<String> topics, List<TopicPartition> partitions) {
         return new Subscription(topics,
             serializeTopicPartitionAssignment(new MemberData(partitions, Optional.of(DEFAULT_GENERATION))));
-    }
-
-    public Subscription buildSubscriptionWithGeneration(List<String> topics, List<TopicPartition> partitions, int generation) {
-        return new Subscription(topics,
-            serializeTopicPartitionAssignment(new MemberData(partitions, Optional.of(generation))));
-    }
-
-    private static ByteBuffer serializeTopicPartitionAssignmentToOldSchema(List<TopicPartition> partitions) {
-        Struct struct = new Struct(StickyAssignor.STICKY_ASSIGNOR_USER_DATA_V0);
-        List<Struct> topicAssignments = new ArrayList<>();
-        for (Map.Entry<String, List<Integer>> topicEntry : CollectionUtils.groupPartitionsByTopic(partitions).entrySet()) {
-            Struct topicAssignment = new Struct(StickyAssignor.TOPIC_ASSIGNMENT);
-            topicAssignment.set(StickyAssignor.TOPIC_KEY_NAME, topicEntry.getKey());
-            topicAssignment.set(StickyAssignor.PARTITIONS_KEY_NAME, topicEntry.getValue().toArray());
-            topicAssignments.add(topicAssignment);
-        }
-        struct.set(StickyAssignor.TOPIC_PARTITIONS_KEY_NAME, topicAssignments.toArray());
-        ByteBuffer buffer = ByteBuffer.allocate(StickyAssignor.STICKY_ASSIGNOR_USER_DATA_V0.sizeOf(struct));
-        StickyAssignor.STICKY_ASSIGNOR_USER_DATA_V0.write(buffer, struct);
-        buffer.flip();
-        return buffer;
     }
 
     @Test
@@ -92,7 +68,7 @@ public class StickyAssignorTest extends AbstractStickyAssignorTest {
         List<TopicPartition> r1partitions2 = assignment.get(consumer2);
         List<TopicPartition> r1partitions3 = assignment.get(consumer3);
         assertTrue(r1partitions1.size() == 2 && r1partitions2.size() == 2 && r1partitions3.size() == 2);
-        verifyValidityAndBalance(subscriptions, assignment);
+        verifyValidityAndBalance(subscriptions, assignment, partitionsPerTopic);
         assertTrue(isFullyBalanced(assignment));
 
         subscriptions.put(consumer1, buildSubscription(topics(topic), r1partitions1));
@@ -105,7 +81,7 @@ public class StickyAssignorTest extends AbstractStickyAssignorTest {
         assertTrue(r2partitions1.size() == 3 && r2partitions2.size() == 3);
         assertTrue(r2partitions1.containsAll(r1partitions1));
         assertTrue(r2partitions2.containsAll(r1partitions2));
-        verifyValidityAndBalance(subscriptions, assignment);
+        verifyValidityAndBalance(subscriptions, assignment, partitionsPerTopic);
         assertTrue(isFullyBalanced(assignment));
         assertTrue(assignor.isSticky());
         assertFalse(Collections.disjoint(r2partitions2, r1partitions3));
@@ -119,7 +95,7 @@ public class StickyAssignorTest extends AbstractStickyAssignorTest {
         List<TopicPartition> r3partitions3 = assignment.get(consumer3);
         assertTrue(r3partitions2.size() == 3 && r3partitions3.size() == 3);
         assertTrue(Collections.disjoint(r3partitions2, r3partitions3));
-        verifyValidityAndBalance(subscriptions, assignment);
+        verifyValidityAndBalance(subscriptions, assignment, partitionsPerTopic);
         assertTrue(isFullyBalanced(assignment));
         assertTrue(assignor.isSticky());
     }
@@ -141,7 +117,7 @@ public class StickyAssignorTest extends AbstractStickyAssignorTest {
         List<TopicPartition> r1partitions2 = assignment.get(consumer2);
         List<TopicPartition> r1partitions3 = assignment.get(consumer3);
         assertTrue(r1partitions1.size() == 2 && r1partitions2.size() == 2 && r1partitions3.size() == 2);
-        verifyValidityAndBalance(subscriptions, assignment);
+        verifyValidityAndBalance(subscriptions, assignment, partitionsPerTopic);
         assertTrue(isFullyBalanced(assignment));
 
         subscriptions.remove(consumer1);
@@ -152,7 +128,7 @@ public class StickyAssignorTest extends AbstractStickyAssignorTest {
         List<TopicPartition> r2partitions2 = assignment.get(consumer2);
         assertEquals(6, r2partitions2.size());
         assertTrue(r2partitions2.containsAll(r1partitions2));
-        verifyValidityAndBalance(subscriptions, assignment);
+        verifyValidityAndBalance(subscriptions, assignment, partitionsPerTopic);
         assertTrue(isFullyBalanced(assignment));
         assertTrue(assignor.isSticky());
 
@@ -168,7 +144,7 @@ public class StickyAssignorTest extends AbstractStickyAssignorTest {
         assertEquals(r1partitions1, r3partitions1);
         assertEquals(r1partitions2, r3partitions2);
         assertEquals(r1partitions3, r3partitions3);
-        verifyValidityAndBalance(subscriptions, assignment);
+        verifyValidityAndBalance(subscriptions, assignment, partitionsPerTopic);
         assertTrue(isFullyBalanced(assignment));
         assertTrue(assignor.isSticky());
     }
@@ -208,7 +184,7 @@ public class StickyAssignorTest extends AbstractStickyAssignorTest {
         assertTrue(c1partitions0.containsAll(c1partitions));
         assertTrue(c2partitions0.containsAll(c2partitions));
         assertTrue(c3partitions0.containsAll(c3partitions));
-        verifyValidityAndBalance(subscriptions, assignment);
+        verifyValidityAndBalance(subscriptions, assignment, partitionsPerTopic);
         assertTrue(isFullyBalanced(assignment));
         assertTrue(assignor.isSticky());
     }
@@ -232,7 +208,7 @@ public class StickyAssignorTest extends AbstractStickyAssignorTest {
         List<TopicPartition> c1partitions0 = partitions(tp0, tp2);
         List<TopicPartition> c2partitions0 = partitions(tp1);
         subscriptions.put(consumer1, buildSubscriptionWithGeneration(topics(topic), c1partitions0, 1));
-        subscriptions.put(consumer2, buildSubscription(topics(topic), c2partitions0));
+        subscriptions.put(consumer2, buildSubscriptionWithOldSchema(topics(topic), c2partitions0));
         Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic, subscriptions);
         List<TopicPartition> c1partitions = assignment.get(consumer1);
         List<TopicPartition> c2partitions = assignment.get(consumer2);
@@ -241,8 +217,30 @@ public class StickyAssignorTest extends AbstractStickyAssignorTest {
         assertTrue(c1partitions.size() == 1 && c2partitions.size() == 1 && c3partitions.size() == 1);
         assertTrue(c1partitions0.containsAll(c1partitions));
         assertTrue(c2partitions0.containsAll(c2partitions));
-        verifyValidityAndBalance(subscriptions, assignment);
+        verifyValidityAndBalance(subscriptions, assignment, partitionsPerTopic);
         assertTrue(isFullyBalanced(assignment));
         assertTrue(assignor.isSticky());
+    }
+
+    private Subscription buildSubscriptionWithGeneration(List<String> topics, List<TopicPartition> partitions, int generation) {
+        return new Subscription(topics,
+            serializeTopicPartitionAssignment(new MemberData(partitions, Optional.of(generation))));
+    }
+
+    private static Subscription buildSubscriptionWithOldSchema(List<String> topics, List<TopicPartition> partitions) {
+        Struct struct = new Struct(StickyAssignor.STICKY_ASSIGNOR_USER_DATA_V0);
+        List<Struct> topicAssignments = new ArrayList<>();
+        for (Map.Entry<String, List<Integer>> topicEntry : CollectionUtils.groupPartitionsByTopic(partitions).entrySet()) {
+            Struct topicAssignment = new Struct(StickyAssignor.TOPIC_ASSIGNMENT);
+            topicAssignment.set(StickyAssignor.TOPIC_KEY_NAME, topicEntry.getKey());
+            topicAssignment.set(StickyAssignor.PARTITIONS_KEY_NAME, topicEntry.getValue().toArray());
+            topicAssignments.add(topicAssignment);
+        }
+        struct.set(StickyAssignor.TOPIC_PARTITIONS_KEY_NAME, topicAssignments.toArray());
+        ByteBuffer buffer = ByteBuffer.allocate(StickyAssignor.STICKY_ASSIGNOR_USER_DATA_V0.sizeOf(struct));
+        StickyAssignor.STICKY_ASSIGNOR_USER_DATA_V0.write(buffer, struct);
+        buffer.flip();
+
+        return new Subscription(topics, buffer);
     }
 }
