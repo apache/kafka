@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.consumer;
 
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -36,13 +37,18 @@ import org.apache.kafka.common.TopicPartition;
  * {@link CooperativeStickyAssignor#supportedProtocols supportedProtocols()}.
  * <p>
  * IMPORTANT: if upgrading from 2.3 or earlier, you must follow a specific upgrade path in order to safely turn on
- * cooperative rebalancing. See the upgrade guide for details.
+ * cooperative rebalancing. See the <a href="https://kafka.apache.org/documentation/#upgrade_240_notable">upgrade guide</a> for details.
  */
 public class CooperativeStickyAssignor extends AbstractStickyAssignor {
 
     @Override
     public String name() {
-        return "cooperative";
+        return "cooperative-sticky";
+    }
+
+    @Override
+    public List<RebalanceProtocol> supportedProtocols() {
+        return Arrays.asList(RebalanceProtocol.COOPERATIVE, RebalanceProtocol.EAGER);
     }
 
     @Override
@@ -63,7 +69,6 @@ public class CooperativeStickyAssignor extends AbstractStickyAssignor {
     private void adjustAssignment(final Map<String, Subscription> subscriptions,
                                   final Map<String, List<TopicPartition>> assignments) {
 
-        Map<TopicPartition, String> allOwnedPartitions = new HashMap<>();
         Map<TopicPartition, String> allAssignedPartitions = new HashMap<>();
         Set<TopicPartition> allRevokedPartitions = new HashSet<>();
 
@@ -71,9 +76,6 @@ public class CooperativeStickyAssignor extends AbstractStickyAssignor {
             final String consumer = entry.getKey();
 
             final List<TopicPartition> ownedPartitions = subscriptions.get(consumer).ownedPartitions();
-            for (TopicPartition tp : ownedPartitions) {
-                allOwnedPartitions.put(tp, consumer);
-            }
 
             final List<TopicPartition> assignedPartitions = entry.getValue();
             for (TopicPartition tp : assignedPartitions) {
