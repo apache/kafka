@@ -34,9 +34,9 @@ public class Log4jControllerTest {
     @Test
     public void testGetLoggers() {
         Hashtable<String, Logger> currentLoggersMock = new Hashtable<>();
-        Logger log1 = new Logger("log1"){};
+        Logger log1 = new Logger("log1") { };
         log1.setLevel(Level.INFO);
-        Logger log2 = new Logger("log2"){};
+        Logger log2 = new Logger("log2") { };
         log2.setLevel(Level.WARN);
         currentLoggersMock.put("log2", log2);
         currentLoggersMock.put("log1", log1);
@@ -58,7 +58,7 @@ public class Log4jControllerTest {
     public void testGetLogLevel() {
         Log4jController controller = mock(Log4jController.class);
         when(controller.getLogLevel(any())).thenCallRealMethod();
-        Logger h = new Logger("hello"){};
+        Logger h = new Logger("hello") { };
         when(controller.loggerByName("hello")).thenReturn(h);
         when(controller.getCurrentLevel(any())).thenReturn(Level.WARN);
 
@@ -68,7 +68,7 @@ public class Log4jControllerTest {
     @Test
     public void testSetLogLevel() {
         Log4jController controller = mock(Log4jController.class);
-        Logger log = new Logger("hello"){};
+        Logger log = new Logger("hello") { };
         log.setLevel(Level.INFO);
         when(controller.loggerByName("hello")).thenReturn(log);
         when(controller.setLogLevel(any(), any())).thenCallRealMethod();
@@ -83,9 +83,9 @@ public class Log4jControllerTest {
     @Test
     public void testEffectiveLogLevel() {
         Log4jController controller = mock(Log4jController.class);
-        Logger root = new Logger("some"){};
+        Logger root = new Logger("some") { };
         Hierarchy hierarchy = new Hierarchy(root);
-        Logger log = hierarchy.getLogger("some.name.hello", name -> new Logger(name){});
+        Logger log = hierarchy.getLogger("some.name.hello", name -> new Logger(name) { });
         root.setLevel(Level.WARN);
         when(controller.loggerByName("some.name.hello")).thenReturn(log);
         when(controller.loggerByName("some")).thenReturn(root);
