@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.streams;
 
-import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.streams.kstream.GlobalKTable;
@@ -31,12 +31,12 @@ import java.util.Map;
  */
 public interface KafkaClientSupplier {
     /**
-     * Create an {@link Admin} which is used for internal topic management.
+     * Create an {@link AdminClient} which is used for internal topic management.
      *
      * @param config Supplied by the {@link java.util.Properties} given to the {@link KafkaStreams}
-     * @return an instance of {@link Admin}
+     * @return an instance of {@link AdminClient}
      */
-    Admin getAdminClient(final Map<String, Object> config);
+    AdminClient getAdminClient(final Map<String, Object> config);
 
     /**
      * Create a {@link Producer} which is used to write records to sink topics.
