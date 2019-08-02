@@ -29,8 +29,8 @@ class LoggingTest extends Logging {
   @Test
   def testLog4jControllerIsRegistered(): Unit = {
     val mbs = ManagementFactory.getPlatformMBeanServer()
-    val log4jControllerName = ObjectName.getInstance("kafka:type=kafka.Log4jController")
-    assertTrue("kafka.utils.Log4jController is not registered", mbs.isRegistered(log4jControllerName))
+    val log4jControllerName = ObjectName.getInstance("kafka:type=Log4jController")
+    assertTrue("org.apache.kafka.common.logging.Log4jController is not registered", mbs.isRegistered(log4jControllerName))
     val instance = mbs.getObjectInstance(log4jControllerName)
     assertEquals("org.apache.kafka.common.logging.Log4jController", instance.getClassName)
   }
