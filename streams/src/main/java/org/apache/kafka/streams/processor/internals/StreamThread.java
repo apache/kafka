@@ -1015,7 +1015,7 @@ public class StreamThread extends Thread {
                 throw new TaskMigratedException(task);
             }
 
-            if (task.streamTime() == -1) {
+            if (task.streamTime() == RecordQueue.UNKNOWN) {
                 task.initializeTaskTime();
             }
             task.addRecords(partition, records.records(partition));

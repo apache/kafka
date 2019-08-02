@@ -147,6 +147,8 @@ public class StreamTaskTest {
     private StreamTask task;
     private long punctuatedAt;
 
+    private static final long DEFAULT_TIMESTAMP = 1000;
+
     private final Punctuator punctuator = new Punctuator() {
         @Override
         public void punctuate(final long timestamp) {
@@ -648,20 +650,21 @@ public class StreamTaskTest {
         task.initializeStateStores();
         task.initializeTopology();
 
-        task.addRecords(partition1, singletonList(getConsumerRecord(partition1, 1000)));
+        task.addRecords(partition1, singletonList(getConsumerRecord(partition1, DEFAULT_TIMESTAMP)));
 
         task.process();
-        // time stamp will be committed here
+
+        // timestamp will be committed here
         task.commit();
-        assertTrue(Long.parseLong(task.consumer.committed(partition1).metadata()) == 1000);
+        assertTrue(Long.parseLong(task.consumer.committed(partition1).metadata()) == DEFAULT_TIMESTAMP);
         // reset times here to artificially represent a restart
         task.resetTimes();
         assertTrue(task.partitionTime(partition1) == RecordQueue.UNKNOWN);
 
         // timestamp would be updated here
         task.initializeTaskTime();
-        assertTrue(task.partitionTime(partition1) == 1000);
-        assertTrue(task.streamTime() == 1000);
+        assertTrue(task.partitionTime(partition1) == DEFAULT_TIMESTAMP);
+        assertTrue(task.streamTime() == DEFAULT_TIMESTAMP);
     }
 
     @Test
@@ -670,7 +673,7 @@ public class StreamTaskTest {
         task.initializeStateStores();
         task.initializeTopology();
 
-        task.addRecords(partition1, singletonList(getConsumerRecord(partition1, 1000)));
+        task.addRecords(partition1, singletonList(getConsumerRecord(partition1, DEFAULT_TIMESTAMP)));
 
         task.process();
         // time stamp will be committed here
@@ -679,18 +682,18 @@ public class StreamTaskTest {
         //since consumer is mock, there is no real broker
         //so we need to manually commit the information to stimulate broker
         final Map<TopicPartition, OffsetAndMetadata> offsetMap = new HashMap<>();
-        offsetMap.put(partition1, new OffsetAndMetadata(1000, "1000"));
+        offsetMap.put(partition1, new OffsetAndMetadata(DEFAULT_TIMESTAMP, "1000"));
         task.consumer.commitSync(offsetMap);
 
-        assertTrue(Long.parseLong(task.consumer.committed(partition1).metadata()) == 1000);
+        assertTrue(Long.parseLong(task.consumer.committed(partition1).metadata()) == DEFAULT_TIMESTAMP);
         // reset times here to artificially represent a restart
         task.resetTimes();
         assertTrue(task.partitionTime(partition1) == RecordQueue.UNKNOWN);
 
         // timestamp would be updated here
         task.initializeTaskTime();
-        assertTrue(task.partitionTime(partition1) == 1000);
-        assertTrue(task.streamTime() == 1000);
+        assertTrue(task.partitionTime(partition1) == DEFAULT_TIMESTAMP);
+        assertTrue(task.streamTime() == DEFAULT_TIMESTAMP);
     }
 
     @Test

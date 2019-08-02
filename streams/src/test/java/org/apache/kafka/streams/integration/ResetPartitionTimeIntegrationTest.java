@@ -153,7 +153,6 @@ public class ResetPartitionTimeIntegrationTest {
                     new KeyValueTimestamp<>("k5", "v5", 4999)
                 )
             );
-            // verify that the lastRecordedTimestamp is 5000
             assertThat(lastRecordedTimestamp, is(5000L));
         } finally {
             kafkaStreams.close();

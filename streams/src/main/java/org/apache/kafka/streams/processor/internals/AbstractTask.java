@@ -130,7 +130,7 @@ public abstract class AbstractTask implements Task {
 
     @Override
     public void initializeTaskTime() {
-        //no-op
+        // no-op
     }
 
     /**
