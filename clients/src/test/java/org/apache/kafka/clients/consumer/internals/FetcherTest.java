@@ -898,6 +898,171 @@ public class FetcherTest {
     }
 
     @Test
+    public void testFetchOnCompletedFetchesForPausedAndResumedPartitions() {
+        buildFetcher();
+
+        assignFromUser(singleton(tp0));
+        subscriptions.seek(tp0, 0);
+
+        assertEquals(1, fetcher.sendFetches());
+
+        subscriptions.pause(tp0);
+
+        client.prepareResponse(fullFetchResponse(tp0, this.records, Errors.NONE, 100L, 0));
+        consumerClient.poll(time.timer(0));
+
+        Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> fetchedRecords = fetchedRecords();
+        assertEquals("Should not return any records when partition is paused", 0, fetchedRecords.size());
+        assertTrue("Should still contain completed fetches", fetcher.hasCompletedFetches());
+        assertFalse("Should not have any available (non-paused) completed fetches", fetcher.hasAvailableFetches());
+        assertNull(fetchedRecords.get(tp0));
+        assertEquals(0, fetcher.sendFetches());
+
+        subscriptions.resume(tp0);
+
+        assertTrue("Should have available (non-paused) completed fetches", fetcher.hasAvailableFetches());
+
+        consumerClient.poll(time.timer(0));
+        fetchedRecords = fetchedRecords();
+        assertEquals("Should return records when partition is resumed", 1, fetchedRecords.size());
+        assertNotNull(fetchedRecords.get(tp0));
+        assertEquals(3, fetchedRecords.get(tp0).size());
+
+        consumerClient.poll(time.timer(0));
+        fetchedRecords = fetchedRecords();
+        assertEquals("Should not return records after previously paused partitions are fetched", 0, fetchedRecords.size());
+        assertFalse("Should no longer contain completed fetches", fetcher.hasCompletedFetches());
+    }
+
+    @Test
+    public void testFetchOnCompletedFetchesForSomePausedPartitions() {
+        buildFetcher();
+
+        Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> fetchedRecords;
+
+        assignFromUser(Utils.mkSet(tp0, tp1));
+
+        // seek to tp0 and tp1 in two polls to generate 2 complete requests and responses
+
+        // #1 seek, request, poll, response
+        subscriptions.seek(tp0, 1);
+        assertEquals(1, fetcher.sendFetches());
+        client.prepareResponse(fullFetchResponse(tp0, this.records, Errors.NONE, 100L, 0));
+        consumerClient.poll(time.timer(0));
+
+        // #2 seek, request, poll, response
+        subscriptions.seek(tp1, 1);
+        assertEquals(1, fetcher.sendFetches());
+        client.prepareResponse(fullFetchResponse(tp1, this.nextRecords, Errors.NONE, 100L, 0));
+
+        subscriptions.pause(tp0);
+        consumerClient.poll(time.timer(0));
+
+        fetchedRecords = fetchedRecords();
+        assertEquals("Should return completed fetch for unpaused partitions", 1, fetchedRecords.size());
+        assertTrue("Should still contain completed fetches", fetcher.hasCompletedFetches());
+        assertNotNull(fetchedRecords.get(tp1));
+        assertNull(fetchedRecords.get(tp0));
+
+        fetchedRecords = fetchedRecords();
+        assertEquals("Should return no records for remaining paused partition", 0, fetchedRecords.size());
+        assertTrue("Should still contain completed fetches", fetcher.hasCompletedFetches());
+    }
+
+    @Test
+    public void testFetchOnCompletedFetchesForAllPausedPartitions() {
+        buildFetcher();
+
+        Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> fetchedRecords;
+
+        assignFromUser(Utils.mkSet(tp0, tp1));
+
+        // seek to tp0 and tp1 in two polls to generate 2 complete requests and responses
+
+        // #1 seek, request, poll, response
+        subscriptions.seek(tp0, 1);
+        assertEquals(1, fetcher.sendFetches());
+        client.prepareResponse(fullFetchResponse(tp0, this.records, Errors.NONE, 100L, 0));
+        consumerClient.poll(time.timer(0));
+
+        // #2 seek, request, poll, response
+        subscriptions.seek(tp1, 1);
+        assertEquals(1, fetcher.sendFetches());
+        client.prepareResponse(fullFetchResponse(tp1, this.nextRecords, Errors.NONE, 100L, 0));
+
+        subscriptions.pause(tp0);
+        subscriptions.pause(tp1);
+
+        consumerClient.poll(time.timer(0));
+
+        fetchedRecords = fetchedRecords();
+        assertEquals("Should return no records for all paused partitions", 0, fetchedRecords.size());
+        assertTrue("Should still contain completed fetches", fetcher.hasCompletedFetches());
+        assertFalse("Should not have any available (non-paused) completed fetches", fetcher.hasAvailableFetches());
+    }
+
+    @Test
+    public void testPartialFetchWithPausedPartitions() {
+        // this test sends creates a completed fetch with 3 records and a max poll of 2 records to assert
+        // that a fetch that must be returned over at least 2 polls can be cached successfully when its partition is
+        // paused, then returned successfully after its been resumed again later
+        buildFetcher(2);
+
+        Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> fetchedRecords;
+
+        assignFromUser(Utils.mkSet(tp0, tp1));
+
+        subscriptions.seek(tp0, 1);
+        assertEquals(1, fetcher.sendFetches());
+        client.prepareResponse(fullFetchResponse(tp0, this.records, Errors.NONE, 100L, 0));
+        consumerClient.poll(time.timer(0));
+
+        fetchedRecords = fetchedRecords();
+
+        assertEquals("Should return 2 records from fetch with 3 records", 2, fetchedRecords.get(tp0).size());
+        assertFalse("Should have no completed fetches", fetcher.hasCompletedFetches());
+
+        subscriptions.pause(tp0);
+        consumerClient.poll(time.timer(0));
+
+        fetchedRecords = fetchedRecords();
+
+        assertEquals("Should return no records for paused partitions", 0, fetchedRecords.size());
+        assertTrue("Should have 1 entry in completed fetches", fetcher.hasCompletedFetches());
+        assertFalse("Should not have any available (non-paused) completed fetches", fetcher.hasAvailableFetches());
+
+        subscriptions.resume(tp0);
+
+        consumerClient.poll(time.timer(0));
+
+        fetchedRecords = fetchedRecords();
+
+        assertEquals("Should return last remaining record", 1, fetchedRecords.get(tp0).size());
+        assertFalse("Should have no completed fetches", fetcher.hasCompletedFetches());
+    }
+
+    @Test
+    public void testFetchDiscardedAfterPausedPartitionResumedAndSeekedToNewOffset() {
+        buildFetcher();
+        assignFromUser(singleton(tp0));
+        subscriptions.seek(tp0, 0);
+
+        assertEquals(1, fetcher.sendFetches());
+        subscriptions.pause(tp0);
+        client.prepareResponse(fullFetchResponse(tp0, this.records, Errors.NONE, 100L, 0));
+
+        subscriptions.seek(tp0, 3);
+        subscriptions.resume(tp0);
+        consumerClient.poll(time.timer(0));
+
+        assertTrue("Should have 1 entry in completed fetches", fetcher.hasCompletedFetches());
+        Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> fetchedRecords = fetchedRecords();
+        assertEquals("Should not return any records because we seeked to a new offset", 0, fetchedRecords.size());
+        assertNull(fetchedRecords.get(tp0));
+        assertFalse("Should have no completed fetches", fetcher.hasCompletedFetches());
+    }
+
+    @Test
     public void testFetchNotLeaderForPartition() {
         buildFetcher();
         assignFromUser(singleton(tp0));
