@@ -970,7 +970,7 @@ public class StreamThreadTest {
         final LogContext logContext = new LogContext("test");
         final Logger log = logContext.logger(StreamThreadTest.class);
         final StreamsMetricsThreadImpl streamsMetrics =
-            new StreamsMetricsThreadImpl(metrics, "", "", Collections.emptyMap());
+            new StreamsMetricsThreadImpl(metrics, "", "", Collections.<String, String>emptyMap());
         final StreamThread.StandbyTaskCreator standbyTaskCreator = new StreamThread.StandbyTaskCreator(
             internalTopologyBuilder,
             config,
@@ -981,9 +981,9 @@ public class StreamThreadTest {
             mockTime,
             log);
         return standbyTaskCreator.createTask(
-            new MockConsumer<>(OffsetResetStrategy.EARLIEST),
+            new MockConsumer<byte[], byte[]>(OffsetResetStrategy.EARLIEST),
             new TaskId(1, 2),
-            Collections.emptySet());
+            Collections.<TopicPartition>emptySet());
     }
 
     @Test

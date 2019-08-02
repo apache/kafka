@@ -43,7 +43,6 @@ import org.junit.Test;
 import org.junit.experimental.categories.Category;
 
 import java.util.Properties;
-import java.util.function.Predicate;
 
 @Category({IntegrationTest.class})
 public class StandbyTaskCreationIntegrationTest {
@@ -121,12 +120,7 @@ public class StandbyTaskCreationIntegrationTest {
         final Topology topology = builder.build();
         createClients(topology, streamsConfiguration(), topology, streamsConfiguration());
 
-        setStateListenersForVerification(new Predicate<ThreadMetadata>() {
-            @Override
-            public boolean test(final ThreadMetadata thread) {
-                return thread.standbyTasks().isEmpty() && !thread.activeTasks().isEmpty();
-            }
-        });
+        setStateListenersForVerification();
 
         startClients();
 
@@ -144,24 +138,30 @@ public class StandbyTaskCreationIntegrationTest {
         client2 = new KafkaStreams(topology2, streamsConfiguration2);
     }
 
-    private void setStateListenersForVerification(final Predicate<ThreadMetadata> taskCondition) {
+    private void setStateListenersForVerification() {
         client1.setStateListener(new StateListener() {
             @Override
             public void onChange(final State newState, final State oldState) {
-                if (newState == State.RUNNING &&
-                    client1.localThreadsMetadata().stream().allMatch(taskCondition)) {
-
+                if (newState == State.RUNNING) {
                     client1IsOk = true;
+                    for (final ThreadMetadata metadata : client1.localThreadsMetadata()) {
+                        if (!(metadata.standbyTasks().isEmpty() && !metadata.activeTasks().isEmpty())) {
+                            client1IsOk = false;
+                        }
+                    }
                 }
             }
         });
         client2.setStateListener(new StateListener() {
             @Override
             public void onChange(final State newState, final State oldState) {
-                if (newState == State.RUNNING &&
-                    client2.localThreadsMetadata().stream().allMatch(taskCondition)) {
-
+                if (newState == State.RUNNING) {
                     client2IsOk = true;
+                    for (final ThreadMetadata metadata : client2.localThreadsMetadata()) {
+                        if (!(metadata.standbyTasks().isEmpty() && !metadata.activeTasks().isEmpty())) {
+                            client2IsOk = false;
+                        }
+                    }
                 }
             }
         });
