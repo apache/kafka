@@ -147,7 +147,7 @@ public class AssignedStreamsTasksTest {
         EasyMock.expect(t1.partitions()).andReturn(Collections.singleton(tp1));
         EasyMock.expect(t1.changelogPartitions()).andReturn(Collections.emptySet());
         t1.closeStateManager(true);
-        EasyMock.expectLastCall().once();
+        EasyMock.expectLastCall();
         EasyMock.replay(t1);
 
         addAndInitTask();
