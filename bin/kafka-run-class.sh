@@ -183,6 +183,11 @@ if [  $JMX_PORT ]; then
   KAFKA_JMX_OPTS="$KAFKA_JMX_OPTS -Dcom.sun.management.jmxremote.port=$JMX_PORT "
 fi
 
+# MX4J port to use
+if [  $MX4J_PORT ]; then
+  KAFKA_JMX_OPTS="$KAFKA_JMX_OPTS -Dkafka_mx4jenable=true -Dmx4jport=$MX4J_PORT "
+fi
+
 # Log directory to use
 if [ "x$LOG_DIR" = "x" ]; then
   LOG_DIR="$base_dir/logs"

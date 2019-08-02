@@ -681,6 +681,7 @@ project(':core') {
     }
     // ZooKeeperMain depends on commons-cli but declares the dependency as `provided`
     compile libs.commonsCli
+    compile libs.mx4jtools
 
     compileOnly libs.log4j
 
