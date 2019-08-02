@@ -999,7 +999,6 @@ public class StreamThread extends Thread {
      * @param records Records, can be null
      */
     private void addRecordsToTasks(final ConsumerRecords<byte[], byte[]> records) {
-
         for (final TopicPartition partition : records.partitions()) {
             final StreamTask task = taskManager.activeTask(partition);
 
@@ -1016,6 +1015,9 @@ public class StreamThread extends Thread {
                 throw new TaskMigratedException(task);
             }
 
+            if (task.streamTime() == -1) {
+                task.initializeTaskTime();
+            }
             task.addRecords(partition, records.records(partition));
         }
     }
