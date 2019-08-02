@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.logging;
 
+import org.apache.log4j.Hierarchy;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.junit.Test;
@@ -24,7 +25,6 @@ import java.util.Hashtable;
 import java.util.List;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -33,25 +33,25 @@ public class Log4jControllerTest {
 
     @Test
     public void testGetLoggers() {
-        Hashtable<String, Logger> x = new Hashtable<>();
-        Logger h1 = new Logger("h1"){};
-        h1.setLevel(Level.INFO);
-        Logger h2 = new Logger("h2"){};
-        h2.setLevel(Level.WARN);
-        x.put("h2", h1);
-        x.put("h1", h2);
+        Hashtable<String, Logger> currentLoggersMock = new Hashtable<>();
+        Logger log1 = new Logger("log1"){};
+        log1.setLevel(Level.INFO);
+        Logger log2 = new Logger("log2"){};
+        log2.setLevel(Level.WARN);
+        currentLoggersMock.put("log2", log2);
+        currentLoggersMock.put("log1", log1);
         Log4jController controller = mock(Log4jController.class);
         when(controller.getLoggers()).thenCallRealMethod();
         when(controller.getCurrentLevel(any())).thenCallRealMethod();
-        when(controller.currentLoggers()).thenReturn(x.elements());
+        when(controller.currentLoggers()).thenReturn(currentLoggersMock.elements());
         when(controller.rootLogLevel()).thenReturn(Level.ERROR);
 
         List<String> loggers = controller.getLoggers();
 
         assertEquals("Expecting 3 loggers", 3, loggers.size());
         assertEquals("Root loggers should be set at error level", "root=ERROR", loggers.get(0));
-        assertEquals("h1 should be ordered before h2", "h1=INFO", loggers.get(1));
-        assertEquals("h2 should be set at warn", "h2=WARN", loggers.get(2));
+        assertEquals("log1 should be ordered before log2", "log1=INFO", loggers.get(1));
+        assertEquals("log2 should be set at warn", "log2=WARN", loggers.get(2));
     }
 
     @Test
@@ -62,22 +62,35 @@ public class Log4jControllerTest {
         when(controller.loggerByName("hello")).thenReturn(h);
         when(controller.getCurrentLevel(any())).thenReturn(Level.WARN);
 
-        assertEquals("logger should be at WARN level", controller.getLogLevel("hello"), "WARN");
+        assertEquals("logger should be at WARN level", "WARN", controller.getLogLevel("hello"));
     }
 
     @Test
     public void testSetLogLevel() {
         Log4jController controller = mock(Log4jController.class);
-        org.apache.log4j.Logger h = new Logger("hello"){};
-        h.setLevel(Level.INFO);
-        when(controller.loggerByName("hello")).thenReturn(h);
+        Logger log = new Logger("hello"){};
+        log.setLevel(Level.INFO);
+        when(controller.loggerByName("hello")).thenReturn(log);
         when(controller.setLogLevel(any(), any())).thenCallRealMethod();
         when(controller.getLogLevel(any())).thenCallRealMethod();
-        assertEquals("original level is INFO", h.getLevel(), Level.INFO);
+        assertEquals("original level is INFO", log.getLevel(), Level.INFO);
 
         controller.setLogLevel("hello", "warn");
 
-        assertEquals("new level should be WARN", h.getLevel(), Level.WARN);
+        assertEquals("new level should be WARN", Level.WARN, log.getLevel());
     }
 
+    @Test
+    public void testEffectiveLogLevel() {
+        Log4jController controller = mock(Log4jController.class);
+        Logger root = new Logger("some"){};
+        Hierarchy hierarchy = new Hierarchy(root);
+        Logger log = hierarchy.getLogger("some.name.hello", name -> new Logger(name){});
+        root.setLevel(Level.WARN);
+        when(controller.loggerByName("some.name.hello")).thenReturn(log);
+        when(controller.loggerByName("some")).thenReturn(root);
+        when(controller.getLogLevel(any())).thenCallRealMethod();
+        when(controller.getCurrentLevel(any())).thenCallRealMethod();
+        assertEquals("should be warn", "WARN", controller.getLogLevel("some.name.hello"));
+    }
 }

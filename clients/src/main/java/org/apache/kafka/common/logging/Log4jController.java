@@ -29,7 +29,7 @@ import java.util.Locale;
 /**
  * An MBean to control log levels of log4j loggers.
  *
- * <p />Note: The changes made by this MBean are not persisted across worker restarts.
+ * <p />Note: The changes made by this MBean are not persisted across application restarts.
  */
 public class Log4jController implements Log4jControllerMBean {
 
