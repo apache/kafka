@@ -17,6 +17,7 @@
 package org.apache.kafka.common.message;
 
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
+import org.apache.kafka.common.protocol.ObjectSizeCache;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.junit.Assert;
 import org.junit.Test;
@@ -59,8 +60,9 @@ public class TestUUIDDataTest {
         final TestUUIDData out = new TestUUIDData();
         out.setProcessId(uuid);
 
-        final ByteBuffer buffer = ByteBuffer.allocate(out.size((short) 1));
-        out.write(new ByteBufferAccessor(buffer), (short) 1);
+        ObjectSizeCache sizeCache = new ObjectSizeCache();
+        final ByteBuffer buffer = ByteBuffer.allocate(out.size(sizeCache, (short) 1));
+        out.write(new ByteBufferAccessor(buffer), sizeCache, (short) 1);
         buffer.rewind();
 
         final TestUUIDData in = new TestUUIDData();

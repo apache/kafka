@@ -19,6 +19,7 @@
   "name": "CreateAclsRequest",
   // Version 1 adds resource pattern type.
   "validVersions": "0-1",
+  "flexibleVersions": "none",
   "fields": [
     { "name": "Creations", "type": "[]CreatableAcl", "versions": "0+", 
       "about": "The ACLs that we want to create.", "fields": [

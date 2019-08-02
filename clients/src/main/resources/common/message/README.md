@@ -65,6 +65,14 @@ version spec "3+".  This specifies that the field only appears in version 3 and
 later.  If a field is being removed, we should change its version from "0+" to
 "0-2" to indicate that it will not appear in version 3 and later.
 
+Flexible Versions
+-----------------
+Kafka serialization has been improved over time to be more flexible and
+efficient.  Message versions that contain these improvements are referred to as
+"flexible versions."
+
+Only flexible versions can contain tagged fields, which are described below.
+
 Field Types
 -----------
 There are several primitive field types available.
@@ -79,9 +87,14 @@ There are several primitive field types available.
 
 * "int64": a 64-bit integer.  This takes up 8 bytes on the wire.
 
-* "string": a string.  This must be less than 64kb in size when serialized as UTF-8.  This takes up 2 bytes on the wire, plus the length of the string when serialized to UTF-8.
+* "string": a string.  Strings are serialized as a length followed by the
+  contents as UTF-8.  The contents must be less than 64kb in size.  In
+  non-flexible versions, the string length will always be 2 bytes.  In flexible
+  versions, the length is a variable-length integer. 
 
-* "bytes": binary data.  This takes up 4 bytes on the wire, plus the length of the bytes.
+* "bytes": binary data.  Bytes fields are serialized as a length followed by
+  the contents.  In non-flexible versions, the length will always be 4 bytes.
+  In flexible versions, the length is a variable-length integer. 
 
 In addition to these primitive field types, there is also an array type.  Array
 types start with a "[]" and end with the name of the element type.  For
@@ -103,6 +116,28 @@ becomes nullable in a later version.
 If a field is declared as non-nullable, and it is present in the message
 version you are using, you should set it to a non-null value before serializing
 the message.  Otherwise, you will get a runtime error.
+
+Tagged Fields
+-------------
+Tagged fields are an extension to the Kafka protocol which allows optional data
+to be attached to messages.  Tagged fields can appear at the root level of
+messages, or within any structure in the message.
+
+Unlike mandatory fields, tagged fields can be added to message versions that
+already exists.  Older servers will ignore new tagged fields which they do not
+understand.
+
+In order to make a field tagged, set a "tag" for the field, and also set up
+tagged versions for the field.  The taggedVersions you specify should be
+open-ended-- that is, they should specify a start version, but not an end
+version.
+
+You can remove support for a tagged field from a specific version of a message,
+but you can't reuse a tag once it has been used for something else.  Once tags
+have been used for something, they can't be used for anything else, without
+breaking compatibilty.
+
+Note that tagged fields can only be added to "flexible" message versions.
 
 Serializing Messages
 --------------------

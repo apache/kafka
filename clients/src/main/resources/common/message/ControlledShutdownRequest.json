@@ -24,7 +24,10 @@
   // Version 1 is the same as version 0.
   //
   // Version 2 adds BrokerEpoch.
-  "validVersions": "0-2",
+  //
+  // Version 3 is the first flexible version.
+  "validVersions": "0-3",
+  "flexibleVersions": "3+",
   "fields": [
     { "name": "BrokerId", "type": "int32", "versions": "0+", "entityType": "brokerId",
       "about": "The id of the broker for which controlled shutdown has been requested." },

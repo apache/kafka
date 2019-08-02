@@ -15,20 +15,42 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.common.protocol;
+package org.apache.kafka.common.protocol.types;
 
-import java.util.UUID;
+import java.util.Arrays;
 
-public interface Writable {
-    void writeByte(byte val);
-    void writeShort(short val);
-    void writeInt(int val);
-    void writeLong(long val);
-    void writeByteArray(byte[] arr);
-    void writeUnsignedVarint(int i);
+public class RawTaggedField {
+    private final int tag;
+    private final byte[] data;
 
-    default void writeUUID(UUID uuid) {
-        writeLong(uuid.getMostSignificantBits());
-        writeLong(uuid.getLeastSignificantBits());
+    public RawTaggedField(int tag, byte[] data) {
+        this.tag = tag;
+        this.data = data;
+    }
+
+    public int tag() {
+        return tag;
+    }
+
+    public byte[] data() {
+        return data;
+    }
+
+    public int size() {
+        return data.length;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if ((o == null) || (!o.getClass().equals(getClass()))) {
+            return false;
+        }
+        RawTaggedField other = (RawTaggedField) o;
+        return tag == other.tag && Arrays.equals(data, other.data);
+    }
+
+    @Override
+    public int hashCode() {
+        return tag ^ Arrays.hashCode(data);
     }
 }

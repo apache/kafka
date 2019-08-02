@@ -31,6 +31,7 @@
   // Version 8 added ErrorRecords and ErrorMessage to include information about
   // records that cause the whole batch to be dropped
   "validVersions": "0-8",
+  "flexibleVersions": "none",
   "fields": [
     { "name": "Responses", "type": "[]TopicProduceResponse", "versions": "0+",
       "about": "Each produce response", "fields": [

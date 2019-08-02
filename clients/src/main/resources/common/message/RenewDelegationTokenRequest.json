@@ -19,6 +19,7 @@
   "name": "RenewDelegationTokenRequest",
   // Version 1 is the same as version 0.
   "validVersions": "0-1",
+  "flexibleVersions": "none",
   "fields": [
     { "name": "Hmac", "type": "bytes", "versions": "0+",
       "about": "The HMAC of the delegation token to be renewed." },

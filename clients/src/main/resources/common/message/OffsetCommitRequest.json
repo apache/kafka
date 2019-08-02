@@ -26,8 +26,12 @@
   // Version 5 removes the retention time, which is now controlled only by a broker configuration.
   //
   // Version 6 adds the leader epoch for fencing.
+  //
   // version 7 adds a new field called groupInstanceId to indicate member identity across restarts.
-  "validVersions": "0-7",
+  //
+  // Version 8 is the first flexible version.
+  "validVersions": "0-8",
+  "flexibleVersions": "8+",
   "fields": [
     { "name": "GroupId", "type": "string", "versions": "0+", "entityType": "groupId",
       "about": "The unique group identifier." },

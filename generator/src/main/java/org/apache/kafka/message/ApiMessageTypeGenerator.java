@@ -135,6 +135,8 @@ public final class ApiMessageTypeGenerator {
         generateAccessor("responseSchemas", "Schema[]");
         buffer.printf("%n");
         generateToString();
+        buffer.printf("%n");
+        generateHeaderVersion();
         buffer.decrementIndent();
         buffer.printf("}%n");
         headerGenerator.generate();
@@ -241,6 +243,58 @@ public final class ApiMessageTypeGenerator {
         buffer.printf("public String toString() {%n");
         buffer.incrementIndent();
         buffer.printf("return this.name();%n");
+        buffer.decrementIndent();
+        buffer.printf("}%n");
+    }
+
+    private void generateHeaderVersion() {
+        buffer.printf("public short headerVersion(short version) {%n");
+        buffer.incrementIndent();
+        buffer.printf("switch (apiKey) {%n");
+        buffer.incrementIndent();
+        for (Map.Entry<Short, ApiData> entry : apis.entrySet()) {
+            short apiKey = entry.getKey();
+            buffer.printf("case %d:%n", apiKey);
+            buffer.incrementIndent();
+            if (apiKey == 7) {
+                buffer.printf("if (version == 0) {%n");
+                buffer.incrementIndent();
+                buffer.printf("return (short) 0;%n");
+                buffer.decrementIndent();
+                buffer.printf("}%n");
+            }
+            ApiData data = entry.getValue();
+            if (data.requestSpec == null) {
+                throw new RuntimeException("failed to find request for API key " + apiKey);
+            }
+            if (data.responseSpec == null) {
+                throw new RuntimeException("failed to find response for API key " + apiKey);
+            }
+            if (!data.requestSpec.flexibleVersions().equals(
+                    data.responseSpec.flexibleVersions())) {
+                throw new RuntimeException("for API key " + apiKey + ", the flexibleVersions " +
+                    "specified for the request do not match those of the response.  " +
+                    "The request's flexibleVersions are " + data.requestSpec.flexibleVersions() +
+                    "; the response's flexibleVersions are " + data.responseSpec.flexibleVersions());
+            }
+            VersionConditional.forVersions(data.requestSpec.flexibleVersions(),
+                data.requestSpec.validVersions()).
+                ifMember(__ -> {
+                    buffer.printf("return (short) 2;%n");
+                }).
+                ifNotMember(__ -> {
+                    buffer.printf("return (short) 1;%n");
+                }).generate(buffer);
+            buffer.decrementIndent();
+        }
+        buffer.printf("default:%n");
+        buffer.incrementIndent();
+        headerGenerator.addImport(MessageGenerator.UNSUPPORTED_VERSION_EXCEPTION_CLASS);
+        buffer.printf("throw new UnsupportedVersionException(\"Unsupported API key \"" +
+            " + apiKey);%n");
+        buffer.decrementIndent();
+        buffer.decrementIndent();
+        buffer.printf("}%n");
         buffer.decrementIndent();
         buffer.printf("}%n");
     }
