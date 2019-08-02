@@ -236,10 +236,11 @@ class Benchmark(Test):
         return data
 
     @cluster(num_nodes=6)
-    @parametrize(security_protocol='SSL', interbroker_security_protocol='PLAINTEXT')
-    @matrix(security_protocol=['PLAINTEXT', 'SSL'], compression_type=["none", "snappy"])
+    @parametrize(paused_partitions_percent="0.8")
+    # @parametrize(security_protocol='SSL', interbroker_security_protocol='PLAINTEXT')
+    # @matrix(security_protocol=['PLAINTEXT', 'SSL'], compression_type=["none", "snappy"])
     def test_consumer_throughput(self, compression_type="none", security_protocol="PLAINTEXT",
-                                 interbroker_security_protocol=None, num_consumers=1,
+                                 interbroker_security_protocol=None, num_consumers=1, paused_partitions_percent="0",
                                  client_version=str(DEV_BRANCH), broker_version=str(DEV_BRANCH)):
         """
         Consume 10e6 100-byte messages with 1 or more consumers from a topic with 6 partitions
@@ -269,7 +270,7 @@ class Benchmark(Test):
 
         # consume
         self.consumer = ConsumerPerformanceService(
-            self.test_context, num_consumers, self.kafka,
+            self.test_context, num_consumers, paused_partitions_percent, self.kafka,
             topic=TOPIC_REP_THREE, messages=num_records)
         self.consumer.group = "test-consumer-group"
         self.consumer.run()
