@@ -682,8 +682,6 @@ project(':core') {
     // ZooKeeperMain depends on commons-cli but declares the dependency as `provided`
     compile libs.commonsCli
 
-    compileOnly libs.log4j
-
     testCompile project(':clients').sourceSets.test.output
     testCompile libs.bcpkix
     testCompile libs.mockitoCore
@@ -962,6 +960,7 @@ project(':clients') {
     testRuntime libs.jacksonDatabind
     testRuntime libs.jacksonJDK8Datatypes
     testCompile libs.jacksonJaxrsJsonProvider
+    testCompile libs.log4j
   }
 
   task determineCommitId {
