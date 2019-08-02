@@ -41,12 +41,9 @@ import org.apache.kafka.streams.processor.TaskMetadata;
 import org.apache.kafka.streams.processor.ThreadMetadata;
 import org.apache.kafka.streams.processor.internals.assignment.AssignmentInfo;
 import org.apache.kafka.streams.state.HostInfo;
-import org.apache.kafka.streams.kstream.internals.MaterializedInternal;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
-import org.apache.kafka.streams.state.KeyValueStore;
-import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
 import org.apache.kafka.streams.processor.internals.StreamThread.StreamsMetricsThreadImpl;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
@@ -1163,7 +1160,7 @@ public class StreamThreadTest {
         final LogContext logContext = new LogContext("test");
         final Logger log = logContext.logger(StreamThreadTest.class);
         final StreamsMetricsThreadImpl streamsMetrics =
-            new StreamsMetricsThreadImpl(metrics, "", "", Collections.emptyMap());
+            new StreamsMetricsThreadImpl(metrics, "", "", Collections.<String, String>emptyMap());
         final StreamThread.StandbyTaskCreator standbyTaskCreator = new StreamThread.StandbyTaskCreator(
             internalTopologyBuilder,
             config,
@@ -1174,9 +1171,9 @@ public class StreamThreadTest {
             mockTime,
             log);
         return standbyTaskCreator.createTask(
-            new MockConsumer<>(OffsetResetStrategy.EARLIEST),
+            new MockConsumer<byte[], byte[]>(OffsetResetStrategy.EARLIEST),
             new TaskId(1, 2),
-            Collections.emptySet());
+            Collections.<TopicPartition>emptySet());
     }
 
     @Test
