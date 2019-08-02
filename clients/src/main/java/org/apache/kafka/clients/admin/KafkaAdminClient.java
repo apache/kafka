@@ -1762,7 +1762,7 @@ public class KafkaAdminClient extends AdminClient {
         final Collection<ConfigResource> unifiedRequestResources = new ArrayList<>(configResources.size());
 
         for (ConfigResource resource : configResources) {
-            if (resource.type() == ConfigResource.Type.BROKER && !resource.isDefault()) {
+            if (dependsOnSpecificNode(resource)) {
                 brokerFutures.put(resource, new KafkaFutureImpl<>());
                 brokerResources.add(resource);
             } else {
@@ -1887,6 +1887,9 @@ public class KafkaAdminClient extends AdminClient {
             case STATIC_BROKER_CONFIG:
                 configSource = ConfigEntry.ConfigSource.STATIC_BROKER_CONFIG;
                 break;
+            case DYNAMIC_BROKER_LOGGER_CONFIG:
+                configSource = ConfigEntry.ConfigSource.DYNAMIC_BROKER_LOGGER_CONFIG;
+                break;
             case DEFAULT_CONFIG:
                 configSource = ConfigEntry.ConfigSource.DEFAULT_CONFIG;
                 break;
@@ -1906,7 +1909,7 @@ public class KafkaAdminClient extends AdminClient {
         final Collection<ConfigResource> unifiedRequestResources = new ArrayList<>();
 
         for (ConfigResource resource : configs.keySet()) {
-            if (resource.type() == ConfigResource.Type.BROKER && !resource.isDefault()) {
+            if (dependsOnSpecificNode(resource)) {
                 NodeProvider nodeProvider = new ConstantNodeIdProvider(Integer.parseInt(resource.name()));
                 allFutures.putAll(alterConfigs(configs, options, Collections.singleton(resource), nodeProvider));
             } else
@@ -1971,7 +1974,7 @@ public class KafkaAdminClient extends AdminClient {
         final Collection<ConfigResource> unifiedRequestResources = new ArrayList<>();
 
         for (ConfigResource resource : configs.keySet()) {
-            if (resource.type() == ConfigResource.Type.BROKER && !resource.isDefault()) {
+            if (dependsOnSpecificNode(resource)) {
                 NodeProvider nodeProvider = new ConstantNodeIdProvider(Integer.parseInt(resource.name()));
                 allFutures.putAll(incrementalAlterConfigs(configs, options, Collections.singleton(resource), nodeProvider));
             } else
@@ -3069,5 +3072,13 @@ public class KafkaAdminClient extends AdminClient {
         }, now);
 
         return new ElectLeadersResult(electionFuture);
+    }
+
+    /**
+     * Returns a boolean indicating whether the resource needs to go to a specific node
+     */
+    private boolean dependsOnSpecificNode(ConfigResource resource) {
+        return (resource.type() == ConfigResource.Type.BROKER && !resource.isDefault())
+                || resource.type() == ConfigResource.Type.BROKER_LOGGER;
     }
 }
