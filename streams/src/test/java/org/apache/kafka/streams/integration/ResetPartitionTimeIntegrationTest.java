@@ -132,10 +132,10 @@ public class ResetPartitionTimeIntegrationTest {
             );
             assertThat(lastRecordedTimestamp, is(-1L));
             lastRecordedTimestamp = -2L;
-            Thread.sleep(1000); // wait for commit to finish
 
             kafkaStreams.close();
             assertThat(kafkaStreams.state(), is(KafkaStreams.State.NOT_RUNNING));
+
             kafkaStreams = new KafkaStreams(builder.build(), streamsConfig);
             kafkaStreams.start();
 
