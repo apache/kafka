@@ -227,7 +227,7 @@ object LogConfig {
     def serverConfigName(configName: String): Option[String] = serverDefaultConfigNames.get(configName)
   }
 
-  // Package private for testing, return a copy since it's a global variable
+  // Package private for testing, return a copy since it's a mutable global variable
   private[log] def configDefCopy: LogConfigDef = new LogConfigDef(configDef)
 
   private val configDef: LogConfigDef = {
