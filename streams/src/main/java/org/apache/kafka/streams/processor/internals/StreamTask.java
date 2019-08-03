@@ -84,6 +84,8 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
     private Producer<byte[], byte[]> producer;
     private boolean commitRequested = false;
     private boolean transactionInFlight = false;
+    private Map<TopicPartition, Long> partitionTimes = new HashMap<>();
+    private boolean isCloseTriggerCommit = false;
 
     protected static final class TaskMetrics {
         final StreamsMetricsImpl metrics;
@@ -441,15 +443,14 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
     }
 
     private long getNextPartitionTime(final TopicPartition partition) {
-        final OffsetAndMetadata oldCommittedMetadata = consumer.committed(partition);
-        final long metadataTimestamp;
-        if (oldCommittedMetadata != null && oldCommittedMetadata.metadata().length() != 0) {
-            metadataTimestamp = Long.parseLong(oldCommittedMetadata.metadata());
-        } else {
-            metadataTimestamp = RecordQueue.UNKNOWN;
+        if (!isCloseTriggerCommit) {
+            return partitionTime(partition);
         }
-        final long localPartitionTime = partitionTime(partition);
-        return metadataTimestamp >= localPartitionTime ? metadataTimestamp : localPartitionTime;
+        final Long partitionTime = partitionTimes.get(partition);
+        if (partitionTime == null) {
+            throw new NullPointerException("Partition " + partition + " does not belong in assignment.");
+        }
+        return partitionTime;
     }
 
     /**
@@ -578,6 +579,13 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
     void suspend(final boolean clean,
                  final boolean isZombie) {
         try {
+            if (clean) {
+                // local partition times will shortly be wiped, so we need to store them
+                // for commit later
+                for (final TopicPartition partition : partitionGroup.partitions()) {
+                    partitionTimes.put(partition, partitionTime(partition));
+                }
+            }
             closeTopology(); // should we call this only on clean suspend?
         } catch (final RuntimeException fatal) {
             if (clean) {
@@ -588,7 +596,9 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         if (clean) {
             TaskMigratedException taskMigratedException = null;
             try {
+                isCloseTriggerCommit = true;
                 commit(false);
+                isCloseTriggerCommit = false;
             } finally {
                 if (eosEnabled) {
                     stateMgr.checkpoint(activeTaskCheckpointableOffsets());
