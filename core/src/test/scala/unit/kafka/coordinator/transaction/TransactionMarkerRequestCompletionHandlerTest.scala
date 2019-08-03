@@ -45,7 +45,7 @@ class TransactionMarkerRequestCompletionHandlerTest {
   private val txnIdAndMarkers = asList(
       TxnIdAndMarkerEntry(transactionalId, new WriteTxnMarkersRequest.TxnMarkerEntry(producerId, producerEpoch, coordinatorEpoch, txnResult, asList(topicPartition))))
 
-  private val txnMetadata = new TransactionMetadata(transactionalId, producerId, producerEpoch, lastProducerEpoch,
+  private val txnMetadata = new TransactionMetadata(transactionalId, producerId, producerId, producerEpoch, lastProducerEpoch,
     txnTimeoutMs, PrepareCommit, mutable.Set[TopicPartition](topicPartition), 0L, 0L)
 
   private val markerChannelManager: TransactionMarkerChannelManager =

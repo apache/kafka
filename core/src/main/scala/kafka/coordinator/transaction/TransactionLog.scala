@@ -73,6 +73,7 @@ object TransactionLog {
 
   private[coordinator] object ValueSchema {
     val ProducerIdKey = "producer_id"
+    val LastProducerIdKey = "last_producer_id"
     val ProducerEpochKey = "producer_epoch"
     val LastProducerEpochKey = "last_producer_epoch"
     val TxnTimeoutKey = "transaction_timeout"
@@ -97,6 +98,7 @@ object TransactionLog {
       new Field(TxnStartTimestampKey, INT64, "Time the transaction was started"))
 
     private val V1 = new Schema(new Field(ProducerIdKey, INT64, "Producer id in use by the transactional id."),
+      new Field(LastProducerIdKey, INT64, "The last producer id assigned to the producer"),
       new Field(ProducerEpochKey, INT16, "Epoch associated with the producer id"),
       new Field(LastProducerEpochKey, INT16, "The last epoch associated with the producer id", -1.toShort),
       new Field(TxnTimeoutKey, INT32, "Transaction timeout in milliseconds"),
@@ -163,6 +165,7 @@ object TransactionLog {
     value.set(TxnStartTimestampKey, txnMetadata.txnStartTimestamp)
 
     if (version >= 1) {
+      value.set(LastProducerIdKey, txnMetadata.lastProducerId)
       value.set(LastProducerEpochKey, txnMetadata.lastProducerEpoch)
     }
 
@@ -225,6 +228,8 @@ object TransactionLog {
 
       if (version <= CurrentVersion) {
         val producerId = value.getLong(ProducerIdKey)
+        val lastProducerId: Long =
+          if (version >= 1) value.getLong(LastProducerIdKey) else RecordBatch.NO_PRODUCER_ID
         val epoch = value.getShort(ProducerEpochKey)
         val lastEpoch: Short =
           if (version >= 1) value.getShort(LastProducerEpochKey) else RecordBatch.NO_PRODUCER_EPOCH
@@ -236,8 +241,8 @@ object TransactionLog {
         val entryTimestamp = value.getLong(TxnEntryTimestampKey)
         val startTimestamp = value.getLong(TxnStartTimestampKey)
 
-        val transactionMetadata = new TransactionMetadata(transactionalId, producerId, epoch, lastEpoch, timeout, state,
-          mutable.Set.empty[TopicPartition],startTimestamp, entryTimestamp)
+        val transactionMetadata = new TransactionMetadata(transactionalId, producerId, lastProducerId, epoch, lastEpoch,
+          timeout, state, mutable.Set.empty[TopicPartition],startTimestamp, entryTimestamp)
 
         if (!state.equals(Empty)) {
           val topicPartitionArray = value.getArray(TxnPartitionsKey)

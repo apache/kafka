@@ -86,18 +86,18 @@ private[transaction] case object PrepareEpochFence extends TransactionState { va
 
 private[transaction] object TransactionMetadata {
   def apply(transactionalId: String, producerId: Long, producerEpoch: Short, txnTimeoutMs: Int, timestamp: Long) =
-    new TransactionMetadata(transactionalId, producerId, producerEpoch, RecordBatch.NO_PRODUCER_EPOCH, txnTimeoutMs,
-      Empty, collection.mutable.Set.empty[TopicPartition], timestamp, timestamp)
+    new TransactionMetadata(transactionalId, producerId, RecordBatch.NO_PRODUCER_ID, producerEpoch,
+      RecordBatch.NO_PRODUCER_EPOCH, txnTimeoutMs, Empty, collection.mutable.Set.empty[TopicPartition], timestamp, timestamp)
 
   def apply(transactionalId: String, producerId: Long, producerEpoch: Short, txnTimeoutMs: Int,
             state: TransactionState, timestamp: Long) =
-    new TransactionMetadata(transactionalId, producerId, producerEpoch, RecordBatch.NO_PRODUCER_EPOCH, txnTimeoutMs,
-      state, collection.mutable.Set.empty[TopicPartition], timestamp, timestamp)
+    new TransactionMetadata(transactionalId, producerId, RecordBatch.NO_PRODUCER_ID, producerEpoch,
+      RecordBatch.NO_PRODUCER_EPOCH, txnTimeoutMs, state, collection.mutable.Set.empty[TopicPartition], timestamp, timestamp)
 
-  def apply(transactionalId: String, producerId: Long, producerEpoch: Short, lastProducerEpoch: Short,
-            txnTimeoutMs: Int, state: TransactionState, timestamp: Long) =
-    new TransactionMetadata(transactionalId, producerId, producerEpoch, lastProducerEpoch, txnTimeoutMs,
-      state, collection.mutable.Set.empty[TopicPartition], timestamp, timestamp)
+  def apply(transactionalId: String, producerId: Long, lastProducerId: Long, producerEpoch: Short,
+            lastProducerEpoch: Short, txnTimeoutMs: Int, state: TransactionState, timestamp: Long) =
+    new TransactionMetadata(transactionalId, producerId, lastProducerId, producerEpoch, lastProducerEpoch,
+      txnTimeoutMs, state, collection.mutable.Set.empty[TopicPartition], timestamp, timestamp)
 
   def byteToState(byte: Byte): TransactionState = {
     byte match {
@@ -126,10 +126,13 @@ private[transaction] object TransactionMetadata {
       Dead -> Set(Empty, CompleteAbort, CompleteCommit),
       PrepareEpochFence -> Set(Ongoing)
     )
+
+  def isEpochExhausted(producerEpoch: Short): Boolean = producerEpoch >= Short.MaxValue - 1
 }
 
 // this is a immutable object representing the target transition of the transaction metadata
 private[transaction] case class TxnTransitMetadata(producerId: Long,
+                                                   lastProducerId: Long,
                                                    producerEpoch: Short,
                                                    lastProducerEpoch: Short,
                                                    txnTimeoutMs: Int,
@@ -140,6 +143,7 @@ private[transaction] case class TxnTransitMetadata(producerId: Long,
   override def toString: String = {
     "TxnTransitMetadata(" +
       s"producerId=$producerId, " +
+      s"lastProducerId=$lastProducerId, " +
       s"producerEpoch=$producerEpoch, " +
       s"lastProducerEpoch=$lastProducerEpoch, " +
       s"txnTimeoutMs=$txnTimeoutMs, " +
@@ -153,7 +157,9 @@ private[transaction] case class TxnTransitMetadata(producerId: Long,
 /**
   *
   * @param producerId            producer id
+  * @param lastProducerId        last producer id assigned to the producer
   * @param producerEpoch         current epoch of the producer
+  * @param lastProducerEpoch     last epoch of the producer
   * @param txnTimeoutMs          timeout to be used to abort long running transactions
   * @param state                 current state of the transaction
   * @param topicPartitions       current set of partitions that are part of this transaction
@@ -163,6 +169,7 @@ private[transaction] case class TxnTransitMetadata(producerId: Long,
 @nonthreadsafe
 private[transaction] class TransactionMetadata(val transactionalId: String,
                                                var producerId: Long,
+                                               var lastProducerId: Long,
                                                var producerEpoch: Short,
                                                var lastProducerEpoch: Short,
                                                var txnTimeoutMs: Int,
@@ -195,7 +202,7 @@ private[transaction] class TransactionMetadata(val transactionalId: String,
   // this is visible for test only
   def prepareNoTransit(): TxnTransitMetadata = {
     // do not call transitTo as it will set the pending state, a follow-up call to abort the transaction will set its pending state
-    TxnTransitMetadata(producerId, producerEpoch, lastProducerEpoch, txnTimeoutMs, state, topicPartitions.toSet,
+    TxnTransitMetadata(producerId, lastProducerId, producerEpoch, lastProducerEpoch, txnTimeoutMs, state, topicPartitions.toSet,
       txnStartTimestamp, txnLastUpdateTimestamp)
   }
 
@@ -208,7 +215,7 @@ private[transaction] class TransactionMetadata(val transactionalId: String,
   }
 
   def prepareIncrementProducerEpoch(newTxnTimeoutMs: Int,
-                                    currentProducerEpoch: Short,
+                                    currentProducerEpoch: Option[Short],
                                     updateTimestamp: Long): Either[Errors, TxnTransitMetadata] = {
     if (isProducerEpochExhausted)
       throw new IllegalStateException(s"Cannot allocate any more producer epochs for producerId $producerId")
@@ -217,37 +224,41 @@ private[transaction] class TransactionMetadata(val transactionalId: String,
     // If an epoch was provided by the producer:
     //   If it matches the current epoch, the producer is attempting to continue after an error, and no other producer
     // has been initialized. Bump the current and last epochs.
-    //   If it matches the previous epoch, it is a retry of a successful call, so just return the current epoch
-    // without bumping. There is no danger of this producer being fenced, because a new producer calling InitProducerId
-    // would have caused the last epoch to be set to -1.
+    //   If it matches the previous epoch, it is a retry of a successful call, so just return the current epoch without
+    // bumping. There is no danger of this producer being fenced, because a new producer calling InitProducerId would
+    // have caused the last epoch to be set to -1.
     //   Otherwise, the producer has a stale epoch and should receive an INVALID_PRODUCER_ERROR
-    val epochBumpResult: Either[Errors, (Int, Short)] =
-      if (currentProducerEpoch == RecordBatch.NO_PRODUCER_EPOCH)
+    val epochBumpResult: Either[Errors, (Int, Short)] = currentProducerEpoch match {
+      case None =>
         Right(if (producerEpoch == RecordBatch.NO_PRODUCER_EPOCH) 0 else producerEpoch + 1, RecordBatch.NO_PRODUCER_EPOCH)
-      else if (currentProducerEpoch == producerEpoch)
-        Right(producerEpoch + 1, producerEpoch)
-      else if (currentProducerEpoch == lastProducerEpoch)
-        Right(producerEpoch, lastProducerEpoch)
-      else {
-        error(s"Provided producer epoch $currentProducerEpoch does not match current " +
-          s"producer epoch $producerEpoch or previous producer epoch $lastProducerEpoch")
-        Left(Errors.INVALID_PRODUCER_EPOCH)
-      }
 
-    epochBumpResult match {
-      case Right((nextEpoch, lastEpoch)) =>
-        Right(prepareTransitionTo(Empty, producerId, nextEpoch.toShort, lastEpoch, newTxnTimeoutMs,
-          immutable.Set.empty[TopicPartition], -1, updateTimestamp))
-      case Left(error: Errors) =>
-        Left(error)
+      case Some(currentEpoch) =>
+        if (currentEpoch == producerEpoch)
+          Right(producerEpoch + 1, producerEpoch)
+        else if (currentEpoch == lastProducerEpoch)
+          Right(producerEpoch, lastProducerEpoch)
+        else {
+          error(s"Provided producer epoch $currentEpoch does not match current " +
+            s"producer epoch $producerEpoch or previous producer epoch $lastProducerEpoch")
+          Left(Errors.INVALID_PRODUCER_EPOCH)
+        }
+    }
+
+    epochBumpResult.map { case (nextEpoch, lastEpoch) =>
+        prepareTransitionTo(Empty, producerId, nextEpoch.toShort, lastEpoch, newTxnTimeoutMs,
+          immutable.Set.empty[TopicPartition], -1, updateTimestamp)
     }
   }
 
-  def prepareProducerIdRotation(newProducerId: Long, newTxnTimeoutMs: Int, updateTimestamp: Long): TxnTransitMetadata = {
+  def prepareProducerIdRotation(newProducerId: Long,
+                                newTxnTimeoutMs: Int,
+                                updateTimestamp: Long,
+                                recordLastEpoch: Boolean): TxnTransitMetadata = {
     if (hasPendingTransaction)
       throw new IllegalStateException("Cannot rotate producer ids while a transaction is still pending")
-    prepareTransitionTo(Empty, newProducerId, 0, RecordBatch.NO_PRODUCER_EPOCH, newTxnTimeoutMs,
-      immutable.Set.empty[TopicPartition], -1, updateTimestamp)
+
+    prepareTransitionTo(Empty, newProducerId, 0, if (recordLastEpoch) producerEpoch else RecordBatch.NO_PRODUCER_EPOCH,
+      newTxnTimeoutMs, immutable.Set.empty[TopicPartition], -1, updateTimestamp)
   }
 
   def prepareAddPartitions(addedTopicPartitions: immutable.Set[TopicPartition], updateTimestamp: Long): TxnTransitMetadata = {
@@ -280,7 +291,7 @@ private[transaction] class TransactionMetadata(val transactionalId: String,
    * Check if the epochs have been exhausted for the current producerId. We do not allow the client to use an
    * epoch equal to Short.MaxValue to ensure that the coordinator will always be able to fence an existing producer.
    */
-  def isProducerEpochExhausted: Boolean = producerEpoch >= Short.MaxValue - 1
+  def isProducerEpochExhausted: Boolean = TransactionMetadata.isEpochExhausted(producerEpoch)
 
   private def hasPendingTransaction: Boolean = {
     state match {
@@ -309,7 +320,7 @@ private[transaction] class TransactionMetadata(val transactionalId: String,
 
     // check that the new state transition is valid and update the pending state if necessary
     if (TransactionMetadata.validPreviousStates(newState).contains(state)) {
-      val transitMetadata = TxnTransitMetadata(newProducerId, newEpoch, newLastEpoch, newTxnTimeoutMs, newState,
+      val transitMetadata = TxnTransitMetadata(newProducerId, producerId, newEpoch, newLastEpoch, newTxnTimeoutMs, newState,
         newTopicPartitions, newTxnStartTimestamp, updateTimestamp)
       debug(s"TransactionalId $transactionalId prepare transition from $state to $transitMetadata")
       pendingState = Some(newState)
@@ -355,6 +366,7 @@ private[transaction] class TransactionMetadata(val transactionalId: String,
             producerEpoch = transitMetadata.producerEpoch
             lastProducerEpoch = transitMetadata.lastProducerEpoch
             producerId = transitMetadata.producerId
+            lastProducerId = transitMetadata.lastProducerId
           }
 
         case Ongoing => // from addPartitions
@@ -405,7 +417,7 @@ private[transaction] class TransactionMetadata(val transactionalId: String,
             s"this operation is to remove the transaction metadata from the cache, not to persist the $toState in the log.")
       }
 
-      debug(s"TransactionalId $transactionalId complete transition from $state to $transitMetadata")
+      info(s"TransactionalId $transactionalId complete transition from $state to $transitMetadata")
       txnLastUpdateTimestamp = transitMetadata.txnLastUpdateTimestamp
       pendingState = None
       state = toState

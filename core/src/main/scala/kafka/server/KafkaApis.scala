@@ -32,7 +32,7 @@ import kafka.cluster.Partition
 import kafka.common.OffsetAndMetadata
 import kafka.controller.KafkaController
 import kafka.coordinator.group.{GroupCoordinator, JoinGroupResult, SyncGroupResult}
-import kafka.coordinator.transaction.{InitProducerIdResult, TransactionCoordinator}
+import kafka.coordinator.transaction.{InitProducerIdResult, ProducerIdAndEpoch, TransactionCoordinator}
 import kafka.message.ZStdCompressionCodec
 import kafka.network.RequestChannel
 import kafka.security.SecurityUtils
@@ -1842,8 +1842,13 @@ class KafkaApis(val requestChannel: RequestChannel,
       }
       sendResponseMaybeThrottle(request, createResponse)
     }
+
+    val producerIdAndEpoch = (initProducerIdRequest.data.producerId, initProducerIdRequest.data.producerEpoch) match {
+      case (RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH) => None
+      case (_, _) => Some(ProducerIdAndEpoch(initProducerIdRequest.data.producerId, initProducerIdRequest.data.producerEpoch))
+    }
     txnCoordinator.handleInitProducerId(transactionalId, initProducerIdRequest.data.transactionTimeoutMs,
-      initProducerIdRequest.data.producerId, initProducerIdRequest.data.producerEpoch, sendResponseCallback)
+      producerIdAndEpoch, sendResponseCallback)
   }
 
   def handleEndTxnRequest(request: RequestChannel.Request): Unit = {

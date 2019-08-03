@@ -22,23 +22,22 @@ import kafka.coordinator.AbstractCoordinatorConcurrencyTest
 import kafka.coordinator.AbstractCoordinatorConcurrencyTest._
 import kafka.coordinator.transaction.TransactionCoordinatorConcurrencyTest._
 import kafka.log.Log
-import kafka.server._
+import kafka.server.{DelayedOperationPurgatory, FetchDataInfo, KafkaConfig, LogOffsetMetadata, MetadataCache}
 import kafka.utils.timer.MockTimer
 import kafka.utils.{Pool, TestUtils}
 import org.apache.kafka.clients.{ClientResponse, NetworkClient}
-import org.apache.kafka.common.{Node, TopicPartition}
 import org.apache.kafka.common.internals.Topic.TRANSACTION_STATE_TOPIC_NAME
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
-import org.apache.kafka.common.record._
+import org.apache.kafka.common.record.{CompressionType, FileRecords, MemoryRecords, RecordBatch, SimpleRecord}
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.utils.{LogContext, MockTime}
+import org.apache.kafka.common.{Node, TopicPartition}
 import org.easymock.{EasyMock, IAnswer}
 import org.junit.Assert._
 import org.junit.{After, Before, Test}
 
-import scala.collection.Map
-import scala.collection.mutable
 import scala.collection.JavaConverters._
+import scala.collection.{Map, mutable}
 
 class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurrencyTest[Transaction] {
   private val nTransactions = nThreads * 10
@@ -59,6 +58,9 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
   private val txnRecordsByPartition: Map[Int, mutable.ArrayBuffer[SimpleRecord]] =
     (0 until numPartitions).map { i => (i, mutable.ArrayBuffer[SimpleRecord]()) }.toMap
 
+  val producerId = 11
+  private var bumpProducerId = false
+
   @Before
   override def setUp() {
     super.setUp()
@@ -72,10 +74,13 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
     for (i <- 0 until numPartitions)
       txnStateManager.addLoadedTransactionsToCache(i, coordinatorEpoch, new Pool[String, TransactionMetadata]())
 
-    val producerId = 11
     val pidManager: ProducerIdManager = EasyMock.createNiceMock(classOf[ProducerIdManager])
     EasyMock.expect(pidManager.generateProducerId())
-      .andReturn(producerId)
+      .andAnswer(new IAnswer[Long]() {
+        def answer(): Long = {
+          if (bumpProducerId) producerId + 1 else producerId
+        }
+      })
       .anyTimes()
     val txnMarkerPurgatory = new DelayedOperationPurgatory[DelayedTxnMarker]("txn-purgatory-name",
       new MockTimer,
@@ -165,6 +170,175 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
     verifyConcurrentActions(loadUnloadActions(partitionsToLoad, partitionsToUnload) + expireAction)
   }
 
+  @Test
+  def testConcurrentNewInitProducerIdRequests(): Unit = {
+    val transactions = (1 to 100).flatMap(i => createTransactions(s"testConcurrentInitProducerID$i-"))
+    bumpProducerId = true
+    transactions.foreach { txn =>
+      val txnMetadata = prepareExhaustedEpochTxnMetadata(txn)
+      txnStateManager.putTransactionStateIfNotExists(txn.transactionalId, txnMetadata)
+
+      // Test simultaneous requests from an existing producer trying to bump the epoch and a new producer initializing
+      val newProducerOp1 = new InitProducerIdOperation()
+      val newProducerOp2 = new InitProducerIdOperation()
+      verifyConcurrentActions(Set(newProducerOp1, newProducerOp2).map(_.actionNoVerify(txn)))
+
+      // If only one request succeeds, assert that the epoch was successfully increased
+      // If both requests succeed, the new producer must have run after the existing one and should have the higher epoch
+      (newProducerOp1.result.get.error, newProducerOp2.result.get.error) match {
+        case (Errors.NONE, Errors.NONE) =>
+          assertNotEquals(newProducerOp1.result.get.producerEpoch, newProducerOp2.result.get.producerEpoch)
+          // assertEquals(0, newProducerOp1.result.get.producerEpoch)
+          // assertEquals(0, newProducerOp2.result.get.producerEpoch)
+        case (Errors.NONE, _) =>
+          assertEquals(0, newProducerOp1.result.get.producerEpoch)
+        case (_, Errors.NONE) =>
+          assertEquals(0, newProducerOp2.result.get.producerEpoch)
+        case (_, _) => fail("One of two InitProducerId requests should succeed")
+      }
+    }
+  }
+
+  @Test
+  def testConcurrentInitProducerIdRequests(): Unit = {
+    val transactions = (1 to 10).flatMap(i => createTransactions(s"testConcurrentInitProducerID$i-"))
+    transactions.foreach { txn =>
+      val firstInitReq = new InitProducerIdOperation()
+      firstInitReq.run(txn)
+      firstInitReq.awaitAndVerify(txn)
+
+      // Test simultaneous requests from an existing producer trying to bump the epoch and a new producer initializing
+      val producerIdAndEpoch = ProducerIdAndEpoch(firstInitReq.result.get.producerId, firstInitReq.result.get.producerEpoch)
+      val bumpEpochOp = new InitProducerIdOperation(Some(producerIdAndEpoch))
+      val newProducerOp = new InitProducerIdOperation()
+      verifyConcurrentActions(Set(bumpEpochOp, newProducerOp).map(_.actionNoVerify(txn)))
+
+      // If only one request succeeds, assert that the epoch was successfully increased
+      // If both requests succeed, the new producer must have run after the existing one and should have the higher epoch
+      (bumpEpochOp.result.get.error, newProducerOp.result.get.error) match {
+        case (Errors.NONE, Errors.NONE) =>
+          assertEquals(producerIdAndEpoch.epoch + 2, newProducerOp.result.get.producerEpoch)
+          assertEquals(producerIdAndEpoch.epoch + 1, bumpEpochOp.result.get.producerEpoch)
+        case (Errors.NONE, _) =>
+          assertEquals(producerIdAndEpoch.epoch + 1, bumpEpochOp.result.get.producerEpoch)
+        case (_, Errors.NONE) =>
+          assertEquals(producerIdAndEpoch.epoch + 1, newProducerOp.result.get.producerEpoch)
+        case (_, _) => fail("One of two InitProducerId requests should succeed")
+      }
+    }
+  }
+
+  @Test
+  def testConcurrentInitProducerIdRequestsWithRetry(): Unit = {
+    val transactions = (1 to 10).flatMap(i => createTransactions(s"testConcurrentInitProducerID$i-"))
+    transactions.foreach { txn =>
+      val firstInitReq = new InitProducerIdOperation()
+      firstInitReq.run(txn)
+      firstInitReq.awaitAndVerify(txn)
+
+      val initialProducerIdAndEpoch = ProducerIdAndEpoch(firstInitReq.result.get.producerId, firstInitReq.result.get.producerEpoch)
+      val bumpEpochReq = new InitProducerIdOperation(Some(initialProducerIdAndEpoch))
+      bumpEpochReq.run(txn)
+      bumpEpochReq.awaitAndVerify(txn)
+
+      // Test simultaneous requests from an existing producer retrying the epoch bump and a new producer initializing
+      val bumpedProducerIdAndEpoch = ProducerIdAndEpoch(bumpEpochReq.result.get.producerId, bumpEpochReq.result.get.producerEpoch)
+      val retryBumpEpochOp = new InitProducerIdOperation(Some(initialProducerIdAndEpoch))
+      val newProducerOp = new InitProducerIdOperation()
+      verifyConcurrentActions(Set(retryBumpEpochOp, newProducerOp).map(_.actionNoVerify(txn)))
+
+      // If the retry succeeds and the new producer doesn't, assert that the already-bumped epoch was returned
+      // If the new producer succeeds and the retry doesn't, assert the epoch was bumped
+      // If both requests succeed, the new producer must have run after the existing one and should have the higher epoch
+      (retryBumpEpochOp.result.get.error, newProducerOp.result.get.error) match {
+        case (Errors.NONE, Errors.NONE) =>
+          assertEquals(bumpedProducerIdAndEpoch.epoch + 1, newProducerOp.result.get.producerEpoch)
+          assertEquals(bumpedProducerIdAndEpoch.epoch, retryBumpEpochOp.result.get.producerEpoch)
+        case (Errors.NONE, _) =>
+          assertEquals(bumpedProducerIdAndEpoch.epoch, retryBumpEpochOp.result.get.producerEpoch)
+        case (_, Errors.NONE) =>
+          assertEquals(bumpedProducerIdAndEpoch.epoch + 1, newProducerOp.result.get.producerEpoch)
+        case (_, _) => fail("One of two InitProducerId requests should succeed")
+      }
+    }
+  }
+
+  @Test
+  def testConcurrentInitProducerRequestsAtPidBoundary(): Unit = {
+    val transactions = (1 to 10).flatMap(i => createTransactions(s"testConcurrentInitProducerID$i-"))
+    bumpProducerId = true
+    transactions.foreach { txn =>
+      val txnMetadata = prepareExhaustedEpochTxnMetadata(txn)
+      txnStateManager.putTransactionStateIfNotExists(txn.transactionalId, txnMetadata)
+
+      // Test simultaneous requests from an existing producer attempting to bump the epoch and a new producer initializing
+      val bumpEpochOp = new InitProducerIdOperation(Some(ProducerIdAndEpoch(producerId, (Short.MaxValue - 1).toShort)))
+      val newProducerOp = new InitProducerIdOperation()
+      verifyConcurrentActions(Set(bumpEpochOp, newProducerOp).map(_.actionNoVerify(txn)))
+
+      // If the retry succeeds and the new producer doesn't, assert that the already-bumped epoch was returned
+      // If the new producer succeeds and the retry doesn't, assert the epoch was bumped
+      // If both requests succeed, the new producer must have run after the existing one and should have the higher epoch
+      (bumpEpochOp.result.get.error, newProducerOp.result.get.error) match {
+        case (Errors.NONE, Errors.NONE) =>
+          assertEquals(0, bumpEpochOp.result.get.producerEpoch)
+          assertEquals(producerId + 1, bumpEpochOp.result.get.producerId)
+
+          assertEquals(1, newProducerOp.result.get.producerEpoch)
+          assertEquals(producerId + 1, newProducerOp.result.get.producerId)
+        case (Errors.NONE, _) =>
+          assertEquals(0, bumpEpochOp.result.get.producerEpoch)
+          assertEquals(producerId + 1, bumpEpochOp.result.get.producerId)
+        case (_, Errors.NONE) =>
+          assertEquals(0, newProducerOp.result.get.producerEpoch)
+          assertEquals(producerId + 1, newProducerOp.result.get.producerId)
+        case (_, _) => fail("One of two InitProducerId requests should succeed")
+      }
+    }
+
+    bumpProducerId = false
+  }
+
+  @Test
+  def testConcurrentInitProducerRequestsWithRetryAtPidBoundary(): Unit = {
+    val transactions = (1 to 10).flatMap(i => createTransactions(s"testConcurrentInitProducerID$i-"))
+    bumpProducerId = true
+    transactions.foreach { txn =>
+      val txnMetadata = prepareExhaustedEpochTxnMetadata(txn)
+      txnStateManager.putTransactionStateIfNotExists(txn.transactionalId, txnMetadata)
+
+      val bumpEpochReq = new InitProducerIdOperation(Some(ProducerIdAndEpoch(producerId, (Short.MaxValue - 1).toShort)))
+      bumpEpochReq.run(txn)
+      bumpEpochReq.awaitAndVerify(txn)
+
+      // Test simultaneous requests from an existing producer attempting to bump the epoch and a new producer initializing
+      val retryBumpEpochOp = new InitProducerIdOperation(Some(ProducerIdAndEpoch(producerId, (Short.MaxValue - 1).toShort)))
+      val newProducerOp = new InitProducerIdOperation()
+      verifyConcurrentActions(Set(retryBumpEpochOp, newProducerOp).map(_.actionNoVerify(txn)))
+
+      // If the retry succeeds and the new producer doesn't, assert that the already-bumped epoch was returned
+      // If the new producer succeeds and the retry doesn't, assert the epoch was bumped
+      // If both requests succeed, the new producer must have run after the existing one and should have the higher epoch
+      (retryBumpEpochOp.result.get.error, newProducerOp.result.get.error) match {
+        case (Errors.NONE, Errors.NONE) =>
+          assertEquals(0, retryBumpEpochOp.result.get.producerEpoch)
+          assertEquals(producerId + 1, retryBumpEpochOp.result.get.producerId)
+
+          assertEquals(1, newProducerOp.result.get.producerEpoch)
+          assertEquals(producerId + 1, newProducerOp.result.get.producerId)
+        case (Errors.NONE, _) =>
+          assertEquals(0, retryBumpEpochOp.result.get.producerEpoch)
+          assertEquals(producerId + 1, retryBumpEpochOp.result.get.producerId)
+        case (_, Errors.NONE) =>
+          assertEquals(1, newProducerOp.result.get.producerEpoch)
+          assertEquals(producerId + 1, newProducerOp.result.get.producerId)
+        case (_, _) => fail("One of two InitProducerId requests should succeed")
+      }
+    }
+
+    bumpProducerId = false
+  }
+
   override def enableCompletion(): Unit = {
     super.enableCompletion()
 
@@ -230,18 +404,18 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
     val txnRecords = txnRecordsByPartition(partitionId)
     val initPidOp = new InitProducerIdOperation()
     val addPartitionsOp = new AddPartitionsToTxnOperation(Set(new TopicPartition("topic", 0)))
-      initPidOp.run(txn)
-      initPidOp.awaitAndVerify(txn)
-      addPartitionsOp.run(txn)
-      addPartitionsOp.awaitAndVerify(txn)
+    initPidOp.run(txn)
+    initPidOp.awaitAndVerify(txn)
+    addPartitionsOp.run(txn)
+    addPartitionsOp.awaitAndVerify(txn)
 
-      val txnMetadata = transactionMetadata(txn).getOrElse(throw new IllegalStateException(s"Transaction not found $txn"))
-      txnRecords += new SimpleRecord(txn.txnMessageKeyBytes, TransactionLog.valueToBytes(txnMetadata.prepareNoTransit()))
+    val txnMetadata = transactionMetadata(txn).getOrElse(throw new IllegalStateException(s"Transaction not found $txn"))
+    txnRecords += new SimpleRecord(txn.txnMessageKeyBytes, TransactionLog.valueToBytes(txnMetadata.prepareNoTransit()))
 
-      txnMetadata.state = PrepareCommit
-      txnRecords += new SimpleRecord(txn.txnMessageKeyBytes, TransactionLog.valueToBytes(txnMetadata.prepareNoTransit()))
+    txnMetadata.state = PrepareCommit
+    txnRecords += new SimpleRecord(txn.txnMessageKeyBytes, TransactionLog.valueToBytes(txnMetadata.prepareNoTransit()))
 
-      prepareTxnLog(partitionId)
+    prepareTxnLog(partitionId)
   }
 
   private def prepareTxnLog(partitionId: Int): Unit = {
@@ -280,14 +454,26 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
     }
   }
 
+  private def prepareExhaustedEpochTxnMetadata(txn: Transaction): TransactionMetadata = {
+    new TransactionMetadata(transactionalId = txn.transactionalId,
+      producerId = producerId,
+      lastProducerId = RecordBatch.NO_PRODUCER_ID,
+      producerEpoch = (Short.MaxValue - 1).toShort,
+      lastProducerEpoch = RecordBatch.NO_PRODUCER_EPOCH,
+      txnTimeoutMs = 60000,
+      state = Empty,
+      topicPartitions = collection.mutable.Set.empty[TopicPartition],
+      txnLastUpdateTimestamp = time.milliseconds())
+  }
+
   abstract class TxnOperation[R] extends Operation {
     @volatile var result: Option[R] = None
     def resultCallback(r: R): Unit = this.result = Some(r)
   }
 
-  class InitProducerIdOperation extends TxnOperation[InitProducerIdResult] {
+  class InitProducerIdOperation(val producerIdAndEpoch: Option[ProducerIdAndEpoch] = None) extends TxnOperation[InitProducerIdResult] {
     override def run(txn: Transaction): Unit = {
-      transactionCoordinator.handleInitProducerId(txn.transactionalId, 60000, -1L, RecordBatch.NO_PRODUCER_EPOCH, resultCallback)
+      transactionCoordinator.handleInitProducerId(txn.transactionalId, 60000, producerIdAndEpoch, resultCallback)
     }
     override def awaitAndVerify(txn: Transaction): Unit = {
       val initPidResult = result.getOrElse(throw new IllegalStateException("InitProducerId has not completed"))

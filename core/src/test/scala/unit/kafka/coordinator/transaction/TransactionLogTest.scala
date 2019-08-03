@@ -70,7 +70,7 @@ class TransactionLogTest {
     (0 to TransactionLog.ValueSchema.CurrentVersion).foreach { version =>
       // generate transaction log messages
       val txnRecords = pidMappings.map { case (transactionalId, producerId) =>
-        val txnMetadata = TransactionMetadata(transactionalId, producerId, producerEpoch, lastProducerEpoch,
+        val txnMetadata = TransactionMetadata(transactionalId, producerId, producerId, producerEpoch, lastProducerEpoch,
           transactionTimeoutMs, transactionStates(producerId), 0)
 
         if (!txnMetadata.state.equals(Empty))
@@ -91,6 +91,7 @@ class TransactionLogTest {
         val txnMetadata = TransactionLog.readTxnRecordValue(transactionalId, record.value)
 
         assertEquals(pidMappings(transactionalId), txnMetadata.producerId)
+        assertEquals(if (version >= 1) pidMappings(transactionalId) else -1, txnMetadata.lastProducerId)
         assertEquals(producerEpoch, txnMetadata.producerEpoch)
         assertEquals(if (version >= 1) lastProducerEpoch else -1, txnMetadata.lastProducerEpoch)
         assertEquals(transactionTimeoutMs, txnMetadata.txnTimeoutMs)
@@ -106,6 +107,5 @@ class TransactionLogTest {
 
       assertEquals(pidMappings.size, count)
     }
-
   }
 }

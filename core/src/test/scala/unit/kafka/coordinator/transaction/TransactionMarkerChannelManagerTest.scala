@@ -58,9 +58,9 @@ class TransactionMarkerChannelManagerTest {
   private val coordinatorEpoch = 0
   private val txnTimeoutMs = 0
   private val txnResult = TransactionResult.COMMIT
-  private val txnMetadata1 = new TransactionMetadata(transactionalId1, producerId1, producerEpoch, lastProducerEpoch,
+  private val txnMetadata1 = new TransactionMetadata(transactionalId1, producerId1, producerId1, producerEpoch, lastProducerEpoch,
     txnTimeoutMs, PrepareCommit, mutable.Set[TopicPartition](partition1, partition2), 0L, 0L)
-  private val txnMetadata2 = new TransactionMetadata(transactionalId2, producerId2, producerEpoch, lastProducerEpoch,
+  private val txnMetadata2 = new TransactionMetadata(transactionalId2, producerId2, producerId2, producerEpoch, lastProducerEpoch,
     txnTimeoutMs, PrepareCommit, mutable.Set[TopicPartition](partition1), 0L, 0L)
 
   private val capturedErrorsCallback: Capture[Errors => Unit] = EasyMock.newCapture()
