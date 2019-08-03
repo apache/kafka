@@ -31,6 +31,7 @@ import org.apache.kafka.streams.kstream.Named;
 import org.apache.kafka.streams.kstream.Predicate;
 import org.apache.kafka.streams.kstream.Printed;
 import org.apache.kafka.streams.kstream.Produced;
+import org.apache.kafka.streams.kstream.Repartitioned;
 import org.apache.kafka.streams.kstream.TransformerSupplier;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.kstream.ValueMapper;
@@ -481,6 +482,22 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
                 null
             )
         );
+    }
+
+    @Override
+    public KStream<K, V> repartition() {
+        return null;
+    }
+
+    @Override
+    public KStream<K, V> repartition(final Repartitioned<K, V> repartitioned) {
+        return null;
+    }
+
+    @Override
+    public <KR> KStream<KR, V> repartition(final KeyValueMapper<? super K, ? super V, ? extends KR> mapper,
+                                           final Repartitioned<KR, V> repartitioned) {
+        return null;
     }
 
     @Override

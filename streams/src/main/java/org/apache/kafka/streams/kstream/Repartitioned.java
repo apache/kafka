@@ -1,14 +1,15 @@
 package org.apache.kafka.streams.kstream;
 
+import org.apache.kafka.clients.producer.internals.DefaultPartitioner;
 import org.apache.kafka.common.serialization.Serde;
+import org.apache.kafka.streams.kstream.internals.WindowedSerializer;
+import org.apache.kafka.streams.kstream.internals.WindowedStreamPartitioner;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 
 /**
  * This class is used to provide the optional parameters for internal repartitioned topics when using:
  * - {@link KStream#repartition(Repartitioned)}
  * - {@link KStream#repartition(KeyValueMapper, Repartitioned)}
- * - {@link KStream#groupByKey(Repartitioned)}
- * - {@link KStream#groupBy(KeyValueMapper, Repartitioned)}
  *
  * @param <K> key type
  * @param <V> value type
@@ -46,8 +47,6 @@ public class Repartitioned<K, V> implements NamedOperation<Repartitioned<K, V>> 
      * @return A new {@link Repartitioned} instance configured with processor name and repartition topic name
      * @see KStream#repartition(Repartitioned)
      * @see KStream#repartition(KeyValueMapper, Repartitioned)
-     * @see KStream#groupByKey(Repartitioned)
-     * @see KStream#groupBy(KeyValueMapper, Repartitioned)
      */
     public static <K, V> Repartitioned<K, V> as(final String name) {
         return new Repartitioned<>(name, null, null, null, null);
@@ -63,8 +62,6 @@ public class Repartitioned<K, V> implements NamedOperation<Repartitioned<K, V>> 
      * @return A new {@link Repartitioned} instance configured with key serde and value serde
      * @see KStream#repartition(Repartitioned)
      * @see KStream#repartition(KeyValueMapper, Repartitioned)
-     * @see KStream#groupByKey(Repartitioned)
-     * @see KStream#groupBy(KeyValueMapper, Repartitioned)
      */
     public static <K, V> Repartitioned<K, V> with(final Serde<K> keySerde,
                                                   final Serde<V> valueSerde) {
@@ -82,8 +79,6 @@ public class Repartitioned<K, V> implements NamedOperation<Repartitioned<K, V>> 
      * @return A new {@link Repartitioned} instance configured with partitioner
      * @see KStream#repartition(Repartitioned)
      * @see KStream#repartition(KeyValueMapper, Repartitioned)
-     * @see KStream#groupByKey(Repartitioned)
-     * @see KStream#groupBy(KeyValueMapper, Repartitioned)
      */
     public static <K, V> Repartitioned<K, V> streamPartitioner(final StreamPartitioner<? super K, ? super V> partitioner) {
         return new Repartitioned<>(null, null, null, null, partitioner);
@@ -98,8 +93,6 @@ public class Repartitioned<K, V> implements NamedOperation<Repartitioned<K, V>> 
      * @return A new {@link Repartitioned} instance configured number of partitions
      * @see KStream#repartition(Repartitioned)
      * @see KStream#repartition(KeyValueMapper, Repartitioned)
-     * @see KStream#groupByKey(Repartitioned)
-     * @see KStream#groupBy(KeyValueMapper, Repartitioned)
      */
     public static <K, V> Repartitioned<K, V> numberOfPartitions(final int numberOfPartitions) {
         return new Repartitioned<>(null, null, null, numberOfPartitions, null);
