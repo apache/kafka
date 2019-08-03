@@ -652,8 +652,13 @@ public class SubscriptionState {
     }
 
     synchronized void requestFailed(Set<TopicPartition> partitions, long nextRetryTimeMs) {
-        for (TopicPartition partition : partitions)
-            assignedState(partition).requestFailed(nextRetryTimeMs);
+        for (TopicPartition partition : partitions) {
+            // by the time the request failed, the assignment may no longer
+            // contain this partition any more, in which case we would just ignore.
+            final TopicPartitionState state = assignedStateOrNull(partition);
+            if (state != null)
+                state.requestFailed(nextRetryTimeMs);
+        }
     }
 
     synchronized void movePartitionToEnd(TopicPartition tp) {
