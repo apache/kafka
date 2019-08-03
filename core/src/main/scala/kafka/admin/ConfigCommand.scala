@@ -28,8 +28,8 @@ import kafka.utils.{CommandDefaultOptions, CommandLineUtils, Exit, PasswordEncod
 import kafka.utils.Implicits._
 import kafka.zk.{AdminZkClient, KafkaZkClient}
 import org.apache.kafka.clients.CommonClientConfigs
-import org.apache.kafka.clients.admin.{Admin, AlterConfigsOptions, ConfigEntry, DescribeConfigsOptions, AdminClient => JAdminClient, Config => JConfig}
-import org.apache.kafka.common.config.ConfigResource
+import org.apache.kafka.clients.admin.{Admin, AlterConfigOp, AlterConfigsOptions, ConfigEntry, DescribeConfigsOptions, AdminClient => JAdminClient, Config => JConfig}
+import org.apache.kafka.common.config.{ConfigResource, LogLevelConfig}
 import org.apache.kafka.common.config.types.Password
 import org.apache.kafka.common.errors.InvalidConfigurationException
 import org.apache.kafka.common.security.JaasUtils
@@ -41,7 +41,6 @@ import scala.collection._
 
 
 /**
- * This script can be used to change configs for topics/clients/brokers dynamically
  * This script can be used to change configs for topics/clients/users/brokers dynamically
  * An entity described or altered by the command may be one of:
  * <ul>
@@ -50,12 +49,15 @@ import scala.collection._
  *     <li> user: --entity-type users --entity-name <user-principal>
  *     <li> <user, client>: --entity-type users --entity-name <user-principal> --entity-type clients --entity-name <client-id>
  *     <li> broker: --entity-type brokers --entity-name <broker>
+ *     <li> broker-logger: --entity-type broker-loggers --entity-name <broker>
  * </ul>
  * --entity-default may be used instead of --entity-name when describing or altering default configuration for users and clients.
  *
  */
 object ConfigCommand extends Config {
 
+  val BrokerLoggerConfigType = "broker-loggers"
+  val BrokerSupportedConfigTypes = Seq(ConfigType.Broker, BrokerLoggerConfigType)
   val DefaultScramIterations = 4096
   // Dynamic broker configs can only be updated using the new AdminClient once brokers have started
   // so that configs may be fully validated. Prior to starting brokers, updates may be performed using
@@ -274,49 +276,61 @@ object ConfigCommand extends Config {
     val adminClient = JAdminClient.create(props)
     val entityName = if (opts.options.has(opts.entityName))
       opts.options.valueOf(opts.entityName)
-    else if (opts.options.has(opts.entityDefault))
+    else // default entity
       ""
-    else
-      throw new IllegalArgumentException("At least one of --entity-name or --entity-default must be specified with --bootstrap-server")
 
     val entityTypes = opts.options.valuesOf(opts.entityType).asScala
     if (entityTypes.size != 1)
-      throw new IllegalArgumentException("Exactly one --entity-type must be specified with --bootstrap-server")
-    if (entityTypes.head != ConfigType.Broker)
-      throw new IllegalArgumentException(s"--zookeeper option must be specified for entity-type $entityTypes")
+      throw new IllegalArgumentException(s"Exactly one --entity-type (out of ${BrokerSupportedConfigTypes.mkString(",")}) must be specified with --bootstrap-server")
 
     try {
       if (opts.options.has(opts.alterOpt))
-        alterBrokerConfig(adminClient, opts, entityName)
+        alterBrokerConfig(adminClient, opts, entityTypes.head, entityName)
       else if (opts.options.has(opts.describeOpt))
-        describeBrokerConfig(adminClient, opts, entityName)
+        describeBrokerConfig(adminClient, opts, entityTypes.head, entityName)
     } finally {
       adminClient.close()
     }
   }
 
-  private[admin] def alterBrokerConfig(adminClient: Admin, opts: ConfigCommandOptions, entityName: String) {
+  private[admin] def alterBrokerConfig(adminClient: Admin, opts: ConfigCommandOptions,
+                                       entityType: String, entityName: String) {
     val configsToBeAdded = parseConfigsToBeAdded(opts).asScala.map { case (k, v) => (k, new ConfigEntry(k, v)) }
     val configsToBeDeleted = parseConfigsToBeDeleted(opts)
 
-    // compile the final set of configs
-    val configResource = new ConfigResource(ConfigResource.Type.BROKER, entityName)
-    val oldConfig = brokerConfig(adminClient, entityName, includeSynonyms = false)
+    if (entityType == ConfigType.Broker) {
+      val configResource = new ConfigResource(ConfigResource.Type.BROKER, entityName)
+      val oldConfig = brokerConfig(adminClient, entityName, includeSynonyms = false)
         .map { entry => (entry.name, entry) }.toMap
 
-    // fail the command if any of the configs to be deleted does not exist
-    val invalidConfigs = configsToBeDeleted.filterNot(oldConfig.contains)
-    if (invalidConfigs.nonEmpty)
-      throw new InvalidConfigurationException(s"Invalid config(s): ${invalidConfigs.mkString(",")}")
+      // fail the command if any of the configs to be deleted does not exist
+      val invalidConfigs = configsToBeDeleted.filterNot(oldConfig.contains)
+      if (invalidConfigs.nonEmpty)
+        throw new InvalidConfigurationException(s"Invalid config(s): ${invalidConfigs.mkString(",")}")
 
-    val newEntries = oldConfig ++ configsToBeAdded -- configsToBeDeleted
-    val sensitiveEntries = newEntries.filter(_._2.value == null)
-    if (sensitiveEntries.nonEmpty)
-      throw new InvalidConfigurationException(s"All sensitive broker config entries must be specified for --alter, missing entries: ${sensitiveEntries.keySet}")
-    val newConfig = new JConfig(newEntries.asJava.values)
+      val newEntries = oldConfig ++ configsToBeAdded -- configsToBeDeleted
+      val sensitiveEntries = newEntries.filter(_._2.value == null)
+      if (sensitiveEntries.nonEmpty)
+        throw new InvalidConfigurationException(s"All sensitive broker config entries must be specified for --alter, missing entries: ${sensitiveEntries.keySet}")
+      val newConfig = new JConfig(newEntries.asJava.values)
 
-    val alterOptions = new AlterConfigsOptions().timeoutMs(30000).validateOnly(false)
-    adminClient.alterConfigs(Map(configResource -> newConfig).asJava, alterOptions).all().get(60, TimeUnit.SECONDS)
+      val alterOptions = new AlterConfigsOptions().timeoutMs(30000).validateOnly(false)
+      adminClient.alterConfigs(Map(configResource -> newConfig).asJava, alterOptions).all().get(60, TimeUnit.SECONDS)
+    } else if (entityType == BrokerLoggerConfigType) {
+      val configResource = new ConfigResource(ConfigResource.Type.BROKER_LOGGER, entityName)
+      val validLoggers = brokerLoggerConfigs(adminClient, entityName).map(_.name)
+      // fail the command if any of the configured broker loggers do not exist
+      val invalidBrokerLoggers = configsToBeDeleted.filterNot(validLoggers.contains) ++ configsToBeAdded.keys.filterNot(validLoggers.contains)
+      if (invalidBrokerLoggers.nonEmpty)
+        throw new InvalidConfigurationException(s"Invalid broker logger(s): ${invalidBrokerLoggers.mkString(",")}")
+
+      val alterOptions = new AlterConfigsOptions().timeoutMs(30000).validateOnly(false)
+      val alterLogLevelEntries = (configsToBeAdded.values.map(new AlterConfigOp(_, AlterConfigOp.OpType.SET))
+        ++ configsToBeDeleted.map { k => new AlterConfigOp(new ConfigEntry(k, ""), AlterConfigOp.OpType.DELETE) }
+      ).asJavaCollection
+
+      adminClient.incrementalAlterConfigs(Map(configResource -> alterLogLevelEntries).asJava, alterOptions).all().get(60, TimeUnit.SECONDS)
+    }
 
     if (entityName.nonEmpty)
       println(s"Completed updating config for broker: $entityName.")
@@ -324,8 +338,13 @@ object ConfigCommand extends Config {
       println(s"Completed updating default config for brokers in the cluster,")
   }
 
-  private def describeBrokerConfig(adminClient: Admin, opts: ConfigCommandOptions, entityName: String) {
-    val configs = brokerConfig(adminClient, entityName, includeSynonyms = true)
+  private def describeBrokerConfig(adminClient: Admin, opts: ConfigCommandOptions,
+                                   entityType: String, entityName: String) {
+    val configs = if (entityType == ConfigType.Broker)
+      brokerConfig(adminClient, entityName, includeSynonyms = true)
+    else // broker logger
+      brokerLoggerConfigs(adminClient, entityName)
+
     if (entityName.nonEmpty)
       println(s"Configs for broker $entityName are:")
     else
@@ -347,6 +366,15 @@ object ConfigCommand extends Config {
     configs.get(configResource).entries.asScala
       .filter(entry => entry.source == configSource)
       .toSeq
+  }
+
+  /**
+    * Returns all the valid broker logger configurations
+    */
+  private def brokerLoggerConfigs(adminClient: Admin, entityName: String): Seq[ConfigEntry] = {
+    val configResource = new ConfigResource(ConfigResource.Type.BROKER_LOGGER, entityName)
+    val configs = adminClient.describeConfigs(Collections.singleton(configResource)).all.get(30, TimeUnit.SECONDS)
+    configs.get(configResource).entries.asScala.toSeq
   }
 
   case class Entity(entityType: String, sanitizedName: Option[String]) {
@@ -445,7 +473,7 @@ object ConfigCommand extends Config {
     if (opts.options.has(opts.alterOpt) && names.size != types.size)
       throw new IllegalArgumentException("--entity-name or --entity-default must be specified with each --entity-type for --alter")
 
-    val reverse = types.size == 2 && types(0) == ConfigType.Client
+    val reverse = types.size == 2 && types.head == ConfigType.Client
     val entityTypes = if (reverse) types.reverse else types
     val sortedNames = (if (reverse && names.length == 2) names.reverse else names).iterator
 
@@ -483,7 +511,7 @@ object ConfigCommand extends Config {
       .ofType(classOf[String])
     val alterOpt = parser.accepts("alter", "Alter the configuration for the entity.")
     val describeOpt = parser.accepts("describe", "List configs for the given entity.")
-    val entityType = parser.accepts("entity-type", "Type of entity (topics/clients/users/brokers)")
+    val entityType = parser.accepts("entity-type", "Type of entity (topics/clients/users/brokers/broker-loggers)")
             .withRequiredArg
             .ofType(classOf[String])
     val entityName = parser.accepts("entity-name", "Name of entity (topic name/client id/user principal name/broker id)")
@@ -514,36 +542,58 @@ object ConfigCommand extends Config {
       val actions = Seq(alterOpt, describeOpt).count(options.has _)
       if(actions != 1)
         CommandLineUtils.printUsageAndDie(parser, "Command must include exactly one action: --describe, --alter")
-
       // check required args
       CommandLineUtils.checkInvalidArgs(parser, options, alterOpt, Set(describeOpt))
       CommandLineUtils.checkInvalidArgs(parser, options, describeOpt, Set(alterOpt, addConfig, deleteConfig))
-      val entityTypeVals = options.valuesOf(entityType).asScala
 
-      if (options.has(bootstrapServerOpt) == options.has(zkConnectOpt))
+      val entityTypeVals = options.valuesOf(entityType).asScala
+      val (allowedEntityTypes, connectOptString) = if (options.has(bootstrapServerOpt))
+        (BrokerSupportedConfigTypes, "--bootstrap-server")
+      else
+        (ConfigType.all, "--zookeeper")
+
+      entityTypeVals.foreach(entityTypeVal =>
+        if (!allowedEntityTypes.contains(entityTypeVal))
+          throw new IllegalArgumentException(s"Invalid entity-type $entityTypeVal, --entity-type must be one of ${allowedEntityTypes.mkString(",")} with the $connectOptString argument")
+      )
+      if (entityTypeVals.isEmpty)
+        throw new IllegalArgumentException("At least one --entity-type must be specified")
+      else if (entityTypeVals.size > 1 && !entityTypeVals.toSet.equals(Set(ConfigType.User, ConfigType.Client)))
+        throw new IllegalArgumentException(s"Only '${ConfigType.User}' and '${ConfigType.Client}' entity types may be specified together")
+
+      if (!options.has(bootstrapServerOpt) && !options.has(zkConnectOpt))
+        throw new IllegalArgumentException("One of the required --bootstrap-server or --zookeeper arguments must be specified")
+      else if (options.has(bootstrapServerOpt) && options.has(zkConnectOpt))
         throw new IllegalArgumentException("Only one of --bootstrap-server or --zookeeper must be specified")
+      else if (options.has(bootstrapServerOpt) && !options.has(entityName) && !options.has(entityDefault))
+        throw new IllegalArgumentException(s"At least one of --entity-name or --entity-default must be specified with --bootstrap-server")
+
+      if (options.has(entityName) && (entityTypeVals.contains(ConfigType.Broker) || entityTypeVals.contains(BrokerLoggerConfigType))) {
+        val brokerId = options.valueOf(entityName)
+        try brokerId.toInt catch {
+          case _: NumberFormatException =>
+            throw new IllegalArgumentException(s"The entity name for ${entityTypeVals.head} must be a valid integer broker id , but it is: $brokerId")
+        }
+      }
+
       if (entityTypeVals.contains(ConfigType.Client) || entityTypeVals.contains(ConfigType.Topic) || entityTypeVals.contains(ConfigType.User))
         CommandLineUtils.checkRequiredArgs(parser, options, zkConnectOpt, entityType)
-      if(options.has(alterOpt)) {
+
+      if (options.has(describeOpt) && entityTypeVals.contains(BrokerLoggerConfigType) && !options.has(entityName))
+        throw new IllegalArgumentException(s"--entity-name must be specified with --describe of ${entityTypeVals.mkString(",")}")
+
+      if (options.has(alterOpt)) {
         if (entityTypeVals.contains(ConfigType.User) || entityTypeVals.contains(ConfigType.Client) || entityTypeVals.contains(ConfigType.Broker)) {
           if (!options.has(entityName) && !options.has(entityDefault))
             throw new IllegalArgumentException("--entity-name or --entity-default must be specified with --alter of users, clients or brokers")
         } else if (!options.has(entityName))
-            throw new IllegalArgumentException(s"--entity-name must be specified with --alter of ${entityTypeVals}")
+          throw new IllegalArgumentException(s"--entity-name must be specified with --alter of ${entityTypeVals.mkString(",")}")
 
         val isAddConfigPresent: Boolean = options.has(addConfig)
         val isDeleteConfigPresent: Boolean = options.has(deleteConfig)
         if(! isAddConfigPresent && ! isDeleteConfigPresent)
           throw new IllegalArgumentException("At least one of --add-config or --delete-config must be specified with --alter")
       }
-      entityTypeVals.foreach(entityTypeVal =>
-        if (!ConfigType.all.contains(entityTypeVal))
-          throw new IllegalArgumentException(s"Invalid entity-type ${entityTypeVal}, --entity-type must be one of ${ConfigType.all}")
-      )
-      if (entityTypeVals.isEmpty)
-        throw new IllegalArgumentException("At least one --entity-type must be specified")
-      else if (entityTypeVals.size > 1 && !entityTypeVals.toSet.equals(Set(ConfigType.User, ConfigType.Client)))
-        throw new IllegalArgumentException(s"Only '${ConfigType.User}' and '${ConfigType.Client}' entity types may be specified together")
     }
   }
 }
