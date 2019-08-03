@@ -73,7 +73,6 @@ abstract class AssignedTasks<T extends Task> {
                     log.debug("Transitioning {} {} to restoring", taskTypeName, entry.getKey());
                     ((AssignedStreamsTasks) this).addToRestoring((StreamTask) entry.getValue());
                 } else {
-                    ((Task) entry.getValue()).initializeTaskTime();
                     transitionToRunning(entry.getValue());
                 }
                 it.remove();
@@ -200,6 +199,7 @@ abstract class AssignedTasks<T extends Task> {
     void transitionToRunning(final T task) {
         log.debug("Transitioning {} {} to running", taskTypeName, task.id());
         running.put(task.id(), task);
+        ((Task) task).initializeTaskTime();
         task.initializeTopology();
         for (final TopicPartition topicPartition : task.partitions()) {
             runningByPartition.put(topicPartition, task);
