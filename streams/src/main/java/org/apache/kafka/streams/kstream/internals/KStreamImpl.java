@@ -38,6 +38,7 @@ import org.apache.kafka.streams.kstream.ValueMapper;
 import org.apache.kafka.streams.kstream.ValueMapperWithKey;
 import org.apache.kafka.streams.kstream.ValueTransformerSupplier;
 import org.apache.kafka.streams.kstream.ValueTransformerWithKeySupplier;
+import org.apache.kafka.streams.kstream.internals.RepartitionedInternal.InternalTopicProperties;
 import org.apache.kafka.streams.kstream.internals.graph.OptimizableRepartitionNode;
 import org.apache.kafka.streams.kstream.internals.graph.OptimizableRepartitionNode.OptimizableRepartitionNodeBuilder;
 import org.apache.kafka.streams.kstream.internals.graph.ProcessorGraphNode;
@@ -114,6 +115,8 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
     private static final String WINDOWED_NAME = "KSTREAM-WINDOWED-";
 
     private static final String FOREACH_NAME = "KSTREAM-FOREACH-";
+
+    private static final String REPARTITION_NAME = "KSTREAM-REPARTITION-";
 
     private final boolean repartitionRequired;
 
@@ -486,12 +489,53 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
 
     @Override
     public KStream<K, V> repartition() {
-        return null;
+        return repartition(null);
     }
 
     @Override
     public KStream<K, V> repartition(final Repartitioned<K, V> repartitioned) {
-        return null;
+        final RepartitionedInternal<K, V> repartitionedInternal = new RepartitionedInternal<>(repartitioned);
+        final String name = new NamedInternal(repartitionedInternal.name())
+            .orElseGenerateWithPrefix(builder, REPARTITION_NAME);
+
+        //TODO: I don't like this. ideally it should be check against source topic
+        if (!repartitionRequired && repartitionedInternal.numberOfPartitions() == null) {
+            return new KStreamImpl<>(
+                name,
+                keySerde,
+                valSerde,
+                sourceNodes,
+                false,
+                streamsGraphNode,
+                builder
+            );
+        }
+
+        final OptimizableRepartitionNodeBuilder<K, V> optimizableRepartitionNodeBuilder =
+            OptimizableRepartitionNode.optimizableRepartitionNodeBuilder();
+
+        final String repartitionedSourceName = createRepartitionedSource(
+            builder,
+            repartitionedInternal.keySerde(),
+            repartitionedInternal.valueSerde(),
+            name,
+            repartitionedInternal.toInternalTopicProperties(),
+            optimizableRepartitionNodeBuilder
+        );
+
+        final OptimizableRepartitionNode<K, V> optimizableRepartitionNode = optimizableRepartitionNodeBuilder.build();
+
+        builder.addGraphNode(this.streamsGraphNode, optimizableRepartitionNode);
+
+        return new KStreamImpl<>(
+            repartitionedSourceName,
+            repartitionedInternal.keySerde(),
+            repartitionedInternal.valueSerde(),
+            sourceNodes,
+            repartitionRequired,
+            optimizableRepartitionNode,
+            builder
+        );
     }
 
     @Override
@@ -824,6 +868,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
                                                      final Serde<K1> keySerde,
                                                      final Serde<V1> valSerde,
                                                      final String repartitionTopicNamePrefix,
+                                                     final InternalTopicProperties internalTopicProperties,
                                                      final OptimizableRepartitionNodeBuilder<K1, V1> optimizableRepartitionNodeBuilder) {
 
 
@@ -840,16 +885,33 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
         );
 
         optimizableRepartitionNodeBuilder.withKeySerde(keySerde)
-                                         .withValueSerde(valSerde)
-                                         .withSourceName(sourceName)
-                                         .withRepartitionTopic(repartitionTopic)
-                                         .withSinkName(sinkName)
-                                         .withProcessorParameters(processorParameters)
-                                         // reusing the source name for the graph node name
-                                         // adding explicit variable as it simplifies logic
-                                         .withNodeName(sourceName);
+            .withValueSerde(valSerde)
+            .withSourceName(sourceName)
+            .withRepartitionTopic(repartitionTopic)
+            .withSinkName(sinkName)
+            .withProcessorParameters(processorParameters)
+            .withInternalTopicProperties(internalTopicProperties)
+            // reusing the source name for the graph node name
+            // adding explicit variable as it simplifies logic
+            .withNodeName(sourceName);
 
         return sourceName;
+    }
+
+    static <K1, V1> String createRepartitionedSource(final InternalStreamsBuilder builder,
+                                                     final Serde<K1> keySerde,
+                                                     final Serde<V1> valSerde,
+                                                     final String repartitionTopicNamePrefix,
+                                                     final OptimizableRepartitionNodeBuilder<K1, V1> optimizableRepartitionNodeBuilder) {
+
+        return createRepartitionedSource(
+            builder,
+            keySerde,
+            valSerde,
+            repartitionTopicNamePrefix,
+            null,
+            optimizableRepartitionNodeBuilder
+        );
     }
 
     @Override

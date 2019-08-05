@@ -27,10 +27,11 @@ import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.TimestampExtractor;
 import org.apache.kafka.streams.processor.TopicNameExtractor;
+import org.apache.kafka.streams.kstream.internals.RepartitionedInternal.InternalTopicProperties;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.internals.SessionStoreBuilder;
-import org.apache.kafka.streams.state.internals.WindowStoreBuilder;
 import org.apache.kafka.streams.state.internals.TimestampedWindowStoreBuilder;
+import org.apache.kafka.streams.state.internals.WindowStoreBuilder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -74,6 +75,8 @@ public class InternalTopologyBuilder {
 
     // all internal topics auto-created by the topology builder and used in source / sink processors
     private final Set<String> internalTopicNames = new HashSet<>();
+
+    private final Map<String, InternalTopicProperties> internalTopicNamesWithProperties = new HashMap<>();
 
     // groups of source processors that need to be copartitioned
     private final List<Set<String>> copartitionSourceGroups = new ArrayList<>();
@@ -600,7 +603,7 @@ public class InternalTopologyBuilder {
     }
 
     public void connectSourceStoreAndTopic(final String sourceStoreName,
-                                            final String topic) {
+                                           final String topic) {
         if (storeToChangelogTopic.containsKey(sourceStoreName)) {
             throw new TopologyException("Source store " + sourceStoreName + " is already added.");
         }
@@ -610,6 +613,12 @@ public class InternalTopologyBuilder {
     public final void addInternalTopic(final String topicName) {
         Objects.requireNonNull(topicName, "topicName can't be null");
         internalTopicNames.add(topicName);
+    }
+
+    public final void addInternalTopic(final String topicName,
+                                       final InternalTopicProperties internalTopicProperties) {
+        addInternalTopic(topicName);
+        internalTopicNamesWithProperties.put(topicName, internalTopicProperties);
     }
 
     public final void copartitionSources(final Collection<String> sourceNodes) {
@@ -1008,9 +1017,15 @@ public class InternalTopologyBuilder {
                         if (internalTopicNames.contains(topic)) {
                             // prefix the internal topic name with the application id
                             final String internalTopic = decorateTopic(topic);
-                            repartitionTopics.put(
+
+                            final RepartitionTopicConfig repartitionTopicConfig = new RepartitionTopicConfig(
                                 internalTopic,
-                                new RepartitionTopicConfig(internalTopic, Collections.emptyMap()));
+                                Collections.emptyMap()
+                            );
+
+                            maybeEnrichRepartitionTopicConfigWithProperties(topic, repartitionTopicConfig);
+
+                            repartitionTopics.put(internalTopic, repartitionTopicConfig);
                             sourceTopics.add(internalTopic);
                         } else {
                             sourceTopics.add(topic);
@@ -1054,6 +1069,14 @@ public class InternalTopologyBuilder {
         }
 
         return Collections.unmodifiableMap(topicGroups);
+    }
+
+    private void maybeEnrichRepartitionTopicConfigWithProperties(final String topic,
+                                                                 final RepartitionTopicConfig repartitionTopicConfig) {
+        if (internalTopicNamesWithProperties.containsKey(topic)) {
+            final InternalTopicProperties internalTopicProperties = internalTopicNamesWithProperties.get(topic);
+            repartitionTopicConfig.setNumberOfPartitions(internalTopicProperties.getNumberOfPartitions());
+        }
     }
 
     private void setRegexMatchedTopicsToSourceNodes() {
@@ -1474,7 +1497,7 @@ public class InternalTopologyBuilder {
         @Override
         public String toString() {
             final String topicsString = topics == null ? topicPattern.toString() : topics.toString();
-            
+
             return "Source: " + name + " (topics: " + topicsString + ")\n      --> " + nodeNames(successors);
         }
 

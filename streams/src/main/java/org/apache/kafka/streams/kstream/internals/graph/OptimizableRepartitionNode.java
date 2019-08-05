@@ -21,18 +21,20 @@ package org.apache.kafka.streams.kstream.internals.graph;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.streams.kstream.internals.RepartitionedInternal.InternalTopicProperties;
 import org.apache.kafka.streams.processor.FailOnInvalidTimestamp;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 
 public class OptimizableRepartitionNode<K, V> extends BaseRepartitionNode<K, V> {
 
-    OptimizableRepartitionNode(final String nodeName,
-                               final String sourceName,
-                               final ProcessorParameters processorParameters,
-                               final Serde<K> keySerde,
-                               final Serde<V> valueSerde,
-                               final String sinkName,
-                               final String repartitionTopic) {
+    private OptimizableRepartitionNode(final String nodeName,
+                                       final String sourceName,
+                                       final ProcessorParameters processorParameters,
+                                       final Serde<K> keySerde,
+                                       final Serde<V> valueSerde,
+                                       final String sinkName,
+                                       final String repartitionTopic,
+                                       final InternalTopicProperties internalTopicProperties) {
 
         super(
             nodeName,
@@ -41,7 +43,8 @@ public class OptimizableRepartitionNode<K, V> extends BaseRepartitionNode<K, V> 
             keySerde,
             valueSerde,
             sinkName,
-            repartitionTopic
+            repartitionTopic,
+            internalTopicProperties
         );
 
     }
@@ -65,7 +68,7 @@ public class OptimizableRepartitionNode<K, V> extends BaseRepartitionNode<K, V> 
 
     @Override
     Deserializer<V> getValueDeserializer() {
-        return  valueSerde != null ? valueSerde.deserializer() : null;
+        return valueSerde != null ? valueSerde.deserializer() : null;
     }
 
     @Override
@@ -78,7 +81,11 @@ public class OptimizableRepartitionNode<K, V> extends BaseRepartitionNode<K, V> 
         final Serializer<K> keySerializer = keySerde != null ? keySerde.serializer() : null;
         final Deserializer<K> keyDeserializer = keySerde != null ? keySerde.deserializer() : null;
 
-        topologyBuilder.addInternalTopic(repartitionTopic);
+        if (internalTopicProperties != null) {
+            topologyBuilder.addInternalTopic(repartitionTopic, internalTopicProperties);
+        } else {
+            topologyBuilder.addInternalTopic(repartitionTopic);
+        }
 
         topologyBuilder.addProcessor(
             processorParameters.processorName(),
@@ -120,6 +127,7 @@ public class OptimizableRepartitionNode<K, V> extends BaseRepartitionNode<K, V> 
         private String sinkName;
         private String sourceName;
         private String repartitionTopic;
+        private InternalTopicProperties internalTopicProperties;
 
         private OptimizableRepartitionNodeBuilder() {
         }
@@ -160,6 +168,11 @@ public class OptimizableRepartitionNode<K, V> extends BaseRepartitionNode<K, V> 
             return this;
         }
 
+        public OptimizableRepartitionNodeBuilder<K, V> withInternalTopicProperties(final InternalTopicProperties internalTopicProperties) {
+            this.internalTopicProperties = internalTopicProperties;
+            return this;
+        }
+
         public OptimizableRepartitionNode<K, V> build() {
 
             return new OptimizableRepartitionNode<>(
@@ -169,7 +182,8 @@ public class OptimizableRepartitionNode<K, V> extends BaseRepartitionNode<K, V> 
                 keySerde,
                 valueSerde,
                 sinkName,
-                repartitionTopic
+                repartitionTopic,
+                internalTopicProperties
             );
 
         }

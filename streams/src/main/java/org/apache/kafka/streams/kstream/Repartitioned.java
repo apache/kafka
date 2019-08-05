@@ -54,6 +54,16 @@ public class Repartitioned<K, V> implements NamedOperation<Repartitioned<K, V>> 
         this.partitioner = partitioner;
     }
 
+    protected Repartitioned(final Repartitioned<K, V> repartitioned) {
+        this(
+            repartitioned.name,
+            repartitioned.keySerde,
+            repartitioned.valueSerde,
+            repartitioned.numberOfPartitions,
+            repartitioned.partitioner
+        );
+    }
+
     /**
      * Create a {@link Repartitioned} instance with the provided name used as part of the repartition topic if required.
      *
