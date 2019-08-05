@@ -472,6 +472,11 @@ public abstract class SessionBytesStoreTest {
         assertThat(messages, hasItem("Skipping record for expired segment."));
     }
 
+    @Test
+    public void shouldNotThrowExceptionRemovingNonexistentKey() {
+        sessionStore.remove(new Windowed<>("a", new SessionWindow(0, 1)));
+    }
+
     @Test(expected = NullPointerException.class)
     public void shouldThrowNullPointerExceptionOnFindSessionsNullKey() {
         sessionStore.findSessions(null, 1L, 2L);

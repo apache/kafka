@@ -20,7 +20,9 @@
   // Version 1 adds IsNew.
   //
   // Version 2 adds broker epoch and reorganizes the partitions by topic.
-  "validVersions": "0-2",
+  //
+  // Version 3 adds AddingReplicas and RemovingReplicas
+  "validVersions": "0-3",
   "fields": [
     { "name": "ControllerId", "type": "int32", "versions": "0+", "entityType": "brokerId",
       "about": "The current controller ID." },
@@ -68,6 +70,10 @@
         "about": "The ZooKeeper version." },
       { "name": "Replicas", "type": "[]int32", "versions": "0+",
         "about": "The replica IDs." },
+      { "name": "AddingReplicas", "type": "[]int32", "versions": "3+", "ignorable": true,
+        "about": "The replica IDs that we are adding this partition to, or null if no replicas are being added." },
+      { "name": "RemovingReplicas", "type": "[]int32", "versions": "3+", "ignorable": true,
+        "about": "The replica IDs that we are removing this partition from, or null if no replicas are being removed." },
       { "name": "IsNew", "type": "bool", "versions": "1+", "default": "false", "ignorable": true,
         "about": "Whether the replica should have existed on the broker or not." }
     ]}

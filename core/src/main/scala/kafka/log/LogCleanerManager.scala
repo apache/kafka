@@ -333,7 +333,7 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
       case None => false
       case Some(state) =>
         state match {
-          case LogCleaningPaused(s) =>
+          case _: LogCleaningPaused =>
             true
           case _ =>
             false
@@ -544,7 +544,7 @@ private[log] object LogCleanerManager extends Logging {
     val firstUncleanableDirtyOffset: Long = Seq(
 
       // we do not clean beyond the first unstable offset
-      log.firstUnstableOffset.map(_.messageOffset),
+      log.firstUnstableOffset,
 
       // the active segment is always uncleanable
       Option(log.activeSegment.baseOffset),

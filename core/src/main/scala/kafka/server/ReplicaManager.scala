@@ -874,25 +874,26 @@ class ReplicaManager(val config: KafkaConfig,
     }
 
     // Wrap the given callback function with another function that will update the HW for the remote follower
-    val updateHwAndThenCallback: Seq[(TopicPartition, FetchPartitionData)] => Unit =
-      (fetchPartitionData: Seq[(TopicPartition, FetchPartitionData)]) => {
+    def maybeUpdateHwAndSendResponse(fetchPartitionData: Seq[(TopicPartition, FetchPartitionData)]): Unit = {
+      if (isFromFollower) {
         fetchPartitionData.foreach {
           case (tp, partitionData) => updateFollowerHighWatermark(tp, replicaId, partitionData.highWatermark)
         }
-        responseCallback(fetchPartitionData)
       }
+      responseCallback(fetchPartitionData)
+    }
 
     // respond immediately if 1) fetch request does not want to wait
     //                        2) fetch request does not require any data
     //                        3) has enough data to respond
     //                        4) some error happens while reading data
-    //                        5) all the requested partitions need HW update
+    //                        5) any of the requested partitions need HW update
     if (timeout <= 0 || fetchInfos.isEmpty || bytesReadable >= fetchMinBytes || errorReadingData || anyPartitionsNeedHwUpdate) {
       val fetchPartitionData = logReadResults.map { case (tp, result) =>
         tp -> FetchPartitionData(result.error, result.highWatermark, result.leaderLogStartOffset, result.info.records,
           result.lastStableOffset, result.info.abortedTransactions, result.preferredReadReplica)
       }
-      updateHwAndThenCallback(fetchPartitionData)
+      maybeUpdateHwAndSendResponse(fetchPartitionData)
     } else {
       // construct the fetch results from the read results
       val fetchPartitionStatus = new mutable.ArrayBuffer[(TopicPartition, FetchPartitionStatus)]
@@ -905,7 +906,7 @@ class ReplicaManager(val config: KafkaConfig,
       val fetchMetadata = FetchMetadata(fetchMinBytes, fetchMaxBytes, hardMaxBytesLimit, isFromFollower,
         fetchIsolation, isFromFollower, replicaId, fetchPartitionStatus)
       val delayedFetch = new DelayedFetch(timeout, fetchMetadata, this, quota, clientMetadata,
-        updateHwAndThenCallback)
+        maybeUpdateHwAndSendResponse)
 
       // create a list of (topic, partition) pairs to use as keys for this delayed fetch operation
       val delayedFetchKeys = fetchPartitionStatus.map { case (tp, _) => TopicPartitionOperationKey(tp) }
@@ -956,7 +957,7 @@ class ReplicaManager(val config: KafkaConfig,
               s"${preferredReadReplica.get} for $clientMetadata")
           }
           // If a preferred read-replica is set, skip the read
-          val offsetSnapshot: LogOffsetSnapshot = partition.fetchOffsetSnapshot(fetchInfo.currentLeaderEpoch, false)
+          val offsetSnapshot = partition.fetchOffsetSnapshot(fetchInfo.currentLeaderEpoch, false)
           LogReadResult(info = FetchDataInfo(LogOffsetMetadata.UnknownOffsetMetadata, MemoryRecords.EMPTY),
             highWatermark = offsetSnapshot.highWatermark.messageOffset,
             leaderLogStartOffset = offsetSnapshot.logStartOffset,
@@ -1234,6 +1235,19 @@ class ReplicaManager(val config: KafkaConfig,
             highWatermarkCheckpoints)
         else
           Set.empty[Partition]
+
+        /*
+         * KAFKA-8392
+         * For topic partitions of which the broker is no longer a leader, delete metrics related to
+         * those topics. Note that this means the broker stops being either a replica or a leader of
+         * partitions of said topics
+         */
+        val leaderTopicSet = leaderPartitionsIterator.map(_.topic).toSet
+        val followerTopicSet = partitionsBecomeFollower.map(_.topic).toSet
+        followerTopicSet.diff(leaderTopicSet).foreach(brokerTopicStats.removeOldLeaderMetrics)
+
+        // remove metrics for brokers which are not followers of a topic
+        leaderTopicSet.diff(followerTopicSet).foreach(brokerTopicStats.removeOldFollowerMetrics)
 
         leaderAndIsrRequest.partitionStates.asScala.keys.foreach { topicPartition =>
           /*

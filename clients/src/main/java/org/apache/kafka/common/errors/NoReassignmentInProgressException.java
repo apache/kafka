@@ -1,14 +1,10 @@
-package kafka.common
-
-import org.apache.kafka.common.TopicPartition
-
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -19,12 +15,17 @@ import org.apache.kafka.common.TopicPartition
  * limitations under the License.
  */
 
+package org.apache.kafka.common.errors;
+
 /**
- * Convenience case class since (topic, partition) pairs are ubiquitous.
+ * Thrown if a reassignment cannot be cancelled because none is in progress.
  */
-case class TopicAndPartition(topic: String, partition: Int) {
+public class NoReassignmentInProgressException extends ApiException {
+    public NoReassignmentInProgressException(String message) {
+        super(message);
+    }
 
-  def this(topicPartition: TopicPartition) = this(topicPartition.topic, topicPartition.partition)
-
-  override def toString: String = s"$topic-$partition"
+    public NoReassignmentInProgressException(String message, Throwable cause) {
+        super(message, cause);
+    }
 }

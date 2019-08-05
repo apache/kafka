@@ -31,7 +31,7 @@ import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record.Records
 import org.apache.kafka.common.requests.EpochEndOffset._
 import org.apache.kafka.common.requests.FetchResponse.PartitionData
-import org.apache.kafka.common.requests.{EpochEndOffset, FetchRequest, FetchResponse, FetchMetadata => JFetchMetadata}
+import org.apache.kafka.common.requests.{EpochEndOffset, FetchRequest, FetchResponse}
 
 import scala.collection.JavaConverters._
 import scala.collection.{Map, Seq, Set, mutable}
@@ -111,7 +111,7 @@ class ReplicaAlterLogDirsThread(name: String,
         topicPartition, fetchOffset, futureLog.logEndOffset))
 
     val logAppendInfo = partition.appendRecordsToFollowerOrFutureReplica(records, isFuture = true)
-    futureLog.highWatermark = futureLog.logEndOffset.min(partitionData.highWatermark)
+    futureLog.updateHighWatermark(partitionData.highWatermark)
     futureLog.maybeIncrementLogStartOffset(partitionData.logStartOffset)
 
     if (partition.maybeReplaceCurrentWithFutureReplica())

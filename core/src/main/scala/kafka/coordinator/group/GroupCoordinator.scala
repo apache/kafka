@@ -28,6 +28,8 @@ import kafka.zk.KafkaZkClient
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.message.JoinGroupResponseData.JoinGroupResponseMember
+import org.apache.kafka.common.metrics.Metrics
+import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record.RecordBatch.{NO_PRODUCER_EPOCH, NO_PRODUCER_ID}
 import org.apache.kafka.common.requests._
@@ -54,7 +56,8 @@ class GroupCoordinator(val brokerId: Int,
                        val groupManager: GroupMetadataManager,
                        val heartbeatPurgatory: DelayedOperationPurgatory[DelayedHeartbeat],
                        val joinPurgatory: DelayedOperationPurgatory[DelayedJoin],
-                       time: Time) extends Logging {
+                       time: Time,
+                       metrics: Metrics) extends Logging {
   import GroupCoordinator._
 
   type JoinCallback = JoinGroupResult => Unit
@@ -252,7 +255,7 @@ class GroupCoordinator(val brokerId: Int,
       } else if (group.isPendingMember(memberId)) {
         // A rejoining pending member will be accepted. Note that pending member will never be a static member.
         if (groupInstanceId.isDefined) {
-          throw new IllegalStateException(s"the static member $groupInstanceId was unexpectedly to be assigned " +
+          throw new IllegalStateException(s"the static member $groupInstanceId was not expected to be assigned " +
             s"into pending member bucket with member id $memberId")
         } else {
           addMemberAndRebalance(rebalanceTimeoutMs, sessionTimeoutMs, memberId, groupInstanceId,
@@ -419,36 +422,58 @@ class GroupCoordinator(val brokerId: Int,
     }
   }
 
-  def handleLeaveGroup(groupId: String, memberId: String, responseCallback: Errors => Unit): Unit = {
-    validateGroupStatus(groupId, ApiKeys.LEAVE_GROUP).foreach { error =>
-      responseCallback(error)
-      return
-    }
-
-    groupManager.getGroup(groupId) match {
+  def handleLeaveGroup(groupId: String,
+                       leavingMembers: List[MemberIdentity],
+                       responseCallback: LeaveGroupResult => Unit) {
+    validateGroupStatus(groupId, ApiKeys.LEAVE_GROUP) match {
+      case Some(error) =>
+        responseCallback(leaveError(error, List.empty))
       case None =>
-        responseCallback(Errors.UNKNOWN_MEMBER_ID)
-
-      case Some(group) =>
-        group.inLock {
-          if (group.is(Dead)) {
-            responseCallback(Errors.COORDINATOR_NOT_AVAILABLE)
-          } else if (group.isPendingMember(memberId)) {
-            // if a pending member is leaving, it needs to be removed from the pending list, heartbeat cancelled
-            // and if necessary, prompt a JoinGroup completion.
-            info(s"Pending member $memberId is leaving group ${group.groupId}.")
-            removePendingMemberAndUpdateGroup(group, memberId)
-            heartbeatPurgatory.checkAndComplete(MemberKey(group.groupId, memberId))
-            responseCallback(Errors.NONE)
-          } else if (!group.has(memberId)) {
-            responseCallback(Errors.UNKNOWN_MEMBER_ID)
-          } else {
-            val member = group.get(memberId)
-            removeHeartbeatForLeavingMember(group, member)
-            info(s"Member ${member.memberId} in group ${group.groupId} has left, removing it from the group")
-            removeMemberAndUpdateGroup(group, member, s"removing member $memberId on LeaveGroup")
-            responseCallback(Errors.NONE)
-          }
+        groupManager.getGroup(groupId) match {
+          case None =>
+            responseCallback(leaveError(Errors.NONE, leavingMembers.map {leavingMember =>
+              memberLeaveError(leavingMember, Errors.UNKNOWN_MEMBER_ID)
+            }))
+          case Some(group) =>
+            group.inLock {
+              if (group.is(Dead)) {
+                responseCallback(leaveError(Errors.COORDINATOR_NOT_AVAILABLE, List.empty))
+              } else {
+                val memberErrors = leavingMembers.map { leavingMember =>
+                  val memberId = leavingMember.memberId
+                  val groupInstanceId = Option(leavingMember.groupInstanceId)
+                  if (memberId != JoinGroupRequest.UNKNOWN_MEMBER_ID
+                    && group.isStaticMemberFenced(memberId, groupInstanceId)) {
+                    memberLeaveError(leavingMember, Errors.FENCED_INSTANCE_ID)
+                  } else if (group.isPendingMember(memberId)) {
+                    if (groupInstanceId.isDefined) {
+                      throw new IllegalStateException(s"the static member $groupInstanceId was not expected to be leaving " +
+                        s"from pending member bucket with member id $memberId")
+                    } else {
+                      // if a pending member is leaving, it needs to be removed from the pending list, heartbeat cancelled
+                      // and if necessary, prompt a JoinGroup completion.
+                      info(s"Pending member $memberId is leaving group ${group.groupId}.")
+                      removePendingMemberAndUpdateGroup(group, memberId)
+                      heartbeatPurgatory.checkAndComplete(MemberKey(group.groupId, memberId))
+                      memberLeaveError(leavingMember, Errors.NONE)
+                    }
+                  } else if (!group.has(memberId) && !group.hasStaticMember(groupInstanceId)) {
+                    memberLeaveError(leavingMember, Errors.UNKNOWN_MEMBER_ID)
+                  } else {
+                    val member = if (group.hasStaticMember(groupInstanceId))
+                      group.get(group.getStaticMemberId(groupInstanceId))
+                    else
+                      group.get(memberId)
+                    removeHeartbeatForLeavingMember(group, member)
+                    info(s"Member[group.instance.id ${member.groupInstanceId}, member.id ${member.memberId}] " +
+                      s"in group ${group.groupId} has left, removing it from the group")
+                    removeMemberAndUpdateGroup(group, member, s"removing member $memberId on LeaveGroup")
+                    memberLeaveError(leavingMember, Errors.NONE)
+                  }
+                }
+                responseCallback(leaveError(Errors.NONE, memberErrors))
+              }
+            }
         }
     }
   }
@@ -1061,10 +1086,11 @@ object GroupCoordinator {
   def apply(config: KafkaConfig,
             zkClient: KafkaZkClient,
             replicaManager: ReplicaManager,
-            time: Time): GroupCoordinator = {
+            time: Time,
+            metrics: Metrics): GroupCoordinator = {
     val heartbeatPurgatory = DelayedOperationPurgatory[DelayedHeartbeat]("Heartbeat", config.brokerId)
     val joinPurgatory = DelayedOperationPurgatory[DelayedJoin]("Rebalance", config.brokerId)
-    apply(config, zkClient, replicaManager, heartbeatPurgatory, joinPurgatory, time)
+    apply(config, zkClient, replicaManager, heartbeatPurgatory, joinPurgatory, time, metrics)
   }
 
   private[group] def offsetConfig(config: KafkaConfig) = OffsetConfig(
@@ -1085,7 +1111,8 @@ object GroupCoordinator {
             replicaManager: ReplicaManager,
             heartbeatPurgatory: DelayedOperationPurgatory[DelayedHeartbeat],
             joinPurgatory: DelayedOperationPurgatory[DelayedJoin],
-            time: Time): GroupCoordinator = {
+            time: Time,
+            metrics: Metrics): GroupCoordinator = {
     val offsetConfig = this.offsetConfig(config)
     val groupConfig = GroupConfig(groupMinSessionTimeoutMs = config.groupMinSessionTimeoutMs,
       groupMaxSessionTimeoutMs = config.groupMaxSessionTimeoutMs,
@@ -1093,8 +1120,8 @@ object GroupCoordinator {
       groupInitialRebalanceDelayMs = config.groupInitialRebalanceDelay)
 
     val groupMetadataManager = new GroupMetadataManager(config.brokerId, config.interBrokerProtocolVersion,
-      offsetConfig, replicaManager, zkClient, time)
-    new GroupCoordinator(config.brokerId, groupConfig, offsetConfig, groupMetadataManager, heartbeatPurgatory, joinPurgatory, time)
+      offsetConfig, replicaManager, zkClient, time, metrics)
+    new GroupCoordinator(config.brokerId, groupConfig, offsetConfig, groupMetadataManager, heartbeatPurgatory, joinPurgatory, time, metrics)
   }
 
   def joinError(memberId: String, error: Errors): JoinGroupResult = {
@@ -1105,6 +1132,21 @@ object GroupCoordinator {
       subProtocol = GroupCoordinator.NoProtocol,
       leaderId = GroupCoordinator.NoLeader,
       error = error)
+  }
+
+  private def memberLeaveError(memberIdentity: MemberIdentity,
+                               error: Errors): LeaveMemberResponse = {
+    LeaveMemberResponse(
+      memberId = memberIdentity.memberId,
+      groupInstanceId = Option(memberIdentity.groupInstanceId),
+      error = error)
+  }
+
+  private def leaveError(topLevelError: Errors,
+                         memberResponses: List[LeaveMemberResponse]): LeaveGroupResult = {
+    LeaveGroupResult(
+      topLevelError = topLevelError,
+      memberResponses = memberResponses)
   }
 }
 
@@ -1122,3 +1164,10 @@ case class JoinGroupResult(members: List[JoinGroupResponseMember],
 
 case class SyncGroupResult(memberAssignment: Array[Byte],
                            error: Errors)
+
+case class LeaveMemberResponse(memberId: String,
+                               groupInstanceId: Option[String],
+                               error: Errors)
+
+case class LeaveGroupResult(topLevelError: Errors,
+                            memberResponses : List[LeaveMemberResponse])

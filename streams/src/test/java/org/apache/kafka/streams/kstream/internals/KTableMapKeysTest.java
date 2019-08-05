@@ -19,6 +19,7 @@ package org.apache.kafka.streams.kstream.internals;
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.streams.KeyValueTimestamp;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.kstream.Consumed;
@@ -54,9 +55,11 @@ public class KTableMapKeysTest {
 
         final KStream<String, String> convertedStream = table1.toStream((key, value) -> keyMap.get(key));
 
-        final String[] expected = new String[]{"ONE:V_ONE (ts: 5)", "TWO:V_TWO (ts: 10)", "THREE:V_THREE (ts: 15)"};
-        final int[] originalKeys = new int[]{1, 2, 3};
-        final String[] values = new String[]{"V_ONE", "V_TWO", "V_THREE"};
+        final KeyValueTimestamp[] expected = new KeyValueTimestamp[] {new KeyValueTimestamp<>("ONE", "V_ONE", 5),
+            new KeyValueTimestamp<>("TWO", "V_TWO", 10),
+            new KeyValueTimestamp<>("THREE", "V_THREE", 15)};
+        final int[] originalKeys = new int[] {1, 2, 3};
+        final String[] values = new String[] {"V_ONE", "V_TWO", "V_THREE"};
 
         final MockProcessorSupplier<String, String> supplier = new MockProcessorSupplier<>();
         convertedStream.process(supplier);

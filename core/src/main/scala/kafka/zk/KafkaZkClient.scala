@@ -1721,7 +1721,7 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
           SetDataOp(path, data, 0)))
       )
       val stat = response.resultCode match {
-        case code@ Code.OK =>
+        case Code.OK =>
           val setDataResult = response.zkOpResults(1).rawOpResult.asInstanceOf[SetDataResult]
           setDataResult.getStat
         case Code.NODEEXISTS =>

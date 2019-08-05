@@ -56,13 +56,13 @@ public class LogAndSkipOnInvalidTimestamp extends ExtractRecordMetadataTimestamp
      *
      * @param record a data record
      * @param recordTimestamp the timestamp extractor from the record
-     * @param previousTimestamp the latest extracted valid timestamp of the current record's partition˙ (could be -1 if unknown)
+     * @param partitionTime the highest extracted valid timestamp of the current record's partition˙ (could be -1 if unknown)
      * @return the originally extracted timestamp of the record
      */
     @Override
     public long onInvalidTimestamp(final ConsumerRecord<Object, Object> record,
                                    final long recordTimestamp,
-                                   final long previousTimestamp) {
+                                   final long partitionTime) {
         log.warn("Input record {} will be dropped because it has an invalid (negative) timestamp.", record);
         return recordTimestamp;
     }

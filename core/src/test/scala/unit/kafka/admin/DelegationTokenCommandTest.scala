@@ -22,7 +22,7 @@ import kafka.admin.DelegationTokenCommand.DelegationTokenCommandOptions
 import kafka.api.{KafkaSasl, SaslSetup}
 import kafka.server.{BaseRequestTest, KafkaConfig}
 import kafka.utils.{JaasTestUtils, TestUtils}
-import org.apache.kafka.clients.admin.AdminClientConfig
+import org.apache.kafka.clients.admin.{Admin, AdminClient, AdminClientConfig}
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.junit.Assert._
 import org.junit.{After, Before, Test}
@@ -38,7 +38,7 @@ class DelegationTokenCommandTest extends BaseRequestTest with SaslSetup {
   private val kafkaServerSaslMechanisms = List("PLAIN")
   protected override val serverSaslProperties = Some(kafkaServerSaslProperties(kafkaServerSaslMechanisms, kafkaClientSaslMechanism))
   protected override val clientSaslProperties = Some(kafkaClientSaslProperties(kafkaClientSaslMechanism))
-  var adminClient: org.apache.kafka.clients.admin.AdminClient = null
+  var adminClient: Admin = null
 
   override def brokerCount = 1
 
@@ -68,7 +68,7 @@ class DelegationTokenCommandTest extends BaseRequestTest with SaslSetup {
 
   @Test
   def testDelegationTokenRequests(): Unit = {
-    adminClient = org.apache.kafka.clients.admin.AdminClient.create(createAdminConfig)
+    adminClient = AdminClient.create(createAdminConfig)
     val renewer1 = "User:renewer1"
     val renewer2 = "User:renewer2"
 

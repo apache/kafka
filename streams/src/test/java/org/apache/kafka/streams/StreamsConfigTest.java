@@ -662,7 +662,7 @@ public class StreamsConfigTest {
     public static class MockTimestampExtractor implements TimestampExtractor {
 
         @Override
-        public long extract(final ConsumerRecord<Object, Object> record, final long previousTimestamp) {
+        public long extract(final ConsumerRecord<Object, Object> record, final long partitionTime) {
             return 0;
         }
     }

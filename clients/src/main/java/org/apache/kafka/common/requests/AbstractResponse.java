@@ -81,7 +81,7 @@ public abstract class AbstractResponse extends AbstractRequestResponse {
             case OFFSET_COMMIT:
                 return new OffsetCommitResponse(struct, version);
             case OFFSET_FETCH:
-                return new OffsetFetchResponse(struct);
+                return new OffsetFetchResponse(struct, version);
             case FIND_COORDINATOR:
                 return new FindCoordinatorResponse(struct, version);
             case JOIN_GROUP:
@@ -103,7 +103,7 @@ public abstract class AbstractResponse extends AbstractRequestResponse {
             case DESCRIBE_GROUPS:
                 return new DescribeGroupsResponse(struct, version);
             case LIST_GROUPS:
-                return new ListGroupsResponse(struct);
+                return new ListGroupsResponse(struct, version);
             case SASL_HANDSHAKE:
                 return new SaslHandshakeResponse(struct, version);
             case API_VERSIONS:
@@ -155,11 +155,15 @@ public abstract class AbstractResponse extends AbstractRequestResponse {
             case DESCRIBE_DELEGATION_TOKEN:
                 return new DescribeDelegationTokenResponse(struct);
             case DELETE_GROUPS:
-                return new DeleteGroupsResponse(struct);
+                return new DeleteGroupsResponse(struct, version);
             case ELECT_LEADERS:
                 return new ElectLeadersResponse(struct, version);
             case INCREMENTAL_ALTER_CONFIGS:
                 return new IncrementalAlterConfigsResponse(struct, version);
+            case ALTER_PARTITION_REASSIGNMENTS:
+                return new AlterPartitionReassignmentsResponse(struct, version);
+            case LIST_PARTITION_REASSIGNMENTS:
+                return new ListPartitionReassignmentsResponse(struct, version);
             default:
                 throw new AssertionError(String.format("ApiKey %s is not currently handled in `parseResponse`, the " +
                         "code should be updated to do so.", apiKey));

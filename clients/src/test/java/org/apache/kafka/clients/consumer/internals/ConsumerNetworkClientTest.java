@@ -48,7 +48,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -242,7 +241,7 @@ public class ConsumerNetworkClientTest {
             fail("Expected authentication error thrown");
         } catch (AuthenticationException e) {
             // After the exception is raised, it should have been cleared
-            assertNull(metadata.getAndClearMetadataException());
+            metadata.maybeThrowAnyException();
         }
     }
 

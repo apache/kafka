@@ -83,15 +83,15 @@ class SimpleFetchTest {
     EasyMock.expect(log.logEndOffset).andReturn(leaderLEO).anyTimes()
     EasyMock.expect(log.dir).andReturn(TestUtils.tempDir()).anyTimes()
     EasyMock.expect(log.logEndOffsetMetadata).andReturn(LogOffsetMetadata(leaderLEO)).anyTimes()
-    EasyMock.expect(log.highWatermarkMetadata).andReturn(LogOffsetMetadata(partitionHW)).anyTimes()
+    EasyMock.expect(log.maybeIncrementHighWatermark(EasyMock.anyObject[LogOffsetMetadata]))
+      .andReturn(Some(LogOffsetMetadata(partitionHW))).anyTimes()
     EasyMock.expect(log.highWatermark).andReturn(partitionHW).anyTimes()
     EasyMock.expect(log.lastStableOffset).andReturn(partitionHW).anyTimes()
     EasyMock.expect(log.read(
       startOffset = 0,
       maxLength = fetchSize,
-      maxOffset = Some(partitionHW),
-      minOneMessage = true,
-      includeAbortedTxns = false))
+      isolation = FetchHighWatermark,
+      minOneMessage = true))
       .andReturn(FetchDataInfo(
         LogOffsetMetadata(0L, 0L, 0),
         MemoryRecords.withRecords(CompressionType.NONE, recordToHW)
@@ -99,9 +99,8 @@ class SimpleFetchTest {
     EasyMock.expect(log.read(
       startOffset = 0,
       maxLength = fetchSize,
-      maxOffset = None,
-      minOneMessage = true,
-      includeAbortedTxns = false))
+      isolation = FetchLogEnd,
+      minOneMessage = true))
       .andReturn(FetchDataInfo(
         LogOffsetMetadata(0L, 0L, 0),
         MemoryRecords.withRecords(CompressionType.NONE, recordToLEO)
@@ -123,7 +122,7 @@ class SimpleFetchTest {
     val partition = replicaManager.createPartition(new TopicPartition(topic, partitionId))
 
     // create the leader replica with the local log
-    log.highWatermark = partitionHW
+    log.updateHighWatermark(partitionHW)
     partition.leaderReplicaIdOpt = Some(configs.head.brokerId)
     partition.setLog(log, false)
 

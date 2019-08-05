@@ -81,7 +81,7 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
   private val numPartitions = 10
   private val producers = new ArrayBuffer[KafkaProducer[String, String]]
   private val consumers = new ArrayBuffer[KafkaConsumer[String, String]]
-  private val adminClients = new ArrayBuffer[AdminClient]()
+  private val adminClients = new ArrayBuffer[Admin]()
   private val clientThreads = new ArrayBuffer[ShutdownableThread]()
   private val executors = new ArrayBuffer[ExecutorService]
   private val topic = "testtopic"
@@ -1070,7 +1070,7 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
     securityProps(props, props.keySet)
   }
 
-  private def createAdminClient(securityProtocol: SecurityProtocol, listenerName: String): AdminClient = {
+  private def createAdminClient(securityProtocol: SecurityProtocol, listenerName: String): Admin = {
     val config = clientProps(securityProtocol)
     val bootstrapServers = TestUtils.bootstrapServers(servers, new ListenerName(listenerName))
     config.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers)
@@ -1109,7 +1109,7 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
     }, "Did not fail authentication with invalid config")
   }
 
-  private def describeConfig(adminClient: AdminClient, servers: Seq[KafkaServer] = this.servers): Config = {
+  private def describeConfig(adminClient: Admin, servers: Seq[KafkaServer] = this.servers): Config = {
     val configResources = servers.map { server =>
       new ConfigResource(ConfigResource.Type.BROKER, server.config.brokerId.toString)
     }
@@ -1157,7 +1157,7 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
     newStoreProps
   }
 
-  private def alterSslKeystore(adminClient: AdminClient, props: Properties, listener: String, expectFailure: Boolean  = false): Unit = {
+  private def alterSslKeystore(adminClient: Admin, props: Properties, listener: String, expectFailure: Boolean  = false): Unit = {
     val configPrefix = listenerPrefix(listener)
     val newProps = securityProps(props, KEYSTORE_PROPS, configPrefix)
     reconfigureServers(newProps, perBrokerConfig = true,
@@ -1189,14 +1189,14 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
     waitForConfig(s"$configPrefix$SSL_KEYSTORE_LOCATION_CONFIG", props.getProperty(SSL_KEYSTORE_LOCATION_CONFIG))
   }
 
-  private def serverEndpoints(adminClient: AdminClient): String = {
+  private def serverEndpoints(adminClient: Admin): String = {
     val nodes = adminClient.describeCluster().nodes().get
     nodes.asScala.map { node =>
       s"${node.host}:${node.port}"
     }.mkString(",")
   }
 
-  private def alterAdvertisedListener(adminClient: AdminClient, externalAdminClient: AdminClient, oldHost: String, newHost: String): Unit = {
+  private def alterAdvertisedListener(adminClient: Admin, externalAdminClient: Admin, oldHost: String, newHost: String): Unit = {
     val configs = servers.map { server =>
       val resource = new ConfigResource(ConfigResource.Type.BROKER, server.config.brokerId.toString)
       val newListeners = server.config.advertisedListeners.map { e =>

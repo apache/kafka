@@ -27,7 +27,7 @@ import java.util.Properties
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig}
 import kafka.server.KafkaConfig
 import kafka.integration.KafkaServerTestHarness
-import org.apache.kafka.clients.admin.{AdminClient, AdminClientConfig}
+import org.apache.kafka.clients.admin.{Admin, AdminClient, AdminClientConfig}
 import org.apache.kafka.common.network.{ListenerName, Mode}
 import org.apache.kafka.common.serialization.{ByteArrayDeserializer, ByteArraySerializer, Deserializer, Serializer}
 import org.junit.{After, Before}
@@ -49,7 +49,7 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
 
   private val consumers = mutable.Buffer[KafkaConsumer[_, _]]()
   private val producers = mutable.Buffer[KafkaProducer[_, _]]()
-  private val adminClients = mutable.Buffer[AdminClient]()
+  private val adminClients = mutable.Buffer[Admin]()
 
   protected def interBrokerListenerName: ListenerName = listenerName
 
@@ -138,7 +138,7 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
     consumer
   }
 
-  def createAdminClient(configOverrides: Properties = new Properties): AdminClient = {
+  def createAdminClient(configOverrides: Properties = new Properties): Admin = {
     val props = new Properties
     props ++= adminClientConfig
     props ++= configOverrides

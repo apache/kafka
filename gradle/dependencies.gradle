@@ -65,6 +65,7 @@ versions += [
   argparse4j: "0.7.0",
   bcpkix: "1.61",
   checkstyle: "8.20",
+  commonsCli: "1.4",
   gradle: "5.4.1",
   gradleVersionsPlugin: "0.21.0",
   grgit: "3.1.1",
@@ -112,7 +113,7 @@ versions += [
   spotbugs: "3.1.12",
   spotbugsPlugin: "1.6.9",
   spotlessPlugin: "3.23.0",
-  zookeeper: "3.4.14",
+  zookeeper: "3.5.5",
   zstd: "1.4.0-1"
 ]
 
@@ -129,6 +130,7 @@ libs += [
   apachedsJdbmPartition: "org.apache.directory.server:apacheds-jdbm-partition:$versions.apacheds",
   argparse4j: "net.sourceforge.argparse4j:argparse4j:$versions.argparse4j",
   bcpkix: "org.bouncycastle:bcpkix-jdk15on:$versions.bcpkix",
+  commonsCli: "commons-cli:commons-cli:$versions.commonsCli",
   easymock: "org.easymock:easymock:$versions.easymock",
   jacksonDatabind: "com.fasterxml.jackson.core:jackson-databind:$versions.jackson",
   jacksonDataformatCsv: "com.fasterxml.jackson.dataformat:jackson-dataformat-csv:$versions.jackson",

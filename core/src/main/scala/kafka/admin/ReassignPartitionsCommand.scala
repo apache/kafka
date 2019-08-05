@@ -27,7 +27,7 @@ import kafka.utils._
 import kafka.utils.json.JsonValue
 import kafka.zk.{AdminZkClient, KafkaZkClient}
 import org.apache.kafka.clients.admin.DescribeReplicaLogDirsResult.ReplicaLogDirInfo
-import org.apache.kafka.clients.admin.{AdminClientConfig, AlterReplicaLogDirsOptions, AdminClient => JAdminClient}
+import org.apache.kafka.clients.admin.{Admin, AdminClientConfig, AlterReplicaLogDirsOptions, AdminClient => JAdminClient}
 import org.apache.kafka.common.errors.ReplicaNotAvailableException
 import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.utils.{Time, Utils}
@@ -70,7 +70,7 @@ object ReassignPartitionsCommand extends Logging {
     } finally zkClient.close()
   }
 
-  private def createAdminClient(opts: ReassignPartitionsCommandOptions): Option[JAdminClient] = {
+  private def createAdminClient(opts: ReassignPartitionsCommandOptions): Option[Admin] = {
     if (opts.options.has(opts.bootstrapServerOpt)) {
       val props = if (opts.options.has(opts.commandConfigOpt))
         Utils.loadProps(opts.options.valueOf(opts.commandConfigOpt))
@@ -84,13 +84,13 @@ object ReassignPartitionsCommand extends Logging {
     }
   }
 
-  def verifyAssignment(zkClient: KafkaZkClient, adminClientOpt: Option[JAdminClient], opts: ReassignPartitionsCommandOptions) {
+  def verifyAssignment(zkClient: KafkaZkClient, adminClientOpt: Option[Admin], opts: ReassignPartitionsCommandOptions) {
     val jsonFile = opts.options.valueOf(opts.reassignmentJsonFileOpt)
     val jsonString = Utils.readFileAsString(jsonFile)
     verifyAssignment(zkClient, adminClientOpt, jsonString)
   }
 
-  def verifyAssignment(zkClient: KafkaZkClient, adminClientOpt: Option[JAdminClient], jsonString: String): Unit = {
+  def verifyAssignment(zkClient: KafkaZkClient, adminClientOpt: Option[Admin], jsonString: String): Unit = {
     println("Status of partition reassignment: ")
     val adminZkClient = new AdminZkClient(zkClient)
     val (partitionsToBeReassigned, replicaAssignment) = parsePartitionReassignmentData(jsonString)
@@ -196,7 +196,7 @@ object ReassignPartitionsCommand extends Logging {
     (partitionsToBeReassigned, currentAssignment)
   }
 
-  def executeAssignment(zkClient: KafkaZkClient, adminClientOpt: Option[JAdminClient], opts: ReassignPartitionsCommandOptions) {
+  def executeAssignment(zkClient: KafkaZkClient, adminClientOpt: Option[Admin], opts: ReassignPartitionsCommandOptions) {
     val reassignmentJsonFile =  opts.options.valueOf(opts.reassignmentJsonFileOpt)
     val reassignmentJsonString = Utils.readFileAsString(reassignmentJsonFile)
     val interBrokerThrottle = opts.options.valueOf(opts.interBrokerThrottleOpt)
@@ -205,7 +205,7 @@ object ReassignPartitionsCommand extends Logging {
     executeAssignment(zkClient, adminClientOpt, reassignmentJsonString, Throttle(interBrokerThrottle, replicaAlterLogDirsThrottle), timeoutMs)
   }
 
-  def executeAssignment(zkClient: KafkaZkClient, adminClientOpt: Option[JAdminClient], reassignmentJsonString: String, throttle: Throttle, timeoutMs: Long = 10000L) {
+  def executeAssignment(zkClient: KafkaZkClient, adminClientOpt: Option[Admin], reassignmentJsonString: String, throttle: Throttle, timeoutMs: Long = 10000L) {
     val (partitionAssignment, replicaAssignment) = parseAndValidate(zkClient, reassignmentJsonString)
     val adminZkClient = new AdminZkClient(zkClient)
     val reassignPartitionsCommand = new ReassignPartitionsCommand(zkClient, adminClientOpt, partitionAssignment.toMap, replicaAssignment, adminZkClient)
@@ -371,7 +371,7 @@ object ReassignPartitionsCommand extends Logging {
     }.toMap
   }
 
-  private def checkIfReplicaReassignmentSucceeded(adminClientOpt: Option[JAdminClient], replicaAssignment: Map[TopicPartitionReplica, String])
+  private def checkIfReplicaReassignmentSucceeded(adminClientOpt: Option[Admin], replicaAssignment: Map[TopicPartitionReplica, String])
   :Map[TopicPartitionReplica, ReassignmentStatus] = {
 
     val replicaLogDirInfos = {
@@ -502,7 +502,7 @@ object ReassignPartitionsCommand extends Logging {
 }
 
 class ReassignPartitionsCommand(zkClient: KafkaZkClient,
-                                adminClientOpt: Option[JAdminClient],
+                                adminClientOpt: Option[Admin],
                                 proposedPartitionAssignment: Map[TopicPartition, Seq[Int]],
                                 proposedReplicaAssignment: Map[TopicPartitionReplica, String] = Map.empty,
                                 adminZkClient: AdminZkClient)
@@ -596,7 +596,7 @@ class ReassignPartitionsCommand(zkClient: KafkaZkClient,
     }.mkString(",")
 
   private def alterReplicaLogDirsIgnoreReplicaNotAvailable(replicaAssignment: Map[TopicPartitionReplica, String],
-                                                           adminClient: JAdminClient,
+                                                           adminClient: Admin,
                                                            timeoutMs: Long): Set[TopicPartitionReplica] = {
     val alterReplicaLogDirsResult = adminClient.alterReplicaLogDirs(replicaAssignment.asJava, new AlterReplicaLogDirsOptions().timeoutMs(timeoutMs.toInt))
     val replicasAssignedToFutureDir = alterReplicaLogDirsResult.values().asScala.flatMap { case (replica, future) => {
