@@ -64,6 +64,14 @@ public class OptimizableRepartitionNode<K, V> extends BaseRepartitionNode<K, V> 
         return repartitionTopic;
     }
 
+    public InternalTopicProperties internalTopicProperties() {
+        return internalTopicProperties;
+    }
+
+    public StreamPartitioner<K, V> partitioner() {
+        return partitioner;
+    }
+
     @Override
     Serializer<V> getValueSerializer() {
         return valueSerde != null ? valueSerde.serializer() : null;
@@ -166,7 +174,7 @@ public class OptimizableRepartitionNode<K, V> extends BaseRepartitionNode<K, V> 
             return this;
         }
 
-        public OptimizableRepartitionNodeBuilder<K, V> withStreamsPartitioner(final StreamPartitioner<K, V> partitioner) {
+        public OptimizableRepartitionNodeBuilder<K, V> withStreamPartitioner(final StreamPartitioner<K, V> partitioner) {
             this.partitioner = partitioner;
             return this;
         }

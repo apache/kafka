@@ -50,6 +50,7 @@ import org.apache.kafka.streams.kstream.internals.graph.StreamTableJoinNode;
 import org.apache.kafka.streams.kstream.internals.graph.StreamsGraphNode;
 import org.apache.kafka.streams.processor.FailOnInvalidTimestamp;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
+import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.TopicNameExtractor;
 import org.apache.kafka.streams.processor.internals.StaticTopicNameExtractor;
 import org.apache.kafka.streams.state.StoreBuilder;
@@ -912,6 +913,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
                                                      final Serde<V1> valSerde,
                                                      final String repartitionTopicNamePrefix,
                                                      final InternalTopicProperties internalTopicProperties,
+                                                     final StreamPartitioner<K1, V1> partitioner,
                                                      final OptimizableRepartitionNodeBuilder<K1, V1> optimizableRepartitionNodeBuilder) {
 
 
@@ -934,6 +936,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
             .withSinkName(sinkName)
             .withProcessorParameters(processorParameters)
             .withInternalTopicProperties(internalTopicProperties)
+            .withStreamPartitioner(partitioner)
             // reusing the source name for the graph node name
             // adding explicit variable as it simplifies logic
             .withNodeName(sourceName);
@@ -952,6 +955,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
             keySerde,
             valSerde,
             repartitionTopicNamePrefix,
+            null,
             null,
             optimizableRepartitionNodeBuilder
         );

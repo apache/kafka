@@ -24,6 +24,7 @@ import org.apache.kafka.streams.kstream.GlobalKTable;
 import org.apache.kafka.streams.kstream.Grouped;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
+import org.apache.kafka.streams.kstream.internals.RepartitionedInternal.InternalTopicProperties;
 import org.apache.kafka.streams.kstream.internals.graph.GlobalStoreNode;
 import org.apache.kafka.streams.kstream.internals.graph.OptimizableRepartitionNode;
 import org.apache.kafka.streams.kstream.internals.graph.ProcessorParameters;
@@ -32,6 +33,7 @@ import org.apache.kafka.streams.kstream.internals.graph.StreamSourceNode;
 import org.apache.kafka.streams.kstream.internals.graph.StreamsGraphNode;
 import org.apache.kafka.streams.kstream.internals.graph.TableSourceNode;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
+import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
@@ -313,7 +315,7 @@ public class InternalStreamsBuilder implements InternalNameProvider {
     @SuppressWarnings("unchecked")
     private void maybeOptimizeRepartitionOperations() {
         maybeUpdateKeyChangingRepartitionNodeMap();
-        final Iterator<Entry<StreamsGraphNode, LinkedHashSet<OptimizableRepartitionNode>>> entryIterator =  keyChangingOperationsToOptimizableRepartitionNodes.entrySet().iterator();
+        final Iterator<Entry<StreamsGraphNode, LinkedHashSet<OptimizableRepartitionNode>>> entryIterator = keyChangingOperationsToOptimizableRepartitionNodes.entrySet().iterator();
 
         while (entryIterator.hasNext()) {
             final Map.Entry<StreamsGraphNode, LinkedHashSet<OptimizableRepartitionNode>> entry = entryIterator.next();
@@ -327,10 +329,14 @@ public class InternalStreamsBuilder implements InternalNameProvider {
             final GroupedInternal groupedInternal = new GroupedInternal(getRepartitionSerdes(entry.getValue()));
 
             final String repartitionTopicName = getFirstRepartitionTopicName(entry.getValue());
+            final StreamPartitioner partitioner = getFirstStreamPartitioner(entry.getValue());
+            final InternalTopicProperties internalTopicProperties = getFirstInternalTopicProperties(entry.getValue());
             //passing in the name of the first repartition topic, re-used to create the optimized repartition topic
             final StreamsGraphNode optimizedSingleRepartition = createRepartitionNode(repartitionTopicName,
                                                                                       groupedInternal.keySerde(),
-                                                                                      groupedInternal.valueSerde());
+                                                                                      groupedInternal.valueSerde(),
+                                                                                      partitioner,
+                                                                                      internalTopicProperties);
 
             // re-use parent buildPriority to make sure the single repartition graph node is evaluated before downstream nodes
             optimizedSingleRepartition.setBuildPriority(keyChangingNode.buildPriority());
@@ -405,13 +411,18 @@ public class InternalStreamsBuilder implements InternalNameProvider {
     @SuppressWarnings("unchecked")
     private OptimizableRepartitionNode createRepartitionNode(final String repartitionTopicName,
                                                              final Serde keySerde,
-                                                             final Serde valueSerde) {
+                                                             final Serde valueSerde,
+                                                             StreamPartitioner partitioner,
+                                                             InternalTopicProperties internalTopicProperties) {
 
         final OptimizableRepartitionNode.OptimizableRepartitionNodeBuilder repartitionNodeBuilder = OptimizableRepartitionNode.optimizableRepartitionNodeBuilder();
+
         KStreamImpl.createRepartitionedSource(this,
                                               keySerde,
                                               valueSerde,
                                               repartitionTopicName,
+                                              internalTopicProperties,
+                                              partitioner,
                                               repartitionNodeBuilder);
 
         // ensures setting the repartition topic to the name of the
@@ -435,6 +446,15 @@ public class InternalStreamsBuilder implements InternalNameProvider {
 
     private String getFirstRepartitionTopicName(final Collection<OptimizableRepartitionNode> repartitionNodes) {
         return repartitionNodes.iterator().next().repartitionTopic();
+    }
+
+    private InternalTopicProperties getFirstInternalTopicProperties(final Collection<OptimizableRepartitionNode> repartitionNodes) {
+        return repartitionNodes.iterator().next().internalTopicProperties();
+    }
+
+    @SuppressWarnings("unchecked")
+    private <K, V> StreamPartitioner<K, V> getFirstStreamPartitioner(final Collection<OptimizableRepartitionNode> repartitionNodes) {
+        return repartitionNodes.iterator().next().partitioner();
     }
 
     @SuppressWarnings("unchecked")
