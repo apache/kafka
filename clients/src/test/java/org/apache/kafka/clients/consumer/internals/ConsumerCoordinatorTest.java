@@ -102,6 +102,7 @@ import static java.util.Collections.singleton;
 import static java.util.Collections.singletonList;
 import static java.util.Collections.singletonMap;
 import static org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.RebalanceProtocol.COOPERATIVE;
+import static org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.RebalanceProtocol.EAGER;
 import static org.apache.kafka.test.TestUtils.toSet;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -555,8 +556,7 @@ public class ConsumerCoordinatorTest {
         assertFalse(coordinator.rejoinNeededOrPending());
         assertEquals(toSet(newAssignment), subscriptions.assignedPartitions());
         assertEquals(toSet(newSubscription), subscriptions.groupSubscription());
-        assertEquals(0, rebalanceListener.revokedCount);
-        assertNull(rebalanceListener.revoked);
+        assertEquals(protocol == EAGER ? 1 : 0, rebalanceListener.revokedCount);
         assertEquals(1, rebalanceListener.assignedCount);
         assertEquals(assigned, rebalanceListener.assigned);
     }

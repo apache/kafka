@@ -263,7 +263,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         }
     }
 
-    private Exception maybeInvokePartitionsAssigned(final Set<TopicPartition> assignedPartitions) {
+    private Exception invokePartitionsAssigned(final Set<TopicPartition> assignedPartitions) {
         log.info("Adding newly assigned partitions: {}", Utils.join(assignedPartitions, ", "));
 
         ConsumerRebalanceListener listener = subscriptions.rebalanceListener();
@@ -280,39 +280,35 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         return null;
     }
 
-    private Exception maybeInvokePartitionsRevoked(final Set<TopicPartition> revokedPartitions) {
-        if (!revokedPartitions.isEmpty()) {
-            log.info("Revoke previously assigned partitions {}", Utils.join(revokedPartitions, ", "));
+    private Exception invokePartitionsRevoked(final Set<TopicPartition> revokedPartitions) {
+        log.info("Revoke previously assigned partitions {}", Utils.join(revokedPartitions, ", "));
 
-            ConsumerRebalanceListener listener = subscriptions.rebalanceListener();
-            try {
-                listener.onPartitionsRevoked(revokedPartitions);
-            } catch (WakeupException | InterruptException e) {
-                throw e;
-            } catch (Exception e) {
-                log.error("User provided listener {} failed on invocation of onPartitionsRevoked for partitions {}",
-                    listener.getClass().getName(), revokedPartitions, e);
-                return e;
-            }
+        ConsumerRebalanceListener listener = subscriptions.rebalanceListener();
+        try {
+            listener.onPartitionsRevoked(revokedPartitions);
+        } catch (WakeupException | InterruptException e) {
+            throw e;
+        } catch (Exception e) {
+            log.error("User provided listener {} failed on invocation of onPartitionsRevoked for partitions {}",
+                listener.getClass().getName(), revokedPartitions, e);
+            return e;
         }
 
         return null;
     }
 
-    private Exception maybeInvokePartitionsLost(final String rootCause, final Set<TopicPartition> lostPartitions) {
-        if (!lostPartitions.isEmpty()) {
-            log.info("Lost previously assigned partitions {} due to {}", Utils.join(lostPartitions, ", "), rootCause);
+    private Exception invokePartitionsLost(final String rootCause, final Set<TopicPartition> lostPartitions) {
+        log.info("Lost previously assigned partitions {} due to {}", Utils.join(lostPartitions, ", "), rootCause);
 
-            ConsumerRebalanceListener listener = subscriptions.rebalanceListener();
-            try {
-                listener.onPartitionsLost(lostPartitions);
-            } catch (WakeupException | InterruptException e) {
-                throw e;
-            } catch (Exception e) {
-                log.error("User provided listener {} failed on invocation of onPartitionsLost for partitions {}",
-                    listener.getClass().getName(), lostPartitions, e);
-                return e;
-            }
+        ConsumerRebalanceListener listener = subscriptions.rebalanceListener();
+        try {
+            listener.onPartitionsLost(lostPartitions);
+        } catch (WakeupException | InterruptException e) {
+            throw e;
+        } catch (Exception e) {
+            log.error("User provided listener {} failed on invocation of onPartitionsLost for partitions {}",
+                listener.getClass().getName(), lostPartitions, e);
+            return e;
         }
 
         return null;
@@ -370,7 +366,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                 // assign partitions that are not yet owned
                 subscriptions.assignFromSubscribed(assignedPartitions);
 
-                firstException.compareAndSet(null, maybeInvokePartitionsAssigned(addedPartitions));
+                firstException.compareAndSet(null, invokePartitionsAssigned(addedPartitions));
 
                 break;
 
@@ -386,12 +382,14 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                     Utils.join(revokedPartitions, ", "));
 
                 // revoke partitions that was previously owned but no longer assigned
-                firstException.compareAndSet(null, maybeInvokePartitionsRevoked(revokedPartitions));
+                if (!revokedPartitions.isEmpty()) {
+                    firstException.compareAndSet(null, invokePartitionsRevoked(revokedPartitions));
+                }
 
                 subscriptions.assignFromSubscribed(assignedPartitions);
 
                 // add partitions that were not previously owned but are now assigned
-                firstException.compareAndSet(null, maybeInvokePartitionsAssigned(addedPartitions));
+                firstException.compareAndSet(null, invokePartitionsAssigned(addedPartitions));
 
                 // if revoked any partitions, need to re-join the group afterwards
                 if (!revokedPartitions.isEmpty()) {
@@ -646,17 +644,20 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             memberId.equals(Generation.NO_GENERATION.memberId)) {
 
             revokedPartitions = new HashSet<>(subscriptions.assignedPartitions());
-            exception = maybeInvokePartitionsLost(
-                "generation has been reset because consumer has been kicked out of the group",
-                revokedPartitions);
 
-            subscriptions.assignFromSubscribed(Collections.emptySet());
+            if (!revokedPartitions.isEmpty()) {
+                exception = invokePartitionsLost(
+                    "generation has been reset because consumer has been kicked out of the group",
+                    revokedPartitions);
+
+                subscriptions.assignFromSubscribed(Collections.emptySet());
+            }
         } else {
             switch (protocol) {
                 case EAGER:
                     // revoke all partitions
                     revokedPartitions = new HashSet<>(subscriptions.assignedPartitions());
-                    exception = maybeInvokePartitionsRevoked(revokedPartitions);
+                    exception = invokePartitionsRevoked(revokedPartitions);
 
                     subscriptions.assignFromSubscribed(Collections.emptySet());
 
@@ -670,7 +671,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                         .collect(Collectors.toSet());
 
                     if (!revokedPartitions.isEmpty()) {
-                        exception = maybeInvokePartitionsRevoked(revokedPartitions);
+                        exception = invokePartitionsRevoked(revokedPartitions);
 
                         ownedPartitions.removeAll(revokedPartitions);
                         subscriptions.assignFromSubscribed(ownedPartitions);
@@ -697,9 +698,9 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             Exception e;
 
             if (lostPartitions) {
-                e = maybeInvokePartitionsLost("reset generation", droppedPartitions);
+                e = invokePartitionsLost("reset generation", droppedPartitions);
             } else {
-                e = maybeInvokePartitionsRevoked(droppedPartitions);
+                e = invokePartitionsRevoked(droppedPartitions);
             }
 
             subscriptions.assignFromSubscribed(Collections.emptySet());
@@ -752,7 +753,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             if (!noLongerExistingPartitions.isEmpty()) {
                 ownedPartitions.removeAll(noLongerExistingPartitions);
 
-                Exception e = maybeInvokePartitionsLost("topic metadata has changed and therefore some topics may not exist any more",
+                Exception e = invokePartitionsLost("topic metadata has changed and therefore some topics may not exist any more",
                     noLongerExistingPartitions);
 
                 subscriptions.assignFromSubscribed(ownedPartitions);
