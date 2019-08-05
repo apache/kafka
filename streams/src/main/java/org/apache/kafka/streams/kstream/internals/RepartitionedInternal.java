@@ -26,6 +26,10 @@ public class RepartitionedInternal<K, V> extends Repartitioned<K, V> {
         super(repartitioned);
     }
 
+    public static <V, K> RepartitionedInternal<K, V> empty() {
+        return new RepartitionedInternal<>(Repartitioned.as(null));
+    }
+
     InternalTopicProperties toInternalTopicProperties() {
         return new InternalTopicProperties(numberOfPartitions());
     }

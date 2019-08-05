@@ -489,16 +489,19 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
 
     @Override
     public KStream<K, V> repartition() {
-        return repartition(null);
+        return repartition(RepartitionedInternal.empty());
     }
 
     @Override
     public KStream<K, V> repartition(final Repartitioned<K, V> repartitioned) {
+        Objects.requireNonNull(repartitioned, "repartitioned can't be null");
+
         final RepartitionedInternal<K, V> repartitionedInternal = new RepartitionedInternal<>(repartitioned);
+
         final String name = new NamedInternal(repartitionedInternal.name())
             .orElseGenerateWithPrefix(builder, REPARTITION_NAME);
 
-        //TODO: I don't like this. ideally it should be check against source topic
+        //TODO: I don't like this. ideally number of partitions should be checked against source topic
         if (!repartitionRequired && repartitionedInternal.numberOfPartitions() == null) {
             return new KStreamImpl<>(
                 name,
@@ -513,6 +516,14 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
 
         final OptimizableRepartitionNodeBuilder<K, V> optimizableRepartitionNodeBuilder =
             OptimizableRepartitionNode.optimizableRepartitionNodeBuilder();
+
+        if (repartitionedInternal.keySerde() == null) {
+            repartitionedInternal.withKeySerde(keySerde);
+        }
+
+        if (repartitionedInternal.valueSerde() == null) {
+            repartitionedInternal.withValueSerde(valSerde);
+        }
 
         final String repartitionedSourceName = createRepartitionedSource(
             builder,
@@ -539,9 +550,47 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
     }
 
     @Override
-    public <KR> KStream<KR, V> repartition(final KeyValueMapper<? super K, ? super V, ? extends KR> mapper,
+    public <KR> KStream<KR, V> repartition(final KeyValueMapper<? super K, ? super V, ? extends KR> selector,
                                            final Repartitioned<KR, V> repartitioned) {
-        return null;
+        RepartitionedInternal<KR, V> repartitionedInternal = new RepartitionedInternal<>(repartitioned);
+
+        final NamedInternal namedInternal = new NamedInternal(repartitionedInternal.name() + "-SELECT-KEY");
+
+        final String name = namedInternal.orElseGenerateWithPrefix(builder, REPARTITION_NAME);
+
+        final ProcessorGraphNode<K, V> selectKeyNode = internalSelectKey(selector, namedInternal);
+
+        builder.addGraphNode(this.streamsGraphNode, selectKeyNode);
+
+        final OptimizableRepartitionNodeBuilder<KR, V> optimizableRepartitionNodeBuilder =
+            OptimizableRepartitionNode.optimizableRepartitionNodeBuilder();
+
+        if (repartitionedInternal.valueSerde() == null) {
+            repartitionedInternal.withValueSerde(valSerde);
+        }
+
+        final String repartitionedSourceName = createRepartitionedSource(
+            builder,
+            repartitionedInternal.keySerde(),
+            repartitionedInternal.valueSerde(),
+            name,
+            repartitionedInternal.toInternalTopicProperties(),
+            optimizableRepartitionNodeBuilder
+        );
+
+        final OptimizableRepartitionNode<KR, V> optimizableRepartitionNode = optimizableRepartitionNodeBuilder.build();
+
+        builder.addGraphNode(this.streamsGraphNode, optimizableRepartitionNode);
+
+        return new KStreamImpl<>(
+            repartitionedSourceName,
+            repartitionedInternal.keySerde(),
+            repartitionedInternal.valueSerde(),
+            sourceNodes,
+            repartitionRequired,
+            optimizableRepartitionNode,
+            builder
+        );
     }
 
     @Override
