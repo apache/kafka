@@ -329,6 +329,7 @@ public class ImplicitLinkedHashCollection<E extends ImplicitLinkedHashCollection
      * @return      The matching element, or null if there were none.
      */
     final public E find(E key) {
+        if (size == 0) return null;
         int index = findIndexOfEqualElement(key);
         if (index == INVALID_INDEX) {
             return null;
