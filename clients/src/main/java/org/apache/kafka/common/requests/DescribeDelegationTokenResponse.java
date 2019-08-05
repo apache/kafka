@@ -19,12 +19,14 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.message.DescribeDelegationTokenResponseData;
 import org.apache.kafka.common.message.DescribeDelegationTokenResponseData.DescribedDelegationToken;
 import org.apache.kafka.common.message.DescribeDelegationTokenResponseData.DescribedDelegationTokenRenewer;
+import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.security.token.delegation.DelegationToken;
 import org.apache.kafka.common.security.token.delegation.TokenInformation;
 
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -63,6 +65,10 @@ public class DescribeDelegationTokenResponse extends AbstractResponse {
 
     public DescribeDelegationTokenResponse(Struct struct, short version) {
         this.data = new DescribeDelegationTokenResponseData(struct, version);
+    }
+
+    public static DescribeDelegationTokenResponse parse(ByteBuffer buffer, short version) {
+        return new DescribeDelegationTokenResponse(ApiKeys.DESCRIBE_DELEGATION_TOKEN.responseSchema(version).read(buffer), version);
     }
 
     @Override
