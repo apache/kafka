@@ -31,6 +31,7 @@ import org.apache.kafka.common.metrics.stats.Avg;
 import org.apache.kafka.common.metrics.stats.Count;
 import org.apache.kafka.common.metrics.stats.Max;
 import org.apache.kafka.common.metrics.stats.Rate;
+import org.apache.kafka.common.serialization.Serdes.StringSerde;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.DeserializationExceptionHandler;
@@ -51,6 +52,7 @@ import org.apache.kafka.streams.state.internals.ThreadCache;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.io.StringWriter;
+import java.nio.ByteBuffer;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
@@ -66,6 +68,9 @@ import static org.apache.kafka.streams.kstream.internals.metrics.Sensors.recordL
 public class StreamTask extends AbstractTask implements ProcessorNodePunctuator {
 
     private static final ConsumerRecord<Object, Object> DUMMY_RECORD = new ConsumerRecord<>(ProcessorContextImpl.NONEXIST_TOPIC, -1, -1L, null, null);
+    private static final byte LATEST_MAGIC_BYTE = 1; // version for committed metadata
+    private static final StringSerde STRING_SERDE = new StringSerde();
+
 
     private final Time time;
     private final long maxTaskIdleMs;
@@ -473,8 +478,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
             final TopicPartition partition = entry.getKey();
             final long offset = entry.getValue() + 1;
             final long partitionTime = getNextPartitionTime(partition);
-            consumedOffsetsAndMetadata.put(partition, new OffsetAndMetadata(offset,
-                                                                            ((Long) partitionTime).toString()));
+            consumedOffsetsAndMetadata.put(partition, new OffsetAndMetadata(offset, encodeTimestamp(partition, partitionTime)));
             stateMgr.putOffsetLimit(partition, offset);
         }
 
@@ -739,17 +743,13 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
 
     private void retrieveCommittedTimestamp(final TopicPartition partition) {
         final OffsetAndMetadata metadata = consumer.committed(partition);
-
-        if (metadata != null && metadata.metadata().length() != 0) {
-            try {
-                final long committedTimestamp = Long.parseLong(metadata.metadata());
-                partitionGroup.setPartitionTime(partition, committedTimestamp);
-                log.debug("A committed timestamp was detected: setting the partition time of partition {}"
-                          + " to {} in stream task {}", partition, committedTimestamp, this);
-            } catch (final NumberFormatException exc) {
-                log.error("Could not initialize partition time. Committed metadata is corrupted.", exc);
-            }
+        final long committedTimestamp = decodeTimestamp(partition, metadata.metadata());
+        if (committedTimestamp == -1) {
+            return;
         }
+        partitionGroup.setPartitionTime(partition, committedTimestamp);
+        log.debug("A committed timestamp was detected: setting the partition time of partition {}"
+                + " to {} in stream task {}", partition, committedTimestamp, this);
     }
 
     /**
@@ -937,6 +937,29 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
                 format("%sFailed to initialize task %s due to timeout.", logPrefix, id),
                 retriable
             );
+        }
+    }
+
+    static String encodeTimestamp(final TopicPartition partition, final long partitionTime) {
+        final byte[] bytes = ByteBuffer.allocate(9)
+            .put(LATEST_MAGIC_BYTE) 
+            .putLong(partitionTime)
+            .array();
+        return STRING_SERDE.deserializer().deserialize(partition.topic(), bytes);
+    }
+
+    static long decodeTimestamp(final TopicPartition partition, final String encodedMetadata) {
+        if (encodedMetadata == null || encodedMetadata.length() == 0) {
+            return -1;
+        }
+        final byte[] bytes = STRING_SERDE.serializer().serialize(partition.topic(), encodedMetadata);
+        final ByteBuffer buffer = ByteBuffer.wrap(bytes);
+        final byte storedMagicByte = buffer.get();
+        switch (storedMagicByte) {
+            case LATEST_MAGIC_BYTE:
+                return buffer.getLong();
+            default:
+                return -1;
         }
     }
 }

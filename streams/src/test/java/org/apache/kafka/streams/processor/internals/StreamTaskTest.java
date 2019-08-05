@@ -656,7 +656,13 @@ public class StreamTaskTest {
 
         // timestamp will be committed here
         task.commit();
-        assertTrue(Long.parseLong(task.consumer.committed(partition1).metadata()) == DEFAULT_TIMESTAMP);
+        final String metadata = task.consumer.committed(partition1).metadata();
+
+        assertTrue(StreamTask.decodeTimestamp(partition1, 
+            StreamTask.encodeTimestamp(partition1, DEFAULT_TIMESTAMP)) == DEFAULT_TIMESTAMP);
+        final long decodedTimestamp = StreamTask.decodeTimestamp(partition1,
+                                                                 metadata);
+        assertTrue(decodedTimestamp == DEFAULT_TIMESTAMP);
         // reset times here to artificially represent a restart
         task.resetTimes();
         assertTrue(task.partitionTime(partition1) == RecordQueue.UNKNOWN);
@@ -682,10 +688,13 @@ public class StreamTaskTest {
         //since consumer is mock, there is no real broker
         //so we need to manually commit the information to stimulate broker
         final Map<TopicPartition, OffsetAndMetadata> offsetMap = new HashMap<>();
-        offsetMap.put(partition1, new OffsetAndMetadata(DEFAULT_TIMESTAMP, "1000"));
+        final String encodedString = StreamTask.encodeTimestamp(partition1, DEFAULT_TIMESTAMP);
+        offsetMap.put(partition1, new OffsetAndMetadata(DEFAULT_TIMESTAMP, encodedString));
         task.consumer.commitSync(offsetMap);
 
-        assertTrue(Long.parseLong(task.consumer.committed(partition1).metadata()) == DEFAULT_TIMESTAMP);
+        final long decodedTimestamp = StreamTask.decodeTimestamp(partition1,
+                                                                 task.consumer.committed(partition1).metadata());
+        assertTrue(decodedTimestamp == DEFAULT_TIMESTAMP);
         // reset times here to artificially represent a restart
         task.resetTimes();
         assertTrue(task.partitionTime(partition1) == RecordQueue.UNKNOWN);
