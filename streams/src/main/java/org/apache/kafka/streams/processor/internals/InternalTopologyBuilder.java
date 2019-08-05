@@ -22,12 +22,12 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.errors.TopologyException;
+import org.apache.kafka.streams.kstream.internals.RepartitionedInternal.InternalTopicProperties;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.TimestampExtractor;
 import org.apache.kafka.streams.processor.TopicNameExtractor;
-import org.apache.kafka.streams.kstream.internals.RepartitionedInternal.InternalTopicProperties;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.internals.SessionStoreBuilder;
 import org.apache.kafka.streams.state.internals.TimestampedWindowStoreBuilder;
@@ -1075,7 +1075,11 @@ public class InternalTopologyBuilder {
                                                                  final RepartitionTopicConfig repartitionTopicConfig) {
         if (internalTopicNamesWithProperties.containsKey(topic)) {
             final InternalTopicProperties internalTopicProperties = internalTopicNamesWithProperties.get(topic);
-            repartitionTopicConfig.setNumberOfPartitions(internalTopicProperties.getNumberOfPartitions());
+            final Integer numberOfPartitions = internalTopicProperties.getNumberOfPartitions();
+
+            if (numberOfPartitions != null) {
+                repartitionTopicConfig.setNumberOfPartitions(numberOfPartitions);
+            }
         }
     }
 

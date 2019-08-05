@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.integration;
 
 import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.IntegerDeserializer;
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serdes;
@@ -40,15 +41,21 @@ import org.junit.Test;
 import org.junit.experimental.categories.Category;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Properties;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
+import static org.junit.Assert.assertEquals;
 
 @Category({IntegrationTest.class})
 public class KStreamRepartitionIntegrationTest {
     private static final int NUM_BROKERS = 1;
+    private final Pattern repartitionTopicPattern = Pattern.compile("Sink: .*-repartition");
 
     @ClassRule
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS);
@@ -56,8 +63,8 @@ public class KStreamRepartitionIntegrationTest {
     private static volatile AtomicInteger testNo = new AtomicInteger(0);
     private Properties streamsConfiguration;
     private KafkaStreams kafkaStreams;
-    private String inputTopic = "kstream-repartition-test-input-topic";
-    private String outputTopic = "kstream-repartition-test-output-topic";
+    private String inputTopic = "input-topic";
+    private String outputTopic = "output-topic";
 
     @Before
     public void before() throws InterruptedException {
@@ -85,8 +92,74 @@ public class KStreamRepartitionIntegrationTest {
     }
 
     @Test
-    public void shouldNotCreateRepartitionTopicIfKeyChangingOperationWasNotPerformed() {
+    public void shouldNotCreateRepartitionTopicIfKeyChangingOperationWasNotPerformed() throws ExecutionException, InterruptedException {
+        final long timestamp = System.currentTimeMillis();
 
+        sendEvents(
+            timestamp,
+            Arrays.asList(
+                new KeyValue<>(1, "A"),
+                new KeyValue<>(2, "B")
+            )
+        );
+
+        StreamsBuilder builder = new StreamsBuilder();
+
+        builder.stream(inputTopic, Consumed.with(Serdes.Integer(), Serdes.String()))
+            .repartition(Repartitioned.as("smart-repartition"))
+            .to(outputTopic);
+
+        startStreams(builder);
+
+        validateReceivedMessages(
+            new IntegerDeserializer(),
+            new StringDeserializer(),
+            Arrays.asList(
+                new KeyValueTimestamp<>(1, "A", timestamp),
+                new KeyValueTimestamp<>(2, "B", timestamp)
+            )
+        );
+
+        final String topology = builder.build().describe().toString();
+
+        assertEquals(0, getCountOfRepartitionTopicsFound(topology));
+    }
+
+    @Test
+    public void shouldCreateRepartitionTopicWhenRepartitionKeySelectorIsUsed() throws ExecutionException, InterruptedException {
+        final long timestamp = System.currentTimeMillis();
+
+        sendEvents(
+            timestamp,
+            Arrays.asList(
+                new KeyValue<>(1, "A"),
+                new KeyValue<>(2, "B")
+            )
+        );
+
+        StreamsBuilder builder = new StreamsBuilder();
+
+        final Repartitioned<String, String> repartitioned = Repartitioned.<String, String>as("smart-repartition")
+            .withKeySerde(Serdes.String());
+
+        builder.stream(inputTopic, Consumed.with(Serdes.Integer(), Serdes.String()))
+            .repartition((key, value) -> key.toString(), repartitioned)
+            .to(outputTopic);
+
+        startStreams(builder);
+
+        validateReceivedMessages(
+            new StringDeserializer(),
+            new StringDeserializer(),
+            Arrays.asList(
+                new KeyValueTimestamp<>("1", "A", timestamp),
+                new KeyValueTimestamp<>("2", "B", timestamp)
+            )
+        );
+
+        final String topology = builder.build().describe().toString();
+
+        assertEquals(1, getCountOfRepartitionTopicsFound(topology));
     }
 
     @Test
@@ -110,11 +183,22 @@ public class KStreamRepartitionIntegrationTest {
         startStreams(builder);
 
         validateReceivedMessages(
+            new IntegerDeserializer(),
+            new StringDeserializer(),
             Arrays.asList(
                 new KeyValueTimestamp<>(1, "A", timestamp),
                 new KeyValueTimestamp<>(2, "B", timestamp)
             )
         );
+    }
+
+    private int getCountOfRepartitionTopicsFound(final String topologyString) {
+        final Matcher matcher = repartitionTopicPattern.matcher(topologyString);
+        final List<String> repartitionTopicsFound = new ArrayList<>();
+        while (matcher.find()) {
+            repartitionTopicsFound.add(matcher.group());
+        }
+        return repartitionTopicsFound.size();
     }
 
     private void sendEvents(long timestamp,
@@ -137,7 +221,9 @@ public class KStreamRepartitionIntegrationTest {
         kafkaStreams.start();
     }
 
-    private <K, V> void validateReceivedMessages(final List<KeyValueTimestamp<K, V>> expectedRecords)
+    private <K, V> void validateReceivedMessages(Deserializer<K> keySerializer,
+                                                 Deserializer<V> valueSerializer,
+                                                 final List<KeyValueTimestamp<K, V>> expectedRecords)
         throws InterruptedException {
         final Properties consumerProperties = new Properties();
         consumerProperties.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
@@ -145,11 +231,11 @@ public class KStreamRepartitionIntegrationTest {
         consumerProperties.setProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         consumerProperties.setProperty(
             ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG,
-            IntegerDeserializer.class.getName()
+            keySerializer.getClass().getName()
         );
         consumerProperties.setProperty(
             ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG,
-            StringDeserializer.class.getName()
+            valueSerializer.getClass().getName()
         );
 
         IntegrationTestUtils.waitUntilFinalKeyValueTimestampRecordsReceived(

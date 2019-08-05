@@ -517,18 +517,14 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
         final OptimizableRepartitionNodeBuilder<K, V> optimizableRepartitionNodeBuilder =
             OptimizableRepartitionNode.optimizableRepartitionNodeBuilder();
 
-        if (repartitionedInternal.keySerde() == null) {
-            repartitionedInternal.withKeySerde(keySerde);
-        }
+        final Serde<K> keySerde = repartitionedInternal.keySerde() == null ? this.keySerde : repartitionedInternal.keySerde();
 
-        if (repartitionedInternal.valueSerde() == null) {
-            repartitionedInternal.withValueSerde(valSerde);
-        }
+        final Serde<V> valueSerde = repartitionedInternal.valueSerde() == null ? this.valSerde : repartitionedInternal.valueSerde();
 
         final String repartitionedSourceName = createRepartitionedSource(
             builder,
-            repartitionedInternal.keySerde(),
-            repartitionedInternal.valueSerde(),
+            keySerde,
+            valueSerde,
             name,
             repartitionedInternal.toInternalTopicProperties(),
             optimizableRepartitionNodeBuilder
@@ -540,8 +536,8 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
 
         return new KStreamImpl<>(
             repartitionedSourceName,
-            repartitionedInternal.keySerde(),
-            repartitionedInternal.valueSerde(),
+            keySerde,
+            valueSerde,
             sourceNodes,
             repartitionRequired,
             optimizableRepartitionNode,
@@ -565,14 +561,12 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
         final OptimizableRepartitionNodeBuilder<KR, V> optimizableRepartitionNodeBuilder =
             OptimizableRepartitionNode.optimizableRepartitionNodeBuilder();
 
-        if (repartitionedInternal.valueSerde() == null) {
-            repartitionedInternal.withValueSerde(valSerde);
-        }
+        final Serde<V> valueSerde = repartitionedInternal.valueSerde() == null ? this.valSerde : repartitionedInternal.valueSerde();
 
         final String repartitionedSourceName = createRepartitionedSource(
             builder,
             repartitionedInternal.keySerde(),
-            repartitionedInternal.valueSerde(),
+            valueSerde,
             name,
             repartitionedInternal.toInternalTopicProperties(),
             optimizableRepartitionNodeBuilder
@@ -580,12 +574,12 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
 
         final OptimizableRepartitionNode<KR, V> optimizableRepartitionNode = optimizableRepartitionNodeBuilder.build();
 
-        builder.addGraphNode(this.streamsGraphNode, optimizableRepartitionNode);
+        builder.addGraphNode(selectKeyNode, optimizableRepartitionNode);
 
         return new KStreamImpl<>(
             repartitionedSourceName,
             repartitionedInternal.keySerde(),
-            repartitionedInternal.valueSerde(),
+            valueSerde,
             sourceNodes,
             repartitionRequired,
             optimizableRepartitionNode,

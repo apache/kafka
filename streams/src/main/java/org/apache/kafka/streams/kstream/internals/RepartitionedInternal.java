@@ -55,13 +55,13 @@ public class RepartitionedInternal<K, V> extends Repartitioned<K, V> {
     }
 
     public static class InternalTopicProperties {
-        private final int numberOfPartitions;
+        private final Integer numberOfPartitions;
 
-        InternalTopicProperties(int numberOfPartitions) {
+        InternalTopicProperties(Integer numberOfPartitions) {
             this.numberOfPartitions = numberOfPartitions;
         }
 
-        public int getNumberOfPartitions() {
+        public Integer getNumberOfPartitions() {
             return numberOfPartitions;
         }
     }
