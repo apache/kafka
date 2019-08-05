@@ -246,7 +246,7 @@ public class StreamThreadTest {
             internalTopologyBuilder,
             config,
             clientSupplier,
-            clientSupplier.getAdminClient(config.getAdminConfigs(clientId)),
+            clientSupplier.getAdmin(config.getAdminConfigs(clientId)),
             processId,
             clientId,
             metrics,

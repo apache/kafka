@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.test;
 
+import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.MockAdminClient;
 import org.apache.kafka.clients.consumer.Consumer;
@@ -56,8 +57,14 @@ public class MockClientSupplier implements KafkaClientSupplier {
         this.cluster = cluster;
     }
 
+    @SuppressWarnings("deprecation")
     @Override
     public AdminClient getAdminClient(final Map<String, Object> config) {
+        return (AdminClient)getAdmin(config);
+    }
+
+    @Override
+    public Admin getAdmin(final Map<String, Object> config) {
         return new MockAdminClient(cluster.nodes(), cluster.nodeById(0));
     }
 

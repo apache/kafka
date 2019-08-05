@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams;
 
+import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.producer.Producer;
@@ -35,8 +36,21 @@ public interface KafkaClientSupplier {
      *
      * @param config Supplied by the {@link java.util.Properties} given to the {@link KafkaStreams}
      * @return an instance of {@link AdminClient}
+     * @deprecated Not used. Implement {@link #getAdmin} instead
      */
+    @Deprecated
     AdminClient getAdminClient(final Map<String, Object> config);
+
+    /**
+     * Create an {@link Admin} which is used for internal topic management.
+     *
+     * @param config Supplied by the {@link java.util.Properties} given to the {@link KafkaStreams}
+     * @return an instance of {@link Admin}
+     */
+    @SuppressWarnings("deprecation")
+    default Admin getAdmin(final Map<String, Object> config) {
+        return getAdminClient(config);
+    }
 
     /**
      * Create a {@link Producer} which is used to write records to sink topics.
