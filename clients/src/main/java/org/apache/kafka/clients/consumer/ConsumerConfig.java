@@ -569,14 +569,14 @@ public class ConsumerConfig extends AbstractConfig {
                                         CommonClientConfigs.DEFAULT_SECURITY_PROTOCOL,
                                         Importance.MEDIUM,
                                         CommonClientConfigs.SECURITY_PROTOCOL_DOC)
-                .define(LIST_KEY_DESERIALIZER_TYPE_CLASS_CONFIG,
-                        Type.STRING,
-                        Importance.MEDIUM,
-                        LIST_KEY_DESERIALIZER_TYPE_CLASS_DOC)
-                .define(LIST_KEY_DEERIALIZER_INNER_CLASS_CONFIG,
-                        Type.STRING,
-                        Importance.MEDIUM,
-                        LIST_KEY_DESERIALIZER_INNER_CLASS_DOC)
+                                .define(LIST_KEY_DESERIALIZER_TYPE_CLASS_CONFIG,
+                                        Type.CLASS,
+                                        Importance.MEDIUM,
+                                        LIST_KEY_DESERIALIZER_TYPE_CLASS_DOC)
+                                .define(LIST_KEY_DEERIALIZER_INNER_CLASS_CONFIG,
+                                        Type.CLASS,
+                                        Importance.MEDIUM,
+                                        LIST_KEY_DESERIALIZER_INNER_CLASS_DOC)
                                 .withClientSslSupport()
                                 .withClientSaslSupport();
     }
