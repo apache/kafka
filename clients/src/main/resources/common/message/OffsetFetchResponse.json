@@ -40,7 +40,7 @@
           "about": "The partition index." },
         { "name": "CommittedOffset", "type": "int64", "versions": "0+",
           "about": "The committed message offset." },
-        { "name": "CommittedLeaderEpoch", "type": "int32", "versions": "5+",
+        { "name": "CommittedLeaderEpoch", "type": "int32", "versions": "5+", "default": "-1",
           "about": "The leader epoch." },
         { "name": "Metadata", "type": "string", "versions": "0+", "nullableVersions": "0+",
           "about": "The partition metadata." },

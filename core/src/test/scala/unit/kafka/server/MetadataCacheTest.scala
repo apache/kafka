@@ -182,7 +182,7 @@ class MetadataCacheTest {
     val partitionMetadata = partitionMetadatas.get(0)
     assertEquals(0, partitionMetadata.partition)
     assertEquals(expectedError, partitionMetadata.error)
-    assertTrue(partitionMetadata.isr.isEmpty)
+    assertFalse(partitionMetadata.isr.isEmpty)
     assertEquals(1, partitionMetadata.replicas.size)
     assertEquals(0, partitionMetadata.replicas.get(0).id)
   }

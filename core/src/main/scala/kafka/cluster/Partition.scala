@@ -948,25 +948,13 @@ class Partition(val topicPartition: TopicPartition,
     // decide whether to only fetch from leader
     val localLog = localLogWithEpochOrException(currentLeaderEpoch, fetchOnlyFromLeader)
 
-    /* Read the LogOffsetMetadata prior to performing the read from the log.
-     * We use the LogOffsetMetadata to determine if a particular replica is in-sync or not.
-     * Using the log end offset after performing the read can lead to a race condition
-     * where data gets appended to the log immediately after the replica has consumed from it
-     * This can cause a replica to always be out of sync.
-     */
+    // Note we use the log end offset prior to the read. This ensures that any appends following
+    // the fetch do not prevent a follower from coming into sync.
     val initialHighWatermark = localLog.highWatermark
     val initialLogStartOffset = localLog.logStartOffset
     val initialLogEndOffset = localLog.logEndOffset
     val initialLastStableOffset = localLog.lastStableOffset
-
-    val maxOffsetOpt = fetchIsolation match {
-      case FetchLogEnd => None
-      case FetchHighWatermark => Some(initialHighWatermark)
-      case FetchTxnCommitted => Some(initialLastStableOffset)
-    }
-
-    val fetchedData = localLog.read(fetchOffset, maxBytes, maxOffsetOpt, minOneMessage,
-          includeAbortedTxns = fetchIsolation == FetchTxnCommitted)
+    val fetchedData = localLog.read(fetchOffset, maxBytes, fetchIsolation, minOneMessage)
 
     LogReadInfo(
       fetchedData = fetchedData,

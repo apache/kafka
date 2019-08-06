@@ -44,7 +44,9 @@ public interface ConsumerPartitionAssignor {
      * Return serialized data that will be included in the {@link Subscription} sent to the leader
      * and can be leveraged in {@link #assign(Cluster, GroupSubscription)} ((e.g. local host/rack information)
      *
-     * @return optional join subscription user data
+     * @param topics Topics subscribed to through {@link org.apache.kafka.clients.consumer.KafkaConsumer#subscribe(java.util.Collection)}
+     *               and variants
+     * @return nullable subscription user data
      */
     default ByteBuffer subscriptionUserData(Set<String> topics) {
         return null;
@@ -53,11 +55,11 @@ public interface ConsumerPartitionAssignor {
     /**
      * Perform the group assignment given the member subscriptions and current cluster metadata.
      * @param metadata Current topic/broker metadata known by consumer
-     * @param subscriptions Subscriptions from all members including metadata provided through {@link #subscriptionUserData(Set)}
-     * @return A map from the members to their respective assignment. This should have one entry
+     * @param groupSubscription Subscriptions from all members including metadata provided through {@link #subscriptionUserData(Set)}
+     * @return A map from the members to their respective assignments. This should have one entry
      *         for each member in the input subscription map.
      */
-    GroupAssignment assign(Cluster metadata, GroupSubscription subscriptions);
+    GroupAssignment assign(Cluster metadata, GroupSubscription groupSubscription);
 
     /**
      * Callback which is invoked when a group member receives its assignment from the leader.

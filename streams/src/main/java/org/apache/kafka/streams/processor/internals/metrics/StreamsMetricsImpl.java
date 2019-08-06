@@ -23,9 +23,12 @@ import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.Sensor.RecordingLevel;
 import org.apache.kafka.common.metrics.stats.Avg;
 import org.apache.kafka.common.metrics.stats.CumulativeCount;
+import org.apache.kafka.common.metrics.stats.CumulativeSum;
 import org.apache.kafka.common.metrics.stats.Max;
 import org.apache.kafka.common.metrics.stats.Rate;
+import org.apache.kafka.common.metrics.stats.Value;
 import org.apache.kafka.common.metrics.stats.WindowedCount;
+import org.apache.kafka.common.metrics.stats.WindowedSum;
 import org.apache.kafka.streams.StreamsMetrics;
 
 import java.util.Arrays;
@@ -54,17 +57,21 @@ public class StreamsMetricsImpl implements StreamsMetrics {
 
     public static final String THREAD_ID_TAG = "client-id";
     public static final String TASK_ID_TAG = "task-id";
+    public static final String STORE_ID_TAG = "state-id";
 
     public static final String ALL_TASKS = "all";
 
     public static final String LATENCY_SUFFIX = "-latency";
     public static final String AVG_SUFFIX = "-avg";
     public static final String MAX_SUFFIX = "-max";
+    public static final String MIN_SUFFIX = "-min";
     public static final String RATE_SUFFIX = "-rate";
     public static final String TOTAL_SUFFIX = "-total";
+    public static final String RATIO_SUFFIX = "-ratio";
 
     public static final String THREAD_LEVEL_GROUP = "stream-metrics";
     public static final String TASK_LEVEL_GROUP = "stream-task-metrics";
+    public static final String STATE_LEVEL_GROUP = "stream-state-metrics";
 
     public static final String PROCESSOR_NODE_METRICS_GROUP = "stream-processor-node-metrics";
     public static final String PROCESSOR_NODE_ID_TAG = "processor-node-id";
@@ -121,6 +128,18 @@ public class StreamsMetricsImpl implements StreamsMetrics {
                 metrics.removeSensor(threadLevelSensors.pop());
             }
         }
+    }
+
+    public Map<String, String> taskLevelTagMap(final String taskName) {
+        final Map<String, String> tagMap = threadLevelTagMap();
+        tagMap.put(TASK_ID_TAG, taskName);
+        return tagMap;
+    }
+
+    public Map<String, String> storeLevelTagMap(final String taskName, final String storeType, final String storeName) {
+        final Map<String, String> tagMap = taskLevelTagMap(taskName);
+        tagMap.put(storeType + "-" + STORE_ID_TAG, storeName);
+        return tagMap;
     }
 
     public final Sensor taskLevelSensor(final String taskName,
@@ -237,9 +256,7 @@ public class StreamsMetricsImpl implements StreamsMetrics {
             if (!storeLevelSensors.containsKey(key)) {
                 storeLevelSensors.put(key, new LinkedList<>());
             }
-
             final String fullSensorName = key + SENSOR_NAME_DELIMITER + sensorName;
-
             final Sensor sensor = metrics.sensor(fullSensorName, recordingLevel, parents);
 
             storeLevelSensors.get(key).push(fullSensorName);
@@ -454,12 +471,62 @@ public class StreamsMetricsImpl implements StreamsMetrics {
                                                  final String group,
                                                  final Map<String, String> tags,
                                                  final String operation) {
-        addInvocationRateAndCount(sensor,
-                                  group,
-                                  tags,
-                                  operation,
-                                  "The total number of " + operation,
-                                  "The average per-second number of " + operation);
+        addInvocationRateAndCount(
+            sensor,
+            group,
+            tags,
+            operation,
+            "The total number of " + operation,
+            "The average per-second number of " + operation
+        );
+    }
+
+    public static void addRateOfSumAndSumMetricsToSensor(final Sensor sensor,
+                                                         final String group,
+                                                         final Map<String, String> tags,
+                                                         final String operation,
+                                                         final String descriptionOfRate,
+                                                         final String descriptionOfTotal) {
+        addRateOfSumMetricToSensor(sensor, group, tags, operation, descriptionOfRate);
+        addSumMetricToSensor(sensor, group, tags, operation, descriptionOfTotal);
+    }
+
+    public static void addRateOfSumMetricToSensor(final Sensor sensor,
+                                                  final String group,
+                                                  final Map<String, String> tags,
+                                                  final String operation,
+                                                  final String description) {
+        sensor.add(new MetricName(operation + RATE_SUFFIX, group, description, tags),
+                   new Rate(TimeUnit.SECONDS, new WindowedSum()));
+    }
+
+    public static void addSumMetricToSensor(final Sensor sensor,
+                                            final String group,
+                                            final Map<String, String> tags,
+                                            final String operation,
+                                            final String description) {
+        sensor.add(new MetricName(operation + TOTAL_SUFFIX, group, description, tags), new CumulativeSum());
+    }
+
+    public static void addValueMetricToSensor(final Sensor sensor,
+                                              final String group,
+                                              final Map<String, String> tags,
+                                              final String name,
+                                              final String description) {
+        sensor.add(new MetricName(name, group, description, tags), new Value());
+    }
+
+    public static void addAvgAndSumMetricsToSensor(final Sensor sensor,
+                                                   final String group,
+                                                   final Map<String, String> tags,
+                                                   final String metricNamePrefix,
+                                                   final String descriptionOfAvg,
+                                                   final String descriptionOfTotal) {
+        sensor.add(new MetricName(metricNamePrefix + AVG_SUFFIX, group, descriptionOfAvg, tags), new Avg());
+        sensor.add(
+            new MetricName(metricNamePrefix + TOTAL_SUFFIX, group, descriptionOfTotal, tags),
+            new CumulativeSum()
+        );
     }
 
     /**

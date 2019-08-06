@@ -48,8 +48,8 @@ public abstract class AbstractPartitionAssignor implements ConsumerPartitionAssi
                                                              Map<String, Subscription> subscriptions);
 
     @Override
-    public GroupAssignment assign(Cluster metadata, GroupSubscription groupSubscriptions) {
-        Map<String, Subscription> subscriptions = groupSubscriptions.groupSubscription();
+    public GroupAssignment assign(Cluster metadata, GroupSubscription groupSubscription) {
+        Map<String, Subscription> subscriptions = groupSubscription.groupSubscription();
         Set<String> allSubscribedTopics = new HashSet<>();
         for (Map.Entry<String, Subscription> subscriptionEntry : subscriptions.entrySet())
             allSubscribedTopics.addAll(subscriptionEntry.getValue().topics());

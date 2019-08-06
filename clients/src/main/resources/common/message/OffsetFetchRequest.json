@@ -17,10 +17,13 @@
   "apiKey": 9,
   "type": "request",
   "name": "OffsetFetchRequest",
+  // In version 0, the request read offsets from ZK.
+  //
   // Starting in version 1, the broker supports fetching offsets from the internal __consumer_offsets topic.
   //
   // Starting in version 2, the request can contain a null topics array to indicate that offsets
-  // for all topics should be fetched.
+  // for all topics should be fetched. It also returns a top level error code
+  // for group or coordinator level errors.
   //
   // Version 3, 4, and 5 are the same as version 2.
   "validVersions": "0-5",
