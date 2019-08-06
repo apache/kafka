@@ -618,7 +618,10 @@ public class InternalTopologyBuilder {
     public final void addInternalTopic(final String topicName,
                                        final InternalTopicProperties internalTopicProperties) {
         addInternalTopic(topicName);
-        internalTopicNamesWithProperties.put(topicName, internalTopicProperties);
+        
+        if (internalTopicProperties != null) {
+            internalTopicNamesWithProperties.put(topicName, internalTopicProperties);
+        }
     }
 
     public final void copartitionSources(final Collection<String> sourceNodes) {

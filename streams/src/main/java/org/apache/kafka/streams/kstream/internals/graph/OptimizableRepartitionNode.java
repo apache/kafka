@@ -92,11 +92,7 @@ public class OptimizableRepartitionNode<K, V> extends BaseRepartitionNode<K, V> 
         final Serializer<K> keySerializer = keySerde != null ? keySerde.serializer() : null;
         final Deserializer<K> keyDeserializer = keySerde != null ? keySerde.deserializer() : null;
 
-        if (internalTopicProperties != null) {
-            topologyBuilder.addInternalTopic(repartitionTopic, internalTopicProperties);
-        } else {
-            topologyBuilder.addInternalTopic(repartitionTopic);
-        }
+        topologyBuilder.addInternalTopic(repartitionTopic, internalTopicProperties);
 
         topologyBuilder.addProcessor(
             processorParameters.processorName(),
