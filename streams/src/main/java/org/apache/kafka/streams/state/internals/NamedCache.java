@@ -270,6 +270,10 @@ class NamedCache {
         return keySetIterator(cache.navigableKeySet().subSet(from, true, to, true));
     }
 
+    public boolean isEmpty() {
+        return cache.isEmpty();
+    }
+
     private Iterator<Bytes> keySetIterator(final Set<Bytes> keySet) {
         return new TreeSet<>(keySet).iterator();
     }
