@@ -69,11 +69,11 @@ public class SecurityConfigTest {
         SecurityConfig.addConfiguredSecurityProviders(configs);
 
         Provider[] providers = Security.getProviders();
-        int providerIndex = getProviderIndexFromName(testScramSaslServerProvider.getName(), providers);
-        int provider1Index = getProviderIndexFromName(testPlainSaslServerProvider.getName(), providers);
+        int testScramSaslServerProviderIndex = getProviderIndexFromName(testScramSaslServerProvider.getName(), providers);
+        int testPlainSaslServerProviderIndex = getProviderIndexFromName(testPlainSaslServerProvider.getName(), providers);
 
         // validations
-        MatcherAssert.assertThat(testScramSaslServerProvider.getName() + " testProvider not found at expected index", providerIndex == 0);
-        MatcherAssert.assertThat(testPlainSaslServerProvider.getName() + " testProvider not found at expected index", provider1Index == 1);
+        MatcherAssert.assertThat(testScramSaslServerProvider.getName() + " testProvider not found at expected index", testScramSaslServerProviderIndex == 0);
+        MatcherAssert.assertThat(testPlainSaslServerProvider.getName() + " testProvider not found at expected index", testPlainSaslServerProviderIndex == 1);
     }
 }
