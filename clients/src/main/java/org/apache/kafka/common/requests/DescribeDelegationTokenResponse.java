@@ -95,9 +95,10 @@ public class DescribeDelegationTokenResponse extends AbstractResponse {
             .stream()
             .map(ddt -> new DelegationToken(new TokenInformation(
                 ddt.tokenId(),
-                new KafkaPrincipal(ddt.principalType(), ddt.principalName()), ddt.renewers()
+                new KafkaPrincipal(ddt.principalType(), ddt.principalName()),
+                ddt.renewers()
                     .stream()
-                    .map(ddtr -> new KafkaPrincipal(ddtr.principalType(), ddtr.principalType()))
+                    .map(ddtr -> new KafkaPrincipal(ddtr.principalType(), ddtr.principalName()))
                     .collect(Collectors.toList()), ddt.issueTimestamp(), ddt.maxTimestamp(), ddt.expiryTimestamp()),
                 ddt.hmac()))
             .collect(Collectors.toList());

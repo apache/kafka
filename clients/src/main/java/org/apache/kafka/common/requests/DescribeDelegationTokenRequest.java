@@ -35,7 +35,7 @@ public class DescribeDelegationTokenRequest extends AbstractRequest {
         public Builder(List<KafkaPrincipal> owners) {
             super(ApiKeys.DESCRIBE_DELEGATION_TOKEN);
             this.data = new DescribeDelegationTokenRequestData()
-                .setOwners(owners
+                .setOwners(owners == null ? null : owners
                     .stream()
                     .map(owner -> new DescribeDelegationTokenRequestData.DescribeDelegationTokenOwner()
                             .setPrincipalName(owner.getName())
