@@ -68,13 +68,19 @@ final class SchemaGenerator {
      */
     private final Map<String, MessageInfo> messages;
 
+    /**
+     * The versions that implement a KIP-482 flexible schema.
+     */
+    private Versions flexibleVersions;
+
     SchemaGenerator(HeaderGenerator headerGenerator, StructRegistry structRegistry) {
         this.headerGenerator = headerGenerator;
         this.structRegistry = structRegistry;
         this.messages = new HashMap<>();
     }
 
-    void generateSchemas(MessageSpec message) throws Exception {
+    void generateSchemas(MessageSpec message, Versions flexibleVersions) throws Exception {
+        this.flexibleVersions = flexibleVersions;
         // Generate schemas for inline structures
         generateSchemas(message.generatedClassName(), message.struct(),
             message.struct().versions());
@@ -195,11 +201,20 @@ final class SchemaGenerator {
             headerGenerator.addImport(MessageGenerator.TYPE_CLASS);
             return nullable ? "Type.NULLABLE_BYTES" : "Type.BYTES";
         } else if (type.isArray()) {
-            headerGenerator.addImport(MessageGenerator.ARRAYOF_CLASS);
-            FieldType.ArrayType arrayType = (FieldType.ArrayType) type;
-            String prefix = nullable ? "ArrayOf.nullable" : "new ArrayOf";
-            return String.format("%s(%s)", prefix,
-                fieldTypeToSchemaType(arrayType.elementType(), false, version));
+            if (flexibleVersions.contains(version)) {
+                headerGenerator.addImport(MessageGenerator.COMPACT_ARRAYOF_CLASS);
+                FieldType.ArrayType arrayType = (FieldType.ArrayType) type;
+                String prefix = nullable ? "CompactArrayOf.nullable" : "new CompactArrayOf";
+                return String.format("%s(%s)", prefix,
+                        fieldTypeToSchemaType(arrayType.elementType(), false, version));
+
+            } else {
+                headerGenerator.addImport(MessageGenerator.ARRAYOF_CLASS);
+                FieldType.ArrayType arrayType = (FieldType.ArrayType) type;
+                String prefix = nullable ? "ArrayOf.nullable" : "new ArrayOf";
+                return String.format("%s(%s)", prefix,
+                        fieldTypeToSchemaType(arrayType.elementType(), false, version));
+            }
         } else if (type.isStruct()) {
             if (nullable) {
                 throw new RuntimeException("Type " + type + " cannot be nullable.");

@@ -36,9 +36,9 @@ public class CodeBuffer {
 
     public void decrementIndent() {
         indent--;
-//        if (indent < 0) {
-//            throw new RuntimeException("Indent < 0");
-//        }
+        if (indent < 0) {
+            throw new RuntimeException("Indent < 0");
+        }
     }
 
     public void printf(String format, Object... args) {

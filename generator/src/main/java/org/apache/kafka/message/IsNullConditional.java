@@ -21,16 +21,18 @@ package org.apache.kafka.message;
  * Creates an if statement based on whether or not a particular field is null.
  */
 public final class IsNullConditional {
-    static IsNullConditional forField(FieldSpec field) {
-        return new IsNullConditional(field);
+    static IsNullConditional forField(FieldSpec field, Versions possibleVersions) {
+        return new IsNullConditional(field, possibleVersions);
     }
 
     private final FieldSpec field;
+    private final Versions possibleVersions;
     private Runnable ifNull = null;
     private Runnable ifNotNull = null;
 
-    private IsNullConditional(FieldSpec field) {
+    private IsNullConditional(FieldSpec field, Versions possibleVersions) {
         this.field = field;
+        this.possibleVersions = possibleVersions;
     }
 
     IsNullConditional ifNull(Runnable ifNull) {
@@ -44,24 +46,30 @@ public final class IsNullConditional {
     }
 
     void generate(CodeBuffer buffer) {
-        boolean maybeNull = !field.nullableVersions().intersect(field.versions()).empty();
-
-        if (maybeNull && (ifNull != null)) {
-            buffer.printf("if (%s == null) {%n", field.camelCaseName());
-            buffer.incrementIndent();
-            ifNull.run();
-            buffer.decrementIndent();
-            if (ifNotNull != null) {
-                buffer.printf("} else {%n");
-                buffer.incrementIndent();
-                ifNotNull.run();
-                buffer.decrementIndent();
-            }
-            buffer.printf("}%n");
-        } else if (ifNotNull != null) {
-            ifNotNull.run();
-        } else {
-            // nothing to do
-        }
+        // check if the current version is a nullable version
+        VersionConditional.forVersions(field.nullableVersions(), possibleVersions).
+            ifMember(() -> {
+                if (ifNull != null) {
+                    buffer.printf("if (this.%s == null) {%n", field.camelCaseName());
+                    buffer.incrementIndent();
+                    ifNull.run();
+                    buffer.decrementIndent();
+                    if (ifNotNull != null) {
+                        buffer.printf("} else {%n");
+                        buffer.incrementIndent();
+                        ifNotNull.run();
+                    }
+                    buffer.decrementIndent();
+                    buffer.printf("}%n");
+                } else if (ifNotNull != null) {
+                    buffer.printf("if (this.%s != null) {%n", field.camelCaseName());
+                    buffer.incrementIndent();
+                    ifNull.run();
+                    buffer.decrementIndent();
+                    buffer.printf("}%n");
+                }
+            }).
+            ifNotMember(ifNotNull).
+            generate(buffer);
     }
 }

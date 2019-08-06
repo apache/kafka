@@ -68,7 +68,7 @@ public final class VersionConditional {
             ifMember.run();
             buffer.decrementIndent();
             if (ifNotMember != null) {
-                buffer.printf("} else { // VC:71%n");
+                buffer.printf("} else {%n");
                 buffer.incrementIndent();
                 ifNotMember.run();
                 buffer.decrementIndent();
@@ -93,7 +93,7 @@ public final class VersionConditional {
             ifMember.run();
             buffer.decrementIndent();
             if (ifNotMember != null) {
-                buffer.printf("} else { // VC:96%n");
+                buffer.printf("} else {%n");
                 buffer.incrementIndent();
                 ifNotMember.run();
                 buffer.decrementIndent();

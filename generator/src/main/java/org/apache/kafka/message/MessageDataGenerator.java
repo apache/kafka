@@ -47,7 +47,7 @@ public final class MessageDataGenerator {
                 "not specify a maximum version.");
         }
         structRegistry.register(message);
-        schemaGenerator.generateSchemas(message);
+        schemaGenerator.generateSchemas(message, message.flexibleVersions());
         flexibleVersions = message.flexibleVersions();
         generateClass(Optional.of(message),
             message.name() + "Data",
@@ -547,7 +547,7 @@ public final class MessageDataGenerator {
                 buffer.incrementIndent();
                 buffer.printf("this.%s = null;%n", field.camelCaseName());
                 buffer.decrementIndent();
-                buffer.printf("} else { // MDG:542%n");
+                buffer.printf("} else {%n");
                 buffer.incrementIndent();
             }
             FieldType.ArrayType arrayType = (FieldType.ArrayType) field.type();
@@ -689,7 +689,7 @@ public final class MessageDataGenerator {
         if (field.type().isArray()) {
             VersionConditional.forVersions(field.versions(), curVersions).
                 ifMember(() -> {
-                    IsNullConditional.forField(field).
+                    IsNullConditional.forField(field, curVersions).
                         ifNull(() -> {
                             VersionConditional.forVersions(flexibleVersions, curVersions).
                                 ifMember(() -> {
@@ -804,7 +804,7 @@ public final class MessageDataGenerator {
             if (maybeNull) {
                 buffer.printf("struct.set(\"%s\", null);%n", field.snakeCaseName());
                 buffer.decrementIndent();
-                buffer.printf("} else { // MDG:799%n");
+                buffer.printf("} else {%n");
                 buffer.incrementIndent();
             }
             FieldType.ArrayType arrayType = (FieldType.ArrayType) field.type();
@@ -915,7 +915,7 @@ public final class MessageDataGenerator {
         } else if (field.type().isArray()) {
             VersionConditional.forVersions(field.versions(), curVersions).
                 ifMember(() -> {
-                    IsNullConditional.forField(field).
+                    IsNullConditional.forField(field, curVersions).
                         ifNull(() -> {
                             VersionConditional.forVersions(flexibleVersions, curVersions).
                                 ifMember(() -> {
@@ -969,7 +969,7 @@ public final class MessageDataGenerator {
             buffer.printf("}%n");
             return;
         }
-        buffer.printf("} else { // MDG:964%n");
+        buffer.printf("} else {%n");
         buffer.incrementIndent();
         headerGenerator.addImport(MessageGenerator.UNSUPPORTED_VERSION_EXCEPTION_CLASS);
         if (field.type().isArray()) {
@@ -1031,7 +1031,7 @@ public final class MessageDataGenerator {
             buffer.incrementIndent();
             buffer.printf("if (other.%s != null) return false;%n", field.camelCaseName());
             buffer.decrementIndent();
-            buffer.printf("} else { // MDG:1026%n");
+            buffer.printf("} else {%n");
             buffer.incrementIndent();
             buffer.printf("if (!this.%s.equals(other.%s)) return false;%n",
                 field.camelCaseName(), field.camelCaseName());
@@ -1196,7 +1196,7 @@ public final class MessageDataGenerator {
 
     private void generateSetDefault(FieldSpec field) {
         buffer.decrementIndent();
-        buffer.printf("} else { // MDG:1191%n");
+        buffer.printf("} else {%n");
         buffer.incrementIndent();
         buffer.printf("this.%s = %s;%n", field.camelCaseName(), fieldDefault(field));
         buffer.decrementIndent();
