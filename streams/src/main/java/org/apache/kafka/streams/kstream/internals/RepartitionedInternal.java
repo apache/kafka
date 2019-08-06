@@ -46,7 +46,7 @@ public class RepartitionedInternal<K, V> extends Repartitioned<K, V> {
         return valueSerde;
     }
 
-    StreamPartitioner<? super K, ? super V> streamPartitioner() {
+    StreamPartitioner<K, V> streamPartitioner() {
         return partitioner;
     }
 

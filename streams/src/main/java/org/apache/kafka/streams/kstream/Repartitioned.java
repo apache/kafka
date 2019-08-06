@@ -40,13 +40,13 @@ public class Repartitioned<K, V> implements NamedOperation<Repartitioned<K, V>> 
 
     protected final Integer numberOfPartitions;
 
-    protected final StreamPartitioner<? super K, ? super V> partitioner;
+    protected final StreamPartitioner<K, V> partitioner;
 
     private Repartitioned(final String name,
                           final Serde<K> keySerde,
                           final Serde<V> valueSerde,
                           final Integer numberOfPartitions,
-                          final StreamPartitioner<? super K, ? super V> partitioner) {
+                          final StreamPartitioner<K, V> partitioner) {
         this.name = name;
         this.keySerde = keySerde;
         this.valueSerde = valueSerde;
@@ -106,7 +106,7 @@ public class Repartitioned<K, V> implements NamedOperation<Repartitioned<K, V>> 
      * @see KStream#repartition(Repartitioned)
      * @see KStream#repartition(KeyValueMapper, Repartitioned)
      */
-    public static <K, V> Repartitioned<K, V> streamPartitioner(final StreamPartitioner<? super K, ? super V> partitioner) {
+    public static <K, V> Repartitioned<K, V> streamPartitioner(final StreamPartitioner<K, V> partitioner) {
         return new Repartitioned<>(null, null, null, null, partitioner);
     }
 
@@ -175,7 +175,7 @@ public class Repartitioned<K, V> implements NamedOperation<Repartitioned<K, V>> 
      *                    {@link WindowedStreamPartitioner} will be used—otherwise {@link DefaultPartitioner} wil be used
      * @return a new {@link Repartitioned} instance configured with provided partitioner
      */
-    public Repartitioned<K, V> withStreamPartitioner(final StreamPartitioner<? super K, ? super V> partitioner) {
+    public Repartitioned<K, V> withStreamPartitioner(final StreamPartitioner<K, V> partitioner) {
         return new Repartitioned<>(name, keySerde, valueSerde, numberOfPartitions, partitioner);
     }
 }

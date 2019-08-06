@@ -528,6 +528,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
             valueSerde,
             name,
             repartitionedInternal.toInternalTopicProperties(),
+            repartitionedInternal.streamPartitioner(),
             optimizableRepartitionNodeBuilder
         );
 
@@ -570,6 +571,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
             valueSerde,
             name,
             repartitionedInternal.toInternalTopicProperties(),
+            repartitionedInternal.streamPartitioner(),
             optimizableRepartitionNodeBuilder
         );
 
