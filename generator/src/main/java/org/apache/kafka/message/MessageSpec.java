@@ -35,18 +35,22 @@ public final class MessageSpec {
 
     private final List<StructSpec> commonStructs;
 
+    private final Versions flexibleVersions;
+
     @JsonCreator
     public MessageSpec(@JsonProperty("name") String name,
                        @JsonProperty("validVersions") String validVersions,
                        @JsonProperty("fields") List<FieldSpec> fields,
                        @JsonProperty("apiKey") Short apiKey,
                        @JsonProperty("type") MessageSpecType type,
-                       @JsonProperty("commonStructs") List<StructSpec> commonStructs) {
+                       @JsonProperty("commonStructs") List<StructSpec> commonStructs,
+                       @JsonProperty("flexibleVersions") String flexibleVersions) {
         this.struct = new StructSpec(name, validVersions, fields);
         this.apiKey = apiKey == null ? Optional.empty() : Optional.of(apiKey);
         this.type = Objects.requireNonNull(type);
         this.commonStructs = commonStructs == null ? Collections.emptyList() :
                 Collections.unmodifiableList(new ArrayList<>(commonStructs));
+        this.flexibleVersions = Versions.parse(flexibleVersions, Versions.NONE);
     }
 
     public StructSpec struct() {
@@ -81,6 +85,15 @@ public final class MessageSpec {
     @JsonProperty("commonStructs")
     public List<StructSpec> commonStructs() {
         return commonStructs;
+    }
+
+    public Versions flexibleVersions() {
+        return flexibleVersions;
+    }
+
+    @JsonProperty("flexibleVersions")
+    public String flexibleVersionsString() {
+        return flexibleVersions.toString();
     }
 
     public String generatedClassName() {

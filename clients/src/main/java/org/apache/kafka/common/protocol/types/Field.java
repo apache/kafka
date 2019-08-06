@@ -105,6 +105,12 @@ public class Field {
         }
     }
 
+    public static class CompactArray extends Field {
+        public CompactArray(String name, Type elementType, String docString) {
+            super(name, new CompactArrayOf(elementType), docString, false, null);
+        }
+    }
+
     public static class ComplexArray {
         public final String name;
         public final String docString;

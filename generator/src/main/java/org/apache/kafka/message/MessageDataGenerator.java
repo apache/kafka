@@ -32,6 +32,7 @@ public final class MessageDataGenerator {
     private final HeaderGenerator headerGenerator;
     private final SchemaGenerator schemaGenerator;
     private final CodeBuffer buffer;
+    private Versions flexibleVersions;
 
     MessageDataGenerator() {
         this.structRegistry = new StructRegistry();
@@ -47,6 +48,7 @@ public final class MessageDataGenerator {
         }
         structRegistry.register(message);
         schemaGenerator.generateSchemas(message);
+        flexibleVersions = message.flexibleVersions();
         generateClass(Optional.of(message),
             message.name() + "Data",
             message.struct(),
@@ -419,39 +421,46 @@ public final class MessageDataGenerator {
 
     private void generateFieldReader(FieldSpec field, Versions curVersions) {
         if (field.type().isArray()) {
-            boolean maybeAbsent =
-                generateVersionCheck(curVersions, field.versions());
-            if (!maybeAbsent) {
-                buffer.printf("{%n");
-                buffer.incrementIndent();
-            }
-            boolean hasKeys = structRegistry.isStructArrayWithKeys(field);
-            buffer.printf("int arrayLength = readable.readInt();%n");
-            buffer.printf("if (arrayLength < 0) {%n");
-            buffer.incrementIndent();
-            buffer.printf("this.%s = null;%n",
-                field.camelCaseName());
-            buffer.decrementIndent();
-            buffer.printf("} else {%n");
-            buffer.incrementIndent();
-            buffer.printf("this.%s.clear(%s);%n",
-                field.camelCaseName(),
-                hasKeys ? "arrayLength" : "");
-            buffer.printf("for (int i = 0; i < arrayLength; i++) {%n");
-            buffer.incrementIndent();
-            FieldType.ArrayType arrayType = (FieldType.ArrayType) field.type();
-            buffer.printf("this.%s.add(%s);%n",
-                field.camelCaseName(), readFieldFromReadable(arrayType.elementType()));
-            buffer.decrementIndent();
-            buffer.printf("}%n");
-            buffer.decrementIndent();
-            buffer.printf("}%n");
-            if (maybeAbsent) {
-                generateSetDefault(field);
-            } else {
-                buffer.decrementIndent();
-                buffer.printf("}%n");
-            }
+            VersionConditional.forVersions(field.versions(), curVersions).
+                alwaysEmitBlockScope(true).
+                ifMember(() -> {
+                    buffer.printf("int arrayLength;%n");
+                    VersionConditional.forVersions(flexibleVersions, field.versions()).
+                        ifMember(() -> {
+                            buffer.printf("arrayLength = readable.readUnsignedVarInt() - 1;%n");
+                        }).
+                        ifNotMember(() -> {
+                            buffer.printf("arrayLength = readable.readInt();%n");
+                        }).
+                        generate(buffer);
+                    buffer.printf("if (arrayLength < 0) {%n");
+                    buffer.incrementIndent();
+                    buffer.printf("this.%s = null;%n", field.camelCaseName());
+                    buffer.decrementIndent();
+                    buffer.printf("} else { // MDG:440%n");
+                    buffer.incrementIndent();
+                    FieldType.ArrayType arrayType = (FieldType.ArrayType) field.type();
+                    if (structRegistry.isStructArrayWithKeys(field)) {
+                        buffer.printf("this.%s = new %s(arrayLength);%n", field.camelCaseName(),
+                                collectionType(arrayType.elementType().toString()));
+                    } else {
+                        headerGenerator.addImport(MessageGenerator.ARRAYLIST_CLASS);
+                        buffer.printf("this.%s = new ArrayList<%s>(arrayLength);%n",
+                                field.camelCaseName(), getBoxedJavaType(arrayType.elementType()));
+                    }
+                    buffer.printf("for (int i = 0; i < arrayLength; i++) {%n");
+                    buffer.incrementIndent();
+                    buffer.printf("this.%s.add(%s);%n",
+                            field.camelCaseName(), readFieldFromReadable(arrayType.elementType()));
+                    buffer.decrementIndent();
+                    buffer.printf("}%n");
+                    buffer.decrementIndent();
+                    buffer.printf("}%n");
+                }).
+                ifNotMember(() -> {
+                    buffer.printf("this.%s = %s;%n", field.camelCaseName(), fieldDefault(field));
+                }).
+                generate(buffer);
         } else {
             boolean maybeAbsent =
                 generateVersionCheck(curVersions, field.versions());
@@ -530,7 +539,7 @@ public final class MessageDataGenerator {
                 buffer.incrementIndent();
                 buffer.printf("this.%s = null;%n", field.camelCaseName());
                 buffer.decrementIndent();
-                buffer.printf("} else {%n");
+                buffer.printf("} else { // MDG:542%n");
                 buffer.incrementIndent();
             }
             FieldType.ArrayType arrayType = (FieldType.ArrayType) field.type();
@@ -670,44 +679,52 @@ public final class MessageDataGenerator {
 
     private void generateFieldWriter(FieldSpec field, Versions curVersions) {
         if (field.type().isArray()) {
-            boolean maybeAbsent =
-                generateVersionCheck(curVersions, field.versions());
-            boolean maybeNull = generateNullCheck(curVersions, field);
-            if (maybeNull) {
-                buffer.printf("writable.writeInt(-1);%n");
-                buffer.decrementIndent();
-                buffer.printf("} else {%n");
-                buffer.incrementIndent();
-            }
-            buffer.printf("writable.writeInt(%s.size());%n", field.camelCaseName());
-            FieldType.ArrayType arrayType = (FieldType.ArrayType) field.type();
-            FieldType elementType = arrayType.elementType();
-            String nestedTypeName = elementType.isStruct() ?
-                elementType.toString() : getBoxedJavaType(elementType);
-            buffer.printf("for (%s element : %s) {%n",
-                nestedTypeName, field.camelCaseName());
-            buffer.incrementIndent();
-            buffer.printf("%s;%n", writeFieldToWritable(elementType, false, "element"));
-            buffer.decrementIndent();
-            buffer.printf("}%n");
-            if (maybeNull) {
-                buffer.decrementIndent();
-                buffer.printf("}%n");
-            }
-            if (maybeAbsent) {
-                buffer.decrementIndent();
-                buffer.printf("}%n");
-            }
+            VersionConditional.forVersions(field.versions(), curVersions).
+                ifMember(() -> {
+                    IsNullConditional.forField(field).
+                        ifNull(() -> {
+                            VersionConditional.forVersions(flexibleVersions, curVersions).
+                                ifMember(() -> {
+                                    buffer.printf("writable.writeUnsignedVarint(0);%n");
+                                }).
+                                ifNotMember(() -> {
+                                    buffer.printf("writable.writeInt(-1);%n");
+                                }).
+                                generate(buffer);
+                        }).
+                        ifNotNull(() -> {
+                            VersionConditional.forVersions(flexibleVersions, curVersions).
+                                ifMember(() -> {
+                                    buffer.printf("writable.writeUnsignedVarint(%s.size() + 1);%n",
+                                            field.camelCaseName());
+                                }).
+                                ifNotMember(() -> {
+                                    buffer.printf("writable.writeInt(%s.size());%n",
+                                            field.camelCaseName());
+                                }).
+                                generate(buffer);
+                            FieldType.ArrayType arrayType = (FieldType.ArrayType) field.type();
+                            FieldType elementType = arrayType.elementType();
+                            String nestedTypeName = elementType.isStruct() ?
+                                    elementType.toString() : getBoxedJavaType(elementType);
+                            buffer.printf("for (%s element : %s) {%n",
+                                    nestedTypeName, field.camelCaseName());
+                            buffer.incrementIndent();
+                            buffer.printf("%s;%n", writeFieldToWritable(elementType, false, "element"));
+                            buffer.decrementIndent();
+                            buffer.printf("}%n");
+                        }).
+                        generate(buffer);
+                }).
+                generate(buffer);
         } else {
-            boolean maybeAbsent =
-                generateVersionCheck(curVersions, field.versions());
-            buffer.printf("%s;%n", writeFieldToWritable(field.type(),
-                !field.nullableVersions().empty(),
-                field.camelCaseName()));
-            if (maybeAbsent) {
-                buffer.decrementIndent();
-                buffer.printf("}%n");
-            }
+            VersionConditional.forVersions(field.versions(), curVersions).
+                ifMember(() -> {
+                    buffer.printf("%s;%n", writeFieldToWritable(field.type(),
+                            !field.nullableVersions().empty(),
+                            field.camelCaseName()));
+                }).
+                generate(buffer);
         }
     }
 
@@ -779,7 +796,7 @@ public final class MessageDataGenerator {
             if (maybeNull) {
                 buffer.printf("struct.set(\"%s\", null);%n", field.snakeCaseName());
                 buffer.decrementIndent();
-                buffer.printf("} else {%n");
+                buffer.printf("} else { // MDG:799%n");
                 buffer.incrementIndent();
             }
             FieldType.ArrayType arrayType = (FieldType.ArrayType) field.type();
@@ -888,41 +905,52 @@ public final class MessageDataGenerator {
                 generateAbsentValueCheck(field);
             }
         } else if (field.type().isArray()) {
-            boolean maybeAbsent =
-                generateVersionCheck(curVersions, field.versions());
-            boolean maybeNull = generateNullCheck(curVersions, field);
-            if (maybeNull) {
-                buffer.printf("size += 4;%n");
-                buffer.decrementIndent();
-                buffer.printf("} else {%n");
-                buffer.incrementIndent();
-            }
-            buffer.printf("size += 4;%n");
-            FieldType.ArrayType arrayType = (FieldType.ArrayType) field.type();
-            FieldType elementType = arrayType.elementType();
-            if (elementType.fixedLength().isPresent()) {
-                buffer.printf("size += %s.size() * %d;%n",
-                    field.camelCaseName(),
-                    elementType.fixedLength().get());
-            } else if (elementType instanceof FieldType.ArrayType) {
-                throw new RuntimeException("Arrays of arrays are not supported " +
-                    "(use a struct).");
-            } else {
-                buffer.printf("for (%s element : %s) {%n",
-                    getBoxedJavaType(elementType), field.camelCaseName());
-                buffer.incrementIndent();
-                generateVariableLengthFieldSize("element", elementType, false);
-                buffer.decrementIndent();
-                buffer.printf("}%n");
-            }
-            if (maybeNull) {
-                buffer.decrementIndent();
-                buffer.printf("}%n");
-            }
-            if (maybeAbsent) {
-                buffer.decrementIndent();
-                generateAbsentValueCheck(field);
-            }
+            VersionConditional.forVersions(field.versions(), curVersions).
+                ifMember(() -> {
+                    IsNullConditional.forField(field).
+                        ifNull(() -> {
+                            VersionConditional.forVersions(flexibleVersions, curVersions).
+                                ifMember(() -> {
+                                    // As an unsigned varint, 0 takes up one byte.
+                                    buffer.printf("size += 1;%n");
+                                }).
+                                ifNotMember(() -> {
+                                    buffer.printf("size += 4;%n");
+                                }).
+                                generate(buffer);
+                        }).
+                        ifNotNull(() -> {
+                            VersionConditional.forVersions(flexibleVersions, curVersions).
+                                ifMember(() -> {
+                                    // As an unsigned varint, 0 takes up one byte.
+                                    headerGenerator.addImport(MessageGenerator.BYTE_UTILS_CLASS);
+                                    buffer.printf("size += ByteUtils.sizeOfUnsignedVarint(%s);%n",
+                                            field.camelCaseName());
+                                }).
+                                ifNotMember(() -> {
+                                    buffer.printf("size += 4;%n");
+                                }).
+                                generate(buffer);
+                            FieldType.ArrayType arrayType = (FieldType.ArrayType) field.type();
+                            FieldType elementType = arrayType.elementType();
+                            if (elementType.fixedLength().isPresent()) {
+                                buffer.printf("size += %s.size() * %d;%n",
+                                        field.camelCaseName(),
+                                        elementType.fixedLength().get());
+                            } else if (elementType instanceof FieldType.ArrayType) {
+                                throw new RuntimeException("Arrays of arrays are not supported " +
+                                        "(use a struct).");
+                            } else {
+                                buffer.printf("for (%s element : %s) {%n",
+                                        getBoxedJavaType(elementType), field.camelCaseName());
+                                buffer.incrementIndent();
+                                generateVariableLengthFieldSize("element", elementType, false);
+                                buffer.decrementIndent();
+                                buffer.printf("}%n");
+                            }
+                        }).
+                        generate(buffer);
+                });
         } else {
             throw new RuntimeException("Unsupported field type " + field.type());
         }
@@ -933,7 +961,7 @@ public final class MessageDataGenerator {
             buffer.printf("}%n");
             return;
         }
-        buffer.printf("} else {%n");
+        buffer.printf("} else { // MDG:964%n");
         buffer.incrementIndent();
         headerGenerator.addImport(MessageGenerator.UNSUPPORTED_VERSION_EXCEPTION_CLASS);
         if (field.type().isArray()) {
@@ -995,7 +1023,7 @@ public final class MessageDataGenerator {
             buffer.incrementIndent();
             buffer.printf("if (other.%s != null) return false;%n", field.camelCaseName());
             buffer.decrementIndent();
-            buffer.printf("} else {%n");
+            buffer.printf("} else { // MDG:1026%n");
             buffer.incrementIndent();
             buffer.printf("if (!this.%s.equals(other.%s)) return false;%n",
                 field.camelCaseName(), field.camelCaseName());
@@ -1160,7 +1188,7 @@ public final class MessageDataGenerator {
 
     private void generateSetDefault(FieldSpec field) {
         buffer.decrementIndent();
-        buffer.printf("} else {%n");
+        buffer.printf("} else { // MDG:1191%n");
         buffer.incrementIndent();
         buffer.printf("this.%s = %s;%n", field.camelCaseName(), fieldDefault(field));
         buffer.decrementIndent();
