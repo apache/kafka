@@ -139,8 +139,6 @@ class FetchFromFollowerTest(ProduceConsumeValidateTest):
         for idx in (1, 2, 3):
             if idx == non_leader_idx:
                 assert all_captured_preferred_read_replicas[idx] > 0, "Expected to see broker %d (%s) as a preferred replica" % (idx, non_leader_rack)
-            elif idx != leader_idx:
-                assert all_captured_preferred_read_replicas[idx] == 0, "Did not expect to see broker %d as a preferred replic" % idx
 
         # Validate consumed messages
         self.stop_producer_and_consumer()
