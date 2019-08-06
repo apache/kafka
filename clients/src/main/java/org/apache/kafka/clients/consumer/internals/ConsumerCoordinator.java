@@ -360,7 +360,6 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         Set<TopicPartition> addedPartitions = new HashSet<>(assignedPartitions);
         addedPartitions.removeAll(ownedPartitions);
 
-        // note that we should only change the assignment AFTER we've triggered the rebalance callback
         switch (protocol) {
             case EAGER:
                 // assign partitions that are not yet owned
@@ -381,7 +380,9 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                     Utils.join(addedPartitions, ", "),
                     Utils.join(revokedPartitions, ", "));
 
-                // revoke partitions that was previously owned but no longer assigned
+                // revoke partitions that was previously owned but no longer assigned;
+                // note that we should only change the assignment AFTER we've triggered
+                // the revoke callback
                 if (!revokedPartitions.isEmpty()) {
                     firstException.compareAndSet(null, invokePartitionsRevoked(revokedPartitions));
                 }
