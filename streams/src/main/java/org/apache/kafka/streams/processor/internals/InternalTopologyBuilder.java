@@ -22,7 +22,6 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.errors.TopologyException;
-import org.apache.kafka.streams.kstream.internals.RepartitionedInternal.InternalTopicProperties;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StreamPartitioner;
@@ -76,6 +75,7 @@ public class InternalTopologyBuilder {
     // all internal topics auto-created by the topology builder and used in source / sink processors
     private final Set<String> internalTopicNames = new HashSet<>();
 
+    // map of internal topic names with topic configuration
     private final Map<String, InternalTopicProperties> internalTopicNamesWithProperties = new HashMap<>();
 
     // groups of source processors that need to be copartitioned

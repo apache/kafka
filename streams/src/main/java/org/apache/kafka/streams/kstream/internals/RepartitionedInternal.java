@@ -19,6 +19,7 @@ package org.apache.kafka.streams.kstream.internals;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.kstream.Repartitioned;
 import org.apache.kafka.streams.processor.StreamPartitioner;
+import org.apache.kafka.streams.processor.internals.InternalTopicProperties;
 
 public class RepartitionedInternal<K, V> extends Repartitioned<K, V> {
 
@@ -52,17 +53,5 @@ public class RepartitionedInternal<K, V> extends Repartitioned<K, V> {
 
     Integer numberOfPartitions() {
         return numberOfPartitions;
-    }
-
-    public static class InternalTopicProperties {
-        private final Integer numberOfPartitions;
-
-        InternalTopicProperties(Integer numberOfPartitions) {
-            this.numberOfPartitions = numberOfPartitions;
-        }
-
-        public Integer getNumberOfPartitions() {
-            return numberOfPartitions;
-        }
     }
 }
