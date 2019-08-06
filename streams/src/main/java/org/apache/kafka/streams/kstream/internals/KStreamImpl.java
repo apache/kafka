@@ -502,7 +502,6 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
         final String name = new NamedInternal(repartitionedInternal.name())
             .orElseGenerateWithPrefix(builder, REPARTITION_NAME);
 
-        //TODO: I don't like this. ideally number of partitions should be checked against source topic
         if (!repartitionRequired && repartitionedInternal.numberOfPartitions() == null) {
             return new KStreamImpl<>(
                 name,
@@ -555,16 +554,16 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
 
         RepartitionedInternal<KR, V> repartitionedInternal = new RepartitionedInternal<>(repartitioned);
 
-        final NamedInternal namedInternal = new NamedInternal(repartitionedInternal.name() + "-SELECT-KEY");
+        final NamedInternal namedInternal = new NamedInternal(repartitionedInternal.name());
 
         final String name = namedInternal.orElseGenerateWithPrefix(builder, REPARTITION_NAME);
 
-        final ProcessorGraphNode<K, V> selectKeyNode = internalSelectKey(selector, namedInternal);
+        final ProcessorGraphNode<K, V> selectKeyNode = internalSelectKey(selector, new NamedInternal(KEY_SELECT_NAME));
 
         builder.addGraphNode(this.streamsGraphNode, selectKeyNode);
 
-        final OptimizableRepartitionNodeBuilder<KR, V> optimizableRepartitionNodeBuilder =
-            OptimizableRepartitionNode.optimizableRepartitionNodeBuilder();
+        final OptimizableRepartitionNodeBuilder<KR, V> optimizableRepartitionNodeBuilder = OptimizableRepartitionNode
+            .optimizableRepartitionNodeBuilder();
 
         final Serde<V> valueSerde = repartitionedInternal.valueSerde() == null ? this.valSerde : repartitionedInternal.valueSerde();
 
