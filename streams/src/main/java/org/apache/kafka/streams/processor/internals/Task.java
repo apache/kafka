@@ -16,13 +16,16 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
+import sun.reflect.generics.reflectiveObjects.NotImplementedException;
 
 import java.util.Collection;
+import java.util.Map;
 import java.util.Set;
 
 public interface Task {
@@ -36,9 +39,21 @@ public interface Task {
 
     boolean commitNeeded();
 
+    default boolean commitRequested() {
+        return false;
+    }
+
     void initializeTopology();
 
     void commit();
+
+    default Map<TopicPartition, OffsetAndMetadata> getPendingOffsets() {
+        throw new NotImplementedException();
+    }
+
+    default void markCommitDone(long commitLatency) {
+        throw new NotImplementedException();
+    }
 
     void suspend();
 

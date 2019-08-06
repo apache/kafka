@@ -21,6 +21,8 @@ import org.apache.kafka.clients.ClientDnsLookup;
 import org.apache.kafka.clients.ClientUtils;
 import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.clients.NetworkClient;
+import org.apache.kafka.clients.consumer.Consumer;
+import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetCommitCallback;
@@ -78,6 +80,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Properties;
+import java.util.UUID;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
@@ -255,6 +258,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     private final ProducerInterceptors<K, V> interceptors;
     private final ApiVersions apiVersions;
     private final TransactionManager transactionManager;
+    private ConsumerGroupMetadata consumerGroupMetadata;
 
     /**
      * A producer is instantiated by providing a set of key-value pairs as configuration. Valid configuration strings
@@ -618,9 +622,18 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     public void initTransactions() {
         throwIfNoTransactionManager();
         throwIfProducerClosed();
+        maybeAllocateTransactionalId();
+
         TransactionalRequestResult result = transactionManager.initializeTransactions();
         sender.wakeup();
         result.await(maxBlockTimeMs, TimeUnit.MILLISECONDS);
+    }
+
+    private void maybeAllocateTransactionalId() {
+        String allocatedTransactionalId = transactionManager.transactionalId();
+        if (allocatedTransactionalId == null || allocatedTransactionalId.isEmpty()) {
+            transactionManager.setTransactionalId("thread-producer-" + UUID.randomUUID().toString());
+        }
     }
 
     /**
@@ -668,6 +681,15 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      */
     public void sendOffsetsToTransaction(Map<TopicPartition, OffsetAndMetadata> offsets,
                                          String consumerGroupId) throws ProducerFencedException {
+        sendOffsetToTransactionInternal(offsets, consumerGroupId);
+    }
+
+    public void sendOffsetsToTransaction(Map<TopicPartition, OffsetAndMetadata> offsets) throws ProducerFencedException {
+        sendOffsetToTransactionInternal(offsets, consumerGroupMetadata.groupId());
+    }
+
+    private void sendOffsetToTransactionInternal(Map<TopicPartition, OffsetAndMetadata> offsets,
+                                                 String consumerGroupId) {
         throwIfNoTransactionManager();
         throwIfProducerClosed();
         TransactionalRequestResult result = transactionManager.sendOffsetsToTransaction(offsets, consumerGroupId);

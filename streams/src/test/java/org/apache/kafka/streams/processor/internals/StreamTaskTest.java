@@ -246,8 +246,8 @@ public class StreamTaskTest {
                         throw new TimeoutException("test");
                     }
                 },
-                null
-            );
+                null,
+                false);
             fail("Expected an exception");
         } catch (final StreamsException expected) {
             // make sure we log the explanation as an ERROR
@@ -300,8 +300,8 @@ public class StreamTaskTest {
                     }
                 }
             },
-            null
-        );
+            null,
+            false);
         testTask.initializeTopology();
         testTask.suspend();
         timeOut.set(true);
@@ -849,7 +849,7 @@ public class StreamTaskTest {
                 public void flush() {
                     flushed.set(true);
                 }
-            });
+            }, false);
         streamTask.flushState();
         assertTrue(flushed.get());
     }
@@ -1424,7 +1424,7 @@ public class StreamTaskTest {
             stateDirectory,
             null,
             time,
-            () -> producer = new MockProducer<>(false, bytesSerializer, bytesSerializer));
+            () -> producer = new MockProducer<>(false, bytesSerializer, bytesSerializer), false);
         task.initializeStateStores();
         task.initializeTopology();
 
@@ -1496,7 +1496,7 @@ public class StreamTaskTest {
             stateDirectory,
             null,
             time,
-            () -> producer = new MockProducer<>(false, bytesSerializer, bytesSerializer));
+            () -> producer = new MockProducer<>(false, bytesSerializer, bytesSerializer), false);
     }
 
     private StreamTask createStatefulTaskThatThrowsExceptionOnClose() {
@@ -1517,7 +1517,7 @@ public class StreamTaskTest {
             stateDirectory,
             null,
             time,
-            () -> producer = new MockProducer<>(false, bytesSerializer, bytesSerializer));
+            () -> producer = new MockProducer<>(false, bytesSerializer, bytesSerializer), false);
     }
 
     private StreamTask createStatelessTask(final StreamsConfig streamsConfig) {
@@ -1542,7 +1542,7 @@ public class StreamTaskTest {
             stateDirectory,
             null,
             time,
-            () -> producer = new MockProducer<>(false, bytesSerializer, bytesSerializer));
+            () -> producer = new MockProducer<>(false, bytesSerializer, bytesSerializer), false);
     }
 
     // this task will throw exception when processing (on partition2), flushing, suspending and closing
@@ -1568,7 +1568,7 @@ public class StreamTaskTest {
             stateDirectory,
             null,
             time,
-            () -> producer = new MockProducer<>(false, bytesSerializer, bytesSerializer)) {
+            () -> producer = new MockProducer<>(false, bytesSerializer, bytesSerializer), false) {
             @Override
             protected void flushState() {
                 throw new RuntimeException("KABOOM!");

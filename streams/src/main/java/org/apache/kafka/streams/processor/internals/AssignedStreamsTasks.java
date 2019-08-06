@@ -16,9 +16,11 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.apache.kafka.streams.processor.TaskId;
 
@@ -35,9 +37,13 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
     private final Map<TaskId, StreamTask> restoring = new HashMap<>();
     private final Set<TopicPartition> restoredPartitions = new HashSet<>();
     private final Map<TopicPartition, StreamTask> restoringByPartition = new HashMap<>();
+    private final Producer<byte[], byte[]> threadProducer;
 
-    AssignedStreamsTasks(final LogContext logContext) {
-        super(logContext, "stream task");
+    AssignedStreamsTasks(final LogContext logContext,
+                         final Producer<byte[], byte[]> threadProducer,
+                         final Time time) {
+        super(logContext, "stream task", threadProducer, time);
+        this.threadProducer = threadProducer;
     }
 
     @Override
@@ -136,41 +142,9 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
      *                               or if the task producer got fenced (EOS)
      */
     int maybeCommitPerUserRequested() {
-        int committed = 0;
-        RuntimeException firstException = null;
-
-        for (final Iterator<StreamTask> it = running().iterator(); it.hasNext(); ) {
-            final StreamTask task = it.next();
-            try {
-                if (task.commitRequested() && task.commitNeeded()) {
-                    task.commit();
-                    committed++;
-                    log.debug("Committed active task {} per user request in", task.id());
-                }
-            } catch (final TaskMigratedException e) {
-                log.info("Failed to commit {} since it got migrated to another thread already. " +
-                        "Closing it as zombie before triggering a new rebalance.", task.id());
-                final RuntimeException fatalException = closeZombieTask(task);
-                if (fatalException != null) {
-                    throw fatalException;
-                }
-                it.remove();
-                throw e;
-            } catch (final RuntimeException t) {
-                log.error("Failed to commit StreamTask {} due to the following error:",
-                        task.id(),
-                        t);
-                if (firstException == null) {
-                    firstException = t;
-                }
-            }
-        }
-
-        if (firstException != null) {
-            throw firstException;
-        }
-
-        return committed;
+       return commitInternal(log,
+                             threadProducer,
+                             task -> task.commitRequested() && task.commitNeeded());
     }
 
     /**
