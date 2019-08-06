@@ -18,6 +18,7 @@
 package kafka.coordinator.group
 
 import com.codahale.metrics.Gauge
+import java.lang.management.ManagementFactory
 import java.nio.ByteBuffer
 import java.util.Collections
 import java.util.Optional

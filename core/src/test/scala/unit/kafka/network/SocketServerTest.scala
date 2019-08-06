@@ -21,7 +21,6 @@ import java.io._
 import java.net._
 import java.nio.ByteBuffer
 import java.nio.channels.SocketChannel
-import java.util.concurrent.TimeUnit
 import java.util.{HashMap, Properties, Random}
 
 import com.codahale.metrics.{Gauge, Meter}
