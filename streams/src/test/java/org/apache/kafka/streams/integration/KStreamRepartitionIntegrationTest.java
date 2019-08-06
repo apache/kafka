@@ -173,6 +173,84 @@ public class KStreamRepartitionIntegrationTest {
     }
 
     @Test
+    public void shouldCreateRepartitionTopicWhenNumberOfPartitionsIsSpecified() throws ExecutionException, InterruptedException {
+        final String repartitionName = "new-partitions";
+        final long timestamp = System.currentTimeMillis();
+
+        sendEvents(
+            timestamp,
+            Arrays.asList(
+                new KeyValue<>(1, "A"),
+                new KeyValue<>(2, "B")
+            )
+        );
+
+        StreamsBuilder builder = new StreamsBuilder();
+
+        builder.stream(inputTopic, Consumed.with(Serdes.Integer(), Serdes.String()))
+            .repartition(Repartitioned.<Integer, String>as(repartitionName).withNumberOfPartitions(1))
+            .groupByKey()
+            .count()
+            .toStream()
+            .to(outputTopic);
+
+        startStreams(builder);
+
+        validateReceivedMessages(
+            new IntegerDeserializer(),
+            new LongDeserializer(),
+            Arrays.asList(
+                new KeyValue<>(1, 1L),
+                new KeyValue<>(2, 1L)
+            )
+        );
+
+        final String topology = builder.build().describe().toString();
+
+        assertTrue(topicExists(toRepartitionTopicName(repartitionName)));
+        assertEquals(1, getCountOfRepartitionTopicsFound(topology, "Sink: .*" + repartitionName + "-repartition.*"));
+    }
+
+    @Test
+    public void shouldCreateOnlyOneRepartitionTopicForKStreamGroupBy() throws ExecutionException, InterruptedException {
+        final String repartitionName = "new-partitions";
+        final long timestamp = System.currentTimeMillis();
+
+        sendEvents(
+            timestamp,
+            Arrays.asList(
+                new KeyValue<>(1, "A"),
+                new KeyValue<>(2, "B")
+            )
+        );
+
+        StreamsBuilder builder = new StreamsBuilder();
+
+        builder.stream(inputTopic, Consumed.with(Serdes.Integer(), Serdes.String()))
+            .selectKey((key, value) -> key.toString())
+            .repartition(Repartitioned.<String, String>as(repartitionName).withNumberOfPartitions(1))
+            .groupByKey()
+            .count()
+            .toStream()
+            .to(outputTopic);
+
+        startStreams(builder);
+        final String topology = builder.build().describe().toString();
+
+        validateReceivedMessages(
+            new StringDeserializer(),
+            new LongDeserializer(),
+            Arrays.asList(
+                new KeyValue<>("1", 1L),
+                new KeyValue<>("2", 1L)
+            )
+        );
+
+        assertTrue(topicExists(toRepartitionTopicName(repartitionName)));
+        assertEquals(1, getCountOfRepartitionTopicsFound(topology, "Sink: .*-repartition"));
+    }
+
+    @Test
     public void shouldGenerateRepartitionTopicWhenNameIsNotSpecified() throws ExecutionException, InterruptedException {
         final long timestamp = System.currentTimeMillis();
 

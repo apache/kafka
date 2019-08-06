@@ -540,7 +540,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
             keySerde,
             valueSerde,
             sourceNodes,
-            repartitionRequired,
+            false,
             optimizableRepartitionNode,
             builder
         );
@@ -587,7 +587,8 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
             null,
             valueSerde,
             sourceNodes,
-            repartitionRequired,
+            // explicitly set repartition required as false
+            false,
             optimizableRepartitionNode,
             builder
         );
