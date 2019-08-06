@@ -21,12 +21,14 @@ import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.MockConsumer;
 import org.apache.kafka.clients.consumer.internals.PartitionAssignor;
+import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.clients.producer.MockProducer;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
@@ -39,6 +41,11 @@ import org.apache.kafka.streams.processor.TaskMetadata;
 import org.apache.kafka.streams.processor.ThreadMetadata;
 import org.apache.kafka.streams.processor.internals.assignment.AssignmentInfo;
 import org.apache.kafka.streams.state.HostInfo;
+import org.apache.kafka.streams.processor.Processor;
+import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.ProcessorSupplier;
+import org.apache.kafka.streams.processor.internals.StreamThread.StreamsMetricsThreadImpl;
+import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.test.MockClientSupplier;
 import org.apache.kafka.test.MockProcessorSupplier;
@@ -50,6 +57,7 @@ import org.easymock.EasyMock;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
+import org.slf4j.Logger;
 
 import java.lang.reflect.Field;
 import java.util.ArrayList;
@@ -67,11 +75,13 @@ import java.util.regex.Pattern;
 
 import static java.util.Collections.EMPTY_SET;
 import static org.hamcrest.CoreMatchers.equalTo;
+import static org.hamcrest.CoreMatchers.not;
+import static org.hamcrest.CoreMatchers.nullValue;
+import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertSame;
-import static org.junit.Assert.assertThat;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -1076,6 +1086,94 @@ public class StreamThreadTest {
         thread.setState(StreamThread.State.RUNNING);
         metadata = thread.threadMetadata();
         assertEquals(StreamThread.State.RUNNING.name(), metadata.threadState());
+    }
+
+    private static class MockProcessor implements Processor {
+        @Override
+        public void init(final ProcessorContext context) {
+
+        }
+
+        @Override
+        public void process(final Object key, final Object value) {
+
+        }
+
+        @Override
+        public void punctuate(final long timestamp) {
+
+        }
+
+        @Override
+        public void close() {
+
+        }
+    }
+
+    @Test
+    public void shouldCreateStandbyTask() {
+        setupInternalTopologyWithoutState();
+        internalTopologyBuilder.addStateStore(
+            Stores.keyValueStoreBuilder(Stores.persistentKeyValueStore("myStore"), null, null),
+            "processor1"
+        );
+
+        final StandbyTask standbyTask = createStandbyTask();
+
+        assertThat(standbyTask, not(nullValue()));
+    }
+
+    @Test
+    public void shouldNotCreateStandbyTaskWithoutStateStores() {
+        setupInternalTopologyWithoutState();
+
+        final StandbyTask standbyTask = createStandbyTask();
+
+        assertThat(standbyTask, nullValue());
+    }
+
+
+    @Test
+    public void shouldNotCreateStandbyTaskIfStateStoresHaveLoggingDisabled() {
+        setupInternalTopologyWithoutState();
+        final StoreBuilder storeBuilder =
+            Stores.keyValueStoreBuilder(Stores.persistentKeyValueStore("myStore"), null, null);
+        storeBuilder.withLoggingDisabled();
+        internalTopologyBuilder.addStateStore(storeBuilder, "processor1");
+
+        final StandbyTask standbyTask = createStandbyTask();
+
+        assertThat(standbyTask, nullValue());
+    }
+
+    private void setupInternalTopologyWithoutState() {
+        internalTopologyBuilder.addSource(null, "source1", null, null, null, "topic1");
+        internalTopologyBuilder.addProcessor("processor1", new ProcessorSupplier() {
+            @Override
+            public Processor get() {
+                return new MockProcessor();
+            }
+        }, "source1");
+    }
+
+    private StandbyTask createStandbyTask() {
+        final LogContext logContext = new LogContext("test");
+        final Logger log = logContext.logger(StreamThreadTest.class);
+        final StreamsMetricsThreadImpl streamsMetrics =
+            new StreamsMetricsThreadImpl(metrics, "", "", Collections.<String, String>emptyMap());
+        final StreamThread.StandbyTaskCreator standbyTaskCreator = new StreamThread.StandbyTaskCreator(
+            internalTopologyBuilder,
+            config,
+            streamsMetrics,
+            stateDirectory,
+            streamsMetrics.taskCreatedSensor,
+            new MockChangelogReader(),
+            mockTime,
+            log);
+        return standbyTaskCreator.createTask(
+            new MockConsumer<byte[], byte[]>(OffsetResetStrategy.EARLIEST),
+            new TaskId(1, 2),
+            Collections.<TopicPartition>emptySet());
     }
 
     @Test
