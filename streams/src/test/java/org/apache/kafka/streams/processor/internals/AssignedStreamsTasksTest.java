@@ -452,6 +452,14 @@ public class AssignedStreamsTasksTest {
         EasyMock.verify(t1);
     }
 
+    @Test
+    public void shouldLetThreadProducerCommit() {
+//        final Map<String, Object> producerConfig = new HashMap<>();
+//
+//        assignedTasks = new AssignedStreamsTasks(new LogContext("log"), new DefaultKafkaClientSupplier().getProducer(), new MockTime(), "dummy-group-id");
+
+    }
+
     private void addAndInitTask() {
         assignedTasks.addNewTask(t1);
         assignedTasks.initializeNewTasks();

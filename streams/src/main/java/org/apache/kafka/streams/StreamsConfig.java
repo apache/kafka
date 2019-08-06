@@ -252,34 +252,6 @@ public class StreamsConfig extends AbstractConfig {
     public static final String UPGRADE_FROM_11 = "1.1";
 
     /**
-     * Config value for parameter {@link #UPGRADE_FROM_CONFIG "upgrade.from"} for upgrading an application from version {@code 2.0.x}.
-     */
-    @SuppressWarnings("WeakerAccess")
-    public static final String UPGRADE_FROM_20 = "2.0";
-
-
-    /**
-     * Config value for parameter {@link #UPGRADE_FROM_CONFIG "upgrade.from"} for upgrading an application from version {@code 2.1.x}.
-     */
-    @SuppressWarnings("WeakerAccess")
-    public static final String UPGRADE_FROM_21 = "2.1";
-
-
-
-    /**
-     * Config value for parameter {@link #UPGRADE_FROM_CONFIG "upgrade.from"} for upgrading an application from version {@code 2.2.x}.
-     */
-    @SuppressWarnings("WeakerAccess")
-    public static final String UPGRADE_FROM_22 = "2.2";
-
-
-    /**
-     * Config value for parameter {@link #UPGRADE_FROM_CONFIG "upgrade.from"} for upgrading an application from version {@code 2.3.x}.
-     */
-    @SuppressWarnings("WeakerAccess")
-    public static final String UPGRADE_FROM_23 = "2.3";
-
-    /**
      * Config value for parameter {@link #PROCESSING_GUARANTEE_CONFIG "processing.guarantee"} for at-least-once processing guarantees.
      */
     @SuppressWarnings("WeakerAccess")
@@ -290,6 +262,13 @@ public class StreamsConfig extends AbstractConfig {
      */
     @SuppressWarnings("WeakerAccess")
     public static final String EXACTLY_ONCE = "exactly_once";
+
+    /**
+     * Config to use thread level producer
+     */
+    @SuppressWarnings("WeakerAccess")
+    public static final String USE_EOS_THREAD_PRODUCER_CONFIG = "use.eos.thread.producer";
+    private static final String USE_EOS_THREAD_PRODUCER_DOC = "Flag to use thread level producer.";
 
     /** {@code application.id} */
     @SuppressWarnings("WeakerAccess")
@@ -596,6 +575,11 @@ public class StreamsConfig extends AbstractConfig {
                     in(NO_OPTIMIZATION, OPTIMIZE),
                     Importance.MEDIUM,
                     TOPOLOGY_OPTIMIZATION_DOC)
+             .define(USE_EOS_THREAD_PRODUCER_CONFIG,
+                     Type.BOOLEAN,
+                     false,
+                     Importance.MEDIUM,
+                     USE_EOS_THREAD_PRODUCER_DOC)
 
             // LOW
 

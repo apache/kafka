@@ -306,7 +306,7 @@ abstract class AssignedTasks<T extends Task> {
         RuntimeException firstException = null;
 
         final Map<TopicPartition, OffsetAndMetadata> pendingOffsets = new HashMap<>();
-        final List<Task> tasks = new ArrayList<>();
+        final List<Task> externalCommitTasks = new ArrayList<>();
 
         for (final Iterator<T> it = running().iterator(); it.hasNext(); ) {
             final T task = it.next();
@@ -314,7 +314,7 @@ abstract class AssignedTasks<T extends Task> {
                 if (taskStatus.needsCommit(task)) {
                     if (eosProducer != null) {
                         pendingOffsets.putAll(task.getPendingOffsets());
-                        tasks.add(task);
+                        externalCommitTasks.add(task);
                     } else {
                         task.commit();
                     }
@@ -347,7 +347,7 @@ abstract class AssignedTasks<T extends Task> {
             eosProducer.sendOffsetsToTransaction(pendingOffsets, consumerGroupId);
             eosProducer.commitTransaction();
             final long commitLatency = time.nanoseconds() - startNs;
-            for (final Task task : tasks) {
+            for (final Task task : externalCommitTasks) {
                 task.markCommitDone(commitLatency);
             }
             eosProducer.beginTransaction();

@@ -876,7 +876,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
     private void initializeTransactions() {
         try {
             producer.initTransactions();
-            producer.beginTransaction();
         } catch (final TimeoutException retriable) {
             log.error(
                 "Timeout exception caught when initializing transactions for task {}. " +

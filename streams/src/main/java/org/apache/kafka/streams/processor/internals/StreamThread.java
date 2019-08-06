@@ -592,15 +592,24 @@ public class StreamThread extends Thread {
         final Duration pollTime = Duration.ofMillis(config.getLong(StreamsConfig.POLL_MS_CONFIG));
         final StoreChangelogReader changelogReader = new StoreChangelogReader(restoreConsumer, pollTime, userStateRestoreListener, logContext);
 
-        Producer<byte[], byte[]> threadProducer = null;
         final boolean eosEnabled = StreamsConfig.EXACTLY_ONCE.equals(config.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG));
-        final String upgradeFrom = config.getString(StreamsConfig.UPGRADE_FROM_CONFIG);
 
-        if (useThreadProducer(eosEnabled, upgradeFrom)) {
+        final boolean useEosThreadProducer = config.getBoolean(StreamsConfig.USE_EOS_THREAD_PRODUCER_CONFIG);
+
+        final Producer<byte[], byte[]> threadProducer;
+        final String applicationId = config.getString(StreamsConfig.APPLICATION_ID_CONFIG);
+        if (useEosThreadProducer || !eosEnabled) {
             final Map<String, Object> producerConfigs = config.getProducerConfigs(getThreadProducerClientId(threadClientId));
             log.info("Creating shared producer client");
+            if (eosEnabled) {
+                producerConfigs.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, applicationId + "-" + threadClientId);
+            }
             threadProducer = clientSupplier.getProducer(producerConfigs);
+        } else {
+            threadProducer = null;
         }
+
+        final Producer<byte[], byte[]> eosThreadProducer = eosEnabled ? threadProducer : null;
 
         final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, threadClientId);
 
@@ -627,7 +636,6 @@ public class StreamThread extends Thread {
             time,
             log);
 
-        final String applicationId = config.getString(StreamsConfig.APPLICATION_ID_CONFIG);
         final TaskManager taskManager = new TaskManager(
             changelogReader,
             processId,
@@ -637,7 +645,7 @@ public class StreamThread extends Thread {
             activeTaskCreator,
             standbyTaskCreator,
             adminClient,
-            new AssignedStreamsTasks(logContext, threadProducer, time, applicationId),
+            new AssignedStreamsTasks(logContext, eosThreadProducer, time, applicationId),
             new AssignedStandbyTasks(logContext));
 
         log.info("Creating consumer client");
@@ -669,26 +677,6 @@ public class StreamThread extends Thread {
             assignmentErrorCode,
             eosEnabled)
             .updateThreadMetadata(getSharedAdminClientId(clientId));
-    }
-
-    private static boolean useThreadProducer(final boolean eosEnabled, final String upgradeFrom) {
-        switch (upgradeFrom) {
-            case StreamsConfig.UPGRADE_FROM_0100:
-            case StreamsConfig.UPGRADE_FROM_0101:
-            case StreamsConfig.UPGRADE_FROM_0102:
-            case StreamsConfig.UPGRADE_FROM_0110:
-            case StreamsConfig.UPGRADE_FROM_10:
-            case StreamsConfig.UPGRADE_FROM_11:
-            case StreamsConfig.UPGRADE_FROM_20:
-            case StreamsConfig.UPGRADE_FROM_21:
-            case StreamsConfig.UPGRADE_FROM_22:
-            case StreamsConfig.UPGRADE_FROM_23:
-                // If upgrading from an older version, we shall continue using the eos producer setup.
-                return !eosEnabled;
-            default:
-                // If not upgrading, start from 2.4 there will be no task level producer setup.
-                return true;
-        }
     }
 
     public StreamThread(final Time time,

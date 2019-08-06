@@ -106,6 +106,7 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertSame;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -452,7 +453,53 @@ public class StreamThreadTest {
         thread.runOnce();
 
         assertThat(thread.currentNumIterations(), equalTo(1));
+    }
 
+    @Test
+    public void threadProducerOnEosShouldCommit() {
+        final MockProcessor mockProcessor = new MockProcessor(PunctuationType.WALL_CLOCK_TIME, 10L);
+        internalTopologyBuilder.addSource(null, "source1", null, null, null, topic1);
+        internalTopologyBuilder.addProcessor("processor1", () -> mockProcessor, "source1");
+        internalTopologyBuilder.addProcessor("processor2", () -> new MockProcessor(PunctuationType.STREAM_TIME, 10L), "source1");
+
+        final Properties properties = new Properties();
+        properties.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100L);
+        properties.put(StreamsConfig.USE_EOS_THREAD_PRODUCER_CONFIG, true);
+        properties.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE);
+        final StreamsConfig config = new StreamsConfig(StreamsTestUtils.getStreamsConfig(applicationId,
+                                                                                         "localhost:2171",
+                                                                                         Serdes.ByteArraySerde.class.getName(),
+                                                                                         Serdes.ByteArraySerde.class.getName(),
+                                                                                         properties));
+        final StreamThread thread = createStreamThread(clientId, config, true);
+
+        thread.setState(StreamThread.State.STARTING);
+        thread.setState(StreamThread.State.PARTITIONS_REVOKED);
+
+        final Set<TopicPartition> assignedPartitions = Collections.singleton(t1p1);
+        thread.taskManager().setAssignmentMetadata(
+            Collections.singletonMap(
+                new TaskId(0, t1p1.partition()),
+                assignedPartitions),
+            Collections.emptyMap());
+
+        final MockConsumer<byte[], byte[]> mockConsumer = (MockConsumer<byte[], byte[]>) thread.consumer;
+        mockConsumer.assign(Collections.singleton(t1p1));
+        mockConsumer.updateBeginningOffsets(Collections.singletonMap(t1p1, 0L));
+        thread.rebalanceListener.onPartitionsAssigned(assignedPartitions);
+        thread.runOnce();
+
+        // processed one record, punctuated after the first record, and hence num.iterations is still 1
+        long offset = -1;
+        addRecord(mockConsumer, ++offset, 0L);
+        thread.runOnce();
+
+        assertThat(thread.currentNumIterations(), equalTo(1));
+
+        mockProcessor.requestCommit();
+        addRecord(mockConsumer, ++offset, 15L);
+        // Mock producer should throw because it's not enabled for transactional support but wanted.
+        assertThrows(IllegalStateException.class, () -> thread.runOnce());
     }
 
     @Test
