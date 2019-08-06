@@ -25,6 +25,7 @@ public interface Readable {
     int readInt();
     long readLong();
     void readArray(byte[] arr);
+    int readUnsignedVarInt();
 
     /**
      * Read a Kafka-delimited string from a byte buffer.  The UTF-8 string

@@ -86,6 +86,30 @@ public final class VersionConditional {
         }
     }
 
+    private void generateLowerRangeCheck(CodeBuffer buffer) {
+        if (ifMember != null) {
+            buffer.printf("if (version >= %d) {%n", containingVersions.lowest());
+            buffer.incrementIndent();
+            ifMember.run();
+            buffer.decrementIndent();
+            if (ifNotMember != null) {
+                buffer.printf("} else {%n");
+                buffer.incrementIndent();
+                ifNotMember.run();
+                buffer.decrementIndent();
+                buffer.printf("}%n");
+            } else {
+                buffer.printf("}%n");
+            }
+        } else if (ifNotMember != null) {
+            buffer.printf("if (version < %d) {%n", containingVersions.lowest());
+            buffer.incrementIndent();
+            ifNotMember.run();
+            buffer.decrementIndent();
+            buffer.printf("}%n");
+        }
+    }
+
     private void generateUpperRangeCheck(CodeBuffer buffer) {
         if (ifMember != null) {
             buffer.printf("if (version <= %d) {%n", containingVersions.highest());
@@ -142,6 +166,8 @@ public final class VersionConditional {
         if (possibleVersions.lowest() < containingVersions.lowest()) {
             if (possibleVersions.highest() > containingVersions.highest()) {
                 generateFullRangeCheck(buffer);
+            } else {
+                generateLowerRangeCheck(buffer);
             }
         } else if ((possibleVersions.highest() >= containingVersions.lowest() &&
                     (possibleVersions.lowest() <= containingVersions.highest()))) {

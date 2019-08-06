@@ -17,6 +17,8 @@
 
 package org.apache.kafka.common.protocol;
 
+import org.apache.kafka.common.utils.ByteUtils;
+
 import java.nio.ByteBuffer;
 
 public class ByteBufferAccessor implements Readable, Writable {
@@ -52,6 +54,11 @@ public class ByteBufferAccessor implements Readable, Writable {
     }
 
     @Override
+    public int readUnsignedVarInt() {
+        return ByteUtils.readVarint(buf);
+    }
+
+    @Override
     public void writeByte(byte val) {
         buf.put(val);
     }
@@ -74,5 +81,10 @@ public class ByteBufferAccessor implements Readable, Writable {
     @Override
     public void writeArray(byte[] arr) {
         buf.put(arr);
+    }
+
+    @Override
+    public void writeUnsignedVarint(int i) {
+        ByteUtils.writeUnsignedVarint(i, buf);
     }
 }

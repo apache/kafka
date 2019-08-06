@@ -25,6 +25,7 @@ public interface Writable {
     void writeInt(int val);
     void writeLong(long val);
     void writeArray(byte[] arr);
+    void writeUnsignedVarint(int i);
 
     /**
      * Write a nullable byte array delimited by a four-byte length prefix.
