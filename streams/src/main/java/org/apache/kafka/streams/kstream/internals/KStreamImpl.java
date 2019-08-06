@@ -502,11 +502,15 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
         final String name = new NamedInternal(repartitionedInternal.name())
             .orElseGenerateWithPrefix(builder, REPARTITION_NAME);
 
+        final Serde<K> keySerde = repartitionedInternal.keySerde() == null ? this.keySerde : repartitionedInternal.keySerde();
+
+        final Serde<V> valueSerde = repartitionedInternal.valueSerde() == null ? this.valSerde : repartitionedInternal.valueSerde();
+
         if (!repartitionRequired && repartitionedInternal.numberOfPartitions() == null) {
             return new KStreamImpl<>(
                 name,
                 keySerde,
-                valSerde,
+                valueSerde,
                 sourceNodes,
                 false,
                 streamsGraphNode,
@@ -516,10 +520,6 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
 
         final OptimizableRepartitionNodeBuilder<K, V> optimizableRepartitionNodeBuilder =
             OptimizableRepartitionNode.optimizableRepartitionNodeBuilder();
-
-        final Serde<K> keySerde = repartitionedInternal.keySerde() == null ? this.keySerde : repartitionedInternal.keySerde();
-
-        final Serde<V> valueSerde = repartitionedInternal.valueSerde() == null ? this.valSerde : repartitionedInternal.valueSerde();
 
         final String repartitionedSourceName = createRepartitionedSource(
             builder,
@@ -559,6 +559,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
         final String name = namedInternal.orElseGenerateWithPrefix(builder, REPARTITION_NAME);
 
         final ProcessorGraphNode<K, V> selectKeyNode = internalSelectKey(selector, new NamedInternal(KEY_SELECT_NAME));
+        selectKeyNode.keyChangingOperation(true);
 
         builder.addGraphNode(this.streamsGraphNode, selectKeyNode);
 
@@ -569,7 +570,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
 
         final String repartitionedSourceName = createRepartitionedSource(
             builder,
-            repartitionedInternal.keySerde(),
+            null,
             valueSerde,
             name,
             repartitionedInternal.toInternalTopicProperties(),
@@ -583,7 +584,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
 
         return new KStreamImpl<>(
             repartitionedSourceName,
-            repartitionedInternal.keySerde(),
+            null,
             valueSerde,
             sourceNodes,
             repartitionRequired,

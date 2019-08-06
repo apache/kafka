@@ -16,16 +16,18 @@
  */
 package org.apache.kafka.streams.integration;
 
+import org.apache.kafka.clients.admin.AdminClient;
+import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.IntegerDeserializer;
 import org.apache.kafka.common.serialization.IntegerSerializer;
+import org.apache.kafka.common.serialization.LongDeserializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.KeyValueTimestamp;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
@@ -45,26 +47,29 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Properties;
+import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 
 @Category({IntegrationTest.class})
 public class KStreamRepartitionIntegrationTest {
     private static final int NUM_BROKERS = 1;
-    private final Pattern repartitionTopicPattern = Pattern.compile("Sink: .*-repartition");
+    private static AtomicInteger testNo = new AtomicInteger(0);
 
     @ClassRule
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS);
 
-    private static volatile AtomicInteger testNo = new AtomicInteger(0);
     private Properties streamsConfiguration;
     private KafkaStreams kafkaStreams;
-    private String inputTopic = "input-topic";
-    private String outputTopic = "output-topic";
+    private String inputTopic = "input-topic-" + testNo.get();
+    private String outputTopic = "output-topic-" + testNo.get();
+    private String applicationId = "kstream-repartition-stream-test-" + testNo.get();
 
     @Before
     public void before() throws InterruptedException {
@@ -72,7 +77,7 @@ public class KStreamRepartitionIntegrationTest {
         CLUSTER.createTopic(outputTopic, 1, 1);
 
         streamsConfiguration = new Properties();
-        final String applicationId = "kstream-repartition-stream-test-" + testNo.incrementAndGet();
+
         streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, applicationId);
         streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         streamsConfiguration.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
@@ -89,10 +94,12 @@ public class KStreamRepartitionIntegrationTest {
             kafkaStreams.close();
         }
         IntegrationTestUtils.purgeLocalStreamsState(streamsConfiguration);
+        testNo.incrementAndGet();
     }
 
     @Test
     public void shouldNotCreateRepartitionTopicIfKeyChangingOperationWasNotPerformed() throws ExecutionException, InterruptedException {
+        final String repartitionName = "dummy";
         final long timestamp = System.currentTimeMillis();
 
         sendEvents(
@@ -106,7 +113,7 @@ public class KStreamRepartitionIntegrationTest {
         StreamsBuilder builder = new StreamsBuilder();
 
         builder.stream(inputTopic, Consumed.with(Serdes.Integer(), Serdes.String()))
-            .repartition(Repartitioned.as("smart-repartition"))
+            .repartition(Repartitioned.as(repartitionName))
             .to(outputTopic);
 
         startStreams(builder);
@@ -115,18 +122,20 @@ public class KStreamRepartitionIntegrationTest {
             new IntegerDeserializer(),
             new StringDeserializer(),
             Arrays.asList(
-                new KeyValueTimestamp<>(1, "A", timestamp),
-                new KeyValueTimestamp<>(2, "B", timestamp)
+                new KeyValue<>(1, "A"),
+                new KeyValue<>(2, "B")
             )
         );
 
         final String topology = builder.build().describe().toString();
 
-        assertEquals(0, getCountOfRepartitionTopicsFound(topology));
+        assertFalse(topicExists(toRepartitionTopicName(repartitionName)));
+        assertEquals(0, getCountOfRepartitionTopicsFound(topology, "Sink: .*-smart-repartition"));
     }
 
     @Test
     public void shouldCreateRepartitionTopicWhenRepartitionKeySelectorIsUsed() throws ExecutionException, InterruptedException {
+        final String repartitionName = "new-key";
         final long timestamp = System.currentTimeMillis();
 
         sendEvents(
@@ -139,31 +148,32 @@ public class KStreamRepartitionIntegrationTest {
 
         StreamsBuilder builder = new StreamsBuilder();
 
-        final Repartitioned<String, String> repartitioned = Repartitioned.<String, String>as("smart-repartition")
-            .withKeySerde(Serdes.String());
-
         builder.stream(inputTopic, Consumed.with(Serdes.Integer(), Serdes.String()))
-            .repartition((key, value) -> key.toString(), repartitioned)
+            .repartition((key, value) -> key.toString(), Repartitioned.as(repartitionName))
+            .groupByKey()
+            .count()
+            .toStream()
             .to(outputTopic);
 
         startStreams(builder);
 
         validateReceivedMessages(
             new StringDeserializer(),
-            new StringDeserializer(),
+            new LongDeserializer(),
             Arrays.asList(
-                new KeyValueTimestamp<>("1", "A", timestamp),
-                new KeyValueTimestamp<>("2", "B", timestamp)
+                new KeyValue<>("1", 1L),
+                new KeyValue<>("2", 1L)
             )
         );
 
         final String topology = builder.build().describe().toString();
 
-        assertEquals(1, getCountOfRepartitionTopicsFound(topology));
+        assertTrue(topicExists(toRepartitionTopicName(repartitionName)));
+        assertEquals(1, getCountOfRepartitionTopicsFound(topology, "Sink: .*" + repartitionName + "-repartition.*"));
     }
 
     @Test
-    public void shouldNotBlowUpThings() throws ExecutionException, InterruptedException {
+    public void shouldGenerateRepartitionTopicWhenNameIsNotSpecified() throws ExecutionException, InterruptedException {
         final long timestamp = System.currentTimeMillis();
 
         sendEvents(
@@ -177,23 +187,49 @@ public class KStreamRepartitionIntegrationTest {
         StreamsBuilder builder = new StreamsBuilder();
 
         builder.stream(inputTopic, Consumed.with(Serdes.Integer(), Serdes.String()))
-            .repartition(Repartitioned.as("smart-repartition"))
+            .selectKey((key, value) -> key.toString())
+            .repartition()
             .to(outputTopic);
 
         startStreams(builder);
 
         validateReceivedMessages(
-            new IntegerDeserializer(),
+            new StringDeserializer(),
             new StringDeserializer(),
             Arrays.asList(
-                new KeyValueTimestamp<>(1, "A", timestamp),
-                new KeyValueTimestamp<>(2, "B", timestamp)
+                new KeyValue<>("1", "A"),
+                new KeyValue<>("2", "B")
             )
         );
+
+        final String topology = builder.build().describe().toString();
+
+        assertEquals(1, getCountOfRepartitionTopicsFound(topology, "Sink: .*-repartition"));
     }
 
-    private int getCountOfRepartitionTopicsFound(final String topologyString) {
-        final Matcher matcher = repartitionTopicPattern.matcher(topologyString);
+    private boolean topicExists(String topic) throws InterruptedException, ExecutionException {
+        try (AdminClient adminClient = createAdminClient()) {
+            final Set<String> topics = adminClient.listTopics()
+                .names()
+                .get();
+
+            return topics.contains(topic);
+        }
+    }
+
+    private String toRepartitionTopicName(String input) {
+        return applicationId + "-" + input + "-repartition";
+    }
+
+    private AdminClient createAdminClient() {
+        Properties properties = new Properties();
+        properties.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
+
+        return AdminClient.create(properties);
+    }
+
+    private int getCountOfRepartitionTopicsFound(final String topologyString, final String searchPattern) {
+        final Matcher matcher = Pattern.compile(searchPattern).matcher(topologyString);
         final List<String> repartitionTopicsFound = new ArrayList<>();
         while (matcher.find()) {
             repartitionTopicsFound.add(matcher.group());
@@ -223,8 +259,8 @@ public class KStreamRepartitionIntegrationTest {
 
     private <K, V> void validateReceivedMessages(Deserializer<K> keySerializer,
                                                  Deserializer<V> valueSerializer,
-                                                 final List<KeyValueTimestamp<K, V>> expectedRecords)
-        throws InterruptedException {
+                                                 final List<KeyValue<K, V>> expectedRecords) throws InterruptedException {
+
         final Properties consumerProperties = new Properties();
         consumerProperties.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         consumerProperties.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "kstream-repartition-test-" + testNo);
@@ -238,7 +274,7 @@ public class KStreamRepartitionIntegrationTest {
             valueSerializer.getClass().getName()
         );
 
-        IntegrationTestUtils.waitUntilFinalKeyValueTimestampRecordsReceived(
+        IntegrationTestUtils.waitUntilFinalKeyValueRecordsReceived(
             consumerProperties,
             outputTopic,
             expectedRecords
