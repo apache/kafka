@@ -435,9 +435,17 @@ public final class MessageDataGenerator {
                         generate(buffer);
                     buffer.printf("if (arrayLength < 0) {%n");
                     buffer.incrementIndent();
-                    buffer.printf("this.%s = null;%n", field.camelCaseName());
+                    VersionConditional.forVersions(field.nullableVersions(), curVersions).
+                        ifNotMember(() -> {
+                            buffer.printf("throw new RuntimeException(\"non-nullable field %s " +
+                                    "was serialized as null\");%n", field.camelCaseName());
+                        }).
+                        ifMember(() -> {
+                            buffer.printf("this.%s = null;%n", field.camelCaseName());
+                        }).
+                        generate(buffer);
                     buffer.decrementIndent();
-                    buffer.printf("} else { // MDG:440%n");
+                    buffer.printf("} else {%n");
                     buffer.incrementIndent();
                     FieldType.ArrayType arrayType = (FieldType.ArrayType) field.type();
                     if (structRegistry.isStructArrayWithKeys(field)) {
