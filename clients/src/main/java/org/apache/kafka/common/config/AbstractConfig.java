@@ -40,7 +40,7 @@ import java.util.TreeMap;
  */
 public class AbstractConfig {
 
-    private final Logger log = LoggerFactory.getLogger(getClass());
+    protected final Logger log = LoggerFactory.getLogger(getClass());
 
     /* configs for which values have been requested, used to detect unused configs */
     private final Set<String> used;
