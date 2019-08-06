@@ -393,7 +393,6 @@ public class StreamThread extends Thread {
                     log.trace("Created task {} with assigned partitions {}", taskId, partitions);
                     createdTasks.add(task);
                 }
-
             }
             return createdTasks;
         }
@@ -627,6 +626,8 @@ public class StreamThread extends Thread {
             changelogReader,
             time,
             log);
+
+        final String applicationId = config.getString(StreamsConfig.APPLICATION_ID_CONFIG);
         final TaskManager taskManager = new TaskManager(
             changelogReader,
             processId,
@@ -636,11 +637,10 @@ public class StreamThread extends Thread {
             activeTaskCreator,
             standbyTaskCreator,
             adminClient,
-            new AssignedStreamsTasks(logContext, threadProducer, time),
+            new AssignedStreamsTasks(logContext, threadProducer, time, applicationId),
             new AssignedStandbyTasks(logContext));
 
         log.info("Creating consumer client");
-        final String applicationId = config.getString(StreamsConfig.APPLICATION_ID_CONFIG);
         final Map<String, Object> consumerConfigs = config.getMainConsumerConfigs(applicationId, getConsumerClientId(threadClientId), threadIdx);
         consumerConfigs.put(StreamsConfig.InternalConfig.TASK_MANAGER_FOR_PARTITION_ASSIGNOR, taskManager);
         final AtomicInteger assignmentErrorCode = new AtomicInteger();
@@ -651,15 +651,15 @@ public class StreamThread extends Thread {
             consumerConfigs.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "none");
         }
 
-        final Consumer<byte[], byte[]> mainConsumer = clientSupplier.getConsumer(consumerConfigs);
-        taskManager.setConsumer(mainConsumer);
+        final Consumer<byte[], byte[]> consumer = clientSupplier.getConsumer(consumerConfigs);
+        taskManager.setConsumer(consumer);
 
         return new StreamThread(
             time,
             config,
             threadProducer,
             restoreConsumer,
-            mainConsumer,
+            consumer,
             originalReset,
             taskManager,
             streamsMetrics,
@@ -703,7 +703,7 @@ public class StreamThread extends Thread {
                         final String threadClientId,
                         final LogContext logContext,
                         final AtomicInteger assignmentErrorCode,
-                        boolean eosEnabled) {
+                        final boolean eosEnabled) {
         super(threadClientId);
 
         this.stateLock = new Object();

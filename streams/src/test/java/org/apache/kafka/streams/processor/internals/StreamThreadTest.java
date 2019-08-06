@@ -751,7 +751,7 @@ public class StreamThreadTest {
                                                         null,
                                                         null,
                                                         null,
-                                                        new AssignedStreamsTasks(new LogContext()),
+                                                        new AssignedStreamsTasks(new LogContext(), null, new MockTime(), applicationId),
                                                         new AssignedStandbyTasks(new LogContext()));
         taskManager.setConsumer(mockStreamThreadConsumer);
         taskManager.setAssignmentMetadata(Collections.emptyMap(), Collections.emptyMap());

@@ -153,7 +153,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
                       final ThreadCache cache,
                       final Time time,
                       final ProducerSupplier producerSupplier,
-                      boolean isTaskProducer) {
+                      final boolean isTaskProducer) {
         this(id, partitions, topology, consumer, changelogReader, config, metrics, stateDirectory, cache, time, producerSupplier, null, isTaskProducer);
     }
 
@@ -169,7 +169,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
                       final Time time,
                       final ProducerSupplier producerSupplier,
                       final RecordCollector recordCollector,
-                      boolean isTaskProducer) {
+                      final boolean isTaskProducer) {
         super(id, partitions, topology, consumer, changelogReader, false, stateDirectory, config);
 
         this.isTaskProducer = isTaskProducer;
@@ -493,7 +493,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
     }
 
     @Override
-    public void markCommitDone(long commitLatency) {
+    public void markCommitDone(final long commitLatency) {
         commitNeeded = false;
         commitRequested = false;
         taskMetrics.taskCommitTimeSensor.record(commitLatency);
@@ -875,7 +875,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
 
     private void initializeTransactions() {
         try {
-            producer.initTransactions(consumer);
+            producer.initTransactions();
             producer.beginTransaction();
         } catch (final TimeoutException retriable) {
             log.error(

@@ -21,8 +21,6 @@ import org.apache.kafka.clients.ClientDnsLookup;
 import org.apache.kafka.clients.ClientUtils;
 import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.clients.NetworkClient;
-import org.apache.kafka.clients.consumer.Consumer;
-import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetCommitCallback;
@@ -258,7 +256,6 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     private final ProducerInterceptors<K, V> interceptors;
     private final ApiVersions apiVersions;
     private final TransactionManager transactionManager;
-    private ConsumerGroupMetadata consumerGroupMetadata;
 
     /**
      * A producer is instantiated by providing a set of key-value pairs as configuration. Valid configuration strings
@@ -632,7 +629,9 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     private void maybeAllocateTransactionalId() {
         String allocatedTransactionalId = transactionManager.transactionalId();
         if (allocatedTransactionalId == null || allocatedTransactionalId.isEmpty()) {
-            transactionManager.setTransactionalId("thread-producer-" + UUID.randomUUID().toString());
+            String threadProducerId = "thread-producer-" + UUID.randomUUID().toString();
+            log.info("Allocating thread producer id: {}", threadProducerId);
+            transactionManager.setTransactionalId(threadProducerId);
         }
     }
 
@@ -681,15 +680,6 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      */
     public void sendOffsetsToTransaction(Map<TopicPartition, OffsetAndMetadata> offsets,
                                          String consumerGroupId) throws ProducerFencedException {
-        sendOffsetToTransactionInternal(offsets, consumerGroupId);
-    }
-
-    public void sendOffsetsToTransaction(Map<TopicPartition, OffsetAndMetadata> offsets) throws ProducerFencedException {
-        sendOffsetToTransactionInternal(offsets, consumerGroupMetadata.groupId());
-    }
-
-    private void sendOffsetToTransactionInternal(Map<TopicPartition, OffsetAndMetadata> offsets,
-                                                 String consumerGroupId) {
         throwIfNoTransactionManager();
         throwIfProducerClosed();
         TransactionalRequestResult result = transactionManager.sendOffsetsToTransaction(offsets, consumerGroupId);

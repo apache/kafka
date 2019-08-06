@@ -19,6 +19,7 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.apache.kafka.streams.processor.TaskId;
@@ -52,7 +53,7 @@ public class AssignedStreamsTasksTest {
 
     @Before
     public void before() {
-        assignedTasks = new AssignedStreamsTasks(new LogContext("log "));
+        assignedTasks = new AssignedStreamsTasks(new LogContext("log"), null, new MockTime(), "dummy-group-id");
         EasyMock.expect(t1.id()).andReturn(taskId1).anyTimes();
         EasyMock.expect(t2.id()).andReturn(taskId2).anyTimes();
     }

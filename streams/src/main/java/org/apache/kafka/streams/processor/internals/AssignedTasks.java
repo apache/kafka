@@ -47,6 +47,7 @@ abstract class AssignedTasks<T extends Task> {
     private final Set<TaskId> previousActiveTasks = new HashSet<>();
     private final Producer<byte[], byte[]> eosProducer;
     private final Time time;
+    private final String consumerGroupId;
 
     // IQ may access this map.
     final Map<TaskId, T> running = new ConcurrentHashMap<>();
@@ -55,11 +56,13 @@ abstract class AssignedTasks<T extends Task> {
     AssignedTasks(final LogContext logContext,
                   final String taskTypeName,
                   final Producer<byte[], byte[]> eosProducer,
-                  final Time time) {
+                  final Time time,
+                  final String consumerGroupId) {
         this.taskTypeName = taskTypeName;
         this.log = logContext.logger(getClass());
         this.eosProducer = eosProducer;
         this.time = time;
+        this.consumerGroupId = consumerGroupId;
     }
 
     void addNewTask(final T task) {
@@ -296,14 +299,14 @@ abstract class AssignedTasks<T extends Task> {
         boolean needsCommit(Task task);
     }
 
-    protected int commitInternal(Logger log,
-                                 Producer<byte[], byte[]> eosProducer,
-                                 TaskStatus taskStatus) {
+    protected int commitInternal(final Logger log,
+                                 final Producer<byte[], byte[]> eosProducer,
+                                 final TaskStatus taskStatus) {
         int committed = 0;
         RuntimeException firstException = null;
 
-        Map<TopicPartition, OffsetAndMetadata> pendingOffsets = new HashMap<>();
-        List<Task> tasks = new ArrayList<>();
+        final Map<TopicPartition, OffsetAndMetadata> pendingOffsets = new HashMap<>();
+        final List<Task> tasks = new ArrayList<>();
 
         for (final Iterator<T> it = running().iterator(); it.hasNext(); ) {
             final T task = it.next();
@@ -341,10 +344,10 @@ abstract class AssignedTasks<T extends Task> {
 
         if (!pendingOffsets.isEmpty()) {
             final long startNs = time.nanoseconds();
-            eosProducer.sendOffsetsToTransaction(pendingOffsets);
+            eosProducer.sendOffsetsToTransaction(pendingOffsets, consumerGroupId);
             eosProducer.commitTransaction();
-            long commitLatency = time.nanoseconds() - startNs;
-            for (Task task : tasks) {
+            final long commitLatency = time.nanoseconds() - startNs;
+            for (final Task task : tasks) {
                 task.markCommitDone(commitLatency);
             }
             eosProducer.beginTransaction();

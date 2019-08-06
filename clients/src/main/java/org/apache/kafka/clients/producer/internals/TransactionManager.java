@@ -19,7 +19,6 @@ package org.apache.kafka.clients.producer.internals;
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.RequestCompletionHandler;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
-import org.apache.kafka.clients.consumer.internals.ConsumerGroupMetadata;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
@@ -33,7 +32,6 @@ import org.apache.kafka.common.errors.TransactionalIdAuthorizationException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.FindCoordinatorRequestData;
 import org.apache.kafka.common.message.InitProducerIdRequestData;
-import org.apache.kafka.common.message.TxnOffsetCommitRequestData;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.DefaultRecordBatch;
 import org.apache.kafka.common.record.RecordBatch;
@@ -202,7 +200,6 @@ public class TransactionManager {
     private volatile RuntimeException lastError = null;
     private volatile ProducerIdAndEpoch producerIdAndEpoch;
     private volatile boolean transactionStarted = false;
-    private org.apache.kafka.clients.consumer.Consumer<byte[], byte[]> consumer;
 
     private enum State {
         UNINITIALIZED,
@@ -277,10 +274,6 @@ public class TransactionManager {
 
     public void setTransactionalId(String transactionalId) {
         this.transactionalId = transactionalId;
-    }
-
-    public void setConsumer(org.apache.kafka.clients.consumer.Consumer<byte[], byte[]> consumer) {
-        this.consumer = consumer;
     }
 
     public synchronized TransactionalRequestResult initializeTransactions() {
@@ -998,19 +991,8 @@ public class TransactionManager {
             pendingTxnOffsetCommits.put(entry.getKey(), committedOffset);
         }
 
-
-        ConsumerGroupMetadata metadata = (ConsumerGroupMetadata) consumer.groupMetadata();
-        TxnOffsetCommitRequest.Builder builder = new TxnOffsetCommitRequest.Builder(
-            new TxnOffsetCommitRequestData()
-                .setTransactionalId(transactionalId)
-                .setGroupId(consumerGroupId)
-                .setProducerId(producerIdAndEpoch.producerId)
-                .setProducerEpoch(producerIdAndEpoch.epoch)
-                .setTopics(TxnOffsetCommitRequest.getTopics(pendingTxnOffsetCommits))
-                .setGenerationId(metadata.generation())
-                .setMemberId(metadata.memberId())
-                .setGroupInstanceId(metadata.groupInstanceId().orElse(null))
-        );
+        TxnOffsetCommitRequest.Builder builder = new TxnOffsetCommitRequest.Builder(transactionalId, consumerGroupId,
+                                                                                    producerIdAndEpoch.producerId, producerIdAndEpoch.epoch, pendingTxnOffsetCommits);
         return new TxnOffsetCommitHandler(result, builder);
     }
 
@@ -1216,16 +1198,6 @@ public class TransactionManager {
                     return;
                 } else if (error == Errors.INVALID_PRODUCER_EPOCH) {
                     fatalError(error.exception());
-                    return;
-                } else if (error == Errors.ILLEGAL_GENERATION) {
-                    fatalError(error.exception());
-                    return;
-                } else if (error == Errors.FENCED_INSTANCE_ID) {
-                    fatalError(error.exception());
-                    return;
-                }  else if (error == Errors.UNKNOWN_MEMBER_ID) {
-                    // What should we do? The consumer internal is not available here.
-                    reenqueue();
                     return;
                 } else if (error == Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED) {
                     fatalError(error.exception());
@@ -1465,7 +1437,7 @@ public class TransactionManager {
 
         @Override
         String coordinatorKey() {
-            return builder.data.groupId();
+            return builder.consumerGroupId();
         }
 
         @Override
@@ -1474,7 +1446,7 @@ public class TransactionManager {
             boolean coordinatorReloaded = false;
             Map<TopicPartition, Errors> errors = txnOffsetCommitResponse.errors();
 
-            log.debug("Received TxnOffsetCommit response for consumer group {}: {}", builder.data.groupId(),
+            log.debug("Received TxnOffsetCommit response for consumer group {}: {}", builder.consumerGroupId(),
                     errors);
 
             for (Map.Entry<TopicPartition, Errors> entry : errors.entrySet()) {
@@ -1487,14 +1459,14 @@ public class TransactionManager {
                         || error == Errors.REQUEST_TIMED_OUT) {
                     if (!coordinatorReloaded) {
                         coordinatorReloaded = true;
-                        lookupCoordinator(FindCoordinatorRequest.CoordinatorType.GROUP, builder.data.groupId());
+                        lookupCoordinator(FindCoordinatorRequest.CoordinatorType.GROUP, builder.consumerGroupId());
                     }
                 } else if (error == Errors.UNKNOWN_TOPIC_OR_PARTITION
                         || error == Errors.COORDINATOR_LOAD_IN_PROGRESS) {
                     // If the topic is unknown or the coordinator is loading, retry with the current coordinator
                     continue;
                 } else if (error == Errors.GROUP_AUTHORIZATION_FAILED) {
-                    abortableError(GroupAuthorizationException.forGroupId(builder.data.groupId()));
+                    abortableError(GroupAuthorizationException.forGroupId(builder.consumerGroupId()));
                     break;
                 } else if (error == Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED
                         || error == Errors.INVALID_PRODUCER_EPOCH

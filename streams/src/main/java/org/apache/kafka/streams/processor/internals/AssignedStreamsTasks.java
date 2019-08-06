@@ -41,8 +41,9 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
 
     AssignedStreamsTasks(final LogContext logContext,
                          final Producer<byte[], byte[]> threadProducer,
-                         final Time time) {
-        super(logContext, "stream task", threadProducer, time);
+                         final Time time,
+                         final String consumerGroupId) {
+        super(logContext, "stream task", threadProducer, time, consumerGroupId);
         this.threadProducer = threadProducer;
     }
 
@@ -142,9 +143,8 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
      *                               or if the task producer got fenced (EOS)
      */
     int maybeCommitPerUserRequested() {
-       return commitInternal(log,
-                             threadProducer,
-                             task -> task.commitRequested() && task.commitNeeded());
+        return commitInternal(log, threadProducer,
+            task -> task.commitRequested() && task.commitNeeded());
     }
 
     /**
