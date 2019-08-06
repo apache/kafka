@@ -29,7 +29,7 @@ import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.streams.KafkaClientSupplier;
 
 public class DefaultKafkaClientSupplier implements KafkaClientSupplier {
-    @SuppressWarnings("deprecation")
+    @Deprecated
     @Override
     public AdminClient getAdminClient(final Map<String, Object> config) {
         return (AdminClient)getAdmin(config);

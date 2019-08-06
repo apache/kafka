@@ -36,10 +36,13 @@ public interface KafkaClientSupplier {
      *
      * @param config Supplied by the {@link java.util.Properties} given to the {@link KafkaStreams}
      * @return an instance of {@link AdminClient}
-     * @deprecated Not used. Implement {@link #getAdmin} instead
+     * @deprecated Not called by Kafka Streams, which now uses {@link #getAdmin} instead.
      */
     @Deprecated
-    AdminClient getAdminClient(final Map<String, Object> config);
+    default AdminClient getAdminClient(final Map<String, Object> config) {
+        throw new UnsupportedOperationException("Direct use of this method is deprecated. " +
+            "The method will be removed in a future release.");
+    }
 
     /**
      * Create an {@link Admin} which is used for internal topic management.
