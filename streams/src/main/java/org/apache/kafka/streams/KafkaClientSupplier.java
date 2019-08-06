@@ -41,6 +41,7 @@ public interface KafkaClientSupplier {
     @Deprecated
     default AdminClient getAdminClient(final Map<String, Object> config) {
         throw new UnsupportedOperationException("Direct use of this method is deprecated. " +
+            "Implementations of KafkaClientSupplier should implement the getAdmin method instead. " +
             "The method will be removed in a future release.");
     }
 

@@ -32,7 +32,7 @@ public class DefaultKafkaClientSupplier implements KafkaClientSupplier {
     @Deprecated
     @Override
     public AdminClient getAdminClient(final Map<String, Object> config) {
-        return (AdminClient)getAdmin(config);
+        return (AdminClient) getAdmin(config);
     }
 
     @Override
