@@ -869,7 +869,7 @@ public interface KStream<K, V> {
      * The provided {@link KeyValueMapper} is applied to each input record and computes a new key for it.
      * Thus, an input record {@code <K,V>} can be transformed into an output record {@code <K':V>}.
      *
-     * @param mapper        a {@link KeyValueMapper} that computes a new key for each record
+     * @param selector      a {@link KeyValueMapper} that computes a new key for each record
      * @param repartitioned the {@link Repartitioned} instance used to specify {@link org.apache.kafka.common.serialization.Serdes},
      *                      {@link StreamPartitioner} which determines how records are distributed among partitions of the topic,
      *                      part of the topic name and number of partitions for a repartition topic, if repartitioning is required.
@@ -877,7 +877,7 @@ public interface KStream<K, V> {
      * @see #repartition()
      * @see #repartition(Repartitioned)
      */
-    <KR> KStream<KR, V> repartition(final KeyValueMapper<? super K, ? super V, ? extends KR> mapper,
+    <KR> KStream<KR, V> repartition(final KeyValueMapper<? super K, ? super V, ? extends KR> selector,
                                     final Repartitioned<KR, V> repartitioned);
 
     /**

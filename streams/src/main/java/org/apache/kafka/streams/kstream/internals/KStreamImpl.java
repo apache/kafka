@@ -495,7 +495,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
 
     @Override
     public KStream<K, V> repartition(final Repartitioned<K, V> repartitioned) {
-        Objects.requireNonNull(repartitioned, "repartitioned can't be null");
+        Objects.requireNonNull(repartitioned, "repartitioned parameter can't be null");
 
         final RepartitionedInternal<K, V> repartitionedInternal = new RepartitionedInternal<>(repartitioned);
 
@@ -550,6 +550,9 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
     @Override
     public <KR> KStream<KR, V> repartition(final KeyValueMapper<? super K, ? super V, ? extends KR> selector,
                                            final Repartitioned<KR, V> repartitioned) {
+        Objects.requireNonNull(selector, "selector parameter can't be null");
+        Objects.requireNonNull(repartitioned, "repartitioned parameter can't be null");
+
         RepartitionedInternal<KR, V> repartitionedInternal = new RepartitionedInternal<>(repartitioned);
 
         final NamedInternal namedInternal = new NamedInternal(repartitionedInternal.name() + "-SELECT-KEY");
