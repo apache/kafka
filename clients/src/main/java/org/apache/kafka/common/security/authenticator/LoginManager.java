@@ -18,7 +18,6 @@ package org.apache.kafka.common.security.authenticator;
 
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.SaslConfigs;
-import org.apache.kafka.common.config.SecurityConfig;
 import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.security.JaasContext;
@@ -26,6 +25,7 @@ import org.apache.kafka.common.security.auth.AuthenticateCallbackHandler;
 import org.apache.kafka.common.security.auth.Login;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule;
 import org.apache.kafka.common.security.oauthbearer.internals.unsecured.OAuthBearerUnsecuredLoginCallbackHandler;
+import org.apache.kafka.common.utils.SecurityUtils;
 import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -113,7 +113,7 @@ public class LoginManager {
                     STATIC_INSTANCES.put(loginMetadata, loginManager);
                 }
             }
-            SecurityConfig.addConfiguredSecurityProviders(configs);
+            SecurityUtils.addConfiguredSecurityProviders(configs);
             return loginManager.acquire();
         }
     }

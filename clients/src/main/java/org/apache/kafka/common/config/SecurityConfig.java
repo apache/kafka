@@ -16,36 +16,13 @@
  */
 package org.apache.kafka.common.config;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import java.security.Provider;
-import java.security.Security;
-import java.util.Map;
-
 /**
  * Contains the common security config for SSL and SASL
  */
 public class SecurityConfig {
-    private static final Logger LOGGER = LoggerFactory.getLogger(SecurityConfig.class);
 
     public static final String SECURITY_PROVIDER_CLASS_CONFIG = "security.provider.class";
-    public static final String SECURITY_PROVIDER_CLASS_DOC = "Java Provider to register security algorithms";
+    public static final String SECURITY_PROVIDER_CLASS_DOC = "A list of Java providers that'll be installed " +
+            "to register security algorithms";
 
-    public static void addConfiguredSecurityProviders(Map<String, ?> configs) {
-        String securityProviderClassesStr = (String) configs.get(SecurityConfig.SECURITY_PROVIDER_CLASS_CONFIG);
-        if (securityProviderClassesStr == null || securityProviderClassesStr.equals("")) {
-            return;
-        }
-        try {
-            String[] securityProviderClasses = securityProviderClassesStr.replaceAll("\\s+", "").split(",");
-            for (int index = 0; index < securityProviderClasses.length; index++) {
-                Security.insertProviderAt((Provider) Class.forName(securityProviderClasses[index]).newInstance(), index + 1);
-            }
-        } catch (ClassNotFoundException cnfe) {
-            LOGGER.error("Unrecognized security provider class", cnfe);
-        } catch (IllegalAccessException | InstantiationException e) {
-            LOGGER.error("Unexpected implementation of security provider class", e);
-        }
-    }
 }

@@ -17,12 +17,12 @@
 package org.apache.kafka.common.security.ssl;
 
 import org.apache.kafka.common.KafkaException;
-import org.apache.kafka.common.config.SecurityConfig;
 import org.apache.kafka.common.config.SslClientAuth;
 import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
 import org.apache.kafka.common.network.Mode;
 import org.apache.kafka.common.config.types.Password;
+import org.apache.kafka.common.utils.SecurityUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -67,7 +67,7 @@ public class SslEngineBuilder {
         this.configs = Collections.unmodifiableMap(configs);
         this.protocol = (String) configs.get(SslConfigs.SSL_PROTOCOL_CONFIG);
         this.provider = (String) configs.get(SslConfigs.SSL_PROVIDER_CONFIG);
-        SecurityConfig.addConfiguredSecurityProviders(this.configs);
+        SecurityUtils.addConfiguredSecurityProviders(this.configs);
 
         List<String> cipherSuitesList = (List<String>) configs.get(SslConfigs.SSL_CIPHER_SUITES_CONFIG);
         if (cipherSuitesList != null && !cipherSuitesList.isEmpty()) {
