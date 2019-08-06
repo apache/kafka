@@ -130,6 +130,7 @@ public final class ProducerBatch {
             this.recordsBuilder.append(timestamp, key, value, headers);
             this.maxRecordSize = Math.max(this.maxRecordSize, AbstractRecords.estimateSizeInBytesUpperBound(magic(),
                     recordsBuilder.compressionType(), key, value, headers));
+            thunk.future.setProduceFuture(this.produceFuture, this.recordCount);
             thunks.add(thunk);
             this.recordCount++;
         }
@@ -229,6 +230,46 @@ public final class ProducerBatch {
         return false;
     }
 
+    /**
+     * Same as {@link #done(long, long, RuntimeException)} but excludes records not specified in relativeOffsets from
+     * having their callbacks invoked
+     * @param baseOffset The base offset of the messages assigned by the server
+     * @param relativeOffsets The set of offsets in this batch to complete
+     * @param logAppendTime The log append time or -1 if CreateTime is being used
+     * @param exception The exception that occurred (or null if the request was successful)
+     * @return true if the batch was completed successfully and false if the batch was previously aborted
+     */
+    public boolean partiallyDone(long baseOffset, Set<Integer> relativeOffsets, long logAppendTime, RuntimeException exception) {
+        final FinalState tryFinalState = (exception == null) ? FinalState.SUCCEEDED : FinalState.FAILED;
+
+        if (tryFinalState == FinalState.SUCCEEDED) {
+            log.trace("Successfully produced messages to {} with base offset {}.", topicPartition, baseOffset);
+        } else {
+            log.trace("Failed to produce messages to {} with base offset {}.", topicPartition, baseOffset, exception);
+        }
+
+        if (this.finalState.compareAndSet(null, tryFinalState)) {
+            completeFutureAndFireCallbacks(baseOffset, relativeOffsets, logAppendTime, exception);
+            return true;
+        }
+
+        if (this.finalState.get() != FinalState.SUCCEEDED) {
+            if (tryFinalState == FinalState.SUCCEEDED) {
+                // Log if a previously unsuccessful batch succeeded later on.
+                log.debug("ProduceResponse returned {} for {} after batch with base offset {} had already been {}.",
+                        tryFinalState, topicPartition, baseOffset, this.finalState.get());
+            } else {
+                // FAILED --> FAILED and ABORTED --> FAILED transitions are ignored.
+                log.debug("Ignored state transition {} -> {} for {} batch with base offset {}",
+                        this.finalState.get(), tryFinalState, topicPartition, baseOffset);
+            }
+        } else {
+            // A SUCCESSFUL batch must not attempt another state change.
+            throw new IllegalStateException("A " + this.finalState.get() + " batch must not attempt another state change to " + tryFinalState);
+        }
+        return false;
+    }
+
     private void completeFutureAndFireCallbacks(long baseOffset, long logAppendTime, RuntimeException exception) {
         // Set the future before invoking the callbacks as we rely on its state for the `onCompletion` call
         produceFuture.set(baseOffset, logAppendTime, exception);
@@ -252,7 +293,33 @@ public final class ProducerBatch {
         produceFuture.done();
     }
 
-    public ProducerBatch[] dropRecords(Set<Integer> errorRecords) {
+    private void completeFutureAndFireCallbacks(long baseOffset, Set<Integer> relativeOffsets, long logAppendTime, RuntimeException exception) {
+        // Set the future before invoking the callbacks as we rely on its state for the `onCompletion` call
+        produceFuture.set(baseOffset, logAppendTime, exception);
+
+        // execute callbacks
+        for (int i = 0; i < thunks.size(); i++) {
+            if (!relativeOffsets.contains(i)) {
+                try {
+                    Thunk thunk = thunks.get(i);
+                    if (exception == null) {
+                        RecordMetadata metadata = thunk.future.value();
+                        if (thunk.callback != null)
+                            thunk.callback.onCompletion(metadata, null);
+                    } else {
+                        if (thunk.callback != null)
+                            thunk.callback.onCompletion(null, exception);
+                    }
+                } catch (Exception e) {
+                    log.error("Error executing user-provided callback on message for topic-partition '{}'", topicPartition, e);
+                }
+            }
+        }
+
+        produceFuture.done();
+    }
+
+    public ProducerBatch dropRecords(Set<Integer> errorRecords) {
         MemoryRecords memoryRecords = recordsBuilder.build();
 
         Iterator<MutableRecordBatch> recordBatchIterator = memoryRecords.batches().iterator();
@@ -266,18 +333,13 @@ public final class ProducerBatch {
 
         Iterator<Thunk> thunkIterator = thunks.iterator();
 
-        ProducerBatch batchToDrop = null;
         ProducerBatch batchToKeep = null;
 
         for (Record record : recordBatch) {
             assert thunkIterator.hasNext();
             Thunk thunk = thunkIterator.next();
 
-            if (errorRecords.contains((int) record.offset())) {
-                if (batchToDrop == null)
-                    batchToDrop = createBatchOffAccumulatorForRecord(record, recordBatch.sizeInBytes());
-                batchToDrop.tryAppendForDropping(record.timestamp(), record.key(), record.value(), record.headers(), thunk);
-            } else {
+            if (!errorRecords.contains((int) record.offset())) {
                 if (batchToKeep == null)
                     batchToKeep = createBatchOffAccumulatorForRecord(record, recordBatch.sizeInBytes());
                 batchToKeep.tryAppendForDropping(record.timestamp(), record.key(), record.value(), record.headers(), thunk);
@@ -289,7 +351,7 @@ public final class ProducerBatch {
             batchToKeep.setProducerState(producerIdAndEpoch, baseSequence(), isTransactional());
         }
 
-        return new ProducerBatch[]{batchToDrop, batchToKeep};
+        return batchToKeep;
     }
 
     public Deque<ProducerBatch> split(int splitBatchSize) {

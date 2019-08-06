@@ -66,6 +66,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 
 import static org.apache.kafka.common.record.RecordBatch.NO_TIMESTAMP;
 
@@ -671,10 +672,9 @@ public class Sender implements Runnable {
                     log.error(response.error.message());
 
                 // remove this batch from in flight batches and deallocate it
-                maybeRemoveFromInflightBatches(batch);
-                this.accumulator.deallocate(batch);
-                ProducerBatch batchToDrop = this.accumulator.dropRecordsAndReenqueueNewBatch(batch, new HashSet<>(response.errorRecords), now);
-                failBatch(batchToDrop, response, new InvalidRecordException("Batch is dropped"), true);
+                Set<Integer> relativeOffsets = new HashSet<>(response.errorRecords);
+                failPartialBatch(batch, response, relativeOffsets, new InvalidRecordException("Batch is dropped"), true);
+                this.accumulator.dropRecordsAndReenqueueNewBatch(batch, relativeOffsets, now);
             } else {
                 final RuntimeException exception;
                 if (error == Errors.TOPIC_AUTHORIZATION_FAILED)
@@ -744,6 +744,32 @@ public class Sender implements Runnable {
 
         if (batch.done(baseOffset, logAppendTime, exception)) {
             maybeRemoveAndDeallocateBatch(batch);
+        }
+    }
+
+    private void failPartialBatch(ProducerBatch batch,
+                                  ProduceResponse.PartitionResponse response,
+                                  Set<Integer> relativeOffsets,
+                                  RuntimeException exception,
+                                  boolean adjustSequenceNumbers) {
+        failPartialBatch(batch, response.baseOffset, relativeOffsets, response.logAppendTime, exception, adjustSequenceNumbers);
+    }
+
+    private void failPartialBatch(ProducerBatch batch,
+                                  long baseOffset,
+                                  Set<Integer> relativeOffsets,
+                                  long logAppendTime,
+                                  RuntimeException exception,
+                                  boolean adjustSequenceNumber) {
+        if (transactionManager != null) {
+            transactionManager.handleFailedBatch(batch, exception, adjustSequenceNumber);
+        }
+
+        this.sensors.recordErrors(batch.topicPartition.topic(), batch.recordCount);
+
+        if (batch.partiallyDone(baseOffset, relativeOffsets, logAppendTime, exception)) {
+            maybeRemoveFromInflightBatches(batch);
+            this.accumulator.deallocate(batch);
         }
     }
 

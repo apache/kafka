@@ -350,12 +350,9 @@ public final class RecordAccumulator {
         }
     }
 
-    public ProducerBatch dropRecordsAndReenqueueNewBatch(ProducerBatch batch, Set<Integer> errorRecords, long now) {
-        ProducerBatch[] batches = batch.dropRecords(errorRecords);
-        ProducerBatch batchToDrop = batches[0];
-        ProducerBatch batchToKeep = batches[1];
+    public void dropRecordsAndReenqueueNewBatch(ProducerBatch batch, Set<Integer> errorRecords, long now) {
+        ProducerBatch batchToKeep = batch.dropRecords(errorRecords);
 
-        incomplete.add(batchToDrop);
         incomplete.add(batchToKeep);
 
         batchToKeep.reenqueued(now);
@@ -367,8 +364,6 @@ public final class RecordAccumulator {
             } else
                 partitionDeque.addLast(batchToKeep);
         }
-
-        return batchToDrop;
     }
 
     /**

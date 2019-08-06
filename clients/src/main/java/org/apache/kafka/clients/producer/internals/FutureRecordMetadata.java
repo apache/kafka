@@ -29,8 +29,8 @@ import java.util.concurrent.TimeoutException;
  */
 public final class FutureRecordMetadata implements Future<RecordMetadata> {
 
-    private final ProduceRequestResult result;
-    private final long relativeOffset;
+    private ProduceRequestResult result;
+    private long relativeOffset;
     private final long createTimestamp;
     private final Long checksum;
     private final int serializedKeySize;
@@ -47,6 +47,11 @@ public final class FutureRecordMetadata implements Future<RecordMetadata> {
         this.serializedKeySize = serializedKeySize;
         this.serializedValueSize = serializedValueSize;
         this.time = time;
+    }
+
+    public void setProduceFuture(ProduceRequestResult produceFuture, long relativeOffset) {
+        this.result = produceFuture;
+        this.relativeOffset = relativeOffset;
     }
 
     @Override
