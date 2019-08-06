@@ -633,16 +633,16 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         // commit offsets prior to rebalance if auto-commit enabled
         maybeAutoCommitOffsetsSync(time.timer(rebalanceConfig.rebalanceTimeoutMs));
 
-        // execute the user's callback before rebalance
-        final Set<TopicPartition> revokedPartitions;
-
-        // note we should only change the assignment AFTER the callback is triggered
-        // so that users can still access the pre-assigned partitions to commit offsets etc.
+        // the generation / member-id can possibly be reset by the heartbeat thread
+        // upon getting errors or heartbeat timeouts; in this case whatever is previously
+        // owned partitions would be lost, we should trigger the callback and cleanup the assignment;
+        // otherwise we can proceed normally and revoke the partitions depending on the protocol,
+        // and in that case we should only change the assignment AFTER the revoke callback is triggered
+        // so that users can still access the previously owned partitions to commit offsets etc.
         Exception exception = null;
-
+        final Set<TopicPartition> revokedPartitions;
         if (generation == Generation.NO_GENERATION.generationId &&
             memberId.equals(Generation.NO_GENERATION.memberId)) {
-
             revokedPartitions = new HashSet<>(subscriptions.assignedPartitions());
 
             if (!revokedPartitions.isEmpty()) {
