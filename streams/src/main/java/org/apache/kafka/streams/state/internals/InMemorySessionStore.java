@@ -16,9 +16,6 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.EXPIRED_WINDOW_RECORD_DROP;
-import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addInvocationRateAndCount;
-
 import java.util.Iterator;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -42,6 +39,9 @@ import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.SessionStore;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.EXPIRED_WINDOW_RECORD_DROP;
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addInvocationRateAndCountToSensor;
 
 public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
 
@@ -82,7 +82,7 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
             EXPIRED_WINDOW_RECORD_DROP,
             Sensor.RecordingLevel.INFO
         );
-        addInvocationRateAndCount(
+        addInvocationRateAndCountToSensor(
             expiredRecordSensor,
             "stream-" + metricScope + "-metrics",
             metrics.tagMap("task-id", taskName, metricScope + "-id", name()),

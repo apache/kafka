@@ -189,6 +189,7 @@ public class ConfigEntry {
      */
     public enum ConfigSource {
         DYNAMIC_TOPIC_CONFIG,           // dynamic topic config that is configured for a specific topic
+        DYNAMIC_BROKER_LOGGER_CONFIG,   // dynamic broker logger config that is configured for a specific broker
         DYNAMIC_BROKER_CONFIG,          // dynamic broker config that is configured for a specific broker
         DYNAMIC_DEFAULT_BROKER_CONFIG,  // dynamic broker config that is configured as default for all brokers in the cluster
         STATIC_BROKER_CONFIG,           // static broker config provided as broker properties at start up (e.g. server.properties file)

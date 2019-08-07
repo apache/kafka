@@ -26,8 +26,8 @@ import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetric
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.TASK_ID_TAG;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.TASK_LEVEL_GROUP;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.THREAD_LEVEL_GROUP;
-import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addAvgAndMax;
-import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addInvocationRateAndCount;
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addAvgAndMaxToSensor;
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addInvocationRateAndCountToSensor;
 
 public class ThreadMetrics {
     private ThreadMetrics() {}
@@ -74,7 +74,7 @@ public class ThreadMetrics {
 
     public static Sensor createTaskSensor(final StreamsMetricsImpl streamsMetrics) {
         final Sensor createTaskSensor = streamsMetrics.threadLevelSensor(CREATE_TASK, RecordingLevel.INFO);
-        addInvocationRateAndCount(createTaskSensor,
+        addInvocationRateAndCountToSensor(createTaskSensor,
                                   THREAD_LEVEL_GROUP,
                                   streamsMetrics.threadLevelTagMap(),
                                   CREATE_TASK,
@@ -85,7 +85,7 @@ public class ThreadMetrics {
 
     public static Sensor closeTaskSensor(final StreamsMetricsImpl streamsMetrics) {
         final Sensor closeTaskSensor = streamsMetrics.threadLevelSensor(CLOSE_TASK, RecordingLevel.INFO);
-        addInvocationRateAndCount(closeTaskSensor,
+        addInvocationRateAndCountToSensor(closeTaskSensor,
                                   THREAD_LEVEL_GROUP,
                                   streamsMetrics.threadLevelTagMap(),
                                   CLOSE_TASK,
@@ -97,8 +97,8 @@ public class ThreadMetrics {
     public static Sensor commitSensor(final StreamsMetricsImpl streamsMetrics) {
         final Sensor commitSensor = streamsMetrics.threadLevelSensor(COMMIT, Sensor.RecordingLevel.INFO);
         final Map<String, String> tagMap = streamsMetrics.threadLevelTagMap();
-        addAvgAndMax(commitSensor, THREAD_LEVEL_GROUP, tagMap, COMMIT_LATENCY);
-        addInvocationRateAndCount(commitSensor,
+        addAvgAndMaxToSensor(commitSensor, THREAD_LEVEL_GROUP, tagMap, COMMIT_LATENCY);
+        addInvocationRateAndCountToSensor(commitSensor,
                                   THREAD_LEVEL_GROUP,
                                   tagMap,
                                   COMMIT,
@@ -110,8 +110,8 @@ public class ThreadMetrics {
     public static Sensor pollSensor(final StreamsMetricsImpl streamsMetrics) {
         final Sensor pollSensor = streamsMetrics.threadLevelSensor(POLL, Sensor.RecordingLevel.INFO);
         final Map<String, String> tagMap = streamsMetrics.threadLevelTagMap();
-        addAvgAndMax(pollSensor, THREAD_LEVEL_GROUP, tagMap, POLL_LATENCY);
-        addInvocationRateAndCount(pollSensor,
+        addAvgAndMaxToSensor(pollSensor, THREAD_LEVEL_GROUP, tagMap, POLL_LATENCY);
+        addInvocationRateAndCountToSensor(pollSensor,
                                   THREAD_LEVEL_GROUP,
                                   tagMap,
                                   POLL,
@@ -123,8 +123,8 @@ public class ThreadMetrics {
     public static Sensor processSensor(final StreamsMetricsImpl streamsMetrics) {
         final Sensor processSensor = streamsMetrics.threadLevelSensor(PROCESS, Sensor.RecordingLevel.INFO);
         final Map<String, String> tagMap = streamsMetrics.threadLevelTagMap();
-        addAvgAndMax(processSensor, THREAD_LEVEL_GROUP, tagMap, PROCESS_LATENCY);
-        addInvocationRateAndCount(processSensor,
+        addAvgAndMaxToSensor(processSensor, THREAD_LEVEL_GROUP, tagMap, PROCESS_LATENCY);
+        addInvocationRateAndCountToSensor(processSensor,
                                   THREAD_LEVEL_GROUP,
                                   tagMap,
                                   PROCESS,
@@ -137,8 +137,8 @@ public class ThreadMetrics {
     public static Sensor punctuateSensor(final StreamsMetricsImpl streamsMetrics) {
         final Sensor punctuateSensor = streamsMetrics.threadLevelSensor(PUNCTUATE, Sensor.RecordingLevel.INFO);
         final Map<String, String> tagMap = streamsMetrics.threadLevelTagMap();
-        addAvgAndMax(punctuateSensor, THREAD_LEVEL_GROUP, tagMap, PUNCTUATE_LATENCY);
-        addInvocationRateAndCount(punctuateSensor,
+        addAvgAndMaxToSensor(punctuateSensor, THREAD_LEVEL_GROUP, tagMap, PUNCTUATE_LATENCY);
+        addInvocationRateAndCountToSensor(punctuateSensor,
                                   THREAD_LEVEL_GROUP,
                                   tagMap,
                                   PUNCTUATE,
@@ -150,7 +150,7 @@ public class ThreadMetrics {
 
     public static Sensor skipRecordSensor(final StreamsMetricsImpl streamsMetrics) {
         final Sensor skippedRecordsSensor = streamsMetrics.threadLevelSensor(SKIP_RECORD, Sensor.RecordingLevel.INFO);
-        addInvocationRateAndCount(skippedRecordsSensor,
+        addInvocationRateAndCountToSensor(skippedRecordsSensor,
                                   THREAD_LEVEL_GROUP,
                                   streamsMetrics.threadLevelTagMap(),
                                   SKIP_RECORD,
@@ -163,11 +163,11 @@ public class ThreadMetrics {
     public static Sensor commitOverTasksSensor(final StreamsMetricsImpl streamsMetrics) {
         final Sensor commitOverTasksSensor = streamsMetrics.threadLevelSensor(COMMIT, Sensor.RecordingLevel.DEBUG);
         final Map<String, String> tagMap = streamsMetrics.threadLevelTagMap(TASK_ID_TAG, ALL_TASKS);
-        addAvgAndMax(commitOverTasksSensor,
+        addAvgAndMaxToSensor(commitOverTasksSensor,
                      TASK_LEVEL_GROUP,
                      tagMap,
                      COMMIT_LATENCY);
-        addInvocationRateAndCount(commitOverTasksSensor,
+        addInvocationRateAndCountToSensor(commitOverTasksSensor,
                                   TASK_LEVEL_GROUP,
                                   tagMap,
                                   COMMIT,
