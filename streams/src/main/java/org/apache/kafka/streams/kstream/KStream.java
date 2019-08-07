@@ -17,7 +17,6 @@
 package org.apache.kafka.streams.kstream;
 
 import org.apache.kafka.clients.producer.internals.DefaultPartitioner;
-import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
@@ -52,7 +51,6 @@ import org.apache.kafka.streams.processor.TopicNameExtractor;
  * @see KGroupedStream
  * @see StreamsBuilder#stream(String)
  */
-@InterfaceStability.Evolving
 public interface KStream<K, V> {
 
     /**
