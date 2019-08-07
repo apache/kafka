@@ -412,8 +412,8 @@ public class InternalStreamsBuilder implements InternalNameProvider {
     private OptimizableRepartitionNode createRepartitionNode(final String repartitionTopicName,
                                                              final Serde keySerde,
                                                              final Serde valueSerde,
-                                                             StreamPartitioner partitioner,
-                                                             InternalTopicProperties internalTopicProperties) {
+                                                             final StreamPartitioner partitioner,
+                                                             final InternalTopicProperties internalTopicProperties) {
 
         final OptimizableRepartitionNode.OptimizableRepartitionNodeBuilder repartitionNodeBuilder = OptimizableRepartitionNode.optimizableRepartitionNodeBuilder();
 

@@ -552,7 +552,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
         Objects.requireNonNull(selector, "selector parameter can't be null");
         Objects.requireNonNull(repartitioned, "repartitioned parameter can't be null");
 
-        RepartitionedInternal<KR, V> repartitionedInternal = new RepartitionedInternal<>(repartitioned);
+        final RepartitionedInternal<KR, V> repartitionedInternal = new RepartitionedInternal<>(repartitioned);
 
         final NamedInternal namedInternal = new NamedInternal(repartitionedInternal.name());
 

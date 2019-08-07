@@ -23,7 +23,7 @@ import org.apache.kafka.streams.processor.internals.InternalTopicProperties;
 
 public class RepartitionedInternal<K, V> extends Repartitioned<K, V> {
 
-    RepartitionedInternal(Repartitioned<K, V> repartitioned) {
+    RepartitionedInternal(final Repartitioned<K, V> repartitioned) {
         super(repartitioned);
     }
 

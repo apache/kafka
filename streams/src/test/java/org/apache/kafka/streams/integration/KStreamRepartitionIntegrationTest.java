@@ -110,7 +110,7 @@ public class KStreamRepartitionIntegrationTest {
             )
         );
 
-        StreamsBuilder builder = new StreamsBuilder();
+        final StreamsBuilder builder = new StreamsBuilder();
 
         builder.stream(inputTopic, Consumed.with(Serdes.Integer(), Serdes.String()))
             .repartition(Repartitioned.as(repartitionName))
@@ -146,7 +146,7 @@ public class KStreamRepartitionIntegrationTest {
             )
         );
 
-        StreamsBuilder builder = new StreamsBuilder();
+        final StreamsBuilder builder = new StreamsBuilder();
 
         builder.stream(inputTopic, Consumed.with(Serdes.Integer(), Serdes.String()))
             .repartition((key, value) -> key.toString(), Repartitioned.as(repartitionName))
@@ -185,7 +185,7 @@ public class KStreamRepartitionIntegrationTest {
             )
         );
 
-        StreamsBuilder builder = new StreamsBuilder();
+        final StreamsBuilder builder = new StreamsBuilder();
 
         builder.stream(inputTopic, Consumed.with(Serdes.Integer(), Serdes.String()))
             .repartition(Repartitioned.<Integer, String>as(repartitionName).withNumberOfPartitions(1))
@@ -224,7 +224,7 @@ public class KStreamRepartitionIntegrationTest {
             )
         );
 
-        StreamsBuilder builder = new StreamsBuilder();
+        final StreamsBuilder builder = new StreamsBuilder();
 
         builder.stream(inputTopic, Consumed.with(Serdes.Integer(), Serdes.String()))
             .selectKey((key, value) -> key.toString())
@@ -235,6 +235,7 @@ public class KStreamRepartitionIntegrationTest {
             .to(outputTopic);
 
         startStreams(builder);
+
         final String topology = builder.build().describe().toString();
 
         validateReceivedMessages(
@@ -262,7 +263,7 @@ public class KStreamRepartitionIntegrationTest {
             )
         );
 
-        StreamsBuilder builder = new StreamsBuilder();
+        final StreamsBuilder builder = new StreamsBuilder();
 
         builder.stream(inputTopic, Consumed.with(Serdes.Integer(), Serdes.String()))
             .selectKey((key, value) -> key.toString())
@@ -285,7 +286,7 @@ public class KStreamRepartitionIntegrationTest {
         assertEquals(1, getCountOfRepartitionTopicsFound(topology, "Sink: .*-repartition"));
     }
 
-    private boolean topicExists(String topic) throws InterruptedException, ExecutionException {
+    private boolean topicExists(final String topic) throws InterruptedException, ExecutionException {
         try (AdminClient adminClient = createAdminClient()) {
             final Set<String> topics = adminClient.listTopics()
                 .names()
@@ -295,18 +296,19 @@ public class KStreamRepartitionIntegrationTest {
         }
     }
 
-    private String toRepartitionTopicName(String input) {
+    private String toRepartitionTopicName(final String input) {
         return applicationId + "-" + input + "-repartition";
     }
 
     private AdminClient createAdminClient() {
-        Properties properties = new Properties();
+        final Properties properties = new Properties();
         properties.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
 
         return AdminClient.create(properties);
     }
 
-    private int getCountOfRepartitionTopicsFound(final String topologyString, final String searchPattern) {
+    private int getCountOfRepartitionTopicsFound(final String topologyString,
+                                                 final String searchPattern) {
         final Matcher matcher = Pattern.compile(searchPattern).matcher(topologyString);
         final List<String> repartitionTopicsFound = new ArrayList<>();
         while (matcher.find()) {
@@ -315,8 +317,8 @@ public class KStreamRepartitionIntegrationTest {
         return repartitionTopicsFound.size();
     }
 
-    private void sendEvents(long timestamp,
-                            List<KeyValue<Integer, String>> events) throws ExecutionException, InterruptedException {
+    private void sendEvents(final long timestamp,
+                            final List<KeyValue<Integer, String>> events) throws ExecutionException, InterruptedException {
         IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(
             inputTopic,
             events,
@@ -330,13 +332,13 @@ public class KStreamRepartitionIntegrationTest {
         );
     }
 
-    private void startStreams(StreamsBuilder builder) {
+    private void startStreams(final StreamsBuilder builder) {
         kafkaStreams = new KafkaStreams(builder.build(), streamsConfiguration);
         kafkaStreams.start();
     }
 
-    private <K, V> void validateReceivedMessages(Deserializer<K> keySerializer,
-                                                 Deserializer<V> valueSerializer,
+    private <K, V> void validateReceivedMessages(final Deserializer<K> keySerializer,
+                                                 final Deserializer<V> valueSerializer,
                                                  final List<KeyValue<K, V>> expectedRecords) throws InterruptedException {
 
         final Properties consumerProperties = new Properties();

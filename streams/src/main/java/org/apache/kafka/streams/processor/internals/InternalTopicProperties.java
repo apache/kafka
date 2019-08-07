@@ -19,7 +19,7 @@ package org.apache.kafka.streams.processor.internals;
 public class InternalTopicProperties {
     private final Integer numberOfPartitions;
 
-    public InternalTopicProperties(Integer numberOfPartitions) {
+    public InternalTopicProperties(final Integer numberOfPartitions) {
         this.numberOfPartitions = numberOfPartitions;
     }
 
