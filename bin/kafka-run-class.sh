@@ -57,10 +57,12 @@ fi
 
 # run ./gradlew copyDependantLibs to get all dependant jars in a local dir
 shopt -s nullglob
-for dir in "$base_dir"/core/build/dependant-libs-${SCALA_VERSION}*;
-do
-  CLASSPATH="$CLASSPATH:$dir/*"
-done
+if [ -z "$UPGRADE_KAFKA_STREAMS_TEST_VERSION" ]; then
+  for dir in "$base_dir"/core/build/dependant-libs-${SCALA_VERSION}*;
+  do
+    CLASSPATH="$CLASSPATH:$dir/*"
+  done
+fi
 
 for file in "$base_dir"/examples/build/libs/kafka-examples*.jar;
 do
@@ -110,6 +112,14 @@ else
       CLASSPATH="$file":"$CLASSPATH"
     fi
   done
+  if [ "$SHORT_VERSION_NO_DOTS" = "0100" ]; then
+    CLASSPATH="/opt/kafka-$UPGRADE_KAFKA_STREAMS_TEST_VERSION/libs/zkclient-0.8.jar":"$CLASSPATH"
+    CLASSPATH="/opt/kafka-$UPGRADE_KAFKA_STREAMS_TEST_VERSION/libs/zookeeper-3.4.6.jar":"$CLASSPATH"
+  fi
+  if [ "$SHORT_VERSION_NO_DOTS" = "0101" ]; then
+    CLASSPATH="/opt/kafka-$UPGRADE_KAFKA_STREAMS_TEST_VERSION/libs/zkclient-0.9.jar":"$CLASSPATH"
+    CLASSPATH="/opt/kafka-$UPGRADE_KAFKA_STREAMS_TEST_VERSION/libs/zookeeper-3.4.8.jar":"$CLASSPATH"
+  fi
 fi
 
 for file in "$rocksdb_lib_dir"/rocksdb*.jar;

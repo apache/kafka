@@ -48,8 +48,8 @@ class EmbeddedZookeeper() extends Logging {
   factory.startup(zookeeper)
   val port = zookeeper.getClientPort
 
-  def shutdown() {
-    CoreUtils.swallow(zookeeper.shutdown(), this)
+  def shutdown(): Unit = {
+    // Also shuts down ZooKeeperServer
     CoreUtils.swallow(factory.shutdown(), this)
 
     def isDown(): Boolean = {
@@ -60,6 +60,7 @@ class EmbeddedZookeeper() extends Logging {
     }
 
     Iterator.continually(isDown()).exists(identity)
+    CoreUtils.swallow(zookeeper.getZKDatabase().close(), this)
 
     Utils.delete(logDir)
     Utils.delete(snapshotDir)

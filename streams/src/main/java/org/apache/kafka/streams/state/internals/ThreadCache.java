@@ -193,7 +193,7 @@ public class ThreadCache {
         }
         return new MemoryLRUCacheBytesIterator(cache.allIterator());
     }
-    
+
     public long size() {
         long size = 0;
         for (final NamedCache cache : caches.values()) {
@@ -235,7 +235,7 @@ public class ThreadCache {
             // a put on another cache. So even though the sizeInBytes() is
             // still > maxCacheSizeBytes there is nothing to evict from this
             // namespaced cache.
-            if (cache.size() == 0) {
+            if (cache.isEmpty()) {
                 return;
             }
             cache.evict();

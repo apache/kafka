@@ -195,6 +195,7 @@ public class FetchRequest extends AbstractRequest {
     // V10 bumped up to indicate ZStandard capability. (see KIP-110)
     private static final Schema FETCH_REQUEST_V10 = FETCH_REQUEST_V9;
 
+    // V11 added rack ID to support read from followers (KIP-392)
     private static final Schema FETCH_REQUEST_V11 = new Schema(
             REPLICA_ID,
             MAX_WAIT_TIME,

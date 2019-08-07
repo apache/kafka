@@ -23,7 +23,7 @@ final class TimeDefinitions {
     private TimeDefinitions() {}
 
     enum TimeDefinitionType {
-        RECORD_TIME, WINDOW_END_TIME;
+        RECORD_TIME, WINDOW_END_TIME
     }
 
     /**

@@ -46,14 +46,11 @@ import org.apache.kafka.common.security.scram.internals.ScramMechanism;
 import org.apache.kafka.common.security.scram.internals.ScramServerCallbackHandler;
 import org.apache.kafka.common.security.ssl.SslFactory;
 import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCache;
-import org.apache.kafka.common.utils.Java;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.Method;
 import java.io.IOException;
 import java.net.Socket;
 import java.nio.channels.SelectionKey;
@@ -66,6 +63,7 @@ import java.util.Set;
 import java.util.function.Supplier;
 
 import javax.security.auth.Subject;
+import javax.security.auth.kerberos.KerberosPrincipal;
 
 public class SaslChannelBuilder implements ChannelBuilder, ListenerReconfigurable {
     private static final Logger log = LoggerFactory.getLogger(SaslChannelBuilder.class);
@@ -260,25 +258,9 @@ public class SaslChannelBuilder implements ChannelBuilder, ListenerReconfigurabl
         return loginManagers;
     }
 
-    private static String defaultKerberosRealm() throws ClassNotFoundException, NoSuchMethodException,
-            IllegalArgumentException, IllegalAccessException, InvocationTargetException {
-
-        //TODO Find a way to avoid using these proprietary classes as access to Java 9 will block access by default
-        //due to the Jigsaw module system
-
-        Object kerbConf;
-        Class<?> classRef;
-        Method getInstanceMethod;
-        Method getDefaultRealmMethod;
-        if (Java.isIbmJdk()) {
-            classRef = Class.forName("com.ibm.security.krb5.internal.Config");
-        } else {
-            classRef = Class.forName("sun.security.krb5.Config");
-        }
-        getInstanceMethod = classRef.getMethod("getInstance", new Class[0]);
-        kerbConf = getInstanceMethod.invoke(classRef, new Object[0]);
-        getDefaultRealmMethod = classRef.getDeclaredMethod("getDefaultRealm", new Class[0]);
-        return (String) getDefaultRealmMethod.invoke(kerbConf, new Object[0]);
+    private static String defaultKerberosRealm() {
+        // see https://issues.apache.org/jira/browse/HADOOP-10848 for details
+        return new KerberosPrincipal("tmp", 1).getRealm();
     }
 
     private void createClientCallbackHandler(Map<String, ?> configs) {
@@ -290,7 +272,7 @@ public class SaslChannelBuilder implements ChannelBuilder, ListenerReconfigurabl
         saslCallbackHandlers.put(clientSaslMechanism, callbackHandler);
     }
 
-    private void createServerCallbackHandlers(Map<String, ?> configs) throws ClassNotFoundException {
+    private void createServerCallbackHandlers(Map<String, ?> configs) {
         for (String mechanism : jaasContexts.keySet()) {
             AuthenticateCallbackHandler callbackHandler;
             String prefix = ListenerName.saslMechanismPrefix(mechanism);

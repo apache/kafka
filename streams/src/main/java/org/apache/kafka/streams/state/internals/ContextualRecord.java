@@ -39,8 +39,8 @@ public class ContextualRecord {
         return value;
     }
 
-    long sizeBytes() {
-        return (value == null ? 0 : value.length) + recordContext.sizeBytes();
+    long residentMemorySizeEstimate() {
+        return (value == null ? 0 : value.length) + recordContext.residentMemorySizeEstimate();
     }
 
     ByteBuffer serialize(final int endPadding) {

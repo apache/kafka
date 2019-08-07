@@ -114,7 +114,12 @@ public class SslFactory implements Reconfigurable {
 
     @Override
     public void reconfigure(Map<String, ?> newConfigs) throws KafkaException {
-        this.sslEngineBuilder = createNewSslEngineBuilder(newConfigs);
+        SslEngineBuilder newSslEngineBuilder = createNewSslEngineBuilder(newConfigs);
+        if (newSslEngineBuilder != this.sslEngineBuilder) {
+            this.sslEngineBuilder = newSslEngineBuilder;
+            log.info("Created new {} SSL engine builder with keystore {} truststore {}", mode,
+                    newSslEngineBuilder.keystore(), newSslEngineBuilder.truststore());
+        }
     }
 
     private SslEngineBuilder createNewSslEngineBuilder(Map<String, ?> newConfigs) {

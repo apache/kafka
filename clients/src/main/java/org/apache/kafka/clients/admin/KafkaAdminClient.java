@@ -29,9 +29,9 @@ import org.apache.kafka.clients.admin.DeleteAclsResult.FilterResult;
 import org.apache.kafka.clients.admin.DeleteAclsResult.FilterResults;
 import org.apache.kafka.clients.admin.DescribeReplicaLogDirsResult.ReplicaLogDirInfo;
 import org.apache.kafka.clients.admin.internals.AdminMetadataManager;
+import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.Assignment;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
-import org.apache.kafka.clients.consumer.internals.PartitionAssignor;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.ConsumerGroupState;
 import org.apache.kafka.common.ElectionType;
@@ -61,20 +61,27 @@ import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
+import org.apache.kafka.common.message.CreateDelegationTokenRequestData;
+import org.apache.kafka.common.message.CreateDelegationTokenRequestData.CreatableRenewers;
+import org.apache.kafka.common.message.CreateDelegationTokenResponseData;
 import org.apache.kafka.common.message.CreateTopicsRequestData;
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopicCollection;
 import org.apache.kafka.common.message.CreateTopicsResponseData.CreatableTopicResult;
+import org.apache.kafka.common.message.DeleteGroupsRequestData;
 import org.apache.kafka.common.message.DeleteTopicsRequestData;
 import org.apache.kafka.common.message.DeleteTopicsResponseData.DeletableTopicResult;
 import org.apache.kafka.common.message.DescribeGroupsRequestData;
 import org.apache.kafka.common.message.DescribeGroupsResponseData.DescribedGroup;
 import org.apache.kafka.common.message.DescribeGroupsResponseData.DescribedGroupMember;
+import org.apache.kafka.common.message.ExpireDelegationTokenRequestData;
 import org.apache.kafka.common.message.FindCoordinatorRequestData;
-import org.apache.kafka.common.message.MetadataRequestData;
 import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData;
 import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData.AlterableConfigCollection;
 import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData.AlterableConfig;
 import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData.AlterConfigsResource;
+import org.apache.kafka.common.message.ListGroupsRequestData;
+import org.apache.kafka.common.message.ListGroupsResponseData;
+import org.apache.kafka.common.message.MetadataRequestData;
 import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
@@ -138,6 +145,7 @@ import org.apache.kafka.common.requests.OffsetFetchRequest;
 import org.apache.kafka.common.requests.OffsetFetchResponse;
 import org.apache.kafka.common.requests.RenewDelegationTokenRequest;
 import org.apache.kafka.common.requests.RenewDelegationTokenResponse;
+import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.security.token.delegation.DelegationToken;
 import org.apache.kafka.common.security.token.delegation.TokenInformation;
 import org.apache.kafka.common.utils.AppInfoParser;
@@ -174,10 +182,10 @@ import static org.apache.kafka.common.requests.MetadataRequest.convertToMetadata
 import static org.apache.kafka.common.utils.Utils.closeQuietly;
 
 /**
- * The default implementation of {@link AdminClient}. An instance of this class is created by invoking one of the
+ * The default implementation of {@link Admin}. An instance of this class is created by invoking one of the
  * {@code create()} methods in {@code AdminClient}. Users should not refer to this class directly.
  *
- * The API of this class is evolving, see {@link AdminClient} for details.
+ * The API of this class is evolving, see {@link Admin} for details.
  */
 @InterfaceStability.Evolving
 public class KafkaAdminClient extends AdminClient {
@@ -269,12 +277,7 @@ public class KafkaAdminClient extends AdminClient {
      * @return      The list value.
      */
     static <K, V> List<V> getOrCreateListValue(Map<K, List<V>> map, K key) {
-        List<V> list = map.get(key);
-        if (list != null)
-            return list;
-        list = new LinkedList<>();
-        map.put(key, list);
-        return list;
+        return map.computeIfAbsent(key, k -> new LinkedList<>());
     }
 
     /**
@@ -1760,7 +1763,7 @@ public class KafkaAdminClient extends AdminClient {
         final Collection<ConfigResource> unifiedRequestResources = new ArrayList<>(configResources.size());
 
         for (ConfigResource resource : configResources) {
-            if (resource.type() == ConfigResource.Type.BROKER && !resource.isDefault()) {
+            if (dependsOnSpecificNode(resource)) {
                 brokerFutures.put(resource, new KafkaFutureImpl<>());
                 brokerResources.add(resource);
             } else {
@@ -1885,6 +1888,9 @@ public class KafkaAdminClient extends AdminClient {
             case STATIC_BROKER_CONFIG:
                 configSource = ConfigEntry.ConfigSource.STATIC_BROKER_CONFIG;
                 break;
+            case DYNAMIC_BROKER_LOGGER_CONFIG:
+                configSource = ConfigEntry.ConfigSource.DYNAMIC_BROKER_LOGGER_CONFIG;
+                break;
             case DEFAULT_CONFIG:
                 configSource = ConfigEntry.ConfigSource.DEFAULT_CONFIG;
                 break;
@@ -1904,7 +1910,7 @@ public class KafkaAdminClient extends AdminClient {
         final Collection<ConfigResource> unifiedRequestResources = new ArrayList<>();
 
         for (ConfigResource resource : configs.keySet()) {
-            if (resource.type() == ConfigResource.Type.BROKER && !resource.isDefault()) {
+            if (dependsOnSpecificNode(resource)) {
                 NodeProvider nodeProvider = new ConstantNodeIdProvider(Integer.parseInt(resource.name()));
                 allFutures.putAll(alterConfigs(configs, options, Collections.singleton(resource), nodeProvider));
             } else
@@ -1969,7 +1975,7 @@ public class KafkaAdminClient extends AdminClient {
         final Collection<ConfigResource> unifiedRequestResources = new ArrayList<>();
 
         for (ConfigResource resource : configs.keySet()) {
-            if (resource.type() == ConfigResource.Type.BROKER && !resource.isDefault()) {
+            if (dependsOnSpecificNode(resource)) {
                 NodeProvider nodeProvider = new ConstantNodeIdProvider(Integer.parseInt(resource.name()));
                 allFutures.putAll(incrementalAlterConfigs(configs, options, Collections.singleton(resource), nodeProvider));
             } else
@@ -2389,12 +2395,21 @@ public class KafkaAdminClient extends AdminClient {
     public CreateDelegationTokenResult createDelegationToken(final CreateDelegationTokenOptions options) {
         final KafkaFutureImpl<DelegationToken> delegationTokenFuture = new KafkaFutureImpl<>();
         final long now = time.milliseconds();
+        List<CreatableRenewers> renewers = new ArrayList<>();
+        for (KafkaPrincipal principal : options.renewers()) {
+            renewers.add(new CreatableRenewers()
+                    .setPrincipalName(principal.getName())
+                    .setPrincipalType(principal.getPrincipalType()));
+        }
         runnable.call(new Call("createDelegationToken", calcDeadlineMs(now, options.timeoutMs()),
             new LeastLoadedNodeProvider()) {
 
             @Override
-            AbstractRequest.Builder createRequest(int timeoutMs) {
-                return new CreateDelegationTokenRequest.Builder(options.renewers(), options.maxlifeTimeMs());
+            AbstractRequest.Builder<CreateDelegationTokenRequest> createRequest(int timeoutMs) {
+                return new CreateDelegationTokenRequest.Builder(
+                        new CreateDelegationTokenRequestData()
+                            .setRenewers(renewers)
+                            .setMaxLifetimeMs(options.maxlifeTimeMs()));
             }
 
             @Override
@@ -2403,9 +2418,10 @@ public class KafkaAdminClient extends AdminClient {
                 if (response.hasError()) {
                     delegationTokenFuture.completeExceptionally(response.error().exception());
                 } else {
-                    TokenInformation tokenInfo =  new TokenInformation(response.tokenId(), response.owner(),
-                        options.renewers(), response.issueTimestamp(), response.maxTimestamp(), response.expiryTimestamp());
-                    DelegationToken token = new DelegationToken(tokenInfo, response.hmacBytes());
+                    CreateDelegationTokenResponseData data = response.data();
+                    TokenInformation tokenInfo =  new TokenInformation(data.tokenId(), new KafkaPrincipal(data.principalType(), data.principalName()),
+                        options.renewers(), data.issueTimestampMs(), data.maxTimestampMs(), data.expiryTimestampMs());
+                    DelegationToken token = new DelegationToken(tokenInfo, data.hmac());
                     delegationTokenFuture.complete(token);
                 }
             }
@@ -2458,8 +2474,11 @@ public class KafkaAdminClient extends AdminClient {
             new LeastLoadedNodeProvider()) {
 
             @Override
-            AbstractRequest.Builder createRequest(int timeoutMs) {
-                return new ExpireDelegationTokenRequest.Builder(hmac, options.expiryTimePeriodMs());
+            AbstractRequest.Builder<ExpireDelegationTokenRequest> createRequest(int timeoutMs) {
+                return new ExpireDelegationTokenRequest.Builder(
+                        new ExpireDelegationTokenRequestData()
+                            .setHmac(hmac)
+                            .setExpiryTimePeriodMs(options.expiryTimePeriodMs()));
             }
 
             @Override
@@ -2712,12 +2731,13 @@ public class KafkaAdminClient extends AdminClient {
                     for (DescribedGroupMember groupMember : members) {
                         Set<TopicPartition> partitions = Collections.emptySet();
                         if (groupMember.memberAssignment().length > 0) {
-                            final PartitionAssignor.Assignment assignment = ConsumerProtocol.
+                            final Assignment assignment = ConsumerProtocol.
                                 deserializeAssignment(ByteBuffer.wrap(groupMember.memberAssignment()));
                             partitions = new HashSet<>(assignment.partitions());
                         }
-                        final MemberDescription memberDescription =
-                            new MemberDescription(groupMember.memberId(),
+                        final MemberDescription memberDescription = new MemberDescription(
+                                groupMember.memberId(),
+                                Optional.ofNullable(groupMember.groupInstanceId()),
                                 groupMember.clientId(),
                                 groupMember.clientHost(),
                                 new MemberAssignment(partitions));
@@ -2838,10 +2858,10 @@ public class KafkaAdminClient extends AdminClient {
                     runnable.call(new Call("listConsumerGroups", deadline, new ConstantNodeIdProvider(node.id())) {
                         @Override
                         AbstractRequest.Builder createRequest(int timeoutMs) {
-                            return new ListGroupsRequest.Builder();
+                            return new ListGroupsRequest.Builder(new ListGroupsRequestData());
                         }
 
-                        private void maybeAddConsumerGroup(ListGroupsResponse.Group group) {
+                        private void maybeAddConsumerGroup(ListGroupsResponseData.ListedGroup group) {
                             String protocolType = group.protocolType();
                             if (protocolType.equals(ConsumerProtocol.PROTOCOL_TYPE) || protocolType.isEmpty()) {
                                 final String groupId = group.groupId();
@@ -2854,13 +2874,13 @@ public class KafkaAdminClient extends AdminClient {
                         void handleResponse(AbstractResponse abstractResponse) {
                             final ListGroupsResponse response = (ListGroupsResponse) abstractResponse;
                             synchronized (results) {
-                                Errors error = response.error();
+                                Errors error = Errors.forCode(response.data().errorCode());
                                 if (error == Errors.COORDINATOR_LOAD_IN_PROGRESS || error == Errors.COORDINATOR_NOT_AVAILABLE) {
                                     throw error.exception();
                                 } else if (error != Errors.NONE) {
                                     results.addError(error.exception(), node);
                                 } else {
-                                    for (ListGroupsResponse.Group group : response.groups()) {
+                                    for (ListGroupsResponseData.ListedGroup group : response.data().groups()) {
                                         maybeAddConsumerGroup(group);
                                     }
                                 }
@@ -2984,7 +3004,10 @@ public class KafkaAdminClient extends AdminClient {
 
             @Override
             AbstractRequest.Builder createRequest(int timeoutMs) {
-                return new DeleteGroupsRequest.Builder(Collections.singleton(context.getGroupId()));
+                return new DeleteGroupsRequest.Builder(
+                    new DeleteGroupsRequestData()
+                        .setGroupsNames(Collections.singletonList(context.getGroupId()))
+                );
             }
 
             @Override
@@ -3053,5 +3076,13 @@ public class KafkaAdminClient extends AdminClient {
         }, now);
 
         return new ElectLeadersResult(electionFuture);
+    }
+
+    /**
+     * Returns a boolean indicating whether the resource needs to go to a specific node
+     */
+    private boolean dependsOnSpecificNode(ConfigResource resource) {
+        return (resource.type() == ConfigResource.Type.BROKER && !resource.isDefault())
+                || resource.type() == ConfigResource.Type.BROKER_LOGGER;
     }
 }

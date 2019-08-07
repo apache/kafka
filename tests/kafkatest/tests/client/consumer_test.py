@@ -265,6 +265,12 @@ class OffsetValidationTest(VerifiableConsumerTest):
                                "normal consumer group and %d from conflict consumer group" % \
                                (len(consumer.nodes), len(consumer.joined_nodes()), len(conflict_consumer.joined_nodes()))
                        )
+            wait_until(lambda: len(consumer.dead_nodes()) + len(conflict_consumer.dead_nodes()) == len(conflict_consumer.nodes),
+                       timeout_sec=self.session_timeout_sec,
+                       err_msg="Timed out waiting for fenced consumers to die, expected total %d dead, but only see %d dead in"
+                               "normal consumer group and %d dead in conflict consumer group" % \
+                               (len(conflict_consumer.nodes), len(consumer.dead_nodes()), len(conflict_consumer.dead_nodes()))
+                       )
 
     @cluster(num_nodes=7)
     @matrix(clean_shutdown=[True], enable_autocommit=[True, False])

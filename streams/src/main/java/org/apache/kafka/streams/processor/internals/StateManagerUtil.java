@@ -38,45 +38,40 @@ import static org.apache.kafka.streams.state.internals.RecordConverters.identity
 import static org.apache.kafka.streams.state.internals.RecordConverters.rawValueToTimestampedValue;
 import static org.apache.kafka.streams.state.internals.WrappedStateStore.isTimestamped;
 
-abstract class AbstractStateManager implements StateManager {
+final class StateManagerUtil {
     static final String CHECKPOINT_FILE_NAME = ".checkpoint";
 
-    final File baseDir;
-    final boolean eosEnabled;
-    OffsetCheckpoint checkpoint;
-
-    final Map<TopicPartition, Long> checkpointableOffsets = new HashMap<>();
-    final FixedOrderMap<String, Optional<StateStore>> globalStores = new FixedOrderMap<>();
-
-    AbstractStateManager(final File baseDir,
-                         final boolean eosEnabled) {
-        this.baseDir = baseDir;
-        this.eosEnabled = eosEnabled;
-        this.checkpoint = new OffsetCheckpoint(new File(baseDir, CHECKPOINT_FILE_NAME));
-    }
+    private StateManagerUtil() {}
 
     static RecordConverter converterForStore(final StateStore store) {
         return isTimestamped(store) ? rawValueToTimestampedValue() : identity();
     }
 
-    public void reinitializeStateStoresForPartitions(final Logger log,
-                                                     final FixedOrderMap<String, Optional<StateStore>> stateStores,
-                                                     final Map<String, String> storeToChangelogTopic,
-                                                     final Collection<TopicPartition> partitions,
-                                                     final InternalProcessorContext processorContext) {
+    public static void reinitializeStateStoresForPartitions(final Logger log,
+                                                            final boolean eosEnabled,
+                                                            final File baseDir,
+                                                            final FixedOrderMap<String, Optional<StateStore>> stateStores,
+                                                            final Map<String, String> storeToChangelogTopic,
+                                                            final Collection<TopicPartition> partitions,
+                                                            final InternalProcessorContext processorContext,
+                                                            final OffsetCheckpoint checkpointFile,
+                                                            final Map<TopicPartition, Long> checkpointFileCache) {
         final Map<String, String> changelogTopicToStore = inverseOneToOneMap(storeToChangelogTopic);
         final Set<String> storesToBeReinitialized = new HashSet<>();
 
         for (final TopicPartition topicPartition : partitions) {
-            checkpointableOffsets.remove(topicPartition);
+            checkpointFileCache.remove(topicPartition);
             storesToBeReinitialized.add(changelogTopicToStore.get(topicPartition.topic()));
         }
 
         if (!eosEnabled) {
             try {
-                checkpoint.write(checkpointableOffsets);
+                checkpointFile.write(checkpointFileCache);
             } catch (final IOException fatalException) {
-                log.error("Failed to write offset checkpoint file to {} while re-initializing {}: {}", checkpoint, stateStores, fatalException);
+                log.error("Failed to write offset checkpoint file to {} while re-initializing {}: {}",
+                          checkpointFile,
+                          stateStores,
+                          fatalException);
                 throw new StreamsException("Failed to reinitialize global store.", fatalException);
             }
         }
@@ -122,7 +117,7 @@ abstract class AbstractStateManager implements StateManager {
         }
     }
 
-    private Map<String, String> inverseOneToOneMap(final Map<String, String> origin) {
+    private static Map<String, String> inverseOneToOneMap(final Map<String, String> origin) {
         final Map<String, String> reversedMap = new HashMap<>();
         for (final Map.Entry<String, String> entry : origin.entrySet()) {
             reversedMap.put(entry.getValue(), entry.getKey());

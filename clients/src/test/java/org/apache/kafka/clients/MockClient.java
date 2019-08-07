@@ -221,7 +221,7 @@ public class MockClient implements KafkaClient {
                     builder.latestAllowedVersion());
             AbstractRequest abstractRequest = request.requestBuilder().build(version);
             if (!futureResp.requestMatcher.matches(abstractRequest))
-                throw new IllegalStateException("Request matcher did not match next-in-line request " + abstractRequest);
+                throw new IllegalStateException("Request matcher did not match next-in-line request " + abstractRequest + " with prepared response " + futureResp.responseBody);
 
             UnsupportedVersionException unsupportedVersionException = null;
             if (futureResp.isUnsupportedRequest)

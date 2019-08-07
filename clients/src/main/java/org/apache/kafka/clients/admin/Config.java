@@ -27,7 +27,7 @@ import java.util.Map;
 /**
  * A configuration object containing the configuration entries for a resource.
  * <p>
- * The API of this class is evolving, see {@link AdminClient} for details.
+ * The API of this class is evolving, see {@link Admin} for details.
  */
 @InterfaceStability.Evolving
 public class Config {

@@ -23,6 +23,7 @@ from kafkatest.services.kafka import KafkaService
 from kafkatest.services.streams import StreamsSmokeTestDriverService, StreamsSmokeTestJobRunnerService, \
     StreamsUpgradeTestJobRunnerService
 from kafkatest.services.zookeeper import ZookeeperService
+from kafkatest.tests.streams.utils import extract_generation_from_logs
 from kafkatest.version import LATEST_0_10_0, LATEST_0_10_1, LATEST_0_10_2, LATEST_0_11_0, LATEST_1_0, LATEST_1_1, \
     LATEST_2_0, LATEST_2_1, LATEST_2_2, DEV_BRANCH, DEV_VERSION, KafkaVersion
 
@@ -45,7 +46,7 @@ anyone can verify that by calling
 curl https://s3-us-west-2.amazonaws.com/kafka-packages/kafka_$scala_version-$version.tgz to download the jar
 and if it is not uploaded yet, ping the dev@kafka mailing list to request it being uploaded.
 
-This test needs to get updated, but this requires several steps
+This test needs to get updated, but this requires several steps,
 which are outlined here:
 
 1. Update all relevant versions in tests/kafkatest/version.py this will include adding a new version for the new
@@ -57,17 +58,17 @@ which are outlined here:
    during the system test run.
    
 3. Update the vagrant/bash.sh file to include all new versions, including the newly released version
-   and all point releases for existing releases.  You only need to list the latest version in 
+   and all point releases for existing releases. You only need to list the latest version in 
    this file.
    
 4. Then update all relevant versions in the tests/docker/Dockerfile
 
-5. Add a new "upgrade-system-tests-XXXX module under streams.  You can probably just copy the 
-   latest system test module from the last release.  Just make sure to update the systout print
-   statement in StreamsUpgradeTest to the version for the release.  After you add the new module
+5. Add a new upgrade-system-tests-XXXX module under streams. You can probably just copy the 
+   latest system test module from the last release. Just make sure to update the systout print
+   statement in StreamsUpgradeTest to the version for the release. After you add the new module
    you'll need to update settings.gradle file to include the name of the module you just created
-   for gradle to recognize the newly added module
-   
+   for gradle to recognize the newly added module.
+
 6. Then you'll need to update any version changes in gradle/dependencies.gradle
 
 """
@@ -598,9 +599,9 @@ class StreamsUpgradeTest(Test):
                     retries = 0
 
                     while retries < 10:
-                        processor_found = self.extract_generation_from_logs(processor)
-                        first_other_processor_found = self.extract_generation_from_logs(first_other_processor)
-                        second_other_processor_found = self.extract_generation_from_logs(second_other_processor)
+                        processor_found = extract_generation_from_logs(processor)
+                        first_other_processor_found = extract_generation_from_logs(first_other_processor)
+                        second_other_processor_found = extract_generation_from_logs(second_other_processor)
 
                         if len(processor_found) > 0 and len(first_other_processor_found) > 0 and len(second_other_processor_found) > 0:
                             self.logger.info("processor: " + str(processor_found))
@@ -631,9 +632,6 @@ class StreamsUpgradeTest(Test):
                         self.verify_metadata_no_upgraded_yet()
 
         return current_generation
-
-    def extract_generation_from_logs(self, processor):
-        return list(processor.node.account.ssh_capture("grep \"Successfully joined group with generation\" %s| awk \'{for(i=1;i<=NF;i++) {if ($i == \"generation\") beginning=i+1; if($i== \"(org.apache.kafka.clients.consumer.internals.AbstractCoordinator)\") ending=i }; for (j=beginning;j<ending;j++) printf $j; printf \"\\n\"}\'" % processor.LOG_FILE, allow_fail=True))
 
     def extract_highest_generation(self, found_generations):
         return int(found_generations[-1])

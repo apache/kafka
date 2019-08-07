@@ -16,7 +16,7 @@ Running Kafka:
 
     > ./bin/kafka-server-start.sh ./config/server.properties &> /tmp/kafka.log &
 
-Then, we want to run a Trogdor Agent, plus a Trogdor broker.
+Then, we want to run a Trogdor Agent, plus a Trogdor Coordinator.
 
 To run the Trogdor Agent:
 
@@ -87,6 +87,36 @@ The task specification is usually written as JSON.  For example, this task speci
         "durationMs": 30000,
         "partitions": [["node1", "node2"], ["node3"]]
     }
+    
+This task runs a simple ProduceBench test on a cluster with one producer node, 5 topics, and 10,000 messages per second. 
+The keys are generated sequentially and the configured partitioner (DefaultPartitioner) is used. 
+
+    {
+        "class": "org.apache.kafka.trogdor.workload.ProduceBenchSpec",
+        "durationMs": 10000000,
+        "producerNode": "node0",
+        "bootstrapServers": "localhost:9092",
+        "targetMessagesPerSec": 10000,
+        "maxMessages": 50000,
+        "activeTopics": {
+            "foo[1-3]": {
+                "numPartitions": 10,
+                "replicationFactor": 1
+            }
+        },
+        "inactiveTopics": {
+             "foo[4-5]": {
+                 "numPartitions": 10,
+                 "replicationFactor": 1
+             }
+        },
+        "keyGenerator": {
+             "type": "sequential",
+             "size": 8,
+             "offset": 1
+        },
+        "useConfiguredPartitioner": true
+     }
 
 Tasks are submitted to the coordinator.  Once the coordinator determines that it is time for the task to start, it creates workers on agent processes.  The workers run until the task is done.
 
@@ -124,6 +154,27 @@ ProcessStopFault stops a process by sending it a SIGSTOP signal.  When the fault
 
 ### NetworkPartitionFault
 NetworkPartitionFault sets up an artificial network partition between one or more sets of nodes.  Currently, this is implemented using iptables.  The iptables rules are set up on the outbound traffic from the affected nodes.  Therefore, the affected nodes should still be reachable from outside the cluster.
+
+External Processes
+========================================
+Trogdor supports running arbitrary commands in external processes. This is a generic way to run any configurable command in the Trogdor framework - be it a Python program, bash script, docker image, etc.
+
+### ExternalCommandWorker
+ExternalCommandWorker starts an external command defined by the ExternalCommandSpec. It essentially allows you to run any command on any Trogdor agent node.
+The worker communicates with the external process via its stdin, stdout and stderr in a JSON protocol. It uses stdout for any actionable communication and only logs what it sees in stderr.
+On startup the worker will first send a message describing the workload to the external process in this format:
+```
+{"id":<task ID string>, "workload":<configured workload JSON object>}
+```
+and will then listen for messages from the external process, again in a JSON format.
+Said JSON can contain the following fields:
+- status: If the object contains this field, the status of the worker will be set to the given value.
+- error: If the object contains this field, the error of the worker will be set to the given value. Once an error occurs, the external process will be terminated.
+- log: If the object contains this field, a log message will be issued with this text.
+An example:
+```json
+{"log": "Finished successfully.", "status": {"p99ProduceLatency": "100ms", "messagesSent": 10000}}
+```
 
 Exec Mode
 ========================================

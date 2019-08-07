@@ -27,7 +27,7 @@ import kafka.utils.{Logging, ShutdownableThread}
 import org.apache.kafka.common.{Cluster, MetricName}
 import org.apache.kafka.common.metrics._
 import org.apache.kafka.common.metrics.Metrics
-import org.apache.kafka.common.metrics.stats.{Avg, Rate, Total}
+import org.apache.kafka.common.metrics.stats.{Avg, CumulativeSum, Rate}
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.utils.{Sanitizer, Time}
 import org.apache.kafka.server.quota.{ClientQuotaCallback, ClientQuotaEntity, ClientQuotaType}
@@ -179,7 +179,7 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
   private val delayQueueSensor = metrics.sensor(quotaType + "-delayQueue")
   delayQueueSensor.add(metrics.metricName("queue-size",
     quotaType.toString,
-    "Tracks the size of the delay queue"), new Total())
+    "Tracks the size of the delay queue"), new CumulativeSum())
   start() // Use start method to keep spotbugs happy
   private def start() {
     throttledChannelReaper.start()
@@ -310,7 +310,7 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
   }
 
   private def quotaLimit(metricTags: util.Map[String, String]): Double = {
-    Option(quotaCallback.quotaLimit(clientQuotaType, metricTags)).map(_.toDouble)getOrElse(Long.MaxValue)
+    Option(quotaCallback.quotaLimit(clientQuotaType, metricTags)).map(_.toDouble).getOrElse(Long.MaxValue)
   }
 
   /*

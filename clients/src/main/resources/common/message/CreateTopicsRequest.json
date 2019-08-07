@@ -18,16 +18,17 @@
   "type": "request",
   "name": "CreateTopicsRequest",
   // Version 1 adds validateOnly.
-  "validVersions": "0-3",
+  // Version 4 makes partitions/replicationFactor optional even when assignments are not present (KIP-464)
+  "validVersions": "0-4",
   "fields": [
     { "name": "Topics", "type": "[]CreatableTopic", "versions": "0+",
       "about": "The topics to create.", "fields": [
       { "name": "Name", "type": "string", "versions": "0+", "mapKey": true, "entityType": "topicName",
         "about": "The topic name." },
       { "name": "NumPartitions", "type": "int32", "versions": "0+",
-        "about": "The number of partitions to create in the topic, or -1 if we are specifying a manual partition assignment." },
+        "about": "The number of partitions to create in the topic, or -1 if we are either specifying a manual partition assignment or using the default partitions." },
       { "name": "ReplicationFactor", "type": "int16", "versions": "0+",
-        "about": "The number of replicas to create for each partition in the topic, or -1 if we are specifying a manual partition assignment." },
+        "about": "The number of replicas to create for each partition in the topic, or -1 if we are either specifying a manual partition assignment or using the default replication factor." },
       { "name": "Assignments", "type": "[]CreatableReplicaAssignment", "versions": "0+",
         "about": "The manual partition assignment, or the empty array if we are using automatic assignment.", "fields": [
         { "name": "PartitionIndex", "type": "int32", "versions": "0+", "mapKey": true,

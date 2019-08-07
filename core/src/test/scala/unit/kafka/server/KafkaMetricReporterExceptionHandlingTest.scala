@@ -15,20 +15,21 @@
 package kafka.server
 
 import java.net.Socket
-import java.util.Properties
+import java.util.{Collections, Properties}
 
 import kafka.utils.TestUtils
 import org.apache.kafka.common.network.ListenerName
-import org.apache.kafka.common.requests.{ListGroupsRequest,ListGroupsResponse}
+import org.apache.kafka.common.requests.{ListGroupsRequest, ListGroupsResponse}
 import org.apache.kafka.common.metrics.MetricsReporter
 import org.apache.kafka.common.metrics.KafkaMetric
 import org.apache.kafka.common.security.auth.SecurityProtocol
-import org.apache.kafka.common.protocol.Errors
-
+import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.junit.Assert._
 import org.junit.{Before, Test}
 import org.junit.After
 import java.util.concurrent.atomic.AtomicInteger
+
+import org.apache.kafka.common.message.ListGroupsRequestData
 
 /*
  * this test checks that a reporter that throws an exception will not affect other reporters
@@ -68,8 +69,10 @@ class KafkaMetricReporterExceptionHandlingTest extends BaseRequestTest {
 
     try {
       TestUtils.retry(10000) {
-        val error = new ListGroupsResponse(requestResponse(socket, "clientId", 0, new ListGroupsRequest.Builder())).error()
-        assertEquals(Errors.NONE, error)
+        val error = new ListGroupsResponse(
+          requestResponse(socket, "clientId", 0, new ListGroupsRequest.Builder(new ListGroupsRequestData)), ApiKeys.LIST_GROUPS.latestVersion)
+          .errorCounts()
+        assertEquals(Collections.singletonMap(Errors.NONE, 1), error)
         assertEquals(KafkaMetricReporterExceptionHandlingTest.goodReporterRegistered.get, KafkaMetricReporterExceptionHandlingTest.badReporterRegistered.get)
         assertTrue(KafkaMetricReporterExceptionHandlingTest.goodReporterRegistered.get > 0)
       }

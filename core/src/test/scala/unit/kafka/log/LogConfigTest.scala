@@ -19,9 +19,11 @@ package kafka.log
 
 import java.util.Properties
 
-import kafka.server.{ThrottledReplicaListValidator, KafkaConfig, KafkaServer}
+import kafka.server.{KafkaConfig, KafkaServer, ThrottledReplicaListValidator}
 import kafka.utils.TestUtils
-import org.apache.kafka.common.config.ConfigException
+import org.apache.kafka.common.config.ConfigDef.Importance.MEDIUM
+import org.apache.kafka.common.config.ConfigDef.Type.INT
+import org.apache.kafka.common.config.{ConfigException, TopicConfig}
 import org.junit.{Assert, Test}
 import org.junit.Assert._
 import org.scalatest.Assertions._
@@ -111,6 +113,46 @@ class LogConfigTest {
     assertFalse(isValid("100 :0,10:   "))
     assertFalse(isValid("100: 0,10:   "))
     assertFalse(isValid("100:0,10 :   "))
+  }
+
+  /* Sanity check that toHtml produces one of the expected configs */
+  @Test
+  def testToHtml(): Unit = {
+    val html = LogConfig.configDefCopy.toHtmlTable
+    val expectedConfig = "<td>file.delete.delay.ms</td>"
+    assertTrue(s"Could not find `$expectedConfig` in:\n $html", html.contains(expectedConfig))
+  }
+
+  /* Sanity check that toEnrichedRst produces one of the expected configs */
+  @Test
+  def testToEnrichedRst(): Unit = {
+    val rst = LogConfig.configDefCopy.toEnrichedRst
+    val expectedConfig = "``file.delete.delay.ms``"
+    assertTrue(s"Could not find `$expectedConfig` in:\n $rst", rst.contains(expectedConfig))
+  }
+
+  /* Sanity check that toEnrichedRst produces one of the expected configs */
+  @Test
+  def testToRst(): Unit = {
+    val rst = LogConfig.configDefCopy.toRst
+    val expectedConfig = "``file.delete.delay.ms``"
+    assertTrue(s"Could not find `$expectedConfig` in:\n $rst", rst.contains(expectedConfig))
+  }
+
+  @Test
+  def testGetConfigValue(): Unit = {
+    // Add a config that doesn't set the `serverDefaultConfigName`
+    val configDef = LogConfig.configDefCopy
+    val configNameWithNoServerMapping = "log.foo"
+    configDef.define(configNameWithNoServerMapping, INT, 1, MEDIUM, s"$configNameWithNoServerMapping doc")
+
+    val deleteDelayKey = configDef.configKeys.get(TopicConfig.FILE_DELETE_DELAY_MS_CONFIG)
+    val deleteDelayServerDefault = configDef.getConfigValue(deleteDelayKey, LogConfig.ServerDefaultHeaderName)
+    assertEquals(KafkaConfig.LogDeleteDelayMsProp, deleteDelayServerDefault)
+
+    val keyWithNoServerMapping = configDef.configKeys.get(configNameWithNoServerMapping)
+    val nullServerDefault = configDef.getConfigValue(keyWithNoServerMapping, LogConfig.ServerDefaultHeaderName)
+    assertNull(nullServerDefault)
   }
 
   private def isValid(configValue: String): Boolean = {
