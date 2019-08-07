@@ -1506,18 +1506,19 @@ public class StreamTaskTest {
             singletonList(stateStore),
             Collections.emptyMap());
 
+        final boolean enableEOS = true;
         return new StreamTask(
             taskId00,
             partitions,
             topology,
             consumer,
             changelogReader,
-            createConfig(true),
+            createConfig(enableEOS),
             streamsMetrics,
             stateDirectory,
             null,
             time,
-            () -> producer = new MockProducer<>(false, bytesSerializer, bytesSerializer), false);
+            () -> producer = new MockProducer<>(false, bytesSerializer, bytesSerializer), enableEOS);
     }
 
     private StreamTask createStatelessTask(final StreamsConfig streamsConfig) {
@@ -1531,6 +1532,8 @@ public class StreamTaskTest {
         source1.addChild(processorSystemTime);
         source2.addChild(processorSystemTime);
 
+        final boolean enableEOS = StreamsConfig.EXACTLY_ONCE.equals(streamsConfig.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG));
+
         return new StreamTask(
             taskId00,
             partitions,
@@ -1542,7 +1545,7 @@ public class StreamTaskTest {
             stateDirectory,
             null,
             time,
-            () -> producer = new MockProducer<>(false, bytesSerializer, bytesSerializer), false);
+            () -> producer = new MockProducer<>(false, bytesSerializer, bytesSerializer), enableEOS);
     }
 
     // this task will throw exception when processing (on partition2), flushing, suspending and closing
