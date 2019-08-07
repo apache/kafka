@@ -17,8 +17,19 @@
 
 package org.apache.kafka.connect.mirror;
 
+import org.apache.kafka.common.Configurable;
+import java.util.Map;
+
 /** Defines which topic configuration properties should be replicated. */
-public interface ConfigPropertyFilter {
+public interface ConfigPropertyFilter extends Configurable, AutoCloseable {
 
     boolean shouldReplicateConfigProperty(String prop);
+
+    default void close() {
+        //nop
+    }
+
+    default void configure(Map<String, ?> props) {
+        //nop
+    }
 }

@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.connect.mirror;
 
+import org.apache.kafka.common.Configurable;
+
 import java.util.Collections;
 import java.util.List;
 import java.util.Set;
@@ -142,4 +144,20 @@ public class MirrorClientTest {
         assertTrue(remoteTopics.contains("source1.source2.topic5"));
         assertTrue(remoteTopics.contains("source3.source4.source5.topic6"));
     }
+
+    @Test
+    public void remoteTopicsSeparatorTest() throws InterruptedException {
+        MirrorClient client = new FakeMirrorClient(Arrays.asList("topic1", "topic2", "topic3",
+            "source1__topic4", "source1__source2__topic5", "source3__source4__source5__topic6"));
+        ((Configurable) client.replicationPolicy()).configure(
+            Collections.singletonMap("replication.policy.separator", "__"));
+        Set<String> remoteTopics = client.remoteTopics();
+        assertFalse(remoteTopics.contains("topic1"));
+        assertFalse(remoteTopics.contains("topic2"));
+        assertFalse(remoteTopics.contains("topic3"));
+        assertTrue(remoteTopics.contains("source1__topic4"));
+        assertTrue(remoteTopics.contains("source1__source2__topic5"));
+        assertTrue(remoteTopics.contains("source3__source4__source5__topic6"));
+    }
+
 }

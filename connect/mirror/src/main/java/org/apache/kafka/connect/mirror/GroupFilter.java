@@ -17,8 +17,19 @@
 
 package org.apache.kafka.connect.mirror;
 
+import org.apache.kafka.common.Configurable;
+import java.util.Map;
+
 /** Defines which consumer groups should be replicated. */
-public interface GroupFilter {
+public interface GroupFilter extends Configurable, AutoCloseable {
 
     boolean shouldReplicateGroup(String group);
+
+    default void close() {
+        //nop
+    }
+
+    default void configure(Map<String, ?> props) {
+        //nop
+    }
 }

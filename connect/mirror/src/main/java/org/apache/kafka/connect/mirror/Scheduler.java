@@ -60,7 +60,10 @@ class Scheduler {
 
     void execute(Task task, String description) {
         try {
+            long start = System.currentTimeMillis();
             task.run();
+            long elapsed = System.currentTimeMillis() - start;
+            log.info("{} took {} ms", description, elapsed);
         } catch (InterruptedException e) {
             log.warn("{} was interrupted running task: {}", name, description);
         } catch (Throwable e) {

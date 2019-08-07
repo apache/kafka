@@ -149,7 +149,7 @@ public class MirrorConnectorConfig extends AbstractConfig {
     }
 
     boolean enabled() {
-        return getBoolean(MirrorMakerConfig.ENABLED_CONFIG);
+        return getBoolean(ENABLED);
     }
 
     Duration consumerPollTimeout() {
@@ -192,6 +192,7 @@ public class MirrorConnectorConfig extends AbstractConfig {
         props.putAll(originalsWithPrefix(TARGET_CLUSTER_PREFIX));
         props.putAll(originalsWithPrefix(ADMIN_CLIENT_PREFIX));
         props.putAll(originalsWithPrefix(TARGET_ADMIN_CLIENT_PREFIX));
+        props.keySet().retainAll(MirrorClientConfig.CLIENT_CONFIG_DEF.names());
         return props;
     }
 
@@ -200,6 +201,7 @@ public class MirrorConnectorConfig extends AbstractConfig {
         props.putAll(originalsWithPrefix(SOURCE_CLUSTER_PREFIX));
         props.putAll(originalsWithPrefix(ADMIN_CLIENT_PREFIX));
         props.putAll(originalsWithPrefix(SOURCE_ADMIN_CLIENT_PREFIX));
+        props.keySet().retainAll(MirrorClientConfig.CLIENT_CONFIG_DEF.names());
         return props;
     }
 
@@ -469,7 +471,13 @@ public class MirrorConnectorConfig extends AbstractConfig {
                     ConfigDef.Type.LIST,
                     null,
                     ConfigDef.Importance.LOW,
-                    CommonClientConfigs.METRIC_REPORTER_CLASSES_DOC);
-
-
+                    CommonClientConfigs.METRIC_REPORTER_CLASSES_DOC)
+            .define(
+                    CommonClientConfigs.SECURITY_PROTOCOL_CONFIG,
+                    ConfigDef.Type.STRING,
+                    CommonClientConfigs.DEFAULT_SECURITY_PROTOCOL,
+                    ConfigDef.Importance.MEDIUM,
+                    CommonClientConfigs.SECURITY_PROTOCOL_DOC)
+            .withClientSslSupport()
+            .withClientSaslSupport();
 }

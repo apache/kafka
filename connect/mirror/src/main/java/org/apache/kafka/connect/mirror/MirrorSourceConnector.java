@@ -121,6 +121,8 @@ public class MirrorSourceConnector extends SourceConnector {
         }
         scheduler.shutdown();
         synchronized (this) {
+            topicFilter.close();
+            configPropertyFilter.close();
             sourceAdminClient.close();
             targetAdminClient.close();
         }

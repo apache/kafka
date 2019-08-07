@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.connect.mirror;
 
-import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Type;
@@ -26,7 +25,7 @@ import java.util.Map;
 import java.util.regex.Pattern;
 
 /** Uses a whitelist and blacklist. */
-public class DefaultTopicFilter implements TopicFilter, Configurable {
+public class DefaultTopicFilter implements TopicFilter {
     
     public static final String TOPICS_WHITELIST_CONFIG = "topics";
     private static final String TOPICS_WHITELIST_DOC = "List of topics and/or regexes to replicate.";
@@ -44,6 +43,10 @@ public class DefaultTopicFilter implements TopicFilter, Configurable {
         TopicFilterConfig config = new TopicFilterConfig(props);
         whitelistPattern = config.whitelistPattern();
         blacklistPattern = config.blacklistPattern();
+    }
+
+    @Override
+    public void close() {
     }
 
     private boolean whitelisted(String topic) {

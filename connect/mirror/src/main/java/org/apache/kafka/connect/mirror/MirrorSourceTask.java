@@ -101,10 +101,12 @@ public class MirrorSourceTask extends SourceTask {
 
     @Override
     public void stop() {
-        new Thread(this::cleanup).start();
+        new Thread(() -> cleanup(lock, consumer, outstandingOffsetSyncs, pollTimeout, offsetProducer, metrics))
+            .start();
     }
 
-    private void cleanup() {
+    private static void cleanup(ReentrantLock lock, KafkaConsumer consumer, Semaphore outstandingOffsetSyncs,
+            Duration pollTimeout, KafkaProducer offsetProducer, MirrorMetrics metrics) {
         lock.lock();
         try {
             consumer.close();
@@ -114,6 +116,7 @@ public class MirrorSourceTask extends SourceTask {
                 log.warn("Timed out waiting for outstanding offset syncs.");
             }
             offsetProducer.close();
+            metrics.close();
         } catch (InterruptedException e) {
             log.info("Interrupted waiting for outstanding offset syncs.");
         } finally {
@@ -123,7 +126,7 @@ public class MirrorSourceTask extends SourceTask {
    
     @Override
     public String version() {
-        return "wip";
+        return "1";
     }
 
     @Override
@@ -137,7 +140,7 @@ public class MirrorSourceTask extends SourceTask {
                 sourceRecords.add(converted);
                 TopicPartition topicPartition = new TopicPartition(converted.topic(), converted.kafkaPartition());
                 metrics.recordAge(topicPartition, System.currentTimeMillis() - record.timestamp());
-                metrics.recordBytes(topicPartition, record.value().length);
+                metrics.recordBytes(topicPartition, byteSize(record.value()));
             }
             return sourceRecords;
         } finally {
@@ -225,6 +228,14 @@ public class MirrorSourceTask extends SourceTask {
 
     private String formatRemoteTopic(String topic) {
         return replicationPolicy.formatRemoteTopic(sourceClusterAlias, topic);
+    }
+
+    private static int byteSize(byte[] bytes) {
+        if (bytes == null) {
+            return 0;
+        } else {
+            return bytes.length;
+        }
     }
 
     static class PartitionState {

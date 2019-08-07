@@ -17,8 +17,19 @@
 
 package org.apache.kafka.connect.mirror;
 
+import org.apache.kafka.common.Configurable;
+import java.util.Map;
+
 /** Defines which topics should be replicated. */
-public interface TopicFilter {
+public interface TopicFilter extends Configurable, AutoCloseable {
 
     boolean shouldReplicateTopic(String topic);
+
+    default void close() {
+        //nop
+    }
+
+    default void configure(Map<String, ?> props) {
+        //nop
+    }
 }

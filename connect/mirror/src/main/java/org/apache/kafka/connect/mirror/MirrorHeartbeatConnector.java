@@ -27,15 +27,18 @@ import java.util.Collections;
 
 public class MirrorHeartbeatConnector extends SourceConnector {
     private MirrorConnectorConfig config;
+    private Scheduler scheduler;
 
     @Override
     public void start(Map<String, String> props) {
         config = new MirrorConnectorConfig(props);
-        MirrorUtils.createTopic(config.heartbeatsTopic(), (short) 1, config.internalTopicReplicationFactor() , config.targetAdminConfig());
+        scheduler = new Scheduler(MirrorHeartbeatConnector.class);
+        scheduler.execute(this::createInternalTopics, "creating internal topics");
     }
 
     @Override
     public void stop() {
+        scheduler.shutdown();
     }
 
     @Override
@@ -57,5 +60,10 @@ public class MirrorHeartbeatConnector extends SourceConnector {
     @Override
     public String version() {
         return "1";
+    }
+
+    private void createInternalTopics() {
+        MirrorUtils.createSinglePartitionTopic(config.heartbeatsTopic(),
+            config.internalTopicReplicationFactor(), config.targetAdminConfig());
     }
 }

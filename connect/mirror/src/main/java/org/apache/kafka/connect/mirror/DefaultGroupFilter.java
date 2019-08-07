@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.connect.mirror;
 
-import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Type;
@@ -26,7 +25,7 @@ import java.util.Map;
 import java.util.regex.Pattern;
 
 /** Uses a whitelist and blacklist. */
-public class DefaultGroupFilter implements GroupFilter, Configurable {
+public class DefaultGroupFilter implements GroupFilter {
 
     public static final String GROUPS_WHITELIST_CONFIG = "groups";
     private static final String GROUPS_WHITELIST_DOC = "List of consumer group names and/or regexes to replicate.";
@@ -44,6 +43,10 @@ public class DefaultGroupFilter implements GroupFilter, Configurable {
         GroupFilterConfig config = new GroupFilterConfig(props);
         whitelistPattern = config.whitelistPattern();
         blacklistPattern = config.blacklistPattern();
+    }
+
+    @Override
+    public void close() {
     }
 
     private boolean whitelisted(String group) {

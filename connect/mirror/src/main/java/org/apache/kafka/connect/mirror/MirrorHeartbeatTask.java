@@ -57,12 +57,12 @@ public class MirrorHeartbeatTask extends SourceTask {
 
     @Override
     public String version() {
-        return "wip";
+        return "1";
     }
 
     @Override
     public List<SourceRecord> poll() throws InterruptedException {
-        // pause to throttle, unless we'ved stopped
+        // pause to throttle, unless we've stopped
         if (stopped.await(interval.toMillis(), TimeUnit.MILLISECONDS)) {
             return Collections.emptyList();
         }

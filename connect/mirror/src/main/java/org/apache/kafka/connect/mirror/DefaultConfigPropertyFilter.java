@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.connect.mirror;
 
-import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Type;
@@ -26,7 +25,7 @@ import java.util.Map;
 import java.util.regex.Pattern;
 
 /** Uses a blacklist of property names or regexes. */
-public class DefaultConfigPropertyFilter implements ConfigPropertyFilter, Configurable {
+public class DefaultConfigPropertyFilter implements ConfigPropertyFilter {
     
     public static final String CONFIG_PROPERTIES_BLACKLIST_CONFIG = "config.properties.blacklist";
     private static final String CONFIG_PROPERTIES_BLACKLIST_DOC = "List of topic configuration properties and/or regexes "
@@ -37,13 +36,16 @@ public class DefaultConfigPropertyFilter implements ConfigPropertyFilter, Config
         + "message\\.timestamp\\.type, "
         + "unclean\\.leader\\.election\\.enable, "
         + "min\\.insync\\.replicas";
-
     private Pattern blacklistPattern;
 
     @Override
     public void configure(Map<String, ?> props) {
         ConfigPropertyFilterConfig config = new ConfigPropertyFilterConfig(props);
         blacklistPattern = config.blacklistPattern();
+    }
+
+    @Override
+    public void close() {
     }
 
     private boolean blacklisted(String prop) {

@@ -35,14 +35,7 @@ public interface ReplicationPolicy {
 
         Returns null if not a remote topic.
     */
-    default String upstreamTopic(String topic) {
-        String source = topicSource(topic);
-        if (source == null) {
-            return null;
-        } else {
-            return topic.substring(source.length() + 1);
-        }
-    }
+    String upstreamTopic(String topic); 
 
     /** The name of the original source-topic, which may have been replicated multiple hops.
         Returns the topic if it is not a remote topic.

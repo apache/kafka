@@ -23,8 +23,7 @@ import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.clients.CommonClientConfigs;
 
 import java.util.Map;
-import java.util.Set;
-import java.util.stream.Collectors;
+import java.util.HashMap;
 
 public class MirrorClientConfig extends AbstractConfig {
     public static final String REPLICATION_POLICY_CLASS = "replication.policy.class";
@@ -43,7 +42,7 @@ public class MirrorClientConfig extends AbstractConfig {
     static final String HEARTBEATS_TOPIC = "heartbeats";
  
     MirrorClientConfig(Map<?, ?> props) {
-        super(CONFIG_DEF, props, false);
+        super(CONFIG_DEF, props, true);
     }
 
     public ReplicationPolicy replicationPolicy() {
@@ -61,16 +60,32 @@ public class MirrorClientConfig extends AbstractConfig {
     public Map<String, Object> producerConfig() {
         return clientConfig(PRODUCER_CLIENT_PREFIX);
     }
-
+    
     private Map<String, Object> clientConfig(String prefix) {
-        Set<String> names = MirrorMakerConfig.CLIENT_CONFIG_DEF.names();
-        return valuesWithPrefixOverride(prefix).entrySet().stream()
-            .filter(x -> names.contains(x.getKey()))
-            .filter(x -> x.getValue() != null)
-            .collect(Collectors.toMap(x -> x.getKey(), x -> x.getValue()));
+        Map<String, Object> props = new HashMap<>();
+        props.putAll(valuesWithPrefixOverride(prefix));
+        props.keySet().retainAll(CLIENT_CONFIG_DEF.names());
+        props.entrySet().removeIf(x -> x.getValue() == null);
+        return props;
     }
 
-    private static final ConfigDef CONFIG_DEF = new ConfigDef()
+    // Properties passed to internal Kafka clients
+    static final ConfigDef CLIENT_CONFIG_DEF = new ConfigDef()
+        .define(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG,
+            Type.LIST,
+            null,
+            Importance.HIGH,
+            CommonClientConfigs.BOOTSTRAP_SERVERS_DOC)
+        // security support
+        .define(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG,
+            Type.STRING,
+            CommonClientConfigs.DEFAULT_SECURITY_PROTOCOL,
+            Importance.MEDIUM,
+            CommonClientConfigs.SECURITY_PROTOCOL_DOC)
+        .withClientSslSupport()
+        .withClientSaslSupport();
+ 
+    static final ConfigDef CONFIG_DEF = new ConfigDef()
         .define(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG,
             Type.STRING,
             null,

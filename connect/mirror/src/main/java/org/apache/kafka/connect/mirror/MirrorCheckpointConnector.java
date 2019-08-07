@@ -60,8 +60,8 @@ public class MirrorCheckpointConnector extends SourceConnector {
         synchronized (this) {
             sourceAdminClient = AdminClient.create(config.sourceAdminConfig());
         }
-        MirrorUtils.createTopic(config.checkpointsTopic(), config.internalTopicReplicationFactor(), (short) 1, config.targetAdminConfig());
         scheduler = new Scheduler(MirrorCheckpointConnector.class);
+        scheduler.execute(this::createInternalTopics, "creating internal topics");
         scheduler.execute(this::loadInitialConsumerGroups, "loading initial consumer groups");
         scheduler.scheduleRepeatingDelayed(this::refreshConsumerGroups, config.refreshGroupsInterval(),
                 "refreshing consumer groups");
@@ -75,6 +75,7 @@ public class MirrorCheckpointConnector extends SourceConnector {
         }
         scheduler.shutdown();
         synchronized (this) {
+            groupFilter.close();
             sourceAdminClient.close();
         }
     }
@@ -144,6 +145,11 @@ public class MirrorCheckpointConnector extends SourceConnector {
             return sourceAdminClient.listConsumerGroups().valid().get();
         }
     }
+
+    private void createInternalTopics() {
+        MirrorUtils.createSinglePartitionTopic(config.checkpointsTopic(),
+            config.internalTopicReplicationFactor(), config.targetAdminConfig());
+    } 
 
     boolean shouldReplicate(String group) {
         return groupFilter.shouldReplicateGroup(group);

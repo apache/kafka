@@ -37,7 +37,7 @@ import java.util.LinkedHashMap;
 import java.util.stream.Collectors;
 
 /** Metrics for replicated topic-partitions */
-class MirrorMetrics {
+class MirrorMetrics implements AutoCloseable {
 
     private static final String SOURCE_CONNECTOR_GROUP = MirrorSourceConnector.class.getSimpleName();
     private static final String CHECKPOINT_CONNECTOR_GROUP = MirrorCheckpointConnector.class.getSimpleName();
@@ -114,6 +114,11 @@ class MirrorMetrics {
             .map(x -> new TopicPartition(replicationPolicy.formatRemoteTopic(source, x.topic()), x.partition()))
             .collect(Collectors.toMap(x -> x, x -> new PartitionMetrics(x)));
 
+    }
+
+    @Override
+    public void close() {
+        metrics.close();
     }
 
     void countRecord(TopicPartition topicPartition) {

@@ -92,14 +92,16 @@ public class MirrorCheckpointTask extends SourceTask {
     @Override
     public void stop() {
         stopped = true;
-        new Thread(this::cleanup).start();  // cleanup off-thread to prevent blocking
+        new Thread(() -> cleanup(lock, offsetSyncStore, sourceAdminClient, metrics)).start();
     }
 
-    private void cleanup() {
+    private static void cleanup(ReentrantLock lock, OffsetSyncStore offsetSyncStore,
+            AdminClient sourceAdminClient, MirrorMetrics metrics) {
         lock.lock();
         try {
             offsetSyncStore.close();
             sourceAdminClient.close();
+            metrics.close();
         } finally {
             lock.unlock();
         }
@@ -107,7 +109,7 @@ public class MirrorCheckpointTask extends SourceTask {
 
     @Override
     public String version() {
-        return "wip";
+        return "1";
     }
 
     @Override

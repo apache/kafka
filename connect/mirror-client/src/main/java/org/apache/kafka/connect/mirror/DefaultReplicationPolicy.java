@@ -21,7 +21,12 @@ import org.apache.kafka.common.Configurable;
 import java.util.Map;
 import java.util.regex.Pattern;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 public class DefaultReplicationPolicy implements ReplicationPolicy, Configurable {
+    
+    private static final Logger log = LoggerFactory.getLogger(DefaultReplicationPolicy.class);
 
     // In order to work with various metrics stores, we allow custom separators.
     public static final String SEPARATOR_CONFIG = MirrorClientConfig.REPLICATION_POLICY_SEPARATOR;
@@ -34,6 +39,7 @@ public class DefaultReplicationPolicy implements ReplicationPolicy, Configurable
     public void configure(Map<String, ?> props) {
         if (props.containsKey(SEPARATOR_CONFIG)) {
             separator = (String) props.get(SEPARATOR_CONFIG);
+            log.info("Using custom remote topic separator: '{}'", separator);
             separatorPattern = Pattern.compile(Pattern.quote(separator));
         }
     }
@@ -51,6 +57,16 @@ public class DefaultReplicationPolicy implements ReplicationPolicy, Configurable
             return null;
         } else {
             return parts[0];
+        }
+    }
+
+    @Override
+    public String upstreamTopic(String topic) {
+        String source = topicSource(topic);
+        if (source == null) {
+            return null;
+        } else {
+            return topic.substring(source.length() + separator.length());
         }
     }
 }
