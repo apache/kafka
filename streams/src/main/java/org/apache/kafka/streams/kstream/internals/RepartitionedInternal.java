@@ -21,13 +21,13 @@ import org.apache.kafka.streams.kstream.Repartitioned;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.internals.InternalTopicProperties;
 
-public class RepartitionedInternal<K, V> extends Repartitioned<K, V> {
+class RepartitionedInternal<K, V> extends Repartitioned<K, V> {
 
     RepartitionedInternal(final Repartitioned<K, V> repartitioned) {
         super(repartitioned);
     }
 
-    public static <V, K> RepartitionedInternal<K, V> empty() {
+    static <V, K> RepartitionedInternal<K, V> empty() {
         return new RepartitionedInternal<>(Repartitioned.as(null));
     }
 
