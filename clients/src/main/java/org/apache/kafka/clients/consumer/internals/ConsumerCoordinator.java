@@ -648,7 +648,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
             if (!revokedPartitions.isEmpty()) {
                 exception = invokePartitionsLost(
-                    "generation has been reset because consumer has been kicked out of the group",
+                    "generation has been reset since consumer is no longer part of the group",
                     revokedPartitions);
 
                 subscriptions.assignFromSubscribed(Collections.emptySet());
@@ -691,18 +691,17 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         }
     }
 
-    private void resetAssignment(boolean lostPartitions) {
+    /**
+     * @throws KafkaException if the rebalance callback throws exception
+     */
+    @Override
+    synchronized void resetGenerationOnLeaveGroup() {
+        // we can reset assignment upon leaving group and trigger the callback as well
         Set<TopicPartition> droppedPartitions = new HashSet<>(subscriptions.assignedPartitions());
 
         if (subscriptions.partitionsAutoAssigned() && !droppedPartitions.isEmpty()) {
 
-            Exception e;
-
-            if (lostPartitions) {
-                e = invokePartitionsLost("reset generation", droppedPartitions);
-            } else {
-                e = invokePartitionsRevoked(droppedPartitions);
-            }
+            final Exception e = invokePartitionsRevoked(droppedPartitions);
 
             subscriptions.assignFromSubscribed(Collections.emptySet());
 
@@ -710,28 +709,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                 throw new KafkaException("User rebalance callback throws an error", e);
             }
         }
-    }
 
-    /**
-     * @throws KafkaException if the rebalance callback throws exception
-     */
-    @Override
-    synchronized void resetGenerationOnResponseError(ApiKeys api, Errors error) {
-        // heartbeat error handling is executed by heartbeat thread, in which case
-        // we would not drop partitions and trigger rebalance callback as it should
-        // only be triggered by the caller thread
-        if (api != ApiKeys.HEARTBEAT) {
-            resetAssignment(true);
-        }
-        super.resetGenerationOnResponseError(api, error);
-    }
-
-    /**
-     * @throws KafkaException if the rebalance callback throws exception
-     */
-    @Override
-    synchronized void resetGenerationOnLeaveGroup() {
-        resetAssignment(false);
         super.resetGenerationOnLeaveGroup();
     }
 
