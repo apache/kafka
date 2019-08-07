@@ -110,6 +110,8 @@ class KafkaController(val config: KafkaConfig,
   @volatile private var globalTopicCount = 0
   @volatile private var globalPartitionCount = 0
   @volatile private var topicsToDeleteCount = 0
+  @volatile private var replicasToDeleteCount = 0
+
 
   /* single-thread scheduler to clean expired tokens */
   private val tokenCleanScheduler = new KafkaScheduler(threads = 1, threadNamePrefix = "delegation-token-cleaner")
@@ -160,6 +162,13 @@ class KafkaController(val config: KafkaConfig,
     "TopicsToDeleteCount",
     new Gauge[Int] {
       def value: Int = topicsToDeleteCount
+    }
+  )
+
+  newGauge(
+    "ReplicasToDeleteCount",
+    new Gauge[Int] {
+      def value: Int = replicasToDeleteCount
     }
   )
 
@@ -324,6 +333,7 @@ class KafkaController(val config: KafkaConfig,
     globalTopicCount = 0
     globalPartitionCount = 0
     topicsToDeleteCount = 0
+    replicasToDeleteCount = 0
 
     // stop token expiry check scheduler
     if (tokenCleanScheduler.isStarted)
@@ -1202,6 +1212,13 @@ class KafkaController(val config: KafkaConfig,
     globalPartitionCount = if (!isActive) 0 else controllerContext.partitionLeadershipInfo.size
 
     topicsToDeleteCount = if (!isActive) 0 else controllerContext.topicsToBeDeleted.size
+
+    replicasToDeleteCount = if (!isActive) 0 else controllerContext.topicsToBeDeleted.map { topic =>
+      // For each enqueued topic, count the number of replicas not yet deleted
+      controllerContext.replicasForTopic(topic).count { replica =>
+        controllerContext.replicaState(replica) != ReplicaDeletionSuccessful
+      }
+    }.sum
   }
 
   // visible for testing
