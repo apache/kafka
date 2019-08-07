@@ -2149,14 +2149,6 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         this.client.wakeup();
     }
 
-    /**
-     * Checks if the consumer is connected to Kafka server i.e. broker.
-     */
-    @Override
-    public boolean isConnected() {
-        return !coordinator.coordinatorUnknown();
-    }
-
     private ClusterResourceListeners configureClusterResourceListeners(Deserializer<K> keyDeserializer, Deserializer<V> valueDeserializer, List<?>... candidateLists) {
         ClusterResourceListeners clusterResourceListeners = new ClusterResourceListeners();
         for (List<?> candidateList: candidateLists)

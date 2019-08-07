@@ -456,6 +456,8 @@ private[log] class Cleaner(val id: Int,
                            time: Time,
                            checkDone: (TopicPartition) => Unit) extends Logging {
 
+  type MutableMap = scala.collection.mutable.Map[Record,Long]
+  
   protected override def loggerName = classOf[LogCleaner].getName
 
   this.logIdent = s"Cleaner $id: "
@@ -608,7 +610,8 @@ private[log] class Cleaner(val id: Int,
                              maxLogMessageSize: Int,
                              transactionMetadata: CleanedTransactionMetadata,
                              activeProducers: Map[Long, Int],
-                             stats: CleanerStats) {
+                             stats: CleanerStats) : MutableMap = {
+    val tombstoneRecords = scala.collection.mutable.Map[Record,Long]()
     val logCleanerFilter = new RecordFilter {
       var discardBatchRecords: Boolean = _
 
@@ -632,7 +635,7 @@ private[log] class Cleaner(val id: Int,
           // The batch is only retained to preserve producer sequence information; the records can be removed
           false
         else
-          Cleaner.this.shouldRetainRecord(map, retainDeletes, batch, record, stats)
+          Cleaner.this.shouldRetainRecord(map, tombstoneRecords, retainDeletes, batch, record, stats)
       }
     }
 
@@ -672,6 +675,7 @@ private[log] class Cleaner(val id: Int,
         growBuffersOrFail(sourceRecords, position, maxLogMessageSize, records)
     }
     restoreBuffers()
+    tombstoneRecords
   }
 
 
@@ -720,6 +724,7 @@ private[log] class Cleaner(val id: Int,
   }
 
   private def shouldRetainRecord(map: kafka.log.OffsetMap,
+                                 tombstoneRecords: MutableMap,
                                  retainDeletes: Boolean,
                                  batch: RecordBatch,
                                  record: Record,
@@ -737,6 +742,9 @@ private[log] class Cleaner(val id: Int,
        */
       val redundant = foundOffset >= 0 && record.offset < foundOffset
       val obsoleteDelete = !retainDeletes && !record.hasValue
+      if (!record.hasValue && !tombstoneRecords.contains(record) && !obsoleteDelete) {
+        tombstoneRecords(record) = time.milliseconds()
+      }
       !redundant && !obsoleteDelete
     } else {
       stats.invalidMessage()

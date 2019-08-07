@@ -521,9 +521,4 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
     public void close(Duration timeout) {
         close();
     }
-
-    @Override
-    public boolean isConnected() {
-        return true;
-    }
 }
