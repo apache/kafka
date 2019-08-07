@@ -431,6 +431,11 @@ public class StreamThread extends Thread {
             this.cache = cache;
             this.clientSupplier = clientSupplier;
             this.threadProducer = threadProducer;
+            if (threadProducer == null) {
+                log.info("Initializing with thread producer to null in task creator");
+            } else {
+                log.info("Initializing with thread producer to non-null in task creator");
+            }
             this.threadClientId = threadClientId;
             createTaskSensor = ThreadMetrics.createTaskSensor(streamsMetrics);
         }
@@ -440,7 +445,7 @@ public class StreamThread extends Thread {
                               final TaskId taskId,
                               final Set<TopicPartition> partitions) {
             createTaskSensor.record();
-
+            log.info("creating task {}", taskId);
             return new StreamTask(
                 taskId,
                 partitions,
@@ -614,6 +619,12 @@ public class StreamThread extends Thread {
         final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, threadClientId);
 
         final ThreadCache cache = new ThreadCache(logContext, cacheSizeBytes, streamsMetrics);
+
+        if (threadProducer == null) {
+            log.info("Init thread producer on stream-thread with null");
+        } else {
+            log.info("Init thread producer on stream-thread with non-null");
+        }
 
         final AbstractTaskCreator<StreamTask> activeTaskCreator = new TaskCreator(
             builder,
@@ -800,6 +811,7 @@ public class StreamThread extends Thread {
             // This is a thread-level txn producer
             if (eosEnabled && producer != null) {
                 producer.initTransactions();
+                producer.beginTransaction();
             }
         } catch (final TimeoutException retriable) {
             log.error(

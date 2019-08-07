@@ -183,13 +183,21 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         final ProductionExceptionHandler productionExceptionHandler = config.defaultProductionExceptionHandler();
 
         if (recordCollector == null) {
+            log.info("record collector is initialized on task");
             this.recordCollector = new RecordCollectorImpl(
                 id.toString(),
                 logContext,
                 productionExceptionHandler,
                 ThreadMetrics.skipRecordSensor(streamsMetrics));
         } else {
+            log.info("record collector given is non-null");
             this.recordCollector = recordCollector;
+        }
+
+        if (this.producer == null) {
+            log.info("Initializing the record collector with producer null");
+        } else {
+            log.info("Initializing the record collector with non-null producer");
         }
         this.recordCollector.init(this.producer);
 
@@ -282,12 +290,14 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
     @Override
     public void resume() {
         log.debug("Resuming");
-        if (isTaskProducer) {
-            if (producer != null) {
-                throw new IllegalStateException("Task producer should be null.");
-            }
+        if (eosEnabled) {
+//            if (producer != null) {
+//                throw new IllegalStateException("Task producer should be null.");
+//            }
             producer = producerSupplier.get();
-            initializeTransactions();
+            if (isTaskProducer) {
+                initializeTransactions();
+            }
             recordCollector.init(producer);
 
             try {
