@@ -53,6 +53,7 @@ public class CooperativeStickyAssignorTest extends AbstractStickyAssignorTest {
     public void verifyValidityAndBalance(Map<String, Subscription> subscriptions,
                                          Map<String, List<TopicPartition>> assignments,
                                          Map<String, Integer> partitionsPerTopic) {
+        int rebalances = 0;
         // partitions are being revoked, we must go through another assignment to get the final state
         while (verifyCooperativeValidity(subscriptions, assignments)) {
 
@@ -65,7 +66,10 @@ public class CooperativeStickyAssignorTest extends AbstractStickyAssignorTest {
 
             assignments.clear();
             assignments.putAll(assignor.assign(partitionsPerTopic, subscriptions));
+            ++rebalances;
         }
+
+        assertTrue(rebalances <= 2);
 
         // Check the validity and balance of the final assignment
         super.verifyValidityAndBalance(subscriptions, assignments, partitionsPerTopic);

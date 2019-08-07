@@ -110,6 +110,7 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
 
         // all partitions that need to be assigned (initially set to all partitions but adjusted in the following loop)
         List<TopicPartition> unassignedPartitions = new ArrayList<>(sortedPartitions);
+        boolean revocationRequired = false;
         for (Iterator<Entry<String, List<TopicPartition>>> it = currentAssignment.entrySet().iterator(); it.hasNext();) {
             Map.Entry<String, List<TopicPartition>> entry = it.next();
             if (!subscriptions.containsKey(entry.getKey())) {
@@ -129,6 +130,7 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
                         // if this partition cannot remain assigned to its current consumer because the consumer
                         // is no longer subscribed to its topic remove it from currentAssignment of the consumer
                         partitionIter.remove();
+                        revocationRequired = true;
                     } else
                         // otherwise, remove the topic partition from those that need to be assigned only if
                         // its current consumer is still subscribed to its topic (because it is already assigned
@@ -146,7 +148,7 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
         sortedCurrentSubscriptions.addAll(currentAssignment.keySet());
 
         balance(currentAssignment, prevAssignment, sortedPartitions, unassignedPartitions, sortedCurrentSubscriptions,
-            consumer2AllPotentialPartitions, partition2AllPotentialConsumers, currentPartitionConsumer);
+            consumer2AllPotentialPartitions, partition2AllPotentialConsumers, currentPartitionConsumer, revocationRequired);
         return currentAssignment;
     }
 
@@ -432,7 +434,8 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
                          TreeSet<String> sortedCurrentSubscriptions,
                          Map<String, List<TopicPartition>> consumer2AllPotentialPartitions,
                          Map<TopicPartition, List<String>> partition2AllPotentialConsumers,
-                         Map<TopicPartition, String> currentPartitionConsumer) {
+                         Map<TopicPartition, String> currentPartitionConsumer,
+                         boolean revocationRequired) {
         boolean initializing = currentAssignment.get(sortedCurrentSubscriptions.last()).isEmpty();
         boolean reassignmentPerformed = false;
 
@@ -452,6 +455,7 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
             if (!canParticipateInReassignment(partition, partition2AllPotentialConsumers))
                 fixedPartitions.add(partition);
         sortedPartitions.removeAll(fixedPartitions);
+        unassignedPartitions.removeAll(fixedPartitions);
 
         // narrow down the reassignment scope to only those consumers that are subject to reassignment
         Map<String, List<TopicPartition>> fixedAssignments = new HashMap<>();
@@ -466,8 +470,14 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
         Map<String, List<TopicPartition>> preBalanceAssignment = deepCopy(currentAssignment);
         Map<TopicPartition, String> preBalancePartitionConsumers = new HashMap<>(currentPartitionConsumer);
 
+        // if we don't already need to revoke something due to subscription changes, first try to balance by only moving newly added partitions
+        if (!revocationRequired) {
+            performReassignments(unassignedPartitions, currentAssignment, prevAssignment, sortedCurrentSubscriptions,
+               consumer2AllPotentialPartitions, partition2AllPotentialConsumers, currentPartitionConsumer);
+        }
+
         reassignmentPerformed = performReassignments(sortedPartitions, currentAssignment, prevAssignment, sortedCurrentSubscriptions,
-            consumer2AllPotentialPartitions, partition2AllPotentialConsumers, currentPartitionConsumer);
+                   consumer2AllPotentialPartitions, partition2AllPotentialConsumers, currentPartitionConsumer);
 
         // if we are not preserving existing assignments and we have made changes to the current assignment
         // make sure we are getting a more balanced assignment; otherwise, revert to previous assignment
