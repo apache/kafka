@@ -20,8 +20,10 @@ import org.apache.kafka.clients.admin.MockAdminClient;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.InvalidOffsetException;
 import org.apache.kafka.clients.consumer.MockConsumer;
+import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.clients.producer.MockProducer;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.common.Cluster;
@@ -56,10 +58,13 @@ import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.TaskMetadata;
 import org.apache.kafka.streams.processor.ThreadMetadata;
+import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
 import org.apache.kafka.test.MockClientSupplier;
+import org.apache.kafka.test.MockKeyValueStoreBuilder;
 import org.apache.kafka.test.MockProcessor;
 import org.apache.kafka.test.MockStateRestoreListener;
 import org.apache.kafka.test.MockTimestampExtractor;
@@ -69,10 +74,12 @@ import org.easymock.EasyMock;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
+import org.slf4j.Logger;
 
 import java.io.File;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -88,9 +95,11 @@ import static java.util.Collections.singletonList;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkProperties;
-import static org.apache.kafka.streams.processor.internals.AbstractStateManager.CHECKPOINT_FILE_NAME;
+import static org.apache.kafka.streams.processor.internals.StateManagerUtil.CHECKPOINT_FILE_NAME;
 import static org.apache.kafka.streams.processor.internals.StreamThread.getSharedAdminClientId;
 import static org.hamcrest.CoreMatchers.equalTo;
+import static org.hamcrest.CoreMatchers.not;
+import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -104,6 +113,7 @@ public class StreamThreadTest {
 
     private final String clientId = "clientId";
     private final String applicationId = "stream-thread-test";
+    private final int threadIdx = 1;
     private final MockTime mockTime = new MockTime();
     private final Metrics metrics = new Metrics();
     private final MockClientSupplier clientSupplier = new MockClientSupplier();
@@ -244,7 +254,8 @@ public class StreamThreadTest {
             streamsMetadataState,
             0,
             stateDirectory,
-            new MockStateRestoreListener());
+            new MockStateRestoreListener(),
+            threadIdx);
     }
 
     @Test
@@ -252,34 +263,70 @@ public class StreamThreadTest {
         final StreamThread thread = createStreamThread(clientId, config, false);
         final String defaultGroupName = "stream-metrics";
         final Map<String, String> defaultTags = Collections.singletonMap("client-id", thread.getName());
+        final String descriptionIsNotVerified = "";
 
-        assertNotNull(metrics.metrics().get(metrics.metricName("commit-latency-avg", defaultGroupName, "The average commit time in ms", defaultTags)));
-        assertNotNull(metrics.metrics().get(metrics.metricName("commit-latency-max", defaultGroupName, "The maximum commit time in ms", defaultTags)));
-        assertNotNull(metrics.metrics().get(metrics.metricName("commit-rate", defaultGroupName, "The average per-second number of commit calls", defaultTags)));
-        assertNotNull(metrics.metrics().get(metrics.metricName("commit-total", defaultGroupName, "The total number of commit calls", defaultTags)));
-        assertNotNull(metrics.metrics().get(metrics.metricName("poll-latency-avg", defaultGroupName, "The average poll time in ms", defaultTags)));
-        assertNotNull(metrics.metrics().get(metrics.metricName("poll-latency-max", defaultGroupName, "The maximum poll time in ms", defaultTags)));
-        assertNotNull(metrics.metrics().get(metrics.metricName("poll-rate", defaultGroupName, "The average per-second number of record-poll calls", defaultTags)));
-        assertNotNull(metrics.metrics().get(metrics.metricName("poll-total", defaultGroupName, "The total number of record-poll calls", defaultTags)));
-        assertNotNull(metrics.metrics().get(metrics.metricName("process-latency-avg", defaultGroupName, "The average process time in ms", defaultTags)));
-        assertNotNull(metrics.metrics().get(metrics.metricName("process-latency-max", defaultGroupName, "The maximum process time in ms", defaultTags)));
-        assertNotNull(metrics.metrics().get(metrics.metricName("process-rate", defaultGroupName, "The average per-second number of process calls", defaultTags)));
-        assertNotNull(metrics.metrics().get(metrics.metricName("process-total", defaultGroupName, "The total number of process calls", defaultTags)));
-        assertNotNull(metrics.metrics().get(metrics.metricName("punctuate-latency-avg", defaultGroupName, "The average punctuate time in ms", defaultTags)));
-        assertNotNull(metrics.metrics().get(metrics.metricName("punctuate-latency-max", defaultGroupName, "The maximum punctuate time in ms", defaultTags)));
-        assertNotNull(metrics.metrics().get(metrics.metricName("punctuate-rate", defaultGroupName, "The average per-second number of punctuate calls", defaultTags)));
-        assertNotNull(metrics.metrics().get(metrics.metricName("punctuate-total", defaultGroupName, "The total number of punctuate calls", defaultTags)));
-        assertNotNull(metrics.metrics().get(metrics.metricName("task-created-rate", defaultGroupName, "The average per-second number of newly created tasks", defaultTags)));
-        assertNotNull(metrics.metrics().get(metrics.metricName("task-created-total", defaultGroupName, "The total number of newly created tasks", defaultTags)));
-        assertNotNull(metrics.metrics().get(metrics.metricName("task-closed-rate", defaultGroupName, "The average per-second number of closed tasks", defaultTags)));
-        assertNotNull(metrics.metrics().get(metrics.metricName("task-closed-total", defaultGroupName, "The total number of closed tasks", defaultTags)));
-        assertNotNull(metrics.metrics().get(metrics.metricName("skipped-records-rate", defaultGroupName, "The average per-second number of skipped records.", defaultTags)));
-        assertNotNull(metrics.metrics().get(metrics.metricName("skipped-records-total", defaultGroupName, "The total number of skipped records.", defaultTags)));
+        assertNotNull(metrics.metrics().get(metrics.metricName(
+            "commit-latency-avg", defaultGroupName, descriptionIsNotVerified, defaultTags)));
+        assertNotNull(metrics.metrics().get(metrics.metricName(
+            "commit-latency-max", defaultGroupName, descriptionIsNotVerified, defaultTags)));
+        assertNotNull(metrics.metrics().get(metrics.metricName(
+            "commit-rate", defaultGroupName, descriptionIsNotVerified, defaultTags)));
+        assertNotNull(metrics.metrics().get(metrics.metricName(
+            "commit-total", defaultGroupName, descriptionIsNotVerified, defaultTags)));
+        assertNotNull(metrics.metrics().get(metrics.metricName(
+            "poll-latency-avg", defaultGroupName, descriptionIsNotVerified, defaultTags)));
+        assertNotNull(metrics.metrics().get(metrics.metricName(
+            "poll-latency-max", defaultGroupName, descriptionIsNotVerified, defaultTags)));
+        assertNotNull(metrics.metrics().get(metrics.metricName(
+            "poll-rate", defaultGroupName, descriptionIsNotVerified, defaultTags)));
+        assertNotNull(metrics.metrics().get(metrics.metricName(
+            "poll-total", defaultGroupName, descriptionIsNotVerified, defaultTags)));
+        assertNotNull(metrics.metrics().get(metrics.metricName(
+            "process-latency-avg", defaultGroupName, descriptionIsNotVerified, defaultTags)));
+        assertNotNull(metrics.metrics().get(metrics.metricName(
+            "process-latency-max", defaultGroupName, descriptionIsNotVerified, defaultTags)));
+        assertNotNull(metrics.metrics().get(metrics.metricName(
+            "process-rate", defaultGroupName, descriptionIsNotVerified, defaultTags)));
+        assertNotNull(metrics.metrics().get(metrics.metricName(
+            "process-total", defaultGroupName, descriptionIsNotVerified, defaultTags)));
+        assertNotNull(metrics.metrics().get(metrics.metricName(
+            "punctuate-latency-avg", defaultGroupName, descriptionIsNotVerified, defaultTags)));
+        assertNotNull(metrics.metrics().get(metrics.metricName(
+            "punctuate-latency-max", defaultGroupName, descriptionIsNotVerified, defaultTags)));
+        assertNotNull(metrics.metrics().get(metrics.metricName(
+            "punctuate-rate", defaultGroupName, descriptionIsNotVerified, defaultTags)));
+        assertNotNull(metrics.metrics().get(metrics.metricName(
+            "punctuate-total", defaultGroupName, descriptionIsNotVerified, defaultTags)));
+        assertNotNull(metrics.metrics().get(metrics.metricName(
+            "task-created-rate", defaultGroupName, descriptionIsNotVerified, defaultTags)));
+        assertNotNull(metrics.metrics().get(metrics.metricName(
+            "task-created-total", defaultGroupName, descriptionIsNotVerified, defaultTags)));
+        assertNotNull(metrics.metrics().get(metrics.metricName(
+            "task-closed-rate", defaultGroupName, descriptionIsNotVerified, defaultTags)));
+        assertNotNull(metrics.metrics().get(metrics.metricName(
+            "task-closed-total", defaultGroupName, descriptionIsNotVerified, defaultTags)));
+        assertNotNull(metrics.metrics().get(metrics.metricName(
+            "skipped-records-rate", defaultGroupName, descriptionIsNotVerified, defaultTags)));
+        assertNotNull(metrics.metrics().get(metrics.metricName(
+            "skipped-records-total", defaultGroupName, descriptionIsNotVerified, defaultTags)));
+
+        final String taskGroupName = "stream-task-metrics";
+        final Map<String, String> taskTags =
+            mkMap(mkEntry("task-id", "all"), mkEntry("client-id", thread.getName()));
+        assertNotNull(metrics.metrics().get(metrics.metricName(
+            "commit-latency-avg", taskGroupName, descriptionIsNotVerified, taskTags)));
+        assertNotNull(metrics.metrics().get(metrics.metricName(
+            "commit-latency-max", taskGroupName, descriptionIsNotVerified, taskTags)));
+        assertNotNull(metrics.metrics().get(metrics.metricName(
+            "commit-rate", taskGroupName, descriptionIsNotVerified, taskTags)));
 
         final JmxReporter reporter = new JmxReporter("kafka.streams");
         metrics.addReporter(reporter);
+        assertEquals(clientId + "-StreamThread-1", thread.getName());
         assertTrue(reporter.containsMbean(String.format("kafka.streams:type=%s,client-id=%s",
-                defaultGroupName, thread.getName())));
+                   defaultGroupName, 
+                   thread.getName())));
+        assertTrue(reporter.containsMbean("kafka.streams:type=stream-task-metrics,client-id=" + thread.getName() + ",task-id=all"));
     }
 
     @Test
@@ -293,8 +340,7 @@ public class StreamThreadTest {
         final Consumer<byte[], byte[]> consumer = EasyMock.createNiceMock(Consumer.class);
         final TaskManager taskManager = mockTaskManagerCommit(consumer, 1, 1);
 
-        final StreamThread.StreamsMetricsThreadImpl streamsMetrics
-            = new StreamThread.StreamsMetricsThreadImpl(metrics, "");
+        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, clientId);
         final StreamThread thread = new StreamThread(
             mockTime,
             config,
@@ -420,8 +466,7 @@ public class StreamThreadTest {
         final Consumer<byte[], byte[]> consumer = EasyMock.createNiceMock(Consumer.class);
         final TaskManager taskManager = mockTaskManagerCommit(consumer, 1, 0);
 
-        final StreamThread.StreamsMetricsThreadImpl streamsMetrics
-            = new StreamThread.StreamsMetricsThreadImpl(metrics, "");
+        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, clientId);
         final StreamThread thread = new StreamThread(
             mockTime,
             config,
@@ -456,8 +501,7 @@ public class StreamThreadTest {
         final Consumer<byte[], byte[]> consumer = EasyMock.createNiceMock(Consumer.class);
         final TaskManager taskManager = mockTaskManagerCommit(consumer, 2, 1);
 
-        final StreamThread.StreamsMetricsThreadImpl streamsMetrics
-            = new StreamThread.StreamsMetricsThreadImpl(metrics, "");
+        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, clientId);
         final StreamThread thread = new StreamThread(
             mockTime,
             config,
@@ -607,8 +651,7 @@ public class StreamThreadTest {
         EasyMock.expectLastCall();
         EasyMock.replay(taskManager, consumer);
 
-        final StreamThread.StreamsMetricsThreadImpl streamsMetrics
-            = new StreamThread.StreamsMetricsThreadImpl(metrics, "");
+        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, clientId);
         final StreamThread thread = new StreamThread(
             mockTime,
             config,
@@ -641,8 +684,7 @@ public class StreamThreadTest {
         EasyMock.expectLastCall();
         EasyMock.replay(taskManager, consumer);
 
-        final StreamThread.StreamsMetricsThreadImpl streamsMetrics
-            = new StreamThread.StreamsMetricsThreadImpl(metrics, "");
+        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, clientId);
         final StreamThread thread = new StreamThread(
             mockTime,
             config,
@@ -662,6 +704,85 @@ public class StreamThreadTest {
     }
 
     @Test
+    public void shouldNotThrowWhenPendingShutdownInRunOnce() {
+        mockRunOnce(true);
+    }
+
+    @Test
+    public void shouldNotThrowWithoutPendingShutdownInRunOnce() {
+        // A reference test to verify that without intermediate shutdown the runOnce should pass
+        // without any exception.
+        mockRunOnce(false);
+    }
+
+    private void mockRunOnce(final boolean shutdownOnPoll) {
+        final Collection<TopicPartition> assignedPartitions = Collections.singletonList(t1p1);
+        class MockStreamThreadConsumer<K, V> extends MockConsumer<K, V> {
+
+            private StreamThread streamThread;
+
+            private MockStreamThreadConsumer(final OffsetResetStrategy offsetResetStrategy) {
+                super(offsetResetStrategy);
+            }
+
+            @Override
+            public synchronized ConsumerRecords<K, V> poll(final Duration timeout) {
+                assertNotNull(streamThread);
+                if (shutdownOnPoll) {
+                    streamThread.shutdown();
+                }
+                streamThread.rebalanceListener.onPartitionsAssigned(assignedPartitions);
+                return super.poll(timeout);
+            }
+
+            private void setStreamThread(final StreamThread streamThread) {
+                this.streamThread = streamThread;
+            }
+        }
+
+        final MockStreamThreadConsumer<byte[], byte[]> mockStreamThreadConsumer =
+            new MockStreamThreadConsumer<>(OffsetResetStrategy.EARLIEST);
+
+        final TaskManager taskManager = new TaskManager(new MockChangelogReader(),
+                                                        processId,
+                                                        "log-prefix",
+                                                        mockStreamThreadConsumer,
+                                                        streamsMetadataState,
+                                                        null,
+                                                        null,
+                                                        null,
+                                                        new AssignedStreamsTasks(new LogContext()),
+                                                        new AssignedStandbyTasks(new LogContext()));
+        taskManager.setConsumer(mockStreamThreadConsumer);
+        taskManager.setAssignmentMetadata(Collections.emptyMap(), Collections.emptyMap());
+
+        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, clientId);
+        final StreamThread thread = new StreamThread(
+            mockTime,
+            config,
+            null,
+            mockStreamThreadConsumer,
+            mockStreamThreadConsumer,
+            null,
+            taskManager,
+            streamsMetrics,
+            internalTopologyBuilder,
+            clientId,
+            new LogContext(""),
+            new AtomicInteger()
+        ).updateThreadMetadata(getSharedAdminClientId(clientId));
+
+        mockStreamThreadConsumer.setStreamThread(thread);
+        mockStreamThreadConsumer.assign(assignedPartitions);
+        mockStreamThreadConsumer.updateBeginningOffsets(Collections.singletonMap(t1p1, 0L));
+
+        addRecord(mockStreamThreadConsumer, 1L, 0L);
+        thread.setState(StreamThread.State.STARTING);
+        thread.setState(StreamThread.State.PARTITIONS_REVOKED);
+        thread.runOnce();
+    }
+
+    @Test
     public void shouldOnlyShutdownOnce() {
         final Consumer<byte[], byte[]> consumer = EasyMock.createNiceMock(Consumer.class);
         final TaskManager taskManager = EasyMock.createNiceMock(TaskManager.class);
@@ -669,8 +790,7 @@ public class StreamThreadTest {
         EasyMock.expectLastCall();
         EasyMock.replay(taskManager, consumer);
 
-        final StreamThread.StreamsMetricsThreadImpl streamsMetrics
-            = new StreamThread.StreamsMetricsThreadImpl(metrics, "");
+        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, clientId);
         final StreamThread thread = new StreamThread(
             mockTime,
             config,
@@ -1022,6 +1142,61 @@ public class StreamThreadTest {
         assertEquals(10L, store1.approximateNumEntries());
         assertEquals(5L, store2.approximateNumEntries());
         assertEquals(0, thread.standbyRecords().size());
+    }
+
+    @Test
+    public void shouldCreateStandbyTask() {
+        setupInternalTopologyWithoutState();
+        internalTopologyBuilder.addStateStore(new MockKeyValueStoreBuilder("myStore", true), "processor1");
+
+        final StandbyTask standbyTask = createStandbyTask();
+
+        assertThat(standbyTask, not(nullValue()));
+    }
+
+    @Test
+    public void shouldNotCreateStandbyTaskWithoutStateStores() {
+        setupInternalTopologyWithoutState();
+
+        final StandbyTask standbyTask = createStandbyTask();
+
+        assertThat(standbyTask, nullValue());
+    }
+
+    @Test
+    public void shouldNotCreateStandbyTaskIfStateStoresHaveLoggingDisabled() {
+        setupInternalTopologyWithoutState();
+        final StoreBuilder storeBuilder = new MockKeyValueStoreBuilder("myStore", true);
+        storeBuilder.withLoggingDisabled();
+        internalTopologyBuilder.addStateStore(storeBuilder, "processor1");
+
+        final StandbyTask standbyTask = createStandbyTask();
+
+        assertThat(standbyTask, nullValue());
+    }
+
+    private void setupInternalTopologyWithoutState() {
+        final MockProcessor mockProcessor = new MockProcessor();
+        internalTopologyBuilder.addSource(null, "source1", null, null, null, topic1);
+        internalTopologyBuilder.addProcessor("processor1", () -> mockProcessor, "source1");
+    }
+
+    private StandbyTask createStandbyTask() {
+        final LogContext logContext = new LogContext("test");
+        final Logger log = logContext.logger(StreamThreadTest.class);
+        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, clientId);
+        final StreamThread.StandbyTaskCreator standbyTaskCreator = new StreamThread.StandbyTaskCreator(
+            internalTopologyBuilder,
+            config,
+            streamsMetrics,
+            stateDirectory,
+            new MockChangelogReader(),
+            mockTime,
+            log);
+        return standbyTaskCreator.createTask(
+            new MockConsumer<>(OffsetResetStrategy.EARLIEST),
+            new TaskId(1, 2),
+            Collections.emptySet());
     }
 
     @Test
@@ -1446,8 +1621,7 @@ public class StreamThreadTest {
         final Consumer<byte[], byte[]> consumer = EasyMock.createNiceMock(Consumer.class);
         final TaskManager taskManager = mockTaskManagerCommit(consumer, 1, 0);
 
-        final StreamThread.StreamsMetricsThreadImpl streamsMetrics
-            = new StreamThread.StreamsMetricsThreadImpl(metrics, "");
+        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, clientId);
         final StreamThread thread = new StreamThread(
                 mockTime,
                 config,
@@ -1486,8 +1660,7 @@ public class StreamThreadTest {
         final Consumer<byte[], byte[]> consumer = EasyMock.createNiceMock(Consumer.class);
         final TaskManager taskManager = EasyMock.createNiceMock(TaskManager.class);
 
-        final StreamThread.StreamsMetricsThreadImpl streamsMetrics
-            = new StreamThread.StreamsMetricsThreadImpl(metrics, "");
+        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, clientId);
         final StreamThread thread = new StreamThread(
                 mockTime,
                 config,

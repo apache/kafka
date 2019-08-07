@@ -18,7 +18,6 @@ package org.apache.kafka.clients.producer.internals;
 
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.common.KafkaException;
-import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.requests.MetadataRequest;
 import org.apache.kafka.common.requests.MetadataResponse;
@@ -96,7 +95,8 @@ public class ProducerMetadata extends Metadata {
         long currentTimeMs = time.milliseconds();
         long deadlineMs = currentTimeMs + timeoutMs < 0 ? Long.MAX_VALUE : currentTimeMs + timeoutMs;
         time.waitObject(this, () -> {
-            maybeThrowException();
+            // Throw fatal exceptions, if there are any. Recoverable topic errors will be handled by the caller.
+            maybeThrowFatalException();
             return updateVersion() > lastVersion || isClosed();
         }, deadlineMs);
 
@@ -111,9 +111,9 @@ public class ProducerMetadata extends Metadata {
     }
 
     @Override
-    public synchronized void failedUpdate(long now, AuthenticationException authenticationException) {
-        super.failedUpdate(now, authenticationException);
-        if (authenticationException != null)
+    public synchronized void failedUpdate(long now, KafkaException fatalException) {
+        super.failedUpdate(now, fatalException);
+        if (fatalException != null)
             notifyAll();
     }
 

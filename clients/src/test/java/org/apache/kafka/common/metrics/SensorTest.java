@@ -20,7 +20,7 @@ import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.metrics.stats.Avg;
 import org.apache.kafka.common.metrics.stats.Meter;
 import org.apache.kafka.common.metrics.stats.Rate;
-import org.apache.kafka.common.metrics.stats.Sum;
+import org.apache.kafka.common.metrics.stats.WindowedSum;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
@@ -128,7 +128,7 @@ public class SensorTest {
         }
 
         // note that adding a different metric with the same name is also a no-op
-        assertTrue(sensor.add(metrics.metricName("test-metric", "test-group"), new Sum()));
+        assertTrue(sensor.add(metrics.metricName("test-metric", "test-group"), new WindowedSum()));
 
         // so after all this, we still just have the original metric registered
         assertEquals(1, sensor.metrics().size());

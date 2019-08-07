@@ -24,7 +24,7 @@
       "about": "The top-level error code." },
     { "name": "RemainingPartitions", "type": "[]RemainingPartition", "versions": "0+",
       "about": "The partitions that the broker still leads.", "fields": [
-      { "name": "TopicName", "type": "string", "versions": "0+", "mapKey": true,
+      { "name": "TopicName", "type": "string", "versions": "0+", "mapKey": true, "entityType": "topicName",
         "about": "The name of the topic." },
       { "name": "PartitionIndex", "type": "int32", "versions": "0+", "mapKey": true,
         "about": "The index of the partition." }

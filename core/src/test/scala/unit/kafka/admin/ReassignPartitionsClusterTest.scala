@@ -24,8 +24,7 @@ import kafka.zk.{ReassignPartitionsZNode, ZkVersion, ZooKeeperTestHarness}
 import org.junit.Assert.{assertEquals, assertTrue}
 import org.junit.{After, Before, Test}
 import kafka.admin.ReplicationQuotaUtils._
-import org.apache.kafka.clients.admin.AdminClientConfig
-import org.apache.kafka.clients.admin.{AdminClient => JAdminClient}
+import org.apache.kafka.clients.admin.{Admin, AdminClient, AdminClientConfig}
 import org.apache.kafka.common.{TopicPartition, TopicPartitionReplica}
 
 import scala.collection.JavaConverters._
@@ -41,7 +40,7 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
   var servers: Seq[KafkaServer] = null
   val topicName = "my-topic"
   val delayMs = 1000
-  var adminClient: JAdminClient = null
+  var adminClient: Admin = null
 
   def zkUpdateDelay(): Unit = Thread.sleep(delayMs)
 
@@ -59,11 +58,11 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
     }.map(c => createServer(KafkaConfig.fromProps(c)))
   }
 
-  def createAdminClient(servers: Seq[KafkaServer]): JAdminClient = {
+  def createAdminClient(servers: Seq[KafkaServer]): Admin = {
     val props = new Properties()
     props.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, TestUtils.getBrokerListStrFromServers(servers))
     props.put(AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG, "10000")
-    JAdminClient.create(props)
+    AdminClient.create(props)
   }
 
   def getRandomLogDirAssignment(brokerId: Int): String = {
@@ -99,15 +98,15 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
     val newLeaderServer = servers.find(_.config.brokerId == 101).get
 
     TestUtils.waitUntilTrue (
-      () => newLeaderServer.replicaManager.getPartition(topicPartition).flatMap(_.leaderReplicaIfLocal).isDefined,
+      () => newLeaderServer.replicaManager.nonOfflinePartition(topicPartition).flatMap(_.leaderLogIfLocal).isDefined,
       "broker 101 should be the new leader", pause = 1L
     )
 
-    assertEquals(100, newLeaderServer.replicaManager.localReplicaOrException(topicPartition)
-      .highWatermark.messageOffset)
+    assertEquals(100, newLeaderServer.replicaManager.localLogOrException(topicPartition)
+      .highWatermark)
     val newFollowerServer = servers.find(_.config.brokerId == 102).get
-    TestUtils.waitUntilTrue(() => newFollowerServer.replicaManager.localReplicaOrException(topicPartition)
-      .highWatermark.messageOffset == 100,
+    TestUtils.waitUntilTrue(() => newFollowerServer.replicaManager.localLogOrException(topicPartition)
+      .highWatermark == 100,
       "partition follower's highWatermark should be 100")
   }
 

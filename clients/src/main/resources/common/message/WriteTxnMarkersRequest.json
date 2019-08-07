@@ -21,7 +21,7 @@
   "fields": [
     { "name": "Markers", "type": "[]WritableTxnMarker", "versions": "0+",
       "about": "The transaction markers to be written.", "fields": [
-      { "name": "ProducerId", "type": "int64", "versions": "0+",
+      { "name": "ProducerId", "type": "int64", "versions": "0+", "entityType": "producerId",
         "about": "The current producer ID."},
       { "name": "ProducerEpoch", "type": "int16", "versions": "0+",
         "about": "The current epoch associated with the producer ID." },
@@ -29,7 +29,7 @@
         "about": "The result of the transaction to write to the partitions (false = ABORT, true = COMMIT)." },
       { "name": "Topics", "type": "[]WritableTxnMarkerTopic", "versions": "0+",
         "about": "Each topic that we want to write transaction marker(s) for.", "fields": [
-        { "name": "Name", "type": "string", "versions": "0+",
+        { "name": "Name", "type": "string", "versions": "0+", "entityType": "topicName",
           "about": "The topic name." },
         { "name": "PartitionIndexes", "type": "[]int32", "versions": "0+",
           "about": "The indexes of the partitions to write transaction markers for." }

@@ -55,6 +55,7 @@ import static org.easymock.EasyMock.verify;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 @RunWith(EasyMockRunner.class)
@@ -241,6 +242,14 @@ public class MeteredKeyValueStoreTest {
         assertTrue(metered.setFlushListener(null, false));
 
         verify(cachedKeyValueStore);
+    }
+
+    @Test
+    public void shouldNotThrowNullPointerExceptionIfGetReturnsNull() {
+        expect(inner.get(Bytes.wrap("a".getBytes()))).andReturn(null);
+
+        init();
+        assertNull(metered.get("a"));
     }
 
     @Test

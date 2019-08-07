@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.streams;
 
-import org.apache.kafka.clients.admin.AdminClient;
+import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
@@ -106,14 +106,14 @@ import static org.apache.kafka.streams.internals.ApiUtils.prepareMillisCheckFail
  * <p>
  * A simple example might look like this:
  * <pre>{@code
- * Map<String, Object> props = new HashMap<>();
+ * Properties props = new Properties();
  * props.put(StreamsConfig.APPLICATION_ID_CONFIG, "my-stream-processing-application");
  * props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
  * props.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass());
  * props.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
  *
  * StreamsBuilder builder = new StreamsBuilder();
- * builder.<String, String>stream("my-input-topic").mapValues(value -> value.length().toString()).to("my-output-topic");
+ * builder.<String, String>stream("my-input-topic").mapValues(value -> String.valueOf(value.length())).to("my-output-topic");
  *
  * KafkaStreams streams = new KafkaStreams(builder.build(), props);
  * streams.start();
@@ -141,7 +141,7 @@ public class KafkaStreams implements AutoCloseable {
     private final StreamsMetadataState streamsMetadataState;
     private final ScheduledExecutorService stateDirCleaner;
     private final QueryableStoreProvider queryableStoreProvider;
-    private final AdminClient adminClient;
+    private final Admin adminClient;
 
     private GlobalStreamThread globalStreamThread;
     private KafkaStreams.StateListener stateListener;
@@ -726,7 +726,8 @@ public class KafkaStreams implements AutoCloseable {
                                              streamsMetadataState,
                                              cacheSizePerThread,
                                              stateDirectory,
-                                             delegatingStateRestoreListener);
+                                             delegatingStateRestoreListener,
+                                             i + 1);
             threadState.put(threads[i].getId(), threads[i].state());
             storeProviders.add(new StreamThreadStateStoreProvider(threads[i]));
         }

@@ -29,9 +29,9 @@ import org.apache.kafka.common.serialization.Serde;
  * @param <K> the key type
  * @param <V> the value type
  */
-public class Grouped<K, V> {
+public class Grouped<K, V> implements NamedOperation<Grouped<K, V>> {
 
-    protected final  Serde<K> keySerde;
+    protected final Serde<K> keySerde;
     protected final Serde<V> valueSerde;
     protected final String name;
 
@@ -128,9 +128,10 @@ public class Grouped<K, V> {
      * Perform the grouping operation with the name for a repartition topic if required.  Note
      * that Kafka Streams does not always create repartition topics for grouping operations.
      *
-     * @param name the name used as part of the repartition topic name if required
+     * @param name the name used for the processor name and as part of the repartition topic name if required
      * @return a new {@link Grouped} instance configured with the name
      * */
+    @Override
     public Grouped<K, V> withName(final String name) {
         return new Grouped<>(name, keySerde, valueSerde);
     }

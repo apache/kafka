@@ -55,6 +55,8 @@ import java.util.stream.Collectors;
 public class MetadataResponse extends AbstractResponse {
     public static final int NO_CONTROLLER_ID = -1;
 
+    public static final int AUTHORIZED_OPERATIONS_OMITTED = Integer.MIN_VALUE;
+
     private MetadataResponseData data;
 
     public MetadataResponse(MetadataResponseData data) {
@@ -421,7 +423,8 @@ public class MetadataResponse extends AbstractResponse {
 
     public static MetadataResponse prepareResponse(int throttleTimeMs, List<Node> brokers, String clusterId,
                                                    int controllerId, List<TopicMetadata> topicMetadataList) {
-        return prepareResponse(throttleTimeMs, brokers, clusterId, controllerId, topicMetadataList, 0);
+        return prepareResponse(throttleTimeMs, brokers, clusterId, controllerId, topicMetadataList,
+                MetadataResponse.AUTHORIZED_OPERATIONS_OMITTED);
     }
 
     public static MetadataResponse prepareResponse(List<Node> brokers, String clusterId, int controllerId,

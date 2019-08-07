@@ -92,6 +92,11 @@ public class ConsumerMetadataTest {
                 new TopicPartition("bar", 0),
                 new TopicPartition("__consumer_offsets", 0)));
         testBasicSubscription(Utils.mkSet("foo", "bar"), Utils.mkSet("__consumer_offsets"));
+
+        subscription.assignFromUser(Utils.mkSet(
+                new TopicPartition("baz", 0),
+                new TopicPartition("__consumer_offsets", 0)));
+        testBasicSubscription(Utils.mkSet("baz"), Utils.mkSet("__consumer_offsets"));
     }
 
     @Test
@@ -159,8 +164,8 @@ public class ConsumerMetadataTest {
     private ConsumerMetadata newConsumerMetadata(boolean includeInternalTopics) {
         long refreshBackoffMs = 50;
         long expireMs = 50000;
-        return new ConsumerMetadata(refreshBackoffMs, expireMs, includeInternalTopics, subscription, new LogContext(),
-                new ClusterResourceListeners());
+        return new ConsumerMetadata(refreshBackoffMs, expireMs, includeInternalTopics, false,
+                subscription, new LogContext(), new ClusterResourceListeners());
     }
 
 }

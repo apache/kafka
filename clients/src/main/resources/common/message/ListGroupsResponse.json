@@ -27,7 +27,7 @@
       "about": "The error code, or 0 if there was no error." },
     { "name": "Groups", "type": "[]ListedGroup", "versions": "0+",
       "about": "Each group in the response.", "fields": [
-      { "name": "GroupId", "type": "string", "versions": "0+",
+      { "name": "GroupId", "type": "string", "versions": "0+", "entityType": "groupId",
         "about": "The group ID." },
       { "name": "ProtocolType", "type": "string", "versions": "0+",
         "about": "The group protocol type." }

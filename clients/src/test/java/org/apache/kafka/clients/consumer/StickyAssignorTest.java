@@ -16,9 +16,7 @@
  */
 package org.apache.kafka.clients.consumer;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
-
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -27,26 +25,43 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Optional;
 import java.util.Random;
 import java.util.Set;
 
-import org.apache.kafka.clients.consumer.internals.PartitionAssignor.Subscription;
+import org.apache.kafka.clients.consumer.StickyAssignor.ConsumerUserData;
+import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.Subscription;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.utils.CollectionUtils;
 import org.apache.kafka.common.utils.Utils;
+import org.junit.Before;
 import org.junit.Test;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 
 public class StickyAssignorTest {
 
     private StickyAssignor assignor = new StickyAssignor();
+    private String consumerId = "consumer";
+    private Map<String, Subscription> subscriptions;
+    private String topic = "topic";
+
+    @Before
+    public void setUp() {
+        if (subscriptions != null) {
+            subscriptions.clear();
+        } else {
+            subscriptions = new HashMap<>();
+        }
+    }
 
     @Test
     public void testOneConsumerNoTopic() {
-        String consumerId = "consumer";
-
         Map<String, Integer> partitionsPerTopic = new HashMap<>();
-        Map<String, Subscription> subscriptions =
-                Collections.singletonMap(consumerId, new Subscription(Collections.<String>emptyList()));
+        subscriptions = Collections.singletonMap(consumerId, new Subscription(Collections.emptyList()));
 
         Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic, subscriptions);
         assertEquals(Collections.singleton(consumerId), assignment.keySet());
@@ -58,12 +73,9 @@ public class StickyAssignorTest {
 
     @Test
     public void testOneConsumerNonexistentTopic() {
-        String topic = "topic";
-        String consumerId = "consumer";
-
         Map<String, Integer> partitionsPerTopic = new HashMap<>();
         partitionsPerTopic.put(topic, 0);
-        Map<String, Subscription> subscriptions = Collections.singletonMap(consumerId, new Subscription(topics(topic)));
+        subscriptions = Collections.singletonMap(consumerId, new Subscription(topics(topic)));
 
         Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic, subscriptions);
 
@@ -76,12 +88,9 @@ public class StickyAssignorTest {
 
     @Test
     public void testOneConsumerOneTopic() {
-        String topic = "topic";
-        String consumerId = "consumer";
-
         Map<String, Integer> partitionsPerTopic = new HashMap<>();
         partitionsPerTopic.put(topic, 3);
-        Map<String, Subscription> subscriptions = Collections.singletonMap(consumerId, new Subscription(topics(topic)));
+        subscriptions = Collections.singletonMap(consumerId, new Subscription(topics(topic)));
 
         Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic, subscriptions);
         assertEquals(partitions(tp(topic, 0), tp(topic, 1), tp(topic, 2)), assignment.get(consumerId));
@@ -92,14 +101,12 @@ public class StickyAssignorTest {
 
     @Test
     public void testOnlyAssignsPartitionsFromSubscribedTopics() {
-        String topic = "topic";
         String otherTopic = "other";
-        String consumerId = "consumer";
 
         Map<String, Integer> partitionsPerTopic = new HashMap<>();
         partitionsPerTopic.put(topic, 3);
         partitionsPerTopic.put(otherTopic, 3);
-        Map<String, Subscription> subscriptions = Collections.singletonMap(consumerId, new Subscription(topics(topic)));
+        subscriptions = Collections.singletonMap(consumerId, new Subscription(topics(topic)));
 
         Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic, subscriptions);
         assertEquals(partitions(tp(topic, 0), tp(topic, 1), tp(topic, 2)), assignment.get(consumerId));
@@ -112,12 +119,11 @@ public class StickyAssignorTest {
     public void testOneConsumerMultipleTopics() {
         String topic1 = "topic1";
         String topic2 = "topic2";
-        String consumerId = "consumer";
 
         Map<String, Integer> partitionsPerTopic = new HashMap<>();
         partitionsPerTopic.put(topic1, 1);
         partitionsPerTopic.put(topic2, 2);
-        Map<String, Subscription> subscriptions = Collections.singletonMap(consumerId, new Subscription(topics(topic1, topic2)));
+        subscriptions = Collections.singletonMap(consumerId, new Subscription(topics(topic1, topic2)));
 
         Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic, subscriptions);
         assertEquals(partitions(tp(topic1, 0), tp(topic2, 0), tp(topic2, 1)), assignment.get(consumerId));
@@ -128,14 +134,12 @@ public class StickyAssignorTest {
 
     @Test
     public void testTwoConsumersOneTopicOnePartition() {
-        String topic = "topic";
         String consumer1 = "consumer1";
         String consumer2 = "consumer2";
 
         Map<String, Integer> partitionsPerTopic = new HashMap<>();
         partitionsPerTopic.put(topic, 1);
 
-        Map<String, Subscription> subscriptions = new HashMap<>();
         subscriptions.put(consumer1, new Subscription(topics(topic)));
         subscriptions.put(consumer2, new Subscription(topics(topic)));
 
@@ -149,14 +153,12 @@ public class StickyAssignorTest {
 
     @Test
     public void testTwoConsumersOneTopicTwoPartitions() {
-        String topic = "topic";
         String consumer1 = "consumer1";
         String consumer2 = "consumer2";
 
         Map<String, Integer> partitionsPerTopic = new HashMap<>();
         partitionsPerTopic.put(topic, 2);
 
-        Map<String, Subscription> subscriptions = new HashMap<>();
         subscriptions.put(consumer1, new Subscription(topics(topic)));
         subscriptions.put(consumer2, new Subscription(topics(topic)));
 
@@ -180,7 +182,6 @@ public class StickyAssignorTest {
         partitionsPerTopic.put(topic1, 3);
         partitionsPerTopic.put(topic2, 2);
 
-        Map<String, Subscription> subscriptions = new HashMap<>();
         subscriptions.put(consumer1, new Subscription(topics(topic1)));
         subscriptions.put(consumer2, new Subscription(topics(topic1, topic2)));
         subscriptions.put(consumer3, new Subscription(topics(topic1)));
@@ -205,7 +206,6 @@ public class StickyAssignorTest {
         partitionsPerTopic.put(topic1, 3);
         partitionsPerTopic.put(topic2, 3);
 
-        Map<String, Subscription> subscriptions = new HashMap<>();
         subscriptions.put(consumer1, new Subscription(topics(topic1, topic2)));
         subscriptions.put(consumer2, new Subscription(topics(topic1, topic2)));
 
@@ -219,12 +219,10 @@ public class StickyAssignorTest {
 
     @Test
     public void testAddRemoveConsumerOneTopic() {
-        String topic = "topic";
-        String consumer1 = "consumer";
+        String consumer1 = "consumer1";
 
         Map<String, Integer> partitionsPerTopic = new HashMap<>();
         partitionsPerTopic.put(topic, 3);
-        Map<String, Subscription> subscriptions = new HashMap<>();
         subscriptions.put(consumer1, new Subscription(topics(topic)));
 
         Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic, subscriptions);
@@ -235,10 +233,11 @@ public class StickyAssignorTest {
 
         String consumer2 = "consumer2";
         subscriptions.put(consumer1,
-                new Subscription(topics(topic), StickyAssignor.serializeTopicPartitionAssignment(assignment.get(consumer1))));
+                new Subscription(topics(topic), StickyAssignor.serializeTopicPartitionAssignment(
+                        new ConsumerUserData(assignment.get(consumer1), Optional.of(assignor.generation())))));
         subscriptions.put(consumer2, new Subscription(topics(topic)));
         assignment = assignor.assign(partitionsPerTopic, subscriptions);
-        assertEquals(partitions(tp(topic, 1), tp(topic, 2)), assignment.get(consumer1));
+        assertEquals(partitions(tp(topic, 2), tp(topic, 1)), assignment.get(consumer1));
         assertEquals(partitions(tp(topic, 0)), assignment.get(consumer2));
 
         verifyValidityAndBalance(subscriptions, assignment);
@@ -247,11 +246,11 @@ public class StickyAssignorTest {
 
         subscriptions.remove(consumer1);
         subscriptions.put(consumer2,
-                new Subscription(topics(topic), StickyAssignor.serializeTopicPartitionAssignment(assignment.get(consumer2))));
+                new Subscription(topics(topic), StickyAssignor.serializeTopicPartitionAssignment(
+                        new ConsumerUserData(assignment.get(consumer2), Optional.of(assignor.generation())))));
         assignment = assignor.assign(partitionsPerTopic, subscriptions);
-        assertTrue(assignment.get(consumer2).contains(tp(topic, 0)));
-        assertTrue(assignment.get(consumer2).contains(tp(topic, 1)));
-        assertTrue(assignment.get(consumer2).contains(tp(topic, 2)));
+        assertEquals(new HashSet<>(partitions(tp(topic, 2), tp(topic, 1), tp(topic, 0))),
+                new HashSet<>(assignment.get(consumer2)));
 
         verifyValidityAndBalance(subscriptions, assignment);
         assertTrue(isFullyBalanced(assignment));
@@ -283,11 +282,14 @@ public class StickyAssignorTest {
         for (int i = 1; i <= 5; i++)
             partitionsPerTopic.put(String.format("topic%d", i), (i % 2) + 1);
 
-        Map<String, Subscription> subscriptions = new HashMap<>();
-        subscriptions.put("consumer1", new Subscription(topics("topic1", "topic2", "topic3", "topic4", "topic5")));
-        subscriptions.put("consumer2", new Subscription(topics("topic1", "topic3", "topic5")));
-        subscriptions.put("consumer3", new Subscription(topics("topic1", "topic3", "topic5")));
-        subscriptions.put("consumer4", new Subscription(topics("topic1", "topic2", "topic3", "topic4", "topic5")));
+        subscriptions.put("consumer1",
+                new Subscription(topics("topic1", "topic2", "topic3", "topic4", "topic5")));
+        subscriptions.put("consumer2",
+                new Subscription(topics("topic1", "topic3", "topic5")));
+        subscriptions.put("consumer3",
+                new Subscription(topics("topic1", "topic3", "topic5")));
+        subscriptions.put("consumer4",
+                new Subscription(topics("topic1", "topic2", "topic3", "topic4", "topic5")));
 
         Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic, subscriptions);
         verifyValidityAndBalance(subscriptions, assignment);
@@ -295,13 +297,11 @@ public class StickyAssignorTest {
 
     @Test
     public void testAddRemoveTopicTwoConsumers() {
-        String topic = "topic";
         String consumer1 = "consumer";
         String consumer2 = "consumer2";
 
         Map<String, Integer> partitionsPerTopic = new HashMap<>();
         partitionsPerTopic.put(topic, 3);
-        Map<String, Subscription> subscriptions = new HashMap<>();
         subscriptions.put(consumer1, new Subscription(topics(topic)));
         subscriptions.put(consumer2, new Subscription(topics(topic)));
 
@@ -318,9 +318,11 @@ public class StickyAssignorTest {
         String topic2 = "topic2";
         partitionsPerTopic.put(topic2, 3);
         subscriptions.put(consumer1,
-                new Subscription(topics(topic, topic2), StickyAssignor.serializeTopicPartitionAssignment(assignment.get(consumer1))));
+                new Subscription(topics(topic, topic2), StickyAssignor.serializeTopicPartitionAssignment(
+                        new ConsumerUserData(assignment.get(consumer1), Optional.of(assignor.generation())))));
         subscriptions.put(consumer2,
-                new Subscription(topics(topic, topic2), StickyAssignor.serializeTopicPartitionAssignment(assignment.get(consumer2))));
+                new Subscription(topics(topic, topic2), StickyAssignor.serializeTopicPartitionAssignment(
+                        new ConsumerUserData(assignment.get(consumer2), Optional.of(assignor.generation())))));
         assignment = assignor.assign(partitionsPerTopic, subscriptions);
         // verify balance
         verifyValidityAndBalance(subscriptions, assignment);
@@ -335,9 +337,11 @@ public class StickyAssignorTest {
 
         partitionsPerTopic.remove(topic);
         subscriptions.put(consumer1,
-                new Subscription(topics(topic2), StickyAssignor.serializeTopicPartitionAssignment(assignment.get(consumer1))));
+                new Subscription(topics(topic2), StickyAssignor.serializeTopicPartitionAssignment(
+                        new ConsumerUserData(assignment.get(consumer1), Optional.of(assignor.generation())))));
         subscriptions.put(consumer2,
-                new Subscription(topics(topic2), StickyAssignor.serializeTopicPartitionAssignment(assignment.get(consumer2))));
+                new Subscription(topics(topic2), StickyAssignor.serializeTopicPartitionAssignment(
+                        new ConsumerUserData(assignment.get(consumer2), Optional.of(assignor.generation())))));
         assignment = assignor.assign(partitionsPerTopic, subscriptions);
         // verify balance
         verifyValidityAndBalance(subscriptions, assignment);
@@ -358,9 +362,8 @@ public class StickyAssignorTest {
         for (int i = 1; i < 20; i++)
             partitionsPerTopic.put(getTopicName(i, 20), i);
 
-        Map<String, Subscription> subscriptions = new HashMap<>();
         for (int i = 1; i < 20; i++) {
-            List<String> topics = new ArrayList<String>();
+            List<String> topics = new ArrayList<>();
             for (int j = 1; j <= i; j++)
                 topics.add(getTopicName(j, 20));
             subscriptions.put(getConsumerName(i, 20), new Subscription(topics));
@@ -372,7 +375,8 @@ public class StickyAssignorTest {
         for (int i = 1; i < 20; i++) {
             String consumer = getConsumerName(i, 20);
             subscriptions.put(consumer,
-                    new Subscription(subscriptions.get(consumer).topics(), StickyAssignor.serializeTopicPartitionAssignment(assignment.get(consumer))));
+                    new Subscription(subscriptions.get(consumer).topics(),
+                            StickyAssignor.serializeTopicPartitionAssignment(new ConsumerUserData(assignment.get(consumer), Optional.of(assignor.generation())))));
         }
         subscriptions.remove("consumer10");
 
@@ -386,9 +390,9 @@ public class StickyAssignorTest {
         Map<String, Integer> partitionsPerTopic = new HashMap<>();
         partitionsPerTopic.put("topic", 20);
 
-        Map<String, Subscription> subscriptions = new HashMap<>();
         for (int i = 1; i < 10; i++)
-            subscriptions.put(getConsumerName(i, 10), new Subscription(topics("topic")));
+            subscriptions.put(getConsumerName(i, 10),
+                    new Subscription(topics("topic")));
 
         Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic, subscriptions);
         verifyValidityAndBalance(subscriptions, assignment);
@@ -407,9 +411,8 @@ public class StickyAssignorTest {
         for (int i = 1; i < 15; i++)
             partitionsPerTopic.put(getTopicName(i, 15), i);
 
-        Map<String, Subscription> subscriptions = new HashMap<>();
         for (int i = 1; i < 9; i++) {
-            List<String> topics = new ArrayList<String>();
+            List<String> topics = new ArrayList<>();
             for (int j = 1; j <= partitionsPerTopic.size(); j++)
                 topics.add(getTopicName(j, 15));
             subscriptions.put(getConsumerName(i, 9), new Subscription(topics));
@@ -421,7 +424,8 @@ public class StickyAssignorTest {
         for (int i = 1; i < 9; i++) {
             String consumer = getConsumerName(i, 9);
             subscriptions.put(consumer,
-                    new Subscription(subscriptions.get(consumer).topics(), StickyAssignor.serializeTopicPartitionAssignment(assignment.get(consumer))));
+                    new Subscription(subscriptions.get(consumer).topics(),
+                            StickyAssignor.serializeTopicPartitionAssignment(new ConsumerUserData(assignment.get(consumer), Optional.of(assignor.generation())))));
         }
         subscriptions.remove(getConsumerName(5, 9));
 
@@ -440,9 +444,8 @@ public class StickyAssignorTest {
         for (int i = 0; i < topicCount; i++)
             partitionsPerTopic.put(getTopicName(i, topicCount), rand.nextInt(10) + 1);
 
-        Map<String, Subscription> subscriptions = new HashMap<>();
         for (int i = 0; i < consumerCount; i++) {
-            List<String> topics = new ArrayList<String>();
+            List<String> topics = new ArrayList<>();
             for (int j = 0; j < rand.nextInt(20); j++)
                 topics.add(getTopicName(rand.nextInt(topicCount), topicCount));
             subscriptions.put(getConsumerName(i, consumerCount), new Subscription(topics));
@@ -454,7 +457,8 @@ public class StickyAssignorTest {
         for (int i = 1; i < consumerCount; i++) {
             String consumer = getConsumerName(i, consumerCount);
             subscriptions.put(consumer,
-                    new Subscription(subscriptions.get(consumer).topics(), StickyAssignor.serializeTopicPartitionAssignment(assignment.get(consumer))));
+                    new Subscription(subscriptions.get(consumer).topics(),
+                            StickyAssignor.serializeTopicPartitionAssignment(new ConsumerUserData(assignment.get(consumer), Optional.of(assignor.generation())))));
         }
         for (int i = 0; i < 50; ++i) {
             String c = getConsumerName(rand.nextInt(consumerCount), consumerCount);
@@ -472,9 +476,8 @@ public class StickyAssignorTest {
         for (int i = 1; i < 5; i++)
             partitionsPerTopic.put(getTopicName(i, 5), 1);
 
-        Map<String, Subscription> subscriptions = new HashMap<>();
         for (int i = 0; i < 3; i++) {
-            List<String> topics = new ArrayList<String>();
+            List<String> topics = new ArrayList<>();
             for (int j = i; j <= 3 * i - 2; j++)
                 topics.add(getTopicName(j, 5));
             subscriptions.put(getConsumerName(i, 3), new Subscription(topics));
@@ -510,7 +513,6 @@ public class StickyAssignorTest {
 
             int numConsumers = minNumConsumers + new Random().nextInt(maxNumConsumers - minNumConsumers);
 
-            Map<String, Subscription> subscriptions = new HashMap<>();
             for (int i = 0; i < numConsumers; ++i) {
                 List<String> sub = Utils.sorted(getRandomSublist(topics));
                 subscriptions.put(getConsumerName(i, maxNumConsumers), new Subscription(sub));
@@ -526,7 +528,7 @@ public class StickyAssignorTest {
                 List<String> sub = Utils.sorted(getRandomSublist(topics));
                 String consumer = getConsumerName(i, maxNumConsumers);
                 subscriptions.put(consumer,
-                        new Subscription(sub, StickyAssignor.serializeTopicPartitionAssignment(assignment.get(consumer))));
+                        new Subscription(sub, StickyAssignor.serializeTopicPartitionAssignment(new ConsumerUserData(assignment.get(consumer), Optional.of(assignor.generation())))));
             }
 
             assignment = assignor.assign(partitionsPerTopic, subscriptions);
@@ -541,16 +543,18 @@ public class StickyAssignorTest {
         for (int i = 1; i <= 6; i++)
             partitionsPerTopic.put(String.format("topic%02d", i), 1);
 
-        Map<String, Subscription> subscriptions = new HashMap<>();
         subscriptions.put("consumer01",
                 new Subscription(topics("topic01", "topic02"),
-                        StickyAssignor.serializeTopicPartitionAssignment(partitions(tp("topic01", 0)))));
+                        StickyAssignor.serializeTopicPartitionAssignment(
+                                new ConsumerUserData(partitions(tp("topic01", 0)), Optional.of(assignor.generation())))));
         subscriptions.put("consumer02",
                 new Subscription(topics("topic01", "topic02", "topic03", "topic04"),
-                        StickyAssignor.serializeTopicPartitionAssignment(partitions(tp("topic02", 0), tp("topic03", 0)))));
+                        StickyAssignor.serializeTopicPartitionAssignment(
+                                new ConsumerUserData(partitions(tp("topic02", 0), tp("topic03", 0)), Optional.of(assignor.generation())))));
         subscriptions.put("consumer03",
                 new Subscription(topics("topic02", "topic03", "topic04", "topic05", "topic06"),
-                        StickyAssignor.serializeTopicPartitionAssignment(partitions(tp("topic04", 0), tp("topic05", 0), tp("topic06", 0)))));
+                        StickyAssignor.serializeTopicPartitionAssignment(
+                                new ConsumerUserData(partitions(tp("topic04", 0), tp("topic05", 0), tp("topic06", 0)), Optional.of(assignor.generation())))));
 
         Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic, subscriptions);
         verifyValidityAndBalance(subscriptions, assignment);
@@ -560,11 +564,15 @@ public class StickyAssignorTest {
     public void testStickiness() {
         Map<String, Integer> partitionsPerTopic = new HashMap<>();
         partitionsPerTopic.put("topic01", 3);
-        Map<String, Subscription> subscriptions = new HashMap<>();
-        subscriptions.put("consumer01", new Subscription(topics("topic01")));
-        subscriptions.put("consumer02", new Subscription(topics("topic01")));
-        subscriptions.put("consumer03", new Subscription(topics("topic01")));
-        subscriptions.put("consumer04", new Subscription(topics("topic01")));
+        String consumer1 = "consumer01";
+        String consumer2 = "consumer02";
+        String consumer3 = "consumer03";
+        String consumer4 = "consumer04";
+
+        subscriptions.put(consumer1, new Subscription(topics("topic01")));
+        subscriptions.put(consumer2, new Subscription(topics("topic01")));
+        subscriptions.put(consumer3, new Subscription(topics("topic01")));
+        subscriptions.put(consumer4, new Subscription(topics("topic01")));
 
         Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic, subscriptions);
         verifyValidityAndBalance(subscriptions, assignment);
@@ -581,16 +589,19 @@ public class StickyAssignorTest {
         }
 
         // removing the potential group leader
-        subscriptions.remove("consumer01");
-        subscriptions.put("consumer02",
+        subscriptions.remove(consumer1);
+        subscriptions.put(consumer2,
                 new Subscription(topics("topic01"),
-                        StickyAssignor.serializeTopicPartitionAssignment(assignment.get("consumer02"))));
-        subscriptions.put("consumer03",
+                        StickyAssignor.serializeTopicPartitionAssignment(
+                                new ConsumerUserData(assignment.get("consumer02"), Optional.of(assignor.generation())))));
+        subscriptions.put(consumer3,
                 new Subscription(topics("topic01"),
-                        StickyAssignor.serializeTopicPartitionAssignment(assignment.get("consumer03"))));
-        subscriptions.put("consumer04",
+                        StickyAssignor.serializeTopicPartitionAssignment(
+                                new ConsumerUserData(assignment.get("consumer03"), Optional.of(assignor.generation())))));
+        subscriptions.put(consumer4,
                 new Subscription(topics("topic01"),
-                        StickyAssignor.serializeTopicPartitionAssignment(assignment.get("consumer04"))));
+                        StickyAssignor.serializeTopicPartitionAssignment(
+                                new ConsumerUserData(assignment.get("consumer04"), Optional.of(assignor.generation())))));
 
         assignment = assignor.assign(partitionsPerTopic, subscriptions);
         verifyValidityAndBalance(subscriptions, assignment);
@@ -608,13 +619,10 @@ public class StickyAssignorTest {
 
     @Test
     public void testAssignmentUpdatedForDeletedTopic() {
-        String consumerId = "consumer";
-
         Map<String, Integer> partitionsPerTopic = new HashMap<>();
         partitionsPerTopic.put("topic01", 1);
         partitionsPerTopic.put("topic03", 100);
-        Map<String, Subscription> subscriptions =
-                Collections.singletonMap(consumerId, new Subscription(topics("topic01", "topic02", "topic03")));
+        subscriptions = Collections.singletonMap(consumerId, new Subscription(topics("topic01", "topic02", "topic03")));
 
         Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic, subscriptions);
         assertEquals(assignment.values().stream().mapToInt(topicPartitions -> topicPartitions.size()).sum(), 1 + 100);
@@ -624,18 +632,257 @@ public class StickyAssignorTest {
 
     @Test
     public void testNoExceptionThrownWhenOnlySubscribedTopicDeleted() {
-        String topic = "topic01";
-        String consumer = "consumer01";
         Map<String, Integer> partitionsPerTopic = new HashMap<>();
         partitionsPerTopic.put(topic, 3);
-        Map<String, Subscription> subscriptions = new HashMap<>();
-        subscriptions.put(consumer, new Subscription(topics(topic)));
+        subscriptions.put(consumerId, new Subscription(topics(topic)));
         Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic, subscriptions);
-        subscriptions.put(consumer, new Subscription(topics(topic), StickyAssignor.serializeTopicPartitionAssignment(assignment.get(consumer))));
+        subscriptions.put(consumerId,
+                new Subscription(topics(topic), StickyAssignor.serializeTopicPartitionAssignment(
+                        new ConsumerUserData(assignment.get(consumerId), Optional.of(1)))));
 
         assignment = assignor.assign(Collections.emptyMap(), subscriptions);
         assertEquals(assignment.size(), 1);
-        assertTrue(assignment.get(consumer).isEmpty());
+        assertTrue(assignment.get(consumerId).isEmpty());
+    }
+
+    @Test
+    public void testAssignmentWithMultipleGenerations1() {
+        String consumer1 = "consumer1";
+        String consumer2 = "consumer2";
+        String consumer3 = "consumer3";
+
+        Map<String, Integer> partitionsPerTopic = new HashMap<>();
+        partitionsPerTopic.put(topic, 6);
+        subscriptions.put(consumer1, new Subscription(topics(topic)));
+        subscriptions.put(consumer2, new Subscription(topics(topic)));
+        subscriptions.put(consumer3, new Subscription(topics(topic)));
+
+        Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic, subscriptions);
+        List<TopicPartition> r1partitions1 = assignment.get(consumer1);
+        List<TopicPartition> r1partitions2 = assignment.get(consumer2);
+        List<TopicPartition> r1partitions3 = assignment.get(consumer3);
+        assertTrue(r1partitions1.size() == 2 && r1partitions2.size() == 2 && r1partitions3.size() == 2);
+        verifyValidityAndBalance(subscriptions, assignment);
+        assertTrue(isFullyBalanced(assignment));
+
+        subscriptions.put(consumer1,
+                new Subscription(topics(topic), StickyAssignor.serializeTopicPartitionAssignment(
+                        new ConsumerUserData(r1partitions1, Optional.of(1)))));
+        subscriptions.put(consumer2,
+                new Subscription(topics(topic), StickyAssignor.serializeTopicPartitionAssignment(
+                        new ConsumerUserData(r1partitions2, Optional.of(1)))));
+        subscriptions.remove(consumer3);
+        assignment = assignor.assign(partitionsPerTopic, subscriptions);
+        List<TopicPartition> r2partitions1 = assignment.get(consumer1);
+        List<TopicPartition> r2partitions2 = assignment.get(consumer2);
+        assertTrue(r2partitions1.size() == 3 && r2partitions2.size() == 3);
+        assertTrue(r2partitions1.containsAll(r1partitions1));
+        assertTrue(r2partitions2.containsAll(r1partitions2));
+        verifyValidityAndBalance(subscriptions, assignment);
+        assertTrue(isFullyBalanced(assignment));
+        assertTrue(assignor.isSticky());
+
+        assertFalse(Collections.disjoint(r2partitions2, r1partitions3));
+        subscriptions.remove(consumer1);
+        subscriptions.put(consumer2,
+                new Subscription(topics(topic), StickyAssignor.serializeTopicPartitionAssignment(
+                        new ConsumerUserData(r2partitions2, Optional.of(2)))));
+        subscriptions.put(consumer3,
+                new Subscription(topics(topic), StickyAssignor.serializeTopicPartitionAssignment(
+                        new ConsumerUserData(r1partitions3, Optional.of(1)))));
+        assignment = assignor.assign(partitionsPerTopic, subscriptions);
+        List<TopicPartition> r3partitions2 = assignment.get(consumer2);
+        List<TopicPartition> r3partitions3 = assignment.get(consumer3);
+        assertTrue(r3partitions2.size() == 3 && r3partitions3.size() == 3);
+        assertTrue(Collections.disjoint(r3partitions2, r3partitions3));
+        verifyValidityAndBalance(subscriptions, assignment);
+        assertTrue(isFullyBalanced(assignment));
+        assertTrue(assignor.isSticky());
+    }
+
+    @Test
+    public void testAssignmentWithMultipleGenerations2() {
+        String consumer1 = "consumer1";
+        String consumer2 = "consumer2";
+        String consumer3 = "consumer3";
+
+        Map<String, Integer> partitionsPerTopic = new HashMap<>();
+        partitionsPerTopic.put(topic, 6);
+        subscriptions.put(consumer1, new Subscription(topics(topic)));
+        subscriptions.put(consumer2, new Subscription(topics(topic)));
+        subscriptions.put(consumer3, new Subscription(topics(topic)));
+
+        Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic, subscriptions);
+        List<TopicPartition> r1partitions1 = assignment.get(consumer1);
+        List<TopicPartition> r1partitions2 = assignment.get(consumer2);
+        List<TopicPartition> r1partitions3 = assignment.get(consumer3);
+        assertTrue(r1partitions1.size() == 2 && r1partitions2.size() == 2 && r1partitions3.size() == 2);
+        verifyValidityAndBalance(subscriptions, assignment);
+        assertTrue(isFullyBalanced(assignment));
+
+        subscriptions.remove(consumer1);
+        subscriptions.put(consumer2,
+                new Subscription(topics(topic), StickyAssignor.serializeTopicPartitionAssignment(
+                        new ConsumerUserData(r1partitions2, Optional.of(1)))));
+        subscriptions.remove(consumer3);
+        assignment = assignor.assign(partitionsPerTopic, subscriptions);
+        List<TopicPartition> r2partitions2 = assignment.get(consumer2);
+        assertEquals(6, r2partitions2.size());
+        assertTrue(r2partitions2.containsAll(r1partitions2));
+        verifyValidityAndBalance(subscriptions, assignment);
+        assertTrue(isFullyBalanced(assignment));
+        assertTrue(assignor.isSticky());
+
+        subscriptions.put(consumer1,
+                new Subscription(topics(topic), StickyAssignor.serializeTopicPartitionAssignment(
+                        new ConsumerUserData(r1partitions1, Optional.of(1)))));
+        subscriptions.put(consumer2,
+                new Subscription(topics(topic), StickyAssignor.serializeTopicPartitionAssignment(
+                        new ConsumerUserData(r2partitions2, Optional.of(2)))));
+        subscriptions.put(consumer3,
+                new Subscription(topics(topic), StickyAssignor.serializeTopicPartitionAssignment(
+                        new ConsumerUserData(r1partitions3, Optional.of(1)))));
+        assignment = assignor.assign(partitionsPerTopic, subscriptions);
+        List<TopicPartition> r3partitions1 = assignment.get(consumer1);
+        List<TopicPartition> r3partitions2 = assignment.get(consumer2);
+        List<TopicPartition> r3partitions3 = assignment.get(consumer3);
+        assertTrue(r3partitions1.size() == 2 && r3partitions2.size() == 2 && r3partitions3.size() == 2);
+        assertEquals(r1partitions1, r3partitions1);
+        assertEquals(r1partitions2, r3partitions2);
+        assertEquals(r1partitions3, r3partitions3);
+        verifyValidityAndBalance(subscriptions, assignment);
+        assertTrue(isFullyBalanced(assignment));
+        assertTrue(assignor.isSticky());
+    }
+
+    @Test
+    public void testAssignmentWithConflictingPreviousGenerations() {
+        String consumer1 = "consumer1";
+        String consumer2 = "consumer2";
+        String consumer3 = "consumer3";
+
+        Map<String, Integer> partitionsPerTopic = new HashMap<>();
+        partitionsPerTopic.put(topic, 6);
+        subscriptions.put(consumer1, new Subscription(topics(topic)));
+        subscriptions.put(consumer2, new Subscription(topics(topic)));
+        subscriptions.put(consumer3, new Subscription(topics(topic)));
+
+        TopicPartition tp0 = new TopicPartition(topic, 0);
+        TopicPartition tp1 = new TopicPartition(topic, 1);
+        TopicPartition tp2 = new TopicPartition(topic, 2);
+        TopicPartition tp3 = new TopicPartition(topic, 3);
+        TopicPartition tp4 = new TopicPartition(topic, 4);
+        TopicPartition tp5 = new TopicPartition(topic, 5);
+
+        List<TopicPartition> c1partitions0 = partitions(tp0, tp1, tp4);
+        List<TopicPartition> c2partitions0 = partitions(tp0, tp2, tp3);
+        List<TopicPartition> c3partitions0 = partitions(tp3, tp4, tp5);
+        subscriptions.put(consumer1,
+                new Subscription(topics(topic), StickyAssignor.serializeTopicPartitionAssignment(
+                        new ConsumerUserData(c1partitions0, Optional.of(1)))));
+        subscriptions.put(consumer2,
+                new Subscription(topics(topic), StickyAssignor.serializeTopicPartitionAssignment(
+                        new ConsumerUserData(c2partitions0, Optional.of(1)))));
+        subscriptions.put(consumer3,
+                new Subscription(topics(topic), StickyAssignor.serializeTopicPartitionAssignment(
+                        new ConsumerUserData(c3partitions0, Optional.of(2)))));
+        Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic, subscriptions);
+        List<TopicPartition> c1partitions = assignment.get(consumer1);
+        List<TopicPartition> c2partitions = assignment.get(consumer2);
+        List<TopicPartition> c3partitions = assignment.get(consumer3);
+
+        assertTrue(c1partitions.size() == 2 && c2partitions.size() == 2 && c3partitions.size() == 2);
+        assertTrue(c1partitions0.containsAll(c1partitions));
+        assertTrue(c2partitions0.containsAll(c2partitions));
+        assertTrue(c3partitions0.containsAll(c3partitions));
+        verifyValidityAndBalance(subscriptions, assignment);
+        assertTrue(isFullyBalanced(assignment));
+        assertTrue(assignor.isSticky());
+    }
+
+    @Test
+    public void testSchemaBackwardCompatibility() {
+        String consumer1 = "consumer1";
+        String consumer2 = "consumer2";
+        String consumer3 = "consumer3";
+
+        Map<String, Integer> partitionsPerTopic = new HashMap<>();
+        partitionsPerTopic.put(topic, 3);
+        subscriptions.put(consumer1, new Subscription(topics(topic)));
+        subscriptions.put(consumer2, new Subscription(topics(topic)));
+        subscriptions.put(consumer3, new Subscription(topics(topic)));
+
+        TopicPartition tp0 = new TopicPartition(topic, 0);
+        TopicPartition tp1 = new TopicPartition(topic, 1);
+        TopicPartition tp2 = new TopicPartition(topic, 2);
+
+        List<TopicPartition> c1partitions0 = partitions(tp0, tp2);
+        List<TopicPartition> c2partitions0 = partitions(tp1);
+        subscriptions.put(consumer1,
+                new Subscription(topics(topic), StickyAssignor.serializeTopicPartitionAssignment(
+                        new ConsumerUserData(c1partitions0, Optional.of(1)))));
+        subscriptions.put(consumer2,
+                new Subscription(topics(topic), serializeTopicPartitionAssignmentToOldSchema(c2partitions0)));
+        Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic, subscriptions);
+        List<TopicPartition> c1partitions = assignment.get(consumer1);
+        List<TopicPartition> c2partitions = assignment.get(consumer2);
+        List<TopicPartition> c3partitions = assignment.get(consumer3);
+
+        assertTrue(c1partitions.size() == 1 && c2partitions.size() == 1 && c3partitions.size() == 1);
+        assertTrue(c1partitions0.containsAll(c1partitions));
+        assertTrue(c2partitions0.containsAll(c2partitions));
+        verifyValidityAndBalance(subscriptions, assignment);
+        assertTrue(isFullyBalanced(assignment));
+        assertTrue(assignor.isSticky());
+    }
+
+    @Test
+    public void testConflictingPreviousAssignments() {
+        String consumer1 = "consumer1";
+        String consumer2 = "consumer2";
+
+        Map<String, Integer> partitionsPerTopic = new HashMap<>();
+        partitionsPerTopic.put(topic, 2);
+        subscriptions.put(consumer1, new Subscription(topics(topic)));
+        subscriptions.put(consumer2, new Subscription(topics(topic)));
+
+        TopicPartition tp0 = new TopicPartition(topic, 0);
+        TopicPartition tp1 = new TopicPartition(topic, 1);
+
+        // both c1 and c2 have partition 1 assigned to them in generation 1
+        List<TopicPartition> c1partitions0 = partitions(tp0, tp1);
+        List<TopicPartition> c2partitions0 = partitions(tp0, tp1);
+        subscriptions.put(consumer1,
+                new Subscription(topics(topic), StickyAssignor.serializeTopicPartitionAssignment(
+                        new ConsumerUserData(c1partitions0, Optional.of(1)))));
+        subscriptions.put(consumer2,
+                new Subscription(topics(topic), StickyAssignor.serializeTopicPartitionAssignment(
+                        new ConsumerUserData(c2partitions0, Optional.of(1)))));
+
+        Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic, subscriptions);
+        List<TopicPartition> c1partitions = assignment.get(consumer1);
+        List<TopicPartition> c2partitions = assignment.get(consumer2);
+
+        assertTrue(c1partitions.size() == 1 && c2partitions.size() == 1);
+        verifyValidityAndBalance(subscriptions, assignment);
+        assertTrue(isFullyBalanced(assignment));
+        assertTrue(assignor.isSticky());
+    }
+
+    private static ByteBuffer serializeTopicPartitionAssignmentToOldSchema(List<TopicPartition> partitions) {
+        Struct struct = new Struct(StickyAssignor.STICKY_ASSIGNOR_USER_DATA_V0);
+        List<Struct> topicAssignments = new ArrayList<>();
+        for (Map.Entry<String, List<Integer>> topicEntry : CollectionUtils.groupPartitionsByTopic(partitions).entrySet()) {
+            Struct topicAssignment = new Struct(StickyAssignor.TOPIC_ASSIGNMENT);
+            topicAssignment.set(StickyAssignor.TOPIC_KEY_NAME, topicEntry.getKey());
+            topicAssignment.set(StickyAssignor.PARTITIONS_KEY_NAME, topicEntry.getValue().toArray());
+            topicAssignments.add(topicAssignment);
+        }
+        struct.set(StickyAssignor.TOPIC_PARTITIONS_KEY_NAME, topicAssignments.toArray());
+        ByteBuffer buffer = ByteBuffer.allocate(StickyAssignor.STICKY_ASSIGNOR_USER_DATA_V0.sizeOf(struct));
+        StickyAssignor.STICKY_ASSIGNOR_USER_DATA_V0.write(buffer, struct);
+        buffer.flip();
+        return buffer;
     }
 
     private String getTopicName(int i, int maxNum) {

@@ -22,6 +22,7 @@ import java.util.{Date, Objects}
 import java.text.SimpleDateFormat
 import javax.management._
 import javax.management.remote._
+import javax.rmi.ssl.SslRMIClientSocketFactory
 
 import joptsimple.OptionParser
 
@@ -82,6 +83,16 @@ object JmxTool extends Logging {
       .describedAs("report-format")
       .ofType(classOf[java.lang.String])
       .defaultsTo("original")
+    val jmxAuthPropOpt = parser.accepts("jmx-auth-prop", "A mechanism to pass property in the form 'username=password' " +
+      "when enabling remote JMX with password authentication.")
+      .withRequiredArg
+      .describedAs("jmx-auth-prop")
+      .ofType(classOf[String])
+    val jmxSslEnableOpt = parser.accepts("jmx-ssl-enable", "Flag to enable remote JMX with SSL.")
+      .withRequiredArg
+      .describedAs("ssl-enable")
+      .ofType(classOf[java.lang.Boolean])
+      .defaultsTo(false)
     val waitOpt = parser.accepts("wait", "Wait for requested JMX objects to become available before starting output. " +
       "Only supported when the list of objects is non-empty and contains no object name patterns.")
     val helpOpt = parser.accepts("help", "Print usage information.")
@@ -109,6 +120,9 @@ object JmxTool extends Logging {
     val reportFormat = parseFormat(options.valueOf(reportFormatOpt).toLowerCase)
     val reportFormatOriginal = reportFormat.equals("original")
 
+    val enablePasswordAuth = options.has(jmxAuthPropOpt)
+    val enableSsl = options.has(jmxSslEnableOpt)
+
     var jmxc: JMXConnector = null
     var mbsc: MBeanServerConnection = null
     var connected = false
@@ -117,7 +131,18 @@ object JmxTool extends Logging {
     do {
       try {
         System.err.println(s"Trying to connect to JMX url: $url.")
-        jmxc = JMXConnectorFactory.connect(url, null)
+        val env = new java.util.HashMap[String, AnyRef]
+        // ssl enable
+        if (enableSsl) {
+          val csf = new SslRMIClientSocketFactory
+          env.put("com.sun.jndi.rmi.factory.socket", csf)
+        }
+        // password authentication enable
+        if (enablePasswordAuth) {
+          val credentials = options.valueOf(jmxAuthPropOpt).split("=", 2)
+          env.put(JMXConnector.CREDENTIALS, credentials)
+        }
+        jmxc = JMXConnectorFactory.connect(url, env)
         mbsc = jmxc.getMBeanServerConnection
         connected = true
       } catch {

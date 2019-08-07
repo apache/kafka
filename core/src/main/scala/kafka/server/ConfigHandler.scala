@@ -34,6 +34,7 @@ import org.apache.kafka.common.metrics.Quota._
 import org.apache.kafka.common.utils.Sanitizer
 
 import scala.collection.JavaConverters._
+import scala.collection.Seq
 import scala.util.Try
 
 /**
@@ -205,7 +206,7 @@ object ThrottledReplicaListValidator extends Validator {
       if (!(proposed.forall(_.toString.trim.matches("([0-9]+:[0-9]+)?"))
         || proposed.headOption.exists(_.toString.trim.equals("*"))))
         throw new ConfigException(name, value,
-          s"$name must be the literal '*' or a list of replicas in the following format: [partitionId],[brokerId]:[partitionId],[brokerId]:...")
+          s"$name must be the literal '*' or a list of replicas in the following format: [partitionId]:[brokerId],[partitionId]:[brokerId],...")
     }
     value match {
       case scalaSeq: Seq[_] => check(scalaSeq)
@@ -214,6 +215,6 @@ object ThrottledReplicaListValidator extends Validator {
     }
   }
 
-  override def toString: String = "[partitionId],[brokerId]:[partitionId],[brokerId]:..."
+  override def toString: String = "[partitionId]:[brokerId],[partitionId]:[brokerId],..."
 
 }

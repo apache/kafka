@@ -148,7 +148,7 @@ class AdminRackAwareTest extends RackAwareTest with Logging {
     val replicationFactor = 5
     val brokerRackMapping = Map(0 -> "rack1", 1 -> "rack2", 2 -> "rack2", 3 -> "rack3", 4 -> "rack3", 5 -> "rack2")
     val assignment = AdminUtils.assignReplicasToBrokers(toBrokerMetadata(brokerRackMapping), numPartitions, replicationFactor)
-    assertEquals(List.fill(assignment.size)(replicationFactor), assignment.values.map(_.size))
+    assertEquals(List.fill(assignment.size)(replicationFactor), assignment.values.toIndexedSeq.map(_.size))
     val distribution = getReplicaDistribution(assignment, brokerRackMapping)
     for (partition <- 0 until numPartitions)
       assertEquals(3, distribution.partitionRacks(partition).toSet.size)
@@ -161,7 +161,7 @@ class AdminRackAwareTest extends RackAwareTest with Logging {
     val brokerRackMapping = Map(0 -> "rack1", 1 -> "rack2", 2 -> "rack2", 3 -> "rack3", 4 -> "rack3", 5 -> "rack2")
     val assignment = AdminUtils.assignReplicasToBrokers(toBrokerMetadata(brokerRackMapping), numPartitions,
       replicationFactor)
-    assertEquals(List.fill(assignment.size)(replicationFactor), assignment.values.map(_.size))
+    assertEquals(List.fill(assignment.size)(replicationFactor), assignment.values.toIndexedSeq.map(_.size))
     val distribution = getReplicaDistribution(assignment, brokerRackMapping)
     for (partition <- 0 to 5)
       assertEquals(2, distribution.partitionRacks(partition).toSet.size)
@@ -173,7 +173,7 @@ class AdminRackAwareTest extends RackAwareTest with Logging {
     val replicationFactor = 3
     val brokerRackMapping = Map(0 -> "rack1", 1 -> "rack1", 2 -> "rack1", 3 -> "rack1", 4 -> "rack1", 5 -> "rack1")
     val assignment = AdminUtils.assignReplicasToBrokers(toBrokerMetadata(brokerRackMapping), numPartitions, replicationFactor)
-    assertEquals(List.fill(assignment.size)(replicationFactor), assignment.values.map(_.size))
+    assertEquals(List.fill(assignment.size)(replicationFactor), assignment.values.toIndexedSeq.map(_.size))
     val distribution = getReplicaDistribution(assignment, brokerRackMapping)
     for (partition <- 0 until numPartitions)
       assertEquals(1, distribution.partitionRacks(partition).toSet.size)

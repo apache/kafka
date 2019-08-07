@@ -17,6 +17,7 @@
 package org.apache.kafka.clients;
 
 import org.apache.kafka.common.Cluster;
+import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
@@ -35,8 +36,8 @@ import java.net.InetSocketAddress;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Optional;
 
+import static org.apache.kafka.test.TestUtils.assertOptional;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
@@ -205,9 +206,7 @@ public class MetadataTest {
 
         // First epoch seen, accept it
         {
-            MetadataResponse metadataResponse = TestUtils.metadataUpdateWith("dummy", 1, Collections.emptyMap(), partitionCounts,
-                (error, partition, leader, leaderEpoch, replicas, isr, offlineReplicas) ->
-                        new MetadataResponse.PartitionMetadata(error, partition, leader, Optional.of(100), replicas, isr, offlineReplicas));
+            MetadataResponse metadataResponse = TestUtils.metadataUpdateWith("dummy", 1, Collections.emptyMap(), partitionCounts, _tp -> 100);
             metadata.update(metadataResponse, 10L);
             assertNotNull(metadata.fetch().partition(tp));
             assertEquals(metadata.lastSeenLeaderEpoch(tp).get().longValue(), 100);
@@ -215,9 +214,9 @@ public class MetadataTest {
 
         // Fake an empty ISR, but with an older epoch, should reject it
         {
-            MetadataResponse metadataResponse = TestUtils.metadataUpdateWith("dummy", 1, Collections.emptyMap(), partitionCounts,
+            MetadataResponse metadataResponse = TestUtils.metadataUpdateWith("dummy", 1, Collections.emptyMap(), partitionCounts, _tp -> 99,
                 (error, partition, leader, leaderEpoch, replicas, isr, offlineReplicas) ->
-                        new MetadataResponse.PartitionMetadata(error, partition, leader, Optional.of(99), replicas, Collections.emptyList(), offlineReplicas));
+                        new MetadataResponse.PartitionMetadata(error, partition, leader, leaderEpoch, replicas, Collections.emptyList(), offlineReplicas));
             metadata.update(metadataResponse, 20L);
             assertEquals(metadata.fetch().partition(tp).inSyncReplicas().length, 1);
             assertEquals(metadata.lastSeenLeaderEpoch(tp).get().longValue(), 100);
@@ -225,9 +224,9 @@ public class MetadataTest {
 
         // Fake an empty ISR, with same epoch, accept it
         {
-            MetadataResponse metadataResponse = TestUtils.metadataUpdateWith("dummy", 1, Collections.emptyMap(), partitionCounts,
+            MetadataResponse metadataResponse = TestUtils.metadataUpdateWith("dummy", 1, Collections.emptyMap(), partitionCounts, _tp -> 100,
                 (error, partition, leader, leaderEpoch, replicas, isr, offlineReplicas) ->
-                        new MetadataResponse.PartitionMetadata(error, partition, leader, Optional.of(100), replicas, Collections.emptyList(), offlineReplicas));
+                        new MetadataResponse.PartitionMetadata(error, partition, leader, leaderEpoch, replicas, Collections.emptyList(), offlineReplicas));
             metadata.update(metadataResponse, 20L);
             assertEquals(metadata.fetch().partition(tp).inSyncReplicas().length, 0);
             assertEquals(metadata.lastSeenLeaderEpoch(tp).get().longValue(), 100);
@@ -235,8 +234,7 @@ public class MetadataTest {
 
         // Empty metadata response, should not keep old partition but should keep the last-seen epoch
         {
-            MetadataResponse metadataResponse = TestUtils.metadataUpdateWith(
-                    "dummy", 1, Collections.emptyMap(), Collections.emptyMap(), MetadataResponse.PartitionMetadata::new);
+            MetadataResponse metadataResponse = TestUtils.metadataUpdateWith("dummy", 1, Collections.emptyMap(), Collections.emptyMap());
             metadata.update(metadataResponse, 20L);
             assertNull(metadata.fetch().partition(tp));
             assertEquals(metadata.lastSeenLeaderEpoch(tp).get().longValue(), 100);
@@ -244,9 +242,7 @@ public class MetadataTest {
 
         // Back in the metadata, with old epoch, should not get added
         {
-            MetadataResponse metadataResponse = TestUtils.metadataUpdateWith("dummy", 1, Collections.emptyMap(), partitionCounts,
-                (error, partition, leader, leaderEpoch, replicas, isr, offlineReplicas) ->
-                        new MetadataResponse.PartitionMetadata(error, partition, leader, Optional.of(99), replicas, isr, offlineReplicas));
+            MetadataResponse metadataResponse = TestUtils.metadataUpdateWith("dummy", 1, Collections.emptyMap(), partitionCounts, _tp -> 99);
             metadata.update(metadataResponse, 10L);
             assertNull(metadata.fetch().partition(tp));
             assertEquals(metadata.lastSeenLeaderEpoch(tp).get().longValue(), 100);
@@ -284,9 +280,7 @@ public class MetadataTest {
         assertTrue(metadata.updateLastSeenEpochIfNewer(tp, 99));
 
         // Update epoch to 100
-        MetadataResponse metadataResponse = TestUtils.metadataUpdateWith("dummy", 1, Collections.emptyMap(), partitionCounts,
-            (error, partition, leader, leaderEpoch, replicas, isr, offlineReplicas) ->
-                    new MetadataResponse.PartitionMetadata(error, partition, leader, Optional.of(100), replicas, isr, offlineReplicas));
+        MetadataResponse metadataResponse = TestUtils.metadataUpdateWith("dummy", 1, Collections.emptyMap(), partitionCounts, _tp -> 100);
         metadata.update(metadataResponse, 10L);
         assertNotNull(metadata.fetch().partition(tp));
         assertEquals(metadata.lastSeenLeaderEpoch(tp).get().longValue(), 100);
@@ -308,9 +302,7 @@ public class MetadataTest {
         assertEquals(metadata.lastSeenLeaderEpoch(tp).get().longValue(), 101);
 
         // Metadata with equal or newer epoch is accepted
-        metadataResponse = TestUtils.metadataUpdateWith("dummy", 1, Collections.emptyMap(), partitionCounts,
-            (error, partition, leader, leaderEpoch, replicas, isr, offlineReplicas) ->
-                    new MetadataResponse.PartitionMetadata(error, partition, leader, Optional.of(101), replicas, isr, offlineReplicas));
+        metadataResponse = TestUtils.metadataUpdateWith("dummy", 1, Collections.emptyMap(), partitionCounts, _tp -> 101);
         metadata.update(metadataResponse, 30L);
         assertNotNull(metadata.fetch().partition(tp));
         assertEquals(metadata.fetch().partitionCountForTopic("topic-1").longValue(), 5);
@@ -321,9 +313,7 @@ public class MetadataTest {
     @Test
     public void testNoEpoch() {
         metadata.update(emptyMetadataResponse(), 0L);
-        MetadataResponse metadataResponse = TestUtils.metadataUpdateWith("dummy", 1, Collections.emptyMap(), Collections.singletonMap("topic-1", 1),
-            (error, partition, leader, leaderEpoch, replicas, isr, offlineReplicas) ->
-                new MetadataResponse.PartitionMetadata(error, partition, leader, Optional.empty(), replicas, isr, offlineReplicas));
+        MetadataResponse metadataResponse = TestUtils.metadataUpdateWith("dummy", 1, Collections.emptyMap(), Collections.singletonMap("topic-1", 1));
         metadata.update(metadataResponse, 10L);
 
         TopicPartition tp = new TopicPartition("topic-1", 0);
@@ -413,18 +403,18 @@ public class MetadataTest {
                 Collections.singletonMap(invalidTopic, Errors.INVALID_TOPIC_EXCEPTION), Collections.emptyMap());
         metadata.update(invalidTopicResponse, time.milliseconds());
 
-        InvalidTopicException e = assertThrows(InvalidTopicException.class, () -> metadata.maybeThrowException());
+        InvalidTopicException e = assertThrows(InvalidTopicException.class, () -> metadata.maybeThrowAnyException());
 
         assertEquals(Collections.singleton(invalidTopic), e.invalidTopics());
         // We clear the exception once it has been raised to the user
-        assertNull(metadata.getAndClearMetadataException());
+        metadata.maybeThrowAnyException();
 
         // Reset the invalid topic error
         metadata.update(invalidTopicResponse, time.milliseconds());
 
         // If we get a good update, the error should clear even if we haven't had a chance to raise it to the user
         metadata.update(emptyMetadataResponse(), time.milliseconds());
-        assertNull(metadata.getAndClearMetadataException());
+        metadata.maybeThrowAnyException();
     }
 
     @Test
@@ -436,17 +426,73 @@ public class MetadataTest {
                 Collections.singletonMap(invalidTopic, Errors.TOPIC_AUTHORIZATION_FAILED), Collections.emptyMap());
         metadata.update(unauthorizedTopicResponse, time.milliseconds());
 
-        TopicAuthorizationException e = assertThrows(TopicAuthorizationException.class, () -> metadata.maybeThrowException());
+        TopicAuthorizationException e = assertThrows(TopicAuthorizationException.class, () -> metadata.maybeThrowAnyException());
         assertEquals(Collections.singleton(invalidTopic), e.unauthorizedTopics());
         // We clear the exception once it has been raised to the user
-        assertNull(metadata.getAndClearMetadataException());
+        metadata.maybeThrowAnyException();
 
         // Reset the unauthorized topic error
         metadata.update(unauthorizedTopicResponse, time.milliseconds());
 
         // If we get a good update, the error should clear even if we haven't had a chance to raise it to the user
         metadata.update(emptyMetadataResponse(), time.milliseconds());
-        assertNull(metadata.getAndClearMetadataException());
+        metadata.maybeThrowAnyException();
     }
 
+    @Test
+    public void testMetadataTopicErrors() {
+        Time time = new MockTime();
+
+        Map<String, Errors> topicErrors = new HashMap<>(3);
+        topicErrors.put("invalidTopic", Errors.INVALID_TOPIC_EXCEPTION);
+        topicErrors.put("sensitiveTopic1", Errors.TOPIC_AUTHORIZATION_FAILED);
+        topicErrors.put("sensitiveTopic2", Errors.TOPIC_AUTHORIZATION_FAILED);
+        MetadataResponse metadataResponse = TestUtils.metadataUpdateWith("clusterId", 1, topicErrors, Collections.emptyMap());
+
+        metadata.update(metadataResponse, time.milliseconds());
+        TopicAuthorizationException e1 = assertThrows(TopicAuthorizationException.class,
+            () -> metadata.maybeThrowExceptionForTopic("sensitiveTopic1"));
+        assertEquals(Collections.singleton("sensitiveTopic1"), e1.unauthorizedTopics());
+        // We clear the exception once it has been raised to the user
+        metadata.maybeThrowAnyException();
+
+        metadata.update(metadataResponse, time.milliseconds());
+        TopicAuthorizationException e2 = assertThrows(TopicAuthorizationException.class,
+            () -> metadata.maybeThrowExceptionForTopic("sensitiveTopic2"));
+        assertEquals(Collections.singleton("sensitiveTopic2"), e2.unauthorizedTopics());
+        metadata.maybeThrowAnyException();
+
+        metadata.update(metadataResponse, time.milliseconds());
+        InvalidTopicException e3 = assertThrows(InvalidTopicException.class,
+            () -> metadata.maybeThrowExceptionForTopic("invalidTopic"));
+        assertEquals(Collections.singleton("invalidTopic"), e3.invalidTopics());
+        metadata.maybeThrowAnyException();
+
+        // Other topics should not throw exception, but they should clear existing exception
+        metadata.update(metadataResponse, time.milliseconds());
+        metadata.maybeThrowExceptionForTopic("anotherTopic");
+        metadata.maybeThrowAnyException();
+    }
+
+    @Test
+    public void testNodeIfOffline() {
+        Map<String, Integer> partitionCounts = new HashMap<>();
+        partitionCounts.put("topic-1", 1);
+        Node node0 = new Node(0, "localhost", 9092);
+        Node node1 = new Node(1, "localhost", 9093);
+
+        MetadataResponse metadataResponse = TestUtils.metadataUpdateWith("dummy", 2, Collections.emptyMap(), partitionCounts, _tp -> 99,
+            (error, partition, leader, leaderEpoch, replicas, isr, offlineReplicas) ->
+                new MetadataResponse.PartitionMetadata(error, partition, node0, leaderEpoch,
+                    Collections.singletonList(node0), Collections.emptyList(), Collections.singletonList(node1)));
+        metadata.update(emptyMetadataResponse(), 0L);
+        metadata.update(metadataResponse, 10L);
+
+        TopicPartition tp = new TopicPartition("topic-1", 0);
+
+        assertOptional(metadata.fetch().nodeIfOnline(tp, 0), node -> assertEquals(node.id(), 0));
+        assertFalse(metadata.fetch().nodeIfOnline(tp, 1).isPresent());
+        assertEquals(metadata.fetch().nodeById(0).id(), 0);
+        assertEquals(metadata.fetch().nodeById(1).id(), 1);
+    }
 }

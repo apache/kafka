@@ -36,7 +36,11 @@ import java.util.Set;
  * assignment decisions. For this, you can override {@link #subscription(Set)} and provide custom
  * userData in the returned Subscription. For example, to have a rack-aware assignor, an implementation
  * can use this user data to forward the rackId belonging to each member.
+ *
+ * This interface has been deprecated in 2.4, custom assignors should now implement
+ * {@link org.apache.kafka.clients.consumer.ConsumerPartitionAssignor}
  */
+@Deprecated
 public interface PartitionAssignor {
 
     /**
@@ -58,12 +62,20 @@ public interface PartitionAssignor {
      */
     Map<String, Assignment> assign(Cluster metadata, Map<String, Subscription> subscriptions);
 
-
     /**
      * Callback which is invoked when a group member receives its assignment from the leader.
      * @param assignment The local member's assignment as provided by the leader in {@link #assign(Cluster, Map)}
      */
     void onAssignment(Assignment assignment);
+
+    /**
+     * Callback which is invoked when a group member receives its assignment from the leader.
+     * @param assignment The local member's assignment as provided by the leader in {@link #assign(Cluster, Map)}
+     * @param generation The consumer group generation associated with this partition assignment (optional)
+     */
+    default void onAssignment(Assignment assignment, int generation) {
+        onAssignment(assignment);
+    }
 
 
     /**
@@ -96,8 +108,8 @@ public interface PartitionAssignor {
         @Override
         public String toString() {
             return "Subscription(" +
-                    "topics=" + topics +
-                    ')';
+                "topics=" + topics +
+                ')';
         }
     }
 
@@ -125,8 +137,8 @@ public interface PartitionAssignor {
         @Override
         public String toString() {
             return "Assignment(" +
-                    "partitions=" + partitions +
-                    ')';
+                "partitions=" + partitions +
+                ')';
         }
     }
 

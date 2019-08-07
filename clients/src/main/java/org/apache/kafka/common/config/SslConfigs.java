@@ -147,4 +147,15 @@ public class SslConfigs {
             SslConfigs.SSL_TRUSTSTORE_TYPE_CONFIG,
             SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG,
             SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG);
+
+    public static final Set<String> NON_RECONFIGURABLE_CONFIGS = Utils.mkSet(
+            BrokerSecurityConfigs.SSL_CLIENT_AUTH_CONFIG,
+            SslConfigs.SSL_PROTOCOL_CONFIG,
+            SslConfigs.SSL_PROVIDER_CONFIG,
+            SslConfigs.SSL_CIPHER_SUITES_CONFIG,
+            SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG,
+            SslConfigs.SSL_KEYMANAGER_ALGORITHM_CONFIG,
+            SslConfigs.SSL_TRUSTMANAGER_ALGORITHM_CONFIG,
+            SslConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG,
+            SslConfigs.SSL_SECURE_RANDOM_IMPLEMENTATION_CONFIG);
 }

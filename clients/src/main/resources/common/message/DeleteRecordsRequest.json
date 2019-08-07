@@ -22,7 +22,7 @@
   "fields": [
     { "name": "Topics", "type": "[]DeleteRecordsTopic", "versions": "0+",
       "about": "Each topic that we want to delete records from.", "fields": [
-      { "name": "Name", "type": "string", "versions": "0+",
+      { "name": "Name", "type": "string", "versions": "0+", "entityType": "topicName",
         "about": "The topic name." },
       { "name": "Partitions", "type": "[]DeleteRecordsPartition", "versions": "0+",
         "about": "Each partition that we want to delete records from.", "fields": [

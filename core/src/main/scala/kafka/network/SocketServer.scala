@@ -39,8 +39,7 @@ import org.apache.kafka.common.config.ConfigException
 import org.apache.kafka.common.{KafkaException, Reconfigurable}
 import org.apache.kafka.common.memory.{MemoryPool, SimpleMemoryPool}
 import org.apache.kafka.common.metrics._
-import org.apache.kafka.common.metrics.stats.Meter
-import org.apache.kafka.common.metrics.stats.Total
+import org.apache.kafka.common.metrics.stats.{CumulativeSum, Meter}
 import org.apache.kafka.common.network.KafkaChannel.ChannelMuteEvent
 import org.apache.kafka.common.network.{ChannelBuilder, ChannelBuilders, KafkaChannel, ListenerName, ListenerReconfigurable, Selectable, Send, Selector => KSelector}
 import org.apache.kafka.common.protocol.ApiKeys
@@ -599,7 +598,7 @@ private[kafka] class Acceptor(val endPoint: EndPoint,
 
     try {
       serverChannel.socket.bind(socketAddress)
-      info(s"Awaiting socket connections on s${socketAddress.getHostString}:${serverChannel.socket.getLocalPort}.")
+      info(s"Awaiting socket connections on ${socketAddress.getHostString}:${serverChannel.socket.getLocalPort}.")
     } catch {
       case e: SocketException =>
         throw new KafkaException(s"Socket server failed to bind to ${socketAddress.getHostString}:$port: ${e.getMessage}.", e)
@@ -712,7 +711,7 @@ private[kafka] class Processor(val id: Int,
     Map(NetworkProcessorMetricTag -> id.toString)
   )
 
-  val expiredConnectionsKilledCount = new Total()
+  val expiredConnectionsKilledCount = new CumulativeSum()
   private val expiredConnectionsKilledCountMetricName = metrics.metricName("expired-connections-killed-count", "socket-server-metrics", metricTags)
   metrics.addMetric(expiredConnectionsKilledCountMetricName, expiredConnectionsKilledCount)
 
@@ -1228,7 +1227,7 @@ class ConnectionQuotas(config: KafkaConfig, time: Time) extends Logging {
 
   class ListenerConnectionQuota(lock: Object, listener: ListenerName) extends ListenerReconfigurable {
     @volatile private var _maxConnections = Int.MaxValue
-    private val listenerPropName = s"${listener.configPrefix}${KafkaConfig.MaxConnectionsProp}"
+
     def maxConnections: Int = _maxConnections
 
     override def listenerName(): ListenerName = listener

@@ -28,7 +28,7 @@ public class ValueAndTimestampSerde<V> implements Serde<ValueAndTimestamp<V>> {
     private final ValueAndTimestampSerializer<V> valueAndTimestampSerializer;
     private final ValueAndTimestampDeserializer<V> valueAndTimestampDeserializer;
 
-    ValueAndTimestampSerde(final Serde<V> valueSerde) {
+    public ValueAndTimestampSerde(final Serde<V> valueSerde) {
         Objects.requireNonNull(valueSerde);
         valueAndTimestampSerializer = new ValueAndTimestampSerializer<>(valueSerde.serializer());
         valueAndTimestampDeserializer = new ValueAndTimestampDeserializer<>(valueSerde.deserializer());

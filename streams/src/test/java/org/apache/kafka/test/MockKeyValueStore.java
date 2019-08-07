@@ -26,8 +26,13 @@ import org.apache.kafka.streams.state.KeyValueStore;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 
 public class MockKeyValueStore implements KeyValueStore {
+    // keep a global counter of flushes and a local reference to which store had which
+    // flush, so we can reason about the order in which stores get flushed.
+    private static final AtomicInteger GLOBAL_FLUSH_COUNTER = new AtomicInteger(0);
+    private final AtomicInteger instanceLastFlushCount = new AtomicInteger(-1);
     private final String name;
     private final boolean persistent;
 
@@ -58,7 +63,12 @@ public class MockKeyValueStore implements KeyValueStore {
 
     @Override
     public void flush() {
+        instanceLastFlushCount.set(GLOBAL_FLUSH_COUNTER.getAndIncrement());
         flushed = true;
+    }
+
+    public int getLastFlushCount() {
+        return instanceLastFlushCount.get();
     }
 
     @Override

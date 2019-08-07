@@ -106,11 +106,12 @@ public class SuppressedInternal<K> implements Suppressed<K>, NamedSuppressed<K> 
 
     @Override
     public String toString() {
-        return "SuppressedInternal{name='" + name + '\'' +
-            ", bufferConfig=" + bufferConfig +
-            ", timeToWaitForMoreEvents=" + timeToWaitForMoreEvents +
-            ", timeDefinition=" + timeDefinition +
-            ", safeToDropTombstones=" + safeToDropTombstones +
-            '}';
+        return "SuppressedInternal{" +
+                "name='" + name + '\'' +
+                ", bufferConfig=" + bufferConfig +
+                ", timeToWaitForMoreEvents=" + timeToWaitForMoreEvents +
+                ", timeDefinition=" + timeDefinition +
+                ", safeToDropTombstones=" + safeToDropTombstones +
+                '}';
     }
 }

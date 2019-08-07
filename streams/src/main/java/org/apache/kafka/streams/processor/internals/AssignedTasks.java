@@ -278,7 +278,6 @@ abstract class AssignedTasks<T extends Task> {
     int commit() {
         int committed = 0;
         RuntimeException firstException = null;
-
         for (final Iterator<T> it = running().iterator(); it.hasNext(); ) {
             final T task = it.next();
             try {

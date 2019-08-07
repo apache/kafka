@@ -16,12 +16,15 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
+import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
-import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.processor.internals.metrics.ThreadMetrics;
+import org.apache.kafka.streams.state.TimestampedKeyValueStore;
+import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -66,18 +69,24 @@ public class KTableSource<K, V> implements ProcessorSupplier<K, V> {
 
     private class KTableSourceProcessor extends AbstractProcessor<K, V> {
 
-        private KeyValueStore<K, V> store;
-        private TupleForwarder<K, V> tupleForwarder;
+        private TimestampedKeyValueStore<K, V> store;
+        private TimestampedTupleForwarder<K, V> tupleForwarder;
         private StreamsMetricsImpl metrics;
+        private Sensor skippedRecordsSensor;
 
         @SuppressWarnings("unchecked")
         @Override
         public void init(final ProcessorContext context) {
             super.init(context);
             metrics = (StreamsMetricsImpl) context.metrics();
+            skippedRecordsSensor = ThreadMetrics.skipRecordSensor(metrics);
             if (queryableName != null) {
-                store = (KeyValueStore<K, V>) context.getStateStore(queryableName);
-                tupleForwarder = new TupleForwarder<>(store, context, new ForwardingCacheFlushListener<K, V>(context), sendOldValues);
+                store = (TimestampedKeyValueStore<K, V>) context.getStateStore(queryableName);
+                tupleForwarder = new TimestampedTupleForwarder<>(
+                    store,
+                    context,
+                    new TimestampedCacheFlushListener<>(context),
+                    sendOldValues);
             }
         }
 
@@ -89,13 +98,23 @@ public class KTableSource<K, V> implements ProcessorSupplier<K, V> {
                     "Skipping record due to null key. topic=[{}] partition=[{}] offset=[{}]",
                     context().topic(), context().partition(), context().offset()
                 );
-                metrics.skippedRecordsSensor().record();
+                skippedRecordsSensor.record();
                 return;
             }
 
             if (queryableName != null) {
-                final V oldValue = sendOldValues ? store.get(key) : null;
-                store.put(key, value);
+                final ValueAndTimestamp<V> oldValueAndTimestamp = store.get(key);
+                final V oldValue;
+                if (oldValueAndTimestamp != null) {
+                    oldValue = oldValueAndTimestamp.value();
+                    if (context().timestamp() < oldValueAndTimestamp.timestamp()) {
+                        LOG.warn("Detected out-of-order KTable update for {} at offset {}, partition {}.",
+                            store.name(), context().offset(), context().partition());
+                    }
+                } else {
+                    oldValue = null;
+                }
+                store.put(key, ValueAndTimestamp.make(value, context().timestamp()));
                 tupleForwarder.maybeForward(key, value, oldValue);
             } else {
                 context().forward(key, new Change<>(value, null));

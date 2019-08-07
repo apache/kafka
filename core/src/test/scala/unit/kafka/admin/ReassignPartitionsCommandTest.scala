@@ -31,11 +31,13 @@ import org.easymock.EasyMock._
 import org.easymock.{Capture, CaptureType, EasyMock}
 import org.junit.{After, Before, Test}
 import org.junit.Assert.{assertEquals, assertFalse, assertNull, assertTrue}
+import org.scalatest.Assertions.fail
 
 import scala.collection.JavaConverters._
 import org.apache.kafka.common.TopicPartition
 
 import scala.collection.mutable
+import scala.collection.Seq
 
 class ReassignPartitionsCommandTest extends ZooKeeperTestHarness with Logging {
   var servers: Seq[KafkaServer] = Seq()

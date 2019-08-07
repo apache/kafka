@@ -26,16 +26,18 @@ import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.locks.ReentrantLock
 
 import com.yammer.metrics.core.Gauge
-import kafka.api.{ApiVersion, KAFKA_0_10_1_IV0, KAFKA_2_1_IV0, KAFKA_2_1_IV1}
+import kafka.api.{ApiVersion, KAFKA_0_10_1_IV0, KAFKA_2_1_IV0, KAFKA_2_1_IV1, KAFKA_2_3_IV0}
 import kafka.common.{MessageFormatter, OffsetAndMetadata}
 import kafka.metrics.KafkaMetricsGroup
-import kafka.server.ReplicaManager
+import kafka.server.{FetchLogEnd, ReplicaManager}
 import kafka.utils.CoreUtils.inLock
 import kafka.utils._
 import kafka.zk.KafkaZkClient
 import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.apache.kafka.common.internals.Topic
+import org.apache.kafka.common.metrics.stats.{Avg, Max}
+import org.apache.kafka.common.metrics.{MetricConfig, Metrics}
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.protocol.types.Type._
 import org.apache.kafka.common.protocol.types._
@@ -46,14 +48,15 @@ import org.apache.kafka.common.utils.{Time, Utils}
 
 import scala.collection.JavaConverters._
 import scala.collection._
-import scala.collection.mutable.ListBuffer
+import scala.collection.mutable.ArrayBuffer
 
 class GroupMetadataManager(brokerId: Int,
                            interBrokerProtocolVersion: ApiVersion,
                            config: OffsetConfig,
                            replicaManager: ReplicaManager,
                            zkClient: KafkaZkClient,
-                           time: Time) extends Logging with KafkaMetricsGroup {
+                           time: Time,
+                           metrics: Metrics) extends Logging with KafkaMetricsGroup {
 
   private val compressionType: CompressionType = CompressionType.forId(config.offsetsTopicCompressionCodec.codec)
 
@@ -81,6 +84,16 @@ class GroupMetadataManager(brokerId: Int,
    * marker comes in for a transaction, it is for a particular partition on the offsets topic and a particular producerId.
    * We use this structure to quickly find the groups which need to be updated by the commit/abort marker. */
   private val openGroupsForProducer = mutable.HashMap[Long, mutable.Set[String]]()
+
+  /* setup metrics*/
+  val partitionLoadSensor = metrics.sensor("PartitionLoadTime")
+
+  partitionLoadSensor.add(metrics.metricName("partition-load-time-max",
+    "group-coordinator-metrics",
+    "The max time it took to load the partitions in the last 30sec"), new Max())
+  partitionLoadSensor.add(metrics.metricName("partition-load-time-avg",
+    "group-coordinator-metrics",
+    "The avg time it took to load the partitions in the last 30sec"), new Avg())
 
   this.logIdent = s"[GroupMetadataManager brokerId=$brokerId] "
 
@@ -312,7 +325,7 @@ class GroupMetadataManager(brokerId: Int,
     // construct the message set to append
     if (filteredOffsetMetadata.isEmpty) {
       // compute the final error codes for the commit response
-      val commitStatus = offsetMetadata.mapValues(_ => Errors.OFFSET_METADATA_TOO_LARGE)
+      val commitStatus = offsetMetadata.map { case (k, _) => k -> Errors.OFFSET_METADATA_TOO_LARGE }
       responseCallback(commitStatus)
       None
     } else {
@@ -498,7 +511,10 @@ class GroupMetadataManager(brokerId: Int,
     try {
       val startMs = time.milliseconds()
       doLoadGroupsAndOffsets(topicPartition, onGroupLoaded)
-      info(s"Finished loading offsets and group metadata from $topicPartition in ${time.milliseconds() - startMs} milliseconds.")
+      val endMs = time.milliseconds()
+      val timeLapse = endMs - startMs
+      partitionLoadSensor.record(timeLapse, endMs, false)
+      info(s"Finished loading offsets and group metadata from $topicPartition in $timeLapse milliseconds.")
     } catch {
       case t: Throwable => error(s"Error loading offsets from $topicPartition", t)
     } finally {
@@ -522,15 +538,17 @@ class GroupMetadataManager(brokerId: Int,
         // buffer may not be needed if records are read from memory
         var buffer = ByteBuffer.allocate(0)
 
-        // loop breaks if leader changes at any time during the load, since getHighWatermark is -1
+        // loop breaks if leader changes at any time during the load, since logEndOffset is -1
         val loadedOffsets = mutable.Map[GroupTopicPartition, CommitRecordMetadataAndOffset]()
         val pendingOffsets = mutable.Map[Long, mutable.Map[GroupTopicPartition, CommitRecordMetadataAndOffset]]()
         val loadedGroups = mutable.Map[String, GroupMetadata]()
         val removedGroups = mutable.Set[String]()
 
         while (currOffset < logEndOffset && !shuttingDown.get()) {
-          val fetchDataInfo = log.read(currOffset, config.loadBufferSize, maxOffset = None,
-            minOneMessage = true, includeAbortedTxns = false)
+          val fetchDataInfo = log.read(currOffset,
+            maxLength = config.loadBufferSize,
+            isolation = FetchLogEnd,
+            minOneMessage = true)
           val memRecords = fetchDataInfo.records match {
             case records: MemoryRecords => records
             case fileRecords: FileRecords =>
@@ -757,7 +775,7 @@ class GroupMetadataManager(brokerId: Int,
         val timestamp = time.milliseconds()
 
           replicaManager.nonOfflinePartition(appendPartition).foreach { partition =>
-            val tombstones = ListBuffer.empty[SimpleRecord]
+            val tombstones = ArrayBuffer.empty[SimpleRecord]
             removedOffsets.foreach { case (topicPartition, offsetAndMetadata) =>
               trace(s"Removing expired/deleted offset and metadata for $groupId, $topicPartition: $offsetAndMetadata")
               val commitKey = GroupMetadataManager.offsetCommitKey(groupId, topicPartition)
@@ -780,7 +798,7 @@ class GroupMetadataManager(brokerId: Int,
               try {
                 // do not need to require acks since even if the tombstone is lost,
                 // it will be appended again in the next purge cycle
-                val records = MemoryRecords.withRecords(magicValue, 0L, compressionType, timestampType, tombstones: _*)
+                val records = MemoryRecords.withRecords(magicValue, 0L, compressionType, timestampType, tombstones.toArray: _*)
                 partition.appendRecordsToLeader(records, isFromClient = false, requiredAcks = 0)
 
                 offsetsRemoved += removedOffsets.size
@@ -977,6 +995,7 @@ object GroupMetadataManager {
   private val GROUP_KEY_GROUP_FIELD = GROUP_METADATA_KEY_SCHEMA.get("group")
 
   private val MEMBER_ID_KEY = "member_id"
+  private val GROUP_INSTANCE_ID_KEY = "group_instance_id"
   private val CLIENT_ID_KEY = "client_id"
   private val CLIENT_HOST_KEY = "client_host"
   private val REBALANCE_TIMEOUT_KEY = "rebalance_timeout"
@@ -1002,6 +1021,16 @@ object GroupMetadataManager {
     new Field(ASSIGNMENT_KEY, BYTES))
 
   private val MEMBER_METADATA_V2 = MEMBER_METADATA_V1
+
+  private val MEMBER_METADATA_V3 = new Schema(
+    new Field(MEMBER_ID_KEY, STRING),
+    new Field(GROUP_INSTANCE_ID_KEY, NULLABLE_STRING),
+    new Field(CLIENT_ID_KEY, STRING),
+    new Field(CLIENT_HOST_KEY, STRING),
+    new Field(REBALANCE_TIMEOUT_KEY, INT32),
+    new Field(SESSION_TIMEOUT_KEY, INT32),
+    new Field(SUBSCRIPTION_KEY, BYTES),
+    new Field(ASSIGNMENT_KEY, BYTES))
 
   private val PROTOCOL_TYPE_KEY = "protocol_type"
   private val GENERATION_KEY = "generation"
@@ -1032,6 +1061,14 @@ object GroupMetadataManager {
     new Field(CURRENT_STATE_TIMESTAMP_KEY, INT64),
     new Field(MEMBERS_KEY, new ArrayOf(MEMBER_METADATA_V2)))
 
+  private val GROUP_METADATA_VALUE_SCHEMA_V3 = new Schema(
+    new Field(PROTOCOL_TYPE_KEY, STRING),
+    new Field(GENERATION_KEY, INT32),
+    new Field(PROTOCOL_KEY, NULLABLE_STRING),
+    new Field(LEADER_KEY, NULLABLE_STRING),
+    new Field(CURRENT_STATE_TIMESTAMP_KEY, INT64),
+    new Field(MEMBERS_KEY, new ArrayOf(MEMBER_METADATA_V3)))
+
   // map of versions to key schemas as data types
   private val MESSAGE_TYPE_SCHEMAS = Map(
     0 -> OFFSET_COMMIT_KEY_SCHEMA,
@@ -1049,7 +1086,8 @@ object GroupMetadataManager {
   private val GROUP_VALUE_SCHEMAS = Map(
     0 -> GROUP_METADATA_VALUE_SCHEMA_V0,
     1 -> GROUP_METADATA_VALUE_SCHEMA_V1,
-    2 -> GROUP_METADATA_VALUE_SCHEMA_V2)
+    2 -> GROUP_METADATA_VALUE_SCHEMA_V2,
+    3 -> GROUP_METADATA_VALUE_SCHEMA_V3)
 
   private val CURRENT_OFFSET_KEY_SCHEMA = schemaForKey(CURRENT_OFFSET_KEY_SCHEMA_VERSION)
   private val CURRENT_GROUP_KEY_SCHEMA = schemaForKey(CURRENT_GROUP_KEY_SCHEMA_VERSION)
@@ -1058,7 +1096,7 @@ object GroupMetadataManager {
     val schemaOpt = MESSAGE_TYPE_SCHEMAS.get(version)
     schemaOpt match {
       case Some(schema) => schema
-      case _ => throw new KafkaException("Unknown offset schema version " + version)
+      case _ => throw new KafkaException("Unknown message key schema version " + version)
     }
   }
 
@@ -1172,8 +1210,10 @@ object GroupMetadataManager {
         (0.toShort, new Struct(GROUP_METADATA_VALUE_SCHEMA_V0))
       else if (apiVersion < KAFKA_2_1_IV0)
         (1.toShort, new Struct(GROUP_METADATA_VALUE_SCHEMA_V1))
-      else
+      else if (apiVersion < KAFKA_2_3_IV0)
         (2.toShort, new Struct(GROUP_METADATA_VALUE_SCHEMA_V2))
+      else
+        (3.toShort, new Struct(GROUP_METADATA_VALUE_SCHEMA_V3))
     }
 
     value.set(PROTOCOL_TYPE_KEY, groupMetadata.protocolType.getOrElse(""))
@@ -1193,6 +1233,9 @@ object GroupMetadataManager {
 
       if (version > 0)
         memberStruct.set(REBALANCE_TIMEOUT_KEY, memberMetadata.rebalanceTimeoutMs)
+
+      if (version >= 3)
+        memberStruct.set(GROUP_INSTANCE_ID_KEY, memberMetadata.groupInstanceId.orNull)
 
       // The group is non-empty, so the current protocol must be defined
       val protocol = groupMetadata.protocolOrNull
@@ -1312,7 +1355,7 @@ object GroupMetadataManager {
       val valueSchema = schemaForGroupValue(version)
       val value = valueSchema.read(buffer)
 
-      if (version >= 0 && version <= 2) {
+      if (version >= 0 && version <= 3) {
         val generationId = value.get(GENERATION_KEY).asInstanceOf[Int]
         val protocolType = value.get(PROTOCOL_TYPE_KEY).asInstanceOf[String]
         val protocol = value.get(PROTOCOL_KEY).asInstanceOf[String]
@@ -1333,13 +1376,18 @@ object GroupMetadataManager {
         val members = memberMetadataArray.map { memberMetadataObj =>
           val memberMetadata = memberMetadataObj.asInstanceOf[Struct]
           val memberId = memberMetadata.get(MEMBER_ID_KEY).asInstanceOf[String]
+          val groupInstanceId =
+            if (version >= 3)
+              Some(memberMetadata.get(GROUP_INSTANCE_ID_KEY).asInstanceOf[String])
+            else
+              None
           val clientId = memberMetadata.get(CLIENT_ID_KEY).asInstanceOf[String]
           val clientHost = memberMetadata.get(CLIENT_HOST_KEY).asInstanceOf[String]
           val sessionTimeout = memberMetadata.get(SESSION_TIMEOUT_KEY).asInstanceOf[Int]
           val rebalanceTimeout = if (version == 0) sessionTimeout else memberMetadata.get(REBALANCE_TIMEOUT_KEY).asInstanceOf[Int]
           val subscription = Utils.toArray(memberMetadata.get(SUBSCRIPTION_KEY).asInstanceOf[ByteBuffer])
 
-          val member = new MemberMetadata(memberId, groupId, clientId, clientHost, rebalanceTimeout, sessionTimeout,
+          val member = new MemberMetadata(memberId, groupId, groupInstanceId, clientId, clientHost, rebalanceTimeout, sessionTimeout,
             protocolType, List((protocol, subscription)))
           member.assignment = Utils.toArray(memberMetadata.get(ASSIGNMENT_KEY).asInstanceOf[ByteBuffer])
           member

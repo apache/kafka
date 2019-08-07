@@ -21,6 +21,7 @@ import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.errors.{GroupAuthorizationException, TopicAuthorizationException}
 import org.junit.{Before, Test}
 import org.junit.Assert.{assertEquals, assertTrue}
+import org.scalatest.Assertions.fail
 
 import scala.collection.immutable.List
 import scala.collection.JavaConverters._
@@ -42,6 +43,7 @@ abstract class SaslEndToEndAuthorizationTest extends EndToEndAuthorizationTest {
     val clientLoginContext = jaasClientLoginModule(kafkaClientSaslMechanism)
     producerConfig.put(SaslConfigs.SASL_JAAS_CONFIG, clientLoginContext)
     consumerConfig.put(SaslConfigs.SASL_JAAS_CONFIG, clientLoginContext)
+    adminClientConfig.put(SaslConfigs.SASL_JAAS_CONFIG, clientLoginContext)
     super.setUp()
   }
 

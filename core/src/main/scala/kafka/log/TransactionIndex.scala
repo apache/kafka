@@ -57,7 +57,7 @@ class TransactionIndex(val startOffset: Long, @volatile var file: File) extends 
           s"${abortedTxn.lastOffset} is not greater than current last offset $offset of index ${file.getAbsolutePath}")
     }
     lastOffset = Some(abortedTxn.lastOffset)
-    Utils.writeFully(channel, abortedTxn.buffer.duplicate())
+    Utils.writeFully(channel(), abortedTxn.buffer.duplicate())
   }
 
   def flush(): Unit = maybeChannel.foreach(_.force(true))
@@ -74,7 +74,7 @@ class TransactionIndex(val startOffset: Long, @volatile var file: File) extends 
     Files.deleteIfExists(file.toPath)
   }
 
-  private def channel: FileChannel = {
+  private def channel(): FileChannel = {
     maybeChannel match {
       case Some(channel) => channel
       case None => openChannel()
@@ -114,7 +114,7 @@ class TransactionIndex(val startOffset: Long, @volatile var file: File) extends 
     var newLastOffset: Option[Long] = None
     for ((abortedTxn, position) <- iterator(() => buffer)) {
       if (abortedTxn.lastOffset >= offset) {
-        channel.truncate(position)
+        channel().truncate(position)
         lastOffset = newLastOffset
         return
       }

@@ -20,7 +20,7 @@
   // Version 1 is the same as version 0.
   "validVersions": "0-1",
   "fields": [
-    { "name": "TransactionalId", "type": "string", "versions": "0+", "nullableVersions": "0+",
+    { "name": "TransactionalId", "type": "string", "versions": "0+", "nullableVersions": "0+", "entityType": "transactionalId",
       "about": "The transactional id, or null if the producer is not transactional." },
     { "name": "TransactionTimeoutMs", "type": "int32", "versions": "0+",
       "about": "The time in ms to wait for before aborting idle transactions sent by this producer. This is only relevant if a TransactionalId has been defined." }

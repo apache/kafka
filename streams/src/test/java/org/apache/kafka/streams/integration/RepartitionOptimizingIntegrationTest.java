@@ -91,7 +91,6 @@ public class RepartitionOptimizingIntegrationTest {
         final Properties props = new Properties();
         props.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 1024 * 10);
         props.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 5000);
-        props.put(IntegrationTestUtils.INTERNAL_LEAVE_GROUP_ON_CLOSE, true);
 
         streamsConfiguration = StreamsTestUtils.getStreamsConfig(
             "maybe-optimized-test-app",

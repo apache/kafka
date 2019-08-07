@@ -200,6 +200,10 @@ public class AdminClientConfig extends AbstractConfig {
         return CONFIG.names();
     }
 
+    public static ConfigDef configDef() {
+        return  new ConfigDef(CONFIG);
+    }
+
     public static void main(String[] args) {
         System.out.println(CONFIG.toHtmlTable());
     }

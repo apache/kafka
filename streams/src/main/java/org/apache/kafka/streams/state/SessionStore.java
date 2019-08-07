@@ -46,7 +46,7 @@ public interface SessionStore<K, AGG> extends StateStore, ReadOnlySessionStore<K
      * @return iterator of sessions with the matching key and aggregated values
      * @throws NullPointerException If null is used for key.
      */
-    KeyValueIterator<Windowed<K>, AGG> findSessions(final K key, long earliestSessionEndTime, final long latestSessionStartTime);
+    KeyValueIterator<Windowed<K>, AGG> findSessions(final K key, final long earliestSessionEndTime, final long latestSessionStartTime);
 
     /**
      * Fetch any sessions in the given range of keys and the sessions end is &ge; earliestSessionEndTime and the sessions
@@ -61,7 +61,7 @@ public interface SessionStore<K, AGG> extends StateStore, ReadOnlySessionStore<K
      * @return iterator of sessions with the matching keys and aggregated values
      * @throws NullPointerException If null is used for any key.
      */
-    KeyValueIterator<Windowed<K>, AGG> findSessions(final K keyFrom, final K keyTo, long earliestSessionEndTime, final long latestSessionStartTime);
+    KeyValueIterator<Windowed<K>, AGG> findSessions(final K keyFrom, final K keyTo, final long earliestSessionEndTime, final long latestSessionStartTime);
 
     /**
      * Get the value of key from a single session.
@@ -72,7 +72,7 @@ public interface SessionStore<K, AGG> extends StateStore, ReadOnlySessionStore<K
      * @return The value or {@code null} if no session associated with the key can be found
      * @throws NullPointerException If {@code null} is used for any key.
      */
-    AGG fetchSession(K key, long startTime, long endTime);
+    AGG fetchSession(final K key, final long startTime, final long endTime);
 
     /**
      * Remove the session aggregated with provided {@link Windowed} key from the store

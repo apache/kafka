@@ -20,7 +20,7 @@
   // Version 1 is the same as version 0.
   "validVersions": "0-1",
   "fields": [
-    { "name": "GroupsNames", "type": "[]string", "versions": "0+",
+    { "name": "GroupsNames", "type": "[]string", "versions": "0+", "entityType": "groupId",
       "about": "The group names to delete." }
   ]
 }

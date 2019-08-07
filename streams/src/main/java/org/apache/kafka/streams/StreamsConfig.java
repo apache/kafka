@@ -17,7 +17,7 @@
 package org.apache.kafka.streams;
 
 import org.apache.kafka.clients.CommonClientConfigs;
-import org.apache.kafka.clients.admin.AdminClient;
+import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
@@ -58,7 +58,7 @@ import static org.apache.kafka.common.requests.IsolationLevel.READ_COMMITTED;
 
 /**
  * Configuration for a {@link KafkaStreams} instance.
- * Can also be used to configure the Kafka Streams internal {@link KafkaConsumer}, {@link KafkaProducer} and {@link AdminClient}.
+ * Can also be used to configure the Kafka Streams internal {@link KafkaConsumer}, {@link KafkaProducer} and {@link Admin}.
  * To avoid consumer/producer/admin property conflicts, you should prefix those properties using
  * {@link #consumerPrefix(String)}, {@link #producerPrefix(String)} and {@link #adminClientPrefix(String)}, respectively.
  * <p>
@@ -139,6 +139,8 @@ public class StreamsConfig extends AbstractConfig {
     private final static long DEFAULT_COMMIT_INTERVAL_MS = 30000L;
     private final static long EOS_DEFAULT_COMMIT_INTERVAL_MS = 100L;
 
+    public final static int DUMMY_THREAD_INDEX = 1;
+
     /**
      * Prefix used to provide default topic configs to be applied when creating internal topics.
      * These should be valid properties from {@link org.apache.kafka.common.config.TopicConfig TopicConfig}.
@@ -196,7 +198,7 @@ public class StreamsConfig extends AbstractConfig {
     public static final String PRODUCER_PREFIX = "producer.";
 
     /**
-     * Prefix used to isolate {@link org.apache.kafka.clients.admin.AdminClient admin} configs from other client configs.
+     * Prefix used to isolate {@link Admin admin} configs from other client configs.
      * It is recommended to use {@link #adminClientPrefix(String)} to add this prefix to {@link ProducerConfig producer
      * properties}.
      */
@@ -943,12 +945,12 @@ public class StreamsConfig extends AbstractConfig {
      * @param groupId      consumer groupId
      * @param clientId     clientId
      * @return Map of the consumer configuration.
-     * @deprecated use {@link StreamsConfig#getMainConsumerConfigs(String, String)}
+     * @deprecated use {@link StreamsConfig#getMainConsumerConfigs(String, String, int)}
      */
     @SuppressWarnings("WeakerAccess")
     @Deprecated
     public Map<String, Object> getConsumerConfigs(final String groupId, final String clientId) {
-        return getMainConsumerConfigs(groupId, clientId);
+        return getMainConsumerConfigs(groupId, clientId, DUMMY_THREAD_INDEX);
     }
 
     /**
@@ -963,10 +965,11 @@ public class StreamsConfig extends AbstractConfig {
      *
      * @param groupId      consumer groupId
      * @param clientId     clientId
+     * @param threadIdx    stream thread index
      * @return Map of the consumer configuration.
      */
     @SuppressWarnings("WeakerAccess")
-    public Map<String, Object> getMainConsumerConfigs(final String groupId, final String clientId) {
+    public Map<String, Object> getMainConsumerConfigs(final String groupId, final String clientId, final int threadIdx) {
         final Map<String, Object> consumerProps = getCommonConsumerConfigs();
 
         // Get main consumer override configs
@@ -977,9 +980,15 @@ public class StreamsConfig extends AbstractConfig {
 
         // this is a hack to work around StreamsConfig constructor inside StreamsPartitionAssignor to avoid casting
         consumerProps.put(APPLICATION_ID_CONFIG, groupId);
-        // add client id with stream client id prefix, and group id
+
+        // add group id, client id with stream client id prefix, and group instance id
         consumerProps.put(ConsumerConfig.GROUP_ID_CONFIG, groupId);
         consumerProps.put(CommonClientConfigs.CLIENT_ID_CONFIG, clientId);
+        final String groupInstanceId = (String) consumerProps.get(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG);
+        // Suffix each thread consumer with thread.id to enforce uniqueness of group.instance.id.
+        if (groupInstanceId != null) {
+            consumerProps.put(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG, groupInstanceId + "-" + threadIdx);
+        }
 
         // add configs required for stream partition assignor
         consumerProps.put(UPGRADE_FROM_CONFIG, getString(UPGRADE_FROM_CONFIG));
@@ -1107,7 +1116,7 @@ public class StreamsConfig extends AbstractConfig {
     }
 
     /**
-     * Get the configs for the {@link org.apache.kafka.clients.admin.AdminClient admin client}.
+     * Get the configs for the {@link Admin admin client}.
      * @param clientId clientId
      * @return Map of the admin client configuration.
      */

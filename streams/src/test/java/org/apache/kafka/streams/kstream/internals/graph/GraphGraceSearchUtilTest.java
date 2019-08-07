@@ -118,11 +118,11 @@ public class GraphGraceSearchUtilTest {
         );
 
         final long extracted = GraphGraceSearchUtil.findAndVerifyWindowGrace(node);
-        assertThat(extracted, is(windows.gracePeriodMs()));
+        assertThat(extracted, is(windows.gracePeriodMs() + windows.inactivityGap()));
     }
 
     @Test
-    public void shouldExtractGraceFromAncestorThroughStatefulParent() {
+    public void shouldExtractGraceFromSessionAncestorThroughStatefulParent() {
         final SessionWindows windows = SessionWindows.with(ofMillis(10L)).grace(ofMillis(1234L));
         final StatefulProcessorNode<String, Long> graceGrandparent = new StatefulProcessorNode<>(
             "asdf",
@@ -155,11 +155,11 @@ public class GraphGraceSearchUtilTest {
         statefulParent.addChild(node);
 
         final long extracted = GraphGraceSearchUtil.findAndVerifyWindowGrace(node);
-        assertThat(extracted, is(windows.gracePeriodMs()));
+        assertThat(extracted, is(windows.gracePeriodMs() + windows.inactivityGap()));
     }
 
     @Test
-    public void shouldExtractGraceFromAncestorThroughStatelessParent() {
+    public void shouldExtractGraceFromSessionAncestorThroughStatelessParent() {
         final SessionWindows windows = SessionWindows.with(ofMillis(10L)).grace(ofMillis(1234L));
         final StatefulProcessorNode<String, Long> graceGrandparent = new StatefulProcessorNode<>(
             "asdf",
@@ -183,7 +183,7 @@ public class GraphGraceSearchUtilTest {
         statelessParent.addChild(node);
 
         final long extracted = GraphGraceSearchUtil.findAndVerifyWindowGrace(node);
-        assertThat(extracted, is(windows.gracePeriodMs()));
+        assertThat(extracted, is(windows.gracePeriodMs() + windows.inactivityGap()));
     }
 
     @Test

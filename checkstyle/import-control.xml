@@ -264,7 +264,6 @@
 
     <subpackage name="processor">
       <subpackage name="internals">
-        <allow pkg="org.I0Itec.zkclient" />
         <allow pkg="com.fasterxml.jackson" />
         <allow pkg="org.apache.zookeeper" />
         <allow pkg="org.apache.zookeeper" />
@@ -322,6 +321,13 @@
       <allow pkg="org.apache.kafka.connect.storage" />
     </subpackage>
 
+    <subpackage name="connector.policy">
+      <allow pkg="org.apache.kafka.connect.health" />
+      <allow pkg="org.apache.kafka.connect.connector" />
+      <!-- for testing -->
+      <allow pkg="org.apache.kafka.connect.runtime" />
+    </subpackage>
+
     <subpackage name="rest">
       <allow pkg="org.apache.kafka.connect.health" />
       <allow pkg="javax.ws.rs" />
@@ -356,6 +362,7 @@
       <allow pkg="org.apache.kafka.connect.storage" />
       <allow pkg="org.apache.kafka.connect.util" />
       <allow pkg="org.apache.kafka.common" />
+      <allow pkg="org.apache.kafka.connect.connector.policy" />
     </subpackage>
 
     <subpackage name="storage">
@@ -382,6 +389,7 @@
       <allow pkg="org.apache.kafka.connect.util.clusters" />
       <allow pkg="org.apache.kafka.connect" />
       <allow pkg="org.apache.kafka.tools" />
+      <allow pkg="javax.ws.rs" />
     </subpackage>
 
     <subpackage name="json">

@@ -16,6 +16,7 @@
 import time
 from ducktape.tests.test import Test
 from kafkatest.services.trogdor.network_partition_fault_spec import NetworkPartitionFaultSpec
+from kafkatest.services.trogdor.degraded_network_fault_spec import DegradedNetworkFaultSpec
 from kafkatest.services.kafka import KafkaService
 from kafkatest.services.trogdor.process_stop_fault_spec import ProcessStopFaultSpec
 from kafkatest.services.trogdor.round_trip_workload import RoundTripWorkloadService, RoundTripWorkloadSpec
@@ -92,3 +93,15 @@ class RoundTripFaultTest(Test):
         workload1.wait_for_done(timeout_sec=600)
         stop1.stop()
         stop1.wait_for_done()
+
+    def test_produce_consume_with_latency(self):
+        workload1 = self.trogdor.create_task("workload1", self.round_trip_spec)
+        time.sleep(2)
+        node_specs = {}
+        for node in self.kafka.nodes + self.zk.nodes:
+            node_specs[node.name] = {"latencyMs": 500, "networkDevice": "eth0"}
+        spec = DegradedNetworkFaultSpec(0, 60000, node_specs)
+        slow1 = self.trogdor.create_task("slow1", spec)
+        workload1.wait_for_done(timeout_sec=600)
+        slow1.stop()
+        slow1.wait_for_done()

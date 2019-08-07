@@ -33,20 +33,18 @@ import org.slf4j.LoggerFactory;
 
 public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
     private final String name;
-    private final ConcurrentNavigableMap<Bytes, byte[]> map;
+    private final ConcurrentNavigableMap<Bytes, byte[]> map = new ConcurrentSkipListMap<>();
     private volatile boolean open = false;
 
     private static final Logger LOG = LoggerFactory.getLogger(InMemoryKeyValueStore.class);
 
     public InMemoryKeyValueStore(final String name) {
         this.name = name;
-
-        this.map = new ConcurrentSkipListMap<>();
     }
 
     @Override
     public String name() {
-        return this.name;
+        return name;
     }
 
     @Override
@@ -65,7 +63,7 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
             });
         }
 
-        this.open = true;
+        open = true;
     }
 
     @Override
@@ -75,20 +73,20 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
 
     @Override
     public boolean isOpen() {
-        return this.open;
+        return open;
     }
 
     @Override
     public byte[] get(final Bytes key) {
-        return this.map.get(key);
+        return map.get(key);
     }
 
     @Override
     public void put(final Bytes key, final byte[] value) {
         if (value == null) {
-            this.map.remove(key);
+            map.remove(key);
         } else {
-            this.map.put(key, value);
+            map.put(key, value);
         }
     }
 
@@ -110,7 +108,7 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
 
     @Override
     public byte[] delete(final Bytes key) {
-        return this.map.remove(key);
+        return map.remove(key);
     }
 
     @Override
@@ -125,19 +123,19 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
 
         return new DelegatingPeekingKeyValueIterator<>(
             name,
-            new InMemoryKeyValueIterator(this.map.subMap(from, true, to, true).entrySet().iterator()));
+            new InMemoryKeyValueIterator(map.subMap(from, true, to, true).entrySet().iterator()));
     }
 
     @Override
     public KeyValueIterator<Bytes, byte[]> all() {
         return new DelegatingPeekingKeyValueIterator<>(
             name,
-            new InMemoryKeyValueIterator(this.map.entrySet().iterator()));
+            new InMemoryKeyValueIterator(map.entrySet().iterator()));
     }
 
     @Override
     public long approximateNumEntries() {
-        return this.map.size();
+        return map.size();
     }
 
     @Override
@@ -147,8 +145,8 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
 
     @Override
     public void close() {
-        this.map.clear();
-        this.open = false;
+        map.clear();
+        open = false;
     }
 
     private static class InMemoryKeyValueIterator implements KeyValueIterator<Bytes, byte[]> {

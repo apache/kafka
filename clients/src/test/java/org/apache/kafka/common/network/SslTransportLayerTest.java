@@ -889,6 +889,46 @@ public class SslTransportLayerTest {
     }
 
     /**
+     * Verifies that inter-broker listener with validation of truststore against keystore works
+     * with configs including mutual authentication and hostname verification.
+     */
+    @Test
+    public void testInterBrokerSslConfigValidation() throws Exception {
+        SecurityProtocol securityProtocol = SecurityProtocol.SSL;
+        sslServerConfigs.put(BrokerSecurityConfigs.SSL_CLIENT_AUTH_CONFIG, "required");
+        sslServerConfigs.put(SslConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG, "HTTPS");
+        sslServerConfigs.putAll(serverCertStores.keyStoreProps());
+        sslServerConfigs.putAll(serverCertStores.trustStoreProps());
+        sslClientConfigs.putAll(serverCertStores.keyStoreProps());
+        sslClientConfigs.putAll(serverCertStores.trustStoreProps());
+        TestSecurityConfig config = new TestSecurityConfig(sslServerConfigs);
+        ListenerName listenerName = ListenerName.forSecurityProtocol(securityProtocol);
+        ChannelBuilder serverChannelBuilder = ChannelBuilders.serverChannelBuilder(listenerName,
+                true, securityProtocol, config, null, null, time);
+        server = new NioEchoServer(listenerName, securityProtocol, config,
+                "localhost", serverChannelBuilder, null, time);
+        server.start();
+
+        this.selector = createSelector(sslClientConfigs, null, null, null);
+        InetSocketAddress addr = new InetSocketAddress("localhost", server.port());
+        selector.connect("0", addr, BUFFER_SIZE, BUFFER_SIZE);
+        NetworkTestUtils.checkClientConnection(selector, "0", 100, 10);
+    }
+
+    /**
+     * Verifies that inter-broker listener with validation of truststore against keystore
+     * fails if certs from keystore are not trusted.
+     */
+    @Test(expected = KafkaException.class)
+    public void testInterBrokerSslConfigValidationFailure() throws Exception {
+        SecurityProtocol securityProtocol = SecurityProtocol.SSL;
+        sslServerConfigs.put(BrokerSecurityConfigs.SSL_CLIENT_AUTH_CONFIG, "required");
+        TestSecurityConfig config = new TestSecurityConfig(sslServerConfigs);
+        ListenerName listenerName = ListenerName.forSecurityProtocol(securityProtocol);
+        ChannelBuilders.serverChannelBuilder(listenerName, true, securityProtocol, config, null, null, time);
+    }
+
+    /**
      * Tests reconfiguration of server keystore. Verifies that existing connections continue
      * to work with old keystore and new connections work with new keystore.
      */

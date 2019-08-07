@@ -23,6 +23,7 @@ import org.junit.Test
 import org.junit.Assert._
 
 import scala.collection.JavaConverters._
+import scala.collection.Seq
 
 /**
  * Integration tests for the consumer that cover basic usage as well as coordinator failure

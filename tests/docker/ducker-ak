@@ -240,7 +240,7 @@ docker_run() {
     # and mount FUSE filesystems inside the container.  We also need it to
     # run iptables inside the container.
     must_do -v docker run --privileged \
-        -d -t --net=host -h "${node}" --network ducknet \
+        -d -t -h "${node}" --network ducknet \
         --memory=${docker_run_memory_limit} --memory-swappiness=1 \
         -v "${kafka_dir}:/opt/kafka-dev" --name "${node}" -- "${image_name}"
 }

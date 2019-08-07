@@ -27,7 +27,7 @@
       "about": "The error code, or 0 if there was no error." },
     { "name": "ErrorMessage", "type": "string", "versions": "1+", "nullableVersions": "1+", "ignorable": true,
       "about": "The error message, or null if there was no error." },
-    { "name": "NodeId", "type": "int32", "versions": "0+",
+    { "name": "NodeId", "type": "int32", "versions": "0+", "entityType": "brokerId",
       "about": "The node id." },
     { "name": "Host", "type": "string", "versions": "0+",
       "about": "The host name." },

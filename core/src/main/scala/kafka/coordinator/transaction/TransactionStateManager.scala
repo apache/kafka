@@ -24,13 +24,14 @@ import java.util.concurrent.locks.ReentrantReadWriteLock
 
 import kafka.log.LogConfig
 import kafka.message.UncompressedCodec
-import kafka.server.Defaults
-import kafka.server.ReplicaManager
+import kafka.server.{Defaults, FetchLogEnd, ReplicaManager}
 import kafka.utils.CoreUtils.{inReadLock, inWriteLock}
 import kafka.utils.{Logging, Pool, Scheduler}
 import kafka.zk.KafkaZkClient
 import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.apache.kafka.common.internals.Topic
+import org.apache.kafka.common.metrics.stats.{Avg, Max}
+import org.apache.kafka.common.metrics.{MetricConfig, Metrics}
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.{FileRecords, MemoryRecords, SimpleRecord}
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
@@ -71,7 +72,8 @@ class TransactionStateManager(brokerId: Int,
                               scheduler: Scheduler,
                               replicaManager: ReplicaManager,
                               config: TransactionConfig,
-                              time: Time) extends Logging {
+                              time: Time,
+                              metrics: Metrics) extends Logging {
 
   this.logIdent = "[Transaction State Manager " + brokerId + "]: "
 
@@ -94,6 +96,16 @@ class TransactionStateManager(brokerId: Int,
 
   /** number of partitions for the transaction log topic */
   private val transactionTopicPartitionCount = getTransactionTopicPartitionCount
+
+  /** setup metrics*/
+  private val partitionLoadSensor = metrics.sensor("PartitionLoadTime")
+
+  partitionLoadSensor.add(metrics.metricName("partition-load-time-max",
+    "transaction-coordinator-metrics",
+    "The max time it took to load the partitions in the last 30sec"), new Max())
+  partitionLoadSensor.add(metrics.metricName("partition-load-time-avg",
+    "transaction-coordinator-metrics",
+    "The avg time it took to load the partitions in the last 30sec"), new Avg())
 
   // visible for testing only
   private[transaction] def addLoadingPartition(partitionId: Int, coordinatorEpoch: Int): Unit = {
@@ -287,22 +299,23 @@ class TransactionStateManager(brokerId: Int,
 
     replicaManager.getLog(topicPartition) match {
       case None =>
-        warn(s"Attempted to load offsets and group metadata from $topicPartition, but found no log")
+        warn(s"Attempted to load transaction metadata from $topicPartition, but found no log")
 
       case Some(log) =>
         // buffer may not be needed if records are read from memory
         var buffer = ByteBuffer.allocate(0)
 
-        // loop breaks if leader changes at any time during the load, since getHighWatermark is -1
+        // loop breaks if leader changes at any time during the load, since logEndOffset is -1
         var currOffset = log.logStartOffset
 
         try {
-          while (currOffset < logEndOffset
-            && !shuttingDown.get()
-            && inReadLock(stateLock) {loadingPartitions.exists { idAndEpoch: TransactionPartitionAndLeaderEpoch =>
+          while (currOffset < logEndOffset && !shuttingDown.get() && inReadLock(stateLock) {
+            loadingPartitions.exists { idAndEpoch: TransactionPartitionAndLeaderEpoch =>
               idAndEpoch.txnPartitionId == topicPartition.partition && idAndEpoch.coordinatorEpoch == coordinatorEpoch}}) {
-            val fetchDataInfo = log.read(currOffset, config.transactionLogLoadBufferSize, maxOffset = None,
-              minOneMessage = true, includeAbortedTxns = false)
+            val fetchDataInfo = log.read(currOffset,
+              maxLength = config.transactionLogLoadBufferSize,
+              isolation = FetchLogEnd,
+              minOneMessage = true)
             val memRecords = fetchDataInfo.records match {
               case records: MemoryRecords => records
               case fileRecords: FileRecords =>
@@ -312,7 +325,7 @@ class TransactionStateManager(brokerId: Int,
                 // minOneMessage = true in the above log.read means that the buffer may need to be grown to ensure progress can be made
                 if (buffer.capacity < bytesNeeded) {
                   if (config.transactionLogLoadBufferSize < bytesNeeded)
-                    warn(s"Loaded offsets and group metadata from $topicPartition with buffer larger ($bytesNeeded bytes) than " +
+                    warn(s"Loaded transaction metadata from $topicPartition with buffer larger ($bytesNeeded bytes) than " +
                       s"configured transaction.state.log.load.buffer.size (${config.transactionLogLoadBufferSize} bytes)")
 
                   buffer = ByteBuffer.allocate(bytesNeeded)
@@ -339,8 +352,10 @@ class TransactionStateManager(brokerId: Int,
                 currOffset = batch.nextOffset
               }
             }
-
-            info(s"Finished loading ${loadedTransactions.size} transaction metadata from $topicPartition in ${time.milliseconds() - startMs} milliseconds")
+            val endMs = time.milliseconds()
+            val timeLapse = endMs - startMs
+            partitionLoadSensor.record(timeLapse, endMs, false)
+            info(s"Finished loading ${loadedTransactions.size} transaction metadata from $topicPartition in $timeLapse milliseconds")
           }
         } catch {
           case t: Throwable => error(s"Error loading transactions from transaction log $topicPartition", t)

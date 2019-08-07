@@ -84,7 +84,7 @@ public class GlobalStateTaskTest {
         final Map<String, String> storeToTopic = new HashMap<>();
         storeToTopic.put("t1-store", topic1);
         storeToTopic.put("t2-store", topic2);
-        topology = ProcessorTopology.with(
+        topology = ProcessorTopologyFactories.with(
             asList(sourceOne, sourceTwo, processorOne, processorTwo),
             sourceByTopics,
             Collections.<StateStore>emptyList(),

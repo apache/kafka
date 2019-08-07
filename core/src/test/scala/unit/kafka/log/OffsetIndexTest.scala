@@ -24,14 +24,14 @@ import org.junit.Assert._
 import java.util.{Arrays, Collections}
 
 import org.junit._
-import org.scalatest.junit.JUnitSuite
+import org.scalatest.Assertions.intercept
 
 import scala.collection._
 import scala.util.Random
 import kafka.utils.TestUtils
 import org.apache.kafka.common.errors.InvalidOffsetException
 
-class OffsetIndexTest extends JUnitSuite {
+class OffsetIndexTest {
   
   var idx: OffsetIndex = null
   val maxEntries = 30

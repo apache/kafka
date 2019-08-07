@@ -34,7 +34,7 @@ class DescribeAuthorizedOperationsTest extends IntegrationTestHarness with SaslS
   this.serverConfig.setProperty(KafkaConfig.ZkEnableSecureAclsProp, "true")
   this.serverConfig.setProperty(KafkaConfig.AuthorizerClassNameProp, classOf[SimpleAclAuthorizer].getName)
 
-  var client: AdminClient = _
+  var client: Admin = _
   val group1 = "group1"
   val group2 = "group2"
   val group3 = "group3"

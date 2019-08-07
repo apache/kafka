@@ -18,11 +18,15 @@ package org.apache.kafka.connect.runtime.distributed;
 
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.common.config.ConfigDef;
+import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.runtime.WorkerConfig;
 
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 
 import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
+import static org.apache.kafka.common.config.ConfigDef.Range.between;
 
 public class DistributedConfig extends WorkerConfig {
     private static final ConfigDef CONFIG;
@@ -35,13 +39,13 @@ public class DistributedConfig extends WorkerConfig {
     /**
      * <code>group.id</code>
      */
-    public static final String GROUP_ID_CONFIG = "group.id";
+    public static final String GROUP_ID_CONFIG = CommonClientConfigs.GROUP_ID_CONFIG;
     private static final String GROUP_ID_DOC = "A unique string that identifies the Connect cluster group this worker belongs to.";
 
     /**
      * <code>session.timeout.ms</code>
      */
-    public static final String SESSION_TIMEOUT_MS_CONFIG = "session.timeout.ms";
+    public static final String SESSION_TIMEOUT_MS_CONFIG = CommonClientConfigs.SESSION_TIMEOUT_MS_CONFIG;
     private static final String SESSION_TIMEOUT_MS_DOC = "The timeout used to detect worker failures. " +
             "The worker sends periodic heartbeats to indicate its liveness to the broker. If no heartbeats are " +
             "received by the broker before the expiration of this session timeout, then the broker will remove the " +
@@ -52,7 +56,7 @@ public class DistributedConfig extends WorkerConfig {
     /**
      * <code>heartbeat.interval.ms</code>
      */
-    public static final String HEARTBEAT_INTERVAL_MS_CONFIG = "heartbeat.interval.ms";
+    public static final String HEARTBEAT_INTERVAL_MS_CONFIG = CommonClientConfigs.HEARTBEAT_INTERVAL_MS_CONFIG;
     private static final String HEARTBEAT_INTERVAL_MS_DOC = "The expected time between heartbeats to the group " +
             "coordinator when using Kafka's group management facilities. Heartbeats are used to ensure that the " +
             "worker's session stays active and to facilitate rebalancing when new members join or leave the group. " +
@@ -62,11 +66,8 @@ public class DistributedConfig extends WorkerConfig {
     /**
      * <code>rebalance.timeout.ms</code>
      */
-    public static final String REBALANCE_TIMEOUT_MS_CONFIG = "rebalance.timeout.ms";
-    private static final String REBALANCE_TIMEOUT_MS_DOC = "The maximum allowed time for each worker to join the group " +
-            "once a rebalance has begun. This is basically a limit on the amount of time needed for all tasks to " +
-            "flush any pending data and commit offsets. If the timeout is exceeded, then the worker will be removed " +
-            "from the group, which will cause offset commit failures.";
+    public static final String REBALANCE_TIMEOUT_MS_CONFIG = CommonClientConfigs.REBALANCE_TIMEOUT_MS_CONFIG;
+    private static final String REBALANCE_TIMEOUT_MS_DOC = CommonClientConfigs.REBALANCE_TIMEOUT_MS_DOC;
 
     /**
      * <code>worker.sync.timeout.ms</code>
@@ -131,6 +132,20 @@ public class DistributedConfig extends WorkerConfig {
      */
     public static final String STATUS_STORAGE_REPLICATION_FACTOR_CONFIG = "status.storage.replication.factor";
     private static final String STATUS_STORAGE_REPLICATION_FACTOR_CONFIG_DOC = "Replication factor used when creating the status storage topic";
+
+    /**
+     * <code>connect.protocol</code>
+     */
+    public static final String CONNECT_PROTOCOL_CONFIG = "connect.protocol";
+    public static final String CONNECT_PROTOCOL_DOC = "Compatibility mode for Kafka Connect Protocol";
+    public static final String CONNECT_PROTOCOL_DEFAULT = ConnectProtocolCompatibility.COMPATIBLE.toString();
+
+    /**
+     * <code>connect.protocol</code>
+     */
+    public static final String SCHEDULED_REBALANCE_MAX_DELAY_MS_CONFIG = "scheduled.rebalance.max.delay.ms";
+    public static final String SCHEDULED_REBALANCE_MAX_DELAY_MS_DOC = "Compatibility mode for Kafka Connect Protocol";
+    public static final int SCHEDULED_REBALANCE_MAX_DELAY_MS_DEFAULT = Math.toIntExact(TimeUnit.SECONDS.toMillis(300));
 
     static {
         CONFIG = baseConfigDef()
@@ -265,7 +280,33 @@ public class DistributedConfig extends WorkerConfig {
                         (short) 3,
                         atLeast(1),
                         ConfigDef.Importance.LOW,
-                        STATUS_STORAGE_REPLICATION_FACTOR_CONFIG_DOC);
+                        STATUS_STORAGE_REPLICATION_FACTOR_CONFIG_DOC)
+                .define(CONNECT_PROTOCOL_CONFIG,
+                        ConfigDef.Type.STRING,
+                        CONNECT_PROTOCOL_DEFAULT,
+                        ConfigDef.LambdaValidator.with(
+                            (name, value) -> {
+                                try {
+                                    ConnectProtocolCompatibility.compatibility((String) value);
+                                } catch (Throwable t) {
+                                    throw new ConfigException(name, value, "Invalid Connect protocol "
+                                            + "compatibility");
+                                }
+                            },
+                            () -> "[" + Utils.join(ConnectProtocolCompatibility.values(), ", ") + "]"),
+                        ConfigDef.Importance.LOW,
+                        CONNECT_PROTOCOL_DOC)
+                .define(SCHEDULED_REBALANCE_MAX_DELAY_MS_CONFIG,
+                        ConfigDef.Type.INT,
+                        SCHEDULED_REBALANCE_MAX_DELAY_MS_DEFAULT,
+                        between(0, Integer.MAX_VALUE),
+                        ConfigDef.Importance.LOW,
+                        SCHEDULED_REBALANCE_MAX_DELAY_MS_DOC);
+    }
+
+    @Override
+    public Integer getRebalanceTimeout() {
+        return getInt(DistributedConfig.REBALANCE_TIMEOUT_MS_CONFIG);
     }
 
     public DistributedConfig(Map<String, String> props) {

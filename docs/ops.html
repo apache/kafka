@@ -453,7 +453,7 @@
   There are two interfaces that can be used to engage a throttle. The simplest, and safest, is to apply a throttle when invoking the kafka-reassign-partitions.sh, but kafka-configs.sh can also be used to view and alter the throttle values directly.
   <p></p>
   So for example, if you were to execute a rebalance, with the below command, it would move partitions at no more than 50MB/s.
-  <pre class="brush: bash;">$ bin/kafka-reassign-partitions.sh --zookeeper myhost:2181--execute --reassignment-json-file bigger-cluster.json —throttle 50000000</pre>
+  <pre class="brush: bash;">$ bin/kafka-reassign-partitions.sh --zookeeper localhost:2181 --execute --reassignment-json-file bigger-cluster.json —throttle 50000000</pre>
   When you execute this script you will see the throttle engage:
   <pre class="brush: bash;">
   The throttle limit was set to 50000000 B/s
@@ -1028,6 +1028,26 @@
         <td>kafka.server:type=SessionExpireListener,name=SessionState</td>
         <td>Connection status of broker's ZooKeeper session which may be one of
             Disconnected|SyncConnected|AuthFailed|ConnectedReadOnly|SaslAuthenticated|Expired.</td>
+      </tr>
+      <tr>
+        <td>Max time to load group metadata</td>
+        <td>kafka.server:type=group-coordinator-metrics,name=partition-load-time-max</td>
+        <td>maximum time, in milliseconds, it took to load offsets and group metadata from the consumer offset partitions loaded in the last 30 seconds</td>
+      </tr>
+      <tr>
+        <td>Avg time to load group metadata</td>
+        <td>kafka.server:type=group-coordinator-metrics,name=partition-load-time-avg</td>
+        <td>average time, in milliseconds, it took to load offsets and group metadata from the consumer offset partitions loaded in the last 30 seconds</td>
+      </tr>
+      <tr>
+        <td>Max time to load transaction metadata</td>
+        <td>kafka.server:type=transaction-coordinator-metrics,name=partition-load-time-max</td>
+        <td>maximum time, in milliseconds, it took to load transaction metadata from the consumer offset partitions loaded in the last 30 seconds</td>
+      </tr>
+      <tr>
+        <td>Avg time to load transaction metadata</td>
+        <td>kafka.server:type=transaction-coordinator-metrics,name=partition-load-time-avg</td>
+        <td>average time, in milliseconds, it took to load transaction metadata from the consumer offset partitions loaded in the last 30 seconds</td>
       </tr>
   </tbody></table>
 
@@ -2014,7 +2034,7 @@ All the following metrics have a recording level of <code>debug</code>:
   <h3><a id="zk" href="#zk">6.7 ZooKeeper</a></h3>
 
   <h4><a id="zkversion" href="#zkversion">Stable version</a></h4>
-  The current stable branch is 3.4 and the latest release of that branch is 3.4.9.
+  The current stable branch is 3.5. Kafka is regularly updated to include the latest release in the 3.5 series.
 
   <h4><a id="zkops" href="#zkops">Operationalizing ZooKeeper</a></h4>
   Operationally, we do the following for a healthy ZooKeeper installation:

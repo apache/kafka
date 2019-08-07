@@ -19,7 +19,7 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.message.IncrementalAlterConfigsResponseData;
-import org.apache.kafka.common.message.IncrementalAlterConfigsResponseData.AlterConfigsResourceResult;
+import org.apache.kafka.common.message.IncrementalAlterConfigsResponseData.AlterConfigsResourceResponse;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
@@ -35,7 +35,7 @@ public class IncrementalAlterConfigsResponse extends AbstractResponse {
         IncrementalAlterConfigsResponseData responseData = new IncrementalAlterConfigsResponseData();
         responseData.setThrottleTimeMs(requestThrottleMs);
         for (Map.Entry<ConfigResource, ApiError> entry : results.entrySet()) {
-            responseData.responses().add(new AlterConfigsResourceResult().
+            responseData.responses().add(new AlterConfigsResourceResponse().
                     setResourceName(entry.getKey().name()).
                     setResourceType(entry.getKey().type().id()).
                     setErrorCode(entry.getValue().error().code()).
@@ -46,9 +46,9 @@ public class IncrementalAlterConfigsResponse extends AbstractResponse {
 
     public static Map<ConfigResource, ApiError> fromResponseData(final IncrementalAlterConfigsResponseData data) {
         Map<ConfigResource, ApiError> map = new HashMap<>();
-        for (AlterConfigsResourceResult result : data.responses()) {
-            map.put(new ConfigResource(ConfigResource.Type.forId(result.resourceType()), result.resourceName()),
-                    new ApiError(Errors.forCode(result.errorCode()), result.errorMessage()));
+        for (AlterConfigsResourceResponse response : data.responses()) {
+            map.put(new ConfigResource(ConfigResource.Type.forId(response.resourceType()), response.resourceName()),
+                    new ApiError(Errors.forCode(response.errorCode()), response.errorMessage()));
         }
         return map;
     }
@@ -70,8 +70,8 @@ public class IncrementalAlterConfigsResponse extends AbstractResponse {
     @Override
     public Map<Errors, Integer> errorCounts() {
         HashMap<Errors, Integer> counts = new HashMap<>();
-        for (AlterConfigsResourceResult result : data.responses()) {
-            Errors error = Errors.forCode(result.errorCode());
+        for (AlterConfigsResourceResponse response : data.responses()) {
+            Errors error = Errors.forCode(response.errorCode());
             counts.put(error, counts.getOrDefault(error, 0) + 1);
         }
         return counts;

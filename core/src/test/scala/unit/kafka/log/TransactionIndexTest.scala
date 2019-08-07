@@ -22,7 +22,7 @@ import kafka.utils.TestUtils
 import org.apache.kafka.common.requests.FetchResponse.AbortedTransaction
 import org.junit.Assert._
 import org.junit.{After, Before, Test}
-import org.scalatest.junit.JUnitSuite
+import org.scalatestplus.junit.JUnitSuite
 
 class TransactionIndexTest extends JUnitSuite {
   var file: File = _

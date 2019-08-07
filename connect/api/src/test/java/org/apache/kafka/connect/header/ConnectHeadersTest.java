@@ -119,6 +119,14 @@ public class ConnectHeadersTest {
     }
 
     @Test
+    public void shouldRetainLatestWhenEmpty() {
+        headers.retainLatest(other);
+        headers.retainLatest(key);
+        headers.retainLatest();
+        assertTrue(headers.isEmpty());
+    }
+
+    @Test
     public void shouldAddMultipleHeadersWithSameKeyAndRetainLatest() {
         populate(headers);
 
@@ -180,6 +188,12 @@ public class ConnectHeadersTest {
     }
 
     @Test
+    public void shouldRemoveAllHeadersWithSameKeyWhenEmpty() {
+        headers.remove(key);
+        assertNoHeaderWithKey(key);
+    }
+
+    @Test
     public void shouldRemoveAllHeadersWithSameKey() {
         populate(headers);
 
@@ -208,6 +222,13 @@ public class ConnectHeadersTest {
         assertNoHeaderWithKey(key);
         assertNoHeaderWithKey(other);
         assertEquals(0, headers.size());
+        assertTrue(headers.isEmpty());
+    }
+
+    @Test
+    public void shouldTransformHeadersWhenEmpty() {
+        headers.apply(appendToKey("-suffix"));
+        headers.apply(key, appendToKey("-suffix"));
         assertTrue(headers.isEmpty());
     }
 

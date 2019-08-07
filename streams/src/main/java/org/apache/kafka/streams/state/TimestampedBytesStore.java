@@ -22,6 +22,9 @@ import static org.apache.kafka.clients.consumer.ConsumerRecord.NO_TIMESTAMP;
 
 public interface TimestampedBytesStore {
     static byte[] convertToTimestampedFormat(final byte[] plainValue) {
+        if (plainValue == null) {
+            return null;
+        }
         return ByteBuffer
             .allocate(8 + plainValue.length)
             .putLong(NO_TIMESTAMP)

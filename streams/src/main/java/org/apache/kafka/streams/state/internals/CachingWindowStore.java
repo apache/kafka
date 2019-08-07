@@ -16,14 +16,17 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import java.util.NoSuchElementException;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
+import org.apache.kafka.streams.processor.internals.RecordQueue;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.StateSerdes;
 import org.apache.kafka.streams.state.WindowStore;
@@ -47,6 +50,8 @@ class CachingWindowStore
     private StateSerdes<Bytes, byte[]> bytesSerdes;
     private CacheFlushListener<byte[], byte[]> flushListener;
 
+    private long maxObservedTimestamp;
+
     private final SegmentedCacheFunction cacheFunction;
 
     CachingWindowStore(final WindowStore<Bytes, byte[]> underlying,
@@ -55,6 +60,7 @@ class CachingWindowStore
         super(underlying);
         this.windowSize = windowSize;
         this.cacheFunction = new SegmentedCacheFunction(keySchema, segmentInterval);
+        this.maxObservedTimestamp = RecordQueue.UNKNOWN;
     }
 
     @Override
@@ -150,6 +156,8 @@ class CachingWindowStore
                 context.partition(),
                 context.topic());
         cache.put(name, cacheFunction.cacheKey(keyBytes), entry);
+
+        maxObservedTimestamp = Math.max(keySchema.segmentTimestamp(keyBytes), maxObservedTimestamp);
     }
 
     @Override
@@ -182,9 +190,13 @@ class CachingWindowStore
         if (cache == null) {
             return underlyingIterator;
         }
-        final Bytes cacheKeyFrom = cacheFunction.cacheKey(keySchema.lowerRangeFixedSize(key, timeFrom));
-        final Bytes cacheKeyTo = cacheFunction.cacheKey(keySchema.upperRangeFixedSize(key, timeTo));
-        final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = cache.range(name, cacheKeyFrom, cacheKeyTo);
+
+        final PeekingKeyValueIterator<Bytes, LRUCacheEntry> cacheIterator = wrapped().persistent() ?
+            new CacheIteratorWrapper(key, timeFrom, timeTo) :
+            cache.range(name,
+                        cacheFunction.cacheKey(keySchema.lowerRangeFixedSize(key, timeFrom)),
+                        cacheFunction.cacheKey(keySchema.upperRangeFixedSize(key, timeTo))
+            );
 
         final HasNextCondition hasNextCondition = keySchema.hasNextCondition(key, key, timeFrom, timeTo);
         final PeekingKeyValueIterator<Bytes, LRUCacheEntry> filteredCacheIterator = new FilteredCacheIterator(
@@ -216,9 +228,13 @@ class CachingWindowStore
         if (cache == null) {
             return underlyingIterator;
         }
-        final Bytes cacheKeyFrom = cacheFunction.cacheKey(keySchema.lowerRange(from, timeFrom));
-        final Bytes cacheKeyTo = cacheFunction.cacheKey(keySchema.upperRange(to, timeTo));
-        final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = cache.range(name, cacheKeyFrom, cacheKeyTo);
+
+        final PeekingKeyValueIterator<Bytes, LRUCacheEntry> cacheIterator = wrapped().persistent() ?
+            new CacheIteratorWrapper(from, to, timeFrom, timeTo) :
+            cache.range(name,
+                        cacheFunction.cacheKey(keySchema.lowerRange(from, timeFrom)),
+                        cacheFunction.cacheKey(keySchema.upperRange(to, timeTo))
+            );
 
         final HasNextCondition hasNextCondition = keySchema.hasNextCondition(from, to, timeFrom, timeTo);
         final PeekingKeyValueIterator<Bytes, LRUCacheEntry> filteredCacheIterator = new FilteredCacheIterator(cacheIterator, hasNextCondition, cacheFunction);
@@ -280,5 +296,137 @@ class CachingWindowStore
         flush();
         cache.close(name);
         wrapped().close();
+    }
+
+    private class CacheIteratorWrapper implements PeekingKeyValueIterator<Bytes, LRUCacheEntry> {
+
+        private final long segmentInterval;
+
+        private final Bytes keyFrom;
+        private final Bytes keyTo;
+        private final long timeTo;
+        private long lastSegmentId;
+
+        private long currentSegmentId;
+        private Bytes cacheKeyFrom;
+        private Bytes cacheKeyTo;
+
+        private ThreadCache.MemoryLRUCacheBytesIterator current;
+
+        private CacheIteratorWrapper(final Bytes key,
+                                     final long timeFrom,
+                                     final long timeTo) {
+            this(key, key, timeFrom, timeTo);
+        }
+
+        private CacheIteratorWrapper(final Bytes keyFrom,
+                                     final Bytes keyTo,
+                                     final long timeFrom,
+                                     final long timeTo) {
+            this.keyFrom = keyFrom;
+            this.keyTo = keyTo;
+            this.timeTo = timeTo;
+            this.lastSegmentId = cacheFunction.segmentId(Math.min(timeTo, maxObservedTimestamp));
+
+            this.segmentInterval = cacheFunction.getSegmentInterval();
+            this.currentSegmentId = cacheFunction.segmentId(timeFrom);
+
+            setCacheKeyRange(timeFrom, currentSegmentLastTime());
+
+            this.current = cache.range(name, cacheKeyFrom, cacheKeyTo);
+        }
+
+        @Override
+        public boolean hasNext() {
+            if (current == null) {
+                return false;
+            }
+
+            if (current.hasNext()) {
+                return true;
+            }
+
+            while (!current.hasNext()) {
+                getNextSegmentIterator();
+                if (current == null) {
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        @Override
+        public Bytes peekNextKey() {
+            if (!hasNext()) {
+                throw new NoSuchElementException();
+            }
+            return current.peekNextKey();
+        }
+
+        @Override
+        public KeyValue<Bytes, LRUCacheEntry> peekNext() {
+            if (!hasNext()) {
+                throw new NoSuchElementException();
+            }
+            return current.peekNext();
+        }
+
+        @Override
+        public KeyValue<Bytes, LRUCacheEntry> next() {
+            if (!hasNext()) {
+                throw new NoSuchElementException();
+            }
+            return current.next();
+        }
+
+        @Override
+        public void close() {
+            current.close();
+        }
+
+        private long currentSegmentBeginTime() {
+            return currentSegmentId * segmentInterval;
+        }
+
+        private long currentSegmentLastTime() {
+            return Math.min(timeTo, currentSegmentBeginTime() + segmentInterval - 1);
+        }
+
+        private void getNextSegmentIterator() {
+            ++currentSegmentId;
+            lastSegmentId = cacheFunction.segmentId(Math.min(timeTo, maxObservedTimestamp));
+
+            if (currentSegmentId > lastSegmentId) {
+                current = null;
+                return;
+            }
+
+            setCacheKeyRange(currentSegmentBeginTime(), currentSegmentLastTime());
+
+            current.close();
+            current = cache.range(name, cacheKeyFrom, cacheKeyTo);
+        }
+
+        private void setCacheKeyRange(final long lowerRangeEndTime, final long upperRangeEndTime) {
+            if (cacheFunction.segmentId(lowerRangeEndTime) != cacheFunction.segmentId(upperRangeEndTime)) {
+                throw new IllegalStateException("Error iterating over segments: segment interval has changed");
+            }
+
+            if (keyFrom == keyTo) {
+                cacheKeyFrom = cacheFunction.cacheKey(segmentLowerRangeFixedSize(keyFrom, lowerRangeEndTime));
+                cacheKeyTo = cacheFunction.cacheKey(segmentUpperRangeFixedSize(keyTo, upperRangeEndTime));
+            } else {
+                cacheKeyFrom = cacheFunction.cacheKey(keySchema.lowerRange(keyFrom, lowerRangeEndTime), currentSegmentId);
+                cacheKeyTo = cacheFunction.cacheKey(keySchema.upperRange(keyTo, timeTo), currentSegmentId);
+            }
+        }
+
+        private Bytes segmentLowerRangeFixedSize(final Bytes key, final long segmentBeginTime) {
+            return WindowKeySchema.toStoreKeyBinary(key, Math.max(0, segmentBeginTime), 0);
+        }
+
+        private Bytes segmentUpperRangeFixedSize(final Bytes key, final long segmentEndTime) {
+            return WindowKeySchema.toStoreKeyBinary(key, segmentEndTime, Integer.MAX_VALUE);
+        }
     }
 }

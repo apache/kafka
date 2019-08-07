@@ -30,6 +30,7 @@ import org.apache.kafka.common.resource.PatternType.{LITERAL, PREFIXED}
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.common.utils.SecurityUtils
 import org.junit.{After, Before, Test}
+import org.scalatest.Assertions.intercept
 
 class AclCommandTest extends ZooKeeperTestHarness with Logging {
 

@@ -117,7 +117,5 @@ public class StreamsNamedRepartitionTest {
             System.out.println("NAMED_REPARTITION_TEST Streams Stopped");
             System.out.flush();
         }));
-
     }
-
 }
