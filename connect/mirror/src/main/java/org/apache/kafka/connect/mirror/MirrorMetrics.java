@@ -20,7 +20,7 @@ import org.apache.kafka.common.MetricNameTemplate;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.metrics.Sensor;
-import org.apache.kafka.common.metrics.stats.Count;
+import org.apache.kafka.common.metrics.stats.WindowedCount;
 import org.apache.kafka.common.metrics.stats.Value;
 import org.apache.kafka.common.metrics.stats.Rate;
 import org.apache.kafka.common.metrics.stats.Min;
@@ -166,7 +166,7 @@ class MirrorMetrics implements AutoCloseable {
             tags.put("partition", Integer.toString(topicPartition.partition()));
 
             recordSensor = metrics.sensor("record-count");
-            recordSensor.add(metrics.metricInstance(RECORD_COUNT, tags), new Count());
+            recordSensor.add(metrics.metricInstance(RECORD_COUNT, tags), new WindowedCount());
 
             byteRateSensor = metrics.sensor("byte-rate");
             byteRateSensor.add(metrics.metricInstance(BYTE_RATE, tags), new Rate());
