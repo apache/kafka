@@ -58,6 +58,8 @@ import org.apache.kafka.common.message.DescribeGroupsResponseData;
 import org.apache.kafka.common.message.DescribeGroupsResponseData.DescribedGroup;
 import org.apache.kafka.common.message.ElectLeadersResponseData.PartitionResult;
 import org.apache.kafka.common.message.ElectLeadersResponseData.ReplicaElectionResult;
+import org.apache.kafka.common.message.ExpireDelegationTokenRequestData;
+import org.apache.kafka.common.message.ExpireDelegationTokenResponseData;
 import org.apache.kafka.common.message.FindCoordinatorRequestData;
 import org.apache.kafka.common.message.HeartbeatRequestData;
 import org.apache.kafka.common.message.HeartbeatResponseData;
@@ -1551,11 +1553,18 @@ public class RequestResponseTest {
     }
 
     private ExpireDelegationTokenRequest createExpireTokenRequest() {
-        return new ExpireDelegationTokenRequest.Builder("test".getBytes(), System.currentTimeMillis()).build();
+        ExpireDelegationTokenRequestData data = new ExpireDelegationTokenRequestData()
+                .setHmac("test".getBytes())
+                .setExpiryTimePeriodMs(System.currentTimeMillis());
+        return new ExpireDelegationTokenRequest.Builder(data).build();
     }
 
     private ExpireDelegationTokenResponse createExpireTokenResponse() {
-        return new ExpireDelegationTokenResponse(20, Errors.NONE, System.currentTimeMillis());
+        ExpireDelegationTokenResponseData data = new ExpireDelegationTokenResponseData()
+                .setThrottleTimeMs(20)
+                .setErrorCode(Errors.NONE.code())
+                .setExpiryTimestampMs(System.currentTimeMillis());
+        return new ExpireDelegationTokenResponse(data);
     }
 
     private DescribeDelegationTokenRequest createDescribeTokenRequest() {
