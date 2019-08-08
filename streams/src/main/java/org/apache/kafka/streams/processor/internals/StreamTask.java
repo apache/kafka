@@ -579,12 +579,10 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
     void suspend(final boolean clean,
                  final boolean isZombie) {
         try {
-            if (clean) {
-                // local partition times will shortly be wiped, so we need to store them
-                // for commit later
-                for (final TopicPartition partition : partitionGroup.partitions()) {
-                    partitionTimes.put(partition, partitionTime(partition));
-                }
+            // local partition times will shortly be wiped, so we need to store them
+            // for commit later
+            for (final TopicPartition partition : partitionGroup.partitions()) {
+                partitionTimes.put(partition, partitionTime(partition));
             }
             closeTopology(); // should we call this only on clean suspend?
         } catch (final RuntimeException fatal) {
