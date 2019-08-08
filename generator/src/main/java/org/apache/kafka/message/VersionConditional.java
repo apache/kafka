@@ -169,8 +169,8 @@ public final class VersionConditional {
             } else {
                 generateLowerRangeCheck(buffer);
             }
-        } else if ((possibleVersions.highest() >= containingVersions.lowest() &&
-                    (possibleVersions.lowest() <= containingVersions.highest()))) {
+        } else if (possibleVersions.highest() >= containingVersions.lowest() &&
+                    (possibleVersions.lowest() <= containingVersions.highest())) {
             if (possibleVersions.highest() > containingVersions.highest()) {
                 generateUpperRangeCheck(buffer);
             } else {
