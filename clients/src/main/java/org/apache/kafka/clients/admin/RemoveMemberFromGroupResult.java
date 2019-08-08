@@ -17,17 +17,15 @@
 package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.common.KafkaFuture;
+import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity;
 import org.apache.kafka.common.message.LeaveGroupResponseData.MemberResponse;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.requests.LeaveGroupResponse;
 
-import java.lang.reflect.Member;
-import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Result of a batch member removal operation.
@@ -37,36 +35,30 @@ public class RemoveMemberFromGroupResult {
     private final Errors error;
     private final Map<MemberIdentity, KafkaFuture<Void>> memberFutures;
 
-    private final List<MemberIdentity> membersToRemove;
-    private final List<MemberIdentity> succeedMembers;
-    private final List<MemberResponse> failedMembers;
-
     RemoveMemberFromGroupResult(Errors error,
                                 List<MemberIdentity> membersToRemove,
                                 List<MemberResponse> memberResponses) {
         this.error = error;
-        this.membersToRemove = membersToRemove;
         this.memberFutures = new HashMap<>(membersToRemove.size());
 
         if (!hasError()) {
             for (MemberIdentity memberIdentity : membersToRemove) {
-                memberFutures.put(memberIdentity, new KafkaFuture.Function<>())
-
+                KafkaFutureImpl future = new KafkaFutureImpl();
+                future.complete(null);
+                memberFutures.put(memberIdentity, future);
             }
-//            succeedMembers = membersToRemove;
-//            failedMembers = Collections.emptyList();
         } else {
-            succeedMembers = new ArrayList<>();
-            failedMembers = new ArrayList<>();
-
             for (MemberResponse memberResponse : memberResponses) {
-                if (Errors.forCode(memberResponse.errorCode()) == Errors.NONE) {
-                    succeedMembers.add(new MemberIdentity()
-                                           .setMemberId(memberResponse.memberId())
-                                           .setGroupInstanceId(memberResponse.groupInstanceId()));
+                KafkaFutureImpl future = new KafkaFutureImpl();
+                Errors memberError = Errors.forCode(memberResponse.errorCode());
+                if (memberError != Errors.NONE) {
+                  future.completeExceptionally(memberError.exception());
                 } else {
-                    failedMembers.add(memberResponse);
+                    future.completeExceptionally(error.exception());
                 }
+                memberFutures.put(new MemberIdentity()
+                                      .setMemberId(memberResponse.memberId())
+                                      .setGroupInstanceId(memberResponse.groupInstanceId()), future);
             }
         }
     }
@@ -84,28 +76,16 @@ public class RemoveMemberFromGroupResult {
      *
      * @return list of members to be removed.
      */
-    public List<MemberIdentity> membersToRemove() {
-        return membersToRemove;
+    public Set<MemberIdentity> membersToRemove() {
+        return memberFutures.keySet();
     }
 
     /**
-     * Individual members who failed to leave the group with corresponding errors. If
-     * the response error is a top level error for the entire request
-     * such as {@link Errors#GROUP_AUTHORIZATION_FAILED}, the list will be empty.
-     * See comments on {@link LeaveGroupResponse} for more details.
+     * Futures of members with corresponding errors when they leave the group.
      *
      * @return list of members who failed to be removed
      */
-    public List<MemberResponse> failedMembers() {
-        return failedMembers;
-    }
-
-    /**
-     * Members who are removed successfully from the group.
-     *
-     * @return list of members who succeed for removal
-     */
-    public List<MemberIdentity> succeedMembers() {
-        return succeedMembers;
+    public Map<MemberIdentity, KafkaFuture<Void>> memberFutures() {
+        return memberFutures;
     }
 }

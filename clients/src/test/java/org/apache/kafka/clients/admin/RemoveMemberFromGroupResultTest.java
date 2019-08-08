@@ -16,18 +16,26 @@
  */
 package org.apache.kafka.clients.admin;
 
+import org.apache.kafka.common.KafkaFuture;
+import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity;
 import org.apache.kafka.common.message.LeaveGroupResponseData.MemberResponse;
 import org.apache.kafka.common.protocol.Errors;
 import org.junit.Test;
 
+import javax.swing.tree.ExpandVetoException;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 
+import static junit.framework.TestCase.assertNull;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.fail;
 
 public class RemoveMemberFromGroupResultTest {
 
@@ -40,18 +48,28 @@ public class RemoveMemberFromGroupResultTest {
             .setGroupInstanceId(instanceTwo)
     );
 
+    private List<MemberResponse> memberResponses = Arrays.asList(
+      new MemberResponse()
+          .setGroupInstanceId(instanceOne),
+      new MemberResponse()
+          .setGroupInstanceId(instanceTwo)
+    );
+
     @Test
     public void testTopLevelErrorConstructor() {
         RemoveMemberFromGroupResult topLevelErrorResult =
             new RemoveMemberFromGroupResult(Errors.GROUP_AUTHORIZATION_FAILED,
                                             membersToRemove,
-                                            Collections.emptyList());
+                                            memberResponses);
 
         assertTrue(topLevelErrorResult.hasError());
         assertEquals(Errors.GROUP_AUTHORIZATION_FAILED, topLevelErrorResult.error());
-        assertEquals(membersToRemove, topLevelErrorResult.membersToRemove());
-        assertEquals(Collections.emptyList(), topLevelErrorResult.succeedMembers());
-        assertEquals(Collections.emptyList(), topLevelErrorResult.failedMembers());
+        assertEquals(new HashSet<>(membersToRemove), topLevelErrorResult.membersToRemove());
+
+        Map<MemberIdentity, KafkaFuture<Void>> memberFutures = topLevelErrorResult.memberFutures();
+        for (Map.Entry<MemberIdentity, KafkaFuture<Void>> memberFututre : memberFutures.entrySet()) {
+            assertThrows(GroupAuthorizationException.class, () -> memberFututre.getValue().get());
+        }
     }
 
     @Test
@@ -70,9 +88,9 @@ public class RemoveMemberFromGroupResultTest {
         assertTrue(memberLevelErrorResult.hasError());
         assertEquals(Errors.FENCED_INSTANCE_ID, memberLevelErrorResult.error());
         assertEquals(membersToRemove, memberLevelErrorResult.membersToRemove());
-        assertEquals(Collections.singletonList(
-            new MemberIdentity().setGroupInstanceId(instanceTwo)), memberLevelErrorResult.succeedMembers());
-        assertEquals(Collections.singletonList(responseOne), memberLevelErrorResult.failedMembers());
+//        assertEquals(Collections.singletonList(
+//            new MemberIdentity().setGroupInstanceId(instanceTwo)), memberLevelErrorResult.succeedMembers());
+//        assertEquals(Collections.singletonList(responseOne), memberLevelErrorResult.failedMembers());
     }
 
     @Test
@@ -91,7 +109,7 @@ public class RemoveMemberFromGroupResultTest {
         assertFalse(noErrorResult.hasError());
         assertEquals(Errors.NONE, noErrorResult.error());
         assertEquals(membersToRemove, noErrorResult.membersToRemove());
-        assertEquals(membersToRemove, noErrorResult.succeedMembers());
-        assertEquals(Collections.emptyList(), noErrorResult.failedMembers());
+//        assertEquals(membersToRemove, noErrorResult.succeedMembers());
+//        assertEquals(Collections.emptyList(), noErrorResult.failedMembers());
     }
 }

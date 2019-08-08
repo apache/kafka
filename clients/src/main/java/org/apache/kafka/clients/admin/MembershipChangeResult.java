@@ -32,7 +32,7 @@ import java.util.concurrent.ExecutionException;
 @InterfaceStability.Evolving
 public class MembershipChangeResult {
 
-    private KafkaFuture<Map<MemberIdentity, KafkaFuture<Void>>> future;
+    private KafkaFuture<RemoveMemberFromGroupResult> future;
 
     MembershipChangeResult(KafkaFuture<RemoveMemberFromGroupResult> future) {
         this.future = future;
