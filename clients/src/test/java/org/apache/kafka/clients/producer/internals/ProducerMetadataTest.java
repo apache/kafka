@@ -17,10 +17,12 @@
 package org.apache.kafka.clients.producer.internals;
 
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
@@ -37,6 +39,7 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
+import static org.junit.Assert.assertThrows;
 
 public class ProducerMetadataTest {
 
@@ -172,6 +175,13 @@ public class ProducerMetadataTest {
             assertTrue("Topic expired even though in use", metadata.containsTopic("topic2"));
             metadata.add("topic2");
         }
+    }
+
+    @Test
+    public void testMetadataWaitAbortedOnFatalException() throws Exception {
+        Time time = new MockTime();
+        metadata.failedUpdate(time.milliseconds(), new AuthenticationException("Fatal exception from test"));
+        assertThrows(AuthenticationException.class, () -> metadata.awaitUpdate(0, 1000));
     }
 
     private MetadataResponse responseWithCurrentTopics() {

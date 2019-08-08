@@ -19,7 +19,6 @@ package kafka.admin
 
 import kafka.utils.{CommandDefaultOptions, CommandLineUtils, Logging}
 import kafka.zk.{KafkaZkClient, ZkData, ZkSecurityMigratorUtils}
-import org.I0Itec.zkclient.exception.ZkException
 import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.utils.Time
 import org.apache.zookeeper.AsyncCallback.{ChildrenCallback, StatCallback}
@@ -182,10 +181,10 @@ class ZkSecurityMigrator(zkClient: KafkaZkClient) extends Logging {
           // Starting a new session isn't really a problem, but it'd complicate
           // the logic of the tool, so we quit and let the user re-run it.
           System.out.println("ZooKeeper session expired while changing ACLs")
-          promise failure ZkException.create(KeeperException.create(Code.get(rc)))
+          promise failure KeeperException.create(Code.get(rc))
         case _ =>
           System.out.println("Unexpected return code: %d".format(rc))
-          promise failure ZkException.create(KeeperException.create(Code.get(rc)))
+          promise failure KeeperException.create(Code.get(rc))
       }
     }
   }
@@ -211,10 +210,10 @@ class ZkSecurityMigrator(zkClient: KafkaZkClient) extends Logging {
           // Starting a new session isn't really a problem, but it'd complicate
           // the logic of the tool, so we quit and let the user re-run it.
           System.out.println("ZooKeeper session expired while changing ACLs")
-          promise failure ZkException.create(KeeperException.create(Code.get(rc)))
+          promise failure KeeperException.create(Code.get(rc))
         case _ =>
           System.out.println("Unexpected return code: %d".format(rc))
-          promise failure ZkException.create(KeeperException.create(Code.get(rc)))
+          promise failure KeeperException.create(Code.get(rc))
       }
     }
   }

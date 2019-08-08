@@ -121,7 +121,7 @@ class LogDirFailureTest extends IntegrationTestHarness {
     producer.send(record).get
 
     assertEquals(brokerCount, leaderServer.replicaManager.nonOfflinePartition(new TopicPartition(topic, anotherPartitionWithTheSameLeader))
-      .get.inSyncReplicas.size)
+      .get.inSyncReplicaIds.size)
     followerServer.replicaManager.replicaFetcherManager.fetcherThreadMap.values.foreach { thread =>
       assertFalse("ReplicaFetcherThread should still be working if its partition count > 0", thread.isShutdownComplete)
     }

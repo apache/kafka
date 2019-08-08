@@ -102,7 +102,6 @@ public class OffsetCommitResponse extends AbstractResponse {
                 errorMap.put(new TopicPartition(topic.name(), partition.partitionIndex()),
                         Errors.forCode(partition.errorCode()));
             }
-
         }
         return errorCounts(errorMap);
     }

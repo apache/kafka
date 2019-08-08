@@ -19,6 +19,7 @@ package org.apache.kafka.streams.kstream.internals;
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.KeyValueTimestamp;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.TopologyTestDriver;
@@ -71,7 +72,7 @@ public class KStreamTransformTest {
                 }
 
                 @Override
-                public void close() {}
+                public void close() { }
             };
 
         final int[] expectedKeys = {1, 10, 100, 1000};
@@ -97,13 +98,13 @@ public class KStreamTransformTest {
             driver.advanceWallClockTime(2);
             driver.advanceWallClockTime(1);
 
-            final String[] expected = {
-                "2:10 (ts: 0)",
-                "20:110 (ts: 5)",
-                "200:1110 (ts: 50)",
-                "2000:11110 (ts: 500)",
-                "-1:2 (ts: 2)",
-                "-1:3 (ts: 3)"
+            final KeyValueTimestamp[] expected = {
+                new KeyValueTimestamp<>(2, 10, 0),
+                new KeyValueTimestamp<>(20, 110, 5),
+                new KeyValueTimestamp<>(200, 1110, 50),
+                new KeyValueTimestamp<>(2000, 11110, 500),
+                new KeyValueTimestamp<>(-1, 2, 2),
+                new KeyValueTimestamp<>(-1, 3, 3)
             };
 
             assertEquals(expected.length, processor.theCapturedProcessor().processed.size());
@@ -136,7 +137,7 @@ public class KStreamTransformTest {
                 }
 
                 @Override
-                public void close() {}
+                public void close() { }
             };
 
         final int[] expectedKeys = {1, 10, 100, 1000};
@@ -158,7 +159,12 @@ public class KStreamTransformTest {
 
         assertEquals(6, processor.theCapturedProcessor().processed.size());
 
-        final String[] expected = {"2:10 (ts: 0)", "20:110 (ts: 0)", "200:1110 (ts: 0)", "2000:11110 (ts: 0)", "-1:2 (ts: 2)", "-1:3 (ts: 3)"};
+        final KeyValueTimestamp[] expected = {new KeyValueTimestamp<>(2, 10, 0),
+            new KeyValueTimestamp<>(20, 110, 0),
+            new KeyValueTimestamp<>(200, 1110, 0),
+            new KeyValueTimestamp<>(2000, 11110, 0),
+            new KeyValueTimestamp<>(-1, 2, 2),
+            new KeyValueTimestamp<>(-1, 3, 3)};
 
         for (int i = 0; i < expected.length; i++) {
             assertEquals(expected[i], processor.theCapturedProcessor().processed.get(i));

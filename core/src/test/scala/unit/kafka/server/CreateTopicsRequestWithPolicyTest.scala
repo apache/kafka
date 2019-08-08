@@ -146,7 +146,7 @@ object CreateTopicsRequestWithPolicyTest {
         require(replicationFactor == null, s"replicationFactor should be null, but it is $replicationFactor")
         require(replicasAssignments != null, s"replicaAssigments should not be null, but it is $replicasAssignments")
 
-        replicasAssignments.asScala.foreach { case (partitionId, assignment) =>
+        replicasAssignments.asScala.toSeq.sortBy { case (tp, _) => tp }.foreach { case (partitionId, assignment) =>
           if (assignment.size < 2)
             throw new PolicyViolationException("Topic partitions should have at least 2 partitions, received " +
               s"${assignment.size} for partition $partitionId")

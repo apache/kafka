@@ -20,6 +20,8 @@ package org.apache.kafka.message;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -31,15 +33,20 @@ public final class MessageSpec {
 
     private final MessageSpecType type;
 
+    private final List<StructSpec> commonStructs;
+
     @JsonCreator
     public MessageSpec(@JsonProperty("name") String name,
                        @JsonProperty("validVersions") String validVersions,
                        @JsonProperty("fields") List<FieldSpec> fields,
                        @JsonProperty("apiKey") Short apiKey,
-                       @JsonProperty("type") MessageSpecType type) {
+                       @JsonProperty("type") MessageSpecType type,
+                       @JsonProperty("commonStructs") List<StructSpec> commonStructs) {
         this.struct = new StructSpec(name, validVersions, fields);
         this.apiKey = apiKey == null ? Optional.empty() : Optional.of(apiKey);
         this.type = Objects.requireNonNull(type);
+        this.commonStructs = commonStructs == null ? Collections.emptyList() :
+                Collections.unmodifiableList(new ArrayList<>(commonStructs));
     }
 
     public StructSpec struct() {
@@ -69,6 +76,11 @@ public final class MessageSpec {
     @JsonProperty("type")
     public MessageSpecType type() {
         return type;
+    }
+
+    @JsonProperty("commonStructs")
+    public List<StructSpec> commonStructs() {
+        return commonStructs;
     }
 
     public String generatedClassName() {

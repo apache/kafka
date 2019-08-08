@@ -18,7 +18,7 @@ package org.apache.kafka.streams.integration;
 
 import kafka.tools.StreamsResetter;
 import org.apache.kafka.clients.CommonClientConfigs;
-import org.apache.kafka.clients.admin.AdminClient;
+import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.ConsumerGroupDescription;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
@@ -75,7 +75,7 @@ public abstract class AbstractResetIntegrationTest {
 
     private static MockTime mockTime;
     private static KafkaStreams streams;
-    private static AdminClient adminClient = null;
+    private static Admin adminClient = null;
 
     abstract Map<String, Object> getClientSslConfig();
 
@@ -95,7 +95,7 @@ public abstract class AbstractResetIntegrationTest {
 
     private void prepareEnvironment() {
         if (adminClient == null) {
-            adminClient = AdminClient.create(commonClientConfig);
+            adminClient = Admin.create(commonClientConfig);
         }
 
         boolean timeSet = false;

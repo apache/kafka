@@ -107,7 +107,7 @@ public class PartitionGroupTest {
         // st: -1 since no records was being processed yet
 
         verifyBuffered(6, 3, 3);
-        assertEquals(-1L, group.timestamp());
+        assertEquals(-1L, group.streamTime());
         assertEquals(0.0, metrics.metric(lastLatenessValue).metricValue());
 
         StampedRecord record;
@@ -143,7 +143,7 @@ public class PartitionGroupTest {
         // 2:[4, 6]
         // st: 2 (just adding records shouldn't change it)
         verifyBuffered(6, 4, 2);
-        assertEquals(2L, group.timestamp());
+        assertEquals(2L, group.streamTime());
         assertEquals(0.0, metrics.metric(lastLatenessValue).metricValue());
 
         // get one record, time should be advanced
@@ -221,7 +221,7 @@ public class PartitionGroupTest {
         group.addRawRecords(partition1, list1);
 
         verifyBuffered(3, 3, 0);
-        assertEquals(-1L, group.timestamp());
+        assertEquals(-1L, group.streamTime());
         assertEquals(0.0, metrics.metric(lastLatenessValue).metricValue());
 
         StampedRecord record;
@@ -258,7 +258,7 @@ public class PartitionGroupTest {
 
     private void verifyTimes(final StampedRecord record, final long recordTime, final long streamTime) {
         assertEquals(recordTime, record.timestamp);
-        assertEquals(streamTime, group.timestamp());
+        assertEquals(streamTime, group.streamTime());
     }
 
     private void verifyBuffered(final int totalBuffered, final int partitionOneBuffered, final int partitionTwoBuffered) {

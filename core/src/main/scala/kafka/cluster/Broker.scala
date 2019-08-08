@@ -22,6 +22,8 @@ import org.apache.kafka.common.Node
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.auth.SecurityProtocol
 
+import scala.collection.Seq
+
 /**
  * A Kafka broker.
  * A broker has an id, a collection of end-points, an optional rack and a listener to security protocol map.

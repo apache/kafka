@@ -18,6 +18,8 @@ package kafka.server
 
 import java.util.Properties
 
+import scala.collection.Seq
+
 import kafka.zk.ZooKeeperTestHarness
 import kafka.utils.TestUtils
 import org.junit.{After, Before, Test}

@@ -81,6 +81,14 @@
     </p>
 
     <p>
+        As of 2.3.0 we've updated how to turn on optimizations. Now to enable optimizations, you need to do two things.
+        First add this line to your properties <code>properties.setProperty(StreamsConfig.TOPOLOGY_OPTIMIZATION, StreamsConfig.OPTIMIZE);</code>, as you have done before.
+        Second, when constructing your <code>KafkaStreams</code> instance, you'll need to pass your configuration properties when building your
+        topology by using the overloaded <code>StreamsBuilder.build(Properties)</code> method.
+        For example <code>KafkaStreams myStream = new KafkaStreams(streamsBuilder.build(properties), properties)</code>.
+    </p>
+
+    <p>
         In 2.3.0 we have added default implementation to <code>close()</code> and <code>configure()</code> for <code>Serializer</code>,
         <code>Deserializer</code> and <code>Serde</code> so that they can be implemented by lambda expression.
         For more details please read <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-331+Add+default+implementation+to+close%28%29+and+configure%28%29+for+Serializer%2C+Deserializer+and+Serde">KIP-331</a>.

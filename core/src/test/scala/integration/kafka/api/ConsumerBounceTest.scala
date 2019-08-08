@@ -31,6 +31,7 @@ import org.junit.{After, Ignore, Test}
 
 import scala.collection.JavaConverters._
 import scala.collection.mutable
+import scala.collection.Seq
 
 /**
  * Integration tests for the consumer that cover basic usage as well as server failures

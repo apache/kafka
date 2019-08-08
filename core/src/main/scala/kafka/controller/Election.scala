@@ -19,6 +19,8 @@ package kafka.controller
 import kafka.api.LeaderAndIsr
 import org.apache.kafka.common.TopicPartition
 
+import scala.collection.Seq
+
 case class ElectionResult(topicPartition: TopicPartition, leaderAndIsr: Option[LeaderAndIsr], liveReplicas: Seq[Int])
 
 object Election {
