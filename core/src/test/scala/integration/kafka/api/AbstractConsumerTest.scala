@@ -61,6 +61,8 @@ abstract class AbstractConsumerTest extends BaseRequestTest {
   this.consumerConfig.setProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
   this.consumerConfig.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false")
   this.consumerConfig.setProperty(ConsumerConfig.METADATA_MAX_AGE_CONFIG, "100")
+  this.consumerConfig.setProperty(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, "6000")
+
 
   override protected def brokerPropertyOverrides(properties: Properties): Unit = {
     properties.setProperty(KafkaConfig.ControlledShutdownEnableProp, "false") // speed up shutdown
@@ -332,28 +334,28 @@ abstract class AbstractConsumerTest extends BaseRequestTest {
     @volatile var thrownException: Option[Throwable] = None
     @volatile var receivedMessages = 0
 
-    @volatile private var partitionAssignment: Set[TopicPartition] = partitionsToAssign
+    @volatile private var partitionAssignment: mutable.Set[TopicPartition] = new mutable.HashSet[TopicPartition]()
     @volatile private var subscriptionChanged = false
     private var topicsSubscription = topicsToSubscribe
 
     val rebalanceListener: ConsumerRebalanceListener = new ConsumerRebalanceListener {
       override def onPartitionsAssigned(partitions: util.Collection[TopicPartition]) = {
-        partitionAssignment = collection.immutable.Set(consumer.assignment().asScala.toArray: _*)
+        partitionAssignment ++= partitions.toArray(new Array[TopicPartition](0))
       }
 
       override def onPartitionsRevoked(partitions: util.Collection[TopicPartition]) = {
-        partitionAssignment = Set.empty[TopicPartition]
+        partitionAssignment --= partitions.toArray(new Array[TopicPartition](0))
       }
     }
 
-    if (partitionAssignment.isEmpty) {
+    if (partitionsToAssign.isEmpty) {
       consumer.subscribe(topicsToSubscribe.asJava, rebalanceListener)
     } else {
-      consumer.assign(partitionAssignment.asJava)
+      consumer.assign(partitionsToAssign.asJava)
     }
 
     def consumerAssignment(): Set[TopicPartition] = {
-      partitionAssignment
+      partitionAssignment.toSet
     }
 
     /**
