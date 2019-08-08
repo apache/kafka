@@ -23,6 +23,7 @@ import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.TimestampedBytesStore;
+import org.apache.kafka.streams.state.internals.metrics.RocksDBMetricsRecorder;
 import org.rocksdb.ColumnFamilyDescriptor;
 import org.rocksdb.ColumnFamilyHandle;
 import org.rocksdb.ColumnFamilyOptions;
@@ -58,6 +59,16 @@ public class RocksDBTimestampedStore extends RocksDBStore implements Timestamped
     RocksDBTimestampedStore(final String name,
                             final String parentDir) {
         super(name, parentDir);
+    }
+
+    RocksDBTimestampedStore(final String name, final RocksDBMetricsRecorder metricsRecorder) {
+        super(name, metricsRecorder);
+    }
+
+    RocksDBTimestampedStore(final String name,
+                            final String parentDir,
+                            final RocksDBMetricsRecorder metricsRecorder) {
+        super(name, parentDir, metricsRecorder);
     }
 
     @Override

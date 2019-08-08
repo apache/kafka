@@ -46,6 +46,7 @@ public class TimestampedSegmentsTest {
     private static final int NUM_SEGMENTS = 5;
     private static final long SEGMENT_INTERVAL = 100L;
     private static final long RETENTION_PERIOD = 4 * SEGMENT_INTERVAL;
+    private static final String METRICS_SCOPE = "test-state-id";
     private InternalMockProcessorContext context;
     private TimestampedSegments segments;
     private File stateDirectory;
@@ -61,7 +62,7 @@ public class TimestampedSegmentsTest {
             new NoOpRecordCollector(),
             new ThreadCache(new LogContext("testCache "), 0, new MockStreamsMetrics(new Metrics()))
         );
-        segments = new TimestampedSegments(storeName, RETENTION_PERIOD, SEGMENT_INTERVAL);
+        segments = new TimestampedSegments(storeName, METRICS_SCOPE, RETENTION_PERIOD, SEGMENT_INTERVAL);
     }
 
     @After
@@ -79,7 +80,8 @@ public class TimestampedSegmentsTest {
 
     @Test
     public void shouldBaseSegmentIntervalOnRetentionAndNumSegments() {
-        final KeyValueSegments segments = new KeyValueSegments("test", 8 * SEGMENT_INTERVAL, 2 * SEGMENT_INTERVAL);
+        final TimestampedSegments segments =
+            new TimestampedSegments("test", METRICS_SCOPE, 8 * SEGMENT_INTERVAL, 2 * SEGMENT_INTERVAL);
         assertEquals(0, segments.segmentId(0));
         assertEquals(0, segments.segmentId(SEGMENT_INTERVAL));
         assertEquals(1, segments.segmentId(2 * SEGMENT_INTERVAL));
@@ -152,7 +154,7 @@ public class TimestampedSegmentsTest {
 
     @Test
     public void shouldOpenExistingSegments() {
-        segments = new TimestampedSegments("test", 4, 1);
+        segments = new TimestampedSegments("test", METRICS_SCOPE, 4, 1);
         segments.getOrCreateSegmentIfLive(0, context, -1L);
         segments.getOrCreateSegmentIfLive(1, context, -1L);
         segments.getOrCreateSegmentIfLive(2, context, -1L);
@@ -161,7 +163,7 @@ public class TimestampedSegmentsTest {
         // close existing.
         segments.close();
 
-        segments = new TimestampedSegments("test", 4, 1);
+        segments = new TimestampedSegments("test", METRICS_SCOPE, 4, 1);
         segments.openExisting(context, -1L);
 
         assertTrue(segments.getSegmentForTimestamp(0).isOpen());
@@ -252,7 +254,7 @@ public class TimestampedSegmentsTest {
     public void shouldUpdateSegmentFileNameFromOldDateFormatToNewFormat() throws Exception {
         final long segmentInterval = 60_000L; // the old segment file's naming system maxes out at 1 minute granularity.
 
-        segments = new TimestampedSegments(storeName, NUM_SEGMENTS * segmentInterval, segmentInterval);
+        segments = new TimestampedSegments(storeName, METRICS_SCOPE, NUM_SEGMENTS * segmentInterval, segmentInterval);
 
         final String storeDirectoryPath = stateDirectory.getAbsolutePath() + File.separator + storeName;
         final File storeDirectory = new File(storeDirectoryPath);

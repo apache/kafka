@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.metrics.Sensor.RecordingLevel;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KeyValue;
@@ -27,9 +28,12 @@ import org.apache.kafka.streams.processor.AbstractNotifyingBatchingRestoreCallba
 import org.apache.kafka.streams.processor.BatchingStateRestoreCallback;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.RocksDBConfigSetter;
+import org.apache.kafka.streams.state.internals.metrics.RocksDBMetricsRecorder;
 import org.rocksdb.BlockBasedTableConfig;
 import org.rocksdb.BloomFilter;
 import org.rocksdb.Cache;
@@ -46,6 +50,8 @@ import org.rocksdb.Options;
 import org.rocksdb.RocksDB;
 import org.rocksdb.RocksDBException;
 import org.rocksdb.RocksIterator;
+import org.rocksdb.Statistics;
+import org.rocksdb.StatsLevel;
 import org.rocksdb.WriteBatch;
 import org.rocksdb.WriteOptions;
 import org.slf4j.Logger;
@@ -61,8 +67,11 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.regex.Pattern;
+
+import static org.apache.kafka.streams.StreamsConfig.METRICS_RECORDING_LEVEL_CONFIG;
 
 /**
  * A persistent key-value store based on RocksDB.
@@ -97,6 +106,8 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BulkLoadingSt
 
     private RocksDBConfigSetter configSetter;
 
+    private Optional<RocksDBMetricsRecorder> metricsRecorder = Optional.empty();
+
     private volatile boolean prepareForBulkload = false;
     ProcessorContext internalProcessorContext;
     // visible for testing
@@ -114,6 +125,17 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BulkLoadingSt
         this.parentDir = parentDir;
     }
 
+    RocksDBStore(final String name,
+                 final RocksDBMetricsRecorder metricsRecorder) {
+        this(name, DB_FILE_DIR, metricsRecorder);
+    }
+
+    RocksDBStore(final String name,
+                 final String parentDir,
+                 final RocksDBMetricsRecorder metricsRecorder) {
+        this(name, parentDir);
+        this.metricsRecorder = Optional.of(metricsRecorder);
+    }
 
     @SuppressWarnings("unchecked")
     void openDB(final ProcessorContext context) {
@@ -177,8 +199,27 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BulkLoadingSt
             throw new ProcessorStateException(fatal);
         }
 
+        metricsRecorder.ifPresent(
+            metricsRecorder -> setUpMetrics(
+                (StreamsMetricsImpl) context.metrics(),
+                context.taskId(),
+                RecordingLevel.forName((String) configs.get(METRICS_RECORDING_LEVEL_CONFIG))
+            )
+        );
+
         openRocksDB(dbOptions, columnFamilyOptions);
         open = true;
+    }
+
+    private void setUpMetrics(final StreamsMetricsImpl metrics,
+                              final TaskId taskId,
+                              final RecordingLevel recordingLevel) {
+        if (userSpecifiedOptions.statistics() == null && recordingLevel == RecordingLevel.DEBUG) {
+            final Statistics statistics = new Statistics();
+            statistics.setStatsLevel(StatsLevel.EXCEPT_DETAILED_TIMERS);
+            userSpecifiedOptions.setStatistics(statistics);
+            metricsRecorder.get().addStatistics(name, statistics, metrics, taskId);
+        }
     }
 
     void openRocksDB(final DBOptions dbOptions,
@@ -401,6 +442,8 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BulkLoadingSt
             configSetter.close(name, userSpecifiedOptions);
             configSetter = null;
         }
+
+        metricsRecorder.ifPresent(RocksDBMetricsRecorder::close);
 
         // Important: do not rearrange the order in which the below objects are closed!
         // Order of closing must follow: ColumnFamilyHandle > RocksDB > DBOptions > ColumnFamilyOptions
