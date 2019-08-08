@@ -244,104 +244,12 @@ public class StreamThread extends Thread {
         }
     }
 
-    static class RebalanceListener implements ConsumerRebalanceListener {
-        private final Time time;
-        private final TaskManager taskManager;
-        private final StreamThread streamThread;
-        private final Logger log;
+    int getAssignmentErrorCode() {
+        return assignmentErrorCode.get();
+    }
 
-        RebalanceListener(final Time time,
-                          final TaskManager taskManager,
-                          final StreamThread streamThread,
-                          final Logger log) {
-            this.time = time;
-            this.taskManager = taskManager;
-            this.streamThread = streamThread;
-            this.log = log;
-        }
-
-        @Override
-        public void onPartitionsAssigned(final Collection<TopicPartition> assignment) {
-            log.debug("Current state {}: assigned partitions {} at the end of consumer rebalance.\n" +
-                    "\tcurrent suspended active tasks: {}\n" +
-                    "\tcurrent suspended standby tasks: {}\n",
-                streamThread.state,
-                assignment,
-                taskManager.suspendedActiveTaskIds(),
-                taskManager.suspendedStandbyTaskIds());
-
-            if (streamThread.assignmentErrorCode.get() == AssignorError.INCOMPLETE_SOURCE_TOPIC_METADATA.code()) {
-                log.error("Received error code {} - shutdown", streamThread.assignmentErrorCode.get());
-                streamThread.shutdown();
-                return;
-            }
-            final long start = time.milliseconds();
-            try {
-                if (streamThread.setState(State.PARTITIONS_ASSIGNED) == null) {
-                    log.debug(
-                        "Skipping task creation in rebalance because we are already in {} state.",
-                        streamThread.state()
-                    );
-                } else if (streamThread.assignmentErrorCode.get() != AssignorError.NONE.code()) {
-                    log.debug(
-                        "Encountered assignment error during partition assignment: {}. Skipping task initialization",
-                        streamThread.assignmentErrorCode
-                    );
-                } else {
-                    log.debug("Creating tasks based on assignment.");
-                    taskManager.createTasks(assignment);
-                }
-            } catch (final Throwable t) {
-                log.error(
-                    "Error caught during partition assignment, " +
-                        "will abort the current process and re-throw at the end of rebalance", t);
-                streamThread.setRebalanceException(t);
-            } finally {
-                log.info("partition assignment took {} ms.\n" +
-                        "\tcurrent active tasks: {}\n" +
-                        "\tcurrent standby tasks: {}\n" +
-                        "\tprevious active tasks: {}\n",
-                    time.milliseconds() - start,
-                    taskManager.activeTaskIds(),
-                    taskManager.standbyTaskIds(),
-                    taskManager.prevActiveTaskIds());
-            }
-        }
-
-        @Override
-        public void onPartitionsRevoked(final Collection<TopicPartition> assignment) {
-            log.debug("Current state {}: revoked partitions {} at the beginning of consumer rebalance.\n" +
-                    "\tcurrent assigned active tasks: {}\n" +
-                    "\tcurrent assigned standby tasks: {}\n",
-                streamThread.state,
-                assignment,
-                taskManager.activeTaskIds(),
-                taskManager.standbyTaskIds());
-
-            if (streamThread.setState(State.PARTITIONS_REVOKED) != null) {
-                final long start = time.milliseconds();
-                try {
-                    // suspend active tasks
-                    taskManager.suspendTasksAndState();
-                } catch (final Throwable t) {
-                    log.error(
-                        "Error caught during partition revocation, " +
-                            "will abort the current process and re-throw at the end of rebalance: {}",
-                        t
-                    );
-                    streamThread.setRebalanceException(t);
-                } finally {
-                    streamThread.clearStandbyRecords();
-
-                    log.info("partition revocation took {} ms.\n" +
-                            "\tsuspended active tasks: {}\n" +
-                            "\tsuspended standby tasks: {}",
-                        time.milliseconds() - start,
-                        taskManager.suspendedActiveTaskIds(),
-                        taskManager.suspendedStandbyTaskIds());
-                }
-            }
-        }
+    void setRebalanceException(final Throwable rebalanceException) {
+        this.rebalanceException = rebalanceException;
     }
 
     static abstract class AbstractTaskCreator<T extends Task> {
@@ -704,7 +612,7 @@ public class StreamThread extends Thread {
         this.builder = builder;
         this.logPrefix = logContext.logPrefix();
         this.log = logContext.logger(StreamThread.class);
-        this.rebalanceListener = new RebalanceListener(time, taskManager, this, this.log);
+        this.rebalanceListener = new StreamsRebalanceListener(time, taskManager, this, this.log);
         this.taskManager = taskManager;
         this.producer = producer;
         this.restoreConsumer = restoreConsumer;
@@ -777,10 +685,6 @@ public class StreamThread extends Thread {
         } finally {
             completeShutdown(cleanRun);
         }
-    }
-
-    private void setRebalanceException(final Throwable rebalanceException) {
-        this.rebalanceException = rebalanceException;
     }
 
     /**
@@ -1226,8 +1130,10 @@ public class StreamThread extends Thread {
         log.info("Shutdown complete");
     }
 
-    private void clearStandbyRecords() {
-        standbyRecords.clear();
+    void clearStandbyRecords(final List<TopicPartition> partitions) {
+        for (final TopicPartition tp : partitions) {
+            standbyRecords.remove(tp);
+        }
     }
 
     /**
@@ -1334,7 +1240,7 @@ public class StreamThread extends Thread {
     }
 
     public Map<MetricName, Metric> adminClientMetrics() {
-        final Map<MetricName, ? extends Metric> adminClientMetrics = taskManager.getAdminClient().metrics();
+        final Map<MetricName, ? extends Metric> adminClientMetrics = taskManager.adminClient().metrics();
         final LinkedHashMap<MetricName, Metric> result = new LinkedHashMap<>();
         result.putAll(adminClientMetrics);
         return result;

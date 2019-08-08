@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import java.util.ArrayList;
+import java.util.concurrent.atomic.AtomicReference;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.LogContext;
@@ -32,6 +34,7 @@ import java.util.Map;
 import java.util.Set;
 
 class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements RestoringTasks {
+    private final Map<TaskId, StreamTask> suspended = new HashMap<>();
     private final Map<TaskId, StreamTask> restoring = new HashMap<>();
     private final Set<TopicPartition> restoredPartitions = new HashSet<>();
     private final Map<TopicPartition, StreamTask> restoringByPartition = new HashMap<>();
@@ -49,6 +52,7 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
     List<StreamTask> allTasks() {
         final List<StreamTask> tasks = super.allTasks();
         tasks.addAll(restoring.values());
+        tasks.addAll(suspended.values());
         return tasks;
     }
 
@@ -56,39 +60,205 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
     Set<TaskId> allAssignedTaskIds() {
         final Set<TaskId> taskIds = super.allAssignedTaskIds();
         taskIds.addAll(restoring.keySet());
+        taskIds.addAll(suspended.keySet());
         return taskIds;
     }
 
     @Override
     boolean allTasksRunning() {
-        return super.allTasksRunning() && restoring.isEmpty();
+        return super.allTasksRunning() && restoring.isEmpty() && suspended.isEmpty();
     }
 
-    RuntimeException closeAllRestoringTasks() {
+    @Override
+    void closeTask(final StreamTask task, final boolean clean) {
+        if (suspended.containsKey(task.id())) {
+            task.closeSuspended(clean, false, null);
+        } else {
+            task.close(clean, false);
+        }
+    }
+    
+    Set<TaskId> suspendedTaskIds() {
+        return suspended.keySet();
+    }
+
+    RuntimeException suspend(final Set<TaskId> revokedTasks, final List<TopicPartition> revokedChangelogs) {
+        final AtomicReference<RuntimeException> firstException = new AtomicReference<>(null);
+
+        log.trace("Suspending running {} {}", taskTypeName, runningTaskIds());
+        firstException.compareAndSet(null, suspendTasks(revokedTasks, revokedChangelogs));
+
+        log.trace("Close created {} {}", taskTypeName, created.keySet());
+        firstException.compareAndSet(null, closeNonRunningTasks(revokedTasks, revokedChangelogs));
+
+        return firstException.get();
+    }
+
+    private RuntimeException suspendTasks(final Set<TaskId> tasks, final List<TopicPartition> revokedChangelogs) {
+        final AtomicReference<RuntimeException> firstException = new AtomicReference<>(null);
+        for (final Iterator<TaskId> it = tasks.iterator(); it.hasNext(); ) {
+            final TaskId id = it.next();
+            final StreamTask task = running.get(id);
+
+            if (suspended.containsKey(id)) {
+                // if the task is already suspended just remove it and move on
+                it.remove();
+            } else if (task != null) {
+                try {
+                    task.suspend();
+                    suspended.put(id, task);
+                } catch (final TaskMigratedException closeAsZombieAndSwallow) {
+                    // as we suspend a task, we are either shutting down or rebalancing, thus, we swallow and move on
+                    log.info("Failed to suspend {} {} since it got migrated to another thread already. " +
+                        "Closing it as zombie and move on.", taskTypeName, id);
+                    firstException.compareAndSet(null, closeZombieTask(task));
+                } catch (final RuntimeException e) {
+                    log.error("Suspending {} {} failed due to the following error:", taskTypeName, id, e);
+                    firstException.compareAndSet(null, e);
+                    try {
+                        task.close(false, false);
+                    } catch (final RuntimeException f) {
+                        log.error(
+                            "After suspending failed, closing the same {} {} failed again due to the following error:",
+                            taskTypeName, id, f);
+                    }
+                } finally {
+                    it.remove();
+
+                    // Wait to reset changelog partitions and remove from running/runningByPartition until the task is
+                    // actually closed as it may be reassigned again, unless an error occurred while suspending
+                    if (!suspended.containsKey(id)) {
+                        running.remove(id);
+                        runningByPartition.keySet().removeAll(task.partitions());
+                        revokedChangelogs.addAll(task.changelogPartitions());
+                    }
+                }
+            }
+        }
+        return firstException.get();
+    }
+
+    private RuntimeException closeNonRunningTasks(final Set<TaskId> revokedTasks, final List<TopicPartition> revokedChangelogs) {
+        RuntimeException exception = null;
+        for (final Iterator<TaskId> it = revokedTasks.iterator(); it.hasNext(); ) {
+            final TaskId id = it.next();
+            final StreamTask task = created.get(id);
+
+            if (task != null) {
+                try {
+                    task.close(false, false);
+                } catch (final RuntimeException e) {
+                    log.error("Failed to close {}, {}", taskTypeName, task.id(), e);
+                    if (exception == null) {
+                        exception = e;
+                    }
+                } finally {
+                    it.remove();
+                    created.remove(id);
+                    revokedChangelogs.addAll(task.changelogPartitions());
+                }
+            }
+        }
+        return exception;
+    }
+
+    RuntimeException closeRestoringTasks(final Set<TaskId> revokedRestoringTasks, final List<TopicPartition> revokedChangelogs) {
+        log.trace("Closing restoring stream tasks {}", revokedRestoringTasks);
         RuntimeException exception = null;
 
-        log.trace("Closing all restoring stream tasks {}", restoring.keySet());
-        final Iterator<StreamTask> restoringTaskIterator = restoring.values().iterator();
-        while (restoringTaskIterator.hasNext()) {
-            final StreamTask task = restoringTaskIterator.next();
-            log.debug("Closing restoring task {}", task.id());
-            try {
-                task.closeStateManager(true);
-            } catch (final RuntimeException e) {
-                log.error("Failed to remove restoring task {} due to the following error:", task.id(), e);
-                if (exception == null) {
-                    exception = e;
+        final Iterator<TaskId> revokedTaskIterator = revokedRestoringTasks.iterator();
+        while (revokedTaskIterator.hasNext()) {
+            final TaskId id = revokedTaskIterator.next();
+            final StreamTask task = restoring.get(id);
+
+            if (task != null) {
+                log.debug("Closing restoring task {}", id);
+                try {
+                    task.closeStateManager(true);
+                } catch (final RuntimeException e) {
+                    log.error("Failed to close restoring task {} due to the following error:", id, e);
+                    if (exception == null) {
+                        exception = e;
+                    }
+                } finally {
+                    revokedTaskIterator.remove();
+                    restoring.remove(id);
+                    for (final TopicPartition tp : task.partitions()) {
+                        restoredPartitions.remove(tp);
+                        restoringByPartition.remove(tp);
+                    }
+                    revokedChangelogs.addAll(task.changelogPartitions());
                 }
-            } finally {
-                restoringTaskIterator.remove();
+            } else {
+                // All non-restoring tasks should have been removed from revokedRestoringTasks, so log an error if it's not in restoring
+                log.error("Task was revoked but cannot be found in the assignment");
+                exception = new IllegalStateException("Revoked a task that was not in the assignment");
+                revokedTaskIterator.remove();
             }
         }
 
-        restoring.clear();
-        restoredPartitions.clear();
-        restoringByPartition.clear();
-
         return exception;
+    }
+
+    /**
+     * @throws TaskMigratedException if the task producer got fenced (EOS only)
+     */
+    boolean maybeResumeSuspendedTask(final TaskId taskId, final Set<TopicPartition> partitions, final List<TopicPartition> changelogs) {
+        if (suspended.containsKey(taskId)) {
+            final StreamTask task = suspended.get(taskId);
+            log.trace("Found suspended {} {}", taskTypeName, taskId);
+            suspended.remove(taskId);
+
+            if (task.partitions().equals(partitions)) {
+                task.resume();
+                try {
+                    transitionToRunning(task);
+                } catch (final TaskMigratedException e) {
+                    // we need to catch migration exception internally since this function
+                    // is triggered in the rebalance callback
+                    log.info("Failed to resume {} {} since it got migrated to another thread already. " +
+                        "Closing it as zombie before triggering a new rebalance.", taskTypeName, task.id());
+                    final RuntimeException fatalException = closeZombieTask(task);
+                    running.remove(taskId);
+                    runningByPartition.keySet().removeAll(task.partitions());
+                    if (fatalException != null) {
+                        throw fatalException;
+                    }
+                    throw e;
+                }
+                log.trace("Resuming suspended {} {}", taskTypeName, task.id());
+                return true;
+            } else {
+                log.warn("Couldn't resume task {} assigned partitions {}, task partitions {}", taskId, partitions, task.partitions());
+                suspended.remove(task.id());
+                running.remove(task.id());
+                runningByPartition.keySet().removeAll(task.partitions());
+                changelogs.addAll(task.changelogPartitions());
+            }
+        }
+        return false;
+    }
+
+    List<TopicPartition> closeRevokedSuspendedTasks(final Map<TaskId, Set<TopicPartition>> revokedTasks) {
+        final List<TopicPartition> revokedChangelogs = new ArrayList<>();
+        for (final Map.Entry<TaskId, Set<TopicPartition>> revokedTask : revokedTasks.entrySet()) {
+            final StreamTask suspendedTask = suspended.get(revokedTask.getKey());
+            if (suspendedTask != null) {
+                log.debug("Closing suspended and not re-assigned {} {}", taskTypeName, suspendedTask.id());
+                try {
+                    suspendedTask.closeSuspended(true, false, null);
+                } catch (final Exception e) {
+                    log.error("Failed to close suspended {} {} due to the following error:", taskTypeName,
+                        suspendedTask.id(), e);
+                } finally {
+                    suspended.remove(suspendedTask.id());
+                    running.remove(suspendedTask.id());
+                    runningByPartition.keySet().removeAll(suspendedTask.partitions());
+                    revokedChangelogs.addAll(suspendedTask.changelogPartitions());
+                }
+            }
+        }
+        return revokedChangelogs;
     }
 
     void updateRestored(final Collection<TopicPartition> restored) {
@@ -254,19 +424,24 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
         restoring.clear();
         restoringByPartition.clear();
         restoredPartitions.clear();
+        suspended.clear();
     }
 
     public String toString(final String indent) {
         final StringBuilder builder = new StringBuilder();
         builder.append(super.toString(indent));
         describe(builder, restoring.values(), indent, "Restoring:");
+        describe(builder, suspended.values(), indent, "Suspended:");
         return builder.toString();
     }
 
     // for testing only
-
     Collection<StreamTask> restoringTasks() {
         return Collections.unmodifiableCollection(restoring.values());
+    }
+
+    Set<TaskId> restoringTaskIds() {
+        return new HashSet<>(restoring.keySet());
     }
 
 }

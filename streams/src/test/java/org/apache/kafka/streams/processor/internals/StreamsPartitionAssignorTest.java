@@ -152,7 +152,7 @@ public class StreamsPartitionAssignorTest {
         taskManager = EasyMock.createNiceMock(TaskManager.class);
         EasyMock.expect(taskManager.adminClient()).andReturn(null).anyTimes();
         EasyMock.expect(taskManager.builder()).andReturn(builder).anyTimes();
-        EasyMock.expect(taskManager.prevActiveTaskIds()).andReturn(prevTasks).anyTimes();
+        EasyMock.expect(taskManager.previousActiveTaskIds()).andReturn(prevTasks).anyTimes();
         EasyMock.expect(taskManager.cachedTasksIds()).andReturn(cachedTasks).anyTimes();
         EasyMock.expect(taskManager.processId()).andReturn(processId).anyTimes();
     }

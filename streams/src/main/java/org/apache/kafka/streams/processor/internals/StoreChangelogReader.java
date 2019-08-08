@@ -280,7 +280,19 @@ public class StoreChangelogReader implements ChangelogReader {
     }
 
     @Override
-    public void reset() {
+    public void remove(final List<TopicPartition> revokedPartitions) {
+        for (final TopicPartition partition : revokedPartitions) {
+            partitionInfo.remove(partition.topic());
+            stateRestorers.remove(partition);
+            needsRestoring.remove(partition);
+            restoreToOffsets.remove(partition);
+            needsInitializing.remove(partition);
+            completedRestorers.remove(partition);
+        }
+    }
+
+    @Override
+    public void clear() {
         partitionInfo.clear();
         stateRestorers.clear();
         needsRestoring.clear();
