@@ -73,6 +73,7 @@ import org.apache.kafka.common.message.DeleteTopicsResponseData.DeletableTopicRe
 import org.apache.kafka.common.message.DescribeGroupsRequestData;
 import org.apache.kafka.common.message.DescribeGroupsResponseData.DescribedGroup;
 import org.apache.kafka.common.message.DescribeGroupsResponseData.DescribedGroupMember;
+import org.apache.kafka.common.message.ExpireDelegationTokenRequestData;
 import org.apache.kafka.common.message.FindCoordinatorRequestData;
 import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData;
 import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData.AlterableConfigCollection;
@@ -2473,8 +2474,11 @@ public class KafkaAdminClient extends AdminClient {
             new LeastLoadedNodeProvider()) {
 
             @Override
-            AbstractRequest.Builder createRequest(int timeoutMs) {
-                return new ExpireDelegationTokenRequest.Builder(hmac, options.expiryTimePeriodMs());
+            AbstractRequest.Builder<ExpireDelegationTokenRequest> createRequest(int timeoutMs) {
+                return new ExpireDelegationTokenRequest.Builder(
+                        new ExpireDelegationTokenRequestData()
+                            .setHmac(hmac)
+                            .setExpiryTimePeriodMs(options.expiryTimePeriodMs()));
             }
 
             @Override
