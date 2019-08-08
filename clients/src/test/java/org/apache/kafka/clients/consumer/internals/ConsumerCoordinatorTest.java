@@ -705,11 +705,9 @@ public class ConsumerCoordinatorTest {
 
         coordinator.poll(time.timer(Long.MAX_VALUE));
 
-        Collection<TopicPartition> lost = Collections.singleton(t2p);
         revoked = getRevoked(newAssigned, oldAssigned);
-        revoked.removeAll(lost);
-        assertEquals(protocol == COOPERATIVE, revoked.isEmpty());
-        revokedCount += revoked.isEmpty() ? 0 : 1;
+        assertFalse(revoked.isEmpty());
+        revokedCount += 1;
         Collection<TopicPartition> added = getAdded(newAssigned, oldAssigned);
 
         assertFalse(coordinator.rejoinNeededOrPending());
@@ -719,8 +717,7 @@ public class ConsumerCoordinatorTest {
         assertEquals(revoked.isEmpty() ? null : revoked, rebalanceListener.revoked);
         assertEquals(3, rebalanceListener.assignedCount);
         assertEquals(added, rebalanceListener.assigned);
-        assertEquals(1, rebalanceListener.lostCount);
-        assertEquals(lost, rebalanceListener.lost);
+        assertEquals(0, rebalanceListener.lostCount);
     }
 
     @Test

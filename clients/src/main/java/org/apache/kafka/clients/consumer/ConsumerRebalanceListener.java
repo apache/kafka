@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.consumer;
 
+import java.time.Duration;
 import java.util.Collection;
 
 import org.apache.kafka.common.TopicPartition;
@@ -118,7 +119,9 @@ public interface ConsumerRebalanceListener {
     /**
      * A callback method the user can implement to provide handling of offset commits to a customized store on the start
      * of a rebalance operation. This method will be called before a rebalance operation starts and after the consumer
-     * stops fetching data. It is recommended that offsets should be committed in this callback to either Kafka or a
+     * stops fetching data. It can also be called when consumer is being closed ({@link KafkaConsumer#close(Duration)})
+     * or is unsubscribing ({@link KafkaConsumer#unsubscribe()}).
+     * It is recommended that offsets should be committed in this callback to either Kafka or a
      * custom offset store to prevent duplicate data.
      * <p>
      * For examples on usage of this API, see Usage Examples section of {@link KafkaConsumer KafkaConsumer}
@@ -170,7 +173,8 @@ public interface ConsumerRebalanceListener {
      * to other consumers during a rebalance event. However, during exceptional scenarios when the consumer realized that it
      * does not own this partition any longer, i.e. not revoked via a normal rebalance event, then this method would be invoked.
      * <p>
-     * For example, this function is called if a consumer's session timeout has expired.
+     * For example, this function is called if a consumer's session timeout has expired, or if a fatal error has been
+     * received indicating the consumer is no longer part of the group.
      * <p>
      * By default it will just trigger {@link ConsumerRebalanceListener#onPartitionsRevoked}; for users who want to distinguish
      * the handling logic of revoked partitions v.s. lost partitions, they can override the default implementation.

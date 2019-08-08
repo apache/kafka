@@ -297,8 +297,8 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         return null;
     }
 
-    private Exception invokePartitionsLost(final String rootCause, final Set<TopicPartition> lostPartitions) {
-        log.info("Lost previously assigned partitions {} due to {}", Utils.join(lostPartitions, ", "), rootCause);
+    private Exception invokePartitionsLost(final Set<TopicPartition> lostPartitions) {
+        log.info("Lost previously assigned partitions {}", Utils.join(lostPartitions, ", "));
 
         ConsumerRebalanceListener listener = subscriptions.rebalanceListener();
         try {
@@ -650,9 +650,9 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             revokedPartitions = new HashSet<>(subscriptions.assignedPartitions());
 
             if (!revokedPartitions.isEmpty()) {
-                exception = invokePartitionsLost(
-                    "generation has been reset since consumer is no longer part of the group",
-                    revokedPartitions);
+                log.info("Giving away all assigned partitions as lost since generation has been reset," +
+                    "indicating that consumer is no longer part of the group");
+                exception = invokePartitionsLost(revokedPartitions);
 
                 subscriptions.assignFromSubscribed(Collections.emptySet());
             }
@@ -694,16 +694,12 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         }
     }
 
-    /**
-     * @throws KafkaException if the rebalance callback throws exception
-     */
     @Override
-    synchronized void resetGenerationOnLeaveGroup() {
-        // we can reset assignment upon leaving group and trigger the callback as well
+    public void onLeaveGroup() {
+        // we should reset assignment and trigger the callback before leaving group
         Set<TopicPartition> droppedPartitions = new HashSet<>(subscriptions.assignedPartitions());
 
         if (subscriptions.partitionsAutoAssigned() && !droppedPartitions.isEmpty()) {
-
             final Exception e = invokePartitionsRevoked(droppedPartitions);
 
             subscriptions.assignFromSubscribed(Collections.emptySet());
@@ -712,8 +708,6 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                 throw new KafkaException("User rebalance callback throws an error", e);
             }
         }
-
-        super.resetGenerationOnLeaveGroup();
     }
 
     /**
@@ -726,29 +720,8 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
         // we need to rejoin if we performed the assignment and metadata has changed;
         // also for those owned-but-no-longer-existed partitions we should drop them as lost
-        if (assignmentSnapshot != null && !assignmentSnapshot.matches(metadataSnapshot)) {
-            Set<TopicPartition> ownedPartitions = new HashSet<>(subscriptions.assignedPartitions());
-            Set<TopicPartition> noLongerExistingPartitions = ownedPartitions.stream()
-                .filter(tp -> !metadataSnapshot.partitionsPerTopic().containsKey(tp.topic()))
-                .collect(Collectors.toSet());
-
-            if (!noLongerExistingPartitions.isEmpty()) {
-                ownedPartitions.removeAll(noLongerExistingPartitions);
-
-                Exception e = invokePartitionsLost("topic metadata has changed and partitions " +
-                        noLongerExistingPartitions + " do not exist any more, owned partitions left are " +
-                        ownedPartitions,
-                    noLongerExistingPartitions);
-
-                subscriptions.assignFromSubscribed(ownedPartitions);
-
-                if (e != null) {
-                    throw new KafkaException("User rebalance callback throws an error", e);
-                }
-            }
-
+        if (assignmentSnapshot != null && !assignmentSnapshot.matches(metadataSnapshot))
             return true;
-        }
 
         // we need to join if our subscription has changed since the last join
         if (joinedSubscription != null && !joinedSubscription.equals(subscriptions.subscription())) {

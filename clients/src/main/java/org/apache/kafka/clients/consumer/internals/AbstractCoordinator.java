@@ -203,6 +203,11 @@ public abstract class AbstractCoordinator implements Closeable {
                                            ByteBuffer memberAssignment);
 
     /**
+     * Invoked prior to each leave group event. This is typically used to cleanup assigned partitions
+     */
+    protected void onLeaveGroup() {}
+
+    /**
      * Visible for testing.
      *
      * Ensure that the coordinator is ready to receive requests.
@@ -839,6 +844,7 @@ public abstract class AbstractCoordinator implements Closeable {
             // needs this lock to complete and terminate after close flag is set.
             synchronized (this) {
                 if (rebalanceConfig.leaveGroupOnClose) {
+                    onLeaveGroup();
                     maybeLeaveGroup("the consumer is being closed");
                 }
 
@@ -854,51 +860,33 @@ public abstract class AbstractCoordinator implements Closeable {
         }
     }
 
-    public synchronized RequestFuture<Void> maybeLeaveGroup(String leaveReason) {
-        return maybeLeaveGroup(leaveReason, false);
-    }
-
     /**
-     * Leave the current group and reset local generation/memberId.
-     * @param leaveReason reason to attempt leaving the group
-     * @throws KafkaException if the callback throws exception
+     * @throws KafkaException if the rebalance callback throws exception
      */
-    public synchronized RequestFuture<Void> maybeLeaveGroup(String leaveReason, boolean dueToHeartbeatExpiration) {
-        LeaveGroupRequest.Builder request = null;
+    public synchronized RequestFuture<Void> maybeLeaveGroup(String leaveReason) {
+        RequestFuture<Void> future = null;
+
         // Starting from 2.3, only dynamic members will send LeaveGroupRequest to the broker,
         // consumer with valid group.instance.id is viewed as static member that never sends LeaveGroup,
         // and the membership expiration is only controlled by session timeout.
         if (isDynamicMember() && !coordinatorUnknown() &&
-                state != MemberState.UNJOINED && generation.hasMemberId()) {
+            state != MemberState.UNJOINED && generation.hasMemberId()) {
             // this is a minimal effort attempt to leave the group. we do not
             // attempt any resending if the request fails or times out.
             log.info("Member {} sending LeaveGroup request to coordinator {} due to {}",
-                     generation.memberId, coordinator, leaveReason);
-            request = new LeaveGroupRequest.Builder(
+                generation.memberId, coordinator, leaveReason);
+            LeaveGroupRequest.Builder request = new LeaveGroupRequest.Builder(
                 rebalanceConfig.groupId,
                 Collections.singletonList(new MemberIdentity().setMemberId(generation.memberId))
             );
-        }
 
-        // we need to reset generation first in order to trigger the rebalance callback if necessary, before sending
-        // the leave group which may trigger the rebalance; if leave-group is caused by heartbeat poll expiration
-        // at the heartbeat thread, we should not trigger the rebalance callback and will wait until the caller thread
-        // calling consumer.poll to trigger it.
-        if (dueToHeartbeatExpiration) {
-            resetGeneration();
-        } else {
-            resetGenerationOnLeaveGroup();
-        }
-
-        if (request != null) {
-            RequestFuture<Void> future = client.send(coordinator, request)
-                .compose(new LeaveGroupResponseHandler());
+            future = client.send(coordinator, request).compose(new LeaveGroupResponseHandler());
             client.pollNoWakeup();
-
-            return future;
         }
 
-        return null;
+        resetGenerationOnLeaveGroup();
+
+        return future;
     }
 
     protected boolean isDynamicMember() {
@@ -1141,7 +1129,7 @@ public abstract class AbstractCoordinator implements Closeable {
                                                     "the poll loop is spending too much time processing messages. " +
                                                     "You can address this either by increasing max.poll.interval.ms or by reducing " +
                                                     "the maximum size of batches returned in poll() with max.poll.records.";
-                            maybeLeaveGroup(leaveReason, true);
+                            maybeLeaveGroup(leaveReason);
                         } else if (!heartbeat.shouldHeartbeat(now)) {
                             // poll again after waiting for the retry backoff in case the heartbeat failed or the
                             // coordinator disconnected
