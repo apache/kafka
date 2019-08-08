@@ -111,6 +111,10 @@ class KafkaController(val config: KafkaConfig,
   @volatile private var globalPartitionCount = 0
   @volatile private var topicsToDeleteCount = 0
   @volatile private var replicasToDeleteCount = 0
+  @volatile private var ineligibleTopicsToDeleteCount = 0
+  @volatile private var ineligibleReplicasToDeleteCount = 0
+
+
 
 
   /* single-thread scheduler to clean expired tokens */
@@ -169,6 +173,20 @@ class KafkaController(val config: KafkaConfig,
     "ReplicasToDeleteCount",
     new Gauge[Int] {
       def value: Int = replicasToDeleteCount
+    }
+  )
+
+  newGauge(
+    "IneligibleTopicsToDeleteCount",
+    new Gauge[Int] {
+      def value: Int = ineligibleTopicsToDeleteCount
+    }
+  )
+
+  newGauge(
+    "IneligibleReplicaToDeleteCount",
+    new Gauge[Int] {
+      def value: Int = ineligibleReplicasToDeleteCount
     }
   )
 
@@ -334,6 +352,8 @@ class KafkaController(val config: KafkaConfig,
     globalPartitionCount = 0
     topicsToDeleteCount = 0
     replicasToDeleteCount = 0
+    ineligibleTopicsToDeleteCount = 0
+    ineligibleReplicasToDeleteCount = 0
 
     // stop token expiry check scheduler
     if (tokenCleanScheduler.isStarted)
@@ -1217,6 +1237,15 @@ class KafkaController(val config: KafkaConfig,
       // For each enqueued topic, count the number of replicas not yet deleted
       controllerContext.replicasForTopic(topic).count { replica =>
         controllerContext.replicaState(replica) != ReplicaDeletionSuccessful
+      }
+    }.sum
+
+    ineligibleTopicsToDeleteCount = if (!isActive) 0 else controllerContext.topicsIneligibleForDeletion.size
+
+    ineligibleReplicasToDeleteCount = if (!isActive) 0 else controllerContext.topicsToBeDeleted.map { topic =>
+      // For each enqueued topic, count the number of replicas not yet deleted
+      controllerContext.replicasForTopic(topic).count { replica =>
+        controllerContext.replicaState(replica) == ReplicaDeletionIneligible
       }
     }.sum
   }
