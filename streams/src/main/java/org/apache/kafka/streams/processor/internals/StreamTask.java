@@ -47,7 +47,6 @@ import org.apache.kafka.streams.processor.internals.metrics.CumulativeCount;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.processor.internals.metrics.ThreadMetrics;
 import org.apache.kafka.streams.state.internals.ThreadCache;
-import org.bouncycastle.util.encoders.Base64;
 
 import java.io.IOException;
 import java.io.PrintWriter;
@@ -56,6 +55,7 @@ import java.nio.ByteBuffer;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Base64;
 import java.util.concurrent.TimeUnit;
 
 import static java.lang.String.format;
@@ -941,14 +941,14 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         final ByteBuffer buffer = ByteBuffer.allocate(9);
         buffer.put(LATEST_MAGIC_BYTE);
         buffer.putLong(partitionTime);
-        return Base64.toBase64String(buffer.array());
+        return Base64.getEncoder().encodeToString(buffer.array());
     }
 
     long decodeTimestamp(final String encryptedString) {
         if (encryptedString.length() == 0) {
             return RecordQueue.UNKNOWN;
         }
-        final ByteBuffer buffer = ByteBuffer.wrap(Base64.decode(encryptedString));
+        final ByteBuffer buffer = ByteBuffer.wrap(Base64.getDecoder().decode(encryptedString));
         final byte version = buffer.get();
         switch (version) {
             case LATEST_MAGIC_BYTE:
