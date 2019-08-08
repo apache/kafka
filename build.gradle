@@ -1120,6 +1120,7 @@ project(':streams') {
 
     compile libs.slf4jApi
     compile libs.rocksDBJni
+    compile libs.bcprov
 
     // testCompileOnly prevents streams from exporting a dependency on test-utils, which would cause a dependency cycle
     testCompileOnly project(':streams:test-utils')

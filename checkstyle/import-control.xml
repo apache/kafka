@@ -227,7 +227,8 @@
     <allow pkg="org.apache.kafka.clients"/>
     <allow pkg="org.apache.kafka.clients.producer" exact-match="true"/>
     <allow pkg="org.apache.kafka.clients.consumer" exact-match="true"/>
-
+    
+    <allow pkg="org.bouncycastle" />
     <allow pkg="org.apache.kafka.streams"/>
 
     <subpackage name="examples">

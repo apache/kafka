@@ -47,10 +47,12 @@ import org.apache.kafka.streams.processor.internals.metrics.CumulativeCount;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.processor.internals.metrics.ThreadMetrics;
 import org.apache.kafka.streams.state.internals.ThreadCache;
+import org.bouncycastle.util.encoders.Base64;
 
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.io.StringWriter;
+import java.nio.ByteBuffer;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
@@ -66,6 +68,7 @@ import static org.apache.kafka.streams.kstream.internals.metrics.Sensors.recordL
 public class StreamTask extends AbstractTask implements ProcessorNodePunctuator {
 
     private static final ConsumerRecord<Object, Object> DUMMY_RECORD = new ConsumerRecord<>(ProcessorContextImpl.NONEXIST_TOPIC, -1, -1L, null, null);
+    private static final byte LATEST_MAGIC_BYTE = 1;
 
     private final Time time;
     private final long maxTaskIdleMs;
@@ -473,8 +476,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
             final TopicPartition partition = entry.getKey();
             final long offset = entry.getValue() + 1;
             final long partitionTime = getNextPartitionTime(partition);
-            consumedOffsetsAndMetadata.put(partition, new OffsetAndMetadata(offset,
-                                                                            ((Long) partitionTime).toString()));
+            consumedOffsetsAndMetadata.put(partition, new OffsetAndMetadata(offset, encodeTimestamp(partitionTime)));
             stateMgr.putOffsetLimit(partition, offset);
         }
 
@@ -738,15 +740,11 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
     private void retrieveCommittedTimestamp(final TopicPartition partition) {
         final OffsetAndMetadata metadata = consumer.committed(partition);
 
-        if (metadata != null && metadata.metadata().length() != 0) {
-            try {
-                final long committedTimestamp = Long.parseLong(metadata.metadata());
-                partitionGroup.setPartitionTime(partition, committedTimestamp);
-                log.debug("A committed timestamp was detected: setting the partition time of partition {}"
-                          + " to {} in stream task {}", partition, committedTimestamp, this);
-            } catch (final NumberFormatException exc) {
-                log.error("Could not initialize partition time. Committed metadata is corrupted.", exc);
-            }
+        if (metadata != null) {
+            final long committedTimestamp = decodeTimestamp(metadata.metadata());
+            partitionGroup.setPartitionTime(partition, committedTimestamp);
+            log.debug("A committed timestamp was detected: setting the partition time of partition {}"
+                      + " to {} in stream task {}", partition, committedTimestamp, this);
         }
     }
 
@@ -935,6 +933,27 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
                 format("%sFailed to initialize task %s due to timeout.", logPrefix, id),
                 retriable
             );
+        }
+    }
+
+    static String encodeTimestamp(final long partitionTime) {
+        final ByteBuffer buffer = ByteBuffer.allocate(9);
+        buffer.put(LATEST_MAGIC_BYTE);
+        buffer.putLong(partitionTime);
+        return Base64.toBase64String(buffer.array());
+    }
+
+    static long decodeTimestamp(final String encryptedString) {
+        if (encryptedString.length() == 0) {
+            return -1;
+        }
+        final ByteBuffer buffer = ByteBuffer.wrap(Base64.decode(encryptedString));
+        final byte version = buffer.get();
+        switch (version) {
+            case LATEST_MAGIC_BYTE:
+                return buffer.getLong();
+            default: 
+                return -1;
         }
     }
 }
