@@ -1055,7 +1055,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             fetcher.clearBufferedDataForUnassignedPartitions(Collections.emptySet());
             this.subscriptions.unsubscribe();
             if (this.coordinator != null) {
-                this.coordinator.onLeaveGroup();
+                this.coordinator.onLeavePrepare();
                 this.coordinator.maybeLeaveGroup("the consumer unsubscribed from all topics");
             }
             log.info("Unsubscribed all topics or patterns and assigned partitions");

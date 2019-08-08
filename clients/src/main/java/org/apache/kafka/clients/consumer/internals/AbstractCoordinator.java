@@ -203,9 +203,11 @@ public abstract class AbstractCoordinator implements Closeable {
                                            ByteBuffer memberAssignment);
 
     /**
-     * Invoked prior to each leave group event. This is typically used to cleanup assigned partitions
+     * Invoked prior to each leave group event. This is typically used to cleanup assigned partitions;
+     * note it is triggered by the consumer's API caller thread (i.e. background heartbeat thread would
+     * not trigger it even if it tries to force leaving group upon heartbeat session expiration)
      */
-    protected void onLeaveGroup() {}
+    protected void onLeavePrepare() {}
 
     /**
      * Visible for testing.
@@ -844,7 +846,7 @@ public abstract class AbstractCoordinator implements Closeable {
             // needs this lock to complete and terminate after close flag is set.
             synchronized (this) {
                 if (rebalanceConfig.leaveGroupOnClose) {
-                    onLeaveGroup();
+                    onLeavePrepare();
                     maybeLeaveGroup("the consumer is being closed");
                 }
 
