@@ -119,18 +119,6 @@ public class StandbyTask extends AbstractTask {
         commitNeeded = false;
     }
 
-    /**
-     * <pre>
-     * - flush store
-     * - checkpoint store
-     * </pre>
-     */
-    @Override
-    public void suspend() {
-        log.debug("Suspending");
-        flushAndCheckpointState();
-    }
-
     private void flushAndCheckpointState() {
         stateMgr.flush();
         stateMgr.checkpoint(Collections.emptyMap());
@@ -160,13 +148,6 @@ public class StandbyTask extends AbstractTask {
         }
 
         taskClosed = true;
-    }
-
-    @Override
-    public void closeSuspended(final boolean clean,
-                               final boolean isZombie,
-                               final RuntimeException e) {
-        close(clean, isZombie);
     }
 
     /**
