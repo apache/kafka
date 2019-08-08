@@ -88,7 +88,6 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
     public byte[] putIfAbsent(final Bytes key, final byte[] value) {
         final byte[] originalValue = get(key);
         if (originalValue == null) {
-            ++size;
             put(key, value);
         }
         return originalValue;
