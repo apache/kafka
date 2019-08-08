@@ -531,7 +531,7 @@ public abstract class Type {
         public String documentation() {
             return "Represents a sequence of characters. First the length N + 1 is given as an UNSIGNED_VARINT " +
                     ". Then N bytes follow which are the UTF-8 encoding of the character sequence. " +
-                    "A null string is represented with a length of 0." ;
+                    "A null string is represented with a length of 0.";
         }
     };
 
@@ -706,7 +706,7 @@ public abstract class Type {
     public static final DocumentedType COMPACT_NULLABLE_BYTES = new DocumentedType() {
         @Override
         public void write(ByteBuffer buffer, Object o) {
-            if (o == null){
+            if (o == null) {
                 ByteUtils.writeUnsignedVarint(0, buffer);
             } else {
                 ByteBuffer arg = (ByteBuffer) o;
