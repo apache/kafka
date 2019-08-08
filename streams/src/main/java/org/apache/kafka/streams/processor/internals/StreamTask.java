@@ -67,6 +67,7 @@ import static org.apache.kafka.streams.kstream.internals.metrics.Sensors.recordL
  */
 public class StreamTask extends AbstractTask implements ProcessorNodePunctuator {
 
+    //private static final Logger log = (new LogContext("stream-task")).logger(StreamTask.class);
     private static final ConsumerRecord<Object, Object> DUMMY_RECORD = new ConsumerRecord<>(ProcessorContextImpl.NONEXIST_TOPIC, -1, -1L, null, null);
     private static final byte LATEST_MAGIC_BYTE = 1;
 
@@ -936,16 +937,16 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         }
     }
 
-    static String encodeTimestamp(final long partitionTime) {
+    String encodeTimestamp(final long partitionTime) {
         final ByteBuffer buffer = ByteBuffer.allocate(9);
         buffer.put(LATEST_MAGIC_BYTE);
         buffer.putLong(partitionTime);
         return Base64.toBase64String(buffer.array());
     }
 
-    static long decodeTimestamp(final String encryptedString) {
+    long decodeTimestamp(final String encryptedString) {
         if (encryptedString.length() == 0) {
-            return -1;
+            return RecordQueue.UNKNOWN;
         }
         final ByteBuffer buffer = ByteBuffer.wrap(Base64.decode(encryptedString));
         final byte version = buffer.get();
@@ -953,7 +954,10 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
             case LATEST_MAGIC_BYTE:
                 return buffer.getLong();
             default: 
-                return -1;
+                log.warn("Unsupported version for stream task, latest version is {}," +
+                         "while version recieved is {} for committed metadata", 
+                         LATEST_MAGIC_BYTE, version);
+                return RecordQueue.UNKNOWN;
         }
     }
 }
