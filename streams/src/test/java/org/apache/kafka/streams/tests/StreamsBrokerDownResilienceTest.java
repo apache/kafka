@@ -17,6 +17,8 @@
 
 package org.apache.kafka.streams.tests;
 
+import java.text.DateFormat;
+import java.text.SimpleDateFormat;
 import java.time.Duration;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
@@ -31,6 +33,7 @@ import org.apache.kafka.streams.kstream.ForeachAction;
 
 import java.io.IOException;
 import java.util.Collections;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
@@ -90,6 +93,7 @@ public class StreamsBrokerDownResilienceTest {
         final StreamsBuilder builder = new StreamsBuilder();
         final Serde<String> stringSerde = Serdes.String();
 
+        final DateFormat df = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSXXX");
         builder.stream(Collections.singletonList(SOURCE_TOPIC_1), Consumed.with(stringSerde, stringSerde))
             .peek(new ForeachAction<String, String>() {
                 int messagesProcessed = 0;
@@ -97,31 +101,26 @@ public class StreamsBrokerDownResilienceTest {
                 public void apply(final String key, final String value) {
                     System.out.println("received key " + key + " and value " + value);
                     messagesProcessed++;
-                    System.out.println("processed" + messagesProcessed + "messages");
+                    System.out.println("processed" + messagesProcessed + "messages at time "
+                                           + df.format(new Date(System.currentTimeMillis())));
                     System.out.flush();
                 }
             }).to(SINK_TOPIC);
 
         final KafkaStreams streams = new KafkaStreams(builder.build(), streamsProperties);
 
-        streams.setUncaughtExceptionHandler(new Thread.UncaughtExceptionHandler() {
-            @Override
-            public void uncaughtException(final Thread t, final Throwable e) {
-                System.err.println("FATAL: An unexpected exception " + e);
-                System.err.flush();
-                streams.close(Duration.ofSeconds(30));
-            }
+        streams.setUncaughtExceptionHandler((t, e) -> {
+            System.err.println("FATAL: An unexpected exception " + e);
+            System.err.flush();
+            streams.close(Duration.ofSeconds(30));
         });
         System.out.println("Start Kafka Streams");
         streams.start();
 
-        Runtime.getRuntime().addShutdownHook(new Thread(new Runnable() {
-            @Override
-            public void run() {
-                streams.close(Duration.ofSeconds(30));
-                System.out.println("Complete shutdown of streams resilience test app now");
-                System.out.flush();
-            }
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            streams.close(Duration.ofSeconds(30));
+            System.out.println("Complete shutdown of streams resilience test app now");
+            System.out.flush();
         }));
 
 

@@ -67,7 +67,7 @@ class BaseStreamsTest(KafkaTest):
 
         wait_until(lambda: producer.num_acked >= num_messages,
                    timeout_sec=timeout_sec,
-                   err_msg="At %s failed to send messages " % test_state)
+                   err_msg="At %s failed to send messages. Expected: %s, actual: %s " % (test_state, num_messages, producer.num_acked))
 
     def assert_consume(self, client_id, test_state, topic, num_messages=5, timeout_sec=60):
         consumer = self.get_consumer(client_id, topic, num_messages)
@@ -75,7 +75,7 @@ class BaseStreamsTest(KafkaTest):
 
         wait_until(lambda: consumer.total_consumed() >= num_messages,
                    timeout_sec=timeout_sec,
-                   err_msg="At %s streams did not process messages in %s seconds " % (test_state, timeout_sec))
+                   err_msg="At %s streams did not process messages in %s seconds. Expected: %s, actual: %s " % (test_state, timeout_sec, num_messages, consumer.total_consumed()))
 
     @staticmethod
     def get_configs(extra_configs=""):
