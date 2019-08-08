@@ -473,7 +473,7 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
         // if we don't already need to revoke something due to subscription changes, first try to balance by only moving newly added partitions
         if (!revocationRequired) {
             performReassignments(unassignedPartitions, currentAssignment, prevAssignment, sortedCurrentSubscriptions,
-               consumer2AllPotentialPartitions, partition2AllPotentialConsumers, currentPartitionConsumer);
+                consumer2AllPotentialPartitions, partition2AllPotentialConsumers, currentPartitionConsumer);
         }
 
         reassignmentPerformed = performReassignments(sortedPartitions, currentAssignment, prevAssignment, sortedCurrentSubscriptions,
