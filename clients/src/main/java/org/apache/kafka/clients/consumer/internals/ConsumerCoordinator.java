@@ -319,6 +319,8 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                                   String memberId,
                                   String assignmentStrategy,
                                   ByteBuffer assignmentBuffer) {
+        log.debug("Executing onJoinComplete with generation {} and memberId {}", generation, memberId);
+
         // only the leader is responsible for monitoring for metadata changes (i.e. partition changes)
         if (!isLeader)
             assignmentSnapshot = null;
@@ -631,6 +633,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
     @Override
     protected void onJoinPrepare(int generation, String memberId) {
+        log.debug("Executing onJoinPrepare with generation {} and memberId {}", generation, memberId);
         // commit offsets prior to rebalance if auto-commit enabled
         maybeAutoCommitOffsetsSync(time.timer(rebalanceConfig.rebalanceTimeoutMs));
 
@@ -732,7 +735,9 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             if (!noLongerExistingPartitions.isEmpty()) {
                 ownedPartitions.removeAll(noLongerExistingPartitions);
 
-                Exception e = invokePartitionsLost("topic metadata has changed and therefore some topics may not exist any more",
+                Exception e = invokePartitionsLost("topic metadata has changed and partitions " +
+                        noLongerExistingPartitions + " do not exist any more, owned partitions left are " +
+                        ownedPartitions,
                     noLongerExistingPartitions);
 
                 subscriptions.assignFromSubscribed(ownedPartitions);
