@@ -44,6 +44,7 @@ class JmxTool(JmxMixin, KafkaPathResolverMixin):
 class FetchFromFollowerTest(ProduceConsumeValidateTest):
 
     RACK_AWARE_REPLICA_SELECTOR = "org.apache.kafka.common.replica.RackAwareReplicaSelector"
+    METADATA_MAX_AGE_MS = 3000
 
     def __init__(self, test_context):
         super(FetchFromFollowerTest, self).__init__(test_context=test_context)
@@ -103,24 +104,23 @@ class FetchFromFollowerTest(ProduceConsumeValidateTest):
         self.consumer = ConsoleConsumer(self.test_context, self.num_consumers, self.kafka, self.topic,
                                         client_id="console-consumer", group_id="test-consumer-group-1",
                                         consumer_timeout_ms=60000, message_validator=is_int,
-                                        consumer_properties={"client.rack": non_leader_rack, "metadata.max.age.ms": "3000"})
+                                        consumer_properties={"client.rack": non_leader_rack, "metadata.max.age.ms": self.METADATA_MAX_AGE_MS})
 
         # Start up and let some data get produced
         self.start_producer_and_consumer()
-        time.sleep(5)
+        time.sleep(self.METADATA_MAX_AGE_MS * 2)
 
         consumer_node = self.consumer.nodes[0]
         consumer_idx = self.consumer.idx(consumer_node)
-        jmx_attribute = "preferred-read-replica"
-
-        jmx_object_name = "kafka.consumer:type=consumer-fetch-manager-metrics,client-id=%s,topic=%s,partition=%d" % \
+        read_replica_attribute = "preferred-read-replica"
+        read_replica_mbean = "kafka.consumer:type=consumer-fetch-manager-metrics,client-id=%s,topic=%s,partition=%d" % \
                   ("console-consumer", self.topic, 0)
-        self.jmx_tool.jmx_object_names = [jmx_object_name]
-        self.jmx_tool.jmx_attributes = [jmx_attribute]
+        self.jmx_tool.jmx_object_names = [read_replica_mbean]
+        self.jmx_tool.jmx_attributes = [read_replica_attribute]
         self.jmx_tool.start_jmx_tool(consumer_idx, consumer_node)
 
         # Wait for at least one interval of "metadata.max.age.ms"
-        time.sleep(5)
+        time.sleep(self.METADATA_MAX_AGE_MS * 2)
 
         # Read the JMX output
         self.jmx_tool.read_jmx_output(consumer_idx, consumer_node)
@@ -130,15 +130,14 @@ class FetchFromFollowerTest(ProduceConsumeValidateTest):
 
         for ts, data in self.jmx_tool.jmx_stats[0].items():
             for k, v in data.items():
-                self.logger.debug("JMX => %s %s" % (k, v))
-                if k.endswith(jmx_attribute):
+                if k.endswith(read_replica_attribute):
                     all_captured_preferred_read_replicas[int(v)] += 1
 
         self.logger.debug("Saw the following preferred read replicas %s",
                           dict(all_captured_preferred_read_replicas.items()))
-        for idx in (1, 2, 3):
-            if idx == non_leader_idx:
-                assert all_captured_preferred_read_replicas[idx] > 0, "Expected to see broker %d (%s) as a preferred replica" % (idx, non_leader_rack)
+
+        assert all_captured_preferred_read_replicas[non_leader_idx] > 0, \
+            "Expected to see broker %d (%s) as a preferred replica" % (non_leader_idx, non_leader_rack)
 
         # Validate consumed messages
         self.stop_producer_and_consumer()
