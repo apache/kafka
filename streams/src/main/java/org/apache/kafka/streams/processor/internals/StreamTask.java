@@ -67,7 +67,6 @@ import static org.apache.kafka.streams.kstream.internals.metrics.Sensors.recordL
  */
 public class StreamTask extends AbstractTask implements ProcessorNodePunctuator {
 
-    //private static final Logger log = (new LogContext("stream-task")).logger(StreamTask.class);
     private static final ConsumerRecord<Object, Object> DUMMY_RECORD = new ConsumerRecord<>(ProcessorContextImpl.NONEXIST_TOPIC, -1, -1L, null, null);
     private static final byte LATEST_MAGIC_BYTE = 1;
 
@@ -88,8 +87,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
     private Producer<byte[], byte[]> producer;
     private boolean commitRequested = false;
     private boolean transactionInFlight = false;
-    private Map<TopicPartition, Long> partitionTimes = new HashMap<>();
-    private boolean isCloseTriggerCommit = false;
 
     protected static final class TaskMetrics {
         final StreamsMetricsImpl metrics;
@@ -443,11 +440,12 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
      */
     @Override
     public void commit() {
-        commit(true);
+        commit(true, null);
     }
 
-    private long getNextPartitionTime(final TopicPartition partition) {
-        if (!isCloseTriggerCommit) {
+    private long getNextPartitionTime(final TopicPartition partition,
+                                      final Map<TopicPartition, Long> partitionTimes) {
+        if (partitionTimes == null) {
             return partitionTime(partition);
         }
         final Long partitionTime = partitionTimes.get(partition);
@@ -462,7 +460,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
      *                               or if the task producer got fenced (EOS)
      */
     // visible for testing
-    void commit(final boolean startNewTransaction) {
+    void commit(final boolean startNewTransaction, final Map<TopicPartition, Long> partitionTimes) {
         final long startNs = time.nanoseconds();
         log.debug("Committing");
 
@@ -476,7 +474,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         for (final Map.Entry<TopicPartition, Long> entry : consumedOffsets.entrySet()) {
             final TopicPartition partition = entry.getKey();
             final long offset = entry.getValue() + 1;
-            final long partitionTime = getNextPartitionTime(partition);
+            final long partitionTime = getNextPartitionTime(partition, partitionTimes);
             consumedOffsetsAndMetadata.put(partition, new OffsetAndMetadata(offset, encodeTimestamp(partitionTime)));
             stateMgr.putOffsetLimit(partition, offset);
         }
@@ -581,11 +579,12 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
     // visible for testing
     void suspend(final boolean clean,
                  final boolean isZombie) {
+        final Map<TopicPartition, Long> partitionTimeMap = new HashMap<>();
         try {
             // local partition times will shortly be wiped, so we need to store them
             // for commit later
             for (final TopicPartition partition : partitionGroup.partitions()) {
-                partitionTimes.put(partition, partitionTime(partition));
+                partitionTimeMap.put(partition, partitionTime(partition));
             }
             closeTopology(); // should we call this only on clean suspend?
         } catch (final RuntimeException fatal) {
@@ -597,9 +596,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         if (clean) {
             TaskMigratedException taskMigratedException = null;
             try {
-                isCloseTriggerCommit = true;
-                commit(false);
-                isCloseTriggerCommit = false;
+                commit(false, partitionTimeMap);
             } finally {
                 if (eosEnabled) {
                     stateMgr.checkpoint(activeTaskCheckpointableOffsets());
