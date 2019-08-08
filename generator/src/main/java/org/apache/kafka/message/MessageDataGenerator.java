@@ -424,8 +424,9 @@ public final class MessageDataGenerator {
             VersionConditional.forVersions(field.versions(), curVersions).
                 alwaysEmitBlockScope(true).
                 ifMember(() -> {
+                    Versions versions = field.versions().intersect(curVersions);
                     buffer.printf("int arrayLength;%n");
-                    VersionConditional.forVersions(flexibleVersions, field.versions()).
+                    VersionConditional.forVersions(flexibleVersions, versions).
                         ifMember(() -> {
                             buffer.printf("arrayLength = readable.readUnsignedVarInt() - 1;%n");
                         }).
@@ -435,7 +436,7 @@ public final class MessageDataGenerator {
                         generate(buffer);
                     buffer.printf("if (arrayLength < 0) {%n");
                     buffer.incrementIndent();
-                    VersionConditional.forVersions(field.nullableVersions(), curVersions).
+                    VersionConditional.forVersions(field.nullableVersions(), versions).
                         ifNotMember(() -> {
                             buffer.printf("throw new RuntimeException(\"non-nullable field %s " +
                                     "was serialized as null\");%n", field.camelCaseName());
@@ -689,9 +690,11 @@ public final class MessageDataGenerator {
         if (field.type().isArray()) {
             VersionConditional.forVersions(field.versions(), curVersions).
                 ifMember(() -> {
-                    IsNullConditional.forField(field, curVersions).
+                    Versions versions = field.versions().intersect(curVersions);
+                    IsNullConditional.forField(field, versions).
                         ifNull(() -> {
-                            VersionConditional.forVersions(flexibleVersions, curVersions).
+                            Versions nullableVersions = versions.intersect(field.nullableVersions());
+                            VersionConditional.forVersions(flexibleVersions, nullableVersions).
                                 ifMember(() -> {
                                     buffer.printf("writable.writeUnsignedVarint(0);%n");
                                 }).
@@ -701,7 +704,7 @@ public final class MessageDataGenerator {
                                 generate(buffer);
                         }).
                         ifNotNull(() -> {
-                            VersionConditional.forVersions(flexibleVersions, curVersions).
+                            VersionConditional.forVersions(flexibleVersions, versions).
                                 ifMember(() -> {
                                     buffer.printf("writable.writeUnsignedVarint(%s.size() + 1);%n",
                                             field.camelCaseName());
@@ -915,9 +918,11 @@ public final class MessageDataGenerator {
         } else if (field.type().isArray()) {
             VersionConditional.forVersions(field.versions(), curVersions).
                 ifMember(() -> {
-                    IsNullConditional.forField(field, curVersions).
+                    Versions versions = curVersions.intersect(field.versions());
+                    IsNullConditional.forField(field, versions).
                         ifNull(() -> {
-                            VersionConditional.forVersions(flexibleVersions, curVersions).
+                            Versions nullableVersions = versions.intersect(field.nullableVersions());
+                            VersionConditional.forVersions(flexibleVersions, nullableVersions).
                                 ifMember(() -> {
                                     // As an unsigned varint, 0 takes up one byte.
                                     buffer.printf("size += 1;%n");
@@ -928,7 +933,7 @@ public final class MessageDataGenerator {
                                 generate(buffer);
                         }).
                         ifNotNull(() -> {
-                            VersionConditional.forVersions(flexibleVersions, curVersions).
+                            VersionConditional.forVersions(flexibleVersions, versions).
                                 ifMember(() -> {
                                     // As an unsigned varint, 0 takes up one byte.
                                     headerGenerator.addImport(MessageGenerator.BYTE_UTILS_CLASS);
