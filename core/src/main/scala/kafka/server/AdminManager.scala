@@ -191,7 +191,7 @@ class AdminManager(val config: KafkaConfig,
   def deleteTopics(timeout: Int,
                    topics: Set[String],
                    responseCallback: Map[String, Errors] => Unit): Unit = {
-
+    info(s"Deleting topics ${topics.mkString(", ")}")
     // 1. map over topics calling the asynchronous delete
     val metadata = topics.map { topic =>
         try {
