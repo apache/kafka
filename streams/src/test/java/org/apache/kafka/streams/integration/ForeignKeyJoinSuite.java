@@ -24,9 +24,10 @@ import org.junit.runner.RunWith;
 import org.junit.runners.Suite;
 
 /**
- * This suite runs all the tests related to the Suppression feature.
+ * This suite runs all the tests related to the KTable-KTable foreign key join feature.
  *
- * It can be used from an IDE to selectively just run these tests when developing code related to Suppress.
+ * It can be used from an IDE to selectively just run these tests when developing code related to KTable-KTable
+ * foreign key join.
  *
  * If desired, it can also be added to a Gradle build task, although this isn't strictly necessary, since all
  * these tests are already included in the `:streams:test` task.
