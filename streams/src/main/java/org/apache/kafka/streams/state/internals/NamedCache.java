@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import java.util.Comparator;
 import java.util.NavigableMap;
 import java.util.concurrent.ConcurrentSkipListMap;
 import org.apache.kafka.common.MetricName;
@@ -105,7 +104,7 @@ class NamedCache {
 
         if (log.isTraceEnabled()) {
             log.trace("Named cache {} stats on flush: #hits={}, #misses={}, #overwrites={}, #flushes={}",
-                name, hits(), misses(), overwrites(), flushes());
+                    name, hits(), misses(), overwrites(), flushes());
         }
 
         if (listener == null) {
@@ -148,10 +147,10 @@ class NamedCache {
     synchronized void put(final Bytes key, final LRUCacheEntry value) {
         if (!value.isDirty() && dirtyKeys.contains(key)) {
             throw new IllegalStateException(
-                String.format(
-                    "Attempting to put a clean entry for key [%s] into NamedCache [%s] when it already contains a dirty entry for the same key",
-                    key, name
-                )
+                    String.format(
+                            "Attempting to put a clean entry for key [%s] into NamedCache [%s] when it already contains a dirty entry for the same key",
+                            key, name
+                    )
             );
         }
         LRUNode node = cache.get(key);
@@ -267,34 +266,12 @@ class NamedCache {
         return cache.size();
     }
 
-    public boolean isEmpty() {
-        return cache.isEmpty();
-    }
-
     synchronized Iterator<Map.Entry<Bytes, LRUNode>> subMapIterator(final Bytes from, final Bytes to) {
         return cache.subMap(from, true, to, true).entrySet().iterator();
     }
 
     synchronized Iterator<Map.Entry<Bytes, LRUNode>> allIterator() {
         return cache.entrySet().iterator();
-    }
-
-    synchronized Iterator<Map.Entry<Bytes, LRUNode>> subMapPrefixIterator(final Bytes prefix) {
-        final Bytes prefixEnd = Bytes.increment(prefix);
-        final Comparator<? super Bytes> comparator = cache.comparator();
-
-        //We currently don't set a comparator for the map in this class, so the comparator will always be null.
-        final int result = comparator == null ? prefix.compareTo(prefixEnd) : comparator.compare(prefix, prefixEnd);
-
-        final NavigableMap<Bytes, LRUNode> subMapResults;
-        if (result > 0) {
-            //Prefix increment would cause a wrap-around. Get the submap from toKey to the end of the map
-            subMapResults = cache.tailMap(prefix, true);
-        } else {
-            subMapResults = cache.subMap(prefix, true, prefixEnd, false);
-        }
-
-        return subMapResults.entrySet().iterator();
     }
 
     synchronized LRUCacheEntry first() {
@@ -352,10 +329,10 @@ class NamedCache {
 
         long size() {
             return key.get().length +
-                8 + // entry
-                8 + // previous
-                8 + // next
-                entry.size();
+                    8 + // entry
+                    8 + // previous
+                    8 + // next
+                    entry.size();
         }
 
         LRUNode next() {
@@ -386,47 +363,47 @@ class NamedCache {
 
             // add parent
             final Map<String, String> allMetricTags = metrics.tagMap(
-                 "task-id", taskName,
-                "record-cache-id", "all"
+                    "task-id", taskName,
+                    "record-cache-id", "all"
             );
             final Sensor taskLevelHitRatioSensor = metrics.taskLevelSensor(taskName, "hitRatio", Sensor.RecordingLevel.DEBUG);
             taskLevelHitRatioSensor.add(
-                new MetricName("hitRatio-avg", group, "The average cache hit ratio.", allMetricTags),
-                new Avg()
+                    new MetricName("hitRatio-avg", group, "The average cache hit ratio.", allMetricTags),
+                    new Avg()
             );
             taskLevelHitRatioSensor.add(
-                new MetricName("hitRatio-min", group, "The minimum cache hit ratio.", allMetricTags),
-                new Min()
+                    new MetricName("hitRatio-min", group, "The minimum cache hit ratio.", allMetricTags),
+                    new Min()
             );
             taskLevelHitRatioSensor.add(
-                new MetricName("hitRatio-max", group, "The maximum cache hit ratio.", allMetricTags),
-                new Max()
+                    new MetricName("hitRatio-max", group, "The maximum cache hit ratio.", allMetricTags),
+                    new Max()
             );
 
             // add child
             final Map<String, String> metricTags = metrics.tagMap(
-                 "task-id", taskName,
-                "record-cache-id", ThreadCache.underlyingStoreNamefromCacheName(cacheName)
+                    "task-id", taskName,
+                    "record-cache-id", ThreadCache.underlyingStoreNamefromCacheName(cacheName)
             );
 
             hitRatioSensor = metrics.cacheLevelSensor(
-                taskName,
-                cacheName,
-                "hitRatio",
-                Sensor.RecordingLevel.DEBUG,
-                taskLevelHitRatioSensor
+                    taskName,
+                    cacheName,
+                    "hitRatio",
+                    Sensor.RecordingLevel.DEBUG,
+                    taskLevelHitRatioSensor
             );
             hitRatioSensor.add(
-                new MetricName("hitRatio-avg", group, "The average cache hit ratio.", metricTags),
-                new Avg()
+                    new MetricName("hitRatio-avg", group, "The average cache hit ratio.", metricTags),
+                    new Avg()
             );
             hitRatioSensor.add(
-                new MetricName("hitRatio-min", group, "The minimum cache hit ratio.", metricTags),
-                new Min()
+                    new MetricName("hitRatio-min", group, "The minimum cache hit ratio.", metricTags),
+                    new Min()
             );
             hitRatioSensor.add(
-                new MetricName("hitRatio-max", group, "The maximum cache hit ratio.", metricTags),
-                new Max()
+                    new MetricName("hitRatio-max", group, "The maximum cache hit ratio.", metricTags),
+                    new Max()
             );
 
         }
