@@ -136,8 +136,7 @@ public class ResetPartitionTimeIntegrationTest {
             kafkaStreams.close();
             assertThat(kafkaStreams.state(), is(KafkaStreams.State.NOT_RUNNING));
 
-            kafkaStreams = new KafkaStreams(builder.build(), streamsConfig);
-            kafkaStreams.start();
+            kafkaStreams = getStartedStreams(streamsConfig, builder, true);
 
             // resend some records and retrieve the last committed timestamp
             produceSynchronouslyToPartitionZero(

@@ -440,19 +440,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
      */
     @Override
     public void commit() {
-        commit(true, null);
-    }
-
-    private long getNextPartitionTime(final TopicPartition partition,
-                                      final Map<TopicPartition, Long> partitionTimes) {
-        if (partitionTimes == null) {
-            return partitionTime(partition);
-        }
-        final Long partitionTime = partitionTimes.get(partition);
-        if (partitionTime == null) {
-            throw new NullPointerException("Partition " + partition + " does not belong in assignment.");
-        }
-        return partitionTime;
+        commit(true, extractPartitionTimes());
     }
 
     /**
@@ -474,7 +462,10 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         for (final Map.Entry<TopicPartition, Long> entry : consumedOffsets.entrySet()) {
             final TopicPartition partition = entry.getKey();
             final long offset = entry.getValue() + 1;
-            final long partitionTime = getNextPartitionTime(partition, partitionTimes);
+            final Long partitionTime = partitionTimes.get(partition);
+            if (partitionTime == null) {
+                throw new NullPointerException("Partition " + partition + " does not belong in assignment.");
+            }
             consumedOffsetsAndMetadata.put(partition, new OffsetAndMetadata(offset, encodeTimestamp(partitionTime)));
             stateMgr.putOffsetLimit(partition, offset);
         }
@@ -579,13 +570,8 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
     // visible for testing
     void suspend(final boolean clean,
                  final boolean isZombie) {
-        final Map<TopicPartition, Long> partitionTimeMap = new HashMap<>();
+        final Map<TopicPartition, Long> partitionTimes = extractPartitionTimes();
         try {
-            // local partition times will shortly be wiped, so we need to store them
-            // for commit later
-            for (final TopicPartition partition : partitionGroup.partitions()) {
-                partitionTimeMap.put(partition, partitionTime(partition));
-            }
             closeTopology(); // should we call this only on clean suspend?
         } catch (final RuntimeException fatal) {
             if (clean) {
@@ -596,7 +582,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         if (clean) {
             TaskMigratedException taskMigratedException = null;
             try {
-                commit(false, partitionTimeMap);
+                commit(false, partitionTimes);
             } finally {
                 if (eosEnabled) {
                     stateMgr.checkpoint(activeTaskCheckpointableOffsets());
@@ -735,7 +721,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         taskClosed = true;
     }
 
-    private void retrieveCommittedTimestamp(final TopicPartition partition) {
+    private void initializeCommittedTimestamp(final TopicPartition partition) {
         final OffsetAndMetadata metadata = consumer.committed(partition);
 
         if (metadata != null) {
@@ -743,17 +729,17 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
             partitionGroup.setPartitionTime(partition, committedTimestamp);
             log.debug("A committed timestamp was detected: setting the partition time of partition {}"
                       + " to {} in stream task {}", partition, committedTimestamp, this);
+        } else {
+            log.debug("No committed timestamp was found in metadata for partition {}", partition);
         }
     }
 
     /**
      * Retrieves formerly committed timestamps and updates the local queue's partition time.
-     * 
-     * @return a boolean result which indicates all timestamps were successfully restored.
      */
     public void initializeTaskTime() {
         for (final TopicPartition partition : partitionGroup.partitions()) {
-            retrieveCommittedTimestamp(partition);
+            initializeCommittedTimestamp(partition);
         }
     }
 
@@ -934,6 +920,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         }
     }
 
+    // visible for testing
     String encodeTimestamp(final long partitionTime) {
         final ByteBuffer buffer = ByteBuffer.allocate(9);
         buffer.put(LATEST_MAGIC_BYTE);
@@ -941,6 +928,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         return Base64.getEncoder().encodeToString(buffer.array());
     }
 
+    // visible for testing
     long decodeTimestamp(final String encryptedString) {
         if (encryptedString.length() == 0) {
             return RecordQueue.UNKNOWN;
@@ -951,10 +939,17 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
             case LATEST_MAGIC_BYTE:
                 return buffer.getLong();
             default: 
-                log.warn("Unsupported version for stream task, latest version is {}," +
-                         "while version recieved is {} for committed metadata", 
+                log.warn("Unsupported offset metadata version found. Supported version {}. Found version {}.", 
                          LATEST_MAGIC_BYTE, version);
                 return RecordQueue.UNKNOWN;
         }
+    }
+
+    private Map<TopicPartition, Long> extractPartitionTimes() {
+        final Map<TopicPartition, Long> partitionTimes = new HashMap<>();
+        for (final TopicPartition partition : partitionGroup.partitions()) {
+            partitionTimes.put(partition, partitionTime(partition));
+        }
+        return partitionTimes;
     }
 }

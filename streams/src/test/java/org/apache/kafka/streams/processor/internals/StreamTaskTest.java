@@ -654,15 +654,13 @@ public class StreamTaskTest {
 
         task.process();
 
-        // timestamp will be committed here
         task.commit();
-        assertTrue(task.decodeTimestamp(task.consumer.committed(partition1).metadata())
+        assertTrue(task.decodeTimestamp(consumer.committed(partition1).metadata())
                    == DEFAULT_TIMESTAMP);
         // reset times here to artificially represent a restart
         task.resetTimes();
         assertTrue(task.partitionTime(partition1) == RecordQueue.UNKNOWN);
 
-        // timestamp would be updated here
         task.initializeTaskTime();
         assertTrue(task.partitionTime(partition1) == DEFAULT_TIMESTAMP);
         assertTrue(task.streamTime() == DEFAULT_TIMESTAMP);
@@ -677,26 +675,45 @@ public class StreamTaskTest {
         task.addRecords(partition1, singletonList(getConsumerRecord(partition1, DEFAULT_TIMESTAMP)));
 
         task.process();
-        // time stamp will be committed here
         task.commit();
-        
+
         //since consumer is mock, there is no real broker
         //so we need to manually commit the information to stimulate broker
         final Map<TopicPartition, OffsetAndMetadata> offsetMap = new HashMap<>();
         final String encryptedMetadata = task.encodeTimestamp(DEFAULT_TIMESTAMP);
         offsetMap.put(partition1, new OffsetAndMetadata(DEFAULT_TIMESTAMP, encryptedMetadata));
-        task.consumer.commitSync(offsetMap);
-
-        assertTrue(task.decodeTimestamp(task.consumer.committed(partition1).metadata())
+        consumer.commitSync(offsetMap);
+        assertTrue(task.decodeTimestamp(consumer.committed(partition1).metadata())
                    == DEFAULT_TIMESTAMP);
+
+        long partitionTime = -1L;
+        final List<Map<String, Map<TopicPartition, OffsetAndMetadata>>> metadataList = 
+            producer.consumerGroupOffsetsHistory();
+        for (final Map<String, Map<TopicPartition, OffsetAndMetadata>> map : metadataList) {
+            for (final Map.Entry<String, Map<TopicPartition, OffsetAndMetadata>> entry : map.entrySet()) {
+                for (final Map.Entry<TopicPartition, OffsetAndMetadata> metadata : entry.getValue().entrySet()) {
+                    if (metadata.getKey().equals(partition1)) {
+                        partitionTime = task.decodeTimestamp(metadata.getValue().metadata());
+                        break;
+                    }
+                }
+            }
+        }
+        assertTrue(partitionTime == DEFAULT_TIMESTAMP);
+
         // reset times here to artificially represent a restart
         task.resetTimes();
         assertTrue(task.partitionTime(partition1) == RecordQueue.UNKNOWN);
 
-        // timestamp would be updated here
         task.initializeTaskTime();
         assertTrue(task.partitionTime(partition1) == DEFAULT_TIMESTAMP);
         assertTrue(task.streamTime() == DEFAULT_TIMESTAMP);
+    }
+
+    @Test
+    public void shouldEncodeAndDecodeMetadata() {
+        task = createStatelessTask(createConfig(false));
+        assertTrue(task.decodeTimestamp(task.encodeTimestamp(DEFAULT_TIMESTAMP)) == DEFAULT_TIMESTAMP);
     }
 
     @Test

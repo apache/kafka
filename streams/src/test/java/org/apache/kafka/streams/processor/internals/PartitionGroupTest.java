@@ -40,6 +40,7 @@ import java.util.List;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 
 public class PartitionGroupTest {
     private final LogContext logContext = new LogContext();
@@ -119,6 +120,7 @@ public class PartitionGroupTest {
         // 2:[2, 4, 6]
         // st: 1
         assertEquals(partition1, info.partition());
+        assertEquals(group.partitionTimestamp(partition1), 3L);
         verifyTimes(record, 1L, 1L);
         verifyBuffered(5, 2, 3);
         assertEquals(0.0, metrics.metric(lastLatenessValue).metricValue());
@@ -129,6 +131,7 @@ public class PartitionGroupTest {
         // 2:[4, 6]
         // st: 2
         assertEquals(partition2, info.partition());
+        assertEquals(group.partitionTimestamp(partition2), 4L);
         verifyTimes(record, 2L, 2L);
         verifyBuffered(4, 2, 2);
         assertEquals(0.0, metrics.metric(lastLatenessValue).metricValue());
@@ -152,6 +155,7 @@ public class PartitionGroupTest {
         // 2:[4, 6]
         // st: 3
         assertEquals(partition1, info.partition());
+        assertEquals(group.partitionTimestamp(partition1), 5L);
         verifyTimes(record, 3L, 3L);
         verifyBuffered(5, 3, 2);
         assertEquals(0.0, metrics.metric(lastLatenessValue).metricValue());
@@ -162,6 +166,7 @@ public class PartitionGroupTest {
         // 2:[6]
         // st: 4
         assertEquals(partition2, info.partition());
+        assertEquals(group.partitionTimestamp(partition2), 6L);
         verifyTimes(record, 4L, 4L);
         verifyBuffered(4, 3, 1);
         assertEquals(0.0, metrics.metric(lastLatenessValue).metricValue());
@@ -172,6 +177,7 @@ public class PartitionGroupTest {
         // 2:[6]
         // st: 5
         assertEquals(partition1, info.partition());
+        assertEquals(group.partitionTimestamp(partition1), 5L);
         verifyTimes(record, 5L, 5L);
         verifyBuffered(3, 2, 1);
         assertEquals(0.0, metrics.metric(lastLatenessValue).metricValue());
@@ -206,6 +212,8 @@ public class PartitionGroupTest {
         verifyBuffered(0, 0, 0);
         assertEquals(0.0, metrics.metric(lastLatenessValue).metricValue());
 
+        group.setPartitionTime(partition2, 100);
+        assertEquals(group.partitionTimestamp(partition2), 100);
     }
 
     @Test
@@ -265,5 +273,24 @@ public class PartitionGroupTest {
         assertEquals(totalBuffered, group.numBuffered());
         assertEquals(partitionOneBuffered, group.numBuffered(partition1));
         assertEquals(partitionTwoBuffered, group.numBuffered(partition2));
+    }
+
+    @Test
+    public void shouldThrowNullPointerUponSearchForNonAssignmentPartition() {
+        final TopicPartition randomPartition = new TopicPartition("random-partition", 0);
+        NullPointerException exc = null;
+        try {
+            group.setPartitionTime(randomPartition, 100);
+        } catch (final NullPointerException e) {
+            exc = e;
+        }
+        assertTrue(exc != null);
+        exc = null;
+        try {
+            group.partitionTimestamp(randomPartition);
+        } catch (final NullPointerException e) {
+            exc = e;
+        }
+        assertTrue(exc != null);
     }
 }
