@@ -271,7 +271,7 @@ public class StreamsUpgradeTest {
         private ByteBuffer encodeFutureVersion() {
             final byte[] endPointBytes = prepareUserEndPoint();
 
-            final ByteBuffer buf = ByteBuffer.allocate(getVersionThreeAndFourByteLength(endPointBytes));
+            final ByteBuffer buf = ByteBuffer.allocate(getVersionThreeFourAndFiveByteLength(endPointBytes));
 
             buf.putInt(LATEST_SUPPORTED_VERSION + 1); // used version
             buf.putInt(LATEST_SUPPORTED_VERSION + 1); // supported version

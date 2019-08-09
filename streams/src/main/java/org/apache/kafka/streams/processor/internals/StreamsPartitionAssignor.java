@@ -65,6 +65,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
     private final static int VERSION_TWO = 2;
     private final static int VERSION_THREE = 3;
     private final static int VERSION_FOUR = 4;
+    private final static int VERSION_FIVE = 5;
     private final static int EARLIEST_PROBEABLE_VERSION = VERSION_THREE;
     protected final Set<Integer> supportedVersions = new HashSet<>();
 
@@ -446,7 +447,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             for (final String topic : topicsInfo.sourceTopics) {
                 if (!topicsInfo.repartitionSourceTopics.keySet().contains(topic) &&
                     !metadata.topics().contains(topic)) {
-                    log.error("Missing source topic {} durign assignment. Returning error {}.",
+                    log.error("Missing source topic {} during assignment. Returning error {}.",
                               topic, Error.INCOMPLETE_SOURCE_TOPIC_METADATA.name());
                     return new GroupAssignment(errorAssignment(clientMetadataMap, topic, Error.INCOMPLETE_SOURCE_TOPIC_METADATA.code));
                 }
@@ -625,6 +626,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             for (final Map.Entry<UUID, ClientMetadata> entry : clientMetadataMap.entrySet()) {
                 final HostInfo hostInfo = entry.getValue().hostInfo;
 
+                // if application server is configured, also include host state map
                 if (hostInfo != null) {
                     final Set<TopicPartition> topicPartitions = new HashSet<>();
                     final ClientState state = entry.getValue().state;
@@ -775,6 +777,17 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         return taskIdsForConsumerAssignment;
     }
 
+    private void upgradeSubscriptionVersionIfNeeded(final int leaderSupportedVersion) {
+        if (leaderSupportedVersion > usedSubscriptionMetadataVersion) {
+            log.info("Sent a version {} subscription and group leader's latest supported version is {}. " +
+                    "Upgrading subscription metadata version to {} for next rebalance.",
+                usedSubscriptionMetadataVersion,
+                leaderSupportedVersion,
+                leaderSupportedVersion);
+            usedSubscriptionMetadataVersion = leaderSupportedVersion;
+        }
+    }
+
     /**
      * @throws TaskAssignmentException if there is no task id for one of the partitions specified
      */
@@ -835,27 +848,18 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                 partitionsByHost = info.partitionsByHost();
                 break;
             case VERSION_THREE:
-                if (leaderSupportedVersion > usedSubscriptionMetadataVersion) {
-                    log.info("Sent a version {} subscription and group leader's latest supported version is {}. " +
-                        "Upgrading subscription metadata version to {} for next rebalance.",
-                        usedSubscriptionMetadataVersion,
-                        leaderSupportedVersion,
-                        leaderSupportedVersion);
-                    usedSubscriptionMetadataVersion = leaderSupportedVersion;
-                }
+                upgradeSubscriptionVersionIfNeeded(leaderSupportedVersion);
                 processVersionThreeAssignment(info, partitions, activeTasks, topicToPartitionInfo);
                 partitionsByHost = info.partitionsByHost();
                 break;
             case VERSION_FOUR:
-                if (leaderSupportedVersion > usedSubscriptionMetadataVersion) {
-                    log.info("Sent a version {} subscription and group leader's latest supported version is {}. " +
-                        "Upgrading subscription metadata version to {} for next rebalance.",
-                        usedSubscriptionMetadataVersion,
-                        leaderSupportedVersion,
-                        leaderSupportedVersion);
-                    usedSubscriptionMetadataVersion = leaderSupportedVersion;
-                }
+                upgradeSubscriptionVersionIfNeeded(leaderSupportedVersion);
                 processVersionFourAssignment(info, partitions, activeTasks, topicToPartitionInfo);
+                partitionsByHost = info.partitionsByHost();
+                break;
+            case VERSION_FIVE:
+                upgradeSubscriptionVersionIfNeeded(leaderSupportedVersion);
+                processVersionFiveAssignment(info, partitions, activeTasks, topicToPartitionInfo);
                 partitionsByHost = info.partitionsByHost();
                 break;
             default:
@@ -916,6 +920,13 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                                               final Map<TaskId, Set<TopicPartition>> activeTasks,
                                               final Map<TopicPartition, PartitionInfo> topicToPartitionInfo) {
         processVersionThreeAssignment(info, partitions, activeTasks, topicToPartitionInfo);
+    }
+
+    private void processVersionFiveAssignment(final AssignmentInfo info,
+                                              final List<TopicPartition> partitions,
+                                              final Map<TaskId, Set<TopicPartition>> activeTasks,
+                                              final Map<TopicPartition, PartitionInfo> topicToPartitionInfo) {
+        processVersionFourAssignment(info, partitions, activeTasks, topicToPartitionInfo);
     }
 
     // for testing
