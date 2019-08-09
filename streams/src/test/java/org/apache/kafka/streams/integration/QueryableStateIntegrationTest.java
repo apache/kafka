@@ -640,7 +640,7 @@ public class QueryableStateIntegrationTest {
         TestUtils.waitForCondition(
             () -> myMapStore.approximateNumEntries() > 0,
             maxWaitMs,
-            "wait for agg to be <a,125>||<a,1225>||<a,12125> and <b,34>||<b,344>||<b,3434>");
+            "wait for suppression buffering");
         assertEquals("1", myMapStore.get("v1"));
         assertEquals("1", myMapStore.get("v2"));
     }

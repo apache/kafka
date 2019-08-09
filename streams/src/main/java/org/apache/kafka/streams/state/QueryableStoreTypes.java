@@ -98,7 +98,9 @@ public final class QueryableStoreTypes {
      *
      * @param <K> key type of the store
      * @param <V> value type of the store
-     * @return {@link QueryableStoreTypes.SessionStoreType}
+     * @param keySerde Key serializer
+     * @param valueSerde Value serializer
+     * @return {@link QueryableStoreTypes.TimeOrderedKeyValueBufferType}
      */
     public static <K, V> QueryableStoreType<ReadOnlyKeyValueStore<K, V>> timeOrderedKeyValueBuffer(final Serde<K> keySerde, final Serde<V> valueSerde) {
         return new TimeOrderedKeyValueBufferType<>(keySerde, valueSerde);
