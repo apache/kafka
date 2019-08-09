@@ -463,10 +463,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         for (final Map.Entry<TopicPartition, Long> entry : consumedOffsets.entrySet()) {
             final TopicPartition partition = entry.getKey();
             final long offset = entry.getValue() + 1;
-            final Long partitionTime = partitionTimes.get(partition);
-            if (partitionTime == null) {
-                throw new NullPointerException("Partition " + partition + " does not belong in assignment.");
-            }
+            final long partitionTime = partitionTimes.get(partition);
             consumedOffsetsAndMetadata.put(partition, new OffsetAndMetadata(offset, encodeTimestamp(partitionTime)));
             stateMgr.putOffsetLimit(partition, offset);
         }

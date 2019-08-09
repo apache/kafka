@@ -68,6 +68,7 @@ import java.nio.ByteBuffer;
 import java.time.Duration;
 import java.util.Base64;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -676,14 +677,17 @@ public class StreamTaskTest {
         task.process();
         task.commit();
 
-        long partitionTime = -1L;
+        //since consumer is mock, there is no real broker
+        //so we need to manually commit the information to stimulate broker
+        final Map<TopicPartition, OffsetAndMetadata> offsetMap = new HashMap<>();
+        final String encryptedMetadata = task.encodeTimestamp(DEFAULT_TIMESTAMP);
+        offsetMap.put(partition1, new OffsetAndMetadata(DEFAULT_TIMESTAMP, encryptedMetadata));
+        consumer.commitSync(offsetMap);
+
         final List<Map<String, Map<TopicPartition, OffsetAndMetadata>>> metadataList = 
             producer.consumerGroupOffsetsHistory();
-        for (final Map<String, Map<TopicPartition, OffsetAndMetadata>> map : metadataList) {
-            if (map.containsKey(topic1) && map.get(topic1).containsKey(partition1)) {
-                partitionTime = task.decodeTimestamp(map.get(topic1).get(partition1).metadata());
-            }
-        }
+        final String storedMetadata = metadataList.get(0).get("stream-task-test").get(partition1).metadata();
+        final long partitionTime = task.decodeTimestamp(storedMetadata);
         assertEquals(DEFAULT_TIMESTAMP, partitionTime);
 
         // reset times here to artificially represent a restart
