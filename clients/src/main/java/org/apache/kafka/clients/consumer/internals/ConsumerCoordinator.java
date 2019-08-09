@@ -649,7 +649,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             memberId.equals(Generation.NO_GENERATION.memberId)) {
             revokedPartitions = new HashSet<>(subscriptions.assignedPartitions());
 
-            if (!revokedPartitions.isEmpty()) {
+            if (!revokedPartitions.isEmpty() || protocol == RebalanceProtocol.EAGER) {
                 log.info("Giving away all assigned partitions as lost since generation has been reset," +
                     "indicating that consumer is no longer part of the group");
                 exception = invokePartitionsLost(revokedPartitions);
