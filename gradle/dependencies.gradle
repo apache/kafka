@@ -93,7 +93,7 @@ versions += [
   kafka_11: "1.1.1",
   kafka_20: "2.0.1",
   kafka_21: "2.1.1",
-  kafka_22: "2.2.0",
+  kafka_22: "2.2.1",
   lz4: "1.6.0",
   mavenArtifact: "3.6.1",
   metrics: "2.2.0",
