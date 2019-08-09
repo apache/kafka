@@ -97,9 +97,16 @@ object GetOffsetShell {
               val consumer = new SimpleConsumer(leader.host, leader.port, 10000, 100000, clientId)
               val topicAndPartition = TopicAndPartition(topic, partitionId)
               val request = OffsetRequest(Map(topicAndPartition -> PartitionOffsetRequestInfo(time, nOffsets)))
-              val offsets = consumer.getOffsetsBefore(request).partitionErrorAndOffsets(topicAndPartition).offsets
+              try {
+                val offsets = consumer.getOffsetsBefore(request).partitionErrorAndOffsets(topicAndPartition).offsets
 
-              println("%s:%d:%s".format(topic, partitionId, offsets.mkString(",")))
+                println("%s:%d:%s".format(topic, partitionId, offsets.mkString(",")))
+              } catch {
+                case e: Throwable =>
+                  throw e
+              } finally {
+                consumer.close()
+              }
             case None => System.err.println("Error: partition %d does not have a leader. Skip getting offsets".format(partitionId))
           }
         case None => System.err.println("Error: partition %d does not exist".format(partitionId))
