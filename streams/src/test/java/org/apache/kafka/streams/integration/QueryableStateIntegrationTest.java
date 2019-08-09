@@ -83,9 +83,12 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import static java.lang.Long.MAX_VALUE;
 import static java.time.Duration.ofMillis;
 import static java.time.Duration.ofSeconds;
 import static java.time.Instant.ofEpochMilli;
+import static org.apache.kafka.streams.kstream.Suppressed.BufferConfig.unbounded;
+import static org.apache.kafka.streams.kstream.Suppressed.untilTimeLimit;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.IsEqual.equalTo;
 import static org.junit.Assert.assertEquals;
@@ -590,6 +593,56 @@ public class QueryableStateIntegrationTest {
         for (final KeyValue<String, String> batchEntry : batch1) {
             assertEquals(Long.valueOf(batchEntry.value), myMapStore.get(batchEntry.key));
         }
+    }
+
+    @Test
+    public void shouldBeAbleToQueryTimeOrderedKeyValueBuffer() throws Exception {
+        streamsConfiguration.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass());
+        streamsConfiguration.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
+        final StreamsBuilder builder = new StreamsBuilder();
+
+        IntegrationTestUtils.produceKeyValuesSynchronously(
+            streamOne,
+            Arrays.asList(
+                new KeyValue<>("v1", "1"),
+                new KeyValue<>("v1", "0"),
+                new KeyValue<>("v2", "1"),
+                new KeyValue<>("v1", "1")
+            ),
+            TestUtils.producerConfig(
+                CLUSTER.bootstrapServers(),
+                StringSerializer.class,
+                StringSerializer.class,
+                new Properties()),
+            mockTime);
+
+        final String storeName = "querySuppression";
+        final KTable<String, String> t1 = builder.table(streamOne);
+        t1
+            .suppress(
+                untilTimeLimit(ofMillis(MAX_VALUE), unbounded()),
+                Materialized.as(storeName))
+            .toStream()
+            .to(outputTopic, Produced.with(Serdes.String(), Serdes.String()));
+
+        kafkaStreams = new KafkaStreams(builder.build(), streamsConfiguration);
+        kafkaStreams.start();
+
+        final int maxWaitMs = 30000;
+
+        TestUtils.waitForCondition(
+            new WaitForStore(storeName),
+            maxWaitMs,
+            "waiting for store " + storeName);
+
+        final ReadOnlyKeyValueStore<String, String> myMapStore =
+            kafkaStreams.store(storeName, QueryableStoreTypes.timeOrderedKeyValueBuffer(Serdes.String(), Serdes.String()));
+        TestUtils.waitForCondition(
+            () -> myMapStore.approximateNumEntries() > 0,
+            maxWaitMs,
+            "wait for agg to be <a,125>||<a,1225>||<a,12125> and <b,34>||<b,344>||<b,3434>");
+        assertEquals("1", myMapStore.get("v1"));
+        assertEquals("1", myMapStore.get("v2"));
     }
 
     @Test

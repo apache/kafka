@@ -507,6 +507,22 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
 
     @Override
     public KTable<K, V> suppress(final Suppressed<? super K> suppressed) {
+        Objects.requireNonNull(suppressed, "suppressed can't be null");
+        return doSuppress(suppressed, null);
+    }
+
+    @Override
+    public KTable<K, V> suppress(final Suppressed<? super K> suppressed,
+                                 final Materialized<K, V, KeyValueStore<Bytes, byte[]>> materialized) {
+        Objects.requireNonNull(suppressed, "suppressed can't be null");
+        Objects.requireNonNull(materialized, "materialized can't be null");
+        final MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>> materializedInternal = new MaterializedInternal<>(materialized);
+        return doSuppress(suppressed, materializedInternal);
+    }
+
+    @SuppressWarnings("unchecked")
+    private KTable<K, V> doSuppress(final Suppressed<? super K> suppressed,
+                                    final MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>> materializedInternal) {
         final String name;
         if (suppressed instanceof NamedSuppressed) {
             final String givenName = ((NamedSuppressed<?>) suppressed).name();
@@ -517,8 +533,18 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
 
         final SuppressedInternal<K> suppressedInternal = buildSuppress(suppressed, name);
 
-        final String storeName =
-            suppressedInternal.name() != null ? suppressedInternal.name() + "-store" : builder.newStoreName(SUPPRESS_NAME);
+        final String storeName;
+        if (materializedInternal != null) {
+            storeName = materializedInternal.queryableStoreName();
+        } else {
+            if (suppressedInternal.name() != null) {
+                storeName = suppressedInternal.name() + "-store";
+            } else {
+                storeName = builder.newStoreName(SUPPRESS_NAME);
+            }
+        }
+
+        final StoreBuilder<InMemoryTimeOrderedKeyValueBuffer<K, V>> storeBuilder = new InMemoryTimeOrderedKeyValueBuffer.Builder(storeName, keySerde, valSerde);
 
         final ProcessorSupplier<K, Change<V>> suppressionSupplier = new KTableSuppressProcessorSupplier<>(
             suppressedInternal,
@@ -529,7 +555,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
         final ProcessorGraphNode<K, Change<V>> node = new StatefulProcessorNode<>(
             name,
             new ProcessorParameters<>(suppressionSupplier, name),
-            new InMemoryTimeOrderedKeyValueBuffer.Builder<>(storeName, keySerde, valSerde)
+            storeBuilder
         );
 
         builder.addGraphNode(streamsGraphNode, node);
