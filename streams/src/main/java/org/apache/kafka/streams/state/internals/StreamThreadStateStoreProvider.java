@@ -22,6 +22,7 @@ import org.apache.kafka.streams.processor.internals.StreamThread;
 import org.apache.kafka.streams.processor.internals.Task;
 import org.apache.kafka.streams.state.QueryableStoreType;
 import org.apache.kafka.streams.state.QueryableStoreTypes;
+import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 import org.apache.kafka.streams.state.TimestampedWindowStore;
 
@@ -62,6 +63,11 @@ public class StreamThreadStateStoreProvider implements StateStoreProvider {
                     stores.add((T) new ReadOnlyKeyValueStoreFacade((TimestampedKeyValueStore<Object, Object>) store));
                 } else if (store instanceof TimestampedWindowStore && queryableStoreType instanceof QueryableStoreTypes.WindowStoreType) {
                     stores.add((T) new ReadOnlyWindowStoreFacade((TimestampedWindowStore<Object, Object>) store));
+                } else if (store instanceof ReadOnlyKeyValueStore && queryableStoreType instanceof QueryableStoreTypes.TimeOrderedKeyValueBufferType) {
+                    final QueryableStoreTypes.TimeOrderedKeyValueBufferType timeOrderedKeyValueBufferType =
+                            (QueryableStoreTypes.TimeOrderedKeyValueBufferType) queryableStoreType;
+                    stores.add((T) new ReadOnlyTimeOrderedBufferFacade<>((TimeOrderedKeyValueBuffer<Object, Object>) store,
+                            timeOrderedKeyValueBufferType.keySerde(), timeOrderedKeyValueBufferType.valueSerde()));
                 } else {
                     stores.add((T) store);
                 }

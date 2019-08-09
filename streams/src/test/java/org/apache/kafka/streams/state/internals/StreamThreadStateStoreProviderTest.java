@@ -114,6 +114,13 @@ public class StreamThreadStateStoreProviderTest {
                 Serdes.String(),
                 Serdes.String()),
             "the-processor");
+        topology.addStateStore(
+            new InMemoryTimeOrderedKeyValueBuffer.Builder<>("time-ordered-kv-buffer",
+                Serdes.String(),
+                Serdes.String()
+            ),
+            "the-processor");
+
 
         final Properties properties = new Properties();
         final String applicationId = "applicationId";
@@ -179,6 +186,19 @@ public class StreamThreadStateStoreProviderTest {
         for (final ReadOnlyKeyValueStore<String, ValueAndTimestamp<String>> store: tkvStores) {
             assertThat(store, instanceOf(ReadOnlyKeyValueStore.class));
             assertThat(store, instanceOf(TimestampedKeyValueStore.class));
+        }
+    }
+
+    @Test
+    public void shouldFindTimeOrderedKeyValueBuffer() {
+        mockThread(true);
+        final List<ReadOnlyKeyValueStore<String, String>> tkvStores =
+                provider.stores("time-ordered-kv-buffer",
+                        QueryableStoreTypes.timeOrderedKeyValueBuffer(Serdes.String(), Serdes.String()));
+        assertEquals(2, tkvStores.size());
+        for (final ReadOnlyKeyValueStore<String, String> store: tkvStores) {
+            assertThat(store, instanceOf(ReadOnlyKeyValueStore.class));
+            assertThat(store, not(instanceOf(TimeOrderedKeyValueBuffer.class)));
         }
     }
 

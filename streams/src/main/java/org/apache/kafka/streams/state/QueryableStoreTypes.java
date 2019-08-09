@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state;
 
+import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.processor.StateStore;
@@ -23,6 +24,7 @@ import org.apache.kafka.streams.state.internals.CompositeReadOnlyKeyValueStore;
 import org.apache.kafka.streams.state.internals.CompositeReadOnlySessionStore;
 import org.apache.kafka.streams.state.internals.CompositeReadOnlyWindowStore;
 import org.apache.kafka.streams.state.internals.StateStoreProvider;
+import org.apache.kafka.streams.state.internals.TimeOrderedKeyValueBuffer;
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -89,6 +91,17 @@ public final class QueryableStoreTypes {
      */
     public static <K, V> QueryableStoreType<ReadOnlySessionStore<K, V>> sessionStore() {
         return new SessionStoreType<>();
+    }
+
+    /**
+     * A {@link QueryableStoreType} that accepts {@link ReadOnlyKeyValueStore}.
+     *
+     * @param <K> key type of the store
+     * @param <V> value type of the store
+     * @return {@link QueryableStoreTypes.SessionStoreType}
+     */
+    public static <K, V> QueryableStoreType<ReadOnlyKeyValueStore<K, V>> timeOrderedKeyValueBuffer(final Serde<K> keySerde, final Serde<V> valueSerde) {
+        return new TimeOrderedKeyValueBufferType<>(keySerde, valueSerde);
     }
 
     private static abstract class QueryableStoreTypeMatcher<T> implements QueryableStoreType<T> {
@@ -181,6 +194,35 @@ public final class QueryableStoreTypes {
                                                  final String storeName) {
             return new CompositeReadOnlySessionStore<>(storeProvider, this, storeName);
         }
+    }
+
+    public static class TimeOrderedKeyValueBufferType<K, V> extends QueryableStoreTypeMatcher<ReadOnlyKeyValueStore<K, V>> {
+
+        private final Serde<K> keySerde;
+        private final Serde<V> valueSerde;
+
+        TimeOrderedKeyValueBufferType(final Serde<K> keySerde, final Serde<V> valueSerde) {
+            super(new HashSet<>(Arrays.asList(
+                    TimeOrderedKeyValueBuffer.class,
+                    ReadOnlyKeyValueStore.class)));
+            this.keySerde = keySerde;
+            this.valueSerde = valueSerde;
+        }
+
+        @Override
+        public ReadOnlyKeyValueStore<K, V> create(final StateStoreProvider storeProvider,
+                                                  final String storeName) {
+            return new CompositeReadOnlyKeyValueStore<>(storeProvider, this, storeName);
+        }
+
+        public Serde<K> keySerde() {
+            return keySerde;
+        }
+
+        public Serde<V> valueSerde() {
+            return valueSerde;
+        }
+
     }
 
 }
