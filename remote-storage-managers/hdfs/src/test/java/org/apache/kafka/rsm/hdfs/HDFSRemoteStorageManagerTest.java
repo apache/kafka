@@ -314,13 +314,13 @@ public class HDFSRemoteStorageManagerTest {
 
         // generate segments with offset overlaps
         ArrayList<LogSegment> segments = new ArrayList<>();
-        for (int i=0; i<10; i++) {
+        for (int i = 0; i < 10; i++) {
             LogSegment seg = LogUtils.createSegment(20 * i, logDir, 4096, Time.SYSTEM);
             appendRecords(seg, 20 * i, 20);
             seg.onBecomeInactiveSegment();
             segments.add(seg);
         }
-        for (int i=0; i<10; i++) {
+        for (int i = 0; i < 10; i++) {
             LogSegment seg = LogUtils.createSegment(20 * i + 5, logDir, 4096, Time.SYSTEM);
             appendRecords(seg, 20 * i + 5, 10);
             seg.onBecomeInactiveSegment();
@@ -339,12 +339,11 @@ public class HDFSRemoteStorageManagerTest {
 
         // remote segments list returned by RSM should be sorted by base offset
         List<RemoteLogSegmentInfo> remoteSegments = rsm.listRemoteSegments(tp);
-        for (int i=0; i<20; i++) {
+        for (int i = 0; i < 20; i++) {
             if (i % 2 == 0) {
                 assertEquals((i / 2) * 20, remoteSegments.get(i).baseOffset());
                 assertEquals((i / 2) * 20 + 19, remoteSegments.get(i).endOffset());
-            }
-            else {
+            } else {
                 assertEquals((i / 2) * 20 + 5, remoteSegments.get(i).baseOffset());
                 assertEquals((i / 2) * 20 + 5 + 9, remoteSegments.get(i).endOffset());
             }
