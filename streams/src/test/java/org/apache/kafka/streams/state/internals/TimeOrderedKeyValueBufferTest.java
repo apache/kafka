@@ -33,6 +33,7 @@ import org.apache.kafka.streams.kstream.internals.FullChangeSerde;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.RecordBatchingStateRestoreCallback;
+import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.internals.TimeOrderedKeyValueBuffer.Eviction;
 import org.apache.kafka.test.MockInternalProcessorContext;
@@ -206,6 +207,64 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
         assertThat(buffer.bufferSize(), is(39L));
         putRecord(buffer, context, 0L, 0L, "zxcv", "qfowin");
         assertThat(buffer.bufferSize(), is(82L));
+        cleanup(context, buffer);
+    }
+
+    @Test
+    public void shouldGetLast() {
+        final TimeOrderedKeyValueBuffer<String, String> buffer = bufferSupplier.apply(testName);
+        final MockInternalProcessorContext context = makeContext();
+        buffer.init(context, buffer);
+        putRecord(buffer, context, 0L, 0L, "asdf", "oin");
+        assertThat(buffer.get(getBytes("asdf")), is(getBufferValue("oin", 0L).newValue()));
+        putRecord(buffer, context, 1L, 0L, "asdf", "wekjn");
+        assertThat(buffer.get(getBytes("asdf")), is(getBufferValue("wekjn", 0L).newValue()));
+        putRecord(buffer, context, 0L, 1L, "zxcv", "24inf");
+        assertThat(buffer.get(getBytes("zxcv")), is(getBufferValue("24inf", 0L).newValue()));
+        cleanup(context, buffer);
+    }
+
+    @Test
+    public void shouldGetRange() {
+        final TimeOrderedKeyValueBuffer<String, String> buffer = bufferSupplier.apply(testName);
+        final MockInternalProcessorContext context = makeContext();
+        buffer.init(context, buffer);
+        putRecord(buffer, context, 0L, 0L, "asdf", "oin");
+        putRecord(buffer, context, 1L, 0L, "asdf", "wekjn");
+        putRecord(buffer, context, 0L, 1L, "zxcv", "24inf");
+        final KeyValueIterator<Bytes, byte[]> iter = buffer.range(getBytes("a"), getBytes("b"));
+        final KeyValue<Bytes, byte[]> entry = iter.next();
+        assertThat(entry.key, is(getBytes("asdf")));
+        assertThat(entry.value, is(getBufferValue("wekjn", 1L).newValue()));
+        assertThat(iter.hasNext(), is(false));
+        cleanup(context, buffer);
+    }
+
+    @Test
+    public void shouldGetAll() {
+        final TimeOrderedKeyValueBuffer<String, String> buffer = bufferSupplier.apply(testName);
+        final MockInternalProcessorContext context = makeContext();
+        buffer.init(context, buffer);
+        putRecord(buffer, context, 0L, 0L, "asdf", "oin");
+
+        // TimeOrderedKeyValueBuffer#all returns a iterator to only one element
+        final KeyValueIterator<Bytes, byte[]> iter1 = buffer.all();
+        final KeyValue<Bytes, byte[]> entry1 = iter1.next();
+        assertThat(entry1.key, is(getBytes("asdf")));
+        assertThat(entry1.value, is(getBufferValue("oin", 0L).newValue()));
+        assertThat(iter1.hasNext(), is(false));
+
+        // TimeOrderedKeyValueBuffer#all now returns a iterator to two elements
+        putRecord(buffer, context, 1L, 0L, "asdf", "wekjn");
+        putRecord(buffer, context, 0L, 1L, "zxcv", "24inf");
+        final KeyValueIterator<Bytes, byte[]> iter2 = buffer.all();
+        final KeyValue<Bytes, byte[]> entry2 = iter2.next();
+        assertThat(entry2.key, is(getBytes("asdf")));
+        assertThat(entry2.value, is(getBufferValue("wekjn", 1L).newValue()));
+        final KeyValue<Bytes, byte[]> entry3 = iter2.next();
+        assertThat(entry3.key, is(getBytes("zxcv")));
+        assertThat(entry3.value, is(getBufferValue("24inf", 0L).newValue()));
+        assertThat(iter2.hasNext(), is(false));
         cleanup(context, buffer);
     }
 
@@ -771,6 +830,10 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
         final ProcessorRecordContext recordContext = getContext(recordTimestamp);
         context.setRecordContext(recordContext);
         buffer.put(streamTime, key, new Change<>(value, null), recordContext);
+    }
+
+    private static Bytes getBytes(final String key) {
+        return Bytes.wrap(Serdes.String().serializer().serialize(null, key));
     }
 
     private static BufferValue getBufferValue(final String value, final long timestamp) {

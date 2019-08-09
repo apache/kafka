@@ -25,6 +25,7 @@ import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.BytesSerializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.internals.Change;
 import org.apache.kafka.streams.kstream.internals.FullChangeSerde;
 import org.apache.kafka.streams.processor.ProcessorContext;
@@ -35,26 +36,32 @@ import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
 import org.apache.kafka.streams.processor.internals.RecordBatchingStateRestoreCallback;
 import org.apache.kafka.streams.processor.internals.RecordCollector;
 import org.apache.kafka.streams.processor.internals.RecordQueue;
+import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.internals.metrics.Sensors;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.nio.ByteBuffer;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.NoSuchElementException;
+import java.util.Objects;
 import java.util.Set;
-import java.util.TreeMap;
+import java.util.concurrent.ConcurrentNavigableMap;
+import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
 import static java.util.Objects.requireNonNull;
 
 public final class InMemoryTimeOrderedKeyValueBuffer<K, V> implements TimeOrderedKeyValueBuffer<K, V> {
+    private static final Logger log = LoggerFactory.getLogger(InMemoryTimeOrderedKeyValueBuffer.class);
+
     private static final BytesSerializer KEY_SERIALIZER = new BytesSerializer();
     private static final ByteArraySerializer VALUE_SERIALIZER = new ByteArraySerializer();
     private static final RecordHeaders V_1_CHANGELOG_HEADERS =
@@ -62,8 +69,8 @@ public final class InMemoryTimeOrderedKeyValueBuffer<K, V> implements TimeOrdere
     private static final RecordHeaders V_2_CHANGELOG_HEADERS =
         new RecordHeaders(new Header[] {new RecordHeader("v", new byte[] {(byte) 2})});
 
-    private final Map<Bytes, BufferKey> index = new HashMap<>();
-    private final TreeMap<BufferKey, BufferValue> sortedMap = new TreeMap<>();
+    private final ConcurrentSkipListMap<Bytes, BufferKey> index = new ConcurrentSkipListMap<>();
+    private final ConcurrentSkipListMap<BufferKey, BufferValue> sortedMap = new ConcurrentSkipListMap<>();
 
     private final Set<Bytes> dirtyKeys = new HashSet<>();
     private final String storeName;
@@ -532,6 +539,44 @@ public final class InMemoryTimeOrderedKeyValueBuffer<K, V> implements TimeOrdere
     }
 
     @Override
+    public byte[] get(final Bytes key) {
+        final BufferValue buffered = getBuffered(key);
+        return buffered == null ? null : buffered.newValue();
+    }
+
+    @Override
+    public KeyValueIterator<Bytes, byte[]> range(final Bytes from, final Bytes to) {
+        Objects.requireNonNull(from, "from cannot be null");
+        Objects.requireNonNull(to, "to cannot be null");
+
+        if (from.compareTo(to) > 0) {
+            log.warn("Returning empty iterator for fetch with invalid key range: from > to. "
+                + "This may be due to serdes that don't preserve ordering when lexicographically comparing the serialized bytes. " +
+                "Note that the built-in numerical serdes do not follow this for negative numbers");
+            return KeyValueIterators.emptyIterator();
+        }
+
+        final ConcurrentNavigableMap<Bytes, BufferKey> inRange = index.subMap(from, true, to, true);
+
+        return new DelegatingPeekingKeyValueIterator<>(
+            storeName,
+            new InMemoryTimeOrderedKeyValueIterator(inRange.entrySet().iterator(), sortedMap));
+    }
+
+    @Override
+    public KeyValueIterator<Bytes, byte[]> all() {
+
+        return new DelegatingPeekingKeyValueIterator<>(
+            storeName,
+            new InMemoryTimeOrderedKeyValueIterator(index.entrySet().iterator(), sortedMap));
+    }
+
+    @Override
+    public long approximateNumEntries() {
+        return numRecords();
+    }
+
+    @Override
     public String toString() {
         return "InMemoryTimeOrderedKeyValueBuffer{" +
             "storeName='" + storeName + '\'' +
@@ -544,5 +589,50 @@ public final class InMemoryTimeOrderedKeyValueBuffer<K, V> implements TimeOrdere
             ", \n\tindex=" + index +
             ", \n\tsortedMap=" + sortedMap +
             '}';
+    }
+
+    private static class InMemoryTimeOrderedKeyValueIterator implements KeyValueIterator<Bytes, byte[]> {
+        private final Iterator<Map.Entry<Bytes, BufferKey>> iter;
+        private final Map<BufferKey, BufferValue> contents;
+
+        private InMemoryTimeOrderedKeyValueIterator(final Iterator<Map.Entry<Bytes, BufferKey>> iter, final Map<BufferKey, BufferValue> contents) {
+            this.iter = iter;
+            this.contents = contents;
+        }
+
+        @Override
+        public boolean hasNext() {
+            return iter.hasNext();
+        }
+
+        @Override
+        public KeyValue<Bytes, byte[]> next() {
+            final Map.Entry<Bytes, BufferKey> entry = iter.next();
+            final Bytes key = entry.getKey();
+            final byte[] value;
+
+            if (entry.getValue() != null && contents.get(entry.getValue()) != null) {
+                value = contents.get(entry.getValue()).newValue();
+            } else {
+                value = null;
+            }
+
+            return new KeyValue<>(key, value);
+        }
+
+        @Override
+        public void remove() {
+            throw new UnsupportedOperationException("remove() not supported in " + getClass().getName());
+        }
+
+        @Override
+        public void close() {
+            // do nothing
+        }
+
+        @Override
+        public Bytes peekNextKey() {
+            throw new UnsupportedOperationException("peekNextKey() not supported in " + getClass().getName());
+        }
     }
 }
