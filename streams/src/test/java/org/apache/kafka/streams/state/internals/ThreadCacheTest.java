@@ -28,7 +28,6 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
 import java.util.NoSuchElementException;
 
@@ -284,30 +283,6 @@ public class ThreadCacheTest {
             bytesIndex++;
         }
         assertEquals(5, bytesIndex);
-    }
-
-    @Test
-    public void shouldPerformByteUpperBoundPrefixScan() {
-        final ThreadCache cache = new ThreadCache(logContext, 10000L, new MockStreamsMetrics(new Metrics()));
-
-        final Bytes key = Bytes.wrap(new byte[]{(byte) 0xFF});
-        final Bytes key2 = Bytes.wrap(new byte[]{(byte) 0xFF, (byte) 0x00});
-        final Bytes key3 = Bytes.wrap(new byte[]{(byte) 0x00});
-        final byte[] value = new byte[]{0x00};
-        cache.put(namespace, key, dirtyEntry(value));
-        cache.put(namespace, key2, dirtyEntry(value));
-        cache.put(namespace, key3, dirtyEntry(value));
-
-        final ThreadCache.MemoryLRUCacheBytesIterator iterator = cache.prefix(namespace, key);
-        final HashMap<Bytes, byte[]> expected = new HashMap<>();
-        expected.put(key, value);
-        expected.put(key2, value);
-        final HashMap<Bytes, byte[]> actual = new HashMap<>();
-        while (iterator.hasNext()) {
-            final KeyValue<Bytes, LRUCacheEntry> elem = iterator.next();
-            actual.put(elem.key, elem.value.value());
-        }
-        assertEquals(expected, actual);
     }
 
     @Test

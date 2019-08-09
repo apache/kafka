@@ -21,7 +21,7 @@ package org.apache.kafka.streams.scala
 package kstream
 
 import org.apache.kafka.common.utils.Bytes
-import org.apache.kafka.streams.kstream.{Suppressed, ValueTransformerWithKeySupplier, KTable => KTableJ}
+import org.apache.kafka.streams.kstream.{Suppressed, ValueJoiner, ValueTransformerWithKeySupplier, KTable => KTableJ}
 import org.apache.kafka.streams.scala.FunctionsCompatConversions._
 import org.apache.kafka.streams.scala.ImplicitConversions._
 import org.apache.kafka.streams.state.KeyValueStore
@@ -319,17 +319,17 @@ class KTable[K, V](val inner: KTableJ[K, V]) {
     inner.outerJoin[VO, VR](other.inner, joiner.asValueJoiner, materialized)
 
   /**
-    * Join records of this [[KTable]] with another [[KTable]]'s records using non-windowed inner join. Records from this
-    * table are joined according to the result of keyExtractor on the other KTable.
-    *
-    * @param other the other [[KTable]] to be joined with this [[KTable]], keyed on the value obtained from keyExtractor
-    * @param keyExtractor a function that extracts the foreign key from this table's value
-    * @param joiner       a function that computes the join result for a pair of matching records
-    * @param materialized a `Materialized` that describes how the `StateStore` for the resulting [[KTable]]
-    * should be materialized.
-    * @return a [[KTable]] that contains join-records for each key and values computed by the given joiner,
-    * one for each matched record-pair with the same key
-    */
+   * Join records of this [[KTable]] with another [[KTable]]'s records using non-windowed inner join. Records from this
+   * table are joined according to the result of keyExtractor on the other KTable.
+   *
+   * @param other the other [[KTable]] to be joined with this [[KTable]], keyed on the value obtained from keyExtractor
+   * @param keyExtractor a function that extracts the foreign key from this table's value
+   * @param joiner       a function that computes the join result for a pair of matching records
+   * @param materialized a `Materialized` that describes how the `StateStore` for the resulting [[KTable]]
+   * should be materialized.
+   * @return a [[KTable]] that contains join-records for each key and values computed by the given joiner,
+   * one for each matched record-pair with the same key
+   */
   def join[VR, KO, VO](other: KTable[KO, VO],
                        keyExtractor: Function[V, KO],
                        joiner: ValueJoiner[V, VO, VR],
@@ -337,17 +337,17 @@ class KTable[K, V](val inner: KTableJ[K, V]) {
     inner.join(other.inner, keyExtractor.asJavaFunction, joiner, materialized)
 
   /**
-    * Join records of this [[KTable]] with another [[KTable]]'s records using non-windowed left join. Records from this
-    * table are joined according to the result of keyExtractor on the other KTable.
-    *
-    * @param other the other [[KTable]] to be joined with this [[KTable]], keyed on the value obtained from keyExtractor
-    * @param keyExtractor a function that extracts the foreign key from this table's value
-    * @param joiner       a function that computes the join result for a pair of matching records
-    * @param materialized a `Materialized` that describes how the `StateStore` for the resulting [[KTable]]
-    * should be materialized.
-    * @return a [[KTable]] that contains join-records for each key and values computed by the given joiner,
-    * one for each matched record-pair with the same key
-    */
+   * Join records of this [[KTable]] with another [[KTable]]'s records using non-windowed left join. Records from this
+   * table are joined according to the result of keyExtractor on the other KTable.
+   *
+   * @param other the other [[KTable]] to be joined with this [[KTable]], keyed on the value obtained from keyExtractor
+   * @param keyExtractor a function that extracts the foreign key from this table's value
+   * @param joiner       a function that computes the join result for a pair of matching records
+   * @param materialized a `Materialized` that describes how the `StateStore` for the resulting [[KTable]]
+   * should be materialized.
+   * @return a [[KTable]] that contains join-records for each key and values computed by the given joiner,
+   * one for each matched record-pair with the same key
+   */
   def leftJoin[VR, KO, VO](other: KTable[KO, VO],
                            keyExtractor: Function[V, KO],
                            joiner: ValueJoiner[V, VO, VR],
