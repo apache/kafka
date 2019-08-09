@@ -48,7 +48,7 @@ import org.apache.kafka.common.resource.{PatternType, ResourcePattern, ResourceT
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.junit.Assert._
 import org.junit.rules.Timeout
-import org.junit.{After, Before, Rule, Test}
+import org.junit.{After, Before, Ignore, Rule, Test}
 import org.scalatest.Assertions.intercept
 
 import scala.collection.JavaConverters._
@@ -1842,6 +1842,7 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
   }
 
   @Test
+  @Ignore // To be re-enabled once KAFKA-8779 is resolved
   def testIncrementalAlterConfigsForLog4jLogLevels(): Unit = {
     client = AdminClient.create(createConfig())
 
@@ -1905,6 +1906,7 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
     * 5. Ensure the kafka.controller.KafkaController logger's level is ERROR (the curent root logger level)
     */
   @Test
+  @Ignore // To be re-enabled once KAFKA-8779 is resolved
   def testIncrementalAlterConfigsForLog4jLogLevelsCanResetLoggerToCurrentRoot(): Unit = {
     client = AdminClient.create(createConfig())
     // step 1 - configure root logger
@@ -1946,6 +1948,7 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
   }
 
   @Test
+  @Ignore // To be re-enabled once KAFKA-8779 is resolved
   def testIncrementalAlterConfigsForLog4jLogLevelsCannotResetRootLogger(): Unit = {
     client = AdminClient.create(createConfig())
     val deleteRootLoggerEntry = Seq(
@@ -1956,6 +1959,7 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
   }
 
   @Test
+  @Ignore // To be re-enabled once KAFKA-8779 is resolved
   def testIncrementalAlterConfigsForLog4jLogLevelsDoesNotWorkWithInvalidConfigs(): Unit = {
     client = AdminClient.create(createConfig())
     val validLoggerName = "kafka.server.KafkaRequestHandler"
@@ -2000,6 +2004,7 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
     * The AlterConfigs API is deprecated and should not support altering log levels
     */
   @Test
+  @Ignore // To be re-enabled once KAFKA-8779 is resolved
   def testAlterConfigsForLog4jLogLevelsDoesNotWork(): Unit = {
     client = AdminClient.create(createConfig())
 
