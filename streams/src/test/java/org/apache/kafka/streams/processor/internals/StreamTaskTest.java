@@ -66,8 +66,8 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.time.Duration;
+import java.util.Base64;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -655,15 +655,14 @@ public class StreamTaskTest {
         task.process();
 
         task.commit();
-        assertTrue(task.decodeTimestamp(consumer.committed(partition1).metadata())
-                   == DEFAULT_TIMESTAMP);
+        assertEquals(DEFAULT_TIMESTAMP, task.decodeTimestamp(consumer.committed(partition1).metadata()));
         // reset times here to artificially represent a restart
         task.resetTimes();
-        assertTrue(task.partitionTime(partition1) == RecordQueue.UNKNOWN);
+        assertEquals(RecordQueue.UNKNOWN, task.partitionTime(partition1));
 
         task.initializeTaskTime();
-        assertTrue(task.partitionTime(partition1) == DEFAULT_TIMESTAMP);
-        assertTrue(task.streamTime() == DEFAULT_TIMESTAMP);
+        assertEquals(DEFAULT_TIMESTAMP, task.partitionTime(partition1));
+        assertEquals(DEFAULT_TIMESTAMP, task.streamTime());
     }
 
     @Test
@@ -677,43 +676,35 @@ public class StreamTaskTest {
         task.process();
         task.commit();
 
-        //since consumer is mock, there is no real broker
-        //so we need to manually commit the information to stimulate broker
-        final Map<TopicPartition, OffsetAndMetadata> offsetMap = new HashMap<>();
-        final String encryptedMetadata = task.encodeTimestamp(DEFAULT_TIMESTAMP);
-        offsetMap.put(partition1, new OffsetAndMetadata(DEFAULT_TIMESTAMP, encryptedMetadata));
-        consumer.commitSync(offsetMap);
-        assertTrue(task.decodeTimestamp(consumer.committed(partition1).metadata())
-                   == DEFAULT_TIMESTAMP);
-
         long partitionTime = -1L;
         final List<Map<String, Map<TopicPartition, OffsetAndMetadata>>> metadataList = 
             producer.consumerGroupOffsetsHistory();
         for (final Map<String, Map<TopicPartition, OffsetAndMetadata>> map : metadataList) {
-            for (final Map.Entry<String, Map<TopicPartition, OffsetAndMetadata>> entry : map.entrySet()) {
-                for (final Map.Entry<TopicPartition, OffsetAndMetadata> metadata : entry.getValue().entrySet()) {
-                    if (metadata.getKey().equals(partition1)) {
-                        partitionTime = task.decodeTimestamp(metadata.getValue().metadata());
-                        break;
-                    }
-                }
+            if (map.containsKey(topic1) && map.get(topic1).containsKey(partition1)) {
+                partitionTime = task.decodeTimestamp(map.get(topic1).get(partition1).metadata());
             }
         }
-        assertTrue(partitionTime == DEFAULT_TIMESTAMP);
+        assertEquals(DEFAULT_TIMESTAMP, partitionTime);
 
         // reset times here to artificially represent a restart
         task.resetTimes();
-        assertTrue(task.partitionTime(partition1) == RecordQueue.UNKNOWN);
+        assertEquals(RecordQueue.UNKNOWN, task.partitionTime(partition1));
 
         task.initializeTaskTime();
-        assertTrue(task.partitionTime(partition1) == DEFAULT_TIMESTAMP);
-        assertTrue(task.streamTime() == DEFAULT_TIMESTAMP);
+        assertEquals(DEFAULT_TIMESTAMP, task.partitionTime(partition1));
+        assertEquals(DEFAULT_TIMESTAMP, task.streamTime());
     }
 
     @Test
     public void shouldEncodeAndDecodeMetadata() {
         task = createStatelessTask(createConfig(false));
-        assertTrue(task.decodeTimestamp(task.encodeTimestamp(DEFAULT_TIMESTAMP)) == DEFAULT_TIMESTAMP);
+        assertEquals(DEFAULT_TIMESTAMP, task.decodeTimestamp(task.encodeTimestamp(DEFAULT_TIMESTAMP)));
+
+        final byte[] emptyMessage = {StreamTask.LATEST_MAGIC_BYTE + 1};
+        final String encodedString = Base64.getEncoder().encodeToString(emptyMessage);
+        assertEquals(RecordQueue.UNKNOWN, task.decodeTimestamp(encodedString));
+
+        assertEquals(RecordQueue.UNKNOWN, task.decodeTimestamp(""));
     }
 
     @Test
