@@ -16,20 +16,27 @@
   */
 package kafka.server
 
+import java.io.File
+
+import kafka.common.InconsistentCusterIdException
+
 import scala.concurrent._
 import ExecutionContext.Implicits._
 import scala.concurrent.duration._
 import kafka.utils.TestUtils
 import kafka.zk.ZooKeeperTestHarness
 import org.junit.Assert._
-import org.junit.{Before, After, Test}
+import org.junit.{After, Before, Test}
 import org.apache.kafka.test.TestUtils.isValidClusterId
+
+import scala.collection.Seq
 
 class ServerGenerateClusterIdTest extends ZooKeeperTestHarness {
   var config1: KafkaConfig = null
   var config2: KafkaConfig = null
   var config3: KafkaConfig = null
   var servers: Seq[KafkaServer] = Seq()
+  val brokerMetaPropsFile = "meta.properties"
 
   @Before
   override def setUp() {
@@ -137,4 +144,59 @@ class ServerGenerateClusterIdTest extends ZooKeeperTestHarness {
     TestUtils.verifyNonDaemonThreadsStatus(this.getClass.getName)
   }
 
+  @Test
+  def testConsistentClusterIdFromZookeeperAndFromMetaProps() = {
+    // Check at the first boot
+    val server = TestUtils.createServer(config1)
+    val clusterId = server.clusterId
+
+    assertTrue(verifyBrokerMetadata(server.config.logDirs, clusterId))
+
+    server.shutdown()
+
+    // Check again after reboot
+    server.startup()
+
+    assertEquals(clusterId, server.clusterId)
+    assertTrue(verifyBrokerMetadata(server.config.logDirs, server.clusterId))
+
+    server.shutdown()
+
+    TestUtils.verifyNonDaemonThreadsStatus(this.getClass.getName)
+  }
+
+  @Test
+  def testInconsistentClusterIdFromZookeeperAndFromMetaProps() = {
+    forgeBrokerMetadata(config1.logDirs, config1.brokerId, "aclusterid")
+
+    val server = new KafkaServer(config1, threadNamePrefix = Option(this.getClass.getName))
+
+    // Startup fails
+    assertThrows(classOf[InconsistentCusterIdException], () => server.startup())
+
+    server.shutdown()
+
+    TestUtils.verifyNonDaemonThreadsStatus(this.getClass.getName)
+  }
+
+  def forgeBrokerMetadata(logDirs: Seq[String], brokerId: Int, clusterId: String) {
+    for (logDir <- logDirs) {
+      val checkpoint = new BrokerMetadataCheckpoint(
+        new File(logDir + File.separator + brokerMetaPropsFile))
+      checkpoint.write(BrokerMetadata(brokerId, clusterId))
+    }
+  }
+
+  def verifyBrokerMetadata(logDirs: Seq[String], clusterId: String): Boolean = {
+    for (logDir <- logDirs) {
+      val brokerMetadataOpt = new BrokerMetadataCheckpoint(
+        new File(logDir + File.separator + brokerMetaPropsFile)).read()
+      brokerMetadataOpt match {
+        case Some(brokerMetadata) =>
+          if (brokerMetadata.clusterId != clusterId) return false
+        case _ => return false
+      }
+    }
+    true
+  }
 }
