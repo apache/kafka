@@ -54,7 +54,7 @@ allprojects {
   repositories {
     mavenCentral()
   }
-  
+
   apply plugin: 'idea'
   apply plugin: 'org.owasp.dependencycheck'
   apply plugin: 'com.github.ben-manes.versions'
@@ -420,7 +420,7 @@ subprojects {
         "-Xlint:unused"
       ]
     }
-    
+
   // these options are valid for Scala versions < 2.13 only
   // Scala 2.13 removes them, see https://github.com/scala/scala/pull/6502 and https://github.com/scala/scala/pull/5969
     if (versions.baseScala in ['2.11','2.12']) {
@@ -518,8 +518,8 @@ def fineTuneEclipseClasspathFile(eclipse, project) {
       if (project.name.equals('core')) {
         cp.entries.findAll { it.kind == "src" && it.path.equals("src/test/scala") }*.excludes = ["integration/", "other/", "unit/"]
       }
-      /* 
-       * Set all eclipse build output to go to 'build_eclipse' directory. This is to ensure that gradle and eclipse use different 
+      /*
+       * Set all eclipse build output to go to 'build_eclipse' directory. This is to ensure that gradle and eclipse use different
        * build output directories, and also avoid using the eclpise default of 'bin' which clashes with some of our script directories.
        * https://discuss.gradle.org/t/eclipse-generated-files-should-be-put-in-the-same-place-as-the-gradle-generated-files/6986/2
        */
@@ -546,10 +546,10 @@ task jacocoRootReport(type: org.gradle.testing.jacoco.tasks.JacocoReport) {
   description = 'Generates an aggregate report from all subprojects'
   dependsOn(javaProjects.test)
 
-  additionalSourceDirs = files(javaProjects.sourceSets.main.allSource.srcDirs)
-  sourceDirectories = files(javaProjects.sourceSets.main.allSource.srcDirs)
-  classDirectories =  files(javaProjects.sourceSets.main.output)
-  executionData = files(javaProjects.jacocoTestReport.executionData)
+  additionalSourceDirs.from = javaProjects.sourceSets.main.allSource.srcDirs
+  sourceDirectories.from = javaProjects.sourceSets.main.allSource.srcDirs
+  classDirectories.from = javaProjects.sourceSets.main.output
+  executionData.from = javaProjects.jacocoTestReport.executionData
 
   reports {
     html.enabled = true
@@ -710,7 +710,7 @@ project(':core') {
     scoverage libs.scoveragePlugin
     scoverage libs.scoverageRuntime
   }
-  
+
   scoverage {
     reportDir = file("${rootProject.buildDir}/scoverage")
     highlighting = false
