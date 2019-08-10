@@ -90,7 +90,7 @@ public class Metrics implements Closeable {
      * Expiration of Sensors is disabled.
      */
     public Metrics(Time time) {
-        this(new MetricConfig(), new ArrayList<MetricsReporter>(0), time);
+        this(new MetricConfig(), new ArrayList<>(0), time);
     }
 
     /**
@@ -98,7 +98,7 @@ public class Metrics implements Closeable {
      * Expiration of Sensors is disabled.
      */
     public Metrics(MetricConfig defaultConfig, Time time) {
-        this(defaultConfig, new ArrayList<MetricsReporter>(0), time);
+        this(defaultConfig, new ArrayList<>(0), time);
     }
 
 
@@ -108,7 +108,7 @@ public class Metrics implements Closeable {
      * @param defaultConfig The default config to use for all metrics that don't override their config
      */
     public Metrics(MetricConfig defaultConfig) {
-        this(defaultConfig, new ArrayList<MetricsReporter>(0), Time.SYSTEM);
+        this(defaultConfig, new ArrayList<>(0), Time.SYSTEM);
     }
 
     /**
