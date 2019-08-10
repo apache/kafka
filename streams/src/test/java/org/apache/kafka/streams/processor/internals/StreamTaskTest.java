@@ -677,18 +677,19 @@ public class StreamTaskTest {
         task.process();
         task.commit();
 
-        //since consumer is mock, there is no real broker
-        //so we need to manually commit the information to stimulate broker
-        final Map<TopicPartition, OffsetAndMetadata> offsetMap = new HashMap<>();
-        final String encryptedMetadata = task.encodeTimestamp(DEFAULT_TIMESTAMP);
-        offsetMap.put(partition1, new OffsetAndMetadata(DEFAULT_TIMESTAMP, encryptedMetadata));
-        consumer.commitSync(offsetMap);
-
+        // extract the committed metadata from MockProducer
         final List<Map<String, Map<TopicPartition, OffsetAndMetadata>>> metadataList = 
             producer.consumerGroupOffsetsHistory();
         final String storedMetadata = metadataList.get(0).get("stream-task-test").get(partition1).metadata();
         final long partitionTime = task.decodeTimestamp(storedMetadata);
         assertEquals(DEFAULT_TIMESTAMP, partitionTime);
+
+        // since producer and consumer is mocked, we need to "connect" producer and consumer
+        // so we should manually commit offsets here to simulate this "connection"
+        final Map<TopicPartition, OffsetAndMetadata> offsetMap = new HashMap<>();
+        final String encryptedMetadata = task.encodeTimestamp(partitionTime);
+        offsetMap.put(partition1, new OffsetAndMetadata(partitionTime, encryptedMetadata));
+        consumer.commitSync(offsetMap);
 
         // reset times here to artificially represent a restart
         task.resetTimes();
