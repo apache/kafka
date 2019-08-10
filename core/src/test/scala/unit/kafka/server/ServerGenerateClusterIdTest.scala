@@ -27,6 +27,7 @@ import kafka.utils.TestUtils
 import kafka.zk.ZooKeeperTestHarness
 import org.junit.Assert._
 import org.junit.{After, Before, Test}
+import org.scalatest.Assertions.assertThrows
 import org.apache.kafka.test.TestUtils.isValidClusterId
 
 import scala.collection.Seq
@@ -172,8 +173,10 @@ class ServerGenerateClusterIdTest extends ZooKeeperTestHarness {
     val server = new KafkaServer(config1, threadNamePrefix = Option(this.getClass.getName))
 
     // Startup fails
-    assertThrows(classOf[InconsistentCusterIdException], () => server.startup())
-
+    assertThrows[InconsistentCusterIdException] {
+      server.startup()
+    }
+    
     server.shutdown()
 
     TestUtils.verifyNonDaemonThreadsStatus(this.getClass.getName)
