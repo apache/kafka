@@ -48,6 +48,7 @@ public class PartitionGroupTest {
     private final Deserializer<Integer> intDeserializer = new IntegerDeserializer();
     private final TimestampExtractor timestampExtractor = new MockTimestampExtractor();
     private final TopicPartition randomPartition = new TopicPartition("random-partition", 0);
+    private final String errMessage = "Partition " + randomPartition + " not found.";
     private final String[] topics = {"topic"};
     private final TopicPartition partition1 = new TopicPartition(topics[0], 1);
     private final TopicPartition partition2 = new TopicPartition(topics[0], 2);
@@ -297,14 +298,14 @@ public class PartitionGroupTest {
     public void testSetPartitionTimestamp() {
         group.setPartitionTime(partition1, 100L);
         assertEquals(100L, group.partitionTimestamp(partition1));
-        assertThrows(NullPointerException.class, () -> {
+        assertThrows(errMessage, NullPointerException.class, () -> {
             group.setPartitionTime(randomPartition, 0L);
         });
     }
 
     @Test
     public void testGetPartitionTimestamp() {
-        assertThrows(NullPointerException.class, () -> {
+        assertThrows(errMessage, NullPointerException.class, () -> {
             group.partitionTimestamp(randomPartition);
         });
     }
