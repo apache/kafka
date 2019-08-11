@@ -511,7 +511,7 @@ public interface KStream<K, V> {
      * the processing progress can be observed and additional periodic actions can be performed.
      * <p>
      * In order for the transformer to use state stores, the stores must be added to the topology and connected to the
-     * transformer using only one of two strategies (though it's not required to connect global state stores; read-only
+     * transformer using at least one of two strategies (though it's not required to connect global state stores; read-only
      * access to global state stores is available by default).
      * <p>
      * The first strategy is to manually add the {@link StoreBuilder}s via {@link Topology#addStateStore(StoreBuilder, String...)},
@@ -625,7 +625,7 @@ public interface KStream<K, V> {
      * the processing progress can be observed and additional periodic actions can be performed.
      * <p>
      * In order for the transformer to use state stores, the stores must be added to the topology and connected to the
-     * transformer using only one of two strategies (though it's not required to connect global state stores; read-only
+     * transformer using at least one of two strategies (though it's not required to connect global state stores; read-only
      * access to global state stores is available by default).
      * <p>
      * The first strategy is to manually add the {@link StoreBuilder}s via {@link Topology#addStateStore(StoreBuilder, String...)},
@@ -739,7 +739,7 @@ public interface KStream<K, V> {
      * can be observed and additional periodic actions can be performed.
      * <p>
      * In order for the transformer to use state stores, the stores must be added to the topology and connected to the
-     * transformer using only one of two strategies (though it's not required to connect global state stores; read-only
+     * transformer using at least one of two strategies (though it's not required to connect global state stores; read-only
      * access to global state stores is available by default).
      * <p>
      * The first strategy is to manually add the {@link StoreBuilder}s via {@link Topology#addStateStore(StoreBuilder, String...)},
@@ -839,7 +839,7 @@ public interface KStream<K, V> {
      * can be observed and additional periodic actions can be performed.
      * <p>
      * In order for the transformer to use state stores, the stores must be added to the topology and connected to the
-     * transformer using only one of two strategies (though it's not required to connect global state stores; read-only
+     * transformer using at least one of two strategies (though it's not required to connect global state stores; read-only
      * access to global state stores is available by default).
      * <p>
      * The first strategy is to manually add the {@link StoreBuilder}s via {@link Topology#addStateStore(StoreBuilder, String...)},
@@ -943,7 +943,7 @@ public interface KStream<K, V> {
      * the processing progress can be observed and additional periodic actions can be performed.
      * <p>
      * In order for the transformer to use state stores, the stores must be added to the topology and connected to the
-     * transformer using only one of two strategies (though it's not required to connect global state stores; read-only
+     * transformer using at least one of two strategies (though it's not required to connect global state stores; read-only
      * access to global state stores is available by default).
      * <p>
      * The first strategy is to manually add the {@link StoreBuilder}s via {@link Topology#addStateStore(StoreBuilder, String...)},
@@ -1054,7 +1054,7 @@ public interface KStream<K, V> {
      * progress can be observed and additional periodic actions can be performed.
      * <p>
      * In order for the transformer to use state stores, the stores must be added to the topology and connected to the
-     * transformer using only one of two strategies (though it's not required to connect global state stores; read-only
+     * transformer using at least one of two strategies (though it's not required to connect global state stores; read-only
      * access to global state stores is available by default).
      * <p>
      * The first strategy is to manually add the {@link StoreBuilder}s via {@link Topology#addStateStore(StoreBuilder, String...)},
@@ -1165,7 +1165,7 @@ public interface KStream<K, V> {
      * Note that this is a terminal operation that returns void.
      * <p>
      * In order for the processor to use state stores, the stores must be added to the topology and connected to the
-     * processor using only one of two strategies (though it's not required to connect global state stores; read-only
+     * processor using at least one of two strategies (though it's not required to connect global state stores; read-only
      * access to global state stores is available by default).
      * <p>
      * The first strategy is to manually add the {@link StoreBuilder}s via {@link Topology#addStateStore(StoreBuilder, String...)},

@@ -59,6 +59,7 @@ import java.time.Duration;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 
@@ -573,25 +574,20 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
     }
 
     /**
-     * Provides store names that should be connected to a {@link StatefulProcessorNode}, requiring that *only one* of
-     * the two ways is used:
+     * Provides store names that should be connected to a {@link StatefulProcessorNode}, from two sources:
      * 1) Store names are provided as arguments to process(...), transform(...), etc.
      * 2) {@link StoreBuilder}s are provided by the Processor/TransformerSupplier itself, by returning a set from
      * {@link ConnectedStoreProvider#stores()}.  The {@link StoreBuilder}s will also be added to the topology.
      */
     private String[] getStoreNamesAndMaybeAddStores(final ConnectedStoreProvider storeProvider, final String[] varargsStoreNames) {
+        final List<String> allStoreNames = Arrays.asList(varargsStoreNames);
         final Set<StoreBuilder> stores = storeProvider.stores();
         if (stores != null) {
-            if (varargsStoreNames.length != 0) {
-                throw new IllegalArgumentException("If the supplier provides stores via ConnectedStoreProvider#stores(), " +
-                    "stateStoreNames may not be passed to process/transform(). The ConnectedStoreProvider provided " +
-                    stores + ", but " + Arrays.toString(varargsStoreNames) + " were also passed.");
-            }
             stores.forEach(builder::addStateStore);
-            return stores.stream().map(StoreBuilder::name).toArray(String[]::new);
-        } else {
-            return varargsStoreNames;
+            stores.stream().map(StoreBuilder::name)
+                .forEach(allStoreNames::add);
         }
+        return allStoreNames.toArray(new String[]{});
     }
 
     @Override
