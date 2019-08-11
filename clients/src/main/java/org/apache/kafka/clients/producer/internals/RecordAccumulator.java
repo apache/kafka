@@ -26,6 +26,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -793,8 +794,11 @@ public final class RecordAccumulator {
         muted.put(tp, Long.MAX_VALUE);
     }
 
-    public void unmutePartition(TopicPartition tp, long throttleUntilTimeMs) {
-        muted.put(tp, throttleUntilTimeMs);
+    public void unmutePartition(TopicPartition tp, Optional<Long> throttleUntilTimeMs) {
+        if (throttleUntilTimeMs.isPresent())
+            muted.put(tp, throttleUntilTimeMs.get());
+        else
+            muted.remove(tp);
     }
 
     /**

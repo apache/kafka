@@ -60,6 +60,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 
 import static org.apache.kafka.common.record.RecordBatch.NO_TIMESTAMP;
 
@@ -537,12 +538,12 @@ public class Sender implements Runnable {
             log.trace("Cancelled request with header {} due to node {} being disconnected",
                 requestHeader, response.destination());
             for (ProducerBatch batch : batches.values())
-                completeBatch(batch, new ProduceResponse.PartitionResponse(Errors.NETWORK_EXCEPTION), correlationId, now, 0L);
+                completeBatch(batch, new ProduceResponse.PartitionResponse(Errors.NETWORK_EXCEPTION), correlationId, now, Optional.empty());
         } else if (response.versionMismatch() != null) {
             log.warn("Cancelled request {} due to a version mismatch with node {}",
                     response, response.destination(), response.versionMismatch());
             for (ProducerBatch batch : batches.values())
-                completeBatch(batch, new ProduceResponse.PartitionResponse(Errors.UNSUPPORTED_VERSION), correlationId, now, 0L);
+                completeBatch(batch, new ProduceResponse.PartitionResponse(Errors.UNSUPPORTED_VERSION), correlationId, now, Optional.empty());
         } else {
             log.trace("Received produce response from node {} with correlation id {}", response.destination(), correlationId);
             // if we have a response, parse it
@@ -552,13 +553,16 @@ public class Sender implements Runnable {
                     TopicPartition tp = entry.getKey();
                     ProduceResponse.PartitionResponse partResp = entry.getValue();
                     ProducerBatch batch = batches.get(tp);
-                    completeBatch(batch, partResp, correlationId, now, receivedTimeMs + produceResponse.throttleTimeMs());
+                    Optional<Long> throttleTime = Optional.empty();
+                    if (produceResponse.throttleTimeMs() > 0)
+                        throttleTime = Optional.of(receivedTimeMs + produceResponse.throttleTimeMs());
+                    completeBatch(batch, partResp, correlationId, now, throttleTime);
                 }
                 this.sensors.recordLatency(response.destination(), response.requestLatencyMs());
             } else {
                 // this is the acks = 0 case, just complete all requests
                 for (ProducerBatch batch : batches.values()) {
-                    completeBatch(batch, new ProduceResponse.PartitionResponse(Errors.NONE), correlationId, now, 0L);
+                    completeBatch(batch, new ProduceResponse.PartitionResponse(Errors.NONE), correlationId, now, Optional.empty());
                 }
             }
         }
@@ -573,7 +577,7 @@ public class Sender implements Runnable {
      * @param now The current POSIX timestamp in milliseconds
      */
     private void completeBatch(ProducerBatch batch, ProduceResponse.PartitionResponse response, long correlationId,
-                               long now, long throttleUntilTimeMs) {
+                               long now, Optional<Long> throttleUntilTimeMs) {
         Errors error = response.error;
 
         if (error == Errors.MESSAGE_TOO_LARGE && batch.recordCount > 1 && !batch.isDone() &&
