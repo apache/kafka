@@ -86,25 +86,23 @@ public class SensorTest {
     public void testExpiredSensor() {
         MetricConfig config = new MetricConfig();
         Time mockTime = new MockTime();
-        Metrics metrics =  new Metrics(config, Arrays.asList((MetricsReporter) new JmxReporter()), mockTime, true);
+        try (Metrics metrics = new Metrics(config, Arrays.asList(new JmxReporter()), mockTime, true)) {
+            long inactiveSensorExpirationTimeSeconds = 60L;
+            Sensor sensor = new Sensor(metrics, "sensor", null, config, mockTime,
+                    inactiveSensorExpirationTimeSeconds, Sensor.RecordingLevel.INFO);
 
-        long inactiveSensorExpirationTimeSeconds = 60L;
-        Sensor sensor = new Sensor(metrics, "sensor", null, config, mockTime,
-            inactiveSensorExpirationTimeSeconds, Sensor.RecordingLevel.INFO);
+            assertTrue(sensor.add(metrics.metricName("test1", "grp1"), new Avg()));
 
-        assertTrue(sensor.add(metrics.metricName("test1", "grp1"), new Avg()));
+            Map<String, String> emptyTags = Collections.emptyMap();
+            MetricName rateMetricName = new MetricName("rate", "test", "", emptyTags);
+            MetricName totalMetricName = new MetricName("total", "test", "", emptyTags);
+            Meter meter = new Meter(rateMetricName, totalMetricName);
+            assertTrue(sensor.add(meter));
 
-        Map<String, String> emptyTags = Collections.emptyMap();
-        MetricName rateMetricName = new MetricName("rate", "test", "", emptyTags);
-        MetricName totalMetricName = new MetricName("total", "test", "", emptyTags);
-        Meter meter = new Meter(rateMetricName, totalMetricName);
-        assertTrue(sensor.add(meter));
-
-        mockTime.sleep(TimeUnit.SECONDS.toMillis(inactiveSensorExpirationTimeSeconds + 1));
-        assertFalse(sensor.add(metrics.metricName("test3", "grp1"), new Avg()));
-        assertFalse(sensor.add(meter));
-
-        metrics.close();
+            mockTime.sleep(TimeUnit.SECONDS.toMillis(inactiveSensorExpirationTimeSeconds + 1));
+            assertFalse(sensor.add(metrics.metricName("test3", "grp1"), new Avg()));
+            assertFalse(sensor.add(meter));
+        }
     }
 
     @Test
