@@ -114,7 +114,7 @@ class DeleteConsumerGroupsTest extends ConsumerGroupCommandTest {
 
     TestUtils.waitUntilTrue(() => {
       service.collectGroupState(group).state == "Empty"
-    }, "The group did become empty as expected.", maxRetries = 3)
+    }, "The group did not become empty as expected.", maxRetries = 3)
 
     val output = TestUtils.grabConsoleOutput(service.deleteGroups())
     assertTrue(s"The consumer group could not be deleted as expected",
@@ -145,7 +145,7 @@ class DeleteConsumerGroupsTest extends ConsumerGroupCommandTest {
 
     TestUtils.waitUntilTrue(() => {
       groups.keySet.forall(groupId => service.collectGroupState(groupId).state == "Empty")
-    }, "The group did become empty as expected.", maxRetries = 3)
+    }, "The group did not become empty as expected.", maxRetries = 3)
 
     val output = TestUtils.grabConsoleOutput(service.deleteGroups()).trim
     val expectedGroupsForDeletion = groups.keySet
@@ -175,7 +175,7 @@ class DeleteConsumerGroupsTest extends ConsumerGroupCommandTest {
 
     TestUtils.waitUntilTrue(() => {
       service.collectGroupState(group).state == "Empty"
-    }, "The group did become empty as expected.", maxRetries = 3)
+    }, "The group did not become empty as expected.", maxRetries = 3)
 
     val result = service.deleteGroups()
     assertTrue(s"The consumer group could not be deleted as expected",
@@ -200,7 +200,7 @@ class DeleteConsumerGroupsTest extends ConsumerGroupCommandTest {
 
     TestUtils.waitUntilTrue(() => {
       service.collectGroupState(group).state == "Empty"
-    }, "The group did become empty as expected.", maxRetries = 3)
+    }, "The group did not become empty as expected.", maxRetries = 3)
 
     val service2 = getConsumerGroupService(cgcArgs ++ Array("--group", missingGroup))
     val output = TestUtils.grabConsoleOutput(service2.deleteGroups())
@@ -227,7 +227,7 @@ class DeleteConsumerGroupsTest extends ConsumerGroupCommandTest {
 
     TestUtils.waitUntilTrue(() => {
       service.collectGroupState(group).state == "Empty"
-    }, "The group did become empty as expected.", maxRetries = 3)
+    }, "The group did not become empty as expected.", maxRetries = 3)
 
     val service2 = getConsumerGroupService(cgcArgs ++ Array("--group", missingGroup))
     val result = service2.deleteGroups()

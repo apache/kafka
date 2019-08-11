@@ -25,16 +25,15 @@ import java.util.regex.Pattern
 import org.junit.Assert._
 import org.junit._
 import org.junit.rules.TemporaryFolder
-import org.apache.kafka.streams.KeyValue
-import org.apache.kafka.streams._
+import org.apache.kafka.streams.{KafkaStreams, KeyValue, StreamsConfig}
 import org.apache.kafka.streams.scala.kstream._
 import org.apache.kafka.streams.integration.utils.{EmbeddedKafkaCluster, IntegrationTestUtils}
 import org.apache.kafka.clients.consumer.ConsumerConfig
 import org.apache.kafka.clients.producer.ProducerConfig
-import org.apache.kafka.common.serialization._
 import org.apache.kafka.common.utils.MockTime
 import org.apache.kafka.test.{IntegrationTest, TestUtils}
 import ImplicitConversions._
+import org.apache.kafka.common.serialization.{LongDeserializer, StringDeserializer, StringSerializer}
 import org.junit.experimental.categories.Category
 
 /**

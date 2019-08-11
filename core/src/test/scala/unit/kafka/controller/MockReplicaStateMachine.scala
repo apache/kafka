@@ -16,6 +16,8 @@
  */
 package kafka.controller
 
+import scala.collection.Seq
+
 class MockReplicaStateMachine(controllerContext: ControllerContext) extends ReplicaStateMachine(controllerContext) {
 
   override def handleStateChanges(replicas: Seq[PartitionAndReplica], targetState: ReplicaState): Unit = {

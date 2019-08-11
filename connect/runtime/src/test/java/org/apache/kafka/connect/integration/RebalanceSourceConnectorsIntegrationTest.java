@@ -39,17 +39,18 @@ import java.util.Properties;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
+import static org.apache.kafka.connect.integration.MonitorableSourceConnector.TOPIC_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.CONNECTOR_CLASS_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.KEY_CONVERTER_CLASS_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.TASKS_MAX_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.VALUE_CONVERTER_CLASS_CONFIG;
-import static org.apache.kafka.connect.runtime.SinkConnectorConfig.TOPICS_CONFIG;
 import static org.apache.kafka.connect.runtime.WorkerConfig.OFFSET_COMMIT_INTERVAL_MS_CONFIG;
 import static org.apache.kafka.connect.runtime.distributed.ConnectProtocolCompatibility.COMPATIBLE;
 import static org.apache.kafka.connect.runtime.distributed.DistributedConfig.CONNECT_PROTOCOL_CONFIG;
 import static org.apache.kafka.test.TestUtils.waitForCondition;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;
+import static org.junit.Assert.assertTrue;
 
 /**
  * Integration tests for incremental cooperative rebalancing between Connect workers
@@ -109,7 +110,7 @@ public class RebalanceSourceConnectorsIntegrationTest {
         props.put(TASKS_MAX_CONFIG, String.valueOf(NUM_TASKS));
         props.put("throughput", String.valueOf(1));
         props.put("messages.per.poll", String.valueOf(10));
-        props.put(TOPICS_CONFIG, TOPIC_NAME);
+        props.put(TOPIC_CONFIG, TOPIC_NAME);
         props.put(KEY_CONVERTER_CLASS_CONFIG, StringConverter.class.getName());
         props.put(VALUE_CONVERTER_CLASS_CONFIG, StringConverter.class.getName());
 
@@ -130,6 +131,58 @@ public class RebalanceSourceConnectorsIntegrationTest {
     }
 
     @Test
+    public void testReconfigConnector() throws Exception {
+        ConnectorHandle connectorHandle = RuntimeHandles.get().connectorHandle(CONNECTOR_NAME);
+
+        // create test topic
+        String anotherTopic = "another-topic";
+        connect.kafka().createTopic(TOPIC_NAME, NUM_TOPIC_PARTITIONS);
+        connect.kafka().createTopic(anotherTopic, NUM_TOPIC_PARTITIONS);
+
+        // setup up props for the source connector
+        Map<String, String> props = new HashMap<>();
+        props.put(CONNECTOR_CLASS_CONFIG, MonitorableSourceConnector.class.getSimpleName());
+        props.put(TASKS_MAX_CONFIG, String.valueOf(NUM_TASKS));
+        props.put("throughput", String.valueOf(1));
+        props.put("messages.per.poll", String.valueOf(10));
+        props.put(TOPIC_CONFIG, TOPIC_NAME);
+        props.put(KEY_CONVERTER_CLASS_CONFIG, StringConverter.class.getName());
+        props.put(VALUE_CONVERTER_CLASS_CONFIG, StringConverter.class.getName());
+
+        // start a source connector
+        connect.configureConnector(CONNECTOR_NAME, props);
+
+        waitForCondition(() -> this.assertConnectorAndTasksRunning(CONNECTOR_NAME, NUM_TASKS).orElse(false),
+                CONNECTOR_SETUP_DURATION_MS, "Connector tasks did not start in time.");
+
+        int numRecordsProduced = 100;
+        int recordTransferDurationMs = 5000;
+
+        // consume all records from the source topic or fail, to ensure that they were correctly produced
+        int recordNum = connect.kafka().consume(numRecordsProduced, recordTransferDurationMs, TOPIC_NAME).count();
+        assertTrue("Not enough records produced by source connector. Expected at least: " + numRecordsProduced + " + but got " + recordNum,
+                recordNum >= numRecordsProduced);
+
+        // Reconfigure the source connector by changing the Kafka topic used as output
+        props.put(TOPIC_CONFIG, anotherTopic);
+        connect.configureConnector(CONNECTOR_NAME, props);
+
+        waitForCondition(() -> this.assertConnectorAndTasksRunning(CONNECTOR_NAME, NUM_TASKS).orElse(false),
+                CONNECTOR_SETUP_DURATION_MS, "Connector tasks did not start in time.");
+
+        // expect all records to be produced by the connector
+        connectorHandle.expectedRecords(numRecordsProduced);
+
+        // expect all records to be produced by the connector
+        connectorHandle.expectedCommits(numRecordsProduced);
+
+        // consume all records from the source topic or fail, to ensure that they were correctly produced
+        recordNum = connect.kafka().consume(numRecordsProduced, recordTransferDurationMs, anotherTopic).count();
+        assertTrue("Not enough records produced by source connector. Expected at least: " + numRecordsProduced + " + but got " + recordNum,
+                recordNum >= numRecordsProduced);
+    }
+
+    @Test
     public void testDeleteConnector() throws Exception {
         // create test topic
         connect.kafka().createTopic(TOPIC_NAME, NUM_TOPIC_PARTITIONS);
@@ -140,7 +193,7 @@ public class RebalanceSourceConnectorsIntegrationTest {
         props.put(TASKS_MAX_CONFIG, String.valueOf(NUM_TASKS));
         props.put("throughput", String.valueOf(1));
         props.put("messages.per.poll", String.valueOf(10));
-        props.put(TOPICS_CONFIG, TOPIC_NAME);
+        props.put(TOPIC_CONFIG, TOPIC_NAME);
         props.put(KEY_CONVERTER_CLASS_CONFIG, StringConverter.class.getName());
         props.put(VALUE_CONVERTER_CLASS_CONFIG, StringConverter.class.getName());
 
@@ -181,7 +234,7 @@ public class RebalanceSourceConnectorsIntegrationTest {
         props.put(TASKS_MAX_CONFIG, String.valueOf(NUM_TASKS));
         props.put("throughput", String.valueOf(1));
         props.put("messages.per.poll", String.valueOf(10));
-        props.put(TOPICS_CONFIG, TOPIC_NAME);
+        props.put(TOPIC_CONFIG, TOPIC_NAME);
         props.put(KEY_CONVERTER_CLASS_CONFIG, StringConverter.class.getName());
         props.put(VALUE_CONVERTER_CLASS_CONFIG, StringConverter.class.getName());
 
@@ -224,7 +277,7 @@ public class RebalanceSourceConnectorsIntegrationTest {
         props.put(TASKS_MAX_CONFIG, String.valueOf(NUM_TASKS));
         props.put("throughput", String.valueOf(1));
         props.put("messages.per.poll", String.valueOf(10));
-        props.put(TOPICS_CONFIG, TOPIC_NAME);
+        props.put(TOPIC_CONFIG, TOPIC_NAME);
         props.put(KEY_CONVERTER_CLASS_CONFIG, StringConverter.class.getName());
         props.put(VALUE_CONVERTER_CLASS_CONFIG, StringConverter.class.getName());
 

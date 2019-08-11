@@ -290,14 +290,14 @@ class TopicCommandTest extends ZooKeeperTestHarness with Logging with RackAwareT
 
     val output = TestUtils.grabConsoleOutput(
       topicService.describeTopic(new TopicCommandOptions(Array("--topic", testTopicName))))
-    assertTrue("The output should contain the modified config", output.contains("Configs:cleanup.policy=compact"))
+    assertTrue("The output should contain the modified config", output.contains("Configs: cleanup.policy=compact"))
 
     topicService.alterTopic(new TopicCommandOptions(
       Array("--topic", testTopicName, "--config", "cleanup.policy=delete")))
 
     val output2 = TestUtils.grabConsoleOutput(
       topicService.describeTopic(new TopicCommandOptions(Array("--topic", testTopicName))))
-    assertTrue("The output should contain the modified config", output2.contains("Configs:cleanup.policy=delete"))
+    assertTrue("The output should contain the modified config", output2.contains("Configs: cleanup.policy=delete"))
   }
 
   @Test
@@ -415,6 +415,11 @@ class TopicCommandTest extends ZooKeeperTestHarness with Logging with RackAwareT
     intercept[IllegalArgumentException] {
       topicService.describeTopic(describeOpts)
     }
+
+    // describe all topics
+    val describeOptsAllTopics = new TopicCommandOptions(Array())
+    // should not throw any error
+    topicService.describeTopic(describeOptsAllTopics)
 
     // describe topic that does not exist with --if-exists
     val describeOptsWithExists = new TopicCommandOptions(Array("--topic", testTopicName, "--if-exists"))

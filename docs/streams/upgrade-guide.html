@@ -81,6 +81,14 @@
     </p>
 
     <p>
+        As of 2.3.0 we've updated how to turn on optimizations. Now to enable optimizations, you need to do two things.
+        First add this line to your properties <code>properties.setProperty(StreamsConfig.TOPOLOGY_OPTIMIZATION, StreamsConfig.OPTIMIZE);</code>, as you have done before.
+        Second, when constructing your <code>KafkaStreams</code> instance, you'll need to pass your configuration properties when building your
+        topology by using the overloaded <code>StreamsBuilder.build(Properties)</code> method.
+        For example <code>KafkaStreams myStream = new KafkaStreams(streamsBuilder.build(properties), properties)</code>.
+    </p>
+
+    <p>
         In 2.3.0 we have added default implementation to <code>close()</code> and <code>configure()</code> for <code>Serializer</code>,
         <code>Deserializer</code> and <code>Serde</code> so that they can be implemented by lambda expression.
         For more details please read <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-331+Add+default+implementation+to+close%28%29+and+configure%28%29+for+Serializer%2C+Deserializer+and+Serde">KIP-331</a>.
@@ -127,7 +135,7 @@
 
     <p>
         RocksDB dependency was updated to version <code>5.18.3</code>.
-        The new version allows to specify more RocksDB configurations, including <code>WriteBufferManager</code> that help to limit RocksDB off-head memory usage.
+        The new version allows to specify more RocksDB configurations, including <code>WriteBufferManager</code> which helps to limit RocksDB off-heap memory usage.
         For more details please read <a href="https://issues.apache.org/jira/browse/KAFKA-8215">KAFKA-8215</a>.
     </p>
 
@@ -239,6 +247,13 @@
         repartition topic.  The original no parameter version of <code>StreamsBuilder#build</code> is still available for those who wish to not
         optimize their topology.  Note that enabling optimization of the topology may require you to do an application reset when redeploying the application.  For more
         details, see <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-312%3A+Add+Overloaded+StreamsBuilder+Build+Method+to+Accept+java.util.Properties">KIP-312</a>
+    </p>
+
+    <p>
+        We are introducing static membership towards Kafka Streams user. This feature reduces unnecessary rebalances during normal application upgrades or rolling bounces.
+        For more details on how to use it, checkout <a href="/{{version}}/design/#static_membership">static membership design</a>.
+        Note, Kafka Streams uses the same <code>ConsumerConfig#GROUP_INSTANCE_ID_CONFIG</code>, and you only need to make sure it is uniquely defined across
+        different stream instances in one application.
     </p>
 
     <h3><a id="streams_api_changes_200" href="#streams_api_changes_200">Streams API changes in 2.0.0</a></h3>

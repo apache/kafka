@@ -189,7 +189,7 @@ public final class Cluster {
      * Get the node by node id if the replica for the given partition is online
      * @param partition
      * @param id
-     * @return
+     * @return the node
      */
     public Optional<Node> nodeIfOnline(TopicPartition partition, int id) {
         Node node = nodeById(id);

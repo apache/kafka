@@ -24,7 +24,7 @@ import java.util.Base64
 import joptsimple.ArgumentAcceptingOptionSpec
 import kafka.utils.{CommandDefaultOptions, CommandLineUtils, Exit, Logging}
 import org.apache.kafka.clients.CommonClientConfigs
-import org.apache.kafka.clients.admin.{CreateDelegationTokenOptions, DescribeDelegationTokenOptions, ExpireDelegationTokenOptions, RenewDelegationTokenOptions, AdminClient => JAdminClient}
+import org.apache.kafka.clients.admin.{Admin, CreateDelegationTokenOptions, DescribeDelegationTokenOptions, ExpireDelegationTokenOptions, RenewDelegationTokenOptions, AdminClient => JAdminClient}
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.security.token.delegation.DelegationToken
 import org.apache.kafka.common.utils.{SecurityUtils, Utils}
@@ -72,7 +72,7 @@ object DelegationTokenCommand extends Logging {
     }
   }
 
-  def createToken(adminClient: JAdminClient, opts: DelegationTokenCommandOptions): DelegationToken = {
+  def createToken(adminClient: Admin, opts: DelegationTokenCommandOptions): DelegationToken = {
     val renewerPrincipals = getPrincipals(opts, opts.renewPrincipalsOpt).getOrElse(new util.LinkedList[KafkaPrincipal]())
     val maxLifeTimeMs = opts.options.valueOf(opts.maxLifeTimeOpt).longValue
 
@@ -108,7 +108,7 @@ object DelegationTokenCommand extends Logging {
       None
   }
 
-  def renewToken(adminClient: JAdminClient, opts: DelegationTokenCommandOptions): Long = {
+  def renewToken(adminClient: Admin, opts: DelegationTokenCommandOptions): Long = {
     val hmac = opts.options.valueOf(opts.hmacOpt)
     val renewTimePeriodMs = opts.options.valueOf(opts.renewTimePeriodOpt).longValue()
     println("Calling renew token operation with hmac :" + hmac +" , renew-time-period :"+ renewTimePeriodMs)
@@ -119,7 +119,7 @@ object DelegationTokenCommand extends Logging {
     expiryTimeStamp
   }
 
-  def expireToken(adminClient: JAdminClient, opts: DelegationTokenCommandOptions): Long = {
+  def expireToken(adminClient: Admin, opts: DelegationTokenCommandOptions): Long = {
     val hmac = opts.options.valueOf(opts.hmacOpt)
     val expiryTimePeriodMs = opts.options.valueOf(opts.expiryTimePeriodOpt).longValue()
     println("Calling expire token operation with hmac :" + hmac +" , expire-time-period : "+ expiryTimePeriodMs)
@@ -130,7 +130,7 @@ object DelegationTokenCommand extends Logging {
     expiryTimeStamp
   }
 
-  def describeToken(adminClient: JAdminClient, opts: DelegationTokenCommandOptions): List[DelegationToken] = {
+  def describeToken(adminClient: Admin, opts: DelegationTokenCommandOptions): List[DelegationToken] = {
     val ownerPrincipals = getPrincipals(opts, opts.ownerPrincipalsOpt)
     if (ownerPrincipals.isEmpty)
       println("Calling describe token operation for current user.")
@@ -143,7 +143,7 @@ object DelegationTokenCommand extends Logging {
     tokens
   }
 
-  private def createAdminClient(opts: DelegationTokenCommandOptions): JAdminClient = {
+  private def createAdminClient(opts: DelegationTokenCommandOptions): Admin = {
     val props = Utils.loadProps(opts.options.valueOf(opts.commandConfigOpt))
     props.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, opts.options.valueOf(opts.bootstrapServerOpt))
     JAdminClient.create(props)

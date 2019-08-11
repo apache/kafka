@@ -18,6 +18,7 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.streams.KeyValueTimestamp;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.TopologyTestDriver;
@@ -65,7 +66,10 @@ public class KStreamFlatMapValuesTest {
             }
         }
 
-        final String[] expected = {"0:v0 (ts: 0)", "0:V0 (ts: 0)", "1:v1 (ts: 0)", "1:V1 (ts: 0)", "2:v2 (ts: 0)", "2:V2 (ts: 0)", "3:v3 (ts: 0)", "3:V3 (ts: 0)"};
+        final KeyValueTimestamp[] expected = {new KeyValueTimestamp<>(0, "v0", 0), new KeyValueTimestamp<>(0, "V0", 0),
+            new KeyValueTimestamp<>(1, "v1", 0), new KeyValueTimestamp<>(1, "V1", 0),
+            new KeyValueTimestamp<>(2, "v2", 0), new KeyValueTimestamp<>(2, "V2", 0),
+            new KeyValueTimestamp<>(3, "v3", 0), new KeyValueTimestamp<>(3, "V3", 0)};
 
         assertArrayEquals(expected, supplier.theCapturedProcessor().processed.toArray());
     }
@@ -97,7 +101,14 @@ public class KStreamFlatMapValuesTest {
             }
         }
 
-        final String[] expected = {"0:v0 (ts: 0)", "0:k0 (ts: 0)", "1:v1 (ts: 0)", "1:k1 (ts: 0)", "2:v2 (ts: 0)", "2:k2 (ts: 0)", "3:v3 (ts: 0)", "3:k3 (ts: 0)"};
+        final KeyValueTimestamp[] expected = {new KeyValueTimestamp<>(0, "v0", 0),
+            new KeyValueTimestamp<>(0, "k0", 0),
+            new KeyValueTimestamp<>(1, "v1", 0),
+            new KeyValueTimestamp<>(1, "k1", 0),
+            new KeyValueTimestamp<>(2, "v2", 0),
+            new KeyValueTimestamp<>(2, "k2", 0),
+            new KeyValueTimestamp<>(3, "v3", 0),
+            new KeyValueTimestamp<>(3, "k3", 0)};
 
         assertArrayEquals(expected, supplier.theCapturedProcessor().processed.toArray());
     }

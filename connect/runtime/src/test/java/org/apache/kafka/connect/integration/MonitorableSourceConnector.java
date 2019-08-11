@@ -44,6 +44,7 @@ import java.util.stream.LongStream;
 public class MonitorableSourceConnector extends TestSourceConnector {
     private static final Logger log = LoggerFactory.getLogger(MonitorableSourceConnector.class);
 
+    public static final String TOPIC_CONFIG = "topic";
     private String connectorName;
     private ConnectorHandle connectorHandle;
     private Map<String, String> commonConfigs;
@@ -105,7 +106,7 @@ public class MonitorableSourceConnector extends TestSourceConnector {
         public void start(Map<String, String> props) {
             taskId = props.get("task.id");
             connectorName = props.get("connector.name");
-            topicName = props.getOrDefault("topic", "sequential-topic");
+            topicName = props.getOrDefault(TOPIC_CONFIG, "sequential-topic");
             throughput = Long.valueOf(props.getOrDefault("throughput", "-1"));
             batchSize = Integer.valueOf(props.getOrDefault("messages.per.poll", "1"));
             taskHandle = RuntimeHandles.get().connectorHandle(connectorName).taskHandle(taskId);
@@ -113,7 +114,7 @@ public class MonitorableSourceConnector extends TestSourceConnector {
                     context.offsetStorageReader().offset(Collections.singletonMap("task.id", taskId)))
                     .orElse(Collections.emptyMap());
             startingSeqno = Optional.ofNullable((Long) offset.get("saved")).orElse(0L);
-            log.info("Started {} task {}", this.getClass().getSimpleName(), taskId);
+            log.info("Started {} task {} with properties {}", this.getClass().getSimpleName(), taskId, props);
             throttler = new ThroughputThrottler(throughput, System.currentTimeMillis());
         }
 

@@ -41,6 +41,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Base64;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -106,7 +107,7 @@ public class TestUtils {
             for (int i = 0; i < partitions; i++)
                 parts.add(new PartitionInfo(topic, i, ns[i % ns.length], ns, ns));
         }
-        return new Cluster("kafka-cluster", asList(ns), parts, Collections.emptySet(), Topic.INTERNAL_TOPICS);
+        return new Cluster("kafka-cluster", asList(ns), parts, Collections.emptySet(), Collections.emptySet());
     }
 
     public static MetadataResponse metadataUpdateWith(final int numNodes,
@@ -432,6 +433,10 @@ public class TestUtils {
         for (T item : iterable)
             list.add(item);
         return list;
+    }
+
+    public static <T> Set<T> toSet(Collection<T> collection) {
+        return new HashSet<>(collection);
     }
 
     public static ByteBuffer toBuffer(Struct struct) {

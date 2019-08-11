@@ -50,7 +50,7 @@ class LRUCacheEntry {
 
         this.isDirty = isDirty;
         this.sizeBytes = 1 + // isDirty
-            record.sizeBytes();
+            record.residentMemorySizeEstimate();
     }
 
     void markClean() {

@@ -18,6 +18,9 @@ package kafka.utils
 
 import java.io.{File, BufferedWriter, FileWriter}
 import java.util.Properties
+
+import scala.collection.Seq
+
 import kafka.server.KafkaConfig
 import org.apache.kafka.common.utils.Java
 
@@ -152,10 +155,7 @@ object JaasTestUtils {
   val serviceName = "kafka"
 
   def saslConfigs(saslProperties: Option[Properties]): Properties = {
-    val result = saslProperties match {
-      case Some(properties) => properties
-      case None => new Properties
-    }
+    val result = saslProperties.getOrElse(new Properties)
     // IBM Kerberos module doesn't support the serviceName JAAS property, hence it needs to be
     // passed as a Kafka property
     if (Java.isIbmJdk && !result.contains(KafkaConfig.SaslKerberosServiceNameProp))

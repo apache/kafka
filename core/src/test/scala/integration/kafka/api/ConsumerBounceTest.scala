@@ -31,6 +31,7 @@ import org.junit.{After, Ignore, Test}
 
 import scala.collection.JavaConverters._
 import scala.collection.mutable
+import scala.collection.Seq
 
 /**
  * Integration tests for the consumer that cover basic usage as well as server failures
@@ -132,7 +133,7 @@ class ConsumerBounceTest extends AbstractConsumerTest with Logging {
 
     // wait until all the followers have synced the last HW with leader
     TestUtils.waitUntilTrue(() => servers.forall(server =>
-      server.replicaManager.localReplica(tp).get.highWatermark.messageOffset == numRecords
+      server.replicaManager.localLog(tp).get.highWatermark == numRecords
     ), "Failed to update high watermark for followers after timeout")
 
     val scheduler = new BounceBrokerScheduler(numIters)
@@ -245,7 +246,9 @@ class ConsumerBounceTest extends AbstractConsumerTest with Logging {
     killBroker(findCoordinator(manualGroup))
 
     val future1 = submitCloseAndValidate(consumer1, Long.MaxValue, None, gracefulCloseTimeMs)
+
     val future2 = submitCloseAndValidate(consumer2, Long.MaxValue, None, gracefulCloseTimeMs)
+
     future1.get
     future2.get
 
@@ -285,7 +288,7 @@ class ConsumerBounceTest extends AbstractConsumerTest with Logging {
 
     servers.foreach(server => killBroker(server.config.brokerId))
     val closeTimeout = 2000
-    val future1 = submitCloseAndValidate(consumer1, closeTimeout, Some(closeTimeout), Some(closeTimeout))
+    val future1 = submitCloseAndValidate(consumer1, closeTimeout, None, Some(closeTimeout))
     val future2 = submitCloseAndValidate(consumer2, Long.MaxValue, Some(requestTimeout), Some(requestTimeout))
     future1.get
     future2.get
@@ -383,13 +386,8 @@ class ConsumerBounceTest extends AbstractConsumerTest with Logging {
 
     def subscribeAndPoll(consumer: KafkaConsumer[Array[Byte], Array[Byte]], revokeSemaphore: Option[Semaphore] = None): Future[Any] = {
       executor.submit(CoreUtils.runnable {
-          consumer.subscribe(Collections.singletonList(topic), new ConsumerRebalanceListener {
-            def onPartitionsAssigned(partitions: Collection[TopicPartition]) {
-            }
-            def onPartitionsRevoked(partitions: Collection[TopicPartition]) {
-              revokeSemaphore.foreach(s => s.release())
-            }
-          })
+        consumer.subscribe(Collections.singletonList(topic))
+        revokeSemaphore.foreach(s => s.release())
         // requires to used deprecated `poll(long)` to trigger metadata update
           consumer.poll(0L)
         }, 0)

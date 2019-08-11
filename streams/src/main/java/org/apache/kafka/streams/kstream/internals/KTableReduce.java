@@ -80,7 +80,7 @@ public class KTableReduce<K, V> implements KTableProcessorSupplier<K, V, V> {
             final ValueAndTimestamp<V> oldAggAndTimestamp = store.get(key);
             final V oldAgg = getValueOrNull(oldAggAndTimestamp);
             final V intermediateAgg;
-            long newTimestamp = context().timestamp();
+            long newTimestamp;
 
             // first try to remove the old value
             if (value.oldValue != null && oldAgg != null) {
@@ -88,6 +88,7 @@ public class KTableReduce<K, V> implements KTableProcessorSupplier<K, V, V> {
                 newTimestamp = Math.max(context().timestamp(), oldAggAndTimestamp.timestamp());
             } else {
                 intermediateAgg = oldAgg;
+                newTimestamp = context().timestamp();
             }
 
             // then try to add the new value

@@ -195,8 +195,8 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
         log.debug("Lost assignments: {}", lostAssignments);
 
         // Derived set: The set of new connectors-and-tasks is a derived set from the set
-        // difference of configured - previous
-        ConnectorsAndTasks newSubmissions = diff(configured, previousAssignment);
+        // difference of configured - previous - active
+        ConnectorsAndTasks newSubmissions = diff(configured, previousAssignment, activeAssignments);
         log.debug("New assignments: {}", newSubmissions);
 
         // A collection of the complete assignment

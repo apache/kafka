@@ -92,6 +92,11 @@ public class ConsumerMetadataTest {
                 new TopicPartition("bar", 0),
                 new TopicPartition("__consumer_offsets", 0)));
         testBasicSubscription(Utils.mkSet("foo", "bar"), Utils.mkSet("__consumer_offsets"));
+
+        subscription.assignFromUser(Utils.mkSet(
+                new TopicPartition("baz", 0),
+                new TopicPartition("__consumer_offsets", 0)));
+        testBasicSubscription(Utils.mkSet("baz"), Utils.mkSet("__consumer_offsets"));
     }
 
     @Test

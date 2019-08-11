@@ -26,6 +26,7 @@ import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLEngine;
 import javax.net.ssl.SSLEngineResult;
 import javax.net.ssl.SSLException;
@@ -113,7 +114,12 @@ public class SslFactory implements Reconfigurable {
 
     @Override
     public void reconfigure(Map<String, ?> newConfigs) throws KafkaException {
-        this.sslEngineBuilder = createNewSslEngineBuilder(newConfigs);
+        SslEngineBuilder newSslEngineBuilder = createNewSslEngineBuilder(newConfigs);
+        if (newSslEngineBuilder != this.sslEngineBuilder) {
+            this.sslEngineBuilder = newSslEngineBuilder;
+            log.info("Created new {} SSL engine builder with keystore {} truststore {}", mode,
+                    newSslEngineBuilder.keystore(), newSslEngineBuilder.truststore());
+        }
     }
 
     private SslEngineBuilder createNewSslEngineBuilder(Map<String, ?> newConfigs) {
@@ -166,6 +172,11 @@ public class SslFactory implements Reconfigurable {
             throw new IllegalStateException("SslFactory has not been configured.");
         }
         return sslEngineBuilder.createSslEngine(mode, peerHost, peerPort, endpointIdentification);
+    }
+
+    @Deprecated
+    public SSLContext sslContext() {
+        return sslEngineBuilder.sslContext();
     }
 
     public SslEngineBuilder sslEngineBuilder() {

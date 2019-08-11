@@ -517,6 +517,204 @@ public class SuppressScenarioTest {
         }
     }
 
+    @Test
+    public void shouldWorkBeforeGroupBy() {
+        final StreamsBuilder builder = new StreamsBuilder();
+
+        builder
+            .table("topic", Consumed.with(Serdes.String(), Serdes.String()))
+            .suppress(untilTimeLimit(ofMillis(10), unbounded()))
+            .groupBy(KeyValue::pair, Grouped.with(Serdes.String(), Serdes.String()))
+            .count()
+            .toStream()
+            .to("output", Produced.with(Serdes.String(), Serdes.Long()));
+
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), config)) {
+            final ConsumerRecordFactory<String, String> recordFactory =
+                new ConsumerRecordFactory<>(STRING_SERIALIZER, STRING_SERIALIZER);
+
+            driver.pipeInput(recordFactory.create("topic", "A", "a", 0L));
+            driver.pipeInput(recordFactory.create("topic", "tick", "tick", 10L));
+
+            verify(
+                drainProducerRecords(driver, "output", STRING_DESERIALIZER, LONG_DESERIALIZER),
+                singletonList(new KeyValueTimestamp<>("A", 1L, 0L))
+            );
+        }
+    }
+
+    @Test
+    public void shouldWorkBeforeJoinRight() {
+        final StreamsBuilder builder = new StreamsBuilder();
+
+        final KTable<String, String> left = builder
+            .table("left", Consumed.with(Serdes.String(), Serdes.String()));
+
+        final KTable<String, String> right = builder
+            .table("right", Consumed.with(Serdes.String(), Serdes.String()))
+            .suppress(untilTimeLimit(ofMillis(10), unbounded()));
+
+        left
+            .outerJoin(right, (l, r) -> String.format("(%s,%s)", l, r))
+            .toStream()
+            .to("output", Produced.with(Serdes.String(), Serdes.String()));
+
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), config)) {
+            final ConsumerRecordFactory<String, String> recordFactory =
+                new ConsumerRecordFactory<>(STRING_SERIALIZER, STRING_SERIALIZER);
+
+            driver.pipeInput(recordFactory.create("right", "B", "1", 0L));
+            driver.pipeInput(recordFactory.create("right", "A", "1", 0L));
+            // buffered, no output
+            verify(
+                drainProducerRecords(driver, "output", STRING_DESERIALIZER, STRING_DESERIALIZER),
+                emptyList()
+            );
+
+
+            driver.pipeInput(recordFactory.create("right", "tick", "tick", 10L));
+            // flush buffer
+            verify(
+                drainProducerRecords(driver, "output", STRING_DESERIALIZER, STRING_DESERIALIZER),
+                asList(
+                    new KeyValueTimestamp<>("A", "(null,1)", 0L),
+                    new KeyValueTimestamp<>("B", "(null,1)", 0L)
+                )
+            );
+
+
+            driver.pipeInput(recordFactory.create("right", "A", "2", 11L));
+            // buffered, no output
+            verify(
+                drainProducerRecords(driver, "output", STRING_DESERIALIZER, STRING_DESERIALIZER),
+                emptyList()
+            );
+
+
+            driver.pipeInput(recordFactory.create("left", "A", "a", 12L));
+            // should join with previously emitted right side
+            verify(
+                drainProducerRecords(driver, "output", STRING_DESERIALIZER, STRING_DESERIALIZER),
+                singletonList(new KeyValueTimestamp<>("A", "(a,1)", 12L))
+            );
+
+
+            driver.pipeInput(recordFactory.create("left", "B", "b", 12L));
+            // should view through to the parent KTable, since B is no longer buffered
+            verify(
+                drainProducerRecords(driver, "output", STRING_DESERIALIZER, STRING_DESERIALIZER),
+                singletonList(new KeyValueTimestamp<>("B", "(b,1)", 12L))
+            );
+
+
+            driver.pipeInput(recordFactory.create("left", "A", "b", 13L));
+            // should join with previously emitted right side
+            verify(
+                drainProducerRecords(driver, "output", STRING_DESERIALIZER, STRING_DESERIALIZER),
+                singletonList(new KeyValueTimestamp<>("A", "(b,1)", 13L))
+            );
+
+
+            driver.pipeInput(recordFactory.create("right", "tick", "tick", 21L));
+            verify(
+                drainProducerRecords(driver, "output", STRING_DESERIALIZER, STRING_DESERIALIZER),
+                asList(
+                    new KeyValueTimestamp<>("tick", "(null,tick)", 21), // just a testing artifact
+                    new KeyValueTimestamp<>("A", "(b,2)", 13L)
+                )
+            );
+        }
+
+    }
+
+
+    @Test
+    public void shouldWorkBeforeJoinLeft() {
+        final StreamsBuilder builder = new StreamsBuilder();
+
+        final KTable<String, String> left = builder
+            .table("left", Consumed.with(Serdes.String(), Serdes.String()))
+            .suppress(untilTimeLimit(ofMillis(10), unbounded()));
+
+        final KTable<String, String> right = builder
+            .table("right", Consumed.with(Serdes.String(), Serdes.String()));
+
+        left
+            .outerJoin(right, (l, r) -> String.format("(%s,%s)", l, r))
+            .toStream()
+            .to("output", Produced.with(Serdes.String(), Serdes.String()));
+
+        final Topology topology = builder.build();
+        System.out.println(topology.describe());
+        try (final TopologyTestDriver driver = new TopologyTestDriver(topology, config)) {
+            final ConsumerRecordFactory<String, String> recordFactory =
+                new ConsumerRecordFactory<>(STRING_SERIALIZER, STRING_SERIALIZER);
+
+            driver.pipeInput(recordFactory.create("left", "B", "1", 0L));
+            driver.pipeInput(recordFactory.create("left", "A", "1", 0L));
+            // buffered, no output
+            verify(
+                drainProducerRecords(driver, "output", STRING_DESERIALIZER, STRING_DESERIALIZER),
+                emptyList()
+            );
+
+
+            driver.pipeInput(recordFactory.create("left", "tick", "tick", 10L));
+            // flush buffer
+            verify(
+                drainProducerRecords(driver, "output", STRING_DESERIALIZER, STRING_DESERIALIZER),
+                asList(
+                    new KeyValueTimestamp<>("A", "(1,null)", 0L),
+                    new KeyValueTimestamp<>("B", "(1,null)", 0L)
+                )
+            );
+
+
+            driver.pipeInput(recordFactory.create("left", "A", "2", 11L));
+            // buffered, no output
+            verify(
+                drainProducerRecords(driver, "output", STRING_DESERIALIZER, STRING_DESERIALIZER),
+                emptyList()
+            );
+
+
+            driver.pipeInput(recordFactory.create("right", "A", "a", 12L));
+            // should join with previously emitted left side
+            verify(
+                drainProducerRecords(driver, "output", STRING_DESERIALIZER, STRING_DESERIALIZER),
+                singletonList(new KeyValueTimestamp<>("A", "(1,a)", 12L))
+            );
+
+
+            driver.pipeInput(recordFactory.create("right", "B", "b", 12L));
+            // should view through to the parent KTable, since B is no longer buffered
+            verify(
+                drainProducerRecords(driver, "output", STRING_DESERIALIZER, STRING_DESERIALIZER),
+                singletonList(new KeyValueTimestamp<>("B", "(1,b)", 12L))
+            );
+
+
+            driver.pipeInput(recordFactory.create("right", "A", "b", 13L));
+            // should join with previously emitted left side
+            verify(
+                drainProducerRecords(driver, "output", STRING_DESERIALIZER, STRING_DESERIALIZER),
+                singletonList(new KeyValueTimestamp<>("A", "(1,b)", 13L))
+            );
+
+
+            driver.pipeInput(recordFactory.create("left", "tick", "tick", 21L));
+            verify(
+                drainProducerRecords(driver, "output", STRING_DESERIALIZER, STRING_DESERIALIZER),
+                asList(
+                    new KeyValueTimestamp<>("tick", "(tick,null)", 21), // just a testing artifact
+                    new KeyValueTimestamp<>("A", "(2,b)", 13L)
+                )
+            );
+        }
+
+    }
+
+
     private static <K, V> void verify(final List<ProducerRecord<K, V>> results,
                                       final List<KeyValueTimestamp<K, V>> expectedResults) {
         if (results.size() != expectedResults.size()) {

@@ -179,6 +179,8 @@ public final class RecordAccumulator {
      * @param headers the Headers for the record
      * @param callback The user-supplied callback to execute when the request is complete
      * @param maxTimeToBlock The maximum time in milliseconds to block for buffer memory to be available
+     * @param abortOnNewBatch A boolean that indicates returning before a new batch is created and 
+     *                        running the the partitioner's onNewBatch method before trying to append again
      */
     public RecordAppendResult append(TopicPartition tp,
                                      long timestamp,
@@ -186,7 +188,8 @@ public final class RecordAccumulator {
                                      byte[] value,
                                      Header[] headers,
                                      Callback callback,
-                                     long maxTimeToBlock) throws InterruptedException {
+                                     long maxTimeToBlock,
+                                     boolean abortOnNewBatch) throws InterruptedException {
         // We keep track of the number of appending thread to make sure we do not miss batches in
         // abortIncompleteBatches().
         appendsInProgress.incrementAndGet();
@@ -204,6 +207,11 @@ public final class RecordAccumulator {
             }
 
             // we don't have an in-progress record batch try to allocate a new batch
+            if (abortOnNewBatch) {
+                // Return a result that will cause another call to append.
+                return new RecordAppendResult(null, false, false, true);
+            }
+            
             byte maxUsableMagic = apiVersions.maxUsableProduceMagic();
             int size = Math.max(this.batchSize, AbstractRecords.estimateSizeInBytesUpperBound(maxUsableMagic, compression, key, value, headers));
             log.trace("Allocating a new {} byte message buffer for topic {} partition {}", size, tp.topic(), tp.partition());
@@ -228,7 +236,7 @@ public final class RecordAccumulator {
 
                 // Don't deallocate this buffer in the finally block as it's being used in the record batch
                 buffer = null;
-                return new RecordAppendResult(future, dq.size() > 1 || batch.isFull(), true);
+                return new RecordAppendResult(future, dq.size() > 1 || batch.isFull(), true, false);
             }
         } finally {
             if (buffer != null)
@@ -261,16 +269,24 @@ public final class RecordAccumulator {
             if (future == null)
                 last.closeForRecordAppends();
             else
-                return new RecordAppendResult(future, deque.size() > 1 || last.isFull(), false);
+                return new RecordAppendResult(future, deque.size() > 1 || last.isFull(), false, false);
         }
         return null;
     }
 
     private boolean isMuted(TopicPartition tp, long now) {
-        boolean result = muted.containsKey(tp) && muted.get(tp) > now;
-        if (!result)
+        // Take care to avoid unnecessary map look-ups because this method is a hotspot if producing to a
+        // large number of partitions
+        Long throttleUntilTime = muted.get(tp);
+        if (throttleUntilTime == null)
+            return false;
+
+        if (now >= throttleUntilTime) {
             muted.remove(tp);
-        return result;
+            return false;
+        }
+        
+        return true;
     }
 
     public void resetNextBatchExpiryTime() {
@@ -558,7 +574,7 @@ public final class RecordAccumulator {
                     if (shouldStopDrainBatchesForPartition(first, tp))
                         break;
 
-                    boolean isTransactional = transactionManager != null ? transactionManager.isTransactional() : false;
+                    boolean isTransactional = transactionManager != null && transactionManager.isTransactional();
                     ProducerIdAndEpoch producerIdAndEpoch =
                         transactionManager != null ? transactionManager.producerIdAndEpoch() : null;
                     ProducerBatch batch = deque.pollFirst();
@@ -787,11 +803,13 @@ public final class RecordAccumulator {
         public final FutureRecordMetadata future;
         public final boolean batchIsFull;
         public final boolean newBatchCreated;
+        public final boolean abortForNewBatch;
 
-        public RecordAppendResult(FutureRecordMetadata future, boolean batchIsFull, boolean newBatchCreated) {
+        public RecordAppendResult(FutureRecordMetadata future, boolean batchIsFull, boolean newBatchCreated, boolean abortForNewBatch) {
             this.future = future;
             this.batchIsFull = batchIsFull;
             this.newBatchCreated = newBatchCreated;
+            this.abortForNewBatch = abortForNewBatch;
         }
     }
 

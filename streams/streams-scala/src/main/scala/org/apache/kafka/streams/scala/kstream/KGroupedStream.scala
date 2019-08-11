@@ -21,7 +21,13 @@ package org.apache.kafka.streams.scala
 package kstream
 
 import org.apache.kafka.streams.kstream.internals.KTableImpl
-import org.apache.kafka.streams.kstream.{KGroupedStream => KGroupedStreamJ, KTable => KTableJ, _}
+import org.apache.kafka.streams.kstream.{
+  SessionWindows,
+  Window,
+  Windows,
+  KGroupedStream => KGroupedStreamJ,
+  KTable => KTableJ
+}
 import org.apache.kafka.streams.scala.ImplicitConversions._
 import org.apache.kafka.streams.scala.FunctionsCompatConversions._
 

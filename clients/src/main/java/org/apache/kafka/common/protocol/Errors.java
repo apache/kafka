@@ -62,7 +62,10 @@ import org.apache.kafka.common.errors.LeaderNotAvailableException;
 import org.apache.kafka.common.errors.LogDirNotFoundException;
 import org.apache.kafka.common.errors.FencedInstanceIdException;
 import org.apache.kafka.common.errors.MemberIdRequiredException;
+import org.apache.kafka.common.errors.ElectionNotNeededException;
+import org.apache.kafka.common.errors.EligibleLeadersNotAvailableException;
 import org.apache.kafka.common.errors.NetworkException;
+import org.apache.kafka.common.errors.NoReassignmentInProgressException;
 import org.apache.kafka.common.errors.NotControllerException;
 import org.apache.kafka.common.errors.NotCoordinatorException;
 import org.apache.kafka.common.errors.NotEnoughReplicasAfterAppendException;
@@ -183,10 +186,8 @@ public enum Errors {
             RebalanceInProgressException::new),
     INVALID_COMMIT_OFFSET_SIZE(28, "The committing offset data size is not valid.",
             InvalidCommitOffsetSizeException::new),
-    TOPIC_AUTHORIZATION_FAILED(29, "Topic authorization failed.",
-            TopicAuthorizationException::new),
-    GROUP_AUTHORIZATION_FAILED(30, "Group authorization failed.",
-            GroupAuthorizationException::new),
+    TOPIC_AUTHORIZATION_FAILED(29, "Topic authorization failed.", TopicAuthorizationException::new),
+    GROUP_AUTHORIZATION_FAILED(30, "Group authorization failed.", GroupAuthorizationException::new),
     CLUSTER_AUTHORIZATION_FAILED(31, "Cluster authorization failed.",
             ClusterAuthorizationException::new),
     INVALID_TIMESTAMP(32, "The timestamp of the message is out of acceptable range.",
@@ -306,7 +307,12 @@ public enum Errors {
     GROUP_MAX_SIZE_REACHED(81, "The consumer group has reached its max size.", GroupMaxSizeReachedException::new),
     FENCED_INSTANCE_ID(82, "The broker rejected this static consumer since " +
             "another consumer with the same group.instance.id has registered with a different member.id.",
-            FencedInstanceIdException::new);
+            FencedInstanceIdException::new),
+    ELIGIBLE_LEADERS_NOT_AVAILABLE(83, "Eligible topic partition leaders are not available",
+            EligibleLeadersNotAvailableException::new),
+    ELECTION_NOT_NEEDED(84, "Leader election not needed for topic partition", ElectionNotNeededException::new),
+    NO_REASSIGNMENT_IN_PROGRESS(85, "No partition reassignment is in progress.",
+            NoReassignmentInProgressException::new);
 
     private static final Logger log = LoggerFactory.getLogger(Errors.class);
 

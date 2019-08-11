@@ -18,21 +18,21 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.errors.DeserializationExceptionHandler;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.TimestampExtractor;
-import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
+import org.apache.kafka.streams.processor.internals.metrics.ThreadMetrics;
 import org.slf4j.Logger;
 
 import java.util.ArrayDeque;
 
-
 /**
  * RecordQueue is a FIFO queue of {@link StampedRecord} (ConsumerRecord + timestamp). It also keeps track of the
- * partition timestamp defined as the minimum timestamp of records in its queue; in addition, its partition
- * timestamp is monotonically increasing such that once it is advanced, it will not be decremented.
+ * partition timestamp defined as the largest timestamp seen on the partition so far; this is passed to the
+ * timestamp extractor.
  */
 public class RecordQueue {
 
@@ -47,6 +47,9 @@ public class RecordQueue {
     private final ArrayDeque<ConsumerRecord<byte[], byte[]>> fifoQueue;
 
     private StampedRecord headRecord = null;
+    private long partitionTime = RecordQueue.UNKNOWN;
+
+    private Sensor skipRecordsSensor;
 
     RecordQueue(final TopicPartition partition,
                 final SourceNode source,
@@ -58,13 +61,14 @@ public class RecordQueue {
         this.partition = partition;
         this.fifoQueue = new ArrayDeque<>();
         this.timestampExtractor = timestampExtractor;
-        this.recordDeserializer = new RecordDeserializer(
+        this.processorContext = processorContext;
+        skipRecordsSensor = ThreadMetrics.skipRecordSensor(processorContext.metrics());
+        recordDeserializer = new RecordDeserializer(
             source,
             deserializationExceptionHandler,
             logContext,
-            processorContext.metrics().skippedRecordsSensor()
+            skipRecordsSensor
         );
-        this.processorContext = processorContext;
         this.log = logContext.logger(RecordQueue.class);
     }
 
@@ -136,12 +140,21 @@ public class RecordQueue {
     }
 
     /**
-     * Returns the tracked partition timestamp
+     * Returns the head record's timestamp
      *
      * @return timestamp
      */
-    public long timestamp() {
+    public long headRecordTimestamp() {
         return headRecord == null ? UNKNOWN : headRecord.timestamp;
+    }
+
+    /**
+     * Returns the tracked partition time
+     *
+     * @return partition time
+     */
+    long partitionTime() {
+        return partitionTime;
     }
 
     /**
@@ -150,6 +163,7 @@ public class RecordQueue {
     public void clear() {
         fifoQueue.clear();
         headRecord = null;
+        partitionTime = RecordQueue.UNKNOWN;
     }
 
     private void updateHead() {
@@ -164,7 +178,7 @@ public class RecordQueue {
 
             final long timestamp;
             try {
-                timestamp = timestampExtractor.extract(deserialized, timestamp());
+                timestamp = timestampExtractor.extract(deserialized, partitionTime);
             } catch (final StreamsException internalFatalExtractorException) {
                 throw internalFatalExtractorException;
             } catch (final Exception fatalUserException) {
@@ -180,11 +194,14 @@ public class RecordQueue {
                         "Skipping record due to negative extracted timestamp. topic=[{}] partition=[{}] offset=[{}] extractedTimestamp=[{}] extractor=[{}]",
                         deserialized.topic(), deserialized.partition(), deserialized.offset(), timestamp, timestampExtractor.getClass().getCanonicalName()
                 );
-                ((StreamsMetricsImpl) processorContext.metrics()).skippedRecordsSensor().record();
+
+                skipRecordsSensor.record();
                 continue;
             }
 
             headRecord = new StampedRecord(deserialized, timestamp);
+
+            partitionTime = Math.max(partitionTime, timestamp);
         }
     }
 }

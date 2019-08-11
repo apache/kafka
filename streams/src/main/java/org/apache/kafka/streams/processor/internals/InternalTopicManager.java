@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import org.apache.kafka.clients.admin.AdminClient;
+import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.CreateTopicsResult;
 import org.apache.kafka.clients.admin.DescribeTopicsResult;
@@ -53,12 +53,12 @@ public class InternalTopicManager {
     private final Map<String, String> defaultTopicConfigs = new HashMap<>();
 
     private final short replicationFactor;
-    private final AdminClient adminClient;
+    private final Admin adminClient;
 
     private final int retries;
     private final long retryBackOffMs;
 
-    public InternalTopicManager(final AdminClient adminClient,
+    public InternalTopicManager(final Admin adminClient,
                                 final StreamsConfig streamsConfig) {
         this.adminClient = adminClient;
 
@@ -155,12 +155,7 @@ public class InternalTopicManager {
             if (!topicsNotReady.isEmpty()) {
                 log.info("Topics {} can not be made ready with {} retries left", topicsNotReady, retries);
 
-                try {
-                    Thread.sleep(retryBackOffMs);
-                } catch (final InterruptedException e) {
-                    // this is okay, we just wake up early
-                    Thread.currentThread().interrupt();
-                }
+                Utils.sleep(retryBackOffMs);
 
                 remainingRetries--;
             }
