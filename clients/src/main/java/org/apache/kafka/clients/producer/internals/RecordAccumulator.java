@@ -275,6 +275,7 @@ public final class RecordAccumulator {
     }
 
     private boolean isMuted(TopicPartition tp, long now) {
+        // Take care to avoid unnecessary map look-ups because this method is a hotspot with a large number of partitions
         Long throttleUntilTime = muted.get(tp);
         if (throttleUntilTime == null)
             return false;
