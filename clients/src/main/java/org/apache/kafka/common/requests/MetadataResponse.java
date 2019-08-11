@@ -185,6 +185,7 @@ public class MetadataResponse extends AbstractResponse {
      * @return the topicMetadata
      */
     public Collection<TopicMetadata> topicMetadata() {
+        Map<Integer, Node> brokersMap = brokersMap();
         List<TopicMetadata> topicMetadataList = new ArrayList<>();
         for (MetadataResponseTopic topicMetadata : data.topics()) {
             Errors topicError = Errors.forCode(topicMetadata.errorCode());
@@ -197,10 +198,10 @@ public class MetadataResponse extends AbstractResponse {
                 int partitionIndex = partitionMetadata.partitionIndex();
                 int leader = partitionMetadata.leaderId();
                 Optional<Integer> leaderEpoch = RequestUtils.getLeaderEpoch(partitionMetadata.leaderEpoch());
-                Node leaderNode = leader == -1 ? null : brokersMap().get(leader);
-                List<Node> replicaNodes = convertToNodes(brokersMap(), partitionMetadata.replicaNodes());
-                List<Node> isrNodes = convertToNodes(brokersMap(), partitionMetadata.isrNodes());
-                List<Node> offlineNodes = convertToNodes(brokersMap(), partitionMetadata.offlineReplicas());
+                Node leaderNode = leader == -1 ? null : brokersMap.get(leader);
+                List<Node> replicaNodes = convertToNodes(brokersMap, partitionMetadata.replicaNodes());
+                List<Node> isrNodes = convertToNodes(brokersMap, partitionMetadata.isrNodes());
+                List<Node> offlineNodes = convertToNodes(brokersMap, partitionMetadata.offlineReplicas());
                 partitionMetadataList.add(new PartitionMetadata(partitionError, partitionIndex, leaderNode, leaderEpoch,
                     replicaNodes, isrNodes, offlineNodes));
             }
