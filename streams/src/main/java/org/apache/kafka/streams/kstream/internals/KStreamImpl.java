@@ -536,7 +536,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
     }
 
     @Override
-    public <KR> KStream<KR, V> repartition(KeyValueMapper<? super K, ? super V, ? extends KR> selector) {
+    public <KR> KStream<KR, V> repartition(final KeyValueMapper<? super K, ? super V, ? extends KR> selector) {
         return repartition(selector, Repartitioned.as(null));
     }
 

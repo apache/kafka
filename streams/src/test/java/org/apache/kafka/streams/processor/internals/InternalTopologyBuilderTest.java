@@ -846,4 +846,60 @@ public class InternalTopologyBuilderTest {
         assertThat(base, not(equalTo(differentPattern)));
         assertThat(base, not(equalTo(overlappingPattern)));
     }
+
+    @Test
+    public void shouldHaveCorrectInternalTopicConfigWhenInternalTopicPropertiesArePresent() {
+        final int numberOfPartitions = 10;
+        builder.setApplicationId("Z");
+        builder.addInternalTopic("topic-1z", new InternalTopicProperties(numberOfPartitions));
+        builder.addSource(null, "source-1", null, null, null, "topic-1z");
+
+        final Map<Integer, InternalTopologyBuilder.TopicsInfo> topicGroups = builder.topicGroups();
+
+        Map<String, InternalTopicConfig> repartitionSourceTopics = topicGroups.get(0).repartitionSourceTopics;
+
+        assertEquals(
+            repartitionSourceTopics.get("Z-topic-1z"),
+            new RepartitionTopicConfig(
+                "Z-topic-1z",
+                numberOfPartitions,
+                Collections.emptyMap()
+            )
+        );
+    }
+
+    @Test
+    public void shouldHandleWhenTopicPropertiesNumberOfPartitionsIsNull() {
+        builder.setApplicationId("T");
+        builder.addInternalTopic("topic-1t", new InternalTopicProperties(null));
+        builder.addSource(null, "source-1", null, null, null, "topic-1t");
+
+        final Map<Integer, InternalTopologyBuilder.TopicsInfo> topicGroups = builder.topicGroups();
+
+        Map<String, InternalTopicConfig> repartitionSourceTopics = topicGroups.get(0).repartitionSourceTopics;
+
+        assertEquals(
+            repartitionSourceTopics.get("T-topic-1t"),
+            new RepartitionTopicConfig(
+                "T-topic-1t",
+                Collections.emptyMap()
+            )
+        );
+    }
+
+    @Test
+    public void shouldHaveCorrectInternalTopicConfigWhenInternalTopicPropertiesAreNotPresent() {
+        builder.setApplicationId("Y");
+        builder.addInternalTopic("topic-1y", null);
+        builder.addSource(null, "source-1", null, null, null, "topic-1y");
+
+        final Map<Integer, InternalTopologyBuilder.TopicsInfo> topicGroups = builder.topicGroups();
+
+        Map<String, InternalTopicConfig> repartitionSourceTopics = topicGroups.get(0).repartitionSourceTopics;
+
+        assertEquals(
+            repartitionSourceTopics.get("Y-topic-1y"),
+            new RepartitionTopicConfig("Y-topic-1y", Collections.emptyMap())
+        );
+    }
 }

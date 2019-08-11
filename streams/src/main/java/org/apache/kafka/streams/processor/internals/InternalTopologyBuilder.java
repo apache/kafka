@@ -1062,14 +1062,14 @@ public class InternalTopologyBuilder {
         return Collections.unmodifiableMap(topicGroups);
     }
 
-    private RepartitionTopicConfig buildRepartitionTopicConfig(String topic) {
+    private RepartitionTopicConfig buildRepartitionTopicConfig(final String topic) {
         // prefix the internal topic name with the application id
-        String internalTopic = decorateTopic(topic);
+        final String internalTopic = decorateTopic(topic);
 
         final InternalTopicProperties internalTopicProperties = internalTopicNamesWithProperties.get(topic);
 
         if (internalTopicProperties == null) {
-           return new RepartitionTopicConfig(internalTopic, Collections.emptyMap());
+            return new RepartitionTopicConfig(internalTopic, Collections.emptyMap());
         }
 
         final Integer numberOfPartitions = internalTopicProperties.getNumberOfPartitions();

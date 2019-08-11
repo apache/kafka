@@ -76,7 +76,8 @@ public class RepartitionTopicConfig extends InternalTopicConfig {
         }
         final RepartitionTopicConfig that = (RepartitionTopicConfig) o;
         return Objects.equals(name, that.name) &&
-               Objects.equals(topicConfigs, that.topicConfigs);
+               Objects.equals(topicConfigs, that.topicConfigs) &&
+               Objects.equals(numberOfPartitions, that.numberOfPartitions);
     }
 
     @Override

@@ -31,15 +31,15 @@ public class UnoptimizableRepartitionNode<K, V> extends BaseRepartitionNode<K, V
     private final StreamPartitioner<K, V> partitioner;
     private final InternalTopicProperties internalTopicProperties;
 
-    private UnoptimizableRepartitionNode(String nodeName,
-                                         String sourceName,
-                                         ProcessorParameters processorParameters,
-                                         Serde<K> keySerde,
-                                         Serde<V> valueSerde,
-                                         String sinkName,
-                                         String repartitionTopic,
-                                         StreamPartitioner<K, V> partitioner,
-                                         InternalTopicProperties internalTopicProperties) {
+    private UnoptimizableRepartitionNode(final String nodeName,
+                                         final String sourceName,
+                                         final ProcessorParameters processorParameters,
+                                         final Serde<K> keySerde,
+                                         final Serde<V> valueSerde,
+                                         final String sinkName,
+                                         final String repartitionTopic,
+                                         final StreamPartitioner<K, V> partitioner,
+                                         final InternalTopicProperties internalTopicProperties) {
         super(
             nodeName,
             sourceName,
@@ -65,7 +65,7 @@ public class UnoptimizableRepartitionNode<K, V> extends BaseRepartitionNode<K, V
     }
 
     @Override
-    public void writeToTopology(InternalTopologyBuilder topologyBuilder) {
+    public void writeToTopology(final InternalTopologyBuilder topologyBuilder) {
         final Serializer<K> keySerializer = getKeySerializer();
         final Deserializer<K> keyDeserializer = getKeyDeserializer();
 
