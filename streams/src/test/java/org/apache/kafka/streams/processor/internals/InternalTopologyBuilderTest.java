@@ -856,7 +856,7 @@ public class InternalTopologyBuilderTest {
 
         final Map<Integer, InternalTopologyBuilder.TopicsInfo> topicGroups = builder.topicGroups();
 
-        Map<String, InternalTopicConfig> repartitionSourceTopics = topicGroups.get(0).repartitionSourceTopics;
+        final Map<String, InternalTopicConfig> repartitionSourceTopics = topicGroups.get(0).repartitionSourceTopics;
 
         assertEquals(
             repartitionSourceTopics.get("Z-topic-1z"),
@@ -876,7 +876,7 @@ public class InternalTopologyBuilderTest {
 
         final Map<Integer, InternalTopologyBuilder.TopicsInfo> topicGroups = builder.topicGroups();
 
-        Map<String, InternalTopicConfig> repartitionSourceTopics = topicGroups.get(0).repartitionSourceTopics;
+        final Map<String, InternalTopicConfig> repartitionSourceTopics = topicGroups.get(0).repartitionSourceTopics;
 
         assertEquals(
             repartitionSourceTopics.get("T-topic-1t"),
@@ -895,7 +895,7 @@ public class InternalTopologyBuilderTest {
 
         final Map<Integer, InternalTopologyBuilder.TopicsInfo> topicGroups = builder.topicGroups();
 
-        Map<String, InternalTopicConfig> repartitionSourceTopics = topicGroups.get(0).repartitionSourceTopics;
+        final Map<String, InternalTopicConfig> repartitionSourceTopics = topicGroups.get(0).repartitionSourceTopics;
 
         assertEquals(
             repartitionSourceTopics.get("Y-topic-1y"),
