@@ -32,8 +32,6 @@ import org.apache.kafka.streams.kstream.internals.graph.StreamSourceNode;
 import org.apache.kafka.streams.kstream.internals.graph.StreamsGraphNode;
 import org.apache.kafka.streams.kstream.internals.graph.TableSourceNode;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
-import org.apache.kafka.streams.processor.StreamPartitioner;
-import org.apache.kafka.streams.processor.internals.InternalTopicProperties;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
@@ -329,7 +327,6 @@ public class InternalStreamsBuilder implements InternalNameProvider {
             final GroupedInternal groupedInternal = new GroupedInternal(getRepartitionSerdes(entry.getValue()));
 
             final String repartitionTopicName = getFirstRepartitionTopicName(entry.getValue());
-
             //passing in the name of the first repartition topic, re-used to create the optimized repartition topic
             final StreamsGraphNode optimizedSingleRepartition = createRepartitionNode(repartitionTopicName,
                                                                                       groupedInternal.keySerde(),
@@ -411,7 +408,6 @@ public class InternalStreamsBuilder implements InternalNameProvider {
                                                              final Serde valueSerde) {
 
         final OptimizableRepartitionNode.OptimizableRepartitionNodeBuilder repartitionNodeBuilder = OptimizableRepartitionNode.optimizableRepartitionNodeBuilder();
-
         KStreamImpl.createRepartitionedSource(this,
                                               keySerde,
                                               valueSerde,
