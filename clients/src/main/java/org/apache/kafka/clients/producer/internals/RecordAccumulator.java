@@ -275,8 +275,8 @@ public final class RecordAccumulator {
     }
 
     private boolean isMuted(TopicPartition tp, long now) {
-        Long time = muted.get(tp);
-        boolean result = time != null && time > now;
+        Long throttleUntilTime = muted.get(tp);
+        boolean result = throttleUntilTime != null && throttleUntilTime > now;
         if (!result)
             muted.remove(tp);
         return result;
