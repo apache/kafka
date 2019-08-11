@@ -146,7 +146,7 @@ public class KStreamRepartitionIntegrationTest {
 
         final String topology = builder.build().describe().toString();
 
-        assertEquals(2, getCountOfRepartitionTopicsFound(topology, "Sink: .*-repartition.*"));
+        assertEquals(2, countOccurencesInTopology(topology, "Sink: .*-repartition.*"));
     }
 
     @Test
@@ -182,12 +182,12 @@ public class KStreamRepartitionIntegrationTest {
         final String topology = builder.build().describe().toString();
 
         assertTrue(topicExists(toRepartitionTopicName(repartitionName)));
-        assertEquals(1, getCountOfRepartitionTopicsFound(topology, "Sink: .*dummy-repartition.*"));
+        assertEquals(1, countOccurencesInTopology(topology, "Sink: .*dummy-repartition.*"));
     }
 
     @Test
-    public void shouldCreateRepartitionTopicWhenRepartitionKeySelectorIsUsed() throws ExecutionException, InterruptedException {
-        final String repartitionName = "new-key";
+    public void shouldPerformKeySelectOperationWhenRepartitionOperationIsUsedWithKeySelector() throws ExecutionException, InterruptedException {
+        final String repartitionedName = "new-key";
         final long timestamp = System.currentTimeMillis();
 
         sendEvents(
@@ -200,7 +200,7 @@ public class KStreamRepartitionIntegrationTest {
 
         final StreamsBuilder builder = new StreamsBuilder();
 
-        final Repartitioned<String, String> repartitioned = Repartitioned.<String, String>as(repartitionName)
+        final Repartitioned<String, String> repartitioned = Repartitioned.<String, String>as(repartitionedName)
             .withKeySerde(Serdes.String());
 
         builder.stream(inputTopic, Consumed.with(Serdes.Integer(), Serdes.String()))
@@ -222,14 +222,15 @@ public class KStreamRepartitionIntegrationTest {
         );
 
         final String topology = builder.build().describe().toString();
-        final String repartitionTopicName = toRepartitionTopicName(repartitionName);
+        final String repartitionTopicName = toRepartitionTopicName(repartitionedName);
 
         assertTrue(topicExists(repartitionTopicName));
-        assertEquals(1, getCountOfRepartitionTopicsFound(topology, "Sink: .*" + repartitionName + "-repartition.*"));
+        assertEquals(1, countOccurencesInTopology(topology, "Sink: .*" + repartitionedName + "-repartition.*"));
+        assertEquals(1, countOccurencesInTopology(topology, "<-- " + repartitionedName));
     }
 
     @Test
-    public void shouldCreateRepartitionTopicWhenNumberOfPartitionsIsSpecified() throws ExecutionException, InterruptedException {
+    public void shouldCreateRepartitionTopicWithSpecifiedNumberOfPartitions() throws ExecutionException, InterruptedException {
         final String repartitionName = "new-partitions";
         final long timestamp = System.currentTimeMillis();
 
@@ -307,7 +308,7 @@ public class KStreamRepartitionIntegrationTest {
     }
 
     @Test
-    public void shouldCreateOnlyOneRepartitionTopicForKStreamGroupBy() throws ExecutionException, InterruptedException {
+    public void shouldCreateOnlyOneRepartitionTopicWhenRepartitionIsFollowedByGroupByKey() throws ExecutionException, InterruptedException {
         final String repartitionName = "new-partitions";
         final long timestamp = System.currentTimeMillis();
 
@@ -348,7 +349,7 @@ public class KStreamRepartitionIntegrationTest {
         );
 
         assertTrue(topicExists(toRepartitionTopicName(repartitionName)));
-        assertEquals(1, getCountOfRepartitionTopicsFound(topology, "Sink: .*-repartition"));
+        assertEquals(1, countOccurencesInTopology(topology, "Sink: .*-repartition"));
     }
 
     @Test
@@ -383,7 +384,7 @@ public class KStreamRepartitionIntegrationTest {
 
         final String topology = builder.build().describe().toString();
 
-        assertEquals(1, getCountOfRepartitionTopicsFound(topology, "Sink: .*-repartition"));
+        assertEquals(1, countOccurencesInTopology(topology, "Sink: .*-repartition"));
     }
 
     private int getNumberOfPartitionsForTopic(final String topic) throws ExecutionException, InterruptedException {
@@ -418,8 +419,8 @@ public class KStreamRepartitionIntegrationTest {
         return AdminClient.create(properties);
     }
 
-    private int getCountOfRepartitionTopicsFound(final String topologyString,
-                                                 final String searchPattern) {
+    private int countOccurencesInTopology(final String topologyString,
+                                          final String searchPattern) {
         final Matcher matcher = Pattern.compile(searchPattern).matcher(topologyString);
         final List<String> repartitionTopicsFound = new ArrayList<>();
         while (matcher.find()) {
