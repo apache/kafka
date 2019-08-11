@@ -275,10 +275,18 @@ public final class RecordAccumulator {
     }
 
     private boolean isMuted(TopicPartition tp, long now) {
-        boolean result = muted.containsKey(tp) && muted.get(tp) > now;
-        if (!result)
+        // Take care to avoid unnecessary map look-ups because this method is a hotspot if producing to a
+        // large number of partitions
+        Long throttleUntilTime = muted.get(tp);
+        if (throttleUntilTime == null)
+            return false;
+
+        if (now >= throttleUntilTime) {
             muted.remove(tp);
-        return result;
+            return false;
+        }
+        
+        return true;
     }
 
     public void resetNextBatchExpiryTime() {
