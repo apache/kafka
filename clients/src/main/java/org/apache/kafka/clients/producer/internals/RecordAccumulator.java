@@ -459,20 +459,15 @@ public final class RecordAccumulator {
         boolean exhausted = this.free.queued() > 0;
         for (Map.Entry<TopicPartition, Deque<ProducerBatch>> entry : this.batches.entrySet()) {
             Deque<ProducerBatch> deque = entry.getValue();
-            boolean empty;
             synchronized (deque) {
-                empty = deque.isEmpty();
-            }
-
-            if (!empty) {
-                TopicPartition part = entry.getKey();
-                Node leader = cluster.leaderFor(part);
-                if (leader == null) {
-                    // This is a partition for which leader is not known, but messages are available to send.
-                    // Note that entries are currently not removed from batches when deque is empty.
-                    unknownLeaderTopics.add(part.topic());
-                } else if (!readyNodes.contains(leader) && !isMuted(part, nowMs)) {
-                    synchronized (deque) {
+                if (!deque.isEmpty()) {
+                    TopicPartition part = entry.getKey();
+                    Node leader = cluster.leaderFor(part);
+                    if (leader == null) {
+                        // This is a partition for which leader is not known, but messages are available to send.
+                        // Note that entries are currently not removed from batches when deque is empty.
+                        unknownLeaderTopics.add(part.topic());
+                    } else if (!readyNodes.contains(leader) && !isMuted(part, nowMs)) {
                         ProducerBatch batch = deque.peekFirst();
                         if (batch != null) {
                             long waitedTimeMs = batch.waitedTimeMs(nowMs);
