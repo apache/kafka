@@ -458,32 +458,38 @@ public final class RecordAccumulator {
 
         boolean exhausted = this.free.queued() > 0;
         for (Map.Entry<TopicPartition, Deque<ProducerBatch>> entry : this.batches.entrySet()) {
-            TopicPartition part = entry.getKey();
             Deque<ProducerBatch> deque = entry.getValue();
-
-            Node leader = cluster.leaderFor(part);
+            boolean empty;
             synchronized (deque) {
-                if (leader == null && !deque.isEmpty()) {
+                empty = deque.isEmpty();
+            }
+
+            if (!empty) {
+                TopicPartition part = entry.getKey();
+                Node leader = cluster.leaderFor(part);
+                if (leader == null) {
                     // This is a partition for which leader is not known, but messages are available to send.
                     // Note that entries are currently not removed from batches when deque is empty.
                     unknownLeaderTopics.add(part.topic());
                 } else if (!readyNodes.contains(leader) && !isMuted(part, nowMs)) {
-                    ProducerBatch batch = deque.peekFirst();
-                    if (batch != null) {
-                        long waitedTimeMs = batch.waitedTimeMs(nowMs);
-                        boolean backingOff = batch.attempts() > 0 && waitedTimeMs < retryBackoffMs;
-                        long timeToWaitMs = backingOff ? retryBackoffMs : lingerMs;
-                        boolean full = deque.size() > 1 || batch.isFull();
-                        boolean expired = waitedTimeMs >= timeToWaitMs;
-                        boolean sendable = full || expired || exhausted || closed || flushInProgress();
-                        if (sendable && !backingOff) {
-                            readyNodes.add(leader);
-                        } else {
-                            long timeLeftMs = Math.max(timeToWaitMs - waitedTimeMs, 0);
-                            // Note that this results in a conservative estimate since an un-sendable partition may have
-                            // a leader that will later be found to have sendable data. However, this is good enough
-                            // since we'll just wake up and then sleep again for the remaining time.
-                            nextReadyCheckDelayMs = Math.min(timeLeftMs, nextReadyCheckDelayMs);
+                    synchronized (deque) {
+                        ProducerBatch batch = deque.peekFirst();
+                        if (batch != null) {
+                            long waitedTimeMs = batch.waitedTimeMs(nowMs);
+                            boolean backingOff = batch.attempts() > 0 && waitedTimeMs < retryBackoffMs;
+                            long timeToWaitMs = backingOff ? retryBackoffMs : lingerMs;
+                            boolean full = deque.size() > 1 || batch.isFull();
+                            boolean expired = waitedTimeMs >= timeToWaitMs;
+                            boolean sendable = full || expired || exhausted || closed || flushInProgress();
+                            if (sendable && !backingOff) {
+                                readyNodes.add(leader);
+                            } else {
+                                long timeLeftMs = Math.max(timeToWaitMs - waitedTimeMs, 0);
+                                // Note that this results in a conservative estimate since an un-sendable partition may have
+                                // a leader that will later be found to have sendable data. However, this is good enough
+                                // since we'll just wake up and then sleep again for the remaining time.
+                                nextReadyCheckDelayMs = Math.min(timeLeftMs, nextReadyCheckDelayMs);
+                            }
                         }
                     }
                 }
