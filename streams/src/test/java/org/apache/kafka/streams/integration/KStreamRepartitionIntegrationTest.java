@@ -18,6 +18,7 @@ package org.apache.kafka.streams.integration;
 
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.AdminClientConfig;
+import org.apache.kafka.clients.admin.TopicDescription;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.IntegerDeserializer;
@@ -47,6 +48,7 @@ import org.junit.experimental.categories.Category;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Properties;
 import java.util.Set;
@@ -220,8 +222,9 @@ public class KStreamRepartitionIntegrationTest {
         );
 
         final String topology = builder.build().describe().toString();
+        final String repartitionTopicName = toRepartitionTopicName(repartitionName);
 
-        assertTrue(topicExists(toRepartitionTopicName(repartitionName)));
+        assertTrue(topicExists(repartitionTopicName));
         assertEquals(1, getCountOfRepartitionTopicsFound(topology, "Sink: .*" + repartitionName + "-repartition.*"));
     }
 
@@ -241,7 +244,7 @@ public class KStreamRepartitionIntegrationTest {
         final StreamsBuilder builder = new StreamsBuilder();
 
         builder.stream(inputTopic, Consumed.with(Serdes.Integer(), Serdes.String()))
-            .repartition(Repartitioned.<Integer, String>as(repartitionName).withNumberOfPartitions(1))
+            .repartition(Repartitioned.<Integer, String>as(repartitionName).withNumberOfPartitions(2))
             .groupByKey()
             .count()
             .toStream()
@@ -258,10 +261,49 @@ public class KStreamRepartitionIntegrationTest {
             )
         );
 
-        final String topology = builder.build().describe().toString();
+        final String repartitionTopicName = toRepartitionTopicName(repartitionName);
 
-        assertTrue(topicExists(toRepartitionTopicName(repartitionName)));
-        assertEquals(1, getCountOfRepartitionTopicsFound(topology, "Sink: .*" + repartitionName + "-repartition.*"));
+        assertTrue(topicExists(repartitionTopicName));
+        assertEquals(2, getNumberOfPartitionsForTopic(repartitionTopicName));
+    }
+
+    @Test
+    public void shouldInheritRepartitionTopicPartitionNumberFromUpstreamTopicWhenNumberOfPartitionsIsNotSpecified() throws InterruptedException, ExecutionException {
+        final String repartitionName = "new-topic";
+        final long timestamp = System.currentTimeMillis();
+
+        sendEvents(
+            timestamp,
+            Arrays.asList(
+                new KeyValue<>(1, "A"),
+                new KeyValue<>(2, "B")
+            )
+        );
+
+        final StreamsBuilder builder = new StreamsBuilder();
+
+        builder.stream(inputTopic, Consumed.with(Serdes.Integer(), Serdes.String()))
+            .repartition(Repartitioned.<Integer, String>as(repartitionName))
+            .groupByKey()
+            .count()
+            .toStream()
+            .to(outputTopic);
+
+        startStreams(builder);
+
+        validateReceivedMessages(
+            new IntegerDeserializer(),
+            new LongDeserializer(),
+            Arrays.asList(
+                new KeyValue<>(1, 1L),
+                new KeyValue<>(2, 1L)
+            )
+        );
+
+        final String repartitionTopicName = toRepartitionTopicName(repartitionName);
+
+        assertTrue(topicExists(repartitionTopicName));
+        assertEquals(3, getNumberOfPartitionsForTopic(repartitionTopicName));
     }
 
     @Test
@@ -342,6 +384,17 @@ public class KStreamRepartitionIntegrationTest {
         final String topology = builder.build().describe().toString();
 
         assertEquals(1, getCountOfRepartitionTopicsFound(topology, "Sink: .*-repartition"));
+    }
+
+    private int getNumberOfPartitionsForTopic(final String topic) throws ExecutionException, InterruptedException {
+        try (AdminClient adminClient = createAdminClient()) {
+            final TopicDescription topicDescription = adminClient.describeTopics(Collections.singleton(topic))
+                .values()
+                .get(topic)
+                .get();
+
+            return topicDescription.partitions().size();
+        }
     }
 
     private boolean topicExists(final String topic) throws InterruptedException, ExecutionException {
