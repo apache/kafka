@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.common;
 
-import org.apache.kafka.common.utils.Utils;
-
 import java.net.InetSocketAddress;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -131,7 +129,9 @@ public final class Cluster {
             }
             partitionsForTopic.add(p);
             if (p.leader() != null) {
-                List<PartitionInfo> partitionsForNode = Utils.notNull(tmpPartitionsByNode.get(p.leader().id()));
+                // The broker guarantees that if a partition has a non-null leader, it is one of the brokers returned
+                // in the metadata response
+                List<PartitionInfo> partitionsForNode = Objects.requireNonNull(tmpPartitionsByNode.get(p.leader().id()));
                 partitionsForNode.add(p);
             }
         }
