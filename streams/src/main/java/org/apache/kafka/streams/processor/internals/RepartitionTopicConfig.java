@@ -42,6 +42,12 @@ public class RepartitionTopicConfig extends InternalTopicConfig {
         super(name, topicConfigs);
     }
 
+    RepartitionTopicConfig(final String name,
+                           final int numberOfPartitions,
+                           final Map<String, String> topicConfigs) {
+        super(name, numberOfPartitions, topicConfigs);
+    }
+
     /**
      * Get the configured properties for this topic. If retentionMs is set then
      * we add additionalRetentionMs to work out the desired retention when cleanup.policy=compact,delete

@@ -24,8 +24,10 @@ import org.apache.kafka.streams.processor.StreamPartitioner;
 
 /**
  * This class is used to provide the optional parameters for internal repartitioned topics when using:
- * - {@link KStream#repartition(Repartitioned)}
- * - {@link KStream#repartition(KeyValueMapper, Repartitioned)}
+ * <ul>
+ *     <li>{@link KStream#repartition(Repartitioned)}</li>
+ *     <li>{@link KStream#repartition(KeyValueMapper, Repartitioned)}</li>
+ * </ul>
  *
  * @param <K> key type
  * @param <V> value type
@@ -33,13 +35,9 @@ import org.apache.kafka.streams.processor.StreamPartitioner;
 public class Repartitioned<K, V> implements NamedOperation<Repartitioned<K, V>> {
 
     protected final String name;
-
     protected final Serde<K> keySerde;
-
     protected final Serde<V> valueSerde;
-
     protected final Integer numberOfPartitions;
-
     protected final StreamPartitioner<K, V> partitioner;
 
     private Repartitioned(final String name,
@@ -65,12 +63,12 @@ public class Repartitioned<K, V> implements NamedOperation<Repartitioned<K, V>> 
     }
 
     /**
-     * Create a {@link Repartitioned} instance with the provided name used as part of the repartition topic if required.
+     * Create a {@code Repartitioned} instance with the provided name used as part of the repartition topic.
      *
-     * @param name the name used as a processor named and part of the repartition topic name if required.
+     * @param name the name used as a processor named and part of the repartition topic name.
      * @param <K>  key type
      * @param <V>  value type
-     * @return A new {@link Repartitioned} instance configured with processor name and repartition topic name
+     * @return A new {@code Repartitioned} instance configured with processor name and repartition topic name
      * @see KStream#repartition(Repartitioned)
      * @see KStream#repartition(KeyValueMapper, Repartitioned)
      */
@@ -79,13 +77,13 @@ public class Repartitioned<K, V> implements NamedOperation<Repartitioned<K, V>> 
     }
 
     /**
-     * Create a {@link Repartitioned} instance with provided key serde and value serde.
+     * Create a {@code Repartitioned} instance with provided key serde and value serde.
      *
      * @param keySerde   Serde to use for serializing the key
      * @param valueSerde Serde to use for serializing the value
      * @param <K>        key type
      * @param <V>        value type
-     * @return A new {@link Repartitioned} instance configured with key serde and value serde
+     * @return A new {@code Repartitioned} instance configured with key serde and value serde
      * @see KStream#repartition(Repartitioned)
      * @see KStream#repartition(KeyValueMapper, Repartitioned)
      */
@@ -95,14 +93,14 @@ public class Repartitioned<K, V> implements NamedOperation<Repartitioned<K, V>> 
     }
 
     /**
-     * Create a {@link Repartitioned} instance with provided partitioner.
+     * Create a {@code Repartitioned} instance with provided partitioner.
      *
      * @param partitioner the function used to determine how records are distributed among partitions of the topic,
      *                    if not specified and the key serde provides a {@link WindowedSerializer} for the key
      *                    {@link WindowedStreamPartitioner} will be used—otherwise {@link DefaultPartitioner} will be used
      * @param <K>         key type
      * @param <V>         value type
-     * @return A new {@link Repartitioned} instance configured with partitioner
+     * @return A new {@code Repartitioned} instance configured with partitioner
      * @see KStream#repartition(Repartitioned)
      * @see KStream#repartition(KeyValueMapper, Repartitioned)
      */
@@ -111,12 +109,12 @@ public class Repartitioned<K, V> implements NamedOperation<Repartitioned<K, V>> 
     }
 
     /**
-     * Create a {@link Repartitioned} instance with provided number of partitions for repartition topic if required.
+     * Create a {@code Repartitioned} instance with provided number of partitions for repartition topic.
      *
-     * @param numberOfPartitions number of partitions used when creating repartition topic if required
+     * @param numberOfPartitions number of partitions used when creating repartition topic
      * @param <K>                key type
      * @param <V>                value type
-     * @return A new {@link Repartitioned} instance configured number of partitions
+     * @return A new {@code Repartitioned} instance configured number of partitions
      * @see KStream#repartition(Repartitioned)
      * @see KStream#repartition(KeyValueMapper, Repartitioned)
      */
@@ -125,11 +123,10 @@ public class Repartitioned<K, V> implements NamedOperation<Repartitioned<K, V>> 
     }
 
     /**
-     * Create a new instance of {@link Repartitioned} with the provided name used as part of repartition topic and processor name.
-     * Note that Kafka Streams creates repartition topic only if required.
+     * Create a new instance of {@code Repartitioned} with the provided name used as part of repartition topic and processor name.
      *
-     * @param name the name used for the processor name and as part of the repartition topic name if required
-     * @return a new {@link Repartitioned} instance configured with the name
+     * @param name the name used for the processor name and as part of the repartition topic
+     * @return a new {@code Repartitioned} instance configured with the name
      */
     @Override
     public Repartitioned<K, V> withName(final String name) {
@@ -137,43 +134,42 @@ public class Repartitioned<K, V> implements NamedOperation<Repartitioned<K, V>> 
     }
 
     /**
-     * Create a new instance of {@link Repartitioned} with the provided number of partitions for repartition topic.
-     * Note that Kafka Streams creates repartition topic only if required.
+     * Create a new instance of {@code Repartitioned} with the provided number of partitions for repartition topic.
      *
-     * @param numberOfPartitions the name used for the processor name and as part of the repartition topic name if required
-     * @return a new {@link Repartitioned} instance configured with the number of partitions
+     * @param numberOfPartitions the name used for the processor name and as part of the repartition topic name
+     * @return a new {@code Repartitioned} instance configured with the number of partitions
      */
     public Repartitioned<K, V> withNumberOfPartitions(final int numberOfPartitions) {
         return new Repartitioned<>(name, keySerde, valueSerde, numberOfPartitions, partitioner);
     }
 
     /**
-     * Create a new instance of {@link Repartitioned} with the provided key serde.
+     * Create a new instance of {@code Repartitioned} with the provided key serde.
      *
      * @param keySerde Serde to use for serializing the key
-     * @return a new {@link Repartitioned} instance configured with the key serde
+     * @return a new {@code Repartitioned} instance configured with the key serde
      */
     public Repartitioned<K, V> withKeySerde(final Serde<K> keySerde) {
         return new Repartitioned<>(name, keySerde, valueSerde, numberOfPartitions, partitioner);
     }
 
     /**
-     * Create a new instance of {@link Repartitioned} with the provided value serde.
+     * Create a new instance of {@code Repartitioned} with the provided value serde.
      *
      * @param valueSerde Serde to use for serializing the value
-     * @return a new {@link Repartitioned} instance configured with the value serde
+     * @return a new {@code Repartitioned} instance configured with the value serde
      */
     public Repartitioned<K, V> withValueSerde(final Serde<V> valueSerde) {
         return new Repartitioned<>(name, keySerde, valueSerde, numberOfPartitions, partitioner);
     }
 
     /**
-     * Create a new instance of {@link Repartitioned} with the provided partitioner.
+     * Create a new instance of {@code Repartitioned} with the provided partitioner.
      *
      * @param partitioner the function used to determine how records are distributed among partitions of the topic,
      *                    if not specified and the key serde provides a {@link WindowedSerializer} for the key
      *                    {@link WindowedStreamPartitioner} will be used—otherwise {@link DefaultPartitioner} wil be used
-     * @return a new {@link Repartitioned} instance configured with provided partitioner
+     * @return a new {@code Repartitioned} instance configured with provided partitioner
      */
     public Repartitioned<K, V> withStreamPartitioner(final StreamPartitioner<K, V> partitioner) {
         return new Repartitioned<>(name, keySerde, valueSerde, numberOfPartitions, partitioner);

@@ -236,7 +236,7 @@ public class InternalTopologyBuilderTest {
         builder.addSource(null, "source-1", null, null, null, "topic-1");
         builder.addSource(null, "source-2", null, null, null, "topic-2");
         builder.addSource(null, "source-3", null, null, null, "topic-3");
-        builder.addInternalTopic("topic-3");
+        builder.addInternalTopic("topic-3", null);
 
         final Pattern expectedPattern = Pattern.compile("X-topic-3|topic-1|topic-2");
 
@@ -336,7 +336,7 @@ public class InternalTopologyBuilderTest {
     @Test
     public void testTopicGroups() {
         builder.setApplicationId("X");
-        builder.addInternalTopic("topic-1x");
+        builder.addInternalTopic("topic-1x", null);
         builder.addSource(null, "source-1", null, null, null, "topic-1", "topic-1x");
         builder.addSource(null, "source-2", null, null, null, "topic-2");
         builder.addSource(null, "source-3", null, null, null, "topic-3");
@@ -524,7 +524,7 @@ public class InternalTopologyBuilderTest {
 
     @Test(expected = NullPointerException.class)
     public void shouldNotAddNullInternalTopic() {
-        builder.addInternalTopic(null);
+        builder.addInternalTopic(null, null);
     }
 
     @Test(expected = NullPointerException.class)
@@ -568,7 +568,7 @@ public class InternalTopologyBuilderTest {
     @Test
     public void shouldCorrectlyMapStateStoreToInternalTopics() {
         builder.setApplicationId("appId");
-        builder.addInternalTopic("internal-topic");
+        builder.addInternalTopic("internal-topic", null);
         builder.addSource(null, "source", null, null, null, "internal-topic");
         builder.addProcessor("processor", new MockProcessorSupplier(), "source");
         builder.addStateStore(storeBuilder, "processor");
@@ -633,7 +633,7 @@ public class InternalTopologyBuilderTest {
     @Test
     public void shouldAddInternalTopicConfigForRepartitionTopics() {
         builder.setApplicationId("appId");
-        builder.addInternalTopic("foo");
+        builder.addInternalTopic("foo", null);
         builder.addSource(null, "source", null, null, null, "foo");
         final InternalTopologyBuilder.TopicsInfo topicsInfo = builder.topicGroups().values().iterator().next();
         final InternalTopicConfig topicConfig = topicsInfo.repartitionSourceTopics.get("appId-foo");

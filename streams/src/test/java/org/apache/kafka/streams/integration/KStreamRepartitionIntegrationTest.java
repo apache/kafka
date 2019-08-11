@@ -33,6 +33,8 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.Consumed;
+import org.apache.kafka.streams.kstream.KStream;
+import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.streams.kstream.Repartitioned;
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.TestUtils;
@@ -54,7 +56,6 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 @Category({IntegrationTest.class})
@@ -84,8 +85,9 @@ public class KStreamRepartitionIntegrationTest {
         streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
         streamsConfiguration.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0);
         streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100);
-        streamsConfiguration.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass());
-        streamsConfiguration.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.Integer().getClass());
+        streamsConfiguration.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.Integer().getClass());
+        streamsConfiguration.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
+        streamsConfiguration.put(StreamsConfig.TOPOLOGY_OPTIMIZATION, StreamsConfig.OPTIMIZE);
     }
 
     @After
@@ -98,7 +100,55 @@ public class KStreamRepartitionIntegrationTest {
     }
 
     @Test
-    public void shouldNotCreateRepartitionTopicIfKeyChangingOperationWasNotPerformed() throws ExecutionException, InterruptedException {
+    public void shouldNotOptimizeRepartitionOperationTopology() throws ExecutionException, InterruptedException {
+        final long timestamp = System.currentTimeMillis();
+
+        sendEvents(
+            timestamp,
+            Arrays.asList(
+                new KeyValue<>(1, "A"),
+                new KeyValue<>(2, "B")
+            )
+        );
+
+        final StreamsBuilder builder = new StreamsBuilder();
+
+        final KStream<Integer, String> stream = builder.stream(inputTopic);
+
+        final KStream<Integer, Long> countStream1 = stream
+            .repartition((key, value) -> key)
+            .groupByKey()
+            .count()
+            .toStream();
+
+        final KStream<Integer, Long> countStream2 = stream
+            .repartition((key, value) -> key)
+            .groupByKey()
+            .count()
+            .toStream();
+
+        countStream1.merge(countStream2).to(outputTopic, Produced.with(Serdes.Integer(), Serdes.Long()));
+
+        startStreams(builder);
+
+        validateReceivedMessages(
+            new IntegerDeserializer(),
+            new LongDeserializer(),
+            Arrays.asList(
+                new KeyValue<>(1, 1L),
+                new KeyValue<>(1, 1L),
+                new KeyValue<>(2, 1L),
+                new KeyValue<>(2, 1L)
+            )
+        );
+
+        final String topology = builder.build().describe().toString();
+
+        assertEquals(2, getCountOfRepartitionTopicsFound(topology, "Sink: .*-repartition.*"));
+    }
+
+    @Test
+    public void shouldCreateRepartitionTopicIfKeyChangingOperationWasNotPerformed() throws ExecutionException, InterruptedException {
         final String repartitionName = "dummy";
         final long timestamp = System.currentTimeMillis();
 
@@ -129,8 +179,8 @@ public class KStreamRepartitionIntegrationTest {
 
         final String topology = builder.build().describe().toString();
 
-        assertFalse(topicExists(toRepartitionTopicName(repartitionName)));
-        assertEquals(0, getCountOfRepartitionTopicsFound(topology, "Sink: .*-smart-repartition"));
+        assertTrue(topicExists(toRepartitionTopicName(repartitionName)));
+        assertEquals(1, getCountOfRepartitionTopicsFound(topology, "Sink: .*dummy-repartition.*"));
     }
 
     @Test
@@ -148,8 +198,11 @@ public class KStreamRepartitionIntegrationTest {
 
         final StreamsBuilder builder = new StreamsBuilder();
 
+        final Repartitioned<String, String> repartitioned = Repartitioned.<String, String>as(repartitionName)
+            .withKeySerde(Serdes.String());
+
         builder.stream(inputTopic, Consumed.with(Serdes.Integer(), Serdes.String()))
-            .repartition((key, value) -> key.toString(), Repartitioned.as(repartitionName))
+            .repartition((key, value) -> key.toString(), repartitioned)
             .groupByKey()
             .count()
             .toStream()
@@ -226,9 +279,14 @@ public class KStreamRepartitionIntegrationTest {
 
         final StreamsBuilder builder = new StreamsBuilder();
 
+        final Repartitioned<String, String> repartitioned = Repartitioned.<String, String>as(repartitionName)
+            .withKeySerde(Serdes.String())
+            .withValueSerde(Serdes.String())
+            .withNumberOfPartitions(1);
+
         builder.stream(inputTopic, Consumed.with(Serdes.Integer(), Serdes.String()))
             .selectKey((key, value) -> key.toString())
-            .repartition(Repartitioned.<String, String>as(repartitionName).withNumberOfPartitions(1))
+            .repartition(repartitioned)
             .groupByKey()
             .count()
             .toStream()
@@ -267,7 +325,7 @@ public class KStreamRepartitionIntegrationTest {
 
         builder.stream(inputTopic, Consumed.with(Serdes.Integer(), Serdes.String()))
             .selectKey((key, value) -> key.toString())
-            .repartition()
+            .repartition(Repartitioned.with(Serdes.String(), Serdes.String()))
             .to(outputTopic);
 
         startStreams(builder);
@@ -333,7 +391,7 @@ public class KStreamRepartitionIntegrationTest {
     }
 
     private void startStreams(final StreamsBuilder builder) {
-        kafkaStreams = new KafkaStreams(builder.build(), streamsConfiguration);
+        kafkaStreams = new KafkaStreams(builder.build(streamsConfiguration), streamsConfiguration);
         kafkaStreams.start();
     }
 

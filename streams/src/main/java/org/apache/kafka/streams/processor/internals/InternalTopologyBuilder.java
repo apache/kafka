@@ -610,14 +610,10 @@ public class InternalTopologyBuilder {
         storeToChangelogTopic.put(sourceStoreName, topic);
     }
 
-    public final void addInternalTopic(final String topicName) {
-        Objects.requireNonNull(topicName, "topicName can't be null");
-        internalTopicNames.add(topicName);
-    }
-
     public final void addInternalTopic(final String topicName,
                                        final InternalTopicProperties internalTopicProperties) {
-        addInternalTopic(topicName);
+        Objects.requireNonNull(topicName, "topicName can't be null");
+        internalTopicNames.add(topicName);
         
         if (internalTopicProperties != null) {
             internalTopicNamesWithProperties.put(topicName, internalTopicProperties);
@@ -1018,18 +1014,10 @@ public class InternalTopologyBuilder {
                             continue;
                         }
                         if (internalTopicNames.contains(topic)) {
-                            // prefix the internal topic name with the application id
-                            final String internalTopic = decorateTopic(topic);
+                            final RepartitionTopicConfig repartitionTopicConfig = buildRepartitionTopicConfig(topic);
 
-                            final RepartitionTopicConfig repartitionTopicConfig = new RepartitionTopicConfig(
-                                internalTopic,
-                                Collections.emptyMap()
-                            );
-
-                            maybeEnrichRepartitionTopicConfigWithProperties(topic, repartitionTopicConfig);
-
-                            repartitionTopics.put(internalTopic, repartitionTopicConfig);
-                            sourceTopics.add(internalTopic);
+                            repartitionTopics.put(repartitionTopicConfig.name(), repartitionTopicConfig);
+                            sourceTopics.add(repartitionTopicConfig.name());
                         } else {
                             sourceTopics.add(topic);
                         }
@@ -1074,16 +1062,23 @@ public class InternalTopologyBuilder {
         return Collections.unmodifiableMap(topicGroups);
     }
 
-    private void maybeEnrichRepartitionTopicConfigWithProperties(final String topic,
-                                                                 final RepartitionTopicConfig repartitionTopicConfig) {
-        if (internalTopicNamesWithProperties.containsKey(topic)) {
-            final InternalTopicProperties internalTopicProperties = internalTopicNamesWithProperties.get(topic);
-            final Integer numberOfPartitions = internalTopicProperties.getNumberOfPartitions();
+    private RepartitionTopicConfig buildRepartitionTopicConfig(String topic) {
+        // prefix the internal topic name with the application id
+        String internalTopic = decorateTopic(topic);
 
-            if (numberOfPartitions != null) {
-                repartitionTopicConfig.setNumberOfPartitions(numberOfPartitions);
-            }
+        final InternalTopicProperties internalTopicProperties = internalTopicNamesWithProperties.get(topic);
+
+        if (internalTopicProperties == null) {
+           return new RepartitionTopicConfig(internalTopic, Collections.emptyMap());
         }
+
+        final Integer numberOfPartitions = internalTopicProperties.getNumberOfPartitions();
+
+        if (numberOfPartitions == null) {
+            return new RepartitionTopicConfig(internalTopic, Collections.emptyMap());
+        }
+
+        return new RepartitionTopicConfig(internalTopic, numberOfPartitions, Collections.emptyMap());
     }
 
     private void setRegexMatchedTopicsToSourceNodes() {

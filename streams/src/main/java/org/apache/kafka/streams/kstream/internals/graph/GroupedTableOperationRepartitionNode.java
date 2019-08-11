@@ -43,9 +43,7 @@ public class GroupedTableOperationRepartitionNode<K, V> extends BaseRepartitionN
             keySerde,
             valueSerde,
             sinkName,
-            repartitionTopic,
-            null,
-            null
+            repartitionTopic
         );
     }
 
@@ -81,8 +79,7 @@ public class GroupedTableOperationRepartitionNode<K, V> extends BaseRepartitionN
         final Serializer<K> keySerializer = keySerde != null ? keySerde.serializer() : null;
         final Deserializer<K> keyDeserializer = keySerde != null ? keySerde.deserializer() : null;
 
-
-        topologyBuilder.addInternalTopic(repartitionTopic);
+        topologyBuilder.addInternalTopic(repartitionTopic, null);
 
         topologyBuilder.addSink(
             sinkName,

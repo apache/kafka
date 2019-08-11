@@ -329,14 +329,11 @@ public class InternalStreamsBuilder implements InternalNameProvider {
             final GroupedInternal groupedInternal = new GroupedInternal(getRepartitionSerdes(entry.getValue()));
 
             final String repartitionTopicName = getFirstRepartitionTopicName(entry.getValue());
-            final StreamPartitioner partitioner = getFirstStreamPartitioner(entry.getValue());
-            final InternalTopicProperties internalTopicProperties = getFirstInternalTopicProperties(entry.getValue());
+
             //passing in the name of the first repartition topic, re-used to create the optimized repartition topic
             final StreamsGraphNode optimizedSingleRepartition = createRepartitionNode(repartitionTopicName,
                                                                                       groupedInternal.keySerde(),
-                                                                                      groupedInternal.valueSerde(),
-                                                                                      partitioner,
-                                                                                      internalTopicProperties);
+                                                                                      groupedInternal.valueSerde());
 
             // re-use parent buildPriority to make sure the single repartition graph node is evaluated before downstream nodes
             optimizedSingleRepartition.setBuildPriority(keyChangingNode.buildPriority());
@@ -411,9 +408,7 @@ public class InternalStreamsBuilder implements InternalNameProvider {
     @SuppressWarnings("unchecked")
     private OptimizableRepartitionNode createRepartitionNode(final String repartitionTopicName,
                                                              final Serde keySerde,
-                                                             final Serde valueSerde,
-                                                             final StreamPartitioner partitioner,
-                                                             final InternalTopicProperties internalTopicProperties) {
+                                                             final Serde valueSerde) {
 
         final OptimizableRepartitionNode.OptimizableRepartitionNodeBuilder repartitionNodeBuilder = OptimizableRepartitionNode.optimizableRepartitionNodeBuilder();
 
@@ -421,8 +416,6 @@ public class InternalStreamsBuilder implements InternalNameProvider {
                                               keySerde,
                                               valueSerde,
                                               repartitionTopicName,
-                                              internalTopicProperties,
-                                              partitioner,
                                               repartitionNodeBuilder);
 
         // ensures setting the repartition topic to the name of the
@@ -446,15 +439,6 @@ public class InternalStreamsBuilder implements InternalNameProvider {
 
     private String getFirstRepartitionTopicName(final Collection<OptimizableRepartitionNode> repartitionNodes) {
         return repartitionNodes.iterator().next().repartitionTopic();
-    }
-
-    private InternalTopicProperties getFirstInternalTopicProperties(final Collection<OptimizableRepartitionNode> repartitionNodes) {
-        return repartitionNodes.iterator().next().internalTopicProperties();
-    }
-
-    @SuppressWarnings("unchecked")
-    private <K, V> StreamPartitioner<K, V> getFirstStreamPartitioner(final Collection<OptimizableRepartitionNode> repartitionNodes) {
-        return repartitionNodes.iterator().next().partitioner();
     }
 
     @SuppressWarnings("unchecked")

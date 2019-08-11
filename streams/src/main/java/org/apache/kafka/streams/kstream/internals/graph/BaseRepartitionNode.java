@@ -20,8 +20,6 @@ package org.apache.kafka.streams.kstream.internals.graph;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serializer;
-import org.apache.kafka.streams.processor.StreamPartitioner;
-import org.apache.kafka.streams.processor.internals.InternalTopicProperties;
 
 public abstract class BaseRepartitionNode<K, V> extends StreamsGraphNode {
 
@@ -30,9 +28,7 @@ public abstract class BaseRepartitionNode<K, V> extends StreamsGraphNode {
     protected final String sinkName;
     protected final String sourceName;
     protected final String repartitionTopic;
-    protected final StreamPartitioner<K, V> partitioner;
     protected final ProcessorParameters processorParameters;
-    protected final InternalTopicProperties internalTopicProperties;
 
     BaseRepartitionNode(final String nodeName,
                         final String sourceName,
@@ -40,9 +36,7 @@ public abstract class BaseRepartitionNode<K, V> extends StreamsGraphNode {
                         final Serde<K> keySerde,
                         final Serde<V> valueSerde,
                         final String sinkName,
-                        final String repartitionTopic,
-                        final StreamPartitioner<K, V> partitioner,
-                        final InternalTopicProperties internalTopicProperties) {
+                        final String repartitionTopic) {
 
         super(nodeName);
 
@@ -50,10 +44,8 @@ public abstract class BaseRepartitionNode<K, V> extends StreamsGraphNode {
         this.valueSerde = valueSerde;
         this.sinkName = sinkName;
         this.sourceName = sourceName;
-        this.partitioner = partitioner;
         this.repartitionTopic = repartitionTopic;
         this.processorParameters = processorParameters;
-        this.internalTopicProperties = internalTopicProperties;
     }
 
     abstract Serializer<V> getValueSerializer();

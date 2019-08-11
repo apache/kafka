@@ -30,14 +30,21 @@ public abstract class InternalTopicConfig {
     final String name;
     final Map<String, String> topicConfigs;
 
-    private int numberOfPartitions = StreamsPartitionAssignor.UNKNOWN;
+    private int numberOfPartitions;
 
-    InternalTopicConfig(final String name, final Map<String, String> topicConfigs) {
+    InternalTopicConfig(final String name,
+                        final int numberOfPartitions,
+                        final Map<String, String> topicConfigs) {
         Objects.requireNonNull(name, "name can't be null");
         Topic.validate(name);
 
         this.name = name;
         this.topicConfigs = topicConfigs;
+        this.numberOfPartitions = numberOfPartitions;
+    }
+
+    InternalTopicConfig(final String name, final Map<String, String> topicConfigs) {
+        this(name, StreamsPartitionAssignor.UNKNOWN, topicConfigs);
     }
 
     /**
