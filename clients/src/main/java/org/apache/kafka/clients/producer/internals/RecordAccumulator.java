@@ -276,10 +276,15 @@ public final class RecordAccumulator {
 
     private boolean isMuted(TopicPartition tp, long now) {
         Long throttleUntilTime = muted.get(tp);
-        boolean unmute = throttleUntilTime != null && now >= throttleUntilTime;
-        if (unmute)
+        if (throttleUntilTime == null)
+            return false;
+
+        if (now >= throttleUntilTime) {
             muted.remove(tp);
-        return unmute;
+            return false;
+        }
+        
+        return true;
     }
 
     public void resetNextBatchExpiryTime() {
