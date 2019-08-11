@@ -136,6 +136,11 @@ public final class Cluster {
             }
         }
 
+        // Update the values of `tmpPartitionsByNode` to contain unmodifiable lists
+        for (Map.Entry<Integer, List<PartitionInfo>> entry : tmpPartitionsByNode.entrySet()) {
+            tmpPartitionsByNode.put(entry.getKey(), Collections.unmodifiableList(entry.getValue()));
+        }
+
         // Populate `tmpAvailablePartitionsByTopic` and update the values of `tmpPartitionsByTopic` to contain
         // unmodifiable lists
         Map<String, List<PartitionInfo>> tmpAvailablePartitionsByTopic = new HashMap<>(tmpPartitionsByTopic.size());
