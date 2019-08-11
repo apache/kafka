@@ -27,19 +27,19 @@ import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 /**
  * Repartition node that is not subject of optimization algorithm
  */
-public class RepartitionNode<K, V> extends BaseRepartitionNode<K, V> {
+public class UnoptimizableRepartitionNode<K, V> extends BaseRepartitionNode<K, V> {
     private final StreamPartitioner<K, V> partitioner;
     private final InternalTopicProperties internalTopicProperties;
 
-    private RepartitionNode(String nodeName,
-                            String sourceName,
-                            ProcessorParameters processorParameters,
-                            Serde<K> keySerde,
-                            Serde<V> valueSerde,
-                            String sinkName,
-                            String repartitionTopic,
-                            StreamPartitioner<K, V> partitioner,
-                            InternalTopicProperties internalTopicProperties) {
+    private UnoptimizableRepartitionNode(String nodeName,
+                                         String sourceName,
+                                         ProcessorParameters processorParameters,
+                                         Serde<K> keySerde,
+                                         Serde<V> valueSerde,
+                                         String sinkName,
+                                         String repartitionTopic,
+                                         StreamPartitioner<K, V> partitioner,
+                                         InternalTopicProperties internalTopicProperties) {
         super(
             nodeName,
             sourceName,
@@ -104,11 +104,11 @@ public class RepartitionNode<K, V> extends BaseRepartitionNode<K, V> {
         return keySerde != null ? keySerde.deserializer() : null;
     }
 
-    public static <K, V> RepartitionNodeBuilder<K, V> repartitionNodeBuilder() {
-        return new RepartitionNodeBuilder<>();
+    public static <K, V> UnoptimizableRepartitionNodeBuilder<K, V> repartitionNodeBuilder() {
+        return new UnoptimizableRepartitionNodeBuilder<>();
     }
 
-    public static final class RepartitionNodeBuilder<K, V> {
+    public static final class UnoptimizableRepartitionNodeBuilder<K, V> {
 
         private String nodeName;
         private ProcessorParameters processorParameters;
@@ -120,54 +120,54 @@ public class RepartitionNode<K, V> extends BaseRepartitionNode<K, V> {
         private InternalTopicProperties internalTopicProperties;
         private StreamPartitioner<K, V> partitioner;
 
-        public RepartitionNodeBuilder<K, V> withProcessorParameters(final ProcessorParameters processorParameters) {
+        public UnoptimizableRepartitionNodeBuilder<K, V> withProcessorParameters(final ProcessorParameters processorParameters) {
             this.processorParameters = processorParameters;
             return this;
         }
 
-        public RepartitionNodeBuilder<K, V> withKeySerde(final Serde<K> keySerde) {
+        public UnoptimizableRepartitionNodeBuilder<K, V> withKeySerde(final Serde<K> keySerde) {
             this.keySerde = keySerde;
             return this;
         }
 
-        public RepartitionNodeBuilder<K, V> withValueSerde(final Serde<V> valueSerde) {
+        public UnoptimizableRepartitionNodeBuilder<K, V> withValueSerde(final Serde<V> valueSerde) {
             this.valueSerde = valueSerde;
             return this;
         }
 
-        public RepartitionNodeBuilder<K, V> withSinkName(final String sinkName) {
+        public UnoptimizableRepartitionNodeBuilder<K, V> withSinkName(final String sinkName) {
             this.sinkName = sinkName;
             return this;
         }
 
-        public RepartitionNodeBuilder<K, V> withSourceName(final String sourceName) {
+        public UnoptimizableRepartitionNodeBuilder<K, V> withSourceName(final String sourceName) {
             this.sourceName = sourceName;
             return this;
         }
 
-        public RepartitionNodeBuilder<K, V> withRepartitionTopic(final String repartitionTopic) {
+        public UnoptimizableRepartitionNodeBuilder<K, V> withRepartitionTopic(final String repartitionTopic) {
             this.repartitionTopic = repartitionTopic;
             return this;
         }
 
-        public RepartitionNodeBuilder<K, V> withStreamPartitioner(final StreamPartitioner<K, V> partitioner) {
+        public UnoptimizableRepartitionNodeBuilder<K, V> withStreamPartitioner(final StreamPartitioner<K, V> partitioner) {
             this.partitioner = partitioner;
             return this;
         }
 
-        public RepartitionNodeBuilder<K, V> withNodeName(final String nodeName) {
+        public UnoptimizableRepartitionNodeBuilder<K, V> withNodeName(final String nodeName) {
             this.nodeName = nodeName;
             return this;
         }
 
-        public RepartitionNodeBuilder<K, V> withInternalTopicProperties(final InternalTopicProperties internalTopicProperties) {
+        public UnoptimizableRepartitionNodeBuilder<K, V> withInternalTopicProperties(final InternalTopicProperties internalTopicProperties) {
             this.internalTopicProperties = internalTopicProperties;
             return this;
         }
 
-        public RepartitionNode<K, V> build() {
+        public UnoptimizableRepartitionNode<K, V> build() {
 
-            return new RepartitionNode<>(
+            return new UnoptimizableRepartitionNode<>(
                 nodeName,
                 sourceName,
                 processorParameters,
