@@ -1939,7 +1939,7 @@ public class FetcherTest {
         }
         Node controller = originalResponse.controller();
         MetadataResponse altered = MetadataResponse.prepareResponse(
-            (List<Node>) originalResponse.brokers(),
+            originalResponse.brokers(),
             originalResponse.clusterId(),
             controller != null ? controller.id() : MetadataResponse.NO_CONTROLLER_ID,
             altTopics);

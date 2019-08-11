@@ -385,7 +385,7 @@ public class MetadataResponse extends AbstractResponse {
         }
     }
 
-    public static MetadataResponse prepareResponse(int throttleTimeMs, List<Node> brokers, String clusterId,
+    public static MetadataResponse prepareResponse(int throttleTimeMs, Collection<Node> brokers, String clusterId,
                                                    int controllerId, List<TopicMetadata> topicMetadataList,
                                                    int clusterAuthorizedOperations) {
         MetadataResponseData responseData = new MetadataResponseData();
@@ -425,13 +425,13 @@ public class MetadataResponse extends AbstractResponse {
         return new MetadataResponse(responseData);
     }
 
-    public static MetadataResponse prepareResponse(int throttleTimeMs, List<Node> brokers, String clusterId,
+    public static MetadataResponse prepareResponse(int throttleTimeMs, Collection<Node> brokers, String clusterId,
                                                    int controllerId, List<TopicMetadata> topicMetadataList) {
         return prepareResponse(throttleTimeMs, brokers, clusterId, controllerId, topicMetadataList,
                 MetadataResponse.AUTHORIZED_OPERATIONS_OMITTED);
     }
 
-    public static MetadataResponse prepareResponse(List<Node> brokers, String clusterId, int controllerId,
+    public static MetadataResponse prepareResponse(Collection<Node> brokers, String clusterId, int controllerId,
                                                    List<TopicMetadata> topicMetadata) {
         return prepareResponse(AbstractResponse.DEFAULT_THROTTLE_TIME, brokers, clusterId, controllerId, topicMetadata);
     }
