@@ -28,6 +28,7 @@ import kafka.zk.KafkaZkClient
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.message.JoinGroupResponseData.JoinGroupResponseMember
+import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record.RecordBatch.{NO_PRODUCER_EPOCH, NO_PRODUCER_ID}
@@ -55,7 +56,8 @@ class GroupCoordinator(val brokerId: Int,
                        val groupManager: GroupMetadataManager,
                        val heartbeatPurgatory: DelayedOperationPurgatory[DelayedHeartbeat],
                        val joinPurgatory: DelayedOperationPurgatory[DelayedJoin],
-                       time: Time) extends Logging {
+                       time: Time,
+                       metrics: Metrics) extends Logging {
   import GroupCoordinator._
 
   type JoinCallback = JoinGroupResult => Unit
@@ -1084,10 +1086,11 @@ object GroupCoordinator {
   def apply(config: KafkaConfig,
             zkClient: KafkaZkClient,
             replicaManager: ReplicaManager,
-            time: Time): GroupCoordinator = {
+            time: Time,
+            metrics: Metrics): GroupCoordinator = {
     val heartbeatPurgatory = DelayedOperationPurgatory[DelayedHeartbeat]("Heartbeat", config.brokerId)
     val joinPurgatory = DelayedOperationPurgatory[DelayedJoin]("Rebalance", config.brokerId)
-    apply(config, zkClient, replicaManager, heartbeatPurgatory, joinPurgatory, time)
+    apply(config, zkClient, replicaManager, heartbeatPurgatory, joinPurgatory, time, metrics)
   }
 
   private[group] def offsetConfig(config: KafkaConfig) = OffsetConfig(
@@ -1108,7 +1111,8 @@ object GroupCoordinator {
             replicaManager: ReplicaManager,
             heartbeatPurgatory: DelayedOperationPurgatory[DelayedHeartbeat],
             joinPurgatory: DelayedOperationPurgatory[DelayedJoin],
-            time: Time): GroupCoordinator = {
+            time: Time,
+            metrics: Metrics): GroupCoordinator = {
     val offsetConfig = this.offsetConfig(config)
     val groupConfig = GroupConfig(groupMinSessionTimeoutMs = config.groupMinSessionTimeoutMs,
       groupMaxSessionTimeoutMs = config.groupMaxSessionTimeoutMs,
@@ -1116,8 +1120,8 @@ object GroupCoordinator {
       groupInitialRebalanceDelayMs = config.groupInitialRebalanceDelay)
 
     val groupMetadataManager = new GroupMetadataManager(config.brokerId, config.interBrokerProtocolVersion,
-      offsetConfig, replicaManager, zkClient, time)
-    new GroupCoordinator(config.brokerId, groupConfig, offsetConfig, groupMetadataManager, heartbeatPurgatory, joinPurgatory, time)
+      offsetConfig, replicaManager, zkClient, time, metrics)
+    new GroupCoordinator(config.brokerId, groupConfig, offsetConfig, groupMetadataManager, heartbeatPurgatory, joinPurgatory, time, metrics)
   }
 
   def joinError(memberId: String, error: Errors): JoinGroupResult = {
