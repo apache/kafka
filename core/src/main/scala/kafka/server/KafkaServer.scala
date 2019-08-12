@@ -26,7 +26,7 @@ import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger}
 import com.yammer.metrics.core.Gauge
 import kafka.api.{KAFKA_0_9_0, KAFKA_2_2_IV0}
 import kafka.cluster.Broker
-import kafka.common.{GenerateBrokerIdException, InconsistentBrokerIdException, InconsistentCusterIdException, InconsistentBrokerMetadataException}
+import kafka.common.{GenerateBrokerIdException, InconsistentBrokerIdException, InconsistentClusterIdException, InconsistentBrokerMetadataException}
 import kafka.controller.KafkaController
 import kafka.coordinator.group.GroupCoordinator
 import kafka.coordinator.transaction.TransactionCoordinator
@@ -211,16 +211,16 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
         info(s"Cluster ID = $clusterId")
 
         /* load metadata */
-        val (brokerMetadata, initialOfflineDirs) = getBrokerMetadataAndOfflineDirs
+        val (preloadedBrokerMetadataCheckpoint, initialOfflineDirs) = getBrokerMetadataAndOfflineDirs
 
         /* check cluster id */
-        if (brokerMetadata.clusterId != null && brokerMetadata.clusterId != clusterId)
-          throw new InconsistentCusterIdException(
-            s"The Cluster ID ${clusterId} doesn't match stored clusterId ${brokerMetadata.clusterId} in meta.properties. " +
+        if (preloadedBrokerMetadataCheckpoint.clusterId.isDefined && preloadedBrokerMetadataCheckpoint.clusterId.get != clusterId)
+          throw new InconsistentClusterIdException(
+            s"The Cluster ID ${clusterId} doesn't match stored clusterId ${preloadedBrokerMetadataCheckpoint.clusterId} in meta.properties. " +
             s"The broker is trying to join the wrong cluster. Configured zookeeper.connect may be wrong.")
 
         /* generate brokerId */
-        config.brokerId = getOrGenerateBrokerId(brokerMetadata)
+        config.brokerId = getOrGenerateBrokerId(preloadedBrokerMetadataCheckpoint)
         logContext = new LogContext(s"[KafkaServer id=${config.brokerId}] ")
         this.logIdent = logContext.logPrefix
 
@@ -270,7 +270,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
         val brokerEpoch = zkClient.registerBroker(brokerInfo)
 
         // Now that the broker is successfully registered, checkpoint its metadata
-        checkpointBrokerMetadata(BrokerMetadata(config.brokerId, clusterId))
+        checkpointBrokerMetadata(BrokerMetadata(config.brokerId, Some(clusterId)))
 
         /* start token manager */
         tokenManager = new DelegationTokenManager(config, tokenCache, time , zkClient)
@@ -690,6 +690,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
    * @return A 2-tuple containing the brokerMetadata and a sequence of offline log directories.
    */
   private def getBrokerMetadataAndOfflineDirs: (BrokerMetadata, Seq[String]) = {
+    val brokerMetadataMap = mutable.HashMap[String, BrokerMetadata]()
     val brokerMetadataSet = mutable.HashSet[BrokerMetadata]()
     val offlineDirs = mutable.ArrayBuffer.empty[String]
 
@@ -697,7 +698,8 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
       try {
         val brokerMetadataOpt = brokerMetadataCheckpoints(logDir).read()
         brokerMetadataOpt.foreach { brokerMetadata =>
-          brokerMetadataSet.add(brokerMetadata)
+          brokerMetadataMap += (logDir -> brokerMetadata)
+          brokerMetadataSet += brokerMetadata
         }
       } catch {
         case e: IOException =>
@@ -706,15 +708,20 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
       }
     }
 
-    if (brokerMetadataSet.size > 1)
+    if (brokerMetadataSet.size > 1) {
+      val builder = StringBuilder.newBuilder
+
+      for ((logDir, brokerMetadata) <- brokerMetadataMap)
+        builder ++= s"- $logDir -> $brokerMetadata\n"
+
       throw new InconsistentBrokerMetadataException(
         s"BrokerMetadata is not consistent across log.dirs. This could happen if multiple brokers shared a log directory (log.dirs) " +
-        s"or partial data was manually copied from another broker. Found $brokerMetadataSet"
+        s"or partial data was manually copied from another broker. Found:\n${builder.toString()}"
       )
-    else if (brokerMetadataSet.size == 1)
+    } else if (brokerMetadataSet.size == 1)
       (brokerMetadataSet.last, offlineDirs)
     else
-      (BrokerMetadata(-1, null), offlineDirs)
+      (BrokerMetadata(-1, None), offlineDirs)
   }
 
   /**

@@ -18,7 +18,7 @@ package kafka.server
 
 import java.io.File
 
-import kafka.common.InconsistentCusterIdException
+import kafka.common.InconsistentClusterIdException
 
 import scala.concurrent._
 import ExecutionContext.Implicits._
@@ -173,10 +173,10 @@ class ServerGenerateClusterIdTest extends ZooKeeperTestHarness {
     val server = new KafkaServer(config1, threadNamePrefix = Option(this.getClass.getName))
 
     // Startup fails
-    assertThrows[InconsistentCusterIdException] {
+    assertThrows[InconsistentClusterIdException] {
       server.startup()
     }
-    
+
     server.shutdown()
 
     TestUtils.verifyNonDaemonThreadsStatus(this.getClass.getName)
@@ -186,7 +186,7 @@ class ServerGenerateClusterIdTest extends ZooKeeperTestHarness {
     for (logDir <- logDirs) {
       val checkpoint = new BrokerMetadataCheckpoint(
         new File(logDir + File.separator + brokerMetaPropsFile))
-      checkpoint.write(BrokerMetadata(brokerId, clusterId))
+      checkpoint.write(BrokerMetadata(brokerId, Option(clusterId)))
     }
   }
 
@@ -196,7 +196,7 @@ class ServerGenerateClusterIdTest extends ZooKeeperTestHarness {
         new File(logDir + File.separator + brokerMetaPropsFile)).read()
       brokerMetadataOpt match {
         case Some(brokerMetadata) =>
-          if (brokerMetadata.clusterId != clusterId) return false
+          if (brokerMetadata.clusterId.isDefined && brokerMetadata.clusterId.get != clusterId) return false
         case _ => return false
       }
     }
