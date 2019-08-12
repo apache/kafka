@@ -14,17 +14,16 @@ package kafka.admin
 
 import java.io.{BufferedWriter, File, FileWriter}
 import java.text.{ParseException, SimpleDateFormat}
-import java.util.concurrent.ExecutionException
 import java.util.{Calendar, Date, Properties}
 
 import scala.collection.Seq
+
 import joptsimple.OptionException
 import kafka.admin.ConsumerGroupCommand.ConsumerGroupService
 import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.errors.CoordinatorNotAvailableException
 import org.apache.kafka.test
 import org.junit.Assert._
 import org.junit.Test
@@ -111,8 +110,7 @@ class ResetConsumerGroupOffsetTest extends ConsumerGroupCommandTest {
     val consumerGroupCommand = getConsumerGroupService(args)
     // Make sure we got a coordinator
     TestUtils.waitUntilTrue(() => TestUtils.maybeUnwrapFutureException(() => {
-      throw new ExecutionException(new CoordinatorNotAvailableException("test"))
-      // consumerGroupCommand.collectGroupState(group).coordinator.host() == "localhost"
+      consumerGroupCommand.collectGroupState(group).coordinator.host() == "localhost"
     }), "Can't find a coordinator", maxRetries = 3)
     val resetOffsets = consumerGroupCommand.resetOffsets()(group)
     assertEquals(Map.empty, resetOffsets)
