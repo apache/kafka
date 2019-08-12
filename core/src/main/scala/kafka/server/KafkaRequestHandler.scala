@@ -188,6 +188,24 @@ class BrokerTopicMetrics(name: Option[String]) extends KafkaMetricsGroup {
     }
   }
 
+  /**
+   * Greedily initialize all topic metrics
+   */
+  def initializeMetrics(): Unit = {
+    messagesInRate
+    bytesInRate
+    bytesOutRate
+    bytesRejectedRate
+    replicationBytesInRate
+    replicationBytesOutRate
+    failedProduceRequestRate
+    failedFetchRequestRate
+    totalProduceRequestRate
+    totalFetchRequestRate
+    fetchMessageConversionsRate
+    produceMessageConversionsRate
+  }
+
   def close(): Unit = {
     removeMetricHelper(BrokerTopicStats.MessagesInPerSec, tags)
     removeMetricHelper(BrokerTopicStats.BytesInPerSec, tags)
@@ -204,6 +222,9 @@ class BrokerTopicMetrics(name: Option[String]) extends KafkaMetricsGroup {
     removeMetricHelper(BrokerTopicStats.FetchMessageConversionsPerSec, tags)
     removeMetricHelper(BrokerTopicStats.ProduceMessageConversionsPerSec, tags)
   }
+
+  if (tags.isEmpty)
+    initializeMetrics()
 }
 
 object BrokerTopicStats {
