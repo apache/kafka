@@ -571,10 +571,12 @@ public class ConsumerConfig extends AbstractConfig {
                                         CommonClientConfigs.SECURITY_PROTOCOL_DOC)
                                 .define(LIST_KEY_DESERIALIZER_TYPE_CLASS_CONFIG,
                                         Type.CLASS,
+                                        null,
                                         Importance.MEDIUM,
                                         LIST_KEY_DESERIALIZER_TYPE_CLASS_DOC)
                                 .define(LIST_KEY_DEERIALIZER_INNER_CLASS_CONFIG,
                                         Type.CLASS,
+                                        null,
                                         Importance.MEDIUM,
                                         LIST_KEY_DESERIALIZER_INNER_CLASS_DOC)
                                 .withClientSslSupport()

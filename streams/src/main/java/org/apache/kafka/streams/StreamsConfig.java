@@ -879,19 +879,23 @@ public class StreamsConfig extends AbstractConfig {
                     Importance.LOW,
                     WINDOW_SIZE_MS_DOC)
             .define(CommonClientConfigs.DEFAULT_LIST_KEY_SERDE_INNER_CLASS,
-                    Type.STRING,
+                    Type.CLASS,
+                    null,
                     Importance.MEDIUM,
                     CommonClientConfigs.DEFAULT_LIST_KEY_SERDE_INNER_CLASS_DOC)
             .define(CommonClientConfigs.DEFAULT_LIST_VALUE_SERDE_INNER_CLASS,
-                    Type.STRING,
+                    Type.CLASS,
+                    null,
                     Importance.MEDIUM,
                     CommonClientConfigs.DEFAULT_LIST_VALUE_SERDE_INNER_CLASS_DOC)
             .define(CommonClientConfigs.DEFAULT_LIST_KEY_SERDE_TYPE_CLASS,
-                    Type.STRING,
+                    Type.CLASS,
+                    null,
                     Importance.MEDIUM,
                     CommonClientConfigs.DEFAULT_LIST_KEY_SERDE_TYPE_CLASS_DOC)
             .define(CommonClientConfigs.DEFAULT_LIST_VALUE_SERDE_TYPE_CLASS,
-                    Type.STRING,
+                    Type.CLASS,
+                    null,
                     Importance.MEDIUM,
                     CommonClientConfigs.DEFAULT_LIST_VALUE_SERDE_TYPE_CLASS_DOC);
     }
