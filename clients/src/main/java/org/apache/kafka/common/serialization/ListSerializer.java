@@ -27,6 +27,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 
+@SuppressWarnings(value = "unchecked")
 public class ListSerializer<T> implements Serializer<List<T>> {
 
     private Serializer<T> inner;

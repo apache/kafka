@@ -28,6 +28,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+@SuppressWarnings(value = "unchecked")
 public class ListDeserializer<T> implements Deserializer<List<T>> {
 
     private Deserializer<T> inner;
@@ -35,13 +36,13 @@ public class ListDeserializer<T> implements Deserializer<List<T>> {
     private Integer primitiveSize;
 
     private Map<Class, Integer> fixedLengthDeserializers = new HashMap<Class, Integer>() {{
-        put(ShortDeserializer.class, 2);
-        put(IntegerDeserializer.class, 4);
-        put(FloatDeserializer.class, 4);
-        put(LongDeserializer.class, 8);
-        put(DoubleDeserializer.class, 8);
-        put(UUIDDeserializer.class, 16);
-    }};
+            put(ShortDeserializer.class, 2);
+            put(IntegerDeserializer.class, 4);
+            put(FloatDeserializer.class, 4);
+            put(LongDeserializer.class, 8);
+            put(DoubleDeserializer.class, 8);
+            put(UUIDDeserializer.class, 16);
+        }};
 
     public ListDeserializer() {
     }
