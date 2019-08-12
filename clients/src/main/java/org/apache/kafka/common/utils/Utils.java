@@ -24,6 +24,7 @@ import java.io.Closeable;
 import java.io.DataOutput;
 import java.io.EOFException;
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.PrintWriter;
@@ -612,6 +613,24 @@ public final class Utils {
      */
     public static byte[] readBytes(ByteBuffer buffer) {
         return Utils.readBytes(buffer, 0, buffer.limit());
+    }
+
+    /**
+     * Read a file as string and return the content. Unlike {@link Utils#readFileAsString(String)}, the file
+     * will be treated as a stream and a character is read at a time. This allows the program to read from say
+     * a FIFO (opened with S_IFIFO flag), where size of file is not known in advance.
+     */
+    public static String readFileStreamAsString(String path) {
+        StringBuilder fileText = new StringBuilder();
+        try (FileInputStream fileInputStream = new FileInputStream(path)) {
+            int nextChar;
+            while ((nextChar = fileInputStream.read()) != -1) {
+                fileText.append((char) nextChar);
+            }
+        } catch (Exception ex) {
+            throw new RuntimeException("Unable to read file " + path, ex);
+        }
+        return fileText.toString();
     }
 
     /**
