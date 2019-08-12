@@ -177,14 +177,14 @@ class KafkaController(val config: KafkaConfig,
   )
 
   newGauge(
-    "IneligibleTopicsToDeleteCount",
+    "TopicsIneligibleToDeleteCount",
     new Gauge[Int] {
       def value: Int = ineligibleTopicsToDeleteCount
     }
   )
 
   newGauge(
-    "IneligibleReplicaToDeleteCount",
+    "ReplicasIneligibleToDeleteCount",
     new Gauge[Int] {
       def value: Int = ineligibleReplicasToDeleteCount
     }
@@ -1231,12 +1231,15 @@ class KafkaController(val config: KafkaConfig,
 
     globalPartitionCount = if (!isActive) 0 else controllerContext.partitionLeadershipInfo.size
 
-    topicsToDeleteCount = if (!isActive) 0 else controllerContext.topicsToBeDeleted.size
+    topicsToDeleteCount = if (!isActive) 0 else {
+      (controllerContext.topicsToBeDeleted -- controllerContext.topicsIneligibleForDeletion).size
+    }
 
     replicasToDeleteCount = if (!isActive) 0 else controllerContext.topicsToBeDeleted.map { topic =>
-      // For each enqueued topic, count the number of replicas not yet deleted
+      // For each enqueued topic, count the number of eligible replicas that are not yet deleted
       controllerContext.replicasForTopic(topic).count { replica =>
-        controllerContext.replicaState(replica) != ReplicaDeletionSuccessful
+        controllerContext.replicaState(replica) != ReplicaDeletionSuccessful &&
+        controllerContext.replicaState(replica) != ReplicaDeletionIneligible
       }
     }.sum
 
