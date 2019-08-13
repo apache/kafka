@@ -196,10 +196,18 @@ final class SchemaGenerator {
             return "Type.INT64";
         } else if (type instanceof FieldType.StringFieldType) {
             headerGenerator.addImport(MessageGenerator.TYPE_CLASS);
-            return nullable ? "Type.NULLABLE_STRING" : "Type.STRING";
+            if (flexibleVersions.contains(version)) {
+                return nullable ? "Type.COMPACT_NULLABLE_STRING" : "Type.COMPACT_STRING";
+            } else {
+                return nullable ? "Type.NULLABLE_STRING" : "Type.STRING";
+            }
         } else if (type instanceof FieldType.BytesFieldType) {
             headerGenerator.addImport(MessageGenerator.TYPE_CLASS);
-            return nullable ? "Type.NULLABLE_BYTES" : "Type.BYTES";
+            if (flexibleVersions.contains(version)) {
+                return nullable ? "Type.COMPACT_NULLABLE_BYTES" : "Type.COMPACT_BYTES";
+            } else {
+                return nullable ? "Type.NULLABLE_BYTES" : "Type.BYTES";
+            }
         } else if (type.isArray()) {
             if (flexibleVersions.contains(version)) {
                 headerGenerator.addImport(MessageGenerator.COMPACT_ARRAYOF_CLASS);

@@ -54,12 +54,12 @@ public class ByteBufferAccessor implements Readable, Writable {
     }
 
     @Override
-    public int readUnsignedVarInt() {
+    public int readUnsignedVarint() {
         return ByteUtils.readVarint(buf);
     }
 
     @Override
-    public long readUnsignedVarLong() {
+    public long readUnsignedVarlong() {
         return ByteUtils.readVarlong(buf);
     }
 
@@ -84,7 +84,7 @@ public class ByteBufferAccessor implements Readable, Writable {
     }
 
     @Override
-    public void writeArray(byte[] arr) {
+    public void writeByteArray(byte[] arr) {
         buf.put(arr);
     }
 

@@ -87,6 +87,8 @@ public final class MessageGenerator {
 
     static final String BYTE_UTILS_CLASS = "org.apache.kafka.common.utils.ByteUtils";
 
+    static final String STANDARD_CHARSETS = "java.nio.charset.StandardCharsets";
+
     /**
      * The Jackson serializer we use for JSON objects.
      */

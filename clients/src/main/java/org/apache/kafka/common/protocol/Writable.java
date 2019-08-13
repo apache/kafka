@@ -17,22 +17,12 @@
 
 package org.apache.kafka.common.protocol;
 
-import java.nio.charset.StandardCharsets;
-
 public interface Writable {
     void writeByte(byte val);
     void writeShort(short val);
     void writeInt(int val);
     void writeLong(long val);
-    void writeArray(byte[] arr);
+    void writeByteArray(byte[] arr);
     void writeUnsignedVarint(int i);
     void writeUnsignedVarlong(long i);
-
-    /**
-     * Write a string delimited by a two-byte length prefix.
-     */
-    default void writeString(String string) {
-        byte[] arr = string.getBytes(StandardCharsets.UTF_8);
-        writeArray(arr);
-    }
 }

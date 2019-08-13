@@ -21,18 +21,35 @@ package org.apache.kafka.message;
  * Creates an if statement based on whether or not a particular field is null.
  */
 public final class IsNullConditional {
-    static IsNullConditional forField(FieldSpec field, Versions possibleVersions) {
-        return new IsNullConditional(field, possibleVersions);
+    static IsNullConditional forField(String name) {
+        return new IsNullConditional(name);
     }
 
-    private final FieldSpec field;
-    private final Versions possibleVersions;
+    static IsNullConditional forField(FieldSpec field) {
+        IsNullConditional cond = new IsNullConditional(field.name());
+        cond.nullableVersions(field.nullableVersions());
+        return cond;
+    }
+
+    private final String name;
+    private Versions nullableVersions = Versions.ALL;
+    private Versions possibleVersions = Versions.ALL;
     private Runnable ifNull = null;
     private Runnable ifNotNull = null;
+    private boolean alwaysEmitBlockScope = false;
 
-    private IsNullConditional(FieldSpec field, Versions possibleVersions) {
-        this.field = field;
+    private IsNullConditional(String name) {
+        this.name = name;
+    }
+
+    IsNullConditional nullableVersions(Versions nullableVersions) {
+        this.nullableVersions = nullableVersions;
+        return this;
+    }
+
+    IsNullConditional possibleVersions(Versions possibleVersions) {
         this.possibleVersions = possibleVersions;
+        return this;
     }
 
     IsNullConditional ifNull(Runnable ifNull) {
@@ -45,12 +62,18 @@ public final class IsNullConditional {
         return this;
     }
 
+    IsNullConditional alwaysEmitBlockScope(boolean alwaysEmitBlockScope) {
+        this.alwaysEmitBlockScope = alwaysEmitBlockScope;
+        return this;
+    }
+
     void generate(CodeBuffer buffer) {
         // check if the current version is a nullable version
-        VersionConditional.forVersions(field.nullableVersions(), possibleVersions).
+        VersionConditional.forVersions(nullableVersions, possibleVersions).
+            alwaysEmitBlockScope(alwaysEmitBlockScope).
             ifMember(() -> {
                 if (ifNull != null) {
-                    buffer.printf("if (this.%s == null) {%n", field.camelCaseName());
+                    buffer.printf("if (this.%s == null) {%n", name);
                     buffer.incrementIndent();
                     ifNull.run();
                     buffer.decrementIndent();
@@ -62,7 +85,7 @@ public final class IsNullConditional {
                     buffer.decrementIndent();
                     buffer.printf("}%n");
                 } else if (ifNotNull != null) {
-                    buffer.printf("if (this.%s != null) {%n", field.camelCaseName());
+                    buffer.printf("if (this.%s != null) {%n", name);
                     buffer.incrementIndent();
                     ifNull.run();
                     buffer.decrementIndent();
