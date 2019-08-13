@@ -460,9 +460,8 @@ public final class RecordAccumulator {
         for (Map.Entry<TopicPartition, Deque<ProducerBatch>> entry : this.batches.entrySet()) {
             Deque<ProducerBatch> deque = entry.getValue();
             synchronized (deque) {
-                // When producing to a large number of partitions, this path is hot, deques are often empty.
-                // When there are no batches in the deque, we do not need to perform any
-                // other conditional leadership, mute, or readiness checks
+                // When producing to a large number of partitions, this path is hot and deques are often empty.
+                // We check whether a batch exists fisrt to avoid the more expensive ones whenever possible.
                 ProducerBatch batch = deque.peekFirst();
                 if (batch != null) {
                     TopicPartition part = entry.getKey();
