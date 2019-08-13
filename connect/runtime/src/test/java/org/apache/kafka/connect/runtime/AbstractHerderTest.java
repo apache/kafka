@@ -478,10 +478,17 @@ public class AbstractHerderTest {
 
     @Test
     public void testConfigProviderRegex() {
+        testConfigProviderRegex("\"${::}\"");
+        testConfigProviderRegex("${::}");
+        testConfigProviderRegex("\"${:/a:somevar}\"");
+        testConfigProviderRegex("\"${file::somevar}\"");
+        testConfigProviderRegex("${file:/a/b/c:}");
         testConfigProviderRegex("${file:/tmp/somefile.txt:somevar}");
         testConfigProviderRegex("\"${file:/tmp/somefile.txt:somevar}\"");
         testConfigProviderRegex("plain.PlainLoginModule required username=\"${file:/tmp/somefile.txt:somevar}\"");
         testConfigProviderRegex("plain.PlainLoginModule required username=${file:/tmp/somefile.txt:somevar}");
+        testConfigProviderRegex("plain.PlainLoginModule required username=${file:/tmp/somefile.txt:somevar} not null");
+        testConfigProviderRegex("plain.PlainLoginModule required username=${file:/tmp/somefile.txt:somevar} password=${file:/tmp/somefile.txt:othervar}");
         testConfigProviderRegex("plain.PlainLoginModule required username", false);
     }
 
