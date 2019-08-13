@@ -39,10 +39,6 @@ public class Percentiles extends SampledStat implements CompoundStat {
     private final Percentile[] percentiles;
     private final BinScheme binScheme;
 
-    public Percentiles(int sizeInBytes, double max, BucketSizing bucketing, Percentile... percentiles) {
-        this(sizeInBytes, 0.0, max, bucketing, percentiles);
-    }
-
     public Percentiles(int sizeInBytes, double min, double max, BucketSizing bucketing, Percentile... percentiles) {
         super(0.0);
         this.percentiles = percentiles;
@@ -60,7 +56,7 @@ public class Percentiles extends SampledStat implements CompoundStat {
 
     @Override
     public List<NamedMeasurable> stats() {
-        List<NamedMeasurable> ms = new ArrayList<NamedMeasurable>(this.percentiles.length);
+        List<NamedMeasurable> ms = new ArrayList<>(this.percentiles.length);
         for (Percentile percentile : this.percentiles) {
             final double pct = percentile.percentile();
             ms.add(new NamedMeasurable(percentile.name(), new Measurable() {
