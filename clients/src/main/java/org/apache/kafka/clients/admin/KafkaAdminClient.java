@@ -3259,6 +3259,8 @@ public class KafkaAdminClient extends AdminClient {
                     partitionReassignmentsFuture.completeExceptionally(new InvalidTopicException("The given partition index " +
                             partition + " is not valid."));
                 }
+                if (partitionReassignmentsFuture.isCompletedExceptionally())
+                    return new ListPartitionReassignmentsResult(partitionReassignmentsFuture);
             }
         }
         final long now = time.milliseconds();

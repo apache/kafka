@@ -17,6 +17,7 @@
 
 package org.apache.kafka.clients.admin;
 
+import java.util.Collections;
 import java.util.List;
 
 /**
@@ -29,9 +30,9 @@ public class PartitionReassignment {
     private final List<Integer> removingReplicas;
 
     public PartitionReassignment(List<Integer> replicas, List<Integer> addingReplicas, List<Integer> removingReplicas) {
-        this.replicas = replicas;
-        this.addingReplicas = addingReplicas;
-        this.removingReplicas = removingReplicas;
+        this.replicas = Collections.unmodifiableList(replicas);
+        this.addingReplicas = Collections.unmodifiableList(addingReplicas);
+        this.removingReplicas = Collections.unmodifiableList(removingReplicas);
     }
 
     /**
