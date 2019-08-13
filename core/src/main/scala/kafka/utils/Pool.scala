@@ -30,7 +30,7 @@ class Pool[K,V](valueFactory: Option[K => V] = None) extends Iterable[(K, V)] {
 
   def put(k: K, v: V): V = pool.put(k, v)
 
-  def putAll(map: Map[K, V]): Unit = map.foreach { case (k, v) => put(k, v) }
+  def putAll(map: java.util.Map[K, V]): Unit = pool.putAll(map)
 
   def putIfNotExists(k: K, v: V): V = pool.putIfAbsent(k, v)
 
