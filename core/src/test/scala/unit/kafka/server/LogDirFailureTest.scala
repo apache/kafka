@@ -138,9 +138,6 @@ class LogDirFailureTest extends IntegrationTestHarness {
   }
 
   def testProduceErrorsFromLogDirFailureOnLeader(failureType: LogDirFailureType): Unit = {
-    val consumer = createConsumer()
-    subscribeAndWaitForAssignment(topic, consumer)
-
     // Disable retries to allow exception to bubble up for validation
     this.producerConfig.setProperty(ProducerConfig.RETRIES_CONFIG, "0")
     val producer = createProducer()
@@ -151,13 +148,9 @@ class LogDirFailureTest extends IntegrationTestHarness {
     val leaderServerId = producer.partitionsFor(topic).asScala.find(_.partition() == 0).get.leader().id()
     val leaderServer = servers.find(_.config.brokerId == leaderServerId).get
 
-    // The first send() should succeed
-    producer.send(record).get()
-    TestUtils.consumeRecords(consumer, 1)
-
     causeLogDirFailure(failureType, leaderServer, partition)
 
-    // The second send() should fail due to either KafkaStorageException or NotLeaderForPartitionException
+    // send() should fail due to either KafkaStorageException or NotLeaderForPartitionException
     try {
       producer.send(record).get(6000, TimeUnit.MILLISECONDS)
       fail("send() should fail with either KafkaStorageException or NotLeaderForPartitionException")

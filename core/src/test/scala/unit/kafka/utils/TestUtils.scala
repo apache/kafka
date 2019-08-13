@@ -1566,15 +1566,6 @@ object TestUtils extends Logging {
     }
   }
 
-  def maybeUnwrapFutureException[T](action: () => T): T = {
-    try {
-      action()
-    } catch {
-      case e: ExecutionException => throw e.getCause
-      case t: Throwable => throw t
-    }
-  }
-
   def totalMetricValue(server: KafkaServer, metricName: String): Long = {
     val allMetrics = server.metrics.metrics
     val total = allMetrics.values().asScala.filter(_.metricName().name() == metricName)
