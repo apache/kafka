@@ -108,7 +108,7 @@ class FetchFromFollowerTest(ProduceConsumeValidateTest):
 
         # Start up and let some data get produced
         self.start_producer_and_consumer()
-        time.sleep(self.METADATA_MAX_AGE_MS * 2)
+        time.sleep(self.METADATA_MAX_AGE_MS * 2. / 1000)
 
         consumer_node = self.consumer.nodes[0]
         consumer_idx = self.consumer.idx(consumer_node)
@@ -120,7 +120,7 @@ class FetchFromFollowerTest(ProduceConsumeValidateTest):
         self.jmx_tool.start_jmx_tool(consumer_idx, consumer_node)
 
         # Wait for at least one interval of "metadata.max.age.ms"
-        time.sleep(self.METADATA_MAX_AGE_MS * 2)
+        time.sleep(self.METADATA_MAX_AGE_MS * 2. / 1000)
 
         # Read the JMX output
         self.jmx_tool.read_jmx_output(consumer_idx, consumer_node)
