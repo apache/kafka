@@ -18,7 +18,7 @@ package kafka.server
 
 import java.io.File
 
-import kafka.common.InconsistentClusterIdException
+import kafka.common.{InconsistentBrokerMetadataException, InconsistentClusterIdException}
 
 import scala.concurrent._
 import ExecutionContext.Implicits._
@@ -182,12 +182,42 @@ class ServerGenerateClusterIdTest extends ZooKeeperTestHarness {
     TestUtils.verifyNonDaemonThreadsStatus(this.getClass.getName)
   }
 
+  @Test
+  def testInconsistentBrokerMetadataBetweenMultipleLogDirs() {
+    // Add multiple logDirs with different BrokerMetadata
+    val logDir1 = TestUtils.tempDir().getAbsolutePath
+    val logDir2 = TestUtils.tempDir().getAbsolutePath
+    val logDirs = logDir1 + "," + logDir2
+
+    forgeBrokerMetadata(logDir1, 1, "ebwOKU-zSieInaFQh_qP4g")
+    forgeBrokerMetadata(logDir2, 1, "blaOKU-zSieInaFQh_qP4g")
+
+    val props = TestUtils.createBrokerConfig(1, zkConnect)
+    props.setProperty("log.dir", logDirs)
+    val config = KafkaConfig.fromProps(props)
+
+    val server = new KafkaServer(config, threadNamePrefix = Option(this.getClass.getName))
+
+    // Startup fails
+    assertThrows[InconsistentBrokerMetadataException] {
+      server.startup()
+    }
+
+    server.shutdown()
+
+    TestUtils.verifyNonDaemonThreadsStatus(this.getClass.getName)
+  }
+
   def forgeBrokerMetadata(logDirs: Seq[String], brokerId: Int, clusterId: String) {
     for (logDir <- logDirs) {
-      val checkpoint = new BrokerMetadataCheckpoint(
-        new File(logDir + File.separator + brokerMetaPropsFile))
-      checkpoint.write(BrokerMetadata(brokerId, Option(clusterId)))
+      forgeBrokerMetadata(logDir, brokerId, clusterId)
     }
+  }
+
+  def forgeBrokerMetadata(logDir: String, brokerId: Int, clusterId: String) {
+    val checkpoint = new BrokerMetadataCheckpoint(
+      new File(logDir + File.separator + brokerMetaPropsFile))
+    checkpoint.write(BrokerMetadata(brokerId, Option(clusterId)))
   }
 
   def verifyBrokerMetadata(logDirs: Seq[String], clusterId: String): Boolean = {
