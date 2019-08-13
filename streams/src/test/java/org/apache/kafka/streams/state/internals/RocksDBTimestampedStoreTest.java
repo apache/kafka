@@ -47,6 +47,67 @@ public class RocksDBTimestampedStoreTest extends RocksDBStoreTest {
     }
 
     @Test
+    public void shouldOpenNewStoreInRegularMode() {
+        LogCaptureAppender.setClassLoggerToDebug(RocksDBTimestampedStore.class);
+
+        final LogCaptureAppender appender = LogCaptureAppender.createAndRegister();
+        rocksDBStore.init(context, rocksDBStore);
+        assertThat(appender.getMessages(), hasItem("Opening store " + DB_NAME + " in regular mode"));
+        LogCaptureAppender.unregister(appender);
+
+        rocksDBStore.close();
+    }
+
+    @Test
+    public void shouldOpenExistingStoreInRegularMode() throws Exception {
+        LogCaptureAppender.setClassLoggerToDebug(RocksDBTimestampedStore.class);
+
+        // prepare store
+        rocksDBStore.init(context, rocksDBStore);
+        rocksDBStore.put(new Bytes("key".getBytes()), "timestamped".getBytes());
+        rocksDBStore.close();
+
+        // re-open store
+        final LogCaptureAppender appender = LogCaptureAppender.createAndRegister();
+        rocksDBStore = getRocksDBStore();
+        rocksDBStore.init(context, rocksDBStore);
+        assertThat(appender.getMessages(), hasItem("Opening store " + DB_NAME + " in regular mode"));
+        LogCaptureAppender.unregister(appender);
+
+        rocksDBStore.close();
+
+        // verify store
+        final DBOptions dbOptions = new DBOptions();
+        final ColumnFamilyOptions columnFamilyOptions = new ColumnFamilyOptions();
+
+        final List<ColumnFamilyDescriptor> columnFamilyDescriptors = asList(
+            new ColumnFamilyDescriptor(RocksDB.DEFAULT_COLUMN_FAMILY, columnFamilyOptions),
+            new ColumnFamilyDescriptor("keyValueWithTimestamp".getBytes(StandardCharsets.UTF_8), columnFamilyOptions));
+        final List<ColumnFamilyHandle> columnFamilies = new ArrayList<>(columnFamilyDescriptors.size());
+
+        final RocksDB db = RocksDB.open(
+            dbOptions,
+            new File(new File(context.stateDir(), "rocksdb"), DB_NAME).getAbsolutePath(),
+            columnFamilyDescriptors,
+            columnFamilies);
+
+        final ColumnFamilyHandle noTimestampColumnFamily = columnFamilies.get(0);
+        final ColumnFamilyHandle withTimestampColumnFamily = columnFamilies.get(1);
+
+        assertThat(db.get(noTimestampColumnFamily, "key".getBytes()), new IsNull<>());
+        assertThat(db.getLongProperty(noTimestampColumnFamily, "rocksdb.estimate-num-keys"), is(0L));
+        assertThat(db.get(withTimestampColumnFamily, "key".getBytes()).length, is(11));
+        assertThat(db.getLongProperty(withTimestampColumnFamily, "rocksdb.estimate-num-keys"), is(1L));
+
+        // Order of closing must follow: ColumnFamilyHandle > RocksDB > DBOptions > ColumnFamilyOptions
+        noTimestampColumnFamily.close();
+        withTimestampColumnFamily.close();
+        db.close();
+        dbOptions.close();
+        columnFamilyOptions.close();
+    }
+
+    @Test
     public void shouldMigrateDataFromDefaultToTimestampColumnFamily() throws Exception {
         prepareOldStore();
 
@@ -247,6 +308,9 @@ public class RocksDBTimestampedStoreTest extends RocksDBStoreTest {
         assertThat(db.get(withTimestampColumnFamily, "key11".getBytes()).length, is(21));
         assertThat(db.get(withTimestampColumnFamily, "key12".getBytes()), new IsNull<>());
 
+        // Order of closing must follow: ColumnFamilyHandle > RocksDB > DBOptions > ColumnFamilyOptions
+        noTimestampColumnFamily.close();
+        withTimestampColumnFamily.close();
         db.close();
 
         // check that still in upgrade mode
@@ -266,7 +330,12 @@ public class RocksDBTimestampedStoreTest extends RocksDBStoreTest {
 
         noTimestampColumnFamily = columnFamilies.get(0);
         db.delete(noTimestampColumnFamily, "key7".getBytes());
+
+        // Order of closing must follow: ColumnFamilyHandle > RocksDB > DBOptions > ColumnFamilyOptions
+        noTimestampColumnFamily.close();
         db.close();
+        dbOptions.close();
+        columnFamilyOptions.close();
 
         // check that still in regular mode
         appender = LogCaptureAppender.createAndRegister();
