@@ -460,6 +460,8 @@ public final class RecordAccumulator {
         for (Map.Entry<TopicPartition, Deque<ProducerBatch>> entry : this.batches.entrySet()) {
             Deque<ProducerBatch> deque = entry.getValue();
             synchronized (deque) {
+                // When producing to a large number of partitions, this path is hot, deques are often empty and the empty
+                // deque check is cheaper than the leaderFor check.
                 if (!deque.isEmpty()) {
                     TopicPartition part = entry.getKey();
                     Node leader = cluster.leaderFor(part);
