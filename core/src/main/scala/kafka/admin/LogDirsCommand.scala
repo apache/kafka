@@ -22,7 +22,7 @@ import java.util.Properties
 
 import kafka.utils.{CommandDefaultOptions, CommandLineUtils, Json}
 import org.apache.kafka.clients.admin.{Admin, AdminClientConfig, DescribeLogDirsResult}
-import org.apache.kafka.common.requests.DescribeLogDirsResponse.LogDirInfo
+import org.apache.kafka.clients.admin.DescribeLogDirsResult.LogDirInfo
 import org.apache.kafka.common.utils.Utils
 
 import scala.jdk.CollectionConverters._
@@ -48,7 +48,11 @@ object LogDirsCommand {
 
         out.println("Querying brokers for log directories information")
         val describeLogDirsResult: DescribeLogDirsResult = adminClient.describeLogDirs(brokerList.map(Integer.valueOf).toSeq.asJava)
-        val logDirInfosByBroker = describeLogDirsResult.all.get().asScala.map { case (k, v) => k -> v.asScala }
+        val logDirInfosByBroker = describeLogDirsResult.all.get().asScala.map { case (k, v) =>
+            k -> v.asScala.map { case (k, v) =>
+                (k, v.asInstanceOf[LogDirInfo])
+            }
+        }
 
         out.println(s"Received log directory information from brokers ${brokerList.mkString(",")}")
         out.println(formatAsJson(logDirInfosByBroker, topicList.toSet))
@@ -65,7 +69,7 @@ object LogDirsCommand {
                         Map(
                             "logDir" -> logDir,
                             "error" -> logDirInfo.error.exceptionName(),
-                            "partitions" -> logDirInfo.replicaInfos.asScala.filter { case (topicPartition, _) =>
+                            "partitions" -> logDirInfo.tpToReplicaInfos.asScala.filter { case (topicPartition, _) =>
                                 topicSet.isEmpty || topicSet.contains(topicPartition.topic)
                             }.map { case (topicPartition, replicaInfo) =>
                                 Map(

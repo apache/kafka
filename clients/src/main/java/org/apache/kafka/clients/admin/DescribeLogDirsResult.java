@@ -18,12 +18,16 @@
 package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.common.KafkaFuture;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.annotation.InterfaceStability;
 import java.util.HashMap;
 import java.util.Collection;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
-import org.apache.kafka.common.requests.DescribeLogDirsResponse.LogDirInfo;
+import java.util.stream.Collectors;
+
+import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.requests.DescribeLogDirsResponse;
 
 
 /**
@@ -32,6 +36,7 @@ import org.apache.kafka.common.requests.DescribeLogDirsResponse.LogDirInfo;
  * The API of this class is evolving, see {@link Admin} for details.
  */
 @InterfaceStability.Evolving
+@SuppressWarnings("deprecation")
 public class DescribeLogDirsResult {
     private final Map<Integer, KafkaFuture<Map<String, LogDirInfo>>> futures;
 
@@ -40,24 +45,46 @@ public class DescribeLogDirsResult {
     }
 
     /**
-     * Return a map from brokerId to future which can be used to check the information of partitions on each individual broker
+     * Return a map from brokerId to future which can be used to check the information of partitions on each individual broker.
+     * <p>
+     * Note: Actually, it returns {@link org.apache.kafka.clients.admin.DescribeLogDirsResult.LogDirInfo} instances instead of deprecated
+     * {@link DescribeLogDirsResponse.LogDirInfo}.
      */
-    public Map<Integer, KafkaFuture<Map<String, LogDirInfo>>> values() {
-        return futures;
+    public Map<Integer, KafkaFuture<Map<String, DescribeLogDirsResponse.LogDirInfo>>> values() {
+        return futures.entrySet().stream().collect(Collectors.toMap(
+            e -> e.getKey(),
+            e -> e.getValue().thenApply(new KafkaFuture.BaseFunction<Map<String, LogDirInfo>, Map<String, DescribeLogDirsResponse.LogDirInfo>>() {
+                @Override
+                public Map<String, DescribeLogDirsResponse.LogDirInfo> apply(Map<String, LogDirInfo> map) {
+                    return map.entrySet().stream().collect(Collectors.toMap(f -> f.getKey(), f -> (DescribeLogDirsResponse.LogDirInfo) f.getValue()));
+                }
+            })
+        ));
     }
 
     /**
-     * Return a future which succeeds only if all the brokers have responded without error
+     * Return a future which succeeds only if all the brokers have responded without error.
+     * <p>
+     * Note: Actually, it returns {@link org.apache.kafka.clients.admin.DescribeLogDirsResult.LogDirInfo} instances instead of deprecated
+     * {@link DescribeLogDirsResponse.LogDirInfo}.
      */
-    public KafkaFuture<Map<Integer, Map<String, LogDirInfo>>> all() {
+    public KafkaFuture<Map<Integer, Map<String, DescribeLogDirsResponse.LogDirInfo>>> all() {
         return KafkaFuture.allOf(futures.values().toArray(new KafkaFuture[0])).
-            thenApply(new KafkaFuture.BaseFunction<Void, Map<Integer, Map<String, LogDirInfo>>>() {
+            thenApply(new KafkaFuture.BaseFunction<Void, Map<Integer, Map<String, DescribeLogDirsResponse.LogDirInfo>>>() {
                 @Override
-                public Map<Integer, Map<String, LogDirInfo>> apply(Void v) {
-                    Map<Integer, Map<String, LogDirInfo>> descriptions = new HashMap<>(futures.size());
+                public Map<Integer, Map<String, DescribeLogDirsResponse.LogDirInfo>> apply(Void v) {
+                    Map<Integer, Map<String, DescribeLogDirsResponse.LogDirInfo>> descriptions = new HashMap<>(futures.size());
                     for (Map.Entry<Integer, KafkaFuture<Map<String, LogDirInfo>>> entry : futures.entrySet()) {
                         try {
-                            descriptions.put(entry.getKey(), entry.getValue().get());
+                            Map<String, LogDirInfo> logDirInfo = entry.getValue().get();
+                            descriptions.put(
+                                entry.getKey(),
+                                logDirInfo.entrySet()
+                                    .stream()
+                                    .collect(Collectors.toMap(
+                                        e -> e.getKey(),
+                                        e -> (DescribeLogDirsResponse.LogDirInfo) e.getValue())
+                            ));
                         } catch (InterruptedException | ExecutionException e) {
                             // This should be unreachable, because allOf ensured that all the futures completed successfully.
                             throw new RuntimeException(e);
@@ -66,5 +93,34 @@ public class DescribeLogDirsResult {
                     return descriptions;
                 }
             });
+    }
+
+    /**
+     * State of a LogDir, (possibly) with an error code. Possible error codes are:
+     * <p><ul>
+     *   <li>KAFKA_STORAGE_ERROR (56)
+     *   <li>UNKNOWN (-1)
+     * </ul><p>
+     */
+    static public class LogDirInfo extends DescribeLogDirsResponse.LogDirInfo {
+        public LogDirInfo(Errors error, Map<TopicPartition, ReplicaInfo> replicaInfos) {
+            super(error, replicaInfos
+                .entrySet()
+                .stream()
+                .collect(Collectors.toMap(
+                    e -> e.getKey(),
+                    e -> (DescribeLogDirsResponse.ReplicaInfo) e.getValue())
+                ));
+        }
+    }
+
+
+    /**
+     * State of a replica.
+     **/
+    static public class ReplicaInfo extends DescribeLogDirsResponse.ReplicaInfo {
+        public ReplicaInfo(long size, long offsetLag, boolean isFuture) {
+            super(size, offsetLag, isFuture);
+        }
     }
 }

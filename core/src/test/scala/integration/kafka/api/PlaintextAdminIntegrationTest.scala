@@ -183,12 +183,12 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       val expectedPartitions = partitionsByBroker(brokerId)
       val logDirInfos = logDirInfosByBroker.get(brokerId)
       val replicaInfos = logDirInfos.asScala.flatMap { case (_, logDirInfo) =>
-        logDirInfo.replicaInfos.asScala
+        logDirInfo.tpToReplicaInfos.asScala
       }.filter { case (k, _) => k.topic == topic }
 
       assertEquals(expectedPartitions.toSet, replicaInfos.keys.map(_.partition).toSet)
       logDirInfos.forEach { (logDir, logDirInfo) =>
-        logDirInfo.replicaInfos.asScala.keys.foreach(tp =>
+        logDirInfo.tpToReplicaInfos.asScala.keys.foreach(tp =>
           assertEquals(server.logManager.getLog(tp).get.dir.getParent, logDir)
         )
       }

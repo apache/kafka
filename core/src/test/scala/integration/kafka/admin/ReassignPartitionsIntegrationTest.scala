@@ -493,7 +493,7 @@ class ReassignPartitionsIntegrationTest extends ZooKeeperTestHarness {
     result.values.get(brokerId).get().forEach {
       case (logDirName, logDirInfo) => {
         logDirs.add(logDirName)
-        logDirInfo.replicaInfos.forEach {
+        logDirInfo.tpToReplicaInfos.forEach {
           case (part, info) =>
             if (info.isFuture) {
               futureLogDirs.put(part, logDirName)

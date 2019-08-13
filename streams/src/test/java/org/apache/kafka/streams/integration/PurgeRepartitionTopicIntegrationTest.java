@@ -18,11 +18,11 @@ package org.apache.kafka.streams.integration;
 
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.Config;
+import org.apache.kafka.clients.admin.DescribeLogDirsResult;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.config.TopicConfig;
-import org.apache.kafka.common.requests.DescribeLogDirsResponse;
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Time;
@@ -120,11 +120,11 @@ public class PurgeRepartitionTopicIntegrationTest {
             time.sleep(PURGE_INTERVAL_MS);
 
             try {
-                final Collection<DescribeLogDirsResponse.LogDirInfo> logDirInfo =
+                final Collection<DescribeLogDirsResult.LogDirInfo> logDirInfo =
                     adminClient.describeLogDirs(Collections.singleton(0)).values().get(0).get().values();
 
-                for (final DescribeLogDirsResponse.LogDirInfo partitionInfo : logDirInfo) {
-                    final DescribeLogDirsResponse.ReplicaInfo replicaInfo =
+                for (final DescribeLogDirsResult.LogDirInfo partitionInfo : logDirInfo) {
+                    final DescribeLogDirsResult.ReplicaInfo replicaInfo =
                         partitionInfo.replicaInfos.get(new TopicPartition(REPARTITION_TOPIC, 0));
                     if (replicaInfo != null && verifier.verify(replicaInfo.size)) {
                         return true;

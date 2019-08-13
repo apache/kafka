@@ -88,20 +88,47 @@ public class DescribeLogDirsResponse extends AbstractResponse {
         return new DescribeLogDirsResponse(ApiKeys.DESCRIBE_LOG_DIRS.responseSchema(version).read(buffer), version);
     }
 
-    // Note this class is part of the public API, reachable from Admin.describeLogDirs()
     /**
-     * Possible error code:
+     * State of a LogDir, (possibly) with an error code. Possible error codes are:
+     * <p><ul>
+     *   <li>KAFKA_STORAGE_ERROR (56)
+     *   <li>UNKNOWN (-1)
+     * </ul><p>
      *
-     * KAFKA_STORAGE_ERROR (56)
-     * UNKNOWN (-1)
+     * @deprecated Since 2.6. Use {@link org.apache.kafka.clients.admin.DescribeLogDirsResult.LogDirInfo} instead.
      */
+    @Deprecated
     static public class LogDirInfo {
         public final Errors error;
+
+        /**
+         * @deprecated Since 2.6. Use {@link LogDirInfo#tpToReplicaInfos} instead.
+         */
+        @Deprecated
         public final Map<TopicPartition, ReplicaInfo> replicaInfos;
+
+        public final Map<TopicPartition, org.apache.kafka.clients.admin.DescribeLogDirsResult.ReplicaInfo> tpToReplicaInfos;
+
+        /**
+         * Convert Map&lt;{@link org.apache.kafka.common.TopicPartition}, {@link org.apache.kafka.common.requests.DescribeLogDirsResponse.ReplicaInfo}&gt; into
+         * Map&lt;{@link org.apache.kafka.common.TopicPartition}, {@link org.apache.kafka.clients.admin.DescribeLogDirsResult.ReplicaInfo}&gt;.
+         */
+        private static Map<TopicPartition, org.apache.kafka.clients.admin.DescribeLogDirsResult.ReplicaInfo> convert(Map<TopicPartition, ReplicaInfo> map) {
+            Map<TopicPartition, org.apache.kafka.clients.admin.DescribeLogDirsResult.ReplicaInfo> ret = new HashMap<>();
+
+            for (Map.Entry<TopicPartition, ReplicaInfo> entry : map.entrySet()) {
+                ReplicaInfo replicaInfo = entry.getValue();
+                ret.put(entry.getKey(),
+                    new org.apache.kafka.clients.admin.DescribeLogDirsResult.ReplicaInfo(replicaInfo.size, replicaInfo.offsetLag, replicaInfo.isFuture));
+            }
+
+            return ret;
+        }
 
         public LogDirInfo(Errors error, Map<TopicPartition, ReplicaInfo> replicaInfos) {
             this.error = error;
             this.replicaInfos = replicaInfos;
+            this.tpToReplicaInfos = convert(replicaInfos);
         }
 
         @Override
@@ -116,7 +143,12 @@ public class DescribeLogDirsResponse extends AbstractResponse {
         }
     }
 
-    // Note this class is part of the public API, reachable from Admin.describeLogDirs()
+    /**
+     * State of a replica.
+     *
+     * @deprecated Since 2.6. Use {@link org.apache.kafka.clients.admin.DescribeLogDirsResult.ReplicaInfo} instead.
+     **/
+    @Deprecated
     static public class ReplicaInfo {
 
         public final long size;

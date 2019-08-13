@@ -2265,7 +2265,7 @@ public class KafkaAdminClient extends AdminClient {
 
     @Override
     public DescribeLogDirsResult describeLogDirs(Collection<Integer> brokers, DescribeLogDirsOptions options) {
-        final Map<Integer, KafkaFutureImpl<Map<String, DescribeLogDirsResponse.LogDirInfo>>> futures = new HashMap<>(brokers.size());
+        final Map<Integer, KafkaFutureImpl<Map<String, DescribeLogDirsResult.LogDirInfo>>> futures = new HashMap<>(brokers.size());
 
         for (Integer brokerId: brokers) {
             futures.put(brokerId, new KafkaFutureImpl<>());
@@ -2283,11 +2283,24 @@ public class KafkaAdminClient extends AdminClient {
                 }
 
                 @Override
+                @SuppressWarnings("deprecation")
                 public void handleResponse(AbstractResponse abstractResponse) {
                     DescribeLogDirsResponse response = (DescribeLogDirsResponse) abstractResponse;
-                    KafkaFutureImpl<Map<String, DescribeLogDirsResponse.LogDirInfo>> future = futures.get(brokerId);
+                    KafkaFutureImpl<Map<String, DescribeLogDirsResult.LogDirInfo>> future = futures.get(brokerId);
                     if (response.logDirInfos().size() > 0) {
-                        future.complete(response.logDirInfos());
+                        Map<String, DescribeLogDirsResult.LogDirInfo> result = new HashMap<>();
+                        for (Map.Entry<String, DescribeLogDirsResponse.LogDirInfo> e1 : response.logDirInfos().entrySet()) {
+                            String key = e1.getKey();
+                            Errors error = e1.getValue().error;
+                            Map<TopicPartition, DescribeLogDirsResult.ReplicaInfo> replicaInfos = new HashMap<>();
+                            for (Map.Entry<TopicPartition, DescribeLogDirsResponse.ReplicaInfo> e2 : e1.getValue().replicaInfos.entrySet()) {
+                                DescribeLogDirsResponse.ReplicaInfo replicaInfo = e2.getValue();
+                                replicaInfos.put(e2.getKey(), new DescribeLogDirsResult.ReplicaInfo(replicaInfo.size, replicaInfo.offsetLag, replicaInfo.isFuture));
+                            }
+                            DescribeLogDirsResult.LogDirInfo logDirInfo = new DescribeLogDirsResult.LogDirInfo(error, replicaInfos);
+                            result.put(key, logDirInfo);
+                        }
+                        future.complete(result);
                     } else {
                         // response.logDirInfos() will be empty if and only if the user is not authorized to describe clsuter resource.
                         future.completeExceptionally(Errors.CLUSTER_AUTHORIZATION_FAILED.exception());
@@ -2349,6 +2362,7 @@ public class KafkaAdminClient extends AdminClient {
                 }
 
                 @Override
+                @SuppressWarnings("deprecation")
                 public void handleResponse(AbstractResponse abstractResponse) {
                     DescribeLogDirsResponse response = (DescribeLogDirsResponse) abstractResponse;
                     for (Map.Entry<String, DescribeLogDirsResponse.LogDirInfo> responseEntry: response.logDirInfos().entrySet()) {

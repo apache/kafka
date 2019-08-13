@@ -50,11 +50,11 @@ class DescribeLogDirsRequestTest extends BaseRequestTest {
 
     assertEquals(logDirCount, logDirInfos.size())
     assertEquals(Errors.KAFKA_STORAGE_ERROR, logDirInfos.get(offlineDir).error)
-    assertEquals(0, logDirInfos.get(offlineDir).replicaInfos.size())
+    assertEquals(0, logDirInfos.get(offlineDir).tpToReplicaInfos.size())
 
     assertEquals(Errors.NONE, logDirInfos.get(onlineDir).error)
-    val replicaInfo0 = logDirInfos.get(onlineDir).replicaInfos.get(tp0)
-    val replicaInfo1 = logDirInfos.get(onlineDir).replicaInfos.get(tp1)
+    val replicaInfo0 = logDirInfos.get(onlineDir).tpToReplicaInfos.get(tp0)
+    val replicaInfo1 = logDirInfos.get(onlineDir).tpToReplicaInfos.get(tp1)
     val log0 = servers.head.logManager.getLog(tp0).get
     val log1 = servers.head.logManager.getLog(tp1).get
     assertEquals(log0.size, replicaInfo0.size)
