@@ -23,7 +23,7 @@ from kafkatest.services.verifiable_producer import VerifiableProducer
 from kafkatest.services.zookeeper import ZookeeperService
 from kafkatest.tests.produce_consume_validate import ProduceConsumeValidateTest
 from kafkatest.utils import is_int
-from kafkatest.version import LATEST_0_8_2, LATEST_0_9, LATEST_0_10, LATEST_0_10_0, LATEST_0_10_1, LATEST_0_10_2, LATEST_0_11_0, LATEST_1_0, LATEST_1_1, LATEST_2_0, LATEST_2_1, LATEST_2_2, LATEST_2_3, V_0_9_0_0, DEV_BRANCH, KafkaVersion
+from kafkatest.version import LATEST_0_8_2, LATEST_0_9, LATEST_0_10, LATEST_0_10_0, LATEST_0_10_1, LATEST_0_10_2, LATEST_0_11_0, LATEST_1_0, LATEST_1_1, LATEST_2_0, LATEST_2_1, LATEST_2_2, LATEST_2_3, V_0_9_0_0, V_0_11_0_0, DEV_BRANCH, KafkaVersion
 
 class TestUpgrade(ProduceConsumeValidateTest):
 
@@ -128,6 +128,10 @@ class TestUpgrade(ProduceConsumeValidateTest):
 
         if from_kafka_version <= LATEST_0_10_0:
             assert self.kafka.cluster_id() is None
+
+        # With older message formats before KIP-101, message loss may occur due to truncation
+        # after leader change. Tolerate limited data loss for this case to avoid transient test failures.
+        self.may_truncate_acked_records = False if from_kafka_version >= V_0_11_0_0 else True
 
         new_consumer = from_kafka_version >= V_0_9_0_0
         # TODO - reduce the timeout

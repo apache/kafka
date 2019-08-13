@@ -82,6 +82,8 @@ class MetadataCache(brokerId: Int) extends Logging {
         val replicaInfo = getEndpoints(snapshot, replicas, listenerName, errorUnavailableEndpoints)
         val offlineReplicaInfo = getEndpoints(snapshot, partitionState.offlineReplicas.asScala, listenerName, errorUnavailableEndpoints)
 
+        val isr = partitionState.basePartitionState.isr.asScala
+        val isrInfo = getEndpoints(snapshot, isr, listenerName, errorUnavailableEndpoints)
         maybeLeader match {
           case None =>
             val error = if (!snapshot.aliveBrokers.contains(brokerId)) { // we are already holding the read lock
@@ -92,13 +94,10 @@ class MetadataCache(brokerId: Int) extends Logging {
               if (errorUnavailableListeners) Errors.LISTENER_NOT_FOUND else Errors.LEADER_NOT_AVAILABLE
             }
             new MetadataResponse.PartitionMetadata(error, partitionId.toInt, Node.noNode(),
-              Optional.empty(), replicaInfo.asJava, java.util.Collections.emptyList(),
+              Optional.empty(), replicaInfo.asJava, isrInfo.asJava,
               offlineReplicaInfo.asJava)
 
           case Some(leader) =>
-            val isr = partitionState.basePartitionState.isr.asScala
-            val isrInfo = getEndpoints(snapshot, isr, listenerName, errorUnavailableEndpoints)
-
             if (replicaInfo.size < replicas.size) {
               debug(s"Error while fetching metadata for $topicPartition: replica information not available for " +
                 s"following brokers ${replicas.filterNot(replicaInfo.map(_.id).contains).mkString(",")}")
