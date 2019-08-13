@@ -27,9 +27,11 @@ import collection.JavaConverters._
 class Pool[K,V](valueFactory: Option[K => V] = None) extends Iterable[(K, V)] {
 
   private val pool: ConcurrentMap[K, V] = new ConcurrentHashMap[K, V]
-  
+
   def put(k: K, v: V): V = pool.put(k, v)
-  
+
+  def putAll(map: Map[K, V]): Unit = map.foreach { case (k, v) => put(k, v) }
+
   def putIfNotExists(k: K, v: V): V = pool.putIfAbsent(k, v)
 
   /**
