@@ -236,7 +236,7 @@ public class GlobalStreamThreadTest {
             10 * 1000,
             "Input record never consumed");
 
-        mockConsumer.setException(new InvalidOffsetException("Try Again!") {
+        mockConsumer.setPollException(new InvalidOffsetException("Try Again!") {
             @Override
             public Set<TopicPartition> partitions() {
                 return Collections.singleton(topicPartition);
