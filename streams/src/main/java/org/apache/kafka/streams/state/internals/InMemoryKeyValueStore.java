@@ -165,11 +165,6 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
         }
 
         @Override
-        public void remove() {
-            iter.remove();
-        }
-
-        @Override
         public void close() {
             // do nothing
         }

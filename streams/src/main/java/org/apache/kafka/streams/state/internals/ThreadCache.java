@@ -318,11 +318,6 @@ public class ThreadCache {
         }
 
         @Override
-        public void remove() {
-            throw new UnsupportedOperationException("remove not supported by MemoryLRUCacheBytesIterator");
-        }
-
-        @Override
         public void close() {
             // do nothing
         }
