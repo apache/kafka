@@ -269,7 +269,7 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
     updatedProps.put(configPrefix+KafkaConfig.SslTruststoreTypeProp, SslTruststoreTypeVal)
 
     // merge two properties
-    updatedProps.putAll(secProps)
+    updatedProps ++= secProps
 
     // 3. update password property using config provider
     updatedProps.put(configPrefix+KafkaConfig.SslKeystorePasswordProp, SslKeystorePasswordVal)
