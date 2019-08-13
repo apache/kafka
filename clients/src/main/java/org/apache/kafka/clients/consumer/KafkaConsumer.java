@@ -1206,6 +1206,11 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         return poll(time.timer(timeout), true);
     }
 
+    @Override
+    public ConsumerRecords<K, V> poll(final Duration timeout, final boolean includeMetadataInTimeout) {
+        return poll(time.timer(timeout), includeMetadataInTimeout);
+    }
+
     /**
      * @throws KafkaException if the rebalance callback throws exception
      */
