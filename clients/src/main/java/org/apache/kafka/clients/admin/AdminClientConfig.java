@@ -175,11 +175,11 @@ public class AdminClientConfig extends AbstractConfig {
                                         Importance.MEDIUM,
                                         CLIENT_DNS_LOOKUP_DOC)
                                 // security support
-                                .define(SecurityConfig.SECURITY_PROVIDER_CLASS_CONFIG,
+                                .define(SecurityConfig.SECURITY_PROVIDERS_CONFIG,
                                         Type.STRING,
                                         null,
                                         Importance.LOW,
-                                        SecurityConfig.SECURITY_PROVIDER_CLASS_DOC)
+                                        SecurityConfig.SECURITY_PROVIDERS_DOC)
                                 .define(SECURITY_PROTOCOL_CONFIG,
                                         Type.STRING,
                                         DEFAULT_SECURITY_PROTOCOL,

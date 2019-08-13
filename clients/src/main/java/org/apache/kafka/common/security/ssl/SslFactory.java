@@ -91,8 +91,8 @@ public class SslFactory implements Reconfigurable {
         if (clientAuthConfigOverride != null) {
             nextConfigs.put(BrokerSecurityConfigs.SSL_CLIENT_AUTH_CONFIG, clientAuthConfigOverride);
         }
-        nextConfigs.put(SecurityConfig.SECURITY_PROVIDER_CLASS_CONFIG,
-                configs.get(SecurityConfig.SECURITY_PROVIDER_CLASS_CONFIG));
+        nextConfigs.put(SecurityConfig.SECURITY_PROVIDERS_CONFIG,
+                configs.get(SecurityConfig.SECURITY_PROVIDERS_CONFIG));
         SslEngineBuilder builder = new SslEngineBuilder(nextConfigs);
         if (keystoreVerifiableUsingTruststore) {
             try {

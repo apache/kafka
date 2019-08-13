@@ -19,7 +19,6 @@ package org.apache.kafka.common.security.ssl;
 import java.io.File;
 import java.nio.file.Files;
 import java.security.KeyStore;
-import java.security.Provider;
 import java.util.Arrays;
 import java.util.Map;
 
@@ -32,7 +31,7 @@ import org.apache.kafka.common.config.SecurityConfig;
 import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.security.ssl.mock.TestKeyManagerFactory;
-import org.apache.kafka.common.security.ssl.mock.TestProvider;
+import org.apache.kafka.common.security.ssl.mock.TestProviderGenerator;
 import org.apache.kafka.common.security.ssl.mock.TestTrustManagerFactory;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.test.TestSslUtils;
@@ -66,16 +65,17 @@ public class SslFactoryTest {
 
     @Test
     public void testSslFactoryWithCustomKeyManagerConfiguration() {
-        Provider provider = new TestProvider();
+        TestProviderGenerator providerGenerator = new TestProviderGenerator();
+        providerGenerator.configure();
         Map<String, Object> serverSslConfig = TestSslUtils.createSslConfig(
                 TestKeyManagerFactory.ALGORITHM,
                 TestTrustManagerFactory.ALGORITHM
         );
-        serverSslConfig.put(SecurityConfig.SECURITY_PROVIDER_CLASS_CONFIG, provider.getClass().getName());
+        serverSslConfig.put(SecurityConfig.SECURITY_PROVIDERS_CONFIG, providerGenerator.getClass().getName());
         SslFactory sslFactory = new SslFactory(Mode.SERVER);
         sslFactory.configure(serverSslConfig);
         assertNotNull("SslEngineBuilder not created", sslFactory.sslEngineBuilder());
-        Security.removeProvider(provider.getName());
+        Security.removeProvider(providerGenerator.getProvider().getName());
     }
 
     @Test(expected = KafkaException.class)
@@ -96,7 +96,7 @@ public class SslFactoryTest {
                 TestKeyManagerFactory.ALGORITHM,
                 TestTrustManagerFactory.ALGORITHM
         );
-        serverSslConfig.put(SecurityConfig.SECURITY_PROVIDER_CLASS_CONFIG,
+        serverSslConfig.put(SecurityConfig.SECURITY_PROVIDERS_CONFIG,
                 "com.fake.ProviderClass1,com.fake.ProviderClass2");
         SslFactory sslFactory = new SslFactory(Mode.SERVER);
         sslFactory.configure(serverSslConfig);

@@ -487,11 +487,11 @@ public class ConsumerConfig extends AbstractConfig {
                                         Importance.MEDIUM,
                                         ALLOW_AUTO_CREATE_TOPICS_DOC)
                                 // security support
-                                .define(SecurityConfig.SECURITY_PROVIDER_CLASS_CONFIG,
+                                .define(SecurityConfig.SECURITY_PROVIDERS_CONFIG,
                                         Type.STRING,
                                         null,
                                         Importance.LOW,
-                                        SecurityConfig.SECURITY_PROVIDER_CLASS_DOC)
+                                        SecurityConfig.SECURITY_PROVIDERS_DOC)
                                 .define(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG,
                                         Type.STRING,
                                         CommonClientConfigs.DEFAULT_SECURITY_PROTOCOL,

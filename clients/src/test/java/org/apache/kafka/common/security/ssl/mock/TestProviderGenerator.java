@@ -14,15 +14,32 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common.config;
+package org.apache.kafka.common.security.ssl.mock;
 
-/**
- * Contains the common security config for SSL and SASL
- */
-public class SecurityConfig {
+import org.apache.kafka.common.security.SecurityProviderGenerator;
 
-    public static final String SECURITY_PROVIDERS_CONFIG = "security.providers";
-    public static final String SECURITY_PROVIDERS_DOC = "A list of generators each returning a provider " +
-            "implementing security algorithms";
+import java.security.Provider;
+import java.util.HashMap;
+import java.util.Map;
 
+public class TestProviderGenerator implements SecurityProviderGenerator {
+
+    private TestProvider provider;
+
+    @Override
+    public void configure(Map<String, ?> config) {
+
+    }
+
+    public void configure() {
+        configure(new HashMap<>());
+    }
+
+    @Override
+    public Provider getProvider() {
+        if (provider == null) {
+            provider = new TestProvider();
+        }
+        return provider;
+    }
 }

@@ -14,15 +14,24 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common.config;
+package org.apache.kafka.common.security;
+
+import java.security.Provider;
+import java.util.Map;
 
 /**
- * Contains the common security config for SSL and SASL
+ * An interface for generating security providers.
  */
-public class SecurityConfig {
+public interface SecurityProviderGenerator {
 
-    public static final String SECURITY_PROVIDERS_CONFIG = "security.providers";
-    public static final String SECURITY_PROVIDERS_DOC = "A list of generators each returning a provider " +
-            "implementing security algorithms";
+    /**
+     * Configure method is used to configure the generator to create the Security Provider
+     * @param config configuration parameters for initialising security provider
+     */
+    void configure(Map<String, ?> config);
 
+    /**
+     * Generate the security provider configured
+     */
+    Provider getProvider();
 }

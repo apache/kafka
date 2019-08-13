@@ -342,11 +342,11 @@ public class ProducerConfig extends AbstractConfig {
                                         CommonClientConfigs.DEFAULT_SECURITY_PROTOCOL,
                                         Importance.MEDIUM,
                                         CommonClientConfigs.SECURITY_PROTOCOL_DOC)
-                                .define(SecurityConfig.SECURITY_PROVIDER_CLASS_CONFIG,
+                                .define(SecurityConfig.SECURITY_PROVIDERS_CONFIG,
                                         Type.STRING,
                                         null,
                                         Importance.LOW,
-                                        SecurityConfig.SECURITY_PROVIDER_CLASS_DOC)
+                                        SecurityConfig.SECURITY_PROVIDERS_DOC)
                                 .withClientSslSupport()
                                 .withClientSaslSupport()
                                 .define(ENABLE_IDEMPOTENCE_CONFIG,

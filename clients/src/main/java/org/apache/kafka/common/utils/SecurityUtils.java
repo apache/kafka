@@ -17,11 +17,11 @@
 package org.apache.kafka.common.utils;
 
 import org.apache.kafka.common.config.SecurityConfig;
+import org.apache.kafka.common.security.SecurityProviderGenerator;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.security.Provider;
 import java.security.Security;
 import java.util.Map;
 
@@ -44,15 +44,19 @@ public class SecurityUtils {
     }
 
     public static void addConfiguredSecurityProviders(Map<String, ?> configs) {
-        String securityProviderClassesStr = (String) configs.get(SecurityConfig.SECURITY_PROVIDER_CLASS_CONFIG);
+        String securityProviderClassesStr = (String) configs.get(SecurityConfig.SECURITY_PROVIDERS_CONFIG);
         if (securityProviderClassesStr == null || securityProviderClassesStr.equals("")) {
             return;
         }
         try {
             String[] securityProviderClasses = securityProviderClassesStr.replaceAll("\\s+", "").split(",");
             for (int index = 0; index < securityProviderClasses.length; index++) {
-                Security.insertProviderAt((Provider) Class.forName(securityProviderClasses[index]).newInstance(), index + 1);
+                SecurityProviderGenerator securityProviderGenerator = (SecurityProviderGenerator) Class.forName(securityProviderClasses[index]).newInstance();
+                Security.insertProviderAt(securityProviderGenerator.getProvider(), index + 1);
             }
+        } catch (ClassCastException e) {
+            LOGGER.error("Generator provided through " + SecurityConfig.SECURITY_PROVIDERS_CONFIG +
+                    " are expected to be sub-classes of SecurityProviderGenerator");
         } catch (ClassNotFoundException cnfe) {
             LOGGER.error("Unrecognized security provider class", cnfe);
         } catch (IllegalAccessException | InstantiationException e) {

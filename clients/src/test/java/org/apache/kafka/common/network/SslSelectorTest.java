@@ -26,7 +26,7 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.security.ssl.SslFactory;
 import org.apache.kafka.common.security.ssl.mock.TestKeyManagerFactory;
-import org.apache.kafka.common.security.ssl.mock.TestProvider;
+import org.apache.kafka.common.security.ssl.mock.TestProviderGenerator;
 import org.apache.kafka.common.security.ssl.mock.TestTrustManagerFactory;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
@@ -43,7 +43,6 @@ import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
-import java.security.Provider;
 import java.security.Security;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -95,8 +94,9 @@ public class SslSelectorTest extends SelectorTest {
 
     @Test
     public void testConnectionWithCustomKeyManager() throws Exception {
-        Provider provider = new TestProvider();
-        Security.addProvider(provider);
+
+        TestProviderGenerator providerGenerator = new TestProviderGenerator();
+        providerGenerator.configure();
 
         int requestSize = 100 * 1024;
         final String node = "0";
@@ -106,7 +106,7 @@ public class SslSelectorTest extends SelectorTest {
                 TestKeyManagerFactory.ALGORITHM,
                 TestTrustManagerFactory.ALGORITHM
         );
-        sslServerConfigs.put(SecurityConfig.SECURITY_PROVIDER_CLASS_CONFIG, provider.getClass().getName());
+        sslServerConfigs.put(SecurityConfig.SECURITY_PROVIDERS_CONFIG, providerGenerator.getClass().getName());
         EchoServer server = new EchoServer(SecurityProtocol.SSL, sslServerConfigs);
         server.start();
         Time time = new MockTime();
@@ -131,7 +131,7 @@ public class SslSelectorTest extends SelectorTest {
         selector.close(node);
         super.verifySelectorEmpty(selector);
 
-        Security.removeProvider(provider.getName());
+        Security.removeProvider(providerGenerator.getProvider().getName());
         selector.close();
         server.close();
         metrics.close();
