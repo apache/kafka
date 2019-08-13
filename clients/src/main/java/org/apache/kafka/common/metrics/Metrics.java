@@ -20,7 +20,6 @@ import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.MetricNameTemplate;
 import org.apache.kafka.common.utils.KafkaThread;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -33,6 +32,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Objects;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.concurrent.ConcurrentHashMap;
@@ -90,7 +90,7 @@ public class Metrics implements Closeable {
      * Expiration of Sensors is disabled.
      */
     public Metrics(Time time) {
-        this(new MetricConfig(), new ArrayList<MetricsReporter>(0), time);
+        this(new MetricConfig(), new ArrayList<>(0), time);
     }
 
     /**
@@ -98,7 +98,7 @@ public class Metrics implements Closeable {
      * Expiration of Sensors is disabled.
      */
     public Metrics(MetricConfig defaultConfig, Time time) {
-        this(defaultConfig, new ArrayList<MetricsReporter>(0), time);
+        this(defaultConfig, new ArrayList<>(0), time);
     }
 
 
@@ -108,7 +108,7 @@ public class Metrics implements Closeable {
      * @param defaultConfig The default config to use for all metrics that don't override their config
      */
     public Metrics(MetricConfig defaultConfig) {
-        this(defaultConfig, new ArrayList<MetricsReporter>(0), Time.SYSTEM);
+        this(defaultConfig, new ArrayList<>(0), Time.SYSTEM);
     }
 
     /**
@@ -134,7 +134,7 @@ public class Metrics implements Closeable {
         this.sensors = new ConcurrentHashMap<>();
         this.metrics = new ConcurrentHashMap<>();
         this.childrenSensors = new ConcurrentHashMap<>();
-        this.reporters = Utils.notNull(reporters);
+        this.reporters = Objects.requireNonNull(reporters);
         this.time = time;
         for (MetricsReporter reporter : reporters)
             reporter.init(new ArrayList<KafkaMetric>());
@@ -313,7 +313,7 @@ public class Metrics implements Closeable {
      * @return Return the sensor or null if no such sensor exists
      */
     public Sensor getSensor(String name) {
-        return this.sensors.get(Utils.notNull(name));
+        return this.sensors.get(Objects.requireNonNull(name));
     }
 
     /**
@@ -500,8 +500,8 @@ public class Metrics implements Closeable {
      */
     public void addMetric(MetricName metricName, MetricConfig config, MetricValueProvider<?> metricValueProvider) {
         KafkaMetric m = new KafkaMetric(new Object(),
-                                        Utils.notNull(metricName),
-                                        Utils.notNull(metricValueProvider),
+                                        Objects.requireNonNull(metricName),
+                                        Objects.requireNonNull(metricValueProvider),
                                         config == null ? this.config : config,
                                         time);
         registerMetric(m);
@@ -545,7 +545,7 @@ public class Metrics implements Closeable {
      * Add a MetricReporter
      */
     public synchronized void addReporter(MetricsReporter reporter) {
-        Utils.notNull(reporter).init(new ArrayList<>(metrics.values()));
+        Objects.requireNonNull(reporter).init(new ArrayList<>(metrics.values()));
         this.reporters.add(reporter);
     }
 
