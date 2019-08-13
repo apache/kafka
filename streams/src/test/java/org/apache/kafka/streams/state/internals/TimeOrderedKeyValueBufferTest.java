@@ -611,7 +611,6 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
 
         final byte[] todeleteValue = getBufferValue("doomed", 0).serialize(0).array();
         final byte[] asdfValue = getBufferValue("qwer", 1).serialize(0).array();
-        final FullChangeSerde<String> fullChangeSerde = FullChangeSerde.wrap(Serdes.String());
         final byte[] zxcvValue1 =
             new BufferValue(
                 Serdes.String().serializer().serialize(null, "previous"),
@@ -619,7 +618,6 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
                 Serdes.String().serializer().serialize(null, "3o4im"),
                 getContext(2L)
             ).serialize(0).array();
-        final FullChangeSerde<String> fullChangeSerde1 = FullChangeSerde.wrap(Serdes.String());
         final byte[] zxcvValue2 =
             new BufferValue(
                 Serdes.String().serializer().serialize(null, "previous"),
