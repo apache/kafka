@@ -820,14 +820,14 @@ object TestUtils extends Logging {
           return
         if (System.currentTimeMillis() > startTime + waitTimeMs)
           fail(msg)
+        Thread.sleep(waitTimeMs.min(pause))
       }
       catch {
         case e: RetriableException if retryExceptions =>
           debug("Retrying after error", e)
           retry += 1
+          Thread.sleep(waitTimeMs.min(pause))
         case e : Throwable => throw e
-      } finally {
-        Thread.sleep(waitTimeMs.min(pause))
       }
     }
     // should never hit here
