@@ -22,7 +22,7 @@ import kafka.utils.{CoreUtils, Logging, ShutdownableThread, TestUtils}
 import org.apache.kafka.clients.consumer._
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.errors.GroupMaxSizeReachedException
+import org.apache.kafka.common.errors.{GroupMaxSizeReachedException, ListenerNotFoundException}
 import org.apache.kafka.common.message.FindCoordinatorRequestData
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.{FindCoordinatorRequest, FindCoordinatorResponse}
@@ -324,8 +324,9 @@ class ConsumerBounceTest extends AbstractConsumerTest with Logging {
       restartDeadBrokers()
     }
 
+    // collect raised exceptions, except ListenerNotFoundException
     def raisedExceptions: Seq[Throwable] = {
-      consumerPollers.flatten(_.thrownException)
+      consumerPollers.flatten(_.thrownException).filterNot(_.isInstanceOf[ListenerNotFoundException])
     }
 
     // we are waiting for the group to rebalance and one member to get kicked
