@@ -934,7 +934,7 @@ public interface Admin extends AutoCloseable {
 
     /**
      * Change the reassignments for one or more partitions.
-     * Providing an empty Optional (e.g via {@link Optional#empty()}) will <bold>cancel</bold> the reassignment for the associated partition.
+     * Providing an empty Optional (e.g via {@link Optional#empty()}) will <bold>revert</bold> the reassignment for the associated partition.
      *
      * This is a convenience method for {@link #alterPartitionReassignments(Map, AlterPartitionReassignmentsOptions)}
      * with default options.  See the overload for more details.
@@ -946,7 +946,7 @@ public interface Admin extends AutoCloseable {
 
     /**
      * Change the reassignments for one or more partitions.
-     * Providing an empty Optional (e.g via {@link Optional#empty()}) will <bold>cancel</bold> the reassignment for the associated partition.
+     * Providing an empty Optional (e.g via {@link Optional#empty()}) will <bold>revert</bold> the reassignment for the associated partition.
      *
      * <p>The following exceptions can be anticipated when calling {@code get()} on the futures obtained from
      * the returned {@code AlterPartitionReassignmentsResult}:</p>
