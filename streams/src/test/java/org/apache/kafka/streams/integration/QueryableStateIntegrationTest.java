@@ -796,7 +796,7 @@ public class QueryableStateIntegrationTest {
             kafkaStreams.store(storeName, QueryableStoreTypes.keyValueStore());
 
         TestUtils.waitForCondition(
-            () -> new Long(8).equals(store.get("hello")),
+            () -> Long.valueOf(8).equals(store.get("hello")),
             maxWaitMs,
             "wait for count to be 8");
 
