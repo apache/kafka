@@ -40,15 +40,6 @@ public class ConsumerGroupDescription {
     private final Node coordinator;
     private final Set<AclOperation> authorizedOperations;
 
-    public ConsumerGroupDescription(String groupId,
-                                    boolean isSimpleConsumerGroup,
-                                    Collection<MemberDescription> members,
-                                    String partitionAssignor,
-                                    ConsumerGroupState state,
-                                    Node coordinator) {
-        this(groupId, isSimpleConsumerGroup, members, partitionAssignor, state, coordinator, Collections.emptySet());
-    }
-
     ConsumerGroupDescription(String groupId,
                              boolean isSimpleConsumerGroup,
                              Collection<MemberDescription> members,
