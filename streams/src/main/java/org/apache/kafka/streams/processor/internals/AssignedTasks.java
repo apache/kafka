@@ -331,26 +331,16 @@ abstract class AssignedTasks<T extends Task> {
 
     void close(final boolean clean) {
         final AtomicReference<RuntimeException> firstException = new AtomicReference<>(null);
-        for (final T task : allTasks()) {
-            try {
-                task.close(clean, false);
-            } catch (final TaskMigratedException e) {
-                log.info("Failed to close {} {} since it got migrated to another thread already. " +
-                        "Closing it as zombie and move on.", taskTypeName, task.id());
-                firstException.compareAndSet(null, closeZombieTask(task));
-            } catch (final RuntimeException t) {
-                log.error("Failed while closing {} {} due to the following error:",
-                          task.getClass().getSimpleName(),
-                          task.id(),
-                          t);
-                if (clean) {
-                    if (!closeUnclean(task)) {
-                        firstException.compareAndSet(null, t);
-                    }
-                } else {
-                    firstException.compareAndSet(null, t);
-                }
-            }
+
+        final List<T> nonSuspendedTasks = new ArrayList<>();
+        nonSuspendedTasks.addAll(created.values());
+        nonSuspendedTasks.addAll(running.values());
+        for (final T task : nonSuspendedTasks) {
+            closeTask(clean, false, task, firstException);
+        }
+
+        for (final T task : suspended.values()) {
+            closeTask(clean, true, task, firstException);
         }
 
         clear();
@@ -358,6 +348,33 @@ abstract class AssignedTasks<T extends Task> {
         final RuntimeException fatalException = firstException.get();
         if (fatalException != null) {
             throw fatalException;
+        }
+    }
+
+    private void closeTask(final boolean clean, final boolean isSuspended, final T task,
+        final AtomicReference<RuntimeException> firstException) {
+        try {
+            if (isSuspended) {
+                task.closeSuspended(clean, false, null);
+            } else {
+                task.close(clean, false);
+            }
+        } catch (final TaskMigratedException e) {
+            log.info("Failed to close {} {} since it got migrated to another thread already. " +
+                "Closing it as zombie and move on.", taskTypeName, task.id());
+            firstException.compareAndSet(null, closeZombieTask(task));
+        } catch (final RuntimeException t) {
+            log.error("Failed while closing {} {} due to the following error:",
+                task.getClass().getSimpleName(),
+                task.id(),
+                t);
+            if (clean) {
+                if (!closeUnclean(task)) {
+                    firstException.compareAndSet(null, t);
+                }
+            } else {
+                firstException.compareAndSet(null, t);
+            }
         }
     }
 
