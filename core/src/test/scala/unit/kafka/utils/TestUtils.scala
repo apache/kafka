@@ -808,10 +808,10 @@ object TestUtils extends Logging {
     * @param msg error message
     * @param waitTimeMs maximum time to wait and retest the condition before failing the test
     * @param pause delay between condition checks
-    * @param maxRetries maximum number of retries to check the given condition if a retriable exception is thrown
+    * @param retryExceptions whether to retry RetriableExceptions
     */
   def waitUntilTrue(condition: () => Boolean, msg: => String,
-                    waitTimeMs: Long = JTestUtils.DEFAULT_MAX_WAIT_MS, pause: Long = 100L, maxRetries: Int = 0): Unit = {
+                    waitTimeMs: Long = JTestUtils.DEFAULT_MAX_WAIT_MS, pause: Long = 100L, retryExceptions: Boolean = false): Unit = {
     val startTime = System.currentTimeMillis()
     var retry = 0
     while (true) {
@@ -820,13 +820,14 @@ object TestUtils extends Logging {
           return
         if (System.currentTimeMillis() > startTime + waitTimeMs)
           fail(msg)
-        Thread.sleep(waitTimeMs.min(pause))
       }
       catch {
-        case e: RetriableException if retry < maxRetries =>
+        case e: RetriableException if retryExceptions =>
           debug("Retrying after error", e)
           retry += 1
         case e : Throwable => throw e
+      } finally {
+        Thread.sleep(waitTimeMs.min(pause))
       }
     }
     // should never hit here
@@ -1563,15 +1564,6 @@ object TestUtils extends Logging {
             cause.getClass.getName, clazz.isInstance(cause))
         expectedErrorMessage.foreach(message => assertTrue(s"Received error message : ${cause.getMessage}" +
           s" does not contain expected error message : $message", cause.getMessage.contains(message)))
-    }
-  }
-
-  def maybeUnwrapFutureException[T](action: () => T): T = {
-    try {
-      action()
-    } catch {
-      case e: ExecutionException => throw e.getCause
-      case t: Throwable => throw t
     }
   }
 

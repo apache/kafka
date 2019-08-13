@@ -25,14 +25,15 @@ import kafka.admin.ConsumerGroupCommand.{ConsumerGroupCommandOptions, ConsumerGr
 import kafka.integration.KafkaServerTestHarness
 import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
+import org.apache.kafka.clients.admin.AdminClientConfig
 import org.apache.kafka.clients.consumer.{KafkaConsumer, RangeAssignor}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.WakeupException
 import org.apache.kafka.common.serialization.StringDeserializer
 import org.junit.{After, Before}
 
-import scala.collection.mutable.ArrayBuffer
 import scala.collection.JavaConverters._
+import scala.collection.mutable.ArrayBuffer
 
 class ConsumerGroupCommandTest extends KafkaServerTestHarness {
   import ConsumerGroupCommandTest._
@@ -84,7 +85,7 @@ class ConsumerGroupCommandTest extends KafkaServerTestHarness {
 
   def getConsumerGroupService(args: Array[String]): ConsumerGroupService = {
     val opts = new ConsumerGroupCommandOptions(args)
-    val service = new ConsumerGroupService(opts)
+    val service = new ConsumerGroupService(opts, Map(AdminClientConfig.RETRIES_CONFIG -> Int.MaxValue.toString))
     consumerGroupService = service :: consumerGroupService
     service
   }
