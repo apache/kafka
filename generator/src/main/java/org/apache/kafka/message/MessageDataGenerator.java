@@ -421,7 +421,7 @@ public final class MessageDataGenerator {
 
     private void generateFieldReader(FieldSpec field, Versions curVersions) {
         boolean isVariableLength =
-            (field.type().isArray() || field.type().isString() || field.type().isBytes());
+            field.type().isArray() || field.type().isString() || field.type().isBytes();
         VersionConditional.forVersions(field.versions(), curVersions).
             ifNotMember(() -> {
                 buffer.printf("this.%s = %s;%n", field.camelCaseName(), fieldDefault(field));
@@ -481,7 +481,7 @@ public final class MessageDataGenerator {
                     buffer.printf("%s = readable.readShort();%n", lengthVar);
                 } else if (type.isBytes() || type.isArray()) {
                     buffer.printf("%s = readable.readInt();%n", lengthVar);
-                } else{
+                } else {
                     throw new RuntimeException("Can't handle variable length type " + type);
                 }
             }).
@@ -726,7 +726,7 @@ public final class MessageDataGenerator {
 
     private void generateFieldWriter(FieldSpec field, Versions curVersions) {
         boolean isVariableLength =
-            (field.type().isArray() || field.type().isString() || field.type().isBytes());
+            field.type().isArray() || field.type().isString() || field.type().isBytes();
         VersionConditional.forVersions(field.versions(), curVersions).
             ifMember(() -> {
                 if (isVariableLength) {
@@ -738,7 +738,7 @@ public final class MessageDataGenerator {
                     buffer.printf("%s;%n", primitiveWriteExpression(field.type(), field.camelCaseName()));
                 }
             }).
-        generate(buffer);
+            generate(buffer);
     }
 
     private void generateVariableLengthWriter(String name,

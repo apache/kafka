@@ -177,7 +177,7 @@ public class ByteUtilsTest {
         assertUnsignedVarlongSerde(1048576, new byte[] {x80, x80, x40});
         assertUnsignedVarlongSerde(Integer.MAX_VALUE, new byte[] {xFF, xFF, xFF, xFF, x07});
         assertUnsignedVarlongSerde(Integer.MIN_VALUE, new byte[] {x80, x80, x80, x80, x08});
-        assertUnsignedVarlongSerde(549755813888L, new byte[] { xFF, xFF, xFF, xFF, x87, x40});
+        assertUnsignedVarlongSerde(549755813888L, new byte[] {xFF, xFF, xFF, xFF, x87, x40});
     }
 
     @Test
