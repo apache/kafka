@@ -461,7 +461,7 @@ public final class RecordAccumulator {
             Deque<ProducerBatch> deque = entry.getValue();
             synchronized (deque) {
                 // When producing to a large number of partitions, this path is hot and deques are often empty.
-                // We check whether a batch exists fisrt to avoid the more expensive ones whenever possible.
+                // We check whether a batch exists first to avoid the more expensive checks whenever possible.
                 ProducerBatch batch = deque.peekFirst();
                 if (batch != null) {
                     TopicPartition part = entry.getKey();
