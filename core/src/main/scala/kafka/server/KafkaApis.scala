@@ -2365,8 +2365,12 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   def handleListPartitionReassignmentsRequest(request: RequestChannel.Request): Unit = {
+<<<<<<< HEAD
     authorizeClusterOperation(request, DESCRIBE)
     val listPartitionReassignmentsRequest = request.body[ListPartitionReassignmentsRequest]
+=======
+    authorizeClusterDescribe(request)
+>>>>>>> Remove unused variables: KafkaApis#[handleAlterPartitionReassignmentsRequest, handleListPartitionReassignmentsRequest]
 
     def sendResponseCallback(result: Either[Map[TopicPartition, ReplicaAssignment], ApiError]): Unit = {
       val responseData = result match {
