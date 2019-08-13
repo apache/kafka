@@ -3176,6 +3176,7 @@ public class KafkaAdminClient extends AdminClient {
                         break;
                     case NOT_CONTROLLER:
                         handleNotControllerError(topLevelError);
+                        break;
                     default:
                         for (ReassignableTopicResponse topicResponse : response.data().responses()) {
                             String topicName = topicResponse.name();
@@ -3238,7 +3239,7 @@ public class KafkaAdminClient extends AdminClient {
                 }
             }
         };
-        if (!reassignments.isEmpty()) {
+        if (!topicsToReassignments.isEmpty()) {
             runnable.call(call, now);
         }
         return new AlterPartitionReassignmentsResult(new HashMap<>(futures));
