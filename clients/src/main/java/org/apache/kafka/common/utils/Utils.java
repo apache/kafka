@@ -627,7 +627,7 @@ public final class Utils {
             while ((nextChar = fileInputStream.read()) != -1) {
                 fileText.append((char) nextChar);
             }
-        } catch (Exception ex) {
+        } catch (IOException ex) {
             throw new RuntimeException("Unable to read file " + path, ex);
         }
         return fileText.toString();
