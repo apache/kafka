@@ -55,7 +55,7 @@ public class RocksDBTimestampedStoreTest extends RocksDBStoreTest {
         assertThat(appender.getMessages(), hasItem("Opening store " + DB_NAME + " in regular mode"));
         LogCaptureAppender.unregister(appender);
 
-        try(final KeyValueIterator<Bytes, byte[]> iterator = rocksDBStore.all()) {
+        try (final KeyValueIterator<Bytes, byte[]> iterator = rocksDBStore.all()) {
             assertThat(iterator.hasNext(), is(false));
         }
     }
@@ -212,7 +212,7 @@ public class RocksDBTimestampedStoreTest extends RocksDBStoreTest {
 
     private void iteratorsShouldNotMigrateData() {
         // iterating should not migrate any data, but return all key over both CF (plus surrogate timestamps for old CF)
-        try(final KeyValueIterator<Bytes, byte[]> itAll = rocksDBStore.all()) {
+        try (final KeyValueIterator<Bytes, byte[]> itAll = rocksDBStore.all()) {
             {
                 final KeyValue<Bytes, byte[]> keyValue = itAll.next();
                 assertArrayEquals("key1".getBytes(), keyValue.key.get());
@@ -255,7 +255,7 @@ public class RocksDBTimestampedStoreTest extends RocksDBStoreTest {
             assertFalse(itAll.hasNext());
         }
 
-        try(final KeyValueIterator<Bytes, byte[]> it =
+        try (final KeyValueIterator<Bytes, byte[]> it =
                 rocksDBStore.range(new Bytes("key2".getBytes()), new Bytes("key5".getBytes()))) {
             {
                 final KeyValue<Bytes, byte[]> keyValue = it.next();
