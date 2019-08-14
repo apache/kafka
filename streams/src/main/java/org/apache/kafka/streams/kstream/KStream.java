@@ -18,6 +18,7 @@ package org.apache.kafka.streams.kstream;
 
 import org.apache.kafka.clients.producer.internals.DefaultPartitioner;
 import org.apache.kafka.common.serialization.Serde;
+import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
@@ -27,6 +28,7 @@ import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.TopicNameExtractor;
+import org.apache.kafka.streams.state.WindowStore;
 
 /**
  * {@code KStream} is an abstraction of a <i>record stream</i> of {@link KeyValue} pairs, i.e., each record is an
@@ -2364,6 +2366,14 @@ public interface KStream<K, V> {
                                  final ValueJoiner<? super V, ? super VO, ? extends VR> joiner,
                                  final JoinWindows windows,
                                  final Joined<K, V, VO> joined);
+
+    <VO, VR> KStream<K, VR> join(final KStream<K, VO> otherStream,
+                                 final ValueJoiner<? super V, ? super VO, ? extends VR> joiner,
+                                 final JoinWindows windows,
+                                 final Joined<K, V, VO> joined,
+                                 final Materialized<K, ?, WindowStore<Bytes, byte[]>> materialized);
+
+
 
     /**
      * Join records of this stream with another {@code KStream}'s records using windowed left equi join with default

@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.serialization.Serde;
+import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.ForeachAction;
 import org.apache.kafka.streams.kstream.GlobalKTable;
@@ -27,6 +28,7 @@ import org.apache.kafka.streams.kstream.KGroupedStream;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
+import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Named;
 import org.apache.kafka.streams.kstream.Predicate;
 import org.apache.kafka.streams.kstream.Printed;
@@ -52,6 +54,7 @@ import org.apache.kafka.streams.processor.TopicNameExtractor;
 import org.apache.kafka.streams.processor.internals.StaticTopicNameExtractor;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
+import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
 import org.apache.kafka.streams.state.WindowStore;
 
 import java.lang.reflect.Array;
@@ -723,7 +726,24 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
                       joiner,
                       windows,
                       joined,
-                      new KStreamImplJoin(false, false));
+            null,
+            new KStreamImplJoin(false, false));
+
+    }
+
+    @Override
+    public <VO, VR> KStream<K, VR> join(final KStream<K, VO> otherStream,
+                                        final ValueJoiner<? super V, ? super VO, ? extends VR> joiner,
+                                        final JoinWindows windows,
+                                        final Joined<K, V, VO> joined,
+                                        final Materialized<K, ?, WindowStore<Bytes, byte[]>> materialized) {
+
+        return doJoin(otherStream,
+            joiner,
+            windows,
+            joined,
+            materialized,
+            new KStreamImplJoin(false, false));
 
     }
 
@@ -739,13 +759,14 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
                                              final ValueJoiner<? super V, ? super VO, ? extends VR> joiner,
                                              final JoinWindows windows,
                                              final Joined<K, V, VO> joined) {
-        return doJoin(other, joiner, windows, joined, new KStreamImplJoin(true, true));
+        return doJoin(other, joiner, windows, joined, null, new KStreamImplJoin(true, true));
     }
 
     private <VO, VR> KStream<K, VR> doJoin(final KStream<K, VO> other,
                                            final ValueJoiner<? super V, ? super VO, ? extends VR> joiner,
                                            final JoinWindows windows,
                                            final Joined<K, V, VO> joined,
+                                           final Materialized<K, ?, WindowStore<Bytes, byte[]>> materialized,
                                            final KStreamImplJoin join) {
         Objects.requireNonNull(other, "other KStream can't be null");
         Objects.requireNonNull(joiner, "joiner can't be null");
@@ -776,8 +797,8 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
             joinOther,
             joiner,
             windows,
-            joined
-        );
+            joined,
+            materialized);
     }
 
     /**
@@ -853,7 +874,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
             joiner,
             windows,
             joined,
-            new KStreamImplJoin(true, false)
+            null, new KStreamImplJoin(true, false)
         );
 
     }
@@ -1071,17 +1092,28 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
     }
 
     @SuppressWarnings("deprecation") // continuing to support Windows#maintainMs/segmentInterval in fallback mode
-    private static <K, V> StoreBuilder<WindowStore<K, V>> joinWindowStoreBuilder(final String joinName,
+    private static <K, V> StoreBuilder<WindowStore<K, V>> joinWindowStoreBuilder(final String storeName,
                                                                                  final JoinWindows windows,
                                                                                  final Serde<K> keySerde,
                                                                                  final Serde<V> valueSerde) {
         return Stores.windowStoreBuilder(
             Stores.persistentWindowStore(
-                joinName + "-store",
+                storeName + "-store",
                 Duration.ofMillis(windows.size() + windows.gracePeriodMs()),
                 Duration.ofMillis(windows.size()),
                 true
             ),
+            keySerde,
+            valueSerde
+        );
+    }
+
+    @SuppressWarnings("deprecation") // continuing to support Windows#maintainMs/segmentInterval in fallback mode
+    private static <K, V> StoreBuilder<WindowStore<K, V>> joinWindowStoreBuilderFromSupplier(final WindowBytesStoreSupplier storeSupplier,
+                                                                                             final Serde<K> keySerde,
+                                                                                             final Serde<V> valueSerde) {
+        return Stores.windowStoreBuilder(
+            storeSupplier,
             keySerde,
             valueSerde
         );
@@ -1103,32 +1135,56 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
                                                    final KStream<K1, V2> other,
                                                    final ValueJoiner<? super V1, ? super V2, ? extends R> joiner,
                                                    final JoinWindows windows,
-                                                   final Joined<K1, V1, V2> joined) {
+                                                   final Joined<K1, V1, V2> joined,
+                                                   final Materialized<K1, ?, WindowStore<Bytes, byte[]>> materialized) {
 
             final JoinedInternal<K1, V1, V2>  joinedInternal = new JoinedInternal<>(joined);
             final NamedInternal renamed = new NamedInternal(joinedInternal.name());
+            final String joinThisSuffix = rightOuter ? "-outer-this-join" : "-this-join";
+            final String joinOtherSuffix = leftOuter ? "-outer-other-join" : "-other-join";
+
+
+            MaterializedInternal<K1, ?, WindowStore<Bytes, byte[]>> materializedInternal = null;
+
+            if (materialized != null) {
+                materializedInternal = new MaterializedInternal<>(materialized, builder, WINDOWED_NAME);
+            }
 
             final String thisWindowStreamName =  renamed.suffixWithOrElseGet(
                     "-this-windowed", builder, WINDOWED_NAME);
             final String otherWindowStreamName = renamed.suffixWithOrElseGet(
                     "-other-windowed", builder, WINDOWED_NAME);
 
-            final String joinThisName = rightOuter ?
-                    renamed.suffixWithOrElseGet("-outer-this-join", builder, OUTERTHIS_NAME)
-                    : renamed.suffixWithOrElseGet("-this-join", builder, JOINTHIS_NAME);
-            final String joinOtherName = leftOuter ?
-                    renamed.suffixWithOrElseGet("-outer-other-join", builder, OUTEROTHER_NAME)
-                    : renamed.suffixWithOrElseGet("-other-join", builder, JOINOTHER_NAME);
+            final String joinThisGeneratedName = rightOuter ? builder.newProcessorName(OUTERTHIS_NAME) : builder.newProcessorName(JOINTHIS_NAME);
+            final String joinOtherGeneratedName = leftOuter ? builder.newProcessorName(OUTEROTHER_NAME) : builder.newProcessorName(JOINOTHER_NAME);
+
+            final String joinThisName = renamed.suffixWithOrElseGet(joinThisSuffix, joinThisGeneratedName + joinThisSuffix);
+            final String joinOtherName = renamed.suffixWithOrElseGet(joinOtherSuffix, joinOtherGeneratedName + joinOtherSuffix);
+
             final String joinMergeName = renamed.suffixWithOrElseGet(
                     "-merge", builder, MERGE_NAME);
+
             final StreamsGraphNode thisStreamsGraphNode = ((AbstractStream) lhs).streamsGraphNode;
             final StreamsGraphNode otherStreamsGraphNode = ((AbstractStream) other).streamsGraphNode;
 
 
-            final StoreBuilder<WindowStore<K1, V1>> thisWindowStore =
-                joinWindowStoreBuilder(joinThisName, windows, joined.keySerde(), joined.valueSerde());
-            final StoreBuilder<WindowStore<K1, V2>> otherWindowStore =
-                joinWindowStoreBuilder(joinOtherName, windows, joined.keySerde(), joined.otherValueSerde());
+            final StoreBuilder<WindowStore<K1, V1>> thisWindowStore;
+            final StoreBuilder<WindowStore<K1, V2>> otherWindowStore;
+            final String userProvidedBaseStoreName = materializedInternal == null ? null : materializedInternal.storeName();
+
+            final String thisJoinStoreName =  userProvidedBaseStoreName == null ? joinThisGeneratedName : userProvidedBaseStoreName + joinThisSuffix;
+            final String otherJoinStoreName = userProvidedBaseStoreName == null ? joinOtherGeneratedName : userProvidedBaseStoreName + joinOtherSuffix;
+
+            if (materializedInternal == null || materializedInternal.storeSupplier() == null) {
+                thisWindowStore = joinWindowStoreBuilder(thisJoinStoreName, windows, joined.keySerde(), joined.valueSerde());
+                otherWindowStore = joinWindowStoreBuilder(otherJoinStoreName, windows, joined.keySerde(), joined.otherValueSerde());
+            } else {
+                final WindowBytesStoreSupplier windowBytesStoreSupplier = (WindowBytesStoreSupplier) materializedInternal.storeSupplier();
+
+                thisWindowStore = joinWindowStoreBuilderFromSupplier(windowBytesStoreSupplier, joined.keySerde(), joined.valueSerde());
+                otherWindowStore = joinWindowStoreBuilderFromSupplier(windowBytesStoreSupplier, joined.keySerde(), joined.otherValueSerde());
+            }
+
 
             final KStreamJoinWindow<K1, V1> thisWindowedStream = new KStreamJoinWindow<>(thisWindowStore.name());
 
