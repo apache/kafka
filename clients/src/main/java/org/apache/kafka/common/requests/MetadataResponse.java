@@ -74,10 +74,6 @@ public class MetadataResponse extends AbstractResponse {
         return data.toStruct(version);
     }
 
-    public MetadataResponseData data() {
-        return data;
-    }
-
     @Override
     public int throttleTimeMs() {
         return data.throttleTimeMs();
@@ -134,6 +130,14 @@ public class MetadataResponse extends AbstractResponse {
         }
         return new Cluster(data.clusterId(), brokers(), partitions, topicsByError(Errors.TOPIC_AUTHORIZATION_FAILED),
                 topicsByError(Errors.INVALID_TOPIC_EXCEPTION), internalTopics, controller());
+    }
+
+    public int topicAuthorizedOperations(String topicName) {
+        return data.topics().find(topicName).topicAuthorizedOperations();
+    }
+
+    public int clusterAuthorizedOperations() {
+        return data.clusterAuthorizedOperations();
     }
 
     /**

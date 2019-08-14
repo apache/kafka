@@ -1526,7 +1526,7 @@ public class KafkaAdminClient extends AdminClient {
                     }
                     partitions.sort(Comparator.comparingInt(TopicPartitionInfo::partition));
                     TopicDescription topicDescription = new TopicDescription(topicName, isInternal, partitions,
-                        validAclOperations(response.data().topics().find(topicName).topicAuthorizedOperations()));
+                        validAclOperations(response.topicAuthorizedOperations(topicName)));
                     future.complete(topicDescription);
                 }
             }
@@ -1585,7 +1585,7 @@ public class KafkaAdminClient extends AdminClient {
                 controllerFuture.complete(controller(response));
                 clusterIdFuture.complete(response.clusterId());
                 authorizedOperationsFuture.complete(
-                        validAclOperations(response.data().clusterAuthorizedOperations()));
+                        validAclOperations(response.clusterAuthorizedOperations()));
             }
 
             private Node controller(MetadataResponse response) {
