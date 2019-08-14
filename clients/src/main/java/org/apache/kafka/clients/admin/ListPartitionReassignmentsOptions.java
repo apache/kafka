@@ -14,21 +14,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.processor;
+
+package org.apache.kafka.clients.admin;
+
+import org.apache.kafka.common.annotation.InterfaceStability;
 
 /**
- * An interface that allows to dynamically determine the name of the Kafka topic to send at the sink node of the topology.
+ * Options for {@link AdminClient#listPartitionReassignments(ListPartitionReassignmentsOptions)}
+ *
+ * The API of this class is evolving. See {@link AdminClient} for details.
  */
-public interface TopicNameExtractor<K, V> {
-
-    /**
-     * Extracts the topic name to send to. The topic name must already exist, since the Kafka Streams library will not
-     * try to automatically create the topic with the extracted name.
-     *
-     * @param key           the record key
-     * @param value         the record value
-     * @param recordContext current context metadata of the record
-     * @return              the topic name this record should be sent to
-     */
-    String extract(final K key, final V value, final RecordContext recordContext);
+@InterfaceStability.Evolving
+public class ListPartitionReassignmentsOptions extends AbstractOptions<ListPartitionReassignmentsOptions> {
 }
