@@ -1361,12 +1361,13 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigO
   def logRetentionTimeMillis: Long = {
     val millisInMinute = 60L * 1000L
     val millisInHour = 60L * millisInMinute
+    val config = currentConfig
 
     val millis: java.lang.Long =
-      Option(getLong(KafkaConfig.LogRetentionTimeMillisProp)).getOrElse(
-        Option(getInt(KafkaConfig.LogRetentionTimeMinutesProp)) match {
+      Option(config.getLong(KafkaConfig.LogRetentionTimeMillisProp)).getOrElse(
+        Option(config.getInt(KafkaConfig.LogRetentionTimeMinutesProp)) match {
           case Some(mins) => millisInMinute * mins
-          case None => getInt(KafkaConfig.LogRetentionTimeHoursProp) * millisInHour
+          case None => config.getInt(KafkaConfig.LogRetentionTimeHoursProp) * millisInHour
         })
 
     if (millis < 0) return -1
@@ -1384,21 +1385,24 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigO
   // If the user did not define listeners but did define host or port, let's use them in backward compatible way
   // If none of those are defined, we default to PLAINTEXT://:9092
   def listeners: Seq[EndPoint] = {
-    Option(getString(KafkaConfig.ListenersProp)).map { listenerProp =>
-      CoreUtils.listenerListToEndPoints(listenerProp, listenerSecurityProtocolMap)
-    }.getOrElse(CoreUtils.listenerListToEndPoints("PLAINTEXT://" + hostName + ":" + port, listenerSecurityProtocolMap))
+    val config = currentConfig
+    Option(config.getString(KafkaConfig.ListenersProp)).map { listenerProp =>
+      CoreUtils.listenerListToEndPoints(listenerProp, config.listenerSecurityProtocolMap)
+    }.getOrElse(CoreUtils.listenerListToEndPoints(s"PLAINTEXT://${config.hostName}:${config.port}", config.listenerSecurityProtocolMap))
   }
 
   def controlPlaneListener: Option[EndPoint] = {
-    controlPlaneListenerName.map { listenerName =>
-      listeners.filter(endpoint => endpoint.listenerName.value() == listenerName.value()).head
+    val config = currentConfig
+    config.controlPlaneListenerName.map { listenerName =>
+      config.listeners.filter(endpoint => endpoint.listenerName.value() == listenerName.value()).head
     }
   }
 
   def dataPlaneListeners: Seq[EndPoint] = {
-    Option(getString(KafkaConfig.ControlPlaneListenerNameProp)) match {
-      case Some(controlPlaneListenerName) => listeners.filterNot(_.listenerName.value() == controlPlaneListenerName)
-      case None => listeners
+    val config = currentConfig
+    Option(config.getString(KafkaConfig.ControlPlaneListenerNameProp)) match {
+      case Some(controlPlaneListenerName) => config.listeners.filterNot(_.listenerName.value() == controlPlaneListenerName)
+      case None => config.listeners
     }
   }
 
@@ -1406,44 +1410,47 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigO
   // If he didn't but did define advertised host or port, we'll use those and fill in the missing value from regular host / port or defaults
   // If none of these are defined, we'll use the listeners
   def advertisedListeners: Seq[EndPoint] = {
-    val advertisedListenersProp = getString(KafkaConfig.AdvertisedListenersProp)
+    val config = currentConfig
+    val advertisedListenersProp = config.getString(KafkaConfig.AdvertisedListenersProp)
     if (advertisedListenersProp != null)
-      CoreUtils.listenerListToEndPoints(advertisedListenersProp, listenerSecurityProtocolMap)
-    else if (getString(KafkaConfig.AdvertisedHostNameProp) != null || getInt(KafkaConfig.AdvertisedPortProp) != null)
-      CoreUtils.listenerListToEndPoints("PLAINTEXT://" + advertisedHostName + ":" + advertisedPort, listenerSecurityProtocolMap)
+      CoreUtils.listenerListToEndPoints(advertisedListenersProp, config.listenerSecurityProtocolMap)
+    else if (config.getString(KafkaConfig.AdvertisedHostNameProp) != null || config.getInt(KafkaConfig.AdvertisedPortProp) != null)
+      CoreUtils.listenerListToEndPoints(s"PLAINTEXT://${config.advertisedHostName}:${config.advertisedPort}", config.listenerSecurityProtocolMap)
     else
       listeners
   }
 
   private def getInterBrokerListenerNameAndSecurityProtocol: (ListenerName, SecurityProtocol) = {
-    Option(getString(KafkaConfig.InterBrokerListenerNameProp)) match {
-      case Some(_) if originals.containsKey(KafkaConfig.InterBrokerSecurityProtocolProp) =>
+    val config = currentConfig
+    Option(config.getString(KafkaConfig.InterBrokerListenerNameProp)) match {
+      case Some(_) if config.originals.containsKey(KafkaConfig.InterBrokerSecurityProtocolProp) =>
         throw new ConfigException(s"Only one of ${KafkaConfig.InterBrokerListenerNameProp} and " +
           s"${KafkaConfig.InterBrokerSecurityProtocolProp} should be set.")
       case Some(name) =>
         val listenerName = ListenerName.normalised(name)
-        val securityProtocol = listenerSecurityProtocolMap.getOrElse(listenerName,
+        val securityProtocol = config.listenerSecurityProtocolMap.getOrElse(listenerName,
           throw new ConfigException(s"Listener with name ${listenerName.value} defined in " +
             s"${KafkaConfig.InterBrokerListenerNameProp} not found in ${KafkaConfig.ListenerSecurityProtocolMapProp}."))
         (listenerName, securityProtocol)
       case None =>
-        val securityProtocol = getSecurityProtocol(getString(KafkaConfig.InterBrokerSecurityProtocolProp),
+        val securityProtocol = config.getSecurityProtocol(config.getString(KafkaConfig.InterBrokerSecurityProtocolProp),
           KafkaConfig.InterBrokerSecurityProtocolProp)
         (ListenerName.forSecurityProtocol(securityProtocol), securityProtocol)
     }
   }
 
   private def getControlPlaneListenerNameAndSecurityProtocol: Option[(ListenerName, SecurityProtocol)] = {
-    Option(getString(KafkaConfig.ControlPlaneListenerNameProp)) match {
+    val config = currentConfig
+    Option(config.getString(KafkaConfig.ControlPlaneListenerNameProp)) match {
       case Some(name) =>
         val listenerName = ListenerName.normalised(name)
-        val securityProtocol = listenerSecurityProtocolMap.getOrElse(listenerName,
+        val securityProtocol = config.listenerSecurityProtocolMap.getOrElse(listenerName,
           throw new ConfigException(s"Listener with ${listenerName.value} defined in " +
             s"${KafkaConfig.ControlPlaneListenerNameProp} not found in ${KafkaConfig.ListenerSecurityProtocolMapProp}."))
         Some(listenerName, securityProtocol)
 
       case None => None
-   }
+    }
   }
 
   private def getSecurityProtocol(protocolName: String, configName: String): SecurityProtocol = {

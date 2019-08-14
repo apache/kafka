@@ -23,6 +23,7 @@ import kafka.api.{ApiVersion, KAFKA_0_8_2}
 import kafka.cluster.EndPoint
 import kafka.message._
 import kafka.utils.{CoreUtils, TestUtils}
+import kafka.utils.Implicits._
 import org.apache.kafka.common.config.ConfigException
 import org.apache.kafka.common.metrics.Sensor
 import org.apache.kafka.common.network.ListenerName
@@ -829,6 +830,62 @@ class KafkaConfigTest {
     assertTrue(isValidKafkaConfig(props))
     props.put(KafkaConfig.MaxConnectionsPerIpOverridesProp, "127.0.0.0#:100")
     assertFalse(isValidKafkaConfig(props))
+  }
+
+  @Test
+  def testListenerUpdate(): Unit = {
+    val initialProps = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
+    val initialListeners = Set("INTERNAL://:9092", "EXTERNAL://:9093", "REPLICATION://:9094", "CONTROL://:9095")
+    val initialAdvertisedListeners = Set("INTERNAL://host1:9092", "EXTERNAL://host2:9093", "REPLICATION://host3:9094", "CONTROL://host3:9095")
+    initialProps.setProperty(KafkaConfig.ListenerSecurityProtocolMapProp, "INTERNAL:SASL_PLAINTEXT,EXTERNAL:SASL_SSL,REPLICATION:PLAINTEXT,CONTROL:SSL")
+    initialProps.setProperty(KafkaConfig.ListenersProp, initialListeners.mkString(","))
+    initialProps.setProperty(KafkaConfig.AdvertisedListenersProp, initialAdvertisedListeners.mkString(","))
+    initialProps.setProperty(KafkaConfig.InterBrokerListenerNameProp, "REPLICATION")
+    initialProps.setProperty(KafkaConfig.ControlPlaneListenerNameProp, "CONTROL")
+    val initialConfig = new KafkaConfig(initialProps)
+
+    val newProps = new Properties()
+    newProps ++= initialProps
+    val newListeners = Set("EXTERNAL://:9093", "REPLICATION://:9094", "CONTROL://:9095")
+    val newAdvertisedListeners = Set("EXTERNAL://host2:9093", "REPLICATION://host3:9094", "CONTROL://host3:9095")
+    newProps.setProperty(KafkaConfig.ListenerSecurityProtocolMapProp, "EXTERNAL:SASL_SSL,REPLICATION:SSL,CONTROL:SSL")
+    newProps.setProperty(KafkaConfig.ListenersProp, newListeners.mkString(","))
+    newProps.setProperty(KafkaConfig.AdvertisedListenersProp, newAdvertisedListeners.mkString(","))
+    val newConfig = new KafkaConfig(newProps)
+
+    var configUpdateOpt: Option[KafkaConfig] = None
+    val config = new KafkaConfig(initialProps) {
+      override def listenerSecurityProtocolMap: collection.Map[ListenerName, SecurityProtocol] = {
+        configUpdateOpt.foreach(updateCurrentConfig)
+        super.listenerSecurityProtocolMap
+      }
+    }
+    config.updateCurrentConfig(initialConfig)
+    assertEquals(initialListeners, config.listeners.map(_.connectionString).toSet)
+    assertEquals(initialAdvertisedListeners, config.advertisedListeners.map(_.connectionString).toSet)
+
+    def setupConfigUpdate(startConfig: KafkaConfig, updatedConfig: KafkaConfig): Unit = {
+      config.updateCurrentConfig(startConfig)
+      configUpdateOpt = Some(updatedConfig)
+    }
+
+    setupConfigUpdate(initialConfig, newConfig)
+    assertEquals(initialListeners, config.listeners.map(_.connectionString).toSet)
+    setupConfigUpdate(initialConfig, newConfig)
+    assertEquals(initialAdvertisedListeners, config.advertisedListeners.map(_.connectionString).toSet)
+    setupConfigUpdate(initialConfig, newConfig)
+    assertEquals(Some("CONTROL://:9095"), config.controlPlaneListener.map(_.connectionString))
+    setupConfigUpdate(initialConfig, newConfig)
+    assertEquals(Set("INTERNAL://:9092", "EXTERNAL://:9093", "REPLICATION://:9094"), config.dataPlaneListeners.map(_.connectionString).toSet)
+
+    setupConfigUpdate(newConfig, initialConfig)
+    assertEquals(newListeners, config.listeners.map(_.connectionString).toSet)
+    setupConfigUpdate(newConfig, initialConfig)
+    assertEquals(newAdvertisedListeners, config.advertisedListeners.map(_.connectionString).toSet)
+    setupConfigUpdate(newConfig, initialConfig)
+    assertEquals(Some("CONTROL://:9095"), config.controlPlaneListener.map(_.connectionString))
+    setupConfigUpdate(newConfig, initialConfig)
+    assertEquals(Set("EXTERNAL://:9093", "REPLICATION://:9094"), config.dataPlaneListeners.map(_.connectionString).toSet)
   }
 
   private def assertPropertyInvalid(validRequiredProps: => Properties, name: String, values: Any*) {
