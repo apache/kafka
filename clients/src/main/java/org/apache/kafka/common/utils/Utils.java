@@ -31,9 +31,7 @@ import java.io.StringWriter;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
 import java.nio.ByteBuffer;
-import java.nio.MappedByteBuffer;
 import java.nio.channels.FileChannel;
-import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
@@ -615,40 +613,16 @@ public final class Utils {
     }
 
     /**
-     * Read a file as string and return the content. Unlike {@link Utils#readFileAsString(String)}, the file
-     * will be treated as a stream and a character is read at a time. This allows the program to read from say
-     * a FIFO (opened with S_IFIFO flag), where size of file is not known in advance.
+     * Read a file as string and return the content. The file is treated as a stream and no seek is performed.
+     * This allows the program to read from a regular file as well as from a pipe/fifo.
      */
-    public static String readFileStreamAsString(String path) {
-        return readFileStreamAsString(path, Charset.defaultCharset());
-    }
-
-    public static String readFileStreamAsString(String path, Charset charset) {
-        if (charset == null) charset = Charset.defaultCharset();
+    public static String readFileAsString(String path) throws IOException {
         try {
             byte[] allBytes = Files.readAllBytes(Paths.get(path));
-            return new String(allBytes, charset);
+            return new String(allBytes, StandardCharsets.UTF_8);
         } catch (IOException ex) {
             throw new RuntimeException("Unable to read file " + path, ex);
         }
-    }
-
-    /**
-     * Attempt to read a file as a string
-     * @throws IOException
-     */
-    public static String readFileAsString(String path, Charset charset) throws IOException {
-        if (charset == null) charset = Charset.defaultCharset();
-
-        try (FileChannel fc = FileChannel.open(Paths.get(path))) {
-            MappedByteBuffer bb = fc.map(FileChannel.MapMode.READ_ONLY, 0, fc.size());
-            return charset.decode(bb).toString();
-        }
-
-    }
-
-    public static String readFileAsString(String path) throws IOException {
-        return Utils.readFileAsString(path, Charset.defaultCharset());
     }
 
     /**
