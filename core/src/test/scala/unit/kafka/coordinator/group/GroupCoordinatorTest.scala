@@ -3162,7 +3162,7 @@ class GroupCoordinatorTest {
 object GroupCoordinatorTest {
   def verifyLeaveGroupResult(leaveGroupResult: LeaveGroupResult,
                              expectedTopLevelError: Errors = Errors.NONE,
-                             expectedMemberLevelErrors: List[Errors] = List.empty) {
+                             expectedMemberLevelErrors: List[Errors] = List.empty): Unit = {
     assertEquals(expectedTopLevelError, leaveGroupResult.topLevelError)
     if (expectedMemberLevelErrors.nonEmpty) {
       assertEquals(expectedMemberLevelErrors.size, leaveGroupResult.memberResponses.size)

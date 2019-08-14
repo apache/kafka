@@ -90,7 +90,7 @@ object StressTestLog {
       }
     }
 
-    def work()
+    def work(): Unit
     def isMakingProgress(): Boolean
   }
 

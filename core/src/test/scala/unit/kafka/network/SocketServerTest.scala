@@ -675,7 +675,7 @@ class SocketServerTest {
         new Processor(id, time, config.socketRequestMaxBytes, dataPlaneRequestChannel, connectionQuotas,
           config.connectionsMaxIdleMs, config.failedAuthenticationDelayMs, listenerName, protocol, config, metrics,
           credentialProvider, MemoryPool.NONE, new LogContext()) {
-          override protected[network] def sendResponse(response: RequestChannel.Response, responseSend: Send) {
+          override protected[network] def sendResponse(response: RequestChannel.Response, responseSend: Send): Unit = {
             conn.close()
             super.sendResponse(response, responseSend)
           }

@@ -244,7 +244,7 @@ class BrokerTopicStats {
   }
 
   // This method only removes metrics only used for leader
-  def removeOldLeaderMetrics(topic: String) {
+  def removeOldLeaderMetrics(topic: String): Unit = {
     val topicMetrics = topicStats(topic)
     if (topicMetrics != null) {
       topicMetrics.removeMetricHelper(BrokerTopicStats.MessagesInPerSec, topicMetrics.tags)

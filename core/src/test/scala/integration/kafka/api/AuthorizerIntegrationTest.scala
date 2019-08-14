@@ -1658,7 +1658,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
 
   private def sendRecords(producer: KafkaProducer[Array[Byte], Array[Byte]],
                           numRecords: Int,
-                          tp: TopicPartition) {
+                          tp: TopicPartition): Unit = {
     val futures = (0 until numRecords).map { i =>
       producer.send(new ProducerRecord(tp.topic(), tp.partition(), i.toString.getBytes, i.toString.getBytes))
     }
@@ -1678,7 +1678,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
                              numRecords: Int = 1,
                              startingOffset: Int = 0,
                              topic: String = topic,
-                             part: Int = part) {
+                             part: Int = part): Unit = {
     val records = TestUtils.consumeRecords(consumer, numRecords)
 
     for (i <- 0 until numRecords) {

@@ -458,7 +458,7 @@ final class DelayedOperationPurgatory[T <: DelayedOperation](purgatoryName: Stri
     "ExpirationReaper-%d-%s".format(brokerId, purgatoryName),
     false) {
 
-    override def doWork() {
+    override def doWork(): Unit = {
       advanceClock(200L)
     }
   }

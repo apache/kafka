@@ -26,7 +26,7 @@ import org.junit.Test
 import scala.collection.JavaConverters._
 
 object ApiVersionsRequestTest {
-  def validateApiVersionsResponse(apiVersionsResponse: ApiVersionsResponse) {
+  def validateApiVersionsResponse(apiVersionsResponse: ApiVersionsResponse): Unit = {
     assertEquals("API keys in ApiVersionsResponse must match API keys supported by broker.", ApiKeys.values.length, apiVersionsResponse.apiVersions.size)
     for (expectedApiVersion: ApiVersion <- ApiVersionsResponse.defaultApiVersionsResponse().apiVersions.asScala) {
       val actualApiVersion = apiVersionsResponse.apiVersion(expectedApiVersion.apiKey)

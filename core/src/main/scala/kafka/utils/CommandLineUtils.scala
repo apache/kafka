@@ -132,7 +132,7 @@ object CommandLineUtils extends Logging {
     * 3) otherwise, use the default value of {@code spec}.
     * A {@code null} value means to remove {@code key} from the {@code props}.
     */
-  def maybeMergeOptions[V](props: Properties, key: String, options: OptionSet, spec: OptionSpec[V]) {
+  def maybeMergeOptions[V](props: Properties, key: String, options: OptionSet, spec: OptionSpec[V]): Unit = {
     if (options.has(spec) || !props.containsKey(key)) {
       val value = options.valueOf(spec)
       if (value == null)

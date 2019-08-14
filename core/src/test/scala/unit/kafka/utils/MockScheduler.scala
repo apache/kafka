@@ -110,7 +110,7 @@ case class MockTask(name: String, fun: () => Unit, var nextExecution: Long, peri
   def get(): Unit = {
   }
 
-  def get(timeout: Long, unit: TimeUnit){
+  def get(timeout: Long, unit: TimeUnit): Unit = {
   }
 
   def isCancelled: Boolean = {

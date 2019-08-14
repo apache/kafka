@@ -337,7 +337,7 @@ class MetadataCacheTest {
     val topic = "topic"
     val cache = new MetadataCache(1)
 
-    def updateCache(brokerIds: Set[Int]) {
+    def updateCache(brokerIds: Set[Int]): Unit = {
       val brokers = brokerIds.map { brokerId =>
         val securityProtocol = SecurityProtocol.PLAINTEXT
         new Broker(brokerId, Seq(

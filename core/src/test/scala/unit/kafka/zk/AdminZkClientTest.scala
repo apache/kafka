@@ -210,7 +210,7 @@ class AdminZkClientTest extends ZooKeeperTestHarness with Logging with RackAware
       props
     }
 
-    def checkConfig(messageSize: Int, retentionMs: Long, throttledLeaders: String, throttledFollowers: String, quotaManagerIsThrottled: Boolean) {
+    def checkConfig(messageSize: Int, retentionMs: Long, throttledLeaders: String, throttledFollowers: String, quotaManagerIsThrottled: Boolean): Unit = {
       def checkList(actual: util.List[String], expected: String): Unit = {
         assertNotNull(actual)
         if (expected == "")

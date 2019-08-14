@@ -58,7 +58,7 @@ class DelegationTokenManagerTest extends ZooKeeperTestHarness  {
   var expiryTimeStamp: Long = 0
 
   @Before
-  override def setUp() {
+  override def setUp(): Unit = {
     super.setUp()
     props = TestUtils.createBrokerConfig(0, zkConnect, enableToken = true)
     props.put(KafkaConfig.SaslEnabledMechanismsProp, ScramMechanism.mechanismNames().asScala.mkString(","))

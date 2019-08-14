@@ -78,7 +78,7 @@ abstract class AbstractCoordinatorConcurrencyTest[M <: CoordinatorMember] {
     * Verify that arbitrary operations run in some random sequence don't leave the coordinator
     * in a bad state. Operations in the normal sequence should continue to work as expected.
     */
-  def verifyConcurrentRandomSequences(createMembers: String => Set[M], operations: Seq[Operation]) {
+  def verifyConcurrentRandomSequences(createMembers: String => Set[M], operations: Seq[Operation]): Unit = {
     EasyMock.reset(replicaManager)
     for (i <- 0 to 10) {
       // Run some random operations

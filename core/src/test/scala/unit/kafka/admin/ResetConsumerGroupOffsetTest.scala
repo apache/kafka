@@ -31,7 +31,7 @@ import org.junit.Test
 class TimeConversionTests {
 
   @Test
-  def testDateTimeFormats() {
+  def testDateTimeFormats(): Unit = {
     //check valid formats
     invokeGetDateTimeMethod(new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS"))
     invokeGetDateTimeMethod(new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSZ"))
@@ -55,7 +55,7 @@ class TimeConversionTests {
     }
   }
 
-  private def invokeGetDateTimeMethod(format: SimpleDateFormat) {
+  private def invokeGetDateTimeMethod(format: SimpleDateFormat): Unit = {
     val checkpoint = new Date()
     val timestampString = format.format(checkpoint)
     ConsumerGroupCommand.convertTimestamp(timestampString)

@@ -43,13 +43,13 @@ class PreferredReplicaLeaderElectionCommandTest extends ZooKeeperTestHarness wit
   var servers: Seq[KafkaServer] = Seq()
 
   @After
-  override def tearDown() {
+  override def tearDown(): Unit = {
     TestUtils.shutdownServers(servers)
     super.tearDown()
   }
 
   private def createTestTopicAndCluster(topicPartition: Map[TopicPartition, List[Int]],
-                                        authorizer: Option[String] = None) {
+                                        authorizer: Option[String] = None): Unit = {
 
     val brokerConfigs = TestUtils.createBrokerConfigs(3, zkConnect, false)
     brokerConfigs.foreach(p => p.setProperty("auto.leader.rebalance.enable", "false"))
@@ -62,7 +62,7 @@ class PreferredReplicaLeaderElectionCommandTest extends ZooKeeperTestHarness wit
   }
 
   private def createTestTopicAndCluster(partitionsAndAssignments: Map[TopicPartition, List[Int]],
-                                        brokerConfigs: Seq[Properties]) {
+                                        brokerConfigs: Seq[Properties]): Unit = {
     // create brokers
     servers = brokerConfigs.map(b => TestUtils.createServer(KafkaConfig.fromProps(b)))
     // create the topic
