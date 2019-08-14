@@ -47,7 +47,7 @@ public class CachingKeyValueStore
     private Thread streamThread;
     private final ReadWriteLock lock = new ReentrantReadWriteLock();
 
-    CachingKeyValueStore(final KeyValueStore<Bytes, byte[]> underlying) {
+    public CachingKeyValueStore(final KeyValueStore<Bytes, byte[]> underlying) {
         super(underlying);
     }
 
