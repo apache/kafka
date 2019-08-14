@@ -149,9 +149,9 @@ public abstract class AbstractResponse extends AbstractRequestResponse {
             case CREATE_DELEGATION_TOKEN:
                 return new CreateDelegationTokenResponse(struct, version);
             case RENEW_DELEGATION_TOKEN:
-                return new RenewDelegationTokenResponse(struct);
+                return new RenewDelegationTokenResponse(struct, version);
             case EXPIRE_DELEGATION_TOKEN:
-                return new ExpireDelegationTokenResponse(struct);
+                return new ExpireDelegationTokenResponse(struct, version);
             case DESCRIBE_DELEGATION_TOKEN:
                 return new DescribeDelegationTokenResponse(struct);
             case DELETE_GROUPS:

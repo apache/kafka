@@ -35,6 +35,7 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
     private final String name;
     private final ConcurrentNavigableMap<Bytes, byte[]> map = new ConcurrentSkipListMap<>();
     private volatile boolean open = false;
+    private long size = 0L; // SkipListMap#size is O(N) so we just do our best to track it
 
     private static final Logger LOG = LoggerFactory.getLogger(InMemoryKeyValueStore.class);
 
@@ -50,17 +51,10 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
     @Override
     public void init(final ProcessorContext context,
                      final StateStore root) {
-
+        size = 0;
         if (root != null) {
             // register the store
-            context.register(root, (key, value) -> {
-                // this is a delete
-                if (value == null) {
-                    delete(Bytes.wrap(key));
-                } else {
-                    put(Bytes.wrap(key), value);
-                }
-            });
+            context.register(root, (key, value) -> put(Bytes.wrap(key), value));
         }
 
         open = true;
@@ -84,9 +78,9 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
     @Override
     public void put(final Bytes key, final byte[] value) {
         if (value == null) {
-            map.remove(key);
+            size -= map.remove(key) == null ? 0 : 1;
         } else {
-            map.put(key, value);
+            size += map.put(key, value) == null ? 1 : 0;
         }
     }
 
@@ -108,7 +102,9 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
 
     @Override
     public byte[] delete(final Bytes key) {
-        return map.remove(key);
+        final byte[] oldValue = map.remove(key);
+        size -= oldValue == null ? 0 : 1;
+        return oldValue;
     }
 
     @Override
@@ -135,7 +131,7 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
 
     @Override
     public long approximateNumEntries() {
-        return map.size();
+        return size;
     }
 
     @Override
@@ -146,6 +142,7 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
     @Override
     public void close() {
         map.clear();
+        size = 0;
         open = false;
     }
 
@@ -165,11 +162,6 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
         public KeyValue<Bytes, byte[]> next() {
             final Map.Entry<Bytes, byte[]> entry = iter.next();
             return new KeyValue<>(entry.getKey(), entry.getValue());
-        }
-
-        @Override
-        public void remove() {
-            iter.remove();
         }
 
         @Override

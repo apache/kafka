@@ -25,6 +25,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -54,7 +55,6 @@ import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.utils.CopyOnWriteMap;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 
 /**
@@ -229,7 +229,8 @@ public final class RecordAccumulator {
 
                 MemoryRecordsBuilder recordsBuilder = recordsBuilder(buffer, maxUsableMagic);
                 ProducerBatch batch = new ProducerBatch(tp, recordsBuilder, time.milliseconds());
-                FutureRecordMetadata future = Utils.notNull(batch.tryAppend(timestamp, key, value, headers, callback, time.milliseconds()));
+                FutureRecordMetadata future = Objects.requireNonNull(batch.tryAppend(timestamp, key, value, headers,
+                        callback, time.milliseconds()));
 
                 dq.addLast(batch);
                 incomplete.add(batch);
@@ -275,10 +276,18 @@ public final class RecordAccumulator {
     }
 
     private boolean isMuted(TopicPartition tp, long now) {
-        boolean result = muted.containsKey(tp) && muted.get(tp) > now;
-        if (!result)
+        // Take care to avoid unnecessary map look-ups because this method is a hotspot if producing to a
+        // large number of partitions
+        Long throttleUntilTime = muted.get(tp);
+        if (throttleUntilTime == null)
+            return false;
+
+        if (now >= throttleUntilTime) {
             muted.remove(tp);
-        return result;
+            return false;
+        }
+        
+        return true;
     }
 
     public void resetNextBatchExpiryTime() {
@@ -450,18 +459,19 @@ public final class RecordAccumulator {
 
         boolean exhausted = this.free.queued() > 0;
         for (Map.Entry<TopicPartition, Deque<ProducerBatch>> entry : this.batches.entrySet()) {
-            TopicPartition part = entry.getKey();
             Deque<ProducerBatch> deque = entry.getValue();
-
-            Node leader = cluster.leaderFor(part);
             synchronized (deque) {
-                if (leader == null && !deque.isEmpty()) {
-                    // This is a partition for which leader is not known, but messages are available to send.
-                    // Note that entries are currently not removed from batches when deque is empty.
-                    unknownLeaderTopics.add(part.topic());
-                } else if (!readyNodes.contains(leader) && !isMuted(part, nowMs)) {
-                    ProducerBatch batch = deque.peekFirst();
-                    if (batch != null) {
+                // When producing to a large number of partitions, this path is hot and deques are often empty.
+                // We check whether a batch exists first to avoid the more expensive checks whenever possible.
+                ProducerBatch batch = deque.peekFirst();
+                if (batch != null) {
+                    TopicPartition part = entry.getKey();
+                    Node leader = cluster.leaderFor(part);
+                    if (leader == null) {
+                        // This is a partition for which leader is not known, but messages are available to send.
+                        // Note that entries are currently not removed from batches when deque is empty.
+                        unknownLeaderTopics.add(part.topic());
+                    } else if (!readyNodes.contains(leader) && !isMuted(part, nowMs)) {
                         long waitedTimeMs = batch.waitedTimeMs(nowMs);
                         boolean backingOff = batch.attempts() > 0 && waitedTimeMs < retryBackoffMs;
                         long timeToWaitMs = backingOff ? retryBackoffMs : lingerMs;

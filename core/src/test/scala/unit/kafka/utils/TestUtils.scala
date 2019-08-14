@@ -53,7 +53,7 @@ import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.network.{ListenerName, Mode}
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.security.auth.SecurityProtocol
-import org.apache.kafka.common.serialization.{ByteArrayDeserializer, ByteArraySerializer, Deserializer, Serializer}
+import org.apache.kafka.common.serialization.{ByteArrayDeserializer, ByteArraySerializer, Deserializer, IntegerSerializer, Serializer}
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.common.utils.Utils._
 import org.apache.kafka.test.{TestSslUtils, TestUtils => JTestUtils}
@@ -1065,7 +1065,10 @@ object TestUtils extends Logging {
                                  numMessages: Int,
                                  acks: Int = -1): Seq[String] = {
     val values = (0 until numMessages).map(x =>  s"test-$x")
-    val records = values.map(v => new ProducerRecord[Array[Byte], Array[Byte]](topic, v.getBytes))
+    val intSerializer = new IntegerSerializer()
+    val records = values.zipWithIndex.map { case (v, i) =>
+      new ProducerRecord(topic, intSerializer.serialize(topic, i), v.getBytes)
+    }
     produceMessages(servers, records, acks)
     values
   }

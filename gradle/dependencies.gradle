@@ -30,7 +30,7 @@ ext {
 
 // Add Scala version
 def defaultScala211Version = '2.11.12'
-def defaultScala212Version = '2.12.8'
+def defaultScala212Version = '2.12.9'
 def defaultScala213Version = '2.13.0'
 if (hasProperty('scalaVersion')) {
   if (scalaVersion == '2.11') {
@@ -63,17 +63,18 @@ versions += [
   apacheda: "1.0.2",
   apacheds: "2.0.0-M24",
   argparse4j: "0.7.0",
-  bcpkix: "1.61",
+  bcpkix: "1.62",
   checkstyle: "8.20",
   commonsCli: "1.4",
   gradle: "5.4.1",
   gradleVersionsPlugin: "0.21.0",
   grgit: "3.1.1",
-  httpclient: "4.5.8",
+  httpclient: "4.5.9",
   easymock: "4.0.2",
   jackson: "2.9.9",
+  jacksonDatabind: "2.9.9.3",
   jacoco: "0.8.3",
-  jetty: "9.4.18.v20190429",
+  jetty: "9.4.19.v20190610",
   jersey: "2.28",
   jmh: "1.21",
   hamcrest: "2.1",
@@ -92,29 +93,29 @@ versions += [
   kafka_11: "1.1.1",
   kafka_20: "2.0.1",
   kafka_21: "2.1.1",
-  kafka_22: "2.2.0",
+  kafka_22: "2.2.1",
   lz4: "1.6.0",
   mavenArtifact: "3.6.1",
   metrics: "2.2.0",
-  mockito: "2.27.0",
-  owaspDepCheckPlugin: "4.0.2",
+  mockito: "3.0.0",
+  owaspDepCheckPlugin: "5.2.1",
   powermock: "2.0.2",
   reflections: "0.9.11",
   rocksDB: "5.18.3",
-  scalaCollectionCompat: "2.1.0",
+  scalaCollectionCompat: "2.1.2",
   scalafmt: "1.5.1",
   scalaJava8Compat : "0.9.0",
   scalatest: "3.0.8",
   scoverage: "1.4.0",
   scoveragePlugin: "2.5.0",
   shadowPlugin: "4.0.4",
-  slf4j: "1.7.26",
+  slf4j: "1.7.27",
   snappy: "1.1.7.3",
   spotbugs: "3.1.12",
   spotbugsPlugin: "1.6.9",
-  spotlessPlugin: "3.23.0",
+  spotlessPlugin: "3.23.1",
   zookeeper: "3.5.5",
-  zstd: "1.4.0-1"
+  zstd: "1.4.2-1"
 ]
 
 libs += [
@@ -132,7 +133,7 @@ libs += [
   bcpkix: "org.bouncycastle:bcpkix-jdk15on:$versions.bcpkix",
   commonsCli: "commons-cli:commons-cli:$versions.commonsCli",
   easymock: "org.easymock:easymock:$versions.easymock",
-  jacksonDatabind: "com.fasterxml.jackson.core:jackson-databind:$versions.jackson",
+  jacksonDatabind: "com.fasterxml.jackson.core:jackson-databind:$versions.jacksonDatabind",
   jacksonDataformatCsv: "com.fasterxml.jackson.dataformat:jackson-dataformat-csv:$versions.jackson",
   jacksonModuleScala: "com.fasterxml.jackson.module:jackson-module-scala_$versions.baseScala:$versions.jackson",
   jacksonJDK8Datatypes: "com.fasterxml.jackson.datatype:jackson-datatype-jdk8:$versions.jackson",

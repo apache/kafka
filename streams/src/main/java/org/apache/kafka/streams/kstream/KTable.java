@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.kstream;
 
-import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KafkaStreams;
@@ -65,7 +64,6 @@ import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
  * @see GlobalKTable
  * @see StreamsBuilder#table(String)
  */
-@InterfaceStability.Evolving
 public interface KTable<K, V> {
 
     /**
