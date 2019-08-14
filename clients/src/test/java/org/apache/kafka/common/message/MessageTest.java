@@ -549,13 +549,13 @@ public final class MessageTest {
 
     @Test
     public void testDefaultValues() throws Exception {
-        verifySizeRaisesUve((short) 0, "validateOnly",
+        verifyWriteRaisesUve((short) 0, "validateOnly",
             new CreateTopicsRequestData().setValidateOnly(true));
-        verifySizeSucceeds((short) 0,
+        verifyWriteSucceeds((short) 0,
             new CreateTopicsRequestData().setValidateOnly(false));
-        verifySizeSucceeds((short) 0,
+        verifyWriteSucceeds((short) 0,
             new OffsetCommitRequestData().setRetentionTimeMs(123));
-        verifySizeRaisesUve((short) 5, "forgotten",
+        verifyWriteRaisesUve((short) 5, "forgotten",
             new FetchRequestData().setForgotten(singletonList(
                 new FetchRequestData.ForgottenTopic().setName("foo"))));
     }
@@ -563,26 +563,29 @@ public final class MessageTest {
     @Test
     public void testNonIgnorableFieldWithDefaultNull() throws Exception {
         // Test non-ignorable string field `groupInstanceId` with default null
-        verifySizeRaisesUve((short) 0, "groupInstanceId", new HeartbeatRequestData()
+        verifyWriteRaisesUve((short) 0, "groupInstanceId", new HeartbeatRequestData()
                 .setGroupId("groupId")
                 .setGenerationId(15)
                 .setMemberId(memberId)
                 .setGroupInstanceId(instanceId));
-        verifySizeSucceeds((short) 0, new HeartbeatRequestData()
+        verifyWriteSucceeds((short) 0, new HeartbeatRequestData()
                 .setGroupId("groupId")
                 .setGenerationId(15)
                 .setMemberId(memberId)
                 .setGroupInstanceId(null));
-        verifySizeSucceeds((short) 0, new HeartbeatRequestData()
+        verifyWriteSucceeds((short) 0, new HeartbeatRequestData()
                 .setGroupId("groupId")
                 .setGenerationId(15)
                 .setMemberId(memberId));
     }
 
-    private void verifySizeRaisesUve(short version, String problemFieldName,
+    private void verifyWriteRaisesUve(short version, String problemFieldName,
                                      Message message) throws Exception {
+        int size = message.size(version);
+        ByteBuffer buf = ByteBuffer.allocate(size);
+        ByteBufferAccessor byteBufferAccessor = new ByteBufferAccessor(buf);
         try {
-            message.size(version);
+            message.write(byteBufferAccessor, version);
             fail("Expected to see an UnsupportedVersionException when writing " +
                 message + " at version " + version);
         } catch (UnsupportedVersionException e) {
@@ -591,7 +594,10 @@ public final class MessageTest {
         }
     }
 
-    private void verifySizeSucceeds(short version, Message message) throws Exception {
-        message.size(version);
+    private void verifyWriteSucceeds(short version, Message message) throws Exception {
+        int size = message.size(version);
+        ByteBuffer buf = ByteBuffer.allocate(size);
+        ByteBufferAccessor byteBufferAccessor = new ByteBufferAccessor(buf);
+        message.write(byteBufferAccessor, version);
     }
 }

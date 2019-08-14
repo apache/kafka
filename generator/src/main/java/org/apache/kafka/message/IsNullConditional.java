@@ -94,11 +94,11 @@ public final class IsNullConditional {
             ifNotMember(() -> {
                 if (alwaysEmitBlockScope) {
                     buffer.printf("{%n");
+                    buffer.incrementIndent();
                 }
-                buffer.incrementIndent();
                 ifNotNull.run();
-                buffer.decrementIndent();
                 if (alwaysEmitBlockScope) {
+                    buffer.decrementIndent();
                     buffer.printf("}%n");
                 }
             }).

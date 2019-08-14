@@ -727,7 +727,8 @@ public final class MessageDataGenerator {
     private void generateFieldWriter(FieldSpec field, Versions curVersions) {
         boolean isVariableLength =
             field.type().isArray() || field.type().isString() || field.type().isBytes();
-        VersionConditional.forVersions(field.versions(), curVersions).
+        VersionConditional cond = VersionConditional.
+            forVersions(field.versions(), curVersions).
             ifMember(() -> {
                 if (isVariableLength) {
                     generateVariableLengthWriter(field.camelCaseName(),
@@ -737,8 +738,13 @@ public final class MessageDataGenerator {
                 } else {
                     buffer.printf("%s;%n", primitiveWriteExpression(field.type(), field.camelCaseName()));
                 }
-            }).
-            generate(buffer);
+            });
+        if (!field.ignorable()) {
+            cond.ifNotMember(() -> {
+                generateAbsentValueCheck(field);
+            });
+        }
+        cond.generate(buffer);
     }
 
     private void generateVariableLengthWriter(String name,
@@ -825,6 +831,41 @@ public final class MessageDataGenerator {
                 }
             }).
             generate(buffer);
+    }
+
+    private void generateAbsentValueCheck(FieldSpec field) {
+        if (field.type().isArray()) {
+            if (fieldDefault(field).equals("null")) {
+                buffer.printf("if (%s != null) {%n", field.camelCaseName());
+            } else {
+                buffer.printf("if (!%s.isEmpty()) {%n", field.camelCaseName());
+            }
+        } else if (field.type().isBytes()) {
+            if (fieldDefault(field).equals("null")) {
+                buffer.printf("if (%s != null) {%n", field.camelCaseName());
+            } else {
+                buffer.printf("if (%s.length != 0) {%n", field.camelCaseName());
+            }
+        } else if (field.type().isString()) {
+            if (fieldDefault(field).equals("null")) {
+                buffer.printf("if (%s != null) {%n", field.camelCaseName());
+            } else {
+                buffer.printf("if (!%s.equals(%s)) {%n", field.camelCaseName(), fieldDefault(field));
+            }
+        } else if (field.type() instanceof FieldType.BoolFieldType) {
+            buffer.printf("if (%s%s) {%n",
+                fieldDefault(field).equals("true") ? "!" : "",
+                field.camelCaseName());
+        } else {
+            buffer.printf("if (%s != %s) {%n", field.camelCaseName(), fieldDefault(field));
+        }
+        buffer.incrementIndent();
+        headerGenerator.addImport(MessageGenerator.UNSUPPORTED_VERSION_EXCEPTION_CLASS);
+        buffer.printf("throw new UnsupportedVersionException(" +
+                "\"Attempted to write a non-default %s at version \" + version);%n",
+            field.camelCaseName());
+        buffer.decrementIndent();
+        buffer.printf("}%n");
     }
 
     private void generateClassToStruct(String className, StructSpec struct,
