@@ -26,6 +26,8 @@ import kafka.common.LogCleaningAbortedException
 import kafka.metrics.KafkaMetricsGroup
 import kafka.server.LogDirFailureChannel
 import kafka.server.checkpoints.OffsetCheckpointFile
+import kafka.server.checkpoints.OffsetAndTimesCheckpointFile
+import kafka.server.checkpoints.OffsetAndTime
 import kafka.utils.CoreUtils._
 import kafka.utils.{Logging, Pool}
 import org.apache.kafka.common.TopicPartition
@@ -65,8 +67,13 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
   private[log] val offsetCheckpointFile = "cleaner-offset-checkpoint"
 
   /* the offset checkpoints holding the last cleaned point for each log */
+  @deprecated("Have adopted a checkpoint file per partition instead of per log.")
   @volatile private var checkpoints = logDirs.map(dir =>
     (dir, new OffsetCheckpointFile(new File(dir, offsetCheckpointFile), logDirFailureChannel))).toMap
+
+  /* the offset checkpoints holding the last cleaned point for each partition */
+  @volatile private var partitionCheckpoints = logDirs.map(dir =>
+    (dir, new OffsetAndTimesCheckpointFile(new File(dir, offsetCheckpointFile), logDirFailureChannel))).toMap
 
   /* the set of logs currently being cleaned */
   private val inProgress = mutable.HashMap[TopicPartition, LogCleaningState]()
@@ -128,6 +135,7 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
   /**
    * @return the position processed for all logs.
    */
+  @deprecated("Deprecated in favor of new allCleanerCheckpointsWithTimes method")
   def allCleanerCheckpoints: Map[TopicPartition, Long] = {
     inLock(lock) {
       checkpoints.values.flatMap(checkpoint => {
@@ -139,6 +147,15 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
             Map.empty[TopicPartition, Long]
         }
       }).toMap
+    }
+  }
+
+  /**
+   * @return the position and time processed for all partitions
+   */
+  def allCleanerCheckpointsWithTimes: Map[TopicPartition, OffsetAndTime] = {
+    inLock(lock) {
+      null
     }
   }
 

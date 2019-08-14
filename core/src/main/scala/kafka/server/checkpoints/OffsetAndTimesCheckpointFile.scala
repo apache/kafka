@@ -25,8 +25,6 @@ import org.apache.kafka.common.TopicPartition
 
 import scala.collection._
 
-class OffsetAndTime(val offset: Long, val time: Long)
-
 /*
  * Will be used only to store offset and times as we have 
  * adopted a new file system where each partition has their
@@ -52,7 +50,7 @@ object OffsetAndTimesCheckpointFile {
 }
 
 /**
-  * This class persists a map of (Partition => Offsets) to a file (for a certain replica)
+  * This class persists a collection of OffsetAndTime to a file (for a certain topic)
   */
 class OffsetAndTimesCheckpointFile(val file: File, logDirFailureChannel: LogDirFailureChannel = null) {
   val checkpoint = new CheckpointFile[OffsetAndTime](file, OffsetAndTimesCheckpointFile.CurrentVersion,
@@ -65,7 +63,7 @@ class OffsetAndTimesCheckpointFile(val file: File, logDirFailureChannel: LogDirF
 }
 
 trait OffsetAndTimeCheckpoints {
-  def fetch(logDir: String, topicPartition: TopicPartition): Seq[OffsetAndTime]
+  def fetch(logDir: String): Seq[OffsetAndTime]
 }
 
 /**
@@ -76,7 +74,7 @@ class LazyOffsetAndTimesCheckpoints(checkpointsByLogDir: Map[String, OffsetAndTi
     logDir -> new LazyOffsetAndTimesCheckpointMap(checkpointFile)
   }.toMap
 
-  override def fetch(logDir: String, topicPartition: TopicPartition): Seq[OffsetAndTime] = {
+  override def fetch(logDir: String): Seq[OffsetAndTime] = {
     val offsetCheckpointFile = lazyCheckpointsByLogDir.getOrElse(logDir,
       throw new IllegalArgumentException(s"No checkpoint file for log dir $logDir"))
     offsetCheckpointFile.fetch()
