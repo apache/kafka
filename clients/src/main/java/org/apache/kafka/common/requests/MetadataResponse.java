@@ -59,21 +59,10 @@ public class MetadataResponse extends AbstractResponse {
     public static final int AUTHORIZED_OPERATIONS_OMITTED = Integer.MIN_VALUE;
 
     private final MetadataResponseData data;
-    private final Collection<Node> brokers;
-    private final Node controller;
-    private final Collection<TopicMetadata> topicMetadata;
+    private volatile Holder holder;
 
     public MetadataResponse(MetadataResponseData data) {
         this.data = data;
-        this.brokers = Collections.unmodifiableCollection(createBrokers());
-        Map<Integer, Node> brokerMap = brokers.stream().collect(Collectors.toMap(Node::id, b -> b));
-        this.topicMetadata = createTopicMetadata(brokerMap);
-        this.controller = brokerMap.get(data.controllerId());
-    }
-
-    private Collection<Node> createBrokers() {
-        return data.brokers().valuesList().stream().map(b ->
-                new Node(b.nodeId(), b.host(), b.port(), b.rack())).collect(Collectors.toList());
     }
 
     public MetadataResponse(Struct struct, short version) {
@@ -87,18 +76,6 @@ public class MetadataResponse extends AbstractResponse {
 
     public MetadataResponseData data() {
         return data;
-    }
-
-    private List<Node> convertToNodes(Map<Integer, Node> brokers, List<Integer> brokerIds) {
-        List<Node> nodes = new ArrayList<>(brokerIds.size());
-        for (Integer brokerId : brokerIds) {
-            Node node = brokers.get(brokerId);
-            if (node == null)
-                nodes.add(new Node(brokerId, "", -1));
-            else
-                nodes.add(node);
-        }
-        return nodes;
     }
 
     @Override
@@ -155,8 +132,8 @@ public class MetadataResponse extends AbstractResponse {
                 }
             }
         }
-        return new Cluster(data.clusterId(), brokers, partitions, topicsByError(Errors.TOPIC_AUTHORIZATION_FAILED),
-                topicsByError(Errors.INVALID_TOPIC_EXCEPTION), internalTopics, controller);
+        return new Cluster(data.clusterId(), brokers(), partitions, topicsByError(Errors.TOPIC_AUTHORIZATION_FAILED),
+                topicsByError(Errors.INVALID_TOPIC_EXCEPTION), internalTopics, controller());
     }
 
     /**
@@ -172,12 +149,22 @@ public class MetadataResponse extends AbstractResponse {
                 partitionMetadata.offlineReplicas().toArray(new Node[0]));
     }
 
+    private Holder holder() {
+        if (holder == null) {
+            synchronized (data) {
+                if (holder == null)
+                    holder = new Holder(data);
+            }
+        }
+        return holder;
+    }
+
     /**
      * Get all brokers returned in metadata response
      * @return the brokers
      */
     public Collection<Node> brokers() {
-        return brokers;
+        return holder().brokers;
     }
 
     /**
@@ -185,34 +172,7 @@ public class MetadataResponse extends AbstractResponse {
      * @return the topicMetadata
      */
     public Collection<TopicMetadata> topicMetadata() {
-        return topicMetadata;
-    }
-
-    private Collection<TopicMetadata> createTopicMetadata(Map<Integer, Node> brokerMap) {
-        List<TopicMetadata> topicMetadataList = new ArrayList<>();
-        for (MetadataResponseTopic topicMetadata : data.topics()) {
-            Errors topicError = Errors.forCode(topicMetadata.errorCode());
-            String topic = topicMetadata.name();
-            boolean isInternal = topicMetadata.isInternal();
-            List<PartitionMetadata> partitionMetadataList = new ArrayList<>();
-
-            for (MetadataResponsePartition partitionMetadata : topicMetadata.partitions()) {
-                Errors partitionError = Errors.forCode(partitionMetadata.errorCode());
-                int partitionIndex = partitionMetadata.partitionIndex();
-                int leader = partitionMetadata.leaderId();
-                Optional<Integer> leaderEpoch = RequestUtils.getLeaderEpoch(partitionMetadata.leaderEpoch());
-                Node leaderNode = leader == -1 ? null : brokerMap.get(leader);
-                List<Node> replicaNodes = convertToNodes(brokerMap, partitionMetadata.replicaNodes());
-                List<Node> isrNodes = convertToNodes(brokerMap, partitionMetadata.isrNodes());
-                List<Node> offlineNodes = convertToNodes(brokerMap, partitionMetadata.offlineReplicas());
-                partitionMetadataList.add(new PartitionMetadata(partitionError, partitionIndex, leaderNode, leaderEpoch,
-                    replicaNodes, isrNodes, offlineNodes));
-            }
-
-            topicMetadataList.add(new TopicMetadata(topicError, topic, isInternal, partitionMetadataList,
-                topicMetadata.topicAuthorizedOperations()));
-        }
-        return topicMetadataList;
+        return holder().topicMetadata;
     }
 
     /**
@@ -220,7 +180,7 @@ public class MetadataResponse extends AbstractResponse {
      * @return the controller node or null if it doesn't exist
      */
     public Node controller() {
-        return controller;
+        return holder().controller;
     }
 
     /**
@@ -383,6 +343,64 @@ public class MetadataResponse extends AbstractResponse {
                     ", isr=" + Utils.join(isr, ",") +
                     ", offlineReplicas=" + Utils.join(offlineReplicas, ",") + ')';
         }
+    }
+
+    private static class Holder {
+        private final Collection<Node> brokers;
+        private final Node controller;
+        private final Collection<TopicMetadata> topicMetadata;
+
+        Holder(MetadataResponseData data) {
+            this.brokers = Collections.unmodifiableCollection(createBrokers(data));
+            Map<Integer, Node> brokerMap = brokers.stream().collect(Collectors.toMap(Node::id, b -> b));
+            this.topicMetadata = createTopicMetadata(data, brokerMap);
+            this.controller = brokerMap.get(data.controllerId());
+        }
+
+        private Collection<Node> createBrokers(MetadataResponseData data) {
+            return data.brokers().valuesList().stream().map(b ->
+                    new Node(b.nodeId(), b.host(), b.port(), b.rack())).collect(Collectors.toList());
+        }
+
+        private Collection<TopicMetadata> createTopicMetadata(MetadataResponseData data, Map<Integer, Node> brokerMap) {
+            List<TopicMetadata> topicMetadataList = new ArrayList<>();
+            for (MetadataResponseTopic topicMetadata : data.topics()) {
+                Errors topicError = Errors.forCode(topicMetadata.errorCode());
+                String topic = topicMetadata.name();
+                boolean isInternal = topicMetadata.isInternal();
+                List<PartitionMetadata> partitionMetadataList = new ArrayList<>();
+
+                for (MetadataResponsePartition partitionMetadata : topicMetadata.partitions()) {
+                    Errors partitionError = Errors.forCode(partitionMetadata.errorCode());
+                    int partitionIndex = partitionMetadata.partitionIndex();
+                    int leader = partitionMetadata.leaderId();
+                    Optional<Integer> leaderEpoch = RequestUtils.getLeaderEpoch(partitionMetadata.leaderEpoch());
+                    Node leaderNode = leader == -1 ? null : brokerMap.get(leader);
+                    List<Node> replicaNodes = convertToNodes(brokerMap, partitionMetadata.replicaNodes());
+                    List<Node> isrNodes = convertToNodes(brokerMap, partitionMetadata.isrNodes());
+                    List<Node> offlineNodes = convertToNodes(brokerMap, partitionMetadata.offlineReplicas());
+                    partitionMetadataList.add(new PartitionMetadata(partitionError, partitionIndex, leaderNode, leaderEpoch,
+                            replicaNodes, isrNodes, offlineNodes));
+                }
+
+                topicMetadataList.add(new TopicMetadata(topicError, topic, isInternal, partitionMetadataList,
+                        topicMetadata.topicAuthorizedOperations()));
+            }
+            return topicMetadataList;
+        }
+
+        private List<Node> convertToNodes(Map<Integer, Node> brokers, List<Integer> brokerIds) {
+            List<Node> nodes = new ArrayList<>(brokerIds.size());
+            for (Integer brokerId : brokerIds) {
+                Node node = brokers.get(brokerId);
+                if (node == null)
+                    nodes.add(new Node(brokerId, "", -1));
+                else
+                    nodes.add(node);
+            }
+            return nodes;
+        }
+
     }
 
     public static MetadataResponse prepareResponse(int throttleTimeMs, Collection<Node> brokers, String clusterId,
