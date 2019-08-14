@@ -986,48 +986,52 @@ public final class MessageDataGenerator {
     }
 
     private void generateFieldSize(FieldSpec field, Versions curVersions) {
-        if (field.type().fixedLength().isPresent()) {
-            boolean maybeAbsent =
-                generateVersionCheck(curVersions, field.versions());
-            buffer.printf("size += %d;%n", field.type().fixedLength().get());
-            if (maybeAbsent) {
-                buffer.decrementIndent();
-                generateAbsentValueCheck(field);
-            }
-        } else if (field.type().isString() || field.type().isBytes() || field.type().isStruct()) {
-            boolean nullable = !curVersions.intersect(field.nullableVersions()).empty();
-            boolean maybeAbsent =
-                generateVersionCheck(curVersions, field.versions());
-            generateVariableLengthFieldSize(field.camelCaseName(), field.type(), nullable);
-            if (maybeAbsent) {
-                buffer.decrementIndent();
-                generateAbsentValueCheck(field);
-            }
-        } else if (field.type().isArray()) {
-            VersionConditional.forVersions(field.versions(), curVersions).
-                ifMember(() -> {
-                    Versions versions = curVersions.intersect(field.versions());
-                    IsNullConditional.forField(field).
-                        possibleVersions(versions).
-                        ifNull(() -> {
-                            Versions nullableVersions = versions.intersect(field.nullableVersions());
-                            VersionConditional.forVersions(flexibleVersions, nullableVersions).
+        VersionConditional.forVersions(field.versions(), curVersions).
+            ifMember(() -> {
+                if (field.type().fixedLength().isPresent()) {
+                    buffer.printf("size += %d;%n", field.type().fixedLength().get());
+                    return;
+                }
+                Versions possibleVersions = curVersions.intersect(field.versions());
+                IsNullConditional.forField(field).
+                    alwaysEmitBlockScope(field.type().isString()).
+                    possibleVersions(possibleVersions).
+                    ifNull(() -> {
+                        Versions possibleNullVersions = possibleVersions.intersect(field.nullableVersions());
+                        VersionConditional.forVersions(flexibleVersions, possibleNullVersions).
+                            ifMember(() -> {
+                                buffer.printf("size += 1;%n");
+                            }).
+                            ifNotMember(() -> {
+                                if (field.type().isString()) {
+                                    buffer.printf("size += 2;%n");
+                                } else {
+                                    buffer.printf("size += 4;%n");
+                                }
+                            }).
+                            generate(buffer);
+                    }).
+                    ifNotNull(() -> {
+                        if (field.type().isString()) {
+                            headerGenerator.addImport(MessageGenerator.MESSAGE_UTIL_CLASS);
+                            buffer.printf("int stringLength = MessageUtil.serializedUtf8Length(%s);%n",
+                                field.camelCaseName());
+                            buffer.printf("size += stringLength;%n");
+                            VersionConditional.forVersions(flexibleVersions, possibleVersions).
                                 ifMember(() -> {
-                                    // As an unsigned varint, 0 takes up one byte.
-                                    buffer.printf("size += 1;%n");
+                                    headerGenerator.addImport(MessageGenerator.BYTE_UTILS_CLASS);
+                                    buffer.printf("size += ByteUtils.sizeOfUnsignedVarint(stringLength + 1);%n");
                                 }).
                                 ifNotMember(() -> {
-                                    buffer.printf("size += 4;%n");
+                                    buffer.printf("size += 2;%n");
                                 }).
                                 generate(buffer);
-                        }).
-                        ifNotNull(() -> {
-                            VersionConditional.forVersions(flexibleVersions, versions).
+                        } else if (field.type().isArray()) {
+                            VersionConditional.forVersions(flexibleVersions, possibleVersions).
                                 ifMember(() -> {
-                                    // As an unsigned varint, 0 takes up one byte.
                                     headerGenerator.addImport(MessageGenerator.BYTE_UTILS_CLASS);
-                                    buffer.printf("size += ByteUtils.sizeOfUnsignedVarint(%s);%n",
-                                            field.camelCaseName());
+                                    buffer.printf("size += ByteUtils.sizeOfUnsignedVarint(%s.size() + 1);%n",
+                                        field.camelCaseName());
                                 }).
                                 ifNotMember(() -> {
                                     buffer.printf("size += 4;%n");
@@ -1037,68 +1041,38 @@ public final class MessageDataGenerator {
                             FieldType elementType = arrayType.elementType();
                             if (elementType.fixedLength().isPresent()) {
                                 buffer.printf("size += %s.size() * %d;%n",
-                                        field.camelCaseName(),
-                                        elementType.fixedLength().get());
+                                    field.camelCaseName(),
+                                    elementType.fixedLength().get());
                             } else if (elementType instanceof FieldType.ArrayType) {
                                 throw new RuntimeException("Arrays of arrays are not supported " +
-                                        "(use a struct).");
+                                    "(use a struct).");
                             } else {
                                 buffer.printf("for (%s element : %s) {%n",
-                                        getBoxedJavaType(elementType), field.camelCaseName());
+                                    getBoxedJavaType(elementType), field.camelCaseName());
                                 buffer.incrementIndent();
                                 generateVariableLengthFieldSize("element", elementType, false);
                                 buffer.decrementIndent();
                                 buffer.printf("}%n");
                             }
-                        }).
-                        generate(buffer);
-                });
-        } else {
-            throw new RuntimeException("Unsupported field type " + field.type());
-        }
-    }
-
-    private void generateAbsentValueCheck(FieldSpec field) {
-        if (field.ignorable()) {
-            buffer.printf("}%n");
-            return;
-        }
-        buffer.printf("} else {%n");
-        buffer.incrementIndent();
-        headerGenerator.addImport(MessageGenerator.UNSUPPORTED_VERSION_EXCEPTION_CLASS);
-        if (field.type().isArray()) {
-            if (fieldDefault(field).equals("null")) {
-                buffer.printf("if (%s != null) {%n", field.camelCaseName());
-            } else {
-                buffer.printf("if (!%s.isEmpty()) {%n", field.camelCaseName());
-            }
-        } else if (field.type().isBytes()) {
-            if (fieldDefault(field).equals("null")) {
-                buffer.printf("if (%s != null) {%n", field.camelCaseName());
-            } else {
-                buffer.printf("if (%s.length != 0) {%n", field.camelCaseName());
-            }
-        } else if (field.type().isString()) {
-            if (fieldDefault(field).equals("null")) {
-                buffer.printf("if (%s != null) {%n", field.camelCaseName());
-            } else {
-                buffer.printf("if (!%s.equals(%s)) {%n", field.camelCaseName(), fieldDefault(field));
-            }
-        } else if (field.type() instanceof FieldType.BoolFieldType) {
-            buffer.printf("if (%s%s) {%n",
-                fieldDefault(field).equals("true") ? "!" : "",
-                field.camelCaseName());
-        } else {
-            buffer.printf("if (%s != %s) {%n", field.camelCaseName(), fieldDefault(field));
-        }
-        buffer.incrementIndent();
-        buffer.printf("throw new UnsupportedVersionException(" +
-                "\"Attempted to write a non-default %s at version \" + version);%n",
-            field.camelCaseName());
-        buffer.decrementIndent();
-        buffer.printf("}%n");
-        buffer.decrementIndent();
-        buffer.printf("}%n");
+                        } else if (field.type().isBytes()) {
+                            buffer.printf("size += %s.length;%n", field.camelCaseName());
+                            VersionConditional.forVersions(flexibleVersions, possibleVersions).
+                                ifMember(() -> {
+                                    headerGenerator.addImport(MessageGenerator.BYTE_UTILS_CLASS);
+                                    buffer.printf("size += ByteUtils.sizeOfUnsignedVarint(%s.length + 1);%n",
+                                        field.camelCaseName());
+                                }).
+                                ifNotMember(() -> {
+                                    buffer.printf("size += 4;%n");
+                                }).
+                                generate(buffer);
+                        } else {
+                            throw new RuntimeException("unhandled type " + field.type());
+                        }
+                    }).
+                    generate(buffer);
+            }).
+            generate(buffer);
     }
 
     private void generateClassEquals(String className, StructSpec struct, boolean onlyMapKeys) {
