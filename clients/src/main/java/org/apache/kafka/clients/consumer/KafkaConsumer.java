@@ -2238,7 +2238,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      */
     private boolean updateFetchPositions(final Timer timer) {
         // If any partitions have been truncated due to a leader change, we need to validate the offsets
-        fetcher.validateOffsetsIfNeeded();
+        //fetcher.validateOffsetsIfNeeded();
 
         cachedSubscriptionHashAllFetchPositions = subscriptions.hasAllFetchPositions();
         if (cachedSubscriptionHashAllFetchPositions) return true;
