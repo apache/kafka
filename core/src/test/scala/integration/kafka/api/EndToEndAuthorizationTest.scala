@@ -60,7 +60,7 @@ import scala.collection.JavaConverters._
 abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with SaslSetup {
   override val brokerCount = 3
 
-  override def configureSecurityBeforeServersStart() {
+  override def configureSecurityBeforeServersStart(): Unit = {
     AclCommand.main(clusterActionArgs)
     AclCommand.main(topicBrokerReadAclArgs)
   }
@@ -179,7 +179,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     * Starts MiniKDC and only then sets up the parent trait.
     */
   @Before
-  override def setUp() {
+  override def setUp(): Unit = {
     super.setUp()
     servers.foreach { s =>
       TestUtils.waitAndVerifyAcls(ClusterActionAcl, s.dataPlaneRequestProcessor.authorizer.get, Resource.ClusterResource)
@@ -193,7 +193,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     * Closes MiniKDC last when tearing down.
     */
   @After
-  override def tearDown() {
+  override def tearDown(): Unit = {
     super.tearDown()
     closeSasl()
   }
@@ -210,7 +210,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     confirmReauthenticationMetrics
   }
 
-  protected def confirmReauthenticationMetrics() : Unit = {
+  protected def confirmReauthenticationMetrics(): Unit = {
     val expiredConnectionsKilledCountTotal = getGauge("ExpiredConnectionsKilledCount").value()
     servers.foreach { s =>
         val numExpiredKilled = TestUtils.totalMetricValue(s, "expired-connections-killed-count")
@@ -272,7 +272,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     confirmReauthenticationMetrics
   }
 
-  private def setWildcardResourceAcls() {
+  private def setWildcardResourceAcls(): Unit = {
     AclCommand.main(produceConsumeWildcardAclArgs)
     servers.foreach { s =>
       TestUtils.waitAndVerifyAcls(TopicReadAcl ++ TopicWriteAcl ++ TopicDescribeAcl ++ TopicCreateAcl ++ TopicBrokerReadAcl, s.dataPlaneRequestProcessor.authorizer.get, wildcardTopicResource)
@@ -280,7 +280,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     }
   }
 
-  private def setPrefixedResourceAcls() {
+  private def setPrefixedResourceAcls(): Unit = {
     AclCommand.main(produceConsumePrefixedAclsArgs)
     servers.foreach { s =>
       TestUtils.waitAndVerifyAcls(TopicReadAcl ++ TopicWriteAcl ++ TopicDescribeAcl ++ TopicCreateAcl, s.dataPlaneRequestProcessor.authorizer.get, prefixedTopicResource)
@@ -288,7 +288,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     }
   }
 
-  private def setReadAndWriteAcls(tp: TopicPartition) {
+  private def setReadAndWriteAcls(tp: TopicPartition): Unit = {
     AclCommand.main(produceAclArgs(tp.topic))
     AclCommand.main(consumeAclArgs(tp.topic))
     servers.foreach { s =>
@@ -298,13 +298,13 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     }
   }
 
-  protected def setAclsAndProduce(tp: TopicPartition) {
+  protected def setAclsAndProduce(tp: TopicPartition): Unit = {
     setReadAndWriteAcls(tp)
     val producer = createProducer()
     sendRecords(producer, numRecords, tp)
   }
 
-  private def setConsumerGroupAcls() {
+  private def setConsumerGroupAcls(): Unit = {
     AclCommand.main(groupAclArgs)
     servers.foreach { s =>
       TestUtils.waitAndVerifyAcls(GroupReadAcl, s.dataPlaneRequestProcessor.authorizer.get, groupResource)
@@ -500,7 +500,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
   }
 
   protected final def sendRecords(producer: KafkaProducer[Array[Byte], Array[Byte]],
-                                  numRecords: Int, tp: TopicPartition) {
+                                  numRecords: Int, tp: TopicPartition): Unit = {
     val futures = (0 until numRecords).map { i =>
       val record = new ProducerRecord(tp.topic(), tp.partition(), s"$i".getBytes, s"$i".getBytes)
       debug(s"Sending this record: $record")
@@ -518,7 +518,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
                                      startingOffset: Int = 0,
                                      topic: String = topic,
                                      part: Int = part,
-                                     timeout: Long = 10000) {
+                                     timeout: Long = 10000): Unit = {
     val records = TestUtils.consumeRecords(consumer, numRecords, timeout)
 
     for (i <- 0 until numRecords) {

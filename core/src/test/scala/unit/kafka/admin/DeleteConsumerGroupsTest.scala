@@ -26,14 +26,14 @@ import org.junit.Test
 class DeleteConsumerGroupsTest extends ConsumerGroupCommandTest {
 
   @Test(expected = classOf[OptionException])
-  def testDeleteWithTopicOption() {
+  def testDeleteWithTopicOption(): Unit = {
     TestUtils.createOffsetsTopic(zkClient, servers)
     val cgcArgs = Array("--bootstrap-server", brokerList, "--delete", "--group", group, "--topic")
     getConsumerGroupService(cgcArgs)
   }
 
   @Test
-  def testDeleteCmdNonExistingGroup() {
+  def testDeleteCmdNonExistingGroup(): Unit = {
     TestUtils.createOffsetsTopic(zkClient, servers)
     val missingGroup = "missing.group"
 
@@ -46,7 +46,7 @@ class DeleteConsumerGroupsTest extends ConsumerGroupCommandTest {
   }
 
   @Test
-  def testDeleteNonExistingGroup() {
+  def testDeleteNonExistingGroup(): Unit = {
     TestUtils.createOffsetsTopic(zkClient, servers)
     val missingGroup = "missing.group"
 
@@ -61,7 +61,7 @@ class DeleteConsumerGroupsTest extends ConsumerGroupCommandTest {
   }
 
   @Test
-  def testDeleteCmdNonEmptyGroup() {
+  def testDeleteCmdNonEmptyGroup(): Unit = {
     TestUtils.createOffsetsTopic(zkClient, servers)
 
     // run one consumer in the group
@@ -79,7 +79,7 @@ class DeleteConsumerGroupsTest extends ConsumerGroupCommandTest {
   }
 
   @Test
-  def testDeleteNonEmptyGroup() {
+  def testDeleteNonEmptyGroup(): Unit = {
     TestUtils.createOffsetsTopic(zkClient, servers)
 
     // run one consumer in the group
@@ -98,7 +98,7 @@ class DeleteConsumerGroupsTest extends ConsumerGroupCommandTest {
   }
 
   @Test
-  def testDeleteCmdEmptyGroup() {
+  def testDeleteCmdEmptyGroup(): Unit = {
     TestUtils.createOffsetsTopic(zkClient, servers)
 
     // run one consumer in the group
@@ -122,7 +122,7 @@ class DeleteConsumerGroupsTest extends ConsumerGroupCommandTest {
   }
 
   @Test
-  def testDeleteCmdAllGroups() {
+  def testDeleteCmdAllGroups(): Unit = {
     TestUtils.createOffsetsTopic(zkClient, servers)
 
     // Create 3 groups with 1 consumer per each
@@ -159,7 +159,7 @@ class DeleteConsumerGroupsTest extends ConsumerGroupCommandTest {
   }
 
   @Test
-  def testDeleteEmptyGroup() {
+  def testDeleteEmptyGroup(): Unit = {
     TestUtils.createOffsetsTopic(zkClient, servers)
 
     // run one consumer in the group
@@ -183,7 +183,7 @@ class DeleteConsumerGroupsTest extends ConsumerGroupCommandTest {
   }
 
   @Test
-  def testDeleteCmdWithMixOfSuccessAndError() {
+  def testDeleteCmdWithMixOfSuccessAndError(): Unit = {
     TestUtils.createOffsetsTopic(zkClient, servers)
     val missingGroup = "missing.group"
 
@@ -210,7 +210,7 @@ class DeleteConsumerGroupsTest extends ConsumerGroupCommandTest {
   }
 
   @Test
-  def testDeleteWithMixOfSuccessAndError() {
+  def testDeleteWithMixOfSuccessAndError(): Unit = {
     TestUtils.createOffsetsTopic(zkClient, servers)
     val missingGroup = "missing.group"
 
@@ -240,7 +240,7 @@ class DeleteConsumerGroupsTest extends ConsumerGroupCommandTest {
 
 
   @Test(expected = classOf[OptionException])
-  def testDeleteWithUnrecognizedNewConsumerOption() {
+  def testDeleteWithUnrecognizedNewConsumerOption(): Unit = {
     val cgcArgs = Array("--new-consumer", "--bootstrap-server", brokerList, "--delete", "--group", group)
     getConsumerGroupService(cgcArgs)
   }

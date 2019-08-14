@@ -35,9 +35,8 @@ import scala.collection.mutable.ArrayBuffer
  * registered MBean is compliant with the standard MBean convention.
  */
 trait KafkaMetricsReporterMBean {
-  def startReporter(pollingPeriodInSeconds: Long)
-  def stopReporter()
-
+  def startReporter(pollingPeriodInSeconds: Long): Unit
+  def stopReporter(): Unit
   /**
    *
    * @return The name with which the MBean will be registered.
@@ -49,7 +48,7 @@ trait KafkaMetricsReporterMBean {
   * Implement {@link org.apache.kafka.common.ClusterResourceListener} to receive cluster metadata once it's available. Please see the class documentation for ClusterResourceListener for more information.
   */
 trait KafkaMetricsReporter {
-  def init(props: VerifiableProperties)
+  def init(props: VerifiableProperties): Unit
 }
 
 object KafkaMetricsReporter {

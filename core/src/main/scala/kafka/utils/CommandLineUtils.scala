@@ -62,7 +62,7 @@ object CommandLineUtils extends Logging {
   /**
    * Check that all the listed options are present
    */
-  def checkRequiredArgs(parser: OptionParser, options: OptionSet, required: OptionSpec[_]*) {
+  def checkRequiredArgs(parser: OptionParser, options: OptionSet, required: OptionSpec[_]*): Unit = {
     for (arg <- required) {
       if (!options.has(arg))
         printUsageAndDie(parser, "Missing required argument \"" + arg + "\"")
@@ -72,7 +72,7 @@ object CommandLineUtils extends Logging {
   /**
    * Check that none of the listed options are present
    */
-  def checkInvalidArgs(parser: OptionParser, options: OptionSet, usedOption: OptionSpec[_], invalidOptions: Set[OptionSpec[_]]) {
+  def checkInvalidArgs(parser: OptionParser, options: OptionSet, usedOption: OptionSpec[_], invalidOptions: Set[OptionSpec[_]]): Unit = {
     if (options.has(usedOption)) {
       for (arg <- invalidOptions) {
         if (options.has(arg))
@@ -84,7 +84,7 @@ object CommandLineUtils extends Logging {
   /**
     * Check that none of the listed options are present with the combination of used options
     */
-  def checkInvalidArgsSet(parser: OptionParser, options: OptionSet, usedOptions: Set[OptionSpec[_]], invalidOptions: Set[OptionSpec[_]]) {
+  def checkInvalidArgsSet(parser: OptionParser, options: OptionSet, usedOptions: Set[OptionSpec[_]], invalidOptions: Set[OptionSpec[_]]): Unit = {
     if (usedOptions.count(options.has) == usedOptions.size) {
       for (arg <- invalidOptions) {
         if (options.has(arg))

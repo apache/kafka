@@ -40,7 +40,7 @@ class ServerGenerateClusterIdTest extends ZooKeeperTestHarness {
   val brokerMetaPropsFile = "meta.properties"
 
   @Before
-  override def setUp() {
+  override def setUp(): Unit = {
     super.setUp()
     config1 = KafkaConfig.fromProps(TestUtils.createBrokerConfig(1, zkConnect))
     config2 = KafkaConfig.fromProps(TestUtils.createBrokerConfig(2, zkConnect))
@@ -48,14 +48,14 @@ class ServerGenerateClusterIdTest extends ZooKeeperTestHarness {
   }
 
   @After
-  override def tearDown() {
+  override def tearDown(): Unit = {
     TestUtils.shutdownServers(servers)
     super.tearDown()
   }
 
 
   @Test
-  def testAutoGenerateClusterId() {
+  def testAutoGenerateClusterId(): Unit = {
     // Make sure that the cluster id doesn't exist yet.
     assertFalse(zkClient.getClusterId.isDefined)
 
@@ -89,7 +89,7 @@ class ServerGenerateClusterIdTest extends ZooKeeperTestHarness {
   }
 
   @Test
-  def testAutoGenerateClusterIdForKafkaClusterSequential() {
+  def testAutoGenerateClusterIdForKafkaClusterSequential(): Unit = {
     val server1 = TestUtils.createServer(config1)
     val clusterIdFromServer1 = server1.clusterId
 
@@ -119,7 +119,7 @@ class ServerGenerateClusterIdTest extends ZooKeeperTestHarness {
   }
 
   @Test
-  def testAutoGenerateClusterIdForKafkaClusterParallel() {
+  def testAutoGenerateClusterIdForKafkaClusterParallel(): Unit = {
     val firstBoot = Future.traverse(Seq(config1, config2, config3))(config => Future(TestUtils.createServer(config)))
     servers = Await.result(firstBoot, 100 second)
     val Seq(server1, server2, server3) = servers

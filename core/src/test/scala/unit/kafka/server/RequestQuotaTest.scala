@@ -96,7 +96,7 @@ class RequestQuotaTest extends BaseRequestTest {
   }
 
   @Before
-  override def setUp() {
+  override def setUp(): Unit = {
     RequestQuotaTest.principal = KafkaPrincipal.ANONYMOUS
     super.setUp()
 
@@ -134,13 +134,13 @@ class RequestQuotaTest extends BaseRequestTest {
   }
 
   @After
-  override def tearDown() {
+  override def tearDown(): Unit = {
     try executor.shutdownNow()
     finally super.tearDown()
   }
 
   @Test
-  def testResponseThrottleTime() {
+  def testResponseThrottleTime(): Unit = {
     for (apiKey <- RequestQuotaTest.ClientActions)
       submitTest(apiKey, () => checkRequestThrottleTime(apiKey))
 
@@ -148,21 +148,21 @@ class RequestQuotaTest extends BaseRequestTest {
   }
 
   @Test
-  def testResponseThrottleTimeWhenBothProduceAndRequestQuotasViolated() {
+  def testResponseThrottleTimeWhenBothProduceAndRequestQuotasViolated(): Unit = {
     val apiKey = ApiKeys.PRODUCE
     submitTest(apiKey, () => checkSmallQuotaProducerRequestThrottleTime(apiKey))
     waitAndCheckResults()
   }
 
   @Test
-  def testResponseThrottleTimeWhenBothFetchAndRequestQuotasViolated() {
+  def testResponseThrottleTimeWhenBothFetchAndRequestQuotasViolated(): Unit = {
     val apiKey = ApiKeys.FETCH
     submitTest(apiKey, () => checkSmallQuotaConsumerRequestThrottleTime(apiKey))
     waitAndCheckResults()
   }
 
   @Test
-  def testUnthrottledClient() {
+  def testUnthrottledClient(): Unit = {
     for (apiKey <- RequestQuotaTest.ClientActions)
       submitTest(apiKey, () => checkUnthrottledClient(apiKey))
 
@@ -170,7 +170,7 @@ class RequestQuotaTest extends BaseRequestTest {
   }
 
   @Test
-  def testExemptRequestTime() {
+  def testExemptRequestTime(): Unit = {
     for (apiKey <- RequestQuotaTest.ClusterActions)
       submitTest(apiKey, () => checkExemptRequestMetric(apiKey))
 
@@ -178,7 +178,7 @@ class RequestQuotaTest extends BaseRequestTest {
   }
 
   @Test
-  def testUnauthorizedThrottle() {
+  def testUnauthorizedThrottle(): Unit = {
     RequestQuotaTest.principal = RequestQuotaTest.UnauthorizedPrincipal
 
     for (apiKey <- ApiKeys.values)
@@ -519,16 +519,16 @@ class RequestQuotaTest extends BaseRequestTest {
     }
   }
 
-  private def submitTest(apiKey: ApiKeys, test: () => Unit) {
+  private def submitTest(apiKey: ApiKeys, test: () => Unit): Unit = {
     val future = executor.submit(new Runnable() {
-      def run() {
+      def run(): Unit = {
         test.apply()
       }
     })
     tasks += Task(apiKey, future)
   }
 
-  private def waitAndCheckResults() {
+  private def waitAndCheckResults(): Unit = {
     for (task <- tasks) {
       try {
         task.future.get(15, TimeUnit.SECONDS)
@@ -594,7 +594,7 @@ class RequestQuotaTest extends BaseRequestTest {
     }
   }
 
-  private def checkRequestThrottleTime(apiKey: ApiKeys) {
+  private def checkRequestThrottleTime(apiKey: ApiKeys): Unit = {
 
     // Request until throttled using client-id with default small quota
     val clientId = apiKey.toString
@@ -609,7 +609,7 @@ class RequestQuotaTest extends BaseRequestTest {
     assertTrue(s"Throttle time metrics not updated: $client" , throttleTimeMetricValue(clientId) > 0)
   }
 
-  private def checkSmallQuotaProducerRequestThrottleTime(apiKey: ApiKeys) {
+  private def checkSmallQuotaProducerRequestThrottleTime(apiKey: ApiKeys): Unit = {
 
     // Request until throttled using client-id with default small producer quota
     val smallQuotaProducerClient = Client(smallQuotaProducerClientId, apiKey)
@@ -622,7 +622,7 @@ class RequestQuotaTest extends BaseRequestTest {
       throttleTimeMetricValueForQuotaType(smallQuotaProducerClientId, QuotaType.Request).isNaN)
   }
 
-  private def checkSmallQuotaConsumerRequestThrottleTime(apiKey: ApiKeys) {
+  private def checkSmallQuotaConsumerRequestThrottleTime(apiKey: ApiKeys): Unit = {
 
     // Request until throttled using client-id with default small consumer quota
     val smallQuotaConsumerClient =   Client(smallQuotaConsumerClientId, apiKey)
@@ -635,7 +635,7 @@ class RequestQuotaTest extends BaseRequestTest {
       throttleTimeMetricValueForQuotaType(smallQuotaConsumerClientId, QuotaType.Request).isNaN)
   }
 
-  private def checkUnthrottledClient(apiKey: ApiKeys) {
+  private def checkUnthrottledClient(apiKey: ApiKeys): Unit = {
 
     // Test that request from client with large quota is not throttled
     val unthrottledClient = Client(unthrottledClientId, apiKey)
@@ -644,7 +644,7 @@ class RequestQuotaTest extends BaseRequestTest {
     assertTrue(s"Client should not have been throttled: $unthrottledClient", throttleTimeMetricValue(unthrottledClientId).isNaN)
   }
 
-  private def checkExemptRequestMetric(apiKey: ApiKeys) {
+  private def checkExemptRequestMetric(apiKey: ApiKeys): Unit = {
     val exemptTarget = exemptRequestMetricValue + 0.02
     val clientId = apiKey.toString
     val client = Client(clientId, apiKey)
@@ -654,7 +654,7 @@ class RequestQuotaTest extends BaseRequestTest {
     assertTrue(s"Client should not have been throttled: $client", throttleTimeMetricValue(clientId).isNaN)
   }
 
-  private def checkUnauthorizedRequestThrottle(apiKey: ApiKeys) {
+  private def checkUnauthorizedRequestThrottle(apiKey: ApiKeys): Unit = {
     val clientId = "unauthorized-" + apiKey.toString
     val client = Client(clientId, apiKey)
     val throttled = client.runUntil(response => throttleTimeMetricValue(clientId) > 0.0)
