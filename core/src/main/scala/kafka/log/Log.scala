@@ -243,12 +243,12 @@ class Log(@volatile var dir: File,
 
   private def checkIfMemoryMappedBufferClosed(): Unit = {
     if (isMemoryMappedBufferClosed)
-      throw new KafkaStorageException(s"The memory mapped buffer for log of $topicPartition is already closed")
+        error(s"The memory mapped buffer for log of $topicPartition is already closed")
   }
 
   @volatile private var nextOffsetMetadata: LogOffsetMetadata = _
 
-  /* The earliest offset which is part of an incomplete transaction. This is used to compute the
+  /* The earliest offset whichc is part of an incomplete transaction. This is used to compute the
    * last stable offset (LSO) in ReplicaManager. Note that it is possible that the "true" first unstable offset
    * gets removed from the log (through record or segment deletion). In this case, the first unstable offset
    * will point to the log start offset, which may actually be either part of a completed transaction or not
@@ -947,6 +947,7 @@ class Log(@volatile var dir: File,
   def renameDir(name: String) {
     lock synchronized {
       maybeHandleIOException(s"Error while renaming dir for $topicPartition in log dir ${dir.getParent}") {
+        closeHandlers()
         val renamedDir = new File(dir.getParent, name)
         Utils.atomicMoveWithFallback(dir.toPath, renamedDir.toPath)
         if (renamedDir != dir) {

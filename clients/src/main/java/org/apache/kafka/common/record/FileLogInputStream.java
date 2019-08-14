@@ -65,6 +65,11 @@ public class FileLogInputStream implements LogInputStream<FileLogInputStream.Fil
             return null;
 
         logHeaderBuffer.rewind();
+
+        if (!channel.isOpen()) {
+            channel = FileRecords.open(fileRecords.file()).channel();
+        }
+
         Utils.readFullyOrFail(channel, logHeaderBuffer, position, "log header");
 
         logHeaderBuffer.rewind();
