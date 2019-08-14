@@ -41,6 +41,7 @@ import org.apache.zookeeper.KeeperException.NodeExistsException
 import scala.collection.JavaConverters._
 import scala.collection._
 import scala.compat.java8.OptionConverters._
+import scala.concurrent.ExecutionException
 import scala.io.StdIn
 
 object TopicCommand extends Logging {
@@ -271,7 +272,7 @@ object TopicCommand extends Logging {
       val topics = getTopics(opts.topic, opts.excludeInternalTopics)
       val allConfigs = adminClient.describeConfigs(topics.map(new ConfigResource(Type.TOPIC, _)).asJavaCollection).values()
       val liveBrokers = adminClient.describeCluster().nodes().get().asScala.map(_.id())
-      val topicDescriptions = adminClient.describeTopics(topics.asJavaCollection).all().get().values().asScala
+      val topicDescriptionFutures = adminClient.describeTopics(topics.asJavaCollection).values()
       val describeOptions = new DescribeOptions(opts, liveBrokers.toSet)
 
       for (td <- topicDescriptions) {
@@ -293,6 +294,12 @@ object TopicCommand extends Logging {
           for (partition <- sortedPartitions) {
             val partitionDesc = PartitionDescription(topicName, partition, Some(config), markedForDeletion = false)
             describeOptions.maybePrintPartitionDescription(partitionDesc)
+          }
+        } catch {
+          case e: ExecutionException => {
+            print("\tTopic: " + topicName)
+            print("\t(LISTENER_NOT_FOUND)")
+            println()
           }
         }
       }
