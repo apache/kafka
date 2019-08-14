@@ -17,6 +17,7 @@
 package org.apache.kafka.connect.runtime;
 
 import org.apache.kafka.connect.runtime.isolation.Plugins;
+import org.apache.kafka.connect.runtime.rest.InternalRequestSignature;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigInfos;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
@@ -120,8 +121,10 @@ public interface Herder {
      * @param connName connector to update
      * @param configs list of configurations
      * @param callback callback to invoke upon completion
+     * @param requestSignature the signature of the request made for this task (re-)configuration;
+     *                         may be null if no signature was provided
      */
-    void putTaskConfigs(String connName, List<Map<String, String>> configs, Callback<Void> callback);
+    void putTaskConfigs(String connName, List<Map<String, String>> configs, Callback<Void> callback, InternalRequestSignature requestSignature);
 
     /**
      * Get a list of connectors currently running in this cluster.

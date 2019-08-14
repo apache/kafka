@@ -28,7 +28,11 @@ import java.util.Locale;
  *
  * {@code COMPATIBLE} signifies that this worker supports both eager and incremental cooperative
  * Connect protocols and will use the version that is elected by the Kafka broker coordinator
- * during rebalancing.
+ * during rebalance.
+ *
+ * {@code SESSIONED} signifies that this worker supports all of the above protocols in addition to
+ * a protocol that uses incremental cooperative rebalancing for worker assignment and uses session
+ * keys distributed via the config topic to verify internal REST requests
  */
 public enum ConnectProtocolCompatibility {
     EAGER {
@@ -42,6 +46,13 @@ public enum ConnectProtocolCompatibility {
         @Override
         public String protocol() {
             return "compatible";
+        }
+    },
+
+    SESSIONED {
+        @Override
+        public String protocol() {
+            return "sessioned";
         }
     };
 

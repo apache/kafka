@@ -33,6 +33,7 @@ import org.apache.kafka.connect.data.SchemaBuilder;
 import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.errors.DataException;
+import org.apache.kafka.connect.runtime.SessionKey;
 import org.apache.kafka.connect.runtime.TargetState;
 import org.apache.kafka.connect.runtime.WorkerConfig;
 import org.apache.kafka.connect.runtime.WorkerConfigTransformer;
@@ -47,6 +48,7 @@ import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Base64;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -176,6 +178,8 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
         return COMMIT_TASKS_PREFIX + connectorName;
     }
 
+    public static final String SESSION_KEY_KEY = "session-key";
+
     // Note that while using real serialization for values as we have here, but ad hoc string serialization for keys,
     // isn't ideal, we use this approach because it avoids any potential problems with schema evolution or
     // converter/serializer changes causing keys to change. We need to absolutely ensure that the keys remain precisely
@@ -189,6 +193,12 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
             .build();
     public static final Schema TARGET_STATE_V0 = SchemaBuilder.struct()
             .field("state", Schema.STRING_SCHEMA)
+            .build();
+    // The key is logically a byte array, but we can't use the JSON converter to (de-)serialize that without a schema.
+    // So instead, we base 64-encode it before serializing and decode it after deserializing.
+    public static final Schema SESSION_KEY_V0 = SchemaBuilder.struct()
+            .field("key", Schema.STRING_SCHEMA)
+            .field("creation-timestamp", Schema.INT64_SCHEMA)
             .build();
 
     private static final long READ_TO_END_TIMEOUT_MS = 30000;
@@ -216,6 +226,8 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
     // The most recently read offset. This does not take into account deferred task updates/commits, so we may have
     // outstanding data to be applied.
     private volatile long offset;
+    // The most recently read session key, to use for validating internal REST requests.
+    private SessionKey sessionKey;
 
     // Connector -> Map[ConnectorTaskId -> Configs]
     private final Map<String, Map<ConnectorTaskId, Map<String, String>>> deferredTaskUpdates = new HashMap<>();
@@ -270,6 +282,7 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
             // immutable configs
             return new ClusterConfigState(
                     offset,
+                    sessionKey,
                     new HashMap<>(connectorTaskCounts),
                     new HashMap<>(connectorConfigs),
                     new HashMap<>(connectorTargetStates),
@@ -407,6 +420,22 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
         byte[] serializedTargetState = converter.fromConnectData(topic, TARGET_STATE_V0, connectTargetState);
         log.debug("Writing target state {} for connector {}", state, connector);
         configLog.send(TARGET_STATE_KEY(connector), serializedTargetState);
+    }
+
+    @Override
+    public void putSessionKey(SessionKey sessionKey) {
+        log.debug("Distributing new session key");
+        Struct sessionKeyStruct = new Struct(SESSION_KEY_V0);
+        sessionKeyStruct.put("key", Base64.getEncoder().encodeToString(sessionKey.key()));
+        sessionKeyStruct.put("creation-timestamp", sessionKey.creationTimestamp());
+        byte[] serializedSessionKey = converter.fromConnectData(topic, SESSION_KEY_V0, sessionKeyStruct);
+        try {
+            configLog.send(SESSION_KEY_KEY, serializedSessionKey);
+            configLog.readToEnd().get(READ_TO_END_TIMEOUT_MS, TimeUnit.MILLISECONDS);
+        } catch (InterruptedException | ExecutionException | TimeoutException e) {
+            log.error("Failed to write session key to Kafka: ", e);
+            throw new ConnectException("Error writing session key to Kafka", e);
+        }
     }
 
     // package private for testing
@@ -635,6 +664,34 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
 
                 if (started)
                     updateListener.onTaskConfigUpdate(updatedTasks);
+            } else if (record.key().equals(SESSION_KEY_KEY)) {
+                synchronized (lock) {
+                    if (value.value() == null) {
+                        log.error("Ignoring session key because it is unexpectedly null");
+                        return;
+                    }
+                    if (!(value.value() instanceof Map)) {
+                        log.error("Ignoring session key because the value is not a Map but is {}", value.value().getClass());
+                        return;
+                    }
+
+                    Object sessionKey = ((Map<String, Object>) value.value()).get("key");
+                    if (!(sessionKey instanceof String)) {
+                        log.error("Invalid data for session key 'key' field should be a String but is {}", sessionKey.getClass());
+                        return;
+                    }
+                    byte[] key = Base64.getDecoder().decode((String) sessionKey);
+
+                    Object creationTimestamp = ((Map<String, Object>) value.value()).get("creation-timestamp");
+                    if (!(creationTimestamp instanceof Long)) {
+                        log.error("Invalid data for session key 'creation-timestamp' field should be a long but it is {}", creationTimestamp.getClass());
+                        return;
+                    }
+                    KafkaConfigBackingStore.this.sessionKey = new SessionKey(key, (long) creationTimestamp);
+
+                    if (started)
+                        updateListener.onSessionKeyUpdate(KafkaConfigBackingStore.this.sessionKey);
+                }
             } else {
                 log.error("Discarding config update record with invalid key: {}", record.key());
             }

@@ -346,6 +346,7 @@
       <allow pkg="org.apache.kafka.connect" />
       <allow pkg="org.reflections"/>
       <allow pkg="org.reflections.util"/>
+      <allow pkg="javax.crypto"/>
 
       <subpackage name="rest">
         <allow pkg="org.eclipse.jetty" />

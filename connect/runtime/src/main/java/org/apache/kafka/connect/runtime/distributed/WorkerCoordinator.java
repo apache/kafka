@@ -157,7 +157,9 @@ public class WorkerCoordinator extends AbstractCoordinator implements Closeable 
             case EAGER:
                 return ConnectProtocol.metadataRequest(workerState);
             case COMPATIBLE:
-                return IncrementalCooperativeConnectProtocol.metadataRequest(workerState);
+                return IncrementalCooperativeConnectProtocol.metadataRequest(workerState, false);
+            case SESSIONED:
+                return IncrementalCooperativeConnectProtocol.metadataRequest(workerState, true);
             default:
                 throw new IllegalStateException("Unknown Connect protocol compatibility mode " + protocolCompatibility);
         }
@@ -194,8 +196,8 @@ public class WorkerCoordinator extends AbstractCoordinator implements Closeable 
     @Override
     protected Map<String, ByteBuffer> performAssignment(String leaderId, String protocol, List<JoinGroupResponseMember> allMemberMetadata) {
         return ConnectProtocolCompatibility.fromProtocol(protocol) == EAGER
-               ? eagerAssignor.performAssignment(leaderId, protocol, allMemberMetadata, this)
-               : incrementalAssignor.performAssignment(leaderId, protocol, allMemberMetadata, this);
+            ? eagerAssignor.performAssignment(leaderId, protocol, allMemberMetadata, this)
+            : incrementalAssignor.performAssignment(leaderId, protocol, allMemberMetadata, this);
     }
 
     @Override
@@ -292,7 +294,15 @@ public class WorkerCoordinator extends AbstractCoordinator implements Closeable 
      * @return the current connect protocol version
      */
     public short currentProtocolVersion() {
-        return currentConnectProtocol == EAGER ? (short) 0 : (short) 1;
+        switch (currentConnectProtocol) {
+            case EAGER:
+                return 0;
+            case COMPATIBLE:
+                return 1;
+            case SESSIONED:
+            default:
+                return 2;
+        }
     }
 
     private class WorkerCoordinatorMetrics {

@@ -50,7 +50,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 @RunWith(PowerMockRunner.class)
-@PowerMockIgnore({"javax.net.ssl.*", "javax.security.*"})
+@PowerMockIgnore({"javax.net.ssl.*", "javax.security.*", "javax.crypto.*"})
 public class RestServerTest {
 
     @MockStrict

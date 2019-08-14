@@ -42,14 +42,17 @@ import org.apache.kafka.connect.runtime.ConnectMetricsRegistry;
 import org.apache.kafka.connect.runtime.ConnectorConfig;
 import org.apache.kafka.connect.runtime.HerderConnectorContext;
 import org.apache.kafka.connect.runtime.HerderRequest;
+import org.apache.kafka.connect.runtime.SessionKey;
 import org.apache.kafka.connect.runtime.SinkConnectorConfig;
 import org.apache.kafka.connect.runtime.SourceConnectorConfig;
 import org.apache.kafka.connect.runtime.TargetState;
 import org.apache.kafka.connect.runtime.Worker;
+import org.apache.kafka.connect.runtime.rest.InternalRequestSignature;
 import org.apache.kafka.connect.runtime.rest.RestClient;
 import org.apache.kafka.connect.runtime.rest.RestServer;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorInfo;
 import org.apache.kafka.connect.runtime.rest.entities.TaskInfo;
+import org.apache.kafka.connect.runtime.rest.errors.BadRequestException;
 import org.apache.kafka.connect.sink.SinkConnector;
 import org.apache.kafka.connect.storage.ConfigBackingStore;
 import org.apache.kafka.connect.storage.StatusBackingStore;
@@ -58,6 +61,7 @@ import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.apache.kafka.connect.util.SinkUtils;
 import org.slf4j.Logger;
 
+import javax.crypto.KeyGenerator;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -84,6 +88,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
 import static org.apache.kafka.connect.runtime.distributed.ConnectProtocol.CONNECT_PROTOCOL_V0;
+import static org.apache.kafka.connect.runtime.distributed.IncrementalCooperativeConnectProtocol.CONNECT_PROTOCOL_V2;
 
 /**
  * <p>
@@ -132,6 +137,10 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
     private final int workerSyncTimeoutMs;
     private final long workerTasksShutdownTimeoutMs;
     private final int workerUnsyncBackoffMs;
+    private final int keyRotationIntervalMs;
+    private final String requestSignatureAlgorithm;
+    private final List<String> keySignatureVerificationAlgorithms;
+    private final KeyGenerator keyGenerator;
 
     private final ExecutorService herderExecutor;
     private final ExecutorService forwardRequestExecutor;
@@ -161,6 +170,8 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
     private boolean needsReconfigRebalance;
     private volatile int generation;
     private volatile long scheduledRebalance;
+    private byte[] sessionKey;
+    private volatile long keyExpiration;
 
     private final DistributedConfig config;
 
@@ -197,6 +208,10 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         this.workerSyncTimeoutMs = config.getInt(DistributedConfig.WORKER_SYNC_TIMEOUT_MS_CONFIG);
         this.workerTasksShutdownTimeoutMs = config.getLong(DistributedConfig.TASK_SHUTDOWN_GRACEFUL_TIMEOUT_MS_CONFIG);
         this.workerUnsyncBackoffMs = config.getInt(DistributedConfig.WORKER_UNSYNC_BACKOFF_MS_CONFIG);
+        this.requestSignatureAlgorithm = config.getString(DistributedConfig.INTERNAL_REQUEST_SIGNATURE_ALGORITHM_CONFIG);
+        this.keyRotationIntervalMs = config.getInt(DistributedConfig.INTERNAL_REQUEST_KEY_ROTATION_INTERVAL_MS_CONFIG);
+        this.keySignatureVerificationAlgorithms = config.getList(DistributedConfig.INTERNAL_REQUEST_VERIFICATION_ALGORITHMS_CONFIG);
+        this.keyGenerator = config.getInternalRequestKeyGenerator();
 
         String clientIdConfig = config.getString(CommonClientConfigs.CLIENT_ID_CONFIG);
         String clientId = clientIdConfig.length() <= 0 ? "connect-" + CONNECT_CLIENT_ID_SEQUENCE.getAndIncrement() : clientIdConfig;
@@ -225,6 +240,8 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         needsReconfigRebalance = false;
         canReadConfigs = true; // We didn't try yet, but Configs are readable until proven otherwise
         scheduledRebalance = Long.MAX_VALUE;
+        keyExpiration = Long.MAX_VALUE;
+        sessionKey = null;
     }
 
     @Override
@@ -278,8 +295,17 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
             return;
         }
 
+        long now = time.milliseconds();
+
+        if (checkAndMaybeRotateSessionKey(now)) {
+            keyExpiration = Long.MAX_VALUE;
+            configBackingStore.putSessionKey(new SessionKey(
+                keyGenerator.generateKey().getEncoded(),
+                time.milliseconds()
+            ));
+        }
+
         // Process any external requests
-        final long now = time.milliseconds();
         long nextRequestTimeoutMs = Long.MAX_VALUE;
         while (true) {
             final DistributedHerderRequest next = peekWithoutException();
@@ -305,6 +331,11 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
             rebalanceResolved = false;
             log.debug("Scheduled rebalance at: {} (now: {} nextRequestTimeoutMs: {}) ",
                     scheduledRebalance, now, nextRequestTimeoutMs);
+        }
+        if (internalRequestValidationEnabled() && keyExpiration < Long.MAX_VALUE) {
+            nextRequestTimeoutMs = Math.min(nextRequestTimeoutMs, Math.max(keyExpiration - now, 0));
+            log.debug("Scheduled next key rotation at: {} (now: {} nextRequestTimeoutMs: {}) ",
+                    keyExpiration, now, nextRequestTimeoutMs);
         }
 
         // Process any configuration updates
@@ -358,6 +389,30 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         } catch (WakeupException e) { // FIXME should not be WakeupException
             // Ignore. Just indicates we need to check the exit flag, for requested actions, etc.
         }
+    }
+
+    private synchronized boolean checkAndMaybeRotateSessionKey(long now) {
+        if (internalRequestValidationEnabled()) {
+            if (isLeader()) {
+                boolean distributeNewKey = false;
+
+                if (sessionKey == null) {
+                    log.debug("Internal request signing is enabled but no session key has been distributed yet. "
+                        + "Distributing new key now.");
+                    distributeNewKey = true;
+                } else if (keyExpiration <= now) {
+                    log.debug("Distributing new session key as existing key has expired");
+                    distributeNewKey = true;
+                }
+
+                return distributeNewKey;
+            } else if (sessionKey == null) {
+                // This happens on startup for follower workers; the snapshot contains the session key,
+                // but no callback in the config update listener has been fired for it yet.
+                sessionKey = configState.sessionKey().key();
+            }
+        }
+        return false;
     }
 
     private synchronized boolean updateConfigsWithEager(AtomicReference<Set<String>> connectorConfigUpdatesCopy,
@@ -751,8 +806,30 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
     }
 
     @Override
-    public void putTaskConfigs(final String connName, final List<Map<String, String>> configs, final Callback<Void> callback) {
+    public void putTaskConfigs(final String connName, final List<Map<String, String>> configs, final Callback<Void> callback, InternalRequestSignature requestSignature) {
         log.trace("Submitting put task configuration request {}", connName);
+        if (internalRequestValidationEnabled()) {
+            String requestValidationError = null;
+            if (requestSignature == null) {
+                requestValidationError = "Internal request missing required signature";
+            } else if (!keySignatureVerificationAlgorithms.contains(requestSignature.keyAlgorithm())) {
+                requestValidationError = String.format(
+                    "The key signing algorithm '%s' is not allowed for this worker; the permitted algorithms are: %s",
+                    requestSignature.keyAlgorithm(),
+                    keySignatureVerificationAlgorithms
+                );
+            } else {
+                synchronized (this) {
+                    if (!requestSignature.isValid(sessionKey)) {
+                        requestValidationError = "Internal request contained invalid signature";
+                    }
+                }
+            }
+            if (requestValidationError != null) {
+                callback.onCompletion(new BadRequestException(requestValidationError), null);
+                return;
+            }
+        }
 
         addRequest(
                 new Callable<Void>() {
@@ -1202,7 +1279,8 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                                     return;
                                 }
                                 String reconfigUrl = RestServer.urlJoin(leaderUrl, "/connectors/" + connName + "/tasks");
-                                RestClient.httpRequest(reconfigUrl, "POST", null, rawTaskProps, null, config);
+                                log.info("Forwarding task configurations for connector {} to leader", connName);
+                                RestClient.httpRequest(reconfigUrl, "POST", null, rawTaskProps, null, config, sessionKey, requestSignatureAlgorithm);
                                 cb.onCompletion(null, null);
                             } catch (ConnectException e) {
                                 log.error("Request to leader to reconfigure connector tasks failed", e);
@@ -1237,6 +1315,10 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         if (peekWithoutException() == req)
             member.wakeup();
         return req;
+    }
+
+    private boolean internalRequestValidationEnabled() {
+        return member.currentProtocolVersion() >= CONNECT_PROTOCOL_V2;
     }
 
     private DistributedHerderRequest peekWithoutException() {
@@ -1305,6 +1387,18 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                 connectorTargetStateChanges.add(connector);
             }
             member.wakeup();
+        }
+
+        @Override
+        public void onSessionKeyUpdate(SessionKey sessionKey) {
+            log.info("Session key updated");
+
+            synchronized (DistributedHerder.this) {
+                DistributedHerder.this.sessionKey = sessionKey.key();
+                if (isLeader() && keyRotationIntervalMs > 0) {
+                    DistributedHerder.this.keyExpiration = sessionKey.creationTimestamp() + keyRotationIntervalMs;
+                }
+            }
         }
     }
 
@@ -1394,14 +1488,24 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
             // catch up (or backoff if we fail) not executed in a callback, and so we'll be able to invoke other
             // group membership actions (e.g., we may need to explicitly leave the group if we cannot handle the
             // assigned tasks).
-            log.info("Joined group at generation {} and got assignment: {}", generation, assignment);
+            log.info(
+                "Joined group at generation {} with protocol version {} and got assignment: {}",
+                generation,
+                member.currentProtocolVersion(),
+                assignment
+            );
             synchronized (DistributedHerder.this) {
                 DistributedHerder.this.assignment = assignment;
                 DistributedHerder.this.generation = generation;
                 int delay = assignment.delay();
                 DistributedHerder.this.scheduledRebalance = delay > 0
-                                                            ? time.milliseconds() + delay
-                                                            : Long.MAX_VALUE;
+                    ? time.milliseconds() + delay
+                    : Long.MAX_VALUE;
+                if (!internalRequestValidationEnabled() && DistributedHerder.this.keyExpiration < Long.MAX_VALUE) {
+                    // In the event of a version downgrade, let the user know that key expiration is now disabled
+                    // However, we retain any existing key expiration time in case an upgrade occurs
+                    log.info("Cancelling scheduled key expiration due to downgrade in protocol");
+                }
                 rebalanceResolved = false;
                 herderMetrics.rebalanceStarted(time.milliseconds());
             }

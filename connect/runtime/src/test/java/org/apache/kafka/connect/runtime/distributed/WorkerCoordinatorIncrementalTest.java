@@ -571,8 +571,11 @@ public class WorkerCoordinatorIncrementalTest {
                                                    ExtendedAssignment assignment) {
         responseMembers.add(new JoinGroupResponseMember()
                 .setMemberId(member)
-                .setMetadata(IncrementalCooperativeConnectProtocol.serializeMetadata(
-                        new ExtendedWorkerState(expectedUrl(member), offset, assignment)).array())
+                .setMetadata(
+                    IncrementalCooperativeConnectProtocol.serializeMetadata(
+                        new ExtendedWorkerState(expectedUrl(member), offset, assignment), false
+                    ).array()
+                )
         );
     }
 }
