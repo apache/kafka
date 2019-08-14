@@ -468,8 +468,6 @@ private[log] class Cleaner(val id: Int,
                            time: Time,
                            checkDone: (TopicPartition) => Unit) extends Logging {
 
-  type MutableMap = scala.collection.mutable.Map[Record,Long]
-  
   protected override def loggerName = classOf[LogCleaner].getName
 
   this.logIdent = s"Cleaner $id: "
@@ -632,8 +630,7 @@ private[log] class Cleaner(val id: Int,
                              maxLogMessageSize: Int,
                              transactionMetadata: CleanedTransactionMetadata,
                              lastRecordsOfActiveProducers: Map[Long, LastRecord],
-                             stats: CleanerStats) : MutableMap = {
-    val tombstoneRecords = scala.collection.mutable.Map[Record,Long]()  
+                             stats: CleanerStats) {
     val logCleanerFilter: RecordFilter = new RecordFilter {
       var discardBatchRecords: Boolean = _
 
@@ -670,7 +667,7 @@ private[log] class Cleaner(val id: Int,
           // The batch is only retained to preserve producer sequence information; the records can be removed
           false
         else
-          Cleaner.this.shouldRetainRecord(map, tombstoneRecords, retainDeletes, batch, record, stats)
+          Cleaner.this.shouldRetainRecord(map, retainDeletes, batch, record, stats)
       }
     }
 
@@ -710,7 +707,6 @@ private[log] class Cleaner(val id: Int,
         growBuffersOrFail(sourceRecords, position, maxLogMessageSize, records)
     }
     restoreBuffers()
-    tombstoneRecords
   }
 
 
@@ -759,7 +755,6 @@ private[log] class Cleaner(val id: Int,
   }
 
   private def shouldRetainRecord(map: kafka.log.OffsetMap,
-                                 tombstoneRecords: MutableMap,
                                  retainDeletes: Boolean,
                                  batch: RecordBatch,
                                  record: Record,
@@ -778,11 +773,7 @@ private[log] class Cleaner(val id: Int,
        */
       val latestOffsetForKey = record.offset() >= foundOffset
       val isRetainedValue = record.hasValue || retainDeletes
-      if (!record.hasValue && !tombstoneRecords.contains(record) && isRetainedValue) {
-        tombstoneRecords(record) = time.milliseconds()
-      }
       latestOffsetForKey && isRetainedValue
-
     } else {
       stats.invalidMessage()
       false
