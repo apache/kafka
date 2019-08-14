@@ -132,10 +132,20 @@ public class MetadataResponse extends AbstractResponse {
                 topicsByError(Errors.INVALID_TOPIC_EXCEPTION), internalTopics, controller());
     }
 
-    public int topicAuthorizedOperations(String topicName) {
-        return data.topics().find(topicName).topicAuthorizedOperations();
+    /**
+     * Returns a 32-bit bitfield to represent authorized operations for this topic.
+     */
+    public Optional<Integer> topicAuthorizedOperations(String topicName) {
+        MetadataResponseTopic topic = data.topics().find(topicName);
+        if (topic == null)
+            return Optional.empty();
+        else
+            return Optional.of(topic.topicAuthorizedOperations());
     }
 
+    /**
+     * Returns a 32-bit bitfield to represent authorized operations for this cluster.
+     */
     public int clusterAuthorizedOperations() {
         return data.clusterAuthorizedOperations();
     }

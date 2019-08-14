@@ -1526,7 +1526,7 @@ public class KafkaAdminClient extends AdminClient {
                     }
                     partitions.sort(Comparator.comparingInt(TopicPartitionInfo::partition));
                     TopicDescription topicDescription = new TopicDescription(topicName, isInternal, partitions,
-                        validAclOperations(response.topicAuthorizedOperations(topicName)));
+                        validAclOperations(response.topicAuthorizedOperations(topicName).get()));
                     future.complete(topicDescription);
                 }
             }
