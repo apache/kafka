@@ -58,7 +58,8 @@ object ConsumerGroupCommand extends Logging {
 
     try {
       if (opts.options.has(opts.listOpt))
-        consumerGroupService.listGroups().foreach(println(_))
+        if (opts.options.has(opts.regexOpt)) consumerGroupService.listGroupsByRegex().foreach(println(_))
+        else consumerGroupService.listGroups().foreach(println(_))
       else if (opts.options.has(opts.describeOpt))
         consumerGroupService.describeGroups()
       else if (opts.options.has(opts.deleteOpt))
@@ -179,6 +180,13 @@ object ConsumerGroupCommand extends Logging {
       val result = adminClient.listConsumerGroups(withTimeoutMs(new ListConsumerGroupsOptions))
       val listings = result.all.get.asScala
       listings.map(_.groupId).toList
+    }
+
+    def listGroupsByRegex(): List[String] = {
+      listGroups().filter {
+        val regex = opts.options.valueOf(opts.regexOpt)
+        groupId => groupId.matches(regex)
+      }
     }
 
     private def shouldPrintMemberState(group: String, state: Option[String], numRows: Option[Int]): Boolean = {
@@ -302,7 +310,9 @@ object ConsumerGroupCommand extends Logging {
     def describeGroups(): Unit = {
       val groupIds =
         if (opts.options.has(opts.allGroupsOpt)) listGroups()
-        else opts.options.valuesOf(opts.groupOpt).asScala
+        else if (opts.options.has(opts.groupOpt)) opts.options.valuesOf(opts.groupOpt).asScala
+        else listGroups().filter(groupId => groupId.matches(opts.options.valueOf(opts.regexOpt)))
+
       val membersOptPresent = opts.options.has(opts.membersOpt)
       val stateOptPresent = opts.options.has(opts.stateOpt)
       val offsetsOptPresent = opts.options.has(opts.offsetsOpt)
@@ -366,7 +376,8 @@ object ConsumerGroupCommand extends Logging {
     def resetOffsets(): Map[String, Map[TopicPartition, OffsetAndMetadata]] = {
       val groupIds =
         if (opts.options.has(opts.allGroupsOpt)) listGroups()
-        else opts.options.valuesOf(opts.groupOpt).asScala
+        else if (opts.options.has(opts.groupOpt)) opts.options.valuesOf(opts.groupOpt).asScala
+        else listGroups().filter(groupId => groupId.matches(opts.options.valueOf(opts.regexOpt)))
 
       val consumerGroups = adminClient.describeConsumerGroups(
         groupIds.asJava,
@@ -763,7 +774,8 @@ object ConsumerGroupCommand extends Logging {
     def deleteGroups(): Map[String, Throwable] = {
       val groupIds =
         if (opts.options.has(opts.allGroupsOpt)) listGroups()
-        else opts.options.valuesOf(opts.groupOpt).asScala
+        else if (opts.options.has(opts.groupOpt)) opts.options.valuesOf(opts.groupOpt).asScala
+        else listGroups().filter(groupId => groupId.matches(opts.options.valueOf(opts.regexOpt)))
 
       val groupsToDelete = adminClient.deleteConsumerGroups(
         groupIds.asJava,
@@ -815,6 +827,7 @@ object ConsumerGroupCommand extends Logging {
     val ListDoc = "List all consumer groups."
     val DescribeDoc = "Describe consumer group and list offset lag (number of messages not yet processed) related to given group."
     val AllGroupsDoc = "Apply to all consumer groups."
+    val RegexDoc = "Select consumer groups by regex pattern."
     val nl = System.getProperty("line.separator")
     val DeleteDoc = "Pass in groups to delete topic partition offsets and ownership information " +
       "over the entire consumer group. For instance --group g1 --group g2"
@@ -865,6 +878,10 @@ object ConsumerGroupCommand extends Logging {
     val listOpt = parser.accepts("list", ListDoc)
     val describeOpt = parser.accepts("describe", DescribeDoc)
     val allGroupsOpt = parser.accepts("all-groups", AllGroupsDoc)
+    val regexOpt = parser.accepts("regex", RegexDoc)
+                        .withRequiredArg()
+                        .describedAs("regex pattern")
+                        .ofType(classOf[String])
     val deleteOpt = parser.accepts("delete", DeleteDoc)
     val timeoutMsOpt = parser.accepts("timeout", TimeoutMsDoc)
                              .withRequiredArg

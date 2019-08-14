@@ -183,6 +183,37 @@ class DeleteConsumerGroupsTest extends ConsumerGroupCommandTest {
   }
 
   @Test
+  def testDeleteEmptyGroupsRegex() {
+    TestUtils.createOffsetsTopic(zkClient, servers)
+
+    val groups = List("group1", "group2", "group3")
+    val executors =
+      for (group <- groups)
+        yield addConsumerGroupExecutor(numConsumers = 1, group = group)
+
+    val regex   = "group[1-2]" // select 2 groups, namely "group1" and "group2"
+    val cgcArgs = Array("--bootstrap-server", brokerList, "--delete", "--regex", regex)
+    val service = getConsumerGroupService(cgcArgs)
+
+    TestUtils.waitUntilTrue(() => {
+      groups.forall(service.listGroups().contains)
+    }, "Some groups did not initialize as expected.", maxRetries = 3)
+
+    executors.foreach(_.shutdown())
+
+    TestUtils.waitUntilTrue(() => {
+      groups.forall(group => service.collectGroupState(group).state == "Empty")
+    }, "All groups did become empty as expected.", maxRetries = 3)
+
+    val groupsExpected = groups.init
+    val groupsDeleted = service.deleteGroups()
+    assertTrue(s"Some groups could not be deleted as expected",
+        groupsDeleted.size == 2 &&
+          groupsExpected.forall(groupsDeleted.keySet.contains) &&
+          groupsDeleted.values.exists(deletionException => Option(deletionException).isEmpty))
+  }
+
+  @Test
   def testDeleteCmdWithMixOfSuccessAndError() {
     TestUtils.createOffsetsTopic(zkClient, servers)
     val missingGroup = "missing.group"

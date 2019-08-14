@@ -145,6 +145,23 @@ class ResetConsumerGroupOffsetTest extends ConsumerGroupCommandTest {
   }
 
   @Test
+  def testResetOffsetsExistingTopicSelectedGroupsRegex(): Unit = {
+    produceMessages(topic, 100)
+    val groups = List("group1", "group2", "group3")
+    for (group <- groups) yield {
+      val executor = addConsumerGroupExecutor(numConsumers = 1, topic = topic, group = group)
+      awaitConsumerProgress(count = 100L, group = group)
+      executor.shutdown()
+    }
+    val regex = "group[1-2]" // select 2 groups, namely "group1" and "group2"
+    val args = Array("--bootstrap-server", brokerList, "--reset-offsets", "--topic", topic,
+      "--to-offset", "50", "--regex", regex)
+    resetAndAssertOffsets(args, expectedOffset = 50, dryRun = true)
+    resetAndAssertOffsets(args ++ Array("--dry-run"), expectedOffset = 50, dryRun = true)
+    resetAndAssertOffsets(args ++ Array("--execute"), expectedOffset = 50)
+  }
+
+  @Test
   def testResetOffsetsExistingTopicAllGroups(): Unit = {
     val args = buildArgsForAllGroups("--topic", topic, "--to-offset", "50")
     produceMessages(topic, 100)
