@@ -26,7 +26,7 @@ public final class IsNullConditional {
     }
 
     static IsNullConditional forField(FieldSpec field) {
-        IsNullConditional cond = new IsNullConditional(field.name());
+        IsNullConditional cond = new IsNullConditional(field.camelCaseName());
         cond.nullableVersions(field.nullableVersions());
         return cond;
     }
@@ -70,7 +70,6 @@ public final class IsNullConditional {
     void generate(CodeBuffer buffer) {
         // check if the current version is a nullable version
         VersionConditional.forVersions(nullableVersions, possibleVersions).
-            alwaysEmitBlockScope(alwaysEmitBlockScope).
             ifMember(() -> {
                 if (ifNull != null) {
                     buffer.printf("if (this.%s == null) {%n", name);
@@ -92,7 +91,17 @@ public final class IsNullConditional {
                     buffer.printf("}%n");
                 }
             }).
-            ifNotMember(ifNotNull).
+            ifNotMember(() -> {
+                if (alwaysEmitBlockScope) {
+                    buffer.printf("{%n");
+                }
+                buffer.incrementIndent();
+                ifNotNull.run();
+                buffer.decrementIndent();
+                if (alwaysEmitBlockScope) {
+                    buffer.printf("}%n");
+                }
+            }).
             generate(buffer);
     }
 }
