@@ -26,12 +26,13 @@ import java.time.Duration
 import java.util
 import java.util.{Collections, Properties}
 import java.util.concurrent._
-import javax.management.ObjectName
 
+import javax.management.ObjectName
 import com.yammer.metrics.Metrics
 import com.yammer.metrics.core.MetricName
 import kafka.admin.ConfigCommand
 import kafka.api.{KafkaSasl, SaslSetup}
+import kafka.cluster.BrokerEndPoint
 import kafka.controller.{ControllerBrokerStateInfo, ControllerChannelManager}
 import kafka.log.LogConfig
 import kafka.message.ProducerCompressionCodec
@@ -673,10 +674,10 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
       (1 to 2).foreach { i =>
         val replicaFetcherManager = servers(i).replicaManager.replicaFetcherManager
         val truncationOffset = tp.partition
-        replicaFetcherManager.markPartitionsForTruncation(leaderId, tp, truncationOffset)
+        replicaFetcherManager.markPartitionsForTruncation(leaderId,servers(i).config.hostName, servers(i).config.port, tp, truncationOffset)
         val fetcherThreads = replicaFetcherManager.fetcherThreadMap.filter(_._2.fetchState(tp).isDefined)
         assertEquals(1, fetcherThreads.size)
-        assertEquals(replicaFetcherManager.getFetcherId(tp), fetcherThreads.head._1.fetcherId)
+        assertEquals(replicaFetcherManager.getFetcherId(new BrokerEndPoint(servers(i).config.brokerId, servers(i).config.hostName, servers(i).config.port), tp.topic(), tp.partition()), fetcherThreads.head._1.fetcherId)
         assertEquals(Some(truncationOffset), fetcherThreads.head._2.fetchState(tp).map(_.fetchOffset))
       }
     }

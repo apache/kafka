@@ -18,8 +18,11 @@
 package kafka.server
 
 import kafka.cluster.BrokerEndPoint
+import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.utils.Time
+
+import scala.collection.mutable
 
 class ReplicaFetcherManager(brokerConfig: KafkaConfig,
                             protected val replicaManager: ReplicaManager,
@@ -44,4 +47,10 @@ class ReplicaFetcherManager(brokerConfig: KafkaConfig,
     closeAllFetchers()
     info("shutdown completed")
   }
+}
+
+
+object FetcherIdManager {
+  val tpFetcherIdMap =  new mutable.HashMap[TopicPartition, Int]
+  val brokerAndLastComputedFetcherIdMap = new mutable.HashMap[BrokerEndPoint, Int]
 }

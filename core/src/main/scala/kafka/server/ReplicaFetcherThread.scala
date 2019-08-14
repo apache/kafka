@@ -287,7 +287,7 @@ class ReplicaFetcherThread(name: String,
 
     // mark the future replica for truncation only when we do last truncation
     if (offsetTruncationState.truncationCompleted)
-      replicaMgr.replicaAlterLogDirsManager.markPartitionsForTruncation(brokerConfig.brokerId, tp,
+      replicaMgr.replicaAlterLogDirsManager.markPartitionsForTruncation(brokerConfig.brokerId,brokerConfig.hostName,brokerConfig.port, tp,
         offsetTruncationState.offset)
   }
 

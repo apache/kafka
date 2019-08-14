@@ -110,16 +110,34 @@ abstract class AbstractFetcherManager[T <: AbstractFetcherThread](val name: Stri
   }
 
   // Visibility for testing
-  private[server] def getFetcherId(topicPartition: TopicPartition): Int = {
+  private[server] def getFetcherId(broker: BrokerEndPoint, topic: String, partitionId: Int): Int = {
+    Utils.abs(31 * topic.hashCode() + partitionId) % numFetchers
+    /*
     lock synchronized {
-      Utils.abs(31 * topicPartition.topic.hashCode() + topicPartition.partition) % numFetchersPerBroker
+      val topicPartition = new TopicPartition(topic, partitionId)
+      if (!FetcherIdManager.tpFetcherIdMap.contains(topicPartition)) {
+        //1.compute fetcherId
+        var fetcherId: Int = 0
+        if (FetcherIdManager.brokerAndLastComputedFetcherIdMap.contains(broker)) {
+          fetcherId = (FetcherIdManager.brokerAndLastComputedFetcherIdMap.get(broker).get + 1) % numFetchers
+        }
+        FetcherIdManager.brokerAndLastComputedFetcherIdMap.put(broker, fetcherId)
+
+        //2.binding fetcherId and topicPartition
+        FetcherIdManager.tpFetcherIdMap.put(topicPartition, fetcherId)
+      }
+
+      debug("topicPartition=" + topicPartition + ", fetcherId=" + FetcherIdManager.tpFetcherIdMap.get(topicPartition).get)
+      FetcherIdManager.tpFetcherIdMap.get(topicPartition).get
+
     }
+    */
   }
 
   // This method is only needed by ReplicaAlterDirManager
-  def markPartitionsForTruncation(brokerId: Int, topicPartition: TopicPartition, truncationOffset: Long) {
+  def markPartitionsForTruncation(brokerId: Int, brokerHost:String, brokerPort:Int, topicPartition: TopicPartition, truncationOffset: Long) {
     lock synchronized {
-      val fetcherId = getFetcherId(topicPartition)
+      val fetcherId = getFetcherId(new BrokerEndPoint(brokerId,brokerHost,brokerPort),topicPartition.topic(),topicPartition.partition())
       val brokerIdAndFetcherId = BrokerIdAndFetcherId(brokerId, fetcherId)
       fetcherThreadMap.get(brokerIdAndFetcherId).foreach { thread =>
         thread.markPartitionsForTruncation(topicPartition, truncationOffset)
@@ -132,8 +150,8 @@ abstract class AbstractFetcherManager[T <: AbstractFetcherThread](val name: Stri
 
   def addFetcherForPartitions(partitionAndOffsets: Map[TopicPartition, InitialFetchState]) {
     lock synchronized {
-      val partitionsPerFetcher = partitionAndOffsets.groupBy { case (topicPartition, brokerAndInitialFetchOffset) =>
-        BrokerAndFetcherId(brokerAndInitialFetchOffset.leader, getFetcherId(topicPartition))
+      val partitionsPerFetcher = partitionAndOffsets.groupBy {  case (topicPartition, brokerAndInitialFetchOffset) =>
+        BrokerAndFetcherId(brokerAndInitialFetchOffset.leader, getFetcherId(brokerAndInitialFetchOffset.leader,topicPartition.topic(),topicPartition.partition()))
       }
 
       def addAndStartFetcherThread(brokerAndFetcherId: BrokerAndFetcherId, brokerIdAndFetcherId: BrokerIdAndFetcherId): AbstractFetcherThread = {
