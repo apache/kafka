@@ -236,12 +236,7 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
       }
 
       servers.foreach { server =>
-        val args = Array("--bootstrap-server", TestUtils.bootstrapServers(servers, new ListenerName(SecureInternal)),
-          "--command-config", propsFile.getAbsolutePath,
-          "--alter", "--add-config",
-          props.asScala.map { case (k, v) => s"$k=$v" }.mkString(","),
-          "--entity-type", "brokers",
-          "--entity-name", server.config.brokerId.toString)
+        val args = buildConfigCommandParameters(server, propsFile.getAbsolutePath, props)
         ConfigCommand.main(args)
       }
     }
@@ -1278,11 +1273,7 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
     }
 
     servers.foreach { server =>
-      val args = Array("--bootstrap-server", TestUtils.bootstrapServers(servers, new ListenerName(SecureInternal)),
-        "--command-config", propsFile.getAbsolutePath,
-        "--alter", "--add-config", newProps.asScala.map { case (k, v) => s"$k=$v" }.mkString(","),
-        "--entity-type", "brokers",
-        "--entity-name", server.config.brokerId.toString)
+      val args = buildConfigCommandParameters(server, propsFile.getAbsolutePath, newProps)
       ConfigCommand.main(args)
     }
     waitForConfig(s"$configPrefix$SSL_KEYSTORE_LOCATION_CONFIG", props.getProperty(SSL_KEYSTORE_LOCATION_CONFIG))
@@ -1514,6 +1505,15 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
       val jaasConfig = jaasSection.modules.head.toString
       props.put(listenerName.saslMechanismConfigPrefix(mechanism) + KafkaConfig.SaslJaasConfigProp, jaasConfig)
     }
+  }
+
+  private def buildConfigCommandParameters(server: KafkaServer, propsFilePath: String, props: Properties): Array[String] = {
+    Array("--bootstrap-server", TestUtils.bootstrapServers(servers, new ListenerName(SecureInternal)),
+      "--command-config", propsFilePath,
+      "--alter", "--add-config",
+      props.asScala.map { case (k, v) => s"$k=$v" }.mkString(","),
+      "--entity-type", "brokers",
+      "--entity-name", server.config.brokerId.toString)
   }
 
   private abstract class ClientBuilder[T]() {
