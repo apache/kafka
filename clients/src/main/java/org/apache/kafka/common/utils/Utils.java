@@ -24,7 +24,6 @@ import java.io.Closeable;
 import java.io.DataOutput;
 import java.io.EOFException;
 import java.io.File;
-import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.PrintWriter;
@@ -621,16 +620,17 @@ public final class Utils {
      * a FIFO (opened with S_IFIFO flag), where size of file is not known in advance.
      */
     public static String readFileStreamAsString(String path) {
-        StringBuilder fileText = new StringBuilder();
-        try (FileInputStream fileInputStream = new FileInputStream(path)) {
-            int nextChar;
-            while ((nextChar = fileInputStream.read()) != -1) {
-                fileText.append((char) nextChar);
-            }
+        return readFileStreamAsString(path, Charset.defaultCharset());
+    }
+
+    public static String readFileStreamAsString(String path, Charset charset) {
+        if (charset == null) charset = Charset.defaultCharset();
+        try {
+            byte[] allBytes = Files.readAllBytes(Paths.get(path));
+            return new String(allBytes, charset);
         } catch (IOException ex) {
             throw new RuntimeException("Unable to read file " + path, ex);
         }
-        return fileText.toString();
     }
 
     /**
