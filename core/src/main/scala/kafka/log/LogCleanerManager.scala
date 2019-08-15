@@ -153,9 +153,16 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
   /**
    * @return the position and time processed for all partitions
    */
-  def allCleanerCheckpointsWithTimes: Map[TopicPartition, OffsetAndTime] = {
+  def allCleanerCheckpointsWithTimes: Map[TopicPartition, Any] = {
     inLock(lock) {
-      null
+      partitionCheckpoints.values.flatMap(checkpoint => {
+        try {
+          (checkpoint: OffsetAndTimesCheckpointFile).read()
+        } catch {
+          case e: KafkaStorageException =>
+            Map.empty[TopicPartition, Long]
+        }
+      }).toMap
     }
   }
 

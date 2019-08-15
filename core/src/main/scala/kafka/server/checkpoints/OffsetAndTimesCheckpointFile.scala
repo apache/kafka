@@ -52,13 +52,14 @@ object OffsetAndTimesCheckpointFile {
 /**
   * This class persists a collection of OffsetAndTime to a file (for a certain topic)
   */
-class OffsetAndTimesCheckpointFile(val file: File, logDirFailureChannel: LogDirFailureChannel = null) {
+class OffsetAndTimesCheckpointFile(val file: File, val partition : TopicPartition = null, logDirFailureChannel: LogDirFailureChannel = null) {
   val checkpoint = new CheckpointFile[OffsetAndTime](file, OffsetAndTimesCheckpointFile.CurrentVersion,
     OffsetAndTimesCheckpointFile.Formatter, logDirFailureChannel, file.getParent)
 
   def write(offsets: Seq[OffsetAndTime]): Unit = checkpoint.write(offsets)
 
-  def read(): Seq[OffsetAndTime] = checkpoint.read()
+  def read(): Map[TopicPartition, Seq[OffsetAndTime]] = Map(partition -> checkpoint.read())
+
 
 }
 
@@ -82,7 +83,7 @@ class LazyOffsetAndTimesCheckpoints(checkpointsByLogDir: Map[String, OffsetAndTi
 }
 
 class LazyOffsetAndTimesCheckpointMap(checkpoint: OffsetAndTimesCheckpointFile) {
-  private lazy val offsets: Seq[OffsetAndTime] = checkpoint.read()
+  private lazy val offsets: Seq[OffsetAndTime] = checkpoint.read()(checkpoint.partition)
 
   def fetch() : Seq[OffsetAndTime] = {
     offsets
