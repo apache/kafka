@@ -164,7 +164,7 @@ public interface Admin extends AutoCloseable {
      * <p>
      * It may take several seconds after the {@link DeleteTopicsResult} returns
      * success for all the brokers to become aware that the topics are gone.
-     * During this time, Admin#listTopics and Admin#describeTopics
+     * During this time, {@link Admin#listTopics()} and {@link Admin#describeTopics(Collection)}
      * may continue to return information about the deleted topics.
      * <p>
      * If delete.topic.enable is false on the brokers, deleteTopics will mark
