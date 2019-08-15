@@ -235,7 +235,6 @@ public class ClientCompatibilityTest {
         long prodTimeMs = Time.SYSTEM.milliseconds();
         testAdminClient();
         testProduce();
-        testAutoCreateOnProduce();
         testConsume(prodTimeMs);
         testAutoCreateOnProduce();
     }

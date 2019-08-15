@@ -438,21 +438,21 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             Sensor throttleTimeSensor = Sender.throttleTimeSensor(metricsRegistry.senderMetrics);
             this.kafkaClient = kafkaClient != null ? kafkaClient : new NetworkClient(
                 new Selector(producerConfig.getLong(ProducerConfig.CONNECTIONS_MAX_IDLE_MS_CONFIG),
-                        this.metrics, time, "producer", channelBuilder, logContext),
-                this.metadata,
-                clientId,
-                maxInflightRequests,
-                producerConfig.getLong(ProducerConfig.RECONNECT_BACKOFF_MS_CONFIG),
-                producerConfig.getLong(ProducerConfig.RECONNECT_BACKOFF_MAX_MS_CONFIG),
-                producerConfig.getInt(ProducerConfig.SEND_BUFFER_CONFIG),
-                producerConfig.getInt(ProducerConfig.RECEIVE_BUFFER_CONFIG),
-                requestTimeoutMs,
-                ClientDnsLookup.forConfig(producerConfig.getString(ProducerConfig.CLIENT_DNS_LOOKUP_CONFIG)),
-                time,
-                true,
-                apiVersions,
-                throttleTimeSensor,
-                logContext);
+                    this.metrics, time, "producer", channelBuilder, logContext),
+                    this.metadata,
+                    clientId,
+                    maxInflightRequests,
+                    producerConfig.getLong(ProducerConfig.RECONNECT_BACKOFF_MS_CONFIG),
+                    producerConfig.getLong(ProducerConfig.RECONNECT_BACKOFF_MAX_MS_CONFIG),
+                    producerConfig.getInt(ProducerConfig.SEND_BUFFER_CONFIG),
+                    producerConfig.getInt(ProducerConfig.RECEIVE_BUFFER_CONFIG),
+                    requestTimeoutMs,
+                    ClientDnsLookup.forConfig(producerConfig.getString(ProducerConfig.CLIENT_DNS_LOOKUP_CONFIG)),
+                    time,
+                    true,
+                    apiVersions,
+                    throttleTimeSensor,
+                    logContext);
             this.sender = newSender(logContext, this.kafkaClient, this.metadata, maxInflightRequests, requestTimeoutMs, metricsRegistry);
             String ioThreadName = NETWORK_THREAD_PREFIX + " | " + clientId;
             this.ioThread = new KafkaThread(ioThreadName, this.sender, true);
