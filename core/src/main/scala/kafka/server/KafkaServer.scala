@@ -192,6 +192,8 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
   def startup() {
     try {
       info("starting")
+      if (config.autoCreateTopicsEnable)
+         warn("auto.create.topics.enable is deprecated.")
 
       if (isShuttingDown.get)
         throw new IllegalStateException("Kafka server is still shutting down, cannot re-start!")

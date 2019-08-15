@@ -21,6 +21,7 @@ import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.clients.producer.internals.ProducerInterceptors;
 import org.apache.kafka.clients.producer.internals.ProducerMetadata;
+import org.apache.kafka.clients.producer.internals.ProducerMetrics;
 import org.apache.kafka.clients.producer.internals.Sender;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
@@ -327,9 +328,9 @@ public class KafkaProducerTest {
         KafkaProducer<String, String> producer = new KafkaProducer<String, String>(configs, new StringSerializer(),
                 new StringSerializer(), metadata, new MockClient(Time.SYSTEM, metadata), null, Time.SYSTEM) {
             @Override
-            Sender newSender(LogContext logContext, KafkaClient kafkaClient, ProducerMetadata metadata) {
+            Sender newSender(LogContext logContext, KafkaClient kafkaClient, ProducerMetadata metadata, int maxInflightRequests, int requestTimeoutMs, ProducerMetrics metricsRegistry) {
                 // give Sender its own Metadata instance so that we can isolate Metadata calls from KafkaProducer
-                return super.newSender(logContext, kafkaClient, newMetadata(0, 100_000));
+                return super.newSender(logContext, kafkaClient, newMetadata(0, 100_000), maxInflightRequests, requestTimeoutMs, metricsRegistry);
             }
         };
         ProducerRecord<String, String> record = new ProducerRecord<>(topic, "value");
@@ -379,9 +380,9 @@ public class KafkaProducerTest {
         KafkaProducer<String, String> producer = new KafkaProducer<String, String>(configs, new StringSerializer(),
                 new StringSerializer(), metadata, new MockClient(Time.SYSTEM, metadata), null, mockTime) {
             @Override
-            Sender newSender(LogContext logContext, KafkaClient kafkaClient, ProducerMetadata metadata) {
+            Sender newSender(LogContext logContext, KafkaClient kafkaClient, ProducerMetadata metadata, int maxInflightRequests, int requestTimeoutMs, ProducerMetrics metricsRegistry) {
                 // give Sender its own Metadata instance so that we can isolate Metadata calls from KafkaProducer
-                return super.newSender(logContext, kafkaClient, newMetadata(0, 100_000));
+                return super.newSender(logContext, kafkaClient, newMetadata(0, 100_000), maxInflightRequests, requestTimeoutMs, metricsRegistry);
             }
         };
 
@@ -417,9 +418,9 @@ public class KafkaProducerTest {
         KafkaProducer<String, String> producer = new KafkaProducer<String, String>(configs, new StringSerializer(),
                 new StringSerializer(), metadata, new MockClient(Time.SYSTEM, metadata), null, mockTime) {
             @Override
-            Sender newSender(LogContext logContext, KafkaClient kafkaClient, ProducerMetadata metadata) {
+            Sender newSender(LogContext logContext, KafkaClient kafkaClient, ProducerMetadata metadata, int maxInflightRequests, int requestTimeoutMs, ProducerMetrics metricsRegistry) {
                 // give Sender its own Metadata instance so that we can isolate Metadata calls from KafkaProducer
-                return super.newSender(logContext, kafkaClient, newMetadata(0, 100_000));
+                return super.newSender(logContext, kafkaClient, newMetadata(0, 100_000), maxInflightRequests, requestTimeoutMs, metricsRegistry);
             }
         };
         // One request update if metadata is available but outdated for the given record
@@ -455,9 +456,9 @@ public class KafkaProducerTest {
         KafkaProducer<String, String> producer = new KafkaProducer<String, String>(configs, new StringSerializer(),
                 new StringSerializer(), metadata, new MockClient(Time.SYSTEM, metadata), null, mockTime) {
             @Override
-            Sender newSender(LogContext logContext, KafkaClient kafkaClient, ProducerMetadata metadata) {
+            Sender newSender(LogContext logContext, KafkaClient kafkaClient, ProducerMetadata metadata, int maxInflightRequests, int requestTimeoutMs, ProducerMetrics metricsRegistry) {
                 // give Sender its own Metadata instance so that we can isolate Metadata calls from KafkaProducer
-                return super.newSender(logContext, kafkaClient, newMetadata(0, 100_000));
+                return super.newSender(logContext, kafkaClient, newMetadata(0, 100_000), maxInflightRequests, requestTimeoutMs, metricsRegistry);
             }
         };
 

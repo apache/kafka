@@ -13,6 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# noinspection PyInterpreter
 import os
 import time
 from random import randint
@@ -22,8 +23,9 @@ from ducktape.tests.test import TestContext
 
 from kafkatest.services.zookeeper import ZookeeperService
 from kafkatest.services.kafka import KafkaService
+from kafkatest.services.kafka import config_property
 from ducktape.tests.test import Test
-from kafkatest.version import DEV_BRANCH, LATEST_0_10_0, LATEST_0_10_1, LATEST_0_10_2, LATEST_0_11_0, LATEST_1_0, LATEST_1_1, LATEST_2_0, LATEST_2_1, LATEST_2_2, LATEST_2_3, V_0_11_0_0, V_0_10_1_0, KafkaVersion
+from kafkatest.version import DEV_BRANCH, LATEST_0_10_0, LATEST_0_10_1, LATEST_0_10_2, LATEST_0_11_0, LATEST_1_0, LATEST_1_1, LATEST_2_0, LATEST_2_1, LATEST_2_2, V_0_11_0_0, V_0_10_1_0, KafkaVersion
 
 def get_broker_features(broker_version):
     features = {}
@@ -41,7 +43,7 @@ def get_broker_features(broker_version):
         features["describe-acls-supported"] = False
     else:
         features["describe-acls-supported"] = True
-    features["broker-autocreate-disabled"] = False
+    features["broker-autocreate-disabled"] = True
     return features
 
 def run_command(node, cmd, ssh_log_file):
@@ -74,7 +76,8 @@ class ClientCompatibilityFeaturesTest(Test):
             "partitions": 1, # Use only one partition to avoid worrying about ordering
             "replication-factor": 3
             }}
-        self.kafka = KafkaService(test_context, num_nodes=3, zk=self.zk, topics=self.topics)
+        override_configs = [(config_property.AUTO_CREATE_TOPICS_ENABLE, False)]
+        self.kafka = KafkaService(test_context, num_nodes=3, zk=self.zk, topics=self.topics, server_prop_overides=override_configs)
 
     def invoke_compatibility_program(self, features):
         # Run the compatibility test on the first Kafka node.
@@ -108,10 +111,9 @@ class ClientCompatibilityFeaturesTest(Test):
     @parametrize(broker_version=str(LATEST_2_0))
     @parametrize(broker_version=str(LATEST_2_1))
     @parametrize(broker_version=str(LATEST_2_2))
-    @parametrize(broker_version=str(LATEST_2_3))
     def run_compatibility_test(self, broker_version):
         self.zk.start()
         self.kafka.set_version(KafkaVersion(broker_version))
-        self.kafka.start()
+        self.kafka.start() 
         features = get_broker_features(broker_version)
         self.invoke_compatibility_program(features)

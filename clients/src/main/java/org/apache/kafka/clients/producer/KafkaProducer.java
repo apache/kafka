@@ -19,8 +19,15 @@ package org.apache.kafka.clients.producer;
 import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.ClientDnsLookup;
 import org.apache.kafka.clients.ClientUtils;
+import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.clients.NetworkClient;
+import org.apache.kafka.clients.ClientRequest;
+import org.apache.kafka.clients.RequestCompletionHandler;
+import org.apache.kafka.common.internals.KafkaFutureImpl;
+import org.apache.kafka.common.message.CreateTopicsRequestData;
+import org.apache.kafka.common.requests.AbstractRequest;
+import org.apache.kafka.common.requests.CreateTopicsRequest;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetCommitCallback;
@@ -255,6 +262,9 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     private final ProducerInterceptors<K, V> interceptors;
     private final ApiVersions apiVersions;
     private final TransactionManager transactionManager;
+    private final KafkaClient kafkaClient;
+    private final int requestTimeoutMs;
+    private ClientResponse autocreateResponse;
 
     /**
      * A producer is instantiated by providing a set of key-value pairs as configuration. Valid configuration strings
@@ -393,6 +403,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             int deliveryTimeoutMs = configureDeliveryTimeout(config, log);
 
             this.apiVersions = new ApiVersions();
+            this.autocreateResponse = null;
             this.accumulator = new RecordAccumulator(logContext,
                     config.getInt(ProducerConfig.BATCH_SIZE_CONFIG),
                     this.compressionType,
@@ -419,7 +430,30 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                 this.metadata.bootstrap(addresses, time.milliseconds());
             }
             this.errors = this.metrics.sensor("errors");
-            this.sender = newSender(logContext, kafkaClient, this.metadata);
+            int maxInflightRequests = configureInflightRequests(producerConfig, transactionManager != null);
+            int requestTimeoutMs = producerConfig.getInt(ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG);
+            this.requestTimeoutMs = requestTimeoutMs;
+            ChannelBuilder channelBuilder = ClientUtils.createChannelBuilder(producerConfig, time);
+            ProducerMetrics metricsRegistry = new ProducerMetrics(this.metrics);
+            Sensor throttleTimeSensor = Sender.throttleTimeSensor(metricsRegistry.senderMetrics);
+            this.kafkaClient = kafkaClient != null ? kafkaClient : new NetworkClient(
+                new Selector(producerConfig.getLong(ProducerConfig.CONNECTIONS_MAX_IDLE_MS_CONFIG),
+                    this.metrics, time, "producer", channelBuilder, logContext),
+                    this.metadata,
+                    clientId,
+                    maxInflightRequests,
+                    producerConfig.getLong(ProducerConfig.RECONNECT_BACKOFF_MS_CONFIG),
+                    producerConfig.getLong(ProducerConfig.RECONNECT_BACKOFF_MAX_MS_CONFIG),
+                    producerConfig.getInt(ProducerConfig.SEND_BUFFER_CONFIG),
+                    producerConfig.getInt(ProducerConfig.RECEIVE_BUFFER_CONFIG),
+                    requestTimeoutMs,
+                    ClientDnsLookup.forConfig(producerConfig.getString(ProducerConfig.CLIENT_DNS_LOOKUP_CONFIG)),
+                    time,
+                    true,
+                    apiVersions,
+                    throttleTimeSensor,
+                    logContext);
+            this.sender = newSender(logContext, this.kafkaClient, this.metadata, maxInflightRequests, requestTimeoutMs, metricsRegistry);
             String ioThreadName = NETWORK_THREAD_PREFIX + " | " + clientId;
             this.ioThread = new KafkaThread(ioThreadName, this.sender, true);
             this.ioThread.start();
@@ -435,33 +469,11 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     }
 
     // visible for testing
-    Sender newSender(LogContext logContext, KafkaClient kafkaClient, ProducerMetadata metadata) {
-        int maxInflightRequests = configureInflightRequests(producerConfig, transactionManager != null);
-        int requestTimeoutMs = producerConfig.getInt(ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG);
-        ChannelBuilder channelBuilder = ClientUtils.createChannelBuilder(producerConfig, time);
-        ProducerMetrics metricsRegistry = new ProducerMetrics(this.metrics);
-        Sensor throttleTimeSensor = Sender.throttleTimeSensor(metricsRegistry.senderMetrics);
-        KafkaClient client = kafkaClient != null ? kafkaClient : new NetworkClient(
-                new Selector(producerConfig.getLong(ProducerConfig.CONNECTIONS_MAX_IDLE_MS_CONFIG),
-                        this.metrics, time, "producer", channelBuilder, logContext),
-                metadata,
-                clientId,
-                maxInflightRequests,
-                producerConfig.getLong(ProducerConfig.RECONNECT_BACKOFF_MS_CONFIG),
-                producerConfig.getLong(ProducerConfig.RECONNECT_BACKOFF_MAX_MS_CONFIG),
-                producerConfig.getInt(ProducerConfig.SEND_BUFFER_CONFIG),
-                producerConfig.getInt(ProducerConfig.RECEIVE_BUFFER_CONFIG),
-                requestTimeoutMs,
-                ClientDnsLookup.forConfig(producerConfig.getString(ProducerConfig.CLIENT_DNS_LOOKUP_CONFIG)),
-                time,
-                true,
-                apiVersions,
-                throttleTimeSensor,
-                logContext);
+    Sender newSender(LogContext logContext, KafkaClient kafkaClient, ProducerMetadata metadata, int maxInflightRequests, int requestTimeoutMs, ProducerMetrics metricsRegistry) {
         int retries = configureRetries(producerConfig, transactionManager != null, log);
         short acks = configureAcks(producerConfig, transactionManager != null, log);
         return new Sender(logContext,
-                client,
+                kafkaClient,
                 metadata,
                 this.accumulator,
                 maxInflightRequests == 1,
@@ -1004,6 +1016,8 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         long begin = time.milliseconds();
         long remainingWaitMs = maxWaitMs;
         long elapsed;
+        long autoCreateTimeout = maxWaitMs / 8; // probably want a better way to define this.
+        long lastAutoCreateAttempt = begin;
         // Issue metadata requests until we have metadata for the topic and the requested partition,
         // or until maxWaitTimeMs is exceeded. This is necessary in case the metadata
         // is stale and the number of partitions for this topic has increased in the meantime.
@@ -1036,9 +1050,78 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             metadata.maybeThrowExceptionForTopic(topic);
             remainingWaitMs = maxWaitMs - elapsed;
             partitionsCount = cluster.partitionCountForTopic(topic);
+            
+            if (partitionsCount == null && producerConfig.getBoolean(ProducerConfig.AUTO_CREATE_TOPICS_ENABLE_CONFIG) && lastAutoCreateAttempt + autoCreateTimeout <= time.milliseconds()) {
+                CreateTopicsRequestData.CreatableTopic newTopic = createTopic(topic);
+                autocreateTopic(newTopic, cluster, remainingWaitMs);
+                lastAutoCreateAttempt = time.milliseconds();
+                if (autocreateResponse != null && autocreateResponse.versionMismatch() != null) {
+                    throw autocreateResponse.versionMismatch();
+                }
+            }
         } while (partitionsCount == null || (partition != null && partition >= partitionsCount));
 
         return new ClusterAndWaitTime(cluster, elapsed);
+    }
+
+    private CreateTopicsRequestData.CreatableTopic createTopic(String topic) {
+        return new CreateTopicsRequestData.CreatableTopic().
+            setName(topic).
+            setNumPartitions(producerConfig.getInt(ProducerConfig.AUTO_CREATE_NUM_PARTITIONS_CONFIG)).
+            setReplicationFactor(producerConfig.getInt(ProducerConfig.AUTO_CREATE_REPLICATION_FACTOR_CONFIG).shortValue());
+    }
+    
+    /**
+     * Returns true if a topic name cannot be represented in an RPC.  This function does NOT check
+     * whether the name is too long, contains invalid characters, etc.  It is better to enforce
+     * those policies on the server, so that they can be changed in the future if needed.
+     */
+    private static boolean topicNameIsUnrepresentable(String topicName) {
+        return topicName == null || topicName.isEmpty();
+    }
+    
+    /**
+     * Get the current time remaining before a deadline as an integer.
+     *
+     * @param now           The current time in milliseconds.
+     * @param deadlineMs    The deadline time in milliseconds.
+     * @return              The time delta in milliseconds.
+     */
+    static int calcTimeoutMsRemainingAsInt(long now, long deadlineMs) {
+        long deltaMs = deadlineMs - now;
+        if (deltaMs > Integer.MAX_VALUE)
+            deltaMs = Integer.MAX_VALUE;
+        else if (deltaMs < Integer.MIN_VALUE)
+            deltaMs = Integer.MIN_VALUE;
+        return (int) deltaMs;
+    }
+    
+    private void autocreateTopic(CreateTopicsRequestData.CreatableTopic topic, Cluster cluster, long remainingWaitMs) {
+        KafkaFutureImpl<Void> future = new KafkaFutureImpl<>();
+        final CreateTopicsRequestData.CreatableTopicCollection topics = new CreateTopicsRequestData.CreatableTopicCollection();
+        if (topicNameIsUnrepresentable(topic.name())) {
+            future.completeExceptionally(new InvalidTopicException("The given topic name '" +
+                topic.name() + "' cannot be represented in a request.")); 
+        } else {
+            topics.add(topic);
+        }
+        final long now = time.milliseconds();
+        int timeoutMs = calcTimeoutMsRemainingAsInt(now, now + remainingWaitMs);
+        AbstractRequest.Builder request = new CreateTopicsRequest.Builder(
+            new CreateTopicsRequestData().
+            setTopics(topics).
+            setTimeoutMs(timeoutMs).
+            setValidateOnly(false));
+        RequestCompletionHandler callback = new RequestCompletionHandler() {
+            public void onComplete(ClientResponse response) {
+                autocreateResponse = response;
+            }
+        };
+        
+        if (kafkaClient.ready(cluster.controller(), time.milliseconds())) {
+            ClientRequest clientRequest = kafkaClient.newClientRequest(cluster.controller().idString(), request, now, true, requestTimeoutMs, callback);
+            kafkaClient.send(clientRequest, now);
+        }
     }
 
     /**
