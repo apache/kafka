@@ -1189,7 +1189,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                 if (error == Errors.COORDINATOR_LOAD_IN_PROGRESS) {
                     // just retry
                     future.raise(error);
-                } else if (error == Errors.NOT_COORDINATOR) {
+                } else if (error == Errors.NOT_COORDINATOR || error == Errors.COORDINATOR_NOT_AVAILABLE) {
                     // re-discover the coordinator and retry
                     markCoordinatorUnknown();
                     future.raise(error);

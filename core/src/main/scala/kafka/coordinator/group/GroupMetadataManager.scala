@@ -34,6 +34,7 @@ import kafka.utils.CoreUtils.inLock
 import kafka.utils._
 import kafka.zk.KafkaZkClient
 import org.apache.kafka.clients.consumer.ConsumerRecord
+import org.apache.kafka.common.errors.CoordinatorNotAvailableException
 import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.metrics.stats.{Avg, Max}
@@ -75,7 +76,7 @@ class GroupMetadataManager(brokerId: Int,
   private val shuttingDown = new AtomicBoolean(false)
 
   /* number of partitions for the consumer metadata topic */
-  private val groupMetadataTopicPartitionCount = getGroupMetadataTopicPartitionCount
+  @volatile private var groupMetadataTopicPartitionCount: Option[Int] = getGroupMetadataTopicPartitionCount
 
   /* single-thread scheduler to handle offset/group metadata cache loading and unloading */
   private val scheduler = new KafkaScheduler(threads = 1, threadNamePrefix = "group-metadata-manager-")
@@ -165,7 +166,17 @@ class GroupMetadataManager(brokerId: Int,
 
   def isPartitionLoading(partition: Int) = inLock(partitionLock) { loadingPartitions.contains(partition) }
 
-  def partitionFor(groupId: String): Int = Utils.abs(groupId.hashCode) % groupMetadataTopicPartitionCount
+  def updateGroupMetadataTopicPartitionCount() {
+    inLock(partitionLock) {
+      groupMetadataTopicPartitionCount = getGroupMetadataTopicPartitionCount
+    }
+    info(s"(Re)loaded offsets topic ${Topic.GROUP_METADATA_TOPIC_NAME} partition count to ${groupMetadataTopicPartitionCount.getOrElse(0)}")
+  }
+
+  def groupMetadataTopicPartitionCountOpt() = groupMetadataTopicPartitionCount
+
+  def partitionFor(groupId: String): Int = Utils.abs(groupId.hashCode % groupMetadataTopicPartitionCount.getOrElse(
+    throw new CoordinatorNotAvailableException(s"The topic ${Topic.GROUP_METADATA_TOPIC_NAME} does not exist when retrieving partition count.")))
 
   def isGroupLocal(groupId: String): Boolean = isPartitionOwned(partitionFor(groupId))
 
@@ -498,6 +509,9 @@ class GroupMetadataManager(brokerId: Int,
    * Asynchronously read the partition from the offsets topic and populate the cache
    */
   def scheduleLoadGroupAndOffsets(offsetsPartition: Int, onGroupLoaded: GroupMetadata => Unit) {
+    if (offsetsPartition >= groupMetadataTopicPartitionCount.getOrElse(0))
+      updateGroupMetadataTopicPartitionCount()
+
     val topicPartition = new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, offsetsPartition)
     if (addLoadingPartition(offsetsPartition)) {
       info(s"Scheduling loading of offsets and group metadata from $topicPartition")
@@ -891,10 +905,9 @@ class GroupMetadataManager(brokerId: Int,
 
   /**
    * Gets the partition count of the group metadata topic from ZooKeeper.
-   * If the topic does not exist, the configured partition count is returned.
    */
-  private def getGroupMetadataTopicPartitionCount: Int = {
-    zkClient.getTopicPartitionCount(Topic.GROUP_METADATA_TOPIC_NAME).getOrElse(config.offsetsTopicNumPartitions)
+  private def getGroupMetadataTopicPartitionCount: Option[Int] = {
+    zkClient.getTopicPartitionCount(Topic.GROUP_METADATA_TOPIC_NAME)
   }
 
   /**

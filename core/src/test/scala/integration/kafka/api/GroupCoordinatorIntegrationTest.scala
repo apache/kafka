@@ -59,4 +59,12 @@ class GroupCoordinatorIntegrationTest extends KafkaServerTestHarness {
 
     consumer.close()
   }
+
+  @Test
+  def testOffsetsTopicPartitionCountUpdate(): Unit = {
+    assertEquals(servers.head.groupCoordinator.groupManager.groupMetadataTopicPartitionCountOpt, None)
+    TestUtils.createTopic(zkClient, Topic.GROUP_METADATA_TOPIC_NAME, 10, 1, servers)
+    servers.foreach(server => assertEquals(server.groupCoordinator.groupManager.groupMetadataTopicPartitionCountOpt, Some(10)))
+  }
+
 }

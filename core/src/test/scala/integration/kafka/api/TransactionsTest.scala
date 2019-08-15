@@ -29,7 +29,9 @@ import kafka.utils.TestUtils.consumeRecords
 import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer, OffsetAndMetadata}
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.apache.kafka.common.{KafkaException, TopicPartition}
-import org.apache.kafka.common.errors.{ProducerFencedException, TimeoutException}
+import org.apache.kafka.common.errors.{CoordinatorNotAvailableException, ProducerFencedException, TimeoutException}
+import org.apache.kafka.common.internals.Topic
+import org.apache.kafka.common.utils.Utils
 import org.junit.{After, Before, Test}
 import org.junit.Assert._
 import org.scalatest.Assertions.fail
@@ -587,6 +589,22 @@ class TransactionsTest extends KafkaServerTestHarness {
     } finally {
       producer.close(Duration.ZERO)
     }
+  }
+
+  @Test
+  def testTransactionTopicPartitionCountUpdate(): Unit = {
+    val transactionalId = "test-transaction"
+    val numPartitions = 10
+    val targetPartition = Utils.abs(transactionalId.hashCode % numPartitions)
+
+    try {
+      servers.head.transactionCoordinator.partitionFor(transactionalId)
+      fail("Should have thrown CoordinatorNotAvailableException.")
+    } catch {
+      case _: CoordinatorNotAvailableException =>
+    }
+    TestUtils.createTopic(zkClient, Topic.TRANSACTION_STATE_TOPIC_NAME, 10, 1, servers)
+    servers.foreach(server => assertEquals(server.transactionCoordinator.partitionFor(transactionalId), targetPartition))
   }
 
   private def sendTransactionalMessagesWithValueRange(producer: KafkaProducer[Array[Byte], Array[Byte]], topic: String,

@@ -443,6 +443,17 @@ class TransactionCoordinator(brokerId: Int,
 
   def partitionFor(transactionalId: String): Int = txnManager.partitionFor(transactionalId)
 
+  def updateTransactionTopicPartitionCount() = txnManager.updateTransactionTopicPartitionCount()
+
+  def maybeRefreshTransactionTopic(partitions: Set[TopicPartition]): Unit = {
+    val filteredPartitions = partitions.filter(_.topic == Topic.TRANSACTION_STATE_TOPIC_NAME)
+    if (!filteredPartitions.isEmpty) {
+      val maxPartitionId = filteredPartitions.map(_.partition).max
+      if (maxPartitionId >= txnManager.transactionTopicPartitionCountOpt.getOrElse(0))
+        txnManager.updateTransactionTopicPartitionCount()
+    }
+  }
+
   private def abortTimedOutTransactions(): Unit = {
     txnManager.timedOutTransactions().foreach { txnIdAndPidEpoch =>
       txnManager.getTransactionState(txnIdAndPidEpoch.transactionalId).right.flatMap {

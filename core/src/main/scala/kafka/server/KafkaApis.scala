@@ -275,6 +275,10 @@ class KafkaApis(val requestChannel: RequestChannel,
         s"${updateMetadataRequest.brokerEpoch()} smaller than the current broker epoch ${controller.brokerEpoch}")
       sendResponseExemptThrottle(request, new UpdateMetadataResponse(Errors.STALE_BROKER_EPOCH))
     } else {
+      val partitions = updateMetadataRequest.partitionStates.keySet().asScala.toSet
+      groupCoordinator.maybeRefreshGroupMetadataTopic(partitions)
+      txnCoordinator.maybeRefreshTransactionTopic(partitions)
+
       val deletedPartitions = replicaManager.maybeUpdateMetadataCache(correlationId, updateMetadataRequest)
       if (deletedPartitions.nonEmpty)
         groupCoordinator.handleDeletedPartitions(deletedPartitions)
@@ -1013,8 +1017,10 @@ class KafkaApis(val requestChannel: RequestChannel,
             s"and not all brokers are up yet.")
           new MetadataResponse.TopicMetadata(Errors.COORDINATOR_NOT_AVAILABLE, topic, true, util.Collections.emptyList())
         } else {
-          createTopic(topic, config.offsetsTopicPartitions, config.offsetsTopicReplicationFactor.toInt,
+          val metadata = createTopic(topic, config.offsetsTopicPartitions, config.offsetsTopicReplicationFactor.toInt,
             groupCoordinator.offsetsTopicConfigs)
+          groupCoordinator.groupManager.updateGroupMetadataTopicPartitionCount()
+          metadata
         }
       case TRANSACTION_STATE_TOPIC_NAME =>
         if (aliveBrokers.size < config.transactionTopicReplicationFactor) {
@@ -1024,8 +1030,10 @@ class KafkaApis(val requestChannel: RequestChannel,
             s"and not all brokers are up yet.")
           new MetadataResponse.TopicMetadata(Errors.COORDINATOR_NOT_AVAILABLE, topic, true, util.Collections.emptyList())
         } else {
-          createTopic(topic, config.transactionTopicPartitions, config.transactionTopicReplicationFactor.toInt,
+          val metadata = createTopic(topic, config.transactionTopicPartitions, config.transactionTopicReplicationFactor.toInt,
             txnCoordinator.transactionTopicConfigs)
+          txnCoordinator.updateTransactionTopicPartitionCount()
+          metadata
         }
       case _ => throw new IllegalArgumentException(s"Unexpected internal topic name: $topic")
     }
@@ -1239,13 +1247,15 @@ class KafkaApis(val requestChannel: RequestChannel,
       // get metadata (and create the topic if necessary)
       val (partition, topicMetadata) = CoordinatorType.forId(findCoordinatorRequest.data.keyType) match {
         case CoordinatorType.GROUP =>
-          val partition = groupCoordinator.partitionFor(findCoordinatorRequest.data.key)
           val metadata = getOrCreateInternalTopic(GROUP_METADATA_TOPIC_NAME, request.context.listenerName)
+          groupCoordinator.groupManager.updateGroupMetadataTopicPartitionCount()
+          val partition = groupCoordinator.partitionFor(findCoordinatorRequest.data.key)
           (partition, metadata)
 
         case CoordinatorType.TRANSACTION =>
-          val partition = txnCoordinator.partitionFor(findCoordinatorRequest.data.key)
           val metadata = getOrCreateInternalTopic(TRANSACTION_STATE_TOPIC_NAME, request.context.listenerName)
+          txnCoordinator.updateTransactionTopicPartitionCount()
+          val partition = txnCoordinator.partitionFor(findCoordinatorRequest.data.key)
           (partition, metadata)
 
         case _ =>
@@ -2052,7 +2062,6 @@ class KafkaApis(val requestChannel: RequestChannel,
     val addOffsetsToTxnRequest = request.body[AddOffsetsToTxnRequest]
     val transactionalId = addOffsetsToTxnRequest.transactionalId
     val groupId = addOffsetsToTxnRequest.consumerGroupId
-    val offsetTopicPartition = new TopicPartition(GROUP_METADATA_TOPIC_NAME, groupCoordinator.partitionFor(groupId))
 
     if (!authorize(request.session, Write, Resource(TransactionalId, transactionalId, LITERAL)))
       sendResponseMaybeThrottle(request, requestThrottleMs =>
@@ -2061,6 +2070,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       sendResponseMaybeThrottle(request, requestThrottleMs =>
         new AddOffsetsToTxnResponse(requestThrottleMs, Errors.GROUP_AUTHORIZATION_FAILED))
     else {
+      val offsetTopicPartition = new TopicPartition(GROUP_METADATA_TOPIC_NAME, groupCoordinator.partitionFor(groupId))
       def sendResponseCallback(error: Errors): Unit = {
         def createResponse(requestThrottleMs: Int): AbstractResponse = {
           val responseBody: AddOffsetsToTxnResponse = new AddOffsetsToTxnResponse(requestThrottleMs, error)

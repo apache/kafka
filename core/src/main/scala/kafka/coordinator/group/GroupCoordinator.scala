@@ -717,6 +717,15 @@ class GroupCoordinator(val brokerId: Int,
     info(s"Removed $offsetsRemoved offsets associated with deleted partitions: ${topicPartitions.mkString(", ")}.")
   }
 
+  def maybeRefreshGroupMetadataTopic(partitions: Set[TopicPartition]) {
+    val filteredPartitions = partitions.filter(_.topic == Topic.GROUP_METADATA_TOPIC_NAME)
+    if (!filteredPartitions.isEmpty) {
+      val maxPartitionId = filteredPartitions.map(_.partition).max
+      if (maxPartitionId >= groupManager.groupMetadataTopicPartitionCountOpt.getOrElse(0))
+        groupManager.updateGroupMetadataTopicPartitionCount()
+    }
+  }
+
   private def isValidGroupId(groupId: String, api: ApiKeys): Boolean = {
     api match {
       case ApiKeys.OFFSET_COMMIT | ApiKeys.OFFSET_FETCH | ApiKeys.DESCRIBE_GROUPS | ApiKeys.DELETE_GROUPS =>
