@@ -418,8 +418,8 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         kafka_topic_script = self.path.script("kafka-topics.sh", node)
 
         cmd = kafka_topic_script + " "
-        cmd += "--zookeeper %(zk_connect)s --create --topic %(topic)s " % {
-                'zk_connect': self.zk_connect_setting(),
+        cmd += "%(connection_string)s --create --topic %(topic)s " % {
+                'connection_string': self.connect_setting(node),
                 'topic': topic_cfg.get("topic"),
            }
         if 'replica-assignment' in topic_cfg:
@@ -450,8 +450,10 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
     def describe_topic(self, topic, node=None):
         if node is None:
             node = self.nodes[0]
-        cmd = "%s --zookeeper %s --topic %s --describe" % \
-              (self.path.script("kafka-topics.sh", node), self.zk_connect_setting(), topic)
+        cmd = "%s %s --topic %s --describe" % \
+              (self.path.script("kafka-topics.sh", node), self.connect_setting(node), topic)
+
+        self.logger.info("Running topic describe command...\n%s" % cmd)
         output = ""
         for line in node.account.ssh_capture(cmd):
             output += line
@@ -460,8 +462,8 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
     def list_topics(self, topic=None, node=None):
         if node is None:
             node = self.nodes[0]
-        cmd = "%s --zookeeper %s --list" % \
-              (self.path.script("kafka-topics.sh", node), self.zk_connect_setting())
+        cmd = "%s %s --list" % \
+              (self.path.script("kafka-topics.sh", node), self.connect_setting(node))
         for line in node.account.ssh_capture(cmd):
             if not line.startswith("SLF4J"):
                 yield line.rstrip()
@@ -486,6 +488,20 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
               (self.path.script("kafka-configs.sh", node), self.zk_connect_setting(), topic, str(value).lower())
         self.logger.info("Running alter unclean leader command...\n%s" % cmd)
         node.account.ssh(cmd)
+
+    def perform_leader_election(self, topic, partition, election_type, node=None):
+        """
+        Perform leader election for the partition of the topic passed in as argument.
+        """
+        if node is None:
+            node = self.nodes[0]
+        current_leader = self.leader(topic, partition)
+        self.logger.info("Performing %s leader election for topic %s, partition %e", election_type, topic, partition)
+        cmd = "%s %s --topic %s --partition %d --election-type %s" % \
+              (self.path.script("kafka-leader-election.sh", node), self.connect_setting(node), topic, partition, election_type)
+        self.logger.info("Running %s leader election command...\n%s" % (election_type, cmd))
+        node.account.ssh(cmd)
+        wait_until(lambda: self.leader(topic, partition) is not current_leader, 30, 1)
 
     def parse_describe_topic(self, topic_description):
         """Parse output of kafka-topics.sh --describe (or describe_topic() method above), which is a string of form
@@ -674,13 +690,14 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
 
         if partition_state is None:
             raise Exception("Error finding partition state for topic %s and partition %d." % (topic, partition))
+        self.logger.debug("Zookeeper has partition state: %s" % (partition_state))
 
         partition_state = json.loads(partition_state)
         self.logger.info(partition_state)
 
         leader_idx = int(partition_state["leader"])
         self.logger.info("Leader for topic %s and partition %d is now: %d" % (topic, partition, leader_idx))
-        return self.get_node(leader_idx)
+        return self.get_node(leader_idx) if leader_idx >= 0 else None
 
     def cluster_id(self):
         """ Get the current cluster id
@@ -746,6 +763,18 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
     def zk_connect_setting(self):
         return self.zk.connect_setting(self.zk_chroot)
 
+    def connect_setting(self, node):
+        """
+        Checks if --bootstrap-server config is supported, if yes then returns a string with
+        bootstrap server, otherwise returns zookeeper connection string.
+        """
+        if node.version.supports_bootstrap_server():
+            connection_setting = "--bootstrap-server %s" % self.bootstrap_servers(self.security_protocol)
+        else:
+            connection_setting = "--zookeeper %s" % self.zk_connect_setting()
+
+        return connection_setting
+
     def __bootstrap_servers(self, port, validate=True, offline_nodes=[]):
         if validate and not port.open:
             raise ValueError("We are retrieving bootstrap servers for the port: %s which is not currently open. - " %
@@ -785,9 +814,15 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         Check whether a broker is registered in Zookeeper
         """
         self.logger.debug("Querying zookeeper to see if broker %s is registered", node)
+        return self.get_broker_info(node) is not None
+
+    def get_broker_info(self, node):
+        """
+        Get the broker information from Zookeeper.
+        """
         broker_info = self.zk.query("/brokers/ids/%s" % self.idx(node), chroot=self.zk_chroot)
         self.logger.debug("Broker info: %s", broker_info)
-        return broker_info is not None
+        return json.loads(broker_info)
 
     def get_offset_shell(self, topic, partitions, max_wait_ms, offsets, time):
         node = self.nodes[0]
