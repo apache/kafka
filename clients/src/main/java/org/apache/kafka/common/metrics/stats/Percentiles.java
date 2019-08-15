@@ -39,6 +39,10 @@ public class Percentiles extends SampledStat implements CompoundStat {
     private final Percentile[] percentiles;
     private final BinScheme binScheme;
 
+    public Percentiles(int sizeInBytes, double max, BucketSizing bucketing, Percentile... percentiles) {
+        this(sizeInBytes, 0.0, max, bucketing, percentiles);
+    }
+
     public Percentiles(int sizeInBytes, double min, double max, BucketSizing bucketing, Percentile... percentiles) {
         super(0.0);
         this.percentiles = percentiles;
