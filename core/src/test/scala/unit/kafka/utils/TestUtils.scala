@@ -47,7 +47,7 @@ import org.apache.kafka.clients.consumer._
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.{KafkaFuture, TopicPartition}
 import org.apache.kafka.common.config.ConfigResource
-import org.apache.kafka.common.errors.RetriableException
+import org.apache.kafka.common.errors.{ListenerNotFoundException, RetriableException}
 import org.apache.kafka.common.header.Header
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.network.{ListenerName, Mode}
@@ -1457,16 +1457,26 @@ object TestUtils extends Logging {
   }
 
   def currentLeader(client: Admin, topicPartition: TopicPartition): Option[Int] = {
-    Option(
-      client
-        .describeTopics(Arrays.asList(topicPartition.topic))
-        .all
-        .get
-        .get(topicPartition.topic)
-        .partitions
-        .get(topicPartition.partition)
-        .leader
-    ).map(_.id)
+    val maybeCurrentLeader = try {
+      Option(
+        client
+          .describeTopics(Collections.singleton(topicPartition.topic))
+          .all
+          .get
+          .get(topicPartition.topic)
+          .partitions
+          .get(topicPartition.partition)
+          .leader
+      )
+    } catch {
+      case e: ExecutionException =>
+        if (e.getCause.isInstanceOf[ListenerNotFoundException]) {
+          None
+        } else {
+          throw e
+        }
+    }
+    maybeCurrentLeader.map(_.id)
   }
 
   def waitForLeaderToBecome(client: Admin, topicPartition: TopicPartition, leader: Option[Int]): Unit = {

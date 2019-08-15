@@ -26,8 +26,8 @@ import java.time.Duration
 import java.util
 import java.util.{Collections, Properties}
 import java.util.concurrent._
-import javax.management.ObjectName
 
+import javax.management.ObjectName
 import com.yammer.metrics.Metrics
 import com.yammer.metrics.core.MetricName
 import kafka.admin.ConfigCommand
@@ -49,7 +49,7 @@ import org.apache.kafka.common.{ClusterResource, ClusterResourceListener, Reconf
 import org.apache.kafka.common.config.{ConfigException, ConfigResource}
 import org.apache.kafka.common.config.SslConfigs._
 import org.apache.kafka.common.config.types.Password
-import org.apache.kafka.common.errors.{AuthenticationException, InvalidRequestException}
+import org.apache.kafka.common.errors.{AuthenticationException, InvalidRequestException, ListenerNotFoundException}
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.metrics.{KafkaMetric, MetricsReporter}
 import org.apache.kafka.common.network.{ListenerName, Mode}
@@ -526,7 +526,18 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
     followerBroker.startup()
 
     // Verify that new leader is not elected with unclean leader disabled since there are no ISRs
-    TestUtils.waitUntilTrue(() => partitionInfo.leader == null, "Unclean leader elected")
+    TestUtils.waitUntilTrue(() => {
+      try {
+        partitionInfo.leader == null
+      } catch {
+        case e: ExecutionException =>
+          if (e.getCause.isInstanceOf[ListenerNotFoundException]) {
+            true
+          } else {
+            false
+          }
+      }
+    }, "Unclean leader elected")
 
     // Enable unclean leader election
     val newProps = new Properties
@@ -535,9 +546,15 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
     waitForConfigOnServer(controller, KafkaConfig.UncleanLeaderElectionEnableProp, "true")
 
     // Verify that the old follower with missing records is elected as the new leader
-    val (newLeader, elected) = TestUtils.computeUntilTrue(partitionInfo.leader)(leader => leader != null)
-    assertTrue("Unclean leader not elected", elected)
-    assertEquals(followerBroker.config.brokerId, newLeader.id)
+    // wait until a new leader is elected
+    TestUtils.waitUntilTrue(() => {
+      try {
+        partitionInfo.leader != null
+      } catch {
+        case _: ExecutionException => false
+      }
+    }, "Unclean leader elected")
+    assertEquals(followerBroker.config.brokerId, partitionInfo.leader.id)
 
     // New leader doesn't have the last 10 records committed on the old leader that have already been consumed.
     // With unclean leader election enabled, we should be able to produce to the new leader. The first 10 records

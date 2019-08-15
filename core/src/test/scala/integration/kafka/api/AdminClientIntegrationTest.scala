@@ -1494,8 +1494,9 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
     servers(broker2).shutdown()
     TestUtils.waitForBrokersOutOfIsr(client, Set(partition1), Set(broker2))
     servers(broker1).shutdown()
+    // No leaders on partition 1, 2
     TestUtils.waitForLeaderToBecome(client, partition1, None)
-    TestUtils.waitForLeaderToBecome(client, partition2, Some(broker3))
+    TestUtils.waitForLeaderToBecome(client, partition2, None)
     servers(broker2).startup()
 
     val electResult = client.electLeaders(ElectionType.UNCLEAN, null)
@@ -1619,8 +1620,9 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
     servers(broker2).shutdown()
     TestUtils.waitForBrokersOutOfIsr(client, Set(partition1), Set(broker2))
     servers(broker1).shutdown()
+    // No leaders on partition 1, 2
     TestUtils.waitForLeaderToBecome(client, partition1, None)
-    TestUtils.waitForLeaderToBecome(client, partition2, Some(broker3))
+    TestUtils.waitForLeaderToBecome(client, partition1, None)
     servers(broker2).startup()
 
     val electResult = client.electLeaders(ElectionType.UNCLEAN, Set(partition1, partition2).asJava)

@@ -1517,13 +1517,19 @@ public class KafkaAdminClient extends AdminClient {
                 MetadataResponse response = (MetadataResponse) abstractResponse;
                 // Handle server responses for particular topics.
                 Cluster cluster = response.cluster();
-                Map<String, Errors> errors = response.errors();
+                Map<String, Errors> topicErrors = response.errors();
+                Map<String, Set<Errors>> partitionErrors = response.partitionErrors();
                 for (Map.Entry<String, KafkaFutureImpl<TopicDescription>> entry : topicFutures.entrySet()) {
                     String topicName = entry.getKey();
                     KafkaFutureImpl<TopicDescription> future = entry.getValue();
-                    Errors topicError = errors.get(topicName);
+                    Errors topicError = topicErrors.get(topicName);
                     if (topicError != null) {
                         future.completeExceptionally(topicError.exception());
+                        continue;
+                    }
+                    Set<Errors> partitionError = partitionErrors.get(topicName);
+                    if (partitionError != null && partitionError.contains(Errors.LISTENER_NOT_FOUND)) {
+                        future.completeExceptionally(Errors.LISTENER_NOT_FOUND.exception());
                         continue;
                     }
                     if (!cluster.topics().contains(topicName)) {
