@@ -2110,7 +2110,7 @@ public class SenderTest {
     @Test
     public void testExpiredBatchDoesNotSplitOnMessageTooLargeError() throws Exception {
         long deliverTimeoutMs = 1500L;
-        // create a producer batch with more than one record so it is eligible to split
+        // create a producer batch with more than one record so it is eligible for splitting
         Future<RecordMetadata> request1 =
             accumulator.append(tp0, time.milliseconds(), "key1".getBytes(), "value1".getBytes(), null, null,
                 MAX_BLOCK_TIMEOUT, false).future;
@@ -2118,7 +2118,8 @@ public class SenderTest {
             accumulator.append(tp0, time.milliseconds(), "key2".getBytes(), "value2".getBytes(), null, null,
                 MAX_BLOCK_TIMEOUT, false).future;
 
-        sender.runOnce();  // send request
+        // send request
+        sender.runOnce();
         assertEquals(1, client.inFlightRequestCount());
         // return a MESSAGE_TOO_LARGE error
         client.respond(produceResponse(tp0, -1, Errors.MESSAGE_TOO_LARGE, -1));
