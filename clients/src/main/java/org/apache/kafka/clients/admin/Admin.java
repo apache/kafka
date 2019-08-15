@@ -402,7 +402,7 @@ public interface Admin extends AutoCloseable {
      * This operation is supported by brokers with version 2.3.0 or higher.
      *
      * @param configs The resources with their configs
-     * @return The IncrementalAlterConfigsResult
+     * @return The AlterConfigsResult
      */
     default AlterConfigsResult incrementalAlterConfigs(Map<ConfigResource, Collection<AlterConfigOp>> configs) {
         return incrementalAlterConfigs(configs, new AlterConfigsOptions());
@@ -416,7 +416,7 @@ public interface Admin extends AutoCloseable {
      * a particular resource are updated atomically.
      * <p>
      * The following exceptions can be anticipated when calling {@code get()} on the futures obtained from
-     * the returned {@code IncrementalAlterConfigsResult}:
+     * the returned {@link AlterConfigsResult}:
      * <ul>
      * <li>{@link org.apache.kafka.common.errors.ClusterAuthorizationException}
      * if the authenticated user didn't have alter access to the cluster.</li>
@@ -430,7 +430,7 @@ public interface Admin extends AutoCloseable {
      *
      * @param configs The resources with their configs
      * @param options The options to use when altering configs
-     * @return The IncrementalAlterConfigsResult
+     * @return The AlterConfigsResult
      */
     AlterConfigsResult incrementalAlterConfigs(Map<ConfigResource,
         Collection<AlterConfigOp>> configs, AlterConfigsOptions options);
