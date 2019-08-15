@@ -808,27 +808,18 @@ object TestUtils extends Logging {
     * @param msg error message
     * @param waitTimeMs maximum time to wait and retest the condition before failing the test
     * @param pause delay between condition checks
-    * @param maxRetries maximum number of retries to check the given condition if a retriable exception is thrown
     */
   def waitUntilTrue(condition: () => Boolean, msg: => String,
-                    waitTimeMs: Long = JTestUtils.DEFAULT_MAX_WAIT_MS, pause: Long = 100L, maxRetries: Int = 0): Unit = {
+                    waitTimeMs: Long = JTestUtils.DEFAULT_MAX_WAIT_MS, pause: Long = 100L): Unit = {
     val startTime = System.currentTimeMillis()
-    var retry = 0
     while (true) {
-      try {
-        if (condition())
-          return
-        if (System.currentTimeMillis() > startTime + waitTimeMs)
-          fail(msg)
-        Thread.sleep(waitTimeMs.min(pause))
-      }
-      catch {
-        case e: RetriableException if retry < maxRetries =>
-          debug("Retrying after error", e)
-          retry += 1
-        case e : Throwable => throw e
-      }
+      if (condition())
+        return
+      if (System.currentTimeMillis() > startTime + waitTimeMs)
+        fail(msg)
+      Thread.sleep(waitTimeMs.min(pause))
     }
+
     // should never hit here
     throw new RuntimeException("unexpected error")
   }

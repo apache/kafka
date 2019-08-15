@@ -158,9 +158,10 @@ object ConsumerGroupCommand extends Logging {
     }
   }
 
-  class ConsumerGroupService(val opts: ConsumerGroupCommandOptions) {
+  class ConsumerGroupService(val opts: ConsumerGroupCommandOptions,
+                             private[admin] val configOverrides: Map[String, String] = Map.empty) {
 
-    private val adminClient = createAdminClient()
+    private val adminClient = createAdminClient(configOverrides)
 
     // `consumers` are only needed for `describe`, so we instantiate them lazily
     private lazy val consumers: mutable.Map[String, KafkaConsumer[String, String]] = mutable.Map.empty
@@ -528,9 +529,10 @@ object ConsumerGroupCommand extends Logging {
       )
     }
 
-    private def createAdminClient(): Admin = {
+    private def createAdminClient(configOverrides: Map[String, String]): Admin = {
       val props = if (opts.options.has(opts.commandConfigOpt)) Utils.loadProps(opts.options.valueOf(opts.commandConfigOpt)) else new Properties()
       props.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, opts.options.valueOf(opts.bootstrapServerOpt))
+      configOverrides.foreach { case (k, v) => props.put(k, v)}
       admin.AdminClient.create(props)
     }
 
