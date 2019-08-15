@@ -424,7 +424,7 @@ public interface Admin extends AutoCloseable {
      * if the authenticated user didn't have alter access to the Topic.</li>
      * <li>{@link org.apache.kafka.common.errors.InvalidRequestException}
      * if the request details are invalid. e.g., a configuration key was specified more than once for a resource</li>
-     * </ul>*
+     * </ul>
      * <p>
      * This operation is supported by brokers with version 2.3.0 or higher.
      *
