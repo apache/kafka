@@ -477,6 +477,11 @@ public abstract class Type {
 
     public static final DocumentedType COMPACT_NULLABLE_STRING = new DocumentedType() {
         @Override
+        public boolean isNullable() {
+            return true;
+        }
+
+        @Override
         public void write(ByteBuffer buffer, Object o) {
             if (o == null) {
                 ByteUtils.writeUnsignedVarint(0, buffer);
@@ -507,7 +512,10 @@ public abstract class Type {
 
         @Override
         public int sizeOf(Object o) {
-            int length = o == null ? -1 : Utils.utf8Length((String) o);
+            if (o == null) {
+                return 1;
+            }
+            int length = Utils.utf8Length((String) o);
             return ByteUtils.sizeOfUnsignedVarint(length + 1) + length;
         }
 
@@ -591,7 +599,6 @@ public abstract class Type {
             ByteBuffer arg = (ByteBuffer) o;
             int pos = arg.position();
             ByteUtils.writeUnsignedVarint(arg.remaining() + 1, buffer);
-            buffer.putInt(arg.remaining());
             buffer.put(arg);
             arg.position(pos);
         }
@@ -705,6 +712,11 @@ public abstract class Type {
 
     public static final DocumentedType COMPACT_NULLABLE_BYTES = new DocumentedType() {
         @Override
+        public boolean isNullable() {
+            return true;
+        }
+
+        @Override
         public void write(ByteBuffer buffer, Object o) {
             if (o == null) {
                 ByteUtils.writeUnsignedVarint(0, buffer);
@@ -712,7 +724,6 @@ public abstract class Type {
                 ByteBuffer arg = (ByteBuffer) o;
                 int pos = arg.position();
                 ByteUtils.writeUnsignedVarint(arg.remaining() + 1, buffer);
-                buffer.putInt(arg.remaining());
                 buffer.put(arg);
                 arg.position(pos);
             }
@@ -749,10 +760,13 @@ public abstract class Type {
 
         @Override
         public ByteBuffer validate(Object item) {
+            if (item == null)
+                return null;
+
             if (item instanceof ByteBuffer)
                 return (ByteBuffer) item;
-            else
-                throw new SchemaException(item + " is not a java.nio.ByteBuffer.");
+
+            throw new SchemaException(item + " is not a java.nio.ByteBuffer.");
         }
 
         @Override

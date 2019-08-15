@@ -31,7 +31,6 @@ public class CompactArrayOf extends DocumentedType {
 
     private final Type type;
     private final boolean nullable;
-    private final static int SIZEOF_UNSIGNED_VARINT_0 = ByteUtils.sizeOfUnsignedVarint(0);
 
 
     public CompactArrayOf(Type type) {
@@ -68,7 +67,7 @@ public class CompactArrayOf extends DocumentedType {
 
     @Override
     public Object read(ByteBuffer buffer) {
-        int n = ByteUtils.readVarint(buffer);
+        int n = ByteUtils.readUnsignedVarint(buffer);
         if (n == 0) {
             if (isNullable()) {
                 return null;
@@ -88,10 +87,10 @@ public class CompactArrayOf extends DocumentedType {
     @Override
     public int sizeOf(Object o) {
         if (o == null) {
-            return SIZEOF_UNSIGNED_VARINT_0;
+            return 1;
         }
         Object[] objs = (Object[]) o;
-        int size = ByteUtils.sizeOfUnsignedVarint(objs.length);
+        int size = ByteUtils.sizeOfUnsignedVarint(objs.length + 1);
         for (Object obj : objs) {
             size += type.sizeOf(obj);
         }

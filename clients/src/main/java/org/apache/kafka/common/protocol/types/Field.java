@@ -87,9 +87,21 @@ public class Field {
         }
     }
 
+    public static class CompactStr extends Field {
+        public CompactStr(String name, String docString) {
+            super(name, Type.COMPACT_STRING, docString, false, null);
+        }
+    }
+
     public static class NullableStr extends Field {
         public NullableStr(String name, String docString) {
             super(name, Type.NULLABLE_STRING, docString, false, null);
+        }
+    }
+
+    public static class CompactNullableStr extends Field {
+        public CompactNullableStr(String name, String docString) {
+            super(name, Type.COMPACT_NULLABLE_STRING, docString, false, null);
         }
     }
 
