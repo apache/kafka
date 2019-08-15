@@ -64,7 +64,8 @@ public class MirrorHeartbeatTask extends SourceTask {
     public List<SourceRecord> poll() throws InterruptedException {
         // pause to throttle, unless we've stopped
         if (stopped.await(interval.toMillis(), TimeUnit.MILLISECONDS)) {
-            return Collections.emptyList();
+            // SourceWorkerTask expects non-zero batches or null
+            return null;
         }
         long timestamp = System.currentTimeMillis();
         Heartbeat heartbeat = new Heartbeat(sourceClusterAlias, targetClusterAlias, timestamp);

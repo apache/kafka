@@ -134,6 +134,10 @@ public class MirrorSourceTask extends SourceTask {
         lock.lock();
         try {
             ConsumerRecords<byte[], byte[]> records = consumer.poll(pollTimeout);
+            if (records.isEmpty()) {
+                // WorkerSourceTasks expects non-zero batch size
+                return null;
+            }
             List<SourceRecord> sourceRecords = new ArrayList<>(records.count());
             for (ConsumerRecord<byte[], byte[]> record : records) {
                 SourceRecord converted = convertRecord(record);

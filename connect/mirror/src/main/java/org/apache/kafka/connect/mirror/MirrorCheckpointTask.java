@@ -124,7 +124,12 @@ public class MirrorCheckpointTask extends SourceTask {
             for (String group : consumerGroups) {
                 records.addAll(checkpointsForGroup(group));
             }
-            return records;
+            if (records.isEmpty()) {
+                // WorkerSourceTask expects non-zero batches or null
+                return null;
+            } else {
+                return records;
+            }
         } finally {
             lock.unlock();
         }
