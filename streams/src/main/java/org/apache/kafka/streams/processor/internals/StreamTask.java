@@ -890,11 +890,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         return partitionGroup.partitionTimestamp(partition);
     }
 
-    // used for testing
-    void resetTimes() {
-        partitionGroup.clear();
-    }
-
     Producer<byte[], byte[]> getProducer() {
         return producer;
     }

@@ -95,6 +95,7 @@ public class StreamTaskTest {
     private final Serializer<Integer> intSerializer = Serdes.Integer().serializer();
     private final Serializer<byte[]> bytesSerializer = Serdes.ByteArray().serializer();
     private final Deserializer<Integer> intDeserializer = Serdes.Integer().deserializer();
+    private final String applicationId = "stream-task-test";
     private final String topic1 = "topic1";
     private final String topic2 = "topic2";
     private final TopicPartition partition1 = new TopicPartition(topic1, 1);
@@ -188,7 +189,7 @@ public class StreamTaskTest {
             throw new RuntimeException(e);
         }
         return new StreamsConfig(mkProperties(mkMap(
-            mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, "stream-task-test"),
+            mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, applicationId),
             mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:2171"),
             mkEntry(StreamsConfig.BUFFERED_RECORDS_PER_PARTITION_CONFIG, "3"),
             mkEntry(StreamsConfig.STATE_DIR_CONFIG, canonicalPath),
@@ -647,19 +648,11 @@ public class StreamTaskTest {
 
     @Test
     public void shouldRestorePartitionTimeAfterRestartWithEosDisabled() {
-        task = createStatelessTask(createConfig(false));
-        task.initializeStateStores();
-        task.initializeTopology();
+        createTaskWithProcessAndCommit(false);
 
-        task.addRecords(partition1, singletonList(getConsumerRecord(partition1, DEFAULT_TIMESTAMP)));
-
-        task.process();
-
-        task.commit();
         assertEquals(DEFAULT_TIMESTAMP, task.decodeTimestamp(consumer.committed(partition1).metadata()));
-        // reset times here to artificially represent a restart
-        task.resetTimes();
-        assertEquals(RecordQueue.UNKNOWN, task.partitionTime(partition1));
+        // reset times here by creating a new task
+        task = createStatelessTask(createConfig(false));
 
         task.initializeTaskTime();
         assertEquals(DEFAULT_TIMESTAMP, task.partitionTime(partition1));
@@ -668,19 +661,12 @@ public class StreamTaskTest {
 
     @Test
     public void shouldRestorePartitionTimeAfterRestartWithEosEnabled() {
-        task = createStatelessTask(createConfig(true));
-        task.initializeStateStores();
-        task.initializeTopology();
-
-        task.addRecords(partition1, singletonList(getConsumerRecord(partition1, DEFAULT_TIMESTAMP)));
-
-        task.process();
-        task.commit();
+        createTaskWithProcessAndCommit(true);
 
         // extract the committed metadata from MockProducer
         final List<Map<String, Map<TopicPartition, OffsetAndMetadata>>> metadataList = 
             producer.consumerGroupOffsetsHistory();
-        final String storedMetadata = metadataList.get(0).get("stream-task-test").get(partition1).metadata();
+        final String storedMetadata = metadataList.get(0).get(applicationId).get(partition1).metadata();
         final long partitionTime = task.decodeTimestamp(storedMetadata);
         assertEquals(DEFAULT_TIMESTAMP, partitionTime);
 
@@ -691,23 +677,43 @@ public class StreamTaskTest {
         offsetMap.put(partition1, new OffsetAndMetadata(partitionTime, encryptedMetadata));
         consumer.commitSync(offsetMap);
 
-        // reset times here to artificially represent a restart
-        task.resetTimes();
-        assertEquals(RecordQueue.UNKNOWN, task.partitionTime(partition1));
+        // reset times here by creating a new task
+        task = createStatelessTask(createConfig(true));
 
         task.initializeTaskTime();
         assertEquals(DEFAULT_TIMESTAMP, task.partitionTime(partition1));
         assertEquals(DEFAULT_TIMESTAMP, task.streamTime());
     }
 
+    private void createTaskWithProcessAndCommit(final boolean eosEnabled) {
+        task = createStatelessTask(createConfig(eosEnabled));
+        task.initializeStateStores();
+        task.initializeTopology();
+
+        task.addRecords(partition1, singletonList(getConsumerRecord(partition1, DEFAULT_TIMESTAMP)));
+
+        task.process();
+        task.commit();
+    }
+
     @Test
     public void shouldEncodeAndDecodeMetadata() {
         task = createStatelessTask(createConfig(false));
         assertEquals(DEFAULT_TIMESTAMP, task.decodeTimestamp(task.encodeTimestamp(DEFAULT_TIMESTAMP)));
+    }
+
+    @Test
+    public void shouldReturnUnknownTimestampIfUnknownVersion() {
+        task = createStatelessTask(createConfig(false));
 
         final byte[] emptyMessage = {StreamTask.LATEST_MAGIC_BYTE + 1};
         final String encodedString = Base64.getEncoder().encodeToString(emptyMessage);
         assertEquals(RecordQueue.UNKNOWN, task.decodeTimestamp(encodedString));
+    }
+
+    @Test
+    public void shouldReturnUnknownTimestampIfEmptyMessage() {
+        task = createStatelessTask(createConfig(false));
 
         assertEquals(RecordQueue.UNKNOWN, task.decodeTimestamp(""));
     }

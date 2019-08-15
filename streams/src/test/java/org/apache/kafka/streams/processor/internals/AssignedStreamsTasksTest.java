@@ -84,7 +84,6 @@ public class AssignedStreamsTasksTest {
         final Set<TopicPartition> t2partitions = Collections.singleton(tp2);
         EasyMock.expect(t2.partitions()).andReturn(t2partitions);
         EasyMock.expect(t2.changelogPartitions()).andReturn(Collections.emptyList());
-
         t1.initializeTaskTime();
         t2.initializeTaskTime();
 

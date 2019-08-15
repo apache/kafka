@@ -295,16 +295,24 @@ public class PartitionGroupTest {
     }
 
     @Test
-    public void testSetPartitionTimestamp() {
+    public void shouldSetPartitionTimestampAndStreamTime() {
         group.setPartitionTime(partition1, 100L);
         assertEquals(100L, group.partitionTimestamp(partition1));
+        assertEquals(100L, group.streamTime());
+        group.setPartitionTime(partition2, 50L);
+        assertEquals(50L, group.partitionTimestamp(partition2));
+        assertEquals(100L, group.streamTime());
+    }
+
+    @Test
+    public void shouldThrowNullpointerUponSetPartitionTimestampFailure() {
         assertThrows(errMessage, NullPointerException.class, () -> {
             group.setPartitionTime(randomPartition, 0L);
         });
     }
 
     @Test
-    public void testGetPartitionTimestamp() {
+    public void shouldThrowNullpointerUponGetPartitionTimestampFailure() {
         assertThrows(errMessage, NullPointerException.class, () -> {
             group.partitionTimestamp(randomPartition);
         });
