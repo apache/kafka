@@ -103,7 +103,8 @@ class SocketServer(val config: KafkaConfig,
   /**
    * Start the socket server. Acceptors for all the listeners are started. Processors
    * are started if `startupProcessors` is true. If not, processors are only started when
-   * [[kafka.network.SocketServer#startProcessors()]] is invoked. Delayed starting of processors
+   * [[kafka.network.SocketServer#startDataPlaneProcessors()]] or
+   * [[kafka.network.SocketServer#startControlPlaneProcessor()]] is invoked. Delayed starting of processors
    * is used to delay processing client connections until server is fully initialized, e.g.
    * to ensure that all credentials have been loaded before authentications are performed.
    * Acceptors are always started during `startup` so that the bound port is known when this
