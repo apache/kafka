@@ -74,7 +74,7 @@ public interface Admin extends AutoCloseable {
     /**
      * Close the Admin and release all associated resources.
      * <p>
-     * See {@link Admin#close(long, TimeUnit)}
+     * See {@link #close(long, TimeUnit)}
      */
     @Override
     default void close() {
@@ -113,7 +113,7 @@ public interface Admin extends AutoCloseable {
     /**
      * Create a batch of new topics with the default options.
      * <p>
-     * This is a convenience method for #{@link #createTopics(Collection, CreateTopicsOptions)} with default options.
+     * This is a convenience method for {@link #createTopics(Collection, CreateTopicsOptions)} with default options.
      * See the overload for more details.
      * <p>
      * This operation is supported by brokers with version 0.10.1.0 or higher.
@@ -132,7 +132,7 @@ public interface Admin extends AutoCloseable {
      * <p>
      * It may take several seconds after {@link CreateTopicsResult} returns
      * success for all the brokers to become aware that the topics have been created.
-     * During this time, {@link Admin#listTopics()} and {@link Admin#describeTopics(Collection)}
+     * During this time, {@link #listTopics()} and {@link #describeTopics(Collection)}
      * may not return information about the new topics.
      * <p>
      * This operation is supported by brokers with version 0.10.1.0 or higher. The validateOnly option is supported
@@ -145,7 +145,7 @@ public interface Admin extends AutoCloseable {
     CreateTopicsResult createTopics(Collection<NewTopic> newTopics, CreateTopicsOptions options);
 
     /**
-     * This is a convenience method for #{@link Admin#deleteTopics(Collection, DeleteTopicsOptions)}
+     * This is a convenience method for {@link #deleteTopics(Collection, DeleteTopicsOptions)}
      * with default options. See the overload for more details.
      * <p>
      * This operation is supported by brokers with version 0.10.1.0 or higher.
@@ -164,7 +164,7 @@ public interface Admin extends AutoCloseable {
      * <p>
      * It may take several seconds after the {@link DeleteTopicsResult} returns
      * success for all the brokers to become aware that the topics are gone.
-     * During this time, {@link Admin#listTopics()} and {@link Admin#describeTopics(Collection)}
+     * During this time, {@link #listTopics()} and {@link #describeTopics(Collection)}
      * may continue to return information about the deleted topics.
      * <p>
      * If delete.topic.enable is false on the brokers, deleteTopics will mark
@@ -182,7 +182,7 @@ public interface Admin extends AutoCloseable {
     /**
      * List the topics available in the cluster with the default options.
      * <p>
-     * This is a convenience method for #{@link Admin#listTopics(ListTopicsOptions)} with default options.
+     * This is a convenience method for {@link #listTopics(ListTopicsOptions)} with default options.
      * See the overload for more details.
      *
      * @return The ListTopicsResult.
@@ -202,7 +202,7 @@ public interface Admin extends AutoCloseable {
     /**
      * Describe some topics in the cluster, with the default options.
      * <p>
-     * This is a convenience method for #{@link Admin#describeTopics(Collection, DescribeTopicsOptions)} with
+     * This is a convenience method for {@link #describeTopics(Collection, DescribeTopicsOptions)} with
      * default options. See the overload for more details.
      *
      * @param topicNames The names of the topics to describe.
@@ -224,7 +224,7 @@ public interface Admin extends AutoCloseable {
     /**
      * Get information about the nodes in the cluster, using the default options.
      * <p>
-     * This is a convenience method for #{@link Admin#describeCluster(DescribeClusterOptions)} with default options.
+     * This is a convenience method for {@link #describeCluster(DescribeClusterOptions)} with default options.
      * See the overload for more details.
      *
      * @return The DescribeClusterResult.
@@ -242,7 +242,7 @@ public interface Admin extends AutoCloseable {
     DescribeClusterResult describeCluster(DescribeClusterOptions options);
 
     /**
-     * This is a convenience method for #{@link Admin#describeAcls(AclBindingFilter, DescribeAclsOptions)} with
+     * This is a convenience method for {@link #describeAcls(AclBindingFilter, DescribeAclsOptions)} with
      * default options. See the overload for more details.
      * <p>
      * This operation is supported by brokers with version 0.11.0.0 or higher.
@@ -269,7 +269,7 @@ public interface Admin extends AutoCloseable {
     DescribeAclsResult describeAcls(AclBindingFilter filter, DescribeAclsOptions options);
 
     /**
-     * This is a convenience method for #{@link Admin#createAcls(Collection, CreateAclsOptions)} with
+     * This is a convenience method for {@link #createAcls(Collection, CreateAclsOptions)} with
      * default options. See the overload for more details.
      * <p>
      * This operation is supported by brokers with version 0.11.0.0 or higher.
@@ -298,7 +298,7 @@ public interface Admin extends AutoCloseable {
     CreateAclsResult createAcls(Collection<AclBinding> acls, CreateAclsOptions options);
 
     /**
-     * This is a convenience method for #{@link Admin#deleteAcls(Collection, DeleteAclsOptions)} with default options.
+     * This is a convenience method for {@link #deleteAcls(Collection, DeleteAclsOptions)} with default options.
      * See the overload for more details.
      * <p>
      * This operation is supported by brokers with version 0.11.0.0 or higher.
@@ -327,7 +327,7 @@ public interface Admin extends AutoCloseable {
     /**
      * Get the configuration for the specified resources with the default options.
      * <p>
-     * This is a convenience method for #{@link Admin#describeConfigs(Collection, DescribeConfigsOptions)} with default options.
+     * This is a convenience method for {@link #describeConfigs(Collection, DescribeConfigsOptions)} with default options.
      * See the overload for more details.
      * <p>
      * This operation is supported by brokers with version 0.11.0.0 or higher.
@@ -361,7 +361,7 @@ public interface Admin extends AutoCloseable {
     /**
      * Update the configuration for the specified resources with the default options.
      * <p>
-     * This is a convenience method for #{@link Admin#alterConfigs(Map, AlterConfigsOptions)} with default options.
+     * This is a convenience method for {@link #alterConfigs(Map, AlterConfigsOptions)} with default options.
      * See the overload for more details.
      * <p>
      * This operation is supported by brokers with version 0.11.0.0 or higher.
@@ -396,7 +396,7 @@ public interface Admin extends AutoCloseable {
     /**
      * Incrementally updates the configuration for the specified resources with default options.
      * <p>
-     * This is a convenience method for #{@link Admin#incrementalAlterConfigs(Map, AlterConfigsOptions)} with default options.
+     * This is a convenience method for {@link #incrementalAlterConfigs(Map, AlterConfigsOptions)} with default options.
      * See the overload for more details.
      * <p>
      * This operation is supported by brokers with version 2.3.0 or higher.
@@ -443,7 +443,7 @@ public interface Admin extends AutoCloseable {
      * <p>
      * This operation is not transactional so it may succeed for some replicas while fail for others.
      * <p>
-     * This is a convenience method for #{@link Admin#alterReplicaLogDirs(Map, AlterReplicaLogDirsOptions)} with default options.
+     * This is a convenience method for {@link #alterReplicaLogDirs(Map, AlterReplicaLogDirsOptions)} with default options.
      * See the overload for more details.
      * <p>
      * This operation is supported by brokers with version 1.1.0 or higher.
@@ -477,7 +477,7 @@ public interface Admin extends AutoCloseable {
     /**
      * Query the information of all log directories on the given set of brokers
      * <p>
-     * This is a convenience method for #{@link Admin#describeLogDirs(Collection, DescribeLogDirsOptions)} with default options.
+     * This is a convenience method for {@link #describeLogDirs(Collection, DescribeLogDirsOptions)} with default options.
      * See the overload for more details.
      * <p>
      * This operation is supported by brokers with version 1.0.0 or higher.
@@ -503,7 +503,7 @@ public interface Admin extends AutoCloseable {
     /**
      * Query the replica log directory information for the specified replicas.
      * <p>
-     * This is a convenience method for #{@link Admin#describeReplicaLogDirs(Collection, DescribeReplicaLogDirsOptions)}
+     * This is a convenience method for {@link #describeReplicaLogDirs(Collection, DescribeReplicaLogDirsOptions)}
      * with default options. See the overload for more details.
      * <p>
      * This operation is supported by brokers with version 1.0.0 or higher.
@@ -551,7 +551,7 @@ public interface Admin extends AutoCloseable {
      * <p>
      * It may take several seconds after this method returns
      * success for all the brokers to become aware that the partitions have been created.
-     * During this time, {@link Admin#describeTopics(Collection)}
+     * During this time, {@link #describeTopics(Collection)}
      * may not return information about the new partitions.
      * <p>
      * This operation is supported by brokers with version 1.0.0 or higher.
@@ -774,9 +774,8 @@ public interface Admin extends AutoCloseable {
     /**
      * Describe some group IDs in the cluster, with the default options.
      * <p>
-     * This is a convenience method for
-     * #{@link Admin#describeConsumerGroups(Collection, DescribeConsumerGroupsOptions)} with
-     * default options. See the overload for more details.
+     * This is a convenience method for {@link #describeConsumerGroups(Collection, DescribeConsumerGroupsOptions)}
+     * with default options. See the overload for more details.
      *
      * @param groupIds The IDs of the groups to describe.
      * @return The DescribeConsumerGroupResult.
@@ -796,7 +795,7 @@ public interface Admin extends AutoCloseable {
     /**
      * List the consumer groups available in the cluster with the default options.
      * <p>
-     * This is a convenience method for #{@link Admin#listConsumerGroups(ListConsumerGroupsOptions)} with default options.
+     * This is a convenience method for {@link #listConsumerGroups(ListConsumerGroupsOptions)} with default options.
      * See the overload for more details.
      *
      * @return The ListGroupsResult.
@@ -816,7 +815,7 @@ public interface Admin extends AutoCloseable {
     /**
      * List the consumer group offsets available in the cluster with the default options.
      * <p>
-     * This is a convenience method for #{@link Admin#listConsumerGroupOffsets(String, ListConsumerGroupOffsetsOptions)} with default options.
+     * This is a convenience method for {@link #listConsumerGroupOffsets(String, ListConsumerGroupOffsetsOptions)} with default options.
      *
      * @return The ListGroupOffsetsResult.
      */
@@ -926,7 +925,7 @@ public interface Admin extends AutoCloseable {
      * <p>
      * It may take several seconds after this method returns success for all the brokers in the cluster
      * to become aware that the partitions have new leaders. During this time,
-     * {@link Admin#describeTopics(Collection)} may not return information about the partitions'
+     * {@link #describeTopics(Collection)} may not return information about the partitions'
      * new leaders.
      * <p>
      * This operation is supported by brokers with version 2.2.0 or later if preferred election is use;
