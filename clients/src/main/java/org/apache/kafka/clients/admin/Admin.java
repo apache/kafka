@@ -87,7 +87,7 @@ public interface Admin extends AutoCloseable {
      * The close operation has a grace period during which current operations will be allowed to
      * complete, specified by the given duration and time unit.
      * New operations will not be accepted during the grace period. Once the grace period is over,
-     * all operations that have not yet been completed will be aborted with a TimeoutException.
+     * all operations that have not yet been completed will be aborted with a {@link org.apache.kafka.common.errors.TimeoutException}.
      *
      * @param duration The duration to use for the wait time.
      * @param unit     The time unit to use for the wait time.
@@ -104,7 +104,7 @@ public interface Admin extends AutoCloseable {
      * The close operation has a grace period during which current operations will be allowed to
      * complete, specified by the given duration.
      * New operations will not be accepted during the grace period. Once the grace period is over,
-     * all operations that have not yet been completed will be aborted with a TimeoutException.
+     * all operations that have not yet been completed will be aborted with a {@link org.apache.kafka.common.errors.TimeoutException}.
      *
      * @param timeout The time to use for the wait time.
      */
