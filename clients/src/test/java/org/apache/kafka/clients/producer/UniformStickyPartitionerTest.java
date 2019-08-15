@@ -29,7 +29,7 @@ import static java.util.Arrays.asList;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
-public class StickyRoundRobinPartitionerTest {
+public class UniformStickyPartitionerTest {
     private final static Node[] NODES = new Node[] {
         new Node(0, "localhost", 99),
         new Node(1, "localhost", 100),
@@ -53,7 +53,7 @@ public class StickyRoundRobinPartitionerTest {
         int countForPart0 = 0;
         int countForPart2 = 0;
         int part = 0;
-        Partitioner partitioner = new StickyRoundRobinPartitioner();
+        Partitioner partitioner = new UniformStickyPartitioner();
         Cluster cluster = new Cluster("clusterId", asList(NODES[0], NODES[1], NODES[2]), partitions,
             Collections.<String>emptySet(), Collections.<String>emptySet());
         for (int i = 0; i < 50; i++) {
@@ -89,7 +89,7 @@ public class StickyRoundRobinPartitionerTest {
 
         final byte[] keyBytes = "key".getBytes();
         int partition = 0;
-        Partitioner partitioner = new StickyRoundRobinPartitioner();
+        Partitioner partitioner = new UniformStickyPartitioner();
         for (int i = 0; i < 30; ++i) {
             partition = partitioner.partition(TOPIC_A, null, keyBytes, null, null, testCluster);
             Integer count = partitionCount.get(partition);
@@ -152,7 +152,7 @@ public class StickyRoundRobinPartitionerTest {
         final Map<Integer, Integer> partitionCount = new HashMap<>();
 
         int partition = 0;
-        Partitioner partitioner = new StickyRoundRobinPartitioner();
+        Partitioner partitioner = new UniformStickyPartitioner();
         for (int i = 0; i < 30; ++i) {
             partition = partitioner.partition(TOPIC_A, null, null, null, null, testCluster);
             Integer count = partitionCount.get(partition);
