@@ -130,7 +130,7 @@ public interface Admin extends AutoCloseable {
      * <p>
      * This operation is not transactional so it may succeed for some topics while fail for others.
      * <p>
-     * It may take several seconds after {@code CreateTopicsResult} returns
+     * It may take several seconds after {@link CreateTopicsResult} returns
      * success for all the brokers to become aware that the topics have been created.
      * During this time, {@link Admin#listTopics()} and {@link Admin#describeTopics(Collection)}
      * may not return information about the new topics.
@@ -162,7 +162,7 @@ public interface Admin extends AutoCloseable {
      * <p>
      * This operation is not transactional so it may succeed for some topics while fail for others.
      * <p>
-     * It may take several seconds after the {@code DeleteTopicsResult} returns
+     * It may take several seconds after the {@link DeleteTopicsResult} returns
      * success for all the brokers to become aware that the topics are gone.
      * During this time, Admin#listTopics and Admin#describeTopics
      * may continue to return information about the deleted topics.
@@ -557,7 +557,7 @@ public interface Admin extends AutoCloseable {
      * This operation is supported by brokers with version 1.0.0 or higher.
      * <p>
      * The following exceptions can be anticipated when calling {@code get()} on the futures obtained from the
-     * {@link CreatePartitionsResult#values() values()} method of the returned {@code CreatePartitionsResult}
+     * {@link CreatePartitionsResult#values() values()} method of the returned {@link CreatePartitionsResult}
      * <ul>
      * <li>{@link org.apache.kafka.common.errors.AuthorizationException}
      * if the authenticated user is not authorized to alter the topic</li>
@@ -628,7 +628,7 @@ public interface Admin extends AutoCloseable {
      * This operation is supported by brokers with version 1.1.0 or higher.
      * <p>
      * The following exceptions can be anticipated when calling {@code get()} on the futures obtained from the
-     * {@link CreateDelegationTokenResult#delegationToken() delegationToken()} method of the returned {@code CreateDelegationTokenResult}
+     * {@link CreateDelegationTokenResult#delegationToken() delegationToken()} method of the returned {@link CreateDelegationTokenResult}
      * <ul>
      * <li>{@link org.apache.kafka.common.errors.UnsupportedByAuthenticationException}
      * If the request sent on PLAINTEXT/1-way SSL channels or delegation token authenticated channels.</li>
@@ -665,7 +665,7 @@ public interface Admin extends AutoCloseable {
      * This operation is supported by brokers with version 1.1.0 or higher.
      * <p>
      * The following exceptions can be anticipated when calling {@code get()} on the futures obtained from the
-     * {@link RenewDelegationTokenResult#expiryTimestamp() expiryTimestamp()} method of the returned {@code RenewDelegationTokenResult}
+     * {@link RenewDelegationTokenResult#expiryTimestamp() expiryTimestamp()} method of the returned {@link RenewDelegationTokenResult}
      * <ul>
      * <li>{@link org.apache.kafka.common.errors.UnsupportedByAuthenticationException}
      * If the request sent on PLAINTEXT/1-way SSL channels or delegation token authenticated channels.</li>
@@ -706,7 +706,7 @@ public interface Admin extends AutoCloseable {
      * This operation is supported by brokers with version 1.1.0 or higher.
      * <p>
      * The following exceptions can be anticipated when calling {@code get()} on the futures obtained from the
-     * {@link ExpireDelegationTokenResult#expiryTimestamp() expiryTimestamp()} method of the returned {@code ExpireDelegationTokenResult}
+     * {@link ExpireDelegationTokenResult#expiryTimestamp() expiryTimestamp()} method of the returned {@link ExpireDelegationTokenResult}
      * <ul>
      * <li>{@link org.apache.kafka.common.errors.UnsupportedByAuthenticationException}
      * If the request sent on PLAINTEXT/1-way SSL channels or delegation token authenticated channels.</li>
@@ -746,7 +746,7 @@ public interface Admin extends AutoCloseable {
      * This operation is supported by brokers with version 1.1.0 or higher.
      * <p>
      * The following exceptions can be anticipated when calling {@code get()} on the futures obtained from the
-     * {@link DescribeDelegationTokenResult#delegationTokens() delegationTokens()} method of the returned {@code DescribeDelegationTokenResult}
+     * {@link DescribeDelegationTokenResult#delegationTokens() delegationTokens()} method of the returned {@link DescribeDelegationTokenResult}
      * <ul>
      * <li>{@link org.apache.kafka.common.errors.UnsupportedByAuthenticationException}
      * If the request sent on PLAINTEXT/1-way SSL channels or delegation token authenticated channels.</li>
@@ -933,7 +933,7 @@ public interface Admin extends AutoCloseable {
      * otherwise the brokers most be 2.4.0 or higher.
      * <p>
      * The following exceptions can be anticipated when calling {@code get()} on the future obtained
-     * from the returned {@code ElectLeadersResult}:
+     * from the returned {@link ElectLeadersResult}:
      * <ul>
      * <li>{@link org.apache.kafka.common.errors.ClusterAuthorizationException}
      * if the authenticated user didn't have alter access to the cluster.</li>
