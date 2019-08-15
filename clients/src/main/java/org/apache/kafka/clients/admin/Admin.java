@@ -86,7 +86,7 @@ public interface Admin extends AutoCloseable {
      * <p>
      * The close operation has a grace period during which current operations will be allowed to
      * complete, specified by the given duration and time unit.
-     * New operations will not be accepted during the grace period.  Once the grace period is over,
+     * New operations will not be accepted during the grace period. Once the grace period is over,
      * all operations that have not yet been completed will be aborted with a TimeoutException.
      *
      * @param duration The duration to use for the wait time.
@@ -103,7 +103,7 @@ public interface Admin extends AutoCloseable {
      * <p>
      * The close operation has a grace period during which current operations will be allowed to
      * complete, specified by the given duration.
-     * New operations will not be accepted during the grace period.  Once the grace period is over,
+     * New operations will not be accepted during the grace period. Once the grace period is over,
      * all operations that have not yet been completed will be aborted with a TimeoutException.
      *
      * @param timeout The time to use for the wait time.
@@ -168,7 +168,7 @@ public interface Admin extends AutoCloseable {
      * may continue to return information about the deleted topics.
      * <p>
      * If delete.topic.enable is false on the brokers, deleteTopics will mark
-     * the topics for deletion, but not actually delete them.  The futures will
+     * the topics for deletion, but not actually delete them. The futures will
      * return successfully in this case.
      * <p>
      * This operation is supported by brokers with version 0.10.1.0 or higher.
@@ -397,7 +397,7 @@ public interface Admin extends AutoCloseable {
      * Incrementally updates the configuration for the specified resources with default options.
      * <p>
      * This is a convenience method for #{@link Admin#incrementalAlterConfigs(Map, AlterConfigsOptions)} with default options.
-     * See the overload for more details.*
+     * See the overload for more details.
      * <p>
      * This operation is supported by brokers with version 2.3.0 or higher.
      *
@@ -576,7 +576,7 @@ public interface Admin extends AutoCloseable {
      *
      * @param newPartitions The topics which should have new partitions created, and corresponding parameters
      *                      for the created partitions.
-     * @param options       The options to use when creating the new paritions.
+     * @param options       The options to use when creating the new partitions.
      * @return The CreatePartitionsResult.
      */
     CreatePartitionsResult createPartitions(Map<String, NewPartitions> newPartitions,
@@ -919,7 +919,7 @@ public interface Admin extends AutoCloseable {
     }
 
     /**
-     * Elect a replica as leader for the given {@code partitions}, or for all partitions if the argumentl
+     * Elect a replica as leader for the given {@code partitions}, or for all partitions if the argument
      * to {@code partitions} is null.
      * <p>
      * This operation is not transactional so it may succeed for some partitions while fail for others.
@@ -929,7 +929,7 @@ public interface Admin extends AutoCloseable {
      * {@link Admin#describeTopics(Collection)} may not return information about the partitions'
      * new leaders.
      * <p>
-     * This operation is supported by brokers with version 2.2.0 or later if preferred eleciton is use;
+     * This operation is supported by brokers with version 2.2.0 or later if preferred election is use;
      * otherwise the brokers most be 2.4.0 or higher.
      *
      * <p>The following exceptions can be anticipated when calling {@code get()} on the future obtained
