@@ -257,8 +257,8 @@ public interface Admin extends AutoCloseable {
     /**
      * Lists access control lists (ACLs) according to the supplied filter.
      * <p>
-     * Note: it may take some time for changes made by createAcls or deleteAcls to be reflected
-     * in the output of describeAcls.
+     * Note: it may take some time for changes made by {@code createAcls} or {@code deleteAcls} to be reflected
+     * in the output of {@code describeAcls}.
      * <p>
      * This operation is supported by brokers with version 0.11.0.0 or higher.
      *
