@@ -304,7 +304,7 @@ public class ImplicitLinkedHashCollection<E extends ImplicitLinkedHashCollection
      * @return                  The match index, or INVALID_INDEX if no match was found.
      */
     final private int findIndexOfEqualElement(Object key) {
-        if (key == null) {
+        if (key == null || size == 0) {
             return INVALID_INDEX;
         }
         int slot = slot(elements, key);
@@ -329,7 +329,6 @@ public class ImplicitLinkedHashCollection<E extends ImplicitLinkedHashCollection
      * @return      The matching element, or null if there were none.
      */
     final public E find(E key) {
-        if (size == 0) return null;
         int index = findIndexOfEqualElement(key);
         if (index == INVALID_INDEX) {
             return null;

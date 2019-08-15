@@ -46,9 +46,12 @@ public class ImplicitLinkedHashMultiCollectionTest {
     }
 
     @Test
-    public void testFindEmpty() {
-        ImplicitLinkedHashCollection<TestElement> coll = new ImplicitLinkedHashCollection<>();
+    public void testFindFindAllContainsRemoveOnEmptyCollection() {
+        ImplicitLinkedHashMultiCollection<TestElement> coll = new ImplicitLinkedHashMultiCollection<>();
         assertNull(coll.find(new TestElement(2)));
+        assertFalse(coll.contains(new TestElement(2)));
+        assertFalse(coll.remove(new TestElement(2)));
+        assertTrue(coll.findAll(new TestElement(2)).isEmpty());
     }
 
     @Test
