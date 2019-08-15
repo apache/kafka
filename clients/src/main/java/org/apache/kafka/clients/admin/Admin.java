@@ -414,9 +414,9 @@ public interface Admin extends AutoCloseable {
      * <p>
      * Updates are not transactional so they may succeed for some resources while fail for others. The configs for
      * a particular resource are updated atomically.
-     *
-     * <p>The following exceptions can be anticipated when calling {@code get()} on the futures obtained from
-     * the returned {@code IncrementalAlterConfigsResult}:</p>
+     * <p>
+     * The following exceptions can be anticipated when calling {@code get()} on the futures obtained from
+     * the returned {@code IncrementalAlterConfigsResult}:
      * <ul>
      * <li>{@link org.apache.kafka.common.errors.ClusterAuthorizationException}
      * if the authenticated user didn't have alter access to the cluster.</li>
@@ -527,12 +527,12 @@ public interface Admin extends AutoCloseable {
     DescribeReplicaLogDirsResult describeReplicaLogDirs(Collection<TopicPartitionReplica> replicas, DescribeReplicaLogDirsOptions options);
 
     /**
-     * <p>Increase the number of partitions of the topics given as the keys of {@code newPartitions}
+     * Increase the number of partitions of the topics given as the keys of {@code newPartitions}
      * according to the corresponding values. <strong>If partitions are increased for a topic that has a key,
-     * the partition logic or ordering of the messages will be affected.</strong></p>
-     *
-     * <p>This is a convenience method for {@link #createPartitions(Map, CreatePartitionsOptions)} with default options.
-     * See the overload for more details.</p>
+     * the partition logic or ordering of the messages will be affected.</strong>
+     * <p>
+     * This is a convenience method for {@link #createPartitions(Map, CreatePartitionsOptions)} with default options.
+     * See the overload for more details.
      *
      * @param newPartitions The topics which should have new partitions created, and corresponding parameters
      *                      for the created partitions.
@@ -543,21 +543,21 @@ public interface Admin extends AutoCloseable {
     }
 
     /**
-     * <p>Increase the number of partitions of the topics given as the keys of {@code newPartitions}
+     * Increase the number of partitions of the topics given as the keys of {@code newPartitions}
      * according to the corresponding values. <strong>If partitions are increased for a topic that has a key,
-     * the partition logic or ordering of the messages will be affected.</strong></p>
-     *
-     * <p>This operation is not transactional so it may succeed for some topics while fail for others.</p>
-     *
-     * <p>It may take several seconds after this method returns
+     * the partition logic or ordering of the messages will be affected.</strong>
+     * <p>
+     * This operation is not transactional so it may succeed for some topics while fail for others.
+     * <p>
+     * It may take several seconds after this method returns
      * success for all the brokers to become aware that the partitions have been created.
      * During this time, {@link Admin#describeTopics(Collection)}
-     * may not return information about the new partitions.</p>
-     *
-     * <p>This operation is supported by brokers with version 1.0.0 or higher.</p>
-     *
-     * <p>The following exceptions can be anticipated when calling {@code get()} on the futures obtained from the
-     * {@link CreatePartitionsResult#values() values()} method of the returned {@code CreatePartitionsResult}</p>
+     * may not return information about the new partitions.
+     * <p>
+     * This operation is supported by brokers with version 1.0.0 or higher.
+     * <p>
+     * The following exceptions can be anticipated when calling {@code get()} on the futures obtained from the
+     * {@link CreatePartitionsResult#values() values()} method of the returned {@code CreatePartitionsResult}
      * <ul>
      * <li>{@link org.apache.kafka.common.errors.AuthorizationException}
      * if the authenticated user is not authorized to alter the topic</li>
@@ -610,10 +610,10 @@ public interface Admin extends AutoCloseable {
                                       DeleteRecordsOptions options);
 
     /**
-     * <p>Create a Delegation Token.</p>
-     *
-     * <p>This is a convenience method for {@link #createDelegationToken(CreateDelegationTokenOptions)} with default options.
-     * See the overload for more details.</p>
+     * Create a Delegation Token.
+     * <p>
+     * This is a convenience method for {@link #createDelegationToken(CreateDelegationTokenOptions)} with default options.
+     * See the overload for more details.
      *
      * @return The CreateDelegationTokenResult.
      */
@@ -623,12 +623,12 @@ public interface Admin extends AutoCloseable {
 
 
     /**
-     * <p>Create a Delegation Token.</p>
-     *
-     * <p>This operation is supported by brokers with version 1.1.0 or higher.</p>
-     *
-     * <p>The following exceptions can be anticipated when calling {@code get()} on the futures obtained from the
-     * {@link CreateDelegationTokenResult#delegationToken() delegationToken()} method of the returned {@code CreateDelegationTokenResult}</p>
+     * Create a Delegation Token.
+     * <p>
+     * This operation is supported by brokers with version 1.1.0 or higher.
+     * <p>
+     * The following exceptions can be anticipated when calling {@code get()} on the futures obtained from the
+     * {@link CreateDelegationTokenResult#delegationToken() delegationToken()} method of the returned {@code CreateDelegationTokenResult}
      * <ul>
      * <li>{@link org.apache.kafka.common.errors.UnsupportedByAuthenticationException}
      * If the request sent on PLAINTEXT/1-way SSL channels or delegation token authenticated channels.</li>
@@ -647,10 +647,10 @@ public interface Admin extends AutoCloseable {
 
 
     /**
-     * <p>Renew a Delegation Token.</p>
-     *
-     * <p>This is a convenience method for {@link #renewDelegationToken(byte[], RenewDelegationTokenOptions)} with default options.
-     * See the overload for more details.</p>
+     * Renew a Delegation Token.
+     * <p>
+     * This is a convenience method for {@link #renewDelegationToken(byte[], RenewDelegationTokenOptions)} with default options.
+     * See the overload for more details.
      *
      * @param hmac HMAC of the Delegation token
      * @return The RenewDelegationTokenResult.
@@ -660,12 +660,12 @@ public interface Admin extends AutoCloseable {
     }
 
     /**
-     * <p> Renew a Delegation Token.</p>
-     *
-     * <p>This operation is supported by brokers with version 1.1.0 or higher.</p>
-     *
-     * <p>The following exceptions can be anticipated when calling {@code get()} on the futures obtained from the
-     * {@link RenewDelegationTokenResult#expiryTimestamp() expiryTimestamp()} method of the returned {@code RenewDelegationTokenResult}</p>
+     * Renew a Delegation Token.
+     * <p>
+     * This operation is supported by brokers with version 1.1.0 or higher.
+     * <p>
+     * The following exceptions can be anticipated when calling {@code get()} on the futures obtained from the
+     * {@link RenewDelegationTokenResult#expiryTimestamp() expiryTimestamp()} method of the returned {@code RenewDelegationTokenResult}
      * <ul>
      * <li>{@link org.apache.kafka.common.errors.UnsupportedByAuthenticationException}
      * If the request sent on PLAINTEXT/1-way SSL channels or delegation token authenticated channels.</li>
@@ -688,10 +688,10 @@ public interface Admin extends AutoCloseable {
     RenewDelegationTokenResult renewDelegationToken(byte[] hmac, RenewDelegationTokenOptions options);
 
     /**
-     * <p>Expire a Delegation Token.</p>
-     *
-     * <p>This is a convenience method for {@link #expireDelegationToken(byte[], ExpireDelegationTokenOptions)} with default options.
-     * This will expire the token immediately. See the overload for more details.</p>
+     * Expire a Delegation Token.
+     * <p>
+     * This is a convenience method for {@link #expireDelegationToken(byte[], ExpireDelegationTokenOptions)} with default options.
+     * This will expire the token immediately. See the overload for more details.
      *
      * @param hmac HMAC of the Delegation token
      * @return The ExpireDelegationTokenResult.
@@ -701,12 +701,12 @@ public interface Admin extends AutoCloseable {
     }
 
     /**
-     * <p>Expire a Delegation Token.</p>
-     *
-     * <p>This operation is supported by brokers with version 1.1.0 or higher.</p>
-     *
-     * <p>The following exceptions can be anticipated when calling {@code get()} on the futures obtained from the
-     * {@link ExpireDelegationTokenResult#expiryTimestamp() expiryTimestamp()} method of the returned {@code ExpireDelegationTokenResult}</p>
+     * Expire a Delegation Token.
+     * <p>
+     * This operation is supported by brokers with version 1.1.0 or higher.
+     * <p>
+     * The following exceptions can be anticipated when calling {@code get()} on the futures obtained from the
+     * {@link ExpireDelegationTokenResult#expiryTimestamp() expiryTimestamp()} method of the returned {@code ExpireDelegationTokenResult}
      * <ul>
      * <li>{@link org.apache.kafka.common.errors.UnsupportedByAuthenticationException}
      * If the request sent on PLAINTEXT/1-way SSL channels or delegation token authenticated channels.</li>
@@ -729,10 +729,10 @@ public interface Admin extends AutoCloseable {
     ExpireDelegationTokenResult expireDelegationToken(byte[] hmac, ExpireDelegationTokenOptions options);
 
     /**
-     * <p>Describe the Delegation Tokens.</p>
-     *
-     * <p>This is a convenience method for {@link #describeDelegationToken(DescribeDelegationTokenOptions)} with default options.
-     * This will return all the user owned tokens and tokens where user have Describe permission. See the overload for more details.</p>
+     * Describe the Delegation Tokens.
+     * <p>
+     * This is a convenience method for {@link #describeDelegationToken(DescribeDelegationTokenOptions)} with default options.
+     * This will return all the user owned tokens and tokens where user have Describe permission. See the overload for more details.
      *
      * @return The DescribeDelegationTokenResult.
      */
@@ -741,12 +741,12 @@ public interface Admin extends AutoCloseable {
     }
 
     /**
-     * <p>Describe the Delegation Tokens.</p>
-     *
-     * <p>This operation is supported by brokers with version 1.1.0 or higher.</p>
-     *
-     * <p>The following exceptions can be anticipated when calling {@code get()} on the futures obtained from the
-     * {@link DescribeDelegationTokenResult#delegationTokens() delegationTokens()} method of the returned {@code DescribeDelegationTokenResult}</p>
+     * Describe the Delegation Tokens.
+     * <p>
+     * This operation is supported by brokers with version 1.1.0 or higher.
+     * <p>
+     * The following exceptions can be anticipated when calling {@code get()} on the futures obtained from the
+     * {@link DescribeDelegationTokenResult#delegationTokens() delegationTokens()} method of the returned {@code DescribeDelegationTokenResult}
      * <ul>
      * <li>{@link org.apache.kafka.common.errors.UnsupportedByAuthenticationException}
      * If the request sent on PLAINTEXT/1-way SSL channels or delegation token authenticated channels.</li>
@@ -931,9 +931,9 @@ public interface Admin extends AutoCloseable {
      * <p>
      * This operation is supported by brokers with version 2.2.0 or later if preferred election is use;
      * otherwise the brokers most be 2.4.0 or higher.
-     *
-     * <p>The following exceptions can be anticipated when calling {@code get()} on the future obtained
-     * from the returned {@code ElectLeadersResult}:</p>
+     * <p>
+     * The following exceptions can be anticipated when calling {@code get()} on the future obtained
+     * from the returned {@code ElectLeadersResult}:
      * <ul>
      * <li>{@link org.apache.kafka.common.errors.ClusterAuthorizationException}
      * if the authenticated user didn't have alter access to the cluster.</li>
