@@ -191,11 +191,7 @@ class MetricsTest extends KafkaServerTestHarness with Logging {
   }
 
   private def filterByTopicMetricRegex(metrics: Set[String], topic: Option[String]): Set[String] = {
-    val baseRegexPattern = ".*BrokerTopicMetrics.*"
-    val pattern = topic match {
-      case Some(topic) => baseRegexPattern + s"("+topic+")$"
-      case None => baseRegexPattern
-    }
-    metrics.filter(new Regex(pattern).pattern.matcher(_).matches())
+    val pattern = (".*BrokerTopicMetrics.*" + topic.map(t => s"($t)$$").getOrElse("")).r.pattern
+    metrics.filter(pattern.matcher(_).matches())
   }
 }

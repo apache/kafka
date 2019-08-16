@@ -148,12 +148,16 @@ class BrokerTopicMetrics(name: Option[String]) extends KafkaMetricsGroup {
   }
 
   case class MeterWrapper(metricType: String, eventType: String) {
-    var lazyMeter: Meter = _
+    @volatile private var lazyMeter: Meter = _
     private val meterLock = new Object
 
-    def meter(): Meter = meterLock synchronized {
-      if (lazyMeter == null)
-        lazyMeter = newMeter(metricType, eventType, TimeUnit.SECONDS, tags)
+    def meter(): Meter = {
+      if (lazyMeter == null) {
+        meterLock synchronized {
+          if (lazyMeter == null)
+            lazyMeter = newMeter(metricType, eventType, TimeUnit.SECONDS, tags)
+        }
+      }
       lazyMeter
     }
 
@@ -217,11 +221,8 @@ class BrokerTopicMetrics(name: Option[String]) extends KafkaMetricsGroup {
   def produceMessageConversionsRate = metricTypeMap.get(BrokerTopicStats.ProduceMessageConversionsPerSec).meter()
 
   // this method helps check with metricTypeMap first before deleting a metric
-  def removeMetricHelper(metricType: String, tags: scala.collection.Map[String, String]): Unit = {
-    val metric = metricTypeMap.get(metricType)
-    if (metric != null)
-      metric.close()
-  }
+  def removeMetricHelper(metricType: String, tags: scala.collection.Map[String, String]): Unit =
+    metricTypeMap.get(metricType).close()
 
   def close(): Unit = metricTypeMap.values.foreach(_.close())
 }
