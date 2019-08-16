@@ -24,6 +24,7 @@ import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.connect.util.TopicAdmin;
 
+import java.util.Arrays;
 import java.util.Map;
 import java.util.List;
 import java.util.HashMap;
@@ -91,6 +92,10 @@ final class MirrorUtils {
             String joined = String.join("|", fields);
             return Pattern.compile(joined);
         }
+    }
+
+    static Pattern compilePatternList(String fields) {
+        return compilePatternList(Arrays.asList(fields.split("\\W*,\\W*")));
     }
 
     static void createTopic(String topicName, short partitions, short replicationFactor, Map<String, Object> adminProps) {

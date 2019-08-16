@@ -80,10 +80,11 @@ public class MirrorSourceConnector extends SourceConnector {
 
     // visible for testing
     MirrorSourceConnector(SourceAndTarget sourceAndTarget, ReplicationPolicy replicationPolicy,
-            TopicFilter topicFilter) {
+            TopicFilter topicFilter, ConfigPropertyFilter configPropertyFilter) {
         this.sourceAndTarget = sourceAndTarget;
         this.replicationPolicy = replicationPolicy;
         this.topicFilter = topicFilter;
+        this.configPropertyFilter = configPropertyFilter;
     } 
 
     @Override
@@ -288,7 +289,6 @@ public class MirrorSourceConnector extends SourceConnector {
     private void updateTopicConfigs(Map<String, Config> topicConfigs)
             throws InterruptedException, ExecutionException {
         Map<ConfigResource, Config> configs = topicConfigs.entrySet().stream()
-            .filter(x -> shouldReplicateTopicConfigurationProperty(x.getKey()))
             .collect(Collectors.toMap(x ->
                 new ConfigResource(ConfigResource.Type.TOPIC, x.getKey()), x -> x.getValue()));
         log.trace("Syncing configs for {} topics.", configs.size());
@@ -333,6 +333,7 @@ public class MirrorSourceConnector extends SourceConnector {
     Config targetConfig(Config sourceConfig) {
         List<ConfigEntry> entries = sourceConfig.entries().stream()
             .filter(x -> !x.isDefault() && !x.isReadOnly() && !x.isSensitive())
+            .filter(x -> shouldReplicateTopicConfigurationProperty(x.name()))
             .collect(Collectors.toList());
         return new Config(entries);
     }

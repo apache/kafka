@@ -23,17 +23,21 @@ import org.apache.kafka.common.acl.AclPermissionType;
 import org.apache.kafka.common.resource.PatternType;
 import org.apache.kafka.common.resource.ResourcePattern;
 import org.apache.kafka.common.resource.ResourceType;
-import org.junit.Test;
+import org.apache.kafka.clients.admin.Config;
+import org.apache.kafka.clients.admin.ConfigEntry;
 
+import org.junit.Test;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.assertFalse;
+
+import java.util.ArrayList;
 
 public class MirrorSourceConnectorTest {
 
     @Test
     public void testReplicatesHeartbeatsByDefault() {
         MirrorSourceConnector connector = new MirrorSourceConnector(new SourceAndTarget("source", "target"), 
-            new DefaultReplicationPolicy(), new DefaultTopicFilter());
+            new DefaultReplicationPolicy(), new DefaultTopicFilter(), new DefaultConfigPropertyFilter());
         assertTrue("should replicate heartbeats", connector.shouldReplicateTopic("heartbeats"));
         assertTrue("should replicate upstream heartbeats", connector.shouldReplicateTopic("us-west.heartbeats"));
     }
@@ -41,7 +45,7 @@ public class MirrorSourceConnectorTest {
     @Test
     public void testReplicatesHeartbeatsDespiteFilter() {
         MirrorSourceConnector connector = new MirrorSourceConnector(new SourceAndTarget("source", "target"),
-            new DefaultReplicationPolicy(), x -> false);
+            new DefaultReplicationPolicy(), x -> false, new DefaultConfigPropertyFilter());
         assertTrue("should replicate heartbeats", connector.shouldReplicateTopic("heartbeats"));
         assertTrue("should replicate upstream heartbeats", connector.shouldReplicateTopic("us-west.heartbeats"));
     }
@@ -49,7 +53,7 @@ public class MirrorSourceConnectorTest {
     @Test
     public void testNoCycles() {
         MirrorSourceConnector connector = new MirrorSourceConnector(new SourceAndTarget("source", "target"),
-            new DefaultReplicationPolicy(), x -> true);
+            new DefaultReplicationPolicy(), x -> true, x -> true);
         assertFalse("should not allow cycles", connector.shouldReplicateTopic("target.topic1"));
         assertFalse("should not allow cycles", connector.shouldReplicateTopic("target.source.topic1"));
         assertFalse("should not allow cycles", connector.shouldReplicateTopic("source.target.topic1"));
@@ -60,7 +64,7 @@ public class MirrorSourceConnectorTest {
     @Test
     public void testAclFiltering() {
         MirrorSourceConnector connector = new MirrorSourceConnector(new SourceAndTarget("source", "target"),
-            new DefaultReplicationPolicy(), x -> true);
+            new DefaultReplicationPolicy(), x -> true, x -> true);
         assertFalse("should not replicate ALLOW WRITE", connector.shouldReplicateAcl(
             new AclBinding(new ResourcePattern(ResourceType.TOPIC, "test_topic", PatternType.LITERAL),
             new AccessControlEntry("kafka", "", AclOperation.WRITE, AclPermissionType.ALLOW))));
@@ -72,7 +76,7 @@ public class MirrorSourceConnectorTest {
     @Test
     public void testAclTransformation() {
         MirrorSourceConnector connector = new MirrorSourceConnector(new SourceAndTarget("source", "target"),
-            new DefaultReplicationPolicy(), x -> true);
+            new DefaultReplicationPolicy(), x -> true, x -> true);
         AclBinding allowAllAclBinding = new AclBinding(
             new ResourcePattern(ResourceType.TOPIC, "test_topic", PatternType.LITERAL),
             new AccessControlEntry("kafka", "", AclOperation.ALL, AclPermissionType.ALLOW));
@@ -93,5 +97,19 @@ public class MirrorSourceConnectorTest {
         assertTrue("should not change DENY",
             processedDenyAllAclBinding.entry().permissionType() == AclPermissionType.DENY);
     }
-
+    
+    @Test
+    public void testConfigPropertyFiltering() {
+        MirrorSourceConnector connector = new MirrorSourceConnector(new SourceAndTarget("source", "target"),
+            new DefaultReplicationPolicy(), x -> true, new DefaultConfigPropertyFilter());
+        ArrayList<ConfigEntry> entries = new ArrayList<>();
+        entries.add(new ConfigEntry("name-1", "value-1"));
+        entries.add(new ConfigEntry("min.insync.replicas", "2"));
+        Config config = new Config(entries);
+        Config targetConfig = connector.targetConfig(config);
+        assertTrue("should replicate properties", targetConfig.entries().stream()
+            .anyMatch(x -> x.name().equals("name-1")));
+        assertFalse("should not replicate blacklisted properties", targetConfig.entries().stream()
+            .anyMatch(x -> x.name().equals("min.insync.replicas")));
+    }
 }
