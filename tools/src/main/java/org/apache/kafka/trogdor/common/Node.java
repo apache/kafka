@@ -37,7 +37,11 @@ public interface Node {
         }
 
         public static int getTrogdorAgentPort(Node node) {
-            return getIntConfig(node, Platform.Config.TROGDOR_AGENT_PORT, Agent.DEFAULT_PORT);
+            return getTrogdorAgentPort(node, Agent.DEFAULT_PORT);
+        }
+
+        public static int getTrogdorAgentPort(Node node, int defaultValue) {
+            return getIntConfig(node, Platform.Config.TROGDOR_AGENT_PORT, defaultValue);
         }
 
         public static int getTrogdorCoordinatorPort(Node node) {
