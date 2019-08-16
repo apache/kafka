@@ -194,7 +194,7 @@ public class StreamThreadStateStoreProviderTest {
         mockThread(true);
         final List<ReadOnlyKeyValueStore<String, String>> tkvStores =
                 provider.stores("time-ordered-kv-buffer",
-                        QueryableStoreTypes.timeOrderedKeyValueBuffer(Serdes.String(), Serdes.String()));
+                        QueryableStoreTypes.suppressionBuffer(Serdes.String(), Serdes.String()));
         assertEquals(2, tkvStores.size());
         for (final ReadOnlyKeyValueStore<String, String> store: tkvStores) {
             assertThat(store, instanceOf(ReadOnlyKeyValueStore.class));

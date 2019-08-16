@@ -100,10 +100,10 @@ public final class QueryableStoreTypes {
      * @param <V> value type of the store
      * @param keySerde Key serializer
      * @param valueSerde Value serializer
-     * @return {@link QueryableStoreTypes.TimeOrderedKeyValueBufferType}
+     * @return {@link QueryableStoreTypes.SuppressionBufferType}
      */
-    public static <K, V> QueryableStoreType<ReadOnlyKeyValueStore<K, V>> timeOrderedKeyValueBuffer(final Serde<K> keySerde, final Serde<V> valueSerde) {
-        return new TimeOrderedKeyValueBufferType<>(keySerde, valueSerde);
+    public static <K, V> QueryableStoreType<ReadOnlyKeyValueStore<K, V>> suppressionBuffer(final Serde<K> keySerde, final Serde<V> valueSerde) {
+        return new SuppressionBufferType<>(keySerde, valueSerde);
     }
 
     private static abstract class QueryableStoreTypeMatcher<T> implements QueryableStoreType<T> {
@@ -198,12 +198,12 @@ public final class QueryableStoreTypes {
         }
     }
 
-    public static class TimeOrderedKeyValueBufferType<K, V> extends QueryableStoreTypeMatcher<ReadOnlyKeyValueStore<K, V>> {
+    public static class SuppressionBufferType<K, V> extends QueryableStoreTypeMatcher<ReadOnlyKeyValueStore<K, V>> {
 
         private final Serde<K> keySerde;
         private final Serde<V> valueSerde;
 
-        TimeOrderedKeyValueBufferType(final Serde<K> keySerde, final Serde<V> valueSerde) {
+        SuppressionBufferType(final Serde<K> keySerde, final Serde<V> valueSerde) {
             super(new HashSet<>(Arrays.asList(
                     TimeOrderedKeyValueBuffer.class,
                     ReadOnlyKeyValueStore.class)));

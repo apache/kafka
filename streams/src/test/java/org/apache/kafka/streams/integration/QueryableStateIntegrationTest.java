@@ -636,7 +636,7 @@ public class QueryableStateIntegrationTest {
             "waiting for store " + storeName);
 
         final ReadOnlyKeyValueStore<String, String> myMapStore =
-            kafkaStreams.store(storeName, QueryableStoreTypes.timeOrderedKeyValueBuffer(Serdes.String(), Serdes.String()));
+            kafkaStreams.store(storeName, QueryableStoreTypes.suppressionBuffer(Serdes.String(), Serdes.String()));
         TestUtils.waitForCondition(
             () -> myMapStore.approximateNumEntries() > 0,
             maxWaitMs,

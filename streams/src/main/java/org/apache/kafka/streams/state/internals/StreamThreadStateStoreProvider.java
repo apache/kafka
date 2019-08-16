@@ -63,11 +63,11 @@ public class StreamThreadStateStoreProvider implements StateStoreProvider {
                     stores.add((T) new ReadOnlyKeyValueStoreFacade((TimestampedKeyValueStore<Object, Object>) store));
                 } else if (store instanceof TimestampedWindowStore && queryableStoreType instanceof QueryableStoreTypes.WindowStoreType) {
                     stores.add((T) new ReadOnlyWindowStoreFacade((TimestampedWindowStore<Object, Object>) store));
-                } else if (store instanceof ReadOnlyKeyValueStore && queryableStoreType instanceof QueryableStoreTypes.TimeOrderedKeyValueBufferType) {
-                    final QueryableStoreTypes.TimeOrderedKeyValueBufferType timeOrderedKeyValueBufferType =
-                            (QueryableStoreTypes.TimeOrderedKeyValueBufferType) queryableStoreType;
+                } else if (store instanceof ReadOnlyKeyValueStore && queryableStoreType instanceof QueryableStoreTypes.SuppressionBufferType) {
+                    final QueryableStoreTypes.SuppressionBufferType suppressionBufferType =
+                            (QueryableStoreTypes.SuppressionBufferType) queryableStoreType;
                     stores.add((T) new ReadOnlyTimeOrderedBufferFacade<>((TimeOrderedKeyValueBuffer<Object, Object>) store,
-                            timeOrderedKeyValueBufferType.keySerde(), timeOrderedKeyValueBufferType.valueSerde()));
+                            suppressionBufferType.keySerde(), suppressionBufferType.valueSerde()));
                 } else {
                     stores.add((T) store);
                 }
