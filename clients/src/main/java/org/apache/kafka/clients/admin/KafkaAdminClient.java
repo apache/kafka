@@ -29,6 +29,7 @@ import org.apache.kafka.clients.admin.CreateTopicsResult.TopicMetadataAndConfig;
 import org.apache.kafka.clients.admin.DeleteAclsResult.FilterResult;
 import org.apache.kafka.clients.admin.DeleteAclsResult.FilterResults;
 import org.apache.kafka.clients.admin.DescribeReplicaLogDirsResult.ReplicaLogDirInfo;
+import org.apache.kafka.clients.admin.ListOffsetsResult.ListOffsetsResultInfo;
 import org.apache.kafka.clients.admin.internals.AdminMetadataManager;
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.Assignment;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
@@ -87,6 +88,11 @@ import org.apache.kafka.common.message.ListGroupsRequestData;
 import org.apache.kafka.common.message.ListGroupsResponseData;
 import org.apache.kafka.common.message.ListPartitionReassignmentsRequestData;
 import org.apache.kafka.common.message.MetadataRequestData;
+import org.apache.kafka.common.message.OffsetCommitRequestData;
+import org.apache.kafka.common.message.OffsetCommitRequestData.OffsetCommitRequestPartition;
+import org.apache.kafka.common.message.OffsetCommitRequestData.OffsetCommitRequestTopic;
+import org.apache.kafka.common.message.OffsetCommitResponseData.OffsetCommitResponsePartition;
+import org.apache.kafka.common.message.OffsetCommitResponseData.OffsetCommitResponseTopic;
 import org.apache.kafka.common.message.OffsetDeleteRequestData;
 import org.apache.kafka.common.message.OffsetDeleteRequestData.OffsetDeleteRequestPartition;
 import org.apache.kafka.common.message.OffsetDeleteRequestData.OffsetDeleteRequestTopic;
@@ -153,10 +159,17 @@ import org.apache.kafka.common.requests.LeaveGroupRequest;
 import org.apache.kafka.common.requests.LeaveGroupResponse;
 import org.apache.kafka.common.requests.ListGroupsRequest;
 import org.apache.kafka.common.requests.ListGroupsResponse;
+import org.apache.kafka.common.requests.ListOffsetRequest;
+import org.apache.kafka.common.requests.ListOffsetResponse;
+import org.apache.kafka.common.requests.ListOffsetResponse.PartitionData;
 import org.apache.kafka.common.requests.ListPartitionReassignmentsRequest;
 import org.apache.kafka.common.requests.ListPartitionReassignmentsResponse;
 import org.apache.kafka.common.requests.MetadataRequest;
 import org.apache.kafka.common.requests.MetadataResponse;
+import org.apache.kafka.common.requests.MetadataResponse.PartitionMetadata;
+import org.apache.kafka.common.requests.MetadataResponse.TopicMetadata;
+import org.apache.kafka.common.requests.OffsetCommitRequest;
+import org.apache.kafka.common.requests.OffsetCommitResponse;
 import org.apache.kafka.common.requests.OffsetDeleteRequest;
 import org.apache.kafka.common.requests.OffsetDeleteResponse;
 import org.apache.kafka.common.requests.OffsetFetchRequest;
@@ -187,6 +200,7 @@ import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
@@ -714,6 +728,7 @@ public class KafkaAdminClient extends AdminClient {
          *
          * @return          The AbstractRequest builder.
          */
+        @SuppressWarnings("rawtypes")
         abstract AbstractRequest.Builder createRequest(int timeoutMs);
 
         /**
@@ -1271,7 +1286,7 @@ public class KafkaAdminClient extends AdminClient {
             return new Call(true, "fetchMetadata", calcDeadlineMs(now, defaultTimeoutMs),
                     new MetadataUpdateNodeIdProvider()) {
                 @Override
-                public AbstractRequest.Builder createRequest(int timeoutMs) {
+                public MetadataRequest.Builder createRequest(int timeoutMs) {
                     // Since this only requests node information, it's safe to pass true
                     // for allowAutoTopicCreation (and it simplifies communication with
                     // older brokers)
@@ -1338,7 +1353,7 @@ public class KafkaAdminClient extends AdminClient {
             new ControllerNodeProvider()) {
 
             @Override
-            public AbstractRequest.Builder createRequest(int timeoutMs) {
+            public CreateTopicsRequest.Builder createRequest(int timeoutMs) {
                 return new CreateTopicsRequest.Builder(
                     new CreateTopicsRequestData().
                         setTopics(topics).
@@ -1435,7 +1450,7 @@ public class KafkaAdminClient extends AdminClient {
             new ControllerNodeProvider()) {
 
             @Override
-            AbstractRequest.Builder createRequest(int timeoutMs) {
+            DeleteTopicsRequest.Builder createRequest(int timeoutMs) {
                 return new DeleteTopicsRequest.Builder(new DeleteTopicsRequestData()
                         .setTopicNames(validTopicNames)
                         .setTimeoutMs(timeoutMs));
@@ -1495,7 +1510,7 @@ public class KafkaAdminClient extends AdminClient {
             new LeastLoadedNodeProvider()) {
 
             @Override
-            AbstractRequest.Builder createRequest(int timeoutMs) {
+            MetadataRequest.Builder createRequest(int timeoutMs) {
                 return MetadataRequest.Builder.allTopics();
             }
 
@@ -1542,7 +1557,7 @@ public class KafkaAdminClient extends AdminClient {
             private boolean supportsDisablingTopicCreation = true;
 
             @Override
-            AbstractRequest.Builder createRequest(int timeoutMs) {
+            MetadataRequest.Builder createRequest(int timeoutMs) {
                 if (supportsDisablingTopicCreation)
                     return new MetadataRequest.Builder(new MetadataRequestData()
                         .setTopics(convertToMetadataRequestTopic(topicNamesList))
@@ -1624,7 +1639,7 @@ public class KafkaAdminClient extends AdminClient {
             new LeastLoadedNodeProvider()) {
 
             @Override
-            AbstractRequest.Builder createRequest(int timeoutMs) {
+            MetadataRequest.Builder createRequest(int timeoutMs) {
                 // Since this only requests node information, it's safe to pass true for allowAutoTopicCreation (and it
                 // simplifies communication with older brokers)
                 return new MetadataRequest.Builder(new MetadataRequestData()
@@ -1676,7 +1691,7 @@ public class KafkaAdminClient extends AdminClient {
             new LeastLoadedNodeProvider()) {
 
             @Override
-            AbstractRequest.Builder createRequest(int timeoutMs) {
+            DescribeAclsRequest.Builder createRequest(int timeoutMs) {
                 return new DescribeAclsRequest.Builder(filter);
             }
 
@@ -1720,7 +1735,7 @@ public class KafkaAdminClient extends AdminClient {
             new LeastLoadedNodeProvider()) {
 
             @Override
-            AbstractRequest.Builder createRequest(int timeoutMs) {
+            CreateAclsRequest.Builder createRequest(int timeoutMs) {
                 return new CreateAclsRequest.Builder(aclCreations);
             }
 
@@ -1768,7 +1783,7 @@ public class KafkaAdminClient extends AdminClient {
             new LeastLoadedNodeProvider()) {
 
             @Override
-            AbstractRequest.Builder createRequest(int timeoutMs) {
+            DeleteAclsRequest.Builder createRequest(int timeoutMs) {
                 return new DeleteAclsRequest.Builder(filterList);
             }
 
@@ -1834,7 +1849,7 @@ public class KafkaAdminClient extends AdminClient {
                 new LeastLoadedNodeProvider()) {
 
                 @Override
-                AbstractRequest.Builder createRequest(int timeoutMs) {
+                DescribeConfigsRequest.Builder createRequest(int timeoutMs) {
                     return new DescribeConfigsRequest.Builder(unifiedRequestResources)
                             .includeSynonyms(options.includeSynonyms());
                 }
@@ -1881,7 +1896,7 @@ public class KafkaAdminClient extends AdminClient {
                     new ConstantNodeIdProvider(nodeId)) {
 
                 @Override
-                AbstractRequest.Builder createRequest(int timeoutMs) {
+                DescribeConfigsRequest.Builder createRequest(int timeoutMs) {
                     return new DescribeConfigsRequest.Builder(Collections.singleton(resource))
                             .includeSynonyms(options.includeSynonyms());
                 }
@@ -1995,7 +2010,7 @@ public class KafkaAdminClient extends AdminClient {
         runnable.call(new Call("alterConfigs", calcDeadlineMs(now, options.timeoutMs()), nodeProvider) {
 
             @Override
-            public AbstractRequest.Builder createRequest(int timeoutMs) {
+            public AlterConfigsRequest.Builder createRequest(int timeoutMs) {
                 return new AlterConfigsRequest.Builder(requestMap, options.shouldValidateOnly());
             }
 
@@ -2055,7 +2070,7 @@ public class KafkaAdminClient extends AdminClient {
         runnable.call(new Call("incrementalAlterConfigs", calcDeadlineMs(now, options.timeoutMs()), nodeProvider) {
 
             @Override
-            public AbstractRequest.Builder createRequest(int timeoutMs) {
+            public IncrementalAlterConfigsRequest.Builder createRequest(int timeoutMs) {
                 return new IncrementalAlterConfigsRequest.Builder(
                         toIncrementalAlterConfigsRequestData(resources, configs, options.shouldValidateOnly()));
             }
@@ -2131,7 +2146,7 @@ public class KafkaAdminClient extends AdminClient {
                 new ConstantNodeIdProvider(brokerId)) {
 
                 @Override
-                public AbstractRequest.Builder createRequest(int timeoutMs) {
+                public AlterReplicaLogDirsRequest.Builder createRequest(int timeoutMs) {
                     return new AlterReplicaLogDirsRequest.Builder(assignment);
                 }
 
@@ -2177,7 +2192,7 @@ public class KafkaAdminClient extends AdminClient {
                 new ConstantNodeIdProvider(brokerId)) {
 
                 @Override
-                public AbstractRequest.Builder createRequest(int timeoutMs) {
+                public DescribeLogDirsRequest.Builder createRequest(int timeoutMs) {
                     // Query selected partitions in all log directories
                     return new DescribeLogDirsRequest.Builder(null);
                 }
@@ -2231,7 +2246,7 @@ public class KafkaAdminClient extends AdminClient {
                 new ConstantNodeIdProvider(brokerId)) {
 
                 @Override
-                public AbstractRequest.Builder createRequest(int timeoutMs) {
+                public DescribeLogDirsRequest.Builder createRequest(int timeoutMs) {
                     // Query selected partitions in all log directories
                     return new DescribeLogDirsRequest.Builder(topicPartitions);
                 }
@@ -2302,7 +2317,7 @@ public class KafkaAdminClient extends AdminClient {
                 new ControllerNodeProvider()) {
 
             @Override
-            public AbstractRequest.Builder createRequest(int timeoutMs) {
+            public CreatePartitionsRequest.Builder createRequest(int timeoutMs) {
                 return new CreatePartitionsRequest.Builder(requestMap, timeoutMs, options.validateOnly());
             }
 
@@ -2360,7 +2375,7 @@ public class KafkaAdminClient extends AdminClient {
                 new LeastLoadedNodeProvider()) {
 
             @Override
-            AbstractRequest.Builder createRequest(int timeoutMs) {
+            MetadataRequest.Builder createRequest(int timeoutMs) {
                 return new MetadataRequest.Builder(new MetadataRequestData()
                     .setTopics(convertToMetadataRequestTopic(topics))
                     .setAllowAutoTopicCreation(false));
@@ -2404,7 +2419,7 @@ public class KafkaAdminClient extends AdminClient {
                             new ConstantNodeIdProvider(brokerId)) {
 
                         @Override
-                        AbstractRequest.Builder createRequest(int timeoutMs) {
+                        DeleteRecordsRequest.Builder createRequest(int timeoutMs) {
                             return new DeleteRecordsRequest.Builder(timeoutMs, partitionDeleteOffsets);
                         }
 
@@ -2455,7 +2470,7 @@ public class KafkaAdminClient extends AdminClient {
             new LeastLoadedNodeProvider()) {
 
             @Override
-            AbstractRequest.Builder<CreateDelegationTokenRequest> createRequest(int timeoutMs) {
+            CreateDelegationTokenRequest.Builder createRequest(int timeoutMs) {
                 return new CreateDelegationTokenRequest.Builder(
                         new CreateDelegationTokenRequestData()
                             .setRenewers(renewers)
@@ -2493,7 +2508,7 @@ public class KafkaAdminClient extends AdminClient {
             new LeastLoadedNodeProvider()) {
 
             @Override
-            AbstractRequest.Builder<RenewDelegationTokenRequest> createRequest(int timeoutMs) {
+            RenewDelegationTokenRequest.Builder createRequest(int timeoutMs) {
                 return new RenewDelegationTokenRequest.Builder(
                         new RenewDelegationTokenRequestData()
                         .setHmac(hmac)
@@ -2527,7 +2542,7 @@ public class KafkaAdminClient extends AdminClient {
             new LeastLoadedNodeProvider()) {
 
             @Override
-            AbstractRequest.Builder<ExpireDelegationTokenRequest> createRequest(int timeoutMs) {
+            ExpireDelegationTokenRequest.Builder createRequest(int timeoutMs) {
                 return new ExpireDelegationTokenRequest.Builder(
                         new ExpireDelegationTokenRequestData()
                             .setHmac(hmac)
@@ -2561,7 +2576,7 @@ public class KafkaAdminClient extends AdminClient {
             new LeastLoadedNodeProvider()) {
 
             @Override
-            AbstractRequest.Builder createRequest(int timeoutMs) {
+            DescribeDelegationTokenRequest.Builder createRequest(int timeoutMs) {
                 return new DescribeDelegationTokenRequest.Builder(options.owners());
             }
 
@@ -2738,7 +2753,7 @@ public class KafkaAdminClient extends AdminClient {
                 context.getDeadline(),
                 new ConstantNodeIdProvider(context.getNode().get().id())) {
             @Override
-            AbstractRequest.Builder createRequest(int timeoutMs) {
+            DescribeGroupsRequest.Builder createRequest(int timeoutMs) {
                 return new DescribeGroupsRequest.Builder(
                     new DescribeGroupsRequestData()
                         .setGroups(Collections.singletonList(context.getGroupId()))
@@ -2890,7 +2905,7 @@ public class KafkaAdminClient extends AdminClient {
         final long deadline = calcDeadlineMs(nowMetadata, options.timeoutMs());
         runnable.call(new Call("findAllBrokers", deadline, new LeastLoadedNodeProvider()) {
             @Override
-            AbstractRequest.Builder createRequest(int timeoutMs) {
+            MetadataRequest.Builder createRequest(int timeoutMs) {
                 return new MetadataRequest.Builder(new MetadataRequestData()
                     .setTopics(Collections.emptyList())
                     .setAllowAutoTopicCreation(true));
@@ -2910,7 +2925,7 @@ public class KafkaAdminClient extends AdminClient {
                     final long nowList = time.milliseconds();
                     runnable.call(new Call("listConsumerGroups", deadline, new ConstantNodeIdProvider(node.id())) {
                         @Override
-                        AbstractRequest.Builder createRequest(int timeoutMs) {
+                        ListGroupsRequest.Builder createRequest(int timeoutMs) {
                             return new ListGroupsRequest.Builder(new ListGroupsRequestData());
                         }
 
@@ -2984,7 +2999,7 @@ public class KafkaAdminClient extends AdminClient {
         return new Call("listConsumerGroupOffsets", context.getDeadline(),
                 new ConstantNodeIdProvider(context.getNode().get().id())) {
             @Override
-            AbstractRequest.Builder createRequest(int timeoutMs) {
+            OffsetFetchRequest.Builder createRequest(int timeoutMs) {
                 return new OffsetFetchRequest.Builder(context.getGroupId(), context.getOptions().topicPartitions());
             }
 
@@ -3056,7 +3071,7 @@ public class KafkaAdminClient extends AdminClient {
         return new Call("deleteConsumerGroups", context.getDeadline(), new ConstantNodeIdProvider(context.getNode().get().id())) {
 
             @Override
-            AbstractRequest.Builder createRequest(int timeoutMs) {
+            DeleteGroupsRequest.Builder createRequest(int timeoutMs) {
                 return new DeleteGroupsRequest.Builder(
                     new DeleteGroupsRequestData()
                         .setGroupsNames(Collections.singletonList(context.getGroupId()))
@@ -3118,7 +3133,7 @@ public class KafkaAdminClient extends AdminClient {
         return new Call("deleteConsumerGroupOffsets", context.getDeadline(), new ConstantNodeIdProvider(context.getNode().get().id())) {
 
             @Override
-            AbstractRequest.Builder createRequest(int timeoutMs) {
+            OffsetDeleteRequest.Builder createRequest(int timeoutMs) {
                 final OffsetDeleteRequestTopicCollection topics = new OffsetDeleteRequestTopicCollection();
 
                 partitions.stream().collect(Collectors.groupingBy(TopicPartition::topic)).forEach((topic, topicPartitions) -> {
@@ -3189,7 +3204,7 @@ public class KafkaAdminClient extends AdminClient {
                 new ControllerNodeProvider()) {
 
             @Override
-            public AbstractRequest.Builder createRequest(int timeoutMs) {
+            public ElectLeadersRequest.Builder createRequest(int timeoutMs) {
                 return new ElectLeadersRequest.Builder(electionType, topicPartitions, timeoutMs);
             }
 
@@ -3254,7 +3269,7 @@ public class KafkaAdminClient extends AdminClient {
                 new ControllerNodeProvider()) {
 
             @Override
-            public AbstractRequest.Builder createRequest(int timeoutMs) {
+            public AlterPartitionReassignmentsRequest.Builder createRequest(int timeoutMs) {
                 AlterPartitionReassignmentsRequestData data =
                         new AlterPartitionReassignmentsRequestData();
                 for (Map.Entry<String, Map<Integer, Optional<NewPartitionReassignment>>> entry :
@@ -3389,7 +3404,7 @@ public class KafkaAdminClient extends AdminClient {
             new ControllerNodeProvider()) {
 
             @Override
-            AbstractRequest.Builder createRequest(int timeoutMs) {
+            ListPartitionReassignmentsRequest.Builder createRequest(int timeoutMs) {
                 ListPartitionReassignmentsRequestData listData = new ListPartitionReassignmentsRequestData();
                 listData.setTimeoutMs(timeoutMs);
 
@@ -3485,7 +3500,7 @@ public class KafkaAdminClient extends AdminClient {
                         context.getDeadline(),
                         new ConstantNodeIdProvider(context.getNode().get().id())) {
             @Override
-            AbstractRequest.Builder createRequest(int timeoutMs) {
+            LeaveGroupRequest.Builder createRequest(int timeoutMs) {
                 return new LeaveGroupRequest.Builder(context.getGroupId(),
                                                      context.getOptions().getMembers());
             }
@@ -3518,4 +3533,201 @@ public class KafkaAdminClient extends AdminClient {
             }
         };
     }
+
+    @Override
+    public AlterOffsetsResult alterConsumerGroupOffsets(String groupId, Map<TopicPartition,
+                                                        OffsetAndMetadata> offsets,
+                                                        AlterOffsetsOptions options) {
+        final KafkaFutureImpl<Map<TopicPartition, KafkaFutureImpl<Void>>> future = new KafkaFutureImpl<>();
+        final Map<TopicPartition, KafkaFutureImpl<Void>> futures = new HashMap<>(offsets.size());
+        for (TopicPartition tp: offsets.keySet()) {
+            futures.put(tp, new KafkaFutureImpl<>());
+        }
+
+        final long startFindCoordinatorMs = time.milliseconds();
+        final long deadline = calcDeadlineMs(startFindCoordinatorMs, options.timeoutMs());
+
+        ConsumerGroupOperationContext<Map<TopicPartition, KafkaFutureImpl<Void>>, AlterOffsetsOptions> context =
+                new ConsumerGroupOperationContext<>(groupId, options, deadline, future);
+
+        Call findCoordinatorCall = getFindCoordinatorCall(context,
+            () -> KafkaAdminClient.this.getAlterConsumerGroupOffsetsCall(context, offsets, futures));
+        runnable.call(findCoordinatorCall, startFindCoordinatorMs);
+
+        return new AlterOffsetsResult(future);
+    }
+
+    private Call getAlterConsumerGroupOffsetsCall(ConsumerGroupOperationContext<Map<TopicPartition, KafkaFutureImpl<Void>>,
+            AlterOffsetsOptions> context, Map<TopicPartition,
+            OffsetAndMetadata> offsets, Map<TopicPartition, KafkaFutureImpl<Void>> futures) {
+
+        return new Call("commitOffsets", context.getDeadline(), new ConstantNodeIdProvider(context.getNode().get().id())) {
+
+            @Override
+            OffsetCommitRequest.Builder createRequest(int timeoutMs) {
+                List<OffsetCommitRequestTopic> topics = new ArrayList<>();
+                Map<String, List<OffsetCommitRequestPartition>> offsetData = new HashMap<>();
+                for (Map.Entry<TopicPartition, OffsetAndMetadata> entry : offsets.entrySet()) {
+                    String topic = entry.getKey().topic();
+                    OffsetAndMetadata oam = entry.getValue();
+                    List<OffsetCommitRequestPartition> partitions = offsetData.getOrDefault(topic, new ArrayList<>());
+                    OffsetCommitRequestPartition partition = new OffsetCommitRequestPartition()
+                            .setCommittedOffset(oam.offset())
+                            .setCommittedLeaderEpoch(oam.leaderEpoch().orElse(-1))
+                            .setCommittedMetadata(oam.metadata())
+                            .setCommitTimestamp(System.nanoTime())
+                            .setPartitionIndex(entry.getKey().partition());
+                    partitions.add(partition);
+                    offsetData.put(topic, partitions);
+                }
+                for (Map.Entry<String, List<OffsetCommitRequestPartition>> entry : offsetData.entrySet()) {
+                    OffsetCommitRequestTopic topic = new OffsetCommitRequestTopic()
+                            .setName(entry.getKey())
+                            .setPartitions(entry.getValue());
+                    topics.add(topic);
+                }
+                OffsetCommitRequestData data = new OffsetCommitRequestData()
+                    .setGroupId(context.getGroupId())
+                    .setTopics(topics);
+                return new OffsetCommitRequest.Builder(data);
+            }
+
+            @Override
+            void handleResponse(AbstractResponse abstractResponse) {
+                final OffsetCommitResponse response = (OffsetCommitResponse) abstractResponse;
+
+                for (OffsetCommitResponseTopic topic : response.data().topics()) {
+                    for (OffsetCommitResponsePartition partition : topic.partitions()) {
+                        TopicPartition tp = new TopicPartition(topic.name(), partition.partitionIndex());
+                        KafkaFutureImpl<Void> future = futures.get(tp);
+                        Errors error = Errors.forCode(partition.errorCode());
+                        if (error != Errors.NONE) {
+                            future.completeExceptionally(error.exception());
+                        } else {
+                            future.complete(null);
+                        }
+                    }
+                }
+                context.getFuture().complete(futures);
+            }
+
+            @Override
+            void handleFailure(Throwable throwable) {
+                for (KafkaFutureImpl<?> future : futures.values()) {
+                    future.completeExceptionally(throwable);
+                }
+            }
+        };
+    }
+
+    @Override
+    public ListOffsetsResult listOffsets(Map<TopicPartition, OffsetSpec> topicPartitionOffsets,
+                                         ListOffsetsOptions options) {
+
+        // preparing topics list for asking metadata about them
+        final Map<TopicPartition, KafkaFutureImpl<ListOffsetsResultInfo>> futures = new HashMap<>(topicPartitionOffsets.size());
+        final Set<String> topics = new HashSet<>();
+        for (TopicPartition topicPartition : topicPartitionOffsets.keySet()) {
+            topics.add(topicPartition.topic());
+            futures.put(topicPartition, new KafkaFutureImpl<>());
+        }
+
+        final long nowMetadata = time.milliseconds();
+        final long deadline = calcDeadlineMs(nowMetadata, options.timeoutMs());
+        // asking for topics metadata for getting partitions leaders
+        runnable.call(new Call("topicsMetadata", deadline, new LeastLoadedNodeProvider()) {
+
+            @Override
+            MetadataRequest.Builder createRequest(int timeoutMs) {
+                return new MetadataRequest.Builder(new MetadataRequestData()
+                    .setTopics(convertToMetadataRequestTopic(topics))
+                    .setAllowAutoTopicCreation(false));
+            }
+
+            @Override
+            void handleResponse(AbstractResponse abstractResponse) {
+                MetadataResponse response = (MetadataResponse) abstractResponse;
+
+                Map<String, Errors> errors = response.errors();
+                Cluster cluster = response.cluster();
+
+                // completing futures for topics with errors
+                for (Map.Entry<String, Errors> topicError : errors.entrySet()) {
+                    for (Map.Entry<TopicPartition, KafkaFutureImpl<ListOffsetsResultInfo>> future: futures.entrySet()) {
+                        if (future.getKey().topic().equals(topicError.getKey())) {
+                            future.getValue().completeExceptionally(topicError.getValue().exception());
+                        }
+                    }
+                }
+
+                // grouping topic partitions per leader
+                Map<Node, Map<TopicPartition, ListOffsetRequest.PartitionData>> leaders = new HashMap<>();
+                Map<TopicPartition, Optional<Integer>> leaderEpochs = new HashMap<>();
+                for (TopicMetadata topicMetadata : response.topicMetadata()) {
+                    for (PartitionMetadata partitionMetadata : topicMetadata.partitionMetadata()) {
+                        leaderEpochs.put(new TopicPartition(topicMetadata.topic(), partitionMetadata.partition()), partitionMetadata.leaderEpoch());
+                    }
+                }
+                for (Map.Entry<TopicPartition, OffsetSpec> entry: topicPartitionOffsets.entrySet()) {
+
+                    // avoid sending listOffsets request for topics with errors
+                    if (!errors.containsKey(entry.getKey().topic())) {
+                        Node node = cluster.leaderFor(entry.getKey());
+                        if (node != null) {
+                            if (!leaders.containsKey(node))
+                                leaders.put(node, new HashMap<>());
+                            leaders.get(node).put(entry.getKey(), new ListOffsetRequest.PartitionData(entry.getValue().offsetQuery(), leaderEpochs.get(entry.getKey())));
+                        } else {
+                            KafkaFutureImpl<ListOffsetsResultInfo> future = futures.get(entry.getKey());
+                            future.completeExceptionally(Errors.LEADER_NOT_AVAILABLE.exception());
+                        }
+                    }
+                }
+
+                for (final Map.Entry<Node, Map<TopicPartition, ListOffsetRequest.PartitionData>> entry: leaders.entrySet()) {
+
+                    final long nowListOffset = time.milliseconds();
+                    final int brokerId = entry.getKey().id();
+
+                    runnable.call(new Call("listOffsets", deadline, new ConstantNodeIdProvider(brokerId)) {
+
+                        @Override
+                        ListOffsetRequest.Builder createRequest(int timeoutMs) {
+                            return ListOffsetRequest.Builder
+                                    .forConsumer(true, options.isolationLevel())
+                                    .setTargetTimes(entry.getValue());
+                        }
+
+                        @Override
+                        void handleResponse(AbstractResponse abstractResponse) {
+                            ListOffsetResponse response = (ListOffsetResponse) abstractResponse;
+                            for (Entry<TopicPartition, PartitionData> result : response.responseData().entrySet()) {
+
+                                KafkaFutureImpl<ListOffsetsResultInfo> future = futures.get(result.getKey());
+                                PartitionData partitionData = result.getValue();
+                                if (partitionData.error == Errors.NONE) {
+                                    future.complete(new ListOffsetsResultInfo(partitionData.offset, partitionData.timestamp, partitionData.leaderEpoch));
+                                } else {
+                                    future.completeExceptionally(result.getValue().error.exception());
+                                }
+                            }
+                        }
+
+                        @Override
+                        void handleFailure(Throwable throwable) {
+                            completeAllExceptionally(futures.values(), throwable);
+                        }
+                    }, nowListOffset);
+                }
+            }
+
+            @Override
+            void handleFailure(Throwable throwable) {
+                completeAllExceptionally(futures.values(), throwable);
+            }
+        }, nowMetadata);
+
+        return new ListOffsetsResult(new HashMap<>(futures));
+    }
+
 }

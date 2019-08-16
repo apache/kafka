@@ -2022,8 +2022,8 @@ public class KafkaAdminClientTest {
                             .setPartitions(Collections.singletonList(normalPartitionResponse))));
             env.kafkaClient().prepareResponse(new AlterPartitionReassignmentsResponse(responseData1));
             AlterPartitionReassignmentsResult result1 = env.adminClient().alterPartitionReassignments(reassignments);
-            Future future1 = result1.all();
-            Future future2 = result1.values().get(tp1);
+            Future<Void> future1 = result1.all();
+            Future<Void> future2 = result1.values().get(tp1);
             TestUtils.assertFutureError(future1, UnknownServerException.class);
             TestUtils.assertFutureError(future2, UnknownServerException.class);
 
