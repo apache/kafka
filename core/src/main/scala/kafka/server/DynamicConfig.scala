@@ -115,7 +115,8 @@ object DynamicConfig {
       val unknownKeys = propKeys.filter(!names.contains(_))
       require(unknownKeys.isEmpty, s"Unknown Dynamic Configuration: $unknownKeys.")
     }
+    val propResolved = DynamicBrokerConfig.resolveVariableConfigs(props)
     //ValidateValues
-    configDef.parse(props)
+    configDef.parse(propResolved)
   }
 }
