@@ -224,23 +224,6 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
     val SslTruststoreTypeVal = "${file:ssl.truststore.type:storetype}"
     val SslKeystorePasswordVal = "${file:ssl.keystore.password:password}"
 
-    def executeConfigCommand(props: Properties): Unit = {
-      val propsFile = TestUtils.tempFile()
-      val propsWriter = new FileWriter(propsFile)
-      try {
-        clientProps(SecurityProtocol.SSL).asScala.foreach {
-          case (k, v) => propsWriter.write(s"$k=$v\n")
-        }
-      } finally {
-        propsWriter.close()
-      }
-
-      servers.foreach { server =>
-        val args = buildConfigCommandParameters(server, propsFile.getAbsolutePath, props)
-        ConfigCommand.main(args)
-      }
-    }
-
     val configPrefix = listenerPrefix(SecureExternal)
     var brokerConfigs = describeConfig(adminClients.head, servers).entries.asScala
     // the following are values before updated
@@ -269,7 +252,7 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
     // 3. update password property using config provider
     updatedProps.put(configPrefix+KafkaConfig.SslKeystorePasswordProp, SslKeystorePasswordVal)
 
-    executeConfigCommand(updatedProps)
+    alterConfigsUsingConfigCommand(updatedProps)
     waitForConfig(TestMetricsReporter.PollingIntervalProp, "1000")
     waitForConfig(configPrefix+KafkaConfig.SslTruststoreTypeProp, "JKS")
     waitForConfig(configPrefix+KafkaConfig.SslKeystorePasswordProp, "ServerPassword")
@@ -289,7 +272,7 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
 
     // verify the update
     // 1. verify update not occurring if the value of property is same.
-    executeConfigCommand(updatedProps)
+    alterConfigsUsingConfigCommand(updatedProps)
     waitForConfig(TestMetricsReporter.PollingIntervalProp, "1000")
     reporters.foreach { reporter =>
       reporter.verifyState(reconfigureCount = 0, deleteCount = 0, pollingInterval = 1000)
@@ -297,7 +280,7 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
 
     // 2. verify update occurring if the value of property changed.
     updatedProps.put(TestMetricsReporter.PollingIntervalProp, PollingIntervalUpdateVal)
-    executeConfigCommand(updatedProps)
+    alterConfigsUsingConfigCommand(updatedProps)
     waitForConfig(TestMetricsReporter.PollingIntervalProp, "2000")
     reporters.foreach { reporter =>
       reporter.verifyState(reconfigureCount = 1, deleteCount = 0, pollingInterval = 2000)
@@ -1261,21 +1244,7 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
   private def alterSslKeystoreUsingConfigCommand(props: Properties, listener: String): Unit = {
     val configPrefix = listenerPrefix(listener)
     val newProps = securityProps(props, KEYSTORE_PROPS, configPrefix)
-
-    val propsFile = TestUtils.tempFile()
-    val propsWriter = new FileWriter(propsFile)
-    try {
-      clientProps(SecurityProtocol.SSL).asScala.foreach {
-        case (k, v) => propsWriter.write(s"$k=$v\n")
-      }
-    } finally {
-      propsWriter.close()
-    }
-
-    servers.foreach { server =>
-      val args = buildConfigCommandParameters(server, propsFile.getAbsolutePath, newProps)
-      ConfigCommand.main(args)
-    }
+    alterConfigsUsingConfigCommand(newProps)
     waitForConfig(s"$configPrefix$SSL_KEYSTORE_LOCATION_CONFIG", props.getProperty(SSL_KEYSTORE_LOCATION_CONFIG))
   }
 
@@ -1507,13 +1476,25 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
     }
   }
 
-  private def buildConfigCommandParameters(server: KafkaServer, propsFilePath: String, props: Properties): Array[String] = {
-    Array("--bootstrap-server", TestUtils.bootstrapServers(servers, new ListenerName(SecureInternal)),
-      "--command-config", propsFilePath,
-      "--alter", "--add-config",
-      props.asScala.map { case (k, v) => s"$k=$v" }.mkString(","),
-      "--entity-type", "brokers",
-      "--entity-name", server.config.brokerId.toString)
+  private def alterConfigsUsingConfigCommand(props: Properties): Unit = {
+    val propsFile = TestUtils.tempFile()
+    val propsWriter = new FileWriter(propsFile)
+    try {
+      clientProps(SecurityProtocol.SSL).asScala.foreach {
+        case (k, v) => propsWriter.write(s"$k=$v\n")
+      }
+    } finally {
+      propsWriter.close()
+    }
+
+    servers.foreach { server =>
+      val args = Array("--bootstrap-server", TestUtils.bootstrapServers(servers, new ListenerName(SecureInternal)),
+        "--command-config", propsFile.getAbsolutePath,
+        "--alter", "--add-config", props.asScala.map { case (k, v) => s"$k=$v" }.mkString(","),
+        "--entity-type", "brokers",
+        "--entity-name", server.config.brokerId.toString)
+      ConfigCommand.main(args)
+    }
   }
 
   private abstract class ClientBuilder[T]() {
