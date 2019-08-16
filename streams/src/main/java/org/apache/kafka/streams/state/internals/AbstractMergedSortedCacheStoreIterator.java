@@ -148,11 +148,6 @@ abstract class AbstractMergedSortedCacheStoreIterator<K, KS, V, VS> implements K
     }
 
     @Override
-    public void remove() {
-        throw new UnsupportedOperationException("remove() is not supported in " + getClass().getName());
-    }
-
-    @Override
     public void close() {
         cacheIterator.close();
         storeIterator.close();

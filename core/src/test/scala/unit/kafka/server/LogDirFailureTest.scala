@@ -51,7 +51,7 @@ class LogDirFailureTest extends IntegrationTestHarness {
   this.serverConfig.setProperty(KafkaConfig.NumReplicaFetchersProp, "1")
 
   @Before
-  override def setUp() {
+  override def setUp(): Unit = {
     super.setUp()
     createTopic(topic, partitionNum, brokerCount)
   }
@@ -62,13 +62,13 @@ class LogDirFailureTest extends IntegrationTestHarness {
   }
 
   @Test
-  def testIOExceptionDuringLogRoll() {
+  def testIOExceptionDuringLogRoll(): Unit = {
     testProduceAfterLogDirFailureOnLeader(Roll)
   }
 
   @Test
   // Broker should halt on any log directory failure if inter-broker protocol < 1.0
-  def brokerWithOldInterBrokerProtocolShouldHaltOnLogDirFailure() {
+  def brokerWithOldInterBrokerProtocolShouldHaltOnLogDirFailure(): Unit = {
     @volatile var statusCodeOption: Option[Int] = None
     Exit.setHaltProcedure { (statusCode, _) =>
       statusCodeOption = Some(statusCode)
@@ -102,12 +102,12 @@ class LogDirFailureTest extends IntegrationTestHarness {
   }
 
   @Test
-  def testIOExceptionDuringCheckpoint() {
+  def testIOExceptionDuringCheckpoint(): Unit = {
     testProduceAfterLogDirFailureOnLeader(Checkpoint)
   }
 
   @Test
-  def testReplicaFetcherThreadAfterLogDirFailureOnFollower() {
+  def testReplicaFetcherThreadAfterLogDirFailureOnFollower(): Unit = {
     this.producerConfig.setProperty(ProducerConfig.RETRIES_CONFIG, "0")
     val producer = createProducer()
     val partition = new TopicPartition(topic, 0)
@@ -229,7 +229,7 @@ class LogDirFailureTest extends IntegrationTestHarness {
     assertTrue(leaderServer.replicaManager.localLog(partition).isEmpty)
   }
 
-  private def subscribeAndWaitForAssignment(topic: String, consumer: KafkaConsumer[Array[Byte], Array[Byte]]) {
+  private def subscribeAndWaitForAssignment(topic: String, consumer: KafkaConsumer[Array[Byte], Array[Byte]]): Unit = {
     consumer.subscribe(Collections.singletonList(topic))
     TestUtils.pollUntilTrue(consumer, () => !consumer.assignment.isEmpty, "Expected non-empty assignment")
   }

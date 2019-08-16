@@ -38,7 +38,7 @@ class ServerGenerateBrokerIdTest extends ZooKeeperTestHarness {
   var servers: Seq[KafkaServer] = Seq()
 
   @Before
-  override def setUp() {
+  override def setUp(): Unit = {
     super.setUp()
     props1 = TestUtils.createBrokerConfig(-1, zkConnect)
     config1 = KafkaConfig.fromProps(props1)
@@ -47,13 +47,13 @@ class ServerGenerateBrokerIdTest extends ZooKeeperTestHarness {
   }
 
   @After
-  override def tearDown() {
+  override def tearDown(): Unit = {
     TestUtils.shutdownServers(servers)
     super.tearDown()
   }
 
   @Test
-  def testAutoGenerateBrokerId() {
+  def testAutoGenerateBrokerId(): Unit = {
     var server1 = new KafkaServer(config1, threadNamePrefix = Option(this.getClass.getName))
     server1.startup()
     server1.shutdown()
@@ -67,7 +67,7 @@ class ServerGenerateBrokerIdTest extends ZooKeeperTestHarness {
   }
 
   @Test
-  def testUserConfigAndGeneratedBrokerId() {
+  def testUserConfigAndGeneratedBrokerId(): Unit = {
     // start the server with broker.id as part of config
     val server1 = new KafkaServer(config1, threadNamePrefix = Option(this.getClass.getName))
     val server2 = new KafkaServer(config2, threadNamePrefix = Option(this.getClass.getName))
@@ -88,7 +88,7 @@ class ServerGenerateBrokerIdTest extends ZooKeeperTestHarness {
   }
 
   @Test
-  def testDisableGeneratedBrokerId() {
+  def testDisableGeneratedBrokerId(): Unit = {
     val props3 = TestUtils.createBrokerConfig(3, zkConnect)
     props3.put(KafkaConfig.BrokerIdGenerationEnableProp, "false")
     // Set reserve broker ids to cause collision and ensure disabling broker id generation ignores the setting
@@ -103,7 +103,7 @@ class ServerGenerateBrokerIdTest extends ZooKeeperTestHarness {
   }
 
   @Test
-  def testMultipleLogDirsMetaProps() {
+  def testMultipleLogDirsMetaProps(): Unit = {
     // add multiple logDirs and check if the generate brokerId is stored in all of them
     val logDirs = props1.getProperty("log.dir")+ "," + TestUtils.tempDir().getAbsolutePath +
     "," + TestUtils.tempDir().getAbsolutePath
@@ -127,7 +127,7 @@ class ServerGenerateBrokerIdTest extends ZooKeeperTestHarness {
   }
 
   @Test
-  def testConsistentBrokerIdFromUserConfigAndMetaProps() {
+  def testConsistentBrokerIdFromUserConfigAndMetaProps(): Unit = {
     // check if configured brokerId and stored brokerId are equal or throw InconsistentBrokerException
     var server1 = new KafkaServer(config1, threadNamePrefix = Option(this.getClass.getName)) //auto generate broker Id
     server1.startup()
@@ -144,7 +144,7 @@ class ServerGenerateBrokerIdTest extends ZooKeeperTestHarness {
   }
 
   @Test
-  def testBrokerMetadataOnIdCollision() {
+  def testBrokerMetadataOnIdCollision(): Unit = {
     // Start a good server
     val propsA = TestUtils.createBrokerConfig(1, zkConnect)
     val configA = KafkaConfig.fromProps(propsA)

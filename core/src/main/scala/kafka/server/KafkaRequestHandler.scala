@@ -43,7 +43,7 @@ class KafkaRequestHandler(id: Int,
   private val shutdownComplete = new CountDownLatch(1)
   @volatile private var stopped = false
 
-  def run() {
+  def run(): Unit = {
     while (!stopped) {
       // We use a single meter for aggregate idle percentage for the thread pool.
       // Since meter is calculated as total_recorded_value / time_window and
@@ -188,7 +188,7 @@ class BrokerTopicMetrics(name: Option[String]) extends KafkaMetricsGroup {
     }
   }
 
-  def close() {
+  def close(): Unit = {
     removeMetricHelper(BrokerTopicStats.MessagesInPerSec, tags)
     removeMetricHelper(BrokerTopicStats.BytesInPerSec, tags)
     removeMetricHelper(BrokerTopicStats.BytesOutPerSec, tags)
@@ -231,20 +231,20 @@ class BrokerTopicStats {
   def topicStats(topic: String): BrokerTopicMetrics =
     stats.getAndMaybePut(topic)
 
-  def updateReplicationBytesIn(value: Long) {
+  def updateReplicationBytesIn(value: Long): Unit = {
     allTopicsStats.replicationBytesInRate.foreach { metric =>
       metric.mark(value)
     }
   }
 
-  private def updateReplicationBytesOut(value: Long) {
+  private def updateReplicationBytesOut(value: Long): Unit = {
     allTopicsStats.replicationBytesOutRate.foreach { metric =>
       metric.mark(value)
     }
   }
 
   // This method only removes metrics only used for leader
-  def removeOldLeaderMetrics(topic: String) {
+  def removeOldLeaderMetrics(topic: String): Unit = {
     val topicMetrics = topicStats(topic)
     if (topicMetrics != null) {
       topicMetrics.removeMetricHelper(BrokerTopicStats.MessagesInPerSec, topicMetrics.tags)
@@ -264,13 +264,13 @@ class BrokerTopicStats {
       topicMetrics.removeMetricHelper(BrokerTopicStats.ReplicationBytesInPerSec, topicMetrics.tags)
   }
 
-  def removeMetrics(topic: String) {
+  def removeMetrics(topic: String): Unit = {
     val metrics = stats.remove(topic)
     if (metrics != null)
       metrics.close()
   }
 
-  def updateBytesOut(topic: String, isFollower: Boolean, value: Long) {
+  def updateBytesOut(topic: String, isFollower: Boolean, value: Long): Unit = {
     if (isFollower) {
       updateReplicationBytesOut(value)
     } else {
