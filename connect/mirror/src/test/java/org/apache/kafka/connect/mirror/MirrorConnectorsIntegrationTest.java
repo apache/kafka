@@ -129,6 +129,9 @@ public class MirrorConnectorsIntegrationTest {
         consumer2.commitSync();
         consumer2.close();
 
+        log.info("primary REST service: {}", primary.endpointForResource("connectors"));
+        log.info("backup REST service: {}", backup.endpointForResource("connectors"));
+        
         // now that the brokers are running, we can finish setting up the Connectors
         mm2Props.put("primary.bootstrap.servers", primary.kafka().bootstrapServers());
         mm2Props.put("backup.bootstrap.servers", backup.kafka().bootstrapServers());

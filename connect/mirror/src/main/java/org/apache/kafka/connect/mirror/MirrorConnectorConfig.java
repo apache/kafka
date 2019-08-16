@@ -59,6 +59,24 @@ public class MirrorConnectorConfig extends AbstractConfig {
     public static final String REPLICATION_FACTOR = "replication.factor";
     private static final String REPLICATION_FACTOR_DOC = "Replication factor for newly created remote topics.";
     public static final int REPLICATION_FACTOR_DEFAULT = 2;
+    public static final String TOPICS = DefaultTopicFilter.TOPICS_WHITELIST_CONFIG;
+    public static final String TOPICS_DEFAULT = DefaultTopicFilter.TOPICS_WHITELIST_DEFAULT;
+    private static final String TOPICS_DOC = "Topics to replicate. Supports comma-separated topic names and regexes.";
+    public static final String TOPICS_BLACKLIST = DefaultTopicFilter.TOPICS_BLACKLIST_CONFIG;
+    public static final String TOPICS_BLACKLIST_DEFAULT = DefaultTopicFilter.TOPICS_BLACKLIST_DEFAULT;
+    private static final String TOPICS_BLACKLIST_DOC = "Blacklisted topics. Supports comma-separated topic names and regexes."
+            + " Blacklists take precedence over whitelists.";
+    public static final String GROUPS = DefaultGroupFilter.GROUPS_WHITELIST_CONFIG;
+    public static final String GROUPS_DEFAULT = DefaultGroupFilter.GROUPS_WHITELIST_DEFAULT;
+    private static final String GROUPS_DOC = "Consumer groups to replicate. Supports comma-separated group IDs and regexes.";
+    public static final String GROUPS_BLACKLIST = DefaultGroupFilter.GROUPS_BLACKLIST_CONFIG;
+    public static final String GROUPS_BLACKLIST_DEFAULT = DefaultGroupFilter.GROUPS_BLACKLIST_DEFAULT;
+    private static final String GROUPS_BLACKLIST_DOC = "Blacklisted groups. Supports comma-separated group IDs and regexes."
+            + " Blacklists take precedence over whitelists.";
+    public static final String CONFIG_PROPERTIES_BLACKLIST = DefaultConfigPropertyFilter.CONFIG_PROPERTIES_BLACKLIST_CONFIG;
+    public static final String CONFIG_PROPERTIES_BLACKLIST_DEFAULT = DefaultConfigPropertyFilter.CONFIG_PROPERTIES_BLACKLIST_DEFAULT;
+    private static final String CONFIG_PROPERTIES_BLACKLIST_DOC = "Topic config properties that should not be replicated. Supports "
+            + "comma-separated property names and regexes.";
 
     public static final String INTERNAL_TOPIC_REPLICATION_FACTOR = "internal.topic.replication.factor";
     public static final String INTERNAL_TOPIC_REPLICATION_FACTOR_DOC = "Replication factor for internal topics.";
@@ -329,6 +347,36 @@ public class MirrorConnectorConfig extends AbstractConfig {
                     true,
                     ConfigDef.Importance.LOW,
                     ENABLED_DOC)
+            .define(
+                    TOPICS,
+                    ConfigDef.Type.LIST,
+                    TOPICS_DEFAULT,
+                    ConfigDef.Importance.HIGH,
+                    TOPICS_DOC) 
+            .define(
+                    TOPICS_BLACKLIST,
+                    ConfigDef.Type.LIST,
+                    TOPICS_BLACKLIST_DEFAULT,
+                    ConfigDef.Importance.HIGH,
+                    TOPICS_BLACKLIST_DOC)
+            .define(
+                    GROUPS,
+                    ConfigDef.Type.LIST,
+                    GROUPS_DEFAULT,
+                    ConfigDef.Importance.HIGH,
+                    GROUPS_DOC) 
+            .define(
+                    GROUPS_BLACKLIST,
+                    ConfigDef.Type.LIST,
+                    GROUPS_BLACKLIST_DEFAULT,
+                    ConfigDef.Importance.HIGH,
+                    GROUPS_BLACKLIST_DOC)
+            .define(
+                    CONFIG_PROPERTIES_BLACKLIST,
+                    ConfigDef.Type.LIST,
+                    CONFIG_PROPERTIES_BLACKLIST_DEFAULT,
+                    ConfigDef.Importance.HIGH,
+                    CONFIG_PROPERTIES_BLACKLIST_DOC)
             .define(
                     TOPIC_FILTER_CLASS,
                     ConfigDef.Type.CLASS,

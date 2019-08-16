@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.connect.mirror;
 
-import org.apache.kafka.connect.runtime.ConnectorConfig;
-import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.common.config.types.Password;
 
 import org.junit.Test;
@@ -101,13 +99,25 @@ public class MirrorMakerConfigTest {
     public void testIncludesConnectorConfigProperties() {
         MirrorMakerConfig mirrorConfig = new MirrorMakerConfig(makeProps(
             "clusters", "a, b",
-            "tasks.max", "100"));
+            "tasks.max", "100",
+            "topics", "topic-1",
+            "groups", "group-2",
+            "config.properties.blacklist", "property-3",
+            "xxx", "yyy"));
         SourceAndTarget sourceAndTarget = new SourceAndTarget("source", "target");
         Map<String, String> connectorProps = mirrorConfig.connectorBaseConfig(sourceAndTarget,
             MirrorSourceConnector.class);
-        ConnectorConfig connectorConfig = new ConnectorConfig(new Plugins(connectorProps), connectorProps);
+        MirrorConnectorConfig connectorConfig = new MirrorConnectorConfig(connectorProps);
         assertEquals("Connector properties like tasks.max should be passed through to underlying Connectors.",
             100, (int) connectorConfig.getInt("tasks.max"));
+        assertEquals("Topics whitelist should be passed through to underlying Connectors.",
+            Arrays.asList("topic-1"), connectorConfig.getList("topics"));
+        assertEquals("Groups whitelist should be passed through to underlying Connectors.",
+            Arrays.asList("group-2"), connectorConfig.getList("groups"));
+        assertEquals("Config properties blacklist should be passed through to underlying Connectors.",
+            Arrays.asList("property-3"), connectorConfig.getList("config.properties.blacklist"));
+        assertFalse("Unknown properties should not be passed through to Connectors.",
+            connectorConfig.originals().containsKey("xxx"));
     }
 
     @Test
