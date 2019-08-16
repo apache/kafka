@@ -727,13 +727,11 @@ public interface KTable<K, V> {
      * <p>
      * This controls what updates downstream table and stream operations will receive.
      *
-     * @param suppressed    Configuration object determining what, if any, updates to suppress
-     * @param materialized  a {@link Materialized} that describes how the {@link StateStore} for the suppression buffer
-     *                      should be materialized. Cannot be {@code null}
+     * @param suppressed            Configuration object determining what, if any, updates to suppress
+     * @param queryableStoreName    A queryableStoreName of suppression buffer
      * @return A new {@code KTable} with the desired suppression characteristics.
      */
-    KTable<K, V> suppress(final Suppressed<? super K> suppressed,
-                          final Materialized<K, V, KeyValueStore<Bytes, byte[]>> materialized);
+    KTable<K, V> suppress(final Suppressed<? super K> suppressed, final String queryableStoreName);
 
     /**
      * Create a new {@code KTable} by transforming the value of each record in this {@code KTable} into a new value

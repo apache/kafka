@@ -172,6 +172,19 @@ class KTable[K, V](val inner: KTableJ[K, V]) {
     inner.suppress(suppressed)
 
   /**
+   * Suppress some updates from this changelog stream, determined by the supplied [[Suppressed]] configuration.
+   *
+   * This controls what updates downstream table and stream operations will receive.
+   *
+   * @param suppressed Configuration object determining what, if any, updates to suppress.
+   * @param queryableStoreName A queryableStoreName of suppression buffer.
+   * @return A new KTable with the desired suppression characteristics.
+   * @see `org.apache.kafka.streams.kstream.KTable#suppress`
+   */
+  def suppress(suppressed: Suppressed[_ >: K], queryableStoreName: String): KTable[K, V] =
+    inner.suppress(suppressed, queryableStoreName)
+
+  /**
    * Create a new `KTable` by transforming the value of each record in this `KTable` into a new value, (with possibly new type).
    * Transform the value of each input record into a new value (with possible new type) of the output record.
    * A `ValueTransformerWithKey` (provided by the given `ValueTransformerWithKeySupplier`) is applied to each input

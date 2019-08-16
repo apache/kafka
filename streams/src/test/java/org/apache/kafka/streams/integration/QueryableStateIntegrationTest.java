@@ -621,7 +621,7 @@ public class QueryableStateIntegrationTest {
         t1
             .suppress(
                 untilTimeLimit(ofMillis(MAX_VALUE), unbounded()),
-                Materialized.as(storeName))
+                storeName)
             .toStream()
             .to(outputTopic, Produced.with(Serdes.String(), Serdes.String()));
 

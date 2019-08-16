@@ -512,17 +512,14 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
     }
 
     @Override
-    public KTable<K, V> suppress(final Suppressed<? super K> suppressed,
-                                 final Materialized<K, V, KeyValueStore<Bytes, byte[]>> materialized) {
+    public KTable<K, V> suppress(final Suppressed<? super K> suppressed, final String queryableStoreName) {
         Objects.requireNonNull(suppressed, "suppressed can't be null");
-        Objects.requireNonNull(materialized, "materialized can't be null");
-        final MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>> materializedInternal = new MaterializedInternal<>(materialized);
-        return doSuppress(suppressed, materializedInternal);
+        Objects.requireNonNull(queryableStoreName, "queryableStoreName can't be null");
+        return doSuppress(suppressed, queryableStoreName);
     }
 
     @SuppressWarnings("unchecked")
-    private KTable<K, V> doSuppress(final Suppressed<? super K> suppressed,
-                                    final MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>> materializedInternal) {
+    private KTable<K, V> doSuppress(final Suppressed<? super K> suppressed, final String queryableStoreName) {
         final String name;
         if (suppressed instanceof NamedSuppressed) {
             final String givenName = ((NamedSuppressed<?>) suppressed).name();
@@ -534,8 +531,8 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
         final SuppressedInternal<K> suppressedInternal = buildSuppress(suppressed, name);
 
         final String storeName;
-        if (materializedInternal != null) {
-            storeName = materializedInternal.queryableStoreName();
+        if (queryableStoreName != null) {
+            storeName = queryableStoreName;
         } else {
             if (suppressedInternal.name() != null) {
                 storeName = suppressedInternal.name() + "-store";
@@ -565,7 +562,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
             keySerde,
             valSerde,
             Collections.singleton(this.name),
-            null,
+            queryableStoreName,
             suppressionSupplier,
             node,
             builder
