@@ -222,7 +222,12 @@ object ConsoleConsumer extends Logging {
       .describedAs("class")
       .ofType(classOf[String])
       .defaultsTo(classOf[DefaultMessageFormatter].getName)
-    val messageFormatterArgOpt = parser.accepts("property",
+    // Deprecated in favour of the more explicit formatter-property argument
+    val messageFormatterDeprecatedArgOpt = parser.accepts("property", "Deprecated. See formatter-property.")
+      .withRequiredArg
+      .describedAs("prop")
+      .ofType(classOf[String])
+    val messageFormatterArgOpt = parser.accepts("formatter-property",
       "The properties to initialize the message formatter. Default properties include:\n" +
         "\tprint.timestamp=true|false\n" +
         "\tprint.key=true|false\n" +
@@ -295,7 +300,14 @@ object ConsoleConsumer extends Logging {
     val partitionArg = if (options.has(partitionIdOpt)) Some(options.valueOf(partitionIdOpt).intValue) else None
     val skipMessageOnError = options.has(skipMessageOnErrorOpt)
     val messageFormatterClass = Class.forName(options.valueOf(messageFormatterOpt))
-    val formatterArgs = CommandLineUtils.parseKeyValueArgs(options.valuesOf(messageFormatterArgOpt).asScala)
+    val formatterArgsNew = CommandLineUtils.parseKeyValueArgs(options.valuesOf(messageFormatterArgOpt).asScala)
+    val formatterArgsDeprecated = CommandLineUtils.parseKeyValueArgs(options.valuesOf(messageFormatterDeprecatedArgOpt).asScala)
+    if (!formatterArgsDeprecated.isEmpty && !formatterArgsNew.isEmpty) {
+      CommandLineUtils.printUsageAndDie(parser, s"${messageFormatterDeprecatedArgOpt.forHelp()} is deprecated. It will be removed from future releases. Please use ${messageFormatterArgOpt} instead. You cannot use both.")
+    } else if (!formatterArgsDeprecated.isEmpty) {
+      System.err.println(s"${messageFormatterDeprecatedArgOpt.forHelp()} is deprecated. It will be removed from future releases. Please use ${messageFormatterArgOpt} instead.")
+    }
+    val formatterArgs = if (formatterArgsDeprecated.isEmpty) formatterArgsNew else formatterArgsDeprecated
     val maxMessages = if (options.has(maxMessagesOpt)) options.valueOf(maxMessagesOpt).intValue else -1
     val timeoutMs = if (options.has(timeoutMsOpt)) options.valueOf(timeoutMsOpt).intValue else -1
     val bootstrapServer = options.valueOf(bootstrapServerOpt)
@@ -310,7 +322,11 @@ object ConsoleConsumer extends Logging {
       formatterArgs.setProperty(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, valueDeserializer)
     }
 
-    formatter.init(formatterArgs)
+    try {
+      formatter.init(formatterArgs)
+    } catch {
+      case e:IllegalArgumentException => CommandLineUtils.printUsageAndDie(parser, e.getMessage)
+    }
 
     val topicOrFilterOpt = List(topicIdOpt, whitelistOpt).filter(options.has)
     if (topicOrFilterOpt.size != 1)
@@ -466,36 +482,62 @@ class DefaultMessageFormatter extends MessageFormatter {
   var keyDeserializer: Option[Deserializer[_]] = None
   var valueDeserializer: Option[Deserializer[_]] = None
 
-  override def init(props: Properties) {
-    if (props.containsKey("print.timestamp"))
-      printTimestamp = props.getProperty("print.timestamp").trim.equalsIgnoreCase("true")
-    if (props.containsKey("print.key"))
-      printKey = props.getProperty("print.key").trim.equalsIgnoreCase("true")
-    if (props.containsKey("print.value"))
-      printValue = props.getProperty("print.value").trim.equalsIgnoreCase("true")
-    if (props.containsKey("key.separator"))
-      keySeparator = props.getProperty("key.separator").getBytes(StandardCharsets.UTF_8)
-    if (props.containsKey("line.separator"))
-      lineSeparator = props.getProperty("line.separator").getBytes(StandardCharsets.UTF_8)
-    // Note that `toString` will be called on the instance returned by `Deserializer.deserialize`
-    if (props.containsKey("key.deserializer")) {
-      keyDeserializer = Some(Class.forName(props.getProperty("key.deserializer")).getDeclaredConstructor()
-        .newInstance().asInstanceOf[Deserializer[_]])
-      keyDeserializer.get.configure(propertiesWithKeyPrefixStripped("key.deserializer.", props).asScala.asJava, true)
+  override def init(propsOriginal: Properties) {
+    // copy the properties so we can modify it
+    val props = new Properties()
+    def process(key: String, processor: (String) => Unit) = {
+      if (props.containsKey(key)) {
+        processor(props.getProperty(key))
+        props.remove(key)
+      }
     }
-    // Note that `toString` will be called on the instance returned by `Deserializer.deserialize`
-    if (props.containsKey("value.deserializer")) {
-      valueDeserializer = Some(Class.forName(props.getProperty("value.deserializer")).getDeclaredConstructor()
-        .newInstance().asInstanceOf[Deserializer[_]])
-      valueDeserializer.get.configure(propertiesWithKeyPrefixStripped("value.deserializer.", props).asScala.asJava, false)
+
+    // https://github.com/scala/bug/issues/10418
+    props.putAll(propsOriginal: java.util.Map[_, _])
+
+    process("print.timestamp", (value: String) => printTimestamp = value.trim.equalsIgnoreCase("true"))
+    process("print.key", (value: String) => printKey = value.trim.equalsIgnoreCase("true"))
+    process("print.value", (value: String) => printValue = value.trim.equalsIgnoreCase("true"))
+    process("key.separator", (value: String) => keySeparator = value.getBytes(StandardCharsets.UTF_8))
+    process("line.separator", (value: String) => lineSeparator = value.getBytes(StandardCharsets.UTF_8))
+
+    val keyDeserializerKey = "key.deserializer"
+    val keyDeserProps = propertiesWithKeyPrefixStripped(keyDeserializerKey, props)
+    process(keyDeserializerKey, (value: String) => {
+      // Note that `toString` will be called on the instance returned by `Deserializer.deserialize`
+      keyDeserializer = Some(Class.forName(value).getDeclaredConstructor().newInstance().asInstanceOf[Deserializer[_]])
+      keyDeserializer.get.configure(keyDeserProps.asScala.asJava, true)
+    })
+
+    val valueDeserializerKey = "value.deserializer"
+    val valDeserProps = propertiesWithKeyPrefixStripped(valueDeserializerKey, props)
+    process(valueDeserializerKey, (value: String) => {
+      // Note that `toString` will be called on the instance returned by `Deserializer.deserialize`
+      valueDeserializer = Some(Class.forName(value).getDeclaredConstructor().newInstance().asInstanceOf[Deserializer[_]])
+      valueDeserializer.get.configure(valDeserProps.asScala.asJava, false)
+    })
+
+    // remove all deserializer properties as well
+    keyDeserProps.asScala.foreach { case (key, value) =>
+      props.remove(keyDeserializerKey + '.' + key)
+    }
+    valDeserProps.asScala.foreach { case (key, value) =>
+      props.remove(valueDeserializerKey + '.' + key)
+    }
+
+    if (!props.isEmpty) {
+      // props contained an unrecognised property
+      throw new IllegalArgumentException(s"Unrecognised arguments (${props}) passed to ${this.getClass.getName}.")
     }
   }
+
+
 
   private def propertiesWithKeyPrefixStripped(prefix: String, props: Properties): Properties = {
     val newProps = new Properties()
     props.asScala.foreach { case (key, value) =>
       if (key.startsWith(prefix) && key.length > prefix.length)
-        newProps.put(key.substring(prefix.length), value)
+        newProps.put(key.substring(prefix.length + 1), value)
     }
     newProps
   }
