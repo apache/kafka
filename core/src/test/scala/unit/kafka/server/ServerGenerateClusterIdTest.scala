@@ -183,7 +183,7 @@ class ServerGenerateClusterIdTest extends ZooKeeperTestHarness {
   }
 
   @Test
-  def testInconsistentBrokerMetadataBetweenMultipleLogDirs() {
+  def testInconsistentBrokerMetadataBetweenMultipleLogDirs(): Unit = {
     // Add multiple logDirs with different BrokerMetadata
     val logDir1 = TestUtils.tempDir().getAbsolutePath
     val logDir2 = TestUtils.tempDir().getAbsolutePath
@@ -208,13 +208,13 @@ class ServerGenerateClusterIdTest extends ZooKeeperTestHarness {
     TestUtils.verifyNonDaemonThreadsStatus(this.getClass.getName)
   }
 
-  def forgeBrokerMetadata(logDirs: Seq[String], brokerId: Int, clusterId: String) {
+  def forgeBrokerMetadata(logDirs: Seq[String], brokerId: Int, clusterId: String): Unit = {
     for (logDir <- logDirs) {
       forgeBrokerMetadata(logDir, brokerId, clusterId)
     }
   }
 
-  def forgeBrokerMetadata(logDir: String, brokerId: Int, clusterId: String) {
+  def forgeBrokerMetadata(logDir: String, brokerId: Int, clusterId: String): Unit = {
     val checkpoint = new BrokerMetadataCheckpoint(
       new File(logDir + File.separator + brokerMetaPropsFile))
     checkpoint.write(BrokerMetadata(brokerId, Option(clusterId)))

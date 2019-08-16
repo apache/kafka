@@ -33,11 +33,13 @@ trait Scheduler {
    * Initialize this scheduler so it is ready to accept scheduling of tasks
    */
   def startup(): Unit
+  
   /**
    * Shutdown this scheduler. When this method is complete no more executions of background tasks will occur. 
    * This includes tasks scheduled with a delayed execution.
    */
   def shutdown(): Unit
+  
   /**
    * Check if the scheduler has been started
    */

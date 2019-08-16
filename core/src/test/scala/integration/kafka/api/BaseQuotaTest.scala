@@ -170,6 +170,7 @@ abstract class QuotaTestClients(topic: String,
   def userPrincipal: KafkaPrincipal
   def overrideQuotas(producerQuota: Long, consumerQuota: Long, requestQuota: Double): Unit
   def removeQuotaOverrides(): Unit
+
   def quotaMetricTags(clientId: String): Map[String, String]
 
   def quota(quotaManager: ClientQuotaManager, userPrincipal: KafkaPrincipal, clientId: String): Quota = {
