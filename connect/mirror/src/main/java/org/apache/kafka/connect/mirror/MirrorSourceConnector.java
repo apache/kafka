@@ -333,6 +333,7 @@ public class MirrorSourceConnector extends SourceConnector {
     Config targetConfig(Config sourceConfig) {
         List<ConfigEntry> entries = sourceConfig.entries().stream()
             .filter(x -> !x.isDefault() && !x.isReadOnly() && !x.isSensitive())
+            .filter(x -> x.source() != ConfigEntry.ConfigSource.STATIC_BROKER_CONFIG)
             .filter(x -> shouldReplicateTopicConfigurationProperty(x.name()))
             .collect(Collectors.toList());
         return new Config(entries);
