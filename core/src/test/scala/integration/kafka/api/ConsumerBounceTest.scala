@@ -65,7 +65,7 @@ class ConsumerBounceTest extends AbstractConsumerTest with Logging {
   }
 
   @After
-  override def tearDown() {
+  override def tearDown(): Unit = {
     try {
       consumerPollers.foreach(_.shutdown())
       executor.shutdownNow()
@@ -84,7 +84,7 @@ class ConsumerBounceTest extends AbstractConsumerTest with Logging {
    * 1. Produce a bunch of messages
    * 2. Then consume the messages while killing and restarting brokers at random
    */
-  def consumeWithBrokerFailures(numIters: Int) {
+  def consumeWithBrokerFailures(numIters: Int): Unit = {
     val numRecords = 1000
     val producer = createProducer()
     sendRecords(producer, numRecords)
@@ -122,7 +122,7 @@ class ConsumerBounceTest extends AbstractConsumerTest with Logging {
   @Test
   def testSeekAndCommitWithBrokerFailures() = seekAndCommitWithBrokerFailures(5)
 
-  def seekAndCommitWithBrokerFailures(numIters: Int) {
+  def seekAndCommitWithBrokerFailures(numIters: Int): Unit = {
     val numRecords = 1000
     val producer = createProducer()
     sendRecords(producer, numRecords)
@@ -159,7 +159,7 @@ class ConsumerBounceTest extends AbstractConsumerTest with Logging {
   }
 
   @Test
-  def testSubscribeWhenTopicUnavailable() {
+  def testSubscribeWhenTopicUnavailable(): Unit = {
     val numRecords = 1000
     val newtopic = "newtopic"
 
@@ -172,7 +172,7 @@ class ConsumerBounceTest extends AbstractConsumerTest with Logging {
 
     val producer = createProducer()
 
-    def sendRecords(numRecords: Int, topic: String) {
+    def sendRecords(numRecords: Int, topic: String): Unit = {
       var remainingRecords = numRecords
       val endTimeMs = System.currentTimeMillis + 20000
       while (remainingRecords > 0 && System.currentTimeMillis < endTimeMs) {
@@ -210,7 +210,7 @@ class ConsumerBounceTest extends AbstractConsumerTest with Logging {
   }
 
   @Test
-  def testClose() {
+  def testClose(): Unit = {
     val numRecords = 10
     val producer = createProducer()
     sendRecords(producer, numRecords)
@@ -225,7 +225,7 @@ class ConsumerBounceTest extends AbstractConsumerTest with Logging {
    * and leave group. New consumer instance should be able join group and start consuming from
    * last committed offset.
    */
-  private def checkCloseGoodPath(numRecords: Int, groupId: String) {
+  private def checkCloseGoodPath(numRecords: Int, groupId: String): Unit = {
     val consumer = createConsumerAndReceive(groupId, false, numRecords)
     val future = submitCloseAndValidate(consumer, Long.MaxValue, None, gracefulCloseTimeMs)
     future.get
@@ -238,7 +238,7 @@ class ConsumerBounceTest extends AbstractConsumerTest with Logging {
    * Close of consumers using manual assignment should complete with successful commits since a
    * broker is available.
    */
-  private def checkCloseWithCoordinatorFailure(numRecords: Int, dynamicGroup: String, manualGroup: String) {
+  private def checkCloseWithCoordinatorFailure(numRecords: Int, dynamicGroup: String, manualGroup: String): Unit = {
     val consumer1 = createConsumerAndReceive(dynamicGroup, false, numRecords)
     val consumer2 = createConsumerAndReceive(manualGroup, true, numRecords)
 
@@ -277,7 +277,7 @@ class ConsumerBounceTest extends AbstractConsumerTest with Logging {
    * there is no coordinator, but close should timeout and return. If close is invoked with a very
    * large timeout, close should timeout after request timeout.
    */
-  private def checkCloseWithClusterFailure(numRecords: Int, group1: String, group2: String) {
+  private def checkCloseWithClusterFailure(numRecords: Int, group1: String, group2: String): Unit = {
     val consumer1 = createConsumerAndReceive(group1, false, numRecords)
 
     val requestTimeout = 6000
@@ -373,7 +373,7 @@ class ConsumerBounceTest extends AbstractConsumerTest with Logging {
    * close should terminate immediately without sending leave group.
    */
   @Test
-  def testCloseDuringRebalance() {
+  def testCloseDuringRebalance(): Unit = {
     val topic = "closetest"
     createTopic(topic, 10, brokerCount)
     this.consumerConfig.setProperty(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, "60000")
@@ -382,7 +382,7 @@ class ConsumerBounceTest extends AbstractConsumerTest with Logging {
     checkCloseDuringRebalance("group1", topic, executor, true)
   }
 
-  private def checkCloseDuringRebalance(groupId: String, topic: String, executor: ExecutorService, brokersAvailableDuringClose: Boolean) {
+  private def checkCloseDuringRebalance(groupId: String, topic: String, executor: ExecutorService, brokersAvailableDuringClose: Boolean): Unit = {
 
     def subscribeAndPoll(consumer: KafkaConsumer[Array[Byte], Array[Byte]], revokeSemaphore: Option[Semaphore] = None): Future[Any] = {
       executor.submit(CoreUtils.runnable {
@@ -393,7 +393,7 @@ class ConsumerBounceTest extends AbstractConsumerTest with Logging {
         }, 0)
     }
 
-    def waitForRebalance(timeoutMs: Long, future: Future[Any], otherConsumers: KafkaConsumer[Array[Byte], Array[Byte]]*) {
+    def waitForRebalance(timeoutMs: Long, future: Future[Any], otherConsumers: KafkaConsumer[Array[Byte], Array[Byte]]*): Unit = {
       val startMs = System.currentTimeMillis
       while (System.currentTimeMillis < startMs + timeoutMs && !future.isDone)
           otherConsumers.foreach(consumer => consumer.poll(time.Duration.ofMillis(100L)))
@@ -471,16 +471,16 @@ class ConsumerBounceTest extends AbstractConsumerTest with Logging {
     }, 0)
   }
 
-  private def checkClosedState(groupId: String, committedRecords: Int) {
+  private def checkClosedState(groupId: String, committedRecords: Int): Unit = {
     // Check that close was graceful with offsets committed and leave group sent.
     // New instance of consumer should be assigned partitions immediately and should see committed offsets.
     val assignSemaphore = new Semaphore(0)
     val consumer = createConsumerWithGroupId(groupId)
     consumer.subscribe(Collections.singletonList(topic),  new ConsumerRebalanceListener {
-      def onPartitionsAssigned(partitions: Collection[TopicPartition]) {
+      def onPartitionsAssigned(partitions: Collection[TopicPartition]): Unit = {
         assignSemaphore.release()
       }
-      def onPartitionsRevoked(partitions: Collection[TopicPartition]) {
+      def onPartitionsRevoked(partitions: Collection[TopicPartition]): Unit = {
       }})
     consumer.poll(time.Duration.ofSeconds(3L))
     assertTrue("Assignment did not complete on time", assignSemaphore.tryAcquire(1, TimeUnit.SECONDS))
@@ -515,7 +515,7 @@ class ConsumerBounceTest extends AbstractConsumerTest with Logging {
   private def sendRecords(producer: KafkaProducer[Array[Byte], Array[Byte]],
                           numRecords: Int,
                           topic: String = this.topic,
-                          numPartitions: Option[Int] = None) {
+                          numPartitions: Option[Int] = None): Unit = {
     var partitionIndex = 0
     def getPartition: Int = {
       numPartitions match {

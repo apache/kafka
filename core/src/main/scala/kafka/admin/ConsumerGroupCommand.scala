@@ -42,7 +42,7 @@ import scala.reflect.ClassTag
 
 object ConsumerGroupCommand extends Logging {
 
-  def main(args: Array[String]) {
+  def main(args: Array[String]): Unit = {
     val opts = new ConsumerGroupCommandOptions(args)
 
     CommandLineUtils.printHelpAndExitIfNeeded(opts, "This tool helps to list all consumer groups, describe a consumer group, delete consumer group info, or reset consumer group offsets.")
@@ -522,7 +522,7 @@ object ConsumerGroupCommand extends Logging {
       successfulLogTimestampOffsets ++ getLogEndOffsets(groupId, unsuccessfulOffsetsForTimes.keySet.toSeq)
     }
 
-    def close() {
+    def close(): Unit = {
       adminClient.close()
       consumers.values.foreach(consumer =>
         Option(consumer).foreach(_.close())
@@ -922,7 +922,7 @@ object ConsumerGroupCommand extends Logging {
     val allResetOffsetScenarioOpts: Set[OptionSpec[_]] = Set(resetToOffsetOpt, resetShiftByOpt,
       resetToDatetimeOpt, resetByDurationOpt, resetToEarliestOpt, resetToLatestOpt, resetToCurrentOpt, resetFromFileOpt)
 
-    def checkArgs() {
+    def checkArgs(): Unit = {
 
       CommandLineUtils.checkRequiredArgs(parser, options, bootstrapServerOpt)
 

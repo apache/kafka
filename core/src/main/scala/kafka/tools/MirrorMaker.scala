@@ -81,7 +81,7 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
       def value = numDroppedMessages.get()
     })
 
-  def main(args: Array[String]) {
+  def main(args: Array[String]): Unit = {
 
     info("Starting mirror maker")
     try {
@@ -162,7 +162,7 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
     }
   }
 
-  def cleanShutdown() {
+  def cleanShutdown(): Unit = {
     if (isShuttingDown.compareAndSet(false, true)) {
       info("Start clean shutdown.")
       // Shutdown consumer threads.
@@ -177,7 +177,7 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
     }
   }
 
-  private def maybeSetDefaultProperty(properties: Properties, propertyName: String, defaultValue: String) {
+  private def maybeSetDefaultProperty(properties: Properties, propertyName: String, defaultValue: String): Unit = {
     val propertyValue = properties.getProperty(propertyName)
     properties.setProperty(propertyName, Option(propertyValue).getOrElse(defaultValue))
     if (properties.getProperty(propertyName) != defaultValue)
@@ -204,7 +204,7 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
         record.value,
         record.headers)
 
-    override def run() {
+    override def run(): Unit = {
       info(s"Starting mirror maker thread $threadName")
       try {
         consumerWrapper.init()
@@ -260,7 +260,7 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
       }
     }
 
-    def maybeFlushAndCommitOffsets() {
+    def maybeFlushAndCommitOffsets(): Unit = {
       if (System.currentTimeMillis() - lastOffsetCommitMs > offsetCommitIntervalMs) {
         debug("Committing MirrorMaker state.")
         producer.flush()
@@ -269,7 +269,7 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
       }
     }
 
-    def shutdown() {
+    def shutdown(): Unit = {
       try {
         info(s"$threadName shutting down")
         shuttingDown = true
@@ -281,7 +281,7 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
       }
     }
 
-    def awaitShutdown() {
+    def awaitShutdown(): Unit = {
       try {
         shutdownLatch.await()
         info("Mirror maker thread shutdown complete")
@@ -303,7 +303,7 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
     // Visible for testing
     private[tools] val offsets = new HashMap[TopicPartition, Long]()
 
-    def init() {
+    def init(): Unit = {
       debug("Initiating consumer")
       val consumerRebalanceListener = new InternalRebalanceListener(this, customRebalanceListener)
       whitelistOpt.foreach { whitelist =>
@@ -336,15 +336,15 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
       record
     }
 
-    def wakeup() {
+    def wakeup(): Unit = {
       consumer.wakeup()
     }
 
-    def close() {
+    def close(): Unit = {
       consumer.close()
     }
 
-    def commit() {
+    def commit(): Unit = {
       consumer.commitSync(offsets.map { case (tp, offset) => (tp, new OffsetAndMetadata(offset)) }.asJava)
       offsets.clear()
     }
@@ -354,15 +354,15 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
                                           customRebalanceListener: Option[ConsumerRebalanceListener])
     extends ConsumerRebalanceListener {
 
-    override def onPartitionsLost(partitions: util.Collection[TopicPartition]) {}
+    override def onPartitionsLost(partitions: util.Collection[TopicPartition]): Unit = {}
 
-    override def onPartitionsRevoked(partitions: util.Collection[TopicPartition]) {
+    override def onPartitionsRevoked(partitions: util.Collection[TopicPartition]): Unit = {
       producer.flush()
       commitOffsets(consumerWrapper)
       customRebalanceListener.foreach(_.onPartitionsRevoked(partitions))
     }
 
-    override def onPartitionsAssigned(partitions: util.Collection[TopicPartition]) {
+    override def onPartitionsAssigned(partitions: util.Collection[TopicPartition]): Unit = {
       customRebalanceListener.foreach(_.onPartitionsAssigned(partitions))
     }
   }
@@ -371,7 +371,7 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
 
     val producer = new KafkaProducer[Array[Byte], Array[Byte]](producerProps)
 
-    def send(record: ProducerRecord[Array[Byte], Array[Byte]]) {
+    def send(record: ProducerRecord[Array[Byte], Array[Byte]]): Unit = {
       if (sync) {
         this.producer.send(record).get()
       } else {
@@ -380,15 +380,15 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
       }
     }
 
-    def flush() {
+    def flush(): Unit = {
       this.producer.flush()
     }
 
-    def close() {
+    def close(): Unit = {
       this.producer.close()
     }
 
-    def close(timeout: Long) {
+    def close(timeout: Long): Unit = {
       this.producer.close(Duration.ofMillis(timeout))
     }
   }
@@ -396,7 +396,7 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
   private class MirrorMakerProducerCallback (topic: String, key: Array[Byte], value: Array[Byte])
     extends ErrorLoggingCallback(topic, key, value, false) {
 
-    override def onCompletion(metadata: RecordMetadata, exception: Exception) {
+    override def onCompletion(metadata: RecordMetadata, exception: Exception): Unit = {
       if (exception != null) {
         // Use default call back to log error. This means the max retries of producer has reached and message
         // still could not be sent.
@@ -520,7 +520,7 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
       val numStreams = options.valueOf(numStreamsOpt).intValue()
 
       Runtime.getRuntime.addShutdownHook(new Thread("MirrorMakerShutdownHook") {
-        override def run() {
+        override def run(): Unit = {
           cleanShutdown()
         }
       })

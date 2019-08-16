@@ -1175,7 +1175,7 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
       try {
         // Start a consumer in a thread that will subscribe to a new group.
         val consumerThread = new Thread {
-          override def run {
+          override def run : Unit = {
             consumer.subscribe(Collections.singleton(testTopicName))
 
             try {
