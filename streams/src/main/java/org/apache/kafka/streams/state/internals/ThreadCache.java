@@ -20,7 +20,6 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
-import org.apache.kafka.streams.state.internals.NamedCache.LRUNode;
 import org.slf4j.Logger;
 
 import java.util.Collections;
@@ -181,17 +180,17 @@ public class ThreadCache {
     public MemoryLRUCacheBytesIterator range(final String namespace, final Bytes from, final Bytes to) {
         final NamedCache cache = getCache(namespace);
         if (cache == null) {
-            return new MemoryLRUCacheBytesIterator(Collections.emptyIterator());
+            return new MemoryLRUCacheBytesIterator(Collections.<Bytes>emptyIterator(), new NamedCache(namespace, this.metrics));
         }
-        return new MemoryLRUCacheBytesIterator(cache.subMapIterator(from, to));
+        return new MemoryLRUCacheBytesIterator(cache.keyRange(from, to), cache);
     }
 
     public MemoryLRUCacheBytesIterator all(final String namespace) {
         final NamedCache cache = getCache(namespace);
         if (cache == null) {
-            return new MemoryLRUCacheBytesIterator(Collections.emptyIterator());
+            return new MemoryLRUCacheBytesIterator(Collections.<Bytes>emptyIterator(), new NamedCache(namespace, this.metrics));
         }
-        return new MemoryLRUCacheBytesIterator(cache.allIterator());
+        return new MemoryLRUCacheBytesIterator(cache.allKeys(), cache);
     }
 
     public long size() {
@@ -261,11 +260,13 @@ public class ThreadCache {
     }
 
     static class MemoryLRUCacheBytesIterator implements PeekingKeyValueIterator<Bytes, LRUCacheEntry> {
-        private final Iterator<Map.Entry<Bytes, LRUNode>> underlying;
+        private final Iterator<Bytes> keys;
+        private final NamedCache cache;
         private KeyValue<Bytes, LRUCacheEntry> nextEntry;
 
-        MemoryLRUCacheBytesIterator(final Iterator<Map.Entry<Bytes, LRUNode>> underlying) {
-            this.underlying = underlying;
+        MemoryLRUCacheBytesIterator(final Iterator<Bytes> keys, final NamedCache cache) {
+            this.keys = keys;
+            this.cache = cache;
         }
 
         public Bytes peekNextKey() {
@@ -289,7 +290,7 @@ public class ThreadCache {
                 return true;
             }
 
-            while (underlying.hasNext() && nextEntry == null) {
+            while (keys.hasNext() && nextEntry == null) {
                 internalNext();
             }
 
@@ -307,9 +308,8 @@ public class ThreadCache {
         }
 
         private void internalNext() {
-            final Map.Entry<Bytes, LRUNode> mapEntry = underlying.next();
-            final Bytes cacheKey = mapEntry.getKey();
-            final LRUCacheEntry entry = mapEntry.getValue().entry();
+            final Bytes cacheKey = keys.next();
+            final LRUCacheEntry entry = cache.get(cacheKey);
             if (entry == null) {
                 return;
             }
