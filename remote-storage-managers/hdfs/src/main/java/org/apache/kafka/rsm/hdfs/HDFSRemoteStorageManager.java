@@ -139,7 +139,7 @@ public class HDFSRemoteStorageManager implements RemoteStorageManager {
     }
 
     @Override
-    public List<RemoteLogSegmentInfo> listRemoteSegments(TopicPartition topicPartition) throws IOException {
+    public List<RemoteLogSegmentInfo> listRemoteSegments(TopicPartition topicPartition, long minBaseOffset) throws IOException {
         ArrayList<RemoteLogSegmentInfo> segments = new ArrayList<>();
 
         FileSystem fs = getFS();
@@ -152,9 +152,11 @@ public class HDFSRemoteStorageManager implements RemoteStorageManager {
             if (m.matches()) {
                 try {
                     long baseOffset = Long.parseLong(m.group(1));
-                    long endOffset = Long.parseLong(m.group(2));
-                    HDFSRemoteLogSegmentInfo segment = new HDFSRemoteLogSegmentInfo(baseOffset, endOffset, file.getPath());
-                    segments.add(segment);
+                    if (baseOffset >= minBaseOffset) {
+                        long endOffset = Long.parseLong(m.group(2));
+                        HDFSRemoteLogSegmentInfo segment = new HDFSRemoteLogSegmentInfo(baseOffset, endOffset, file.getPath());
+                        segments.add(segment);
+                    }
                 } catch (NumberFormatException e) {
                 }
             }

@@ -389,4 +389,28 @@ public class HDFSRemoteStorageManagerTest {
         indexEntries = rsm1.copyLogSegment(tp4, seg);
         assertEquals(3, indexEntries.size());
     }
+
+    @Test
+    public void testListRemoteSegmentsWithMinBaseOffset() throws Exception {
+        HDFSRemoteStorageManager rsm = new HDFSRemoteStorageManager();
+        rsm.configure(config);
+
+        TopicPartition tp = new TopicPartition("test", 1);
+        int segmentSize = 20;
+        for (int i = 0; i < 10; i++) {
+            LogSegment seg = LogUtils.createSegment(segmentSize * i, logDir, 4096, Time.SYSTEM);
+            appendRecords(seg, segmentSize * i, segmentSize);
+            seg.onBecomeInactiveSegment();
+            rsm.copyLogSegment(tp, seg);
+        }
+
+        int numSegments = 5;
+        List<RemoteLogSegmentInfo> remoteSegments = rsm.listRemoteSegments(tp, numSegments * segmentSize);
+        assertEquals(numSegments, remoteSegments.size());
+        for (int i = numSegments; i < 10; i++) {
+            RemoteLogSegmentInfo segment = remoteSegments.get(i - numSegments);
+            assertEquals(segmentSize * i, segment.baseOffset());
+            assertEquals(segmentSize * (i + 1) - 1, segment.endOffset());
+        }
+    }
 }

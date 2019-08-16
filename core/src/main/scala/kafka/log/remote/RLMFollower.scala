@@ -40,22 +40,16 @@ class RLMFollower(remoteStorageManager: RemoteStorageManager, logFetcher: TopicP
       try {
         watchedTopicPartitions.forEach(new Consumer[TopicPartition] {
           override def accept(tp: TopicPartition): Unit = {
-            val remoteLogSegmentInfos = remoteStorageManager.listRemoteSegments(tp)
-
-            // find the offset for a topic that is already written here.
-            rlmIndexer.getOrLoadIndexOffset(tp).foreach(offset => {
-              var index: Int = util.Collections.binarySearch(remoteLogSegmentInfos, offset, new Comparator[Any] {
-                override def compare(o1: Any, o2: Any): Int = {
-                  java.lang.Long.compare(o1.asInstanceOf[RemoteLogSegmentInfo].baseOffset, o2.asInstanceOf[RemoteLogSegmentInfo].baseOffset)
-                }
-              })
-
-              if (index < 0) index = -(index + 1)
-              remoteLogSegmentInfos.subList(index, remoteLogSegmentInfos.size()).forEach( segInfo => {
-                val indexEntries = remoteStorageManager.getRemoteLogIndexEntries(segInfo)
-                logFetcher(tp).map(log => log.dir).foreach(dir => {
-                  rlmIndexer.maybeBuildIndexes(tp, indexEntries, dir, Log.filenamePrefixFromOffset(segInfo.baseOffset))
-                })
+            val remoteLogSegmentInfos = rlmIndexer.getOrLoadIndexOffset(tp) match {
+              case Some(offset) =>
+                remoteStorageManager.listRemoteSegments(tp, offset)
+              case None =>
+                remoteStorageManager.listRemoteSegments(tp)
+            }
+            remoteLogSegmentInfos.forEach(segInfo => {
+              val indexEntries = remoteStorageManager.getRemoteLogIndexEntries(segInfo)
+              logFetcher(tp).map(log => log.dir).foreach(dir => {
+                rlmIndexer.maybeBuildIndexes(tp, indexEntries, dir, Log.filenamePrefixFromOffset(segInfo.baseOffset))
               })
             })
           }
