@@ -18,7 +18,9 @@ package org.apache.kafka.streams.state.internals;
 
 import java.util.List;
 import java.util.NavigableMap;
+import java.util.Set;
 import java.util.TreeMap;
+import java.util.TreeSet;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.ProcessorContext;
@@ -27,7 +29,6 @@ import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 
 import java.util.Iterator;
-import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -119,14 +120,14 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
 
         return new DelegatingPeekingKeyValueIterator<>(
             name,
-            new InMemoryKeyValueIterator(map.subMap(from, true, to, true).entrySet().iterator()));
+            new InMemoryKeyValueIterator(map.subMap(from, true, to, true).keySet()));
     }
 
     @Override
     public synchronized KeyValueIterator<Bytes, byte[]> all() {
         return new DelegatingPeekingKeyValueIterator<>(
             name,
-            new InMemoryKeyValueIterator(map.entrySet().iterator()));
+            new InMemoryKeyValueIterator(map.keySet()));
     }
 
     @Override
@@ -146,11 +147,11 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
         open = false;
     }
 
-    private static class InMemoryKeyValueIterator implements KeyValueIterator<Bytes, byte[]> {
-        private final Iterator<Map.Entry<Bytes, byte[]>> iter;
+    private class InMemoryKeyValueIterator implements KeyValueIterator<Bytes, byte[]> {
+        private final Iterator<Bytes> iter;
 
-        private InMemoryKeyValueIterator(final Iterator<Map.Entry<Bytes, byte[]>> iter) {
-            this.iter = iter;
+        private InMemoryKeyValueIterator(final Set<Bytes> keySet) {
+            this.iter = new TreeSet<>(keySet).iterator();
         }
 
         @Override
@@ -160,8 +161,8 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
 
         @Override
         public KeyValue<Bytes, byte[]> next() {
-            final Map.Entry<Bytes, byte[]> entry = iter.next();
-            return new KeyValue<>(entry.getKey(), entry.getValue());
+            final Bytes key = iter.next();
+            return new KeyValue<>(key, map.get(key));
         }
 
         @Override
