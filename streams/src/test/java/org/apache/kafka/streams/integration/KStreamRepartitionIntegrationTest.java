@@ -50,6 +50,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.Objects;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
@@ -69,17 +70,18 @@ public class KStreamRepartitionIntegrationTest {
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS);
 
     private Properties streamsConfiguration;
-    private KafkaStreams kafkaStreams;
+    private List<KafkaStreams> kafkaStreamsInstances;
     private String inputTopic = "input-topic-" + testNo.get();
     private String outputTopic = "output-topic-" + testNo.get();
     private String applicationId = "kstream-repartition-stream-test-" + testNo.get();
 
     @Before
     public void before() throws InterruptedException {
-        CLUSTER.createTopic(inputTopic, 3, 1);
+        CLUSTER.createTopic(inputTopic, 4, 1);
         CLUSTER.createTopic(outputTopic, 1, 1);
 
         streamsConfiguration = new Properties();
+        kafkaStreamsInstances = new ArrayList<>();
 
         streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, applicationId);
         streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
@@ -94,9 +96,11 @@ public class KStreamRepartitionIntegrationTest {
 
     @After
     public void whenShuttingDown() throws IOException {
-        if (kafkaStreams != null) {
-            kafkaStreams.close();
-        }
+        kafkaStreamsInstances
+            .stream()
+            .filter(Objects::nonNull)
+            .forEach(KafkaStreams::close);
+
         IntegrationTestUtils.purgeLocalStreamsState(streamsConfiguration);
         testNo.incrementAndGet();
     }
@@ -146,7 +150,7 @@ public class KStreamRepartitionIntegrationTest {
 
         final String topology = builder.build().describe().toString();
 
-        assertEquals(2, countOccurencesInTopology(topology, "Sink: .*-repartition.*"));
+        assertEquals(2, countOccurrencesInTopology(topology, "Sink: .*-repartition.*"));
     }
 
     @Test
@@ -182,7 +186,7 @@ public class KStreamRepartitionIntegrationTest {
         final String topology = builder.build().describe().toString();
 
         assertTrue(topicExists(toRepartitionTopicName(repartitionName)));
-        assertEquals(1, countOccurencesInTopology(topology, "Sink: .*dummy-repartition.*"));
+        assertEquals(1, countOccurrencesInTopology(topology, "Sink: .*dummy-repartition.*"));
     }
 
     @Test
@@ -225,8 +229,8 @@ public class KStreamRepartitionIntegrationTest {
         final String repartitionTopicName = toRepartitionTopicName(repartitionedName);
 
         assertTrue(topicExists(repartitionTopicName));
-        assertEquals(1, countOccurencesInTopology(topology, "Sink: .*" + repartitionedName + "-repartition.*"));
-        assertEquals(1, countOccurencesInTopology(topology, "<-- " + repartitionedName));
+        assertEquals(1, countOccurrencesInTopology(topology, "Sink: .*" + repartitionedName + "-repartition.*"));
+        assertEquals(1, countOccurrencesInTopology(topology, "<-- " + repartitionedName));
     }
 
     @Test
@@ -304,7 +308,7 @@ public class KStreamRepartitionIntegrationTest {
         final String repartitionTopicName = toRepartitionTopicName(repartitionName);
 
         assertTrue(topicExists(repartitionTopicName));
-        assertEquals(3, getNumberOfPartitionsForTopic(repartitionTopicName));
+        assertEquals(4, getNumberOfPartitionsForTopic(repartitionTopicName));
     }
 
     @Test
@@ -349,7 +353,7 @@ public class KStreamRepartitionIntegrationTest {
         );
 
         assertTrue(topicExists(toRepartitionTopicName(repartitionName)));
-        assertEquals(1, countOccurencesInTopology(topology, "Sink: .*-repartition"));
+        assertEquals(1, countOccurrencesInTopology(topology, "Sink: .*-repartition"));
     }
 
     @Test
@@ -384,7 +388,72 @@ public class KStreamRepartitionIntegrationTest {
 
         final String topology = builder.build().describe().toString();
 
-        assertEquals(1, countOccurencesInTopology(topology, "Sink: .*-repartition"));
+        assertEquals(1, countOccurrencesInTopology(topology, "Sink: .*-repartition"));
+    }
+
+    @Test
+    public void shouldGoThroughRebalancingCorrectly() throws ExecutionException, InterruptedException {
+        final String repartitionName = "rebalancing-test";
+        final long timestamp = System.currentTimeMillis();
+
+        sendEvents(
+            timestamp,
+            Arrays.asList(
+                new KeyValue<>(1, "A"),
+                new KeyValue<>(2, "B")
+            )
+        );
+
+        final StreamsBuilder builder = new StreamsBuilder();
+
+        final Repartitioned<String, String> repartitioned = Repartitioned.<String, String>as(repartitionName)
+            .withKeySerde(Serdes.String())
+            .withValueSerde(Serdes.String())
+            .withNumberOfPartitions(2);
+
+        builder.stream(inputTopic, Consumed.with(Serdes.Integer(), Serdes.String()))
+            .selectKey((key, value) -> key.toString())
+            .repartition(repartitioned)
+            .groupByKey()
+            .count()
+            .toStream()
+            .to(outputTopic);
+
+        startStreams(builder);
+        final KafkaStreams kafkaStreamsToClose = startStreams(builder);
+
+        validateReceivedMessages(
+            new StringDeserializer(),
+            new LongDeserializer(),
+            Arrays.asList(
+                new KeyValue<>("1", 1L),
+                new KeyValue<>("2", 1L)
+            )
+        );
+
+        kafkaStreamsToClose.close();
+
+        sendEvents(
+            timestamp,
+            Arrays.asList(
+                new KeyValue<>(1, "C"),
+                new KeyValue<>(2, "D")
+            )
+        );
+
+        validateReceivedMessages(
+            new StringDeserializer(),
+            new LongDeserializer(),
+            Arrays.asList(
+                new KeyValue<>("1", 2L),
+                new KeyValue<>("2", 2L)
+            )
+        );
+
+        final String repartitionTopicName = toRepartitionTopicName(repartitionName);
+
+        assertTrue(topicExists(repartitionTopicName));
+        assertEquals(2, getNumberOfPartitionsForTopic(repartitionTopicName));
     }
 
     private int getNumberOfPartitionsForTopic(final String topic) throws ExecutionException, InterruptedException {
@@ -419,13 +488,15 @@ public class KStreamRepartitionIntegrationTest {
         return AdminClient.create(properties);
     }
 
-    private int countOccurencesInTopology(final String topologyString,
-                                          final String searchPattern) {
+    private int countOccurrencesInTopology(final String topologyString,
+                                           final String searchPattern) {
         final Matcher matcher = Pattern.compile(searchPattern).matcher(topologyString);
         final List<String> repartitionTopicsFound = new ArrayList<>();
+
         while (matcher.find()) {
             repartitionTopicsFound.add(matcher.group());
         }
+
         return repartitionTopicsFound.size();
     }
 
@@ -444,9 +515,11 @@ public class KStreamRepartitionIntegrationTest {
         );
     }
 
-    private void startStreams(final StreamsBuilder builder) {
-        kafkaStreams = new KafkaStreams(builder.build(streamsConfiguration), streamsConfiguration);
+    private KafkaStreams startStreams(final StreamsBuilder builder) {
+        KafkaStreams kafkaStreams = new KafkaStreams(builder.build(streamsConfiguration), streamsConfiguration);
         kafkaStreams.start();
+        kafkaStreamsInstances.add(kafkaStreams);
+        return kafkaStreams;
     }
 
     private <K, V> void validateReceivedMessages(final Deserializer<K> keySerializer,
