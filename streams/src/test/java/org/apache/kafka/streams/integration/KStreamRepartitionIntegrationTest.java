@@ -516,7 +516,7 @@ public class KStreamRepartitionIntegrationTest {
     }
 
     private KafkaStreams startStreams(final StreamsBuilder builder) {
-        KafkaStreams kafkaStreams = new KafkaStreams(builder.build(streamsConfiguration), streamsConfiguration);
+        final KafkaStreams kafkaStreams = new KafkaStreams(builder.build(streamsConfiguration), streamsConfiguration);
         kafkaStreams.start();
         kafkaStreamsInstances.add(kafkaStreams);
         return kafkaStreams;
