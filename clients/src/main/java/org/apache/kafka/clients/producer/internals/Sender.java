@@ -531,7 +531,6 @@ public class Sender implements Runnable {
      */
     private void handleProduceResponse(ClientResponse response, Map<TopicPartition, ProducerBatch> batches, long now) {
         RequestHeader requestHeader = response.requestHeader();
-        long receivedTimeMs = response.receivedTimeMs();
         int correlationId = requestHeader.correlationId();
         if (response.wasDisconnected()) {
             log.trace("Cancelled request with header {} due to node {} being disconnected",
