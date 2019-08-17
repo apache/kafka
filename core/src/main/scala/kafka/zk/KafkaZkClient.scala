@@ -1421,6 +1421,15 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
   }
 
   /**
+   * Wait up to the provided timeoutMs this KafkaZKClient to close.
+   * Supplying a timeoutMs of 0 means to wait forever.
+   */
+  def closeAndWait(timeoutMs: Int): Boolean = {
+    zooKeeperClient.closeAndWait(timeoutMs)
+  }
+
+
+  /**
    * Get the committed offset for a topic partition and group
    * @param group the group we wish to get offset for
    * @param topicPartition the topic partition we wish to get the offset for

@@ -353,6 +353,17 @@ class ZooKeeperClient(connectString: String,
     info("Closed.")
   }
 
+  /**
+   * Wait up to the provided timeoutMs this ZooKeeperClient to close.
+   * Supplying a timeoutMs of 0 means to wait forever.
+   */
+  def closeAndWait(timeoutMs: Int): Boolean = {
+    close()
+    inWriteLock(initializationLock) {
+      zooKeeper.close(timeoutMs)
+    }
+  }
+
   def sessionId: Long = inReadLock(initializationLock) {
     zooKeeper.getSessionId
   }

@@ -62,8 +62,11 @@ abstract class ZooKeeperTestHarness extends Logging {
 
   @After
   def tearDown(): Unit = {
-    if (zkClient != null)
-     zkClient.close()
+    if (zkClient != null) {
+      zkClient.close()
+      val closeTimeoutMs = 15 * 1000
+      assertTrue(s"Failed to close zkClient after ${closeTimeoutMs}ms", zkClient.closeAndWait(closeTimeoutMs))
+    }
     if (zookeeper != null)
       CoreUtils.swallow(zookeeper.shutdown(), this)
     Configuration.setConfiguration(null)
