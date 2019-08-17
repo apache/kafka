@@ -640,7 +640,7 @@ public final class RecordAccumulator {
     /**
      * The earliest absolute time a batch will expire (in milliseconds)
      */
-    public Long nextExpiryTimeMs() {
+    public long nextExpiryTimeMs() {
         return this.nextBatchExpiryTimeMs;
     }
 
