@@ -26,7 +26,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -83,7 +82,7 @@ public final class RecordAccumulator {
     private final ConcurrentMap<TopicPartition, Deque<ProducerBatch>> batches;
     private final IncompleteBatches incomplete;
     // The following variables are only accessed by the sender thread, so we don't need to protect them.
-    private final Map<TopicPartition, Long> muted;
+    private final Set<TopicPartition> muted;
     private int drainIndex;
     private final TransactionManager transactionManager;
     private long nextBatchExpiryTimeMs = Long.MAX_VALUE; // the earliest time (absolute) a batch will expire.
@@ -130,7 +129,7 @@ public final class RecordAccumulator {
         this.batches = new CopyOnWriteMap<>();
         this.free = bufferPool;
         this.incomplete = new IncompleteBatches();
-        this.muted = new HashMap<>();
+        this.muted = new HashSet<>();
         this.time = time;
         this.apiVersions = apiVersions;
         this.transactionManager = transactionManager;
@@ -282,19 +281,8 @@ public final class RecordAccumulator {
         return null;
     }
 
-    private boolean isMuted(TopicPartition tp, long now) {
-        // Take care to avoid unnecessary map look-ups because this method is a hotspot if producing to a
-        // large number of partitions
-        Long throttleUntilTime = muted.get(tp);
-        if (throttleUntilTime == null)
-            return false;
-
-        if (now >= throttleUntilTime) {
-            muted.remove(tp);
-            return false;
-        }
-
-        return true;
+    private boolean isMuted(TopicPartition tp) {
+        return muted.contains(tp);
     }
 
     public void resetNextBatchExpiryTime() {
@@ -478,7 +466,7 @@ public final class RecordAccumulator {
                         // This is a partition for which leader is not known, but messages are available to send.
                         // Note that entries are currently not removed from batches when deque is empty.
                         unknownLeaderTopics.add(part.topic());
-                    } else if (!readyNodes.contains(leader) && !isMuted(part, nowMs)) {
+                    } else if (!readyNodes.contains(leader) && !isMuted(part)) {
                         long waitedTimeMs = batch.waitedTimeMs(nowMs);
                         boolean backingOff = batch.attempts() > 0 && waitedTimeMs < retryBackoffMs;
                         long timeToWaitMs = backingOff ? retryBackoffMs : lingerMs;
@@ -556,7 +544,7 @@ public final class RecordAccumulator {
             this.drainIndex = (this.drainIndex + 1) % parts.size();
 
             // Only proceed if the partition has no in-flight batches.
-            if (isMuted(tp, now))
+            if (isMuted(tp))
                 continue;
 
             Deque<ProducerBatch> deque = getDeque(tp);
@@ -791,14 +779,11 @@ public final class RecordAccumulator {
     }
 
     public void mutePartition(TopicPartition tp) {
-        muted.put(tp, Long.MAX_VALUE);
+        muted.add(tp);
     }
 
-    public void unmutePartition(TopicPartition tp, Optional<Long> throttleUntilTimeMs) {
-        if (throttleUntilTimeMs.isPresent())
-            muted.put(tp, throttleUntilTimeMs.get());
-        else
-            muted.remove(tp);
+    public void unmutePartition(TopicPartition tp) {
+        muted.remove(tp);
     }
 
     /**
