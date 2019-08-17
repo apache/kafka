@@ -20,17 +20,17 @@ import java.io.File
 import java.util.Collections
 import java.util.concurrent.{ExecutionException, TimeUnit}
 
-import kafka.server.LogDirFailureTest._
 import kafka.api.IntegrationTestHarness
 import kafka.controller.{OfflineReplica, PartitionAndReplica}
+import kafka.server.LogDirFailureTest._
 import kafka.utils.{CoreUtils, Exit, TestUtils}
 import org.apache.kafka.clients.consumer.KafkaConsumer
 import org.apache.kafka.clients.producer.{ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.common.errors.{KafkaStorageException, NotLeaderForPartitionException}
-import org.junit.{Before, Test}
+import org.apache.kafka.common.utils.Utils
 import org.junit.Assert.{assertEquals, assertFalse, assertTrue}
+import org.junit.{Before, Test}
 import org.scalatest.Assertions.fail
 
 import scala.collection.JavaConverters._
@@ -54,6 +54,11 @@ class LogDirFailureTest extends IntegrationTestHarness {
   override def setUp(): Unit = {
     super.setUp()
     createTopic(topic, partitionNum, brokerCount)
+  }
+
+  @Test
+  def testProduceErrorFromFailureOnLogRoll(): Unit = {
+    testProduceErrorsFromLogDirFailureOnLeader(Roll)
   }
 
   @Test
@@ -92,6 +97,11 @@ class LogDirFailureTest extends IntegrationTestHarness {
   }
 
   @Test
+  def testProduceErrorFromFailureOnCheckpoint(): Unit = {
+    testProduceErrorsFromLogDirFailureOnLeader(Checkpoint)
+  }
+
+  @Test
   def testIOExceptionDuringCheckpoint(): Unit = {
     testProduceAfterLogDirFailureOnLeader(Checkpoint)
   }
@@ -127,11 +137,37 @@ class LogDirFailureTest extends IntegrationTestHarness {
     }
   }
 
-  def testProduceAfterLogDirFailureOnLeader(failureType: LogDirFailureType): Unit = {
+  def testProduceErrorsFromLogDirFailureOnLeader(failureType: LogDirFailureType): Unit = {
+    // Disable retries to allow exception to bubble up for validation
+    this.producerConfig.setProperty(ProducerConfig.RETRIES_CONFIG, "0")
+    val producer = createProducer()
+
+    val partition = new TopicPartition(topic, 0)
+    val record = new ProducerRecord(topic, 0, s"key".getBytes, s"value".getBytes)
+
+    val leaderServerId = producer.partitionsFor(topic).asScala.find(_.partition() == 0).get.leader().id()
+    val leaderServer = servers.find(_.config.brokerId == leaderServerId).get
+
+    causeLogDirFailure(failureType, leaderServer, partition)
+
+    // send() should fail due to either KafkaStorageException or NotLeaderForPartitionException
+    try {
+      producer.send(record).get(6000, TimeUnit.MILLISECONDS)
+      fail("send() should fail with either KafkaStorageException or NotLeaderForPartitionException")
+    } catch {
+      case e: ExecutionException =>
+        e.getCause match {
+          case t: KafkaStorageException =>
+          case t: NotLeaderForPartitionException => // This may happen if ProduceRequest version <= 3
+          case t: Throwable => fail(s"send() should fail with either KafkaStorageException or NotLeaderForPartitionException instead of ${t.toString}")
+        }
+    }
+  }
+
+  def testProduceAfterLogDirFailureOnLeader(failureType: LogDirFailureType) {
     val consumer = createConsumer()
     subscribeAndWaitForAssignment(topic, consumer)
 
-    this.producerConfig.setProperty(ProducerConfig.RETRIES_CONFIG, "0")
     val producer = createProducer()
 
     val partition = new TopicPartition(topic, 0)
@@ -144,6 +180,32 @@ class LogDirFailureTest extends IntegrationTestHarness {
     producer.send(record).get()
     TestUtils.consumeRecords(consumer, 1)
 
+    causeLogDirFailure(failureType, leaderServer, partition)
+
+    TestUtils.waitUntilTrue(() => {
+      // ProduceResponse may contain KafkaStorageException and trigger metadata update
+      producer.send(record)
+      producer.partitionsFor(topic).asScala.find(_.partition() == 0).get.leader().id() != leaderServerId
+    }, "Expected new leader for the partition", 6000L)
+
+    // Block on send to ensure that new leader accepts a message.
+    producer.send(record).get(6000L, TimeUnit.MILLISECONDS)
+
+    // Consumer should receive some messages
+    TestUtils.pollUntilAtLeastNumRecords(consumer, 1)
+
+    // There should be no remaining LogDirEventNotification znode
+    assertTrue(zkClient.getAllLogDirEventNotifications.isEmpty)
+
+    // The controller should have marked the replica on the original leader as offline
+    val controllerServer = servers.find(_.kafkaController.isActive).get
+    val offlineReplicas = controllerServer.kafkaController.controllerContext.replicasInState(topic, OfflineReplica)
+    assertTrue(offlineReplicas.contains(PartitionAndReplica(new TopicPartition(topic, 0), leaderServerId)))
+  }
+
+  private def causeLogDirFailure(failureType: LogDirFailureType,
+                                 leaderServer: KafkaServer,
+                                 partition: TopicPartition): Unit = {
     // Make log directory of the partition on the leader broker inaccessible by replacing it with a file
     val localLog = leaderServer.replicaManager.localLogOrException(partition)
     val logDir = localLog.dir.getParentFile
@@ -165,39 +227,6 @@ class LogDirFailureTest extends IntegrationTestHarness {
     // Wait for ReplicaHighWatermarkCheckpoint to happen so that the log directory of the topic will be offline
     TestUtils.waitUntilTrue(() => !leaderServer.logManager.isLogDirOnline(logDir.getAbsolutePath), "Expected log directory offline", 3000L)
     assertTrue(leaderServer.replicaManager.localLog(partition).isEmpty)
-
-    // The second send() should fail due to either KafkaStorageException or NotLeaderForPartitionException
-    try {
-      producer.send(record).get(6000, TimeUnit.MILLISECONDS)
-      fail("send() should fail with either KafkaStorageException or NotLeaderForPartitionException")
-    } catch {
-      case e: ExecutionException =>
-        e.getCause match {
-          case t: KafkaStorageException =>
-          case t: NotLeaderForPartitionException => // This may happen if ProduceRequest version <= 3
-          case t: Throwable => fail(s"send() should fail with either KafkaStorageException or NotLeaderForPartitionException instead of ${t.toString}")
-        }
-    }
-
-    TestUtils.waitUntilTrue(() => {
-      // ProduceResponse may contain KafkaStorageException and trigger metadata update
-      producer.send(record)
-      producer.partitionsFor(topic).asScala.find(_.partition() == 0).get.leader().id() != leaderServerId
-    }, "Expected new leader for the partition", 6000L)
-
-    // Block on send to ensure that new leader accepts a message.
-    producer.send(record).get(6000L, TimeUnit.MILLISECONDS)
-
-    // Consumer should receive some messages
-    TestUtils.pollUntilAtLeastNumRecords(consumer, 1)
-
-    // There should be no remaining LogDirEventNotification znode
-    assertTrue(zkClient.getAllLogDirEventNotifications.isEmpty)
-
-    // The controller should have marked the replica on the original leader as offline
-    val controllerServer = servers.find(_.kafkaController.isActive).get
-    val offlineReplicas = controllerServer.kafkaController.controllerContext.replicasInState(topic, OfflineReplica)
-    assertTrue(offlineReplicas.contains(PartitionAndReplica(new TopicPartition(topic, 0), leaderServerId)))
   }
 
   private def subscribeAndWaitForAssignment(topic: String, consumer: KafkaConsumer[Array[Byte], Array[Byte]]): Unit = {
