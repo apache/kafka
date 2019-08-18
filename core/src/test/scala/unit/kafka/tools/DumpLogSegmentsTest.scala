@@ -58,25 +58,19 @@ class DumpLogSegmentsTest {
       logDirFailureChannel = new LogDirFailureChannel(10))
 
     val now = System.currentTimeMillis()
-    
-    
     val firstBatchRecords = (0 until 10).map { i => new SimpleRecord(now + i * 2, s"message key $i".getBytes, s"message value $i".getBytes)}
     batches += BatchInfo(firstBatchRecords, true, true)
-    log.appendAsLeader(MemoryRecords.withRecords(CompressionType.NONE, 0, firstBatchRecords: _*),
-      leaderEpoch = 0)
     val secondBatchRecords = (10 until 30).map { i => new SimpleRecord(now + i * 3, s"message key $i".getBytes, null)}
     batches += BatchInfo(secondBatchRecords, true, false)
-    log.appendAsLeader(MemoryRecords.withRecords(CompressionType.NONE, 0, secondBatchRecords: _*),
-      leaderEpoch = 0)
     val thirdBatchRecords = (30 until 50).map { i => new SimpleRecord(now + i * 5, null, s"message value $i".getBytes)}
     batches += BatchInfo(thirdBatchRecords, false, true)
-    log.appendAsLeader(MemoryRecords.withRecords(CompressionType.NONE, 0, thirdBatchRecords: _*),
-      leaderEpoch = 0)
     val fourthBatchRecords = (50 until 60).map { i => new SimpleRecord(now + i * 7, null)}
     batches += BatchInfo(fourthBatchRecords, false, false)
-    log.appendAsLeader(MemoryRecords.withRecords(CompressionType.NONE, 0, fourthBatchRecords: _*),
-      leaderEpoch = 0)
 
+    batches.foreach { batchInfo =>
+      log.appendAsLeader(MemoryRecords.withRecords(CompressionType.NONE, 0, batchInfo.records: _*),
+        leaderEpoch = 0)
+    }
     // Flush, but don't close so that the indexes are not trimmed and contain some zero entries
     log.flush()
   }
