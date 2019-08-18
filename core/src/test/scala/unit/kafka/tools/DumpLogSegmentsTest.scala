@@ -33,6 +33,8 @@ import org.scalatest.Assertions.fail
 
 import scala.collection.mutable.ArrayBuffer
 
+case class BatchInfo(records: Seq[SimpleRecord])
+
 class DumpLogSegmentsTest {
 
   val tmpDir = TestUtils.tempDir()
@@ -43,7 +45,7 @@ class DumpLogSegmentsTest {
   val timeIndexFilePath = s"$logDir/$segmentName.timeindex"
   val time = new MockTime(0, 0)
 
-  val batches = new ArrayBuffer[Seq[SimpleRecord]]
+  val batches = new ArrayBuffer[BatchInfo]
   var log: Log = _
 
   @Before
@@ -57,16 +59,24 @@ class DumpLogSegmentsTest {
 
     val now = System.currentTimeMillis()
     val firstBatchRecords = (0 until 10).map { i => new SimpleRecord(now + i * 2, s"hello there $i".getBytes)}
-    batches += firstBatchRecords
+    batches += BatchInfo(firstBatchRecords)
     log.appendAsLeader(MemoryRecords.withRecords(CompressionType.NONE, 0, firstBatchRecords: _*),
       leaderEpoch = 0)
     val secondBatchRecords = (10 until 30).map { i => new SimpleRecord(now + i * 3, s"hello there again $i".getBytes)}
-    batches += secondBatchRecords
+    batches += BatchInfo(secondBatchRecords)
     log.appendAsLeader(MemoryRecords.withRecords(CompressionType.NONE, 0, secondBatchRecords: _*),
       leaderEpoch = 0)
     val thirdBatchRecords = (30 until 50).map { i => new SimpleRecord(now + i * 5, s"hello there one more time $i".getBytes)}
-    batches += thirdBatchRecords
+    batches += BatchInfo(thirdBatchRecords)
     log.appendAsLeader(MemoryRecords.withRecords(CompressionType.NONE, 0, thirdBatchRecords: _*),
+      leaderEpoch = 0)
+    val fourthBatchRecords = (50 until 60).map { i => new SimpleRecord(now + i * 7, s"message key $i".getBytes, s"message value $i".getBytes)}
+    batches += BatchInfo(fourthBatchRecords)
+    log.appendAsLeader(MemoryRecords.withRecords(CompressionType.NONE, 0, fourthBatchRecords: _*),
+      leaderEpoch = 0)
+    val fifthBatchRecords = (60 until 70).map { i => new SimpleRecord(now + i * 11, s"message key $i".getBytes, null)}
+    batches += BatchInfo(fifthBatchRecords)
+    log.appendAsLeader(MemoryRecords.withRecords(CompressionType.NONE, 0, fifthBatchRecords: _*),
       leaderEpoch = 0)
 
     // Flush, but don't close so that the indexes are not trimmed and contain some zero entries
@@ -91,7 +101,7 @@ class DumpLogSegmentsTest {
 
           i += 1
 
-          batch.indices.foreach { recordIndex =>
+          batch.records.indices.foreach { recordIndex =>
             if (i == index)
               return false
             i += 1
@@ -103,7 +113,7 @@ class DumpLogSegmentsTest {
       val output = runDumpLogSegments(args)
       val lines = output.split("\n")
       assertTrue(s"Data not printed: $output", lines.length > 2)
-      val totalRecords = batches.map(_.size).sum
+      val totalRecords = batches.map(_.records.size).sum
       var offset = 0
       (0 until totalRecords + batches.size).foreach { index =>
         val line = lines(lines.length - totalRecords - batches.size + index)
