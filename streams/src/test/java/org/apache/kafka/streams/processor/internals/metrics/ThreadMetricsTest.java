@@ -27,7 +27,7 @@ import org.powermock.modules.junit4.PowerMockRunner;
 import java.util.Collections;
 import java.util.Map;
 
-import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.ALL_TASKS;
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.ROLLUP_VALUE;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.TASK_ID_TAG;
 import static org.easymock.EasyMock.expect;
 import static org.hamcrest.CoreMatchers.is;
@@ -225,7 +225,7 @@ public class ThreadMetricsTest {
         final String rateDescription = "The average per-second number of commit calls over all tasks";
         mockStatic(StreamsMetricsImpl.class);
         expect(streamsMetrics.threadLevelSensor(operation, RecordingLevel.DEBUG)).andReturn(dummySensor);
-        expect(streamsMetrics.threadLevelTagMap(TASK_ID_TAG, ALL_TASKS)).andReturn(dummyTagMap);
+        expect(streamsMetrics.threadLevelTagMap(TASK_ID_TAG, ROLLUP_VALUE)).andReturn(dummyTagMap);
         StreamsMetricsImpl.addInvocationRateAndCountToSensor(
             dummySensor, TASK_LEVEL_GROUP, dummyTagMap, operation, totalDescription, rateDescription);
         StreamsMetricsImpl.addAvgAndMaxToSensor(
