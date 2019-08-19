@@ -67,9 +67,9 @@ public class CooperativeStickyAssignorTest extends AbstractStickyAssignorTest {
             assignments.clear();
             assignments.putAll(assignor.assign(partitionsPerTopic, subscriptions));
             ++rebalances;
-        }
 
-        assertTrue(rebalances <= 2);
+            assertTrue(rebalances <= 2);
+        }
 
         // Check the validity and balance of the final assignment
         super.verifyValidityAndBalance(subscriptions, assignments, partitionsPerTopic);
