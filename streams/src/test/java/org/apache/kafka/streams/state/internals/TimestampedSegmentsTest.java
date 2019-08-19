@@ -41,7 +41,7 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
-public class TimetampedSegmentsTest {
+public class TimestampedSegmentsTest {
 
     private static final int NUM_SEGMENTS = 5;
     private static final long SEGMENT_INTERVAL = 100L;

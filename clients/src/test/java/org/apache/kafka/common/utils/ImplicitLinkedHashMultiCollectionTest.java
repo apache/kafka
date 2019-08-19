@@ -28,6 +28,7 @@ import java.util.Random;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -42,6 +43,15 @@ public class ImplicitLinkedHashMultiCollectionTest {
     public void testNullForbidden() {
         ImplicitLinkedHashMultiCollection<TestElement> multiSet = new ImplicitLinkedHashMultiCollection<>();
         assertFalse(multiSet.add(null));
+    }
+
+    @Test
+    public void testFindFindAllContainsRemoveOnEmptyCollection() {
+        ImplicitLinkedHashMultiCollection<TestElement> coll = new ImplicitLinkedHashMultiCollection<>();
+        assertNull(coll.find(new TestElement(2)));
+        assertFalse(coll.contains(new TestElement(2)));
+        assertFalse(coll.remove(new TestElement(2)));
+        assertTrue(coll.findAll(new TestElement(2)).isEmpty());
     }
 
     @Test

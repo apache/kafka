@@ -193,11 +193,11 @@ object TopicCommand extends Logging {
           "collide. To avoid issues it is best to use either, but not both.")
       createTopic(topic)
     }
-    def createTopic(topic: CommandTopicPartition)
-    def listTopics(opts: TopicCommandOptions)
-    def alterTopic(opts: TopicCommandOptions)
-    def describeTopic(opts: TopicCommandOptions)
-    def deleteTopic(opts: TopicCommandOptions)
+    def createTopic(topic: CommandTopicPartition): Unit
+    def listTopics(opts: TopicCommandOptions): Unit
+    def alterTopic(opts: TopicCommandOptions): Unit
+    def describeTopic(opts: TopicCommandOptions): Unit
+    def deleteTopic(opts: TopicCommandOptions): Unit
     def getTopics(topicWhitelist: Option[String], excludeInternalTopics: Boolean = false): Seq[String]
   }
 
@@ -649,7 +649,7 @@ object TopicCommand extends Logging {
     def topicConfig: Option[util.List[String]] = valuesAsOption(configOpt)
     def configsToDelete: Option[util.List[String]] = valuesAsOption(deleteConfigOpt)
 
-    def checkArgs() {
+    def checkArgs(): Unit = {
       if (args.length == 0)
         CommandLineUtils.printUsageAndDie(parser, "Create, delete, describe, or change a topic.")
 

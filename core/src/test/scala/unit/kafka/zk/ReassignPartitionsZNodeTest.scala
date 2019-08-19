@@ -34,20 +34,20 @@ class ReassignPartitionsZNodeTest {
   private val reassignmentJson = """{"version":1,"partitions":[{"topic":"foo","partition":0,"replicas":[1,2]}]}"""
 
   @Test
-  def testEncode() {
+  def testEncode(): Unit = {
     val encodedJsonString = new String(ReassignPartitionsZNode.encode(reassignPartitionData), StandardCharsets.UTF_8)
     assertEquals(reassignmentJson, encodedJsonString)
   }
 
   @Test
-  def testDecodeInvalidJson() {
+  def testDecodeInvalidJson(): Unit = {
     val result = ReassignPartitionsZNode.decode("invalid json".getBytes)
     assertTrue(result.isLeft)
     assertTrue(result.left.get.isInstanceOf[JsonProcessingException])
   }
 
   @Test
-  def testDecodeValidJson() {
+  def testDecodeValidJson(): Unit = {
     val result = ReassignPartitionsZNode.decode(reassignmentJson.getBytes)
     assertTrue(result.isRight)
     val assignmentMap = result.right.get

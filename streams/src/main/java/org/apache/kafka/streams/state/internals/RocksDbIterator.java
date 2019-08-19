@@ -68,11 +68,6 @@ class RocksDbIterator extends AbstractIterator<KeyValue<Bytes, byte[]>> implemen
     }
 
     @Override
-    public void remove() {
-        throw new UnsupportedOperationException("RocksDB iterator does not support remove()");
-    }
-
-    @Override
     public synchronized void close() {
         openIterators.remove(this);
         iter.close();
