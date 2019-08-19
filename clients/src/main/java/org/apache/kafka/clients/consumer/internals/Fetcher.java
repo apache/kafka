@@ -1102,7 +1102,7 @@ public class Fetcher<K, V> implements Closeable {
         if (metadataUpdateVersion.getAndSet(newMetadataUpdateVersion) != newMetadataUpdateVersion) {
             // Ensure the position has an up-to-date leader
             subscriptions.forEachAssignedPartition(
-                    tp -> subscriptions.maybeValidatePositionForCurrentLeader(tp, metadata.leaderAndEpoch(tp)));
+                tp -> subscriptions.maybeValidatePositionForCurrentLeader(tp, metadata.leaderAndEpoch(tp)));
         }
 
         long currentTimeMs = time.milliseconds();
