@@ -97,6 +97,7 @@ import static org.junit.Assert.fail;
 
 public class StandbyTaskTest {
 
+    private final String threadId = Thread.currentThread().getName();
     private final TaskId taskId = new TaskId(0, 1);
     private StandbyTask task;
     private final Serializer<Integer> intSerializer = new IntegerSerializer();
@@ -782,7 +783,7 @@ public class StandbyTaskTest {
 
     private MetricName setupCloseTaskMetric() {
         final MetricName metricName = new MetricName("name", "group", "description", Collections.emptyMap());
-        final Sensor sensor = streamsMetrics.threadLevelSensor("task-closed", Sensor.RecordingLevel.INFO);
+        final Sensor sensor = streamsMetrics.threadLevelSensor(threadId, "task-closed", Sensor.RecordingLevel.INFO);
         sensor.add(metricName, new CumulativeSum());
         return metricName;
     }

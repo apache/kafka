@@ -65,6 +65,7 @@ public class KStreamWindowAggregateTest {
     private final ConsumerRecordFactory<String, String> recordFactory =
         new ConsumerRecordFactory<>(new StringSerializer(), new StringSerializer());
     private final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.String(), Serdes.String());
+    private final String threadId = Thread.currentThread().getName();
 
     @Test
     public void testAggBasic() {
@@ -394,7 +395,7 @@ public class KStreamWindowAggregateTest {
             "stream-processor-node-metrics",
             "The total number of occurrence of late-record-drop operations.",
             mkMap(
-                mkEntry("client-id", "topology-test-driver-virtual-thread"),
+                mkEntry("client-id", threadId),
                 mkEntry("task-id", "0_0"),
                 mkEntry("processor-node-id", "KSTREAM-AGGREGATE-0000000001")
             )
@@ -406,7 +407,7 @@ public class KStreamWindowAggregateTest {
             "stream-processor-node-metrics",
             "The average number of occurrence of late-record-drop operations.",
             mkMap(
-                mkEntry("client-id", "topology-test-driver-virtual-thread"),
+                mkEntry("client-id", threadId),
                 mkEntry("task-id", "0_0"),
                 mkEntry("processor-node-id", "KSTREAM-AGGREGATE-0000000001")
             )
@@ -418,7 +419,7 @@ public class KStreamWindowAggregateTest {
             "stream-task-metrics",
             "The max observed lateness of records.",
             mkMap(
-                mkEntry("client-id", "topology-test-driver-virtual-thread"),
+                mkEntry("client-id", threadId),
                 mkEntry("task-id", "0_0")
             )
         );
@@ -429,7 +430,7 @@ public class KStreamWindowAggregateTest {
             "stream-task-metrics",
             "The average observed lateness of records.",
             mkMap(
-                mkEntry("client-id", "topology-test-driver-virtual-thread"),
+                mkEntry("client-id", threadId),
                 mkEntry("task-id", "0_0")
             )
         );
