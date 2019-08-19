@@ -482,13 +482,7 @@ public class Fetcher<K, V> implements Closeable {
 
         // Validate each partition against the current leader and epoch
         // If we see a new metadata version, check all partitions
-        int newMetadataUpdateVersion = metadata.updateVersion();
-        if (metadataUpdateVersion.getAndSet(newMetadataUpdateVersion) != newMetadataUpdateVersion) {
-            subscriptions.forEachAssignedPartition(topicPartition -> {
-                ConsumerMetadata.LeaderAndEpoch leaderAndEpoch = metadata.leaderAndEpoch(topicPartition);
-                subscriptions.maybeValidatePositionForCurrentLeader(topicPartition, leaderAndEpoch);
-            });
-        }
+        maybeValidateAssignments();
 
         // Collect positions needing validation, with backoff
         Map<TopicPartition, SubscriptionState.FetchPosition> partitionsToValidate = subscriptions
@@ -1092,18 +1086,25 @@ public class Fetcher<K, V> implements Closeable {
     }
 
     /**
+     * If we have seen new metadata (as tracked by {@link org.apache.kafka.clients.Metadata#updateVersion()}), then
+     * we should check that all of the assignments have a valid position.
+     */
+    private void maybeValidateAssignments() {
+        int newMetadataUpdateVersion = metadata.updateVersion();
+        if (metadataUpdateVersion.getAndSet(newMetadataUpdateVersion) != newMetadataUpdateVersion) {
+            subscriptions.forEachAssignedPartition(
+                    tp -> subscriptions.maybeValidatePositionForCurrentLeader(tp, metadata.leaderAndEpoch(tp)));
+        }
+    }
+
+    /**
      * Create fetch requests for all nodes for which we have assigned partitions
      * that have no existing requests in flight.
      */
     private Map<Node, FetchSessionHandler.FetchRequestData> prepareFetchRequests() {
         Map<Node, FetchSessionHandler.Builder> fetchable = new LinkedHashMap<>();
 
-        int newMetadataUpdateVersion = metadata.updateVersion();
-        if (metadataUpdateVersion.getAndSet(newMetadataUpdateVersion) != newMetadataUpdateVersion) {
-            // Ensure the position has an up-to-date leader
-            subscriptions.forEachAssignedPartition(
-                tp -> subscriptions.maybeValidatePositionForCurrentLeader(tp, metadata.leaderAndEpoch(tp)));
-        }
+        maybeValidateAssignments();
 
         long currentTimeMs = time.milliseconds();
 

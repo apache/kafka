@@ -390,7 +390,7 @@ public class SubscriptionState {
         return new HashSet<>(this.assignment.partitionSet());
     }
 
-    public void forEachAssignedPartition(Consumer<TopicPartition> consumer) {
+    public synchronized void forEachAssignedPartition(Consumer<TopicPartition> consumer) {
         this.assignment.partitionSet().forEach(consumer);
     }
 
