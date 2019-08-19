@@ -17,10 +17,10 @@
 package org.apache.kafka.common.utils;
 
 import org.apache.kafka.common.config.SecurityConfig;
-import org.apache.kafka.common.security.SecurityProviderGenerator;
+import org.apache.kafka.common.security.SecurityProviderCreator;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
-import org.apache.kafka.common.security.ssl.mock.TestPlainSaslServerProviderGenerator;
-import org.apache.kafka.common.security.ssl.mock.TestScramSaslServerProviderGenerator;
+import org.apache.kafka.common.security.ssl.mock.TestPlainSaslServerProviderCreator;
+import org.apache.kafka.common.security.ssl.mock.TestScramSaslServerProviderCreator;
 import org.hamcrest.MatcherAssert;
 import org.junit.After;
 import org.junit.Before;
@@ -35,11 +35,11 @@ import static org.junit.Assert.assertEquals;
 
 public class SecurityUtilsTest {
 
-    private SecurityProviderGenerator testScramSaslServerProviderGenerator = new TestScramSaslServerProviderGenerator();
-    private SecurityProviderGenerator testPlainSaslServerProviderGenerator = new TestPlainSaslServerProviderGenerator();
+    private SecurityProviderCreator testScramSaslServerProviderCreator = new TestScramSaslServerProviderCreator();
+    private SecurityProviderCreator testPlainSaslServerProviderCreator = new TestPlainSaslServerProviderCreator();
 
-    private Provider testScramSaslServerProvider = testScramSaslServerProviderGenerator.getProvider();
-    private Provider testPlainSaslServerProvider = testPlainSaslServerProviderGenerator.getProvider();
+    private Provider testScramSaslServerProvider = testScramSaslServerProviderCreator.getProvider();
+    private Provider testPlainSaslServerProvider = testPlainSaslServerProviderCreator.getProvider();
 
     private void clearTestProviders() {
         Security.removeProvider(testScramSaslServerProvider.getName());
@@ -89,8 +89,8 @@ public class SecurityUtilsTest {
     // expected to be added at the start of the list of available providers and with the relative ordering maintained
     @Test
     public void testAddCustomSecurityProvider() {
-        String customProviderClasses = testScramSaslServerProviderGenerator.getClass().getName() + "," +
-                testPlainSaslServerProviderGenerator.getClass().getName();
+        String customProviderClasses = testScramSaslServerProviderCreator.getClass().getName() + "," +
+                testPlainSaslServerProviderCreator.getClass().getName();
         Map<String, String> configs = new HashMap<>();
         configs.put(SecurityConfig.SECURITY_PROVIDERS_CONFIG, customProviderClasses);
         SecurityUtils.addConfiguredSecurityProviders(configs);

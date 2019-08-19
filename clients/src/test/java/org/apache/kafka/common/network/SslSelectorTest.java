@@ -26,7 +26,7 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.security.ssl.SslFactory;
 import org.apache.kafka.common.security.ssl.mock.TestKeyManagerFactory;
-import org.apache.kafka.common.security.ssl.mock.TestProviderGenerator;
+import org.apache.kafka.common.security.ssl.mock.TestProviderCreator;
 import org.apache.kafka.common.security.ssl.mock.TestTrustManagerFactory;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
@@ -95,8 +95,7 @@ public class SslSelectorTest extends SelectorTest {
     @Test
     public void testConnectionWithCustomKeyManager() throws Exception {
 
-        TestProviderGenerator providerGenerator = new TestProviderGenerator();
-        providerGenerator.configure();
+        TestProviderCreator testProviderCreator = new TestProviderCreator();
 
         int requestSize = 100 * 1024;
         final String node = "0";
@@ -106,7 +105,7 @@ public class SslSelectorTest extends SelectorTest {
                 TestKeyManagerFactory.ALGORITHM,
                 TestTrustManagerFactory.ALGORITHM
         );
-        sslServerConfigs.put(SecurityConfig.SECURITY_PROVIDERS_CONFIG, providerGenerator.getClass().getName());
+        sslServerConfigs.put(SecurityConfig.SECURITY_PROVIDERS_CONFIG, testProviderCreator.getClass().getName());
         EchoServer server = new EchoServer(SecurityProtocol.SSL, sslServerConfigs);
         server.start();
         Time time = new MockTime();
@@ -131,7 +130,7 @@ public class SslSelectorTest extends SelectorTest {
         selector.close(node);
         super.verifySelectorEmpty(selector);
 
-        Security.removeProvider(providerGenerator.getProvider().getName());
+        Security.removeProvider(testProviderCreator.getProvider().getName());
         selector.close();
         server.close();
         metrics.close();

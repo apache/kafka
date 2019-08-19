@@ -16,19 +16,13 @@
  */
 package org.apache.kafka.common.security.ssl.mock;
 
-import org.apache.kafka.common.security.SecurityProviderGenerator;
+import org.apache.kafka.common.security.SecurityProviderCreator;
 
 import java.security.Provider;
-import java.util.Map;
 
-public class TestScramSaslServerProviderGenerator implements SecurityProviderGenerator {
+public class TestScramSaslServerProviderCreator implements SecurityProviderCreator {
 
     private TestScramSaslServerProvider provider;
-
-    @Override
-    public void configure(Map<String, ?> config) {
-
-    }
 
     @Override
     public Provider getProvider() {

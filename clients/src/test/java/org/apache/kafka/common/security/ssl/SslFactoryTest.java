@@ -31,7 +31,7 @@ import org.apache.kafka.common.config.SecurityConfig;
 import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.security.ssl.mock.TestKeyManagerFactory;
-import org.apache.kafka.common.security.ssl.mock.TestProviderGenerator;
+import org.apache.kafka.common.security.ssl.mock.TestProviderCreator;
 import org.apache.kafka.common.security.ssl.mock.TestTrustManagerFactory;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.test.TestSslUtils;
@@ -65,17 +65,16 @@ public class SslFactoryTest {
 
     @Test
     public void testSslFactoryWithCustomKeyManagerConfiguration() {
-        TestProviderGenerator providerGenerator = new TestProviderGenerator();
-        providerGenerator.configure();
+        TestProviderCreator testProviderCreator = new TestProviderCreator();
         Map<String, Object> serverSslConfig = TestSslUtils.createSslConfig(
                 TestKeyManagerFactory.ALGORITHM,
                 TestTrustManagerFactory.ALGORITHM
         );
-        serverSslConfig.put(SecurityConfig.SECURITY_PROVIDERS_CONFIG, providerGenerator.getClass().getName());
+        serverSslConfig.put(SecurityConfig.SECURITY_PROVIDERS_CONFIG, testProviderCreator.getClass().getName());
         SslFactory sslFactory = new SslFactory(Mode.SERVER);
         sslFactory.configure(serverSslConfig);
         assertNotNull("SslEngineBuilder not created", sslFactory.sslEngineBuilder());
-        Security.removeProvider(providerGenerator.getProvider().getName());
+        Security.removeProvider(testProviderCreator.getProvider().getName());
     }
 
     @Test(expected = KafkaException.class)

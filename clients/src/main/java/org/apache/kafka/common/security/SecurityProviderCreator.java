@@ -14,32 +14,26 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common.security.ssl.mock;
-
-import org.apache.kafka.common.security.SecurityProviderGenerator;
+package org.apache.kafka.common.security;
 
 import java.security.Provider;
-import java.util.HashMap;
 import java.util.Map;
 
-public class TestProviderGenerator implements SecurityProviderGenerator {
+/**
+ * An interface for generating security providers.
+ */
+public interface SecurityProviderCreator {
 
-    private TestProvider provider;
-
-    @Override
-    public void configure(Map<String, ?> config) {
+    /**
+     * Configure method is used to configure the generator to create the Security Provider
+     * @param config configuration parameters for initialising security provider
+     */
+    default void configure(Map<String, ?> config) {
 
     }
 
-    public void configure() {
-        configure(new HashMap<>());
-    }
-
-    @Override
-    public Provider getProvider() {
-        if (provider == null) {
-            provider = new TestProvider();
-        }
-        return provider;
-    }
+    /**
+     * Generate the security provider configured
+     */
+    Provider getProvider();
 }
