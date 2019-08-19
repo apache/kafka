@@ -925,7 +925,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                 partition = partition(record, serializedKey, serializedValue, cluster);
                 tp = new TopicPartition(record.topic(), partition);
                 if (log.isTraceEnabled()) {
-                    log.trace("Retrying because of a new batch, sending the record to topic {} partition {}. The old partition was {}", record.topic(), partition, prevPartition);
+                    log.trace("Retrying append due to new batch creation for topic {} partition {}. The old partition was {}", record.topic(), partition, prevPartition);
                 }
                 // producer callback will make sure to call both 'callback' and interceptor callback
                 interceptCallback = new InterceptorCallback<>(callback, this.interceptors, tp);

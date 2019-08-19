@@ -67,8 +67,4 @@ class CompositeKeyValueIterator<K, V, StoreType> implements KeyValueIterator<K, 
         return current.next();
     }
 
-    @Override
-    public void remove() {
-        throw new UnsupportedOperationException("Remove not supported");
-    }
 }

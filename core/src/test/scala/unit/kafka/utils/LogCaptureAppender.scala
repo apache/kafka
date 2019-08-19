@@ -37,7 +37,7 @@ class LogCaptureAppender extends AppenderSkeleton {
     }
   }
 
-  override def close(): Unit =  {
+  override def close(): Unit = {
     events.synchronized {
       events.clear()
     }

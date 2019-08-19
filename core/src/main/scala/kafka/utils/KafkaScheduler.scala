@@ -32,13 +32,13 @@ trait Scheduler {
   /**
    * Initialize this scheduler so it is ready to accept scheduling of tasks
    */
-  def startup()
+  def startup(): Unit
   
   /**
    * Shutdown this scheduler. When this method is complete no more executions of background tasks will occur. 
    * This includes tasks scheduled with a delayed execution.
    */
-  def shutdown()
+  def shutdown(): Unit
   
   /**
    * Check if the scheduler has been started
@@ -72,7 +72,7 @@ class KafkaScheduler(val threads: Int,
   private var executor: ScheduledThreadPoolExecutor = null
   private val schedulerThreadId = new AtomicInteger(0)
 
-  override def startup() {
+  override def startup(): Unit = {
     debug("Initializing task scheduler.")
     this synchronized {
       if(isStarted)
@@ -88,7 +88,7 @@ class KafkaScheduler(val threads: Int,
     }
   }
   
-  override def shutdown() {
+  override def shutdown(): Unit = {
     debug("Shutting down task scheduler.")
     // We use the local variable to avoid NullPointerException if another thread shuts down scheduler at same time.
     val cachedExecutor = this.executor

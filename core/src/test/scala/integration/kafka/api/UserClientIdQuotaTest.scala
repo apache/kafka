@@ -31,7 +31,7 @@ class UserClientIdQuotaTest extends BaseQuotaTest {
   override def consumerClientId = "QuotasTestConsumer-!@#$%^&*()"
 
   @Before
-  override def setUp() {
+  override def setUp(): Unit = {
     this.serverConfig.setProperty(KafkaConfig.SslClientAuthProp, "required")
     this.serverConfig.setProperty(KafkaConfig.ProducerQuotaBytesPerSecondDefaultProp, Long.MaxValue.toString)
     this.serverConfig.setProperty(KafkaConfig.ConsumerQuotaBytesPerSecondDefaultProp, Long.MaxValue.toString)
@@ -51,7 +51,7 @@ class UserClientIdQuotaTest extends BaseQuotaTest {
         Map("user" -> Sanitizer.sanitize(userPrincipal.getName), "client-id" -> clientId)
       }
 
-      override def overrideQuotas(producerQuota: Long, consumerQuota: Long, requestQuota: Double) {
+      override def overrideQuotas(producerQuota: Long, consumerQuota: Long, requestQuota: Double): Unit = {
         val producerProps = new Properties()
         producerProps.setProperty(DynamicConfig.Client.ProducerByteRateOverrideProp, producerQuota.toString)
         producerProps.setProperty(DynamicConfig.Client.RequestPercentageOverrideProp, requestQuota.toString)
@@ -63,7 +63,7 @@ class UserClientIdQuotaTest extends BaseQuotaTest {
         updateQuotaOverride(userPrincipal.getName, consumerClientId, consumerProps)
       }
 
-      override def removeQuotaOverrides() {
+      override def removeQuotaOverrides(): Unit = {
         val emptyProps = new Properties
         adminZkClient.changeUserOrUserClientIdConfig(Sanitizer.sanitize(userPrincipal.getName) +
           "/clients/" + Sanitizer.sanitize(producerClientId), emptyProps)
@@ -71,7 +71,7 @@ class UserClientIdQuotaTest extends BaseQuotaTest {
           "/clients/" + Sanitizer.sanitize(consumerClientId), emptyProps)
       }
 
-      private def updateQuotaOverride(userPrincipal: String, clientId: String, properties: Properties) {
+      private def updateQuotaOverride(userPrincipal: String, clientId: String, properties: Properties): Unit = {
         adminZkClient.changeUserOrUserClientIdConfig(Sanitizer.sanitize(userPrincipal) + "/clients/" + Sanitizer.sanitize(clientId), properties)
       }
     }

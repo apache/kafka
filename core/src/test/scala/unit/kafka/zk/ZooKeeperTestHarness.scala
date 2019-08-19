@@ -53,7 +53,7 @@ abstract class ZooKeeperTestHarness extends Logging {
   def zkConnect: String = s"127.0.0.1:$zkPort"
   
   @Before
-  def setUp() {
+  def setUp(): Unit = {
     zookeeper = new EmbeddedZookeeper()
     zkClient = KafkaZkClient(zkConnect, zkAclsEnabled.getOrElse(JaasUtils.isZkSecurityEnabled), zkSessionTimeout,
       zkConnectionTimeout, zkMaxInFlightRequests, Time.SYSTEM)
@@ -61,7 +61,7 @@ abstract class ZooKeeperTestHarness extends Logging {
   }
 
   @After
-  def tearDown() {
+  def tearDown(): Unit = {
     if (zkClient != null)
      zkClient.close()
     if (zookeeper != null)
@@ -101,7 +101,7 @@ object ZooKeeperTestHarness {
    * which is true for core tests where this harness is used.
    */
   @BeforeClass
-  def setUpClass() {
+  def setUpClass(): Unit = {
     verifyNoUnexpectedThreads("@BeforeClass")
   }
 
@@ -109,7 +109,7 @@ object ZooKeeperTestHarness {
    * Verify that tests from the current test class using ZooKeeperTestHarness haven't left behind an unexpected thread
    */
   @AfterClass
-  def tearDownClass() {
+  def tearDownClass(): Unit = {
     verifyNoUnexpectedThreads("@AfterClass")
   }
 
@@ -117,7 +117,7 @@ object ZooKeeperTestHarness {
    * Verifies that threads which are known to cause transient failures in subsequent tests
    * have been shutdown.
    */
-  def verifyNoUnexpectedThreads(context: String) {
+  def verifyNoUnexpectedThreads(context: String): Unit = {
     def allThreads = Thread.getAllStackTraces.keySet.asScala.map(thread => thread.getName)
     val (threads, noUnexpected) = TestUtils.computeUntilTrue(allThreads) { threads =>
       threads.forall(t => unexpectedThreadNames.forall(s => !t.contains(s)))
