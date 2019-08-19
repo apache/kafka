@@ -107,25 +107,35 @@ private[kafka] object LogValidator extends Logging {
     if (isFromClient) {
       if (batch.magic >= RecordBatch.MAGIC_VALUE_V2) {
         val countFromOffsets = batch.lastOffset - batch.baseOffset + 1
-        if (countFromOffsets <= 0)
+        if (countFromOffsets <= 0) {
+          brokerTopicStats.topicStats(topicPartition.topic).invalidOffsetOrSequenceRecordsPerSec.mark()
           throw new InvalidRecordException(s"Batch has an invalid offset range: [${batch.baseOffset}, ${batch.lastOffset}]")
+        }
 
         // v2 and above messages always have a non-null count
         val count = batch.countOrNull
-        if (count <= 0)
+        if (count <= 0) {
+          brokerTopicStats.topicStats(topicPartition.topic).invalidOffsetOrSequenceRecordsPerSec.mark()
           throw new InvalidRecordException(s"Invalid reported count for record batch: $count")
+        }
 
-        if (countFromOffsets != batch.countOrNull)
+        if (countFromOffsets != batch.countOrNull) {
+          brokerTopicStats.topicStats(topicPartition.topic).invalidOffsetOrSequenceRecordsPerSec.mark()
           throw new InvalidRecordException(s"Inconsistent batch offset range [${batch.baseOffset}, ${batch.lastOffset}] " +
             s"and count of records $count")
+        }
       }
 
-      if (batch.hasProducerId && batch.baseSequence < 0)
+      if (batch.hasProducerId && batch.baseSequence < 0) {
+        brokerTopicStats.topicStats(topicPartition.topic).invalidOffsetOrSequenceRecordsPerSec.mark()
         throw new InvalidRecordException(s"Invalid sequence number ${batch.baseSequence} in record batch " +
           s"with producerId ${batch.producerId}")
+      }
 
-      if (batch.isControlBatch)
+      if (batch.isControlBatch) {
+        brokerTopicStats.topicStats(topicPartition.topic).invalidOffsetOrSequenceRecordsPerSec.mark()
         throw new InvalidRecordException("Clients are not allowed to write control records")
+      }
     }
 
     if (batch.isTransactional && toMagic < RecordBatch.MAGIC_VALUE_V2)
@@ -349,7 +359,7 @@ private[kafka] object LogValidator extends Logging {
             // inner records offset should always be continuous
             val expectedOffset = expectedInnerOffset.getAndIncrement()
             if (record.offset != expectedOffset) {
-              brokerTopicStats.topicStats(topicPartition.topic).nonIncreasingOffsetRecordsPerSec.mark()
+              brokerTopicStats.topicStats(topicPartition.topic).invalidOffsetOrSequenceRecordsPerSec.mark()
               throw new InvalidRecordException(s"Inner record $record inside the compressed record batch does not have incremental offsets, expected offset is $expectedOffset")
             }
             if (record.timestamp > maxTimestamp)

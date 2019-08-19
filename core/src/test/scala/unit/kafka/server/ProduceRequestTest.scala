@@ -19,6 +19,7 @@ package kafka.server
 
 import java.util.Properties
 
+import com.yammer.metrics.Metrics
 import kafka.log.LogConfig
 import kafka.message.ZStdCompressionCodec
 import kafka.utils.TestUtils
@@ -114,6 +115,7 @@ class ProduceRequestTest extends BaseRequestTest {
     assertEquals(Errors.CORRUPT_MESSAGE, partitionResponse.error)
     assertEquals(-1, partitionResponse.baseOffset)
     assertEquals(-1, partitionResponse.logAppendTime)
+    assertEquals(Metrics.defaultRegistry.allMetrics.keySet.asScala.count(_.getMBeanName.endsWith(s"name=InvalidMessageCrcRecordsPerSec,topic=topic")), 1)
   }
 
   @Test

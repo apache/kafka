@@ -186,8 +186,8 @@ class BrokerTopicMetrics(name: Option[String]) extends KafkaMetricsGroup {
     newMeter(BrokerTopicStats.InvalidMagicNumberRecordsPerSec, "requests", TimeUnit.SECONDS, tags))
   def invalidMessageCrcRecordsPerSec = metricTypeMap.getAndMaybePut(BrokerTopicStats.InvalidMessageCrcRecordsPerSec,
     newMeter(BrokerTopicStats.InvalidMessageCrcRecordsPerSec, "requests", TimeUnit.SECONDS, tags))
-  def nonIncreasingOffsetRecordsPerSec = metricTypeMap.getAndMaybePut(BrokerTopicStats.NonIncreasingOffsetRecordsPerSec,
-    newMeter(BrokerTopicStats.NonIncreasingOffsetRecordsPerSec, "requests", TimeUnit.SECONDS, tags))
+  def invalidOffsetOrSequenceRecordsPerSec = metricTypeMap.getAndMaybePut(BrokerTopicStats.InvalidOffsetOrSequenceRecordsPerSec,
+    newMeter(BrokerTopicStats.InvalidOffsetOrSequenceRecordsPerSec, "requests", TimeUnit.SECONDS, tags))
 
   // this method helps check with metricTypeMap first before deleting a metric
   def removeMetricHelper(metricType: String, tags: scala.collection.Map[String, String]): Unit = {
@@ -215,7 +215,7 @@ class BrokerTopicMetrics(name: Option[String]) extends KafkaMetricsGroup {
     removeMetricHelper(BrokerTopicStats.NoKeyCompactedTopicRecordsPerSec, tags)
     removeMetricHelper(BrokerTopicStats.InvalidMagicNumberRecordsPerSec, tags)
     removeMetricHelper(BrokerTopicStats.InvalidMessageCrcRecordsPerSec, tags)
-    removeMetricHelper(BrokerTopicStats.NonIncreasingOffsetRecordsPerSec, tags)
+    removeMetricHelper(BrokerTopicStats.InvalidOffsetOrSequenceRecordsPerSec, tags)
   }
 }
 
@@ -237,7 +237,7 @@ object BrokerTopicStats {
   val NoKeyCompactedTopicRecordsPerSec = "NoKeyCompactedTopicRecordsPerSec"
   val InvalidMagicNumberRecordsPerSec = "InvalidMagicNumberRecordsPerSec"
   val InvalidMessageCrcRecordsPerSec = "InvalidMessageCrcRecordsPerSec"
-  val NonIncreasingOffsetRecordsPerSec = "NonIncreasingOffsetRecordsPerSec"
+  val InvalidOffsetOrSequenceRecordsPerSec = "InvalidOffsetOrSequenceRecordsPerSec"
 
   private val valueFactory = (k: String) => new BrokerTopicMetrics(Some(k))
 }
