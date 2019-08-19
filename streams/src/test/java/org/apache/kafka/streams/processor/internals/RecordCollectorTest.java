@@ -145,6 +145,37 @@ public class RecordCollectorTest {
         assertEquals((Long) 0L, offsets.get(new TopicPartition("topic1", 2)));
     }
 
+    @Test()
+    public void shouldNotAllowOffsetsToBeUpdatedExternally() {
+
+        final RecordCollectorImpl collector = new RecordCollectorImpl(
+            "RecordCollectorTest-TestSpecificPartition",
+            new LogContext("RecordCollectorTest-TestSpecificPartition "),
+            new DefaultProductionExceptionHandler(),
+            new Metrics().sensor("skipped-records")
+        );
+        collector.init(new MockProducer<>(cluster, true, new DefaultPartitioner(), byteArraySerializer, byteArraySerializer));
+
+        final Headers headers = new RecordHeaders(new Header[]{new RecordHeader("key", "value".getBytes())});
+
+        collector.send("topic1", "999", "0", null, 0, null, stringSerializer, stringSerializer);
+        collector.send("topic1", "999", "0", null, 0, null, stringSerializer, stringSerializer);
+        collector.send("topic1", "999", "0", null, 0, null, stringSerializer, stringSerializer);
+
+        final Map<TopicPartition, Long> offsets = collector.offsets();
+
+        assertEquals((Long) 2L, offsets.get(new TopicPartition("topic1", 0)));
+
+        try {
+            offsets.put(new TopicPartition("topic1", 0), 50L);
+            fail("Should have thrown UnsupportedOperationException");
+        } catch (final UnsupportedOperationException e) {
+            // Expected case
+        }
+
+        assertEquals((Long) 2L, offsets.get(new TopicPartition("topic1", 0)));
+    }
+
     @SuppressWarnings("unchecked")
     @Test(expected = StreamsException.class)
     public void shouldThrowStreamsExceptionOnAnyExceptionButProducerFencedException() {
