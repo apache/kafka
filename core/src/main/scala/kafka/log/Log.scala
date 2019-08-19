@@ -1352,12 +1352,9 @@ class Log(@volatile var dir: File,
       }
 
       // check the validity of the message by checking CRC
-      try {
-        batch.ensureValid()
-      } catch {
-        case e: InvalidRecordException =>
-          brokerTopicStats.topicStats(topicPartition.topic).invalidMessageCrcRecordsPerSec.mark()
-          throw e
+      if (batch.isValid) {
+        brokerTopicStats.topicStats(topicPartition.topic).invalidMessageCrcRecordsPerSec.mark()
+        throw new InvalidRecordException(s"Record is corrupt (stored crc = ${batch.checksum()}).")
       }
 
       if (batch.maxTimestamp > maxTimestamp) {

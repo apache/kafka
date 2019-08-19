@@ -31,7 +31,6 @@ import org.apache.kafka.common.utils.Time
 import org.apache.kafka.test.TestUtils
 import org.junit.Assert._
 import org.junit.Test
-import org.scalatest.Assertions
 import org.scalatest.Assertions.{assertThrows, intercept}
 
 import scala.collection.JavaConverters._
@@ -80,11 +79,8 @@ class LogValidatorTest {
   }
 
   private def checkMismatchMagic(batchMagic: Byte, recordMagic: Byte, compressionType: CompressionType): Unit = {
-    try {
+    assertThrows[InvalidRecordException] {
       validateMessages(recordsWithInvalidInnerMagic(batchMagic, recordMagic, compressionType), batchMagic, compressionType, compressionType)
-      Assertions.fail("InvalidRecordException should have been thrown")
-    } catch {
-      case _: InvalidRecordException => // GOOD
     }
     assertEquals(metricsKeySet.count(_.getMBeanName.startsWith("kafka.server:type=BrokerTopicMetrics,name=InvalidMagicNumberRecordsPerSec")), 1)
   }
