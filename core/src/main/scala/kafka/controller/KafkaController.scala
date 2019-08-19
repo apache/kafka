@@ -1246,7 +1246,7 @@ class KafkaController(val config: KafkaConfig,
     ineligibleTopicsToDeleteCount = if (!isActive) 0 else controllerContext.topicsIneligibleForDeletion.size
 
     ineligibleReplicasToDeleteCount = if (!isActive) 0 else controllerContext.topicsToBeDeleted.map { topic =>
-      // For each enqueued topic, count the number of replicas not yet deleted
+      // For each enqueued topic, count the number of replicas that are ineligible
       controllerContext.replicasForTopic(topic).count { replica =>
         controllerContext.replicaState(replica) == ReplicaDeletionIneligible
       }
