@@ -107,7 +107,7 @@ class DumpLogSegmentsTest {
       assertTrue(s"Data not printed: $output", lines.length > 2)
       val totalRecords = batches.map(_.records.size).sum
       var offset = 0
-      val batchClone = batches.clone()
+      val batchIterator = batches.iterator
       var batch : BatchInfo = null;
       (0 until totalRecords + batches.size).foreach { index =>
         val line = lines(lines.length - totalRecords - batches.size + index)
@@ -115,7 +115,7 @@ class DumpLogSegmentsTest {
         // only increment the offset if it's not a batch
         if (isBatch(index)) {
           assertTrue(s"Not a valid batch-level message record: $line", line.startsWith(s"baseOffset: $offset lastOffset: "))
-          batch = batchClone.remove(0)
+          batch = batchIterator.next
         } else {
           assertTrue(s"Not a valid message record: $line", line.startsWith(s"${DumpLogSegments.RecordIndent} offset: $offset"))
           if (checkKeysAndValues) {
