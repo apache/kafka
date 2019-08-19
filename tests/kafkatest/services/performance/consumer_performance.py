@@ -189,7 +189,6 @@ class ConsumerPerformanceService(PerformanceService):
         self.logger.debug("Consumer performance %d command: %s", idx, cmd)
         last = None
         for line in node.account.ssh_capture(cmd):
-            print line
             last = line
 
         # Parse and save the last line's information

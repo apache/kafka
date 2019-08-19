@@ -222,7 +222,7 @@ class Benchmark(Test):
             }
         )
         self.consumer = ConsumerPerformanceService(
-            self.test_context, 1, self.kafka, topic=TOPIC_REP_THREE, messages=num_records)
+            self.test_context, 1, None, self.kafka, topic=TOPIC_REP_THREE, messages=num_records)
         Service.run_parallel(self.producer, self.consumer)
 
         data = {
@@ -236,9 +236,9 @@ class Benchmark(Test):
         return data
 
     @cluster(num_nodes=6)
+    @parametrize(security_protocol='SSL', interbroker_security_protocol='PLAINTEXT')
+    @matrix(security_protocol=['PLAINTEXT', 'SSL'], compression_type=["none", "snappy"])
     @parametrize(paused_partitions_percent="0.8")
-    # @parametrize(security_protocol='SSL', interbroker_security_protocol='PLAINTEXT')
-    # @matrix(security_protocol=['PLAINTEXT', 'SSL'], compression_type=["none", "snappy"])
     def test_consumer_throughput(self, compression_type="none", security_protocol="PLAINTEXT",
                                  interbroker_security_protocol=None, num_consumers=1, paused_partitions_percent="0",
                                  client_version=str(DEV_BRANCH), broker_version=str(DEV_BRANCH)):

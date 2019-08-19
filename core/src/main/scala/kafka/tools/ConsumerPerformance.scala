@@ -20,7 +20,7 @@ package kafka.tools
 import java.text.SimpleDateFormat
 import java.time.Duration
 import java.util
-import java.util.Properties
+import java.util.{Properties, Random}
 import java.util.concurrent.atomic.AtomicLong
 
 import com.typesafe.scalalogging.LazyLogging
@@ -33,7 +33,6 @@ import org.apache.kafka.common.{Metric, MetricName, TopicPartition}
 
 import scala.collection.JavaConverters._
 import scala.collection.mutable
-import scala.util.Random
 
 /**
  * Performance test for the full zookeeper consumer
@@ -236,7 +235,7 @@ object ConsumerPerformance extends LazyLogging {
     val groupIdOpt = parser.accepts("group", "The group id to consume on.")
       .withRequiredArg
       .describedAs("gid")
-      .defaultsTo("perf-consumer-" + Random.nextInt(100000))
+      .defaultsTo("perf-consumer-" + new Random().nextInt(100000))
       .ofType(classOf[String])
     val fetchSizeOpt = parser.accepts("fetch-size", "The amount of data to fetch in a single request.")
       .withRequiredArg
