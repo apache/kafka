@@ -388,6 +388,10 @@ public class SubscriptionState {
         return new HashSet<>(this.assignment.partitionSet());
     }
 
+    public void forEachAssignedPartition(Consumer<TopicPartition> consumer) {
+        this.assignment.partitionSet().forEach(consumer);
+    }
+
     /**
      * @return a modifiable copy of the currently assigned partitions as a list
      */

@@ -153,6 +153,8 @@ public class Fetcher<K, V> implements Closeable {
     private final OffsetsForLeaderEpochClient offsetsForLeaderEpochClient;
     private final Set<Integer> nodesWithPendingFetchRequests;
     private final ApiVersions apiVersions;
+    private final AtomicInteger metadataUpdateVersion = new AtomicInteger(-1);
+
 
     private PartitionRecords nextInLineRecords = null;
 
@@ -479,10 +481,14 @@ public class Fetcher<K, V> implements Closeable {
             throw exception;
 
         // Validate each partition against the current leader and epoch
-        subscriptions.assignedPartitions().forEach(topicPartition -> {
-            ConsumerMetadata.LeaderAndEpoch leaderAndEpoch = metadata.leaderAndEpoch(topicPartition);
-            subscriptions.maybeValidatePositionForCurrentLeader(topicPartition, leaderAndEpoch);
-        });
+        // If we see a new metadata version, check all partitions
+        int newMetadataUpdateVersion = metadata.updateVersion();
+        if (metadataUpdateVersion.getAndSet(newMetadataUpdateVersion) != newMetadataUpdateVersion) {
+            subscriptions.forEachAssignedPartition(topicPartition -> {
+                ConsumerMetadata.LeaderAndEpoch leaderAndEpoch = metadata.leaderAndEpoch(topicPartition);
+                subscriptions.maybeValidatePositionForCurrentLeader(topicPartition, leaderAndEpoch);
+            });
+        }
 
         // Collect positions needing validation, with backoff
         Map<TopicPartition, SubscriptionState.FetchPosition> partitionsToValidate = subscriptions
@@ -769,6 +775,7 @@ public class Fetcher<K, V> implements Closeable {
         final Map<Node, Map<TopicPartition, SubscriptionState.FetchPosition>> regrouped =
                 regroupFetchPositionsByLeader(partitionsToValidate);
 
+        long nextResetTimeMs = time.milliseconds() + requestTimeoutMs;
         regrouped.forEach((node, fetchPostitions) -> {
             if (node.isEmpty()) {
                 metadata.requestUpdate();
@@ -791,7 +798,7 @@ public class Fetcher<K, V> implements Closeable {
                 return;
             }
 
-            subscriptions.setNextAllowedRetry(fetchPostitions.keySet(), time.milliseconds() + requestTimeoutMs);
+            subscriptions.setNextAllowedRetry(fetchPostitions.keySet(), nextResetTimeMs);
 
             RequestFuture<OffsetsForLeaderEpochClient.OffsetForEpochResult> future = offsetsForLeaderEpochClient.sendAsyncRequest(node, partitionsToValidate);
             future.addListener(new RequestFutureListener<OffsetsForLeaderEpochClient.OffsetForEpochResult>() {
@@ -1091,9 +1098,12 @@ public class Fetcher<K, V> implements Closeable {
     private Map<Node, FetchSessionHandler.FetchRequestData> prepareFetchRequests() {
         Map<Node, FetchSessionHandler.Builder> fetchable = new LinkedHashMap<>();
 
-        // Ensure the position has an up-to-date leader
-        subscriptions.assignedPartitions().forEach(
-            tp -> subscriptions.maybeValidatePositionForCurrentLeader(tp, metadata.leaderAndEpoch(tp)));
+        int newMetadataUpdateVersion = metadata.updateVersion();
+        if (metadataUpdateVersion.getAndSet(newMetadataUpdateVersion) != newMetadataUpdateVersion) {
+            // Ensure the position has an up-to-date leader
+            subscriptions.forEachAssignedPartition(
+                    tp -> subscriptions.maybeValidatePositionForCurrentLeader(tp, metadata.leaderAndEpoch(tp)));
+        }
 
         long currentTimeMs = time.milliseconds();
 
