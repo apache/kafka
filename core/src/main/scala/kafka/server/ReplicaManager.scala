@@ -216,7 +216,7 @@ class ReplicaManager(val config: KafkaConfig,
   private var logDirFailureHandler: LogDirFailureHandler = null
 
   private class LogDirFailureHandler(name: String, haltBrokerOnDirFailure: Boolean) extends ShutdownableThread(name) {
-    override def doWork() {
+    override def doWork(): Unit = {
       val newOfflineLogDir = logDirFailureChannel.takeNextOfflineLogDir()
       if (haltBrokerOnDirFailure) {
         fatal(s"Halting broker because dir $newOfflineLogDir is offline")
@@ -276,7 +276,7 @@ class ReplicaManager(val config: KafkaConfig,
       scheduler.schedule("highwatermark-checkpoint", checkpointHighWatermarks _, period = config.replicaHighWatermarkCheckpointIntervalMs, unit = TimeUnit.MILLISECONDS)
   }
 
-  def recordIsrChange(topicPartition: TopicPartition) {
+  def recordIsrChange(topicPartition: TopicPartition): Unit = {
     isrChangeSet synchronized {
       isrChangeSet += topicPartition
       lastIsrChangeMs.set(System.currentTimeMillis())
@@ -289,7 +289,7 @@ class ReplicaManager(val config: KafkaConfig,
    * This allows an occasional ISR change to be propagated within a few seconds, and avoids overwhelming controller and
    * other brokers when large amount of ISR change occurs.
    */
-  def maybePropagateIsrChanges() {
+  def maybePropagateIsrChanges(): Unit = {
     val now = System.currentTimeMillis()
     isrChangeSet synchronized {
       if (isrChangeSet.nonEmpty &&
@@ -319,7 +319,7 @@ class ReplicaManager(val config: KafkaConfig,
     debug("Request key %s unblocked %d ElectLeader.".format(key.keyLabel, completed))
   }
 
-  def startup() {
+  def startup(): Unit = {
     // start ISR expiration thread
     // A follower can lag behind leader for up to config.replicaLagTimeMaxMs x 1.5 before it is removed from ISR
     scheduler.schedule("isr-expiration", maybeShrinkIsr _, period = config.replicaLagTimeMaxMs / 2, unit = TimeUnit.MILLISECONDS)
@@ -485,7 +485,7 @@ class ReplicaManager(val config: KafkaConfig,
                     entriesPerPartition: Map[TopicPartition, MemoryRecords],
                     responseCallback: Map[TopicPartition, PartitionResponse] => Unit,
                     delayedProduceLock: Option[Lock] = None,
-                    recordConversionStatsCallback: Map[TopicPartition, RecordConversionStats] => Unit = _ => ()) {
+                    recordConversionStatsCallback: Map[TopicPartition, RecordConversionStats] => Unit = _ => ()): Unit = {
     if (isValidRequiredAcks(requiredAcks)) {
       val sTime = time.milliseconds
       val localProduceResults = appendToLocalLog(internalTopicsAllowed = internalTopicsAllowed,
@@ -696,7 +696,7 @@ class ReplicaManager(val config: KafkaConfig,
 
   def deleteRecords(timeout: Long,
                     offsetPerPartition: Map[TopicPartition, Long],
-                    responseCallback: Map[TopicPartition, DeleteRecordsResponse.PartitionResponse] => Unit) {
+                    responseCallback: Map[TopicPartition, DeleteRecordsResponse.PartitionResponse] => Unit): Unit = {
     val timeBeforeLocalDeleteRecords = time.milliseconds
     val localDeleteRecordsResults = deleteRecordsOnLocalLog(offsetPerPartition)
     debug("Delete records on local log in %d ms".format(time.milliseconds - timeBeforeLocalDeleteRecords))
@@ -832,7 +832,7 @@ class ReplicaManager(val config: KafkaConfig,
                     quota: ReplicaQuota,
                     responseCallback: Seq[(TopicPartition, FetchPartitionData)] => Unit,
                     isolationLevel: IsolationLevel,
-                    clientMetadata: Option[ClientMetadata]) {
+                    clientMetadata: Option[ClientMetadata]): Unit = {
     val isFromFollower = Request.isValidBrokerId(replicaId)
 
     val fetchIsolation = if (isFromFollower || replicaId == Request.FutureLocalReplicaId)
@@ -1565,7 +1565,7 @@ class ReplicaManager(val config: KafkaConfig,
     nonOfflinePartition(topicPartition).flatMap(_.leaderLogIfLocal.map(_.logEndOffset))
 
   // Flushes the highwatermark value for all partitions to the highwatermark file
-  def checkpointHighWatermarks() {
+  def checkpointHighWatermarks(): Unit = {
     val localLogs = nonOfflinePartitionsIterator.flatMap { partition =>
       val logsList: mutable.Set[Log] = mutable.Set()
       partition.log.foreach(logsList.add)
@@ -1592,7 +1592,7 @@ class ReplicaManager(val config: KafkaConfig,
 
   // logDir should be an absolute path
   // sendZkNotification is needed for unit test
-  def handleLogDirFailure(dir: String, sendZkNotification: Boolean = true) {
+  def handleLogDirFailure(dir: String, sendZkNotification: Boolean = true): Unit = {
     if (!logManager.isLogDirOnline(dir))
       return
     info(s"Stopping serving replicas in dir $dir")
@@ -1627,7 +1627,7 @@ class ReplicaManager(val config: KafkaConfig,
     info(s"Stopped serving replicas in dir $dir")
   }
 
-  def removeMetrics() {
+  def removeMetrics(): Unit = {
     removeMetric("LeaderCount")
     removeMetric("PartitionCount")
     removeMetric("OfflineReplicaCount")
@@ -1637,7 +1637,7 @@ class ReplicaManager(val config: KafkaConfig,
   }
 
   // High watermark do not need to be checkpointed only when under unit tests
-  def shutdown(checkpointHW: Boolean = true) {
+  def shutdown(checkpointHW: Boolean = true): Unit = {
     info("Shutting down")
     removeMetrics()
     if (logDirFailureHandler != null)

@@ -373,8 +373,8 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
      * 3. within each client, tasks are assigned to consumer clients in round-robin manner.
      */
     @Override
-    public GroupAssignment assign(final Cluster metadata, final GroupSubscription groupSubscriptions) {
-        final Map<String, Subscription> subscriptions = groupSubscriptions.groupSubscription();
+    public GroupAssignment assign(final Cluster metadata, final GroupSubscription groupSubscription) {
+        final Map<String, Subscription> subscriptions = groupSubscription.groupSubscription();
         // construct the client metadata from the decoded subscription info
         final Map<UUID, ClientMetadata> clientMetadataMap = new HashMap<>();
         final Set<String> futureConsumers = new HashSet<>();

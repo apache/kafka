@@ -79,11 +79,10 @@ public class StreamTableJoinIntegrationTest extends AbstractJoinIntegrationTest 
         streams.setStreamThreadStateListener(listener);
         streams.start();
 
-        TestUtils.waitForCondition(listener::revokedToPendingShutdownSeen, "Did not seen thread state transited to PENDING_SHUTDOWN");
+        TestUtils.waitForCondition(listener::transitToPendingShutdownSeen, "Did not seen thread state transited to PENDING_SHUTDOWN");
 
         streams.close();
-        assertTrue(listener.createdToRevokedSeen());
-        assertTrue(listener.revokedToPendingShutdownSeen());
+        assertTrue(listener.transitToPendingShutdownSeen());
     }
 
     @Test

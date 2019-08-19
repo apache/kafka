@@ -83,7 +83,7 @@ object CoreUtils {
     * @param logging The logging instance to use for logging the thrown exception.
     * @param logLevel The log level to use for logging.
     */
-  def swallow(action: => Unit, logging: Logging, logLevel: Level = Level.WARN) {
+  def swallow(action: => Unit, logging: Logging, logLevel: Level = Level.WARN): Unit = {
     try {
       action
     } catch {
@@ -159,7 +159,7 @@ object CoreUtils {
    * Unregister the mbean with the given name, if there is one registered
    * @param name The mbean name to unregister
    */
-  def unregisterMBean(name: String) {
+  def unregisterMBean(name: String): Unit = {
     val mbs = ManagementFactory.getPlatformMBeanServer()
     mbs synchronized {
       val objName = new ObjectName(name)

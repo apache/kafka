@@ -26,6 +26,7 @@ import kafka.coordinator.group.GroupCoordinatorConcurrencyTest._
 import kafka.server.{DelayedOperationPurgatory, KafkaConfig}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.internals.Topic
+import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.JoinGroupRequest
@@ -67,7 +68,7 @@ class GroupCoordinatorConcurrencyTest extends AbstractCoordinatorConcurrencyTest
   var groupCoordinator: GroupCoordinator = _
 
   @Before
-  override def setUp() {
+  override def setUp(): Unit = {
     super.setUp()
 
     EasyMock.expect(zkClient.getTopicPartitionCount(Topic.GROUP_METADATA_TOPIC_NAME))
@@ -84,12 +85,12 @@ class GroupCoordinatorConcurrencyTest extends AbstractCoordinatorConcurrencyTest
     val heartbeatPurgatory = new DelayedOperationPurgatory[DelayedHeartbeat]("Heartbeat", timer, config.brokerId, reaperEnabled = false)
     val joinPurgatory = new DelayedOperationPurgatory[DelayedJoin]("Rebalance", timer, config.brokerId, reaperEnabled = false)
 
-    groupCoordinator = GroupCoordinator(config, zkClient, replicaManager, heartbeatPurgatory, joinPurgatory, timer.time)
+    groupCoordinator = GroupCoordinator(config, zkClient, replicaManager, heartbeatPurgatory, joinPurgatory, timer.time, new Metrics())
     groupCoordinator.startup(false)
   }
 
   @After
-  override def tearDown() {
+  override def tearDown(): Unit = {
     try {
       if (groupCoordinator != null)
         groupCoordinator.shutdown()
@@ -105,17 +106,17 @@ class GroupCoordinatorConcurrencyTest extends AbstractCoordinatorConcurrencyTest
   }
 
   @Test
-  def testConcurrentGoodPathSequence() {
+  def testConcurrentGoodPathSequence(): Unit = {
     verifyConcurrentOperations(createGroupMembers, allOperations)
   }
 
   @Test
-  def testConcurrentTxnGoodPathSequence() {
+  def testConcurrentTxnGoodPathSequence(): Unit = {
     verifyConcurrentOperations(createGroupMembers, allOperationsWithTxn)
   }
 
   @Test
-  def testConcurrentRandomSequence() {
+  def testConcurrentRandomSequence(): Unit = {
     verifyConcurrentRandomSequences(createGroupMembers, allOperationsWithTxn)
   }
 

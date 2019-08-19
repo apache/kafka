@@ -59,7 +59,7 @@ public class ThreadMetricsTest {
         mockStatic(StreamsMetricsImpl.class);
         expect(streamsMetrics.threadLevelSensor(operation, RecordingLevel.INFO)).andReturn(dummySensor);
         expect(streamsMetrics.threadLevelTagMap()).andReturn(dummyTagMap);
-        StreamsMetricsImpl.addInvocationRateAndCount(
+        StreamsMetricsImpl.addInvocationRateAndCountToSensor(
             dummySensor, THREAD_LEVEL_GROUP, dummyTagMap, operation, totalDescription, rateDescription);
 
         replayAll();
@@ -81,7 +81,7 @@ public class ThreadMetricsTest {
         mockStatic(StreamsMetricsImpl.class);
         expect(streamsMetrics.threadLevelSensor(operation, RecordingLevel.INFO)).andReturn(dummySensor);
         expect(streamsMetrics.threadLevelTagMap()).andReturn(dummyTagMap);
-        StreamsMetricsImpl.addInvocationRateAndCount(
+        StreamsMetricsImpl.addInvocationRateAndCountToSensor(
             dummySensor, THREAD_LEVEL_GROUP, dummyTagMap, operation, totalDescription, rateDescription);
 
         replayAll();
@@ -104,9 +104,9 @@ public class ThreadMetricsTest {
         mockStatic(StreamsMetricsImpl.class);
         expect(streamsMetrics.threadLevelSensor(operation, RecordingLevel.INFO)).andReturn(dummySensor);
         expect(streamsMetrics.threadLevelTagMap()).andReturn(dummyTagMap);
-        StreamsMetricsImpl.addInvocationRateAndCount(
+        StreamsMetricsImpl.addInvocationRateAndCountToSensor(
             dummySensor, THREAD_LEVEL_GROUP, dummyTagMap, operation, totalDescription, rateDescription);
-        StreamsMetricsImpl.addAvgAndMax(
+        StreamsMetricsImpl.addAvgAndMaxToSensor(
             dummySensor, THREAD_LEVEL_GROUP, dummyTagMap, operationLatency);
 
         replayAll();
@@ -129,9 +129,9 @@ public class ThreadMetricsTest {
         mockStatic(StreamsMetricsImpl.class);
         expect(streamsMetrics.threadLevelSensor(operation, RecordingLevel.INFO)).andReturn(dummySensor);
         expect(streamsMetrics.threadLevelTagMap()).andReturn(dummyTagMap);
-        StreamsMetricsImpl.addInvocationRateAndCount(
+        StreamsMetricsImpl.addInvocationRateAndCountToSensor(
             dummySensor, THREAD_LEVEL_GROUP, dummyTagMap, operation, totalDescription, rateDescription);
-        StreamsMetricsImpl.addAvgAndMax(
+        StreamsMetricsImpl.addAvgAndMaxToSensor(
             dummySensor, THREAD_LEVEL_GROUP, dummyTagMap, operationLatency);
 
         replayAll();
@@ -154,9 +154,9 @@ public class ThreadMetricsTest {
         mockStatic(StreamsMetricsImpl.class);
         expect(streamsMetrics.threadLevelSensor(operation, RecordingLevel.INFO)).andReturn(dummySensor);
         expect(streamsMetrics.threadLevelTagMap()).andReturn(dummyTagMap);
-        StreamsMetricsImpl.addInvocationRateAndCount(
+        StreamsMetricsImpl.addInvocationRateAndCountToSensor(
             dummySensor, THREAD_LEVEL_GROUP, dummyTagMap, operation, totalDescription, rateDescription);
-        StreamsMetricsImpl.addAvgAndMax(
+        StreamsMetricsImpl.addAvgAndMaxToSensor(
             dummySensor, THREAD_LEVEL_GROUP, dummyTagMap, operationLatency);
 
         replayAll();
@@ -179,9 +179,9 @@ public class ThreadMetricsTest {
         mockStatic(StreamsMetricsImpl.class);
         expect(streamsMetrics.threadLevelSensor(operation, RecordingLevel.INFO)).andReturn(dummySensor);
         expect(streamsMetrics.threadLevelTagMap()).andReturn(dummyTagMap);
-        StreamsMetricsImpl.addInvocationRateAndCount(
+        StreamsMetricsImpl.addInvocationRateAndCountToSensor(
             dummySensor, THREAD_LEVEL_GROUP, dummyTagMap, operation, totalDescription, rateDescription);
-        StreamsMetricsImpl.addAvgAndMax(
+        StreamsMetricsImpl.addAvgAndMaxToSensor(
             dummySensor, THREAD_LEVEL_GROUP, dummyTagMap, operationLatency);
 
         replayAll();
@@ -203,7 +203,7 @@ public class ThreadMetricsTest {
         mockStatic(StreamsMetricsImpl.class);
         expect(streamsMetrics.threadLevelSensor(operation, RecordingLevel.INFO)).andReturn(dummySensor);
         expect(streamsMetrics.threadLevelTagMap()).andReturn(dummyTagMap);
-        StreamsMetricsImpl.addInvocationRateAndCount(
+        StreamsMetricsImpl.addInvocationRateAndCountToSensor(
             dummySensor, THREAD_LEVEL_GROUP, dummyTagMap, operation, totalDescription, rateDescription);
 
         replayAll();
@@ -226,9 +226,9 @@ public class ThreadMetricsTest {
         mockStatic(StreamsMetricsImpl.class);
         expect(streamsMetrics.threadLevelSensor(operation, RecordingLevel.DEBUG)).andReturn(dummySensor);
         expect(streamsMetrics.threadLevelTagMap(TASK_ID_TAG, ALL_TASKS)).andReturn(dummyTagMap);
-        StreamsMetricsImpl.addInvocationRateAndCount(
+        StreamsMetricsImpl.addInvocationRateAndCountToSensor(
             dummySensor, TASK_LEVEL_GROUP, dummyTagMap, operation, totalDescription, rateDescription);
-        StreamsMetricsImpl.addAvgAndMax(
+        StreamsMetricsImpl.addAvgAndMaxToSensor(
             dummySensor, TASK_LEVEL_GROUP, dummyTagMap, operationLatency);
 
         replayAll();
