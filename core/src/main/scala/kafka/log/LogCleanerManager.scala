@@ -27,9 +27,9 @@ import kafka.metrics.KafkaMetricsGroup
 import kafka.server.LogDirFailureChannel
 import kafka.server.checkpoints.OffsetCheckpointFile
 import kafka.server.checkpoints.OffsetAndTimesCheckpointFile
-import kafka.server.checkpoints.OffsetAndTime
 import kafka.utils.CoreUtils._
 import kafka.utils.{Logging, Pool}
+import org.apache.kafka.clients.consumer.OffsetAndTimestamp
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.common.errors.KafkaStorageException
@@ -72,8 +72,7 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
     (dir, new OffsetCheckpointFile(new File(dir, offsetCheckpointFile), logDirFailureChannel))).toMap
 
   /* the offset checkpoints holding the last cleaned point for each partition */
-  @volatile private var partitionCheckpoints = logDirs.map(dir =>
-    (dir, new OffsetAndTimesCheckpointFile(new File(dir, offsetCheckpointFile), logDirFailureChannel))).toMap
+  @volatile private var partitionCheckpoints = getPartitionToFileMap()
 
   /* the set of logs currently being cleaned */
   private val inProgress = mutable.HashMap[TopicPartition, LogCleaningState]()
@@ -124,6 +123,22 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
       )
     }
 
+  def getPartitionToFileMap() : Map[TopicPartition, OffsetAndTimesCheckpointFile] = {
+    var logDirsIterator = logDirs.iterator
+    var partitionToFileMap = mutable.Map[TopicPartition, OffsetAndTimesCheckpointFile]()
+    var index = 0
+    for (tp <- logs.keys) {
+      if (!logDirsIterator.hasNext) logDirsIterator = logDirs.iterator
+      partitionToFileMap += (tp -> 
+          new OffsetAndTimesCheckpointFile(new File(logDirsIterator.next,
+                                                    offsetCheckpointFile + "-" + index), 
+                                           tp,
+                                           logDirFailureChannel))
+      index += 1
+    }
+    partitionToFileMap.toMap
+  }
+
   /* a gauge for tracking the cleanable ratio of the dirtiest log */
   @volatile private var dirtiestLogCleanableRatio = 0.0
   newGauge("max-dirty-percent", new Gauge[Int] { def value = (100 * dirtiestLogCleanableRatio).toInt })
@@ -153,14 +168,14 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
   /**
    * @return the position and time processed for all partitions
    */
-  def allCleanerCheckpointsWithTimes: Map[TopicPartition, Any] = {
+  def allCleanerCheckpointsWithTimes: Map[TopicPartition, OffsetAndTimestamp] = {
     inLock(lock) {
       partitionCheckpoints.values.flatMap(checkpoint => {
         try {
-          (checkpoint: OffsetAndTimesCheckpointFile).read()
+          Map(checkpoint.partition -> checkpoint.read())
         } catch {
           case e: KafkaStorageException =>
-            Map.empty[TopicPartition, Long]
+            Map.empty[TopicPartition, OffsetAndTimestamp]
         }
       }).toMap
     }

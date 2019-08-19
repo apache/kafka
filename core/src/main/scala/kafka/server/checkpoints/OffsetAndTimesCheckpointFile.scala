@@ -21,6 +21,7 @@ import java.util.regex.Pattern
 
 import kafka.server.LogDirFailureChannel
 import kafka.server.epoch.EpochEntry
+import org.apache.kafka.clients.consumer.OffsetAndTimestamp
 import org.apache.kafka.common.TopicPartition
 
 import scala.collection._
@@ -34,15 +35,15 @@ object OffsetAndTimesCheckpointFile {
   private val WhiteSpacesPattern = Pattern.compile("\\s+")
   private[checkpoints] val CurrentVersion = 0
 
-  object Formatter extends CheckpointFileFormatter[OffsetAndTime] {
-    override def toLine(entry: OffsetAndTime): String = {
-      s"${entry.offset} ${entry.time}"
+  object Formatter extends CheckpointFileFormatter[OffsetAndTimestamp] {
+    override def toLine(entry: OffsetAndTimestamp): String = {
+      s"${entry.offset()} ${entry.timestamp()}"
     }
 
-    override def fromLine(line: String): Option[OffsetAndTime] = {
+    override def fromLine(line: String): Option[OffsetAndTimestamp] = {
       WhiteSpacesPattern.split(line) match {
         case Array(offset, time) =>
-          Some(new OffsetAndTime(offset.toLong, time.toLong))
+          Some(new OffsetAndTimestamp(offset.toLong, time.toLong))
         case _ => None
       }
     }
@@ -52,19 +53,17 @@ object OffsetAndTimesCheckpointFile {
 /**
   * This class persists a collection of OffsetAndTime to a file (for a certain topic)
   */
-class OffsetAndTimesCheckpointFile(val file: File, val partition : TopicPartition = null, logDirFailureChannel: LogDirFailureChannel = null) {
-  val checkpoint = new CheckpointFile[OffsetAndTime](file, OffsetAndTimesCheckpointFile.CurrentVersion,
+class OffsetAndTimesCheckpointFile(val file: File, val partition: TopicPartition, logDirFailureChannel: LogDirFailureChannel = null) {
+  val checkpoint = new CheckpointFile[OffsetAndTimestamp](file, OffsetAndTimesCheckpointFile.CurrentVersion,
     OffsetAndTimesCheckpointFile.Formatter, logDirFailureChannel, file.getParent)
 
-  def write(offsets: Seq[OffsetAndTime]): Unit = checkpoint.write(offsets)
+  def write(offset: OffsetAndTimestamp): Unit = checkpoint.write(Seq(offset))
 
-  def read(): Map[TopicPartition, Seq[OffsetAndTime]] = Map(partition -> checkpoint.read())
-
-
+  def read(): OffsetAndTimestamp = checkpoint.read()(0)
 }
 
 trait OffsetAndTimeCheckpoints {
-  def fetch(logDir: String): Seq[OffsetAndTime]
+  def fetch(logDir: String): OffsetAndTimestamp
 }
 
 /**
@@ -75,7 +74,7 @@ class LazyOffsetAndTimesCheckpoints(checkpointsByLogDir: Map[String, OffsetAndTi
     logDir -> new LazyOffsetAndTimesCheckpointMap(checkpointFile)
   }.toMap
 
-  override def fetch(logDir: String): Seq[OffsetAndTime] = {
+  override def fetch(logDir: String): OffsetAndTimestamp = {
     val offsetCheckpointFile = lazyCheckpointsByLogDir.getOrElse(logDir,
       throw new IllegalArgumentException(s"No checkpoint file for log dir $logDir"))
     offsetCheckpointFile.fetch()
@@ -83,10 +82,9 @@ class LazyOffsetAndTimesCheckpoints(checkpointsByLogDir: Map[String, OffsetAndTi
 }
 
 class LazyOffsetAndTimesCheckpointMap(checkpoint: OffsetAndTimesCheckpointFile) {
-  private lazy val offsets: Seq[OffsetAndTime] = checkpoint.read()(checkpoint.partition)
+  private lazy val offset: OffsetAndTimestamp = checkpoint.read()
 
-  def fetch() : Seq[OffsetAndTime] = {
-    offsets
+  def fetch() : OffsetAndTimestamp = {
+    offset
   }
-
 }
