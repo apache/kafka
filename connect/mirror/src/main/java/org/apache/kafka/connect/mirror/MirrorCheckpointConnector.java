@@ -57,15 +57,14 @@ public class MirrorCheckpointConnector extends SourceConnector {
         sourceAndTarget = new SourceAndTarget(config.sourceClusterAlias(), config.targetClusterAlias());
         groupFilter = config.groupFilter();
         replicationPolicy = config.replicationPolicy();
-        synchronized (this) {
-            sourceAdminClient = AdminClient.create(config.sourceAdminConfig());
-        }
-        scheduler = new Scheduler(MirrorCheckpointConnector.class);
+        sourceAdminClient = AdminClient.create(config.sourceAdminConfig());
+        scheduler = new Scheduler(MirrorCheckpointConnector.class, config.adminTimeout());
         scheduler.execute(this::createInternalTopics, "creating internal topics");
         scheduler.execute(this::loadInitialConsumerGroups, "loading initial consumer groups");
         scheduler.scheduleRepeatingDelayed(this::refreshConsumerGroups, config.refreshGroupsInterval(),
                 "refreshing consumer groups");
         log.info("Started {} with {} consumer groups.", connectorName, knownConsumerGroups.size());
+        log.debug("Started {} with consumer groups: {}", connectorName, knownConsumerGroups);
     }
 
     @Override
@@ -73,11 +72,9 @@ public class MirrorCheckpointConnector extends SourceConnector {
         if (!config.enabled()) {
             return;
         }
-        scheduler.shutdown();
-        synchronized (this) {
-            groupFilter.close();
-            sourceAdminClient.close();
-        }
+        scheduler.close();
+        groupFilter.close();
+        sourceAdminClient.close();
     }
 
     @Override
@@ -120,6 +117,7 @@ public class MirrorCheckpointConnector extends SourceConnector {
             log.info("Found {} consumer groups for {}. {} are new. {} were removed. Previously had {}.",
                     consumerGroups.size(), sourceAndTarget, newConsumerGroups.size(), deadConsumerGroups.size(),
                     knownConsumerGroups.size());
+            log.debug("Found new consumer groups: {}", newConsumerGroups);
             knownConsumerGroups = consumerGroups;
             context.requestTaskReconfiguration();
         }
@@ -141,9 +139,7 @@ public class MirrorCheckpointConnector extends SourceConnector {
 
     private Collection<ConsumerGroupListing> listConsumerGroups()
             throws InterruptedException, ExecutionException {
-        synchronized (this) {
-            return sourceAdminClient.listConsumerGroups().valid().get();
-        }
+        return sourceAdminClient.listConsumerGroups().valid().get();
     }
 
     private void createInternalTopics() {

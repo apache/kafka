@@ -32,13 +32,13 @@ public class MirrorHeartbeatConnector extends SourceConnector {
     @Override
     public void start(Map<String, String> props) {
         config = new MirrorConnectorConfig(props);
-        scheduler = new Scheduler(MirrorHeartbeatConnector.class);
+        scheduler = new Scheduler(MirrorHeartbeatConnector.class, config.adminTimeout());
         scheduler.execute(this::createInternalTopics, "creating internal topics");
     }
 
     @Override
     public void stop() {
-        scheduler.shutdown();
+        scheduler.close();
     }
 
     @Override

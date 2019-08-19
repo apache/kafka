@@ -29,6 +29,7 @@ import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.header.Header;
+import org.apache.kafka.common.errors.WakeupException;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -41,7 +42,6 @@ import java.util.ArrayList;
 import java.util.stream.Collectors;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.concurrent.Semaphore;
-import java.util.concurrent.TimeUnit;
 import java.time.Duration;
 
 /** Replicates a set of topic-partitions. */
@@ -60,7 +60,8 @@ public class MirrorSourceTask extends SourceTask {
     private Map<TopicPartition, PartitionState> partitionStates;
     private ReplicationPolicy replicationPolicy;
     private MirrorMetrics metrics;
-    private ReentrantLock lock;
+    private final ReentrantLock lock = new ReentrantLock();
+    private boolean stopping = false;
     private Semaphore outstandingOffsetSyncs;
 
     public MirrorSourceTask() {}
@@ -75,7 +76,6 @@ public class MirrorSourceTask extends SourceTask {
     @Override
     public void start(Map<String, String> props) {
         MirrorTaskConfig config = new MirrorTaskConfig(props);
-        lock = new ReentrantLock();
         outstandingOffsetSyncs = new Semaphore(MAX_OUTSTANDING_OFFSET_SYNCS);
         sourceClusterAlias = config.sourceClusterAlias();
         metrics = config.metrics();
@@ -89,6 +89,9 @@ public class MirrorSourceTask extends SourceTask {
         Set<TopicPartition> taskTopicPartitions = config.taskTopicPartitions();
         Map<TopicPartition, Long> topicPartitionOffsets = loadOffsets(taskTopicPartitions);
         consumer.assign(topicPartitionOffsets.keySet());
+        log.info("Starting with {} previously uncommitted partitions.", topicPartitionOffsets.entrySet().stream()
+            .filter(x -> x.getValue() == 0L).count());
+        log.trace("Seeking offsets: {}", topicPartitionOffsets);
         topicPartitionOffsets.forEach(consumer::seek);
         log.info("{} replicating {} topic-partitions {}->{}: {}.", Thread.currentThread().getName(),
             taskTopicPartitions.size(), sourceClusterAlias, config.targetClusterAlias(), taskTopicPartitions);
@@ -101,27 +104,20 @@ public class MirrorSourceTask extends SourceTask {
 
     @Override
     public void stop() {
-        new Thread(() -> cleanup(lock, consumer, outstandingOffsetSyncs, pollTimeout, offsetProducer, metrics))
-            .start();
-    }
-
-    private static void cleanup(ReentrantLock lock, KafkaConsumer consumer, Semaphore outstandingOffsetSyncs,
-            Duration pollTimeout, KafkaProducer offsetProducer, MirrorMetrics metrics) {
+        long start = System.currentTimeMillis();
+        stopping = true;
+        consumer.wakeup();
         lock.lock();
         try {
-            consumer.close();
-            // re-use the poll-timeout to approximate round-trip time
-            if (!outstandingOffsetSyncs.tryAcquire(MAX_OUTSTANDING_OFFSET_SYNCS, 2 * pollTimeout.toMillis(),
-                    TimeUnit.MILLISECONDS)) {
-                log.warn("Timed out waiting for outstanding offset syncs.");
-            }
-            offsetProducer.close();
+            consumer.close(Duration.ofMillis(500));
+            offsetProducer.close(Duration.ofMillis(500));
             metrics.close();
-        } catch (InterruptedException e) {
-            log.info("Interrupted waiting for outstanding offset syncs.");
+        } catch (Throwable e) {
+            log.error("Failure stopping task.", e);
         } finally {
             lock.unlock();
         }
+        log.info("Stopping {} took {} ms.", Thread.currentThread().getName(), System.currentTimeMillis() - start);
     }
    
     @Override
@@ -133,11 +129,10 @@ public class MirrorSourceTask extends SourceTask {
     public List<SourceRecord> poll() {
         lock.lock();
         try {
-            ConsumerRecords<byte[], byte[]> records = consumer.poll(pollTimeout);
-            if (records.isEmpty()) {
-                // WorkerSourceTasks expects non-zero batch size
+            if (stopping) {
                 return null;
             }
+            ConsumerRecords<byte[], byte[]> records = consumer.poll(pollTimeout);
             List<SourceRecord> sourceRecords = new ArrayList<>(records.count());
             for (ConsumerRecord<byte[], byte[]> record : records) {
                 SourceRecord converted = convertRecord(record);
@@ -146,7 +141,18 @@ public class MirrorSourceTask extends SourceTask {
                 metrics.recordAge(topicPartition, System.currentTimeMillis() - record.timestamp());
                 metrics.recordBytes(topicPartition, byteSize(record.value()));
             }
-            return sourceRecords;
+            if (sourceRecords.isEmpty()) {
+                // WorkerSourceTasks expects non-zero batch size
+                return null;
+            } else {
+                log.trace("Polled {} records from {}.", sourceRecords.size(), records.partitions());
+                return sourceRecords;
+            }
+        } catch (WakeupException e) {
+            return null;
+        } catch (Throwable e) {
+            log.error("Failure during poll.", e);
+            return null;
         } finally {
             lock.unlock();
         }
@@ -154,18 +160,28 @@ public class MirrorSourceTask extends SourceTask {
  
     @Override
     public void commitRecord(SourceRecord record, RecordMetadata metadata) {
-        if (!metadata.hasOffset()) {
-            log.error("RecordMetadata has no offset -- can't sync offsets for {}.", record.topic());
-            return;
+        lock.lock();
+        try {
+            if (stopping) {
+                return;
+            }
+            if (!metadata.hasOffset()) {
+                log.error("RecordMetadata has no offset -- can't sync offsets for {}.", record.topic());
+                return;
+            }
+            TopicPartition topicPartition = new TopicPartition(record.topic(), record.kafkaPartition());
+            long latency = System.currentTimeMillis() - record.timestamp();
+            metrics.countRecord(topicPartition);
+            metrics.replicationLatency(topicPartition, latency);
+            TopicPartition sourceTopicPartition = MirrorUtils.unwrapPartition(record.sourcePartition());
+            long upstreamOffset = MirrorUtils.unwrapOffset(record.sourceOffset());
+            long downstreamOffset = metadata.offset();
+            maybeSyncOffsets(sourceTopicPartition, upstreamOffset, downstreamOffset);
+        } catch (Throwable e) {
+            log.error("Failure committing record.", e);
+        } finally {
+            lock.unlock();
         }
-        TopicPartition topicPartition = new TopicPartition(record.topic(), record.kafkaPartition());
-        long latency = System.currentTimeMillis() - record.timestamp();
-        metrics.countRecord(topicPartition);
-        metrics.replicationLatency(topicPartition, latency);
-        TopicPartition sourceTopicPartition = MirrorUtils.unwrapPartition(record.sourcePartition());
-        long upstreamOffset = MirrorUtils.unwrapOffset(record.sourceOffset());
-        long downstreamOffset = metadata.offset();
-        maybeSyncOffsets(sourceTopicPartition, upstreamOffset, downstreamOffset);
     }
 
     // updates partition state and sends OffsetSync if necessary

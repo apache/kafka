@@ -20,6 +20,7 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeoutException;
 import java.time.Duration;
 
 import org.slf4j.Logger;
@@ -30,13 +31,16 @@ class Scheduler {
 
     private final String name;
     private final ScheduledExecutorService executor = Executors.newSingleThreadScheduledExecutor();
+    private final Duration timeout;
+    private boolean closed = false;
 
-    Scheduler(String name) {
+    Scheduler(String name, Duration timeout) {
         this.name = name;
+        this.timeout = timeout;
     }
 
-    Scheduler(Class clazz) {
-        this("Scheduler for " + clazz.getSimpleName());
+    Scheduler(Class clazz, Duration timeout) {
+        this("Scheduler for " + clazz.getSimpleName(), timeout);
     }
 
     void scheduleRepeating(Task task, Duration interval, String description) {
@@ -52,22 +56,30 @@ class Scheduler {
         }
         executor.scheduleAtFixedRate(() -> executeThread(task, description), interval.toMillis(),
             interval.toMillis(), TimeUnit.MILLISECONDS);
-    } 
-
-    void shutdown() {
-        executor.shutdown();
     }
 
     void execute(Task task, String description) {
         try {
-            long start = System.currentTimeMillis();
-            task.run();
-            long elapsed = System.currentTimeMillis() - start;
-            log.info("{} took {} ms", description, elapsed);
+            executor.submit(() -> executeThread(task, description)).get(timeout.toMillis(), TimeUnit.MILLISECONDS);
         } catch (InterruptedException e) {
             log.warn("{} was interrupted running task: {}", name, description);
+        } catch (TimeoutException e) {
+            log.error("{} timed out running task: {}", name, description);
         } catch (Throwable e) {
-            log.error("{} caught exception in scheduled task: {}", name, description, e);
+            log.error("{} caught exception in task: {}", name, description, e);
+        }
+    } 
+
+    void close() {
+        closed = true;
+        executor.shutdown();
+        try {
+            boolean terminated = executor.awaitTermination(timeout.toMillis(), TimeUnit.MILLISECONDS);
+            if (!terminated) {
+                log.error("{} timed out during shutdown of internal scheduler.", name);
+            }
+        } catch (InterruptedException e) {
+            log.warn("{} was interrupted during shutdown of internal scheduler.", name);
         }
     }
 
@@ -75,9 +87,29 @@ class Scheduler {
         void run() throws InterruptedException, ExecutionException;
     }
 
+    private void run(Task task, String description) {
+        try {
+            long start = System.currentTimeMillis();
+            task.run();
+            long elapsed = System.currentTimeMillis() - start;
+            log.info("{} took {} ms", description, elapsed);
+            if (elapsed > timeout.toMillis()) {
+                log.error("{} took too long ({} ms) running task: {}", name, elapsed, description);
+            }
+        } catch (InterruptedException e) {
+            log.warn("{} was interrupted running task: {}", name, description);
+        } catch (Throwable e) {
+            log.error("{} caught exception in scheduled task: {}", name, description, e);
+        }
+    }
+
     private void executeThread(Task task, String description) {
         Thread.currentThread().setName(description);
-        execute(task, description);
+        if (closed) {
+            log.info("{} skipping task due to shutdown: {}", name, description);
+            return;
+        }
+        run(task, description);
     }
 }
 

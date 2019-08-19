@@ -68,7 +68,7 @@ final class MirrorUtils {
     }
 
     static Long unwrapOffset(Map<String, ?> wrapped) {
-        if (wrapped == null) {
+        if (wrapped == null || wrapped.get("offset") == null) {
             return -1L;
         }
         return (Long) wrapped.get("offset");

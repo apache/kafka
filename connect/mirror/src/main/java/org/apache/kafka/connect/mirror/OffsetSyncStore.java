@@ -19,6 +19,7 @@ package org.apache.kafka.connect.mirror;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 
 import java.util.Map;
@@ -57,11 +58,16 @@ class OffsetSyncStore {
 
     // poll and handle records
     synchronized void update(Duration pollTimeout) throws InterruptedException {
-        consumer.poll(pollTimeout).forEach(this::handleRecord);
+        try {
+            consumer.poll(pollTimeout).forEach(this::handleRecord);
+        } catch (WakeupException e) {
+            // swallow
+        }
     }
 
     synchronized void close() {
-        consumer.close();
+        consumer.wakeup();
+        consumer.close(Duration.ofMillis(0));
     }
 
     protected void handleRecord(ConsumerRecord<byte[], byte[]> record) {
