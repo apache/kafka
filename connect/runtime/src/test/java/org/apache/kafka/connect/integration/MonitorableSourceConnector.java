@@ -127,7 +127,7 @@ public class MonitorableSourceConnector extends TestSourceConnector {
                 if (throttler.shouldThrottle(seqno - startingSeqno, System.currentTimeMillis())) {
                     throttler.throttle();
                 }
-                taskHandle.record(batchSize);
+                taskHandle.record(topicName, batchSize);
                 return LongStream.range(0, batchSize)
                         .mapToObj(i -> new SourceRecord(
                                 Collections.singletonMap("task.id", taskId),

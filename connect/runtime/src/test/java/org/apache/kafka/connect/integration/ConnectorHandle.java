@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.connect.integration;
 
-import org.apache.kafka.connect.errors.DataException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -24,10 +23,8 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
-import java.util.stream.IntStream;
 
 /**
  * A handle to a connector executing in a Connect cluster.
@@ -39,14 +36,11 @@ public class ConnectorHandle {
     private final String connectorName;
     private final Map<String, TaskHandle> taskHandles = new ConcurrentHashMap<>();
     private final StartAndStopCounter startAndStopCounter = new StartAndStopCounter();
-
-    private CountDownLatch recordsRemainingLatch;
-    private CountDownLatch recordsToCommitLatch;
-    private int expectedRecords = -1;
-    private int expectedCommits = -1;
+    private final RecordLatches recordLatches;
 
     public ConnectorHandle(String connectorName) {
         this.connectorName = connectorName;
+        this.recordLatches = new RecordLatches("Connector " + connectorName);
     }
 
     /**
@@ -94,8 +88,17 @@ public class ConnectorHandle {
      * @param expected number of records
      */
     public void expectedRecords(int expected) {
-        expectedRecords = expected;
-        recordsRemainingLatch = new CountDownLatch(expected);
+        recordLatches.expectedRecords(expected);
+    }
+
+    /**
+     * Set the number of expected records for this task.
+     *
+     * @param topic    the name of the topic onto which the records are expected
+     * @param expected number of records
+     */
+    public void expectedRecords(String topic, int expected) {
+        recordLatches.expectedRecords(topic, expected);
     }
 
     /**
@@ -104,17 +107,14 @@ public class ConnectorHandle {
      * @param expected number of commits
      */
     public void expectedCommits(int expected) {
-        expectedCommits = expected;
-        recordsToCommitLatch = new CountDownLatch(expected);
+        recordLatches.expectedCommits(expected);
     }
 
     /**
      * Record a message arrival at the connector.
      */
     public void record() {
-        if (recordsRemainingLatch != null) {
-            recordsRemainingLatch.countDown();
-        }
+        recordLatches.record();
     }
 
     /**
@@ -123,18 +123,33 @@ public class ConnectorHandle {
      * @param batchSize the number of messages
      */
     public void record(int batchSize) {
-        if (recordsRemainingLatch != null) {
-            IntStream.range(0, batchSize).forEach(i -> recordsRemainingLatch.countDown());
-        }
+        recordLatches.record(batchSize);
+    }
+
+    /**
+     * Record a message arrival at the task and the connector overall.
+     *
+     * @param topic the name of the topic
+     */
+    public void record(String topic) {
+        recordLatches.record(topic);
+    }
+
+    /**
+     * Record arrival of a batch of messages at the task and the connector overall.
+     *
+     * @param topic     the name of the topic
+     * @param batchSize the number of messages
+     */
+    public void record(String topic, int batchSize) {
+        recordLatches.record(topic, batchSize);
     }
 
     /**
      * Record a message commit from the connector.
      */
     public void commit() {
-        if (recordsToCommitLatch != null) {
-            recordsToCommitLatch.countDown();
-        }
+        recordLatches.commit();
     }
 
     /**
@@ -143,9 +158,7 @@ public class ConnectorHandle {
      * @param batchSize the number of messages
      */
     public void commit(int batchSize) {
-        if (recordsToCommitLatch != null) {
-            IntStream.range(0, batchSize).forEach(i -> recordsToCommitLatch.countDown());
-        }
+        recordLatches.commit(batchSize);
     }
 
     /**
@@ -156,21 +169,22 @@ public class ConnectorHandle {
      * @throws InterruptedException if another threads interrupts this one while waiting for records
      */
     public void awaitRecords(long timeout) throws InterruptedException {
-        if (recordsRemainingLatch == null || expectedRecords < 0) {
-            throw new IllegalStateException("expectedRecords() was not set for this connector?");
-        }
-        if (!recordsRemainingLatch.await(timeout, TimeUnit.MILLISECONDS)) {
-            String msg = String.format(
-                    "Insufficient records seen by connector %s in %d millis. Records expected=%d, actual=%d",
-                    connectorName,
-                    timeout,
-                    expectedRecords,
-                    expectedRecords - recordsRemainingLatch.getCount());
-            throw new DataException(msg);
-        }
+        recordLatches.awaitRecords(timeout);
     }
 
-     /**
+    /**
+     * Wait for this connector to meet the expected number of records as defined by {@code
+     * expectedRecords}.
+     *
+     * @param topic   the name of the topic
+     * @param timeout max duration to wait for records
+     * @throws InterruptedException if another threads interrupts this one while waiting for records
+     */
+    public void awaitRecords(String topic, long timeout) throws InterruptedException {
+        recordLatches.awaitRecords(topic, timeout, TimeUnit.MILLISECONDS);
+    }
+
+    /**
      * Wait for this connector to meet the expected number of commits as defined by {@code
      * expectedCommits}.
      *
@@ -178,18 +192,7 @@ public class ConnectorHandle {
      * @throws InterruptedException if another threads interrupts this one while waiting for commits
      */
     public void awaitCommits(long timeout) throws InterruptedException {
-        if (recordsToCommitLatch == null || expectedCommits < 0) {
-            throw new IllegalStateException("expectedCommits() was not set for this connector?");
-        }
-        if (!recordsToCommitLatch.await(timeout, TimeUnit.MILLISECONDS)) {
-            String msg = String.format(
-                    "Insufficient records committed by connector %s in %d millis. Records expected=%d, actual=%d",
-                    connectorName,
-                    timeout,
-                    expectedCommits,
-                    expectedCommits - recordsToCommitLatch.getCount());
-            throw new DataException(msg);
-        }
+        recordLatches.awaitCommits(timeout);
     }
 
     /**
