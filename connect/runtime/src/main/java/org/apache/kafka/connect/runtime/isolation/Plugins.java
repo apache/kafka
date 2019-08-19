@@ -216,17 +216,29 @@ public class Plugins {
             return null;
         }
         Converter plugin = null;
+        String converterClassOrAlias = config.getClass(classPropertyName).getName();
+        Class<? extends Converter> klass;
+        ClassLoader savedLoader = null;
         switch (classLoaderUsage) {
             case CURRENT_CLASSLOADER:
                 // Attempt to load first with the current classloader, and plugins as a fallback.
                 // Note: we can't use config.getConfiguredInstance because Converter doesn't implement Configurable, and even if it did
                 // we have to remove the property prefixes before calling config(...) and we still always want to call Converter.config.
-                plugin = getInstance(config, classPropertyName, Converter.class);
+                try {
+                   klass = Class.forName(converterClassOrAlias, true, currentThreadLoader()).asSubclass(Converter.class);
+                } catch (ClassNotFoundException e) {
+                    throw new ConnectException(
+                        "Failed to find any class that implements Converter and which name matches "
+                            + converterClassOrAlias + "in the current class loader "
+                    );
+                };
+                plugin = newPlugin(klass);
+                if (plugin == null) {
+                    return newConverter(config, classPropertyName, ClassLoaderUsage.PLUGINS);
+                }
                 break;
             case PLUGINS:
                 // Attempt to load with the plugin class loader, which uses the current classloader as a fallback
-                String converterClassOrAlias = config.getClass(classPropertyName).getName();
-                Class<? extends Converter> klass;
                 try {
                     klass = pluginClass(delegatingLoader, converterClassOrAlias, Converter.class);
                 } catch (ClassNotFoundException e) {
@@ -236,7 +248,13 @@ public class Plugins {
                             + pluginNames(delegatingLoader.converters())
                     );
                 }
-                plugin = newPlugin(klass);
+                savedLoader = compareAndSwapLoaders(klass.getClassLoader());
+                try {
+                    plugin = newPlugin(klass);
+                }
+                finally {
+                    compareAndSwapLoaders(savedLoader);
+                }
                 break;
         }
         if (plugin == null) {
@@ -265,7 +283,13 @@ public class Plugins {
             }
         }
 
-        plugin.configure(converterConfig, isKeyConverter);
+        try {
+            plugin.configure(converterConfig, isKeyConverter);
+        } finally {
+            if (savedLoader != null) {
+                compareAndSwapLoaders(savedLoader);
+            }
+        }
         return plugin;
     }
 
@@ -281,6 +305,9 @@ public class Plugins {
      */
     public HeaderConverter newHeaderConverter(AbstractConfig config, String classPropertyName, ClassLoaderUsage classLoaderUsage) {
         HeaderConverter plugin = null;
+        String converterClassOrAlias = config.getClass(classPropertyName).getName();
+        Class<? extends HeaderConverter> klass;
+        ClassLoader savedLoader = null;
         switch (classLoaderUsage) {
             case CURRENT_CLASSLOADER:
                 if (!config.originals().containsKey(classPropertyName)) {
@@ -290,13 +317,22 @@ public class Plugins {
                 // Attempt to load first with the current classloader, and plugins as a fallback.
                 // Note: we can't use config.getConfiguredInstance because we have to remove the property prefixes
                 // before calling config(...)
-                plugin = getInstance(config, classPropertyName, HeaderConverter.class);
+                try {
+                    klass = Class.forName(converterClassOrAlias, true, currentThreadLoader()).asSubclass(HeaderConverter.class);
+                } catch (ClassNotFoundException e) {
+                    throw new ConnectException(
+                        "Failed to find any class that implements HeaderConverter and which name matches "
+                        + converterClassOrAlias + "in the current class loader "
+                    );
+                };
+                plugin = newPlugin(klass);
+                if (plugin == null) {
+                    return newHeaderConverter(config, classPropertyName, ClassLoaderUsage.PLUGINS);
+                }
                 break;
             case PLUGINS:
                 // Attempt to load with the plugin class loader, which uses the current classloader as a fallback.
                 // Note that there will always be at least a default header converter for the worker
-                String converterClassOrAlias = config.getClass(classPropertyName).getName();
-                Class<? extends HeaderConverter> klass;
                 try {
                     klass = pluginClass(
                             delegatingLoader,
@@ -311,7 +347,13 @@ public class Plugins {
                                     + pluginNames(delegatingLoader.headerConverters())
                     );
                 }
-                plugin = newPlugin(klass);
+                savedLoader = compareAndSwapLoaders(klass.getClassLoader());
+                try {
+                    plugin = newPlugin(klass);
+                }
+                finally {
+                    compareAndSwapLoaders(savedLoader);
+                }
         }
         if (plugin == null) {
             throw new ConnectException("Unable to instantiate the Converter specified in '" + classPropertyName + "'");
@@ -321,7 +363,13 @@ public class Plugins {
         Map<String, Object> converterConfig = config.originalsWithPrefix(configPrefix);
         converterConfig.put(ConverterConfig.TYPE_CONFIG, ConverterType.HEADER.getName());
         log.debug("Configuring the header converter with configuration keys:{}{}", System.lineSeparator(), converterConfig.keySet());
-        plugin.configure(converterConfig);
+        try {
+            plugin.configure(converterConfig);
+        } finally {
+            if (savedLoader != null) {
+                compareAndSwapLoaders(savedLoader);
+            }
+        }
         return plugin;
     }
 
