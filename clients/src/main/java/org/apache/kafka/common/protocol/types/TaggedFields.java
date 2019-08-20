@@ -24,6 +24,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.NavigableMap;
+import java.util.TreeMap;
 
 /**
  * Represents a tagged fields section.
@@ -32,6 +33,17 @@ public class TaggedFields extends DocumentedType {
     private static final String TAGGED_FIELDS_TYPE_NAME = "TAGGED_FIELDS";
 
     private final NavigableMap<Integer, Type> fields;
+
+    @SuppressWarnings("unchecked")
+    public static TaggedFields of(Object... fields) {
+        TreeMap<Integer, Type> newFields = new TreeMap<>();
+        for (int i = 0; i < fields.length; i += 2) {
+            Integer key = (Integer) fields[i];
+            Type type = (Type) fields[i + 1];
+            newFields.put(key, type);
+        }
+        return new TaggedFields(newFields);
+    }
 
     public TaggedFields(NavigableMap<Integer, Type> fields) {
         this.fields = fields;

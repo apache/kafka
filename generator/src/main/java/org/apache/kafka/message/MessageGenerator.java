@@ -89,6 +89,8 @@ public final class MessageGenerator {
 
     static final String STANDARD_CHARSETS = "java.nio.charset.StandardCharsets";
 
+    static final String TAGGED_FIELDS_SECTION_CLASS = "org.apache.kafka.common.protocol.types.Field.TaggedFieldsSection";
+
     /**
      * The Jackson serializer we use for JSON objects.
      */

@@ -123,6 +123,19 @@ public class Field {
         }
     }
 
+    public static class TaggedFieldsSection extends Field {
+        private static final String NAME = "tagged_fields";
+        private static final String DOC_STRING = "The tagged fields";
+
+        public static TaggedFieldsSection of(Object... fields) {
+            return new TaggedFieldsSection(TaggedFields.of(fields));
+        }
+
+        public TaggedFieldsSection(Type type) {
+            super(NAME, type, DOC_STRING, false, null);
+        }
+    }
+
     public static class ComplexArray {
         public final String name;
         public final String docString;

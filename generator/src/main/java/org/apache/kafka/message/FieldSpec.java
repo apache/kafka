@@ -46,6 +46,10 @@ public final class FieldSpec {
 
     private final String about;
 
+    private final Versions taggedVersions;
+
+    private final int tag;
+
     @JsonCreator
     public FieldSpec(@JsonProperty("name") String name,
                      @JsonProperty("versions") String versions,
@@ -56,7 +60,9 @@ public final class FieldSpec {
                      @JsonProperty("default") String fieldDefault,
                      @JsonProperty("ignorable") boolean ignorable,
                      @JsonProperty("entityType") EntityType entityType,
-                     @JsonProperty("about") String about) {
+                     @JsonProperty("about") String about,
+                     @JsonProperty("taggedVersions") String taggedVersions,
+                     @JsonProperty("tag") Integer tag) {
         this.name = Objects.requireNonNull(name);
         this.versions = Versions.parse(versions, null);
         if (this.versions == null) {
@@ -82,6 +88,26 @@ public final class FieldSpec {
         if (!this.fields().isEmpty()) {
             if (!this.type.isArray()) {
                 throw new RuntimeException("Non-array field " + name + " cannot have fields");
+            }
+        }
+        this.taggedVersions = Versions.parse(taggedVersions, Versions.NONE);
+        this.tag = (tag == null) ? -1 : tag;
+        if (this.taggedVersions.empty()) {
+            if (this.tag >= 0) {
+                throw new RuntimeException("Field " + name + " specifies a non-negative tag " +
+                    "of " + this.tag + ", but does not have any tagged versions.");
+            }
+        } else {
+            if (this.tag < 0) {
+                throw new RuntimeException("Field " + name + " specifies a negative tag " +
+                    "of " + this.tag + ", but has tagged versions.");
+            }
+            Versions nullableTaggedVersions = this.nullableVersions.intersect(this.taggedVersions);
+            if (!(nullableTaggedVersions.empty() ||
+                    nullableTaggedVersions.equals(this.taggedVersions))) {
+                throw new RuntimeException("Field " + name + " specifies nullableVersions " +
+                    this.nullableVersions + " and taggedVersions " + this.taggedVersions + ".  " +
+                    "Either all tagged versions must be nullable, or none must be.");
             }
         }
     }
@@ -153,5 +179,19 @@ public final class FieldSpec {
     @JsonProperty("about")
     public String about() {
         return about;
+    }
+
+    @JsonProperty("taggedVersions")
+    public String taggedVersionsString() {
+        return taggedVersions.toString();
+    }
+
+    public Versions taggedVersions() {
+        return taggedVersions;
+    }
+
+    @JsonProperty("tag")
+    public int tag() {
+        return tag;
     }
 }

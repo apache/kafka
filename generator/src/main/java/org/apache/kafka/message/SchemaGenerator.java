@@ -132,10 +132,15 @@ final class SchemaGenerator {
                 break;
             }
             FieldSpec field = struct.fields().get(lastValidIndex);
-            if (field.versions().contains(version)) {
+            if ((!field.taggedVersions().contains(version)) &&
+                    field.versions().contains(version)) {
                 break;
             }
             lastValidIndex--;
+        }
+        int finalLine = lastValidIndex;
+        if (flexibleVersions.contains(version)) {
+            finalLine++;
         }
 
         headerGenerator.addImport(MessageGenerator.SCHEMA_CLASS);
@@ -143,7 +148,8 @@ final class SchemaGenerator {
         buffer.incrementIndent();
         for (int i = 0; i <= lastValidIndex; i++) {
             FieldSpec field = struct.fields().get(i);
-            if (!field.versions().contains(version)) {
+            if ((!field.versions().contains(version)) ||
+                    field.taggedVersions().contains(version)) {
                 continue;
             }
             headerGenerator.addImport(MessageGenerator.FIELD_CLASS);
@@ -151,10 +157,51 @@ final class SchemaGenerator {
                 field.snakeCaseName(),
                 fieldTypeToSchemaType(field, version),
                 field.about(),
-                i == lastValidIndex ? "" : ",");
+                i == finalLine ? "" : ",");
+        }
+        if (flexibleVersions.contains(version)) {
+            generateTaggedFieldsSchemaForVersion(struct, version, buffer);
         }
         buffer.decrementIndent();
         buffer.printf(");%n");
+    }
+
+    private void generateTaggedFieldsSchemaForVersion(StructSpec struct,
+            short version, CodeBuffer buffer) throws Exception {
+        headerGenerator.addStaticImport(MessageGenerator.TAGGED_FIELDS_SECTION_CLASS);
+
+        // Find the last valid tagged field index.
+        int lastValidIndex = struct.fields().size() - 1;
+        while (true) {
+            if (lastValidIndex < 0) {
+                break;
+            }
+            FieldSpec field = struct.fields().get(lastValidIndex);
+            if ((field.taggedVersions().contains(version)) &&
+                field.versions().contains(version)) {
+                break;
+            }
+            lastValidIndex--;
+        }
+
+        buffer.printf("TaggedFieldsSection.of(%n");
+        buffer.incrementIndent();
+        for (int i = 0; i <= lastValidIndex; i++) {
+            FieldSpec field = struct.fields().get(i);
+            if ((!field.versions().contains(version)) ||
+                    (!field.taggedVersions().contains(version))) {
+                continue;
+            }
+            headerGenerator.addImport(MessageGenerator.FIELD_CLASS);
+            buffer.printf("%d, new Field(\"%s\", %s, \"%s\")%s%n",
+                field.tag(),
+                field.snakeCaseName(),
+                fieldTypeToSchemaType(field, version),
+                field.about(),
+                i == lastValidIndex ? "" : ",");
+        }
+        buffer.decrementIndent();
+        buffer.printf(")%n");
     }
 
     private String fieldTypeToSchemaType(FieldSpec field, short version) {
