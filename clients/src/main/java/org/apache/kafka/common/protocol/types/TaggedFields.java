@@ -42,6 +42,7 @@ public class TaggedFields extends DocumentedType {
         return false;
     }
 
+    @SuppressWarnings("unchecked")
     @Override
     public void write(ByteBuffer buffer, Object o) {
         Map<Integer, Object> objects = (Map<Integer, Object>) o;
@@ -58,6 +59,7 @@ public class TaggedFields extends DocumentedType {
         }
     }
 
+    @SuppressWarnings("unchecked")
     @Override
     public Map<Integer, Object> read(ByteBuffer buffer) {
         int numTaggedFields = ByteUtils.readUnsignedVarint(buffer);
@@ -78,6 +80,7 @@ public class TaggedFields extends DocumentedType {
         return objects == null ? Collections.<Integer, Object>emptyMap() : objects;
     }
 
+    @SuppressWarnings("unchecked")
     @Override
     public int sizeOf(Object o) {
         int size = 0;
@@ -108,6 +111,7 @@ public class TaggedFields extends DocumentedType {
         return bld.toString();
     }
 
+    @SuppressWarnings("unchecked")
     @Override
     public Map<Integer, Object> validate(Object item) {
         try {
