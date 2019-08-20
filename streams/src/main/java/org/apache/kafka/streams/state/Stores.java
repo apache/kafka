@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.state;
 
-import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Time;
@@ -76,7 +75,6 @@ import static org.apache.kafka.streams.internals.ApiUtils.prepareMillisCheckFail
  * topology.addStateStore(storeBuilder, "processorName");
  * }</pre>
  */
-@InterfaceStability.Evolving
 public final class Stores {
 
     /**

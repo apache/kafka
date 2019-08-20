@@ -45,7 +45,7 @@ class DescribeAuthorizedOperationsTest extends IntegrationTestHarness with SaslS
 
   override protected lazy val trustStoreFile = Some(File.createTempFile("truststore", ".jks"))
 
-  override def configureSecurityBeforeServersStart() {
+  override def configureSecurityBeforeServersStart(): Unit = {
     val authorizer = CoreUtils.createObject[Authorizer](classOf[SimpleAclAuthorizer].getName)
     val topicResource = Resource(Topic, Resource.WildCardResource, PatternType.LITERAL)
 

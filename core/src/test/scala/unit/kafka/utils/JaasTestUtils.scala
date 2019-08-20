@@ -267,7 +267,7 @@ object JaasTestUtils {
   private def jaasSectionsToString(jaasSections: Seq[JaasSection]): String =
     jaasSections.mkString
 
-  private def writeToFile(file: File, jaasSections: Seq[JaasSection]) {
+  private def writeToFile(file: File, jaasSections: Seq[JaasSection]): Unit = {
     val writer = new BufferedWriter(new FileWriter(file))
     try writer.write(jaasSectionsToString(jaasSections))
     finally writer.close()

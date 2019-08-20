@@ -31,7 +31,7 @@ class CredentialProvider(scramMechanisms: Collection[String], val tokenCache: De
   val credentialCache = new CredentialCache
   ScramCredentialUtils.createCache(credentialCache, scramMechanisms)
 
-  def updateCredentials(username: String, config: Properties) {
+  def updateCredentials(username: String, config: Properties): Unit = {
     for (mechanism <- ScramMechanism.values()) {
       val cache = credentialCache.cache(mechanism.mechanismName, classOf[ScramCredential])
       if (cache != null) {

@@ -36,7 +36,7 @@ public class AlterPartitionReassignmentsResponse extends AbstractResponse {
         this(struct, ApiKeys.ALTER_PARTITION_REASSIGNMENTS.latestVersion());
     }
 
-    AlterPartitionReassignmentsResponse(AlterPartitionReassignmentsResponseData data) {
+    public AlterPartitionReassignmentsResponse(AlterPartitionReassignmentsResponseData data) {
         this.data = data;
     }
 

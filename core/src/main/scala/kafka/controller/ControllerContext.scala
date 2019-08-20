@@ -99,7 +99,7 @@ class ControllerContext {
     }.toSet
   }
 
-  def setLiveBrokerAndEpochs(brokerAndEpochs: Map[Broker, Long]) {
+  def setLiveBrokerAndEpochs(brokerAndEpochs: Map[Broker, Long]): Unit = {
     liveBrokers = brokerAndEpochs.keySet
     liveBrokerEpochs =
       brokerAndEpochs map { case (broker, brokerEpoch) => (broker.id, brokerEpoch)}

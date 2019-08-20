@@ -44,7 +44,7 @@ class ConsoleProducerTest {
   )
 
   @Test
-  def testValidConfigs() {
+  def testValidConfigs(): Unit = {
     val config = new ConsoleProducer.ProducerConfig(validArgs)
     val producerConfig = new ProducerConfig(ConsoleProducer.producerProps(config))
     assertEquals(util.Arrays.asList("localhost:1001", "localhost:1002"),
@@ -52,7 +52,7 @@ class ConsoleProducerTest {
   }
 
   @Test(expected = classOf[IllegalArgumentException])
-  def testInvalidConfigs() {
+  def testInvalidConfigs(): Unit = {
     Exit.setExitProcedure((_, message) => throw new IllegalArgumentException(message.orNull))
     try {
       new ConsoleProducer.ProducerConfig(invalidArgs)

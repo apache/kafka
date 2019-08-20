@@ -32,7 +32,7 @@ import java.util.Arrays
 class DeleteTopicsRequestTest extends BaseRequestTest {
 
   @Test
-  def testValidDeleteTopicRequests() {
+  def testValidDeleteTopicRequests(): Unit = {
     val timeout = 10000
     // Single topic
     createTopic("topic-1", 1, 1)
@@ -59,7 +59,7 @@ class DeleteTopicsRequestTest extends BaseRequestTest {
   }
 
   @Test
-  def testErrorDeleteTopicRequests() {
+  def testErrorDeleteTopicRequests(): Unit = {
     val timeout = 30000
     val timeoutTopic = "invalid-timeout"
 
@@ -112,7 +112,7 @@ class DeleteTopicsRequestTest extends BaseRequestTest {
   }
 
   @Test
-  def testNotController() {
+  def testNotController(): Unit = {
     val request = new DeleteTopicsRequest.Builder(
         new DeleteTopicsRequestData()
           .setTopicNames(Collections.singletonList("not-controller"))

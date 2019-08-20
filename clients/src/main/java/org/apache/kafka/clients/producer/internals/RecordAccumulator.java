@@ -459,18 +459,19 @@ public final class RecordAccumulator {
 
         boolean exhausted = this.free.queued() > 0;
         for (Map.Entry<TopicPartition, Deque<ProducerBatch>> entry : this.batches.entrySet()) {
-            TopicPartition part = entry.getKey();
             Deque<ProducerBatch> deque = entry.getValue();
-
-            Node leader = cluster.leaderFor(part);
             synchronized (deque) {
-                if (leader == null && !deque.isEmpty()) {
-                    // This is a partition for which leader is not known, but messages are available to send.
-                    // Note that entries are currently not removed from batches when deque is empty.
-                    unknownLeaderTopics.add(part.topic());
-                } else if (!readyNodes.contains(leader) && !isMuted(part, nowMs)) {
-                    ProducerBatch batch = deque.peekFirst();
-                    if (batch != null) {
+                // When producing to a large number of partitions, this path is hot and deques are often empty.
+                // We check whether a batch exists first to avoid the more expensive checks whenever possible.
+                ProducerBatch batch = deque.peekFirst();
+                if (batch != null) {
+                    TopicPartition part = entry.getKey();
+                    Node leader = cluster.leaderFor(part);
+                    if (leader == null) {
+                        // This is a partition for which leader is not known, but messages are available to send.
+                        // Note that entries are currently not removed from batches when deque is empty.
+                        unknownLeaderTopics.add(part.topic());
+                    } else if (!readyNodes.contains(leader) && !isMuted(part, nowMs)) {
                         long waitedTimeMs = batch.waitedTimeMs(nowMs);
                         boolean backingOff = batch.attempts() > 0 && waitedTimeMs < retryBackoffMs;
                         long timeToWaitMs = backingOff ? retryBackoffMs : lingerMs;
