@@ -498,7 +498,7 @@ public class FetcherTest {
 
         buffer.flip();
 
-        subscriptions.seek(tp0, 0);
+        subscriptions.seekUnvalidated(tp0, new SubscriptionState.FetchPosition(0, Optional.empty(), metadata.leaderAndEpoch(tp0)));
 
         // normal fetch
         assertEquals(1, fetcher.sendFetches());
@@ -536,7 +536,7 @@ public class FetcherTest {
 
     private void seekAndConsumeRecord(ByteBuffer responseBuffer, long toOffset) {
         // Seek to skip the bad record and fetch again.
-        subscriptions.seek(tp0, toOffset);
+        subscriptions.seekUnvalidated(tp0, new SubscriptionState.FetchPosition(toOffset, Optional.empty(), metadata.leaderAndEpoch(tp0)));
         // Should not throw exception after the seek.
         fetcher.fetchedRecords();
         assertEquals(1, fetcher.sendFetches());
@@ -945,13 +945,13 @@ public class FetcherTest {
         // seek to tp0 and tp1 in two polls to generate 2 complete requests and responses
 
         // #1 seek, request, poll, response
-        subscriptions.seek(tp0, 1);
+        subscriptions.seekUnvalidated(tp0, new SubscriptionState.FetchPosition(1, Optional.empty(), metadata.leaderAndEpoch(tp0)));
         assertEquals(1, fetcher.sendFetches());
         client.prepareResponse(fullFetchResponse(tp0, this.records, Errors.NONE, 100L, 0));
         consumerClient.poll(time.timer(0));
 
         // #2 seek, request, poll, response
-        subscriptions.seek(tp1, 1);
+        subscriptions.seekUnvalidated(tp1, new SubscriptionState.FetchPosition(1, Optional.empty(), metadata.leaderAndEpoch(tp1)));
         assertEquals(1, fetcher.sendFetches());
         client.prepareResponse(fullFetchResponse(tp1, this.nextRecords, Errors.NONE, 100L, 0));
 
@@ -980,13 +980,13 @@ public class FetcherTest {
         // seek to tp0 and tp1 in two polls to generate 2 complete requests and responses
 
         // #1 seek, request, poll, response
-        subscriptions.seek(tp0, 1);
+        subscriptions.seekUnvalidated(tp0, new SubscriptionState.FetchPosition(1, Optional.empty(), metadata.leaderAndEpoch(tp0)));
         assertEquals(1, fetcher.sendFetches());
         client.prepareResponse(fullFetchResponse(tp0, this.records, Errors.NONE, 100L, 0));
         consumerClient.poll(time.timer(0));
 
         // #2 seek, request, poll, response
-        subscriptions.seek(tp1, 1);
+        subscriptions.seekUnvalidated(tp1, new SubscriptionState.FetchPosition(1, Optional.empty(), metadata.leaderAndEpoch(tp1)));
         assertEquals(1, fetcher.sendFetches());
         client.prepareResponse(fullFetchResponse(tp1, this.nextRecords, Errors.NONE, 100L, 0));
 
@@ -1350,7 +1350,8 @@ public class FetcherTest {
         assertEquals(2, fetcher.fetchedRecords().get(tp0).size());
 
         subscriptions.assignFromUser(Utils.mkSet(tp0, tp1));
-        subscriptions.seek(tp1, 1);
+        subscriptions.seekUnvalidated(tp1, new SubscriptionState.FetchPosition(1, Optional.empty(), metadata.leaderAndEpoch(tp1)));
+
         assertEquals(1, fetcher.sendFetches());
         partitions = new HashMap<>();
         partitions.put(tp1, new FetchResponse.PartitionData<>(Errors.OFFSET_OUT_OF_RANGE, 100,
@@ -1670,7 +1671,7 @@ public class FetcherTest {
                 Object result = invocation.callRealMethod();
                 latchEarliestDone.countDown();
                 return result;
-            }).when(subscriptions).maybeSeekUnvalidated(tp0, 0L, OffsetResetStrategy.EARLIEST);
+            }).when(subscriptions).maybeSeekUnvalidated(tp0, new SubscriptionState.FetchPosition(0L), OffsetResetStrategy.EARLIEST);
 
             es.submit(() -> {
                 subscriptions.requestOffsetReset(tp0, OffsetResetStrategy.EARLIEST);
