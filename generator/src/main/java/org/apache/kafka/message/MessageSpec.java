@@ -62,6 +62,10 @@ public final class MessageSpec {
         return struct.name();
     }
 
+    public Versions validVersions() {
+        return struct.versions();
+    }
+
     @JsonProperty("validVersions")
     public String validVersionsString() {
         return struct.versionsString();

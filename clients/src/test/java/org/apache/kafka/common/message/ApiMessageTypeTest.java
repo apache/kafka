@@ -73,4 +73,14 @@ public class ApiMessageTypeTest {
         assertEquals(ApiMessageType.values().length, requestNames.size());
         assertEquals(ApiMessageType.values().length, responseNames.size());
     }
+
+    @Test
+    public void testHeaderVersion() {
+        assertEquals(1, ApiMessageType.PRODUCE.headerVersion(0));
+        assertEquals(1, ApiMessageType.PRODUCE.headerVersion(1));
+        assertEquals(1, ApiMessageType.PRODUCE.headerVersion(2));
+        assertEquals(0, ApiMessageType.CONTROLLED_SHUTDOWN.headerVersion(0));
+        assertEquals(1, ApiMessageType.CONTROLLED_SHUTDOWN.headerVersion(1));
+        assertEquals(1, ApiMessageType.CREATE_PARTITIONS.headerVersion(0));
+    }
 }

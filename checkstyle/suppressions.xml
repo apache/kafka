@@ -13,6 +13,8 @@
               files="(SchemaGenerator|MessageDataGenerator).java"/>
     <suppress checks="NPathComplexity"
               files="(FieldSpec).java"/>
+    <suppress checks="JavaNCSS"
+              files="(ApiMessageType).java"/>
 
     <!-- Clients -->
     <suppress checks="ClassFanOutComplexity"

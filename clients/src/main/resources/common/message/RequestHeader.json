@@ -16,8 +16,20 @@
 {
   "type": "header",
   "name": "RequestHeader",
-  "validVersions": "0-1",
-  "flexibleVersions": "1+",
+
+  // In order to know what version of the request and response headers to use
+  // for deserialization, we first read the 16-bit request API key and API version.
+  // The (API key, API version) tuple maps to a header version.
+
+  // Version 0 of this header was used only by v0 of the controlled shutdown.
+  // For some reason, that verison of that request left out the client id.
+
+  // Version 1 of the header is used by requests that do not have a flexible schema.
+
+  // Version 2 is the first flexible version which allows tagged fields.
+
+  "validVersions": "0-2",
+  "flexibleVersions": "2+",
   "fields": [
     // Note: the first two fields must not be changed.  When reading the header,
     // we use these fields to determine what version to use to parse the rest.
@@ -29,7 +41,7 @@
       "about": "The API version of this request." },
     { "name": "CorrelationId", "type": "int32", "versions": "0+",
       "about": "The correlation ID of this request." },
-    { "name": "ClientId", "type": "string", "versions": "0+",
+    { "name": "ClientId", "type": "string", "versions": "1+", "ignorable": true,
       "about": "The client ID string." }
   ]
 }
