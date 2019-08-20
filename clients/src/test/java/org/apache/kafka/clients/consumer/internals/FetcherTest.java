@@ -1671,7 +1671,7 @@ public class FetcherTest {
                 Object result = invocation.callRealMethod();
                 latchEarliestDone.countDown();
                 return result;
-            }).when(subscriptions).maybeSeekUnvalidated(tp0, new SubscriptionState.FetchPosition(0L), OffsetResetStrategy.EARLIEST);
+            }).when(subscriptions).maybeSeekUnvalidated(tp0, new SubscriptionState.FetchPosition(0L, Optional.empty(), metadata.leaderAndEpoch(tp0)), OffsetResetStrategy.EARLIEST);
 
             es.submit(() -> {
                 subscriptions.requestOffsetReset(tp0, OffsetResetStrategy.EARLIEST);
