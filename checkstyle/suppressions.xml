@@ -8,6 +8,12 @@
 
     <!-- Note that [/\\] must be used as the path separator for cross-platform support -->
 
+    <!-- Generator -->
+    <suppress checks="CyclomaticComplexity"
+              files="(SchemaGenerator|MessageDataGenerator).java"/>
+    <suppress checks="NPathComplexity"
+              files="(FieldSpec).java"/>
+
     <!-- Clients -->
     <suppress checks="ClassFanOutComplexity"
               files="(Fetcher|Sender|SenderTest|ConsumerCoordinator|KafkaConsumer|KafkaProducer|Utils|TransactionManagerTest|KafkaAdminClient|NetworkClient|Admin).java"/>
@@ -49,7 +55,7 @@
               files="(Utils|Topic|KafkaLZ4BlockOutputStream|AclData|JoinGroupRequest).java"/>
 
     <suppress checks="CyclomaticComplexity"
-              files="(ConsumerCoordinator|Fetcher|Sender|KafkaProducer|BufferPool|ConfigDef|RecordAccumulator|KerberosLogin|AbstractRequest|AbstractResponse|Selector|SslFactory|SslTransportLayer|SaslClientAuthenticator|SaslClientCallbackHandler|SaslServerAuthenticator|SchemaGenerator|AbstractCoordinator).java"/>
+              files="(ConsumerCoordinator|Fetcher|Sender|KafkaProducer|BufferPool|ConfigDef|RecordAccumulator|KerberosLogin|AbstractRequest|AbstractResponse|Selector|SslFactory|SslTransportLayer|SaslClientAuthenticator|SaslClientCallbackHandler|SaslServerAuthenticator|AbstractCoordinator).java"/>
 
     <suppress checks="JavaNCSS"
               files="AbstractRequest.java|KerberosLogin.java|WorkerSinkTaskTest.java|TransactionManagerTest.java|SenderTest.java"/>
@@ -228,7 +234,5 @@
             files="clients[\\/]src[\\/]generated[\\/].+.java$"/>
     <suppress checks="NPathComplexity"
             files="MessageTest.java"/>
-
-    <suppress checks="CyclomaticComplexity" files="MessageDataGenerator.java"/>
 
 </suppressions>
