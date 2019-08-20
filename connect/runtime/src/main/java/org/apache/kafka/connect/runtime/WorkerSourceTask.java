@@ -171,6 +171,7 @@ class WorkerSourceTask extends WorkerTask {
 
     @Override
     public void stop() {
+        log.debug("{} Source task requested to stop", this);
         super.stop();
         stopRequestedLatch.countDown();
         synchronized (this) {
@@ -183,6 +184,7 @@ class WorkerSourceTask extends WorkerTask {
 
     private synchronized void tryStop() {
         if (!stopped) {
+            log.debug("{} Attempting to stop the source task", this);
             try {
                 task.stop();
                 stopped = true;
@@ -216,7 +218,7 @@ class WorkerSourceTask extends WorkerTask {
                 }
 
                 if (toSend == null) {
-                    log.trace("{} Nothing to send to Kafka. Polling source for additional records", this);
+                    log.debug("{} Nothing to send to Kafka. Polling source for additional records", this);
                     long start = time.milliseconds();
                     toSend = poll();
                     if (toSend != null) {
@@ -229,13 +231,16 @@ class WorkerSourceTask extends WorkerTask {
                 if (!sendRecords())
                     stopRequestedLatch.await(SEND_FAILED_BACKOFF_MS, TimeUnit.MILLISECONDS);
             }
+            log.debug("{} Source task is stopping execution", this);
         } catch (InterruptedException e) {
+            log.debug("{} Source task execution is interrupted", this, e);
             // Ignore and allow to exit.
         } finally {
             // It should still be safe to commit offsets since any exception would have
             // simply resulted in not getting more records but all the existing records should be ok to flush
             // and commit offsets. Worst case, task.flush() will also throw an exception causing the offset commit
             // to fail.
+            log.debug("{} Source task committing offsets prior to stopping", this);
             commitOffsets();
         }
     }
@@ -284,6 +289,7 @@ class WorkerSourceTask extends WorkerTask {
      * @return true if all messages were sent, false if some need to be retried
      */
     private boolean sendRecords() {
+        log.trace("{} Sending {} records", this, toSend.size());
         int processed = 0;
         recordBatch(toSend.size());
         final SourceRecordWriteCounter counter = new SourceRecordWriteCounter(toSend.size(), sourceTaskMetricsGroup);

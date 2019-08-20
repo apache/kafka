@@ -179,6 +179,8 @@ public class RebalanceSourceConnectorsIntegrationTest {
         props.put(TOPIC_CONFIG, anotherTopic);
         connect.configureConnector(CONNECTOR_NAME, props);
 
+        assertTrue(connect.kafka().allBrokersRunning());
+
         // Wait for the connector *and tasks* to be restarted
         assertTrue("Failed to alter connector configuration and see connector and tasks restart "
                    + "within " + CONNECTOR_SETUP_DURATION_MS + "ms",
@@ -187,6 +189,8 @@ public class RebalanceSourceConnectorsIntegrationTest {
         // And wait for Connect to show the connectors and tasks are running
         waitForCondition(() -> this.assertConnectorAndTasksRunning(CONNECTOR_NAME, NUM_TASKS).orElse(false),
                 CONNECTOR_SETUP_DURATION_MS, "Connector tasks did not start in time.");
+
+        assertTrue(connect.kafka().allBrokersRunning());
 
         // wait for the connector's tasks to have produced records
         connectorHandle.awaitRecords(anotherTopic, recordWriteDurationMs);

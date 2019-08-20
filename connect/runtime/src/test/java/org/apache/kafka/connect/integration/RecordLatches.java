@@ -226,7 +226,7 @@ public class RecordLatches {
         if (latch != null) {
             latch.countDown(count);
         } else {
-            log.error("Unexpectedly missing latch");
+            log.trace("No latch found due to no expectation");
         }
     }
 
