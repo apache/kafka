@@ -16,8 +16,13 @@
 {
   "type": "header",
   "name": "RequestHeader",
-  "validVersions": "0",
+  "validVersions": "0-1",
+  "flexibleVersions": "1+",
   "fields": [
+    // Note: the first two fields must not be changed.  When reading the header,
+    // we use these fields to determine what version to use to parse the rest.
+    // If the message version is a flexible version, we will use version 1;
+    // otherwise, we will use version 0.
     { "name": "RequestApiKey", "type": "int16", "versions": "0+",
       "about": "The API key of this request." },
     { "name": "RequestApiVersion", "type": "int16", "versions": "0+",
