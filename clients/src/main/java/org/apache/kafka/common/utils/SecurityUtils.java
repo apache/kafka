@@ -52,6 +52,7 @@ public class SecurityUtils {
             String[] securityProviderClasses = securityProviderClassesStr.replaceAll("\\s+", "").split(",");
             for (int index = 0; index < securityProviderClasses.length; index++) {
                 SecurityProviderCreator securityProviderCreator = (SecurityProviderCreator) Class.forName(securityProviderClasses[index]).newInstance();
+                securityProviderCreator.configure(configs);
                 Security.insertProviderAt(securityProviderCreator.getProvider(), index + 1);
             }
         } catch (ClassCastException e) {
