@@ -491,7 +491,8 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
 
     def perform_leader_election(self, topic, partition, election_type, node=None):
         """
-        Perform leader election for the partition of the topic passed in as argument.
+        Perform leader election for the partition of the topic passed in as argument
+        and waits until leadership changes replica.
         """
         if node is None:
             node = self.nodes[0]
