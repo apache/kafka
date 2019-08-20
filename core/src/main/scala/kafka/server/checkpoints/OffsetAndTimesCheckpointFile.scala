@@ -57,9 +57,17 @@ class OffsetAndTimesCheckpointFile(val file: File, val partition: TopicPartition
   val checkpoint = new CheckpointFile[OffsetAndTimestamp](file, OffsetAndTimesCheckpointFile.CurrentVersion,
     OffsetAndTimesCheckpointFile.Formatter, logDirFailureChannel, file.getParent)
 
-  def write(offset: OffsetAndTimestamp): Unit = checkpoint.write(Seq(offset))
+  def write(offset: OffsetAndTimestamp): Unit = {
+    if (offset == null) {
+      checkpoint.write(Seq())
+    } else {
+      checkpoint.write(Seq(offset))
+    }
+  }
 
-  def read(): OffsetAndTimestamp = checkpoint.read()(0)
+  def read(): OffsetAndTimestamp = readSeq()(0)
+
+  def readSeq(): Seq[OffsetAndTimestamp] = checkpoint.read()
 }
 
 trait OffsetAndTimeCheckpoints {

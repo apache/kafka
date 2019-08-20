@@ -74,6 +74,11 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
   /* the offset checkpoints holding the last cleaned point for each partition */
   @volatile private var partitionCheckpoints = getPartitionToFileMap()
 
+  // version 0: Map of (logDir => OffsetCheckpointFile) with one file per disk
+  private var currVersion = 0 
+  // version 1: Map of (partition => OffsetAndTimesCheckpointFile) with one file per partition
+  private val latestVersion = 1
+
   /* the set of logs currently being cleaned */
   private val inProgress = mutable.HashMap[TopicPartition, LogCleaningState]()
 
@@ -179,6 +184,15 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
         }
       }).toMap
     }
+  }
+
+  def simplifyMapToOffsetsOnly(localCheckpoints: Map[TopicPartition, OffsetAndTimestamp])
+    : Map[TopicPartition, Long] = {
+    var simplifiedCheckpoints = Map[TopicPartition, Long]()
+    localCheckpoints.foreach {
+      case (partition, offsetAndTimestamp) => simplifiedCheckpoints += (partition -> offsetAndTimestamp.offset)
+    }
+    simplifiedCheckpoints.toMap
   }
 
   /**
@@ -390,6 +404,7 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
     }
   }
 
+  @deprecated("Deprecated due to change in file organization to one checkpoint file per partition.")
   def updateCheckpoints(dataDir: File, update: Option[(TopicPartition,Long)]) {
     inLock(lock) {
       val checkpoint = checkpoints(dataDir)
@@ -397,6 +412,20 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
         try {
           val existing = checkpoint.read().filter { case (k, _) => logs.keys.contains(k) } ++ update
           checkpoint.write(existing)
+        } catch {
+          case e: KafkaStorageException =>
+            error(s"Failed to access checkpoint file ${checkpoint.file.getName} in dir ${checkpoint.file.getParentFile.getAbsolutePath}", e)
+        }
+      }
+    }
+  }
+
+  def updateCheckpointsWithTime(partition: TopicPartition, dataDir: File, update: Option[OffsetAndTimestamp]) {
+    inLock(lock) {
+      val checkpoint = partitionCheckpoints(partition)
+      if (checkpoint != null) {
+        try {
+          checkpoint.write(update.getOrElse(null))
         } catch {
           case e: KafkaStorageException =>
             error(s"Failed to access checkpoint file ${checkpoint.file.getName} in dir ${checkpoint.file.getParentFile.getAbsolutePath}", e)
