@@ -34,7 +34,7 @@ class ReplicaAlterLogDirsManager(brokerConfig: KafkaConfig,
       quotaManager, brokerTopicStats)
   }
 
-  def shutdown() {
+  def shutdown(): Unit = {
     info("shutting down")
     closeAllFetchers()
     info("shutdown completed")

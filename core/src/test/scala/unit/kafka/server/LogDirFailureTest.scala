@@ -20,17 +20,17 @@ import java.io.File
 import java.util.Collections
 import java.util.concurrent.{ExecutionException, TimeUnit}
 
-import kafka.server.LogDirFailureTest._
 import kafka.api.IntegrationTestHarness
 import kafka.controller.{OfflineReplica, PartitionAndReplica}
+import kafka.server.LogDirFailureTest._
 import kafka.utils.{CoreUtils, Exit, TestUtils}
 import org.apache.kafka.clients.consumer.KafkaConsumer
 import org.apache.kafka.clients.producer.{ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.common.errors.{KafkaStorageException, NotLeaderForPartitionException}
-import org.junit.{Before, Test}
+import org.apache.kafka.common.utils.Utils
 import org.junit.Assert.{assertEquals, assertFalse, assertTrue}
+import org.junit.{Before, Test}
 import org.scalatest.Assertions.fail
 
 import scala.collection.JavaConverters._
@@ -51,19 +51,24 @@ class LogDirFailureTest extends IntegrationTestHarness {
   this.serverConfig.setProperty(KafkaConfig.NumReplicaFetchersProp, "1")
 
   @Before
-  override def setUp() {
+  override def setUp(): Unit = {
     super.setUp()
     createTopic(topic, partitionNum, brokerCount)
   }
 
   @Test
-  def testIOExceptionDuringLogRoll() {
+  def testProduceErrorFromFailureOnLogRoll(): Unit = {
+    testProduceErrorsFromLogDirFailureOnLeader(Roll)
+  }
+
+  @Test
+  def testIOExceptionDuringLogRoll(): Unit = {
     testProduceAfterLogDirFailureOnLeader(Roll)
   }
 
   @Test
   // Broker should halt on any log directory failure if inter-broker protocol < 1.0
-  def brokerWithOldInterBrokerProtocolShouldHaltOnLogDirFailure() {
+  def brokerWithOldInterBrokerProtocolShouldHaltOnLogDirFailure(): Unit = {
     @volatile var statusCodeOption: Option[Int] = None
     Exit.setHaltProcedure { (statusCode, _) =>
       statusCodeOption = Some(statusCode)
@@ -92,12 +97,17 @@ class LogDirFailureTest extends IntegrationTestHarness {
   }
 
   @Test
-  def testIOExceptionDuringCheckpoint() {
+  def testProduceErrorFromFailureOnCheckpoint(): Unit = {
+    testProduceErrorsFromLogDirFailureOnLeader(Checkpoint)
+  }
+
+  @Test
+  def testIOExceptionDuringCheckpoint(): Unit = {
     testProduceAfterLogDirFailureOnLeader(Checkpoint)
   }
 
   @Test
-  def testReplicaFetcherThreadAfterLogDirFailureOnFollower() {
+  def testReplicaFetcherThreadAfterLogDirFailureOnFollower(): Unit = {
     this.producerConfig.setProperty(ProducerConfig.RETRIES_CONFIG, "0")
     val producer = createProducer()
     val partition = new TopicPartition(topic, 0)
@@ -127,11 +137,37 @@ class LogDirFailureTest extends IntegrationTestHarness {
     }
   }
 
+  def testProduceErrorsFromLogDirFailureOnLeader(failureType: LogDirFailureType): Unit = {
+    // Disable retries to allow exception to bubble up for validation
+    this.producerConfig.setProperty(ProducerConfig.RETRIES_CONFIG, "0")
+    val producer = createProducer()
+
+    val partition = new TopicPartition(topic, 0)
+    val record = new ProducerRecord(topic, 0, s"key".getBytes, s"value".getBytes)
+
+    val leaderServerId = producer.partitionsFor(topic).asScala.find(_.partition() == 0).get.leader().id()
+    val leaderServer = servers.find(_.config.brokerId == leaderServerId).get
+
+    causeLogDirFailure(failureType, leaderServer, partition)
+
+    // send() should fail due to either KafkaStorageException or NotLeaderForPartitionException
+    try {
+      producer.send(record).get(6000, TimeUnit.MILLISECONDS)
+      fail("send() should fail with either KafkaStorageException or NotLeaderForPartitionException")
+    } catch {
+      case e: ExecutionException =>
+        e.getCause match {
+          case t: KafkaStorageException =>
+          case t: NotLeaderForPartitionException => // This may happen if ProduceRequest version <= 3
+          case t: Throwable => fail(s"send() should fail with either KafkaStorageException or NotLeaderForPartitionException instead of ${t.toString}")
+        }
+    }
+  }
+
   def testProduceAfterLogDirFailureOnLeader(failureType: LogDirFailureType) {
     val consumer = createConsumer()
     subscribeAndWaitForAssignment(topic, consumer)
 
-    this.producerConfig.setProperty(ProducerConfig.RETRIES_CONFIG, "0")
     val producer = createProducer()
 
     val partition = new TopicPartition(topic, 0)
@@ -144,40 +180,7 @@ class LogDirFailureTest extends IntegrationTestHarness {
     producer.send(record).get()
     TestUtils.consumeRecords(consumer, 1)
 
-    // Make log directory of the partition on the leader broker inaccessible by replacing it with a file
-    val localLog = leaderServer.replicaManager.localLogOrException(partition)
-    val logDir = localLog.dir.getParentFile
-    CoreUtils.swallow(Utils.delete(logDir), this)
-    logDir.createNewFile()
-    assertTrue(logDir.isFile)
-
-    if (failureType == Roll) {
-      try {
-        leaderServer.replicaManager.getLog(partition).get.roll()
-        fail("Log rolling should fail with KafkaStorageException")
-      } catch {
-        case e: KafkaStorageException => // This is expected
-      }
-    } else if (failureType == Checkpoint) {
-      leaderServer.replicaManager.checkpointHighWatermarks()
-    }
-
-    // Wait for ReplicaHighWatermarkCheckpoint to happen so that the log directory of the topic will be offline
-    TestUtils.waitUntilTrue(() => !leaderServer.logManager.isLogDirOnline(logDir.getAbsolutePath), "Expected log directory offline", 3000L)
-    assertTrue(leaderServer.replicaManager.localLog(partition).isEmpty)
-
-    // The second send() should fail due to either KafkaStorageException or NotLeaderForPartitionException
-    try {
-      producer.send(record).get(6000, TimeUnit.MILLISECONDS)
-      fail("send() should fail with either KafkaStorageException or NotLeaderForPartitionException")
-    } catch {
-      case e: ExecutionException =>
-        e.getCause match {
-          case t: KafkaStorageException =>
-          case t: NotLeaderForPartitionException => // This may happen if ProduceRequest version <= 3
-          case t: Throwable => fail(s"send() should fail with either KafkaStorageException or NotLeaderForPartitionException instead of ${t.toString}")
-        }
-    }
+    causeLogDirFailure(failureType, leaderServer, partition)
 
     TestUtils.waitUntilTrue(() => {
       // ProduceResponse may contain KafkaStorageException and trigger metadata update
@@ -200,7 +203,33 @@ class LogDirFailureTest extends IntegrationTestHarness {
     assertTrue(offlineReplicas.contains(PartitionAndReplica(new TopicPartition(topic, 0), leaderServerId)))
   }
 
-  private def subscribeAndWaitForAssignment(topic: String, consumer: KafkaConsumer[Array[Byte], Array[Byte]]) {
+  private def causeLogDirFailure(failureType: LogDirFailureType,
+                                 leaderServer: KafkaServer,
+                                 partition: TopicPartition): Unit = {
+    // Make log directory of the partition on the leader broker inaccessible by replacing it with a file
+    val localLog = leaderServer.replicaManager.localLogOrException(partition)
+    val logDir = localLog.dir.getParentFile
+    CoreUtils.swallow(Utils.delete(logDir), this)
+    logDir.createNewFile()
+    assertTrue(logDir.isFile)
+
+    if (failureType == Roll) {
+      try {
+        leaderServer.replicaManager.getLog(partition).get.roll()
+        fail("Log rolling should fail with KafkaStorageException")
+      } catch {
+        case e: KafkaStorageException => // This is expected
+      }
+    } else if (failureType == Checkpoint) {
+      leaderServer.replicaManager.checkpointHighWatermarks()
+    }
+
+    // Wait for ReplicaHighWatermarkCheckpoint to happen so that the log directory of the topic will be offline
+    TestUtils.waitUntilTrue(() => !leaderServer.logManager.isLogDirOnline(logDir.getAbsolutePath), "Expected log directory offline", 3000L)
+    assertTrue(leaderServer.replicaManager.localLog(partition).isEmpty)
+  }
+
+  private def subscribeAndWaitForAssignment(topic: String, consumer: KafkaConsumer[Array[Byte], Array[Byte]]): Unit = {
     consumer.subscribe(Collections.singletonList(topic))
     TestUtils.pollUntilTrue(consumer, () => !consumer.assignment.isEmpty, "Expected non-empty assignment")
   }

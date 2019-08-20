@@ -45,10 +45,6 @@ public class NoOpWindowStore implements ReadOnlyWindowStore, StateStore {
         public KeyValue<Long, KeyValue> next() {
             throw new NoSuchElementException();
         }
-
-        @Override
-        public void remove() {
-        }
     }
 
     private static final WindowStoreIterator<KeyValue> EMPTY_WINDOW_STORE_ITERATOR = new EmptyWindowStoreIterator();

@@ -1332,7 +1332,7 @@ public class KafkaConsumerTest {
     }
 
     @Test
-    public void closeShouldBeIdempotent() {
+    public void testCloseShouldBeIdempotent() {
         KafkaConsumer<byte[], byte[]> consumer = newConsumer((String) null);
         consumer.close();
         consumer.close();
@@ -1419,7 +1419,7 @@ public class KafkaConsumerTest {
     }
 
     @Test
-    public void shouldAttemptToRejoinGroupAfterSyncGroupFailed() throws Exception {
+    public void testShouldAttemptToRejoinGroupAfterSyncGroupFailed() throws Exception {
         Time time = new MockTime();
         SubscriptionState subscription = new SubscriptionState(new LogContext(), OffsetResetStrategy.EARLIEST);
         ConsumerMetadata metadata = createMetadata(subscription);
@@ -1639,6 +1639,52 @@ public class KafkaConsumerTest {
         consumer.committed(tp0);
     }
 
+    @Test
+    public void testRebalanceException() {
+        Time time = new MockTime();
+        SubscriptionState subscription = new SubscriptionState(new LogContext(), OffsetResetStrategy.EARLIEST);
+        ConsumerMetadata metadata = createMetadata(subscription);
+        MockClient client = new MockClient(time, metadata);
+
+        initMetadata(client, Collections.singletonMap(topic, 1));
+        Node node = metadata.fetch().nodes().get(0);
+
+        ConsumerPartitionAssignor assignor = new RoundRobinAssignor();
+
+        KafkaConsumer<String, String> consumer = newConsumer(time, client, subscription, metadata, assignor, true, groupInstanceId);
+
+        consumer.subscribe(singleton(topic), getExceptionConsumerRebalanceListener());
+        Node coordinator = new Node(Integer.MAX_VALUE - node.id(), node.host(), node.port());
+
+        client.prepareResponseFrom(FindCoordinatorResponse.prepareResponse(Errors.NONE, node), node);
+        client.prepareResponseFrom(joinGroupFollowerResponse(assignor, 1, "memberId", "leaderId", Errors.NONE), coordinator);
+        client.prepareResponseFrom(syncGroupResponse(singletonList(tp0), Errors.NONE), coordinator);
+
+        // assign throws
+        try {
+            consumer.updateAssignmentMetadataIfNeeded(time.timer(Long.MAX_VALUE));
+            fail("Should throw exception");
+        } catch (Throwable e) {
+            assertEquals("boom!", e.getCause().getMessage());
+        }
+
+        // the assignment is still updated regardless of the exception
+        assertEquals(singleton(tp0), subscription.assignedPartitions());
+
+        // close's revoke throws
+        try {
+            consumer.close(Duration.ofMillis(0));
+            fail("Should throw exception");
+        } catch (Throwable e) {
+            assertEquals("boom!", e.getCause().getCause().getMessage());
+        }
+
+        consumer.close(Duration.ofMillis(0));
+
+        // the assignment is still updated regardless of the exception
+        assertTrue(subscription.assignedPartitions().isEmpty());
+    }
+
     private KafkaConsumer<String, String> consumerWithPendingAuthenticationError() {
         Time time = new MockTime();
         SubscriptionState subscription = new SubscriptionState(new LogContext(), OffsetResetStrategy.EARLIEST);
@@ -1665,6 +1711,20 @@ public class KafkaConsumerTest {
                 // set initial position so we don't need a lookup
                 for (TopicPartition partition : partitions)
                     consumer.seek(partition, 0);
+            }
+        };
+    }
+
+    private ConsumerRebalanceListener getExceptionConsumerRebalanceListener() {
+        return new ConsumerRebalanceListener() {
+            @Override
+            public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
+                throw new RuntimeException("boom!");
+            }
+
+            @Override
+            public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
+                throw new RuntimeException("boom!");
             }
         };
     }

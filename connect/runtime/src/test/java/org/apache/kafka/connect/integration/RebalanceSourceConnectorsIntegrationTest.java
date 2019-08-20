@@ -36,6 +36,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -61,8 +62,8 @@ public class RebalanceSourceConnectorsIntegrationTest {
     private static final Logger log = LoggerFactory.getLogger(RebalanceSourceConnectorsIntegrationTest.class);
 
     private static final int NUM_TOPIC_PARTITIONS = 3;
-    private static final int CONNECTOR_SETUP_DURATION_MS = 30_000;
-    private static final int WORKER_SETUP_DURATION_MS = 30_000;
+    private static final long CONNECTOR_SETUP_DURATION_MS = TimeUnit.SECONDS.toMillis(30);
+    private static final long WORKER_SETUP_DURATION_MS = TimeUnit.SECONDS.toMillis(60);
     private static final int NUM_TASKS = 4;
     private static final String CONNECTOR_NAME = "seq-source1";
     private static final String TOPIC_NAME = "sequential-topic";
@@ -156,25 +157,28 @@ public class RebalanceSourceConnectorsIntegrationTest {
                 CONNECTOR_SETUP_DURATION_MS, "Connector tasks did not start in time.");
 
         int numRecordsProduced = 100;
-        int recordTransferDurationMs = 5000;
+        long recordTransferDurationMs = TimeUnit.SECONDS.toMillis(30);
 
         // consume all records from the source topic or fail, to ensure that they were correctly produced
         int recordNum = connect.kafka().consume(numRecordsProduced, recordTransferDurationMs, TOPIC_NAME).count();
         assertTrue("Not enough records produced by source connector. Expected at least: " + numRecordsProduced + " + but got " + recordNum,
                 recordNum >= numRecordsProduced);
 
+        // expect that we're going to restart the connector and its tasks
+        StartAndStopLatch restartLatch = connectorHandle.expectedStarts(1);
+
         // Reconfigure the source connector by changing the Kafka topic used as output
         props.put(TOPIC_CONFIG, anotherTopic);
         connect.configureConnector(CONNECTOR_NAME, props);
 
+        // Wait for the connector *and tasks* to be restarted
+        assertTrue("Failed to alter connector configuration and see connector and tasks restart "
+                   + "within " + CONNECTOR_SETUP_DURATION_MS + "ms",
+                restartLatch.await(CONNECTOR_SETUP_DURATION_MS, TimeUnit.MILLISECONDS));
+
+        // And wait for the Connect to show the connectors and tasks are running
         waitForCondition(() -> this.assertConnectorAndTasksRunning(CONNECTOR_NAME, NUM_TASKS).orElse(false),
                 CONNECTOR_SETUP_DURATION_MS, "Connector tasks did not start in time.");
-
-        // expect all records to be produced by the connector
-        connectorHandle.expectedRecords(numRecordsProduced);
-
-        // expect all records to be produced by the connector
-        connectorHandle.expectedCommits(numRecordsProduced);
 
         // consume all records from the source topic or fail, to ensure that they were correctly produced
         recordNum = connect.kafka().consume(numRecordsProduced, recordTransferDurationMs, anotherTopic).count();
@@ -320,6 +324,7 @@ public class RebalanceSourceConnectorsIntegrationTest {
                     && info.tasks().size() == numTasks
                     && info.connector().state().equals(AbstractStatus.State.RUNNING.toString())
                     && info.tasks().stream().allMatch(s -> s.state().equals(AbstractStatus.State.RUNNING.toString()));
+            log.debug("Found connector and tasks running: {}", result);
             return Optional.of(result);
         } catch (Exception e) {
             log.error("Could not check connector state info.", e);

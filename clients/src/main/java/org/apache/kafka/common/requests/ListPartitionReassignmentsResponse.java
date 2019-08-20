@@ -33,7 +33,7 @@ public class ListPartitionReassignmentsResponse extends AbstractResponse {
         this(struct, ApiKeys.LIST_PARTITION_REASSIGNMENTS.latestVersion());
     }
 
-    ListPartitionReassignmentsResponse(ListPartitionReassignmentsResponseData responseData) {
+    public ListPartitionReassignmentsResponse(ListPartitionReassignmentsResponseData responseData) {
         this.data = responseData;
     }
 

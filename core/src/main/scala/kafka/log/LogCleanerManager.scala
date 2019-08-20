@@ -300,7 +300,7 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
    *  the partition is aborted.
    *  This is implemented by first abortAndPausing and then resuming the cleaning of the partition.
    */
-  def abortCleaning(topicPartition: TopicPartition) {
+  def abortCleaning(topicPartition: TopicPartition): Unit = {
     inLock(lock) {
       abortAndPauseCleaning(topicPartition)
       resumeCleaning(Seq(topicPartition))
@@ -320,7 +320,7 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
    *  6. If the partition is already paused, a new call to this function
    *     will increase the paused count by one.
    */
-  def abortAndPauseCleaning(topicPartition: TopicPartition) {
+  def abortAndPauseCleaning(topicPartition: TopicPartition): Unit = {
     inLock(lock) {
       inProgress.get(topicPartition) match {
         case None =>
@@ -343,7 +343,7 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
     *  Resume the cleaning of paused partitions.
     *  Each call of this function will undo one pause.
     */
-  def resumeCleaning(topicPartitions: Iterable[TopicPartition]){
+  def resumeCleaning(topicPartitions: Iterable[TopicPartition]): Unit = {
     inLock(lock) {
       topicPartitions.foreach {
         topicPartition =>
@@ -397,7 +397,7 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
   /**
    *  Check if the cleaning for a partition is aborted. If so, throw an exception.
    */
-  def checkCleaningAborted(topicPartition: TopicPartition) {
+  def checkCleaningAborted(topicPartition: TopicPartition): Unit = {
     inLock(lock) {
       if (isCleaningInState(topicPartition, LogCleaningAborted))
         throw new LogCleaningAbortedException()
@@ -405,7 +405,7 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
   }
 
   @deprecated("Deprecated due to change in file organization to one checkpoint file per partition.")
-  def updateCheckpoints(dataDir: File, update: Option[(TopicPartition,Long)]) {
+  def updateCheckpoints(dataDir: File, update: Option[(TopicPartition,Long)]): Unit = {
     inLock(lock) {
       val checkpoint = checkpoints(dataDir)
       if (checkpoint != null) {
@@ -458,14 +458,14 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
     }
   }
 
-  def handleLogDirFailure(dir: String) {
+  def handleLogDirFailure(dir: String): Unit = {
     info(s"Stopping cleaning logs in dir $dir")
     inLock(lock) {
       checkpoints = checkpoints.filter { case (k, _) => k.getAbsolutePath != dir }
     }
   }
 
-  def maybeTruncateCheckpoint(dataDir: File, topicPartition: TopicPartition, offset: Long) {
+  def maybeTruncateCheckpoint(dataDir: File, topicPartition: TopicPartition, offset: Long): Unit = {
     inLock(lock) {
       if (logs.get(topicPartition).config.compact) {
         val checkpoint = checkpoints(dataDir)
@@ -481,7 +481,7 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
   /**
    * Save out the endOffset and remove the given log from the in-progress set, if not aborted.
    */
-  def doneCleaning(topicPartition: TopicPartition, dataDir: File, endOffset: Long) {
+  def doneCleaning(topicPartition: TopicPartition, dataDir: File, endOffset: Long): Unit = {
     inLock(lock) {
       inProgress.get(topicPartition) match {
         case Some(LogCleaningInProgress) =>

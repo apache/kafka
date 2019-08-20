@@ -31,7 +31,7 @@ import org.junit.Test
 class PlaintextProducerSendTest extends BaseProducerSendTest {
 
   @Test(expected = classOf[SerializationException])
-  def testWrongSerializer() {
+  def testWrongSerializer(): Unit = {
     val producerProps = new Properties()
     producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
     producerProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.StringSerializer")
@@ -42,7 +42,7 @@ class PlaintextProducerSendTest extends BaseProducerSendTest {
   }
 
   @Test
-  def testBatchSizeZero() {
+  def testBatchSizeZero(): Unit = {
     val producer = createProducer(brokerList = brokerList,
       lingerMs = Int.MaxValue,
       deliveryTimeoutMs = Int.MaxValue,
@@ -51,7 +51,7 @@ class PlaintextProducerSendTest extends BaseProducerSendTest {
   }
 
   @Test
-  def testSendCompressedMessageWithLogAppendTime() {
+  def testSendCompressedMessageWithLogAppendTime(): Unit = {
     val producer = createProducer(brokerList = brokerList,
       compressionType = "gzip",
       lingerMs = Int.MaxValue,
@@ -60,7 +60,7 @@ class PlaintextProducerSendTest extends BaseProducerSendTest {
   }
 
   @Test
-  def testSendNonCompressedMessageWithLogAppendTime() {
+  def testSendNonCompressedMessageWithLogAppendTime(): Unit = {
     val producer = createProducer(brokerList = brokerList, lingerMs = Int.MaxValue, deliveryTimeoutMs = Int.MaxValue)
     sendAndVerifyTimestamp(producer, TimestampType.LOG_APPEND_TIME)
   }
@@ -71,7 +71,7 @@ class PlaintextProducerSendTest extends BaseProducerSendTest {
    * The topic should be created upon sending the first message
    */
   @Test
-  def testAutoCreateTopic() {
+  def testAutoCreateTopic(): Unit = {
     val producer = createProducer(brokerList)
     try {
       // Send a message to auto-create the topic
@@ -87,7 +87,7 @@ class PlaintextProducerSendTest extends BaseProducerSendTest {
   }
 
   @Test
-  def testSendWithInvalidCreateTime() {
+  def testSendWithInvalidCreateTime(): Unit = {
     val topicProps = new Properties()
     topicProps.setProperty(LogConfig.MessageTimestampDifferenceMaxMsProp, "1000")
     createTopic(topic, 1, 2, topicProps)

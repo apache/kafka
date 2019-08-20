@@ -41,7 +41,7 @@ object AclCommand extends Logging {
 
   private val Newline = scala.util.Properties.lineSeparator
 
-  def main(args: Array[String]) {
+  def main(args: Array[String]): Unit = {
 
     val opts = new AclCommandOptions(args)
 
@@ -80,7 +80,7 @@ object AclCommand extends Logging {
 
   class AdminClientService(val opts: AclCommandOptions) extends AclCommandService with Logging {
 
-    private def withAdminClient(opts: AclCommandOptions)(f: Admin => Unit) {
+    private def withAdminClient(opts: AclCommandOptions)(f: Admin => Unit): Unit = {
       val props = if (opts.options.has(opts.commandConfigOpt))
         Utils.loadProps(opts.options.valueOf(opts.commandConfigOpt))
       else
@@ -185,7 +185,7 @@ object AclCommand extends Logging {
 
   class AuthorizerService(val opts: AclCommandOptions) extends AclCommandService with Logging {
 
-    private def withAuthorizer()(f: Authorizer => Unit) {
+    private def withAuthorizer()(f: Authorizer => Unit): Unit = {
       val defaultProps = Map(KafkaConfig.ZkEnableSecureAclsProp -> JaasUtils.isZkSecurityEnabled)
       val authorizerProperties =
         if (opts.options.has(opts.authorizerPropertiesOpt)) {
@@ -258,7 +258,7 @@ object AclCommand extends Logging {
       }
     }
 
-    private def removeAcls(authorizer: Authorizer, acls: Set[Acl], filter: ResourcePatternFilter) {
+    private def removeAcls(authorizer: Authorizer, acls: Set[Acl], filter: ResourcePatternFilter): Unit = {
       getAcls(authorizer, filter)
         .keys
         .foreach(resource =>
@@ -573,7 +573,7 @@ object AclCommand extends Logging {
 
     options = parser.parse(args: _*)
 
-    def checkArgs() {
+    def checkArgs(): Unit = {
       if (options.has(bootstrapServerOpt) && options.has(authorizerOpt))
         CommandLineUtils.printUsageAndDie(parser, "Only one of --bootstrap-server or --authorizer must be specified")
 

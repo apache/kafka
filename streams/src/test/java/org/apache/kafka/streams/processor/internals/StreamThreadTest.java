@@ -1409,7 +1409,7 @@ public class StreamThreadTest {
                 () -> mockRestoreConsumer.position(changelogPartition) == 1L,
                 "Never restore first record");
 
-            mockRestoreConsumer.setException(new InvalidOffsetException("Try Again!") {
+            mockRestoreConsumer.setPollException(new InvalidOffsetException("Try Again!") {
                 @Override
                 public Set<TopicPartition> partitions() {
                     return changelogPartitionSet;
