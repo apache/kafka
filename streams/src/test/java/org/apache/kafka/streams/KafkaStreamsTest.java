@@ -529,20 +529,20 @@ public class KafkaStreamsTest {
     }
 
     @Test
-    public void shouldAllowCleanupBeforeStartAndAfterClose() {
+    public void shouldAllowCleanupBeforeStartAndAfterClose() throws Exception {
+        final KafkaStreams streams = getStatefulApp();
         try {
-            globalStreams.cleanUp();
-            globalStreams.start();
+            streams.cleanUp();
+            streams.start();
         } finally {
-            globalStreams.close();
+            streams.close();
         }
-        globalStreams.cleanUp();
+        streams.cleanUp();
     }
 
     @Test
     public void shouldAllowCleanupIfApplicationIsDown() throws Exception {
-        final StreamsBuilder builder = new StreamsBuilder();
-        final KafkaStreams streams = new KafkaStreams(builder.build(), props);
+        final KafkaStreams streams = getStatefulApp();
 
         final File taskDir = new File(
             props.getProperty(StreamsConfig.STATE_DIR_CONFIG)
@@ -570,8 +570,7 @@ public class KafkaStreamsTest {
 
     @Test
     public void shouldAllowCleanupIfLockIsReleased() throws Exception {
-        final StreamsBuilder builder = new StreamsBuilder();
-        final KafkaStreams streams = new KafkaStreams(builder.build(), props);
+        final KafkaStreams streams = getStatefulApp();
 
         final File taskDir = new File(
             props.getProperty(StreamsConfig.STATE_DIR_CONFIG)
@@ -609,8 +608,7 @@ public class KafkaStreamsTest {
 
     @Test
     public void shouldAllowCleanupIfLockIsReleasedFromDifferentThread() throws Exception {
-        final StreamsBuilder builder = new StreamsBuilder();
-        final KafkaStreams streams = new KafkaStreams(builder.build(), props);
+        final KafkaStreams streams = getStatefulApp();
 
         final File taskDir = new File(
             props.getProperty(StreamsConfig.STATE_DIR_CONFIG)
@@ -649,26 +647,7 @@ public class KafkaStreamsTest {
 
     @Test
     public void shouldFailWithOverlappingFileLockException() throws Exception {
-        final StreamsBuilder builder = new StreamsBuilder();
-        builder.addGlobalStore(
-            Stores.timestampedKeyValueStoreBuilder(
-                Stores.persistentTimestampedKeyValueStore("storeName"),
-                Serdes.ByteArray(),
-                Serdes.ByteArray()
-            ),
-            "topicName",
-            Consumed.as("someName"),
-            () -> new Processor() {
-                @Override
-                public void init(final ProcessorContext context) {}
-
-                @Override
-                public void process(final Object key, final Object value) {}
-
-                @Override
-                public void close() {}
-            });
-        final KafkaStreams streams = new KafkaStreams(builder.build(), props);
+        final KafkaStreams streams = getStatefulApp();
 
         final File taskDir = new File(
             props.getProperty(StreamsConfig.STATE_DIR_CONFIG)
@@ -689,26 +668,7 @@ public class KafkaStreamsTest {
 
     @Test
     public void shouldFailWithOverlappingFileLockExceptionWhenLockedByDifferentThread() throws Exception {
-        final StreamsBuilder builder = new StreamsBuilder();
-        builder.addGlobalStore(
-            Stores.timestampedKeyValueStoreBuilder(
-                Stores.persistentTimestampedKeyValueStore("storeName"),
-                Serdes.ByteArray(),
-                Serdes.ByteArray()
-            ),
-            "topicName",
-            Consumed.as("someName"),
-            () -> new Processor() {
-                @Override
-                public void init(final ProcessorContext context) {}
-
-                @Override
-                public void process(final Object key, final Object value) {}
-
-                @Override
-                public void close() {}
-            });
-        final KafkaStreams streams = new KafkaStreams(builder.build(), props);
+        final KafkaStreams streams = getStatefulApp();
 
         final File taskDir = new File(
             props.getProperty(StreamsConfig.STATE_DIR_CONFIG)
@@ -738,26 +698,7 @@ public class KafkaStreamsTest {
 
     @Test
     public void shouldFailWithOverlappingFileLockExceptionForGlobalTask() throws Exception {
-        final StreamsBuilder builder = new StreamsBuilder();
-        builder.addGlobalStore(
-            Stores.timestampedKeyValueStoreBuilder(
-                Stores.persistentTimestampedKeyValueStore("storeName"),
-                Serdes.ByteArray(),
-                Serdes.ByteArray()
-            ),
-            "topicName",
-            Consumed.as("someName"),
-            () -> new Processor() {
-                @Override
-                public void init(final ProcessorContext context) {}
-
-                @Override
-                public void process(final Object key, final Object value) {}
-
-                @Override
-                public void close() {}
-            });
-        final KafkaStreams streams = new KafkaStreams(builder.build(), props);
+        final KafkaStreams streams = getStatefulApp();
 
         final File taskDir = new File(
             props.getProperty(StreamsConfig.STATE_DIR_CONFIG)
@@ -777,26 +718,7 @@ public class KafkaStreamsTest {
 
     @Test
     public void shouldFailWithOverlappingFileLockExceptionForGlobalTaskWhenLockedByDifferentThread() throws Exception {
-        final StreamsBuilder builder = new StreamsBuilder();
-        builder.addGlobalStore(
-            Stores.timestampedKeyValueStoreBuilder(
-                Stores.persistentTimestampedKeyValueStore("storeName"),
-                Serdes.ByteArray(),
-                Serdes.ByteArray()
-            ),
-            "topicName",
-            Consumed.as("someName"),
-            () -> new Processor() {
-                @Override
-                public void init(final ProcessorContext context) {}
-
-                @Override
-                public void process(final Object key, final Object value) {}
-
-                @Override
-                public void close() {}
-            });
-        final KafkaStreams streams = new KafkaStreams(builder.build(), props);
+        final KafkaStreams streams = getStatefulApp();
 
         final File taskDir = new File(
             props.getProperty(StreamsConfig.STATE_DIR_CONFIG)
@@ -929,6 +851,36 @@ public class KafkaStreamsTest {
         final String globalStoreName = testName.getMethodName() + "-globalStore";
         final Topology topology = getStatefulTopology(inputTopic, outputTopic, globalTopicName, storeName, globalStoreName, true);
         startStreamsAndCheckDirExists(topology, asList(inputTopic, globalTopicName), outputTopic, true);
+    }
+
+    private KafkaStreams getStatefulApp() throws Exception {
+        final String inputTopic = testName.getMethodName() + "-input";
+        final String outputTopic = testName.getMethodName() + "-output";
+        final String globalTopicName = testName.getMethodName() + "-global";
+        final String storeName = testName.getMethodName() + "-counts";
+        final String globalStoreName = testName.getMethodName() + "-globalStore";
+        final Topology topology = getStatefulTopology(inputTopic, outputTopic, globalTopicName, storeName, globalStoreName, true);
+
+        final StreamsBuilder builder = new StreamsBuilder();
+        builder.addGlobalStore(
+            Stores.timestampedKeyValueStoreBuilder(
+                Stores.persistentTimestampedKeyValueStore("storeName"),
+                Serdes.ByteArray(),
+                Serdes.ByteArray()
+            ),
+            "topicName",
+            Consumed.as("someName"),
+            () -> new Processor() {
+                @Override
+                public void init(final ProcessorContext context) {}
+
+                @Override
+                public void process(final Object key, final Object value) {}
+
+                @Override
+                public void close() {}
+            });
+        return new KafkaStreams(builder.build(), props);
     }
 
     @SuppressWarnings("unchecked")
