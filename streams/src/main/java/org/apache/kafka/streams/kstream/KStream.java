@@ -2539,6 +2539,12 @@ public interface KStream<K, V> {
                                      final JoinWindows windows,
                                      final Joined<K, V, VO> joined);
 
+    <VO, VR> KStream<K, VR> leftJoin(final KStream<K, VO> otherStream,
+                                     final ValueJoiner<? super V, ? super VO, ? extends VR> joiner,
+                                     final JoinWindows windows,
+                                     final Joined<K, V, VO> joined,
+                                     final Materialized<K, ?, WindowStore<Bytes, byte[]>> materialized);
+
     /**
      * Join records of this stream with another {@code KStream}'s records using windowed outer equi join with default
      * serializers and deserializers.
@@ -2704,6 +2710,12 @@ public interface KStream<K, V> {
                                       final ValueJoiner<? super V, ? super VO, ? extends VR> joiner,
                                       final JoinWindows windows,
                                       final Joined<K, V, VO> joined);
+
+    <VO, VR> KStream<K, VR> outerJoin(final KStream<K, VO> otherStream,
+                                      final ValueJoiner<? super V, ? super VO, ? extends VR> joiner,
+                                      final JoinWindows windows,
+                                      final Joined<K, V, VO> joined,
+                                      final Materialized<K, ?, WindowStore<Bytes, byte[]>> materialized);
 
     /**
      * Join records of this stream with {@link KTable}'s records using non-windowed inner equi join with default

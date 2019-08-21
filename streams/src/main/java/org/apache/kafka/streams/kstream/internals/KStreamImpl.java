@@ -759,7 +759,17 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
                                              final ValueJoiner<? super V, ? super VO, ? extends VR> joiner,
                                              final JoinWindows windows,
                                              final Joined<K, V, VO> joined) {
-        return doJoin(other, joiner, windows, joined, null, new KStreamImplJoin(true, true));
+        return outerJoin(other, joiner, windows, joined, null);
+    }
+
+    @Override
+    public <VO, VR> KStream<K, VR> outerJoin(final KStream<K, VO> other,
+                                             final ValueJoiner<? super V, ? super VO, ? extends VR> joiner,
+                                             final JoinWindows windows,
+                                             final Joined<K, V, VO> joined,
+                                             final Materialized<K, ?, WindowStore<Bytes, byte[]>> materialized) {
+
+        return doJoin(other, joiner, windows, joined, materialized, new KStreamImplJoin(true, true));
     }
 
     private <VO, VR> KStream<K, VR> doJoin(final KStream<K, VO> other,
@@ -868,15 +878,24 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
                                             final ValueJoiner<? super V, ? super VO, ? extends VR> joiner,
                                             final JoinWindows windows,
                                             final Joined<K, V, VO> joined) {
+        return leftJoin(other, joiner, windows, joined, null);
+
+    }
+
+    @Override
+    public <VO, VR> KStream<K, VR> leftJoin(final KStream<K, VO> other,
+                                            final ValueJoiner<? super V, ? super VO, ? extends VR> joiner,
+                                            final JoinWindows windows,
+                                            final Joined<K, V, VO> joined,
+                                            final  Materialized<K, ?, WindowStore<Bytes, byte[]>> materialized) {
         Objects.requireNonNull(joined, "joined can't be null");
         return doJoin(
             other,
             joiner,
             windows,
             joined,
-            null, new KStreamImplJoin(true, false)
+            materialized, new KStreamImplJoin(true, false)
         );
-
     }
 
     @Override
@@ -1158,8 +1177,8 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
             final String joinThisGeneratedName = rightOuter ? builder.newProcessorName(OUTERTHIS_NAME) : builder.newProcessorName(JOINTHIS_NAME);
             final String joinOtherGeneratedName = leftOuter ? builder.newProcessorName(OUTEROTHER_NAME) : builder.newProcessorName(JOINOTHER_NAME);
 
-            final String joinThisName = renamed.suffixWithOrElseGet(joinThisSuffix, joinThisGeneratedName + joinThisSuffix);
-            final String joinOtherName = renamed.suffixWithOrElseGet(joinOtherSuffix, joinOtherGeneratedName + joinOtherSuffix);
+            final String joinThisName = renamed.suffixWithOrElseGet(joinThisSuffix, joinThisGeneratedName);
+            final String joinOtherName = renamed.suffixWithOrElseGet(joinOtherSuffix, joinOtherGeneratedName);
 
             final String joinMergeName = renamed.suffixWithOrElseGet(
                     "-merge", builder, MERGE_NAME);

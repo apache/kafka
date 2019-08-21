@@ -599,7 +599,7 @@ public class StreamsBuilderTest {
         final KStream<String, String> streamOne = builder.stream(STREAM_TOPIC);
         final KStream<String, String> streamTwo = builder.stream(STREAM_TOPIC_TWO);
 
-        streamOne.leftJoin(streamTwo, (value1, value2) -> value1, JoinWindows.of(Duration.ofHours(1)), Joined.as(STREAM_OPERATION_NAME));
+        streamOne.leftJoin(streamTwo, (value1, value2) -> value1, JoinWindows.of(Duration.ofHours(1)), Joined.as(STREAM_OPERATION_NAME), Materialized.as(STREAM_OPERATION_NAME));
         builder.build();
 
         final ProcessorTopology topology = builder.internalTopologyBuilder.rewriteTopology(new StreamsConfig(props)).build();
@@ -621,7 +621,7 @@ public class StreamsBuilderTest {
         final KStream<String, String> streamOne = builder.stream(STREAM_TOPIC);
         final KStream<String, String> streamTwo = builder.stream(STREAM_TOPIC_TWO);
 
-        streamOne.join(streamTwo, (value1, value2) -> value1, JoinWindows.of(Duration.ofHours(1)), Joined.as(STREAM_OPERATION_NAME));
+        streamOne.join(streamTwo, (value1, value2) -> value1, JoinWindows.of(Duration.ofHours(1)), Joined.as(STREAM_OPERATION_NAME), Materialized.as(STREAM_OPERATION_NAME));
         builder.build();
 
         final ProcessorTopology topology = builder.internalTopologyBuilder.rewriteTopology(new StreamsConfig(props)).build();
@@ -644,7 +644,7 @@ public class StreamsBuilderTest {
         final KStream<String, String> streamOne = builder.stream(STREAM_TOPIC);
         final KStream<String, String> streamTwo = builder.stream(STREAM_TOPIC_TWO);
 
-        streamOne.outerJoin(streamTwo, (value1, value2) -> value1, JoinWindows.of(Duration.ofHours(1)), Joined.as(STREAM_OPERATION_NAME));
+        streamOne.outerJoin(streamTwo, (value1, value2) -> value1, JoinWindows.of(Duration.ofHours(1)), Joined.as(STREAM_OPERATION_NAME), Materialized.as(STREAM_OPERATION_NAME));
         builder.build();
         final ProcessorTopology topology = builder.internalTopologyBuilder.rewriteTopology(new StreamsConfig(props)).build();
         assertSpecifiedNameForStateStore(topology.stateStores(),
