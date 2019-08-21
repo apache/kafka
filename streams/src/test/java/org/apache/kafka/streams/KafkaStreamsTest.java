@@ -30,8 +30,6 @@ import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.processor.AbstractProcessor;
-import org.apache.kafka.streams.processor.Processor;
-import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.ThreadMetadata;
 import org.apache.kafka.streams.processor.internals.GlobalStreamThread;
@@ -861,26 +859,7 @@ public class KafkaStreamsTest {
         final String globalStoreName = testName.getMethodName() + "-globalStore";
         final Topology topology = getStatefulTopology(inputTopic, outputTopic, globalTopicName, storeName, globalStoreName, true);
 
-        final StreamsBuilder builder = new StreamsBuilder();
-        builder.addGlobalStore(
-            Stores.timestampedKeyValueStoreBuilder(
-                Stores.persistentTimestampedKeyValueStore("storeName"),
-                Serdes.ByteArray(),
-                Serdes.ByteArray()
-            ),
-            "topicName",
-            Consumed.as("someName"),
-            () -> new Processor() {
-                @Override
-                public void init(final ProcessorContext context) {}
-
-                @Override
-                public void process(final Object key, final Object value) {}
-
-                @Override
-                public void close() {}
-            });
-        return new KafkaStreams(builder.build(), props);
+        return new KafkaStreams(topology, props);
     }
 
     @SuppressWarnings("unchecked")
