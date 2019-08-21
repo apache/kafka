@@ -16,15 +16,10 @@
  */
 package org.apache.kafka.streams;
 
-import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.MockProducer;
 import org.apache.kafka.common.Cluster;
-import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
-import org.apache.kafka.common.config.ConfigException;
-import org.apache.kafka.common.metrics.Sensor;
-import org.apache.kafka.common.network.Selectable;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
@@ -35,6 +30,8 @@ import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.processor.AbstractProcessor;
+import org.apache.kafka.streams.processor.Processor;
+import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.ThreadMetadata;
 import org.apache.kafka.streams.processor.internals.GlobalStreamThread;
@@ -49,7 +46,6 @@ import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.MockStateRestoreListener;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
-import org.junit.Assert;
 import org.junit.Before;
 import org.junit.ClassRule;
 import org.junit.Rule;
@@ -59,15 +55,14 @@ import org.junit.rules.TestName;
 
 import java.io.File;
 import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.time.Duration;
-import java.util.Collection;
 import java.nio.channels.FileChannel;
 import java.nio.channels.FileLock;
 import java.nio.channels.OverlappingFileLockException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.time.Duration;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -80,10 +75,13 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 
 import static java.util.Arrays.asList;
-import static org.junit.Assert.assertEquals;
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.greaterThan;
+import static org.hamcrest.Matchers.instanceOf;
+import static org.hamcrest.Matchers.is;
 import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -123,32 +121,9 @@ public class KafkaStreamsTest {
     }
 
     @Test
-    public void testOsDefaultSocketBufferSizes() {
-        props.put(CommonClientConfigs.SEND_BUFFER_CONFIG, Selectable.USE_DEFAULT_BUFFER_SIZE);
-        props.put(CommonClientConfigs.RECEIVE_BUFFER_CONFIG, Selectable.USE_DEFAULT_BUFFER_SIZE);
-        final KafkaStreams streams = new KafkaStreams(builder.build(), props);
-        streams.close();
-    }
-
-    @Test(expected = KafkaException.class)
-    public void testInvalidSocketSendBufferSize() {
-        props.put(CommonClientConfigs.SEND_BUFFER_CONFIG, -2);
-        final KafkaStreams streams = new KafkaStreams(builder.build(), props);
-        streams.close();
-    }
-
-    @Test(expected = KafkaException.class)
-    public void testInvalidSocketReceiveBufferSize() {
-        props.put(CommonClientConfigs.RECEIVE_BUFFER_CONFIG, -2);
-        final KafkaStreams streams = new KafkaStreams(builder.build(), props);
-        streams.close();
-    }
-
-    @Test
     public void stateShouldTransitToNotRunningIfCloseRightAfterCreated() {
         globalStreams.close();
-
-        Assert.assertEquals(KafkaStreams.State.NOT_RUNNING, globalStreams.state());
+        assertThat(globalStreams.state(), is(KafkaStreams.State.NOT_RUNNING));
     }
 
     @Test
@@ -156,15 +131,15 @@ public class KafkaStreamsTest {
         final StateListenerStub stateListener = new StateListenerStub();
         globalStreams.setStateListener(stateListener);
 
-        Assert.assertEquals(0, stateListener.numChanges);
-        Assert.assertEquals(KafkaStreams.State.CREATED, globalStreams.state());
+        assertThat(stateListener.numChanges, is(0));
+        assertThat(globalStreams.state(), is(KafkaStreams.State.CREATED));
 
         globalStreams.start();
 
         TestUtils.waitForCondition(
             () -> stateListener.numChanges == 2,
             "Streams never started.");
-        Assert.assertEquals(KafkaStreams.State.RUNNING, globalStreams.state());
+        assertThat(globalStreams.state(), is(KafkaStreams.State.RUNNING));
 
         for (final StreamThread thread: globalStreams.threads) {
             thread.stateListener().onChange(
@@ -173,8 +148,8 @@ public class KafkaStreamsTest {
                 StreamThread.State.RUNNING);
         }
 
-        Assert.assertEquals(3, stateListener.numChanges);
-        Assert.assertEquals(KafkaStreams.State.REBALANCING, globalStreams.state());
+        assertThat(stateListener.numChanges, is(3));
+        assertThat(globalStreams.state(), is(KafkaStreams.State.REBALANCING));
 
         for (final StreamThread thread : globalStreams.threads) {
             thread.stateListener().onChange(
@@ -183,8 +158,8 @@ public class KafkaStreamsTest {
                 StreamThread.State.PARTITIONS_REVOKED);
         }
 
-        Assert.assertEquals(3, stateListener.numChanges);
-        Assert.assertEquals(KafkaStreams.State.REBALANCING, globalStreams.state());
+        assertThat(stateListener.numChanges, is(3));
+        assertThat(globalStreams.state(), is(KafkaStreams.State.REBALANCING));
 
         globalStreams.threads[NUM_THREADS - 1].stateListener().onChange(
             globalStreams.threads[NUM_THREADS - 1],
@@ -196,8 +171,8 @@ public class KafkaStreamsTest {
             StreamThread.State.DEAD,
             StreamThread.State.PENDING_SHUTDOWN);
 
-        Assert.assertEquals(3, stateListener.numChanges);
-        Assert.assertEquals(KafkaStreams.State.REBALANCING, globalStreams.state());
+        assertThat(stateListener.numChanges, is(3));
+        assertThat(globalStreams.state(), is(KafkaStreams.State.REBALANCING));
 
         for (final StreamThread thread : globalStreams.threads) {
             if (thread != globalStreams.threads[NUM_THREADS - 1]) {
@@ -208,15 +183,15 @@ public class KafkaStreamsTest {
             }
         }
 
-        Assert.assertEquals(4, stateListener.numChanges);
-        Assert.assertEquals(KafkaStreams.State.RUNNING, globalStreams.state());
+        assertThat(stateListener.numChanges, is(4));
+        assertThat(globalStreams.state(), is(KafkaStreams.State.RUNNING));
 
         globalStreams.close();
 
         TestUtils.waitForCondition(
             () -> stateListener.numChanges == 6,
             "Streams never closed.");
-        Assert.assertEquals(KafkaStreams.State.NOT_RUNNING, globalStreams.state());
+        assertThat(globalStreams.state(), is(KafkaStreams.State.NOT_RUNNING));
     }
 
     @Test
@@ -224,15 +199,15 @@ public class KafkaStreamsTest {
         final StateListenerStub stateListener = new StateListenerStub();
         globalStreams.setStateListener(stateListener);
 
-        Assert.assertEquals(0, stateListener.numChanges);
-        Assert.assertEquals(KafkaStreams.State.CREATED, globalStreams.state());
+        assertThat(stateListener.numChanges, is(0));
+        assertThat(globalStreams.state(), is(KafkaStreams.State.CREATED));
 
         globalStreams.start();
 
         TestUtils.waitForCondition(
             () -> stateListener.numChanges == 2,
             "Streams never started.");
-        Assert.assertEquals(KafkaStreams.State.RUNNING, globalStreams.state());
+        assertThat(globalStreams.state(), is(KafkaStreams.State.RUNNING));
 
         for (final StreamThread thread : globalStreams.threads) {
             thread.stateListener().onChange(
@@ -241,8 +216,8 @@ public class KafkaStreamsTest {
                 StreamThread.State.RUNNING);
         }
 
-        Assert.assertEquals(3, stateListener.numChanges);
-        Assert.assertEquals(KafkaStreams.State.REBALANCING, globalStreams.state());
+        assertThat(stateListener.numChanges, is(3));
+        assertThat(globalStreams.state(), is(KafkaStreams.State.REBALANCING));
 
         globalStreams.threads[NUM_THREADS - 1].stateListener().onChange(
             globalStreams.threads[NUM_THREADS - 1],
@@ -254,8 +229,8 @@ public class KafkaStreamsTest {
             StreamThread.State.DEAD,
             StreamThread.State.PENDING_SHUTDOWN);
 
-        Assert.assertEquals(3, stateListener.numChanges);
-        Assert.assertEquals(KafkaStreams.State.REBALANCING, globalStreams.state());
+        assertThat(stateListener.numChanges, is(3));
+        assertThat(globalStreams.state(), is(KafkaStreams.State.REBALANCING));
 
         for (final StreamThread thread : globalStreams.threads) {
             if (thread != globalStreams.threads[NUM_THREADS - 1]) {
@@ -271,8 +246,8 @@ public class KafkaStreamsTest {
             }
         }
 
-        Assert.assertEquals(4, stateListener.numChanges);
-        Assert.assertEquals(KafkaStreams.State.ERROR, globalStreams.state());
+        assertThat(stateListener.numChanges, is(4));
+        assertThat(globalStreams.state(), is(KafkaStreams.State.ERROR));
 
         globalStreams.close();
 
@@ -280,7 +255,7 @@ public class KafkaStreamsTest {
         TestUtils.waitForCondition(
             () -> stateListener.numChanges == 6,
             "Streams never closed.");
-        Assert.assertEquals(KafkaStreams.State.NOT_RUNNING, globalStreams.state());
+        assertThat(globalStreams.state(), is(KafkaStreams.State.NOT_RUNNING));
     }
 
     @Test
@@ -317,8 +292,8 @@ public class KafkaStreamsTest {
             threadsField.setAccessible(true);
             final StreamThread[] threads = (StreamThread[]) threadsField.get(streams);
 
-            assertEquals(NUM_THREADS, threads.length);
-            assertEquals(streams.state(), KafkaStreams.State.CREATED);
+            assertThat(threads.length, is(NUM_THREADS));
+            assertThat(streams.state(), is(KafkaStreams.State.CREATED));
 
             streams.start();
             TestUtils.waitForCondition(
@@ -369,12 +344,12 @@ public class KafkaStreamsTest {
                 () -> globalStreamThread.state() == GlobalStreamThread.State.DEAD,
                 "Thread never stopped.");
             globalStreamThread.join();
-            assertEquals(streams.state(), KafkaStreams.State.ERROR);
+            assertThat(streams.state(), is(KafkaStreams.State.ERROR));
         } finally {
             streams.close();
         }
 
-        assertEquals(streams.state(), KafkaStreams.State.NOT_RUNNING);
+        assertThat(streams.state(), is(KafkaStreams.State.NOT_RUNNING));
     }
 
     @Test
@@ -391,10 +366,7 @@ public class KafkaStreamsTest {
         // make sure we have the global state thread running too
         builder.globalTable("anyTopic");
         try (final KafkaStreams streams = new KafkaStreams(builder.build(), props)) {
-            streams.start();
-            fail("expected start() to time out and throw an exception.");
-        } catch (final StreamsException expected) {
-            // This is a result of not being able to connect to the broker.
+            assertThrows(StreamsException.class, streams::start);
         }
     }
 
@@ -423,12 +395,13 @@ public class KafkaStreamsTest {
         try (final KafkaStreams streams = new KafkaStreams(builder.build(), props)) {
             final int newInitCount = MockMetricsReporter.INIT_COUNT.get();
             final int initDiff = newInitCount - oldInitCount;
-            assertTrue("some reporters should be initialized by calling on construction", initDiff > 0);
+            assertThat("some reporters should be initialized by calling on construction",
+                initDiff, greaterThan(0));
 
             streams.start();
             final int oldCloseCount = MockMetricsReporter.CLOSE_COUNT.get();
             streams.close();
-            assertEquals(oldCloseCount + initDiff, MockMetricsReporter.CLOSE_COUNT.get());
+            assertThat(MockMetricsReporter.CLOSE_COUNT.get(), is(oldCloseCount + initDiff));
         }
     }
 
@@ -438,110 +411,59 @@ public class KafkaStreamsTest {
         final int closeCount = MockMetricsReporter.CLOSE_COUNT.get();
 
         globalStreams.close();
-        Assert.assertEquals("subsequent close() calls should do nothing",
-            closeCount, MockMetricsReporter.CLOSE_COUNT.get());
+        assertThat("subsequent close() calls should do nothing",
+            MockMetricsReporter.CLOSE_COUNT.get(), is(closeCount));
     }
 
     @Test
     public void testCannotStartOnceClosed() {
         globalStreams.start();
         globalStreams.close();
-        try {
-            globalStreams.start();
-            fail("Should have throw IllegalStateException");
-        } catch (final IllegalStateException expected) {
-            // this is ok
-        } finally {
-            globalStreams.close();
-        }
+        assertThrows(IllegalStateException.class, globalStreams::start);
     }
 
     @Test
     public void testCannotStartTwice() {
         globalStreams.start();
-
-        try {
-            globalStreams.start();
-            fail("Should throw an IllegalStateException");
-        } catch (final IllegalStateException e) {
-            // this is ok
-        } finally {
-            globalStreams.close();
-        }
+        assertThrows(IllegalStateException.class, globalStreams::start);
     }
 
     @Test
     public void shouldNotSetGlobalRestoreListenerAfterStarting() {
         globalStreams.start();
-        try {
-            globalStreams.setGlobalStateRestoreListener(new MockStateRestoreListener());
-            fail("Should throw an IllegalStateException");
-        } catch (final IllegalStateException e) {
-            // expected
-        } finally {
-            globalStreams.close();
-        }
+        assertThrows(IllegalStateException.class, () -> globalStreams.setGlobalStateRestoreListener(new MockStateRestoreListener()));
     }
 
     @Test
     public void shouldThrowExceptionSettingUncaughtExceptionHandlerNotInCreateState() {
         globalStreams.start();
-        try {
-            globalStreams.setUncaughtExceptionHandler(null);
-            fail("Should throw IllegalStateException");
-        } catch (final IllegalStateException e) {
-            // expected
-        }
+        assertThrows(IllegalStateException.class, () -> globalStreams.setUncaughtExceptionHandler(null));
     }
 
     @Test
     public void shouldThrowExceptionSettingStateListenerNotInCreateState() {
         globalStreams.start();
-        try {
-            globalStreams.setStateListener(null);
-            fail("Should throw IllegalStateException");
-        } catch (final IllegalStateException e) {
-            // expected
-        }
+        assertThrows(IllegalStateException.class, () -> globalStreams.setStateListener(null));
     }
 
     @Test
-    public void testIllegalMetricsConfig() {
-        props.setProperty(StreamsConfig.METRICS_RECORDING_LEVEL_CONFIG, "illegalConfig");
-
-        try {
-            new KafkaStreams(builder.build(), props);
-            fail("Should have throw ConfigException");
-        } catch (final ConfigException expected) { /* expected */ }
-    }
-
-    @Test
-    public void testLegalMetricsConfig() {
-        props.setProperty(StreamsConfig.METRICS_RECORDING_LEVEL_CONFIG, Sensor.RecordingLevel.INFO.toString());
-        new KafkaStreams(builder.build(), props).close();
-
-        props.setProperty(StreamsConfig.METRICS_RECORDING_LEVEL_CONFIG, Sensor.RecordingLevel.DEBUG.toString());
-        new KafkaStreams(builder.build(), props).close();
-    }
-
-    @Test(expected = IllegalStateException.class)
     public void shouldNotGetAllTasksWhenNotRunning() {
-        globalStreams.allMetadata();
+        assertThrows(IllegalStateException.class, globalStreams::allMetadata);
     }
 
-    @Test(expected = IllegalStateException.class)
+    @Test
     public void shouldNotGetAllTasksWithStoreWhenNotRunning() {
-        globalStreams.allMetadataForStore("store");
+        assertThrows(IllegalStateException.class, () -> globalStreams.allMetadataForStore("store"));
     }
 
-    @Test(expected = IllegalStateException.class)
+    @Test
     public void shouldNotGetTaskWithKeyAndSerializerWhenNotRunning() {
-        globalStreams.metadataForKey("store", "key", Serdes.String().serializer());
+        assertThrows(IllegalStateException.class, () -> globalStreams.metadataForKey("store", "key", Serdes.String().serializer()));
     }
 
-    @Test(expected = IllegalStateException.class)
+    @Test
     public void shouldNotGetTaskWithKeyAndPartitionerWhenNotRunning() {
-        globalStreams.metadataForKey("store", "key", (topic, key, value, numPartitions) -> 0);
+        assertThrows(IllegalStateException.class, () -> globalStreams.metadataForKey("store", "key", (topic, key, value, numPartitions) -> 0));
     }
 
     @Test
@@ -591,19 +513,18 @@ public class KafkaStreamsTest {
     public void shouldReturnThreadMetadata() {
         globalStreams.start();
         final Set<ThreadMetadata> threadMetadata = globalStreams.localThreadsMetadata();
-        assertNotNull(threadMetadata);
-        assertEquals(2, threadMetadata.size());
+        assertThat(threadMetadata.size(), is(2));
         for (final ThreadMetadata metadata : threadMetadata) {
             assertTrue("#threadState() was: " + metadata.threadState() + "; expected either RUNNING, STARTING, PARTITIONS_REVOKED, PARTITIONS_ASSIGNED, or CREATED",
                 asList("RUNNING", "STARTING", "PARTITIONS_REVOKED", "PARTITIONS_ASSIGNED", "CREATED").contains(metadata.threadState()));
-            assertEquals(0, metadata.standbyTasks().size());
-            assertEquals(0, metadata.activeTasks().size());
+            assertThat(metadata.standbyTasks().size(), is(0));
+            assertThat(metadata.activeTasks().size(), is(0));
             final String threadName = metadata.threadName();
             assertTrue(threadName.startsWith("clientId-StreamThread-"));
-            assertEquals(threadName + "-consumer", metadata.consumerClientId());
-            assertEquals(threadName + "-restore-consumer", metadata.restoreConsumerClientId());
-            assertEquals(Collections.singleton(threadName + "-producer"), metadata.producerClientIds());
-            assertEquals("clientId-admin", metadata.adminClientId());
+            assertThat(metadata.consumerClientId(), is(threadName + "-consumer"));
+            assertThat(metadata.restoreConsumerClientId(), is(threadName + "-restore-consumer"));
+            assertThat(metadata.producerClientIds(), is(Collections.singleton(threadName + "-producer")));
+            assertThat(metadata.adminClientId(), is("clientId-admin"));
         }
     }
 
@@ -729,6 +650,24 @@ public class KafkaStreamsTest {
     @Test
     public void shouldFailWithOverlappingFileLockException() throws Exception {
         final StreamsBuilder builder = new StreamsBuilder();
+        builder.addGlobalStore(
+            Stores.timestampedKeyValueStoreBuilder(
+                Stores.persistentTimestampedKeyValueStore("storeName"),
+                Serdes.ByteArray(),
+                Serdes.ByteArray()
+            ),
+            "topicName",
+            Consumed.as("someName"),
+            () -> new Processor() {
+                @Override
+                public void init(final ProcessorContext context) {}
+
+                @Override
+                public void process(final Object key, final Object value) {}
+
+                @Override
+                public void close() {}
+            });
         final KafkaStreams streams = new KafkaStreams(builder.build(), props);
 
         final File taskDir = new File(
@@ -738,21 +677,37 @@ public class KafkaStreamsTest {
         assertTrue(taskDir.mkdirs());
 
         final File lockFile = new File(taskDir, ".lock");
-
         try (final FileChannel channel = FileChannel.open(lockFile.toPath(), StandardOpenOption.CREATE, StandardOpenOption.WRITE)) {
             channel.tryLock();
-            try {
-                streams.cleanUp();
-                fail("Should have throw StreamsException");
-            } catch (final StreamsException expected) {
-                assertTrue(expected.getCause() instanceof OverlappingFileLockException);
-            }
+
+            final StreamsException expected = assertThrows(StreamsException.class, streams::cleanUp);
+            assertThat(expected.getCause(), instanceOf(OverlappingFileLockException.class));
+        } finally {
+            streams.close();
         }
     }
 
     @Test
     public void shouldFailWithOverlappingFileLockExceptionWhenLockedByDifferentThread() throws Exception {
         final StreamsBuilder builder = new StreamsBuilder();
+        builder.addGlobalStore(
+            Stores.timestampedKeyValueStoreBuilder(
+                Stores.persistentTimestampedKeyValueStore("storeName"),
+                Serdes.ByteArray(),
+                Serdes.ByteArray()
+            ),
+            "topicName",
+            Consumed.as("someName"),
+            () -> new Processor() {
+                @Override
+                public void init(final ProcessorContext context) {}
+
+                @Override
+                public void process(final Object key, final Object value) {}
+
+                @Override
+                public void close() {}
+            });
         final KafkaStreams streams = new KafkaStreams(builder.build(), props);
 
         final File taskDir = new File(
@@ -771,12 +726,8 @@ public class KafkaStreamsTest {
         }
 
         try {
-            try {
-                streams.cleanUp();
-                fail("Should have throw StreamsException");
-            } catch (final StreamsException expected) {
-                assertTrue(expected.getCause() instanceof OverlappingFileLockException);
-            }
+            final StreamsException expected = assertThrows(StreamsException.class, streams::cleanUp);
+            assertThat(expected.getCause(), instanceOf(OverlappingFileLockException.class));
         } finally {
             lockThread.releaseLock = true;
             lockThread.isRunning = false;
@@ -788,6 +739,24 @@ public class KafkaStreamsTest {
     @Test
     public void shouldFailWithOverlappingFileLockExceptionForGlobalTask() throws Exception {
         final StreamsBuilder builder = new StreamsBuilder();
+        builder.addGlobalStore(
+            Stores.timestampedKeyValueStoreBuilder(
+                Stores.persistentTimestampedKeyValueStore("storeName"),
+                Serdes.ByteArray(),
+                Serdes.ByteArray()
+            ),
+            "topicName",
+            Consumed.as("someName"),
+            () -> new Processor() {
+                @Override
+                public void init(final ProcessorContext context) {}
+
+                @Override
+                public void process(final Object key, final Object value) {}
+
+                @Override
+                public void close() {}
+            });
         final KafkaStreams streams = new KafkaStreams(builder.build(), props);
 
         final File taskDir = new File(
@@ -800,18 +769,33 @@ public class KafkaStreamsTest {
 
         try (final FileChannel channel = FileChannel.open(lockFile.toPath(), StandardOpenOption.CREATE, StandardOpenOption.WRITE)) {
             channel.tryLock();
-            try {
-                streams.cleanUp();
-                fail("Should have throw StreamsException");
-            } catch (final StreamsException expected) {
-                assertTrue(expected.getCause() instanceof OverlappingFileLockException);
-            }
+
+            final StreamsException expected = assertThrows(StreamsException.class, streams::cleanUp);
+            assertThat(expected.getCause(), instanceOf(OverlappingFileLockException.class));
         }
     }
 
     @Test
     public void shouldFailWithOverlappingFileLockExceptionForGlobalTaskWhenLockedByDifferentThread() throws Exception {
         final StreamsBuilder builder = new StreamsBuilder();
+        builder.addGlobalStore(
+            Stores.timestampedKeyValueStoreBuilder(
+                Stores.persistentTimestampedKeyValueStore("storeName"),
+                Serdes.ByteArray(),
+                Serdes.ByteArray()
+            ),
+            "topicName",
+            Consumed.as("someName"),
+            () -> new Processor() {
+                @Override
+                public void init(final ProcessorContext context) {}
+
+                @Override
+                public void process(final Object key, final Object value) {}
+
+                @Override
+                public void close() {}
+            });
         final KafkaStreams streams = new KafkaStreams(builder.build(), props);
 
         final File taskDir = new File(
@@ -830,12 +814,8 @@ public class KafkaStreamsTest {
         }
 
         try {
-            try {
-                streams.cleanUp();
-                fail("Should have throw StreamsException");
-            } catch (final StreamsException expected) {
-                assertTrue(expected.getCause() instanceof OverlappingFileLockException);
-            }
+            final StreamsException expected = assertThrows(StreamsException.class, streams::cleanUp);
+            assertThat(expected.getCause(), instanceOf(OverlappingFileLockException.class));
         } finally {
             lockThread.releaseLock = true;
             lockThread.isRunning = false;
@@ -851,12 +831,8 @@ public class KafkaStreamsTest {
             () -> globalStreams.state() == KafkaStreams.State.RUNNING,
             "Streams never started.");
 
-        try {
-            globalStreams.cleanUp();
-            fail("Should have thrown IllegalStateException");
-        } catch (final IllegalStateException expected) {
-            assertEquals("Cannot clean up while running.", expected.getMessage());
-        }
+        final IllegalStateException expected = assertThrows(IllegalStateException.class, globalStreams::cleanUp);
+        assertThat(expected.getMessage(), is("Cannot clean up while running."));
     }
 
     @Test
@@ -1037,13 +1013,13 @@ public class KafkaStreamsTest {
         try {
             final List<Path> files = Files.find(basePath, 999, (p, bfa) -> !p.equals(basePath)).collect(Collectors.toList());
             if (shouldFilesExist && files.isEmpty()) {
-                Assert.fail("Files should have existed, but it didn't: " + files);
+                fail("Files should have existed, but it didn't: " + files);
             }
             if (!shouldFilesExist && !files.isEmpty()) {
-                Assert.fail("Files should not have existed, but it did: " + files);
+                fail("Files should not have existed, but it did: " + files);
             }
         } catch (final IOException e) {
-            Assert.fail("Couldn't read the state directory : " + baseDir.getPath());
+            fail("Couldn't read the state directory : " + baseDir.getPath());
         } finally {
             streams.close();
             streams.cleanUp();
@@ -1077,7 +1053,7 @@ public class KafkaStreamsTest {
         }
     }
 
-    private class LockThread extends Thread {
+    private static class LockThread extends Thread {
         private final File lockFile;
         volatile boolean isRunning = true;
         volatile boolean releaseLock = false;
