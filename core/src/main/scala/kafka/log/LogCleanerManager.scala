@@ -561,7 +561,9 @@ private[log] object LogCleanerManager extends Logging {
       } else None
     ).flatten.min
 
-    debug(s"Finding range of cleanable offsets for log=${log.name} topicPartition=$topicPartition. Last clean offset=$lastCleanOffset now=$now => firstDirtyOffset=$firstDirtyOffset firstUncleanableOffset=$firstUncleanableDirtyOffset activeSegment.baseOffset=${log.activeSegment.baseOffset}")
+    debug(s"Finding range of cleanable offsets for log=${log.name} topicPartition=$topicPartition. Last clean offset=$lastCleanOffset" +
+      s"now=$now => firstDirtyOffset=$firstDirtyOffset firstUncleanableOffset=$firstUncleanableDirtyOffset" +
+      s"activeSegment.baseOffset=${log.activeSegment.baseOffset} firstUnstableOffset=${log.firstUnstableOffset}")
 
     (firstDirtyOffset, firstUncleanableDirtyOffset)
   }
