@@ -667,6 +667,7 @@ public class StreamsResetter {
             throw new RuntimeException("Encountered an error deleting one or more topics");
         }
     }
+
     private boolean isInternalTopic(final String topicName) {
         // Specified input/intermediate topics might be named like internal topics (by chance).
         // Even is this is not expected in general, we need to exclude those topics here
