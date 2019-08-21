@@ -563,7 +563,7 @@ public abstract class AbstractCoordinator implements Closeable {
                 }
             } else if (error == Errors.UNSUPPORTED_VERSION) {
                 log.error("Attempt to join group failed due to unsupported version error. Please unset field group.instance.id and retry" +
-                        "to see if the problem resolves");
+                        " to see if the problem resolves");
                 future.raise(error);
             } else if (error == Errors.MEMBER_ID_REQUIRED) {
                 // Broker requires a concrete member id to be allowed to join the group. Update member id
@@ -814,7 +814,7 @@ public abstract class AbstractCoordinator implements Closeable {
     }
 
     synchronized void resetGenerationOnResponseError(ApiKeys api, Errors error) {
-        log.debug("Resetting generation after encountering " + error + " from " + api + " response");
+        log.debug("Resetting generation after encountering {} from {} response", error, api);
         resetGeneration();
     }
 
@@ -1243,6 +1243,7 @@ public abstract class AbstractCoordinator implements Closeable {
         }
     }
 
+    @SuppressWarnings("serial")
     private static class UnjoinedGroupException extends RetriableException {
 
     }
