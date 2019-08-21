@@ -20,6 +20,7 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
+import org.apache.kafka.common.message.ApiMessageType;
 import org.apache.kafka.common.network.NetworkReceive;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.CommonFields;
@@ -163,7 +164,8 @@ public class NetworkClientTest {
         networkClient.send(request, time.milliseconds());
         networkClient.poll(1, time.milliseconds());
         assertEquals(1, networkClient.inFlightRequestCount());
-        ResponseHeader respHeader = new ResponseHeader(request.correlationId());
+        ResponseHeader respHeader =
+            new ResponseHeader(request.correlationId(), builder.latestAllowedVersion());
         Struct resp = new Struct(ApiKeys.PRODUCE.responseSchema(ApiKeys.PRODUCE.latestVersion()));
         resp.set("responses", new Object[0]);
         Struct responseHeaderStruct = respHeader.toStruct();
@@ -183,7 +185,7 @@ public class NetworkClientTest {
 
     private void setExpectedApiVersionsResponse(ApiVersionsResponse response) {
         short apiVersionsResponseVersion = response.apiVersion(ApiKeys.API_VERSIONS.id).maxVersion;
-        ByteBuffer buffer = response.serialize(apiVersionsResponseVersion, new ResponseHeader(0));
+        ByteBuffer buffer = response.serialize(ApiKeys.API_VERSIONS, apiVersionsResponseVersion, 0);
         selector.delayedReceive(new DelayedReceive(node.idString(), new NetworkReceive(node.idString(), buffer)));
     }
 
@@ -242,7 +244,8 @@ public class NetworkClientTest {
                 defaultRequestTimeoutMs, handler);
         client.send(request, time.milliseconds());
         client.poll(1, time.milliseconds());
-        ResponseHeader respHeader = new ResponseHeader(request.correlationId());
+        ResponseHeader respHeader =
+            new ResponseHeader(request.correlationId(), builder.latestAllowedVersion());
         Struct resp = new Struct(ApiKeys.PRODUCE.responseSchema(ApiKeys.PRODUCE.latestVersion()));
         resp.set("responses", new Object[0]);
         resp.set(CommonFields.THROTTLE_TIME_MS, 100);
@@ -316,8 +319,7 @@ public class NetworkClientTest {
     }
 
 
-    private void sendResponse(int correlationId, Struct response) {
-        ResponseHeader respHeader = new ResponseHeader(correlationId);
+    private void sendResponse(ResponseHeader respHeader, Struct response) {
         Struct responseHeaderStruct = respHeader.toStruct();
         int size = responseHeaderStruct.sizeOf() + response.sizeOf();
         ByteBuffer buffer = ByteBuffer.allocate(size);
@@ -331,7 +333,9 @@ public class NetworkClientTest {
         Struct resp = new Struct(ApiKeys.PRODUCE.responseSchema(ApiKeys.PRODUCE.latestVersion()));
         resp.set("responses", new Object[0]);
         resp.set(CommonFields.THROTTLE_TIME_MS, throttleMs);
-        sendResponse(correlationId, resp);
+        sendResponse(new ResponseHeader(correlationId,
+            ApiMessageType.PRODUCE.headerVersion(ApiKeys.PRODUCE.latestVersion())),
+            resp);
     }
 
     @Test

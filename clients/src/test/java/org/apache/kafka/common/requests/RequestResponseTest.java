@@ -33,6 +33,7 @@ import org.apache.kafka.common.errors.NotEnoughReplicasException;
 import org.apache.kafka.common.errors.SecurityDisabledException;
 import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
+import org.apache.kafka.common.message.ApiMessageType;
 import org.apache.kafka.common.message.ControlledShutdownRequestData;
 import org.apache.kafka.common.message.ControlledShutdownResponseData.RemainingPartition;
 import org.apache.kafka.common.message.ControlledShutdownResponseData.RemainingPartitionCollection;
@@ -376,9 +377,9 @@ public class RequestResponseTest {
 
     @Test
     public void testResponseHeader() {
-        ResponseHeader header = createResponseHeader();
+        ResponseHeader header = createResponseHeader((short) 1);
         ByteBuffer buffer = toBuffer(header.toStruct());
-        ResponseHeader deserialized = ResponseHeader.parse(buffer);
+        ResponseHeader deserialized = ResponseHeader.parse(buffer, header.headerVersion());
         assertEquals(header.correlationId(), deserialized.correlationId());
     }
 
@@ -530,11 +531,12 @@ public class RequestResponseTest {
 
         ProduceResponse v5Response = new ProduceResponse(responseData, 10);
         short version = 5;
+        short headerVersion = ApiKeys.PRODUCE.headerVersion(version);
 
-        ByteBuffer buffer = v5Response.serialize(version, new ResponseHeader(0));
+        ByteBuffer buffer = v5Response.serialize(ApiKeys.PRODUCE, version, 0);
         buffer.rewind();
 
-        ResponseHeader.parse(buffer); // throw away.
+        ResponseHeader.parse(buffer, headerVersion); // throw away.
 
         Struct deserializedStruct = ApiKeys.PRODUCE.parseResponse(version, buffer);
 
@@ -627,7 +629,8 @@ public class RequestResponseTest {
     private void verifyFetchResponseFullWrite(short apiVersion, FetchResponse fetchResponse) throws Exception {
         int correlationId = 15;
 
-        Send send = fetchResponse.toSend("1", new ResponseHeader(correlationId), apiVersion);
+        short headerVersion = ApiMessageType.FETCH.headerVersion(apiVersion);
+        Send send = fetchResponse.toSend("1", new ResponseHeader(correlationId, headerVersion), apiVersion);
         ByteBufferChannel channel = new ByteBufferChannel(send.size());
         send.writeTo(channel);
         channel.close();
@@ -639,7 +642,7 @@ public class RequestResponseTest {
         assertTrue(size > 0);
 
         // read the header
-        ResponseHeader responseHeader = ResponseHeader.parse(channel.buffer());
+        ResponseHeader responseHeader = ResponseHeader.parse(channel.buffer(), headerVersion);
         assertEquals(correlationId, responseHeader.correlationId());
 
         // read the body
@@ -740,8 +743,8 @@ public class RequestResponseTest {
         assertTrue(string.contains("group1"));
     }
 
-    private ResponseHeader createResponseHeader() {
-        return new ResponseHeader(10);
+    private ResponseHeader createResponseHeader(short headerVersion) {
+        return new ResponseHeader(10, headerVersion);
     }
 
     private FindCoordinatorRequest createFindCoordinatorRequest(int version) {

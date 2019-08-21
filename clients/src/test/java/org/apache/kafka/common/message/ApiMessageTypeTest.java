@@ -76,11 +76,11 @@ public class ApiMessageTypeTest {
 
     @Test
     public void testHeaderVersion() {
-        assertEquals(1, ApiMessageType.PRODUCE.headerVersion(0));
-        assertEquals(1, ApiMessageType.PRODUCE.headerVersion(1));
-        assertEquals(1, ApiMessageType.PRODUCE.headerVersion(2));
-        assertEquals(0, ApiMessageType.CONTROLLED_SHUTDOWN.headerVersion(0));
-        assertEquals(1, ApiMessageType.CONTROLLED_SHUTDOWN.headerVersion(1));
-        assertEquals(1, ApiMessageType.CREATE_PARTITIONS.headerVersion(0));
+        assertEquals((short) 1, ApiMessageType.PRODUCE.headerVersion((short) 0));
+        assertEquals((short) 1, ApiMessageType.PRODUCE.headerVersion((short) 1));
+        assertEquals((short) 1, ApiMessageType.PRODUCE.headerVersion((short) 2));
+        assertEquals((short) 0, ApiMessageType.CONTROLLED_SHUTDOWN.headerVersion((short) 0));
+        assertEquals((short) 1, ApiMessageType.CONTROLLED_SHUTDOWN.headerVersion((short) 1));
+        assertEquals((short) 1, ApiMessageType.CREATE_PARTITIONS.headerVersion((short) 0));
     }
 }

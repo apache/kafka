@@ -244,7 +244,7 @@ public final class ApiMessageTypeGenerator {
     }
 
     private void generateHeaderVersion() {
-        buffer.printf("public int headerVersion(int version) {%n");
+        buffer.printf("public short headerVersion(short version) {%n");
         buffer.incrementIndent();
         buffer.printf("switch (apiKey) {%n");
         buffer.incrementIndent();
@@ -255,7 +255,7 @@ public final class ApiMessageTypeGenerator {
             if (apiKey == 7) {
                 buffer.printf("if (version == 0) {%n");
                 buffer.incrementIndent();
-                buffer.printf("return 0;%n");
+                buffer.printf("return (short) 0;%n");
                 buffer.decrementIndent();
                 buffer.printf("}%n");
             }
@@ -276,10 +276,10 @@ public final class ApiMessageTypeGenerator {
             VersionConditional.forVersions(data.requestSpec.flexibleVersions(),
                 data.requestSpec.validVersions()).
                 ifMember(() -> {
-                    buffer.printf("return 2;%n");
+                    buffer.printf("return (short) 2;%n");
                 }).
                 ifNotMember(() -> {
-                    buffer.printf("return 1;%n");
+                    buffer.printf("return (short) 1;%n");
                 }).generate(buffer);
             buffer.decrementIndent();
         }

@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.protocol;
 
+import org.apache.kafka.common.message.ApiMessageType;
 import org.apache.kafka.common.message.ControlledShutdownRequestData;
 import org.apache.kafka.common.message.ControlledShutdownResponseData;
 import org.apache.kafka.common.message.CreateDelegationTokenRequestData;
@@ -330,6 +331,10 @@ public enum ApiKeys {
 
     public boolean isVersionSupported(short apiVersion) {
         return apiVersion >= oldestVersion() && apiVersion <= latestVersion();
+    }
+
+    public short headerVersion(short apiVersion) {
+        return ApiMessageType.fromApiKey(id).headerVersion(apiVersion);
     }
 
     private static String toHtml() {
