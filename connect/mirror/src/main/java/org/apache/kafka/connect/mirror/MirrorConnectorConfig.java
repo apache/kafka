@@ -185,6 +185,7 @@ public class MirrorConnectorConfig extends AbstractConfig {
     Map<String, Object> sourceProducerConfig() {
         Map<String, Object> props = new HashMap<>();
         props.putAll(originalsWithPrefix(SOURCE_CLUSTER_PREFIX));
+        props.keySet().retainAll(MirrorClientConfig.CLIENT_CONFIG_DEF.names());
         props.putAll(originalsWithPrefix(PRODUCER_CLIENT_PREFIX));
         return props;
     }
@@ -192,6 +193,7 @@ public class MirrorConnectorConfig extends AbstractConfig {
     Map<String, Object> sourceConsumerConfig() {
         Map<String, Object> props = new HashMap<>();
         props.putAll(originalsWithPrefix(SOURCE_CLUSTER_PREFIX));
+        props.keySet().retainAll(MirrorClientConfig.CLIENT_CONFIG_DEF.names());
         props.putAll(originalsWithPrefix(CONSUMER_CLIENT_PREFIX));
         props.put("enable.auto.commit", "false");
         props.put("auto.offset.reset", "earliest");
@@ -216,18 +218,18 @@ public class MirrorConnectorConfig extends AbstractConfig {
     Map<String, Object> targetAdminConfig() {
         Map<String, Object> props = new HashMap<>();
         props.putAll(originalsWithPrefix(TARGET_CLUSTER_PREFIX));
+        props.keySet().retainAll(MirrorClientConfig.CLIENT_CONFIG_DEF.names());
         props.putAll(originalsWithPrefix(ADMIN_CLIENT_PREFIX));
         props.putAll(originalsWithPrefix(TARGET_ADMIN_CLIENT_PREFIX));
-        props.keySet().retainAll(MirrorClientConfig.CLIENT_CONFIG_DEF.names());
         return props;
     }
 
     Map<String, Object> sourceAdminConfig() {
         Map<String, Object> props = new HashMap<>();
         props.putAll(originalsWithPrefix(SOURCE_CLUSTER_PREFIX));
+        props.keySet().retainAll(MirrorClientConfig.CLIENT_CONFIG_DEF.names());
         props.putAll(originalsWithPrefix(ADMIN_CLIENT_PREFIX));
         props.putAll(originalsWithPrefix(SOURCE_ADMIN_CLIENT_PREFIX));
-        props.keySet().retainAll(MirrorClientConfig.CLIENT_CONFIG_DEF.names());
         return props;
     }
 

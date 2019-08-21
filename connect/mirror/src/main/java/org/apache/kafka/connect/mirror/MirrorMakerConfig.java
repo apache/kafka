@@ -112,16 +112,6 @@ public class MirrorMakerConfig extends AbstractConfig {
         Map<String, String> props = new HashMap<>();
         Map<String, String> strings = originalsStrings();
 
-        for (String k : MirrorClientConfig.CLIENT_CONFIG_DEF.names()) {
-            String v = strings.get(k);
-            if (v != null) {
-                props.putIfAbsent("producer." + k, v);
-                props.putIfAbsent("consumer." + k, v);
-                props.putIfAbsent("admin." + k, v);
-                props.putIfAbsent(k, v);
-            }
-        }
- 
         props.putAll(stringsWithPrefix(cluster + "."));
 
         for (String k : MirrorClientConfig.CLIENT_CONFIG_DEF.names()) {
@@ -133,6 +123,16 @@ public class MirrorMakerConfig extends AbstractConfig {
             }
         }
 
+        for (String k : MirrorClientConfig.CLIENT_CONFIG_DEF.names()) {
+            String v = strings.get(k);
+            if (v != null) {
+                props.putIfAbsent("producer." + k, v);
+                props.putIfAbsent("consumer." + k, v);
+                props.putIfAbsent("admin." + k, v);
+                props.putIfAbsent(k, v);
+            }
+        }
+ 
         return props;
     }
 
