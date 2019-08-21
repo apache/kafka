@@ -41,7 +41,7 @@ class DeleteTopicsRequestWithDeletionDisabledTest extends BaseRequestTest {
   }
 
   @Test
-  def testDeleteRecordsRequest() {
+  def testDeleteRecordsRequest(): Unit = {
     val topic = "topic-1"
     val request = new DeleteTopicsRequest.Builder(
         new DeleteTopicsRequestData()

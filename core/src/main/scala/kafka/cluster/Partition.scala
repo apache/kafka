@@ -413,7 +413,7 @@ class Partition(val topicPartition: TopicPartition,
     }
   }
 
-  def removeFutureLocalReplica(deleteFromLogDir: Boolean = true) {
+  def removeFutureLocalReplica(deleteFromLogDir: Boolean = true): Unit = {
     inWriteLock(leaderIsrUpdateLock) {
       futureLog = None
       if (deleteFromLogDir)
@@ -450,7 +450,7 @@ class Partition(val topicPartition: TopicPartition,
     } else false
   }
 
-  def delete() {
+  def delete(): Unit = {
     // need to hold the lock to prevent appendMessagesToLeader() from hitting I/O exceptions due to log being deleted
     inWriteLock(leaderIsrUpdateLock) {
       remoteReplicasMap.clear()
@@ -1076,7 +1076,7 @@ class Partition(val topicPartition: TopicPartition,
     * @param offset offset to be used for truncation
     * @param isFuture True iff the truncation should be performed on the future log of this partition
     */
-  def truncateTo(offset: Long, isFuture: Boolean) {
+  def truncateTo(offset: Long, isFuture: Boolean): Unit = {
     // The read lock is needed to prevent the follower replica from being truncated while ReplicaAlterDirThread
     // is executing maybeDeleteAndSwapFutureReplica() to replace follower replica with the future replica.
     inReadLock(leaderIsrUpdateLock) {
@@ -1090,7 +1090,7 @@ class Partition(val topicPartition: TopicPartition,
     * @param newOffset The new offset to start the log with
     * @param isFuture True iff the truncation should be performed on the future log of this partition
     */
-  def truncateFullyAndStartAt(newOffset: Long, isFuture: Boolean) {
+  def truncateFullyAndStartAt(newOffset: Long, isFuture: Boolean): Unit = {
     // The read lock is needed to prevent the follower replica from being truncated while ReplicaAlterDirThread
     // is executing maybeDeleteAndSwapFutureReplica() to replace follower replica with the future replica.
     inReadLock(leaderIsrUpdateLock) {

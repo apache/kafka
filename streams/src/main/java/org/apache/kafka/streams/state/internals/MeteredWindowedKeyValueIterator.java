@@ -64,11 +64,6 @@ class MeteredWindowedKeyValueIterator<K, V> implements KeyValueIterator<Windowed
     }
 
     @Override
-    public void remove() {
-        iter.remove();
-    }
-
-    @Override
     public void close() {
         try {
             iter.close();

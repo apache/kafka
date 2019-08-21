@@ -44,7 +44,7 @@ class LeaderElectionTest extends ZooKeeperTestHarness {
   var staleControllerEpochDetected = false
 
   @Before
-  override def setUp() {
+  override def setUp(): Unit = {
     super.setUp()
 
     val configProps1 = TestUtils.createBrokerConfig(brokerId1, zkConnect, enableControlledShutdown = false)
@@ -60,7 +60,7 @@ class LeaderElectionTest extends ZooKeeperTestHarness {
   }
 
   @After
-  override def tearDown() {
+  override def tearDown(): Unit = {
     TestUtils.shutdownServers(servers)
     super.tearDown()
   }
@@ -111,7 +111,7 @@ class LeaderElectionTest extends ZooKeeperTestHarness {
   }
 
   @Test
-  def testLeaderElectionWithStaleControllerEpoch() {
+  def testLeaderElectionWithStaleControllerEpoch(): Unit = {
     // start 2 brokers
     val topic = "new-topic"
     val partitionId = 0

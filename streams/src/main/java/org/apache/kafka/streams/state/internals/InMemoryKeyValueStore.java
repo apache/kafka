@@ -17,8 +17,10 @@
 package org.apache.kafka.streams.state.internals;
 
 import java.util.List;
-import java.util.concurrent.ConcurrentNavigableMap;
-import java.util.concurrent.ConcurrentSkipListMap;
+import java.util.NavigableMap;
+import java.util.Set;
+import java.util.TreeMap;
+import java.util.TreeSet;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.ProcessorContext;
@@ -27,14 +29,14 @@ import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 
 import java.util.Iterator;
-import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
     private final String name;
-    private final ConcurrentNavigableMap<Bytes, byte[]> map = new ConcurrentSkipListMap<>();
+    private final NavigableMap<Bytes, byte[]> map = new TreeMap<>();
     private volatile boolean open = false;
+    private long size = 0L; // SkipListMap#size is O(N) so we just do our best to track it
 
     private static final Logger LOG = LoggerFactory.getLogger(InMemoryKeyValueStore.class);
 
@@ -50,17 +52,10 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
     @Override
     public void init(final ProcessorContext context,
                      final StateStore root) {
-
+        size = 0;
         if (root != null) {
             // register the store
-            context.register(root, (key, value) -> {
-                // this is a delete
-                if (value == null) {
-                    delete(Bytes.wrap(key));
-                } else {
-                    put(Bytes.wrap(key), value);
-                }
-            });
+            context.register(root, (key, value) -> put(Bytes.wrap(key), value));
         }
 
         open = true;
@@ -77,21 +72,21 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
     }
 
     @Override
-    public byte[] get(final Bytes key) {
+    public synchronized byte[] get(final Bytes key) {
         return map.get(key);
     }
 
     @Override
-    public void put(final Bytes key, final byte[] value) {
+    public synchronized void put(final Bytes key, final byte[] value) {
         if (value == null) {
-            map.remove(key);
+            size -= map.remove(key) == null ? 0 : 1;
         } else {
-            map.put(key, value);
+            size += map.put(key, value) == null ? 1 : 0;
         }
     }
 
     @Override
-    public byte[] putIfAbsent(final Bytes key, final byte[] value) {
+    public synchronized byte[] putIfAbsent(final Bytes key, final byte[] value) {
         final byte[] originalValue = get(key);
         if (originalValue == null) {
             put(key, value);
@@ -107,12 +102,14 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
     }
 
     @Override
-    public byte[] delete(final Bytes key) {
-        return map.remove(key);
+    public synchronized byte[] delete(final Bytes key) {
+        final byte[] oldValue = map.remove(key);
+        size -= oldValue == null ? 0 : 1;
+        return oldValue;
     }
 
     @Override
-    public KeyValueIterator<Bytes, byte[]> range(final Bytes from, final Bytes to) {
+    public synchronized KeyValueIterator<Bytes, byte[]> range(final Bytes from, final Bytes to) {
 
         if (from.compareTo(to) > 0) {
             LOG.warn("Returning empty iterator for fetch with invalid key range: from > to. "
@@ -123,19 +120,19 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
 
         return new DelegatingPeekingKeyValueIterator<>(
             name,
-            new InMemoryKeyValueIterator(map.subMap(from, true, to, true).entrySet().iterator()));
+            new InMemoryKeyValueIterator(map.subMap(from, true, to, true).keySet()));
     }
 
     @Override
-    public KeyValueIterator<Bytes, byte[]> all() {
+    public synchronized KeyValueIterator<Bytes, byte[]> all() {
         return new DelegatingPeekingKeyValueIterator<>(
             name,
-            new InMemoryKeyValueIterator(map.entrySet().iterator()));
+            new InMemoryKeyValueIterator(map.keySet()));
     }
 
     @Override
     public long approximateNumEntries() {
-        return map.size();
+        return size;
     }
 
     @Override
@@ -146,14 +143,15 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
     @Override
     public void close() {
         map.clear();
+        size = 0;
         open = false;
     }
 
-    private static class InMemoryKeyValueIterator implements KeyValueIterator<Bytes, byte[]> {
-        private final Iterator<Map.Entry<Bytes, byte[]>> iter;
+    private class InMemoryKeyValueIterator implements KeyValueIterator<Bytes, byte[]> {
+        private final Iterator<Bytes> iter;
 
-        private InMemoryKeyValueIterator(final Iterator<Map.Entry<Bytes, byte[]>> iter) {
-            this.iter = iter;
+        private InMemoryKeyValueIterator(final Set<Bytes> keySet) {
+            this.iter = new TreeSet<>(keySet).iterator();
         }
 
         @Override
@@ -163,13 +161,8 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
 
         @Override
         public KeyValue<Bytes, byte[]> next() {
-            final Map.Entry<Bytes, byte[]> entry = iter.next();
-            return new KeyValue<>(entry.getKey(), entry.getValue());
-        }
-
-        @Override
-        public void remove() {
-            iter.remove();
+            final Bytes key = iter.next();
+            return new KeyValue<>(key, map.get(key));
         }
 
         @Override

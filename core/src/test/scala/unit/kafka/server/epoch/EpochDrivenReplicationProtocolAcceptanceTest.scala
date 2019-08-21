@@ -60,12 +60,12 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends ZooKeeperTestHarness 
   var consumer: KafkaConsumer[Array[Byte], Array[Byte]] = null
 
   @Before
-  override def setUp() {
+  override def setUp(): Unit = {
     super.setUp()
   }
 
   @After
-  override def tearDown() {
+  override def tearDown(): Unit = {
     producer.close()
     TestUtils.shutdownServers(brokers)
     super.tearDown()

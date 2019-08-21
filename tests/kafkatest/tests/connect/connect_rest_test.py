@@ -44,7 +44,7 @@ class ConnectRestApiTest(KafkaTest):
     INPUT_FILE2 = "/mnt/connect.input2"
     OUTPUT_FILE = "/mnt/connect.output"
 
-    TOPIC = "${file:%s:topic.external}" % ConnectServiceBase.EXTERNAL_CONFIGS_FILE
+    TOPIC = "topic-${file:%s:topic.external}" % ConnectServiceBase.EXTERNAL_CONFIGS_FILE
     TOPIC_TEST = "test"
 
     DEFAULT_BATCH_SIZE = "2000"

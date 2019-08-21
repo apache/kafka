@@ -53,7 +53,7 @@ public class AbstractConfig {
 
     private final ConfigDef definition;
 
-    private static final String CONFIG_PROVIDERS_CONFIG = "config.providers";
+    public static final String CONFIG_PROVIDERS_CONFIG = "config.providers";
 
     private static final String CONFIG_PROVIDERS_PARAM = ".param.";
 

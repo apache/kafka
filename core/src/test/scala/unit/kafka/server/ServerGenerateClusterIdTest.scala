@@ -16,23 +16,31 @@
   */
 package kafka.server
 
+import java.io.File
+
+import kafka.common.{InconsistentBrokerMetadataException, InconsistentClusterIdException}
+
 import scala.concurrent._
 import ExecutionContext.Implicits._
 import scala.concurrent.duration._
 import kafka.utils.TestUtils
 import kafka.zk.ZooKeeperTestHarness
 import org.junit.Assert._
-import org.junit.{Before, After, Test}
+import org.junit.{After, Before, Test}
+import org.scalatest.Assertions.assertThrows
 import org.apache.kafka.test.TestUtils.isValidClusterId
+
+import scala.collection.Seq
 
 class ServerGenerateClusterIdTest extends ZooKeeperTestHarness {
   var config1: KafkaConfig = null
   var config2: KafkaConfig = null
   var config3: KafkaConfig = null
   var servers: Seq[KafkaServer] = Seq()
+  val brokerMetaPropsFile = "meta.properties"
 
   @Before
-  override def setUp() {
+  override def setUp(): Unit = {
     super.setUp()
     config1 = KafkaConfig.fromProps(TestUtils.createBrokerConfig(1, zkConnect))
     config2 = KafkaConfig.fromProps(TestUtils.createBrokerConfig(2, zkConnect))
@@ -40,14 +48,14 @@ class ServerGenerateClusterIdTest extends ZooKeeperTestHarness {
   }
 
   @After
-  override def tearDown() {
+  override def tearDown(): Unit = {
     TestUtils.shutdownServers(servers)
     super.tearDown()
   }
 
 
   @Test
-  def testAutoGenerateClusterId() {
+  def testAutoGenerateClusterId(): Unit = {
     // Make sure that the cluster id doesn't exist yet.
     assertFalse(zkClient.getClusterId.isDefined)
 
@@ -81,7 +89,7 @@ class ServerGenerateClusterIdTest extends ZooKeeperTestHarness {
   }
 
   @Test
-  def testAutoGenerateClusterIdForKafkaClusterSequential() {
+  def testAutoGenerateClusterIdForKafkaClusterSequential(): Unit = {
     val server1 = TestUtils.createServer(config1)
     val clusterIdFromServer1 = server1.clusterId
 
@@ -111,7 +119,7 @@ class ServerGenerateClusterIdTest extends ZooKeeperTestHarness {
   }
 
   @Test
-  def testAutoGenerateClusterIdForKafkaClusterParallel() {
+  def testAutoGenerateClusterIdForKafkaClusterParallel(): Unit = {
     val firstBoot = Future.traverse(Seq(config1, config2, config3))(config => Future(TestUtils.createServer(config)))
     servers = Await.result(firstBoot, 100 second)
     val Seq(server1, server2, server3) = servers
@@ -137,4 +145,91 @@ class ServerGenerateClusterIdTest extends ZooKeeperTestHarness {
     TestUtils.verifyNonDaemonThreadsStatus(this.getClass.getName)
   }
 
+  @Test
+  def testConsistentClusterIdFromZookeeperAndFromMetaProps() = {
+    // Check at the first boot
+    val server = TestUtils.createServer(config1)
+    val clusterId = server.clusterId
+
+    assertTrue(verifyBrokerMetadata(server.config.logDirs, clusterId))
+
+    server.shutdown()
+
+    // Check again after reboot
+    server.startup()
+
+    assertEquals(clusterId, server.clusterId)
+    assertTrue(verifyBrokerMetadata(server.config.logDirs, server.clusterId))
+
+    server.shutdown()
+
+    TestUtils.verifyNonDaemonThreadsStatus(this.getClass.getName)
+  }
+
+  @Test
+  def testInconsistentClusterIdFromZookeeperAndFromMetaProps() = {
+    forgeBrokerMetadata(config1.logDirs, config1.brokerId, "aclusterid")
+
+    val server = new KafkaServer(config1, threadNamePrefix = Option(this.getClass.getName))
+
+    // Startup fails
+    assertThrows[InconsistentClusterIdException] {
+      server.startup()
+    }
+
+    server.shutdown()
+
+    TestUtils.verifyNonDaemonThreadsStatus(this.getClass.getName)
+  }
+
+  @Test
+  def testInconsistentBrokerMetadataBetweenMultipleLogDirs(): Unit = {
+    // Add multiple logDirs with different BrokerMetadata
+    val logDir1 = TestUtils.tempDir().getAbsolutePath
+    val logDir2 = TestUtils.tempDir().getAbsolutePath
+    val logDirs = logDir1 + "," + logDir2
+
+    forgeBrokerMetadata(logDir1, 1, "ebwOKU-zSieInaFQh_qP4g")
+    forgeBrokerMetadata(logDir2, 1, "blaOKU-zSieInaFQh_qP4g")
+
+    val props = TestUtils.createBrokerConfig(1, zkConnect)
+    props.setProperty("log.dir", logDirs)
+    val config = KafkaConfig.fromProps(props)
+
+    val server = new KafkaServer(config, threadNamePrefix = Option(this.getClass.getName))
+
+    // Startup fails
+    assertThrows[InconsistentBrokerMetadataException] {
+      server.startup()
+    }
+
+    server.shutdown()
+
+    TestUtils.verifyNonDaemonThreadsStatus(this.getClass.getName)
+  }
+
+  def forgeBrokerMetadata(logDirs: Seq[String], brokerId: Int, clusterId: String): Unit = {
+    for (logDir <- logDirs) {
+      forgeBrokerMetadata(logDir, brokerId, clusterId)
+    }
+  }
+
+  def forgeBrokerMetadata(logDir: String, brokerId: Int, clusterId: String): Unit = {
+    val checkpoint = new BrokerMetadataCheckpoint(
+      new File(logDir + File.separator + brokerMetaPropsFile))
+    checkpoint.write(BrokerMetadata(brokerId, Option(clusterId)))
+  }
+
+  def verifyBrokerMetadata(logDirs: Seq[String], clusterId: String): Boolean = {
+    for (logDir <- logDirs) {
+      val brokerMetadataOpt = new BrokerMetadataCheckpoint(
+        new File(logDir + File.separator + brokerMetaPropsFile)).read()
+      brokerMetadataOpt match {
+        case Some(brokerMetadata) =>
+          if (brokerMetadata.clusterId.isDefined && brokerMetadata.clusterId.get != clusterId) return false
+        case _ => return false
+      }
+    }
+    true
+  }
 }

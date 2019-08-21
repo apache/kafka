@@ -21,33 +21,13 @@ import kafka.log.LogConfig
 import kafka.network.RequestChannel.Session
 import kafka.security.auth._
 import kafka.utils.TestUtils
-import org.apache.kafka.common.ElectionType
-import org.apache.kafka.common.Node
-import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.acl.{AccessControlEntry, AccessControlEntryFilter, AclBinding, AclBindingFilter, AclOperation, AclPermissionType}
+import org.apache.kafka.common.{ElectionType, Node, TopicPartition}
+import org.apache.kafka.common.acl._
 import org.apache.kafka.common.config.ConfigResource
-import org.apache.kafka.common.message.ControlledShutdownRequestData
-import org.apache.kafka.common.message.CreateDelegationTokenRequestData
-import org.apache.kafka.common.message.CreateTopicsRequestData
 import org.apache.kafka.common.message.CreateTopicsRequestData.{CreatableTopic, CreatableTopicCollection}
-import org.apache.kafka.common.message.DeleteGroupsRequestData
-import org.apache.kafka.common.message.DeleteTopicsRequestData
-import org.apache.kafka.common.message.DescribeGroupsRequestData
-import org.apache.kafka.common.message.ExpireDelegationTokenRequestData
-import org.apache.kafka.common.message.FindCoordinatorRequestData
-import org.apache.kafka.common.message.HeartbeatRequestData
-import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData
-import org.apache.kafka.common.message.InitProducerIdRequestData
-import org.apache.kafka.common.message.JoinGroupRequestData
 import org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocolCollection
 import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity
-import org.apache.kafka.common.message.ListGroupsRequestData
-import org.apache.kafka.common.message.AlterPartitionReassignmentsRequestData
-import org.apache.kafka.common.message.ListPartitionReassignmentsRequestData
-import org.apache.kafka.common.message.OffsetCommitRequestData
-import org.apache.kafka.common.message.SaslAuthenticateRequestData
-import org.apache.kafka.common.message.SaslHandshakeRequestData
-import org.apache.kafka.common.message.SyncGroupRequestData
+import org.apache.kafka.common.message._
 import org.apache.kafka.common.metrics.{KafkaMetric, Quota, Sensor}
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.ApiKeys
@@ -57,8 +37,7 @@ import org.apache.kafka.common.requests.CreateAclsRequest.AclCreation
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.resource.{PatternType, ResourcePattern, ResourcePatternFilter, ResourceType => AdminResourceType}
 import org.apache.kafka.common.security.auth.{AuthenticationContext, KafkaPrincipal, KafkaPrincipalBuilder, SecurityProtocol}
-import org.apache.kafka.common.utils.Sanitizer
-import org.apache.kafka.common.utils.SecurityUtils
+import org.apache.kafka.common.utils.{Sanitizer, SecurityUtils}
 import org.junit.Assert._
 import org.junit.{After, Before, Test}
 
@@ -95,7 +74,7 @@ class RequestQuotaTest extends BaseRequestTest {
   }
 
   @Before
-  override def setUp() {
+  override def setUp(): Unit = {
     RequestQuotaTest.principal = KafkaPrincipal.ANONYMOUS
     super.setUp()
 
@@ -133,13 +112,13 @@ class RequestQuotaTest extends BaseRequestTest {
   }
 
   @After
-  override def tearDown() {
+  override def tearDown(): Unit = {
     try executor.shutdownNow()
     finally super.tearDown()
   }
 
   @Test
-  def testResponseThrottleTime() {
+  def testResponseThrottleTime(): Unit = {
     for (apiKey <- RequestQuotaTest.ClientActions)
       submitTest(apiKey, () => checkRequestThrottleTime(apiKey))
 
@@ -147,21 +126,21 @@ class RequestQuotaTest extends BaseRequestTest {
   }
 
   @Test
-  def testResponseThrottleTimeWhenBothProduceAndRequestQuotasViolated() {
+  def testResponseThrottleTimeWhenBothProduceAndRequestQuotasViolated(): Unit = {
     val apiKey = ApiKeys.PRODUCE
     submitTest(apiKey, () => checkSmallQuotaProducerRequestThrottleTime(apiKey))
     waitAndCheckResults()
   }
 
   @Test
-  def testResponseThrottleTimeWhenBothFetchAndRequestQuotasViolated() {
+  def testResponseThrottleTimeWhenBothFetchAndRequestQuotasViolated(): Unit = {
     val apiKey = ApiKeys.FETCH
     submitTest(apiKey, () => checkSmallQuotaConsumerRequestThrottleTime(apiKey))
     waitAndCheckResults()
   }
 
   @Test
-  def testUnthrottledClient() {
+  def testUnthrottledClient(): Unit = {
     for (apiKey <- RequestQuotaTest.ClientActions)
       submitTest(apiKey, () => checkUnthrottledClient(apiKey))
 
@@ -169,7 +148,7 @@ class RequestQuotaTest extends BaseRequestTest {
   }
 
   @Test
-  def testExemptRequestTime() {
+  def testExemptRequestTime(): Unit = {
     for (apiKey <- RequestQuotaTest.ClusterActions)
       submitTest(apiKey, () => checkExemptRequestMetric(apiKey))
 
@@ -177,7 +156,7 @@ class RequestQuotaTest extends BaseRequestTest {
   }
 
   @Test
-  def testUnauthorizedThrottle() {
+  def testUnauthorizedThrottle(): Unit = {
     RequestQuotaTest.principal = RequestQuotaTest.UnauthorizedPrincipal
 
     for (apiKey <- ApiKeys.values)
@@ -454,7 +433,10 @@ class RequestQuotaTest extends BaseRequestTest {
           new DescribeDelegationTokenRequest.Builder(Collections.singletonList(SecurityUtils.parseKafkaPrincipal("User:test")))
 
         case ApiKeys.RENEW_DELEGATION_TOKEN =>
-          new RenewDelegationTokenRequest.Builder("".getBytes, 1000)
+          new RenewDelegationTokenRequest.Builder(
+              new RenewDelegationTokenRequestData()
+                .setHmac("".getBytes)
+                .setRenewPeriodMs(1000L))
 
         case ApiKeys.DELETE_GROUPS =>
           new DeleteGroupsRequest.Builder(new DeleteGroupsRequestData()
@@ -515,16 +497,16 @@ class RequestQuotaTest extends BaseRequestTest {
     }
   }
 
-  private def submitTest(apiKey: ApiKeys, test: () => Unit) {
+  private def submitTest(apiKey: ApiKeys, test: () => Unit): Unit = {
     val future = executor.submit(new Runnable() {
-      def run() {
+      def run(): Unit = {
         test.apply()
       }
     })
     tasks += Task(apiKey, future)
   }
 
-  private def waitAndCheckResults() {
+  private def waitAndCheckResults(): Unit = {
     for (task <- tasks) {
       try {
         task.future.get(15, TimeUnit.SECONDS)
@@ -576,9 +558,9 @@ class RequestQuotaTest extends BaseRequestTest {
       case ApiKeys.DESCRIBE_LOG_DIRS => new DescribeLogDirsResponse(response).throttleTimeMs
       case ApiKeys.CREATE_PARTITIONS => new CreatePartitionsResponse(response).throttleTimeMs
       case ApiKeys.CREATE_DELEGATION_TOKEN => new CreateDelegationTokenResponse(response, ApiKeys.CREATE_DELEGATION_TOKEN.latestVersion).throttleTimeMs
-      case ApiKeys.DESCRIBE_DELEGATION_TOKEN=> new DescribeDelegationTokenResponse(response).throttleTimeMs
+      case ApiKeys.DESCRIBE_DELEGATION_TOKEN=> new DescribeDelegationTokenResponse(response, ApiKeys.DESCRIBE_DELEGATION_TOKEN.latestVersion).throttleTimeMs
+      case ApiKeys.RENEW_DELEGATION_TOKEN => new RenewDelegationTokenResponse(response, ApiKeys.RENEW_DELEGATION_TOKEN.latestVersion).throttleTimeMs
       case ApiKeys.EXPIRE_DELEGATION_TOKEN => new ExpireDelegationTokenResponse(response, ApiKeys.EXPIRE_DELEGATION_TOKEN.latestVersion).throttleTimeMs
-      case ApiKeys.RENEW_DELEGATION_TOKEN => new RenewDelegationTokenResponse(response).throttleTimeMs
       case ApiKeys.DELETE_GROUPS => new DeleteGroupsResponse(response).throttleTimeMs
       case ApiKeys.OFFSET_FOR_LEADER_EPOCH => new OffsetsForLeaderEpochResponse(response).throttleTimeMs
       case ApiKeys.ELECT_LEADERS => new ElectLeadersResponse(response).throttleTimeMs
@@ -590,7 +572,7 @@ class RequestQuotaTest extends BaseRequestTest {
     }
   }
 
-  private def checkRequestThrottleTime(apiKey: ApiKeys) {
+  private def checkRequestThrottleTime(apiKey: ApiKeys): Unit = {
 
     // Request until throttled using client-id with default small quota
     val clientId = apiKey.toString
@@ -605,7 +587,7 @@ class RequestQuotaTest extends BaseRequestTest {
     assertTrue(s"Throttle time metrics not updated: $client" , throttleTimeMetricValue(clientId) > 0)
   }
 
-  private def checkSmallQuotaProducerRequestThrottleTime(apiKey: ApiKeys) {
+  private def checkSmallQuotaProducerRequestThrottleTime(apiKey: ApiKeys): Unit = {
 
     // Request until throttled using client-id with default small producer quota
     val smallQuotaProducerClient = Client(smallQuotaProducerClientId, apiKey)
@@ -618,7 +600,7 @@ class RequestQuotaTest extends BaseRequestTest {
       throttleTimeMetricValueForQuotaType(smallQuotaProducerClientId, QuotaType.Request).isNaN)
   }
 
-  private def checkSmallQuotaConsumerRequestThrottleTime(apiKey: ApiKeys) {
+  private def checkSmallQuotaConsumerRequestThrottleTime(apiKey: ApiKeys): Unit = {
 
     // Request until throttled using client-id with default small consumer quota
     val smallQuotaConsumerClient =   Client(smallQuotaConsumerClientId, apiKey)
@@ -631,7 +613,7 @@ class RequestQuotaTest extends BaseRequestTest {
       throttleTimeMetricValueForQuotaType(smallQuotaConsumerClientId, QuotaType.Request).isNaN)
   }
 
-  private def checkUnthrottledClient(apiKey: ApiKeys) {
+  private def checkUnthrottledClient(apiKey: ApiKeys): Unit = {
 
     // Test that request from client with large quota is not throttled
     val unthrottledClient = Client(unthrottledClientId, apiKey)
@@ -640,7 +622,7 @@ class RequestQuotaTest extends BaseRequestTest {
     assertTrue(s"Client should not have been throttled: $unthrottledClient", throttleTimeMetricValue(unthrottledClientId).isNaN)
   }
 
-  private def checkExemptRequestMetric(apiKey: ApiKeys) {
+  private def checkExemptRequestMetric(apiKey: ApiKeys): Unit = {
     val exemptTarget = exemptRequestMetricValue + 0.02
     val clientId = apiKey.toString
     val client = Client(clientId, apiKey)
@@ -650,7 +632,7 @@ class RequestQuotaTest extends BaseRequestTest {
     assertTrue(s"Client should not have been throttled: $client", throttleTimeMetricValue(clientId).isNaN)
   }
 
-  private def checkUnauthorizedRequestThrottle(apiKey: ApiKeys) {
+  private def checkUnauthorizedRequestThrottle(apiKey: ApiKeys): Unit = {
     val clientId = "unauthorized-" + apiKey.toString
     val client = Client(clientId, apiKey)
     val throttled = client.runUntil(response => throttleTimeMetricValue(clientId) > 0.0)
