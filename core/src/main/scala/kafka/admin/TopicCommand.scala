@@ -112,7 +112,9 @@ object TopicCommand extends Logging {
   case class PartitionDescription(topic: String,
                                   info: TopicPartitionInfo,
                                   config: Option[JConfig],
-                                  markedForDeletion: Boolean) {
+                                  markedForDeletion: Boolean,
+                                  addingReplicas: List[Int],
+                                  removingReplicas: List[Int]) {
 
     private def minIsrCount: Option[Int] = {
       config.map(_.get(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG).value.toInt)
@@ -138,6 +140,11 @@ object TopicCommand extends Logging {
       !hasLeader || !liveBrokers.contains(info.leader.id)
     }
 
+    def hasReassigningReplicas: Boolean = {
+      addingReplicas.nonEmpty || removingReplicas.nonEmpty
+    }
+
+
     def printDescription(): Unit = {
       print("\tTopic: " + topic)
       print("\tPartition: " + info.partition)
@@ -145,6 +152,8 @@ object TopicCommand extends Logging {
       print("\tReplicas: " + info.replicas.asScala.map(_.id).mkString(","))
       print("\tIsr: " + info.isr.asScala.map(_.id).mkString(","))
       print(if (markedForDeletion) "\tMarkedForDeletion: true" else "")
+      print(if (hasReassigningReplicas) "\tAdding Replicas: " + addingReplicas.mkString(",") else "")
+      print(if (hasReassigningReplicas) "\tRemoving Replicas: " + removingReplicas.mkString(",") else "")
       println()
     }
 
@@ -272,6 +281,7 @@ object TopicCommand extends Logging {
       val allConfigs = adminClient.describeConfigs(topics.map(new ConfigResource(Type.TOPIC, _)).asJavaCollection).values()
       val liveBrokers = adminClient.describeCluster().nodes().get().asScala.map(_.id())
       val topicDescriptions = adminClient.describeTopics(topics.asJavaCollection).all().get().values().asScala
+      val ongoingReassignments = adminClient.listPartitionReassignments()
       val describeOptions = new DescribeOptions(opts, liveBrokers.toSet)
 
       for (td <- topicDescriptions) {
@@ -291,7 +301,8 @@ object TopicCommand extends Logging {
 
         if (describeOptions.describePartitions) {
           for (partition <- sortedPartitions) {
-            val partitionDesc = PartitionDescription(topicName, partition, Some(config), markedForDeletion = false)
+            val partitionDesc = PartitionDescription(topicName, partition, Some(config), markedForDeletion = false,
+              addingReplicas = List(), removingReplicas = List())
             describeOptions.maybePrintPartitionDescription(partitionDesc)
           }
         }
@@ -427,7 +438,8 @@ object TopicCommand extends Logging {
                   assignedReplicas.map(asNode).toList.asJava,
                   isr.map(asNode).toList.asJava)
 
-                val partitionDesc = PartitionDescription(topic, info, config = None, markedForDeletion)
+                val partitionDesc = PartitionDescription(topic, info, config = None, markedForDeletion,
+                  addingReplicas = List(), removingReplicas= List())
                 describeOptions.maybePrintPartitionDescription(partitionDesc)
               }
             }
