@@ -842,7 +842,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     public void commitOffsetsAsync(final Map<TopicPartition, OffsetAndMetadata> offsets, final OffsetCommitCallback callback) {
         invokeCompletedOffsetCommitCallbacks();
 
-        if (!coordinatorUnknown()) {
+        if (!coordinatorUnknown(ApiKeys.OFFSET_COMMIT)) {
             doCommitOffsetsAsync(offsets, callback);
         } else {
             // we don't know the current coordinator, so try to find it and then send the commit
@@ -919,7 +919,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             return true;
 
         do {
-            if (coordinatorUnknown() && !ensureCoordinatorReady(timer)) {
+            if (coordinatorUnknown(ApiKeys.OFFSET_COMMIT) && !ensureCoordinatorReady(timer)) {
                 return false;
             }
 
@@ -1013,7 +1013,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         if (offsets.isEmpty())
             return RequestFuture.voidSuccess();
 
-        Node coordinator = checkAndGetCoordinator();
+        Node coordinator = checkAndGetCoordinator(ApiKeys.OFFSET_COMMIT);
         if (coordinator == null)
             return RequestFuture.coordinatorNotAvailable();
 
@@ -1077,7 +1077,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         }
 
         @Override
-        public void handle(OffsetCommitResponse commitResponse, RequestFuture<Void> future) {
+        public void handle(OffsetCommitResponse commitResponse, String destination, RequestFuture<Void> future) {
             sensors.commitLatency.record(response.requestLatencyMs());
             Set<String> unauthorizedTopics = new HashSet<>();
 
@@ -1090,12 +1090,14 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
                     Errors error = Errors.forCode(partition.errorCode());
                     if (error == Errors.NONE) {
-                        log.debug("Committed offset {} for partition {}", offset, tp);
+                        log.debug("Committed offset {} for partition {} at coordinator {}", offset, tp, destination);
                     } else {
                         if (error.exception() instanceof RetriableException) {
-                            log.warn("Offset commit failed on partition {} at offset {}: {}", tp, offset, error.message());
+                            log.warn("Offset commit failed at coordinator {} on partition {} at offset {}: {}",
+                                destination, tp, offset, error.message());
                         } else {
-                            log.error("Offset commit failed on partition {} at offset {}: {}", tp, offset, error.message());
+                            log.error("Offset commit failed at coordinator {} on partition {} at offset {}: {}",
+                                destination, tp, offset, error.message());
                         }
 
                         if (error == Errors.GROUP_AUTHORIZATION_FAILED) {
@@ -1120,7 +1122,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                             future.raise(error);
                             return;
                         } else if (error == Errors.FENCED_INSTANCE_ID) {
-                            log.error("Received fatal exception: group.instance.id gets fenced");
+                            log.error("Received fatal exception from coordinator {}: group.instance.id gets fenced", destination);
                             future.raise(error);
                             return;
                         } else if (error == Errors.REBALANCE_IN_PROGRESS) {
@@ -1165,7 +1167,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
      * @return A request future containing the committed offsets.
      */
     private RequestFuture<Map<TopicPartition, OffsetAndMetadata>> sendOffsetFetchRequest(Set<TopicPartition> partitions) {
-        Node coordinator = checkAndGetCoordinator();
+        Node coordinator = checkAndGetCoordinator(ApiKeys.OFFSET_FETCH);
         if (coordinator == null)
             return RequestFuture.coordinatorNotAvailable();
 
@@ -1181,7 +1183,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
     private class OffsetFetchResponseHandler extends CoordinatorResponseHandler<OffsetFetchResponse, Map<TopicPartition, OffsetAndMetadata>> {
         @Override
-        public void handle(OffsetFetchResponse response, RequestFuture<Map<TopicPartition, OffsetAndMetadata>> future) {
+        public void handle(OffsetFetchResponse response, String destination, RequestFuture<Map<TopicPartition, OffsetAndMetadata>> future) {
             if (response.hasError()) {
                 Errors error = response.error();
                 log.debug("Offset fetch failed: {}", error.message());
@@ -1208,7 +1210,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                 OffsetFetchResponse.PartitionData data = entry.getValue();
                 if (data.hasError()) {
                     Errors error = data.error;
-                    log.debug("Failed to fetch offset for partition {}: {}", tp, error.message());
+                    log.debug("Failed to fetch offset from coordinator {} for partition {}: {}", destination, tp, error.message());
 
                     if (error == Errors.UNKNOWN_TOPIC_OR_PARTITION) {
                         future.raise(new KafkaException("Topic or Partition " + tp + " does not exist"));
@@ -1227,7 +1229,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                     // record the position with the offset (-1 indicates no committed offset to fetch)
                     offsets.put(tp, new OffsetAndMetadata(data.offset, data.leaderEpoch, data.metadata));
                 } else {
-                    log.info("Found no committed offset for partition {}", tp);
+                    log.info("Found no committed offset from coordinator {} for partition {}", destination, tp);
                 }
             }
 
