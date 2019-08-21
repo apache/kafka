@@ -213,6 +213,13 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
     }
   }
 
+  def probeVersion() {
+    if (currVersion < latestVersion) {
+        currVersion = latestVersion
+        upgradeCheckpointDir()
+      }
+  }
+
    /**
     * Choose the log to clean next and add it to the in-progress set. We recompute this
     * each time from the full set of logs to allow logs to be dynamically added to the pool of logs
@@ -222,7 +229,9 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
     inLock(lock) {
       val now = time.milliseconds
       this.timeOfLastRun = now
-      val lastClean = allCleanerCheckpoints
+      probeVersion
+      val lastCleanWithTimes = allCleanerCheckpointsWithTimes
+      val lastCleanWithoutTimes = simplifyMapToOffsetsOnly(lastCleanWithTimes)
       val dirtyLogs = logs.filter {
         case (_, log) => log.config.compact  // match logs that are marked as compacted
       }.filterNot {
@@ -232,12 +241,17 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
       }.map {
         case (topicPartition, log) => // create a LogToClean instance for each
           val (firstDirtyOffset, firstUncleanableDirtyOffset) =
-            LogCleanerManager.cleanableOffsets(log, topicPartition, lastClean, now)
+            LogCleanerManager.cleanableOffsets(log, topicPartition, lastCleanWithoutTimes, now)
 
           val compactionDelayMs = LogCleanerManager.getMaxCompactionDelay(log, firstDirtyOffset, now)
           preCleanStats.updateMaxCompactionDelay(compactionDelayMs)
 
-          LogToClean(topicPartition, log, firstDirtyOffset, firstUncleanableDirtyOffset, compactionDelayMs > 0)
+          LogToClean(topicPartition, log, firstDirtyOffset, firstUncleanableDirtyOffset, compactionDelayMs > 0,
+                     lastCleanWithTimes.get(topicPartition) match {
+                       case None => -1L
+                       case Some(offsetAndTimestamp) => offsetAndTimestamp.timestamp()
+                     }
+          )
       }.filter(ltc => ltc.totalBytes > 0) // skip any empty logs
 
       this.dirtiestLogCleanableRatio = if (dirtyLogs.nonEmpty) dirtyLogs.max.cleanableRatio else 0
@@ -420,7 +434,7 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
     }
   }
 
-  def updateCheckpointsWithTime(partition: TopicPartition, dataDir: File, update: Option[OffsetAndTimestamp]) {
+  def updateCheckpointsWithTime(partition: TopicPartition, update: Option[OffsetAndTimestamp]) {
     inLock(lock) {
       val checkpoint = partitionCheckpoints(partition)
       if (checkpoint != null) {
@@ -434,6 +448,35 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
     }
   }
 
+  /* this method must be called by another method which has attained the lock */
+  def upgradeCheckpointDir(partition: TopicPartition, sourceLogDir: File): Unit = {
+    try {
+      checkpoints.get(sourceLogDir).flatMap(_.read().get(partition)) match {
+        case Some(offset) =>
+          // Remove this partition from the checkpoint file in the source dir
+          updateCheckpoints(sourceLogDir, None)
+          // Place offset and -1 to indicate unknown timestamp in  new file system
+          updateCheckpointsWithTime(partition, Option(new OffsetAndTimestamp(offset, -1L)))
+        case None =>
+      }
+    } catch {
+      case e: KafkaStorageException =>
+        error(s"Failed to access checkpoint file in dir ${sourceLogDir.getAbsolutePath}", e)
+    }
+  }
+
+  def upgradeCheckpointDir(): Unit = {
+    inLock(lock) {
+      logDirs.foreach {
+        case file => 
+          logs.foreach {
+            case (partition, _) => upgradeCheckpointDir(partition, file)
+          }
+      }
+    }
+  }
+
+  @deprecated("Method is unneccessary due to change in file system.")
   def alterCheckpointDir(topicPartition: TopicPartition, sourceLogDir: File, destLogDir: File): Unit = {
     inLock(lock) {
       try {
@@ -467,6 +510,7 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
 
   def maybeTruncateCheckpoint(dataDir: File, topicPartition: TopicPartition, offset: Long) {
     inLock(lock) {
+      probeVersion
       if (logs.get(topicPartition).config.compact) {
         val checkpoint = checkpoints(dataDir)
         if (checkpoint != null) {
