@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.common.network;
 
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.SslConfigs;
@@ -1218,5 +1220,49 @@ public class SslTransportLayerTest {
                 return size;
             }
         }
+    }
+
+    private static class TestHandshakeLogger extends SslTransportLayer.HandshakeLogger {
+        private final List<String> logs = new ArrayList<>();
+
+        TestHandshakeLogger(int handshakesPerLogMessage, int counterStart) {
+            super(handshakesPerLogMessage, counterStart);
+        }
+
+        @Override
+        void log(String message) {
+            logs.add(message);
+        }
+
+        List<String> logs() {
+            return Collections.unmodifiableList(new ArrayList<>(logs));
+        }
+    }
+
+    @Test
+    public void testHandshakeLogger() throws Exception {
+        final String[] principals = new String[] {"PRINCIPAL0", "PRINCIPAL1", "PRINCIPAL2"};
+        final String[] ciphers = new String[] {"CIPHER0", "CIPHER1", "CIPHER2"};
+
+        TestHandshakeLogger logger = new TestHandshakeLogger(60, 59);
+        assertEquals(Arrays.asList(), logger.logs());
+        logger.add(principals[0], ciphers[0]);
+        assertEquals(Arrays.asList(new String[] {
+            "Completed 1 SSL handshake(s) with cipher(s): {CIPHER0: 1} and principal(s): {PRINCIPAL0: 1}"
+        }), logger.logs());
+        for (int i = 0; i < 9; i++) {
+            logger.add(principals[0], ciphers[0]);
+        }
+        for (int i = 0; i < 20; i++) {
+            logger.add(principals[1], ciphers[1]);
+        }
+        for (int i = 0; i < 31; i++) {
+            logger.add(principals[2], ciphers[2]);
+        }
+        assertEquals(Arrays.asList(new String[] {
+            "Completed 1 SSL handshake(s) with cipher(s): {CIPHER0: 1} and principal(s): {PRINCIPAL0: 1}",
+            "Completed 60 SSL handshake(s) with cipher(s): {CIPHER2: 31, CIPHER1: 20, CIPHER0: 9} " +
+                "and principal(s): {PRINCIPAL2: 31, PRINCIPAL1: 20, PRINCIPAL0: 9}"
+        }), logger.logs());
     }
 }

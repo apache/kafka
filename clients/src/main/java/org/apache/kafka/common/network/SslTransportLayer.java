@@ -25,6 +25,9 @@ import java.nio.channels.SelectionKey;
 import java.nio.channels.CancelledKeyException;
 
 import java.security.Principal;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.TreeMap;
 import javax.net.ssl.SSLEngine;
 import javax.net.ssl.SSLEngineResult;
 import javax.net.ssl.SSLEngineResult.HandshakeStatus;
@@ -41,6 +44,7 @@ import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /*
  * Transport layer for SSL communication
@@ -54,6 +58,71 @@ public class SslTransportLayer implements TransportLayer {
         CLOSING
     }
 
+    static class HandshakeLogger {
+        private final static Logger log = LoggerFactory.getLogger(HandshakeLogger.class);
+        private final int handshakesPerLogMessage;
+        private final HashMap<String, Integer> cipherCounts = new HashMap<>();
+        private final HashMap<String, Integer> principalCounts = new HashMap<>();
+        private int count;
+        private int created = 0;
+
+        HandshakeLogger(int handshakesPerLogMessage, int counterStart) {
+            this.handshakesPerLogMessage = handshakesPerLogMessage;
+            this.count = counterStart;
+        }
+
+        void add(String principal, String cipherSuite) {
+            String logMessage = null;
+            synchronized (this) {
+                cipherCounts.put(cipherSuite, cipherCounts.getOrDefault(cipherSuite, 0) + 1);
+                principalCounts.put(principal, principalCounts.getOrDefault(principal, 0) + 1);
+                created++;
+                if (++count >= handshakesPerLogMessage) {
+                    StringBuilder bld = new StringBuilder();
+                    bld.append("Completed ").append(created).append(" SSL handshake(s) with cipher(s): {");
+                    summarizeMap(10, cipherCounts, bld);
+                    bld.append("} and principal(s): {");
+                    summarizeMap(10, principalCounts, bld);
+                    bld.append("}");
+                    logMessage = bld.toString();
+                    cipherCounts.clear();
+                    principalCounts.clear();
+                    count = 0;
+                    created = 0;
+                }
+            }
+            if (logMessage != null) {
+                log(logMessage);
+            }
+        }
+
+        private void summarizeMap(int maxCount, Map<String, Integer> map, StringBuilder bld) {
+            TreeMap<Long, String> sortedMap = new TreeMap<>();
+            int nonce = 0;
+            for (Map.Entry<String, Integer> entry : map.entrySet()) {
+                long val = entry.getValue();
+                sortedMap.put(val << 32 | nonce++, entry.getKey());
+            }
+            String prefix = "";
+            Map.Entry<Long, String> entry = sortedMap.lastEntry();
+            for (int i = 0; entry != null; i++) {
+                bld.append(prefix);
+                prefix = ", ";
+                if (i >= maxCount) {
+                    bld.append("...");
+                    break;
+                }
+                bld.append(entry.getValue()).append(": ").append(entry.getKey() >> 32);
+                entry = sortedMap.lowerEntry(entry.getKey());
+            }
+        }
+
+        void log(String message) {
+            log.info("{}", message);
+        }
+    }
+
+    private final static HandshakeLogger HANDSHAKE_LOGGER = new HandshakeLogger(10000, 9999);
     private final String channelId;
     private final SSLEngine sslEngine;
     private final SelectionKey key;
@@ -423,6 +492,7 @@ public class SslTransportLayer implements TransportLayer {
                 SSLSession session = sslEngine.getSession();
                 log.debug("SSL handshake completed successfully with peerHost '{}' peerPort {} peerPrincipal '{}' cipherSuite '{}'",
                         session.getPeerHost(), session.getPeerPort(), peerPrincipal(), session.getCipherSuite());
+                HANDSHAKE_LOGGER.add(peerPrincipal().getName(), session.getCipherSuite());
             }
 
             log.trace("SSLHandshake FINISHED channelId {}, appReadBuffer pos {}, netReadBuffer pos {}, netWriteBuffer pos {} ",
