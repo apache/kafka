@@ -34,6 +34,19 @@
 
     It's worth noting that security is optional - non-secured clusters are supported, as well as a mix of authenticated, unauthenticated, encrypted and non-encrypted clients.
 
+    <h3><a id="insecure_by_default" href="#insecure_by_default"> &#9888; WARNING: Insecure By Default</a></h3>
+    <p> While security it optional, Kafka/Kafka Connect do not come with any security enabled by default. This means that Kafka/Kafka Connect instances can be read/written/configured by unauthenticated clients.
+    This can result in serious security implications, such as:
+    <ul>
+        <li>Ability to read arbitrary data from topics</li>
+        <li>Ability to write arbitrary data from topics</li>
+        <li>Ability to reconfigure instances (NOTE: this can result in denial of service or remote code execution)</li>
+        <li>Ability to create arbitrary Connect configurations, resulting in arbitrary file disclosure</li>
+    </ul>
+    For any production deployment, it is strongly urged that RBAC be enabled at a minimum to avoid cluster compromise. There is no method of mitigation
+    </p>
+
+
     The guides below explain how to configure and use the security features in both clients and brokers.
 
     <h3><a id="security_ssl" href="#security_ssl">7.2 Encryption and Authentication using SSL</a></h3>
