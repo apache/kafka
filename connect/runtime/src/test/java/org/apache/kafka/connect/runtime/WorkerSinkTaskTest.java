@@ -25,6 +25,7 @@ import org.apache.kafka.clients.consumer.OffsetCommitCallback;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.WakeupException;
+import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.record.RecordBatch;
@@ -93,7 +94,11 @@ public class WorkerSinkTaskTest {
     // These are fixed to keep this code simpler. In this example we assume byte[] raw values
     // with mix of integer/string in Connect
     private static final String TOPIC = "test";
+    private static final Headers EMPTY_HEADERS = new RecordHeaders();
     private static final Headers HEADERS = new RecordHeaders();
+    static {
+        HEADERS.add("header_key", "header_value".getBytes());
+    }
     private static final int PARTITION = 12;
     private static final int PARTITION2 = 13;
     private static final int PARTITION3 = 14;
@@ -1267,6 +1272,28 @@ public class WorkerSinkTaskTest {
         assertEquals(30, metrics.currentMetricValueAsDouble(group1.metricGroup(), "put-batch-max-time-ms"), 0.001d);
     }
 
+    @Test
+    public void testHeaders() throws Exception {
+        createTask(initialState);
+
+        expectInitializeTask();
+        expectPollInitialAssignment();
+
+        expectConsumerPoll(1, HEADERS);
+        expectConversionAndTransformation(1, null, HEADERS);
+        sinkTask.put(EasyMock.<Collection<SinkRecord>>anyObject());
+        EasyMock.expectLastCall();
+
+        PowerMock.replayAll();
+
+        workerTask.initialize(TASK_CONFIG);
+        workerTask.initializeAndStart();
+        workerTask.iteration(); // iter 1 -- initial assignment
+        workerTask.iteration(); // iter 2 -- deliver 1 record
+
+        PowerMock.verifyAll();
+    }
+
     private void expectInitializeTask() throws Exception {
         consumer.subscribe(EasyMock.eq(asList(TOPIC)), EasyMock.capture(rebalanceListener));
         PowerMock.expectLastCall();
@@ -1349,17 +1376,25 @@ public class WorkerSinkTaskTest {
     }
 
     private void expectConsumerPoll(final int numMessages) {
-        expectConsumerPoll(numMessages, RecordBatch.NO_TIMESTAMP, TimestampType.NO_TIMESTAMP_TYPE);
+        expectConsumerPoll(numMessages, RecordBatch.NO_TIMESTAMP, TimestampType.NO_TIMESTAMP_TYPE, EMPTY_HEADERS);
+    }
+
+    private void expectConsumerPoll(final int numMessages, Headers headers) {
+        expectConsumerPoll(numMessages, RecordBatch.NO_TIMESTAMP, TimestampType.NO_TIMESTAMP_TYPE, headers);
     }
 
     private void expectConsumerPoll(final int numMessages, final long timestamp, final TimestampType timestampType) {
+        expectConsumerPoll(numMessages, timestamp, timestampType, EMPTY_HEADERS);
+    }
+
+    private void expectConsumerPoll(final int numMessages, final long timestamp, final TimestampType timestampType, Headers headers) {
         EasyMock.expect(consumer.poll(Duration.ofMillis(EasyMock.anyLong()))).andAnswer(
                 new IAnswer<ConsumerRecords<byte[], byte[]>>() {
                     @Override
                     public ConsumerRecords<byte[], byte[]> answer() throws Throwable {
                         List<ConsumerRecord<byte[], byte[]>> records = new ArrayList<>();
                         for (int i = 0; i < numMessages; i++)
-                            records.add(new ConsumerRecord<>(TOPIC, PARTITION, FIRST_OFFSET + recordsReturnedTp1 + i, timestamp, timestampType, 0L, 0, 0, RAW_KEY, RAW_VALUE));
+                            records.add(new ConsumerRecord<>(TOPIC, PARTITION, FIRST_OFFSET + recordsReturnedTp1 + i, timestamp, timestampType, 0L, 0, 0, RAW_KEY, RAW_VALUE, headers));
                         recordsReturnedTp1 += numMessages;
                         return new ConsumerRecords<>(
                                 numMessages > 0 ?
@@ -1375,8 +1410,16 @@ public class WorkerSinkTaskTest {
     }
 
     private void expectConversionAndTransformation(final int numMessages, final String topicPrefix) {
-        EasyMock.expect(keyConverter.toConnectData(TOPIC, HEADERS, RAW_KEY)).andReturn(new SchemaAndValue(KEY_SCHEMA, KEY)).times(numMessages);
-        EasyMock.expect(valueConverter.toConnectData(TOPIC, HEADERS, RAW_VALUE)).andReturn(new SchemaAndValue(VALUE_SCHEMA, VALUE)).times(numMessages);
+        expectConversionAndTransformation(numMessages, topicPrefix, EMPTY_HEADERS);
+    }
+
+    private void expectConversionAndTransformation(final int numMessages, final String topicPrefix, final Headers headers) {
+        EasyMock.expect(keyConverter.toConnectData(TOPIC, headers, RAW_KEY)).andReturn(new SchemaAndValue(KEY_SCHEMA, KEY)).times(numMessages);
+        EasyMock.expect(valueConverter.toConnectData(TOPIC, headers, RAW_VALUE)).andReturn(new SchemaAndValue(VALUE_SCHEMA, VALUE)).times(numMessages);
+
+        for (Header header : headers) {
+            EasyMock.expect(headerConverter.toConnectHeader(TOPIC, header.key(), header.value())).andReturn(new SchemaAndValue(VALUE_SCHEMA, new String(header.value()))).times(1);
+        }
 
         final Capture<SinkRecord> recordCapture = EasyMock.newCapture();
         EasyMock.expect(transformationChain.apply(EasyMock.capture(recordCapture)))
@@ -1392,7 +1435,8 @@ public class WorkerSinkTaskTest {
                                        origRecord.key(),
                                        origRecord.valueSchema(),
                                        origRecord.value(),
-                                       origRecord.timestamp()
+                                       origRecord.timestamp(),
+                                       origRecord.headers()
                                )
                                : origRecord;
                     }

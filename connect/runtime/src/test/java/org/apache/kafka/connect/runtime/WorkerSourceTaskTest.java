@@ -21,11 +21,14 @@ import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.record.InvalidRecordException;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.connect.data.Schema;
+import org.apache.kafka.connect.data.SchemaAndValue;
+import org.apache.kafka.connect.header.ConnectHeaders;
 import org.apache.kafka.connect.runtime.ConnectMetrics.MetricGroup;
 import org.apache.kafka.connect.runtime.WorkerSourceTask.SourceTaskMetricsGroup;
 import org.apache.kafka.connect.runtime.distributed.ClusterConfigState;
@@ -81,7 +84,15 @@ import static org.junit.Assert.assertTrue;
 @RunWith(PowerMockRunner.class)
 public class WorkerSourceTaskTest extends ThreadedTest {
     private static final String TOPIC = "topic";
+    private static final Headers EMPTY_HEADERS = new RecordHeaders();
     private static final Headers HEADERS = new RecordHeaders();
+    static {
+        HEADERS.add("header_key", "header_value".getBytes());
+    }
+    private static final org.apache.kafka.connect.header.Headers CONNECT_HEADERS = new ConnectHeaders();
+    static {
+        CONNECT_HEADERS.add("header_key", new SchemaAndValue(Schema.STRING_SCHEMA, "header_value"));
+    }
     private static final Map<String, byte[]> PARTITION = Collections.singletonMap("key", "partition".getBytes());
     private static final Map<String, Integer> OFFSET = Collections.singletonMap("key", 12);
 
@@ -668,6 +679,27 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         assertEquals(1800.0, metrics.currentMetricValueAsDouble(group1.metricGroup(), "source-record-active-count"), 0.001d);
     }
 
+    @Test
+    public void testHeaders() throws Exception {
+        createWorkerTask();
+
+        List<SourceRecord> records = new ArrayList<>();
+        records.add(new SourceRecord(PARTITION, OFFSET, "topic", null, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD, null, CONNECT_HEADERS));
+
+        Capture<ProducerRecord<byte[], byte[]>> sent = expectSendRecord(true, false, true, HEADERS);
+
+        PowerMock.replayAll();
+
+        Whitebox.setInternalState(workerTask, "toSend", records);
+        Whitebox.invokeMethod(workerTask, "sendRecords");
+        assertEquals(SERIALIZED_KEY, sent.getValue().key());
+        assertEquals(SERIALIZED_RECORD, sent.getValue().value());
+        assertEquals(SERIALIZED_RECORD, sent.getValue().value());
+        assertEquals(HEADERS, sent.getValue().headers());
+
+        PowerMock.verifyAll();
+    }
+
     private CountDownLatch expectPolls(int minimum, final AtomicInteger count) throws InterruptedException {
         final CountDownLatch latch = new CountDownLatch(minimum);
         // Note that we stub these to allow any number of calls because the thread will continue to
@@ -694,7 +726,7 @@ public class WorkerSourceTaskTest extends ThreadedTest {
 
     @SuppressWarnings("unchecked")
     private void expectSendRecordSyncFailure(Throwable error) throws InterruptedException {
-        expectConvertKeyValue(false);
+        expectConvertHeadersAndKeyValue(false);
         expectApplyTransformationChain(false);
 
         offsetWriter.offset(PARTITION, OFFSET);
@@ -722,9 +754,13 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         return expectSendRecord(anyTimes, isRetry, false);
     }
 
-    @SuppressWarnings("unchecked")
     private Capture<ProducerRecord<byte[], byte[]>> expectSendRecord(boolean anyTimes, boolean isRetry, boolean succeed) throws InterruptedException {
-        expectConvertKeyValue(anyTimes);
+        return expectSendRecord(anyTimes, isRetry, succeed, EMPTY_HEADERS);
+    }
+
+    @SuppressWarnings("unchecked")
+    private Capture<ProducerRecord<byte[], byte[]>> expectSendRecord(boolean anyTimes, boolean isRetry, boolean succeed, Headers headers) throws InterruptedException {
+        expectConvertHeadersAndKeyValue(anyTimes, headers);
         expectApplyTransformationChain(anyTimes);
 
         Capture<ProducerRecord<byte[], byte[]>> sent = EasyMock.newCapture();
@@ -766,13 +802,24 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         return sent;
     }
 
-    private void expectConvertKeyValue(boolean anyTimes) {
-        IExpectationSetters<byte[]> convertKeyExpect = EasyMock.expect(keyConverter.fromConnectData(TOPIC, HEADERS, KEY_SCHEMA, KEY));
+    private void expectConvertHeadersAndKeyValue(boolean anyTimes) {
+        expectConvertHeadersAndKeyValue(anyTimes, EMPTY_HEADERS);
+    }
+
+    private void expectConvertHeadersAndKeyValue(boolean anyTimes, Headers headers) {
+        for (Header header : headers) {
+            IExpectationSetters<byte[]> convertHeaderExpect = EasyMock.expect(headerConverter.fromConnectHeader(TOPIC, header.key(), Schema.STRING_SCHEMA, new String(header.value())));
+            if (anyTimes)
+                convertHeaderExpect.andStubReturn(header.value());
+            else
+                convertHeaderExpect.andReturn(header.value());
+        }
+        IExpectationSetters<byte[]> convertKeyExpect = EasyMock.expect(keyConverter.fromConnectData(TOPIC, headers, KEY_SCHEMA, KEY));
         if (anyTimes)
             convertKeyExpect.andStubReturn(SERIALIZED_KEY);
         else
             convertKeyExpect.andReturn(SERIALIZED_KEY);
-        IExpectationSetters<byte[]> convertValueExpect = EasyMock.expect(valueConverter.fromConnectData(TOPIC, HEADERS, RECORD_SCHEMA, RECORD));
+        IExpectationSetters<byte[]> convertValueExpect = EasyMock.expect(valueConverter.fromConnectData(TOPIC, headers, RECORD_SCHEMA, RECORD));
         if (anyTimes)
             convertValueExpect.andStubReturn(SERIALIZED_RECORD);
         else
