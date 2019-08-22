@@ -135,23 +135,6 @@ class MetricsTest extends KafkaServerTestHarness with Logging {
   }
 
   @Test
-  def testBrokerTopicMetricsNoKeyCompactedTopicRecordsLogged(): Unit = {
-    val topic = "test-compacted-topic-record-no-key"
-    val topicConfig = new Properties
-    topicConfig.setProperty(LogConfig.CleanupPolicyProp, LogConfig.Compact)
-    createTopic(topic, 1, numNodes, topicConfig)
-    try {
-      TestUtils.generateAndProduceMessages(servers, topic, nMessages)
-      Assertions.fail("Exception should have been thrown")
-    } catch {
-      case _: Exception => // GOOD
-    }
-    // now the metric should kick in
-    assertEquals(Metrics.defaultRegistry.allMetrics.keySet.asScala.count(_.getMBeanName.endsWith(s"name=NoKeyCompactedTopicRecordsPerSec,topic=$topic")), 1)
-    assertTrue(meterCount(s"name=NoKeyCompactedTopicRecordsPerSec,topic=$topic") > 0)
-  }
-
-  @Test
   def testControllerMetrics(): Unit = {
     val metrics = Metrics.defaultRegistry.allMetrics
 
