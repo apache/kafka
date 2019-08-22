@@ -169,10 +169,9 @@ import org.apache.kafka.common.utils.CollectionUtils;
  * Any consumer that uses sticky assignment can leverage this listener like this:
  * <code>consumer.subscribe(topics, new TheNewRebalanceListener());</code>
  *
- * Note that you can leverage the {@link CooperativeStickyAssignor} to never revoke any partitions to begin with, except
- * those which are actually intended to be migrated to another consumer for better overall balance. See
+ * Note that you can leverage the {@link CooperativeStickyAssignor} so that only partitions which are being
+ * reassigned to another consumer will be revoked. That is the preferred assignor for newer cluster. See
  * {@link ConsumerPartitionAssignor.RebalanceProtocol} for a detailed explanation of cooperative rebalancing.
- *
  */
 public class StickyAssignor extends AbstractStickyAssignor {
 

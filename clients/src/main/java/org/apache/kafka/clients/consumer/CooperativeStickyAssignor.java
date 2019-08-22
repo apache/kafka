@@ -33,6 +33,8 @@ import org.apache.kafka.common.TopicPartition;
  * {@link StickyAssignor StickyAssignor} follows the eager rebalancing protocol. See
  * {@link ConsumerPartitionAssignor.RebalanceProtocol} for an explanation of the rebalancing protocols.
  * <p>
+ * Users should prefer this assignor for newer clusters.
+ * <p>
  * To turn on cooperative rebalancing you must set all your consumers to use this {@code PartitionAssignor},
  * or implement a custom one that returns {@code RebalanceProtocol.COOPERATIVE} in
  * {@link CooperativeStickyAssignor#supportedProtocols supportedProtocols()}.
