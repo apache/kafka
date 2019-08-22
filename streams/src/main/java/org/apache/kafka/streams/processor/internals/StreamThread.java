@@ -281,7 +281,8 @@ public class StreamThread extends Thread {
                         "Skipping task creation in rebalance because we are already in {} state.",
                         streamThread.state()
                     );
-                } else if (streamThread.assignmentErrorCode.get() != StreamsPartitionAssignor.Error.NONE.code()) {
+                } else if (streamThread.assignmentErrorCode.get() != StreamsPartitionAssignor.Error.NONE.code()
+                   && streamThread.assignmentErrorCode.get() != StreamsPartitionAssignor.Error.VERSION_PROBING.code() ) {
                     log.debug(
                         "Encountered assignment error during partition assignment: {}. Skipping task initialization",
                         streamThread.assignmentErrorCode
