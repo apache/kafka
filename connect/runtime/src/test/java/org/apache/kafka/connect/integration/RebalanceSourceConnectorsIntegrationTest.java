@@ -101,7 +101,7 @@ public class RebalanceSourceConnectorsIntegrationTest {
         connect.stop();
     }
 
-    @Ignore
+    @Ignore("Flaky and disruptive. See KAFKA-8391, KAFKA-8661 for details.")
     @Test
     public void testStartTwoConnectors() throws Exception {
         // create test topic
@@ -133,7 +133,7 @@ public class RebalanceSourceConnectorsIntegrationTest {
                 CONNECTOR_SETUP_DURATION_MS, "Connector tasks did not start in time.");
     }
 
-    @Ignore
+    @Ignore("Flaky and disruptive. See KAFKA-8391, KAFKA-8661 for details.")
     @Test
     public void testReconfigConnector() throws Exception {
         ConnectorHandle connectorHandle = RuntimeHandles.get().connectorHandle(CONNECTOR_NAME);
@@ -189,7 +189,7 @@ public class RebalanceSourceConnectorsIntegrationTest {
                 recordNum >= numRecordsProduced);
     }
 
-    @Ignore
+    @Ignore("Flaky and disruptive. See KAFKA-8391, KAFKA-8661 for details.")
     @Test
     public void testDeleteConnector() throws Exception {
         // create test topic
