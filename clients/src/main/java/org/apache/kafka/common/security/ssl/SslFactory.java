@@ -88,11 +88,10 @@ public class SslFactory implements Reconfigurable {
         Map<String, Object> nextConfigs = new HashMap<>();
         copyMapEntries(nextConfigs, configs, SslConfigs.NON_RECONFIGURABLE_CONFIGS);
         copyMapEntries(nextConfigs, configs, SslConfigs.RECONFIGURABLE_CONFIGS);
+        copyMapEntry(nextConfigs, configs, SecurityConfig.SECURITY_PROVIDERS_CONFIG);
         if (clientAuthConfigOverride != null) {
             nextConfigs.put(BrokerSecurityConfigs.SSL_CLIENT_AUTH_CONFIG, clientAuthConfigOverride);
         }
-        nextConfigs.put(SecurityConfig.SECURITY_PROVIDERS_CONFIG,
-                configs.get(SecurityConfig.SECURITY_PROVIDERS_CONFIG));
         SslEngineBuilder builder = new SslEngineBuilder(nextConfigs);
         if (keystoreVerifiableUsingTruststore) {
             try {
@@ -199,9 +198,24 @@ public class SslFactory implements Reconfigurable {
                                               Map<K, ? extends V> srcMap,
                                               Set<K> keySet) {
         for (K k : keySet) {
-            if (srcMap.containsKey(k)) {
-                destMap.put(k, srcMap.get(k));
-            }
+            copyMapEntry(destMap, srcMap, k);
+        }
+    }
+
+    /**
+     * Copy entry from one map into another.
+     *
+     * @param destMap   The map to copy entries into.
+     * @param srcMap    The map to copy entries from.
+     * @param key       The entry with this key will be copied
+     * @param <K>       The map key type.
+     * @param <V>       The map value type.
+     */
+    private static <K, V> void copyMapEntry(Map<K, V> destMap,
+                                            Map<K, ? extends V> srcMap,
+                                            K key) {
+        if (srcMap.containsKey(key)) {
+            destMap.put(key, srcMap.get(key));
         }
     }
 

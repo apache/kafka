@@ -56,12 +56,12 @@ public class SecurityUtils {
                 Security.insertProviderAt(securityProviderCreator.getProvider(), index + 1);
             }
         } catch (ClassCastException e) {
-            LOGGER.error("Generator provided through " + SecurityConfig.SECURITY_PROVIDERS_CONFIG +
+            LOGGER.error("Creators provided through " + SecurityConfig.SECURITY_PROVIDERS_CONFIG +
                     " are expected to be sub-classes of SecurityProviderCreator");
         } catch (ClassNotFoundException cnfe) {
-            LOGGER.error("Unrecognized security provider class", cnfe);
+            LOGGER.error("Unrecognized security provider creator class", cnfe);
         } catch (IllegalAccessException | InstantiationException e) {
-            LOGGER.error("Unexpected implementation of security provider class", e);
+            LOGGER.error("Unexpected implementation of security provider creator class", e);
         }
     }
 

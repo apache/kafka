@@ -22,7 +22,7 @@ package org.apache.kafka.common.config;
 public class SecurityConfig {
 
     public static final String SECURITY_PROVIDERS_CONFIG = "security.providers";
-    public static final String SECURITY_PROVIDERS_DOC = "A list of generators each returning a provider " +
+    public static final String SECURITY_PROVIDERS_DOC = "A list of configurable creators each returning a provider " +
             "implementing security algorithms";
 
 }

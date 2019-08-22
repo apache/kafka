@@ -16,13 +16,15 @@
  */
 package org.apache.kafka.common.security;
 
+import org.apache.kafka.common.Configurable;
+
 import java.security.Provider;
 import java.util.Map;
 
 /**
  * An interface for generating security providers.
  */
-public interface SecurityProviderCreator {
+public interface SecurityProviderCreator extends Configurable {
 
     /**
      * Configure method is used to configure the generator to create the Security Provider
