@@ -30,6 +30,7 @@ import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.message.JoinGroupResponseData.JoinGroupResponseMember
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity
+import org.apache.kafka.common.metrics.stats.Meter
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record.RecordBatch.{NO_PRODUCER_EPOCH, NO_PRODUCER_ID}
 import org.apache.kafka.common.requests._
@@ -62,6 +63,27 @@ class GroupCoordinator(val brokerId: Int,
 
   type JoinCallback = JoinGroupResult => Unit
   type SyncCallback = SyncGroupResult => Unit
+
+  /* setup metrics */
+  val offsetDeletionSensor = metrics.sensor("OffsetDeletions")
+
+  offsetDeletionSensor.add(new Meter(
+    metrics.metricName("offset-deletion-rate",
+      "group-coordinator-metrics",
+      "The rate of administrative deleted offsets"),
+    metrics.metricName("offset-deletion-count",
+      "group-coordinator-metrics",
+      "The total number of administrative deleted offsets")))
+
+  val groupCompletedRebalanceSensor = metrics.sensor("OffsetDeletions")
+
+  groupCompletedRebalanceSensor.add(new Meter(
+    metrics.metricName("group-completed-rebalance-rate",
+      "group-coordinator-metrics",
+      "The rate of completed rebalance"),
+    metrics.metricName("group-completed-rebalance-count",
+      "group-coordinator-metrics",
+      "The total number of completed rebalance")))
 
   this.logIdent = "[GroupCoordinator " + brokerId + "]: "
 
@@ -407,6 +429,7 @@ class GroupCoordinator(val brokerId: Int,
                   }
                 }
               })
+              groupCompletedRebalanceSensor.record()
             }
 
           case Stable =>
@@ -517,6 +540,66 @@ class GroupCoordinator(val brokerId: Int,
     }
 
     groupErrors
+  }
+
+  def handleDeleteOffsets(groupId: String, partitions: Seq[TopicPartition]): Map[TopicPartition, Errors] = {
+    def errorResponse(error: Errors): Map[TopicPartition, Errors] = {
+      partitions.map { partition =>
+        (partition, error)
+      }.toMap
+    }
+
+    var partitionErrors: Map[TopicPartition, Errors] = Map()
+    var partitionEligibleForDeletion: Seq[TopicPartition] = Seq()
+
+    validateGroupStatus(groupId, ApiKeys.OFFSET_DELETE) match {
+      case Some(error) =>
+        partitionErrors = errorResponse(error)
+
+      case None =>
+        groupManager.getGroup(groupId) match {
+          case None =>
+            partitionErrors = errorResponse(if (groupManager.groupNotExists(groupId))
+              Errors.GROUP_ID_NOT_FOUND else Errors.NOT_COORDINATOR)
+
+          case Some(group) =>
+            group.inLock {
+              group.currentState match {
+                case Dead =>
+                  partitionErrors = errorResponse(if (groupManager.groupNotExists(groupId))
+                    Errors.GROUP_ID_NOT_FOUND else Errors.NOT_COORDINATOR)
+
+                case Empty =>
+                  partitionEligibleForDeletion = partitions
+
+                case PreparingRebalance | CompletingRebalance | Stable if group.isConsumerGroup =>
+                  val (consumed, notConsumed) =
+                    partitions.partition(tp => group.isSubscribedToTopic(tp.topic()))
+
+                  partitionEligibleForDeletion = notConsumed
+                  partitionErrors = consumed.map(_ -> Errors.GROUP_SUBSCRIBED_TO_TOPIC).toMap
+
+                case _ =>
+                  partitionErrors = errorResponse(Errors.NON_EMPTY_GROUP)
+              }
+            }
+
+            if (partitionEligibleForDeletion.nonEmpty) {
+              val offsetsRemoved = groupManager.cleanupGroupMetadata(Seq(group), group => {
+                group.removeOffsets(partitionEligibleForDeletion)
+              })
+
+              partitionErrors ++= partitionEligibleForDeletion.map(_ -> Errors.NONE).toMap
+
+              offsetDeletionSensor.record(offsetsRemoved)
+
+              info(s"The following offsets of the group $groupId were deleted: ${partitionEligibleForDeletion.mkString(", ")}. " +
+                s"A total of $offsetsRemoved offsets were removed.")
+            }
+        }
+    }
+
+    partitionErrors
   }
 
   def handleHeartbeat(groupId: String,

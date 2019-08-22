@@ -838,6 +838,29 @@ public interface Admin extends AutoCloseable {
     }
 
     /**
+     * Delete committed offsets for a set of partitions in a consumer group. This will
+     * succeed at the partition level only if the group is not actively subscribed
+     * to the corresponding topic.
+     *
+     * @param options The options to use when deleting offsets in a consumer group.
+     * @return The DeleteConsumerGroupOffsetsResult.
+     */
+    DeleteConsumerGroupOffsetsResult deleteConsumerGroupOffsets(String groupId,
+        Set<TopicPartition> partitions,
+        DeleteConsumerGroupOffsetsOptions options);
+
+    /**
+     * Delete committed offsets for a set of partitions in a consumer group with the default
+     * options. This will succeed at the partition level only if the group is not actively
+     * subscribed to the corresponding topic.
+     *
+     * @return The DeleteConsumerGroupOffsetsResult.
+     */
+    default DeleteConsumerGroupOffsetsResult deleteConsumerGroupOffsets(String groupId, Set<TopicPartition> partitions) {
+        return deleteConsumerGroupOffsets(groupId, partitions, new DeleteConsumerGroupOffsetsOptions());
+    }
+
+    /**
      * Elect the preferred replica as leader for topic partitions.
      * <p>
      * This is a convenience method for {@link #electLeaders(ElectionType, Set, ElectLeadersOptions)}

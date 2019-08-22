@@ -70,6 +70,7 @@ import org.apache.kafka.common.message.LeaveGroupResponseData.MemberResponse
 import org.apache.kafka.common.message.ListGroupsResponseData
 import org.apache.kafka.common.message.OffsetCommitRequestData
 import org.apache.kafka.common.message.OffsetCommitResponseData
+import org.apache.kafka.common.message.OffsetDeleteResponseData
 import org.apache.kafka.common.message.RenewDelegationTokenResponseData
 import org.apache.kafka.common.message.SaslAuthenticateResponseData
 import org.apache.kafka.common.message.SaslHandshakeResponseData
@@ -186,6 +187,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         case ApiKeys.INCREMENTAL_ALTER_CONFIGS => handleIncrementalAlterConfigsRequest(request)
         case ApiKeys.ALTER_PARTITION_REASSIGNMENTS => handleAlterPartitionReassignmentsRequest(request)
         case ApiKeys.LIST_PARTITION_REASSIGNMENTS => handleListPartitionReassignmentsRequest(request)
+        case ApiKeys.OFFSET_DELETE => handleOffsetDeleteRequest(request)
       }
     } catch {
       case e: FatalExitError => throw e
@@ -2657,6 +2659,45 @@ class KafkaApis(val requestChannel: RequestChannel,
         sendResponseCallback(ApiError.NONE),
         electionRequest.data().timeoutMs()
       )
+    }
+  }
+
+  def handleOffsetDeleteRequest(request: RequestChannel.Request): Unit = {
+    val offsetDeleteRequest = request.body[OffsetDeleteRequest]
+    val groupId = offsetDeleteRequest.data.groupId()
+
+    if (authorize(request, READ, GROUP, groupId)) {
+      val topicPartitions = offsetDeleteRequest.data.topics().asScala.flatMap { topic =>
+        topic.partitions().asScala.map { partition =>
+          new TopicPartition(topic.name(), partition.partitionIndex())
+        }
+      }.toSeq
+
+      val offsetDeletionResult = groupCoordinator.handleDeleteOffsets(groupId, topicPartitions)
+
+      sendResponseMaybeThrottle(request, requestThrottleMs => {
+        val topics = new OffsetDeleteResponseData.OffsetDeleteResponseTopicCollection
+        offsetDeletionResult.groupBy(_._1.topic()).map { case (topic, topicPartitions) =>
+          val partitions = new OffsetDeleteResponseData.OffsetDeleteResponsePartitionCollection
+          topicPartitions.map { case (topicPartition, error) =>
+            partitions.add(
+              new OffsetDeleteResponseData.OffsetDeleteResponsePartition()
+                .setPartitionIndex(topicPartition.partition())
+                .setErrorCode(error.code())
+            )
+            topics.add(new OffsetDeleteResponseData.OffsetDeleteResponseTopic()
+              .setName(topic)
+              .setPartitions(partitions))
+          }
+        }
+
+        new OffsetDeleteResponse(new OffsetDeleteResponseData()
+          .setTopics(topics)
+          .setThrottleTimeMs(requestThrottleMs))
+      })
+    } else {
+      sendResponseMaybeThrottle(request, requestThrottleMs =>
+        offsetDeleteRequest.getErrorResponse(requestThrottleMs, Errors.GROUP_AUTHORIZATION_FAILED))
     }
   }
 
