@@ -1167,6 +1167,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
 
             if (materialized != null) {
                 materializedInternal = new MaterializedInternal<>(materialized, builder, WINDOWED_NAME);
+                //TODO disable IQ at this point for Joined stores
             }
 
             final String thisWindowStreamName =  renamed.suffixWithOrElseGet(
