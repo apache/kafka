@@ -130,6 +130,8 @@ object Defaults {
   val RemoteLogRetentionBytes = 1024 * 1024 * 1024L
   val RemoteLogManagerThreadPoolSize = 10
   val RemoteLogManagerTaskIntervalMs = 30 * 1000L
+  val RemoteLogReaderThreads = 5
+  val RemoteLogReaderMaxPendingTasks = 100
 
   /** ********* Replication configuration ***********/
   val ControllerSocketTimeoutMs = RequestTimeoutMs
@@ -366,6 +368,8 @@ object KafkaConfig {
   val RemoteLogRetentionBytesProp = "remote.log.retention.bytes"
   val RemoteLogManagerThreadPoolSizeProp = "remote.log.manager.thread.pool.size"
   val RemoteLogManagerTaskIntervalMsProp = "remote.log.manager.task.interval.ms"
+  val RemoteLogReaderThreadsProp = "remote.log.reader.threads"
+  val RemoteLogReaderMaxPendingTasksProp = "remote.log.reader.max.pending.tasks"
 
   /** ********* Replication configuration ***********/
   val ControllerSocketTimeoutMsProp = "controller.socket.timeout.ms"
@@ -690,6 +694,8 @@ object KafkaConfig {
   val RemoteLogRetentionBytesDoc = "Remote log size retention in bytes, after which remote log segment is deleted."
   val RemoteLogManagerThreadPoolSizeDoc = "Remote log thread pool size, which is used in scheduling tasks to copy segments, fetch remote log indexes and clean up remote log segments."
   val RemoteLogManagerTaskIntervalMsDoc = "Interval at which remote log manager runs the scheduled tasks like copy segments, fetch remote log indexes and clean up remote log segments."
+  val RemoteLogReaderThreadsDoc = "Remote log reader thread pool size."
+  val RemoteLogReaderMaxPendingTasksDoc = "Maximum remote log reader thread pool task queue size. If the task queue is full, broker will stop reading remote log segments."
 
   /** ********* Replication configuration ***********/
   val ControllerSocketTimeoutMsDoc = "The socket timeout for controller-to-broker channels"
@@ -756,7 +762,7 @@ object KafkaConfig {
   val OffsetCommitRequiredAcksDoc = "The required acks before the commit can be accepted. In general, the default (-1) should not be overridden"
   /** ********* Transaction management configuration ***********/
   val TransactionalIdExpirationMsDoc = "The time in ms that the transaction coordinator will wait without receiving any transaction status updates " +
-    "for the current transaction before expiring its transactional id. This setting also influences producer id expiration - producer ids are expired " + 
+    "for the current transaction before expiring its transactional id. This setting also influences producer id expiration - producer ids are expired " +
     "once this time has elapsed after the last write with the given producer id. Note that producer ids may expire sooner if the last write from the producer id is deleted due to the topic's retention settings."
   val TransactionsMaxTimeoutMsDoc = "The maximum allowed timeout for transactions. " +
     "If a client’s requested transaction time exceed this, then the broker will return an error in InitProducerIdRequest. This prevents a client from too large of a timeout, which can stall consumers reading from topics included in the transaction."
@@ -977,6 +983,8 @@ object KafkaConfig {
       .define(RemoteLogRetentionMillisProp, LONG, null, LOW, RemoteLogRetentionMillisDoc)
       .define(RemoteLogRetentionMinutesProp, LONG, Defaults.RemoteLogRetentionMinutes, LOW, RemoteLogRetentionMinutesDoc)
       .define(RemoteLogRetentionBytesProp, LONG, Defaults.RemoteLogRetentionBytes, LOW, RemoteLogRetentionBytesDoc)
+      .define(RemoteLogReaderThreadsProp, INT, Defaults.RemoteLogReaderThreads, LOW, RemoteLogReaderThreadsDoc)
+      .define(RemoteLogReaderMaxPendingTasksProp, INT, Defaults.RemoteLogReaderMaxPendingTasks, LOW, RemoteLogReaderMaxPendingTasksDoc)
       .define(RemoteLogManagerThreadPoolSizeProp, INT, Defaults.RemoteLogManagerThreadPoolSize, atLeast(1), LOW, RemoteLogManagerThreadPoolSizeDoc)
       .define(RemoteLogManagerTaskIntervalMsProp, LONG, Defaults.RemoteLogManagerTaskIntervalMs, atLeast(1), LOW, RemoteLogManagerTaskIntervalMsDoc)
 
@@ -1296,6 +1304,8 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigO
     if (millis < 0) return -1
     millis
   }
+  def remoteLogReaderThreads: Int = getInt(KafkaConfig.RemoteLogReaderThreadsProp)
+  def remoteLogReaderMaxPendingTasks: Int = getInt(KafkaConfig.RemoteLogReaderMaxPendingTasksProp)
 
   def remoteLogManagerThreadPoolSize: Int = getInt(KafkaConfig.RemoteLogManagerThreadPoolSizeProp)
   def remoteLogManagerTaskIntervalMs: Long = getLong(KafkaConfig.RemoteLogManagerTaskIntervalMsProp)

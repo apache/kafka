@@ -17,7 +17,9 @@
 
 package kafka.server
 
+import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.record.Records
+import org.apache.kafka.common.requests.FetchRequest.PartitionData
 import org.apache.kafka.common.requests.FetchResponse.AbortedTransaction
 
 sealed trait FetchIsolation
@@ -28,4 +30,10 @@ case object FetchTxnCommitted extends FetchIsolation
 case class FetchDataInfo(fetchOffsetMetadata: LogOffsetMetadata,
                          records: Records,
                          firstEntryIncomplete: Boolean = false,
-                         abortedTransactions: Option[List[AbortedTransaction]] = None)
+                         abortedTransactions: Option[List[AbortedTransaction]] = None,
+                         delayedRemoteStorageFetch: Option[RemoteStorageFetchInfo] = None)
+
+case class RemoteStorageFetchInfo(fetchMaxByes: Int,
+                                  minOneMessage: Boolean,
+                                  topicPartition: TopicPartition,
+                                  fetchInfo: PartitionData)

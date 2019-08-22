@@ -24,7 +24,6 @@ import java.util.concurrent.{CountDownLatch, TimeUnit}
 import java.util.{Optional, Properties}
 
 import kafka.api.Request
-import kafka.cluster.BrokerEndPoint
 import kafka.log.{Log, LogConfig, LogManager, ProducerStateManager}
 import kafka.utils.{MockScheduler, MockTime, TestUtils}
 import TestUtils.createBroker
@@ -921,6 +920,8 @@ class ReplicaManagerTest {
       purgatoryName = "DeleteRecords", timer, reaperEnabled = false)
     val mockElectLeaderPurgatory = new DelayedOperationPurgatory[DelayedElectLeader](
       purgatoryName = "ElectLeader", timer, reaperEnabled = false)
+    val mockDelayedRemoteFetchPurgatory = new DelayedOperationPurgatory[DelayedRemoteFetch](
+      purgatoryName = "RemoteFetch", timer, reaperEnabled = false)
 
     // Mock network client to show leader offset of 5
     val quota = QuotaFactory.instantiate(config, metrics, time, "")
@@ -929,7 +930,7 @@ class ReplicaManagerTest {
     val replicaManager = new ReplicaManager(config, metrics, time, kafkaZkClient, mockScheduler, mockLogMgr,
       new AtomicBoolean(false), quota, mockBrokerTopicStats,
       metadataCache, mockLogDirFailureChannel, mockProducePurgatory, mockFetchPurgatory,
-      mockDeleteRecordsPurgatory, mockElectLeaderPurgatory, Option(this.getClass.getName)) {
+      mockDeleteRecordsPurgatory, mockElectLeaderPurgatory, mockDelayedRemoteFetchPurgatory, Option(this.getClass.getName)) {
 
       override protected def createReplicaFetcherManager(metrics: Metrics,
                                                      time: Time,
@@ -1087,13 +1088,15 @@ class ReplicaManagerTest {
       purgatoryName = "Fetch", timer, reaperEnabled = false)
     val mockDeleteRecordsPurgatory = new DelayedOperationPurgatory[DelayedDeleteRecords](
       purgatoryName = "DeleteRecords", timer, reaperEnabled = false)
+    val mockDelayedRemoteFetchPurgatory = new DelayedOperationPurgatory[DelayedRemoteFetch](
+      purgatoryName = "RemoteFetch", timer, reaperEnabled = false)
     val mockDelayedElectLeaderPurgatory = new DelayedOperationPurgatory[DelayedElectLeader](
       purgatoryName = "DelayedElectLeader", timer, reaperEnabled = false)
 
     new ReplicaManager(config, metrics, time, kafkaZkClient, new MockScheduler(time), mockLogMgr,
       new AtomicBoolean(false), QuotaFactory.instantiate(config, metrics, time, ""), new BrokerTopicStats,
       metadataCache, new LogDirFailureChannel(config.logDirs.size), mockProducePurgatory, mockFetchPurgatory,
-      mockDeleteRecordsPurgatory, mockDelayedElectLeaderPurgatory, Option(this.getClass.getName))
+      mockDeleteRecordsPurgatory, mockDelayedElectLeaderPurgatory, mockDelayedRemoteFetchPurgatory, Option(this.getClass.getName))
   }
 
   @Test
@@ -1234,10 +1237,10 @@ class ReplicaManagerTest {
     EasyMock.replay(metadataCache1)
 
     // each replica manager is for a broker
-    val rm0 = new ReplicaManager(config0, metrics, time, kafkaZkClient, new MockScheduler(time), mockLogMgr0,
+    val rm0 = new ReplicaManager(config0, metrics, time, kafkaZkClient, new MockScheduler(time), mockLogMgr0, None,
       new AtomicBoolean(false), QuotaFactory.instantiate(config0, metrics, time, ""),
       mockTopicStats0, metadataCache0, new LogDirFailureChannel(config0.logDirs.size))
-    val rm1 = new ReplicaManager(config1, metrics, time, kafkaZkClient, new MockScheduler(time), mockLogMgr1,
+    val rm1 = new ReplicaManager(config1, metrics, time, kafkaZkClient, new MockScheduler(time), mockLogMgr1, None,
       new AtomicBoolean(false), QuotaFactory.instantiate(config1, metrics, time, ""),
       mockTopicStats1, metadataCache1, new LogDirFailureChannel(config1.logDirs.size))
 

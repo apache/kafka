@@ -26,6 +26,7 @@ import kafka.log.remote.RemoteLogManager.REMOTE_STORAGE_MANAGER_CONFIG_PREFIX
 import kafka.log.{CleanerConfig, LogConfig, LogManager, LogSegment}
 import kafka.server.QuotaFactory.UnboundedQuota
 import kafka.server._
+import kafka.server.checkpoints.LazyOffsetCheckpoints
 import kafka.utils.{MockScheduler, MockTime, TestUtils}
 import kafka.zk.KafkaZkClient
 import org.apache.kafka.common.TopicPartition
@@ -48,7 +49,7 @@ class RemoteLogManagerTest {
 
   val rsmConfig: Map[String, Any] = Map(REMOTE_STORAGE_MANAGER_CONFIG_PREFIX + "url" -> "foo.url",
     REMOTE_STORAGE_MANAGER_CONFIG_PREFIX + "timout.ms" -> 1000L)
-  val rlmConfig = RemoteLogManagerConfig(remoteLogStorageEnable = true, "kafka.log.remote.MockRemoteStorageManager", 1024, 60000, rsmConfig, 10, 30000)
+  val rlmConfig = RemoteLogManagerConfig(true, "kafka.log.remote.MockRemoteStorageManager", 1024L, 60000L, rsmConfig)
 
   var logConfig: LogConfig = _
   var tmpDir: File = _
@@ -126,9 +127,10 @@ class RemoteLogManagerTest {
     logManager.setRemoteLogManager(Some(rlmMock))
 
     val leaderEpoch = 1
-    val partition = replicaManager.getOrCreatePartition(topicPartition)
+    val partition = replicaManager.getPartitionOrException(topicPartition, true)
     partition.makeLeader(1, new PartitionState(1, brokerId, leaderEpoch,
-      Collections.singletonList(brokerId), 1, Collections.singletonList(brokerId), true), 1)
+      Collections.singletonList(brokerId), 1, Collections.singletonList(brokerId), true),
+      1, new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints))
 
     val recordsArray = Array(new SimpleRecord("k1".getBytes, "v1".getBytes),
       new SimpleRecord("k2".getBytes, "v2".getBytes),
@@ -146,7 +148,7 @@ class RemoteLogManagerTest {
       val partitionInfo = Seq((topicPartition, new PartitionData(fetchOffset, 0, 1000,
         Optional.of(leaderEpoch))))
       val readRecords = replicaManager.readFromLocalLog(100, fetchOnlyFromLeader = true, FetchTxnCommitted, 1000,
-        hardMaxBytesLimit = false, partitionInfo, UnboundedQuota)
+        hardMaxBytesLimit = false, partitionInfo, UnboundedQuota, None)
       if (readRecords.isEmpty) null else readRecords.last._2
     }
 

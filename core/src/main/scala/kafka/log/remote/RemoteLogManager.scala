@@ -23,11 +23,12 @@ import java.util.concurrent.atomic.AtomicInteger
 import java.util.function.{BiConsumer, Consumer, Function}
 
 import kafka.log.{Log, LogSegment}
-import kafka.server.{Defaults, FetchDataInfo, KafkaConfig, LogOffsetMetadata}
+import kafka.server.{Defaults, FetchDataInfo, KafkaConfig, LogOffsetMetadata, RemoteStorageFetchInfo}
 import kafka.utils.Logging
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.OffsetOutOfRangeException
 import org.apache.kafka.common.requests.FetchRequest.PartitionData
+import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.utils.{KafkaThread, Time, Utils}
 
 import scala.collection.Set
@@ -84,6 +85,7 @@ class RemoteLogManager(logFetcher: TopicPartition => Option[Log],
 
   private val leaderOrFollowerTasks: ConcurrentMap[TopicPartition, RLMTaskWithFuture] =
     new ConcurrentHashMap[TopicPartition, RLMTaskWithFuture]()
+  private val remoteStorageFetcherThreadPool = new RemoteStorageReaderThreadPool(rlmConfig.remoteLogReaderThreads, rlmConfig.remoteLogReaderMaxPendingTasks, time)
 
   private def createRemoteStorageManager(): RemoteStorageManager = {
     val rsm = Class.forName(rlmConfig.remoteLogStorageManagerClass)
@@ -271,6 +273,18 @@ class RemoteLogManager(logFetcher: TopicPartition => Option[Log],
   }
 
   /**
+   * Submit a remote log read task.
+   *
+   * This method returns immediately. The read operation is executed in a thread pool.
+   * The callback will be called when the task is done.
+   *
+   * @throws RejectedExecutionException if the task cannot be accepted for execution (task queue is full)
+   */
+  def asyncRead(fetchInfo: RemoteStorageFetchInfo, callback: (RemoteLogReadResult) => Unit): Future[Unit] = {
+    remoteStorageFetcherThreadPool.submit(new RemoteLogReader(fetchInfo, this, callback))
+  }
+
+  /**
    * Stops all the threads and releases all the resources.
    */
   def close(): Unit = {
@@ -281,11 +295,20 @@ class RemoteLogManager(logFetcher: TopicPartition => Option[Log],
     rlmScheduledThreadPool.shutdown()
   }
 
-  case class RLMTaskWithFuture(rlmTask: RLMTask, future: Future[_]) {
-    def cancel(): Unit = {
-      rlmTask.cancel()
-      future.cancel(true)
-    }
+}
+
+case class RemoteLogManagerConfig(remoteLogStorageEnable: Boolean,
+                                  remoteLogStorageManagerClass: String,
+                                  remoteLogRetentionBytes: Long,
+                                  remoteLogRetentionMillis: Long,
+                                  remoteStorageConfig: scala.collection.immutable.Map[String, Any])
+
+private case class LogSegmentEntry(topicPartition: TopicPartition,
+                                   baseOffset: Long,
+                                   logSegment: LogSegment) {
+  override def hashCode(): Int = {
+    val fields = Seq(topicPartition, baseOffset)
+    fields.map(_.hashCode()).foldLeft(0)((a, b) => 31 * a + b)
   }
 
 }
@@ -300,7 +323,7 @@ object RemoteLogManager {
   def REMOTE_STORAGE_MANAGER_CONFIG_PREFIX = "remote.log.storage."
 
   def DefaultConfig = RemoteLogManagerConfig(remoteLogStorageEnable = Defaults.RemoteLogStorageEnable, null,
-    Defaults.RemoteLogRetentionBytes, TimeUnit.MINUTES.toMillis(Defaults.RemoteLogRetentionMinutes), Map.empty,
+    Defaults.RemoteLogRetentionBytes, TimeUnit.MINUTES.toMillis(Defaults.RemoteLogRetentionMinutes), 5, 100, Map.empty,
     Defaults.RemoteLogManagerThreadPoolSize, Defaults.RemoteLogManagerTaskIntervalMs)
 
   def createRemoteLogManagerConfig(config: KafkaConfig): RemoteLogManagerConfig = {
@@ -315,7 +338,7 @@ object RemoteLogManager {
       }
     })
     RemoteLogManagerConfig(config.remoteLogStorageEnable, config.remoteLogStorageManager,
-      config.remoteLogRetentionBytes, config.remoteLogRetentionMillis, rsmProps.toMap,
+      config.remoteLogRetentionBytes, config.remoteLogRetentionMillis, config.remoteLogReaderThreads, config.remoteLogReaderMaxPendingTasks, rsmProps.toMap,
       config.remoteLogManagerThreadPoolSize, config.remoteLogManagerTaskIntervalMs)
   }
 }

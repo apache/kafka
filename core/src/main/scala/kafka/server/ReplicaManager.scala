@@ -18,7 +18,7 @@ package kafka.server
 
 import java.io.File
 import java.util.Optional
-import java.util.concurrent.TimeUnit
+import java.util.concurrent.{CompletableFuture, Future, RejectedExecutionException, TimeUnit}
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicLong}
 import java.util.concurrent.locks.Lock
 
@@ -27,6 +27,7 @@ import kafka.api._
 import kafka.cluster.{BrokerEndPoint, Partition}
 import kafka.controller.{KafkaController, StateChangeLogger}
 import kafka.log._
+import kafka.log.remote.{RemoteLogReadResult}
 import kafka.metrics.KafkaMetricsGroup
 import kafka.server.QuotaFactory.QuotaManagers
 import kafka.server.checkpoints.{LazyOffsetCheckpoints, OffsetCheckpointFile, OffsetCheckpoints}
@@ -165,6 +166,7 @@ class ReplicaManager(val config: KafkaConfig,
                      val delayedFetchPurgatory: DelayedOperationPurgatory[DelayedFetch],
                      val delayedDeleteRecordsPurgatory: DelayedOperationPurgatory[DelayedDeleteRecords],
                      val delayedElectLeaderPurgatory: DelayedOperationPurgatory[DelayedElectLeader],
+                     val remoteFetchPurgatory: DelayedOperationPurgatory[DelayedRemoteFetch],
                      threadNamePrefix: Option[String]) extends Logging with KafkaMetricsGroup {
 
   def this(config: KafkaConfig,
@@ -192,6 +194,8 @@ class ReplicaManager(val config: KafkaConfig,
         purgeInterval = config.deleteRecordsPurgatoryPurgeIntervalRequests),
       DelayedOperationPurgatory[DelayedElectLeader](
         purgatoryName = "ElectLeader", brokerId = config.brokerId),
+      DelayedOperationPurgatory[DelayedRemoteFetch](
+        purgatoryName = "RemoteFetch", brokerId = config.brokerId),
       threadNamePrefix)
   }
 
@@ -862,13 +866,16 @@ class ReplicaManager(val config: KafkaConfig,
     val logReadResults = readFromLog()
 
     // check if this fetch request can be satisfied right away
-    var bytesReadable: Long = 0
+    var bytesReadable: Long = 0 // bytes available in local storage
     var errorReadingData = false
+    var remoteFetchInfo: Option[RemoteStorageFetchInfo] = None // The 1st topic-partition that has to be read from remote storage
     val logReadResultMap = new mutable.HashMap[TopicPartition, LogReadResult]
     var anyPartitionsNeedHwUpdate = false
     logReadResults.foreach { case (topicPartition, logReadResult) =>
       if (logReadResult.error != Errors.NONE)
         errorReadingData = true
+      if (remoteFetchInfo.isEmpty && logReadResult.info.delayedRemoteStorageFetch.isDefined)
+        remoteFetchInfo = logReadResult.info.delayedRemoteStorageFetch
       bytesReadable = bytesReadable + logReadResult.info.records.sizeInBytes
       logReadResultMap.put(topicPartition, logReadResult)
       if (isFromFollower && logReadResult.followerNeedsHwUpdate) {
@@ -908,17 +915,65 @@ class ReplicaManager(val config: KafkaConfig,
       }
       val fetchMetadata = FetchMetadata(fetchMinBytes, fetchMaxBytes, hardMaxBytesLimit, isFromFollower,
         fetchIsolation, isFromFollower, replicaId, fetchPartitionStatus)
-      val delayedFetch = new DelayedFetch(timeout, fetchMetadata, this, quota, clientMetadata,
-        maybeUpdateHwAndSendResponse)
 
-      // create a list of (topic, partition) pairs to use as keys for this delayed fetch operation
-      val delayedFetchKeys = fetchPartitionStatus.map { case (tp, _) => TopicPartitionOperationKey(tp) }
+      if (remoteFetchInfo.isDefined) {
+        val key = new TopicPartitionOperationKey(remoteFetchInfo.get.topicPartition.topic(), remoteFetchInfo.get.topicPartition.partition())
+        val remoteFetchResult = new CompletableFuture[RemoteLogReadResult]
+        var remoteFetchTask: Future[Unit]  = null
+        try {
+          remoteFetchTask = logManager.remoteLogManager.get.asyncRead(remoteFetchInfo.get, (result:RemoteLogReadResult) => {
+            remoteFetchResult.complete(result)
+            remoteFetchPurgatory.checkAndComplete(key)
+          })
+        } catch {
+          // if the task queue of remote storage reader thread pool is full, return what we currently have
+          // (the data read from local log segment for the other topic-partitions) and an error for the topic-partition that
+          // we couldn't read from remote storage
+          case e: RejectedExecutionException =>
+            val fetchPartitionData = logReadResults.map { case (tp, result) =>
+              val r = {
+                if (tp.equals(remoteFetchInfo.get.topicPartition))
+                  createLogReadResult(e)
+                else
+                  result
+              }
+              tp -> FetchPartitionData(r.error, r.highWatermark, r.leaderLogStartOffset, r.info.records,
+                r.lastStableOffset, r.nextLocalOffset, r.info.abortedTransactions, r.preferredReadReplica)
+            }
+            responseCallback(fetchPartitionData)
+            return
+        }
+        // If there is remote data, we will read remote data, instead of waiting for new data.
+        val remoteFetch = new DelayedRemoteFetch(remoteFetchTask, remoteFetchResult, remoteFetchInfo.get, timeout,
+          fetchMetadata, this, quota, responseCallback)
 
-      // try to complete the request immediately, otherwise put it into the purgatory;
-      // this is because while the delayed fetch operation is being created, new requests
-      // may arrive and hence make this operation completable.
-      delayedFetchPurgatory.tryCompleteElseWatch(delayedFetch, delayedFetchKeys)
+        remoteFetchPurgatory.tryCompleteElseWatch(remoteFetch, Seq(key))
+      } else {
+        // If there is not enough data to respond and there is no remote data, we will let the fetch request
+        // to wait for new data.
+        val delayedFetch = new DelayedFetch(timeout, fetchMetadata, this, quota, clientMetadata, responseCallback)
+
+        // create a list of (topic, partition) pairs to use as keys for this delayed fetch operation
+        val delayedFetchKeys = fetchPartitionStatus.map { case (tp, _) => new TopicPartitionOperationKey(tp.topic(), tp.partition()) }
+
+        // try to complete the request immediately, otherwise put it into the purgatory;
+        // this is because while the delayed fetch operation is being created, new requests
+        // may arrive and hence make this operation completable.
+        delayedFetchPurgatory.tryCompleteElseWatch(delayedFetch, delayedFetchKeys)
+      }
     }
+  }
+
+  def createLogReadResult(e: Throwable) = {
+    LogReadResult(info = FetchDataInfo(LogOffsetMetadata.UnknownOffsetMetadata, MemoryRecords.EMPTY),
+      highWatermark = -1L,
+      leaderLogStartOffset = -1L,
+      leaderLogEndOffset = -1L,
+      followerLogStartOffset = -1L,
+      fetchTimeMs = -1L,
+      readSize = 0,
+      lastStableOffset = None,
+      exception = Some(e))
   }
 
   /**
@@ -1008,7 +1063,8 @@ class ReplicaManager(val config: KafkaConfig,
 
           // Check if the HW known to the follower is behind the actual HW
           val followerNeedsHwUpdate: Boolean = partition.getReplica(replicaId)
-            .exists(replica => replica.lastSentHighWatermark < readInfo.highWatermark)val fetchDataInfo: FetchDataInfo = checkFetchDataInfo(tp, readInfo.fetchedData)
+            .exists(replica => replica.lastSentHighWatermark < readInfo.highWatermark)
+          val fetchDataInfo: FetchDataInfo = checkFetchDataInfo(tp, readInfo.fetchedData)
 
         LogReadResult(info = fetchDataInfo,
           highWatermark = readInfo.highWatermark,
@@ -1037,14 +1093,13 @@ class ReplicaManager(val config: KafkaConfig,
           // if it is from a follower then send the offset metadata but not the records data as that can be fetched
           // from the remote store.
           logManager.remoteLogManager.map(rlm => {
-            val partition = getPartitionOrException(tp, expectLeader = fetchOnlyFromLeader)
-              .localReplicaWithEpochOrException(fetchInfo.currentLeaderEpoch, fetchOnlyFromLeader)
-            val highWatermark = partition.highWatermark.messageOffset
-            val leaderLogStartOffset = partition.logStartOffset
-            val leaderLogEndOffset = partition.logEndOffset
+            val log = getPartitionOrException(tp, expectLeader = fetchOnlyFromLeader).localLogOrException
+            val highWatermark = log.highWatermark
+            val leaderLogStartOffset = log.logStartOffset
+            val leaderLogEndOffset = log.logEndOffset
             val fetchTimeMs = time.milliseconds
             val readSize = adjustedMaxBytes
-            val lastStableOffset = Some(partition.lastStableOffset.messageOffset)
+            val lastStableOffset = Some(log.lastStableOffset)
             var error: Option[Throwable] = None
             var nextLocalOffset: Option[Long] = None
             val isFollowerRequest = Request.isValidBrokerId(replicaId)
@@ -1057,8 +1112,14 @@ class ReplicaManager(val config: KafkaConfig,
                 nextLocalOffset = Some(mayBeLastOffset.get + 1)
 
               FetchDataInfo(LogOffsetMetadata(fetchInfo.fetchOffset, -1L, -1), MemoryRecords.EMPTY)
+            } else {
+              // create a dummy FetchDataInfo with the remote storage fetch information
+              // For the first topic-partition that needs remote data, we will use this information to read the data in another thread
+              // For the following topic-partitions, we return an empty record set
+              val logOffsetMetadata = LogOffsetMetadata(fetchInfo.fetchOffset, relativePositionInSegment = LogOffsetMetadata.UnknownFilePosition)
+              FetchDataInfo(logOffsetMetadata, MemoryRecords.EMPTY,
+                delayedRemoteStorageFetch = Option(RemoteStorageFetchInfo(adjustedMaxBytes, minOneMessage, tp, fetchInfo)))
             }
-            else rlm.read(adjustedMaxBytes, minOneMessage, tp, fetchInfo)
 
             if (error.isDefined) createLogReadResult(error.get)
             else LogReadResult(checkFetchDataInfo(tp, fetchDataInfo),
@@ -1094,6 +1155,13 @@ class ReplicaManager(val config: KafkaConfig,
       if (recordBatchSize > 0)
         minOneMessage = false
       limitBytes = math.max(0, limitBytes - recordBatchSize)
+
+      // Do not read more local data after the first topic-partition that has remote data
+      // Instead of try to estimate how much data is there in remote storage, we assume there is always
+      // enough data to fetch in the remote storage
+      if (readResult.info.delayedRemoteStorageFetch.isDefined)
+        limitBytes = 0
+
       result += (tp -> readResult)
     }
     result
