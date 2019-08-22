@@ -289,6 +289,7 @@ public class StreamThread extends Thread {
                     );
                 } else {
                     log.debug("Creating tasks based on assignment.");
+                    streamThread.assignmentErrorCode.set(StreamsPartitionAssignor.Error.NONE.code());
                     taskManager.createTasks(assignment);
                 }
             } catch (final Throwable t) {
