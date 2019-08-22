@@ -42,12 +42,12 @@ class ListOffsetsRequestTest extends BaseRequestTest {
       .build()
 
     val replicaRequest = ListOffsetRequest.Builder
-      .forReplica(ApiKeys.LIST_OFFSETS.latestVersion, servers.head.config.brokerId)
+      .forReplica(ApiKeys.LIST_OFFSET.latestVersion, servers.head.config.brokerId)
       .setTargetTimes(targetTimes)
       .build()
 
     val debugReplicaRequest = ListOffsetRequest.Builder
-      .forReplica(ApiKeys.LIST_OFFSETS.latestVersion, ListOffsetRequest.DEBUGGING_REPLICA_ID)
+      .forReplica(ApiKeys.LIST_OFFSET.latestVersion, ListOffsetRequest.DEBUGGING_REPLICA_ID)
       .setTargetTimes(targetTimes)
       .build()
 
@@ -165,7 +165,7 @@ class ListOffsetsRequestTest extends BaseRequestTest {
 
   private def sendRequest(leaderId: Int, request: ListOffsetRequest): ListOffsetResponse = {
     val socketServer = brokerSocketServer(leaderId)
-    val response = connectAndSend(request, ApiKeys.LIST_OFFSETS, destination = socketServer)
+    val response = connectAndSend(request, ApiKeys.LIST_OFFSET, destination = socketServer)
     ListOffsetResponse.parse(response, request.version)
   }
 

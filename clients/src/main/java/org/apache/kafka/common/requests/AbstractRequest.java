@@ -147,7 +147,7 @@ public abstract class AbstractRequest extends AbstractRequestResponse {
                 return new ProduceRequest(struct, apiVersion);
             case FETCH:
                 return new FetchRequest(struct, apiVersion);
-            case LIST_OFFSETS:
+            case LIST_OFFSET:
                 return new ListOffsetRequest(struct, apiVersion);
             case METADATA:
                 return new MetadataRequest(struct, apiVersion);

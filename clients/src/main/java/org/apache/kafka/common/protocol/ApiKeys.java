@@ -22,6 +22,47 @@ import org.apache.kafka.common.protocol.types.SchemaException;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.protocol.types.Type;
 import org.apache.kafka.common.record.RecordBatch;
+import org.apache.kafka.common.requests.AddOffsetsToTxnRequest;
+import org.apache.kafka.common.requests.AddOffsetsToTxnResponse;
+import org.apache.kafka.common.requests.AddPartitionsToTxnRequest;
+import org.apache.kafka.common.requests.AddPartitionsToTxnResponse;
+import org.apache.kafka.common.requests.AlterConfigsRequest;
+import org.apache.kafka.common.requests.AlterConfigsResponse;
+import org.apache.kafka.common.requests.AlterReplicaLogDirsRequest;
+import org.apache.kafka.common.requests.AlterReplicaLogDirsResponse;
+import org.apache.kafka.common.requests.ApiVersionsRequest;
+import org.apache.kafka.common.requests.ApiVersionsResponse;
+import org.apache.kafka.common.requests.CreateAclsRequest;
+import org.apache.kafka.common.requests.CreatePartitionsRequest;
+import org.apache.kafka.common.requests.CreatePartitionsResponse;
+import org.apache.kafka.common.requests.DeleteAclsRequest;
+import org.apache.kafka.common.requests.DeleteAclsResponse;
+import org.apache.kafka.common.requests.DeleteRecordsRequest;
+import org.apache.kafka.common.requests.DeleteRecordsResponse;
+import org.apache.kafka.common.requests.DescribeAclsRequest;
+import org.apache.kafka.common.requests.DescribeAclsResponse;
+import org.apache.kafka.common.requests.DescribeConfigsRequest;
+import org.apache.kafka.common.requests.DescribeLogDirsRequest;
+import org.apache.kafka.common.requests.EndTxnRequest;
+import org.apache.kafka.common.requests.EndTxnResponse;
+import org.apache.kafka.common.requests.FetchRequest;
+import org.apache.kafka.common.requests.FetchResponse;
+import org.apache.kafka.common.requests.LeaderAndIsrRequest;
+import org.apache.kafka.common.requests.LeaderAndIsrResponse;
+import org.apache.kafka.common.requests.ListOffsetRequest;
+import org.apache.kafka.common.requests.ListOffsetResponse;
+import org.apache.kafka.common.requests.OffsetsForLeaderEpochRequest;
+import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse;
+import org.apache.kafka.common.requests.ProduceRequest;
+import org.apache.kafka.common.requests.ProduceResponse;
+import org.apache.kafka.common.requests.StopReplicaRequest;
+import org.apache.kafka.common.requests.StopReplicaResponse;
+import org.apache.kafka.common.requests.TxnOffsetCommitRequest;
+import org.apache.kafka.common.requests.TxnOffsetCommitResponse;
+import org.apache.kafka.common.requests.UpdateMetadataRequest;
+import org.apache.kafka.common.requests.UpdateMetadataResponse;
+import org.apache.kafka.common.requests.WriteTxnMarkersRequest;
+import org.apache.kafka.common.requests.WriteTxnMarkersResponse;
 
 import java.nio.ByteBuffer;
 import java.util.Collections;
@@ -37,53 +78,81 @@ import static org.apache.kafka.common.protocol.types.Type.RECORDS;
  * Identifiers for all the Kafka APIs
  */
 public enum ApiKeys {
-    PRODUCE(0),
-    FETCH(1),
-    LIST_OFFSETS(2),
-    METADATA(3),
-    LEADER_AND_ISR(4),
-    STOP_REPLICA(5),
-    UPDATE_METADATA(6),
-    CONTROLLED_SHUTDOWN(7),
-    OFFSET_COMMIT(8),
-    OFFSET_FETCH(9),
-    FIND_COORDINATOR(10),
-    JOIN_GROUP(11),
-    HEARTBEAT(12),
-    LEAVE_GROUP(13),
-    SYNC_GROUP(14),
-    DESCRIBE_GROUPS(15),
-    LIST_GROUPS(16),
-    SASL_HANDSHAKE(17),
-    API_VERSIONS(18),
-    CREATE_TOPICS(19),
-    DELETE_TOPICS(20),
-    DELETE_RECORDS(21),
-    INIT_PRODUCER_ID(22),
-    OFFSET_FOR_LEADER_EPOCH(23),
-    ADD_PARTITIONS_TO_TXN(24),
-    ADD_OFFSETS_TO_TXN(25),
-    END_TXN(26, false, RecordBatch.MAGIC_VALUE_V2),
-    WRITE_TXN_MARKERS(27, true, RecordBatch.MAGIC_VALUE_V2),
-    TXN_OFFSET_COMMIT(28, false, RecordBatch.MAGIC_VALUE_V2),
-    DESCRIBE_ACLS(29),
-    CREATE_ACLS(30),
-    DELETE_ACLS(31),
-    DESCRIBE_CONFIGS(32),
-    ALTER_CONFIGS(33),
-    ALTER_REPLICA_LOG_DIRS(34),
-    DESCRIBE_LOG_DIRS(35),
-    SASL_AUTHENTICATE(36),
-    CREATE_PARTITIONS(37),
-    CREATE_DELEGATION_TOKEN(38),
-    RENEW_DELEGATION_TOKEN(39),
-    EXPIRE_DELEGATION_TOKEN(40),
-    DESCRIBE_DELEGATION_TOKEN(41),
-    DELETE_GROUPS(42),
-    ELECT_LEADERS(43),
-    INCREMENTAL_ALTER_CONFIGS(44),
-    ALTER_PARTITION_REASSIGNMENTS(45),
-    LIST_PARTITION_REASSIGNMENTS(46);
+    PRODUCE(ProduceRequest.schemaVersions(),
+        ProduceResponse.schemaVersions()),
+    FETCH(FetchRequest.schemaVersions(),
+        FetchResponse.schemaVersions()),
+    LIST_OFFSET(ListOffsetRequest.schemaVersions(),
+        ListOffsetResponse.schemaVersions()),
+    METADATA(),
+    LEADER_AND_ISR(LeaderAndIsrRequest.schemaVersions(),
+        LeaderAndIsrResponse.schemaVersions(), true),
+    STOP_REPLICA(StopReplicaRequest.schemaVersions(),
+        StopReplicaResponse.schemaVersions(), true),
+    UPDATE_METADATA(UpdateMetadataRequest.schemaVersions(),
+        UpdateMetadataResponse.schemaVersions(), true),
+    CONTROLLED_SHUTDOWN(true),
+    OFFSET_COMMIT(),
+    OFFSET_FETCH(),
+    FIND_COORDINATOR(),
+    JOIN_GROUP(),
+    HEARTBEAT(),
+    LEAVE_GROUP(),
+    SYNC_GROUP(),
+    DESCRIBE_GROUPS(),
+    LIST_GROUPS(),
+    SASL_HANDSHAKE(),
+    API_VERSIONS(ApiVersionsRequest.schemaVersions(),
+        ApiVersionsResponse.schemaVersions()),
+    CREATE_TOPICS(),
+    DELETE_TOPICS(),
+    DELETE_RECORDS(DeleteRecordsRequest.schemaVersions(),
+        DeleteRecordsResponse.schemaVersions()),
+    INIT_PRODUCER_ID(),
+    OFFSET_FOR_LEADER_EPOCH(OffsetsForLeaderEpochRequest.schemaVersions(),
+        OffsetsForLeaderEpochResponse.schemaVersions()),
+    ADD_PARTITIONS_TO_TXN(AddPartitionsToTxnRequest.schemaVersions(),
+        AddPartitionsToTxnResponse.schemaVersions(),
+        RecordBatch.MAGIC_VALUE_V2),
+    ADD_OFFSETS_TO_TXN(AddOffsetsToTxnRequest.schemaVersions(),
+        AddOffsetsToTxnResponse.schemaVersions(),
+        RecordBatch.MAGIC_VALUE_V2),
+    END_TXN(EndTxnRequest.schemaVersions(),
+        EndTxnResponse.schemaVersions(),
+        RecordBatch.MAGIC_VALUE_V2),
+    WRITE_TXN_MARKERS(WriteTxnMarkersRequest.schemaVersions(),
+        WriteTxnMarkersResponse.schemaVersions(),
+        RecordBatch.MAGIC_VALUE_V2,
+        true),
+    TXN_OFFSET_COMMIT(TxnOffsetCommitRequest.schemaVersions(),
+        TxnOffsetCommitResponse.schemaVersions(),
+        RecordBatch.MAGIC_VALUE_V2),
+    DESCRIBE_ACLS(DescribeAclsRequest.schemaVersions(),
+        DescribeAclsResponse.schemaVersions()),
+    CREATE_ACLS(CreateAclsRequest.schemaVersions(),
+        CreateAclsRequest.schemaVersions()),
+    DELETE_ACLS(DeleteAclsRequest.schemaVersions(),
+        DeleteAclsResponse.schemaVersions()),
+    DESCRIBE_CONFIGS(DescribeConfigsRequest.schemaVersions(),
+        DescribeAclsResponse.schemaVersions()),
+    ALTER_CONFIGS(AlterConfigsRequest.schemaVersions(),
+        AlterConfigsResponse.schemaVersions()),
+    ALTER_REPLICA_LOG_DIRS(AlterReplicaLogDirsRequest.schemaVersions(),
+        AlterReplicaLogDirsResponse.schemaVersions()),
+    DESCRIBE_LOG_DIRS(DescribeLogDirsRequest.schemaVersions(),
+        DescribeAclsResponse.schemaVersions()),
+    SASL_AUTHENTICATE(),
+    CREATE_PARTITIONS(CreatePartitionsRequest.schemaVersions(),
+        CreatePartitionsResponse.schemaVersions()),
+    CREATE_DELEGATION_TOKEN(),
+    RENEW_DELEGATION_TOKEN(),
+    EXPIRE_DELEGATION_TOKEN(),
+    DESCRIBE_DELEGATION_TOKEN(),
+    DELETE_GROUPS(),
+    ELECT_LEADERS(),
+    INCREMENTAL_ALTER_CONFIGS(),
+    ALTER_PARTITION_REASSIGNMENTS(),
+    LIST_PARTITION_REASSIGNMENTS();
 
     private static final Map<Integer, ApiKeys> ID_TO_API_KEY;
 
@@ -113,27 +182,39 @@ public enum ApiKeys {
     public final Schema[] responseSchemas;
     public final boolean requiresDelayedAllocation;
 
-    ApiKeys(int id) {
-        this(id, false, RecordBatch.MAGIC_VALUE_V0);
+    ApiKeys() {
+        this(null, null, RecordBatch.MAGIC_VALUE_V0, false);
     }
 
-    ApiKeys(int id, boolean clusterAction) {
-        this(id, clusterAction, RecordBatch.MAGIC_VALUE_V0);
+    ApiKeys(boolean clusterAction) {
+        this(null, null, RecordBatch.MAGIC_VALUE_V0, clusterAction);
     }
 
-    ApiKeys(int id, boolean clusterAction, byte minRequiredInterBrokerMagic) {
-        if ((id < 0) || (id > 0x7fff)) {
-            throw new IllegalArgumentException("invalid api key " + id);
-        }
-        this.type = ApiMessageType.fromApiKey((short) id);
+    ApiKeys(Schema[] requestSchemas, Schema[] responseSchemas) {
+        this(requestSchemas, responseSchemas, RecordBatch.MAGIC_VALUE_V0, false);
+    }
+
+    ApiKeys(Schema[] requestSchemas, Schema[] responseSchemas, boolean clusterAction) {
+        this(requestSchemas, responseSchemas, RecordBatch.MAGIC_VALUE_V0, clusterAction);
+    }
+
+    ApiKeys(Schema[] requestSchemas, Schema[] responseSchemas, byte minRequiredInterBrokerMagic) {
+        this(requestSchemas, responseSchemas, minRequiredInterBrokerMagic, false);
+    }
+
+    ApiKeys(Schema[] requestSchemas,
+            Schema[] responseSchemas,
+            byte minRequiredInterBrokerMagic,
+            boolean clusterAction) {
+        this.type = ApiMessageType.fromApiName(this.name());
         this.id = type.apiKey();
         this.name = type.description();
         this.clusterAction = clusterAction;
         this.minRequiredInterBrokerMagic = minRequiredInterBrokerMagic;
-        this.requestSchemas = type.requestSchemas();
-        this.responseSchemas = type.responseSchemas();
+        this.requestSchemas = (requestSchemas == null) ? type.requestSchemas() : requestSchemas;
+        this.responseSchemas = (responseSchemas == null) ? type.responseSchemas() : responseSchemas;
         boolean requestRetainsBufferReference = false;
-        for (Schema requestVersionSchema : requestSchemas) {
+        for (Schema requestVersionSchema : this.requestSchemas) {
             if (retainsBufferReference(requestVersionSchema)) {
                 requestRetainsBufferReference = true;
                 break;

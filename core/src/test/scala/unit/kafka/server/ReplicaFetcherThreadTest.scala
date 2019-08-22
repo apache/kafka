@@ -68,7 +68,7 @@ class ReplicaFetcherThreadTest {
       leaderEndpointBlockingSend = None)
     assertEquals(ApiKeys.FETCH.latestVersion, thread.fetchRequestVersion)
     assertEquals(ApiKeys.OFFSET_FOR_LEADER_EPOCH.latestVersion, thread.offsetForLeaderEpochRequestVersion)
-    assertEquals(ApiKeys.LIST_OFFSETS.latestVersion, thread.listOffsetRequestVersion)
+    assertEquals(ApiKeys.LIST_OFFSET.latestVersion, thread.listOffsetRequestVersion)
   }
 
   @Test

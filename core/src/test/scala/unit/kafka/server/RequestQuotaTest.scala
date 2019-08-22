@@ -218,7 +218,7 @@ class RequestQuotaTest extends BaseRequestTest {
         case ApiKeys.METADATA =>
           new MetadataRequest.Builder(List(topic).asJava, true)
 
-        case ApiKeys.LIST_OFFSETS =>
+        case ApiKeys.LIST_OFFSET =>
           ListOffsetRequest.Builder.forConsumer(false, IsolationLevel.READ_UNCOMMITTED)
             .setTargetTimes(Map(tp -> new ListOffsetRequest.PartitionData(
               0L, Optional.of[Integer](15))).asJava)
@@ -523,7 +523,7 @@ class RequestQuotaTest extends BaseRequestTest {
     apiKey match {
       case ApiKeys.PRODUCE => new ProduceResponse(response).throttleTimeMs
       case ApiKeys.FETCH => FetchResponse.parse(response).throttleTimeMs
-      case ApiKeys.LIST_OFFSETS => new ListOffsetResponse(response).throttleTimeMs
+      case ApiKeys.LIST_OFFSET => new ListOffsetResponse(response).throttleTimeMs
       case ApiKeys.METADATA =>
         new MetadataResponse(response, ApiKeys.DESCRIBE_GROUPS.latestVersion).throttleTimeMs
       case ApiKeys.OFFSET_COMMIT =>

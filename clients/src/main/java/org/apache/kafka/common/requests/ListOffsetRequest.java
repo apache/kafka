@@ -146,14 +146,14 @@ public class ListOffsetRequest extends AbstractRequest {
                 minVersion = 2;
             else if (requireTimestamp)
                 minVersion = 1;
-            return new Builder(minVersion, ApiKeys.LIST_OFFSETS.latestVersion(), CONSUMER_REPLICA_ID, isolationLevel);
+            return new Builder(minVersion, ApiKeys.LIST_OFFSET.latestVersion(), CONSUMER_REPLICA_ID, isolationLevel);
         }
 
         private Builder(short oldestAllowedVersion,
                         short latestAllowedVersion,
                         int replicaId,
                         IsolationLevel isolationLevel) {
-            super(ApiKeys.LIST_OFFSETS, oldestAllowedVersion, latestAllowedVersion);
+            super(ApiKeys.LIST_OFFSET, oldestAllowedVersion, latestAllowedVersion);
             this.replicaId = replicaId;
             this.isolationLevel = isolationLevel;
         }
@@ -222,7 +222,7 @@ public class ListOffsetRequest extends AbstractRequest {
                               Map<TopicPartition, PartitionData> targetTimes,
                               IsolationLevel isolationLevel,
                               short version) {
-        super(ApiKeys.LIST_OFFSETS, version);
+        super(ApiKeys.LIST_OFFSET, version);
         this.replicaId = replicaId;
         this.isolationLevel = isolationLevel;
         this.partitionTimestamps = targetTimes;
@@ -230,7 +230,7 @@ public class ListOffsetRequest extends AbstractRequest {
     }
 
     public ListOffsetRequest(Struct struct, short version) {
-        super(ApiKeys.LIST_OFFSETS, version);
+        super(ApiKeys.LIST_OFFSET, version);
         Set<TopicPartition> duplicatePartitions = new HashSet<>();
         replicaId = struct.get(REPLICA_ID);
         isolationLevel = struct.hasField(ISOLATION_LEVEL) ?
@@ -278,7 +278,7 @@ public class ListOffsetRequest extends AbstractRequest {
                 return new ListOffsetResponse(throttleTimeMs, responseData);
             default:
                 throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
-                        versionId, this.getClass().getSimpleName(), ApiKeys.LIST_OFFSETS.latestVersion()));
+                        versionId, this.getClass().getSimpleName(), ApiKeys.LIST_OFFSET.latestVersion()));
         }
     }
 
@@ -299,13 +299,13 @@ public class ListOffsetRequest extends AbstractRequest {
     }
 
     public static ListOffsetRequest parse(ByteBuffer buffer, short version) {
-        return new ListOffsetRequest(ApiKeys.LIST_OFFSETS.parseRequest(version, buffer), version);
+        return new ListOffsetRequest(ApiKeys.LIST_OFFSET.parseRequest(version, buffer), version);
     }
 
     @Override
     protected Struct toStruct() {
         short version = version();
-        Struct struct = new Struct(ApiKeys.LIST_OFFSETS.requestSchema(version));
+        Struct struct = new Struct(ApiKeys.LIST_OFFSET.requestSchema(version));
         Map<String, Map<Integer, PartitionData>> topicsData = CollectionUtils.groupPartitionDataByTopic(partitionTimestamps);
 
         struct.set(REPLICA_ID, replicaId);

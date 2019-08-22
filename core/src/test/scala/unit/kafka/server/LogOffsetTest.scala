@@ -250,7 +250,7 @@ class LogOffsetTest extends BaseRequestTest {
   private def server: KafkaServer = servers.head
 
   private def sendListOffsetsRequest(request: ListOffsetRequest, destination: Option[SocketServer] = None): ListOffsetResponse = {
-    val response = connectAndSend(request, ApiKeys.LIST_OFFSETS, destination = destination.getOrElse(anySocketServer))
+    val response = connectAndSend(request, ApiKeys.LIST_OFFSET, destination = destination.getOrElse(anySocketServer))
     ListOffsetResponse.parse(response, request.version)
   }
 

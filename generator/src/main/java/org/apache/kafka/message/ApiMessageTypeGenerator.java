@@ -120,6 +120,8 @@ public final class ApiMessageTypeGenerator {
         buffer.printf("%n");
         generateFromApiKey();
         buffer.printf("%n");
+        generateFromName();
+        buffer.printf("%n");
         generateNewApiMessageMethod("request");
         buffer.printf("%n");
         generateNewApiMessageMethod("response");
@@ -203,6 +205,30 @@ public final class ApiMessageTypeGenerator {
         headerGenerator.addImport(MessageGenerator.UNSUPPORTED_VERSION_EXCEPTION_CLASS);
         buffer.printf("throw new UnsupportedVersionException(\"Unsupported API key \"" +
             " + apiKey);%n");
+        buffer.decrementIndent();
+        buffer.decrementIndent();
+        buffer.printf("}%n");
+        buffer.decrementIndent();
+        buffer.printf("}%n");
+    }
+
+    private void generateFromName() {
+        buffer.printf("public static ApiMessageType fromApiName(String name) {%n");
+        buffer.incrementIndent();
+        buffer.printf("switch (name) {%n");
+        buffer.incrementIndent();
+        for (ApiData apiData : apis.values()) {
+            String enumName = MessageGenerator.toSnakeCase(apiData.name()).toUpperCase(Locale.ROOT);
+            buffer.printf("case \"%s\":%n", enumName);
+            buffer.incrementIndent();
+            buffer.printf("return %s;%n", enumName);
+            buffer.decrementIndent();
+        }
+        buffer.printf("default:%n");
+        buffer.incrementIndent();
+        headerGenerator.addImport(MessageGenerator.UNSUPPORTED_VERSION_EXCEPTION_CLASS);
+        buffer.printf("throw new UnsupportedVersionException(\"Unsupported API key \"" +
+            " + name);%n");
         buffer.decrementIndent();
         buffer.decrementIndent();
         buffer.printf("}%n");

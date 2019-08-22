@@ -248,12 +248,12 @@ public class ListOffsetResponse extends AbstractResponse {
     }
 
     public static ListOffsetResponse parse(ByteBuffer buffer, short version) {
-        return new ListOffsetResponse(ApiKeys.LIST_OFFSETS.parseResponse(version, buffer));
+        return new ListOffsetResponse(ApiKeys.LIST_OFFSET.parseResponse(version, buffer));
     }
 
     @Override
     protected Struct toStruct(short version) {
-        Struct struct = new Struct(ApiKeys.LIST_OFFSETS.responseSchema(version));
+        Struct struct = new Struct(ApiKeys.LIST_OFFSET.responseSchema(version));
         struct.setIfExists(THROTTLE_TIME_MS, throttleTimeMs);
         Map<String, Map<Integer, PartitionData>> topicsData = CollectionUtils.groupPartitionDataByTopic(responseData);
 

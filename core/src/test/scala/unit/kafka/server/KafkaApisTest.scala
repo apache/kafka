@@ -409,7 +409,7 @@ class KafkaApisTest {
     val (listOffsetRequest, request) = buildRequest(builder)
     createKafkaApis().handleListOffsetRequest(request)
 
-    val response = readResponse(ApiKeys.LIST_OFFSETS, listOffsetRequest, capturedResponse)
+    val response = readResponse(ApiKeys.LIST_OFFSET, listOffsetRequest, capturedResponse)
       .asInstanceOf[ListOffsetResponse]
     assertTrue(response.responseData.containsKey(tp))
 
@@ -752,7 +752,7 @@ class KafkaApisTest {
     val (listOffsetRequest, request) = buildRequest(builder)
     createKafkaApis().handleListOffsetRequest(request)
 
-    val response = readResponse(ApiKeys.LIST_OFFSETS, listOffsetRequest, capturedResponse).asInstanceOf[ListOffsetResponse]
+    val response = readResponse(ApiKeys.LIST_OFFSET, listOffsetRequest, capturedResponse).asInstanceOf[ListOffsetResponse]
     assertTrue(response.responseData.containsKey(tp))
 
     val partitionData = response.responseData.get(tp)
