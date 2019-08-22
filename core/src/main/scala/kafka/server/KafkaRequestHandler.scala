@@ -152,13 +152,15 @@ class BrokerTopicMetrics(name: Option[String]) extends KafkaMetricsGroup {
     private val meterLock = new Object
 
     def meter(): Meter = {
-      if (lazyMeter == null) {
+      var meter = lazyMeter
+      if (meter == null) {
         meterLock synchronized {
           if (lazyMeter == null)
             lazyMeter = newMeter(metricType, eventType, TimeUnit.SECONDS, tags)
+          meter = lazyMeter
         }
       }
-      lazyMeter
+      meter
     }
 
     def close(): Unit = meterLock synchronized {
@@ -173,8 +175,7 @@ class BrokerTopicMetrics(name: Option[String]) extends KafkaMetricsGroup {
   }
 
   // an internal map for "lazy initialization" of certain metrics
-  // public for testing only
-  val metricTypeMap = new Pool[String, MeterWrapper]()
+  private val metricTypeMap = new Pool[String, MeterWrapper]()
   metricTypeMap.putAll(Map(
     BrokerTopicStats.MessagesInPerSec -> MeterWrapper(BrokerTopicStats.MessagesInPerSec, "messages"),
     BrokerTopicStats.BytesInPerSec -> MeterWrapper(BrokerTopicStats.BytesInPerSec, "bytes"),
@@ -191,6 +192,9 @@ class BrokerTopicMetrics(name: Option[String]) extends KafkaMetricsGroup {
     metricTypeMap.put(BrokerTopicStats.ReplicationBytesInPerSec, MeterWrapper(BrokerTopicStats.ReplicationBytesInPerSec, "bytes"))
     metricTypeMap.put(BrokerTopicStats.ReplicationBytesOutPerSec, MeterWrapper(BrokerTopicStats.ReplicationBytesOutPerSec, "bytes"))
   }
+
+  // used for testing only
+  def metricMap: Map[String, MeterWrapper] = metricTypeMap.toMap
 
   def messagesInRate = metricTypeMap.get(BrokerTopicStats.MessagesInPerSec).meter()
 
@@ -220,9 +224,7 @@ class BrokerTopicMetrics(name: Option[String]) extends KafkaMetricsGroup {
 
   def produceMessageConversionsRate = metricTypeMap.get(BrokerTopicStats.ProduceMessageConversionsPerSec).meter()
 
-  // this method helps check with metricTypeMap first before deleting a metric
-  def removeMetricHelper(metricType: String, tags: scala.collection.Map[String, String]): Unit =
-    metricTypeMap.get(metricType).close()
+  def closeMetric(metricType: String): Unit = metricTypeMap.get(metricType).close()
 
   def close(): Unit = metricTypeMap.values.foreach(_.close())
 }
@@ -268,13 +270,13 @@ class BrokerTopicStats {
   def removeOldLeaderMetrics(topic: String): Unit = {
     val topicMetrics = topicStats(topic)
     if (topicMetrics != null) {
-      topicMetrics.removeMetricHelper(BrokerTopicStats.MessagesInPerSec, topicMetrics.tags)
-      topicMetrics.removeMetricHelper(BrokerTopicStats.BytesInPerSec, topicMetrics.tags)
-      topicMetrics.removeMetricHelper(BrokerTopicStats.BytesRejectedPerSec, topicMetrics.tags)
-      topicMetrics.removeMetricHelper(BrokerTopicStats.FailedProduceRequestsPerSec, topicMetrics.tags)
-      topicMetrics.removeMetricHelper(BrokerTopicStats.TotalProduceRequestsPerSec, topicMetrics.tags)
-      topicMetrics.removeMetricHelper(BrokerTopicStats.ProduceMessageConversionsPerSec, topicMetrics.tags)
-      topicMetrics.removeMetricHelper(BrokerTopicStats.ReplicationBytesOutPerSec, topicMetrics.tags)
+      topicMetrics.closeMetric(BrokerTopicStats.MessagesInPerSec)
+      topicMetrics.closeMetric(BrokerTopicStats.BytesInPerSec)
+      topicMetrics.closeMetric(BrokerTopicStats.BytesRejectedPerSec)
+      topicMetrics.closeMetric(BrokerTopicStats.FailedProduceRequestsPerSec)
+      topicMetrics.closeMetric(BrokerTopicStats.TotalProduceRequestsPerSec)
+      topicMetrics.closeMetric(BrokerTopicStats.ProduceMessageConversionsPerSec)
+      topicMetrics.closeMetric(BrokerTopicStats.ReplicationBytesOutPerSec)
     }
   }
 
@@ -282,7 +284,7 @@ class BrokerTopicStats {
   def removeOldFollowerMetrics(topic: String): Unit = {
     val topicMetrics = topicStats(topic)
     if (topicMetrics != null)
-      topicMetrics.removeMetricHelper(BrokerTopicStats.ReplicationBytesInPerSec, topicMetrics.tags)
+      topicMetrics.closeMetric(BrokerTopicStats.ReplicationBytesInPerSec, topicMetrics.tags)
   }
 
   def removeMetrics(topic: String): Unit = {
