@@ -767,6 +767,8 @@ class KafkaConfigTest {
         case KafkaConfig.RemoteLogRetentionBytesProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number")
         case KafkaConfig.RemoteLogRetentionMillisProp=> assertPropertyInvalid(getBaseProperties(), name, "not_a_number")
         case KafkaConfig.RemoteLogRetentionMinutesProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number")
+        case KafkaConfig.RemoteLogReaderThreadsProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number")
+        case KafkaConfig.RemoteLogReaderMaxPendingTasksProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number")
 
         case _ => assertPropertyInvalid(getBaseProperties(), name, "not_a_number", "-1")
       }
