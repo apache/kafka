@@ -155,9 +155,11 @@ class BrokerTopicMetrics(name: Option[String]) extends KafkaMetricsGroup {
       var meter = lazyMeter
       if (meter == null) {
         meterLock synchronized {
-          if (lazyMeter == null)
-            lazyMeter = newMeter(metricType, eventType, TimeUnit.SECONDS, tags)
           meter = lazyMeter
+          if (meter == null) {
+            meter = newMeter(metricType, eventType, TimeUnit.SECONDS, tags)
+            lazyMeter = meter
+          }
         }
       }
       meter
@@ -284,7 +286,7 @@ class BrokerTopicStats {
   def removeOldFollowerMetrics(topic: String): Unit = {
     val topicMetrics = topicStats(topic)
     if (topicMetrics != null)
-      topicMetrics.closeMetric(BrokerTopicStats.ReplicationBytesInPerSec, topicMetrics.tags)
+      topicMetrics.closeMetric(BrokerTopicStats.ReplicationBytesInPerSec)
   }
 
   def removeMetrics(topic: String): Unit = {
