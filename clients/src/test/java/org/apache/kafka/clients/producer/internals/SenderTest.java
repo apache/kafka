@@ -2327,7 +2327,7 @@ public class SenderTest {
         client.prepareResponse(new AddPartitionsToTxnResponse(0, Collections.singletonMap(tp0, Errors.NONE)));
         sender.runOnce();
 
-        // create a producer batch with more than one record so it is eligible to split
+        // create a producer batch with more than one record so it is eligible for splitting
         Future<RecordMetadata> request1 =
                 accumulator.append(tp0, time.milliseconds(), "key1".getBytes(), "value1".getBytes(), null, null,
                         MAX_BLOCK_TIMEOUT, false).future;
@@ -2335,7 +2335,8 @@ public class SenderTest {
                 accumulator.append(tp0, time.milliseconds(), "key2".getBytes(), "value2".getBytes(), null, null,
                         MAX_BLOCK_TIMEOUT, false).future;
 
-        sender.runOnce();  // send request
+        // send request
+        sender.runOnce();
         assertEquals(1, sender.inFlightBatches(tp0).size());
         // return a MESSAGE_TOO_LARGE error
         client.respond(produceResponse(tp0, -1, Errors.MESSAGE_TOO_LARGE, -1));
