@@ -120,7 +120,7 @@ ext {
   userIgnoreFailures = project.hasProperty('ignoreFailures') ? ignoreFailures : false
 
   skipSigning = project.hasProperty('skipSigning') && skipSigning.toBoolean()
-  shouldSign = !skipSigning && !version.endsWith("SNAPSHOT") && project.gradle.startParameter.taskNames.any { it.contains("upload") }
+  shouldSign = !skipSigning && !version.endsWith("SNAPSHOT") && !version.endsWith("-beta1") && project.gradle.startParameter.taskNames.any { it.contains("upload") }
 
   mavenUrl = project.hasProperty('mavenUrl') ? project.mavenUrl : ''
   mavenUsername = project.hasProperty('mavenUsername') ? project.mavenUsername : ''
