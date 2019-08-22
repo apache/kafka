@@ -110,7 +110,7 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
             inLock(lock) {
               uncleanablePartitions.get(dir.getAbsolutePath) match {
                 case Some(partitions) => {
-                  val lastClean = allCleanerCheckpoints
+                  val lastClean = simplifyMapToOffsetsOnly(allCleanerCheckpointsWithTimes)
                   val now = Time.SYSTEM.milliseconds
                   partitions.map { tp =>
                     val log = logs.get(tp)
@@ -129,17 +129,14 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
     }
 
   def getPartitionToFileMap() : Map[TopicPartition, OffsetAndTimesCheckpointFile] = {
-    var logDirsIterator = logDirs.iterator
     var partitionToFileMap = mutable.Map[TopicPartition, OffsetAndTimesCheckpointFile]()
-    var index = 0
-    for (tp <- logs.keys) {
-      if (!logDirsIterator.hasNext) logDirsIterator = logDirs.iterator
-      partitionToFileMap += (tp -> 
-          new OffsetAndTimesCheckpointFile(new File(logDirsIterator.next,
-                                                    offsetCheckpointFile + "-" + index), 
-                                           tp,
-                                           logDirFailureChannel))
-      index += 1
+    logs.foreach {
+      case (partition, log) =>
+        partitionToFileMap += (partition -> 
+            new OffsetAndTimesCheckpointFile(new File(log.dir.getParentFile,
+                                                      partition.toString()), 
+                                             partition,
+                                             logDirFailureChannel))
     }
     partitionToFileMap.toMap
   }
@@ -449,7 +446,7 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
   }
 
   /* this method must be called by another method which has attained the lock */
-  def upgradeCheckpointDir(partition: TopicPartition, sourceLogDir: File): Unit = {
+  private def upgradeCheckpointDir(partition: TopicPartition, sourceLogDir: File): Unit = {
     try {
       checkpoints.get(sourceLogDir).flatMap(_.read().get(partition)) match {
         case Some(offset) =>
@@ -476,16 +473,22 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
     }
   }
 
-  @deprecated("Method is unneccessary due to change in file system.")
   def alterCheckpointDir(topicPartition: TopicPartition, sourceLogDir: File, destLogDir: File): Unit = {
     inLock(lock) {
       try {
-        checkpoints.get(sourceLogDir).flatMap(_.read().get(topicPartition)) match {
-          case Some(offset) =>
+        partitionCheckpoints.get(topicPartition) match {
+          case Some(offsetCheckpointFile) =>
+            val offsetAndTimestamp = offsetCheckpointFile.read()
             // Remove this partition from the checkpoint file in the source log directory
-            updateCheckpoints(sourceLogDir, None)
+            updateCheckpointsWithTime(topicPartition, None)
+            // Recreate the file under new destination directory
+            partitionCheckpoints = partitionCheckpoints + (topicPartition -> 
+              new OffsetAndTimesCheckpointFile(new File(destLogDir,
+                                                        topicPartition.toString()), 
+                                              topicPartition,
+                                              logDirFailureChannel))
             // Add offset for this partition to the checkpoint file in the source log directory
-            updateCheckpoints(destLogDir, Option(topicPartition, offset))
+            updateCheckpointsWithTime(topicPartition, Option(offsetAndTimestamp))
           case None =>
         }
       } catch {
@@ -504,7 +507,7 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
   def handleLogDirFailure(dir: String): Unit = {
     info(s"Stopping cleaning logs in dir $dir")
     inLock(lock) {
-      checkpoints = checkpoints.filter { case (k, _) => k.getAbsolutePath != dir }
+      partitionCheckpoints = partitionCheckpoints.filter { case (k, v) => v.file.getAbsolutePath != dir }
     }
   }
 
@@ -512,11 +515,13 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
     inLock(lock) {
       probeVersion
       if (logs.get(topicPartition).config.compact) {
-        val checkpoint = checkpoints(dataDir)
+        val checkpoint = partitionCheckpoints(topicPartition)
         if (checkpoint != null) {
           val existing = checkpoint.read()
-          if (existing.getOrElse(topicPartition, 0L) > offset)
-            checkpoint.write(existing + (topicPartition -> offset))
+          if (existing.offset > offset) {
+            checkpoint.write(existing)
+            checkpoint.write(new OffsetAndTimestamp(offset, existing.timestamp))
+          }
         }
       }
     }
@@ -525,11 +530,12 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
   /**
    * Save out the endOffset and remove the given log from the in-progress set, if not aborted.
    */
-  def doneCleaning(topicPartition: TopicPartition, dataDir: File, endOffset: Long): Unit = {
+  def doneCleaning(topicPartition: TopicPartition, dataDir: File, endOffset: Long, timestamp: Long = -1L): Unit = {
     inLock(lock) {
+      probeVersion
       inProgress.get(topicPartition) match {
         case Some(LogCleaningInProgress) =>
-          updateCheckpoints(dataDir, Option(topicPartition, endOffset))
+          updateCheckpointsWithTime(topicPartition, Option(new OffsetAndTimestamp(endOffset, timestamp)))
           inProgress.remove(topicPartition)
         case Some(LogCleaningAborted) =>
           inProgress.put(topicPartition, LogCleaningPaused(1))
