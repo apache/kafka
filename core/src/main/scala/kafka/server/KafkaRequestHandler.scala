@@ -226,7 +226,11 @@ class BrokerTopicMetrics(name: Option[String]) extends KafkaMetricsGroup {
 
   def produceMessageConversionsRate = metricTypeMap.get(BrokerTopicStats.ProduceMessageConversionsPerSec).meter()
 
-  def closeMetric(metricType: String): Unit = metricTypeMap.get(metricType).close()
+  def closeMetric(metricType: String): Unit = {
+    val meter = metricTypeMap.get(metricType)
+    if (meter != null)
+      meter.close()
+  }
 
   def close(): Unit = metricTypeMap.values.foreach(_.close())
 }
