@@ -127,8 +127,8 @@ abstract class BaseRequestTest extends IntegrationTestHarness {
   /**
     * Serializes and sends the request to the given api.
     */
-  def send(request: AbstractRequest, apiKey: ApiKeys, socket: Socket, apiVersion: Option[Short] = None): Unit = {
-    val header = nextRequestHeader(apiKey, apiVersion.getOrElse(request.version))
+  def send(request: AbstractRequest, apiKey: ApiKeys, socket: Socket, apiVersion: Short): Unit = {
+    val header = nextRequestHeader(apiKey, apiVersion)
     val serializedBytes = request.serialize(header).array
     sendRequest(socket, serializedBytes)
   }
@@ -136,9 +136,9 @@ abstract class BaseRequestTest extends IntegrationTestHarness {
   /**
    * Receive response and return a ByteBuffer containing response without the header
    */
-  def receive(socket: Socket): ByteBuffer = {
+  def receive(socket: Socket, headerVersion: Short): ByteBuffer = {
     val response = receiveResponse(socket)
-    skipResponseHeader(response)
+    skipResponseHeader(response, headerVersion)
   }
 
   /**
@@ -146,9 +146,10 @@ abstract class BaseRequestTest extends IntegrationTestHarness {
     * A ByteBuffer containing the response is returned.
     */
   def sendAndReceive(request: AbstractRequest, apiKey: ApiKeys, socket: Socket, apiVersion: Option[Short] = None): ByteBuffer = {
-    send(request, apiKey, socket, apiVersion)
+    val version = apiVersion.getOrElse(request.version)
+    send(request, apiKey, socket, version)
     val response = receiveResponse(socket)
-    skipResponseHeader(response)
+    skipResponseHeader(response, apiKey.headerVersion(version))
   }
 
   /**
@@ -159,7 +160,7 @@ abstract class BaseRequestTest extends IntegrationTestHarness {
     val request = requestBuilder.build()
     val header = new RequestHeader(apiKey, request.version, clientId, correlationId)
     val response = requestAndReceive(socket, request.serialize(header).array)
-    val responseBuffer = skipResponseHeader(response)
+    val responseBuffer = skipResponseHeader(response, header.headerVersion())
     apiKey.parseResponse(request.version, responseBuffer)
   }
   
@@ -171,13 +172,13 @@ abstract class BaseRequestTest extends IntegrationTestHarness {
     val header = nextRequestHeader(apiKey, apiVersion)
     val serializedBytes = AbstractRequestResponse.serialize(header.toStruct, requestStruct).array
     val response = requestAndReceive(socket, serializedBytes)
-    skipResponseHeader(response)
+    skipResponseHeader(response, header.headerVersion())
   }
 
-  protected def skipResponseHeader(response: Array[Byte]): ByteBuffer = {
+  protected def skipResponseHeader(response: Array[Byte], headerVersion: Short): ByteBuffer = {
     val responseBuffer = ByteBuffer.wrap(response)
     // Parse the header to ensure its valid and move the buffer forward
-    ResponseHeader.parse(responseBuffer)
+    ResponseHeader.parse(responseBuffer, headerVersion)
     responseBuffer
   }
 
