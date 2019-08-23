@@ -23,9 +23,11 @@ import com.fasterxml.jackson.jaxrs.json.JacksonJsonProvider;
 import org.apache.kafka.trogdor.common.JsonUtil;
 import org.apache.kafka.trogdor.common.ThreadUtils;
 import org.eclipse.jetty.server.Connector;
+import org.eclipse.jetty.server.CustomRequestLog;
 import org.eclipse.jetty.server.Handler;
 import org.eclipse.jetty.server.Server;
 import org.eclipse.jetty.server.ServerConnector;
+import org.eclipse.jetty.server.Slf4jRequestLogWriter;
 import org.eclipse.jetty.server.handler.DefaultHandler;
 import org.eclipse.jetty.server.handler.HandlerCollection;
 import org.eclipse.jetty.server.handler.RequestLogHandler;
@@ -84,7 +86,6 @@ public class JsonRestServer {
      *
      * @param resources         The path handling resources to register.
      */
-    @SuppressWarnings("deprecation")
     public void start(Object... resources) {
         log.info("Starting REST server");
         ResourceConfig resourceConfig = new ResourceConfig();
@@ -101,10 +102,9 @@ public class JsonRestServer {
         context.addServlet(servletHolder, "/*");
 
         RequestLogHandler requestLogHandler = new RequestLogHandler();
-        // Use fully qualified name to avoid deprecation warning in import statement
-        org.eclipse.jetty.server.Slf4jRequestLog requestLog = new org.eclipse.jetty.server.Slf4jRequestLog();
-        requestLog.setLoggerName(JsonRestServer.class.getCanonicalName());
-        requestLog.setLogLatency(true);
+        Slf4jRequestLogWriter slf4jRequestLogWriter = new Slf4jRequestLogWriter();
+        slf4jRequestLogWriter.setLoggerName(JsonRestServer.class.getCanonicalName());
+        CustomRequestLog requestLog = new CustomRequestLog(slf4jRequestLogWriter, CustomRequestLog.EXTENDED_NCSA_FORMAT + " %msT");
         requestLogHandler.setRequestLog(requestLog);
 
         HandlerCollection handlers = new HandlerCollection();
@@ -157,21 +157,6 @@ public class JsonRestServer {
         while (!shutdownExecutor.isShutdown()) {
             shutdownExecutor.awaitTermination(1, TimeUnit.DAYS);
         }
-    }
-
-    /**
-     * Make an HTTP request.
-     *
-     * @param url               HTTP connection will be established with this url.
-     * @param method            HTTP method ("GET", "POST", "PUT", etc.)
-     * @param requestBodyData   Object to serialize as JSON and send in the request body.
-     * @param responseFormat    Expected format of the response to the HTTP request.
-     * @param <T>               The type of the deserialized response to the HTTP request.
-     * @return The deserialized response to the HTTP request, or null if no data is expected.
-     */
-    public static <T> HttpResponse<T> httpRequest(String url, String method, Object requestBodyData,
-                                                  TypeReference<T> responseFormat) throws IOException {
-        return httpRequest(log, url, method, requestBodyData, responseFormat);
     }
 
     /**

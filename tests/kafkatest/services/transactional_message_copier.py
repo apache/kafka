@@ -135,7 +135,7 @@ class TransactionalMessageCopier(KafkaPathResolverMixin, BackgroundThreadService
 
     def pids(self, node):
         try:
-            cmd = "ps ax | grep -i TransactionalMessageCopier | grep java | grep -v grep | awk '{print $1}'"
+            cmd = "jps | grep -i TransactionalMessageCopier | awk '{print $1}'"
             pid_arr = [pid for pid in node.account.ssh_capture(cmd, allow_fail=True, callback=int)]
             return pid_arr
         except (RemoteCommandError, ValueError) as e:

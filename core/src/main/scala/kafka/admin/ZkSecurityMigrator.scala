@@ -19,7 +19,6 @@ package kafka.admin
 
 import kafka.utils.{CommandDefaultOptions, CommandLineUtils, Logging}
 import kafka.zk.{KafkaZkClient, ZkData, ZkSecurityMigratorUtils}
-import org.I0Itec.zkclient.exception.ZkException
 import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.utils.Time
 import org.apache.zookeeper.AsyncCallback.{ChildrenCallback, StatCallback}
@@ -62,7 +61,7 @@ object ZkSecurityMigrator extends Logging {
                       + "znodes as part of the process of setting up ZooKeeper "
                       + "authentication.")
 
-  def run(args: Array[String]) {
+  def run(args: Array[String]): Unit = {
     val jaasFile = System.getProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM)
     val opts = new ZkSecurityMigratorOptions(args)
 
@@ -100,7 +99,7 @@ object ZkSecurityMigrator extends Logging {
     migrator.run()
   }
 
-  def main(args: Array[String]) {
+  def main(args: Array[String]): Unit = {
     try {
       run(args)
     } catch {
@@ -160,7 +159,7 @@ class ZkSecurityMigrator(zkClient: KafkaZkClient) extends Logging {
     def processResult(rc: Int,
                       path: String,
                       ctx: Object,
-                      children: java.util.List[String]) {
+                      children: java.util.List[String]): Unit = {
       val zkHandle = zkSecurityMigratorUtils.currentZooKeeper
       val promise = ctx.asInstanceOf[Promise[String]]
       Code.get(rc) match {
@@ -182,10 +181,10 @@ class ZkSecurityMigrator(zkClient: KafkaZkClient) extends Logging {
           // Starting a new session isn't really a problem, but it'd complicate
           // the logic of the tool, so we quit and let the user re-run it.
           System.out.println("ZooKeeper session expired while changing ACLs")
-          promise failure ZkException.create(KeeperException.create(Code.get(rc)))
+          promise failure KeeperException.create(Code.get(rc))
         case _ =>
           System.out.println("Unexpected return code: %d".format(rc))
-          promise failure ZkException.create(KeeperException.create(Code.get(rc)))
+          promise failure KeeperException.create(Code.get(rc))
       }
     }
   }
@@ -194,7 +193,7 @@ class ZkSecurityMigrator(zkClient: KafkaZkClient) extends Logging {
     def processResult(rc: Int,
                       path: String,
                       ctx: Object,
-                      stat: Stat) {
+                      stat: Stat): Unit = {
       val zkHandle = zkSecurityMigratorUtils.currentZooKeeper
       val promise = ctx.asInstanceOf[Promise[String]]
 
@@ -211,10 +210,10 @@ class ZkSecurityMigrator(zkClient: KafkaZkClient) extends Logging {
           // Starting a new session isn't really a problem, but it'd complicate
           // the logic of the tool, so we quit and let the user re-run it.
           System.out.println("ZooKeeper session expired while changing ACLs")
-          promise failure ZkException.create(KeeperException.create(Code.get(rc)))
+          promise failure KeeperException.create(Code.get(rc))
         case _ =>
           System.out.println("Unexpected return code: %d".format(rc))
-          promise failure ZkException.create(KeeperException.create(Code.get(rc)))
+          promise failure KeeperException.create(Code.get(rc))
       }
     }
   }

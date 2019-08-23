@@ -16,23 +16,38 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import org.apache.kafka.clients.GroupRebalanceConfig;
 import org.apache.kafka.common.utils.MockTime;
 
+import org.junit.Before;
 import org.junit.Test;
+
+import java.util.Optional;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 public class HeartbeatTest {
-
     private int sessionTimeoutMs = 300;
     private int heartbeatIntervalMs = 100;
     private int maxPollIntervalMs = 900;
     private long retryBackoffMs = 10L;
     private MockTime time = new MockTime();
-    private Heartbeat heartbeat = new Heartbeat(time, sessionTimeoutMs, heartbeatIntervalMs,
-            maxPollIntervalMs, retryBackoffMs);
+
+    private Heartbeat heartbeat;
+
+    @Before
+    public void setUp() {
+        GroupRebalanceConfig rebalanceConfig = new GroupRebalanceConfig(sessionTimeoutMs,
+                                                                        maxPollIntervalMs,
+                                                                        heartbeatIntervalMs,
+                                                                        "group_id",
+                                                                        Optional.empty(),
+                                                                        retryBackoffMs,
+                                                                        true);
+        heartbeat = new Heartbeat(rebalanceConfig, time);
+    }
 
     @Test
     public void testShouldHeartbeat() {

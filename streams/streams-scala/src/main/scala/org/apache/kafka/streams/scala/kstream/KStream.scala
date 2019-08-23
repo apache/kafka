@@ -21,7 +21,15 @@ package org.apache.kafka.streams.scala
 package kstream
 
 import org.apache.kafka.streams.KeyValue
-import org.apache.kafka.streams.kstream.{KStream => KStreamJ, _}
+import org.apache.kafka.streams.kstream.{
+  GlobalKTable,
+  JoinWindows,
+  Printed,
+  TransformerSupplier,
+  ValueTransformerSupplier,
+  ValueTransformerWithKeySupplier,
+  KStream => KStreamJ
+}
 import org.apache.kafka.streams.processor.{Processor, ProcessorSupplier, TopicNameExtractor}
 import org.apache.kafka.streams.scala.FunctionsCompatConversions._
 import org.apache.kafka.streams.scala.ImplicitConversions._

@@ -246,7 +246,6 @@ public class StreamTaskTest {
                         throw new TimeoutException("test");
                     }
                 },
-                null,
                 null
             );
             fail("Expected an exception");
@@ -301,7 +300,6 @@ public class StreamTaskTest {
                     }
                 }
             },
-            null,
             null
         );
         testTask.initializeTopology();
@@ -851,8 +849,7 @@ public class StreamTaskTest {
                 public void flush() {
                     flushed.set(true);
                 }
-            },
-            metrics.sensor("dummy"));
+            });
         streamTask.flushState();
         assertTrue(flushed.get());
     }
@@ -864,7 +861,7 @@ public class StreamTaskTest {
         task.initializeTopology();
         task.commit();
         final OffsetCheckpoint checkpoint = new OffsetCheckpoint(
-            new File(stateDirectory.directoryForTask(taskId00), ProcessorStateManager.CHECKPOINT_FILE_NAME)
+            new File(stateDirectory.directoryForTask(taskId00), StateManagerUtil.CHECKPOINT_FILE_NAME)
         );
 
         assertThat(checkpoint.read(), equalTo(Collections.singletonMap(changelogPartition, offset)));
@@ -878,7 +875,7 @@ public class StreamTaskTest {
         task.commit();
         final File checkpointFile = new File(
             stateDirectory.directoryForTask(taskId00),
-            ProcessorStateManager.CHECKPOINT_FILE_NAME
+            StateManagerUtil.CHECKPOINT_FILE_NAME
         );
 
         assertFalse(checkpointFile.exists());
@@ -1092,6 +1089,19 @@ public class StreamTaskTest {
     }
 
     @Test
+    public void shouldOnlyCloseFencedProducerOnUncleanClosedWithEosEnabled() {
+        task = createStatelessTask(createConfig(true));
+        task.initializeTopology();
+        producer.fenceProducer();
+
+        task.close(false, true);
+        task = null;
+
+        assertFalse(producer.transactionAborted());
+        assertTrue(producer.closed());
+    }
+
+    @Test
     public void shouldAbortTransactionButNotCloseProducerIfFencedOnCloseDuringUncleanCloseWithEosEnabled() {
         task = createStatelessTask(createConfig(true));
         task.initializeTopology();
@@ -1146,7 +1156,7 @@ public class StreamTaskTest {
     public void shouldNotThrowOnCloseIfTaskWasNotInitializedWithEosEnabled() {
         task = createStatelessTask(createConfig(true));
 
-        assertTrue(!producer.transactionInFlight());
+        assertFalse(producer.transactionInFlight());
         task.close(false, false);
     }
 
@@ -1304,6 +1314,26 @@ public class StreamTaskTest {
     }
 
     @Test
+    public void shouldCloseProducerOnUncleanCloseNotZombieWhenEosEnabled() {
+        task = createStatelessTask(createConfig(true));
+        task.initializeTopology();
+        task.close(false, false);
+        task = null;
+
+        assertTrue(producer.closed());
+    }
+
+    @Test
+    public void shouldCloseProducerOnUncleanCloseIsZombieWhenEosEnabled() {
+        task = createStatelessTask(createConfig(true));
+        task.initializeTopology();
+        task.close(false, true);
+        task = null;
+
+        assertTrue(producer.closed());
+    }
+
+    @Test
     public void shouldNotViolateAtLeastOnceWhenExceptionOccursDuringFlushing() {
         task = createTaskThatThrowsException(false);
         task.initializeStateStores();
@@ -1394,8 +1424,7 @@ public class StreamTaskTest {
             stateDirectory,
             null,
             time,
-            () -> producer = new MockProducer<>(false, bytesSerializer, bytesSerializer),
-            metrics.sensor("dummy"));
+            () -> producer = new MockProducer<>(false, bytesSerializer, bytesSerializer));
         task.initializeStateStores();
         task.initializeTopology();
 
@@ -1448,6 +1477,8 @@ public class StreamTaskTest {
     }
 
     private StreamTask createStatefulTask(final StreamsConfig config, final boolean logged) {
+        final StateStore stateStore = new MockKeyValueStore(storeName, logged);
+
         final ProcessorTopology topology = ProcessorTopologyFactories.with(
             asList(source1, source2),
             mkMap(mkEntry(topic1, source1), mkEntry(topic2, source2)),
@@ -1465,8 +1496,7 @@ public class StreamTaskTest {
             stateDirectory,
             null,
             time,
-            () -> producer = new MockProducer<>(false, bytesSerializer, bytesSerializer),
-            metrics.sensor("dummy"));
+            () -> producer = new MockProducer<>(false, bytesSerializer, bytesSerializer));
     }
 
     private StreamTask createStatefulTaskThatThrowsExceptionOnClose() {
@@ -1487,8 +1517,7 @@ public class StreamTaskTest {
             stateDirectory,
             null,
             time,
-            () -> producer = new MockProducer<>(false, bytesSerializer, bytesSerializer),
-            metrics.sensor("dummy"));
+            () -> producer = new MockProducer<>(false, bytesSerializer, bytesSerializer));
     }
 
     private StreamTask createStatelessTask(final StreamsConfig streamsConfig) {
@@ -1513,8 +1542,7 @@ public class StreamTaskTest {
             stateDirectory,
             null,
             time,
-            () -> producer = new MockProducer<>(false, bytesSerializer, bytesSerializer),
-            metrics.sensor("dummy"));
+            () -> producer = new MockProducer<>(false, bytesSerializer, bytesSerializer));
     }
 
     // this task will throw exception when processing (on partition2), flushing, suspending and closing
@@ -1540,8 +1568,7 @@ public class StreamTaskTest {
             stateDirectory,
             null,
             time,
-            () -> producer = new MockProducer<>(false, bytesSerializer, bytesSerializer),
-            metrics.sensor("dummy")) {
+            () -> producer = new MockProducer<>(false, bytesSerializer, bytesSerializer)) {
             @Override
             protected void flushState() {
                 throw new RuntimeException("KABOOM!");

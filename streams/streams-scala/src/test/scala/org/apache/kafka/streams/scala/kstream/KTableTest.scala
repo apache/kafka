@@ -289,22 +289,34 @@ class KTableTest extends FlatSpec with Matchers with TestDriver {
       Option(testDriver.readRecord[String, Long](sinkTopic)) shouldBe None
     }
     {
-      // late event for first window, included since grade period hasn't passed
+      // out-of-order event for first window, included since grade period hasn't passed
       testDriver.pipeRecord(sourceTopic, ("k1", "v1"), 2L)
+      Option(testDriver.readRecord[String, Long](sinkTopic)) shouldBe None
+    }
+    {
+      // add to second window
+      testDriver.pipeRecord(sourceTopic, ("k1", "v1"), 13L)
+      Option(testDriver.readRecord[String, Long](sinkTopic)) shouldBe None
+    }
+    {
+      // add out-of-order to second window
+      testDriver.pipeRecord(sourceTopic, ("k1", "v1"), 10L)
       Option(testDriver.readRecord[String, Long](sinkTopic)) shouldBe None
     }
     {
       // push stream time forward to flush other events through
       testDriver.pipeRecord(sourceTopic, ("k1", "v1"), 30L)
-      // too-late event should get dropped from the stream
+      // late event should get dropped from the stream
       testDriver.pipeRecord(sourceTopic, ("k1", "v1"), 3L)
       // should now have to results
       val r1 = testDriver.readRecord[String, Long](sinkTopic)
       r1.key shouldBe "0:2:k1"
       r1.value shouldBe 3L
+      r1.timestamp shouldBe 2L
       val r2 = testDriver.readRecord[String, Long](sinkTopic)
-      r2.key shouldBe "8:8:k1"
-      r2.value shouldBe 1
+      r2.key shouldBe "8:13:k1"
+      r2.value shouldBe 3L
+      r2.timestamp shouldBe 13L
     }
     testDriver.readRecord[String, Long](sinkTopic) shouldBe null
 

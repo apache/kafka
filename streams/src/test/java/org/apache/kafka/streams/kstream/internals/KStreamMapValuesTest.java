@@ -19,6 +19,7 @@ package org.apache.kafka.streams.kstream.internals;
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.streams.KeyValueTimestamp;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.kstream.Consumed;
@@ -51,10 +52,13 @@ public class KStreamMapValuesTest {
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             for (final int expectedKey : expectedKeys) {
-                driver.pipeInput(recordFactory.create(topicName, expectedKey, Integer.toString(expectedKey)));
+                driver.pipeInput(recordFactory.create(topicName, expectedKey, Integer.toString(expectedKey), expectedKey / 2L));
             }
         }
-        final String[] expected = {"1:1 (ts: 0)", "10:2 (ts: 0)", "100:3 (ts: 0)", "1000:4 (ts: 0)"};
+        final KeyValueTimestamp[] expected = {new KeyValueTimestamp<>(1, 1, 0),
+            new KeyValueTimestamp<>(10, 2, 5),
+            new KeyValueTimestamp<>(100, 3, 50),
+            new KeyValueTimestamp<>(1000, 4, 500)};
 
         assertArrayEquals(expected, supplier.theCapturedProcessor().processed.toArray());
     }
@@ -72,10 +76,13 @@ public class KStreamMapValuesTest {
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             for (final int expectedKey : expectedKeys) {
-                driver.pipeInput(recordFactory.create(topicName, expectedKey, Integer.toString(expectedKey)));
+                driver.pipeInput(recordFactory.create(topicName, expectedKey, Integer.toString(expectedKey), expectedKey / 2L));
             }
         }
-        final String[] expected = {"1:2 (ts: 0)", "10:12 (ts: 0)", "100:103 (ts: 0)", "1000:1004 (ts: 0)"};
+        final KeyValueTimestamp[] expected = {new KeyValueTimestamp<>(1, 2, 0),
+            new KeyValueTimestamp<>(10, 12, 5),
+            new KeyValueTimestamp<>(100, 103, 50),
+            new KeyValueTimestamp<>(1000, 1004, 500)};
 
         assertArrayEquals(expected, supplier.theCapturedProcessor().processed.toArray());
     }

@@ -293,7 +293,7 @@ public class ConsumerNetworkClient implements Closeable {
         // called without the lock to avoid deadlock potential if handlers need to acquire locks
         firePendingCompletedRequests();
 
-        metadata.maybeThrowException();
+        metadata.maybeThrowAnyException();
     }
 
     /**
@@ -459,7 +459,8 @@ public class ConsumerNetworkClient implements Closeable {
         }
     }
 
-    private long trySend(long now) {
+    // Visible for testing
+    long trySend(long now) {
         long pollDelayMs = maxPollTimeoutMs;
 
         // send any requests that can be sent now

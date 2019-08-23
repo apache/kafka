@@ -14,6 +14,7 @@
 
 from kafkatest import __version__ as __kafkatest_version__
 
+import math
 import re
 import time
 
@@ -137,7 +138,7 @@ def annotate_data_lost(data_lost, msg, number_validated):
             "This suggests they were lost on their way to the consumer." % number_validated
     return msg
 
-def validate_delivery(acked, consumed, idempotence_enabled=False, check_lost_data=None):
+def validate_delivery(acked, consumed, idempotence_enabled=False, check_lost_data=None, may_truncate_acked_records=False):
     """Check that each acked message was consumed."""
     success = True
     msg = ""
@@ -149,13 +150,26 @@ def validate_delivery(acked, consumed, idempotence_enabled=False, check_lost_dat
     # Were all acked messages consumed?
     if len(missing) > 0:
         msg = annotate_missing_msgs(missing, acked, consumed, msg)
-        success = False
         
         # Did we miss anything due to data loss?
         if check_lost_data:
-            to_validate = list(missing)[0:1000 if len(missing) > 1000 else len(missing)]
+            max_truncate_count = 100 if may_truncate_acked_records else 0
+            max_validate_count = max(1000, max_truncate_count)
+
+            to_validate = list(missing)[0:min(len(missing), max_validate_count)]
             data_lost = check_lost_data(to_validate)
-            msg = annotate_data_lost(data_lost, msg, len(to_validate))
+
+            # With older versions of message format before KIP-101, data loss could occur due to truncation.
+            # These records won't be in the data logs. Tolerate limited data loss for this case.
+            if len(missing) < max_truncate_count and len(data_lost) == len(missing):
+               msg += "The %s missing messages were not present in Kafka's data files. This suggests data loss " \
+                   "due to truncation, which is possible with older message formats and hence are ignored " \
+                   "by this test. The messages lost: %s\n" % (len(data_lost), str(data_lost))
+            else:
+                msg = annotate_data_lost(data_lost, msg, len(to_validate))
+                success = False
+        else:
+            success = False
 
     # Are there duplicates?
     if len(set(consumed)) != len(consumed):

@@ -19,6 +19,7 @@ package org.apache.kafka.message;
 
 import java.io.Writer;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -27,13 +28,15 @@ import java.util.stream.Collectors;
  * Generates Kafka MessageData classes.
  */
 public final class MessageDataGenerator {
+    private final StructRegistry structRegistry;
     private final HeaderGenerator headerGenerator;
     private final SchemaGenerator schemaGenerator;
     private final CodeBuffer buffer;
 
     MessageDataGenerator() {
+        this.structRegistry = new StructRegistry();
         this.headerGenerator = new HeaderGenerator();
-        this.schemaGenerator = new SchemaGenerator(headerGenerator);
+        this.schemaGenerator = new SchemaGenerator(headerGenerator, structRegistry);
         this.buffer = new CodeBuffer();
     }
 
@@ -42,6 +45,7 @@ public final class MessageDataGenerator {
             throw new RuntimeException("Message " + message.name() + " does " +
                 "not specify a maximum version.");
         }
+        structRegistry.register(message);
         schemaGenerator.generateSchemas(message);
         generateClass(Optional.of(message),
             message.name() + "Data",
@@ -104,6 +108,13 @@ public final class MessageDataGenerator {
         }
         generateSubclasses(className, struct, parentVersions, isSetElement);
         if (isTopLevel) {
+            for (Iterator<StructSpec> iter = structRegistry.commonStructs(); iter.hasNext(); ) {
+                StructSpec commonStruct = iter.next();
+                generateClass(Optional.empty(),
+                        commonStruct.name(),
+                        commonStruct,
+                        commonStruct.versions());
+            }
             buffer.decrementIndent();
             buffer.printf("}%n");
         }
@@ -120,8 +131,8 @@ public final class MessageDataGenerator {
             headerGenerator.addImport(MessageGenerator.MESSAGE_CLASS);
         }
         if (isSetElement) {
-            headerGenerator.addImport(MessageGenerator.IMPLICIT_LINKED_HASH_MULTI_SET_CLASS);
-            implementedInterfaces.add("ImplicitLinkedHashMultiSet.Element");
+            headerGenerator.addImport(MessageGenerator.IMPLICIT_LINKED_HASH_MULTI_COLLECTION_CLASS);
+            implementedInterfaces.add("ImplicitLinkedHashMultiCollection.Element");
         }
         Set<String> classModifiers = new HashSet<>();
         classModifiers.add("public");
@@ -139,10 +150,12 @@ public final class MessageDataGenerator {
         for (FieldSpec field : struct.fields()) {
             if (field.type().isStructArray()) {
                 FieldType.ArrayType arrayType = (FieldType.ArrayType) field.type();
-                generateClass(Optional.empty(),
-                    arrayType.elementType().toString(),
-                    field.toStruct(),
-                    parentVersions.intersect(struct.versions()));
+                if (!structRegistry.commonStructNames().contains(arrayType.elementName())) {
+                    generateClass(Optional.empty(),
+                            arrayType.elementType().toString(),
+                            structRegistry.findStruct(field),
+                            parentVersions.intersect(struct.versions()));
+                }
             }
         }
         if (isSetElement) {
@@ -152,9 +165,9 @@ public final class MessageDataGenerator {
 
     private void generateHashSet(String className, StructSpec struct) {
         buffer.printf("%n");
-        headerGenerator.addImport(MessageGenerator.IMPLICIT_LINKED_HASH_MULTI_SET_CLASS);
-        buffer.printf("public static class %s extends ImplicitLinkedHashMultiSet<%s> {%n",
-            hashSetType(className), className);
+        headerGenerator.addImport(MessageGenerator.IMPLICIT_LINKED_HASH_MULTI_COLLECTION_CLASS);
+        buffer.printf("public static class %s extends ImplicitLinkedHashMultiCollection<%s> {%n",
+            collectionType(className), className);
         buffer.incrementIndent();
         generateHashSetZeroArgConstructor(className);
         generateHashSetSizeArgConstructor(className);
@@ -166,7 +179,7 @@ public final class MessageDataGenerator {
     }
 
     private void generateHashSetZeroArgConstructor(String className) {
-        buffer.printf("public %s() {%n", hashSetType(className));
+        buffer.printf("public %s() {%n", collectionType(className));
         buffer.incrementIndent();
         buffer.printf("super();%n");
         buffer.decrementIndent();
@@ -175,7 +188,7 @@ public final class MessageDataGenerator {
     }
 
     private void generateHashSetSizeArgConstructor(String className) {
-        buffer.printf("public %s(int expectedNumElements) {%n", hashSetType(className));
+        buffer.printf("public %s(int expectedNumElements) {%n", collectionType(className));
         buffer.incrementIndent();
         buffer.printf("super(expectedNumElements);%n");
         buffer.decrementIndent();
@@ -185,7 +198,7 @@ public final class MessageDataGenerator {
 
     private void generateHashSetIteratorConstructor(String className) {
         headerGenerator.addImport(MessageGenerator.ITERATOR_CLASS);
-        buffer.printf("public %s(Iterator<%s> iterator) {%n", hashSetType(className), className);
+        buffer.printf("public %s(Iterator<%s> iterator) {%n", collectionType(className), className);
         buffer.incrementIndent();
         buffer.printf("super(iterator);%n");
         buffer.decrementIndent();
@@ -199,7 +212,7 @@ public final class MessageDataGenerator {
             commaSeparatedHashSetFieldAndTypes(struct));
         buffer.incrementIndent();
         generateKeyElement(className, struct);
-        headerGenerator.addImport(MessageGenerator.IMPLICIT_LINKED_HASH_MULTI_SET_CLASS);
+        headerGenerator.addImport(MessageGenerator.IMPLICIT_LINKED_HASH_MULTI_COLLECTION_CLASS);
         buffer.printf("return find(key);%n");
         buffer.decrementIndent();
         buffer.printf("}%n");
@@ -212,7 +225,7 @@ public final class MessageDataGenerator {
             commaSeparatedHashSetFieldAndTypes(struct));
         buffer.incrementIndent();
         generateKeyElement(className, struct);
-        headerGenerator.addImport(MessageGenerator.IMPLICIT_LINKED_HASH_MULTI_SET_CLASS);
+        headerGenerator.addImport(MessageGenerator.IMPLICIT_LINKED_HASH_MULTI_COLLECTION_CLASS);
         buffer.printf("return findAll(key);%n");
         buffer.decrementIndent();
         buffer.printf("}%n");
@@ -283,8 +296,8 @@ public final class MessageDataGenerator {
         }
     }
 
-    private static String hashSetType(String baseType) {
-        return baseType + "Set";
+    private static String collectionType(String baseType) {
+        return baseType + "Collection";
     }
 
     private String fieldAbstractJavaType(FieldSpec field) {
@@ -306,9 +319,9 @@ public final class MessageDataGenerator {
             return MessageGenerator.capitalizeFirst(field.typeString());
         } else if (field.type().isArray()) {
             FieldType.ArrayType arrayType = (FieldType.ArrayType) field.type();
-            if (field.toStruct().hasKeys()) {
-                headerGenerator.addImport(MessageGenerator.IMPLICIT_LINKED_HASH_MULTI_SET_CLASS);
-                return hashSetType(arrayType.elementType().toString());
+            if (structRegistry.isStructArrayWithKeys(field)) {
+                headerGenerator.addImport(MessageGenerator.IMPLICIT_LINKED_HASH_MULTI_COLLECTION_CLASS);
+                return collectionType(arrayType.elementType().toString());
             } else {
                 headerGenerator.addImport(MessageGenerator.LIST_CLASS);
                 return "List<" + getBoxedJavaType(arrayType.elementType()) + ">";
@@ -321,9 +334,9 @@ public final class MessageDataGenerator {
     private String fieldConcreteJavaType(FieldSpec field) {
         if (field.type().isArray()) {
             FieldType.ArrayType arrayType = (FieldType.ArrayType) field.type();
-            if (field.toStruct().hasKeys()) {
-                headerGenerator.addImport(MessageGenerator.IMPLICIT_LINKED_HASH_MULTI_SET_CLASS);
-                return hashSetType(arrayType.elementType().toString());
+            if (structRegistry.isStructArrayWithKeys(field)) {
+                headerGenerator.addImport(MessageGenerator.IMPLICIT_LINKED_HASH_MULTI_COLLECTION_CLASS);
+                return collectionType(arrayType.elementType().toString());
             } else {
                 headerGenerator.addImport(MessageGenerator.ARRAYLIST_CLASS);
                 return "ArrayList<" + getBoxedJavaType(arrayType.elementType()) + ">";
@@ -412,7 +425,7 @@ public final class MessageDataGenerator {
                 buffer.printf("{%n");
                 buffer.incrementIndent();
             }
-            boolean hasKeys = field.toStruct().hasKeys();
+            boolean hasKeys = structRegistry.isStructArrayWithKeys(field);
             buffer.printf("int arrayLength = readable.readInt();%n");
             buffer.printf("if (arrayLength < 0) {%n");
             buffer.incrementIndent();
@@ -924,11 +937,23 @@ public final class MessageDataGenerator {
         buffer.incrementIndent();
         headerGenerator.addImport(MessageGenerator.UNSUPPORTED_VERSION_EXCEPTION_CLASS);
         if (field.type().isArray()) {
-            buffer.printf("if (!%s.isEmpty()) {%n", field.camelCaseName());
+            if (fieldDefault(field).equals("null")) {
+                buffer.printf("if (%s != null) {%n", field.camelCaseName());
+            } else {
+                buffer.printf("if (!%s.isEmpty()) {%n", field.camelCaseName());
+            }
         } else if (field.type().isBytes()) {
-            buffer.printf("if (%s.length != 0) {%n", field.camelCaseName());
+            if (fieldDefault(field).equals("null")) {
+                buffer.printf("if (%s != null) {%n", field.camelCaseName());
+            } else {
+                buffer.printf("if (%s.length != 0) {%n", field.camelCaseName());
+            }
         } else if (field.type().isString()) {
-            buffer.printf("if (%s.equals(%s)) {%n", field.camelCaseName(), fieldDefault(field));
+            if (fieldDefault(field).equals("null")) {
+                buffer.printf("if (%s != null) {%n", field.camelCaseName());
+            } else {
+                buffer.printf("if (!%s.equals(%s)) {%n", field.camelCaseName(), fieldDefault(field));
+            }
         } else if (field.type() instanceof FieldType.BoolFieldType) {
             buffer.printf("if (%s%s) {%n",
                 fieldDefault(field).equals("true") ? "!" : "",
@@ -1204,19 +1229,19 @@ public final class MessageDataGenerator {
             }
         } else if (field.type() instanceof FieldType.StringFieldType) {
             if (field.defaultString().equals("null")) {
-                if (!(field.nullableVersions().contains(field.versions()))) {
-                    throw new RuntimeException("null cannot be the default for field " +
-                        field.name() + ", because not all versions of this field are " +
-                        "nullable.");
-                }
+                validateNullDefault(field);
                 return "null";
             } else {
                 return "\"" + field.defaultString() + "\"";
             }
         } else if (field.type().isBytes()) {
-            if (!field.defaultString().isEmpty()) {
+            if (field.defaultString().equals("null")) {
+                validateNullDefault(field);
+                return "null";
+            } else if (!field.defaultString().isEmpty()) {
                 throw new RuntimeException("Invalid default for bytes field " +
-                    field.name() + ": custom defaults are not supported for bytes fields.");
+                        field.name() + ".  The only valid default for a bytes field " +
+                        "is empty or null.");
             }
             headerGenerator.addImport(MessageGenerator.BYTES_CLASS);
             return "Bytes.EMPTY";
@@ -1227,19 +1252,31 @@ public final class MessageDataGenerator {
             }
             return "new " + field.type().toString() + "()";
         } else if (field.type().isArray()) {
-            if (!field.defaultString().isEmpty()) {
+            if (field.defaultString().equals("null")) {
+                validateNullDefault(field);
+                return "null";
+            } else if (!field.defaultString().isEmpty()) {
                 throw new RuntimeException("Invalid default for array field " +
-                    field.name() + ": custom defaults are not supported for array fields.");
+                    field.name() + ".  The only valid default for an array field " +
+                        "is the empty array or null.");
             }
             FieldType.ArrayType arrayType = (FieldType.ArrayType) field.type();
-            if (field.toStruct().hasKeys()) {
-                return "new " + hashSetType(arrayType.elementType().toString()) + "(0)";
+            if (structRegistry.isStructArrayWithKeys(field)) {
+                return "new " + collectionType(arrayType.elementType().toString()) + "(0)";
             } else {
                 headerGenerator.addImport(MessageGenerator.ARRAYLIST_CLASS);
                 return "new ArrayList<" + getBoxedJavaType(arrayType.elementType()) + ">()";
             }
         } else {
             throw new RuntimeException("Unsupported field type " + field.type());
+        }
+    }
+
+    private void validateNullDefault(FieldSpec field) {
+        if (!(field.nullableVersions().contains(field.versions()))) {
+            throw new RuntimeException("null cannot be the default for field " +
+                    field.name() + ", because not all versions of this field are " +
+                    "nullable.");
         }
     }
 

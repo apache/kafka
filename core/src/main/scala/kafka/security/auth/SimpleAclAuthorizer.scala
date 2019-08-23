@@ -76,7 +76,7 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
   /**
    * Guaranteed to be called before any authorize call is made.
    */
-  override def configure(javaConfigs: util.Map[String, _]) {
+  override def configure(javaConfigs: util.Map[String, _]): Unit = {
     val configs = javaConfigs.asScala
     val props = new java.util.Properties()
     configs.foreach { case (key, value) => props.put(key, value.toString) }
@@ -181,7 +181,7 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
     }
   }
 
-  override def addAcls(acls: Set[Acl], resource: Resource) {
+  override def addAcls(acls: Set[Acl], resource: Resource): Unit = {
     if (acls != null && acls.nonEmpty) {
       if (!extendedAclSupport && resource.patternType == PatternType.PREFIXED) {
         throw new UnsupportedVersionException(s"Adding ACLs on prefixed resource patterns requires " +
@@ -221,10 +221,12 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
 
   override def getAcls(principal: KafkaPrincipal): Map[Resource, Set[Acl]] = {
     inReadLock(lock) {
-      aclCache.mapValues { versionedAcls =>
-        versionedAcls.acls.filter(_.principal == principal)
-      }.filter { case (_, acls) =>
-        acls.nonEmpty
+      unorderedAcls.flatMap { case (k, versionedAcls) =>
+        val aclsForPrincipal = versionedAcls.acls.filter(_.principal == principal)
+        if (aclsForPrincipal.nonEmpty)
+          Some(k -> aclsForPrincipal)
+        else
+          None
       }
     }
   }
@@ -243,7 +245,8 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
         .from(Resource(resourceType, resourceName, PatternType.PREFIXED))
         .to(Resource(resourceType, resourceName.take(1), PatternType.PREFIXED))
         .filterKeys(resource => resourceName.startsWith(resource.name))
-        .flatMap { case (resource, versionedAcls) => versionedAcls.acls }
+        .values
+        .flatMap { _.acls }
         .toSet
 
       prefixed ++ wildcard ++ literal
@@ -252,31 +255,30 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
 
   override def getAcls(): Map[Resource, Set[Acl]] = {
     inReadLock(lock) {
-      aclCache.mapValues(_.acls)
+      unorderedAcls.map { case (k, v) => k -> v.acls }
     }
   }
 
-  def close() {
+  def close(): Unit = {
     aclChangeListeners.foreach(listener => listener.close())
     if (zkClient != null) zkClient.close()
   }
 
-  private def loadCache() {
+  private def loadCache(): Unit = {
     inWriteLock(lock) {
       ZkAclStore.stores.foreach(store => {
         val resourceTypes = zkClient.getResourceTypes(store.patternType)
         for (rType <- resourceTypes) {
           val resourceType = Try(ResourceType.fromString(rType))
           resourceType match {
-            case Success(resourceTypeObj) => {
+            case Success(resourceTypeObj) =>
               val resourceNames = zkClient.getResourceNames(store.patternType, resourceTypeObj)
               for (resourceName <- resourceNames) {
                 val resource = new Resource(resourceTypeObj, resourceName, store.patternType)
                 val versionedAcls = getAclsFromZk(resource)
                 updateCache(resource, versionedAcls)
               }
-            }
-            case Failure(f) => warn(s"Ignoring unknown ResourceType: $rType")
+            case Failure(_) => warn(s"Ignoring unknown ResourceType: $rType")
           }
         }
       })
@@ -288,7 +290,7 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
       .map(store => store.createListener(AclChangedNotificationHandler, zkClient))
   }
 
-  private def logAuditMessage(principal: KafkaPrincipal, authorized: Boolean, operation: Operation, resource: Resource, host: String) {
+  private def logAuditMessage(principal: KafkaPrincipal, authorized: Boolean, operation: Operation, resource: Resource, host: String): Unit = {
     def logMessage: String = {
       val authResult = if (authorized) "Allowed" else "Denied"
       s"Principal = $principal is $authResult Operation = $operation from host = $host on resource = $resource"
@@ -356,6 +358,10 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
     }
   }
 
+  // Returns Map instead of SortedMap since most callers don't care about ordering. In Scala 2.13, mapping from SortedMap
+  // to Map is restricted by default
+  private def unorderedAcls: Map[Resource, VersionedAcls] = aclCache
+
   private def getAclsFromCache(resource: Resource): VersionedAcls = {
     aclCache.getOrElse(resource, throw new IllegalArgumentException(s"ACLs do not exist in the cache for resource $resource"))
   }
@@ -364,7 +370,7 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
     zkClient.getVersionedAclsForResource(resource)
   }
 
-  private def updateCache(resource: Resource, versionedAcls: VersionedAcls) {
+  private def updateCache(resource: Resource, versionedAcls: VersionedAcls): Unit = {
     if (versionedAcls.acls.nonEmpty) {
       aclCache = aclCache + (resource -> versionedAcls)
     } else {
@@ -372,7 +378,7 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
     }
   }
 
-  private def updateAclChangedFlag(resource: Resource) {
+  private def updateAclChangedFlag(resource: Resource): Unit = {
       zkClient.createAclChangeNotification(resource)
   }
 
@@ -381,7 +387,7 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
   }
 
   object AclChangedNotificationHandler extends AclChangeNotificationHandler {
-    override def processNotification(resource: Resource) {
+    override def processNotification(resource: Resource): Unit = {
       inWriteLock(lock) {
         val versionedAcls = getAclsFromZk(resource)
         updateCache(resource, versionedAcls)

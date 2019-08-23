@@ -37,7 +37,7 @@ class SaslSslAdminClientIntegrationTest extends AdminClientIntegrationTest with 
   override protected def securityProtocol = SecurityProtocol.SASL_SSL
   override protected lazy val trustStoreFile = Some(File.createTempFile("truststore", ".jks"))
 
-  override def configureSecurityBeforeServersStart() {
+  override def configureSecurityBeforeServersStart(): Unit = {
     val authorizer = CoreUtils.createObject[Authorizer](classOf[SimpleAclAuthorizer].getName)
     try {
       authorizer.configure(this.configs.head.originals())
@@ -395,7 +395,7 @@ class SaslSslAdminClientIntegrationTest extends AdminClientIntegrationTest with 
     testAclCreateGetDelete(expectAuth = false)
   }
 
-  private def waitForDescribeAcls(client: AdminClient, filter: AclBindingFilter, acls: Set[AclBinding]): Unit = {
+  private def waitForDescribeAcls(client: Admin, filter: AclBindingFilter, acls: Set[AclBinding]): Unit = {
     var lastResults: util.Collection[AclBinding] = null
     TestUtils.waitUntilTrue(() => {
       lastResults = client.describeAcls(filter).values.get()

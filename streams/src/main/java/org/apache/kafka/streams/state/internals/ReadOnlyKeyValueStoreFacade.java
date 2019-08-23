@@ -19,7 +19,8 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
-import org.apache.kafka.streams.state.ValueAndTimestamp;
+
+import static org.apache.kafka.streams.state.ValueAndTimestamp.getValueOrNull;
 
 public class ReadOnlyKeyValueStoreFacade<K, V> implements ReadOnlyKeyValueStore<K, V> {
     protected final TimestampedKeyValueStore<K, V> inner;
@@ -30,8 +31,7 @@ public class ReadOnlyKeyValueStoreFacade<K, V> implements ReadOnlyKeyValueStore<
 
     @Override
     public V get(final K key) {
-        final ValueAndTimestamp<V> valueAndTimestamp = inner.get(key);
-        return valueAndTimestamp == null ? null : valueAndTimestamp.value();
+        return getValueOrNull(inner.get(key));
     }
 
     @Override

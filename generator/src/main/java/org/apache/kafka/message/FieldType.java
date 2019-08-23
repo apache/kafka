@@ -181,6 +181,10 @@ public interface FieldType {
             return elementType;
         }
 
+        public String elementName() {
+            return elementType.toString();
+        }
+
         @Override
         public String toString() {
             return "[]" + elementType.toString();

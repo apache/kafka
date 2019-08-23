@@ -27,7 +27,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
-import org.apache.kafka.common.metrics.stats.Total;
+import org.apache.kafka.common.metrics.stats.CumulativeSum;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.serialization.IntegerDeserializer;
 import org.apache.kafka.common.serialization.IntegerSerializer;
@@ -51,13 +51,15 @@ import org.apache.kafka.streams.kstream.internals.TimeWindow;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.KeyValueIterator;
+import org.apache.kafka.streams.state.TimestampedWindowStore;
+import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
 import org.apache.kafka.streams.state.internals.WindowKeySchema;
 import org.apache.kafka.test.MockKeyValueStore;
+import org.apache.kafka.test.MockKeyValueStoreBuilder;
 import org.apache.kafka.test.MockRestoreConsumer;
 import org.apache.kafka.test.MockStateRestoreListener;
-import org.apache.kafka.test.MockKeyValueStoreBuilder;
 import org.apache.kafka.test.MockTimestampExtractor;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
@@ -352,9 +354,9 @@ public class StandbyTaskTest {
 
         assertEquals(
             asList(
-                new KeyValue<>(new Windowed<>(1, new TimeWindow(0, 60_000)), 100L),
-                new KeyValue<>(new Windowed<>(2, new TimeWindow(60_000, 120_000)), 100L),
-                new KeyValue<>(new Windowed<>(3, new TimeWindow(120_000, 180_000)), 100L)
+                new KeyValue<>(new Windowed<>(1, new TimeWindow(0, 60_000)), ValueAndTimestamp.make(100L, 60_000L)),
+                new KeyValue<>(new Windowed<>(2, new TimeWindow(60_000, 120_000)), ValueAndTimestamp.make(100L, 120_000L)),
+                new KeyValue<>(new Windowed<>(3, new TimeWindow(120_000, 180_000)), ValueAndTimestamp.make(100L, 180_000L))
             ),
             getWindowedStoreContents(storeName, task)
         );
@@ -368,9 +370,9 @@ public class StandbyTaskTest {
         // the first record's window should have expired.
         assertEquals(
             asList(
-                new KeyValue<>(new Windowed<>(2, new TimeWindow(60_000, 120_000)), 100L),
-                new KeyValue<>(new Windowed<>(3, new TimeWindow(120_000, 180_000)), 100L),
-                new KeyValue<>(new Windowed<>(4, new TimeWindow(180_000, 240_000)), 100L)
+                new KeyValue<>(new Windowed<>(2, new TimeWindow(60_000, 120_000)), ValueAndTimestamp.make(100L, 120_000L)),
+                new KeyValue<>(new Windowed<>(3, new TimeWindow(120_000, 180_000)), ValueAndTimestamp.make(100L, 180_000L)),
+                new KeyValue<>(new Windowed<>(4, new TimeWindow(180_000, 240_000)), ValueAndTimestamp.make(100L, 240_000L))
             ),
             getWindowedStoreContents(storeName, task)
         );
@@ -388,7 +390,7 @@ public class StandbyTaskTest {
             changelogName,
             1,
             offset,
-            start,
+            end,
             TimestampType.CREATE_TIME,
             0L,
             0,
@@ -441,7 +443,7 @@ public class StandbyTaskTest {
         task.close(true, false);
 
         final File taskDir = stateDirectory.directoryForTask(taskId);
-        final OffsetCheckpoint checkpoint = new OffsetCheckpoint(new File(taskDir, ProcessorStateManager.CHECKPOINT_FILE_NAME));
+        final OffsetCheckpoint checkpoint = new OffsetCheckpoint(new File(taskDir, StateManagerUtil.CHECKPOINT_FILE_NAME));
         final Map<TopicPartition, Long> offsets = checkpoint.read();
 
         assertEquals(1, offsets.size());
@@ -449,17 +451,17 @@ public class StandbyTaskTest {
     }
 
     @SuppressWarnings("unchecked")
-    private List<KeyValue<Windowed<Integer>, Long>> getWindowedStoreContents(final String storeName,
-                                                                             final StandbyTask task) {
+    private List<KeyValue<Windowed<Integer>, ValueAndTimestamp<Long>>> getWindowedStoreContents(final String storeName,
+                                                                                                final StandbyTask task) {
         final StandbyContextImpl context = (StandbyContextImpl) task.context();
 
-        final List<KeyValue<Windowed<Integer>, Long>> result = new ArrayList<>();
+        final List<KeyValue<Windowed<Integer>, ValueAndTimestamp<Long>>> result = new ArrayList<>();
 
-        try (final KeyValueIterator<Windowed<byte[]>, Long> iterator =
-                 ((WindowStore) context.getStateMgr().getStore(storeName)).all()) {
+        try (final KeyValueIterator<Windowed<byte[]>, ValueAndTimestamp<Long>> iterator =
+                 ((TimestampedWindowStore) context.getStateMgr().getStore(storeName)).all()) {
 
             while (iterator.hasNext()) {
-                final KeyValue<Windowed<byte[]>, Long> next = iterator.next();
+                final KeyValue<Windowed<byte[]>, ValueAndTimestamp<Long>> next = iterator.next();
                 final Integer deserializedKey = new IntegerDeserializer().deserialize(null, next.key.key());
                 result.add(new KeyValue<>(new Windowed<>(deserializedKey, next.key.window()), next.value));
             }
@@ -635,7 +637,7 @@ public class StandbyTaskTest {
         task.commit();
 
         final Map<TopicPartition, Long> checkpoint = new OffsetCheckpoint(
-            new File(stateDirectory.directoryForTask(taskId), ProcessorStateManager.CHECKPOINT_FILE_NAME)
+            new File(stateDirectory.directoryForTask(taskId), StateManagerUtil.CHECKPOINT_FILE_NAME)
         ).read();
         assertThat(checkpoint, equalTo(Collections.singletonMap(globalTopicPartition, 51L)));
 
@@ -690,7 +692,7 @@ public class StandbyTaskTest {
     private MetricName setupCloseTaskMetric() {
         final MetricName metricName = new MetricName("name", "group", "description", Collections.emptyMap());
         final Sensor sensor = streamsMetrics.threadLevelSensor("task-closed", Sensor.RecordingLevel.INFO);
-        sensor.add(metricName, new Total());
+        sensor.add(metricName, new CumulativeSum());
         return metricName;
     }
 

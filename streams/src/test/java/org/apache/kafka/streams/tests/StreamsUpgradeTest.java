@@ -18,8 +18,9 @@ package org.apache.kafka.streams.tests;
 
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
+import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
-import org.apache.kafka.clients.consumer.internals.PartitionAssignor;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
@@ -47,7 +48,6 @@ import java.io.IOException;
 import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -90,16 +90,13 @@ public class StreamsUpgradeTest {
         final KafkaStreams streams = new KafkaStreams(builder.build(), config, kafkaClientSupplier);
         streams.start();
 
-        Runtime.getRuntime().addShutdownHook(new Thread() {
-            @Override
-            public void run() {
-                System.out.println("closing Kafka Streams instance");
-                System.out.flush();
-                streams.close();
-                System.out.println("UPGRADE-TEST-CLIENT-CLOSED");
-                System.out.flush();
-            }
-        });
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            System.out.println("closing Kafka Streams instance");
+            System.out.flush();
+            streams.close();
+            System.out.println("UPGRADE-TEST-CLIENT-CLOSED");
+            System.out.flush();
+        }));
     }
 
     private static class FutureKafkaClientSupplier extends DefaultKafkaClientSupplier {
@@ -117,7 +114,7 @@ public class StreamsUpgradeTest {
         }
 
         @Override
-        public Subscription subscription(final Set<String> topics) {
+        public ByteBuffer subscriptionUserData(final Set<String> topics) {
             // Adds the following information to subscription
             // 1. Client UUID (a unique id assigned to an instance of KafkaStreams)
             // 2. Task ids of previously running tasks
@@ -137,13 +134,13 @@ public class StreamsUpgradeTest {
 
             taskManager.updateSubscriptionsFromMetadata(topics);
 
-            return new Subscription(new ArrayList<>(topics), data.encode());
+            return data.encode();
         }
 
         @Override
-        public void onAssignment(final PartitionAssignor.Assignment assignment) {
+        public void onAssignment(final ConsumerPartitionAssignor.Assignment assignment, final ConsumerGroupMetadata metadata) {
             try {
-                super.onAssignment(assignment);
+                super.onAssignment(assignment, metadata);
                 return;
             } catch (final TaskAssignmentException cannotProcessFutureVersion) {
                 // continue
@@ -168,7 +165,7 @@ public class StreamsUpgradeTest {
                 assignment.userData().putInt(0, AssignmentInfo.LATEST_SUPPORTED_VERSION));
 
             final List<TopicPartition> partitions = new ArrayList<>(assignment.partitions());
-            Collections.sort(partitions, PARTITION_COMPARATOR);
+            partitions.sort(PARTITION_COMPARATOR);
 
             // version 1 field
             final Map<TaskId, Set<TopicPartition>> activeTasks = new HashMap<>();
@@ -187,15 +184,15 @@ public class StreamsUpgradeTest {
         }
 
         @Override
-        public Map<String, Assignment> assign(final Cluster metadata,
-                                              final Map<String, Subscription> subscriptions) {
+        public GroupAssignment assign(final Cluster metadata, final GroupSubscription groupSubscription) {
+            final Map<String, Subscription> subscriptions = groupSubscription.groupSubscription();
             Map<String, Assignment> assignment = null;
 
             final Map<String, Subscription> downgradedSubscriptions = new HashMap<>();
             for (final Subscription subscription : subscriptions.values()) {
                 final SubscriptionInfo info = SubscriptionInfo.decode(subscription.userData());
                 if (info.version() < SubscriptionInfo.LATEST_SUPPORTED_VERSION + 1) {
-                    assignment = super.assign(metadata, subscriptions);
+                    assignment = super.assign(metadata, new GroupSubscription(subscriptions)).groupAssignment();
                     break;
                 }
             }
@@ -223,7 +220,7 @@ public class StreamsUpgradeTest {
                                 info.userEndPoint())
                                 .encode()));
                 }
-                assignment = super.assign(metadata, downgradedSubscriptions);
+                assignment = super.assign(metadata, new GroupSubscription(downgradedSubscriptions)).groupAssignment();
                 bumpUsedVersion = true;
                 bumpSupportedVersion = true;
             }
@@ -242,7 +239,7 @@ public class StreamsUpgradeTest {
                             .encode()));
             }
 
-            return newAssignment;
+            return new GroupAssignment(newAssignment);
         }
     }
 

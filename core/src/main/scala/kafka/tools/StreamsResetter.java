@@ -22,7 +22,7 @@ import joptsimple.OptionSet;
 import joptsimple.OptionSpec;
 import joptsimple.OptionSpecBuilder;
 import kafka.utils.CommandLineUtils;
-import org.apache.kafka.clients.admin.AdminClient;
+import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.DeleteTopicsResult;
 import org.apache.kafka.clients.admin.DescribeConsumerGroupsOptions;
 import org.apache.kafka.clients.admin.DescribeConsumerGroupsResult;
@@ -38,6 +38,7 @@ import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Utils;
+import scala.collection.JavaConverters;
 
 import java.io.IOException;
 import java.text.ParseException;
@@ -149,7 +150,7 @@ public class StreamsResetter {
             }
             properties.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, options.valueOf(bootstrapServerOption));
 
-            kafkaAdminClient = (KafkaAdminClient) AdminClient.create(properties);
+            kafkaAdminClient = (KafkaAdminClient) Admin.create(properties);
             validateNoActiveConsumers(groupId, kafkaAdminClient);
 
             allTopics.clear();
@@ -178,7 +179,7 @@ public class StreamsResetter {
     }
 
     private void validateNoActiveConsumers(final String groupId,
-                                           final AdminClient adminClient)
+                                           final Admin adminClient)
         throws ExecutionException, InterruptedException {
 
         final DescribeConsumerGroupsResult describeResult = adminClient.describeConsumerGroups(Collections.singleton(groupId),
@@ -261,22 +262,29 @@ public class StreamsResetter {
             CommandLineUtils.printUsageAndDie(optionParser, "Only one of --dry-run and --execute can be specified");
         }
 
-        final scala.collection.immutable.HashSet<OptionSpec<?>> allScenarioOptions = new scala.collection.immutable.HashSet<>();
-        allScenarioOptions.$plus(toOffsetOption);
-        allScenarioOptions.$plus(toDatetimeOption);
-        allScenarioOptions.$plus(byDurationOption);
-        allScenarioOptions.$plus(toEarliestOption);
-        allScenarioOptions.$plus(toLatestOption);
-        allScenarioOptions.$plus(fromFileOption);
-        allScenarioOptions.$plus(shiftByOption);
+        final Set<OptionSpec<?>> allScenarioOptions = new HashSet<>();
+        allScenarioOptions.add(toOffsetOption);
+        allScenarioOptions.add(toDatetimeOption);
+        allScenarioOptions.add(byDurationOption);
+        allScenarioOptions.add(toEarliestOption);
+        allScenarioOptions.add(toLatestOption);
+        allScenarioOptions.add(fromFileOption);
+        allScenarioOptions.add(shiftByOption);
 
-        CommandLineUtils.checkInvalidArgs(optionParser, options, toOffsetOption, allScenarioOptions.$minus(toOffsetOption));
-        CommandLineUtils.checkInvalidArgs(optionParser, options, toDatetimeOption, allScenarioOptions.$minus(toDatetimeOption));
-        CommandLineUtils.checkInvalidArgs(optionParser, options, byDurationOption, allScenarioOptions.$minus(byDurationOption));
-        CommandLineUtils.checkInvalidArgs(optionParser, options, toEarliestOption, allScenarioOptions.$minus(toEarliestOption));
-        CommandLineUtils.checkInvalidArgs(optionParser, options, toLatestOption, allScenarioOptions.$minus(toLatestOption));
-        CommandLineUtils.checkInvalidArgs(optionParser, options, fromFileOption, allScenarioOptions.$minus(fromFileOption));
-        CommandLineUtils.checkInvalidArgs(optionParser, options, shiftByOption, allScenarioOptions.$minus(shiftByOption));
+        checkInvalidArgs(optionParser, options, allScenarioOptions, toOffsetOption);
+        checkInvalidArgs(optionParser, options, allScenarioOptions, toDatetimeOption);
+        checkInvalidArgs(optionParser, options, allScenarioOptions, byDurationOption);
+        checkInvalidArgs(optionParser, options, allScenarioOptions, toEarliestOption);
+        checkInvalidArgs(optionParser, options, allScenarioOptions, toLatestOption);
+        checkInvalidArgs(optionParser, options, allScenarioOptions, fromFileOption);
+        checkInvalidArgs(optionParser, options, allScenarioOptions, shiftByOption);
+    }
+
+    private <T> void checkInvalidArgs(OptionParser optionParser, OptionSet options, Set<OptionSpec<?>> allOptions,
+                                  OptionSpec<T> option) {
+        Set<OptionSpec<?>> invalidOptions = new HashSet<>(allOptions);
+        invalidOptions.remove(option);
+        CommandLineUtils.checkInvalidArgs(optionParser, options, option, JavaConverters.asScalaSetConverter(invalidOptions).asScala());
     }
 
     private int maybeResetInputAndSeekToEndIntermediateTopicOffsets(final Map consumerConfig,
@@ -639,7 +647,7 @@ public class StreamsResetter {
 
     // visible for testing
     public void doDelete(final List<String> topicsToDelete,
-                          final AdminClient adminClient) {
+                          final Admin adminClient) {
         boolean hasDeleteErrors = false;
         final DeleteTopicsResult deleteTopicsResult = adminClient.deleteTopics(topicsToDelete);
         final Map<String, KafkaFuture<Void>> results = deleteTopicsResult.values();

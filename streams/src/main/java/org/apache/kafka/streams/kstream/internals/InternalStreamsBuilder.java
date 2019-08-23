@@ -118,7 +118,7 @@ public class InternalStreamsBuilder implements InternalNameProvider {
         final String sourceName = new NamedInternal(consumed.name())
                 .orElseGenerateWithPrefix(this, KStreamImpl.SOURCE_NAME);
         final String tableSourceName = new NamedInternal(consumed.name())
-                .suffixWithOrElseGet("-table-source", () -> newProcessorName(KTableImpl.SOURCE_NAME));
+                .suffixWithOrElseGet("-table-source", this, KTableImpl.SOURCE_NAME);
         final KTableSource<K, V> tableSource = new KTableSource<>(materialized.storeName(), materialized.queryableStoreName());
         final ProcessorParameters<K, V> processorParameters = new ProcessorParameters<>(tableSource, tableSourceName);
 

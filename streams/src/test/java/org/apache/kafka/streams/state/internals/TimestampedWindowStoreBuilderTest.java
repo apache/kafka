@@ -18,12 +18,10 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.serialization.Serdes;
-import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.TimestampedWindowStore;
 import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
-import org.apache.kafka.streams.state.WindowStore;
 import org.easymock.EasyMockRunner;
 import org.easymock.Mock;
 import org.easymock.MockType;
@@ -46,14 +44,15 @@ public class TimestampedWindowStoreBuilderTest {
     @Mock(type = MockType.NICE)
     private WindowBytesStoreSupplier supplier;
     @Mock(type = MockType.NICE)
-    private WindowStore<Bytes, byte[]> inner;
+    private RocksDBTimestampedWindowStore inner;
     private TimestampedWindowStoreBuilder<String, String> builder;
 
     @Before
     public void setUp() {
         expect(supplier.get()).andReturn(inner);
         expect(supplier.name()).andReturn("name");
-        replay(supplier);
+        expect(inner.persistent()).andReturn(true).anyTimes();
+        replay(supplier, inner);
 
         builder = new TimestampedWindowStoreBuilder<>(
             supplier,

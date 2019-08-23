@@ -389,7 +389,7 @@ public class ExternalCommandWorker implements TaskWorker {
             spec.shutdownGracePeriodMs().get() : DEFAULT_SHUTDOWN_GRACE_PERIOD_MS;
         if (!executor.awaitTermination(shutdownGracePeriodMs, TimeUnit.MILLISECONDS)) {
             terminatorActionQueue.add(TerminatorAction.DESTROY_FORCIBLY);
-            executor.awaitTermination(1000, TimeUnit.DAYS);
+            executor.awaitTermination(1, TimeUnit.DAYS);
         }
         this.status = null;
         this.doneFuture = null;

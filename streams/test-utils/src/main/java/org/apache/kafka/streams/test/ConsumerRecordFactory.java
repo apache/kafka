@@ -17,7 +17,6 @@
 package org.apache.kafka.streams.test;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
-import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.record.TimestampType;
@@ -38,7 +37,6 @@ import java.util.Objects;
  *
  * @see TopologyTestDriver
  */
-@InterfaceStability.Evolving
 public class ConsumerRecordFactory<K, V> {
     private final String topicName;
     private final Serializer<K> keySerializer;

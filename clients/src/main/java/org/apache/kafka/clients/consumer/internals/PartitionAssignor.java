@@ -36,7 +36,11 @@ import java.util.Set;
  * assignment decisions. For this, you can override {@link #subscription(Set)} and provide custom
  * userData in the returned Subscription. For example, to have a rack-aware assignor, an implementation
  * can use this user data to forward the rackId belonging to each member.
+ *
+ * This interface has been deprecated in 2.4, custom assignors should now implement
+ * {@link org.apache.kafka.clients.consumer.ConsumerPartitionAssignor}
  */
+@Deprecated
 public interface PartitionAssignor {
 
     /**
@@ -73,7 +77,6 @@ public interface PartitionAssignor {
         onAssignment(assignment);
     }
 
-
     /**
      * Unique name for this assignor (e.g. "range" or "roundrobin" or "sticky")
      * @return non-null unique name
@@ -104,8 +107,8 @@ public interface PartitionAssignor {
         @Override
         public String toString() {
             return "Subscription(" +
-                    "topics=" + topics +
-                    ')';
+                "topics=" + topics +
+                ')';
         }
     }
 
@@ -133,8 +136,8 @@ public interface PartitionAssignor {
         @Override
         public String toString() {
             return "Assignment(" +
-                    "partitions=" + partitions +
-                    ')';
+                "partitions=" + partitions +
+                ')';
         }
     }
 

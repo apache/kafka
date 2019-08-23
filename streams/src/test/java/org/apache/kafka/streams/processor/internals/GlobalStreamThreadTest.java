@@ -31,7 +31,7 @@ import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.internals.InternalNameProvider;
 import org.apache.kafka.streams.kstream.internals.KTableSource;
-import org.apache.kafka.streams.kstream.internals.KeyValueStoreMaterializer;
+import org.apache.kafka.streams.kstream.internals.TimestampedKeyValueStoreMaterializer;
 import org.apache.kafka.streams.kstream.internals.MaterializedInternal;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.KeyValueStore;
@@ -87,7 +87,7 @@ public class GlobalStreamThreadTest {
             );
 
         builder.addGlobalStore(
-            new KeyValueStoreMaterializer<>(materialized).materialize().withLoggingDisabled(),
+            new TimestampedKeyValueStoreMaterializer<>(materialized).materialize().withLoggingDisabled(),
             "sourceName",
             null,
             null,
@@ -236,7 +236,7 @@ public class GlobalStreamThreadTest {
             10 * 1000,
             "Input record never consumed");
 
-        mockConsumer.setException(new InvalidOffsetException("Try Again!") {
+        mockConsumer.setPollException(new InvalidOffsetException("Try Again!") {
             @Override
             public Set<TopicPartition> partitions() {
                 return Collections.singleton(topicPartition);

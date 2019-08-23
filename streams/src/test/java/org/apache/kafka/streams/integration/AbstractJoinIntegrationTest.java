@@ -27,6 +27,7 @@ import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.KeyValueTimestamp;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
@@ -35,6 +36,7 @@ import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.QueryableStoreTypes;
 import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
+import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
@@ -51,6 +53,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Iterator;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Properties;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -86,7 +89,7 @@ public abstract class AbstractJoinIntegrationTest {
     static final String INPUT_TOPIC_RIGHT = "inputTopicRight";
     static final String INPUT_TOPIC_LEFT = "inputTopicLeft";
     static final String OUTPUT_TOPIC = "outputTopic";
-    private final long anyUniqueKey = 0L;
+    static final long ANY_UNIQUE_KEY = 0L;
 
     private final static Properties PRODUCER_CONFIG = new Properties();
     private final static Properties RESULT_CONSUMER_CONFIG = new Properties();
@@ -163,13 +166,13 @@ public abstract class AbstractJoinIntegrationTest {
         CLUSTER.deleteAllTopicsAndWait(120000);
     }
 
-    private void checkResult(final String outputTopic, final List<String> expectedResult) throws InterruptedException {
-        final List<String> result = IntegrationTestUtils.waitUntilMinValuesRecordsReceived(RESULT_CONSUMER_CONFIG, outputTopic, expectedResult.size(), 30 * 1000L);
-        assertThat(result, is(expectedResult));
+    private void checkResult(final String outputTopic, final List<KeyValueTimestamp<Long, String>> expectedResult) throws InterruptedException {
+        IntegrationTestUtils.verifyKeyValueTimestamps(RESULT_CONSUMER_CONFIG, outputTopic, expectedResult);
     }
 
-    private void checkResult(final String outputTopic, final String expectedFinalResult, final int expectedTotalNumRecords) throws InterruptedException {
-        final List<String> result = IntegrationTestUtils.waitUntilMinValuesRecordsReceived(RESULT_CONSUMER_CONFIG, outputTopic, expectedTotalNumRecords, 30 * 1000L);
+    private void checkResult(final String outputTopic, final KeyValueTimestamp<Long, String> expectedFinalResult, final int expectedTotalNumRecords) throws InterruptedException {
+        final List<KeyValueTimestamp<Long, String>> result =
+            IntegrationTestUtils.waitUntilMinKeyValueWithTimestampRecordsReceived(RESULT_CONSUMER_CONFIG, outputTopic, expectedTotalNumRecords, 30 * 1000L);
         assertThat(result.get(result.size() - 1), is(expectedFinalResult));
     }
 
@@ -177,7 +180,7 @@ public abstract class AbstractJoinIntegrationTest {
      * Runs the actual test. Checks the result after each input record to ensure fixed processing order.
      * If an input tuple does not trigger any result, "expectedResult" should contain a "null" entry
      */
-    void runTest(final List<List<String>> expectedResult) throws Exception {
+    void runTest(final List<List<KeyValueTimestamp<Long, String>>> expectedResult) throws Exception {
         runTest(expectedResult, null);
     }
 
@@ -186,28 +189,34 @@ public abstract class AbstractJoinIntegrationTest {
      * Runs the actual test. Checks the result after each input record to ensure fixed processing order.
      * If an input tuple does not trigger any result, "expectedResult" should contain a "null" entry
      */
-    void runTest(final List<List<String>> expectedResult, final String storeName) throws Exception {
+    void runTest(final List<List<KeyValueTimestamp<Long, String>>> expectedResult, final String storeName) throws Exception {
         assert expectedResult.size() == input.size();
 
         IntegrationTestUtils.purgeLocalStreamsState(STREAMS_CONFIG);
         streams = new KafkaStreams(builder.build(), STREAMS_CONFIG);
 
-        String expectedFinalResult = null;
+        KeyValueTimestamp<Long, String> expectedFinalResult = null;
 
         try {
             streams.start();
 
-            long ts = System.currentTimeMillis();
+            final long firstTimestamp = System.currentTimeMillis();
+            long ts = firstTimestamp;
 
-            final Iterator<List<String>> resultIterator = expectedResult.iterator();
+            final Iterator<List<KeyValueTimestamp<Long, String>>> resultIterator = expectedResult.iterator();
             for (final Input<String> singleInput : input) {
                 producer.send(new ProducerRecord<>(singleInput.topic, null, ++ts, singleInput.record.key, singleInput.record.value)).get();
 
-                final List<String> expected = resultIterator.next();
+                final List<KeyValueTimestamp<Long, String>> expected = resultIterator.next();
 
                 if (expected != null) {
-                    checkResult(OUTPUT_TOPIC, expected);
-                    expectedFinalResult = expected.get(expected.size() - 1);
+                    final List<KeyValueTimestamp<Long, String>> updatedExpected = new LinkedList<>();
+                    for (final KeyValueTimestamp<Long, String> record : expected) {
+                        updatedExpected.add(new KeyValueTimestamp<>(record.key(), record.value(), firstTimestamp + record.timestamp()));
+                    }
+
+                    checkResult(OUTPUT_TOPIC, updatedExpected);
+                    expectedFinalResult = updatedExpected.get(expected.size() - 1);
                 }
             }
 
@@ -222,21 +231,22 @@ public abstract class AbstractJoinIntegrationTest {
     /*
      * Runs the actual test. Checks the final result only after expected number of records have been consumed.
      */
-    void runTest(final String expectedFinalResult) throws Exception {
+    void runTest(final KeyValueTimestamp<Long, String> expectedFinalResult) throws Exception {
         runTest(expectedFinalResult, null);
     }
 
     /*
      * Runs the actual test. Checks the final result only after expected number of records have been consumed.
      */
-    void runTest(final String expectedFinalResult, final String storeName) throws Exception {
+    void runTest(final KeyValueTimestamp<Long, String> expectedFinalResult, final String storeName) throws Exception {
         IntegrationTestUtils.purgeLocalStreamsState(STREAMS_CONFIG);
         streams = new KafkaStreams(builder.build(), STREAMS_CONFIG);
 
         try {
             streams.start();
 
-            long ts = System.currentTimeMillis();
+            final long firstTimestamp = System.currentTimeMillis();
+            long ts = firstTimestamp;
 
             for (final Input<String> singleInput : input) {
                 producer.send(new ProducerRecord<>(singleInput.topic, null, ++ts, singleInput.record.key, singleInput.record.value)).get();
@@ -244,10 +254,15 @@ public abstract class AbstractJoinIntegrationTest {
 
             TestUtils.waitForCondition(() -> finalResultReached.get(), "Never received expected final result.");
 
-            checkResult(OUTPUT_TOPIC, expectedFinalResult, numRecordsExpected);
+            final KeyValueTimestamp<Long, String> updatedExpectedFinalResult =
+                new KeyValueTimestamp<>(
+                    expectedFinalResult.key(),
+                    expectedFinalResult.value(),
+                    firstTimestamp + expectedFinalResult.timestamp());
+            checkResult(OUTPUT_TOPIC, updatedExpectedFinalResult, numRecordsExpected);
 
             if (storeName != null) {
-                checkQueryableStore(storeName, expectedFinalResult);
+                checkQueryableStore(storeName, updatedExpectedFinalResult);
             }
         } finally {
             streams.close();
@@ -257,15 +272,16 @@ public abstract class AbstractJoinIntegrationTest {
     /*
      * Checks the embedded queryable state store snapshot
      */
-    private void checkQueryableStore(final String queryableName, final String expectedFinalResult) {
-        final ReadOnlyKeyValueStore<Long, String> store = streams.store(queryableName, QueryableStoreTypes.keyValueStore());
+    private void checkQueryableStore(final String queryableName, final KeyValueTimestamp<Long, String> expectedFinalResult) {
+        final ReadOnlyKeyValueStore<Long, ValueAndTimestamp<String>> store = streams.store(queryableName, QueryableStoreTypes.timestampedKeyValueStore());
 
-        final KeyValueIterator<Long, String> all = store.all();
-        final KeyValue<Long, String> onlyEntry = all.next();
+        final KeyValueIterator<Long, ValueAndTimestamp<String>> all = store.all();
+        final KeyValue<Long, ValueAndTimestamp<String>> onlyEntry = all.next();
 
         try {
-            assertThat(onlyEntry.key, is(anyUniqueKey));
-            assertThat(onlyEntry.value, is(expectedFinalResult));
+            assertThat(onlyEntry.key, is(expectedFinalResult.key()));
+            assertThat(onlyEntry.value.value(), is(expectedFinalResult.value()));
+            assertThat(onlyEntry.value.timestamp(), is(expectedFinalResult.timestamp()));
             assertThat(all.hasNext(), is(false));
         } finally {
             all.close();
@@ -278,7 +294,7 @@ public abstract class AbstractJoinIntegrationTest {
 
         Input(final String topic, final V value) {
             this.topic = topic;
-            record = KeyValue.pair(anyUniqueKey, value);
+            record = KeyValue.pair(ANY_UNIQUE_KEY, value);
         }
     }
 }

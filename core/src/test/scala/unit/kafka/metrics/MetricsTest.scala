@@ -19,7 +19,6 @@ package kafka.metrics
 
 import java.util.Properties
 import javax.management.ObjectName
-
 import com.yammer.metrics.Metrics
 import com.yammer.metrics.core.{Meter, MetricPredicate}
 import org.junit.Test
@@ -47,7 +46,7 @@ class MetricsTest extends KafkaServerTestHarness with Logging {
   val nMessages = 2
 
   @Test
-  def testMetricsReporterAfterDeletingTopic() {
+  def testMetricsReporterAfterDeletingTopic(): Unit = {
     val topic = "test-topic-metric"
     createTopic(topic, 1, 1)
     adminZkClient.deleteTopic(topic)
@@ -56,7 +55,7 @@ class MetricsTest extends KafkaServerTestHarness with Logging {
   }
 
   @Test
-  def testBrokerTopicMetricsUnregisteredAfterDeletingTopic() {
+  def testBrokerTopicMetricsUnregisteredAfterDeletingTopic(): Unit = {
     val topic = "test-broker-topic-metric"
     createTopic(topic, 2, 1)
     // Produce a few messages to create the metrics
@@ -110,10 +109,15 @@ class MetricsTest extends KafkaServerTestHarness with Logging {
         logSize.map(_ > 0).getOrElse(false))
     }
 
+    // Consume messages to make bytesOut tick
+    TestUtils.consumeTopicRecords(servers, topic, nMessages)
     val initialReplicationBytesIn = meterCount(replicationBytesIn)
     val initialReplicationBytesOut = meterCount(replicationBytesOut)
     val initialBytesIn = meterCount(bytesIn)
     val initialBytesOut = meterCount(bytesOut)
+
+    // BytesOut doesn't include replication, so it shouldn't have changed
+    assertEquals(initialBytesOut, meterCount(bytesOut))
 
     // Produce a few messages to make the metrics tick
     TestUtils.generateAndProduceMessages(servers, topic, nMessages)
@@ -121,11 +125,9 @@ class MetricsTest extends KafkaServerTestHarness with Logging {
     assertTrue(meterCount(replicationBytesIn) > initialReplicationBytesIn)
     assertTrue(meterCount(replicationBytesOut) > initialReplicationBytesOut)
     assertTrue(meterCount(bytesIn) > initialBytesIn)
-    // BytesOut doesn't include replication, so it shouldn't have changed
-    assertEquals(initialBytesOut, meterCount(bytesOut))
 
     // Consume messages to make bytesOut tick
-    TestUtils.consumeTopicRecords(servers, topic, nMessages * 2)
+    TestUtils.consumeTopicRecords(servers, topic, nMessages)
 
     assertTrue(meterCount(bytesOut) > initialBytesOut)
   }

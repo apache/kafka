@@ -34,7 +34,7 @@ import org.apache.kafka.common.{KafkaException, Node, TopicPartition}
 
 import scala.collection.JavaConverters._
 import scala.collection.mutable.ListBuffer
-import scala.collection.{Seq, Set, mutable}
+import scala.collection.{immutable, Map, Seq, Set, mutable}
 import scala.util.{Failure, Success, Try}
 import joptsimple.OptionSpec
 import scala.collection.immutable.TreeMap
@@ -42,7 +42,7 @@ import scala.reflect.ClassTag
 
 object ConsumerGroupCommand extends Logging {
 
-  def main(args: Array[String]) {
+  def main(args: Array[String]): Unit = {
     val opts = new ConsumerGroupCommandOptions(args)
 
     CommandLineUtils.printHelpAndExitIfNeeded(opts, "This tool helps to list all consumer groups, describe a consumer group, delete consumer group info, or reset consumer group offsets.")
@@ -158,9 +158,10 @@ object ConsumerGroupCommand extends Logging {
     }
   }
 
-  class ConsumerGroupService(val opts: ConsumerGroupCommandOptions) {
+  class ConsumerGroupService(val opts: ConsumerGroupCommandOptions,
+                             private[admin] val configOverrides: Map[String, String] = Map.empty) {
 
-    private val adminClient = createAdminClient()
+    private val adminClient = createAdminClient(configOverrides)
 
     // `consumers` are only needed for `describe`, so we instantiate them lazily
     private lazy val consumers: mutable.Map[String, KafkaConsumer[String, String]] = mutable.Map.empty
@@ -374,7 +375,7 @@ object ConsumerGroupCommand extends Logging {
       ).describedGroups()
 
       val result =
-        consumerGroups.asScala.foldLeft(Map[String, Map[TopicPartition, OffsetAndMetadata]]()) {
+        consumerGroups.asScala.foldLeft(immutable.Map[String, Map[TopicPartition, OffsetAndMetadata]]()) {
           case (acc, (groupId, groupDescription)) =>
             groupDescription.get.state().toString match {
               case "Empty" | "Dead" =>
@@ -418,7 +419,7 @@ object ConsumerGroupCommand extends Logging {
 
       val groupOffsets = TreeMap[String, (Option[String], Option[Seq[PartitionAssignmentState]])]() ++ (for ((groupId, consumerGroup) <- consumerGroups) yield {
         val state = consumerGroup.state
-        val committedOffsets = getCommittedOffsets(groupId).asScala.toMap
+        val committedOffsets = getCommittedOffsets(groupId)
         var assignedTopicPartitions = ListBuffer[TopicPartition]()
         val rowsWithConsumer = consumerGroup.members.asScala.filter(!_.assignment.topicPartitions.isEmpty).toSeq
           .sortWith(_.assignment.topicPartitions.size > _.assignment.topicPartitions.size).flatMap { consumerSummary =>
@@ -441,7 +442,7 @@ object ConsumerGroupCommand extends Logging {
               Map(topicPartition -> Some(offset.offset)),
               Some(MISSING_COLUMN_VALUE),
               Some(MISSING_COLUMN_VALUE),
-              Some(MISSING_COLUMN_VALUE))
+              Some(MISSING_COLUMN_VALUE)).toSeq
         }
         groupId -> (Some(state.toString), Some(rowsWithConsumer ++ rowsWithoutConsumer))
       }).toMap
@@ -521,16 +522,17 @@ object ConsumerGroupCommand extends Logging {
       successfulLogTimestampOffsets ++ getLogEndOffsets(groupId, unsuccessfulOffsetsForTimes.keySet.toSeq)
     }
 
-    def close() {
+    def close(): Unit = {
       adminClient.close()
       consumers.values.foreach(consumer =>
         Option(consumer).foreach(_.close())
       )
     }
 
-    private def createAdminClient(): admin.AdminClient = {
+    private def createAdminClient(configOverrides: Map[String, String]): Admin = {
       val props = if (opts.options.has(opts.commandConfigOpt)) Utils.loadProps(opts.options.valueOf(opts.commandConfigOpt)) else new Properties()
       props.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, opts.options.valueOf(opts.bootstrapServerOpt))
+      configOverrides.foreach { case (k, v) => props.put(k, v)}
       admin.AdminClient.create(props)
     }
 
@@ -576,8 +578,7 @@ object ConsumerGroupCommand extends Logging {
 
     private def getPartitionsToReset(groupId: String): Seq[TopicPartition] = {
       if (opts.options.has(opts.allTopicsOpt)) {
-        val allTopicPartitions = getCommittedOffsets(groupId).keySet().asScala.toSeq
-        allTopicPartitions
+        getCommittedOffsets(groupId).keys.toSeq
       } else if (opts.options.has(opts.topicOpt)) {
         val topics = opts.options.valuesOf(opts.topicOpt).asScala
         parseTopicPartitionsToReset(groupId, topics)
@@ -589,19 +590,19 @@ object ConsumerGroupCommand extends Logging {
       }
     }
 
-    private def getCommittedOffsets(groupId: String) = {
+    private def getCommittedOffsets(groupId: String): Map[TopicPartition, OffsetAndMetadata] = {
       adminClient.listConsumerGroupOffsets(
         groupId,
         withTimeoutMs(new ListConsumerGroupOffsetsOptions)
-      ).partitionsToOffsetAndMetadata.get
+      ).partitionsToOffsetAndMetadata.get.asScala
     }
 
-    type GroupMetadata = Map[String, Map[TopicPartition, OffsetAndMetadata]]
+    type GroupMetadata = immutable.Map[String, immutable.Map[TopicPartition, OffsetAndMetadata]]
     private def parseResetPlan(resetPlanCsv: String): GroupMetadata = {
       def updateGroupMetadata(group: String, topic: String, partition: Int, offset: Long, acc: GroupMetadata) = {
         val topicPartition = new TopicPartition(topic, partition)
         val offsetAndMetadata = new OffsetAndMetadata(offset)
-        val dataMap = acc.getOrElse(group, Map()).updated(topicPartition, offsetAndMetadata)
+        val dataMap = acc.getOrElse(group, immutable.Map()).updated(topicPartition, offsetAndMetadata)
         acc.updated(group, dataMap)
       }
       val csvReader = CsvUtils().readerFor[CsvRecordNoGroup]
@@ -612,14 +613,14 @@ object ConsumerGroupCommand extends Logging {
       // Single group CSV format: "topic,partition,offset"
       val dataMap = if (isSingleGroupQuery && isOldCsvFormat) {
         val group = opts.options.valueOf(opts.groupOpt)
-        lines.foldLeft(Map[String, Map[TopicPartition, OffsetAndMetadata]]()) { (acc, line) =>
+        lines.foldLeft(immutable.Map[String, immutable.Map[TopicPartition, OffsetAndMetadata]]()) { (acc, line) =>
           val CsvRecordNoGroup(topic, partition, offset) = csvReader.readValue[CsvRecordNoGroup](line)
           updateGroupMetadata(group, topic, partition, offset, acc)
         }
         // Multiple group CSV format: "group,topic,partition,offset"
       } else {
         val csvReader = CsvUtils().readerFor[CsvRecordWithGroup]
-        lines.foldLeft(Map[String, Map[TopicPartition, OffsetAndMetadata]]()) { (acc, line) =>
+        lines.foldLeft(immutable.Map[String, immutable.Map[TopicPartition, OffsetAndMetadata]]()) { (acc, line) =>
           val CsvRecordWithGroup(group, topic, partition, offset) = csvReader.readValue[CsvRecordWithGroup](line)
           updateGroupMetadata(group, topic, partition, offset, acc)
         }
@@ -654,7 +655,7 @@ object ConsumerGroupCommand extends Logging {
         val currentCommittedOffsets = getCommittedOffsets(groupId)
         val requestedOffsets = partitionsToReset.map { topicPartition =>
           val shiftBy = opts.options.valueOf(opts.resetShiftByOpt)
-          val currentOffset = currentCommittedOffsets.asScala.getOrElse(topicPartition,
+          val currentOffset = currentCommittedOffsets.getOrElse(topicPartition,
             throw new IllegalArgumentException(s"Cannot shift offset for partition $topicPartition since there is no current committed offset")).offset
           (topicPartition, currentOffset + shiftBy)
         }.toMap
@@ -706,8 +707,8 @@ object ConsumerGroupCommand extends Logging {
 
         val preparedOffsetsForPartitionsWithCommittedOffset = partitionsToResetWithCommittedOffset.map { topicPartition =>
           (topicPartition, new OffsetAndMetadata(currentCommittedOffsets.get(topicPartition) match {
-            case offset if offset != null => offset.offset
-            case _ => throw new IllegalStateException(s"Expected a valid current offset for topic partition: $topicPartition")
+            case Some(offset) => offset.offset
+            case None => throw new IllegalStateException(s"Expected a valid current offset for topic partition: $topicPartition")
           }))
         }.toMap
 
@@ -756,7 +757,7 @@ object ConsumerGroupCommand extends Logging {
             if (isSingleGroupQuery) CsvRecordNoGroup(k.topic, k.partition, v.offset)
             else CsvRecordWithGroup(groupId, k.topic, k.partition, v.offset)
           csvWriter.writeValueAsString(csvRecord)
-        }(collection.breakOut): List[String]
+        }
       }
       rows.mkString("")
     }
@@ -921,7 +922,7 @@ object ConsumerGroupCommand extends Logging {
     val allResetOffsetScenarioOpts: Set[OptionSpec[_]] = Set(resetToOffsetOpt, resetShiftByOpt,
       resetToDatetimeOpt, resetByDurationOpt, resetToEarliestOpt, resetToLatestOpt, resetToCurrentOpt, resetFromFileOpt)
 
-    def checkArgs() {
+    def checkArgs(): Unit = {
 
       CommandLineUtils.checkRequiredArgs(parser, options, bootstrapServerOpt)
 
