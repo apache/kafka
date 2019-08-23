@@ -57,7 +57,7 @@ object StateChangeLogMerger extends Logging {
   var startDate: Date = null
   var endDate: Date = null
 
-  def main(args: Array[String]) {
+  def main(args: Array[String]): Unit = {
 
     // Parse input arguments.
     val parser = new OptionParser(false)

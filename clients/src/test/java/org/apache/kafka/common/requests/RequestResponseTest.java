@@ -1702,8 +1702,8 @@ public class RequestResponseTest {
 
     private ListPartitionReassignmentsResponse createListPartitionReassignmentsResponse() {
         ListPartitionReassignmentsResponseData data = new ListPartitionReassignmentsResponseData();
-        data.topics().add(
-                new ListPartitionReassignmentsResponseData.OngoingTopicReassignment()
+        data.setTopics(Collections.singletonList(
+            new ListPartitionReassignmentsResponseData.OngoingTopicReassignment()
                         .setName("topic")
                         .setPartitions(Collections.singletonList(
                                 new ListPartitionReassignmentsResponseData.OngoingPartitionReassignment()
@@ -1713,7 +1713,7 @@ public class RequestResponseTest {
                                         .setRemovingReplicas(Collections.singletonList(1))
                                 )
                         )
-        );
+        ));
         return new ListPartitionReassignmentsResponse(data);
     }
 }

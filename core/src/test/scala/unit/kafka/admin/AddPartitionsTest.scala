@@ -49,7 +49,7 @@ class AddPartitionsTest extends BaseRequestTest {
   val topic5Assignment = Map(1->Seq(0,1))
 
   @Before
-  override def setUp() {
+  override def setUp(): Unit = {
     super.setUp()
 
     createTopic(topic1, partitionReplicaAssignment = topic1Assignment)

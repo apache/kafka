@@ -41,13 +41,13 @@ class DeleteTopicTest extends ZooKeeperTestHarness {
   val expectedReplicaAssignment = Map(0 -> List(0, 1, 2))
 
   @After
-  override def tearDown() {
+  override def tearDown(): Unit = {
     TestUtils.shutdownServers(servers)
     super.tearDown()
   }
 
   @Test
-  def testDeleteTopicWithAllAliveReplicas() {
+  def testDeleteTopicWithAllAliveReplicas(): Unit = {
     val topic = "test"
     servers = createTestTopicAndCluster(topic)
     // start topic deletion
@@ -56,7 +56,7 @@ class DeleteTopicTest extends ZooKeeperTestHarness {
   }
 
   @Test
-  def testResumeDeleteTopicWithRecoveredFollower() {
+  def testResumeDeleteTopicWithRecoveredFollower(): Unit = {
     val topicPartition = new TopicPartition("test", 0)
     val topic = topicPartition.topic
     servers = createTestTopicAndCluster(topic)
@@ -80,7 +80,7 @@ class DeleteTopicTest extends ZooKeeperTestHarness {
   }
 
   @Test
-  def testResumeDeleteTopicOnControllerFailover() {
+  def testResumeDeleteTopicOnControllerFailover(): Unit = {
     val topicPartition = new TopicPartition("test", 0)
     val topic = topicPartition.topic
     servers = createTestTopicAndCluster(topic)
@@ -106,7 +106,7 @@ class DeleteTopicTest extends ZooKeeperTestHarness {
   }
 
   @Test
-  def testPartitionReassignmentDuringDeleteTopic() {
+  def testPartitionReassignmentDuringDeleteTopic(): Unit = {
     val expectedReplicaAssignment = Map(0 -> List(0, 1, 2))
     val topic = "test"
     val topicPartition = new TopicPartition(topic, 0)
@@ -177,7 +177,7 @@ class DeleteTopicTest extends ZooKeeperTestHarness {
   }
 
   @Test
-  def testIncreasePartitionCountDuringDeleteTopic() {
+  def testIncreasePartitionCountDuringDeleteTopic(): Unit = {
     val expectedReplicaAssignment = Map(0 -> List(0, 1, 2))
     val topic = "test"
     val topicPartition = new TopicPartition(topic, 0)
@@ -234,7 +234,7 @@ class DeleteTopicTest extends ZooKeeperTestHarness {
 
 
   @Test
-  def testDeleteTopicDuringAddPartition() {
+  def testDeleteTopicDuringAddPartition(): Unit = {
     val topic = "test"
     servers = createTestTopicAndCluster(topic)
     val leaderIdOpt = zkClient.getLeaderForPartition(new TopicPartition(topic, 0))
@@ -262,7 +262,7 @@ class DeleteTopicTest extends ZooKeeperTestHarness {
   }
 
   @Test
-  def testAddPartitionDuringDeleteTopic() {
+  def testAddPartitionDuringDeleteTopic(): Unit = {
     zkClient.createTopLevelPaths()
     val topic = "test"
     servers = createTestTopicAndCluster(topic)
@@ -280,7 +280,7 @@ class DeleteTopicTest extends ZooKeeperTestHarness {
   }
 
   @Test
-  def testRecreateTopicAfterDeletion() {
+  def testRecreateTopicAfterDeletion(): Unit = {
     val expectedReplicaAssignment = Map(0 -> List(0, 1, 2))
     val topic = "test"
     val topicPartition = new TopicPartition(topic, 0)
@@ -296,7 +296,7 @@ class DeleteTopicTest extends ZooKeeperTestHarness {
   }
 
   @Test
-  def testDeleteNonExistingTopic() {
+  def testDeleteNonExistingTopic(): Unit = {
     val topicPartition = new TopicPartition("test", 0)
     val topic = topicPartition.topic
     servers = createTestTopicAndCluster(topic)
@@ -319,7 +319,7 @@ class DeleteTopicTest extends ZooKeeperTestHarness {
   }
 
   @Test
-  def testDeleteTopicWithCleaner() {
+  def testDeleteTopicWithCleaner(): Unit = {
     val topicName = "test"
     val topicPartition = new TopicPartition(topicName, 0)
     val topic = topicPartition.topic
@@ -349,7 +349,7 @@ class DeleteTopicTest extends ZooKeeperTestHarness {
   }
 
   @Test
-  def testDeleteTopicAlreadyMarkedAsDeleted() {
+  def testDeleteTopicAlreadyMarkedAsDeleted(): Unit = {
     val topicPartition = new TopicPartition("test", 0)
     val topic = topicPartition.topic
     servers = createTestTopicAndCluster(topic)
@@ -397,7 +397,7 @@ class DeleteTopicTest extends ZooKeeperTestHarness {
   }
 
   @Test
-  def testDisableDeleteTopic() {
+  def testDisableDeleteTopic(): Unit = {
     val topicPartition = new TopicPartition("test", 0)
     val topic = topicPartition.topic
     servers = createTestTopicAndCluster(topic, deleteTopicEnabled = false)
@@ -415,7 +415,7 @@ class DeleteTopicTest extends ZooKeeperTestHarness {
   }
 
   @Test
-  def testDeletingPartiallyDeletedTopic() {
+  def testDeletingPartiallyDeletedTopic(): Unit = {
     /**
       * A previous controller could have deleted some partitions of a topic from ZK, but not all partitions, and then crashed.
       * In that case, the new controller should be able to handle the partially deleted topic, and finish the deletion.

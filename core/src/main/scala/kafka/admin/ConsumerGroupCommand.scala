@@ -42,7 +42,7 @@ import scala.reflect.ClassTag
 
 object ConsumerGroupCommand extends Logging {
 
-  def main(args: Array[String]) {
+  def main(args: Array[String]): Unit = {
     val opts = new ConsumerGroupCommandOptions(args)
 
     CommandLineUtils.printHelpAndExitIfNeeded(opts, "This tool helps to list all consumer groups, describe a consumer group, delete consumer group info, or reset consumer group offsets.")
@@ -158,9 +158,10 @@ object ConsumerGroupCommand extends Logging {
     }
   }
 
-  class ConsumerGroupService(val opts: ConsumerGroupCommandOptions) {
+  class ConsumerGroupService(val opts: ConsumerGroupCommandOptions,
+                             private[admin] val configOverrides: Map[String, String] = Map.empty) {
 
-    private val adminClient = createAdminClient()
+    private val adminClient = createAdminClient(configOverrides)
 
     // `consumers` are only needed for `describe`, so we instantiate them lazily
     private lazy val consumers: mutable.Map[String, KafkaConsumer[String, String]] = mutable.Map.empty
@@ -521,16 +522,17 @@ object ConsumerGroupCommand extends Logging {
       successfulLogTimestampOffsets ++ getLogEndOffsets(groupId, unsuccessfulOffsetsForTimes.keySet.toSeq)
     }
 
-    def close() {
+    def close(): Unit = {
       adminClient.close()
       consumers.values.foreach(consumer =>
         Option(consumer).foreach(_.close())
       )
     }
 
-    private def createAdminClient(): Admin = {
+    private def createAdminClient(configOverrides: Map[String, String]): Admin = {
       val props = if (opts.options.has(opts.commandConfigOpt)) Utils.loadProps(opts.options.valueOf(opts.commandConfigOpt)) else new Properties()
       props.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, opts.options.valueOf(opts.bootstrapServerOpt))
+      configOverrides.foreach { case (k, v) => props.put(k, v)}
       admin.AdminClient.create(props)
     }
 
@@ -920,7 +922,7 @@ object ConsumerGroupCommand extends Logging {
     val allResetOffsetScenarioOpts: Set[OptionSpec[_]] = Set(resetToOffsetOpt, resetShiftByOpt,
       resetToDatetimeOpt, resetByDurationOpt, resetToEarliestOpt, resetToLatestOpt, resetToCurrentOpt, resetFromFileOpt)
 
-    def checkArgs() {
+    def checkArgs(): Unit = {
 
       CommandLineUtils.checkRequiredArgs(parser, options, bootstrapServerOpt)
 

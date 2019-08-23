@@ -31,7 +31,7 @@ import scala.collection.Seq
 abstract class BaseConsumerTest extends AbstractConsumerTest {
 
   @Test
-  def testSimpleConsumption() {
+  def testSimpleConsumption(): Unit = {
     val numRecords = 10000
     val producer = createProducer()
     sendRecords(producer, numRecords, tp)
@@ -49,7 +49,7 @@ abstract class BaseConsumerTest extends AbstractConsumerTest {
   }
 
   @Test
-  def testCoordinatorFailover() {
+  def testCoordinatorFailover(): Unit = {
     val listener = new TestConsumerReassignmentListener()
     this.consumerConfig.setProperty(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, "5001")
     this.consumerConfig.setProperty(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, "2000")

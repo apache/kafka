@@ -86,7 +86,7 @@ class ReplicationQuotaManager(val config: ReplicationQuotaManagerConfig,
     *
     * @param quota
     */
-  def updateQuota(quota: Quota) {
+  def updateQuota(quota: Quota): Unit = {
     inWriteLock(lock) {
       this.quota = quota
       //The metric could be expired by another thread, so use a local variable and null check.
@@ -132,7 +132,7 @@ class ReplicationQuotaManager(val config: ReplicationQuotaManagerConfig,
     *
     * @param value
     */
-  def record(value: Long) {
+  def record(value: Long): Unit = {
     try {
       sensor().record(value)
     } catch {
@@ -149,7 +149,7 @@ class ReplicationQuotaManager(val config: ReplicationQuotaManagerConfig,
     * @param partitions the set of throttled partitions
     * @return
     */
-  def markThrottled(topic: String, partitions: Seq[Int]) {
+  def markThrottled(topic: String, partitions: Seq[Int]): Unit = {
     throttledPartitions.put(topic, partitions)
   }
 
@@ -159,7 +159,7 @@ class ReplicationQuotaManager(val config: ReplicationQuotaManagerConfig,
     * @param topic
     * @return
     */
-  def markThrottled(topic: String) {
+  def markThrottled(topic: String): Unit = {
     markThrottled(topic, AllReplicas)
   }
 
@@ -169,7 +169,7 @@ class ReplicationQuotaManager(val config: ReplicationQuotaManagerConfig,
     * @param topic
     * @return
     */
-  def removeThrottle(topic: String) {
+  def removeThrottle(topic: String): Unit = {
     throttledPartitions.remove(topic)
   }
 
