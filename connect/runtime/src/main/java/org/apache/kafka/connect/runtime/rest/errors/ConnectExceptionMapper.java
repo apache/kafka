@@ -36,7 +36,7 @@ public class ConnectExceptionMapper implements ExceptionMapper<Exception> {
 
     @Override
     public Response toResponse(Exception exception) {
-        log.debug("Uncaught exception in REST call to /{}", uriInfo.getPath(), exception);
+        log.error("Uncaught exception in REST call to /{}", uriInfo.getPath(), exception);
 
         if (exception instanceof ConnectRestException) {
             ConnectRestException restException = (ConnectRestException) exception;
@@ -55,10 +55,6 @@ public class ConnectExceptionMapper implements ExceptionMapper<Exception> {
             return Response.status(Response.Status.CONFLICT)
                     .entity(new ErrorMessage(Response.Status.CONFLICT.getStatusCode(), exception.getMessage()))
                     .build();
-        }
-
-        if (!log.isDebugEnabled()) {
-            log.error("Uncaught exception in REST call to /{}", uriInfo.getPath(), exception);
         }
 
         final int statusCode;

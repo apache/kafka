@@ -333,7 +333,8 @@ public class ConnectorConfig extends AbstractConfig {
         try {
             transformation = transformationCls.asSubclass(Transformation.class).newInstance();
         } catch (Exception e) {
-            throw new ConfigException(key, String.valueOf(transformationCls), "Error getting config definition from Transformation: " + e.getMessage());
+            String exDetail = e.getMessage() == null ? e.toString() : e.getMessage();
+            throw new ConfigException(key, String.valueOf(transformationCls), "Error getting config definition from Transformation: " + exDetail);
         }
         ConfigDef configDef = transformation.config();
         if (null == configDef) {
