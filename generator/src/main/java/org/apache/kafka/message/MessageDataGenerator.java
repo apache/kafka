@@ -903,35 +903,31 @@ public final class MessageDataGenerator {
             buffer.printf("struct.setByteArray(\"%s\", this.%s);%n",
                 field.snakeCaseName(), field.camelCaseName());
         } else if (field.type().isArray()) {
-            boolean maybeNull = generateNullCheck(curVersions, field);
-            if (maybeNull) {
-                buffer.printf("struct.set(\"%s\", null);%n", field.snakeCaseName());
-                buffer.decrementIndent();
-                buffer.printf("} else {%n");
-                buffer.incrementIndent();
-            }
-            FieldType.ArrayType arrayType = (FieldType.ArrayType) field.type();
-            FieldType elementType = arrayType.elementType();
-            String boxdElementType = elementType.isStruct() ? "Struct" : getBoxedJavaType(elementType);
-            buffer.printf("%s[] nestedObjects = new %s[%s.size()];%n",
-                boxdElementType, boxdElementType, field.camelCaseName());
-            buffer.printf("int i = 0;%n");
-            buffer.printf("for (%s element : this.%s) {%n",
-                getBoxedJavaType(arrayType.elementType()), field.camelCaseName());
-            buffer.incrementIndent();
-            if (elementType.isStruct()) {
-                buffer.printf("nestedObjects[i++] = element.toStruct(version);%n");
-            } else {
-                buffer.printf("nestedObjects[i++] = element;%n");
-            }
-            buffer.decrementIndent();
-            buffer.printf("}%n");
-            buffer.printf("struct.set(\"%s\", (Object[]) nestedObjects);%n",
-                field.snakeCaseName());
-            if (maybeNull) {
-                buffer.decrementIndent();
-                buffer.printf("}%n");
-            }
+            IsNullConditional.forField(field).
+                possibleVersions(curVersions).
+                ifNull(() -> {
+                    buffer.printf("struct.set(\"%s\", null);%n", field.snakeCaseName());
+                }).
+                ifNotNull(() -> {
+                    FieldType.ArrayType arrayType = (FieldType.ArrayType) field.type();
+                    FieldType elementType = arrayType.elementType();
+                    String boxdElementType = elementType.isStruct() ? "Struct" : getBoxedJavaType(elementType);
+                    buffer.printf("%s[] nestedObjects = new %s[%s.size()];%n",
+                        boxdElementType, boxdElementType, field.camelCaseName());
+                    buffer.printf("int i = 0;%n");
+                    buffer.printf("for (%s element : this.%s) {%n",
+                        getBoxedJavaType(arrayType.elementType()), field.camelCaseName());
+                    buffer.incrementIndent();
+                    if (elementType.isStruct()) {
+                        buffer.printf("nestedObjects[i++] = element.toStruct(version);%n");
+                    } else {
+                        buffer.printf("nestedObjects[i++] = element;%n");
+                    }
+                    buffer.decrementIndent();
+                    buffer.printf("}%n");
+                    buffer.printf("struct.set(\"%s\", (Object[]) nestedObjects);%n",
+                        field.snakeCaseName());
+                }).generate(buffer);
         } else {
             throw new RuntimeException("Unsupported field type " + field.type());
         }
@@ -1216,15 +1212,6 @@ public final class MessageDataGenerator {
         } else {
             throw new RuntimeException("Unsupported field type " + field.type());
         }
-    }
-
-    private boolean generateNullCheck(Versions prevVersions, FieldSpec field) {
-        if (prevVersions.intersect(field.nullableVersions()).empty()) {
-            return false;
-        }
-        buffer.printf("if (%s == null) {%n", field.camelCaseName());
-        buffer.incrementIndent();
-        return true;
     }
 
     private String fieldDefault(FieldSpec field) {
