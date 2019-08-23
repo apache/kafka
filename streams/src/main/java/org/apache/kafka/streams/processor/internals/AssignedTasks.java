@@ -332,7 +332,7 @@ abstract class AssignedTasks<T extends Task> {
     void close(final boolean clean) {
         final AtomicReference<RuntimeException> firstException = new AtomicReference<>(null);
 
-        for(final T task: allTasks()) {
+        for (final T task: allTasks()) {
             try {
                 if (suspended.containsKey(task.id())) {
                     task.closeSuspended(clean, false, null);

@@ -52,7 +52,6 @@ import org.apache.log4j.spi.LoggingEvent;
 import org.easymock.EasyMock;
 import org.junit.Before;
 import org.junit.Test;
-import scala.collection.immutable.List;
 
 public class AssignedStreamsTasksTest {
 
@@ -540,9 +539,8 @@ public class AssignedStreamsTasksTest {
             LogCaptureAppender.setClassLoggerLevel(AssignedStreamsTasks.class, previousLevel);
             LogCaptureAppender.unregister(appender);
         }
-        final List<LoggingEvent> errorList = appender.getMessages().toList();
-        if (!errorList.isEmpty()) {
-            final LoggingEvent firstError = errorList.iterator().next();
+        if (!appender.getMessages().isEmpty()) {
+            final LoggingEvent firstError = appender.getMessages().head();
             final String firstErrorCause =
                 firstError.getThrowableStrRep() != null
                     ? String.join("\n", firstError.getThrowableStrRep())
@@ -551,7 +549,7 @@ public class AssignedStreamsTasksTest {
             final String failMsg =
                 String.format("Expected no ERROR message while closing assignedTasks, but got %d. " +
                     "First error: %s. Cause: %s",
-                    errorList.size(),
+                    appender.getMessages().size(),
                     firstError.getMessage(),
                     firstErrorCause);
             fail(failMsg);
