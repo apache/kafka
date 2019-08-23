@@ -29,6 +29,7 @@ import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.Message;
+import org.apache.kafka.common.protocol.ObjectSizeCache;
 import org.apache.kafka.common.protocol.types.ArrayOf;
 import org.apache.kafka.common.protocol.types.BoundField;
 import org.apache.kafka.common.protocol.types.Schema;
@@ -367,10 +368,11 @@ public final class MessageTest {
     }
 
     private void testByteBufferRoundTrip(short version, Message message, Message expected) throws Exception {
-        int size = message.size(version);
+        ObjectSizeCache sizeCache = new ObjectSizeCache();
+        int size = message.size(sizeCache, version);
         ByteBuffer buf = ByteBuffer.allocate(size);
         ByteBufferAccessor byteBufferAccessor = new ByteBufferAccessor(buf);
-        message.write(byteBufferAccessor, version);
+        message.write(byteBufferAccessor, sizeCache, version);
         assertEquals(size, buf.position());
         Message message2 = message.getClass().newInstance();
         buf.flip();
@@ -581,11 +583,12 @@ public final class MessageTest {
 
     private void verifyWriteRaisesUve(short version, String problemFieldName,
                                      Message message) throws Exception {
-        int size = message.size(version);
+        ObjectSizeCache sizeCache = new ObjectSizeCache();
+        int size = message.size(sizeCache, version);
         ByteBuffer buf = ByteBuffer.allocate(size);
         ByteBufferAccessor byteBufferAccessor = new ByteBufferAccessor(buf);
         try {
-            message.write(byteBufferAccessor, version);
+            message.write(byteBufferAccessor, sizeCache, version);
             fail("Expected to see an UnsupportedVersionException when writing " +
                 message + " at version " + version);
         } catch (UnsupportedVersionException e) {
@@ -595,9 +598,10 @@ public final class MessageTest {
     }
 
     private void verifyWriteSucceeds(short version, Message message) throws Exception {
-        int size = message.size(version);
+        ObjectSizeCache sizeCache = new ObjectSizeCache();
+        int size = message.size(sizeCache, version);
         ByteBuffer buf = ByteBuffer.allocate(size);
         ByteBufferAccessor byteBufferAccessor = new ByteBufferAccessor(buf);
-        message.write(byteBufferAccessor, version);
+        message.write(byteBufferAccessor, sizeCache, version);
     }
 }

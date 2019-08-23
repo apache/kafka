@@ -683,8 +683,9 @@ public final class MessageDataGenerator {
     private void generateClassWriter(String className, StructSpec struct,
             Versions parentVersions) {
         headerGenerator.addImport(MessageGenerator.WRITABLE_CLASS);
+        headerGenerator.addImport(MessageGenerator.OBJECT_SIZE_CACHE_CLASS);
         buffer.printf("@Override%n");
-        buffer.printf("public void write(Writable writable, short version) {%n");
+        buffer.printf("public void write(Writable writable, ObjectSizeCache sizeCache, short version) {%n");
         buffer.incrementIndent();
         if (generateInverseVersionCheck(parentVersions, struct.versions())) {
             buffer.incrementIndent();
@@ -718,7 +719,7 @@ public final class MessageDataGenerator {
         } else if (type instanceof FieldType.Int64FieldType) {
             return String.format("writable.writeLong(%s)", name);
         } else if (type instanceof FieldType.StructType) {
-            return String.format("%s.write(writable, version)", name);
+            return String.format("%s.write(writable, sizeCache, version)", name);
         } else {
             throw new RuntimeException("Unsupported field type " + type);
         }
@@ -970,18 +971,18 @@ public final class MessageDataGenerator {
 
     private void generateClassSize(String className, StructSpec struct,
                                    Versions parentVersions) {
+        headerGenerator.addImport(MessageGenerator.OBJECT_SIZE_CACHE_CLASS);
         buffer.printf("@Override%n");
-        buffer.printf("public int size(short version) {%n");
+        buffer.printf("public int size(ObjectSizeCache sizeCache, short version) {%n");
         buffer.incrementIndent();
         buffer.printf("int size = 0;%n");
-        if (generateInverseVersionCheck(parentVersions, struct.versions())) {
-            buffer.incrementIndent();
-            headerGenerator.addImport(MessageGenerator.UNSUPPORTED_VERSION_EXCEPTION_CLASS);
-            buffer.printf("throw new UnsupportedVersionException(\"Can't size " +
-                "version \" + version + \" of %s\");%n", className);
-            buffer.decrementIndent();
-            buffer.printf("}%n");
-        }
+        VersionConditional.forVersions(parentVersions, struct.versions()).
+            ifNotMember(() -> {
+                headerGenerator.addImport(MessageGenerator.UNSUPPORTED_VERSION_EXCEPTION_CLASS);
+                buffer.printf("throw new UnsupportedVersionException(\"Can't size " +
+                    "version \" + version + \" of %s\");%n", className);
+            }).
+            generate(buffer);
         Versions curVersions = parentVersions.intersect(struct.versions());
         if (curVersions.empty()) {
             throw new RuntimeException("Version ranges " + parentVersions +
@@ -1020,7 +1021,7 @@ public final class MessageDataGenerator {
                 buffer.printf("}%n");
             }
         } else if (type instanceof FieldType.StructType) {
-            buffer.printf("size += %s.size(version);%n", fieldName);
+            buffer.printf("size += %s.size(sizeCache, version);%n", fieldName);
         } else {
             throw new RuntimeException("Unsupported type " + type);
         }
