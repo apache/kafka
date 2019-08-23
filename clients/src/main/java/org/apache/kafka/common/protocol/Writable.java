@@ -24,5 +24,4 @@ public interface Writable {
     void writeLong(long val);
     void writeByteArray(byte[] arr);
     void writeUnsignedVarint(int i);
-    void writeUnsignedVarlong(long i);
 }

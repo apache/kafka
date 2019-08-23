@@ -26,7 +26,6 @@ public interface Readable {
     long readLong();
     void readArray(byte[] arr);
     int readUnsignedVarint();
-    long readUnsignedVarlong();
 
     default String readString(int length) {
         byte[] arr = new byte[length];

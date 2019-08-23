@@ -42,7 +42,6 @@ public class ByteUtilsTest {
     private final byte xFF = (byte) 0xff;
     private final byte x80 = (byte) 0x80;
     private final byte x81 = (byte) 0x81;
-    private final byte x87 = (byte) 0x87;
     private final byte xBF = (byte) 0xbf;
     private final byte xC0 = (byte) 0xc0;
     private final byte xFE = (byte) 0xfe;
@@ -162,25 +161,6 @@ public class ByteUtilsTest {
     }
 
     @Test
-    public void testUnsignedVarlongSerde() throws Exception {
-        assertUnsignedVarlongSerde(0, new byte[] {x00});
-        assertUnsignedVarlongSerde(-1, new byte[] {xFF, xFF, xFF, xFF, x0F});
-        assertUnsignedVarlongSerde(1, new byte[] {x01});
-        assertUnsignedVarlongSerde(63, new byte[] {x3F});
-        assertUnsignedVarlongSerde(-64, new byte[] {xC0, xFF, xFF, xFF, x0F});
-        assertUnsignedVarlongSerde(64, new byte[] {x40});
-        assertUnsignedVarlongSerde(8191, new byte[] {xFF, x3F});
-        assertUnsignedVarlongSerde(-8192, new byte[] {x80, xC0, xFF, xFF, x0F});
-        assertUnsignedVarlongSerde(8192, new byte[] {x80, x40});
-        assertUnsignedVarlongSerde(-8193, new byte[] {xFF, xBF, xFF, xFF, x0F});
-        assertUnsignedVarlongSerde(1048575, new byte[] {xFF, xFF, x3F});
-        assertUnsignedVarlongSerde(1048576, new byte[] {x80, x80, x40});
-        assertUnsignedVarlongSerde(Integer.MAX_VALUE, new byte[] {xFF, xFF, xFF, xFF, x07});
-        assertUnsignedVarlongSerde(Integer.MIN_VALUE, new byte[] {x80, x80, x80, x80, x08});
-        assertUnsignedVarlongSerde(549755813888L, new byte[] {xFF, xFF, xFF, xFF, x87, x40});
-    }
-
-    @Test
     public void testVarlongSerde() throws Exception {
         assertVarlongSerde(0, new byte[] {x00});
         assertVarlongSerde(-1, new byte[] {x01});
@@ -271,22 +251,6 @@ public class ByteUtilsTest {
         assertArrayEquals(expectedEncoding, Utils.toArray(buf));
         DataInputStream in = new DataInputStream(new ByteBufferInputStream(buf));
         assertEquals(value, ByteUtils.readVarint(in));
-    }
-
-    private void assertUnsignedVarlongSerde(long value, byte[] expectedEncoding) throws IOException {
-        ByteBuffer buf = ByteBuffer.allocate(32);
-        ByteUtils.writeUnsignedVarlong(value, buf);
-        buf.flip();
-        assertEquals(value, ByteUtils.readUnsignedVarlong(buf.duplicate()));
-        assertArrayEquals(expectedEncoding, Utils.toArray(buf));
-
-        buf.rewind();
-        DataOutputStream out = new DataOutputStream(new ByteBufferOutputStream(buf));
-        ByteUtils.writeUnsignedVarlong(value, out);
-        buf.flip();
-        assertArrayEquals(expectedEncoding, Utils.toArray(buf));
-        DataInputStream in = new DataInputStream(new ByteBufferInputStream(buf));
-        assertEquals(value, ByteUtils.readUnsignedVarlong(in));
     }
 
     private void assertVarlongSerde(long value, byte[] expectedEncoding) throws IOException {
