@@ -41,6 +41,6 @@ public interface Log4jControllerMBean {
      * @param level the level to be set
      * @return true, if level was successfully set; false otherwise.
      */
-    Boolean setLogLevel(String logger, String level);
+    boolean setLogLevel(String logger, String level);
 
 }

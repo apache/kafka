@@ -65,7 +65,7 @@ public class Log4jController implements Log4jControllerMBean {
     }
 
     @Override
-    public Boolean setLogLevel(String name, String level) {
+    public boolean setLogLevel(String name, String level) {
         if (name.trim().isEmpty() || level.trim().isEmpty()) {
             return false;
         }
