@@ -399,14 +399,13 @@ public final class MessageDataGenerator {
         buffer.printf("@Override%n");
         buffer.printf("public void read(Readable readable, short version) {%n");
         buffer.incrementIndent();
-        if (generateInverseVersionCheck(parentVersions, struct.versions())) {
-            buffer.incrementIndent();
-            headerGenerator.addImport(MessageGenerator.UNSUPPORTED_VERSION_EXCEPTION_CLASS);
-            buffer.printf("throw new UnsupportedVersionException(\"Can't read " +
-                "version \" + version + \" of %s\");%n", className);
-            buffer.decrementIndent();
-            buffer.printf("}%n");
-        }
+        VersionConditional.forVersions(parentVersions, struct.versions()).
+            ifNotMember(() -> {
+                headerGenerator.addImport(MessageGenerator.UNSUPPORTED_VERSION_EXCEPTION_CLASS);
+                buffer.printf("throw new UnsupportedVersionException(\"Can't read " +
+                    "version \" + version + \" of %s\");%n", className);
+            }).
+            generate(buffer);
         Versions curVersions = parentVersions.intersect(struct.versions());
         if (curVersions.empty()) {
             throw new RuntimeException("Version ranges " + parentVersions +
@@ -560,14 +559,13 @@ public final class MessageDataGenerator {
         buffer.printf("@Override%n");
         buffer.printf("public void fromStruct(Struct struct, short version) {%n");
         buffer.incrementIndent();
-        if (generateInverseVersionCheck(parentVersions, struct.versions())) {
-            buffer.incrementIndent();
-            headerGenerator.addImport(MessageGenerator.UNSUPPORTED_VERSION_EXCEPTION_CLASS);
-            buffer.printf("throw new UnsupportedVersionException(\"Can't read " +
-                "version \" + version + \" of %s\");%n", className);
-            buffer.decrementIndent();
-            buffer.printf("}%n");
-        }
+        VersionConditional.forVersions(parentVersions, struct.versions()).
+            ifNotMember(() -> {
+                headerGenerator.addImport(MessageGenerator.UNSUPPORTED_VERSION_EXCEPTION_CLASS);
+                buffer.printf("throw new UnsupportedVersionException(\"Can't read " +
+                    "version \" + version + \" of %s\");%n", className);
+            }).
+            generate(buffer);
         Versions curVersions = parentVersions.intersect(struct.versions());
         if (curVersions.empty()) {
             throw new RuntimeException("Version ranges " + parentVersions +
@@ -687,14 +685,13 @@ public final class MessageDataGenerator {
         buffer.printf("@Override%n");
         buffer.printf("public void write(Writable writable, ObjectSizeCache sizeCache, short version) {%n");
         buffer.incrementIndent();
-        if (generateInverseVersionCheck(parentVersions, struct.versions())) {
-            buffer.incrementIndent();
-            headerGenerator.addImport(MessageGenerator.UNSUPPORTED_VERSION_EXCEPTION_CLASS);
-            buffer.printf("throw new UnsupportedVersionException(\"Can't write " +
-                "version \" + version + \" of %s\");%n", className);
-            buffer.decrementIndent();
-            buffer.printf("}%n");
-        }
+        VersionConditional.forVersions(parentVersions, struct.versions()).
+            ifNotMember(() -> {
+                headerGenerator.addImport(MessageGenerator.UNSUPPORTED_VERSION_EXCEPTION_CLASS);
+                buffer.printf("throw new UnsupportedVersionException(\"Can't write " +
+                    "version \" + version + \" of %s\");%n", className);
+            }).
+            generate(buffer);
         Versions curVersions = parentVersions.intersect(struct.versions());
         if (curVersions.empty()) {
             throw new RuntimeException("Version ranges " + parentVersions +
@@ -875,14 +872,13 @@ public final class MessageDataGenerator {
         buffer.printf("@Override%n");
         buffer.printf("public Struct toStruct(short version) {%n");
         buffer.incrementIndent();
-        if (generateInverseVersionCheck(parentVersions, struct.versions())) {
-            buffer.incrementIndent();
-            headerGenerator.addImport(MessageGenerator.UNSUPPORTED_VERSION_EXCEPTION_CLASS);
-            buffer.printf("throw new UnsupportedVersionException(\"Can't write " +
-                "version \" + version + \" of %s\");%n", className);
-            buffer.decrementIndent();
-            buffer.printf("}%n");
-        }
+        VersionConditional.forVersions(parentVersions, struct.versions()).
+            ifNotMember(() -> {
+                headerGenerator.addImport(MessageGenerator.UNSUPPORTED_VERSION_EXCEPTION_CLASS);
+                buffer.printf("throw new UnsupportedVersionException(\"Can't write " +
+                    "version \" + version + \" of %s\");%n", className);
+            }).
+            generate(buffer);
         Versions curVersions = parentVersions.intersect(struct.versions());
         if (curVersions.empty()) {
             throw new RuntimeException("Version ranges " + parentVersions +
@@ -1277,26 +1273,6 @@ public final class MessageDataGenerator {
             if (cur.highest() < prev.highest()) {
                 buffer.printf("if (version <= %d) {%n", cur.highest());
                 buffer.incrementIndent();
-                return true;
-            } else {
-                return false;
-            }
-        }
-    }
-
-    private boolean generateInverseVersionCheck(Versions prev, Versions cur) {
-        if (cur.lowest() > prev.lowest()) {
-            if (cur.highest() < prev.highest()) {
-                buffer.printf("if ((version < %d) || (version > %d)) {%n",
-                    cur.lowest(), cur.highest());
-                return true;
-            } else {
-                buffer.printf("if (version < %d) {%n", cur.lowest());
-                return true;
-            }
-        } else {
-            if (cur.highest() < prev.highest()) {
-                buffer.printf("if (version > %d) {%n", cur.highest());
                 return true;
             } else {
                 return false;
