@@ -412,36 +412,31 @@ public final class MessageDataGenerator {
                 " and " + struct.versions() + " have no versions in common.");
         }
         for (FieldSpec field : struct.fields()) {
-            generateFieldReader(field, curVersions);
+            boolean isVariableLength =
+                field.type().isArray() || field.type().isString() || field.type().isBytes();
+            VersionConditional.forVersions(field.versions(), curVersions).
+                alwaysEmitBlockScope(isVariableLength).
+                ifNotMember(() -> {
+                    buffer.printf("this.%s = %s;%n", field.camelCaseName(), fieldDefault(field));
+                }).
+                ifMember(() -> {
+                    if (isVariableLength) {
+                        Versions versions = curVersions.intersect(field.versions());
+                        generateVariableLengthReader(field.camelCaseName(),
+                            field.type(),
+                            versions,
+                            field.nullableVersions(),
+                            String.format("this.%s = ", field.camelCaseName()),
+                            String.format(";%n"),
+                            structRegistry.isStructArrayWithKeys(field));
+                    } else {
+                        buffer.printf("this.%s = %s;%n", field.camelCaseName(),
+                            primitiveReadExpression(field.type()));
+                    }
+                }).generate(buffer);
         }
         buffer.decrementIndent();
         buffer.printf("}%n");
-    }
-
-    private void generateFieldReader(FieldSpec field, Versions curVersions) {
-        boolean isVariableLength =
-            field.type().isArray() || field.type().isString() || field.type().isBytes();
-        VersionConditional.forVersions(field.versions(), curVersions).
-            ifNotMember(() -> {
-                buffer.printf("this.%s = %s;%n", field.camelCaseName(), fieldDefault(field));
-            }).
-            alwaysEmitBlockScope(isVariableLength).
-            ifMember(() -> {
-                if (isVariableLength) {
-                    Versions versions = curVersions.intersect(field.versions());
-                    generateVariableLengthReader(field.camelCaseName(),
-                        field.type(),
-                        versions,
-                        field.nullableVersions(),
-                        String.format("this.%s = ", field.camelCaseName()),
-                        String.format(";%n"),
-                        structRegistry.isStructArrayWithKeys(field));
-                } else {
-                    buffer.printf("this.%s = %s;%n", field.camelCaseName(),
-                        primitiveReadExpression(field.type()));
-                }
-            }).
-            generate(buffer);
     }
 
     private String primitiveReadExpression(FieldType type) {
@@ -579,60 +574,55 @@ public final class MessageDataGenerator {
     }
 
     private void generateFieldFromStruct(FieldSpec field, Versions curVersions) {
-        if (field.type().isArray()) {
-            boolean maybeAbsent =
-                generateVersionCheck(curVersions, field.versions());
-            if (!maybeAbsent) {
-                buffer.printf("{%n");
-                buffer.incrementIndent();
-            }
-            headerGenerator.addImport(MessageGenerator.STRUCT_CLASS);
-            buffer.printf("Object[] nestedObjects = struct.getArray(\"%s\");%n",
-                field.snakeCaseName());
-            boolean maybeNull = false;
-            if (!curVersions.intersect(field.nullableVersions()).empty()) {
-                maybeNull = true;
-                buffer.printf("if (nestedObjects == null) {%n", field.camelCaseName());
-                buffer.incrementIndent();
-                buffer.printf("this.%s = null;%n", field.camelCaseName());
-                buffer.decrementIndent();
-                buffer.printf("} else {%n");
-                buffer.incrementIndent();
-            }
-            FieldType.ArrayType arrayType = (FieldType.ArrayType) field.type();
-            FieldType elementType = arrayType.elementType();
-            buffer.printf("this.%s = new %s(nestedObjects.length);%n",
-                field.camelCaseName(), fieldConcreteJavaType(field));
-            buffer.printf("for (Object nestedObject : nestedObjects) {%n");
+        VersionConditional.forVersions(curVersions, field.versions()).
+            alwaysEmitBlockScope(field.type().isArray()).
+            ifNotMember(() -> {
+                buffer.printf("this.%s = %s;%n", field.camelCaseName(), fieldDefault(field));
+            }).
+            ifMember(() -> {
+                if (field.type().isArray()) {
+                    generateArrayFromStruct(field, curVersions.intersect(field.versions()));
+                } else {
+                    buffer.printf("this.%s = %s;%n",
+                        field.camelCaseName(),
+                        readFieldFromStruct(field.type(), field.snakeCaseName()));
+                }
+            }).
+            generate(buffer);
+    }
+
+    private void generateArrayFromStruct(FieldSpec field, Versions versions) {
+        headerGenerator.addImport(MessageGenerator.STRUCT_CLASS);
+        buffer.printf("Object[] nestedObjects = struct.getArray(\"%s\");%n",
+            field.snakeCaseName());
+        boolean maybeNull = false;
+        if (!versions.intersect(field.nullableVersions()).empty()) {
+            maybeNull = true;
+            buffer.printf("if (nestedObjects == null) {%n", field.camelCaseName());
             buffer.incrementIndent();
-            if (elementType.isStruct()) {
-                buffer.printf("this.%s.add(new %s((Struct) nestedObject, version));%n",
-                    field.camelCaseName(), elementType.toString());
-            } else {
-                buffer.printf("this.%s.add((%s) nestedObject);%n",
-                    field.camelCaseName(), getBoxedJavaType(elementType));
-            }
+            buffer.printf("this.%s = null;%n", field.camelCaseName());
+            buffer.decrementIndent();
+            buffer.printf("} else {%n");
+            buffer.incrementIndent();
+        }
+        FieldType.ArrayType arrayType = (FieldType.ArrayType) field.type();
+        FieldType elementType = arrayType.elementType();
+        buffer.printf("this.%s = new %s(nestedObjects.length);%n",
+            field.camelCaseName(), fieldConcreteJavaType(field));
+        buffer.printf("for (Object nestedObject : nestedObjects) {%n");
+        buffer.incrementIndent();
+        if (elementType.isStruct()) {
+            buffer.printf("this.%s.add(new %s((Struct) nestedObject, version));%n",
+                field.camelCaseName(), elementType.toString());
+        } else {
+            buffer.printf("this.%s.add((%s) nestedObject);%n",
+                field.camelCaseName(), getBoxedJavaType(elementType));
+        }
+        buffer.decrementIndent();
+        buffer.printf("}%n");
+        if (maybeNull) {
             buffer.decrementIndent();
             buffer.printf("}%n");
-            if (maybeNull) {
-                buffer.decrementIndent();
-                buffer.printf("}%n");
-            }
-            if (maybeAbsent) {
-                generateSetDefault(field);
-            } else {
-                buffer.decrementIndent();
-                buffer.printf("}%n");
-            }
-        } else {
-            boolean maybeAbsent =
-                generateVersionCheck(curVersions, field.versions());
-            buffer.printf("this.%s = %s;%n",
-                field.camelCaseName(),
-                readFieldFromStruct(field.type(), field.snakeCaseName()));
-            if (maybeAbsent) {
-                generateSetDefault(field);
-            }
         }
     }
 
@@ -698,7 +688,27 @@ public final class MessageDataGenerator {
                 " and " + struct.versions() + " have no versions in common.");
         }
         for (FieldSpec field : struct.fields()) {
-            generateFieldWriter(field, curVersions);
+            boolean isVariableLength =
+                field.type().isArray() || field.type().isString() || field.type().isBytes();
+            VersionConditional cond = VersionConditional.
+                forVersions(field.versions(), curVersions).
+                ifMember(() -> {
+                    if (isVariableLength) {
+                        generateVariableLengthWriter(field.camelCaseName(),
+                            field.type(),
+                            field.versions().intersect(curVersions),
+                            field.nullableVersions());
+                    } else {
+                        buffer.printf("%s;%n",
+                            primitiveWriteExpression(field.type(), field.camelCaseName()));
+                    }
+                });
+            if (!field.ignorable()) {
+                cond.ifNotMember(() -> {
+                    generateAbsentValueCheck(field);
+                });
+            }
+            cond.generate(buffer);
         }
         buffer.decrementIndent();
         buffer.printf("}%n");
@@ -720,29 +730,6 @@ public final class MessageDataGenerator {
         } else {
             throw new RuntimeException("Unsupported field type " + type);
         }
-    }
-
-    private void generateFieldWriter(FieldSpec field, Versions curVersions) {
-        boolean isVariableLength =
-            field.type().isArray() || field.type().isString() || field.type().isBytes();
-        VersionConditional cond = VersionConditional.
-            forVersions(field.versions(), curVersions).
-            ifMember(() -> {
-                if (isVariableLength) {
-                    generateVariableLengthWriter(field.camelCaseName(),
-                        field.type(),
-                        field.versions().intersect(curVersions),
-                        field.nullableVersions());
-                } else {
-                    buffer.printf("%s;%n", primitiveWriteExpression(field.type(), field.camelCaseName()));
-                }
-            });
-        if (!field.ignorable()) {
-            cond.ifNotMember(() -> {
-                generateAbsentValueCheck(field);
-            });
-        }
-        cond.generate(buffer);
     }
 
     private void generateVariableLengthWriter(String name,
@@ -886,7 +873,12 @@ public final class MessageDataGenerator {
         }
         buffer.printf("Struct struct = new Struct(SCHEMAS[version]);%n");
         for (FieldSpec field : struct.fields()) {
-            generateFieldToStruct(field, curVersions);
+            VersionConditional.forVersions(curVersions, field.versions()).
+                alwaysEmitBlockScope(field.type().isArray()).
+                ifMember(() -> {
+                    generateFieldToStruct(field, curVersions);
+                }).
+                generate(buffer);
         }
         buffer.printf("return struct;%n");
         buffer.decrementIndent();
@@ -905,30 +897,12 @@ public final class MessageDataGenerator {
                 (field.type() instanceof FieldType.Int32FieldType) ||
                 (field.type() instanceof FieldType.Int64FieldType) ||
                 (field.type() instanceof FieldType.StringFieldType)) {
-            boolean maybeAbsent =
-                generateVersionCheck(curVersions, field.versions());
             buffer.printf("struct.set(\"%s\", this.%s);%n",
                 field.snakeCaseName(), field.camelCaseName());
-            if (maybeAbsent) {
-                buffer.decrementIndent();
-                buffer.printf("}%n");
-            }
         } else if (field.type().isBytes()) {
-            boolean maybeAbsent =
-                generateVersionCheck(curVersions, field.versions());
             buffer.printf("struct.setByteArray(\"%s\", this.%s);%n",
                 field.snakeCaseName(), field.camelCaseName());
-            if (maybeAbsent) {
-                buffer.decrementIndent();
-                buffer.printf("}%n");
-            }
         } else if (field.type().isArray()) {
-            boolean maybeAbsent =
-                generateVersionCheck(curVersions, field.versions());
-            if (!maybeAbsent) {
-                buffer.printf("{%n");
-                buffer.incrementIndent();
-            }
             boolean maybeNull = generateNullCheck(curVersions, field);
             if (maybeNull) {
                 buffer.printf("struct.set(\"%s\", null);%n", field.snakeCaseName());
@@ -958,8 +932,6 @@ public final class MessageDataGenerator {
                 buffer.decrementIndent();
                 buffer.printf("}%n");
             }
-            buffer.decrementIndent();
-            buffer.printf("}%n");
         } else {
             throw new RuntimeException("Unsupported field type " + field.type());
         }
@@ -985,7 +957,10 @@ public final class MessageDataGenerator {
                 " and " + struct.versions() + " have no versions in common.");
         }
         for (FieldSpec field : struct.fields()) {
-            generateFieldSize(field, curVersions);
+            VersionConditional.forVersions(field.versions(), curVersions).
+                ifMember(() -> {
+                    generateFieldSize(field, field.versions().intersect(curVersions));
+                }).generate(buffer);
         }
         buffer.printf("return size;%n");
         buffer.decrementIndent();
@@ -1023,92 +998,87 @@ public final class MessageDataGenerator {
         }
     }
 
-    private void generateFieldSize(FieldSpec field, Versions curVersions) {
-        VersionConditional.forVersions(field.versions(), curVersions).
-            ifMember(() -> {
-                if (field.type().fixedLength().isPresent()) {
-                    buffer.printf("size += %d;%n", field.type().fixedLength().get());
-                    return;
-                }
-                Versions possibleVersions = curVersions.intersect(field.versions());
-                IsNullConditional.forField(field).
-                    alwaysEmitBlockScope(field.type().isString()).
-                    possibleVersions(possibleVersions).
-                    ifNull(() -> {
-                        Versions possibleNullVersions = possibleVersions.intersect(field.nullableVersions());
-                        VersionConditional.forVersions(flexibleVersions, possibleNullVersions).
-                            ifMember(() -> {
-                                buffer.printf("size += 1;%n");
-                            }).
-                            ifNotMember(() -> {
-                                if (field.type().isString()) {
-                                    buffer.printf("size += 2;%n");
-                                } else {
-                                    buffer.printf("size += 4;%n");
-                                }
-                            }).
-                            generate(buffer);
+    private void generateFieldSize(FieldSpec field, Versions possibleVersions) {
+        if (field.type().fixedLength().isPresent()) {
+            buffer.printf("size += %d;%n", field.type().fixedLength().get());
+            return;
+        }
+        IsNullConditional.forField(field).
+            alwaysEmitBlockScope(field.type().isString()).
+            possibleVersions(possibleVersions).
+            ifNull(() -> {
+                Versions possibleNullVersions = possibleVersions.intersect(field.nullableVersions());
+                VersionConditional.forVersions(flexibleVersions, possibleNullVersions).
+                    ifMember(() -> {
+                        buffer.printf("size += 1;%n");
                     }).
-                    ifNotNull(() -> {
+                    ifNotMember(() -> {
                         if (field.type().isString()) {
-                            headerGenerator.addImport(MessageGenerator.MESSAGE_UTIL_CLASS);
-                            buffer.printf("int stringLength = MessageUtil.serializedUtf8Length(%s);%n",
-                                field.camelCaseName());
-                            buffer.printf("size += stringLength;%n");
-                            VersionConditional.forVersions(flexibleVersions, possibleVersions).
-                                ifMember(() -> {
-                                    headerGenerator.addImport(MessageGenerator.BYTE_UTILS_CLASS);
-                                    buffer.printf("size += ByteUtils.sizeOfUnsignedVarint(stringLength + 1);%n");
-                                }).
-                                ifNotMember(() -> {
-                                    buffer.printf("size += 2;%n");
-                                }).
-                                generate(buffer);
-                        } else if (field.type().isArray()) {
-                            VersionConditional.forVersions(flexibleVersions, possibleVersions).
-                                ifMember(() -> {
-                                    headerGenerator.addImport(MessageGenerator.BYTE_UTILS_CLASS);
-                                    buffer.printf("size += ByteUtils.sizeOfUnsignedVarint(%s.size() + 1);%n",
-                                        field.camelCaseName());
-                                }).
-                                ifNotMember(() -> {
-                                    buffer.printf("size += 4;%n");
-                                }).
-                                generate(buffer);
-                            FieldType.ArrayType arrayType = (FieldType.ArrayType) field.type();
-                            FieldType elementType = arrayType.elementType();
-                            if (elementType.fixedLength().isPresent()) {
-                                buffer.printf("size += %s.size() * %d;%n",
-                                    field.camelCaseName(),
-                                    elementType.fixedLength().get());
-                            } else if (elementType instanceof FieldType.ArrayType) {
-                                throw new RuntimeException("Arrays of arrays are not supported " +
-                                    "(use a struct).");
-                            } else {
-                                buffer.printf("for (%s element : %s) {%n",
-                                    getBoxedJavaType(elementType), field.camelCaseName());
-                                buffer.incrementIndent();
-                                generateVariableLengthFieldSize("element", elementType, false);
-                                buffer.decrementIndent();
-                                buffer.printf("}%n");
-                            }
-                        } else if (field.type().isBytes()) {
-                            buffer.printf("size += %s.length;%n", field.camelCaseName());
-                            VersionConditional.forVersions(flexibleVersions, possibleVersions).
-                                ifMember(() -> {
-                                    headerGenerator.addImport(MessageGenerator.BYTE_UTILS_CLASS);
-                                    buffer.printf("size += ByteUtils.sizeOfUnsignedVarint(%s.length + 1);%n",
-                                        field.camelCaseName());
-                                }).
-                                ifNotMember(() -> {
-                                    buffer.printf("size += 4;%n");
-                                }).
-                                generate(buffer);
+                            buffer.printf("size += 2;%n");
                         } else {
-                            throw new RuntimeException("unhandled type " + field.type());
+                            buffer.printf("size += 4;%n");
                         }
                     }).
                     generate(buffer);
+            }).
+            ifNotNull(() -> {
+                if (field.type().isString()) {
+                    headerGenerator.addImport(MessageGenerator.MESSAGE_UTIL_CLASS);
+                    buffer.printf("int stringLength = MessageUtil.serializedUtf8Length(%s);%n",
+                        field.camelCaseName());
+                    buffer.printf("size += stringLength;%n");
+                    VersionConditional.forVersions(flexibleVersions, possibleVersions).
+                        ifMember(() -> {
+                            headerGenerator.addImport(MessageGenerator.BYTE_UTILS_CLASS);
+                            buffer.printf("size += ByteUtils.sizeOfUnsignedVarint(stringLength + 1);%n");
+                        }).
+                        ifNotMember(() -> {
+                            buffer.printf("size += 2;%n");
+                        }).
+                        generate(buffer);
+                } else if (field.type().isArray()) {
+                    VersionConditional.forVersions(flexibleVersions, possibleVersions).
+                        ifMember(() -> {
+                            headerGenerator.addImport(MessageGenerator.BYTE_UTILS_CLASS);
+                            buffer.printf("size += ByteUtils.sizeOfUnsignedVarint(%s.size() + 1);%n",
+                                field.camelCaseName());
+                        }).
+                        ifNotMember(() -> {
+                            buffer.printf("size += 4;%n");
+                        }).
+                        generate(buffer);
+                    FieldType.ArrayType arrayType = (FieldType.ArrayType) field.type();
+                    FieldType elementType = arrayType.elementType();
+                    if (elementType.fixedLength().isPresent()) {
+                        buffer.printf("size += %s.size() * %d;%n",
+                            field.camelCaseName(),
+                            elementType.fixedLength().get());
+                    } else if (elementType instanceof FieldType.ArrayType) {
+                        throw new RuntimeException("Arrays of arrays are not supported " +
+                            "(use a struct).");
+                    } else {
+                        buffer.printf("for (%s element : %s) {%n",
+                            getBoxedJavaType(elementType), field.camelCaseName());
+                        buffer.incrementIndent();
+                        generateVariableLengthFieldSize("element", elementType, false);
+                        buffer.decrementIndent();
+                        buffer.printf("}%n");
+                    }
+                } else if (field.type().isBytes()) {
+                    buffer.printf("size += %s.length;%n", field.camelCaseName());
+                    VersionConditional.forVersions(flexibleVersions, possibleVersions).
+                        ifMember(() -> {
+                            headerGenerator.addImport(MessageGenerator.BYTE_UTILS_CLASS);
+                            buffer.printf("size += ByteUtils.sizeOfUnsignedVarint(%s.length + 1);%n",
+                                field.camelCaseName());
+                        }).
+                        ifNotMember(() -> {
+                            buffer.printf("size += 4;%n");
+                        }).
+                        generate(buffer);
+                } else {
+                    throw new RuntimeException("unhandled type " + field.type());
+                }
             }).
             generate(buffer);
     }
@@ -1255,38 +1225,6 @@ public final class MessageDataGenerator {
         buffer.printf("if (%s == null) {%n", field.camelCaseName());
         buffer.incrementIndent();
         return true;
-    }
-
-    private boolean generateVersionCheck(Versions prev, Versions cur) {
-        if (cur.lowest() > prev.lowest()) {
-            if (cur.highest() < prev.highest()) {
-                buffer.printf("if ((version >= %d) && (version <= %d)) {%n",
-                    cur.lowest(), cur.highest());
-                buffer.incrementIndent();
-                return true;
-            } else {
-                buffer.printf("if (version >= %d) {%n", cur.lowest());
-                buffer.incrementIndent();
-                return true;
-            }
-        } else {
-            if (cur.highest() < prev.highest()) {
-                buffer.printf("if (version <= %d) {%n", cur.highest());
-                buffer.incrementIndent();
-                return true;
-            } else {
-                return false;
-            }
-        }
-    }
-
-    private void generateSetDefault(FieldSpec field) {
-        buffer.decrementIndent();
-        buffer.printf("} else {%n");
-        buffer.incrementIndent();
-        buffer.printf("this.%s = %s;%n", field.camelCaseName(), fieldDefault(field));
-        buffer.decrementIndent();
-        buffer.printf("}%n");
     }
 
     private String fieldDefault(FieldSpec field) {
