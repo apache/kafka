@@ -1341,9 +1341,6 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigO
   val numAlterLogDirsReplicationQuotaSamples = getInt(KafkaConfig.NumAlterLogDirsReplicationQuotaSamplesProp)
   val alterLogDirsReplicationQuotaWindowSizeSeconds = getInt(KafkaConfig.AlterLogDirsReplicationQuotaWindowSizeSecondsProp)
 
-  /** ********* Transaction Configuration **************/
-  val transactionIdExpirationMs = getInt(KafkaConfig.TransactionalIdExpirationMsProp)
-
   /** ********* Fetch Session Configuration **************/
   val maxIncrementalFetchSessionCacheSlots = getInt(KafkaConfig.MaxIncrementalFetchSessionCacheSlots)
 
