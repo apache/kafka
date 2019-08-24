@@ -79,9 +79,9 @@ public class TxnOffsetCommitRequest extends AbstractRequest {
                 offsetMap.put(new TopicPartition(topic.name(), partition.partitionIndex()),
                               new CommittedOffset(partition.committedOffset(),
                                                   partition.committedMetadata(),
-                                                  Optional.of(partition.committedLeaderEpoch())));
+                                                  RequestUtils.getLeaderEpoch(partition.committedLeaderEpoch()))
+                );
             }
-
         }
         return offsetMap;
     }
