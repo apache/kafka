@@ -51,7 +51,7 @@ public class CreatePartitionsRequest extends AbstractRequest {
                             TOPIC_NAME,
                             new Field(NEW_PARTITIONS_KEY_NAME, new Schema(
                                     new Field(COUNT_KEY_NAME, INT32, "The new partition count."),
-                                    new Field(ASSIGNMENT_KEY_NAME, ArrayOf.nullable(new ArrayOf(INT32)),
+                                    new Field(ASSIGNMENT_KEY_NAME, ArrayOf.nullable(INT32),
                                             "The assigned brokers.")
                             )))),
                     "List of topic and the corresponding new partitions."),
