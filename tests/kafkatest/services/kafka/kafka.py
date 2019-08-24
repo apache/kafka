@@ -766,15 +766,9 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
 
     def connect_setting(self, node):
         """
-        Checks if --bootstrap-server config is supported, if yes then returns a string with
-        bootstrap server, otherwise returns zookeeper connection string.
+        Returns bootstrap server connection string.
         """
-        if node.version.supports_bootstrap_server():
-            connection_setting = "--bootstrap-server %s" % self.bootstrap_servers(self.security_protocol)
-        else:
-            connection_setting = "--zookeeper %s" % self.zk_connect_setting()
-
-        return connection_setting
+        return "--bootstrap-server %s" % self.bootstrap_servers(self.security_protocol)
 
     def __bootstrap_servers(self, port, validate=True, offline_nodes=[]):
         if validate and not port.open:
