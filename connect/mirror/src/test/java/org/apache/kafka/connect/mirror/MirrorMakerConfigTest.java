@@ -73,7 +73,8 @@ public class MirrorMakerConfigTest {
             "ssl.truststore.password", "secret",
             "a.security.protocol", "PLAINTEXT", 
             "a.producer.security.protocol", "SASL", 
-            "a.bootstrap.servers", "one:9092, two:9092", 
+            "a.bootstrap.servers", "one:9092, two:9092",
+            "metric.reporters", "FakeMetricsReporter",
             "a.xxx", "yyy"));
         MirrorClientConfig clientConfig = mirrorConfig.clientConfig("a");
         assertEquals("replication.policy.separator is picked up in MirrorClientConfig",
@@ -89,6 +90,8 @@ public class MirrorMakerConfigTest {
             "SASL", clientConfig.producerConfig().get("security.protocol"));
         assertFalse("unknown properties aren't included in client configs",
             adminProps.containsKey("xxx"));
+        assertFalse("top-leve metrics reporters aren't included in client configs",
+            adminProps.containsKey("metric.reporters"));
         assertEquals("security properties are picked up in MirrorClientConfig",
             "secret", clientConfig.getPassword("ssl.truststore.password").value());
         assertEquals("client configs include top-level security properties",
@@ -103,6 +106,8 @@ public class MirrorMakerConfigTest {
             "topics", "topic-1",
             "groups", "group-2",
             "config.properties.blacklist", "property-3",
+            "metric.reporters", "FakeMetricsReporter",
+            "topic.filter.class", DefaultTopicFilter.class.getName(),
             "xxx", "yyy"));
         SourceAndTarget sourceAndTarget = new SourceAndTarget("source", "target");
         Map<String, String> connectorProps = mirrorConfig.connectorBaseConfig(sourceAndTarget,
@@ -116,6 +121,10 @@ public class MirrorMakerConfigTest {
             Arrays.asList("group-2"), connectorConfig.getList("groups"));
         assertEquals("Config properties blacklist should be passed through to underlying Connectors.",
             Arrays.asList("property-3"), connectorConfig.getList("config.properties.blacklist"));
+        assertEquals("Metrics reporters should be passed through to underlying Connectors.",
+            Arrays.asList("FakeMetricsReporter"), connectorConfig.getList("metric.reporters"));
+        assertEquals("Filters should be passed through to underlying Connectors.",
+            "DefaultTopicFilter", connectorConfig.getClass("topic.filter.class").getSimpleName());
         assertFalse("Unknown properties should not be passed through to Connectors.",
             connectorConfig.originals().containsKey("xxx"));
     }

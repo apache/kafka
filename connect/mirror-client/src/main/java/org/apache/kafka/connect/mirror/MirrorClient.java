@@ -40,7 +40,6 @@ import java.util.Collections;
 import java.util.Collection;
 import java.util.stream.Collectors;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.TimeoutException;
 
 public class MirrorClient implements AutoCloseable {
     private static final Logger log = LoggerFactory.getLogger(MirrorClient.class);
@@ -120,8 +119,7 @@ public class MirrorClient implements AutoCloseable {
     }
 
     public Map<TopicPartition, OffsetAndMetadata> remoteConsumerOffsets(String consumerGroupId,
-            String remoteClusterAlias, Duration timeout)
-            throws InterruptedException, TimeoutException {
+            String remoteClusterAlias, Duration timeout) {
         long deadline = System.currentTimeMillis() + timeout.toMillis();
         Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
         KafkaConsumer<byte[], byte[]> consumer = new KafkaConsumer<>(consumerConfig,
@@ -151,8 +149,7 @@ public class MirrorClient implements AutoCloseable {
         return offsets;
     }
 
-    // visible for testing
-    protected Set<String> listTopics() throws InterruptedException {
+    Set<String> listTopics() throws InterruptedException {
         try {
             return adminClient.listTopics().names().get();
         } catch (ExecutionException e) {
@@ -201,8 +198,7 @@ public class MirrorClient implements AutoCloseable {
         return sources;
     }
 
-    static protected boolean endOfStream(Consumer<?, ?> consumer, Collection<TopicPartition> assignments)
-            throws InterruptedException, TimeoutException {
+    static private boolean endOfStream(Consumer<?, ?> consumer, Collection<TopicPartition> assignments) {
         Map<TopicPartition, Long> endOffsets = consumer.endOffsets(assignments);
         for (TopicPartition topicPartition : assignments) {
             if (consumer.position(topicPartition) < endOffsets.get(topicPartition)) {

@@ -42,7 +42,6 @@ public class MirrorCheckpointConnector extends SourceConnector {
     private MirrorConnectorConfig config;
     private GroupFilter groupFilter;
     private AdminClient sourceAdminClient;
-    private ReplicationPolicy replicationPolicy;
     private SourceAndTarget sourceAndTarget;
     private String connectorName;
     private List<String> knownConsumerGroups = Collections.emptyList();
@@ -56,7 +55,6 @@ public class MirrorCheckpointConnector extends SourceConnector {
         connectorName = config.connectorName();
         sourceAndTarget = new SourceAndTarget(config.sourceClusterAlias(), config.targetClusterAlias());
         groupFilter = config.groupFilter();
-        replicationPolicy = config.replicationPolicy();
         sourceAdminClient = AdminClient.create(config.sourceAdminConfig());
         scheduler = new Scheduler(MirrorCheckpointConnector.class, config.adminTimeout());
         scheduler.execute(this::createInternalTopics, "creating internal topics");
@@ -74,7 +72,7 @@ public class MirrorCheckpointConnector extends SourceConnector {
         }
         scheduler.close();
         groupFilter.close();
-        sourceAdminClient.close();
+        sourceAdminClient.close(config.adminTimeout());
     }
 
     @Override

@@ -57,7 +57,7 @@ class OffsetSyncStore {
     }
 
     // poll and handle records
-    synchronized void update(Duration pollTimeout) throws InterruptedException {
+    synchronized void update(Duration pollTimeout) {
         try {
             consumer.poll(pollTimeout).forEach(this::handleRecord);
         } catch (WakeupException e) {

@@ -108,7 +108,7 @@ public class Checkpoint {
         return buffer;
     }
 
-    static Checkpoint deserializeRecord(ConsumerRecord<byte[], byte[]> record) {
+    public static Checkpoint deserializeRecord(ConsumerRecord<byte[], byte[]> record) {
         Struct keyStruct = KEY_SCHEMA.read(ByteBuffer.wrap(record.key()));
         String group = keyStruct.getString(CONSUMER_GROUP_ID_KEY);
         String topic = keyStruct.getString(TOPIC_KEY);
@@ -123,7 +123,7 @@ public class Checkpoint {
             downstreamOffset, metadata);
     } 
 
-    protected Struct valueStruct() {
+    private Struct valueStruct() {
         Struct struct = new Struct(VALUE_SCHEMA);
         struct.set(UPSTREAM_OFFSET_KEY, upstreamOffset);
         struct.set(DOWNSTREAM_OFFSET_KEY, downstreamOffset);
@@ -131,7 +131,7 @@ public class Checkpoint {
         return struct;
     }
 
-    protected Struct keyStruct() {
+    private Struct keyStruct() {
         Struct struct = new Struct(KEY_SCHEMA);
         struct.set(CONSUMER_GROUP_ID_KEY, consumerGroupId);
         struct.set(TOPIC_KEY, topicPartition.topic());

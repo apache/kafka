@@ -23,8 +23,6 @@ import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.protocol.types.Type;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 
-import java.util.Map;
-import java.util.HashMap;
 import java.nio.ByteBuffer;
 
 public class OffsetSync {
@@ -110,13 +108,6 @@ public class OffsetSync {
         struct.set(TOPIC_KEY, topicPartition.topic());
         struct.set(PARTITION_KEY, topicPartition.partition());
         return struct;
-    }
-
-    Map<String, ?> connectPartition() {
-        Map<String, Object> partition = new HashMap<>();
-        partition.put(TOPIC_KEY, topicPartition.topic());
-        partition.put(PARTITION_KEY, topicPartition.partition());
-        return partition;
     }
 
     byte[] recordKey() {

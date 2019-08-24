@@ -17,7 +17,10 @@
 
 package org.apache.kafka.connect.mirror;
 
+import org.apache.kafka.common.annotation.InterfaceStability;
+
 /** Defines which topics are "remote topics", e.g. "us-west.topic1". */
+@InterfaceStability.Evolving
 public interface ReplicationPolicy {
 
     /** How to rename remote topics; generally should be like us-west.topic1. */

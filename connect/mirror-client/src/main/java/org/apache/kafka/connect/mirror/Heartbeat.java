@@ -82,7 +82,7 @@ public class Heartbeat {
         return buffer;
     }
 
-    static Heartbeat deserializeRecord(ConsumerRecord<byte[], byte[]> record) {
+    public static Heartbeat deserializeRecord(ConsumerRecord<byte[], byte[]> record) {
         Struct keyStruct = KEY_SCHEMA.read(ByteBuffer.wrap(record.key()));
         String sourceClusterAlias = keyStruct.getString(SOURCE_CLUSTER_ALIAS_KEY);
         String targetClusterAlias = keyStruct.getString(TARGET_CLUSTER_ALIAS_KEY);
@@ -93,13 +93,13 @@ public class Heartbeat {
         return new Heartbeat(sourceClusterAlias, targetClusterAlias, timestamp);    
     } 
 
-    protected Struct valueStruct() {
+    private Struct valueStruct() {
         Struct struct = new Struct(VALUE_SCHEMA);
         struct.set(TIMESTAMP_KEY, timestamp);
         return struct;
     }
 
-    protected Struct keyStruct() {
+    private Struct keyStruct() {
         Struct struct = new Struct(KEY_SCHEMA);
         struct.set(SOURCE_CLUSTER_ALIAS_KEY, sourceClusterAlias);
         struct.set(TARGET_CLUSTER_ALIAS_KEY, targetClusterAlias);

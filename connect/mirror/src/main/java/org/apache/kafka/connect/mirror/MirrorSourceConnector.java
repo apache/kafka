@@ -124,8 +124,8 @@ public class MirrorSourceConnector extends SourceConnector {
         scheduler.close();
         topicFilter.close();
         configPropertyFilter.close();
-        sourceAdminClient.close();
-        targetAdminClient.close();
+        sourceAdminClient.close(config.adminTimeout());
+        targetAdminClient.close(config.adminTimeout());
         log.info("Stopping {} took {} ms.", connectorName, System.currentTimeMillis() - start);
     }
 

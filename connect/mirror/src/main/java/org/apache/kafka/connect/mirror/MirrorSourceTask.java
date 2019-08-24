@@ -152,6 +152,12 @@ public class MirrorSourceTask extends SourceTask {
             return null;
         } catch (Throwable e) {
             log.error("Failure during poll.", e);
+            try {
+                // sleep to prevent spinning when poll() not possible
+                Thread.sleep(1000);
+            } catch (InterruptedException e2) {
+                //nop
+            }
             return null;
         } finally {
             lock.unlock();
