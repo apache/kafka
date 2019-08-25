@@ -108,6 +108,81 @@ public class KStreamRepartitionIntegrationTest {
     }
 
     @Test
+    public void shouldUseStreamPartitionerForRepartitionOperation() throws ExecutionException, InterruptedException {
+        final int partition = 1;
+        final String repartitionName = "partitioner-test";
+        final long timestamp = System.currentTimeMillis();
+        final AtomicInteger partitionerInvocation = new AtomicInteger(0);
+
+        final List<KeyValue<Integer, String>> expectedRecords = Arrays.asList(
+            new KeyValue<>(1, "A"),
+            new KeyValue<>(2, "B")
+        );
+
+        sendEvents(timestamp, expectedRecords);
+
+        final StreamsBuilder builder = new StreamsBuilder();
+
+        final Repartitioned<Integer, String> repartitioned = Repartitioned
+            .<Integer, String>as(repartitionName)
+            .withStreamPartitioner((topic, key, value, numPartitions) -> {
+                partitionerInvocation.incrementAndGet();
+                return partition;
+            });
+
+        builder.stream(inputTopic, Consumed.with(Serdes.Integer(), Serdes.String()))
+            .repartition(repartitioned)
+            .to(outputTopic);
+
+        startStreams(builder);
+
+        final String topic = toRepartitionTopicName(repartitionName);
+
+        validateReceivedMessages(
+            new IntegerDeserializer(),
+            new StringDeserializer(),
+            expectedRecords
+        );
+
+        assertTrue(topicExists(topic));
+        assertEquals(expectedRecords.size(), partitionerInvocation.get());
+    }
+
+    @Test
+    public void shouldPerformSelectKeyWithRepartitionOperation() throws ExecutionException, InterruptedException {
+        final long timestamp = System.currentTimeMillis();
+
+        sendEvents(
+            timestamp,
+            Arrays.asList(
+                new KeyValue<>(1, "10"),
+                new KeyValue<>(2, "20")
+            )
+        );
+
+        final StreamsBuilder builder = new StreamsBuilder();
+
+        builder.stream(inputTopic, Consumed.with(Serdes.Integer(), Serdes.String()))
+            .repartition((key, value) -> Integer.valueOf(value))
+            .to(outputTopic);
+
+        startStreams(builder);
+
+        validateReceivedMessages(
+            new IntegerDeserializer(),
+            new StringDeserializer(),
+            Arrays.asList(
+                new KeyValue<>(10, "10"),
+                new KeyValue<>(20, "20")
+            )
+        );
+
+        final String topology = builder.build().describe().toString();
+
+        assertEquals(1, countOccurrencesInTopology(topology, "Sink: .*-repartition.*"));
+    }
+
+    @Test
     public void shouldCreateRepartitionTopicIfKeyChangingOperationWasNotPerformed() throws ExecutionException, InterruptedException {
         final String repartitionName = "dummy";
         final long timestamp = System.currentTimeMillis();
