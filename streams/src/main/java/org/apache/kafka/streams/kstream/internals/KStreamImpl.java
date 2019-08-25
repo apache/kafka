@@ -501,8 +501,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
 
         final RepartitionedInternal<K, V> repartitionedInternal = new RepartitionedInternal<>(repartitioned);
 
-        final String name = new NamedInternal(repartitionedInternal.name())
-            .orElseGenerateWithPrefix(builder, REPARTITION_NAME);
+        final String name = repartitionedInternal.name() != null ? repartitionedInternal.name() : builder.newProcessorName(REPARTITION_NAME);
 
         final Serde<K> keySerde = repartitionedInternal.keySerde() == null ? this.keySerde : repartitionedInternal.keySerde();
 
