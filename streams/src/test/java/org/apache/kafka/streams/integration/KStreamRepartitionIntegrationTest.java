@@ -53,27 +53,32 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Properties;
 import java.util.Set;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import static org.apache.kafka.streams.KafkaStreams.State.REBALANCING;
+import static org.apache.kafka.streams.KafkaStreams.State.RUNNING;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
 @Category({IntegrationTest.class})
 public class KStreamRepartitionIntegrationTest {
     private static final int NUM_BROKERS = 1;
-    private static AtomicInteger testNo = new AtomicInteger(0);
+    private static final AtomicInteger TEST_NUM = new AtomicInteger(0);
 
     @ClassRule
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS);
 
+    private final String inputTopic = "input-topic-" + TEST_NUM.get();
+    private final String outputTopic = "output-topic-" + TEST_NUM.get();
+    private final String applicationId = "kstream-repartition-stream-test-" + TEST_NUM.get();
+
     private Properties streamsConfiguration;
     private List<KafkaStreams> kafkaStreamsInstances;
-    private String inputTopic = "input-topic-" + testNo.get();
-    private String outputTopic = "output-topic-" + testNo.get();
-    private String applicationId = "kstream-repartition-stream-test-" + testNo.get();
 
     @Before
     public void before() throws InterruptedException {
@@ -102,7 +107,7 @@ public class KStreamRepartitionIntegrationTest {
             .forEach(KafkaStreams::close);
 
         IntegrationTestUtils.purgeLocalStreamsState(streamsConfiguration);
-        testNo.incrementAndGet();
+        TEST_NUM.incrementAndGet();
     }
 
     @Test
@@ -288,7 +293,7 @@ public class KStreamRepartitionIntegrationTest {
         final StreamsBuilder builder = new StreamsBuilder();
 
         builder.stream(inputTopic, Consumed.with(Serdes.Integer(), Serdes.String()))
-            .repartition(Repartitioned.<Integer, String>as(repartitionName))
+            .repartition(Repartitioned.as(repartitionName))
             .groupByKey()
             .count()
             .toStream()
@@ -457,7 +462,7 @@ public class KStreamRepartitionIntegrationTest {
     }
 
     private int getNumberOfPartitionsForTopic(final String topic) throws ExecutionException, InterruptedException {
-        try (AdminClient adminClient = createAdminClient()) {
+        try (final AdminClient adminClient = createAdminClient()) {
             final TopicDescription topicDescription = adminClient.describeTopics(Collections.singleton(topic))
                 .values()
                 .get(topic)
@@ -468,7 +473,7 @@ public class KStreamRepartitionIntegrationTest {
     }
 
     private boolean topicExists(final String topic) throws InterruptedException, ExecutionException {
-        try (AdminClient adminClient = createAdminClient()) {
+        try (final AdminClient adminClient = createAdminClient()) {
             final Set<String> topics = adminClient.listTopics()
                 .names()
                 .get();
@@ -516,10 +521,24 @@ public class KStreamRepartitionIntegrationTest {
     }
 
     private KafkaStreams startStreams(final StreamsBuilder builder) {
+        final CountDownLatch latch = new CountDownLatch(1);
         final KafkaStreams kafkaStreams = new KafkaStreams(builder.build(streamsConfiguration), streamsConfiguration);
+
+        kafkaStreams.setStateListener((newState, oldState) -> {
+            if (REBALANCING == oldState && RUNNING == newState) {
+                latch.countDown();
+            }
+        });
+
         kafkaStreams.start();
-        kafkaStreamsInstances.add(kafkaStreams);
-        return kafkaStreams;
+
+        try {
+            latch.await(IntegrationTestUtils.DEFAULT_TIMEOUT, TimeUnit.MILLISECONDS);
+            kafkaStreamsInstances.add(kafkaStreams);
+            return kafkaStreams;
+        } catch (final InterruptedException e) {
+            throw new RuntimeException(e);
+        }
     }
 
     private <K, V> void validateReceivedMessages(final Deserializer<K> keySerializer,
@@ -528,7 +547,7 @@ public class KStreamRepartitionIntegrationTest {
 
         final Properties consumerProperties = new Properties();
         consumerProperties.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
-        consumerProperties.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "kstream-repartition-test-" + testNo);
+        consumerProperties.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "kstream-repartition-test-" + TEST_NUM.get());
         consumerProperties.setProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         consumerProperties.setProperty(
             ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG,
