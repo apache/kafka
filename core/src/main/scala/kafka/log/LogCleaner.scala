@@ -202,6 +202,10 @@ class LogCleaner(initialConfig: CleanerConfig,
     cleanerManager.updateCheckpoints(dataDir, update=None)
   }
 
+  def updateCheckpointsWithTime(partition: TopicPartition, update: Option[OffsetAndTimestamp]) {
+    cleanerManager.updateCheckpointsWithTime(partition, update)
+  }
+
   def alterCheckpointDir(topicPartition: TopicPartition, sourceLogDir: File, destLogDir: File): Unit = {
     cleanerManager.alterCheckpointDir(topicPartition, sourceLogDir, destLogDir)
   }

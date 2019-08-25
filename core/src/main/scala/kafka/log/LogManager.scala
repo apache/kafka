@@ -871,7 +871,7 @@ class LogManager(logDirs: Seq[File],
       //We need to wait until there is no more cleaning task on the log to be deleted before actually deleting it.
       if (cleaner != null && !isFuture) {
         cleaner.abortCleaning(topicPartition)
-        cleaner.updateCheckpoints(removedLog.dir.getParentFile)
+        cleaner.updateCheckpointsWithTime(topicPartition, None)
       }
       removedLog.renameDir(Log.logDeleteDirName(topicPartition))
       checkpointRecoveryOffsetsAndCleanSnapshot(removedLog.dir.getParentFile, ArrayBuffer.empty)

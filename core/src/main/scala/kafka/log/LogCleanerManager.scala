@@ -152,18 +152,9 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
   /**
    * @return the position processed for all logs.
    */
-  @deprecated("Deprecated in favor of new allCleanerCheckpointsWithTimes method")
   def allCleanerCheckpoints: Map[TopicPartition, Long] = {
     inLock(lock) {
-      checkpoints.values.flatMap(checkpoint => {
-        try {
-          checkpoint.read()
-        } catch {
-          case e: KafkaStorageException =>
-            error(s"Failed to access checkpoint file ${checkpoint.file.getName} in dir ${checkpoint.file.getParentFile.getAbsolutePath}", e)
-            Map.empty[TopicPartition, Long]
-        }
-      }).toMap
+      simplifyMapToOffsetsOnly(allCleanerCheckpointsWithTimes)
     }
   }
 

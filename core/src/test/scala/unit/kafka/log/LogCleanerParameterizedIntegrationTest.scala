@@ -23,7 +23,7 @@ import java.util.Properties
 import kafka.api.KAFKA_0_11_0_IV0
 import kafka.api.{KAFKA_0_10_0_IV1, KAFKA_0_9_0}
 import kafka.server.KafkaConfig
-import kafka.server.checkpoints.OffsetCheckpointFile
+import kafka.server.checkpoints.OffsetAndTimesCheckpointFile
 import kafka.utils._
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.record._
@@ -81,8 +81,9 @@ class LogCleanerParameterizedIntegrationTest(compressionCodec: String) extends A
     // force a checkpoint
     // and make sure its gone from checkpoint file
     cleaner.logs.remove(topicPartitions(0))
-    cleaner.updateCheckpoints(logDir)
-    val checkpoints = new OffsetCheckpointFile(new File(logDir, cleaner.cleanerManager.offsetCheckpointFile)).read()
+    cleaner.updateCheckpointsWithTime(topicPartitions(0), None)
+    val checkpoints = new OffsetAndTimesCheckpointFile(new File(logDir, cleaner.cleanerManager.offsetCheckpointFile),
+                                                       topicPartitions(0)).read()
     // we expect partition 0 to be gone
     assertFalse(checkpoints.contains(topicPartitions(0)))
   }
