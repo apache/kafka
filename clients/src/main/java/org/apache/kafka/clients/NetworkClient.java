@@ -790,6 +790,10 @@ public class NetworkClient implements KafkaClient {
         for (NetworkReceive receive : this.selector.completedReceives()) {
             String source = receive.source();
             InFlightRequest req = inFlightRequests.completeNext(source);
+            // remove the req whose correlationId is before receive
+            while (isReqBeforeReceive(req, receive)){
+                req = inFlightRequests.completeNext(source);
+            }
             Struct responseStruct = parseStructMaybeUpdateThrottleTimeMetrics(receive.payload(), req.header,
                 throttleTimeSensor, now);
             if (log.isTraceEnabled()) {
@@ -808,6 +812,19 @@ public class NetworkClient implements KafkaClient {
         }
     }
 
+    /**
+     * check the request's correlationId is before the receive's
+     * @param req
+     * @param receive
+     * @return
+     */
+    private boolean isReqBeforeReceive(InFlightRequest req, NetworkReceive receive){
+        if(req == null || receive == null || req.header == null || receive.payload() == null){
+            return false;
+        }
+        ResponseHeader responseHeader = ResponseHeader.parse(receive.payload());
+        return (req.header.correlationId() < responseHeader.correlationId());
+    }
     private void handleApiVersionsResponse(List<ClientResponse> responses,
                                            InFlightRequest req, long now, ApiVersionsResponse apiVersionsResponse) {
         final String node = req.destination;
