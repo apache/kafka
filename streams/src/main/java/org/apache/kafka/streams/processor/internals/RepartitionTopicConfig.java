@@ -82,7 +82,7 @@ public class RepartitionTopicConfig extends InternalTopicConfig {
 
     @Override
     public int hashCode() {
-        return Objects.hash(name, topicConfigs);
+        return Objects.hash(name, topicConfigs, numberOfPartitions);
     }
 
     @Override
@@ -90,6 +90,7 @@ public class RepartitionTopicConfig extends InternalTopicConfig {
         return "RepartitionTopicConfig(" +
                 "name=" + name +
                 ", topicConfigs=" + topicConfigs +
+                ", numberOfPartitions=" + numberOfPartitions +
                 ")";
     }
 }
