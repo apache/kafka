@@ -435,15 +435,15 @@ public class KStreamRepartitionIntegrationTest {
         return applicationId + "-" + input + "-repartition";
     }
 
-    private AdminClient createAdminClient() {
+    private static AdminClient createAdminClient() {
         final Properties properties = new Properties();
         properties.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
 
         return AdminClient.create(properties);
     }
 
-    private int countOccurrencesInTopology(final String topologyString,
-                                           final String searchPattern) {
+    private static int countOccurrencesInTopology(final String topologyString,
+                                                  final String searchPattern) {
         final Matcher matcher = Pattern.compile(searchPattern).matcher(topologyString);
         final List<String> repartitionTopicsFound = new ArrayList<>();
 
