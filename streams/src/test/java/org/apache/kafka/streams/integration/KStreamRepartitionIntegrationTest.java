@@ -88,7 +88,6 @@ public class KStreamRepartitionIntegrationTest {
 
         streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, applicationId);
         streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
-        streamsConfiguration.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
         streamsConfiguration.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0);
         streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100);
@@ -544,7 +543,7 @@ public class KStreamRepartitionIntegrationTest {
         );
     }
 
-    private KafkaStreams startStreams(final StreamsBuilder builder) {
+    private KafkaStreams startStreams(final StreamsBuilder builder) throws InterruptedException {
         final CountDownLatch latch = new CountDownLatch(1);
         final KafkaStreams kafkaStreams = new KafkaStreams(builder.build(streamsConfiguration), streamsConfiguration);
 
@@ -556,13 +555,9 @@ public class KStreamRepartitionIntegrationTest {
 
         kafkaStreams.start();
 
-        try {
-            latch.await(IntegrationTestUtils.DEFAULT_TIMEOUT, TimeUnit.MILLISECONDS);
-            kafkaStreamsInstances.add(kafkaStreams);
-            return kafkaStreams;
-        } catch (final InterruptedException e) {
-            throw new RuntimeException(e);
-        }
+        latch.await(IntegrationTestUtils.DEFAULT_TIMEOUT, TimeUnit.MILLISECONDS);
+        kafkaStreamsInstances.add(kafkaStreams);
+        return kafkaStreams;
     }
 
     private <K, V> void validateReceivedMessages(final Deserializer<K> keySerializer,
