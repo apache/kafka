@@ -34,8 +34,6 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.Consumed;
-import org.apache.kafka.streams.kstream.KStream;
-import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.streams.kstream.Repartitioned;
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.TestUtils;
@@ -96,7 +94,6 @@ public class KStreamRepartitionIntegrationTest {
         streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100);
         streamsConfiguration.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.Integer().getClass());
         streamsConfiguration.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
-        streamsConfiguration.put(StreamsConfig.TOPOLOGY_OPTIMIZATION, StreamsConfig.OPTIMIZE);
     }
 
     @After
@@ -108,54 +105,6 @@ public class KStreamRepartitionIntegrationTest {
 
         IntegrationTestUtils.purgeLocalStreamsState(streamsConfiguration);
         TEST_NUM.incrementAndGet();
-    }
-
-    @Test
-    public void shouldNotOptimizeRepartitionOperationTopology() throws ExecutionException, InterruptedException {
-        final long timestamp = System.currentTimeMillis();
-
-        sendEvents(
-            timestamp,
-            Arrays.asList(
-                new KeyValue<>(1, "A"),
-                new KeyValue<>(2, "B")
-            )
-        );
-
-        final StreamsBuilder builder = new StreamsBuilder();
-
-        final KStream<Integer, String> stream = builder.stream(inputTopic);
-
-        final KStream<Integer, Long> countStream1 = stream
-            .repartition((key, value) -> key)
-            .groupByKey()
-            .count()
-            .toStream();
-
-        final KStream<Integer, Long> countStream2 = stream
-            .repartition((key, value) -> key)
-            .groupByKey()
-            .count()
-            .toStream();
-
-        countStream1.merge(countStream2).to(outputTopic, Produced.with(Serdes.Integer(), Serdes.Long()));
-
-        startStreams(builder);
-
-        validateReceivedMessages(
-            new IntegerDeserializer(),
-            new LongDeserializer(),
-            Arrays.asList(
-                new KeyValue<>(1, 1L),
-                new KeyValue<>(1, 1L),
-                new KeyValue<>(2, 1L),
-                new KeyValue<>(2, 1L)
-            )
-        );
-
-        final String topology = builder.build().describe().toString();
-
-        assertEquals(2, countOccurrencesInTopology(topology, "Sink: .*-repartition.*"));
     }
 
     @Test

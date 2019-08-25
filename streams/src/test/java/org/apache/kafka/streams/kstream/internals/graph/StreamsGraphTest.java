@@ -124,6 +124,16 @@ public class StreamsGraphTest {
 
     }
 
+    @Test
+    public void shouldNotOptimizeWhenRepartitionOperationIsDone() {
+        final Topology attemptedOptimize = getTopologyWithRepartitionOperation(StreamsConfig.OPTIMIZE);
+        final Topology noOptimziation = getTopologyWithRepartitionOperation(StreamsConfig.NO_OPTIMIZATION);
+
+        assertEquals(attemptedOptimize.describe().toString(), noOptimziation.describe().toString());
+        assertEquals(2, getCountOfRepartitionTopicsFound(attemptedOptimize.describe().toString()));
+        assertEquals(2, getCountOfRepartitionTopicsFound(noOptimziation.describe().toString()));
+    }
+
     private Topology getTopologyWithChangingValuesAfterChangingKey(final String optimizeConfig) {
 
         final StreamsBuilder builder = new StreamsBuilder();
@@ -154,6 +164,31 @@ public class StreamsGraphTest {
 
         return builder.build(properties);
 
+    }
+
+    private Topology getTopologyWithRepartitionOperation(final String optimizeConfig) {
+        final StreamsBuilder builder = new StreamsBuilder();
+        final Properties properties = new Properties();
+        properties.put(StreamsConfig.TOPOLOGY_OPTIMIZATION, optimizeConfig);
+
+        final KStream<String, String> inputStream = builder.<String, String>stream("input").selectKey((k, v) -> k + v);
+
+        inputStream
+            .repartition()
+            .groupByKey()
+            .count()
+            .toStream()
+            .to("output");
+
+        inputStream
+            .repartition()
+            .groupByKey()
+            .windowedBy(TimeWindows.of(ofMillis(5000)))
+            .count()
+            .toStream()
+            .to("windowed-output");
+
+        return builder.build(properties);
     }
 
     private int getCountOfRepartitionTopicsFound(final String topologyString) {
