@@ -76,30 +76,3 @@ class OffsetAndTimesCheckpointFile(val file: File, val partition: TopicPartition
 
   private def readSeq(): Seq[OffsetAndTimestamp] = checkpoint.read()
 }
-
-trait OffsetAndTimeCheckpoints {
-  def fetch(logDir: String): OffsetAndTimestamp
-}
-
-/**
- * Loads checkpoint files on demand and caches the offsets for reuse.
- */
-class LazyOffsetAndTimesCheckpoints(checkpointsByLogDir: Map[String, OffsetAndTimesCheckpointFile]) extends OffsetAndTimeCheckpoints {
-  private val lazyCheckpointsByLogDir = checkpointsByLogDir.map { case (logDir, checkpointFile) =>
-    logDir -> new LazyOffsetAndTimesCheckpointMap(checkpointFile)
-  }.toMap
-
-  override def fetch(logDir: String): OffsetAndTimestamp = {
-    val offsetCheckpointFile = lazyCheckpointsByLogDir.getOrElse(logDir,
-      throw new IllegalArgumentException(s"No checkpoint file for log dir $logDir"))
-    offsetCheckpointFile.fetch()
-  }
-}
-
-class LazyOffsetAndTimesCheckpointMap(checkpoint: OffsetAndTimesCheckpointFile) {
-  private lazy val offset: OffsetAndTimestamp = checkpoint.read()(checkpoint.partition)
-
-  def fetch() : OffsetAndTimestamp = {
-    offset
-  }
-}
