@@ -839,8 +839,8 @@ public interface KStream<K, V> {
                           final Produced<K, V> produced);
 
     /**
-     * Materialize this stream to a auto-generated repartition topic and create a new {@code KStream}
-     * from the auto-generated topic using default serializers, deserializers, and producer's {@link DefaultPartitioner}.
+     * Materialize this stream to an auto-generated repartition topic and create a new {@code KStream}
+     * from the auto-generated topic using default serializers, deserializers, and producers {@link DefaultPartitioner}.
      * The number of partitions is determined based on the upstream topics partition numbers.
      *
      * @return {@code KStream} that contains the exact same repartitioned records as this {@code KStream}.
@@ -848,7 +848,7 @@ public interface KStream<K, V> {
     KStream<K, V> repartition();
 
     /**
-     * Materialize this stream to a auto-generated repartition topic and create a new {@code KStream}
+     * Materialize this stream to an auto-generated repartition topic and create a new {@code KStream}
      * from the auto-generated topic using {@link Serde key serde}, {@link Serde value serde}, {@link StreamPartitioner},
      * number of partitions, and topic name part as defined by {@link Repartitioned}.
      *
@@ -860,8 +860,8 @@ public interface KStream<K, V> {
     KStream<K, V> repartition(final Repartitioned<K, V> repartitioned);
 
     /**
-     * Materialize this stream to a auto-generated repartition topic and create a new {@code KStream}
-     * from the auto-generated topic using default serializers, deserializers, and producer's {@link DefaultPartitioner}.
+     * Materialize this stream to an auto-generated repartition topic and create a new {@code KStream}
+     * from the auto-generated topic using default serializers, deserializers, and producers {@link DefaultPartitioner}.
      * The number of partitions is determined based on the upstream topics partition numbers.
      *
      * The provided {@link KeyValueMapper} is applied to each input record and computes a new key for it.
@@ -873,7 +873,7 @@ public interface KStream<K, V> {
     <KR> KStream<KR, V> repartition(final KeyValueMapper<? super K, ? super V, ? extends KR> selector);
 
     /**
-     * Materialize this stream to a auto-generated repartition topic and create a new {@code KStream}
+     * Materialize this stream to an auto-generated repartition topic and create a new {@code KStream}
      * from the auto-generated topic using {@link Serde key serde}, {@link Serde value serde}, {@link StreamPartitioner},
      * number of partitions, and topic name part as defined by {@link Repartitioned}.
      * The provided {@link KeyValueMapper} is applied to each input record and computes a new key for it.
