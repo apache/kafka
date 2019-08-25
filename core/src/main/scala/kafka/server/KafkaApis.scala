@@ -788,12 +788,16 @@ class KafkaApis(val requestChannel: RequestChannel,
     if (interesting.isEmpty)
       processResponseCallback(Seq.empty)
     else {
+      val configMaxFetchBytes = config.fetchMaxBytes
+      var maxFetchBytes = math.min(fetchRequest.maxBytes(), configMaxFetchBytes)
+      var minFetchBytes = math.min(fetchRequest.minBytes, configMaxFetchBytes)
+
       // call the replica manager to fetch messages from the local replica
       replicaManager.fetchMessages(
         fetchRequest.maxWait.toLong,
         fetchRequest.replicaId,
-        fetchRequest.minBytes,
-        fetchRequest.maxBytes,
+        minFetchBytes,
+        maxFetchBytes,
         versionId <= 2,
         interesting,
         replicationQuota(fetchRequest),

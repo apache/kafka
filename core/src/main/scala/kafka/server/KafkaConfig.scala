@@ -42,6 +42,9 @@ import scala.collection.JavaConverters._
 import scala.collection.{Map, Seq}
 
 object Defaults {
+  /** ********* FetchRequest Configuration ***********/
+  val FetchMaxBytes = 1024 * 1024
+
   /** ********* Zookeeper Configuration ***********/
   val ZkSessionTimeoutMs = 6000
   val ZkSyncTimeMs = 2000
@@ -257,6 +260,9 @@ object KafkaConfig {
   def main(args: Array[String]): Unit = {
     System.out.println(configDef.toHtmlTable(DynamicBrokerConfig.dynamicConfigUpdateModes))
   }
+
+  /** ********* FetchRequest Configuration ***********/
+  val FetchMaxBytesProp = "fetch.max.bytes"
 
   /** ********* Zookeeper Configuration ***********/
   val ZkConnectProp = "zookeeper.connect"
@@ -486,6 +492,9 @@ object KafkaConfig {
   val PasswordEncoderIterationsProp =  "password.encoder.iterations"
 
   /* Documentation */
+  /** ********* FetchRequest Configuration ***********/
+  val FetchMaxBytesDoc = "Client can fetch the max bytes size each fetch requeset"
+
   /** ********* Zookeeper Configuration ***********/
   val ZkConnectDoc = "Specifies the ZooKeeper connection string in the form <code>hostname:port</code> where host and port are the " +
   "host and port of a ZooKeeper server. To allow connecting through other ZooKeeper nodes when that ZooKeeper machine is " +
@@ -850,6 +859,8 @@ object KafkaConfig {
     import ConfigDef.ValidString._
 
     new ConfigDef()
+      /** ********* FetchRequest Configuration ***********/
+      .define(FetchMaxBytesProp, INT, Defaults.FetchMaxBytes, atLeast(0), MEDIUM, FetchMaxBytesDoc)
 
       /** ********* Zookeeper Configuration ***********/
       .define(ZkConnectProp, STRING, HIGH, ZkConnectDoc)
@@ -1141,6 +1152,9 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigO
   private[server] def valuesFromThisConfig: util.Map[String, _] = super.values
   private[server] def valuesFromThisConfigWithPrefixOverride(prefix: String): util.Map[String, AnyRef] =
     super.valuesWithPrefixOverride(prefix)
+
+  /** ********* FetchRequest Configuration ***********/
+  val fetchMaxBytes:Int = getInt(KafkaConfig.FetchMaxBytesProp)
 
   /** ********* Zookeeper Configuration ***********/
   val zkConnect: String = getString(KafkaConfig.ZkConnectProp)
