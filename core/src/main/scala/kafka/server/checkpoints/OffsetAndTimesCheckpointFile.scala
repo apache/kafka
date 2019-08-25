@@ -65,9 +65,16 @@ class OffsetAndTimesCheckpointFile(val file: File, val partition: TopicPartition
     }
   }
 
-  def read(): OffsetAndTimestamp = readSeq()(0)
+  def read(): Map[TopicPartition, OffsetAndTimestamp] = {
+    val offsetSeq = readSeq()
+    if (!offsetSeq.isEmpty) {
+      Map(partition -> offsetSeq(0))
+    } else {
+      Map()
+    }
+  }
 
-  def readSeq(): Seq[OffsetAndTimestamp] = checkpoint.read()
+  private def readSeq(): Seq[OffsetAndTimestamp] = checkpoint.read()
 }
 
 trait OffsetAndTimeCheckpoints {
@@ -90,7 +97,7 @@ class LazyOffsetAndTimesCheckpoints(checkpointsByLogDir: Map[String, OffsetAndTi
 }
 
 class LazyOffsetAndTimesCheckpointMap(checkpoint: OffsetAndTimesCheckpointFile) {
-  private lazy val offset: OffsetAndTimestamp = checkpoint.read()
+  private lazy val offset: OffsetAndTimestamp = checkpoint.read()(checkpoint.partition)
 
   def fetch() : OffsetAndTimestamp = {
     offset

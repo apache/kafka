@@ -23,6 +23,7 @@ import java.util.Properties
 import kafka.server.{BrokerTopicStats, LogDirFailureChannel}
 import kafka.utils._
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.clients.consumer.OffsetAndTimestamp
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.utils.Utils
 import org.junit.Assert._
@@ -53,6 +54,15 @@ class LogCleanerManagerTest extends Logging {
                               logDirFailureChannel: LogDirFailureChannel) extends LogCleanerManager(logDirs, logs, logDirFailureChannel) {
     override def allCleanerCheckpoints: Map[TopicPartition, Long] = {
       cleanerCheckpoints.toMap
+    }
+
+    override def allCleanerCheckpointsWithTimes: Map[TopicPartition, OffsetAndTimestamp] = {
+      var checkpointsWithTimes = mutable.Map[TopicPartition, OffsetAndTimestamp]()
+      cleanerCheckpoints.foreach {
+        case (partition, offset) =>
+          checkpointsWithTimes += (partition -> new OffsetAndTimestamp(offset, 0L))
+      }
+      checkpointsWithTimes.toMap
     }
   }
 
@@ -450,12 +460,12 @@ class LogCleanerManagerTest extends Logging {
     cleanerManager.setCleaningState(topicPartition, LogCleaningInProgress)
     cleanerManager.doneCleaning(topicPartition, log.dir, 1)
     assertTrue(cleanerManager.cleaningState(topicPartition).isEmpty)
-    assertTrue(cleanerManager.allCleanerCheckpoints.get(topicPartition).nonEmpty)
+    assertTrue(cleanerManager.allCleanerCheckpointsWithTimes.get(topicPartition).nonEmpty)
 
     cleanerManager.setCleaningState(topicPartition, LogCleaningAborted)
     cleanerManager.doneCleaning(topicPartition, log.dir, 1)
     assertEquals(LogCleaningPaused(1), cleanerManager.cleaningState(topicPartition).get)
-    assertTrue(cleanerManager.allCleanerCheckpoints.get(topicPartition).nonEmpty)
+    assertTrue(cleanerManager.allCleanerCheckpointsWithTimes.get(topicPartition).nonEmpty)
   }
 
   @Test

@@ -133,7 +133,7 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
     logs.foreach {
       case (partition, log) =>
         partitionToFileMap += (partition -> 
-            new OffsetAndTimesCheckpointFile(new File(log.dir.getParentFile,
+            new OffsetAndTimesCheckpointFile(new File(log.dir,
                                                       partition.toString()), 
                                              partition,
                                              logDirFailureChannel))
@@ -174,7 +174,7 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
     inLock(lock) {
       partitionCheckpoints.values.flatMap(checkpoint => {
         try {
-          Map(checkpoint.partition -> checkpoint.read())
+          checkpoint.read()
         } catch {
           case e: KafkaStorageException =>
             Map.empty[TopicPartition, OffsetAndTimestamp]
@@ -245,7 +245,7 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
 
           LogToClean(topicPartition, log, firstDirtyOffset, firstUncleanableDirtyOffset, compactionDelayMs > 0,
                      lastCleanWithTimes.get(topicPartition) match {
-                       case None => -1L
+                       case None => 0L
                        case Some(offsetAndTimestamp) => offsetAndTimestamp.timestamp()
                      }
           )
@@ -452,8 +452,8 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
         case Some(offset) =>
           // Remove this partition from the checkpoint file in the source dir
           updateCheckpoints(sourceLogDir, None)
-          // Place offset and -1 to indicate unknown timestamp in  new file system
-          updateCheckpointsWithTime(partition, Option(new OffsetAndTimestamp(offset, -1L)))
+          // Place offset and 0 to indicate unknown timestamp in  new file system
+          updateCheckpointsWithTime(partition, Option(new OffsetAndTimestamp(offset, 0L)))
         case None =>
       }
     } catch {
@@ -478,7 +478,7 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
       try {
         partitionCheckpoints.get(topicPartition) match {
           case Some(offsetCheckpointFile) =>
-            val offsetAndTimestamp = offsetCheckpointFile.read()
+            val offsetAndTimestamp = offsetCheckpointFile.read()(topicPartition)
             // Remove this partition from the checkpoint file in the source log directory
             updateCheckpointsWithTime(topicPartition, None)
             // Recreate the file under new destination directory
@@ -517,7 +517,7 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
       if (logs.get(topicPartition).config.compact) {
         val checkpoint = partitionCheckpoints(topicPartition)
         if (checkpoint != null) {
-          val existing = checkpoint.read()
+          val existing = checkpoint.read()(topicPartition)
           if (existing.offset > offset) {
             checkpoint.write(existing)
             checkpoint.write(new OffsetAndTimestamp(offset, existing.timestamp))
@@ -530,7 +530,7 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
   /**
    * Save out the endOffset and remove the given log from the in-progress set, if not aborted.
    */
-  def doneCleaning(topicPartition: TopicPartition, dataDir: File, endOffset: Long, timestamp: Long = -1L): Unit = {
+  def doneCleaning(topicPartition: TopicPartition, dataDir: File, endOffset: Long, timestamp: Long = 0L): Unit = {
     inLock(lock) {
       probeVersion
       inProgress.get(topicPartition) match {
