@@ -367,7 +367,7 @@ class LogCleaner(initialConfig: CleanerConfig,
           val msg = s"Failed to clean up log for ${cleanable.topicPartition} in dir ${logDirectory} due to IOException"
           logDirFailureChannel.maybeAddOfflineLogDir(logDirectory, msg, e)
       } finally {
-        cleanerManager.doneCleaning(cleanable.topicPartition, cleanable.log.dir.getParentFile, endOffset)
+        cleanerManager.doneCleaning(cleanable.topicPartition, cleanable.log.dir.getParentFile, endOffset, time.milliseconds)
       }
     }
 
@@ -495,7 +495,12 @@ private[log] class Cleaner(val id: Int,
     val deleteHorizonMs =
       cleanable.log.logSegments(0, cleanable.firstDirtyOffset).lastOption match {
         case None => 0L
-        case Some(seg) => seg.lastModified - cleanable.log.config.deleteRetentionMs
+        case Some(seg) =>
+          if (cleanable.lastCleaningTime > 0L) {
+            cleanable.lastCleaningTime - cleanable.log.config.deleteRetentionMs
+          } else {
+            seg.lastModified - cleanable.log.config.deleteRetentionMs
+          }
     }
 
     doClean(cleanable, deleteHorizonMs)
@@ -1044,7 +1049,7 @@ private class CleanerStats(time: Time = Time.SYSTEM) {
   */
 private case class LogToClean(topicPartition: TopicPartition, log: Log, firstDirtyOffset: Long,
                               uncleanableOffset: Long, needCompactionNow: Boolean = false,
-                              cleaningTime: Long = 0L) extends Ordered[LogToClean] {
+                              lastCleaningTime: Long = 0L) extends Ordered[LogToClean] {
   val cleanBytes = log.logSegments(-1, firstDirtyOffset).map(_.size.toLong).sum
   val (firstUncleanableOffset, cleanableBytes) = LogCleaner.calculateCleanableBytes(log, firstDirtyOffset, uncleanableOffset)
   val totalBytes = cleanBytes + cleanableBytes

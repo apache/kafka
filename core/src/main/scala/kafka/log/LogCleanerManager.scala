@@ -210,7 +210,7 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
     }
   }
 
-  def probeVersion() {
+  def probeVersion: Unit = {
     if (currVersion < latestVersion) {
         currVersion = latestVersion
         upgradeCheckpointDir()

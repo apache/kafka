@@ -202,6 +202,18 @@ class LogCleanerManagerTest extends Logging {
     assertEquals("should have 1 logs ready to be deleted", 1, readyToDelete)
   }
 
+  @Test
+  def testCheckpointDirUpgrade(): Unit = {
+    val records = TestUtils.singletonRecords("test".getBytes)
+    val log: Log = createLog(records.sizeInBytes * 5, LogConfig.Compact, 1)
+    val cleanerManager: LogCleanerManager = createCleanerManager(log)
+
+    cleanerManager.updateCheckpoints(logDir, Some(topicPartition, 1L))
+    cleanerManager.upgradeCheckpointDir()
+
+    assertEquals(cleanerManager.allCleanerCheckpointsWithTimes(topicPartition).offset, 1)
+  }
+
   /**
     * When looking for logs with segments ready to be deleted we should consider
     * logs with cleanup.policy=compact because they may have segments from before the log start offset
