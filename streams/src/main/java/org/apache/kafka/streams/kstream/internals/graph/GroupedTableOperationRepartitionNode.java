@@ -23,6 +23,7 @@ import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.kstream.internals.ChangedDeserializer;
 import org.apache.kafka.streams.kstream.internals.ChangedSerializer;
 import org.apache.kafka.streams.processor.FailOnInvalidTimestamp;
+import org.apache.kafka.streams.processor.internals.InternalTopicProperties;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 
 public class GroupedTableOperationRepartitionNode<K, V> extends BaseRepartitionNode<K, V> {
@@ -79,7 +80,7 @@ public class GroupedTableOperationRepartitionNode<K, V> extends BaseRepartitionN
         final Serializer<K> keySerializer = keySerde != null ? keySerde.serializer() : null;
         final Deserializer<K> keyDeserializer = keySerde != null ? keySerde.deserializer() : null;
 
-        topologyBuilder.addInternalTopic(repartitionTopic, null);
+        topologyBuilder.addInternalTopic(repartitionTopic, InternalTopicProperties.empty());
 
         topologyBuilder.addSink(
             sinkName,

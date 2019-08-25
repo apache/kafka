@@ -26,4 +26,8 @@ public class InternalTopicProperties {
     public Integer getNumberOfPartitions() {
         return numberOfPartitions;
     }
+
+    public static InternalTopicProperties empty() {
+        return new InternalTopicProperties(null);
+    }
 }

@@ -72,10 +72,7 @@ public class InternalTopologyBuilder {
     // all topics subscribed from source processors (without application-id prefix for internal topics)
     private final Set<String> sourceTopicNames = new HashSet<>();
 
-    // all internal topics auto-created by the topology builder and used in source / sink processors
-    private final Set<String> internalTopicNames = new HashSet<>();
-
-    // map of internal topic names with topic configuration
+    // all internal topics with their corresponding properties auto-created by the topology builder and used in source / sink processors
     private final Map<String, InternalTopicProperties> internalTopicNamesWithProperties = new HashMap<>();
 
     // groups of source processors that need to be copartitioned
@@ -312,7 +309,7 @@ public class InternalTopologyBuilder {
         public ProcessorNode build() {
             if (topicExtractor instanceof StaticTopicNameExtractor) {
                 final String topic = ((StaticTopicNameExtractor) topicExtractor).topicName;
-                if (internalTopicNames.contains(topic)) {
+                if (internalTopicNamesWithProperties.containsKey(topic)) {
                     // prefix the internal topic name with the application id
                     return new SinkNode<>(name, new StaticTopicNameExtractor<>(decorateTopic(topic)), keySerializer, valSerializer, partitioner);
                 } else {
@@ -613,11 +610,9 @@ public class InternalTopologyBuilder {
     public final void addInternalTopic(final String topicName,
                                        final InternalTopicProperties internalTopicProperties) {
         Objects.requireNonNull(topicName, "topicName can't be null");
-        internalTopicNames.add(topicName);
-        
-        if (internalTopicProperties != null) {
-            internalTopicNamesWithProperties.put(topicName, internalTopicProperties);
-        }
+        Objects.requireNonNull(internalTopicProperties, "internalTopicProperties can't be null");
+
+        internalTopicNamesWithProperties.put(topicName, internalTopicProperties);
     }
 
     public final void copartitionSources(final Collection<String> sourceNodes) {
@@ -905,7 +900,7 @@ public class InternalTopologyBuilder {
             if (sinkNodeFactory.topicExtractor instanceof StaticTopicNameExtractor) {
                 final String topic = ((StaticTopicNameExtractor) sinkNodeFactory.topicExtractor).topicName;
 
-                if (internalTopicNames.contains(topic)) {
+                if (internalTopicNamesWithProperties.containsKey(topic)) {
                     // prefix the internal topic name with the application id
                     final String decoratedTopic = decorateTopic(topic);
                     topicSinkMap.put(decoratedTopic, node);
@@ -928,7 +923,7 @@ public class InternalTopologyBuilder {
                                     sourceNodeFactory.topics;
 
         for (final String topic : topics) {
-            if (internalTopicNames.contains(topic)) {
+            if (internalTopicNamesWithProperties.containsKey(topic)) {
                 // prefix the internal topic name with the application id
                 final String decoratedTopic = decorateTopic(topic);
                 topicSourceMap.put(decoratedTopic, node);
@@ -1013,8 +1008,11 @@ public class InternalTopologyBuilder {
                         if (globalTopics.contains(topic)) {
                             continue;
                         }
-                        if (internalTopicNames.contains(topic)) {
-                            final RepartitionTopicConfig repartitionTopicConfig = buildRepartitionTopicConfig(topic);
+                        if (internalTopicNamesWithProperties.containsKey(topic)) {
+                            final RepartitionTopicConfig repartitionTopicConfig = buildRepartitionTopicConfig(
+                                topic,
+                                internalTopicNamesWithProperties.get(topic)
+                            );
 
                             repartitionTopics.put(repartitionTopicConfig.name(), repartitionTopicConfig);
                             sourceTopics.add(repartitionTopicConfig.name());
@@ -1027,7 +1025,7 @@ public class InternalTopologyBuilder {
                 // if the node is a sink node, add to the sink topics
                 final String topic = nodeToSinkTopic.get(node);
                 if (topic != null) {
-                    if (internalTopicNames.contains(topic)) {
+                    if (internalTopicNamesWithProperties.containsKey(topic)) {
                         // prefix the change log topic name with the application id
                         sinkTopics.add(decorateTopic(topic));
                     } else {
@@ -1062,15 +1060,10 @@ public class InternalTopologyBuilder {
         return Collections.unmodifiableMap(topicGroups);
     }
 
-    private RepartitionTopicConfig buildRepartitionTopicConfig(final String topic) {
+    private RepartitionTopicConfig buildRepartitionTopicConfig(final String topic,
+                                                               final InternalTopicProperties internalTopicProperties) {
         // prefix the internal topic name with the application id
         final String internalTopic = decorateTopic(topic);
-
-        final InternalTopicProperties internalTopicProperties = internalTopicNamesWithProperties.get(topic);
-
-        if (internalTopicProperties == null) {
-            return new RepartitionTopicConfig(internalTopic, Collections.emptyMap());
-        }
 
         final Integer numberOfPartitions = internalTopicProperties.getNumberOfPartitions();
 
@@ -1191,7 +1184,7 @@ public class InternalTopologyBuilder {
     private List<String> maybeDecorateInternalSourceTopics(final Collection<String> sourceTopics) {
         final List<String> decoratedTopics = new ArrayList<>();
         for (final String topic : sourceTopics) {
-            if (internalTopicNames.contains(topic)) {
+            if (internalTopicNamesWithProperties.containsKey(topic)) {
                 decoratedTopics.add(decorateTopic(topic));
             } else {
                 decoratedTopics.add(topic);

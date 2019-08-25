@@ -236,7 +236,7 @@ public class InternalTopologyBuilderTest {
         builder.addSource(null, "source-1", null, null, null, "topic-1");
         builder.addSource(null, "source-2", null, null, null, "topic-2");
         builder.addSource(null, "source-3", null, null, null, "topic-3");
-        builder.addInternalTopic("topic-3", null);
+        builder.addInternalTopic("topic-3", InternalTopicProperties.empty());
 
         final Pattern expectedPattern = Pattern.compile("X-topic-3|topic-1|topic-2");
 
@@ -336,7 +336,7 @@ public class InternalTopologyBuilderTest {
     @Test
     public void testTopicGroups() {
         builder.setApplicationId("X");
-        builder.addInternalTopic("topic-1x", null);
+        builder.addInternalTopic("topic-1x", InternalTopicProperties.empty());
         builder.addSource(null, "source-1", null, null, null, "topic-1", "topic-1x");
         builder.addSource(null, "source-2", null, null, null, "topic-2");
         builder.addSource(null, "source-3", null, null, null, "topic-3");
@@ -524,7 +524,12 @@ public class InternalTopologyBuilderTest {
 
     @Test(expected = NullPointerException.class)
     public void shouldNotAddNullInternalTopic() {
-        builder.addInternalTopic(null, null);
+        builder.addInternalTopic(null, InternalTopicProperties.empty());
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldNotAddNullInternalTopicProperties() {
+        builder.addInternalTopic("topic", null);
     }
 
     @Test(expected = NullPointerException.class)
@@ -568,7 +573,7 @@ public class InternalTopologyBuilderTest {
     @Test
     public void shouldCorrectlyMapStateStoreToInternalTopics() {
         builder.setApplicationId("appId");
-        builder.addInternalTopic("internal-topic", null);
+        builder.addInternalTopic("internal-topic", InternalTopicProperties.empty());
         builder.addSource(null, "source", null, null, null, "internal-topic");
         builder.addProcessor("processor", new MockProcessorSupplier(), "source");
         builder.addStateStore(storeBuilder, "processor");
@@ -633,7 +638,7 @@ public class InternalTopologyBuilderTest {
     @Test
     public void shouldAddInternalTopicConfigForRepartitionTopics() {
         builder.setApplicationId("appId");
-        builder.addInternalTopic("foo", null);
+        builder.addInternalTopic("foo", InternalTopicProperties.empty());
         builder.addSource(null, "source", null, null, null, "foo");
         final InternalTopologyBuilder.TopicsInfo topicsInfo = builder.topicGroups().values().iterator().next();
         final InternalTopicConfig topicConfig = topicsInfo.repartitionSourceTopics.get("appId-foo");
@@ -871,7 +876,7 @@ public class InternalTopologyBuilderTest {
     @Test
     public void shouldHandleWhenTopicPropertiesNumberOfPartitionsIsNull() {
         builder.setApplicationId("T");
-        builder.addInternalTopic("topic-1t", new InternalTopicProperties(null));
+        builder.addInternalTopic("topic-1t", InternalTopicProperties.empty());
         builder.addSource(null, "source-1", null, null, null, "topic-1t");
 
         final Map<Integer, InternalTopologyBuilder.TopicsInfo> topicGroups = builder.topicGroups();
@@ -890,7 +895,7 @@ public class InternalTopologyBuilderTest {
     @Test
     public void shouldHaveCorrectInternalTopicConfigWhenInternalTopicPropertiesAreNotPresent() {
         builder.setApplicationId("Y");
-        builder.addInternalTopic("topic-1y", null);
+        builder.addInternalTopic("topic-1y", InternalTopicProperties.empty());
         builder.addSource(null, "source-1", null, null, null, "topic-1y");
 
         final Map<Integer, InternalTopologyBuilder.TopicsInfo> topicGroups = builder.topicGroups();

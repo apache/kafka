@@ -691,7 +691,7 @@ public class StreamsPartitionAssignorTest {
     @Test
     public void testAssignWithInternalTopics() {
         builder.setApplicationId(applicationId);
-        builder.addInternalTopic("topicX", null);
+        builder.addInternalTopic("topicX", InternalTopicProperties.empty());
         builder.addSource(null, "source1", null, null, null, "topic1");
         builder.addProcessor("processor1", new MockProcessorSupplier(), "source1");
         builder.addSink("sink1", "topicX", null, null, null, "processor1");
@@ -721,12 +721,12 @@ public class StreamsPartitionAssignorTest {
     public void testAssignWithInternalTopicThatsSourceIsAnotherInternalTopic() {
         final String applicationId = "test";
         builder.setApplicationId(applicationId);
-        builder.addInternalTopic("topicX", null);
+        builder.addInternalTopic("topicX", InternalTopicProperties.empty());
         builder.addSource(null, "source1", null, null, null, "topic1");
         builder.addProcessor("processor1", new MockProcessorSupplier(), "source1");
         builder.addSink("sink1", "topicX", null, null, null, "processor1");
         builder.addSource(null, "source2", null, null, null, "topicX");
-        builder.addInternalTopic("topicZ", null);
+        builder.addInternalTopic("topicZ", InternalTopicProperties.empty());
         builder.addProcessor("processor2", new MockProcessorSupplier(), "source2");
         builder.addSink("sink2", "topicZ", null, null, null, "processor2");
         builder.addSource(null, "source3", null, null, null, "topicZ");
