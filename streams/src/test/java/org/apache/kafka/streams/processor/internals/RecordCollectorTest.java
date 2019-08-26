@@ -50,7 +50,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Future;
 
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.equalTo;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -143,6 +146,31 @@ public class RecordCollectorTest {
         assertEquals((Long) 4L, offsets.get(new TopicPartition("topic1", 0)));
         assertEquals((Long) 2L, offsets.get(new TopicPartition("topic1", 1)));
         assertEquals((Long) 0L, offsets.get(new TopicPartition("topic1", 2)));
+    }
+
+    @Test
+    public void shouldNotAllowOffsetsToBeUpdatedExternally() {
+        final String topic = "topic1";
+        final TopicPartition topicPartition = new TopicPartition(topic, 0);
+
+        final RecordCollectorImpl collector = new RecordCollectorImpl(
+            "RecordCollectorTest-TestSpecificPartition",
+            new LogContext("RecordCollectorTest-TestSpecificPartition "),
+            new DefaultProductionExceptionHandler(),
+            new Metrics().sensor("skipped-records")
+        );
+        collector.init(new MockProducer<>(cluster, true, new DefaultPartitioner(), byteArraySerializer, byteArraySerializer));
+
+        collector.send(topic, "999", "0", null, 0, null, stringSerializer, stringSerializer);
+        collector.send(topic, "999", "0", null, 0, null, stringSerializer, stringSerializer);
+        collector.send(topic, "999", "0", null, 0, null, stringSerializer, stringSerializer);
+
+        final Map<TopicPartition, Long> offsets = collector.offsets();
+
+        assertThat(offsets.get(topicPartition), equalTo(2L));
+        assertThrows(UnsupportedOperationException.class, () -> offsets.put(new TopicPartition(topic, 0), 50L));
+
+        assertThat(collector.offsets().get(topicPartition), equalTo(2L));
     }
 
     @SuppressWarnings("unchecked")
