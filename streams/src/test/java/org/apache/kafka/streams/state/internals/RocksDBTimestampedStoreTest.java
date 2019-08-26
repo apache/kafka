@@ -43,7 +43,7 @@ import static org.junit.Assert.assertFalse;
 public class RocksDBTimestampedStoreTest extends RocksDBStoreTest {
 
     RocksDBStore getRocksDBStore() {
-        return new RocksDBTimestampedStore(DB_NAME);
+        return new RocksDBTimestampedStore(DB_NAME, METRICS_SCOPE);
     }
 
     @Test
@@ -382,7 +382,7 @@ public class RocksDBTimestampedStoreTest extends RocksDBStoreTest {
     }
 
     private void prepareOldStore() {
-        final RocksDBStore keyValueStore = new RocksDBStore(DB_NAME);
+        final RocksDBStore keyValueStore = new RocksDBStore(DB_NAME, METRICS_SCOPE);
         try {
             keyValueStore.init(context, keyValueStore);
 

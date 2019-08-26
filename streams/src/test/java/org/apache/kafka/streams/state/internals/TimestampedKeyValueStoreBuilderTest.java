@@ -119,7 +119,7 @@ public class TimestampedKeyValueStoreBuilderTest {
     @Test
     public void shouldNotWrapTimestampedByteStore() {
         reset(supplier);
-        expect(supplier.get()).andReturn(new RocksDBTimestampedStore("name"));
+        expect(supplier.get()).andReturn(new RocksDBTimestampedStore("name", "metrics-scope"));
         expect(supplier.name()).andReturn("name");
         replay(supplier);
 
@@ -133,7 +133,7 @@ public class TimestampedKeyValueStoreBuilderTest {
     @Test
     public void shouldWrapPlainKeyValueStoreAsTimestampStore() {
         reset(supplier);
-        expect(supplier.get()).andReturn(new RocksDBStore("name"));
+        expect(supplier.get()).andReturn(new RocksDBStore("name", "metrics-scope"));
         expect(supplier.name()).andReturn("name");
         replay(supplier);
 
