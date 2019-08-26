@@ -110,7 +110,8 @@ class KafkaMetricReporterClusterIdTest extends ZooKeeperTestHarness {
   override def tearDown(): Unit = {
     server.shutdown()
     CoreUtils.delete(config.logDirs)
-    TestUtils.verifyNonDaemonThreadsStatus(this.getClass.getName)
     super.tearDown()
+    // Note: if verifyNonDaemonThreadsStatus fails, nothing after would be executed
+    TestUtils.verifyNonDaemonThreadsStatus(this.getClass.getName)
   }
 }
