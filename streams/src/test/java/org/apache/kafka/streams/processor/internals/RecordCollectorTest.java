@@ -170,7 +170,6 @@ public class RecordCollectorTest {
         assertThat(offsets.get(topicPartition), equalTo(2L));
         assertThrows(UnsupportedOperationException.class, () -> offsets.put(new TopicPartition(topic, 0), 50L));
 
-        // Verify that collector offsets were not updated
         assertThat(collector.offsets().get(topicPartition), equalTo(2L));
     }
 
