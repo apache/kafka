@@ -1502,24 +1502,24 @@ public class WorkerSinkTaskTest {
     private void expectTransformation(final int numMessages, final String topicPrefix) {
         final Capture<SinkRecord> recordCapture = EasyMock.newCapture();
         EasyMock.expect(transformationChain.apply(EasyMock.capture(recordCapture)))
-            .andAnswer(new IAnswer<SinkRecord>() {
-                @Override
-                public SinkRecord answer() {
-                    SinkRecord origRecord = recordCapture.getValue();
-                    return topicPrefix != null && !topicPrefix.isEmpty()
-                        ? origRecord.newRecord(
-                        topicPrefix + origRecord.topic(),
-                        origRecord.kafkaPartition(),
-                        origRecord.keySchema(),
-                        origRecord.key(),
-                        origRecord.valueSchema(),
-                        origRecord.value(),
-                        origRecord.timestamp(),
-                        origRecord.headers()
-                    )
-                        : origRecord;
-                }
-            }).times(numMessages);
+                .andAnswer(new IAnswer<SinkRecord>() {
+                    @Override
+                    public SinkRecord answer() {
+                        SinkRecord origRecord = recordCapture.getValue();
+                        return topicPrefix != null && !topicPrefix.isEmpty()
+                               ? origRecord.newRecord(
+                                       topicPrefix + origRecord.topic(),
+                                       origRecord.kafkaPartition(),
+                                       origRecord.keySchema(),
+                                       origRecord.key(),
+                                       origRecord.valueSchema(),
+                                       origRecord.value(),
+                                       origRecord.timestamp(),
+                                       origRecord.headers()
+                               )
+                               : origRecord;
+                    }
+                }).times(numMessages);
     }
 
 
