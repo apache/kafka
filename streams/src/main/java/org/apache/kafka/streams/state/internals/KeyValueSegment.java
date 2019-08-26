@@ -28,13 +28,6 @@ class KeyValueSegment extends RocksDBStore implements Comparable<KeyValueSegment
 
     KeyValueSegment(final String segmentName,
                     final String windowName,
-                    final long id) {
-        super(segmentName, windowName);
-        this.id = id;
-    }
-
-    KeyValueSegment(final String segmentName,
-                    final String windowName,
                     final long id,
                     final RocksDBMetricsRecorder metricsRecorder) {
         super(segmentName, windowName, metricsRecorder);

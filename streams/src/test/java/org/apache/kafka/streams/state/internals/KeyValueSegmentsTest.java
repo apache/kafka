@@ -80,7 +80,7 @@ public class KeyValueSegmentsTest {
 
     @Test
     public void shouldBaseSegmentIntervalOnRetentionAndNumSegments() {
-        final KeyValueSegments segments = new KeyValueSegments("test",  METRICS_SCOPE, 8 * SEGMENT_INTERVAL, 2 * SEGMENT_INTERVAL);
+        final KeyValueSegments segments = new KeyValueSegments("test", METRICS_SCOPE, 8 * SEGMENT_INTERVAL, 2 * SEGMENT_INTERVAL);
         assertEquals(0, segments.segmentId(0));
         assertEquals(0, segments.segmentId(SEGMENT_INTERVAL));
         assertEquals(1, segments.segmentId(2 * SEGMENT_INTERVAL));

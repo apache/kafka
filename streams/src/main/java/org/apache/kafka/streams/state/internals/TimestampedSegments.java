@@ -24,7 +24,7 @@ import org.apache.kafka.streams.state.internals.metrics.RocksDBMetricsRecorder;
  */
 class TimestampedSegments extends AbstractSegments<TimestampedSegment> {
 
-    final private RocksDBMetricsRecorder metricsRecorder;
+    private final RocksDBMetricsRecorder metricsRecorder;
 
     TimestampedSegments(final String name,
                         final String metricsScope,
@@ -50,5 +50,11 @@ class TimestampedSegments extends AbstractSegments<TimestampedSegment> {
             newSegment.openDB(context);
             return newSegment;
         }
+    }
+
+    @Override
+    public void close() {
+        metricsRecorder.close();
+        super.close();
     }
 }

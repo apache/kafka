@@ -28,13 +28,6 @@ class TimestampedSegment extends RocksDBTimestampedStore implements Comparable<T
 
     TimestampedSegment(final String segmentName,
                        final String windowName,
-                       final long id) {
-        super(segmentName, windowName);
-        this.id = id;
-    }
-
-    TimestampedSegment(final String segmentName,
-                       final String windowName,
                        final long id,
                        final RocksDBMetricsRecorder metricsRecorder) {
         super(segmentName, windowName, metricsRecorder);

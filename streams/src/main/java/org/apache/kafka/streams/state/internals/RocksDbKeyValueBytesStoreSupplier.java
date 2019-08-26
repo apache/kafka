@@ -19,7 +19,6 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
-import org.apache.kafka.streams.state.internals.metrics.RocksDBMetricsRecorder;
 
 public class RocksDbKeyValueBytesStoreSupplier implements KeyValueBytesStoreSupplier {
 
@@ -39,10 +38,9 @@ public class RocksDbKeyValueBytesStoreSupplier implements KeyValueBytesStoreSupp
 
     @Override
     public KeyValueStore<Bytes, byte[]> get() {
-        final RocksDBMetricsRecorder metricsRecorder = new RocksDBMetricsRecorder(metricsScope(), name);
         return returnTimestampedStore ?
-            new RocksDBTimestampedStore(name, metricsRecorder) :
-            new RocksDBStore(name, metricsRecorder);
+            new RocksDBTimestampedStore(name, metricsScope()) :
+            new RocksDBStore(name, metricsScope());
     }
 
     @Override

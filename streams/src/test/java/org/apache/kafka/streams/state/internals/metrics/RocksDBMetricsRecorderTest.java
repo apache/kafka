@@ -25,70 +25,92 @@ import org.junit.runner.RunWith;
 import org.powermock.core.classloader.annotations.PrepareForTest;
 import org.powermock.modules.junit4.PowerMockRunner;
 import org.rocksdb.Statistics;
+import org.rocksdb.StatsLevel;
 
 import static org.easymock.EasyMock.eq;
 import static org.easymock.EasyMock.expect;
+import static org.easymock.EasyMock.mock;
+import static org.powermock.api.easymock.PowerMock.reset;
 import static org.powermock.api.easymock.PowerMock.createMock;
 import static org.powermock.api.easymock.PowerMock.mockStatic;
 import static org.powermock.api.easymock.PowerMock.mockStaticNice;
 import static org.powermock.api.easymock.PowerMock.replay;
-import static org.powermock.api.easymock.PowerMock.replayAll;
 import static org.powermock.api.easymock.PowerMock.verify;
-import static org.powermock.api.easymock.PowerMock.verifyAll;
 
 @RunWith(PowerMockRunner.class)
 @PrepareForTest({RocksDBMetrics.class, Sensor.class})
 public class RocksDBMetricsRecorderTest {
 
-    private final static String METRICS_SCOPE = "test-state-id";
-    private final static String STORE_NAME = "test store";
+    private final static String METRICS_SCOPE = "metrics-scope";
+    private final static String STORE_NAME = "store name";
+    private final static String SEGMENT_STORE_NAME_1 = "segment store name 1";
+    private final static String SEGMENT_STORE_NAME_2 = "segment  name 2";
+
+    private final Statistics statisticsToAdd1 = mock(Statistics.class);
+    private final Statistics statisticsToAdd2 = mock(Statistics.class);
+    private final Sensor sensor = createMock(Sensor.class);
+    private final StreamsMetricsImpl streamsMetrics = mock(StreamsMetricsImpl.class);
+    private final TaskId taskId = new TaskId(0, 0);
+
     private final RocksDBMetricsRecorder recorder = new RocksDBMetricsRecorder(METRICS_SCOPE, STORE_NAME);
 
-    private final Statistics statisticsToAdd1 = createMock(Statistics.class);
-    private final Statistics statisticsToAdd2 = createMock(Statistics.class);
-    private final String statisticsId1 = "statistics ID 1";
-    private final String statisticsId2 = "statistics ID 2";
+    @Test
+    public void shouldSetStatsLevelToExceptDetailedTimers() {
+        mockStaticNice(RocksDBMetrics.class);
+        replay(RocksDBMetrics.class);
+        statisticsToAdd1.setStatsLevel(StatsLevel.EXCEPT_DETAILED_TIMERS);
+        replay(statisticsToAdd1);
 
-    private final Sensor sensor = createMock(Sensor.class);
-    private final StreamsMetricsImpl streamsMetrics = createMock(StreamsMetricsImpl.class);
-    private final TaskId taskId = new TaskId(0, 0);
+        recorder.addStatistics(SEGMENT_STORE_NAME_1, statisticsToAdd1, streamsMetrics, taskId);
+
+        verify(statisticsToAdd1);
+    }
 
     @Test
     public void shouldInitMetricsOnlyWhenFirstStatisticsIsAdded() {
         replayMetricsInitialization();
-        recorder.addStatistics(statisticsId1, statisticsToAdd1, streamsMetrics, taskId);
+        statisticsToAdd1.setStatsLevel(StatsLevel.EXCEPT_DETAILED_TIMERS);
+        replay(statisticsToAdd1);
+        recorder.addStatistics(SEGMENT_STORE_NAME_1, statisticsToAdd1, streamsMetrics, taskId);
         verify(RocksDBMetrics.class);
 
         mockStatic(RocksDBMetrics.class);
         replay(RocksDBMetrics.class);
-        recorder.addStatistics(statisticsId2, statisticsToAdd2, streamsMetrics, taskId);
+        recorder.addStatistics(SEGMENT_STORE_NAME_2, statisticsToAdd2, streamsMetrics, taskId);
         verify(RocksDBMetrics.class);
     }
 
     @Test
     public void shouldCloseStatisticsWhenRecorderIsClosed() {
         mockStaticNice(RocksDBMetrics.class);
+        replay(RocksDBMetrics.class);
+        recorder.addStatistics(SEGMENT_STORE_NAME_1, statisticsToAdd1, streamsMetrics, taskId);
+        recorder.addStatistics(SEGMENT_STORE_NAME_2, statisticsToAdd2, streamsMetrics, taskId);
+        reset(statisticsToAdd1);
+        reset(statisticsToAdd2);
         statisticsToAdd1.close();
         statisticsToAdd2.close();
-        replayAll();
-        recorder.addStatistics(statisticsId1, statisticsToAdd1, streamsMetrics, taskId);
-        recorder.addStatistics(statisticsId2, statisticsToAdd2, streamsMetrics, taskId);
+        replay(statisticsToAdd1);
+        replay(statisticsToAdd2);
 
         recorder.close();
 
-        verifyAll();
+        verify(statisticsToAdd1);
+        verify(statisticsToAdd2);
     }
 
     @Test
-    public void shouldCloseStatisticsWhenStatisticsWithSameIdIsAdded() {
+    public void shouldCloseStatisticsWhenStatisticsIsRemoved() {
         mockStaticNice(RocksDBMetrics.class);
+        replay(RocksDBMetrics.class);
+        recorder.addStatistics(SEGMENT_STORE_NAME_1, statisticsToAdd1, streamsMetrics, taskId);
+        reset(statisticsToAdd1);
         statisticsToAdd1.close();
-        replayAll();
-        recorder.addStatistics(statisticsId1, statisticsToAdd1, streamsMetrics, taskId);
+        replay(statisticsToAdd1);
 
-        recorder.addStatistics(statisticsId1, statisticsToAdd2, streamsMetrics, taskId);
+        recorder.removeStatistics(SEGMENT_STORE_NAME_1);
 
-        verifyAll();
+        verify(statisticsToAdd1);
     }
 
     private void replayMetricsInitialization() {

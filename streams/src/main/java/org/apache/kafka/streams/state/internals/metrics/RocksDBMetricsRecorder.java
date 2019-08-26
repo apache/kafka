@@ -21,6 +21,7 @@ import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.internals.metrics.RocksDBMetrics.RocksDBMetricContext;
 import org.rocksdb.Statistics;
+import org.rocksdb.StatsLevel;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -78,21 +79,31 @@ public class RocksDBMetricsRecorder {
         numberOfFileErrorsSensor = RocksDBMetrics.numberOfFileErrorsSensor(streamsMetrics, metricContext);
     }
 
-    public void addStatistics(final String statisticsId,
+    public void addStatistics(final String storeName,
                               final Statistics statistics,
                               final StreamsMetricsImpl streamsMetrics,
                               final TaskId taskId) {
         if (statisticsToRecord.isEmpty()) {
             init(streamsMetrics, taskId);
         }
-        final Statistics previousStatistics = statisticsToRecord.get(statisticsId);
-        if (previousStatistics != null) {
-            previousStatistics.close();
+        if (statisticsToRecord.containsKey(storeName)) {
+            throw new IllegalStateException("A statistics for store " + storeName + "has been already registered. "
+                + "This is a bug in Kafka Streams.");
         }
-        statisticsToRecord.put(statisticsId, statistics);
+        statistics.setStatsLevel(StatsLevel.EXCEPT_DETAILED_TIMERS);
+        statisticsToRecord.put(storeName, statistics);
+    }
+
+    public void removeStatistics(final String storeName) {
+        final Statistics removedStatistics = statisticsToRecord.remove(storeName);
+        if (removedStatistics != null) {
+            removedStatistics.close();
+        }
     }
 
     public void record() {
+        // TODO: this block of record calls merely avoids compiler warnings.
+        //       The actual computations of the metrics will be implemented in the next PR
         bytesWrittenToDatabaseSensor.record(0);
         bytesReadToDatabaseSensor.record(0);
         memtableBytesFlushedSensor.record(0);
