@@ -48,8 +48,7 @@ class RemoteLogManagerTest {
 
   val rsmConfig: Map[String, Any] = Map(REMOTE_STORAGE_MANAGER_CONFIG_PREFIX + "url" -> "foo.url",
     REMOTE_STORAGE_MANAGER_CONFIG_PREFIX + "timout.ms" -> 1000L)
-  val rlmConfig = RemoteLogManagerConfig(remoteLogStorageEnable = true, "kafka.log.remote.MockRemoteStorageManager",
-    1024, 60000, rsmConfig)
+  val rlmConfig = RemoteLogManagerConfig(remoteLogStorageEnable = true, "kafka.log.remote.MockRemoteStorageManager", 1024, 60000, rsmConfig, 10, 30000)
 
   var logConfig: LogConfig = _
   var tmpDir: File = _
@@ -193,6 +192,8 @@ class MockRemoteStorageManager extends RemoteStorageManager {
 
   override def deleteLogSegment(remoteLogSegment: RemoteLogSegmentInfo): Boolean = true
 
+  override def deleteTopicPartition(topicPartition: TopicPartition): Boolean = true
+
   override def read(remoteLogIndexEntry: RemoteLogIndexEntry, maxBytes: Int, startOffset: Long,
                     minOneMessage: Boolean): Records = MemoryRecords.EMPTY
 
@@ -201,5 +202,6 @@ class MockRemoteStorageManager extends RemoteStorageManager {
   override def configure(configs: util.Map[String, _]): Unit = {
     MockRemoteStorageManager.configs = configs
   }
-}
 
+  override def cleanupLogUntil(topicPartition: TopicPartition, cleanUpTillMs: Long): Boolean = true
+}

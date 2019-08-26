@@ -17,10 +17,10 @@
 package kafka.log.remote
 
 import java.io.Closeable
-import java.nio.file.{DirectoryStream, Files, Path}
 import java.util
 import java.util.concurrent._
-import java.util.function.BiConsumer
+import java.util.concurrent.atomic.AtomicInteger
+import java.util.function.{BiConsumer, Consumer, Function}
 
 import kafka.log.{Log, LogSegment}
 import kafka.server.{Defaults, FetchDataInfo, KafkaConfig, LogOffsetMetadata}
@@ -28,18 +28,62 @@ import kafka.utils.Logging
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.OffsetOutOfRangeException
 import org.apache.kafka.common.requests.FetchRequest.PartitionData
-import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.common.utils.{KafkaThread, Time, Utils}
 
-import scala.collection.JavaConverters._
-import scala.collection.{JavaConverters, Set}
+import scala.collection.Set
+
+class RLMScheduledThreadPool(poolSize: Int) extends Logging {
+
+  private val scheduledThreadPool: ScheduledThreadPoolExecutor = {
+    val threadPool = new ScheduledThreadPoolExecutor(poolSize)
+    threadPool.setRemoveOnCancelPolicy(true)
+    threadPool.setExecuteExistingDelayedTasksAfterShutdownPolicy(false)
+    threadPool.setThreadFactory(new ThreadFactory {
+      private val sequence = new AtomicInteger()
+
+      override def newThread(r: Runnable): Thread = {
+        KafkaThread.daemon("kafka-rlm-thread-pool-" + sequence.incrementAndGet(), r)
+      }
+    })
+
+    threadPool
+  }
+
+  def resizePool(size: Int): Unit = {
+    scheduledThreadPool.setCorePoolSize(size)
+  }
+
+  def scheduleWithFixedDelay(runnable: CancellableRunnable, initialDelay: Long, delay: Long,
+                             timeUnit: TimeUnit): ScheduledFuture[_] = {
+    scheduledThreadPool.scheduleWithFixedDelay(runnable, initialDelay, delay, timeUnit)
+  }
+
+  def shutdown(): Unit = {
+    scheduledThreadPool.shutdownNow()
+    //waits for 2 mins to terminate the current tasks
+    scheduledThreadPool.awaitTermination(2, TimeUnit.MINUTES)
+  }
+}
+
+trait CancellableRunnable extends Runnable {
+  @volatile private var cancelled = false;
+
+  def cancel(): Unit = {
+    cancelled = true
+  }
+
+  def isCancelled(): Boolean = {
+    cancelled
+  }
+}
 
 class RemoteLogManager(logFetcher: TopicPartition => Option[Log],
                        segmentCleaner: (TopicPartition, LogSegment) => Unit,
-                       rlmConfig: RemoteLogManagerConfig) extends Logging with Closeable {
+                       rlmConfig: RemoteLogManagerConfig,
+                       time: Time = Time.SYSTEM) extends Logging with Closeable {
 
-  private val watchedSegments: BlockingQueue[LogSegmentEntry] = new LinkedBlockingQueue[LogSegmentEntry]()
-  private val polledDirs = new ConcurrentHashMap[TopicPartition, Path]().asScala
-  private val maxOffsets: util.Map[TopicPartition, Long] = new ConcurrentHashMap[TopicPartition, Long]()
+  private val leaderOrFollowerTasks: ConcurrentMap[TopicPartition, RLMTaskWithFuture] =
+    new ConcurrentHashMap[TopicPartition, RLMTaskWithFuture]()
 
   private def createRemoteStorageManager(): RemoteStorageManager = {
     val rsm = Class.forName(rlmConfig.remoteLogStorageManagerClass)
@@ -55,138 +99,151 @@ class RemoteLogManager(logFetcher: TopicPartition => Option[Log],
 
   private val remoteStorageManager: RemoteStorageManager = createRemoteStorageManager()
   private val rlmIndexer: RLMIndexer = new RLMIndexer(remoteStorageManager, logFetcher)
-  private val rlmFollower: RLMFollower = new RLMFollower(remoteStorageManager, logFetcher, rlmIndexer)
 
-  private val pollerDirsRunnable: Runnable = new Runnable() {
-    override def run(): Unit = {
-      polledDirs.foreach { case (tp, path) =>
-        val dirPath: Path = path
-        val tp: TopicPartition = Log.parseTopicPartitionName(dirPath.toFile)
-
-        val maxOffset = if(maxOffsets.containsKey(tp)) maxOffsets.get(tp) else -1L
-        val paths = Files.newDirectoryStream(dirPath, new DirectoryStream.Filter[Path]() {
-          override def accept(path: Path): Boolean = {
-            val fileName = path.toFile.getName
-            fileName.endsWith(Log.LogFileSuffix) && Log.offsetFromFileName(fileName) > maxOffset
-          }
-        })
-        try {
-          //todo-satish avoid polling log directories as it may introduce IO ops to read directory metadata
-          // we need to introduce a callback whenever log rollover occurs for a topic partition.
-          val logFiles: List[String] = paths.iterator().asScala
-            .map(x => x.toFile.getName).toList
-
-          if (logFiles.size > 1) {
-            val sortedPaths = logFiles.sorted
-            val passiveLogFiles = sortedPaths.slice(0, sortedPaths.size - 1)
-            logFetcher(tp).foreach(log => {
-              val lastSegmentOffset = Log.offsetFromFileName(passiveLogFiles.last)
-              val segments = log.logSegments(maxOffset + 1, lastSegmentOffset + 1)
-              segments.foreach(segment => watchedSegments.add(LogSegmentEntry(tp, segment.baseOffset, segment)))
-              maxOffsets.put(tp, lastSegmentOffset)
-            })
-          }
-        } finally {
-          Utils.closeQuietly(paths, "paths")
-        }
-      }
-    }
-  }
-
-  private val pollerExecutorService: ScheduledExecutorService = Executors.newSingleThreadScheduledExecutor()
-  //todo time intervals should be made configurable with default values
-  pollerExecutorService.scheduleWithFixedDelay(pollerDirsRunnable, 30, 30, TimeUnit.SECONDS)
-
-  //todo configurable no of tasks/threads
-  private val executorService = Executors.newSingleThreadExecutor()
-  executorService.submit(new Runnable() {
-    override def run(): Unit = {
-      try {
-        while (true) {
-          var segmentEntry: LogSegmentEntry = null
-          try {
-            segmentEntry = watchedSegments.take()
-            val segment = segmentEntry.logSegment
-
-            val tp = segmentEntry.topicPartition
-
-            //todo-satish Not all LogSegments on different replicas are same. So, we need to avoid duplicating
-            // log-segments in remote tier with similar offset ranges.
-            val entries = remoteStorageManager.copyLogSegment(tp, segment)
-            val file = segment.log.file()
-            val fileName = file.getName
-            val baseOffsetStr = fileName.substring(0, fileName.indexOf("."))
-            rlmIndexer.maybeBuildIndexes(tp, entries, file.getParentFile, baseOffsetStr)
-
-            //delete the local log-segment as it is already copied into remote storage
-            //todo-satish need to clean up while restarting in scenarios where broker is exited before doing this task.
-            segmentCleaner(tp, segment)
-          } catch {
-            case ex: InterruptedException => throw ex
-            case ex: Throwable =>
-              logger.error(s"Error occurred while building indexes in RLM leader for segment entry $segmentEntry", ex)
-          }
-        }
-      } catch {
-        case ex: InterruptedException =>
-          logger.info("Current thread is interrupted with ", ex)
-      }
-    }
-  })
+  // add a config to take no of threads
+  private val delayInMs = 30 * 1000L
+  private val poolSize = 10
+  private val rlmScheduledThreadPool = new RLMScheduledThreadPool(poolSize)
 
   /**
    * Ask RLM to monitor the given TopicPartitions, and copy inactive Log
    * Segments to remote storage. RLM updates local index files once a
    * Log Segment in a TopicPartition is copied to Remote Storage
    */
-  def handleLeaderPartitions(topicPartitions: Set[TopicPartition]): Boolean = {
-
-    // stop begin followers as they become leaders.
-    rlmFollower.removeFollowers(JavaConverters.asJavaCollectionConverter(topicPartitions).asJavaCollection)
-
-    topicPartitions.foreach(tp =>
-      logFetcher(tp).foreach(log => {
-        val segments: util.List[LogSegmentEntry] = new util.ArrayList[LogSegmentEntry]()
-        log.logSegments.foreach(x => {
-          segments.add(LogSegmentEntry(tp, x.baseOffset, x))
-        })
-
-        // remove the last segment which is active
-        if (segments.size() > 0) segments.remove(segments.size() - 1)
-
-        if (segments.size() > 0) maxOffsets.put(tp, segments.get(segments.size() - 1).baseOffset)
-        watchedSegments.addAll(segments)
-
-        // add the polling dirs to the list.
-        polledDirs.put(tp, log.dir.toPath)
-      }))
-
-    true
+  def handleLeaderPartitions(topicPartitions: Set[TopicPartition]): Unit = {
+    doHandleLeaderOrFollowerPartitions(topicPartitions, task => task.convertToLeader())
   }
 
   /**
    * Stops copy of LogSegment if TopicPartition ownership is moved from a broker.
    */
-  def handleFollowerPartitions(topicPartitions: Set[TopicPartition]): Boolean = {
+  def handleFollowerPartitions(topicPartitions: Set[TopicPartition]): Unit = {
+    doHandleLeaderOrFollowerPartitions(topicPartitions, task => task.convertToFollower())
+  }
 
-    // remove these partitions as they become followers
-    topicPartitions.foreach(tp => {
-      logFetcher(tp).foreach(log => log.logSegments
-        .foreach(logSegment => {
-          watchedSegments.remove(LogSegmentEntry(tp, logSegment.baseOffset, logSegment))
-          remoteStorageManager.cancelCopyingLogSegment(tp)
-        }))
-    })
+  private def doHandleLeaderOrFollowerPartitions(topicPartitions: Set[TopicPartition],
+                                                 convertToLeaderOrFollower: RLMTask => Unit) = {
+    topicPartitions.foreach { topicPartition =>
+      val rlmTaskWithFuture = leaderOrFollowerTasks.computeIfAbsent(topicPartition,
+        new Function[TopicPartition, RLMTaskWithFuture] {
+          override def apply(tp: TopicPartition): RLMTaskWithFuture = {
+            val task = new RLMTask(tp)
+            val future = rlmScheduledThreadPool.scheduleWithFixedDelay(task, 0, delayInMs, TimeUnit.MILLISECONDS)
+            RLMTaskWithFuture(task, future)
+          }
+        })
+      convertToLeaderOrFollower(rlmTaskWithFuture.rlmTask)
+    }
+  }
 
-    //cancel the watched directories for topic/partition.
-    topicPartitions.foreach(tp => {
-      polledDirs.remove(tp)
-    })
+  /**
+   * Stops partitions for copying segments, building indexes and deletes the partition in remote storage if delete flag
+   * is set as true.
+   *
+   * @param topicPartitions Set of topic partitions with a flag to be deleted or not.
+   * @return
+   */
+  def handleStopPartition(topicPartitions: Set[(TopicPartition, Boolean)]): Unit = {
+    topicPartitions.foreach { case (tp, delete) =>
+      // unassign topic partitions from RLM leader/follower
+      val rlmTaskWithFuture = leaderOrFollowerTasks.remove(tp)
+      if (rlmTaskWithFuture != null) {
+        rlmTaskWithFuture.cancel()
+      }
+      // schedule delete task if necessary, this should be asynchronous
+      if (delete) remoteStorageManager.deleteTopicPartition(tp)
+    }
+  }
 
-    //these partitions become followers
-    rlmFollower.addFollowers(JavaConverters.asJavaCollectionConverter(topicPartitions).asJavaCollection)
+  class RLMTask(tp: TopicPartition) extends CancellableRunnable with Logging {
+    this.logIdent = s"[RLMTask partition:$tp] "
+    @volatile var isLeader: Boolean = false
 
-    true
+    private var readOffset: Long = rlmIndexer.getOrLoadIndexOffset(tp).getOrElse(0L)
+
+    def convertToLeader(): Unit = {
+      isLeader = true
+    }
+
+    def convertToFollower(): Unit = {
+      isLeader = false
+    }
+
+    def copyLogSegmentsToRemote(): Unit = {
+      logFetcher(tp).foreach { log => {
+        if (isCancelled()) {
+          info(s"Skipping copying log segments as the current task is cancelled")
+          return
+        }
+
+        val baseOffset = log.activeSegment.baseOffset
+        if (readOffset >= baseOffset) {
+          info(s"Skipping building indexes, current read offset:$readOffset is more than >= active segment " +
+            s"base offset:$baseOffset ")
+          return
+        }
+
+        val segments = log.logSegments(readOffset + 1, baseOffset)
+        segments.foreach { segment =>
+          if (isCancelled() || !isLeader) {
+            info(
+              s"Skipping copying log segments as the current task state is changed, cancelled:$isCancelled() leader:$isLeader")
+            return
+          }
+          val entries = remoteStorageManager.copyLogSegment(tp, segment)
+          val file = segment.log.file()
+          val fileName = file.getName
+          val baseOffsetStr = fileName.substring(0, fileName.indexOf("."))
+          rlmIndexer.maybeBuildIndexes(tp, entries, file.getParentFile, baseOffsetStr)
+          readOffset = entries.get(entries.size() - 1).lastOffset
+        }
+      }
+      }
+    }
+
+    def updateRemoteLogIndexes(): Unit = {
+      remoteStorageManager.listRemoteSegments(tp, readOffset).forEach {
+        rlsInfo =>
+          val entries = remoteStorageManager.getRemoteLogIndexEntries(rlsInfo)
+          if (!entries.isEmpty) {
+            logFetcher(tp).foreach { log: Log =>
+              if (isCancelled()) {
+                info(s"Skipping building indexes as the current task is cancelled")
+                return
+              }
+              val baseOffset = Log.filenamePrefixFromOffset(entries.get(0).firstOffset)
+              val logDir = log.activeSegment.log.file().getParentFile
+              rlmIndexer.maybeBuildIndexes(tp, entries, logDir, baseOffset)
+              readOffset = entries.get(entries.size() - 1).lastOffset
+            }
+          }
+      }
+    }
+
+    def deleteExpiredRemoteLogSegments(): Unit = {
+      remoteStorageManager.cleanupLogUntil(tp, time.milliseconds() - rlmConfig.remoteLogRetentionMillis)
+    }
+
+    override def run(): Unit = {
+      try {
+        if (!isCancelled()) {
+          //a. copy log segments to remote store
+          if (isLeader) copyLogSegmentsToRemote()
+
+          //b. fetch missing remote index files
+          updateRemoteLogIndexes()
+
+          //c. delete expired remote segments
+          if (isLeader) deleteExpiredRemoteLogSegments()
+        }
+      } catch {
+        case ex: InterruptedException =>
+          warn(s"Current thread for topic-partition $tp is interrupted, this should not be rescheduled ", ex)
+        case ex: Exception =>
+          warn(
+            s"Current task for topic-partition $tp received error but it will be scheduled for next iteration: ", ex)
+      }
+    }
   }
 
   def lookupLastOffset(tp: TopicPartition): Option[Long] = {
@@ -205,7 +262,8 @@ class RemoteLogManager(logFetcher: TopicPartition => Option[Log],
   def read(fetchMaxByes: Int, minOneMessage: Boolean, tp: TopicPartition, fetchInfo: PartitionData): FetchDataInfo = {
     val offset = fetchInfo.fetchOffset
     val entry = rlmIndexer.lookupEntryForOffset(tp, offset)
-      .getOrElse(throw new OffsetOutOfRangeException(s"Received request for offset $offset for partition $tp, which does not exist in remote tier"))
+      .getOrElse(throw new OffsetOutOfRangeException(
+        s"Received request for offset $offset for partition $tp, which does not exist in remote tier"))
 
     val records = remoteStorageManager.read(entry, fetchInfo.maxBytes, offset, minOneMessage)
 
@@ -217,38 +275,33 @@ class RemoteLogManager(logFetcher: TopicPartition => Option[Log],
    */
   def close(): Unit = {
     Utils.closeQuietly(remoteStorageManager, "RemoteLogStorageManager")
-    executorService.shutdownNow()
-    pollerExecutorService.shutdownNow()
+    leaderOrFollowerTasks.values().forEach(new Consumer[RLMTaskWithFuture] {
+      override def accept(taskWithFuture: RLMTaskWithFuture): Unit = taskWithFuture.cancel()
+    })
+    rlmScheduledThreadPool.shutdown()
   }
 
-}
-
-case class RemoteLogManagerConfig(remoteLogStorageEnable: Boolean,
-                                  remoteLogStorageManagerClass: String,
-                                  remoteLogRetentionBytes: Long,
-                                  remoteLogRetentionMillis: Long,
-                                  remoteStorageConfig: scala.collection.immutable.Map[String, Any])
-
-private case class LogSegmentEntry(topicPartition: TopicPartition,
-                                   baseOffset: Long,
-                                   logSegment: LogSegment) {
-  override def hashCode(): Int = {
-    val fields = Seq(topicPartition, baseOffset)
-    fields.map(_.hashCode()).foldLeft(0)((a, b) => 31 * a + b)
-  }
-
-  override def equals(other: Any): Boolean = {
-    other match {
-      case that: LogSegmentEntry => topicPartition.equals(that.topicPartition) && baseOffset.equals(that.baseOffset)
-      case _ => false
+  case class RLMTaskWithFuture(rlmTask: RLMTask, future: Future[_]) {
+    def cancel(): Unit = {
+      rlmTask.cancel()
+      future.cancel(true)
     }
   }
+
 }
+
+case class RemoteLogManagerConfig(remoteLogStorageEnable: Boolean, remoteLogStorageManagerClass: String,
+                                  remoteLogRetentionBytes: Long, remoteLogRetentionMillis: Long,
+                                  remoteStorageConfig: Map[String, Any], remoteLogManagerThreadPoolSize: Int,
+                                  remoteLogManagerTaskIntervalMs: Long)
+
 
 object RemoteLogManager {
   def REMOTE_STORAGE_MANAGER_CONFIG_PREFIX = "remote.log.storage."
+
   def DefaultConfig = RemoteLogManagerConfig(remoteLogStorageEnable = Defaults.RemoteLogStorageEnable, null,
-    Defaults.RemoteLogRetentionBytes, TimeUnit.MINUTES.toMillis(Defaults.RemoteLogRetentionMinutes), Map.empty)
+    Defaults.RemoteLogRetentionBytes, TimeUnit.MINUTES.toMillis(Defaults.RemoteLogRetentionMinutes), Map.empty,
+    Defaults.RemoteLogManagerThreadPoolSize, Defaults.RemoteLogManagerTaskIntervalMs)
 
   def createRemoteLogManagerConfig(config: KafkaConfig): RemoteLogManagerConfig = {
     var rsmProps = collection.mutable.Map[String, Any]()
@@ -262,6 +315,7 @@ object RemoteLogManager {
       }
     })
     RemoteLogManagerConfig(config.remoteLogStorageEnable, config.remoteLogStorageManager,
-      config.remoteLogRetentionBytes, config.remoteLogRetentionMillis, rsmProps.toMap)
+      config.remoteLogRetentionBytes, config.remoteLogRetentionMillis, rsmProps.toMap,
+      config.remoteLogManagerThreadPoolSize, config.remoteLogManagerTaskIntervalMs)
   }
 }

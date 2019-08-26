@@ -16,12 +16,12 @@
  */
 package kafka.log.remote
 
+import java._
 import java.io.{File, IOException}
 import java.nio.file.{Files, Path}
 import java.util.concurrent.locks.ReentrantLock
 import java.util.concurrent.{ConcurrentNavigableMap, ConcurrentSkipListMap}
 import java.util.function.{Consumer, Predicate}
-import java._
 
 import kafka.log.remote.TopicPartitionRemoteIndex.{REMOTE_OFFSET_INDEX_SUFFIX, REMOTE_TIME_INDEX_SUFFIX}
 import kafka.log.{Log, OffsetIndex, TimeIndex}
@@ -29,7 +29,7 @@ import kafka.utils.{CoreUtils, Logging}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.utils.Utils
 
-import scala.collection.{JavaConversions, JavaConverters}
+import scala.collection.JavaConverters
 
 class TopicPartitionRemoteIndex(val topicPartition: TopicPartition, logDir: File) extends AutoCloseable with Logging {
 

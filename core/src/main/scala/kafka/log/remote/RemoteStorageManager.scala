@@ -16,8 +16,8 @@
  */
 package kafka.log.remote
 
-import java.io.IOException
 import java._
+import java.io.IOException
 
 import kafka.log.LogSegment
 import org.apache.kafka.common.record.Records
@@ -85,15 +85,33 @@ trait RemoteStorageManager extends Configurable with AutoCloseable {
   def deleteLogSegment(remoteLogSegment: RemoteLogSegmentInfo): Boolean
 
   /**
+   * Delete all the log segments for the given topic partition. This can be done by rename the existing locations
+   * and delete them later in asynchronous manner.
+   *
+   * @param topicPartition
+   * @return
+   */
+  def deleteTopicPartition(topicPartition: TopicPartition): Boolean
+
+  /**
+   * Remove the log segments which are older than the given cleanUpTillMs
+   *
+   * @param topicPartition
+   * @param cleanUpTillMs
+   * @return
+   */
+  def cleanupLogUntil(topicPartition: TopicPartition, cleanUpTillMs: Long): Boolean
+
+  /**
    * Read up to maxBytes data from remote storage, starting from the 1st batch that
    * is greater than or equals to the startOffset.
    *
    * Will read at least one batch, if the 1st batch size is larger than maxBytes.
    *
    * @param remoteLogIndexEntry The first remoteLogIndexEntry that remoteLogIndexEntry.lastOffset >= startOffset
-   * @param maxBytes maximum bytes to fetch for the given entry
-   * @param startOffset initial offset to be read from the given rdi in remoteLogIndexEntry
-   * @param minOneMessage if true read at least one record even if the size is more than maxBytes
+   * @param maxBytes            maximum bytes to fetch for the given entry
+   * @param startOffset         initial offset to be read from the given rdi in remoteLogIndexEntry
+   * @param minOneMessage       if true read at least one record even if the size is more than maxBytes
    * @return
    */
   @throws(classOf[IOException])

@@ -33,7 +33,8 @@ import org.apache.kafka.common.record.FileRecords;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.Records;
-import scala.collection.JavaConverters;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import static kafka.log.remote.RemoteLogManager.REMOTE_STORAGE_MANAGER_CONFIG_PREFIX;
 
@@ -48,13 +49,19 @@ import java.nio.channels.WritableByteChannel;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import scala.collection.JavaConverters;
+
 public class HDFSRemoteStorageManager implements RemoteStorageManager {
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(HDFSRemoteStorageManager.class);
+
     // TODO: Use the utilities in AbstractConfig. Should we support dynamic config?
     public static final String HDFS_URI_PROP = REMOTE_STORAGE_MANAGER_CONFIG_PREFIX() + "hdfs.fs.uri";
     public static final String HDFS_BASE_DIR_PROP = REMOTE_STORAGE_MANAGER_CONFIG_PREFIX() + "hdfs.base.dir";
@@ -158,13 +165,12 @@ public class HDFSRemoteStorageManager implements RemoteStorageManager {
                         segments.add(segment);
                     }
                 } catch (NumberFormatException e) {
+                    LOGGER.warn("Exception occurred while parsing segment file [{}] ", segmentName, e);
                 }
             }
         }
 
-        Collections.sort(segments, (a, b) -> {
-            return Long.compare(a.baseOffset(), b.baseOffset());
-        });
+        segments.sort(Comparator.comparingLong(RemoteLogSegmentInfo::baseOffset));
         return segments;
     }
 
@@ -202,9 +208,20 @@ public class HDFSRemoteStorageManager implements RemoteStorageManager {
         return fs.delete(segment.getPath(), true);
     }
 
-    /*
-        Read remote log from startOffset.
-     */
+    public boolean deleteTopicPartition(TopicPartition tp) {
+        // todo
+        return true;
+    }
+
+    @Override
+    public boolean cleanupLogUntil(TopicPartition topicPartition, long cleanUpTillMs) {
+        //todo
+        return true;
+    }
+
+    /**
+     * Read remote log from startOffset.
+     **/
     @Override
     public Records read(RemoteLogIndexEntry remoteLogIndexEntry, int maxBytes, long startOffset, boolean minOneMessage) throws IOException {
         if (startOffset > remoteLogIndexEntry.lastOffset())

@@ -52,7 +52,7 @@ class RLMIndexer(rsm: RemoteStorageManager, logFetcher: TopicPartition => Option
     maybeLoadIndex(tp).currentStartOffset
   }
 
-  private def maybeLoadIndex(tp: TopicPartition): TopicPartitionRemoteIndex = {
+  def maybeLoadIndex(tp: TopicPartition): TopicPartitionRemoteIndex = {
     remoteIndexes.computeIfAbsent(tp, new Function[TopicPartition, TopicPartitionRemoteIndex]() {
       override def apply(tp: TopicPartition): TopicPartitionRemoteIndex = {
         val log = logFetcher(tp).getOrElse(
