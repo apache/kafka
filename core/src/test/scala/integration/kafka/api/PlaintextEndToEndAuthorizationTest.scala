@@ -71,13 +71,13 @@ class PlaintextEndToEndAuthorizationTest extends EndToEndAuthorizationTest {
   override val kafkaPrincipal = "server"
 
   @Before
-  override def setUp() {
+  override def setUp(): Unit = {
     startSasl(jaasSections(List.empty, None, ZkSasl))
     super.setUp()
   }
 
   @Test
-  def testListenerName() {
+  def testListenerName(): Unit = {
     // To check the client listener name, establish a session on the server by sending any request eg sendRecords
     val producer = createProducer()
     intercept[TopicAuthorizationException](sendRecords(producer, numRecords = 1, tp))

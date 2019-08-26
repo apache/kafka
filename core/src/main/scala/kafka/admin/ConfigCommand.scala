@@ -111,7 +111,7 @@ object ConfigCommand extends Config {
     }
   }
 
-  private[admin] def alterConfig(zkClient: KafkaZkClient, opts: ConfigCommandOptions, adminZkClient: AdminZkClient) {
+  private[admin] def alterConfig(zkClient: KafkaZkClient, opts: ConfigCommandOptions, adminZkClient: AdminZkClient): Unit = {
     val configsToBeAdded = parseConfigsToBeAdded(opts)
     val configsToBeDeleted = parseConfigsToBeDeleted(opts)
     val entity = parseEntity(opts)
@@ -157,7 +157,7 @@ object ConfigCommand extends Config {
     println(s"Completed Updating config for entity: $entity.")
   }
 
-  private def preProcessScramCredentials(configsToBeAdded: Properties) {
+  private def preProcessScramCredentials(configsToBeAdded: Properties): Unit = {
     def scramCredential(mechanism: ScramMechanism, credentialStr: String): String = {
       val pattern = "(?:iterations=([0-9]*),)?password=(.*)".r
       val (iterations, password) = credentialStr match {
@@ -194,7 +194,7 @@ object ConfigCommand extends Config {
    * Password configs are encrypted using the secret `KafkaConfig.PasswordEncoderSecretProp`.
    * The secret is removed from `configsToBeAdded` and will not be persisted in ZooKeeper.
    */
-  private def preProcessBrokerConfigs(configsToBeAdded: Properties, perBrokerConfig: Boolean) {
+  private def preProcessBrokerConfigs(configsToBeAdded: Properties, perBrokerConfig: Boolean): Unit = {
     val passwordEncoderConfigs = new Properties
     passwordEncoderConfigs ++= configsToBeAdded.asScala.filter { case (key, _) => key.startsWith("password.encoder.") }
     if (!passwordEncoderConfigs.isEmpty) {
@@ -221,7 +221,7 @@ object ConfigCommand extends Config {
     }
   }
 
-  private def describeConfig(zkClient: KafkaZkClient, opts: ConfigCommandOptions, adminZkClient: AdminZkClient) {
+  private def describeConfig(zkClient: KafkaZkClient, opts: ConfigCommandOptions, adminZkClient: AdminZkClient): Unit = {
     val configEntity = parseEntity(opts)
     val describeAllUsers = configEntity.root.entityType == ConfigType.User && !configEntity.root.sanitizedName.isDefined && !configEntity.child.isDefined
     val entities = configEntity.getAllEntities(zkClient)
@@ -294,7 +294,7 @@ object ConfigCommand extends Config {
   }
 
   private[admin] def alterBrokerConfig(adminClient: Admin, opts: ConfigCommandOptions,
-                                       entityType: String, entityName: String) {
+                                       entityType: String, entityName: String): Unit = {
     val configsToBeAdded = parseConfigsToBeAdded(opts).asScala.map { case (k, v) => (k, new ConfigEntry(k, v)) }
     val configsToBeDeleted = parseConfigsToBeDeleted(opts)
 
@@ -339,7 +339,7 @@ object ConfigCommand extends Config {
   }
 
   private def describeBrokerConfig(adminClient: Admin, opts: ConfigCommandOptions,
-                                   entityType: String, entityName: String) {
+                                   entityType: String, entityName: String): Unit = {
     val configs = if (entityType == ConfigType.Broker)
       brokerConfig(adminClient, entityName, includeSynonyms = true)
     else // broker logger
@@ -537,7 +537,7 @@ object ConfigCommand extends Config {
 
     val allOpts: Set[OptionSpec[_]] = Set(alterOpt, describeOpt, entityType, entityName, addConfig, deleteConfig, helpOpt)
 
-    def checkArgs() {
+    def checkArgs(): Unit = {
       // should have exactly one action
       val actions = Seq(alterOpt, describeOpt).count(options.has _)
       if(actions != 1)

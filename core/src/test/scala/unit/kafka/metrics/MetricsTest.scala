@@ -46,7 +46,7 @@ class MetricsTest extends KafkaServerTestHarness with Logging {
   val nMessages = 2
 
   @Test
-  def testMetricsReporterAfterDeletingTopic() {
+  def testMetricsReporterAfterDeletingTopic(): Unit = {
     val topic = "test-topic-metric"
     createTopic(topic, 1, 1)
     adminZkClient.deleteTopic(topic)
@@ -55,7 +55,7 @@ class MetricsTest extends KafkaServerTestHarness with Logging {
   }
 
   @Test
-  def testBrokerTopicMetricsUnregisteredAfterDeletingTopic() {
+  def testBrokerTopicMetricsUnregisteredAfterDeletingTopic(): Unit = {
     val topic = "test-broker-topic-metric"
     createTopic(topic, 2, 1)
     // Produce a few messages to create the metrics
@@ -141,6 +141,10 @@ class MetricsTest extends KafkaServerTestHarness with Logging {
     assertEquals(metrics.keySet.asScala.count(_.getMBeanName == "kafka.controller:type=KafkaController,name=PreferredReplicaImbalanceCount"), 1)
     assertEquals(metrics.keySet.asScala.count(_.getMBeanName == "kafka.controller:type=KafkaController,name=GlobalTopicCount"), 1)
     assertEquals(metrics.keySet.asScala.count(_.getMBeanName == "kafka.controller:type=KafkaController,name=GlobalPartitionCount"), 1)
+    assertEquals(metrics.keySet.asScala.count(_.getMBeanName == "kafka.controller:type=KafkaController,name=TopicsToDeleteCount"), 1)
+    assertEquals(metrics.keySet.asScala.count(_.getMBeanName == "kafka.controller:type=KafkaController,name=ReplicasToDeleteCount"), 1)
+    assertEquals(metrics.keySet.asScala.count(_.getMBeanName == "kafka.controller:type=KafkaController,name=TopicsIneligibleToDeleteCount"), 1)
+    assertEquals(metrics.keySet.asScala.count(_.getMBeanName == "kafka.controller:type=KafkaController,name=ReplicasIneligibleToDeleteCount"), 1)
   }
 
   /**

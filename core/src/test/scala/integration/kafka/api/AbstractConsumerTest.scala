@@ -74,7 +74,7 @@ abstract class AbstractConsumerTest extends BaseRequestTest {
   }
 
   @Before
-  override def setUp() {
+  override def setUp(): Unit = {
     super.setUp()
 
     // create the test topic with all the brokers as replicas
@@ -85,12 +85,12 @@ abstract class AbstractConsumerTest extends BaseRequestTest {
     var callsToAssigned = 0
     var callsToRevoked = 0
 
-    def onPartitionsAssigned(partitions: java.util.Collection[TopicPartition]) {
+    def onPartitionsAssigned(partitions: java.util.Collection[TopicPartition]): Unit = {
       info("onPartitionsAssigned called.")
       callsToAssigned += 1
     }
 
-    def onPartitionsRevoked(partitions: java.util.Collection[TopicPartition]) {
+    def onPartitionsRevoked(partitions: java.util.Collection[TopicPartition]): Unit = {
       info("onPartitionsRevoked called.")
       callsToRevoked += 1
     }
@@ -121,7 +121,7 @@ abstract class AbstractConsumerTest extends BaseRequestTest {
                                         startingTimestamp: Long = 0L,
                                         timestampType: TimestampType = TimestampType.CREATE_TIME,
                                         tp: TopicPartition = tp,
-                                        maxPollRecords: Int = Int.MaxValue) {
+                                        maxPollRecords: Int = Int.MaxValue): Unit = {
     val records = consumeRecords(consumer, numRecords, maxPollRecords = maxPollRecords)
     val now = System.currentTimeMillis()
     for (i <- 0 until numRecords) {

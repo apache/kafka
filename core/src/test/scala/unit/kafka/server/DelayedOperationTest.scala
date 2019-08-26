@@ -34,19 +34,19 @@ class DelayedOperationTest {
   var executorService: ExecutorService = null
 
   @Before
-  def setUp() {
+  def setUp(): Unit = {
     purgatory = DelayedOperationPurgatory[MockDelayedOperation](purgatoryName = "mock")
   }
 
   @After
-  def tearDown() {
+  def tearDown(): Unit = {
     purgatory.shutdown()
     if (executorService != null)
       executorService.shutdown()
   }
 
   @Test
-  def testRequestSatisfaction() {
+  def testRequestSatisfaction(): Unit = {
     val r1 = new MockDelayedOperation(100000L)
     val r2 = new MockDelayedOperation(100000L)
     assertEquals("With no waiting requests, nothing should be satisfied", 0, purgatory.checkAndComplete("test1"))
@@ -63,7 +63,7 @@ class DelayedOperationTest {
   }
 
   @Test
-  def testRequestExpiry() {
+  def testRequestExpiry(): Unit = {
     val expiration = 20L
     val start = Time.SYSTEM.hiResClockMs
     val r1 = new MockDelayedOperation(expiration)
@@ -78,7 +78,7 @@ class DelayedOperationTest {
   }
 
   @Test
-  def testRequestPurge() {
+  def testRequestPurge(): Unit = {
     val r1 = new MockDelayedOperation(100000L)
     val r2 = new MockDelayedOperation(100000L)
     val r3 = new MockDelayedOperation(100000L)
@@ -110,7 +110,7 @@ class DelayedOperationTest {
   }
 
   @Test
-  def shouldCancelForKeyReturningCancelledOperations() {
+  def shouldCancelForKeyReturningCancelledOperations(): Unit = {
     purgatory.tryCompleteElseWatch(new MockDelayedOperation(10000L), Seq("key"))
     purgatory.tryCompleteElseWatch(new MockDelayedOperation(10000L), Seq("key"))
     purgatory.tryCompleteElseWatch(new MockDelayedOperation(10000L), Seq("key2"))
@@ -122,7 +122,7 @@ class DelayedOperationTest {
   }
 
   @Test
-  def shouldReturnNilOperationsOnCancelForKeyWhenKeyDoesntExist() {
+  def shouldReturnNilOperationsOnCancelForKeyWhenKeyDoesntExist(): Unit = {
     val cancelledOperations = purgatory.cancelForKey("key")
     assertEquals(Nil, cancelledOperations)
   }
@@ -216,12 +216,12 @@ class DelayedOperationTest {
   }
 
   @Test
-  def testDelayedOperationLock() {
+  def testDelayedOperationLock(): Unit = {
     verifyDelayedOperationLock(new MockDelayedOperation(100000L), mismatchedLocks = false)
   }
 
   @Test
-  def testDelayedOperationLockOverride() {
+  def testDelayedOperationLockOverride(): Unit = {
     def newMockOperation = {
       val lock = new ReentrantLock
       new MockDelayedOperation(100000L, Some(lock), Some(lock))
@@ -232,7 +232,7 @@ class DelayedOperationTest {
         mismatchedLocks = true)
   }
 
-  def verifyDelayedOperationLock(mockDelayedOperation: => MockDelayedOperation, mismatchedLocks: Boolean) {
+  def verifyDelayedOperationLock(mockDelayedOperation: => MockDelayedOperation, mismatchedLocks: Boolean): Unit = {
     val key = "key"
     executorService = Executors.newSingleThreadExecutor
     def createDelayedOperations(count: Int): Seq[MockDelayedOperation] = {
@@ -327,7 +327,7 @@ class DelayedOperationTest {
                              extends DelayedOperation(delayMs, lockOpt) {
     var completable = false
 
-    def awaitExpiration() {
+    def awaitExpiration(): Unit = {
       synchronized {
         wait()
       }
@@ -340,11 +340,11 @@ class DelayedOperationTest {
         false
     }
 
-    override def onExpiration() {
+    override def onExpiration(): Unit = {
 
     }
 
-    override def onComplete() {
+    override def onComplete(): Unit = {
       responseLockOpt.foreach { lock =>
         if (!lock.tryLock())
           throw new IllegalStateException("Response callback lock could not be acquired in callback")

@@ -76,7 +76,7 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
   /**
    * Guaranteed to be called before any authorize call is made.
    */
-  override def configure(javaConfigs: util.Map[String, _]) {
+  override def configure(javaConfigs: util.Map[String, _]): Unit = {
     val configs = javaConfigs.asScala
     val props = new java.util.Properties()
     configs.foreach { case (key, value) => props.put(key, value.toString) }
@@ -181,7 +181,7 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
     }
   }
 
-  override def addAcls(acls: Set[Acl], resource: Resource) {
+  override def addAcls(acls: Set[Acl], resource: Resource): Unit = {
     if (acls != null && acls.nonEmpty) {
       if (!extendedAclSupport && resource.patternType == PatternType.PREFIXED) {
         throw new UnsupportedVersionException(s"Adding ACLs on prefixed resource patterns requires " +
@@ -259,12 +259,12 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
     }
   }
 
-  def close() {
+  def close(): Unit = {
     aclChangeListeners.foreach(listener => listener.close())
     if (zkClient != null) zkClient.close()
   }
 
-  private def loadCache() {
+  private def loadCache(): Unit = {
     inWriteLock(lock) {
       ZkAclStore.stores.foreach(store => {
         val resourceTypes = zkClient.getResourceTypes(store.patternType)
@@ -290,7 +290,7 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
       .map(store => store.createListener(AclChangedNotificationHandler, zkClient))
   }
 
-  private def logAuditMessage(principal: KafkaPrincipal, authorized: Boolean, operation: Operation, resource: Resource, host: String) {
+  private def logAuditMessage(principal: KafkaPrincipal, authorized: Boolean, operation: Operation, resource: Resource, host: String): Unit = {
     def logMessage: String = {
       val authResult = if (authorized) "Allowed" else "Denied"
       s"Principal = $principal is $authResult Operation = $operation from host = $host on resource = $resource"
@@ -370,7 +370,7 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
     zkClient.getVersionedAclsForResource(resource)
   }
 
-  private def updateCache(resource: Resource, versionedAcls: VersionedAcls) {
+  private def updateCache(resource: Resource, versionedAcls: VersionedAcls): Unit = {
     if (versionedAcls.acls.nonEmpty) {
       aclCache = aclCache + (resource -> versionedAcls)
     } else {
@@ -378,7 +378,7 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
     }
   }
 
-  private def updateAclChangedFlag(resource: Resource) {
+  private def updateAclChangedFlag(resource: Resource): Unit = {
       zkClient.createAclChangeNotification(resource)
   }
 
@@ -387,7 +387,7 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
   }
 
   object AclChangedNotificationHandler extends AclChangeNotificationHandler {
-    override def processNotification(resource: Resource) {
+    override def processNotification(resource: Resource): Unit = {
       inWriteLock(lock) {
         val versionedAcls = getAclsFromZk(resource)
         updateCache(resource, versionedAcls)

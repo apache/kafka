@@ -234,7 +234,7 @@ class LogSegment private[log] (val log: FileRecords,
   }
 
   @nonthreadsafe
-  def updateTxnIndex(completedTxn: CompletedTxn, lastStableOffset: Long) {
+  def updateTxnIndex(completedTxn: CompletedTxn, lastStableOffset: Long): Unit = {
     if (completedTxn.isAborted) {
       trace(s"Writing aborted transaction $completedTxn to transaction index, last stable offset is $lastStableOffset")
       txnIndex.append(new AbortedTxn(completedTxn, lastStableOffset))
@@ -383,7 +383,7 @@ class LogSegment private[log] (val log: FileRecords,
     truncated
   }
 
-  private def loadLargestTimestamp() {
+  private def loadLargestTimestamp(): Unit = {
     // Get the last time index entry. If the time index is empty, it will return (-1, baseOffset)
     val lastTimeIndexEntry = timeIndex.lastEntry
     maxTimestampSoFar = lastTimeIndexEntry.timestamp
@@ -462,7 +462,7 @@ class LogSegment private[log] (val log: FileRecords,
    * Flush this log segment to disk
    */
   @threadsafe
-  def flush() {
+  def flush(): Unit = {
     LogFlushStats.logFlushTimer.time {
       log.flush()
       offsetIndex.flush()
@@ -486,7 +486,7 @@ class LogSegment private[log] (val log: FileRecords,
    * Change the suffix for the index and log file for this log segment
    * IOException from this method should be handled by the caller
    */
-  def changeFileSuffixes(oldSuffix: String, newSuffix: String) {
+  def changeFileSuffixes(oldSuffix: String, newSuffix: String): Unit = {
     log.renameTo(new File(CoreUtils.replaceSuffix(log.file.getPath, oldSuffix, newSuffix)))
     offsetIndex.renameTo(new File(CoreUtils.replaceSuffix(lazyOffsetIndex.file.getPath, oldSuffix, newSuffix)))
     timeIndex.renameTo(new File(CoreUtils.replaceSuffix(lazyTimeIndex.file.getPath, oldSuffix, newSuffix)))
@@ -498,7 +498,7 @@ class LogSegment private[log] (val log: FileRecords,
    *
    * The time index entry appended will be used to decide when to delete the segment.
    */
-  def onBecomeInactiveSegment() {
+  def onBecomeInactiveSegment(): Unit = {
     timeIndex.maybeAppend(maxTimestampSoFar, offsetOfMaxTimestampSoFar, skipFullCheck = true)
     offsetIndex.trimToValidSize()
     timeIndex.trimToValidSize()
@@ -579,7 +579,7 @@ class LogSegment private[log] (val log: FileRecords,
   /**
    * Close this log segment
    */
-  def close() {
+  def close(): Unit = {
     CoreUtils.swallow(timeIndex.maybeAppend(maxTimestampSoFar, offsetOfMaxTimestampSoFar, skipFullCheck = true), this)
     CoreUtils.swallow(offsetIndex.close(), this)
     CoreUtils.swallow(timeIndex.close(), this)
@@ -590,7 +590,7 @@ class LogSegment private[log] (val log: FileRecords,
   /**
     * Close file handlers used by the log segment but don't write to disk. This is used when the disk may have failed
     */
-  def closeHandlers() {
+  def closeHandlers(): Unit = {
     CoreUtils.swallow(offsetIndex.closeHandler(), this)
     CoreUtils.swallow(timeIndex.closeHandler(), this)
     CoreUtils.swallow(log.closeHandlers(), this)
@@ -600,7 +600,7 @@ class LogSegment private[log] (val log: FileRecords,
   /**
    * Delete this log segment from the filesystem.
    */
-  def deleteIfExists() {
+  def deleteIfExists(): Unit = {
     def delete(delete: () => Boolean, fileType: String, file: File, logIfMissing: Boolean): Unit = {
       try {
         if (delete())
