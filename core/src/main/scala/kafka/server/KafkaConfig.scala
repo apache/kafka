@@ -43,7 +43,7 @@ import scala.collection.{Map, Seq}
 
 object Defaults {
   /** ********* FetchRequest Configuration ***********/
-  val FetchMaxBytes = 1024 * 1024 * 1024 * 1024
+  val FetchLimitBytes = 1024 * 1024 * 1024 * 1024
 
   /** ********* Zookeeper Configuration ***********/
   val ZkSessionTimeoutMs = 6000
@@ -262,7 +262,7 @@ object KafkaConfig {
   }
 
   /** ********* FetchRequest Configuration ***********/
-  val FetchMaxBytesProp = "fetch.max.bytes"
+  val FetchLimitBytesProp = "fetch.limit.bytes"
 
   /** ********* Zookeeper Configuration ***********/
   val ZkConnectProp = "zookeeper.connect"
@@ -493,7 +493,7 @@ object KafkaConfig {
 
   /* Documentation */
   /** ********* FetchRequest Configuration ***********/
-  val FetchMaxBytesDoc = "Client can fetch the max bytes size each fetch requeset"
+  val FetchLimitBytesDoc = "Client can fetch the max bytes size each fetch requeset"
 
   /** ********* Zookeeper Configuration ***********/
   val ZkConnectDoc = "Specifies the ZooKeeper connection string in the form <code>hostname:port</code> where host and port are the " +
@@ -860,7 +860,7 @@ object KafkaConfig {
 
     new ConfigDef()
       /** ********* FetchRequest Configuration ***********/
-      .define(FetchMaxBytesProp, INT, Defaults.FetchMaxBytes, atLeast(0), MEDIUM, FetchMaxBytesDoc)
+      .define(FetchLimitBytesProp, INT, Defaults.FetchLimitBytes, atLeast(0), MEDIUM, FetchLimitBytesDoc)
 
       /** ********* Zookeeper Configuration ***********/
       .define(ZkConnectProp, STRING, HIGH, ZkConnectDoc)
@@ -1154,7 +1154,7 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigO
     super.valuesWithPrefixOverride(prefix)
 
   /** ********* FetchRequest Configuration ***********/
-  val fetchMaxBytes:Int = getInt(KafkaConfig.FetchMaxBytesProp)
+  val fetchLimitBytes:Int = getInt(KafkaConfig.FetchLimitBytesProp)
 
   /** ********* Zookeeper Configuration ***********/
   val zkConnect: String = getString(KafkaConfig.ZkConnectProp)

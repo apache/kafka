@@ -788,9 +788,9 @@ class KafkaApis(val requestChannel: RequestChannel,
     if (interesting.isEmpty)
       processResponseCallback(Seq.empty)
     else {
-      val configMaxFetchBytes = config.fetchMaxBytes
-      var maxFetchBytes = math.min(fetchRequest.maxBytes(), configMaxFetchBytes)
-      var minFetchBytes = math.min(fetchRequest.minBytes, configMaxFetchBytes)
+      val configLimitFetchBytes = config.fetchLimitBytes
+      var maxFetchBytes = math.min(fetchRequest.maxBytes(), configLimitFetchBytes)
+      var minFetchBytes = math.min(fetchRequest.minBytes, configLimitFetchBytes)
 
       // call the replica manager to fetch messages from the local replica
       replicaManager.fetchMessages(
