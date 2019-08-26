@@ -212,4 +212,5 @@ class MockRemoteStorageManager extends RemoteStorageManager {
 
   override def cleanupLogUntil(topicPartition: TopicPartition, cleanUpTillMs: Long): Long = 0L
 
+  override def earliestLogOffset(tp: TopicPartition): Long = 0L
 }

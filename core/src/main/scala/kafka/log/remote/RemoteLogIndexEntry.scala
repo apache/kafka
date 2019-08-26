@@ -21,6 +21,9 @@ import java.nio.channels.FileChannel
 import java.util
 import java.util.zip.CRC32
 
+import kafka.common.KafkaException
+import kafka.utils.Logging
+
 /**
  * Entry representation in a remote log index
  *
@@ -35,7 +38,7 @@ import java.util.zip.CRC32
  */
 case class RemoteLogIndexEntry(magic: Short, crc: Int, firstOffset: Long, lastOffset: Long,
                                firstTimeStamp: Long, lastTimeStamp: Long, dataLength: Int,
-                               rdi: Array[Byte]) {
+                               rdi: Array[Byte]) extends Logging {
   /**
    * @return bytes length of this entry value
    */
@@ -49,6 +52,8 @@ case class RemoteLogIndexEntry(magic: Short, crc: Int, firstOffset: Long, lastOf
       + 2 // rdiLength - short
       + rdi.length).asInstanceOf[Short]
   }
+
+  def totalLength: Short = (entryLength + 4).asInstanceOf[Short]
 
   override def equals(any: Any): Boolean = {
     any match {
@@ -83,7 +88,7 @@ case class RemoteLogIndexEntry(magic: Short, crc: Int, firstOffset: Long, lastOf
 
 }
 
-object RemoteLogIndexEntry {
+object RemoteLogIndexEntry extends Logging {
   def apply (firstOffset: Long, lastOffset: Long, firstTimeStamp: Long, lastTimeStamp: Long,
              dataLength: Int, rdi: Array[Byte]): RemoteLogIndexEntry = {
 
@@ -113,7 +118,7 @@ object RemoteLogIndexEntry {
     entry
   }
 
-  def parseEntry(ch: FileChannel, position: Long): RemoteLogIndexEntry = {
+  def parseEntry(ch: FileChannel, position: Long): Option[RemoteLogIndexEntry] = {
     val magicBuffer = ByteBuffer.allocate(2)
     val readCt = ch.read(magicBuffer, position)
     if (readCt > 0) {
@@ -140,16 +145,15 @@ object RemoteLogIndexEntry {
           val rdiLength = valueBuffer.getShort
           val rdiBuffer = ByteBuffer.allocate(rdiLength)
           valueBuffer.get(rdiBuffer.array())
-          RemoteLogIndexEntry(magic, crc, firstOffset, lastOffset, firstTimestamp, lastTimestamp, dataLength,
-            rdiBuffer.array())
+          Some(RemoteLogIndexEntry(magic, crc, firstOffset, lastOffset, firstTimestamp, lastTimestamp, dataLength,
+            rdiBuffer.array()))
         case _ =>
           // TODO: Throw Custom Exceptions?
           throw new RuntimeException("magic version " + magic + " is not supported")
       }
     } else {
-      // TODO: log
-      println("Reached limit of the file")
-      null
+      debug(s"Reached limit of the file for channel:$ch for position: $position")
+      None
     }
   }
 
@@ -158,9 +162,10 @@ object RemoteLogIndexEntry {
 
     var pos = 0L;
     while (pos < ch.size()) {
-      val entry = parseEntry(ch, pos)
+      val entryOption = parseEntry(ch, pos.toInt)
+      val entry = entryOption.getOrElse(throw new KafkaException(s"Entry could not be found at position: $pos"))
       index = index :+ entry
-      pos += entry.entryLength + 4;
+      pos += entry.entryLength + 4
     }
 
     index

@@ -16,8 +16,7 @@
  */
 package kafka.log.remote
 
-import java._
-import java.io.{Closeable, File}
+import java.io.{File, IOException}
 import java.nio.ByteBuffer
 import java.nio.channels.FileChannel
 import java.nio.file.{Files, StandardOpenOption}
@@ -27,8 +26,6 @@ import kafka.log.CleanableIndex
 import kafka.utils.CoreUtils.inLock
 import kafka.utils.Logging
 import org.apache.kafka.common.utils.Utils
-
-import scala.collection.JavaConverters._
 
 /**
  * The remote log index maintains the information of log records for each topic partition maintained in the remote log.
@@ -67,9 +64,9 @@ class RemoteLogIndex(_file: File, val startOffset: Long) extends CleanableIndex(
     }
   }
 
-  def append(entries: util.List[RemoteLogIndexEntry]): Seq[Long] = {
+  private[remote] def append(entries: Seq[RemoteLogIndexEntry]): Seq[Long] = {
     inLock(lock) {
-      val positions: Seq[Long] = entries.iterator().asScala.map(entry => append(entry)).toSeq
+      val positions: Seq[Long] = entries.map(entry => append(entry))
       flush()
       positions
     }
@@ -81,7 +78,7 @@ class RemoteLogIndex(_file: File, val startOffset: Long) extends CleanableIndex(
    * @param entry
    * @return the position of the added entry into this index.
    */
-  def append(entry: RemoteLogIndexEntry): Long = {
+  private def append(entry: RemoteLogIndexEntry): Long = {
     inLock(lock) {
       _lastOffset.foreach { offset =>
         if (offset >= entry.lastOffset)
@@ -114,15 +111,11 @@ class RemoteLogIndex(_file: File, val startOffset: Long) extends CleanableIndex(
     }
   }
 
-  def lastOffset(): Option[Long] = {
-    _lastOffset
-  }
-
   def flush(): Unit = maybeChannel.foreach(_.force(true))
 
   def lookupEntry(position: Long): Option[RemoteLogIndexEntry] = {
     inLock(lock) {
-        Option(RemoteLogIndexEntry.parseEntry(channel(), position))
+      RemoteLogIndexEntry.parseEntry(channel(), position)
     }
   }
 
@@ -141,7 +134,11 @@ class RemoteLogIndex(_file: File, val startOffset: Long) extends CleanableIndex(
    *         not exist
    */
   def deleteIfExists(): Boolean = {
-    close()
+    try {
+      close()
+    } catch {
+      case ex: Exception => debug(s"Exception occurred while closing file:$file", ex)
+    }
     Files.deleteIfExists(file.toPath)
   }
 

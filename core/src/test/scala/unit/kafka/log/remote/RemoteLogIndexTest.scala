@@ -14,26 +14,25 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package unit.kafka.log
+package kafka.log.remote
 
-import java._
-
-import kafka.log.remote.{RemoteLogIndex, RemoteLogIndexEntry}
+import kafka.log.remote.RemoteLogIndexTest.generateEntries
 import kafka.utils.TestUtils
 import org.junit.Assert._
 import org.junit.{After, Before, Test}
 import org.scalatest.junit.JUnitSuite
-import unit.kafka.log.RemoteLogIndexTest.generateEntries
 
+import scala.collection.mutable.ArrayBuffer
 import scala.util.Random
 
 class RemoteLogIndexTest extends JUnitSuite {
   var index: RemoteLogIndex = _
+  val startOffset = 19
 
   @Before
   def setup(): Unit = {
     val file = TestUtils.tempFile()
-    index = new RemoteLogIndex(file, 0)
+    index = new RemoteLogIndex(file, startOffset)
   }
 
   @After
@@ -42,30 +41,42 @@ class RemoteLogIndexTest extends JUnitSuite {
   }
 
   @Test
-  def testIndexPosition() = {
-    println("position: " + index.nextEntryPosition())
+  def testIndexPosition(): Unit = {
     val entriesCt = 10
-    val entries = generateEntries(entriesCt)
+    val entries = generateEntries(entriesCt, baseOffset = startOffset)
     val positions = index.append(entries)
-    var i: Integer = 0
-    while (i < entries.size) {
-      println("######### " + i)
-      assertEquals(entries.get(i), index.lookupEntry(positions(i)).get)
-      i += 1
-    }
-    println("after adding few entries, position: " + index.nextEntryPosition())
-  }
 
+    def assertLookupEntries(lookupIndex:RemoteLogIndex): Unit = {
+      var i = 0
+      while (i < entries.size) {
+        assertEquals(entries(i), lookupIndex.lookupEntry(positions(i)).get)
+        i += 1
+      }
+    }
+
+    // check looking up entries at respective positions
+    assertLookupEntries(index)
+
+    // reopen the index and check for entries
+    val reopenedIndex = new RemoteLogIndex(index.file, startOffset)
+    // this should throw IllegalArgumentException as  offset with earlier startOffset is already pushed
+    // index allows only offsets which are more than earlier.
+    assertThrows[IllegalArgumentException] {
+      reopenedIndex.append(generateEntries(entriesCt, baseOffset = startOffset))
+    }
+    // check looking up entries at respective positions
+    assertLookupEntries(reopenedIndex)
+  }
 
 }
 
 object RemoteLogIndexTest {
 
-  def generateEntries(numEntries: Int, offsetStep: Integer = 100, baseOffset: Long = 1000): util.List[RemoteLogIndexEntry] = {
+  def generateEntries(numEntries: Int, offsetStep: Integer = 100, baseOffset: Long = 1000): Seq[RemoteLogIndexEntry] = {
     require(offsetStep >= 1, "offsetStep should be >= 1")
     require(baseOffset >= 0, " base offset can not be negative")
 
-    val entries = new util.ArrayList[RemoteLogIndexEntry]
+    val entries = new ArrayBuffer[RemoteLogIndexEntry](numEntries)
     val rdi = "rdi://foo/bar/" + System.currentTimeMillis()
     val rdiBytes = rdi.getBytes
     var firstOffset = baseOffset
@@ -74,11 +85,12 @@ object RemoteLogIndexTest {
       val lastOffset = firstOffset + 2
       val lastTimestamp = firstTimestamp + 1
       val dataLength = Math.abs(new Random().nextInt())
-      val entry: RemoteLogIndexEntry = RemoteLogIndexEntry(firstOffset, lastOffset, firstTimestamp, lastTimestamp, dataLength, rdiBytes)
+      val entry: RemoteLogIndexEntry = RemoteLogIndexEntry(firstOffset, lastOffset, firstTimestamp, lastTimestamp,
+        dataLength, rdiBytes)
       firstOffset += offsetStep
       firstTimestamp += 1
 
-      entries.add(entry)
+      entries += entry
     }
 
     entries

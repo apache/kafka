@@ -23,12 +23,17 @@ import kafka.log.LogSegment
 import org.apache.kafka.common.record.Records
 import org.apache.kafka.common.{Configurable, TopicPartition}
 
-trait LogStartOffsetUpdateListener {
-  def handleLogStartOffsetUpdate(tp: TopicPartition, lso: Long)
-}
-
 // all these APIs are still experimental, in poc mode.
 trait RemoteStorageManager extends Configurable with AutoCloseable {
+
+  /**
+   * Earliest log offset that exists for a topic partition in remote storage.
+   *
+   * @param tp
+   * @return
+   */
+  @throws(classOf[IOException])
+  def earliestLogOffset(tp: TopicPartition): Long
 
   /**
    * Copies LogSegment provided by [[RemoteLogManager]]

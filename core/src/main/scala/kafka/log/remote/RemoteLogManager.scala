@@ -32,6 +32,7 @@ import org.apache.kafka.common.requests.FetchRequest.PartitionData
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.utils.{KafkaThread, Time, Utils}
 
+import scala.collection.JavaConverters._
 import scala.collection.Set
 
 class RLMScheduledThreadPool(poolSize: Int) extends Logging {
@@ -108,24 +109,11 @@ class RemoteLogManager(fetchLog: TopicPartition => Option[Log],
     rsmProps.put(KafkaConfig.RemoteLogRetentionMillisProp, rlmConfig.remoteLogRetentionMillis)
     rsmProps.put(KafkaConfig.RemoteLogRetentionBytesProp, rlmConfig.remoteLogRetentionBytes)
     rsm.configure(rsmProps)
-
     rsm
   }
 
   private val remoteStorageManager: RemoteStorageManager = createRemoteStorageManager()
   private val rlmIndexer: RLMIndexer = new RLMIndexer(remoteStorageManager, fetchLog)
-
-  def handleLogStartOffsetUpdate(topicPartition: TopicPartition, logStartOffset: Long): Unit = {
-    updateRemoteLogStartOffset(topicPartition, logStartOffset)
-    info(s"Cleaning remote log indexes of partition $topicPartition till logStartOffset:$logStartOffset")
-    // remove all indexes earlier to lso, may be rename now and they will GCed later.
-    val cleanedUpIndexes = rlmIndexer.maybeLoadIndex(topicPartition).cleanupIndexesUntil(logStartOffset)
-
-    // deleting files in the current thread for now. These can be scheduled in a separate thread pool as it is more of
-    // a cleanup activity. If the broker shutsdown in the middle of this activity, restart will delete all these files
-    // as part of deleting files with a suffix of [Log.DeletedFileSuffix]
-    cleanedUpIndexes.foreach { x => x.deleteIfExists() }
-  }
 
   /**
    * Ask RLM to monitor the given TopicPartitions, and copy inactive Log
@@ -230,7 +218,7 @@ class RemoteLogManager(fetchLog: TopicPartition => Option[Log],
             val file = segment.log.file()
             val fileName = file.getName
             val baseOffsetStr = fileName.substring(0, fileName.indexOf("."))
-            rlmIndexer.maybeBuildIndexes(tp, entries, file.getParentFile, baseOffsetStr)
+            rlmIndexer.maybeBuildIndexes(tp, entries.asScala, file.getParentFile, baseOffsetStr)
             readOffset = entries.get(entries.size() - 1).lastOffset
           }
         }
@@ -250,7 +238,7 @@ class RemoteLogManager(fetchLog: TopicPartition => Option[Log],
               }
               val baseOffset = Log.filenamePrefixFromOffset(entries.get(0).firstOffset)
               val logDir = log.activeSegment.log.file().getParentFile
-              rlmIndexer.maybeBuildIndexes(tp, entries, logDir, baseOffset)
+              rlmIndexer.maybeBuildIndexes(tp, entries.asScala, logDir, baseOffset)
               readOffset = entries.get(entries.size() - 1).lastOffset
             }
           }
@@ -258,10 +246,31 @@ class RemoteLogManager(fetchLog: TopicPartition => Option[Log],
       })
     }
 
-    def deleteExpiredRemoteLogSegments(): Unit = {
-      val newRemoteLogStartOffset = remoteStorageManager.cleanupLogUntil(tp,
-        time.milliseconds() - rlmConfig.remoteLogRetentionMillis)
-      handleLogStartOffsetUpdate(tp, newRemoteLogStartOffset)
+    def handleExpiredRemoteLogSegments(): Unit = {
+      val remoteLso:Long =
+        if (isLeader) {
+          remoteStorageManager.cleanupLogUntil(tp, time.milliseconds() - rlmConfig.remoteLogRetentionMillis)
+        } else {
+          remoteStorageManager.earliestLogOffset(tp)
+        }
+
+      def handleLogStartOffsetUpdate(topicPartition: TopicPartition, logStartOffset: Long): Unit = {
+        updateRemoteLogStartOffset(topicPartition, logStartOffset)
+        info(s"Cleaning remote log indexes of partition $topicPartition till logStartOffset:$logStartOffset")
+
+        // need to cleanup only when any segments beyond logStartOffset exists
+        if(logStartOffset > 0) {
+          // remove all indexes earlier to lso, may be rename now and they will GCed later.
+          val cleanedUpIndexes = rlmIndexer.maybeLoadIndex(topicPartition).cleanupIndexesUntil(logStartOffset)
+
+          // deleting files in the current thread for now. These can be scheduled in a separate thread pool as it is more of
+          // a cleanup activity. If the broker shutsdown in the middle of this activity, restart will delete all these files
+          // as part of deleting files with a suffix of [Log.DeletedFileSuffix]
+          cleanedUpIndexes.foreach { x => x.deleteIfExists() }
+        }
+      }
+
+      if(remoteLso >= 0) handleLogStartOffsetUpdate(tp, remoteLso)
     }
 
     override def run(): Unit = {
@@ -273,8 +282,8 @@ class RemoteLogManager(fetchLog: TopicPartition => Option[Log],
           //b. fetch missing remote index files
           updateRemoteLogIndexes()
 
-          //c. delete expired remote segments
-          if (isLeader) deleteExpiredRemoteLogSegments()
+          //c. cleanup/delete expired remote segments
+          handleExpiredRemoteLogSegments()
         }
       } catch {
         case ex: InterruptedException =>

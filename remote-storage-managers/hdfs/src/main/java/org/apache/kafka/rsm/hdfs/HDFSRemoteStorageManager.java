@@ -17,7 +17,6 @@
 package org.apache.kafka.rsm.hdfs;
 
 import kafka.log.LogSegment;
-import kafka.log.remote.LogStartOffsetUpdateListener;
 import kafka.log.remote.RemoteLogIndexEntry;
 import kafka.log.remote.RemoteLogSegmentInfo;
 import kafka.log.remote.RemoteStorageManager;
@@ -84,7 +83,13 @@ public class HDFSRemoteStorageManager implements RemoteStorageManager {
     private String baseDir = null;
     private Configuration hadoopConf = null;
     private ThreadLocal<FileSystem> fs = new ThreadLocal<>();
-    private LogStartOffsetUpdateListener lsoUpdater;
+
+    @Override
+    public long earliestLogOffset(TopicPartition tp) throws IOException {
+        List<RemoteLogSegmentInfo> remoteLogSegmentInfos = listRemoteSegments(tp);
+        //todo better to avoid it seeking from remote storage when it can be cached here especially incase of leader.
+        return (remoteLogSegmentInfos.isEmpty()) ? -1L : remoteLogSegmentInfos.get(0).baseOffset();
+    }
 
     @Override
     public List<RemoteLogIndexEntry> copyLogSegment(TopicPartition topicPartition, LogSegment logSegment)

@@ -229,6 +229,26 @@ public class HDFSRemoteStorageManagerTest {
         rsm2.deleteLogSegment(rsm2.listRemoteSegments(tp).get(0));
     }
 
+    @Test
+    public void testEarliesLogOffset() throws Exception {
+        HDFSRemoteStorageManager rsm = new HDFSRemoteStorageManager();
+        rsm.configure(config);
+
+        TopicPartition tp = new TopicPartition("test", 1);
+        segments.forEach(segment -> {
+            try {
+                rsm.copyLogSegment(tp, segment);
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+        });
+
+        List<RemoteLogSegmentInfo> remoteSegments = rsm.listRemoteSegments(tp);
+
+        long earliestLogOffset = rsm.earliestLogOffset(tp);
+        assertEquals(remoteSegments.get(0).baseOffset(), earliestLogOffset);
+    }
+
     class ConcurrentWriteThread extends Thread {
         private AtomicInteger successCount;
         LogSegment segment;
