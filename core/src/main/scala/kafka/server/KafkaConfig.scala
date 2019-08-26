@@ -43,7 +43,7 @@ import scala.collection.{Map, Seq}
 
 object Defaults {
   /** ********* FetchRequest Configuration ***********/
-  val FetchMaxBytes = 100 * 1024 * 1024
+  val FetchMaxBytes = 1024 * 1024 * 1024 * 1024
 
   /** ********* Zookeeper Configuration ***********/
   val ZkSessionTimeoutMs = 6000
