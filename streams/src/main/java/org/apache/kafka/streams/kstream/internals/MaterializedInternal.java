@@ -27,6 +27,7 @@ import java.util.Map;
 public class MaterializedInternal<K, V, S extends StateStore> extends Materialized<K, V, S> {
 
     private final boolean queriable;
+    private boolean disableQueriesForJoinStores = false;
 
     public MaterializedInternal(final Materialized<K, V, S> materialized) {
         this(materialized, null, null);
@@ -44,9 +45,8 @@ public class MaterializedInternal<K, V, S extends StateStore> extends Materializ
             storeName = nameProvider.newStoreName(generatedStorePrefix);
         }
     }
-
     public String queryableStoreName() {
-        return queriable ? storeName() : null;
+        return (queriable && !disableQueriesForJoinStores) ? storeName() : null;
     }
 
     public String storeName() {
@@ -54,6 +54,10 @@ public class MaterializedInternal<K, V, S extends StateStore> extends Materializ
             return storeSupplier.name();
         }
         return storeName;
+    }
+
+    void disableQueriesForJoinStores() {
+        this.disableQueriesForJoinStores = true;
     }
 
     public StoreSupplier<S> storeSupplier() {
