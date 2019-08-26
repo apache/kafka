@@ -998,7 +998,8 @@ object TestUtils extends Logging {
       "Reassigned partition [%s,%d] is under-replicated as reported by the leader %d".format(topic, partitionToBeReassigned, leader.get))
   }
 
-  // Note: if verifyNonDaemonThreadsStatus fails, nothing after would be executed
+  // Note: If called in @After method, make sure this method is called last.
+  // Because of the assert, so if verifyNonDaemonThreadsStatus fails, nothing after would be executed.
   def verifyNonDaemonThreadsStatus(threadNamePrefix: String): Unit = {
     val threadCount = Thread.getAllStackTraces.keySet.asScala.count { t =>
       !t.isDaemon && t.isAlive && t.getName.startsWith(threadNamePrefix)
