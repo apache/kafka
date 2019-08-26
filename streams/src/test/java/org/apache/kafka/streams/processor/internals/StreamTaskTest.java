@@ -90,6 +90,8 @@ import static org.junit.Assert.fail;
 
 public class StreamTaskTest {
 
+    private static final File BASE_DIR = TestUtils.tempDirectory();
+
     private final Serializer<Integer> intSerializer = Serdes.Integer().serializer();
     private final Serializer<byte[]> bytesSerializer = Serdes.ByteArray().serializer();
     private final Deserializer<Integer> intDeserializer = Serdes.Integer().deserializer();
@@ -141,7 +143,6 @@ public class StreamTaskTest {
     private final StreamsMetricsImpl streamsMetrics = new MockStreamsMetrics(metrics);
     private final TaskId taskId00 = new TaskId(0, 0);
     private final MockTime time = new MockTime();
-    private final File baseDir = TestUtils.tempDirectory();
     private StateDirectory stateDirectory;
     private StreamTask task;
     private long punctuatedAt;
@@ -176,10 +177,11 @@ public class StreamTaskTest {
                                      Collections.emptySet());
     }
 
-    private StreamsConfig createConfig(final boolean enableEoS) {
+    // Exposed to make it easier to create StreamTask config from other tests.
+    static StreamsConfig createConfig(final boolean enableEoS) {
         final String canonicalPath;
         try {
-            canonicalPath = baseDir.getCanonicalPath();
+            canonicalPath = BASE_DIR.getCanonicalPath();
         } catch (final IOException e) {
             throw new RuntimeException(e);
         }
@@ -211,7 +213,7 @@ public class StreamTaskTest {
                 }
             }
         } finally {
-            Utils.delete(baseDir);
+            Utils.delete(BASE_DIR);
         }
     }
 
