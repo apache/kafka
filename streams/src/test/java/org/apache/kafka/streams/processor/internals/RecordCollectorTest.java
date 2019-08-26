@@ -148,7 +148,7 @@ public class RecordCollectorTest {
         assertEquals((Long) 0L, offsets.get(new TopicPartition("topic1", 2)));
     }
 
-    @Test()
+    @Test
     public void shouldNotAllowOffsetsToBeUpdatedExternally() {
         final String topic = "topic1";
         final TopicPartition topicPartition = new TopicPartition(topic, 0);
@@ -169,7 +169,9 @@ public class RecordCollectorTest {
 
         assertThat(offsets.get(topicPartition), equalTo(2L));
         assertThrows(UnsupportedOperationException.class, () -> offsets.put(new TopicPartition(topic, 0), 50L));
-        assertThat(offsets.get(topicPartition), equalTo(2L));
+
+        // Verify that collector offsets were not updated
+        assertThat(collector.offsets().get(topicPartition), equalTo(2L));
     }
 
     @SuppressWarnings("unchecked")
