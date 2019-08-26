@@ -247,7 +247,7 @@ public class ProduceBenchWorker implements TaskWorker {
                     throw e;
                 } finally {
                     if (sendFuture != null) {
-			try {
+                        try {
                             sendFuture.get();
                         } catch (Exception e) {
                             log.error("Exception on final future", e);
