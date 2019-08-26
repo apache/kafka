@@ -983,8 +983,8 @@ object KafkaConfig {
       .define(RemoteLogRetentionMillisProp, LONG, null, LOW, RemoteLogRetentionMillisDoc)
       .define(RemoteLogRetentionMinutesProp, LONG, Defaults.RemoteLogRetentionMinutes, LOW, RemoteLogRetentionMinutesDoc)
       .define(RemoteLogRetentionBytesProp, LONG, Defaults.RemoteLogRetentionBytes, LOW, RemoteLogRetentionBytesDoc)
-      .define(RemoteLogReaderThreadsProp, INT, Defaults.RemoteLogReaderThreads, LOW, RemoteLogReaderThreadsDoc)
-      .define(RemoteLogReaderMaxPendingTasksProp, INT, Defaults.RemoteLogReaderMaxPendingTasks, LOW, RemoteLogReaderMaxPendingTasksDoc)
+      .define(RemoteLogReaderThreadsProp, INT, Defaults.RemoteLogReaderThreads, atLeast(1), LOW, RemoteLogReaderThreadsDoc)
+      .define(RemoteLogReaderMaxPendingTasksProp, INT, Defaults.RemoteLogReaderMaxPendingTasks, atLeast(1) , LOW, RemoteLogReaderMaxPendingTasksDoc)
       .define(RemoteLogManagerThreadPoolSizeProp, INT, Defaults.RemoteLogManagerThreadPoolSize, atLeast(1), LOW, RemoteLogManagerThreadPoolSizeDoc)
       .define(RemoteLogManagerTaskIntervalMsProp, LONG, Defaults.RemoteLogManagerTaskIntervalMs, atLeast(1), LOW, RemoteLogManagerTaskIntervalMsDoc)
 
