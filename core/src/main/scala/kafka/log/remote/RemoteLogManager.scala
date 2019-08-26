@@ -85,7 +85,7 @@ class RemoteLogManager(logFetcher: TopicPartition => Option[Log],
 
   private val leaderOrFollowerTasks: ConcurrentMap[TopicPartition, RLMTaskWithFuture] =
     new ConcurrentHashMap[TopicPartition, RLMTaskWithFuture]()
-  private val remoteStorageFetcherThreadPool = new RemoteStorageReaderThreadPool(rlmConfig.remoteLogReaderThreads, rlmConfig.remoteLogReaderMaxPendingTasks, time)
+  val remoteStorageFetcherThreadPool = new RemoteStorageReaderThreadPool(rlmConfig.remoteLogReaderThreads, rlmConfig.remoteLogReaderMaxPendingTasks, time)
 
   private def createRemoteStorageManager(): RemoteStorageManager = {
     val rsm = Class.forName(rlmConfig.remoteLogStorageManagerClass)
@@ -273,6 +273,25 @@ class RemoteLogManager(logFetcher: TopicPartition => Option[Log],
   }
 
   /**
+   * A remote log read task returned by asyncRead(). The caller of asyncRead() can use this object to cancel a
+   * pending task or check if the task is done.
+   */
+  case class AsyncReadTask(future: Future[Unit]) {
+    def cancel(mayInterruptIfRunning: Boolean): Boolean = {
+      val r = future.cancel(mayInterruptIfRunning)
+      if (r) {
+        // Removed the cancelled task from task queue
+        remoteStorageFetcherThreadPool.purge()
+      }
+      r
+    }
+
+    def isCancelled: Boolean = future.isCancelled
+
+    def isDone: Boolean = future.isDone
+  }
+
+  /**
    * Submit a remote log read task.
    *
    * This method returns immediately. The read operation is executed in a thread pool.
@@ -280,8 +299,8 @@ class RemoteLogManager(logFetcher: TopicPartition => Option[Log],
    *
    * @throws RejectedExecutionException if the task cannot be accepted for execution (task queue is full)
    */
-  def asyncRead(fetchInfo: RemoteStorageFetchInfo, callback: (RemoteLogReadResult) => Unit): Future[Unit] = {
-    remoteStorageFetcherThreadPool.submit(new RemoteLogReader(fetchInfo, this, callback))
+  def asyncRead(fetchInfo: RemoteStorageFetchInfo, callback: (RemoteLogReadResult) => Unit): AsyncReadTask = {
+    AsyncReadTask(remoteStorageFetcherThreadPool.submit(new RemoteLogReader(fetchInfo, this, callback)))
   }
 
   /**

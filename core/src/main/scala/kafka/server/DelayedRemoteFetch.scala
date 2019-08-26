@@ -17,9 +17,10 @@
 
 package kafka.server
 
-import java.util.concurrent.{CompletableFuture, Future}
+import java.util.concurrent.{CompletableFuture, TimeUnit}
 
-import kafka.log.remote.RemoteLogReadResult
+import kafka.log.remote.{RemoteLogManager, RemoteLogReadResult}
+import kafka.metrics.KafkaMetricsGroup
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors._
 
@@ -29,7 +30,7 @@ import scala.collection._
  * A remote fetch operation that can be created by the replica manager and watched
  * in the remote fetch operation purgatory
  */
-class DelayedRemoteFetch(remoteFetchTask: Future[Unit],
+class DelayedRemoteFetch(remoteFetchTask: RemoteLogManager#AsyncReadTask,
                          remoteFetchResult: CompletableFuture[RemoteLogReadResult],
                          remoteFetchInfo: RemoteStorageFetchInfo,
                          delayMs: Long,
@@ -82,13 +83,10 @@ class DelayedRemoteFetch(remoteFetchTask: Future[Unit],
   }
 
   override def onExpiration() {
-    // TODO(yingz): add new metrics for delayed remote storage fetch
-    if (fetchMetadata.isFromFollower)
-      DelayedFetchMetrics.followerExpiredRequestMeter.mark()
-    else
-      DelayedFetchMetrics.consumerExpiredRequestMeter.mark()
+    DelayedFetchMetrics.consumerExpiredRequestMeter.mark()
+    DelayedRemoteFetchMetrics.expiredRequestMeter.mark()
 
-    // cancel the remote storage read task, if it has not finished yet
+    // cancel the remote storage read task, if it has not been executed yet
     remoteFetchTask.cancel(false)
   }
 
@@ -96,7 +94,7 @@ class DelayedRemoteFetch(remoteFetchTask: Future[Unit],
    * Upon completion, read whatever data is available and pass to the complete callback
    */
   override def onComplete() {
-    remoteFetchTask.cancel(false) // cancel the remote storage read task, if it has not finished yet
+    remoteFetchTask.cancel(false) // cancel the remote storage read task, if it has not been executed yet
 
     // Read local log segments again to make sure the infomation is up to date
     val logReadResults = replicaManager.readFromLocalLog(
@@ -128,4 +126,8 @@ class DelayedRemoteFetch(remoteFetchTask: Future[Unit],
 
     responseCallback(fetchPartitionData)
   }
+}
+
+object DelayedRemoteFetchMetrics extends KafkaMetricsGroup {
+  val expiredRequestMeter = newMeter("ExpiresPerSec", "requests", TimeUnit.SECONDS)
 }

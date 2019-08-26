@@ -27,7 +27,7 @@ import kafka.api._
 import kafka.cluster.{BrokerEndPoint, Partition}
 import kafka.controller.{KafkaController, StateChangeLogger}
 import kafka.log._
-import kafka.log.remote.{RemoteLogReadResult}
+import kafka.log.remote.{RemoteLogManager, RemoteLogReadResult}
 import kafka.metrics.KafkaMetricsGroup
 import kafka.server.QuotaFactory.QuotaManagers
 import kafka.server.checkpoints.{LazyOffsetCheckpoints, OffsetCheckpointFile, OffsetCheckpoints}
@@ -919,7 +919,7 @@ class ReplicaManager(val config: KafkaConfig,
       if (remoteFetchInfo.isDefined) {
         val key = new TopicPartitionOperationKey(remoteFetchInfo.get.topicPartition.topic(), remoteFetchInfo.get.topicPartition.partition())
         val remoteFetchResult = new CompletableFuture[RemoteLogReadResult]
-        var remoteFetchTask: Future[Unit]  = null
+        var remoteFetchTask: RemoteLogManager#AsyncReadTask  = null
         try {
           remoteFetchTask = logManager.remoteLogManager.get.asyncRead(remoteFetchInfo.get, (result:RemoteLogReadResult) => {
             remoteFetchResult.complete(result)

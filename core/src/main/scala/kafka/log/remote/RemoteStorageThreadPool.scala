@@ -58,7 +58,8 @@ abstract class RemoteStorageThreadPool(name: String, numThreads: Int, maxPending
   this.logIdent = s"[${name}] "
 
   override def afterExecute(r: Runnable, e: Throwable): Unit = {
-    e match {
+    if(e != null)
+      e match {
       case e: FatalExitError => {
         info("Stopped")
         Exit.exit(e.statusCode())
