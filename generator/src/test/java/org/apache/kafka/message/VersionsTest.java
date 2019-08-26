@@ -72,6 +72,8 @@ public class VersionsTest {
         assertEquals(Versions.NONE,
             newVersions(9, Short.MAX_VALUE).intersect(
                 newVersions(2, 8)));
+        assertEquals(Versions.NONE,
+            Versions.NONE.intersect(Versions.NONE));
     }
 
     @Test
@@ -86,5 +88,27 @@ public class VersionsTest {
         assertFalse(newVersions(2, 3).contains(newVersions(2, 4)));
         assertTrue(newVersions(2, 3).contains(Versions.NONE));
         assertTrue(Versions.ALL.contains(newVersions(1, 2)));
+    }
+
+    @Test
+    public void testTrim() {
+        assertEquals(Versions.NONE,
+            Versions.NONE.trim(Versions.NONE));
+        assertEquals(newVersions(0, 0),
+            newVersions(0, 0).trim(Versions.NONE));
+        assertEquals(newVersions(1, 1),
+            newVersions(1, 2).trim(newVersions(2, 2)));
+        assertEquals(newVersions(2, 2),
+            newVersions(1, 2).trim(newVersions(1, 1)));
+        assertEquals(newVersions(0, Short.MAX_VALUE),
+            newVersions(0, Short.MAX_VALUE).trim(newVersions(1, 100)));
+        assertEquals(newVersions(10, 10),
+            newVersions(1, 10).trim(newVersions(1, 9)));
+        assertEquals(newVersions(1, 1),
+            newVersions(1, 10).trim(newVersions(2, 10)));
+        assertEquals(newVersions(2, 4),
+            newVersions(2, Short.MAX_VALUE).trim(newVersions(5, Short.MAX_VALUE)));
+        assertEquals(newVersions(5, Short.MAX_VALUE),
+            newVersions(0, Short.MAX_VALUE).trim(newVersions(0, 4)));
     }
 }
