@@ -321,11 +321,7 @@ public class StreamThread extends Thread {
                 final long start = time.milliseconds();
                 try {
                     // suspend active tasks
-                    if (streamThread.assignmentErrorCode.get() == StreamsPartitionAssignor.Error.VERSION_PROBING.code()) {
-                        streamThread.assignmentErrorCode.set(StreamsPartitionAssignor.Error.NONE.code());
-                    } else {
-                        taskManager.suspendTasksAndState();
-                    }
+                    taskManager.suspendTasksAndState();
                 } catch (final Throwable t) {
                     log.error(
                         "Error caught during partition revocation, " +
@@ -796,6 +792,7 @@ public class StreamThread extends Thread {
                 runOnce();
                 if (assignmentErrorCode.get() == StreamsPartitionAssignor.Error.VERSION_PROBING.code()) {
                     log.info("Version probing detected. Triggering new rebalance.");
+                    assignmentErrorCode.set(StreamsPartitionAssignor.Error.NONE.code());
                     enforceRebalance();
                 }
             } catch (final TaskMigratedException ignoreAndRejoinGroup) {
