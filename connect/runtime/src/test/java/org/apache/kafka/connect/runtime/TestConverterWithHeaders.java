@@ -16,9 +16,13 @@
  */
 package org.apache.kafka.connect.runtime;
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
 import java.io.Serializable;
 import java.util.Map;
-import org.apache.commons.lang3.SerializationUtils;
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.Headers;
@@ -69,7 +73,7 @@ public class TestConverterWithHeaders implements Converter {
         String messageType = extractMessageType(headers);
 
         if (messageType.equals("MessageTypeA")) {
-            MessageTypeA message = SerializationUtils.deserialize(value);
+            MessageTypeA message = deserialize(value);
 
             Schema schema =  SchemaBuilder.struct()
                 .field("value1", Schema.INT32_SCHEMA)
@@ -82,7 +86,7 @@ public class TestConverterWithHeaders implements Converter {
 
             return new SchemaAndValue(schema, object);
         } else if (messageType.equals("MessageTypeB")) {
-            MessageTypeB message = SerializationUtils.deserialize(value);
+            MessageTypeB message = deserialize(value);
 
             Schema schema =  SchemaBuilder.struct()
                 .field("value1", Schema.BOOLEAN_SCHEMA)
@@ -111,7 +115,7 @@ public class TestConverterWithHeaders implements Converter {
                 struct.getString("value2")
             );
 
-            return SerializationUtils.serialize(message);
+            return serialize(message);
         } else if (messageType.equals("MessageTypeB")) {
             Struct struct = (Struct) value;
 
@@ -120,7 +124,7 @@ public class TestConverterWithHeaders implements Converter {
                 struct.getInt64("value2")
             );
 
-            return SerializationUtils.serialize(message);
+            return serialize(message);
         } else {
             throw new DataException("Unsupported type: " + messageType);
         }
@@ -129,19 +133,41 @@ public class TestConverterWithHeaders implements Converter {
     private String extractMessageType(Headers headers) {
         Header header = headers.lastHeader(HEADER_MESSAGE_TYPE);
         if (header == null) {
-            throw new SerializationException("Header '" + HEADER_MESSAGE_TYPE + "' is required!");
+            throw new DataException("Header '" + HEADER_MESSAGE_TYPE + "' is required!");
         }
 
         return new String(header.value());
     }
 
+    static <T> T deserialize(final byte[] objectData) {
+        try (ObjectInputStream in = new ObjectInputStream(new ByteArrayInputStream(objectData))) {
+            @SuppressWarnings("unchecked")
+            final T obj = (T) in.readObject();
+            return obj;
+        } catch (final ClassNotFoundException | IOException ex) {
+            throw new SerializationException(ex);
+        }
+    }
+
+    static byte[] serialize(final Serializable obj) {
+        final ByteArrayOutputStream baos = new ByteArrayOutputStream(512);
+
+        try (ObjectOutputStream out = new ObjectOutputStream(baos)) {
+            out.writeObject(obj);
+        } catch (final IOException ex) {
+            throw new SerializationException(ex);
+        }
+
+        return baos.toByteArray();
+    }
+
     @Override
     public SchemaAndValue toConnectData(String topic, byte[] value) {
-        throw new SerializationException("Headers are required for this converter!");
+        throw new DataException("Headers are required for this converter!");
     }
 
     @Override
     public byte[] fromConnectData(String topic, Schema schema, Object value) {
-        throw new SerializationException("Headers are required for this converter!");
+        throw new DataException("Headers are required for this converter!");
     }
 }

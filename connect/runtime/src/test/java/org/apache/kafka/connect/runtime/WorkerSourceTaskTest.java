@@ -17,7 +17,6 @@
 package org.apache.kafka.connect.runtime;
 
 import java.nio.ByteBuffer;
-import org.apache.commons.lang3.SerializationUtils;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
@@ -754,14 +753,14 @@ public class WorkerSourceTaskTest extends ThreadedTest {
 
         assertEquals(ByteBuffer.wrap("a".getBytes()), ByteBuffer.wrap(sentRecordA.getValue().key()));
         assertEquals(
-            ByteBuffer.wrap(SerializationUtils.serialize(new MessageTypeA(100, "test"))),
+            ByteBuffer.wrap(TestConverterWithHeaders.serialize(new MessageTypeA(100, "test"))),
             ByteBuffer.wrap(sentRecordA.getValue().value())
         );
         assertEquals("MessageTypeA", new String(sentRecordA.getValue().headers().lastHeader("message.type").value()));
 
         assertEquals(ByteBuffer.wrap("b".getBytes()), ByteBuffer.wrap(sentRecordB.getValue().key()));
         assertEquals(
-            ByteBuffer.wrap(SerializationUtils.serialize(new MessageTypeB(true, 2000L))),
+            ByteBuffer.wrap(TestConverterWithHeaders.serialize(new MessageTypeB(true, 2000L))),
             ByteBuffer.wrap(sentRecordB.getValue().value())
         );
         assertEquals("MessageTypeB", new String(sentRecordB.getValue().headers().lastHeader("message.type").value()));

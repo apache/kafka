@@ -18,7 +18,6 @@ package org.apache.kafka.connect.runtime;
 
 import java.util.Arrays;
 import java.util.Iterator;
-import org.apache.commons.lang3.SerializationUtils;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
@@ -1324,8 +1323,8 @@ public class WorkerSinkTaskTest {
         headersB.add("message.type", "MessageTypeB".getBytes());
 
         expectConsumerPoll(Arrays.asList(
-            new ConsumerRecord<>(TOPIC, PARTITION, FIRST_OFFSET + recordsReturnedTp1 + 1, RecordBatch.NO_TIMESTAMP, TimestampType.NO_TIMESTAMP_TYPE, 0L, 0, 0, keyA.getBytes(), SerializationUtils.serialize(valueA), headersA),
-            new ConsumerRecord<>(TOPIC, PARTITION, FIRST_OFFSET + recordsReturnedTp1 + 2, RecordBatch.NO_TIMESTAMP, TimestampType.NO_TIMESTAMP_TYPE, 0L, 0, 0, keyB.getBytes(), SerializationUtils.serialize(valueB), headersB)
+            new ConsumerRecord<>(TOPIC, PARTITION, FIRST_OFFSET + recordsReturnedTp1 + 1, RecordBatch.NO_TIMESTAMP, TimestampType.NO_TIMESTAMP_TYPE, 0L, 0, 0, keyA.getBytes(), TestConverterWithHeaders.serialize(valueA), headersA),
+            new ConsumerRecord<>(TOPIC, PARTITION, FIRST_OFFSET + recordsReturnedTp1 + 2, RecordBatch.NO_TIMESTAMP, TimestampType.NO_TIMESTAMP_TYPE, 0L, 0, 0, keyB.getBytes(), TestConverterWithHeaders.serialize(valueB), headersB)
         ));
 
         expectTransformation(2, null);
