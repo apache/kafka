@@ -23,6 +23,7 @@ import kafka.log.remote.{RemoteLogManager, RemoteLogReadResult}
 import kafka.metrics.KafkaMetricsGroup
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors._
+import org.apache.kafka.common.record.Records
 
 import scala.collection._
 
@@ -35,6 +36,7 @@ class DelayedRemoteFetch(remoteFetchTask: RemoteLogManager#AsyncReadTask,
                          remoteFetchInfo: RemoteStorageFetchInfo,
                          delayMs: Long,
                          fetchMetadata: FetchMetadata,
+                         localReadResults: Seq[(TopicPartition, LogReadResult)],
                          replicaManager: ReplicaManager,
                          quota: ReplicaQuota,
                          responseCallback: Seq[(TopicPartition, FetchPartitionData)] => Unit)
@@ -94,19 +96,7 @@ class DelayedRemoteFetch(remoteFetchTask: RemoteLogManager#AsyncReadTask,
    * Upon completion, read whatever data is available and pass to the complete callback
    */
   override def onComplete() {
-    remoteFetchTask.cancel(false) // cancel the remote storage read task, if it has not been executed yet
-
-    // Read local log segments again to make sure the infomation is up to date
-    val logReadResults = replicaManager.readFromLocalLog(
-      replicaId = fetchMetadata.replicaId,
-      fetchOnlyFromLeader = fetchMetadata.fetchOnlyLeader,
-      fetchIsolation = fetchMetadata.fetchIsolation,
-      fetchMaxBytes = fetchMetadata.fetchMaxBytes,
-      hardMaxBytesLimit = fetchMetadata.hardMaxBytesLimit,
-      readPartitionInfo = fetchMetadata.fetchPartitionStatus.map { case (tp, status) => tp -> status.fetchInfo },
-      quota = quota)
-
-    val fetchPartitionData = logReadResults.map { case (tp, result) =>
+    val fetchPartitionData = localReadResults.map { case (tp, result) =>
       if (tp.equals(remoteFetchInfo.topicPartition) && remoteFetchResult.isDone
         && result.exception.isEmpty && result.info.delayedRemoteStorageFetch.isDefined) {
         if (remoteFetchResult.get.error.isDefined) {

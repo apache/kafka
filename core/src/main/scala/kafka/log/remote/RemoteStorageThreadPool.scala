@@ -17,7 +17,8 @@
 
 package kafka.log.remote
 
-import java.util.concurrent.{Callable, LinkedBlockingQueue, ThreadPoolExecutor, TimeUnit}
+import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.{Callable, LinkedBlockingQueue, ThreadFactory, ThreadPoolExecutor, TimeUnit}
 
 import com.yammer.metrics.core.Gauge
 import kafka.metrics.KafkaMetricsGroup
@@ -25,10 +26,9 @@ import kafka.utils.{Exit, Logging}
 import org.apache.kafka.common.internals.FatalExitError
 import org.apache.kafka.common.utils.Time
 
-abstract class RemoteStorageTask[T](name: String) extends Callable[T] with Logging {
+abstract class RemoteStorageTask[T] extends Callable[T] with Logging {
   override final def call(): T = {
-    val tid = Thread.currentThread().getId
-    this.logIdent = s"[${name}-${tid}]: "
+    this.logIdent = s"[${Thread.currentThread.getName}]: "
     execute()
   }
 
@@ -43,8 +43,9 @@ abstract class RemoteStorageTask[T](name: String) extends Callable[T] with Loggi
  * @param maxPendingTasks The task queue capacity. If the task queue is full, the submit() / execute() method will throw RejectedExecutionException
  * @param metricNamePrefix The name of average idle percentage metric
  */
-abstract class RemoteStorageThreadPool(name: String, numThreads: Int, maxPendingTasks: Int, time: Time, metricNamePrefix: String)
-  extends ThreadPoolExecutor(numThreads, numThreads, 0L, TimeUnit.MILLISECONDS, new LinkedBlockingQueue[Runnable](maxPendingTasks))
+abstract class RemoteStorageThreadPool(name: String, threadNamePrefix: String, numThreads: Int, maxPendingTasks: Int, time: Time, metricNamePrefix: String)
+  extends ThreadPoolExecutor(numThreads, numThreads, 0L, TimeUnit.MILLISECONDS,
+    new LinkedBlockingQueue[Runnable](maxPendingTasks), new RemoteStorageThreadFactory(threadNamePrefix + "-"))
     with Logging
     with KafkaMetricsGroup {
   newGauge(metricNamePrefix.concat("TaskQueueSize"), new Gauge[Int] {
@@ -89,5 +90,13 @@ abstract class RemoteStorageThreadPool(name: String, numThreads: Int, maxPending
       info("shutting down")
     }
     info("shut down completely")
+  }
+}
+
+class RemoteStorageThreadFactory(namePrefix : String) extends ThreadFactory {
+  private val threadNumber = new AtomicInteger(0)
+
+  override def newThread(r: Runnable): Thread = {
+    new Thread(r, namePrefix + threadNumber.getAndIncrement)
   }
 }

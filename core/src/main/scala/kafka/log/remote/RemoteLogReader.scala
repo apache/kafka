@@ -22,7 +22,7 @@ import kafka.utils.Logging
 import org.apache.kafka.common.utils.Time
 
 class RemoteLogReader(fetchInfo: RemoteStorageFetchInfo, rlm: RemoteLogManager, callback: (RemoteLogReadResult) => Unit)
-  extends RemoteStorageTask[Unit]("RemoteLogReader") with Logging {
+  extends RemoteStorageTask[Unit] with Logging {
   override def execute(): Unit = {
     val result = {
       try {
@@ -41,9 +41,11 @@ class RemoteLogReader(fetchInfo: RemoteStorageFetchInfo, rlm: RemoteLogManager, 
 case class RemoteLogReadResult(info: Option[FetchDataInfo], error: Option[Throwable] = None)
 
 class RemoteStorageReaderThreadPool(numThreads: Int, maxPendingTasks: Int, time: Time)
-  extends RemoteStorageThreadPool(RemoteStorageReaderThreadPool.name, numThreads, maxPendingTasks, time, RemoteStorageReaderThreadPool.metricNamePrefix)
+  extends RemoteStorageThreadPool(RemoteStorageReaderThreadPool.name, RemoteStorageReaderThreadPool.threadNamePrefix,
+    numThreads, maxPendingTasks, time, RemoteStorageReaderThreadPool.metricNamePrefix)
 
 object RemoteStorageReaderThreadPool {
   val name = "Remote Log Reader Thread Pool"
+  val threadNamePrefix = "RemoteLogReader"
   val metricNamePrefix = "RemoteLogReader"
 }
