@@ -484,14 +484,11 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         taskMetrics.taskCommitTimeSensor.record(time.nanoseconds() - startNs);
     }
 
-    @Override
-    protected Map<TopicPartition, Long> activeTaskCheckpointableOffsets() {
-        final Map<TopicPartition, Long> checkpointableOffsets =
-            new HashMap<>(recordCollector.offsets());
+    private Map<TopicPartition, Long> activeTaskCheckpointableOffsets() {
+        final Map<TopicPartition, Long> checkpointableOffsets = new HashMap<>(recordCollector.offsets());
         for (final Map.Entry<TopicPartition, Long> entry : consumedOffsets.entrySet()) {
             checkpointableOffsets.putIfAbsent(entry.getKey(), entry.getValue());
         }
-
         return checkpointableOffsets;
     }
 
