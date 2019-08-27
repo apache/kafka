@@ -104,6 +104,9 @@ class KafkaMetricReporterClusterIdTest extends ZooKeeperTestHarness {
 
     assertEquals(KafkaMetricReporterClusterIdTest.MockKafkaMetricsReporter.CLUSTER_META.get().clusterId(),
       KafkaMetricReporterClusterIdTest.MockBrokerMetricsReporter.CLUSTER_META.get().clusterId())
+
+    server.shutdown()
+    TestUtils.assertNoNonDaemonThreads(this.getClass.getName)
   }
 
   @After
@@ -111,7 +114,5 @@ class KafkaMetricReporterClusterIdTest extends ZooKeeperTestHarness {
     server.shutdown()
     CoreUtils.delete(config.logDirs)
     super.tearDown()
-    // Note: Make sure this method is called last. If assertNoNonDaemonThreads fails, nothing after would be executed.
-    TestUtils.assertNoNonDaemonThreads(this.getClass.getName)
   }
 }
