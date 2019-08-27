@@ -16,37 +16,32 @@
  */
 package org.apache.kafka.streams.internals;
 
-import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.serialization.Serde;
 
-import org.apache.kafka.streams.MockTime;
+import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.internals.AbstractStoreBuilder;
-import org.apache.kafka.streams.state.internals.InMemoryKeyValueStore;
 
 
-public class MockKeyValueStoreBuilder extends AbstractStoreBuilder<byte[], byte[], KeyValueStore> {
+
+public class MockKeyValueStoreBuilder<K, V> extends AbstractStoreBuilder<K, V, KeyValueStore> {
 
     private final boolean persistent;
-    private final KeyValueStore keyValueStore;
+    private final KeyValueBytesStoreSupplier storeSupplier;
 
-    public MockKeyValueStoreBuilder(final String storeName, final boolean persistent) {
-        super(storeName, Serdes.ByteArray(), Serdes.ByteArray(), new MockTime(0));
+    public MockKeyValueStoreBuilder(final KeyValueBytesStoreSupplier storeSupplier,
+                                    final Serde<K> keySerde,
+                                    final Serde<V> valueSerde,
+                                    final boolean persistent) {
+        super(storeSupplier.name(), keySerde, valueSerde, Time.SYSTEM);
         this.persistent = persistent;
-        this.keyValueStore = new InMemoryKeyValueStore(storeName);
-
+        this.storeSupplier = storeSupplier;
     }
-
-    // The users can plugin their own kv store as the backend of the mock store.
-    public MockKeyValueStoreBuilder(final String storeName, KeyValueStore keyValueStore, final boolean persistent) {
-        super(storeName, Serdes.ByteArray(), Serdes.ByteArray(), new MockTime(0));
-        this.persistent = persistent;
-        this.keyValueStore = keyValueStore;
-    }
-
 
     @Override
     public KeyValueStore build() {
-        return new MockKeyValueStore(name, keyValueStore, persistent);
+        return new MockKeyValueStore<>(name, storeSupplier.get(), persistent);
     }
 }
 

@@ -16,22 +16,18 @@
  */
 package org.apache.kafka.streams.internals;
 
-import org.apache.kafka.common.serialization.Deserializer;
-import org.apache.kafka.common.serialization.IntegerDeserializer;
-import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
-import org.apache.kafka.streams.state.internals.InMemoryKeyValueStore;
 
 import java.util.LinkedList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 
-public class MockKeyValueStore<K, V> implements KeyValueStore {
+public class MockKeyValueStore<K, V> implements KeyValueStore<K, V>  {
     // keep a global counter of flushes and a local reference to which store had which
     // flush, so we can reason about the order in which stores get flushed.
     private static final AtomicInteger GLOBAL_FLUSH_COUNTER = new AtomicInteger(0);
@@ -43,21 +39,14 @@ public class MockKeyValueStore<K, V> implements KeyValueStore {
     public boolean flushed = false;
     public boolean closed = true;
 
-    public final List<KeyValue> capturedPutCalls = new LinkedList<>();
-    public final List<KeyValue> capturedGetCalls = new LinkedList<>();
-    public final List<KeyValue> capturedDeleteCalls = new LinkedList<>();
+    public final List<KeyValue<K, V>> capturedPutCalls = new LinkedList<>();
+    public final List<KeyValue<K, V>> capturedGetCalls = new LinkedList<>();
+    public final List<KeyValue<K, V>> capturedDeleteCalls = new LinkedList<>();
 
-    public final KeyValueStore innerKeyValueStore;
-
-    public MockKeyValueStore(final String name,
-                             final boolean persistent) {
-        this.name = name;
-        this.persistent = persistent;
-        innerKeyValueStore = new InMemoryKeyValueStore(name);
-    }
+    public final KeyValueStore<K, V> innerKeyValueStore;
 
     public MockKeyValueStore(final String name,
-                             final KeyValueStore innerKeyValueStore,
+                             final KeyValueStore<K, V> innerKeyValueStore,
                              final boolean persistent) {
         this.name = name;
         this.innerKeyValueStore = innerKeyValueStore;
@@ -106,60 +95,58 @@ public class MockKeyValueStore<K, V> implements KeyValueStore {
     }
 
     public final StateRestoreCallback stateRestoreCallback = new StateRestoreCallback() {
-        private final Deserializer<Integer> deserializer = new IntegerDeserializer();
 
         @Override
         public void restore(final byte[] key,
                             final byte[] value) {
-            innerKeyValueStore.put(deserializer.deserialize("", key), value);
         }
     };
 
     @Override
-    public void put(final Object key, final Object value) {
-        capturedPutCalls.add(new KeyValue(key, value));
+    public void put(final K key, final V value) {
+        capturedPutCalls.add(new KeyValue<>(key, value));
         innerKeyValueStore.put(key, value);
     }
 
     @Override
-    public Object putIfAbsent(final Object key, final Object value) {
-        final byte[] originalValue = (byte[])get(key);
+    public V putIfAbsent(final K key, final V value) {
+        final V originalValue = get(key);
         if (originalValue == null) {
             put(key, value);
-            capturedPutCalls.add(new KeyValue(key, value));
+            capturedPutCalls.add(new KeyValue<>(key, value));
         }
         return originalValue;
     }
 
     @Override
-    public Object delete(final Object key) {
-        Object value = innerKeyValueStore.delete(key);
-        capturedDeleteCalls.add(new KeyValue(key, value));
+    public V delete(final K key) {
+        V value = innerKeyValueStore.delete(key);
+        capturedDeleteCalls.add(new KeyValue<>(key, value));
         return value;
     }
 
     @Override
-    public void putAll(final List entries) {
-        for (final KeyValue<Bytes, byte[]> entry : (List<KeyValue<Bytes, byte[]>>) entries) {
+    public void putAll(final List<KeyValue<K, V>> entries) {
+        for (final KeyValue<K, V> entry : entries) {
             put(entry.key, entry.value);
             capturedPutCalls.add(entry);
         }
     }
 
     @Override
-    public Object get(final Object key) {
-        byte[] value = (byte[])innerKeyValueStore.get(key);
-        capturedGetCalls.add(new KeyValue(key, value));
+    public V get(final K key) {
+        V value = innerKeyValueStore.get(key);
+        capturedGetCalls.add(new KeyValue<>(key, value));
         return value;
     }
 
     @Override
-    public KeyValueIterator range(final Object from, final Object to) {
+    public KeyValueIterator<K,V> range(final K from, final K to) {
         return innerKeyValueStore.range(from, to);
     }
 
     @Override
-    public KeyValueIterator all() {
+    public KeyValueIterator<K,V>  all() {
         return innerKeyValueStore.all();
     }
 
