@@ -141,9 +141,11 @@ object TestUtils extends Logging {
    * USING THIS IS A SIGN YOU ARE NOT WRITING A REAL UNIT TEST
    *
    * @param config The configuration of the server
+   * @param time
+   * @param threadNamePrefix
    */
-  def createServer(config: KafkaConfig, time: Time = Time.SYSTEM): KafkaServer = {
-    val server = new KafkaServer(config, time)
+  def createServer(config: KafkaConfig, time: Time = Time.SYSTEM, threadNamePrefix: Option[String] = None): KafkaServer = {
+    val server = new KafkaServer(config, time, threadNamePrefix = threadNamePrefix)
     server.startup()
     server
   }
@@ -1000,7 +1002,7 @@ object TestUtils extends Logging {
 
   // Note: If this method is called in an @After method, make sure it is called last.
   // Because of the assert, if verifyNonDaemonThreadsStatus fails, nothing after would be executed.
-  def verifyNonDaemonThreadsStatus(threadNamePrefix: String): Unit = {
+  def assertNoNonDaemonThreads(threadNamePrefix: String): Unit = {
     val threadCount = Thread.getAllStackTraces.keySet.asScala.count { t =>
       !t.isDaemon && t.isAlive && t.getName.startsWith(threadNamePrefix)
     }

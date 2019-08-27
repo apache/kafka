@@ -122,7 +122,7 @@ public class EmbeddedKafkaCluster extends ExternalResource {
         for (int i = 0; i < brokers.length; i++) {
             brokerConfig.put(KafkaConfig$.MODULE$.BrokerIdProp(), i);
             brokerConfig.put(KafkaConfig$.MODULE$.LogDirProp(), createLogDir());
-            brokers[i] = TestUtils.createServer(new KafkaConfig(brokerConfig, true), time);
+            brokers[i] = TestUtils.createServer(new KafkaConfig(brokerConfig, true), time, null);
         }
 
         Map<String, Object> producerProps = new HashMap<>();

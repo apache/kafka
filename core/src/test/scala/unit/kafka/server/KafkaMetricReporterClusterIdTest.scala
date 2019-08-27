@@ -88,7 +88,7 @@ class KafkaMetricReporterClusterIdTest extends ZooKeeperTestHarness {
     props.setProperty(KafkaConfig.BrokerIdGenerationEnableProp, "true")
     props.setProperty(KafkaConfig.BrokerIdProp, "-1")
     config = KafkaConfig.fromProps(props)
-    server = KafkaServerStartable.fromProps(props)
+    server = KafkaServerStartable.fromProps(props, threadNamePrefix = Option(this.getClass.getName))
     server.startup()
   }
 
@@ -112,6 +112,6 @@ class KafkaMetricReporterClusterIdTest extends ZooKeeperTestHarness {
     CoreUtils.delete(config.logDirs)
     super.tearDown()
     // Note: Make sure this method is called last. If verifyNonDaemonThreadsStatus fails, nothing after would be executed.
-    TestUtils.verifyNonDaemonThreadsStatus(this.getClass.getName)
+    TestUtils.assertNoNonDaemonThreads(this.getClass.getName)
   }
 }

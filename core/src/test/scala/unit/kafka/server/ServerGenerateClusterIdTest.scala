@@ -59,7 +59,7 @@ class ServerGenerateClusterIdTest extends ZooKeeperTestHarness {
     // Make sure that the cluster id doesn't exist yet.
     assertFalse(zkClient.getClusterId.isDefined)
 
-    var server1 = TestUtils.createServer(config1)
+    var server1 = TestUtils.createServer(config1, threadNamePrefix = Option(this.getClass.getName))
     servers = Seq(server1)
 
     // Validate the cluster id
@@ -73,7 +73,7 @@ class ServerGenerateClusterIdTest extends ZooKeeperTestHarness {
     assertEquals(zkClient.getClusterId, Some(clusterIdOnFirstBoot))
 
     // Restart the server check to confirm that it uses the clusterId generated previously
-    server1 = TestUtils.createServer(config1)
+    server1 = TestUtils.createServer(config1, threadNamePrefix = Option(this.getClass.getName))
     servers = Seq(server1)
 
     val clusterIdOnSecondBoot = server1.clusterId
@@ -85,18 +85,18 @@ class ServerGenerateClusterIdTest extends ZooKeeperTestHarness {
     assertTrue(zkClient.getClusterId.isDefined)
     assertEquals(zkClient.getClusterId, Some(clusterIdOnFirstBoot))
 
-    TestUtils.verifyNonDaemonThreadsStatus(this.getClass.getName)
+    TestUtils.assertNoNonDaemonThreads(this.getClass.getName)
   }
 
   @Test
   def testAutoGenerateClusterIdForKafkaClusterSequential(): Unit = {
-    val server1 = TestUtils.createServer(config1)
+    val server1 = TestUtils.createServer(config1, threadNamePrefix = Option(this.getClass.getName))
     val clusterIdFromServer1 = server1.clusterId
 
-    val server2 = TestUtils.createServer(config2)
+    val server2 = TestUtils.createServer(config2, threadNamePrefix = Option(this.getClass.getName))
     val clusterIdFromServer2 = server2.clusterId
 
-    val server3 = TestUtils.createServer(config3)
+    val server3 = TestUtils.createServer(config3, threadNamePrefix = Option(this.getClass.getName))
     val clusterIdFromServer3 = server3.clusterId
     servers = Seq(server1, server2, server3)
 
@@ -115,12 +115,12 @@ class ServerGenerateClusterIdTest extends ZooKeeperTestHarness {
 
     servers.foreach(_.shutdown())
 
-    TestUtils.verifyNonDaemonThreadsStatus(this.getClass.getName)
+    TestUtils.assertNoNonDaemonThreads(this.getClass.getName)
   }
 
   @Test
   def testAutoGenerateClusterIdForKafkaClusterParallel(): Unit = {
-    val firstBoot = Future.traverse(Seq(config1, config2, config3))(config => Future(TestUtils.createServer(config)))
+    val firstBoot = Future.traverse(Seq(config1, config2, config3))(config => Future(TestUtils.createServer(config, threadNamePrefix = Option(this.getClass.getName))))
     servers = Await.result(firstBoot, 100 second)
     val Seq(server1, server2, server3) = servers
 
@@ -142,13 +142,13 @@ class ServerGenerateClusterIdTest extends ZooKeeperTestHarness {
 
     servers.foreach(_.shutdown())
 
-    TestUtils.verifyNonDaemonThreadsStatus(this.getClass.getName)
+    TestUtils.assertNoNonDaemonThreads(this.getClass.getName)
   }
 
   @Test
   def testConsistentClusterIdFromZookeeperAndFromMetaProps() = {
     // Check at the first boot
-    val server = TestUtils.createServer(config1)
+    val server = TestUtils.createServer(config1, threadNamePrefix = Option(this.getClass.getName))
     val clusterId = server.clusterId
 
     assertTrue(verifyBrokerMetadata(server.config.logDirs, clusterId))
@@ -163,7 +163,7 @@ class ServerGenerateClusterIdTest extends ZooKeeperTestHarness {
 
     server.shutdown()
 
-    TestUtils.verifyNonDaemonThreadsStatus(this.getClass.getName)
+    TestUtils.assertNoNonDaemonThreads(this.getClass.getName)
   }
 
   @Test
@@ -179,7 +179,7 @@ class ServerGenerateClusterIdTest extends ZooKeeperTestHarness {
 
     server.shutdown()
 
-    TestUtils.verifyNonDaemonThreadsStatus(this.getClass.getName)
+    TestUtils.assertNoNonDaemonThreads(this.getClass.getName)
   }
 
   @Test
@@ -205,7 +205,7 @@ class ServerGenerateClusterIdTest extends ZooKeeperTestHarness {
 
     server.shutdown()
 
-    TestUtils.verifyNonDaemonThreadsStatus(this.getClass.getName)
+    TestUtils.assertNoNonDaemonThreads(this.getClass.getName)
   }
 
   def forgeBrokerMetadata(logDirs: Seq[String], brokerId: Int, clusterId: String): Unit = {
