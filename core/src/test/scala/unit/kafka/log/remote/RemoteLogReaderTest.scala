@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package unit.kafka.log.remote
+package kafka.log.remote
 
 import java.util.Optional
 import java.util.concurrent.atomic.AtomicInteger

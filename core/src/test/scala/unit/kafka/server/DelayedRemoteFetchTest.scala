@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package unit.kafka.server
+package kafka.server
 
 import java.util.Optional
 import java.util.concurrent.CompletableFuture
@@ -30,7 +30,7 @@ import org.apache.kafka.common.requests.FetchRequest.PartitionData
 import org.easymock.{EasyMock, EasyMockSupport}
 import org.junit.Assert.assertEquals
 import org.junit.Test
-import unit.kafka.log.remote.MockRemoteLogManager
+import kafka.log.remote.MockRemoteLogManager
 
 import scala.collection.JavaConverters._
 import scala.collection.Seq
