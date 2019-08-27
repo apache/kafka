@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map.Entry;
 import org.apache.kafka.clients.consumer.Consumer;
@@ -231,7 +232,7 @@ public class GlobalStreamThread extends Thread {
          * @throws StreamsException      if the store's change log does not contain the partition
          */
         void initialize() {
-            final Map<TopicPartition, Long> partitionOffsets = stateMaintainer.initialize();
+            final Map<TopicPartition, Long> partitionOffsets = new HashMap<>(stateMaintainer.initialize());
             Set<String> unusedTopics = new HashSet<>();
             Iterator<Entry<TopicPartition, Long>> tps = partitionOffsets.entrySet().iterator();
             while (tps.hasNext()) {
@@ -242,7 +243,7 @@ public class GlobalStreamThread extends Thread {
                 }
             }
             if (!unusedTopics.isEmpty()) {
-                log.warn("Checkpoint contains unused topic(s): {}, skipped them now, need to clean them, current source topic(s): ",
+                log.warn("Checkpoint contains unused topic(s): {}, skipped them now, need to clean them, current source topic(s): {}",
                     Arrays.toString(unusedTopics.toArray()),
                     Arrays.toString(this.topology.sourceTopics().toArray()));
             }
