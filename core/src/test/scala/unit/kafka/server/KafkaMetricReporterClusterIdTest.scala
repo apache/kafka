@@ -111,7 +111,7 @@ class KafkaMetricReporterClusterIdTest extends ZooKeeperTestHarness {
     server.shutdown()
     CoreUtils.delete(config.logDirs)
     super.tearDown()
-    // Note: Make sure this method is called last. If verifyNonDaemonThreadsStatus fails, nothing after would be executed.
+    // Note: Make sure this method is called last. If assertNoNonDaemonThreads fails, nothing after would be executed.
     TestUtils.assertNoNonDaemonThreads(this.getClass.getName)
   }
 }

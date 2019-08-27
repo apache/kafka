@@ -1001,7 +1001,7 @@ object TestUtils extends Logging {
   }
 
   // Note: If this method is called in an @After method, make sure it is called last.
-  // Because of the assert, if verifyNonDaemonThreadsStatus fails, nothing after would be executed.
+  // Because of the assert, if assertNoNonDaemonThreads fails, nothing after would be executed.
   def assertNoNonDaemonThreads(threadNamePrefix: String): Unit = {
     val threadCount = Thread.getAllStackTraces.keySet.asScala.count { t =>
       !t.isDaemon && t.isAlive && t.getName.startsWith(threadNamePrefix)
