@@ -36,21 +36,22 @@ public final class VersionConditional {
 
     private final Versions containingVersions;
     private final Versions possibleVersions;
-    private Runnable ifMember = null;
-    private Runnable ifNotMember = null;
+    private ClauseGenerator ifMember = null;
+    private ClauseGenerator ifNotMember = null;
     private boolean alwaysEmitBlockScope = false;
+    private boolean allowMembershipCheckAlwaysFalse = true;
 
     private VersionConditional(Versions containingVersions, Versions possibleVersions) {
         this.containingVersions = containingVersions;
         this.possibleVersions = possibleVersions;
     }
 
-    VersionConditional ifMember(Runnable ifMember) {
+    VersionConditional ifMember(ClauseGenerator ifMember) {
         this.ifMember = ifMember;
         return this;
     }
 
-    VersionConditional ifNotMember(Runnable ifNotMember) {
+    VersionConditional ifNotMember(ClauseGenerator ifNotMember) {
         this.ifNotMember = ifNotMember;
         return this;
     }
@@ -60,17 +61,30 @@ public final class VersionConditional {
         return this;
     }
 
+    VersionConditional allowMembershipCheckAlwaysFalse(boolean allowMembershipCheckAlwaysFalse) {
+        this.allowMembershipCheckAlwaysFalse = allowMembershipCheckAlwaysFalse;
+        return this;
+    }
+
+    private void generateIfClause() {
+        ifMember.generate(possibleVersions.intersect(containingVersions));
+    }
+
+    private void generateIfNotClause() {
+        ifMember.generate(possibleVersions.trim(containingVersions));
+    }
+
     private void generateFullRangeCheck(CodeBuffer buffer) {
         if (ifMember != null) {
             buffer.printf("if ((version >= %d) && (version <= %d)) {%n",
                     containingVersions.lowest(), containingVersions.highest());
             buffer.incrementIndent();
-            ifMember.run();
+            generateIfClause();
             buffer.decrementIndent();
             if (ifNotMember != null) {
                 buffer.printf("} else {%n");
                 buffer.incrementIndent();
-                ifNotMember.run();
+                generateIfNotClause();
                 buffer.decrementIndent();
                 buffer.printf("}%n");
             } else {
@@ -80,7 +94,7 @@ public final class VersionConditional {
             buffer.printf("if ((version < %d) || (version > %d)) {%n",
                     containingVersions.lowest(), containingVersions.highest());
             buffer.incrementIndent();
-            ifNotMember.run();
+            generateIfNotClause();
             buffer.decrementIndent();
             buffer.printf("}%n");
         }
@@ -90,12 +104,12 @@ public final class VersionConditional {
         if (ifMember != null) {
             buffer.printf("if (version >= %d) {%n", containingVersions.lowest());
             buffer.incrementIndent();
-            ifMember.run();
+            generateIfClause();
             buffer.decrementIndent();
             if (ifNotMember != null) {
                 buffer.printf("} else {%n");
                 buffer.incrementIndent();
-                ifNotMember.run();
+                generateIfNotClause();
                 buffer.decrementIndent();
                 buffer.printf("}%n");
             } else {
@@ -104,7 +118,7 @@ public final class VersionConditional {
         } else if (ifNotMember != null) {
             buffer.printf("if (version < %d) {%n", containingVersions.lowest());
             buffer.incrementIndent();
-            ifNotMember.run();
+            generateIfNotClause();
             buffer.decrementIndent();
             buffer.printf("}%n");
         }
@@ -114,12 +128,12 @@ public final class VersionConditional {
         if (ifMember != null) {
             buffer.printf("if (version <= %d) {%n", containingVersions.highest());
             buffer.incrementIndent();
-            ifMember.run();
+            generateIfClause();
             buffer.decrementIndent();
             if (ifNotMember != null) {
                 buffer.printf("} else {%n");
                 buffer.incrementIndent();
-                ifNotMember.run();
+                generateIfNotClause();
                 buffer.decrementIndent();
                 buffer.printf("}%n");
             } else {
@@ -128,7 +142,7 @@ public final class VersionConditional {
         } else if (ifNotMember != null) {
             buffer.printf("if (version > %d) {%n", containingVersions.highest());
             buffer.incrementIndent();
-            ifNotMember.run();
+            generateIfNotClause();
             buffer.decrementIndent();
             buffer.printf("}%n");
         }
@@ -140,7 +154,7 @@ public final class VersionConditional {
                 buffer.printf("{%n");
                 buffer.incrementIndent();
             }
-            ifMember.run();
+            generateIfClause();
             if (alwaysEmitBlockScope) {
                 buffer.decrementIndent();
                 buffer.printf("}%n");
@@ -149,12 +163,16 @@ public final class VersionConditional {
     }
 
     private void generateAlwaysFalseCheck(CodeBuffer buffer) {
+        if (!allowMembershipCheckAlwaysFalse) {
+            throw new RuntimeException("Version ranges " + containingVersions +
+                " and " + possibleVersions + " have no versions in common.");
+        }
         if (ifNotMember != null) {
             if (alwaysEmitBlockScope) {
                 buffer.printf("{%n");
                 buffer.incrementIndent();
             }
-            ifNotMember.run();
+            generateIfNotClause();
             if (alwaysEmitBlockScope) {
                 buffer.decrementIndent();
                 buffer.printf("}%n");

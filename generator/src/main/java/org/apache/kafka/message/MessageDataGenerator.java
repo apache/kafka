@@ -400,33 +400,28 @@ public final class MessageDataGenerator {
         buffer.printf("public void read(Readable readable, short version) {%n");
         buffer.incrementIndent();
         VersionConditional.forVersions(parentVersions, struct.versions()).
-            ifNotMember(() -> {
+            allowMembershipCheckAlwaysFalse(false).
+            ifNotMember((__) -> {
                 headerGenerator.addImport(MessageGenerator.UNSUPPORTED_VERSION_EXCEPTION_CLASS);
                 buffer.printf("throw new UnsupportedVersionException(\"Can't read " +
                     "version \" + version + \" of %s\");%n", className);
             }).
             generate(buffer);
-        Versions curVersions = parentVersions.intersect(struct.versions());
-        if (curVersions.empty()) {
-            throw new RuntimeException("Version ranges " + parentVersions +
-                " and " + struct.versions() + " have no versions in common.");
-        }
         for (FieldSpec field : struct.fields()) {
             boolean isVariableLength =
                 field.type().isArray() || field.type().isString() || field.type().isBytes();
-            VersionConditional.forVersions(field.versions(), curVersions).
+            VersionConditional.forVersions(field.versions(), parentVersions.intersect(struct.versions())).
                 alwaysEmitBlockScope(isVariableLength).
-                ifNotMember(() -> {
+                ifNotMember((__) -> {
                     buffer.printf("this.%s = %s;%n", field.camelCaseName(), fieldDefault(field));
                 }).
-                ifMember(() -> {
-                    Versions versions = curVersions.intersect(field.versions());
-                    VersionConditional.forVersions(field.taggedVersions(), versions).
-                        ifNotMember(() -> {
+                ifMember((presentVersions) -> {
+                    VersionConditional.forVersions(field.taggedVersions(), presentVersions).
+                        ifNotMember((presentAndUntaggedVersions) -> {
                             if (isVariableLength) {
                                 generateVariableLengthReader(field.camelCaseName(),
                                     field.type(),
-                                    versions.trim(field.taggedVersions()),
+                                    presentAndUntaggedVersions,
                                     field.nullableVersions(),
                                     String.format("this.%s = ", field.camelCaseName()),
                                     String.format(";%n"),
@@ -437,7 +432,8 @@ public final class MessageDataGenerator {
                             }
                         }).
                         generate(buffer);
-                }).generate(buffer);
+                }).
+                generate(buffer);
         }
         buffer.decrementIndent();
         buffer.printf("}%n");
@@ -471,10 +467,10 @@ public final class MessageDataGenerator {
         String lengthVar = type.isArray() ? "arrayLength" : "length";
         buffer.printf("int %s;%n", lengthVar);
         VersionConditional.forVersions(flexibleVersions, versions).
-            ifMember(() -> {
+            ifMember((__) -> {
                 buffer.printf("%s = readable.readUnsignedVarint() - 1;%n", lengthVar);
             }).
-            ifNotMember(() -> {
+            ifNotMember((__) -> {
                 if (type.isString()) {
                     buffer.printf("%s = readable.readShort();%n", lengthVar);
                 } else if (type.isBytes() || type.isArray()) {
@@ -487,11 +483,11 @@ public final class MessageDataGenerator {
         buffer.printf("if (%s < 0) {%n", lengthVar);
         buffer.incrementIndent();
         VersionConditional.forVersions(nullableVersions, versions).
-            ifNotMember(() -> {
+            ifNotMember((__) -> {
                 buffer.printf("throw new RuntimeException(\"non-nullable field %s " +
                     "was serialized as null\");%n", name);
             }).
-            ifMember(() -> {
+            ifMember((__) -> {
                 buffer.printf("%snull%s", assignmentPrefix, assignmentSuffix);
             }).
             generate(buffer);
@@ -559,43 +555,39 @@ public final class MessageDataGenerator {
         buffer.printf("public void fromStruct(Struct struct, short version) {%n");
         buffer.incrementIndent();
         VersionConditional.forVersions(parentVersions, struct.versions()).
-            ifNotMember(() -> {
+            allowMembershipCheckAlwaysFalse(false).
+            ifNotMember((__) -> {
                 headerGenerator.addImport(MessageGenerator.UNSUPPORTED_VERSION_EXCEPTION_CLASS);
                 buffer.printf("throw new UnsupportedVersionException(\"Can't read " +
                     "version \" + version + \" of %s\");%n", className);
             }).
             generate(buffer);
         Versions curVersions = parentVersions.intersect(struct.versions());
-        if (curVersions.empty()) {
-            throw new RuntimeException("Version ranges " + parentVersions +
-                " and " + struct.versions() + " have no versions in common.");
-        }
         for (FieldSpec field : struct.fields()) {
-            generateFieldFromStruct(field, curVersions);
+            VersionConditional.forVersions(field.versions(), curVersions).
+                alwaysEmitBlockScope(field.type().isArray()).
+                ifNotMember((__) -> {
+                    buffer.printf("this.%s = %s;%n", field.camelCaseName(), fieldDefault(field));
+                }).
+                ifMember((presentVersions) -> {
+                    generateFieldFromStruct(field, presentVersions);
+                }).
+                generate(buffer);
         }
         buffer.decrementIndent();
         buffer.printf("}%n");
     }
 
-    private void generateFieldFromStruct(FieldSpec field, Versions curVersions) {
-        VersionConditional.forVersions(curVersions, field.versions()).
-            alwaysEmitBlockScope(field.type().isArray()).
-            ifNotMember(() -> {
-                buffer.printf("this.%s = %s;%n", field.camelCaseName(), fieldDefault(field));
-            }).
-            ifMember(() -> {
-                Versions versions = curVersions.intersect(field.versions());
-                VersionConditional.forVersions(field.taggedVersions(), versions).
-                    ifNotMember(() -> {
-                        if (field.type().isArray()) {
-                            generateArrayFromStruct(field, versions.trim(field.taggedVersions()));
-                        } else {
-                            buffer.printf("this.%s = %s;%n",
-                                field.camelCaseName(),
-                                readFieldFromStruct(field.type(), field.snakeCaseName()));
-                        }
-                    }).
-                    generate(buffer);
+    private void generateFieldFromStruct(FieldSpec field, Versions presentVersions) {
+        VersionConditional.forVersions(field.taggedVersions(), presentVersions).
+            ifNotMember((presentAndUntaggedVersions) -> {
+                if (field.type().isArray()) {
+                    generateArrayFromStruct(field, presentAndUntaggedVersions);
+                } else {
+                    buffer.printf("this.%s = %s;%n",
+                        field.camelCaseName(),
+                        readFieldFromStruct(field.type(), field.snakeCaseName()));
+                }
             }).
             generate(buffer);
     }
@@ -685,30 +677,25 @@ public final class MessageDataGenerator {
         buffer.printf("public void write(Writable writable, ObjectSizeCache sizeCache, short version) {%n");
         buffer.incrementIndent();
         VersionConditional.forVersions(parentVersions, struct.versions()).
-            ifNotMember(() -> {
+            allowMembershipCheckAlwaysFalse(false).
+            ifNotMember((__) -> {
                 headerGenerator.addImport(MessageGenerator.UNSUPPORTED_VERSION_EXCEPTION_CLASS);
                 buffer.printf("throw new UnsupportedVersionException(\"Can't write " +
                     "version \" + version + \" of %s\");%n", className);
             }).
             generate(buffer);
-        Versions curVersions = parentVersions.intersect(struct.versions());
-        if (curVersions.empty()) {
-            throw new RuntimeException("Version ranges " + parentVersions +
-                " and " + struct.versions() + " have no versions in common.");
-        }
         for (FieldSpec field : struct.fields()) {
             boolean isVariableLength =
                 field.type().isArray() || field.type().isString() || field.type().isBytes();
             VersionConditional cond = VersionConditional.
-                forVersions(field.versions(), curVersions).
-                ifMember(() -> {
-                    Versions versions = field.versions().intersect(curVersions);
-                    VersionConditional.forVersions(field.taggedVersions(), versions)
-                        .ifNotMember(() -> {
+                forVersions(field.versions(), parentVersions.intersect(struct.versions())).
+                ifMember((presentVersions) -> {
+                    VersionConditional.forVersions(field.taggedVersions(), presentVersions)
+                        .ifNotMember((presentAndUntaggedVersions) -> {
                             if (isVariableLength) {
                                 generateVariableLengthWriter(field.camelCaseName(),
                                     field.type(),
-                                    versions.trim(field.taggedVersions()),
+                                    presentAndUntaggedVersions,
                                     field.nullableVersions());
                             } else {
                                 buffer.printf("%s;%n",
@@ -718,7 +705,7 @@ public final class MessageDataGenerator {
                         generate(buffer);
                 });
             if (!field.ignorable()) {
-                cond.ifNotMember(() -> {
+                cond.ifNotMember((__) -> {
                     generateAbsentValueCheck(field);
                 });
             }
@@ -754,12 +741,12 @@ public final class MessageDataGenerator {
             possibleVersions(versions).
             nullableVersions(nullableVersions).
             alwaysEmitBlockScope(type.isString()).
-            ifNull(() -> {
-                VersionConditional.forVersions(flexibleVersions, nullableVersions.intersect(versions)).
-                    ifMember(() -> {
+            ifNull((ifNullVersions) -> {
+                VersionConditional.forVersions(flexibleVersions, ifNullVersions).
+                    ifMember((__) -> {
                         buffer.printf("writable.writeUnsignedVarint(0);%n");
                     }).
-                    ifNotMember(() -> {
+                    ifNotMember((__) -> {
                         if (type.isString()) {
                             buffer.printf("writable.writeShort((short) -1);%n");
                         } else {
@@ -768,7 +755,7 @@ public final class MessageDataGenerator {
                     }).
                     generate(buffer);
             }).
-            ifNotNull(() -> {
+            ifNotNull((ifNotNullVersions) -> {
                 final String lengthExpression;
                 if (type.isString()) {
                     lengthExpression = "arr.length";
@@ -787,11 +774,11 @@ public final class MessageDataGenerator {
                 } else {
                     throw new RuntimeException("Unhandled type " + type);
                 }
-                VersionConditional.forVersions(flexibleVersions, nullableVersions.intersect(versions)).
-                    ifMember(() -> {
+                VersionConditional.forVersions(flexibleVersions, ifNotNullVersions).
+                    ifMember((__) -> {
                         buffer.printf("writable.writeUnsignedVarint(%s + 1);%n", lengthExpression);
                     }).
-                    ifNotMember(() -> {
+                    ifNotMember((__) -> {
                         if (type.isString()) {
                             buffer.printf("writable.writeShort((short) %s);%n", lengthExpression);
                         } else {
@@ -874,26 +861,22 @@ public final class MessageDataGenerator {
         buffer.printf("public Struct toStruct(short version) {%n");
         buffer.incrementIndent();
         VersionConditional.forVersions(parentVersions, struct.versions()).
-            ifNotMember(() -> {
+            allowMembershipCheckAlwaysFalse(false).
+            ifNotMember((__) -> {
                 headerGenerator.addImport(MessageGenerator.UNSUPPORTED_VERSION_EXCEPTION_CLASS);
                 buffer.printf("throw new UnsupportedVersionException(\"Can't write " +
                     "version \" + version + \" of %s\");%n", className);
             }).
             generate(buffer);
         Versions curVersions = parentVersions.intersect(struct.versions());
-        if (curVersions.empty()) {
-            throw new RuntimeException("Version ranges " + parentVersions +
-                " and " + struct.versions() + " have no versions in common.");
-        }
         buffer.printf("Struct struct = new Struct(SCHEMAS[version]);%n");
         for (FieldSpec field : struct.fields()) {
             VersionConditional.forVersions(curVersions, field.versions()).
                 alwaysEmitBlockScope(field.type().isArray()).
-                ifMember(() -> {
-                    Versions versions = curVersions.intersect(field.versions());
-                    VersionConditional.forVersions(field.taggedVersions(), versions).
-                        ifNotMember(() -> {
-                            generateFieldToStruct(field, versions.trim(field.taggedVersions()));
+                ifMember((presentVersions) -> {
+                    VersionConditional.forVersions(field.taggedVersions(), presentVersions).
+                        ifNotMember((presentAndUntaggedVersions) -> {
+                            generateFieldToStruct(field, presentAndUntaggedVersions);
                         }).
                         generate(buffer);
                 }).
@@ -904,7 +887,7 @@ public final class MessageDataGenerator {
         buffer.printf("}%n");
     }
 
-    private void generateFieldToStruct(FieldSpec field, Versions curVersions) {
+    private void generateFieldToStruct(FieldSpec field, Versions versions) {
         if ((!field.type().canBeNullable()) &&
             (!field.nullableVersions().empty())) {
             throw new RuntimeException("Fields of type " + field.type() +
@@ -923,11 +906,11 @@ public final class MessageDataGenerator {
                 field.snakeCaseName(), field.camelCaseName());
         } else if (field.type().isArray()) {
             IsNullConditional.forField(field).
-                possibleVersions(curVersions).
-                ifNull(() -> {
+                possibleVersions(versions).
+                ifNull((__) -> {
                     buffer.printf("struct.set(\"%s\", null);%n", field.snakeCaseName());
                 }).
-                ifNotNull(() -> {
+                ifNotNull((__) -> {
                     FieldType.ArrayType arrayType = (FieldType.ArrayType) field.type();
                     FieldType elementType = arrayType.elementType();
                     String boxdElementType = elementType.isStruct() ? "Struct" : getBoxedJavaType(elementType);
@@ -960,24 +943,20 @@ public final class MessageDataGenerator {
         buffer.incrementIndent();
         buffer.printf("int size = 0;%n");
         VersionConditional.forVersions(parentVersions, struct.versions()).
-            ifNotMember(() -> {
+            allowMembershipCheckAlwaysFalse(false).
+            ifNotMember((__) -> {
                 headerGenerator.addImport(MessageGenerator.UNSUPPORTED_VERSION_EXCEPTION_CLASS);
                 buffer.printf("throw new UnsupportedVersionException(\"Can't size " +
                     "version \" + version + \" of %s\");%n", className);
             }).
             generate(buffer);
         Versions curVersions = parentVersions.intersect(struct.versions());
-        if (curVersions.empty()) {
-            throw new RuntimeException("Version ranges " + parentVersions +
-                " and " + struct.versions() + " have no versions in common.");
-        }
         for (FieldSpec field : struct.fields()) {
             VersionConditional.forVersions(field.versions(), curVersions).
-                ifMember(() -> {
-                    Versions versions = field.versions().intersect(curVersions);
-                    VersionConditional.forVersions(field.taggedVersions(), versions).
-                        ifNotMember(() -> {
-                            generateFieldSize(field, field.versions().intersect(versions.trim(field.taggedVersions())));
+                ifMember((presentVersions) -> {
+                    VersionConditional.forVersions(field.taggedVersions(), presentVersions).
+                        ifNotMember((presentAndUntaggedVersions) -> {
+                            generateFieldSize(field, presentAndUntaggedVersions);
                         }).
                         generate(buffer);
                 }).generate(buffer);
@@ -1026,13 +1005,12 @@ public final class MessageDataGenerator {
         IsNullConditional.forField(field).
             alwaysEmitBlockScope(field.type().isString()).
             possibleVersions(possibleVersions).
-            ifNull(() -> {
-                Versions possibleNullVersions = possibleVersions.intersect(field.nullableVersions());
-                VersionConditional.forVersions(flexibleVersions, possibleNullVersions).
-                    ifMember(() -> {
+            ifNull((ifNullVersions) -> {
+                VersionConditional.forVersions(flexibleVersions, ifNullVersions).
+                    ifMember((__) -> {
                         buffer.printf("size += 1;%n");
                     }).
-                    ifNotMember(() -> {
+                    ifNotMember((__) -> {
                         if (field.type().isString()) {
                             buffer.printf("size += 2;%n");
                         } else {
@@ -1041,29 +1019,29 @@ public final class MessageDataGenerator {
                     }).
                     generate(buffer);
             }).
-            ifNotNull(() -> {
+            ifNotNull((ifNotNullVersions) -> {
                 if (field.type().isString()) {
                     headerGenerator.addImport(MessageGenerator.MESSAGE_UTIL_CLASS);
                     buffer.printf("int stringLength = MessageUtil.serializedUtf8Length(%s);%n",
                         field.camelCaseName());
                     buffer.printf("size += stringLength;%n");
-                    VersionConditional.forVersions(flexibleVersions, possibleVersions).
-                        ifMember(() -> {
+                    VersionConditional.forVersions(flexibleVersions, ifNotNullVersions).
+                        ifMember((__) -> {
                             headerGenerator.addImport(MessageGenerator.BYTE_UTILS_CLASS);
                             buffer.printf("size += ByteUtils.sizeOfUnsignedVarint(stringLength + 1);%n");
                         }).
-                        ifNotMember(() -> {
+                        ifNotMember((__) -> {
                             buffer.printf("size += 2;%n");
                         }).
                         generate(buffer);
                 } else if (field.type().isArray()) {
-                    VersionConditional.forVersions(flexibleVersions, possibleVersions).
-                        ifMember(() -> {
+                    VersionConditional.forVersions(flexibleVersions, ifNotNullVersions).
+                        ifMember((__) -> {
                             headerGenerator.addImport(MessageGenerator.BYTE_UTILS_CLASS);
                             buffer.printf("size += ByteUtils.sizeOfUnsignedVarint(%s.size() + 1);%n",
                                 field.camelCaseName());
                         }).
-                        ifNotMember(() -> {
+                        ifNotMember((__) -> {
                             buffer.printf("size += 4;%n");
                         }).
                         generate(buffer);
@@ -1086,13 +1064,13 @@ public final class MessageDataGenerator {
                     }
                 } else if (field.type().isBytes()) {
                     buffer.printf("size += %s.length;%n", field.camelCaseName());
-                    VersionConditional.forVersions(flexibleVersions, possibleVersions).
-                        ifMember(() -> {
+                    VersionConditional.forVersions(flexibleVersions, ifNotNullVersions).
+                        ifMember((__) -> {
                             headerGenerator.addImport(MessageGenerator.BYTE_UTILS_CLASS);
                             buffer.printf("size += ByteUtils.sizeOfUnsignedVarint(%s.length + 1);%n",
                                 field.camelCaseName());
                         }).
-                        ifNotMember(() -> {
+                        ifNotMember((__) -> {
                             buffer.printf("size += 4;%n");
                         }).
                         generate(buffer);

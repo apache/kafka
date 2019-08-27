@@ -34,8 +34,8 @@ public final class IsNullConditional {
     private final String name;
     private Versions nullableVersions = Versions.ALL;
     private Versions possibleVersions = Versions.ALL;
-    private Runnable ifNull = null;
-    private Runnable ifNotNull = null;
+    private ClauseGenerator ifNull = null;
+    private ClauseGenerator ifNotNull = null;
     private boolean alwaysEmitBlockScope = false;
 
     private IsNullConditional(String name) {
@@ -52,12 +52,12 @@ public final class IsNullConditional {
         return this;
     }
 
-    IsNullConditional ifNull(Runnable ifNull) {
+    IsNullConditional ifNull(ClauseGenerator ifNull) {
         this.ifNull = ifNull;
         return this;
     }
 
-    IsNullConditional ifNotNull(Runnable ifNotNull) {
+    IsNullConditional ifNotNull(ClauseGenerator ifNotNull) {
         this.ifNotNull = ifNotNull;
         return this;
     }
@@ -70,33 +70,33 @@ public final class IsNullConditional {
     void generate(CodeBuffer buffer) {
         // check if the current version is a nullable version
         VersionConditional.forVersions(nullableVersions, possibleVersions).
-            ifMember(() -> {
+            ifMember((versions) -> {
                 if (ifNull != null) {
                     buffer.printf("if (this.%s == null) {%n", name);
                     buffer.incrementIndent();
-                    ifNull.run();
+                    ifNull.generate(versions);
                     buffer.decrementIndent();
                     if (ifNotNull != null) {
                         buffer.printf("} else {%n");
                         buffer.incrementIndent();
-                        ifNotNull.run();
+                        ifNotNull.generate(versions);
                     }
                     buffer.decrementIndent();
                     buffer.printf("}%n");
                 } else if (ifNotNull != null) {
                     buffer.printf("if (this.%s != null) {%n", name);
                     buffer.incrementIndent();
-                    ifNull.run();
+                    ifNotNull.generate(versions);
                     buffer.decrementIndent();
                     buffer.printf("}%n");
                 }
             }).
-            ifNotMember(() -> {
+            ifNotMember((versions) -> {
                 if (alwaysEmitBlockScope) {
                     buffer.printf("{%n");
                     buffer.incrementIndent();
                 }
-                ifNotNull.run();
+                ifNotNull.generate(versions);
                 if (alwaysEmitBlockScope) {
                     buffer.decrementIndent();
                     buffer.printf("}%n");
