@@ -27,7 +27,6 @@ import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.Metrics;
-import org.apache.kafka.common.protocol.types.Field.Array;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
@@ -208,18 +207,18 @@ public class GlobalStreamThread extends Thread {
         private final Duration pollTime;
         private final long flushInterval;
         private final Logger log;
-        private final ProcessorTopology topology;
+        private final Set<String> sourceTopics;
         private long lastFlush;
 
         StateConsumer(final LogContext logContext,
-                      final ProcessorTopology topology,
+                      final Set<String> sourceTopics,
                       final Consumer<byte[], byte[]> globalConsumer,
                       final GlobalStateMaintainer stateMaintainer,
                       final Time time,
                       final Duration pollTime,
                       final long flushInterval) {
             this.log = logContext.logger(getClass());
-            this.topology = topology;
+            this.sourceTopics = sourceTopics;
             this.globalConsumer = globalConsumer;
             this.stateMaintainer = stateMaintainer;
             this.time = time;
@@ -233,19 +232,19 @@ public class GlobalStreamThread extends Thread {
          */
         void initialize() {
             final Map<TopicPartition, Long> partitionOffsets = new HashMap<>(stateMaintainer.initialize());
-            Set<String> unusedTopics = new HashSet<>();
-            Iterator<Entry<TopicPartition, Long>> tps = partitionOffsets.entrySet().iterator();
+            final Set<String> unusedTopics = new HashSet<>();
+            final Iterator<Entry<TopicPartition, Long>> tps = partitionOffsets.entrySet().iterator();
             while (tps.hasNext()) {
                 Entry<TopicPartition, Long> tp = tps.next();
-                if(!this.topology.sourceTopics().contains(tp.getKey().topic())) {
+                if (!this.sourceTopics.contains(tp.getKey().topic())) {
                     unusedTopics.add(tp.getKey().topic());
                     tps.remove();
                 }
             }
             if (!unusedTopics.isEmpty()) {
-                log.warn("Checkpoint contains unused topic(s): {}, skipped them now, need to clean them, current source topic(s): {}",
+                log.warn("Checkpoint contains unused topic(s): {}, skipped them now, current source topic(s): {}",
                     Arrays.toString(unusedTopics.toArray()),
-                    Arrays.toString(this.topology.sourceTopics().toArray()));
+                    Arrays.toString(this.sourceTopics.toArray()));
             }
             globalConsumer.assign(partitionOffsets.keySet());
             for (final Map.Entry<TopicPartition, Long> entry : partitionOffsets.entrySet()) {
@@ -350,7 +349,7 @@ public class GlobalStreamThread extends Thread {
 
             final StateConsumer stateConsumer = new StateConsumer(
                 logContext,
-                topology,
+                topology.sourceTopics(),
                 globalConsumer,
                 new GlobalStateUpdateTask(
                     topology,
