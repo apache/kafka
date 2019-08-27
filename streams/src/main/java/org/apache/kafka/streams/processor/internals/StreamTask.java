@@ -236,7 +236,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
 
     @Override
     public boolean initializeStateStores() {
-        log.trace("Initializing state stores");
+        log.debug("Initializing state stores");
 
         // Currently there is no easy way to tell the ProcessorStateManager to only restore up to
         // a specific offset. In most cases this is fine. However, in optimized topologies we can
@@ -252,7 +252,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
                 stateMgr.putOffsetLimit(tp, offset);
                 log.trace("Updating store offset limits {} for changelog {}", offset, tp);
             });
-
         registerStateStores();
 
         return changelogPartitions().isEmpty();

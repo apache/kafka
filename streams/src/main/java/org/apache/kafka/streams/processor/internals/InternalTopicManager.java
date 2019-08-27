@@ -73,9 +73,9 @@ public class InternalTopicManager {
         retries = dummyAdmin.getInt(AdminClientConfig.RETRIES_CONFIG);
         retryBackOffMs = dummyAdmin.getLong(AdminClientConfig.RETRY_BACKOFF_MS_CONFIG);
 
-        log.debug("Configs:" + Utils.NL,
-            "\t{} = {}" + Utils.NL,
-            "\t{} = {}" + Utils.NL,
+        log.debug("Configs:" + Utils.NL +
+            "\t{} = {}" + Utils.NL +
+            "\t{} = {}" + Utils.NL +
             "\t{} = {}",
             AdminClientConfig.RETRIES_CONFIG, retries,
             StreamsConfig.REPLICATION_FACTOR_CONFIG, replicationFactor,
