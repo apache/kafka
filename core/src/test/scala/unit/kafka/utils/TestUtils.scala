@@ -141,9 +141,12 @@ object TestUtils extends Logging {
    * USING THIS IS A SIGN YOU ARE NOT WRITING A REAL UNIT TEST
    *
    * @param config The configuration of the server
-   * @param time
-   * @param threadNamePrefix
+   * @param time The universal time of the server
    */
+  def createServer(config: KafkaConfig, time: Time = Time.SYSTEM): KafkaServer = {
+    createServer(config, time, None)
+  }
+
   def createServer(config: KafkaConfig, time: Time = Time.SYSTEM, threadNamePrefix: Option[String] = None): KafkaServer = {
     val server = new KafkaServer(config, time, threadNamePrefix = threadNamePrefix)
     server.startup()
