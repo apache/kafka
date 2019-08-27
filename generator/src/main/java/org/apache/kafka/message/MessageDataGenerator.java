@@ -420,19 +420,23 @@ public final class MessageDataGenerator {
                     buffer.printf("this.%s = %s;%n", field.camelCaseName(), fieldDefault(field));
                 }).
                 ifMember(() -> {
-                    if (isVariableLength) {
-                        Versions versions = curVersions.intersect(field.versions());
-                        generateVariableLengthReader(field.camelCaseName(),
-                            field.type(),
-                            versions,
-                            field.nullableVersions(),
-                            String.format("this.%s = ", field.camelCaseName()),
-                            String.format(";%n"),
-                            structRegistry.isStructArrayWithKeys(field));
-                    } else {
-                        buffer.printf("this.%s = %s;%n", field.camelCaseName(),
-                            primitiveReadExpression(field.type()));
-                    }
+                    Versions versions = curVersions.intersect(field.versions());
+                    VersionConditional.forVersions(field.taggedVersions(), versions).
+                        ifNotMember(() -> {
+                            if (isVariableLength) {
+                                generateVariableLengthReader(field.camelCaseName(),
+                                    field.type(),
+                                    versions.trim(field.taggedVersions()),
+                                    field.nullableVersions(),
+                                    String.format("this.%s = ", field.camelCaseName()),
+                                    String.format(";%n"),
+                                    structRegistry.isStructArrayWithKeys(field));
+                            } else {
+                                buffer.printf("this.%s = %s;%n", field.camelCaseName(),
+                                    primitiveReadExpression(field.type()));
+                            }
+                        }).
+                        generate(buffer);
                 }).generate(buffer);
         }
         buffer.decrementIndent();
@@ -580,13 +584,18 @@ public final class MessageDataGenerator {
                 buffer.printf("this.%s = %s;%n", field.camelCaseName(), fieldDefault(field));
             }).
             ifMember(() -> {
-                if (field.type().isArray()) {
-                    generateArrayFromStruct(field, curVersions.intersect(field.versions()));
-                } else {
-                    buffer.printf("this.%s = %s;%n",
-                        field.camelCaseName(),
-                        readFieldFromStruct(field.type(), field.snakeCaseName()));
-                }
+                Versions versions = curVersions.intersect(field.versions());
+                VersionConditional.forVersions(field.taggedVersions(), versions).
+                    ifNotMember(() -> {
+                        if (field.type().isArray()) {
+                            generateArrayFromStruct(field, versions.trim(field.taggedVersions()));
+                        } else {
+                            buffer.printf("this.%s = %s;%n",
+                                field.camelCaseName(),
+                                readFieldFromStruct(field.type(), field.snakeCaseName()));
+                        }
+                    }).
+                    generate(buffer);
             }).
             generate(buffer);
     }
@@ -693,15 +702,20 @@ public final class MessageDataGenerator {
             VersionConditional cond = VersionConditional.
                 forVersions(field.versions(), curVersions).
                 ifMember(() -> {
-                    if (isVariableLength) {
-                        generateVariableLengthWriter(field.camelCaseName(),
-                            field.type(),
-                            field.versions().intersect(curVersions),
-                            field.nullableVersions());
-                    } else {
-                        buffer.printf("%s;%n",
-                            primitiveWriteExpression(field.type(), field.camelCaseName()));
-                    }
+                    Versions versions = field.versions().intersect(curVersions);
+                    VersionConditional.forVersions(field.taggedVersions(), versions)
+                        .ifNotMember(() -> {
+                            if (isVariableLength) {
+                                generateVariableLengthWriter(field.camelCaseName(),
+                                    field.type(),
+                                    versions.trim(field.taggedVersions()),
+                                    field.nullableVersions());
+                            } else {
+                                buffer.printf("%s;%n",
+                                    primitiveWriteExpression(field.type(), field.camelCaseName()));
+                            }
+                        }).
+                        generate(buffer);
                 });
             if (!field.ignorable()) {
                 cond.ifNotMember(() -> {
@@ -876,7 +890,12 @@ public final class MessageDataGenerator {
             VersionConditional.forVersions(curVersions, field.versions()).
                 alwaysEmitBlockScope(field.type().isArray()).
                 ifMember(() -> {
-                    generateFieldToStruct(field, curVersions);
+                    Versions versions = curVersions.intersect(field.versions());
+                    VersionConditional.forVersions(field.taggedVersions(), versions).
+                        ifNotMember(() -> {
+                            generateFieldToStruct(field, versions.trim(field.taggedVersions()));
+                        }).
+                        generate(buffer);
                 }).
                 generate(buffer);
         }
@@ -955,7 +974,12 @@ public final class MessageDataGenerator {
         for (FieldSpec field : struct.fields()) {
             VersionConditional.forVersions(field.versions(), curVersions).
                 ifMember(() -> {
-                    generateFieldSize(field, field.versions().intersect(curVersions));
+                    Versions versions = field.versions().intersect(curVersions);
+                    VersionConditional.forVersions(field.taggedVersions(), versions).
+                        ifNotMember(() -> {
+                            generateFieldSize(field, field.versions().intersect(versions.trim(field.taggedVersions())));
+                        }).
+                        generate(buffer);
                 }).generate(buffer);
         }
         buffer.printf("return size;%n");
