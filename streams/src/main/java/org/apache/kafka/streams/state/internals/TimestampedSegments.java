@@ -54,7 +54,7 @@ class TimestampedSegments extends AbstractSegments<TimestampedSegment> {
 
     @Override
     public void close() {
-        metricsRecorder.close();
         super.close();
+        metricsRecorder.close();
     }
 }

@@ -54,7 +54,7 @@ class KeyValueSegments extends AbstractSegments<KeyValueSegment> {
 
     @Override
     public void close() {
-        metricsRecorder.close();
         super.close();
+        metricsRecorder.close();
     }
 }

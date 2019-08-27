@@ -58,6 +58,7 @@ import org.slf4j.LoggerFactory;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -105,7 +106,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BulkLoadingSt
 
     private final RocksDBMetricsRecorder metricsRecorder;
     private boolean closeMetricsRecorder = false;
-    private boolean removeStatisticsFromMetricsRecorder = false;
+    private boolean metricsRecorderIsRunning = false;
 
     private volatile boolean prepareForBulkload = false;
     ProcessorContext internalProcessorContext;
@@ -190,13 +191,13 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BulkLoadingSt
             throw new ProcessorStateException(fatal);
         }
 
-        setUpMetrics(context, configs);
+        setUpAndStartMetricsRecorder(context, configs);
 
         openRocksDB(dbOptions, columnFamilyOptions);
         open = true;
     }
 
-    private void setUpMetrics(final ProcessorContext context, final Map<String, Object> configs) {
+    private void setUpAndStartMetricsRecorder(final ProcessorContext context, final Map<String, Object> configs) {
         if (userSpecifiedOptions.statistics() == null &&
             RecordingLevel.forName((String) configs.get(METRICS_RECORDING_LEVEL_CONFIG)) == RecordingLevel.DEBUG) {
 
@@ -209,7 +210,8 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BulkLoadingSt
                 (StreamsMetricsImpl) context.metrics(),
                 context.taskId()
             );
-            removeStatisticsFromMetricsRecorder = true;
+            metricsRecorder.startRecording(Duration.ofMinutes(10));
+            metricsRecorderIsRunning = true;
         }
     }
 
@@ -471,7 +473,8 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BulkLoadingSt
     private void closeOrUpdateMetricsRecorder() {
         if (closeMetricsRecorder) {
             metricsRecorder.close();
-        } else if (removeStatisticsFromMetricsRecorder) {
+            metricsRecorderIsRunning = false;
+        } else if (metricsRecorderIsRunning) {
             metricsRecorder.removeStatistics(name);
         }
     }

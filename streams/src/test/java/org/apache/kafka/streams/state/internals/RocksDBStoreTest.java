@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
@@ -32,6 +33,7 @@ import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.RocksDBConfigSetter;
+import org.apache.kafka.streams.state.internals.metrics.RocksDBMetrics;
 import org.apache.kafka.streams.state.internals.metrics.RocksDBMetricsRecorder;
 import org.apache.kafka.test.InternalMockProcessorContext;
 import org.apache.kafka.test.StreamsTestUtils;
@@ -39,6 +41,9 @@ import org.apache.kafka.test.TestUtils;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.powermock.core.classloader.annotations.PrepareForTest;
+import org.powermock.modules.junit4.PowerMockRunner;
 import org.rocksdb.BlockBasedTableConfig;
 import org.rocksdb.BloomFilter;
 import org.rocksdb.Filter;
@@ -63,9 +68,7 @@ import static org.apache.kafka.streams.StreamsConfig.METRICS_RECORDING_LEVEL_CON
 import static org.apache.kafka.streams.StreamsConfig.ROCKSDB_CONFIG_SETTER_CLASS_CONFIG;
 import static org.easymock.EasyMock.expect;
 import static org.easymock.EasyMock.mock;
-import static org.easymock.EasyMock.replay;
 import static org.easymock.EasyMock.reset;
-import static org.easymock.EasyMock.verify;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -73,7 +76,11 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
+import static org.powermock.api.easymock.PowerMock.replay;
+import static org.powermock.api.easymock.PowerMock.verify;
 
+@RunWith(PowerMockRunner.class)
+@PrepareForTest({RocksDBMetrics.class, Sensor.class})
 public class RocksDBStoreTest {
     private static boolean enableBloomFilters = false;
     final static String DB_NAME = "db-name";
@@ -108,7 +115,7 @@ public class RocksDBStoreTest {
     }
 
     @Test
-    public void shouldRemoveStatisticsFromInjectedMetricsRecorderOnClose() {
+    public void shouldRemoveStatisticsFromAndNotCloseInjectedMetricsRecorderOnClose() {
         final RocksDBMetricsRecorder metricsRecorder = mock(RocksDBMetricsRecorder.class);
         final RocksDBStore store = new RocksDBStore(DB_NAME, METRICS_SCOPE, metricsRecorder);
         final ProcessorContext mockContext = mock(ProcessorContext.class);
@@ -160,7 +167,7 @@ public class RocksDBStoreTest {
     }
 
     @Test
-    public void shouldNotRemoveStatisticsFromInjectedMetricsRecorderOnCloseWhenUserProvidsStatistics() {
+    public void shouldNotRemoveStatisticsFromInjectedMetricsRecorderOnCloseWhenUserProvidesStatistics() {
         final RocksDBMetricsRecorder metricsRecorder = mock(RocksDBMetricsRecorder.class);
         replay(metricsRecorder);
         final RocksDBStore store = new RocksDBStore(DB_NAME, METRICS_SCOPE, metricsRecorder);
