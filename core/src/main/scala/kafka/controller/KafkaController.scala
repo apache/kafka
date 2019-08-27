@@ -109,6 +109,10 @@ class KafkaController(val config: KafkaConfig,
   @volatile private var preferredReplicaImbalanceCount = 0
   @volatile private var globalTopicCount = 0
   @volatile private var globalPartitionCount = 0
+  @volatile private var topicsToDeleteCount = 0
+  @volatile private var replicasToDeleteCount = 0
+  @volatile private var ineligibleTopicsToDeleteCount = 0
+  @volatile private var ineligibleReplicasToDeleteCount = 0
 
   /* single-thread scheduler to clean expired tokens */
   private val tokenCleanScheduler = new KafkaScheduler(threads = 1, threadNamePrefix = "delegation-token-cleaner")
@@ -152,6 +156,34 @@ class KafkaController(val config: KafkaConfig,
     "GlobalPartitionCount",
     new Gauge[Int] {
       def value: Int = globalPartitionCount
+    }
+  )
+
+  newGauge(
+    "TopicsToDeleteCount",
+    new Gauge[Int] {
+      def value: Int = topicsToDeleteCount
+    }
+  )
+
+  newGauge(
+    "ReplicasToDeleteCount",
+    new Gauge[Int] {
+      def value: Int = replicasToDeleteCount
+    }
+  )
+
+  newGauge(
+    "TopicsIneligibleToDeleteCount",
+    new Gauge[Int] {
+      def value: Int = ineligibleTopicsToDeleteCount
+    }
+  )
+
+  newGauge(
+    "ReplicasIneligibleToDeleteCount",
+    new Gauge[Int] {
+      def value: Int = ineligibleReplicasToDeleteCount
     }
   )
 
@@ -315,6 +347,10 @@ class KafkaController(val config: KafkaConfig,
     preferredReplicaImbalanceCount = 0
     globalTopicCount = 0
     globalPartitionCount = 0
+    topicsToDeleteCount = 0
+    replicasToDeleteCount = 0
+    ineligibleTopicsToDeleteCount = 0
+    ineligibleReplicasToDeleteCount = 0
 
     // stop token expiry check scheduler
     if (tokenCleanScheduler.isStarted)
@@ -1191,6 +1227,24 @@ class KafkaController(val config: KafkaConfig,
     globalTopicCount = if (!isActive) 0 else controllerContext.allTopics.size
 
     globalPartitionCount = if (!isActive) 0 else controllerContext.partitionLeadershipInfo.size
+
+    topicsToDeleteCount = if (!isActive) 0 else controllerContext.topicsToBeDeleted.size
+
+    replicasToDeleteCount = if (!isActive) 0 else controllerContext.topicsToBeDeleted.map { topic =>
+      // For each enqueued topic, count the number of replicas that are not yet deleted
+      controllerContext.replicasForTopic(topic).count { replica =>
+        controllerContext.replicaState(replica) != ReplicaDeletionSuccessful
+      }
+    }.sum
+
+    ineligibleTopicsToDeleteCount = if (!isActive) 0 else controllerContext.topicsIneligibleForDeletion.size
+
+    ineligibleReplicasToDeleteCount = if (!isActive) 0 else controllerContext.topicsToBeDeleted.map { topic =>
+      // For each enqueued topic, count the number of replicas that are ineligible
+      controllerContext.replicasForTopic(topic).count { replica =>
+        controllerContext.replicaState(replica) == ReplicaDeletionIneligible
+      }
+    }.sum
   }
 
   // visible for testing
