@@ -278,6 +278,10 @@ public interface FieldType {
         return Optional.empty();
     }
 
+    default boolean isVariableLength() {
+        return !fixedLength().isPresent();
+    }
+
     /**
      * Convert the field type to a JSON string.
      */

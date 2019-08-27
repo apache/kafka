@@ -71,7 +71,7 @@ public final class VersionConditional {
     }
 
     private void generateIfNotClause() {
-        ifMember.generate(possibleVersions.trim(containingVersions));
+        ifNotMember.generate(possibleVersions.trim(containingVersions));
     }
 
     private void generateFullRangeCheck(CodeBuffer buffer) {

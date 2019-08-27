@@ -93,6 +93,8 @@ public final class MessageGenerator {
 
     static final String OBJECT_SIZE_CACHE_CLASS = "org.apache.kafka.common.protocol.ObjectSizeCache";
 
+    static final String RAW_TAGGED_FIELD_CLASS = "org.apache.kafka.common.protocol.RawTaggedField";
+
     /**
      * The Jackson serializer we use for JSON objects.
      */

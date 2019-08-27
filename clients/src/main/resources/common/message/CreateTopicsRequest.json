@@ -19,7 +19,9 @@
   "name": "CreateTopicsRequest",
   // Version 1 adds validateOnly.
   // Version 4 makes partitions/replicationFactor optional even when assignments are not present (KIP-464)
-  "validVersions": "0-4",
+  // Version 5 is the first flexible version
+  "validVersions": "0-5",
+  "flexibleVersions": "5+",
   "fields": [
     { "name": "Topics", "type": "[]CreatableTopic", "versions": "0+",
       "about": "The topics to create.", "fields": [
@@ -47,6 +49,10 @@
     { "name": "timeoutMs", "type": "int32", "versions": "0+", "default": "60000",
       "about": "How long to wait in milliseconds before timing out the request." },
     { "name": "validateOnly", "type": "bool", "versions": "1+", "default": "false", "ignorable": false,
-      "about": "If true, check that the topics can be created as specified, but don't create anything." }
+      "about": "If true, check that the topics can be created as specified, but don't create anything." },
+    { "name": "newTaggedInt", "type": "int32", "versions": "5+", "taggedVersions": "5+", "tag": 0,
+      "about": "A new tagged int for testing." },
+    { "name": "newTaggedString", "type": "string", "versions": "5+", "taggedVersions": "5+", "tag": 1,
+      "about": "A new tagged string for testing." }
   ]
 }

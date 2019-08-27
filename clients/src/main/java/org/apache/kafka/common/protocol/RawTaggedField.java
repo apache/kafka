@@ -17,31 +17,20 @@
 
 package org.apache.kafka.common.protocol;
 
-import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
-import java.util.List;
+public class RawTaggedField {
+    private final int tag;
+    private final byte[] data;
 
-public interface Readable {
-    byte readByte();
-    short readShort();
-    int readInt();
-    long readLong();
-    void readArray(byte[] arr);
-    int readUnsignedVarint();
-
-    default String readString(int length) {
-        byte[] arr = new byte[length];
-        readArray(arr);
-        return new String(arr, StandardCharsets.UTF_8);
+    public RawTaggedField(int tag, byte[] data) {
+        this.tag = tag;
+        this.data = data;
     }
 
-    default List<RawTaggedField> readRawTaggedField(List<RawTaggedField> unknowns, int tag, int size) {
-        if (unknowns == null) {
-            unknowns = new ArrayList<>();
-        }
-        byte[] data = new byte[size];
-        readArray(data);
-        unknowns.add(new RawTaggedField(tag, data));
-        return unknowns;
+    public int tag() {
+        return tag;
+    }
+
+    public byte[] data() {
+        return data;
     }
 }

@@ -256,6 +256,11 @@ public final class MessageDataGenerator {
         for (FieldSpec field : struct.fields()) {
             generateFieldDeclaration(field);
         }
+        if (!flexibleVersions.intersect(struct.versions()).empty()) {
+            headerGenerator.addImport(MessageGenerator.LIST_CLASS);
+            headerGenerator.addImport(MessageGenerator.RAW_TAGGED_FIELD_CLASS);
+            buffer.printf("private List<RawTaggedField> _unknownTaggedFields;%n");
+        }
         if (isSetElement) {
             buffer.printf("private int next;%n");
             buffer.printf("private int prev;%n");
@@ -407,18 +412,23 @@ public final class MessageDataGenerator {
                     "version \" + version + \" of %s\");%n", className);
             }).
             generate(buffer);
+        Versions curVersions = parentVersions.intersect(struct.versions());
         for (FieldSpec field : struct.fields()) {
-            boolean isVariableLength =
-                field.type().isArray() || field.type().isString() || field.type().isBytes();
-            VersionConditional.forVersions(field.versions(), parentVersions.intersect(struct.versions())).
-                alwaysEmitBlockScope(isVariableLength).
-                ifNotMember((__) -> {
+            VersionConditional.forVersions(field.taggedVersions(), curVersions).
+                ifMember((__) -> {
+                    // Always set tagged fields to their default here.
                     buffer.printf("this.%s = %s;%n", field.camelCaseName(), fieldDefault(field));
                 }).
-                ifMember((presentVersions) -> {
-                    VersionConditional.forVersions(field.taggedVersions(), presentVersions).
-                        ifNotMember((presentAndUntaggedVersions) -> {
-                            if (isVariableLength) {
+                ifNotMember((untaggedVersions) -> {
+                    VersionConditional.forVersions(field.versions(), untaggedVersions).
+                        alwaysEmitBlockScope(field.type().isVariableLength()).
+                        ifNotMember((__) -> {
+                            // Mandatory fields get set to their defaults if the message version doesn't
+                            // support them.
+                            buffer.printf("this.%s = %s;%n", field.camelCaseName(), fieldDefault(field));
+                        }).
+                        ifMember((presentAndUntaggedVersions) -> {
+                            if (field.type().isVariableLength()) {
                                 generateVariableLengthReader(field.camelCaseName(),
                                     field.type(),
                                     presentAndUntaggedVersions,
@@ -435,6 +445,56 @@ public final class MessageDataGenerator {
                 }).
                 generate(buffer);
         }
+        VersionConditional.forVersions(flexibleVersions, curVersions).
+            ifMember((curFlexibleVersions) -> {
+                buffer.printf("this._unknownTaggedFields = null;%n");
+                buffer.printf("int _numTaggedFields = readable.readUnsignedVarint();%n");
+                buffer.printf("for (int _i = 0; _i < _numTaggedFields; _i++) {%n");
+                buffer.incrementIndent();
+                buffer.printf("int _tag = readable.readUnsignedVarint();%n");
+                buffer.printf("int _size = readable.readUnsignedVarint();%n");
+                buffer.printf("switch (_tag) {%n");
+                buffer.incrementIndent();
+                for (FieldSpec field : struct.fields()) {
+                    VersionConditional.forVersions(field.versions(), curFlexibleVersions).
+                        ifMember((presentVersions) -> {
+                            VersionConditional.forVersions(field.taggedVersions(), presentVersions).
+                                ifMember((presentAndTaggedVersions) -> {
+                                    buffer.printf("case %d: {%n", field.tag());
+                                    buffer.incrementIndent();
+                                    if (field.type().isVariableLength()) {
+                                        generateVariableLengthReader(field.camelCaseName(),
+                                            field.type(),
+                                            presentAndTaggedVersions,
+                                            field.nullableVersions(),
+                                            String.format("this.%s = ", field.camelCaseName()),
+                                            String.format(";%n"),
+                                            structRegistry.isStructArrayWithKeys(field));
+                                    } else {
+                                        buffer.printf("this.%s = %s;%n", field.camelCaseName(),
+                                            primitiveReadExpression(field.type()));
+                                    }
+
+                                    buffer.printf("break;%n");
+                                    buffer.decrementIndent();
+                                    buffer.printf("}%n");
+                                }).
+                                generate(buffer);
+                        }).
+                        generate(buffer);
+                }
+                buffer.printf("default: {%n");
+                buffer.incrementIndent();
+                buffer.printf("this._unknownTaggedFields = readable.readRawTaggedField(this._unknownTaggedFields, _tag, _size);%n");
+                buffer.printf("break;%n");
+                buffer.decrementIndent();
+                buffer.printf("}%n");
+                buffer.decrementIndent();
+                buffer.printf("}%n");
+                buffer.decrementIndent();
+                buffer.printf("}%n");
+            }).
+            generate(buffer);
         buffer.decrementIndent();
         buffer.printf("}%n");
     }
@@ -685,14 +745,12 @@ public final class MessageDataGenerator {
             }).
             generate(buffer);
         for (FieldSpec field : struct.fields()) {
-            boolean isVariableLength =
-                field.type().isArray() || field.type().isString() || field.type().isBytes();
             VersionConditional cond = VersionConditional.
                 forVersions(field.versions(), parentVersions.intersect(struct.versions())).
                 ifMember((presentVersions) -> {
                     VersionConditional.forVersions(field.taggedVersions(), presentVersions)
                         .ifNotMember((presentAndUntaggedVersions) -> {
-                            if (isVariableLength) {
+                            if (field.type().isVariableLength()) {
                                 generateVariableLengthWriter(field.camelCaseName(),
                                     field.type(),
                                     presentAndUntaggedVersions,
