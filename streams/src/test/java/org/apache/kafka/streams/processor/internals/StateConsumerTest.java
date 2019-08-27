@@ -16,6 +16,9 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.Set;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.MockConsumer;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
@@ -44,6 +47,7 @@ public class StateConsumerTest {
     private final MockTime time = new MockTime();
     private final MockConsumer<byte[], byte[]> consumer = new MockConsumer<>(OffsetResetStrategy.EARLIEST);
     private final Map<TopicPartition, Long> partitionOffsets = new HashMap<>();
+    private final Set<String> sourceTopics = new HashSet<>();
     private final LogContext logContext = new LogContext("test ");
     private GlobalStreamThread.StateConsumer stateConsumer;
     private StateMaintainerStub stateMaintainer;
@@ -53,7 +57,9 @@ public class StateConsumerTest {
         partitionOffsets.put(topicOne, 20L);
         partitionOffsets.put(topicTwo, 30L);
         stateMaintainer = new StateMaintainerStub(partitionOffsets);
-        stateConsumer = new GlobalStreamThread.StateConsumer(logContext, consumer, stateMaintainer, time, Duration.ofMillis(10L), FLUSH_INTERVAL);
+        sourceTopics.add(topicOne.topic());
+        sourceTopics.add(topicTwo.topic());
+        stateConsumer = new GlobalStreamThread.StateConsumer(logContext, sourceTopics, consumer, stateMaintainer, time, Duration.ofMillis(10L), FLUSH_INTERVAL);
     }
 
     @Test
