@@ -26,6 +26,7 @@ import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.protocol.types.Field.Array;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
@@ -241,7 +242,9 @@ public class GlobalStreamThread extends Thread {
                 }
             }
             if (!unusedTopics.isEmpty()) {
-                log.warn("Checkpoint contains unused topic(s): {}, skipped them now, need to clean them.", Arrays.toString(unusedTopics.toArray()));
+                log.warn("Checkpoint contains unused topic(s): {}, skipped them now, need to clean them, current source topic(s): ",
+                    Arrays.toString(unusedTopics.toArray()),
+                    Arrays.toString(this.topology.sourceTopics().toArray()));
             }
             globalConsumer.assign(partitionOffsets.keySet());
             for (final Map.Entry<TopicPartition, Long> entry : partitionOffsets.entrySet()) {
