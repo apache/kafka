@@ -143,7 +143,15 @@ object TestUtils extends Logging {
    * @param config The configuration of the server
    */
   def createServer(config: KafkaConfig, time: Time = Time.SYSTEM): KafkaServer = {
-    val server = new KafkaServer(config, time)
+    createServer(config, time, None)
+  }
+
+  def createServer(config: KafkaConfig, threadNamePrefix: Option[String]): KafkaServer = {
+    createServer(config, Time.SYSTEM, threadNamePrefix)
+  }
+
+  def createServer(config: KafkaConfig, time: Time, threadNamePrefix: Option[String]): KafkaServer = {
+    val server = new KafkaServer(config, time, threadNamePrefix = threadNamePrefix)
     server.startup()
     server
   }
@@ -998,7 +1006,9 @@ object TestUtils extends Logging {
       "Reassigned partition [%s,%d] is under-replicated as reported by the leader %d".format(topic, partitionToBeReassigned, leader.get))
   }
 
-  def verifyNonDaemonThreadsStatus(threadNamePrefix: String): Unit = {
+  // Note: Call this method in the test itself, rather than the @After method.
+  // Because of the assert, if assertNoNonDaemonThreads fails, nothing after would be executed.
+  def assertNoNonDaemonThreads(threadNamePrefix: String): Unit = {
     val threadCount = Thread.getAllStackTraces.keySet.asScala.count { t =>
       !t.isDaemon && t.isAlive && t.getName.startsWith(threadNamePrefix)
     }

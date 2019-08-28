@@ -88,7 +88,7 @@ class KafkaMetricReporterClusterIdTest extends ZooKeeperTestHarness {
     props.setProperty(KafkaConfig.BrokerIdGenerationEnableProp, "true")
     props.setProperty(KafkaConfig.BrokerIdProp, "-1")
     config = KafkaConfig.fromProps(props)
-    server = KafkaServerStartable.fromProps(props)
+    server = KafkaServerStartable.fromProps(props, threadNamePrefix = Option(this.getClass.getName))
     server.startup()
   }
 
@@ -104,13 +104,15 @@ class KafkaMetricReporterClusterIdTest extends ZooKeeperTestHarness {
 
     assertEquals(KafkaMetricReporterClusterIdTest.MockKafkaMetricsReporter.CLUSTER_META.get().clusterId(),
       KafkaMetricReporterClusterIdTest.MockBrokerMetricsReporter.CLUSTER_META.get().clusterId())
+
+    server.shutdown()
+    TestUtils.assertNoNonDaemonThreads(this.getClass.getName)
   }
 
   @After
   override def tearDown(): Unit = {
     server.shutdown()
     CoreUtils.delete(config.logDirs)
-    TestUtils.verifyNonDaemonThreadsStatus(this.getClass.getName)
     super.tearDown()
   }
 }

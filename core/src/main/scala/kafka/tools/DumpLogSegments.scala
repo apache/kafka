@@ -218,14 +218,14 @@ object DumpLogSegments {
 
   private class DecoderMessageParser[K, V](keyDecoder: Decoder[K], valueDecoder: Decoder[V]) extends MessageParser[K, V] {
     override def parse(record: Record): (Option[K], Option[V]) = {
-      if (!record.hasValue) {
-        (None, None)
-      } else {
-        val key = if (record.hasKey)
-          Some(keyDecoder.fromBytes(Utils.readBytes(record.key)))
-        else
-          None
+      val key = if (record.hasKey)
+        Some(keyDecoder.fromBytes(Utils.readBytes(record.key)))
+      else
+        None
 
+      if (!record.hasValue) {
+        (key, None)
+      } else {
         val payload = Some(valueDecoder.fromBytes(Utils.readBytes(record.value)))
 
         (key, payload)
