@@ -74,6 +74,13 @@ public class StateConsumerTest {
         assertEquals(30L, consumer.position(topicTwo));
     }
 
+    @Test(expected = IllegalArgumentException.class)
+    public void shouldSeekToInitialOffsetsWithMissingTopic() {
+        sourceTopics.remove(topicOne.topic());
+        stateConsumer.initialize();
+        assertEquals(20L, consumer.position(topicOne));
+    }
+
     @Test
     public void shouldUpdateStateWithReceivedRecordsForPartition() {
         stateConsumer.initialize();
