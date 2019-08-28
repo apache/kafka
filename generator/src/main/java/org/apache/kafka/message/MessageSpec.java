@@ -51,6 +51,12 @@ public final class MessageSpec {
         this.commonStructs = commonStructs == null ? Collections.emptyList() :
                 Collections.unmodifiableList(new ArrayList<>(commonStructs));
         this.flexibleVersions = Versions.parse(flexibleVersions, Versions.NONE);
+        if ((!this.flexibleVersions().empty()) &&
+                (this.flexibleVersions.highest() < Short.MAX_VALUE)) {
+            throw new RuntimeException("Field " + name + " specifies flexibleVersions " +
+                this.flexibleVersions + ", which is not open-ended.  flexibleVersions must " +
+                "be either none, or an open-ended range (that ends with a plus sign).");
+        }
     }
 
     public StructSpec struct() {

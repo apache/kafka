@@ -66,25 +66,19 @@ public final class VersionConditional {
         return this;
     }
 
-    private void generateIfClause() {
-        ifMember.generate(possibleVersions.intersect(containingVersions));
-    }
-
-    private void generateIfNotClause() {
-        ifNotMember.generate(possibleVersions.trim(containingVersions));
-    }
-
-    private void generateFullRangeCheck(CodeBuffer buffer) {
+    private void generateFullRangeCheck(Versions ifVersions,
+                                        Versions ifNotVersions,
+                                        CodeBuffer buffer) {
         if (ifMember != null) {
             buffer.printf("if ((version >= %d) && (version <= %d)) {%n",
                     containingVersions.lowest(), containingVersions.highest());
             buffer.incrementIndent();
-            generateIfClause();
+            ifMember.generate(ifVersions);
             buffer.decrementIndent();
             if (ifNotMember != null) {
                 buffer.printf("} else {%n");
                 buffer.incrementIndent();
-                generateIfNotClause();
+                ifNotMember.generate(ifNotVersions);
                 buffer.decrementIndent();
                 buffer.printf("}%n");
             } else {
@@ -94,22 +88,24 @@ public final class VersionConditional {
             buffer.printf("if ((version < %d) || (version > %d)) {%n",
                     containingVersions.lowest(), containingVersions.highest());
             buffer.incrementIndent();
-            generateIfNotClause();
+            ifNotMember.generate(ifNotVersions);
             buffer.decrementIndent();
             buffer.printf("}%n");
         }
     }
 
-    private void generateLowerRangeCheck(CodeBuffer buffer) {
+    private void generateLowerRangeCheck(Versions ifVersions,
+                                         Versions ifNotVersions,
+                                         CodeBuffer buffer) {
         if (ifMember != null) {
             buffer.printf("if (version >= %d) {%n", containingVersions.lowest());
             buffer.incrementIndent();
-            generateIfClause();
+            ifMember.generate(ifVersions);
             buffer.decrementIndent();
             if (ifNotMember != null) {
                 buffer.printf("} else {%n");
                 buffer.incrementIndent();
-                generateIfNotClause();
+                ifNotMember.generate(ifNotVersions);
                 buffer.decrementIndent();
                 buffer.printf("}%n");
             } else {
@@ -118,22 +114,24 @@ public final class VersionConditional {
         } else if (ifNotMember != null) {
             buffer.printf("if (version < %d) {%n", containingVersions.lowest());
             buffer.incrementIndent();
-            generateIfNotClause();
+            ifNotMember.generate(ifNotVersions);
             buffer.decrementIndent();
             buffer.printf("}%n");
         }
     }
 
-    private void generateUpperRangeCheck(CodeBuffer buffer) {
+    private void generateUpperRangeCheck(Versions ifVersions,
+                                         Versions ifNotVersions,
+                                         CodeBuffer buffer) {
         if (ifMember != null) {
             buffer.printf("if (version <= %d) {%n", containingVersions.highest());
             buffer.incrementIndent();
-            generateIfClause();
+            ifMember.generate(ifVersions);
             buffer.decrementIndent();
             if (ifNotMember != null) {
                 buffer.printf("} else {%n");
                 buffer.incrementIndent();
-                generateIfNotClause();
+                ifNotMember.generate(ifNotVersions);
                 buffer.decrementIndent();
                 buffer.printf("}%n");
             } else {
@@ -142,19 +140,19 @@ public final class VersionConditional {
         } else if (ifNotMember != null) {
             buffer.printf("if (version > %d) {%n", containingVersions.highest());
             buffer.incrementIndent();
-            generateIfNotClause();
+            ifNotMember.generate(ifNotVersions);
             buffer.decrementIndent();
             buffer.printf("}%n");
         }
     }
 
-    private void generateAlwaysTrueCheck(CodeBuffer buffer) {
+    private void generateAlwaysTrueCheck(Versions ifVersions, CodeBuffer buffer) {
         if (ifMember != null) {
             if (alwaysEmitBlockScope) {
                 buffer.printf("{%n");
                 buffer.incrementIndent();
             }
-            generateIfClause();
+            ifMember.generate(ifVersions);
             if (alwaysEmitBlockScope) {
                 buffer.decrementIndent();
                 buffer.printf("}%n");
@@ -162,7 +160,7 @@ public final class VersionConditional {
         }
     }
 
-    private void generateAlwaysFalseCheck(CodeBuffer buffer) {
+    private void generateAlwaysFalseCheck(Versions ifNotVersions, CodeBuffer buffer) {
         if (!allowMembershipCheckAlwaysFalse) {
             throw new RuntimeException("Version ranges " + containingVersions +
                 " and " + possibleVersions + " have no versions in common.");
@@ -172,7 +170,7 @@ public final class VersionConditional {
                 buffer.printf("{%n");
                 buffer.incrementIndent();
             }
-            generateIfNotClause();
+            ifNotMember.generate(ifNotVersions);
             if (alwaysEmitBlockScope) {
                 buffer.decrementIndent();
                 buffer.printf("}%n");
@@ -181,21 +179,31 @@ public final class VersionConditional {
     }
 
     void generate(CodeBuffer buffer) {
+        Versions ifVersions = possibleVersions.intersect(containingVersions);
+        Versions ifNotVersions = possibleVersions.subtract(containingVersions);
+        // In the case where ifNotVersions would be two ranges rather than one,
+        // we just pass in the original possibleVersions instead.
+        // This is slightly less optimal, but allows us to avoid dealing with
+        // multiple ranges.
+        if (ifNotVersions == null) {
+            ifNotVersions = possibleVersions;
+        }
+
         if (possibleVersions.lowest() < containingVersions.lowest()) {
             if (possibleVersions.highest() > containingVersions.highest()) {
-                generateFullRangeCheck(buffer);
+                generateFullRangeCheck(ifVersions, ifNotVersions, buffer);
             } else {
-                generateLowerRangeCheck(buffer);
+                generateLowerRangeCheck(ifVersions, ifNotVersions, buffer);
             }
         } else if (possibleVersions.highest() >= containingVersions.lowest() &&
                     (possibleVersions.lowest() <= containingVersions.highest())) {
             if (possibleVersions.highest() > containingVersions.highest()) {
-                generateUpperRangeCheck(buffer);
+                generateUpperRangeCheck(ifVersions, ifNotVersions, buffer);
             } else {
-                generateAlwaysTrueCheck(buffer);
+                generateAlwaysTrueCheck(ifVersions, buffer);
             }
         } else {
-            generateAlwaysFalseCheck(buffer);
+            generateAlwaysFalseCheck(ifNotVersions, buffer);
         }
     }
 }

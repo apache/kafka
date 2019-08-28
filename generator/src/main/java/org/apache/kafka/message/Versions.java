@@ -132,15 +132,15 @@ public final class Versions {
      * 1-4.trim(1-2) = 3-4
      * 3+.trim(4+) = 3
      * 4+.trim(3+) = none
-     * 1-5.trim(2-4) = 1-5
+     * 1-5.trim(2-4) = null
      *
      * This is similar to subtracting the other version range, except that if two
      * version ranges would be
      *
-     * @param other     The other version range.
-     * @return          A new version range.
+     * @param other                 The other version range.
+     * @return                      A new version range.
      */
-    public Versions trim(Versions other) {
+    public Versions subtract(Versions other) {
         if (other.lowest() <= lowest) {
             if (other.highest >= highest) {
                 // Case 1: other is a superset of this.  Trim everything.
@@ -161,15 +161,16 @@ public final class Versions {
             if (newHighest < 0) {
                 // Case 4: other was NONE.  Trim nothing.
                 return this;
-            } else {
+            } else if (newHighest < highest) {
                 // Case 5: trim some values from the end of this range.
                 return new Versions(lowest, (short) newHighest);
+            } else {
+                // Case 6: other is a disjoint range that is higher than this.  Trim nothing.
+                return this;
             }
         } else {
-            // Case 6: other is a disjoint range that is higher than this, or other is
-            // a subset of this that can't be subtracted without creating two sets.
-            // Trim nothing.
-            return this;
+            // Case 7: the difference between this and other would be two ranges, not one.
+            return null;
         }
     }
 

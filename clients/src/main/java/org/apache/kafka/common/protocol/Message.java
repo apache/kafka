@@ -19,6 +19,8 @@ package org.apache.kafka.common.protocol;
 
 import org.apache.kafka.common.protocol.types.Struct;
 
+import java.util.List;
+
 /**
  * An object that can serialize itself.  The serialization protocol is versioned.
  * Messages also implement toString, equals, and hashCode.
@@ -92,4 +94,11 @@ public interface Message {
      *                      by this software.
      */
     Struct toStruct(short version);
+
+    /**
+     * Returns a list of tagged fields which this software can't understand.
+     *
+     * @return              The raw tagged fields.
+     */
+    List<RawTaggedField> unknownTaggedFields();
 }

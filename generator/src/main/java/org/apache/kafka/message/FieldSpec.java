@@ -109,6 +109,11 @@ public final class FieldSpec {
                     this.nullableVersions + " and taggedVersions " + this.taggedVersions + ".  " +
                     "Either all tagged versions must be nullable, or none must be.");
             }
+            if (this.taggedVersions().highest() < Short.MAX_VALUE) {
+                throw new RuntimeException("Field " + name + " specifies taggedVersions " +
+                    this.taggedVersions + ", which is not open-ended.  taggedVersions must " +
+                    "be either none, or an open-ended range (that ends with a plus sign).");
+            }
         }
     }
 

@@ -102,6 +102,8 @@ public final class MessageDataGenerator {
         buffer.printf("%n");
         generateClassToString(className, struct);
         generateFieldAccessors(struct, isSetElement);
+        buffer.printf("%n");
+        generateUnknownTaggedFieldsAccessor(struct);
         generateFieldMutators(struct, className, isSetElement);
 
         if (!isTopLevel) {
@@ -256,11 +258,9 @@ public final class MessageDataGenerator {
         for (FieldSpec field : struct.fields()) {
             generateFieldDeclaration(field);
         }
-        if (!flexibleVersions.intersect(struct.versions()).empty()) {
-            headerGenerator.addImport(MessageGenerator.LIST_CLASS);
-            headerGenerator.addImport(MessageGenerator.RAW_TAGGED_FIELD_CLASS);
-            buffer.printf("private List<RawTaggedField> _unknownTaggedFields;%n");
-        }
+        headerGenerator.addImport(MessageGenerator.LIST_CLASS);
+        headerGenerator.addImport(MessageGenerator.RAW_TAGGED_FIELD_CLASS);
+        buffer.printf("private List<RawTaggedField> _unknownTaggedFields;%n");
         if (isSetElement) {
             buffer.printf("private int next;%n");
             buffer.printf("private int prev;%n");
@@ -285,6 +285,26 @@ public final class MessageDataGenerator {
             buffer.printf("@Override%n");
             generateAccessor("int", "prev", "prev");
         }
+    }
+
+    private void generateUnknownTaggedFieldsAccessor(StructSpec struct) {
+        buffer.printf("@Override%n");
+        headerGenerator.addImport(MessageGenerator.LIST_CLASS);
+        headerGenerator.addImport(MessageGenerator.RAW_TAGGED_FIELD_CLASS);
+        buffer.printf("public List<RawTaggedField> unknownTaggedFields() {%n");
+        buffer.incrementIndent();
+        // Optimize _unknownTaggedFields by not creating a new ArrayList object
+        // unless we need it.
+        buffer.printf("if (_unknownTaggedFields == null) {%n");
+        buffer.incrementIndent();
+        headerGenerator.addImport(MessageGenerator.ARRAYLIST_CLASS);
+        buffer.printf("_unknownTaggedFields = new ArrayList<>(0);%n");
+        buffer.decrementIndent();
+        buffer.printf("}%n");
+        buffer.printf("return _unknownTaggedFields;%n");
+        buffer.decrementIndent();
+        buffer.printf("}%n");
+
     }
 
     private void generateFieldMutators(StructSpec struct, String className,
@@ -414,40 +434,32 @@ public final class MessageDataGenerator {
             generate(buffer);
         Versions curVersions = parentVersions.intersect(struct.versions());
         for (FieldSpec field : struct.fields()) {
-            VersionConditional.forVersions(field.taggedVersions(), curVersions).
-                ifMember((__) -> {
-                    // Always set tagged fields to their default here.
+            Versions mandatoryVersions = field.versions().subtract(field.taggedVersions());
+            VersionConditional.forVersions(mandatoryVersions, curVersions).
+                alwaysEmitBlockScope(field.type().isVariableLength()).
+                ifNotMember((__) -> {
+                    // If the field is not present, or is tagged, set it to its default here.
                     buffer.printf("this.%s = %s;%n", field.camelCaseName(), fieldDefault(field));
                 }).
-                ifNotMember((untaggedVersions) -> {
-                    VersionConditional.forVersions(field.versions(), untaggedVersions).
-                        alwaysEmitBlockScope(field.type().isVariableLength()).
-                        ifNotMember((__) -> {
-                            // Mandatory fields get set to their defaults if the message version doesn't
-                            // support them.
-                            buffer.printf("this.%s = %s;%n", field.camelCaseName(), fieldDefault(field));
-                        }).
-                        ifMember((presentAndUntaggedVersions) -> {
-                            if (field.type().isVariableLength()) {
-                                generateVariableLengthReader(field.camelCaseName(),
-                                    field.type(),
-                                    presentAndUntaggedVersions,
-                                    field.nullableVersions(),
-                                    String.format("this.%s = ", field.camelCaseName()),
-                                    String.format(";%n"),
-                                    structRegistry.isStructArrayWithKeys(field));
-                            } else {
-                                buffer.printf("this.%s = %s;%n", field.camelCaseName(),
-                                    primitiveReadExpression(field.type()));
-                            }
-                        }).
-                        generate(buffer);
+                ifMember((presentAndUntaggedVersions) -> {
+                    if (field.type().isVariableLength()) {
+                        generateVariableLengthReader(field.camelCaseName(),
+                            field.type(),
+                            presentAndUntaggedVersions,
+                            field.nullableVersions(),
+                            String.format("this.%s = ", field.camelCaseName()),
+                            String.format(";%n"),
+                            structRegistry.isStructArrayWithKeys(field));
+                    } else {
+                        buffer.printf("this.%s = %s;%n", field.camelCaseName(),
+                            primitiveReadExpression(field.type()));
+                    }
                 }).
                 generate(buffer);
         }
+        buffer.printf("this._unknownTaggedFields = null;%n");
         VersionConditional.forVersions(flexibleVersions, curVersions).
             ifMember((curFlexibleVersions) -> {
-                buffer.printf("this._unknownTaggedFields = null;%n");
                 buffer.printf("int _numTaggedFields = readable.readUnsignedVarint();%n");
                 buffer.printf("for (int _i = 0; _i < _numTaggedFields; _i++) {%n");
                 buffer.incrementIndent();
@@ -456,39 +468,43 @@ public final class MessageDataGenerator {
                 buffer.printf("switch (_tag) {%n");
                 buffer.incrementIndent();
                 for (FieldSpec field : struct.fields()) {
-                    VersionConditional.forVersions(field.versions(), curFlexibleVersions).
-                        ifMember((presentVersions) -> {
-                            VersionConditional.forVersions(field.taggedVersions(), presentVersions).
-                                ifMember((presentAndTaggedVersions) -> {
-                                    buffer.printf("case %d: {%n", field.tag());
-                                    buffer.incrementIndent();
-                                    if (field.type().isVariableLength()) {
-                                        generateVariableLengthReader(field.camelCaseName(),
-                                            field.type(),
-                                            presentAndTaggedVersions,
-                                            field.nullableVersions(),
-                                            String.format("this.%s = ", field.camelCaseName()),
-                                            String.format(";%n"),
-                                            structRegistry.isStructArrayWithKeys(field));
-                                    } else {
-                                        buffer.printf("this.%s = %s;%n", field.camelCaseName(),
-                                            primitiveReadExpression(field.type()));
-                                    }
-
-                                    buffer.printf("break;%n");
-                                    buffer.decrementIndent();
-                                    buffer.printf("}%n");
-                                }).
-                                generate(buffer);
-                        }).
-                        generate(buffer);
+                    Versions validTaggedVersions = field.versions().intersect(field.taggedVersions());
+                    if (!validTaggedVersions.empty()) {
+                        if (field.tag() < 0) {
+                            throw new RuntimeException("Field " + field.name() + " has tagged versions, but no tag.");
+                        }
+                        buffer.printf("case %d: {%n", field.tag());
+                        buffer.incrementIndent();
+                        VersionConditional.forVersions(validTaggedVersions, curFlexibleVersions).
+                            ifMember((presentAndTaggedVersions) -> {
+                                if (field.type().isVariableLength()) {
+                                    generateVariableLengthReader(field.camelCaseName(),
+                                        field.type(),
+                                        presentAndTaggedVersions,
+                                        field.nullableVersions(),
+                                        String.format("this.%s = ", field.camelCaseName()),
+                                        String.format(";%n"),
+                                        structRegistry.isStructArrayWithKeys(field));
+                                } else {
+                                    buffer.printf("this.%s = %s;%n", field.camelCaseName(),
+                                        primitiveReadExpression(field.type()));
+                                }
+                                buffer.printf("break;%n");
+                            }).
+                            ifNotMember((__) -> {
+                                buffer.printf("throw new RuntimeException(\"Tag %d is not " +
+                                    "valid for version \" + version);%n", field.tag());
+                            }).
+                            generate(buffer);
+                        buffer.decrementIndent();
+                        buffer.printf("}%n");
+                    }
                 }
-                buffer.printf("default: {%n");
+                buffer.printf("default:%n");
                 buffer.incrementIndent();
                 buffer.printf("this._unknownTaggedFields = readable.readRawTaggedField(this._unknownTaggedFields, _tag, _size);%n");
                 buffer.printf("break;%n");
                 buffer.decrementIndent();
-                buffer.printf("}%n");
                 buffer.decrementIndent();
                 buffer.printf("}%n");
                 buffer.decrementIndent();
