@@ -235,7 +235,7 @@ public class GlobalStreamThread extends Thread {
             final Set<String> unusedTopics = new HashSet<>();
             final Iterator<Entry<TopicPartition, Long>> tps = partitionOffsets.entrySet().iterator();
             while (tps.hasNext()) {
-                Entry<TopicPartition, Long> tp = tps.next();
+                final Entry<TopicPartition, Long> tp = tps.next();
                 if (!this.sourceTopics.contains(tp.getKey().topic())) {
                     unusedTopics.add(tp.getKey().topic());
                     tps.remove();
