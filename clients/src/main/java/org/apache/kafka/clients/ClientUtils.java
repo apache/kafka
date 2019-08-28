@@ -47,6 +47,14 @@ public final class ClientUtils {
         return parseAndValidateAddresses(urls, ClientDnsLookup.forConfig(clientDnsLookupConfig));
     }
 
+    /**
+     * Kafka does not use this function directly. However,
+     * some third-party applications still rely on this API to parse and validate addresses.
+     */
+    public static List<InetSocketAddress> parseAndValidateAddresses(List<String> urls) {
+        return parseAndValidateAddresses(urls, ClientDnsLookup.DEFAULT);
+    }
+
     public static List<InetSocketAddress> parseAndValidateAddresses(List<String> urls, ClientDnsLookup clientDnsLookup) {
         List<InetSocketAddress> addresses = new ArrayList<>();
         for (String url : urls) {
