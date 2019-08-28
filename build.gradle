@@ -132,6 +132,7 @@ if (file('.git').exists()) {
         'gradlew.bat',
         'TROGDOR.md',
         '**/README.md',
+        'DO_NOT_MERGE',
         '**/id_rsa',
         '**/id_rsa.pub',
         'checkstyle/suppressions.xml',
