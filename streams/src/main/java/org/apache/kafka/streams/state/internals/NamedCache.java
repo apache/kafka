@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import java.util.NavigableMap;
 import java.util.TreeMap;
 import java.util.TreeSet;
 import org.apache.kafka.common.MetricName;
