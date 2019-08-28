@@ -209,20 +209,20 @@ public class MirrorMaker {
         String workerId = sourceAndTarget.toString();
         Plugins plugins = new Plugins(workerProps);
         plugins.compareAndSwapWithDelegatingLoader();
-        DistributedConfig config = new DistributedConfig(workerProps);
-        String kafkaClusterId = ConnectUtils.lookupKafkaClusterId(config);
+        DistributedConfig distributedConfig = new DistributedConfig(workerProps);
+        String kafkaClusterId = ConnectUtils.lookupKafkaClusterId(distributedConfig);
         KafkaOffsetBackingStore offsetBackingStore = new KafkaOffsetBackingStore();
-        offsetBackingStore.configure(config);
-        Worker worker = new Worker(workerId, time, plugins, config, offsetBackingStore, CLIENT_CONFIG_OVERRIDE_POLICY);
+        offsetBackingStore.configure(distributedConfig);
+        Worker worker = new Worker(workerId, time, plugins, distributedConfig, offsetBackingStore, CLIENT_CONFIG_OVERRIDE_POLICY);
         WorkerConfigTransformer configTransformer = worker.configTransformer();
         Converter internalValueConverter = worker.getInternalValueConverter();
         StatusBackingStore statusBackingStore = new KafkaStatusBackingStore(time, internalValueConverter);
-        statusBackingStore.configure(config);
+        statusBackingStore.configure(distributedConfig);
         ConfigBackingStore configBackingStore = new KafkaConfigBackingStore(
                 internalValueConverter,
-                config,
+                distributedConfig,
                 configTransformer);
-        Herder herder = new DistributedHerder(config, time, worker,
+        Herder herder = new DistributedHerder(distributedConfig, time, worker,
                 kafkaClusterId, statusBackingStore, configBackingStore,
                 advertisedUrl, CLIENT_CONFIG_OVERRIDE_POLICY);
         herders.put(sourceAndTarget, herder);

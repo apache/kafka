@@ -98,14 +98,14 @@ public class MirrorConnectorConfig extends AbstractConfig {
     public static final boolean REFRESH_TOPICS_ENABLED_DEFAULT = true;
     public static final String REFRESH_TOPICS_INTERVAL_SECONDS = REFRESH_TOPICS + INTERVAL_SECONDS_SUFFIX;
     private static final String REFRESH_TOPICS_INTERVAL_SECONDS_DOC = "Frequency of topic refresh.";
-    public static final long REFRESH_TOPICS_INTERVAL_SECONDS_DEFAULT = 5 * 60;
+    public static final long REFRESH_TOPICS_INTERVAL_SECONDS_DEFAULT = 10 * 60;
 
     public static final String REFRESH_GROUPS_ENABLED = REFRESH_GROUPS + ENABLED_SUFFIX;
     private static final String REFRESH_GROUPS_ENABLED_DOC = "Whether to periodically check for new consumer groups.";
     public static final boolean REFRESH_GROUPS_ENABLED_DEFAULT = true;
     public static final String REFRESH_GROUPS_INTERVAL_SECONDS = REFRESH_GROUPS + INTERVAL_SECONDS_SUFFIX;
     private static final String REFRESH_GROUPS_INTERVAL_SECONDS_DOC = "Frequency of group refresh.";
-    public static final long REFRESH_GROUPS_INTERVAL_SECONDS_DEFAULT = 5 * 60;
+    public static final long REFRESH_GROUPS_INTERVAL_SECONDS_DEFAULT = 10 * 60;
 
     public static final String SYNC_TOPIC_CONFIGS_ENABLED = SYNC_TOPIC_CONFIGS + ENABLED_SUFFIX;
     private static final String SYNC_TOPIC_CONFIGS_ENABLED_DOC = "Whether to periodically configure remote topics to match their corresponding upstream topics.";
@@ -133,7 +133,7 @@ public class MirrorConnectorConfig extends AbstractConfig {
     public static final boolean EMIT_CHECKPOINTS_ENABLED_DEFAULT = true;
     public static final String EMIT_CHECKPOINTS_INTERVAL_SECONDS = EMIT_CHECKPOINTS + INTERVAL_SECONDS_SUFFIX;
     private static final String EMIT_CHECKPOINTS_INTERVAL_SECONDS_DOC = "Frequency of checkpoints.";
-    public static final long EMIT_CHECKPOINTS_INTERVAL_SECONDS_DEFAULT = 5;
+    public static final long EMIT_CHECKPOINTS_INTERVAL_SECONDS_DEFAULT = 60;
 
     public static final String TOPIC_FILTER_CLASS = "topic.filter.class";
     private static final String TOPIC_FILTER_CLASS_DOC = "TopicFilter to use. Selects topics to replicate.";
@@ -163,7 +163,7 @@ public class MirrorConnectorConfig extends AbstractConfig {
     }
 
     protected MirrorConnectorConfig(ConfigDef configDef, Map<String, String> props) {
-        super(configDef, props);
+        super(configDef, props, true);
     }
 
     String connectorName() {

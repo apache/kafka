@@ -16,11 +16,16 @@
  */
 package org.apache.kafka.connect.mirror;
 
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Type;
 import org.apache.kafka.common.config.ConfigDef.Importance;
+import org.apache.kafka.common.config.provider.ConfigProvider;
+import org.apache.kafka.common.config.ConfigTransformer;
 import org.apache.kafka.clients.CommonClientConfigs;
+import org.apache.kafka.connect.runtime.WorkerConfig;
+import org.apache.kafka.connect.runtime.isolation.Plugins;
 
 import java.util.Map;
 import java.util.HashMap;
@@ -28,11 +33,12 @@ import java.util.List;
 import java.util.Set;
 import java.util.HashSet;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.stream.Collectors;
 
 /** Top-level config describing replication flows between multiple Kafka clusters.
  *
- *  Supports cluster-level properties of the form cluster.x.y.z, and flow-level
+ *  Supports cluster-level properties of the form cluster.x.y.z, and replication-level
  *  properties of the form source->target.x.y.z.
  *  e.g.
  *
@@ -49,6 +55,8 @@ public class MirrorMakerConfig extends AbstractConfig {
 
     public static final String CLUSTERS_CONFIG = "clusters";
     private static final String CLUSTERS_DOC = "List of cluster aliases.";
+    public static final String CONFIG_PROVIDERS_CONFIG = WorkerConfig.CONFIG_PROVIDERS_CONFIG;
+    private static final String CONFIG_PROVIDERS_DOC = "Names of ConfigProviders to use.";
 
     private static final String NAME = "name";
     private static final String CONNECTOR_CLASS = "connector.class";
@@ -74,9 +82,12 @@ public class MirrorMakerConfig extends AbstractConfig {
 
     static final String SOURCE_CLUSTER_PREFIX = "source.cluster.";
     static final String TARGET_CLUSTER_PREFIX = "target.cluster.";
+
+    private final Plugins plugins;
    
     public MirrorMakerConfig(Map<?, ?> props) {
-        super(CONFIG_DEF, props);
+        super(CONFIG_DEF, props, true);
+        plugins = new Plugins(originalsStrings());
     }
 
     public Set<String> clusters() {
@@ -104,7 +115,7 @@ public class MirrorMakerConfig extends AbstractConfig {
         Map<String, String> props = new HashMap<>();
         props.putAll(originalsStrings());
         props.putAll(clusterProps(cluster));
-        return new MirrorClientConfig(props);
+        return new MirrorClientConfig(transform(props));
     }
 
     // loads properties of the form cluster.x.y.z
@@ -112,7 +123,7 @@ public class MirrorMakerConfig extends AbstractConfig {
         Map<String, String> props = new HashMap<>();
         Map<String, String> strings = originalsStrings();
 
-        props.putAll(stringsWithPrefix(cluster + "."));
+        props.putAll(stringsWithPrefixStripped(cluster + "."));
 
         for (String k : MirrorClientConfig.CLIENT_CONFIG_DEF.names()) {
             String v = props.get(k);
@@ -140,6 +151,10 @@ public class MirrorMakerConfig extends AbstractConfig {
     Map<String, String> workerConfig(SourceAndTarget sourceAndTarget) {
         Map<String, String> props = new HashMap<>();
         props.putAll(clusterProps(sourceAndTarget.target()));
+        
+        // transform any expression like ${provider:path:key}, since the worker doesn't do so
+        props = transform(props);
+        props.putAll(stringsWithPrefix(CONFIG_PROVIDERS_CONFIG));
 
         // fill in reasonable defaults
         props.putIfAbsent(GROUP_ID_CONFIG, sourceAndTarget.source() + "-mm2");
@@ -153,11 +168,7 @@ public class MirrorMakerConfig extends AbstractConfig {
         props.putIfAbsent(VALUE_CONVERTER_CLASS_CONFIG, BYTE_ARRAY_CONVERTER_CLASS); 
         props.putIfAbsent(HEADER_CONVERTER_CLASS_CONFIG, BYTE_ARRAY_CONVERTER_CLASS);
 
-        // default to internal.topic.replication.factor or replication.factor for internal Connect topics
-        String replicationFactor = props.getOrDefault(REPLICATION_FACTOR,
-                originalsStrings().get(REPLICATION_FACTOR));
-        String internalReplicationFactor = props.getOrDefault(INTERNAL_TOPIC_REPLICATION_FACTOR,
-                replicationFactor);
+        String internalReplicationFactor = props.get(INTERNAL_TOPIC_REPLICATION_FACTOR);
         if (internalReplicationFactor != null) {
             props.putIfAbsent(OFFSET_STORAGE_REPLICATION_FACTOR_CONFIG, internalReplicationFactor);
             props.putIfAbsent(CONFIG_STORAGE_REPLICATION_FACTOR_CONFIG, internalReplicationFactor);
@@ -174,6 +185,8 @@ public class MirrorMakerConfig extends AbstractConfig {
         props.putAll(originalsStrings());
         props.keySet().retainAll(MirrorConnectorConfig.CONNECTOR_CONFIG_DEF.names());
         
+        props.putAll(stringsWithPrefix(CONFIG_PROVIDERS_CONFIG));
+        
         props.putAll(withPrefix(SOURCE_CLUSTER_PREFIX, clusterProps(sourceAndTarget.source())));
         props.putAll(withPrefix(TARGET_CLUSTER_PREFIX, clusterProps(sourceAndTarget.target())));
 
@@ -189,17 +202,41 @@ public class MirrorMakerConfig extends AbstractConfig {
         }
 
         // override with connector-level properties
-        props.putAll(stringsWithPrefix(sourceAndTarget.source() + "->"
+        props.putAll(stringsWithPrefixStripped(sourceAndTarget.source() + "->"
             + sourceAndTarget.target() + "."));
 
         // disabled by default
         props.putIfAbsent(MirrorConnectorConfig.ENABLED, "false");
 
+        // don't transform -- the worker will handle transformation of Connector and Task configs
         return props;
     }
 
+    List<String> configProviders() {
+        return getList(CONFIG_PROVIDERS_CONFIG);
+    } 
+
+    Map<String, String> transform(Map<String, String> props) {
+        // transform worker config according to config.providers
+        List<String> providerNames = configProviders();
+        Map<String, ConfigProvider> providers = new HashMap<>();
+        for (String name : providerNames) {
+            ConfigProvider configProvider = plugins.newConfigProvider(
+                    this,
+                    CONFIG_PROVIDERS_CONFIG + "." + name,
+                    Plugins.ClassLoaderUsage.PLUGINS
+            );
+            providers.put(name, configProvider);
+        }
+        ConfigTransformer transformer = new ConfigTransformer(providers);
+        Map<String, String> transformed = transformer.transform(props).data();
+        providers.values().forEach(x -> Utils.closeQuietly(x, "config provider"));
+        return transformed;
+    }
+ 
     protected static final ConfigDef CONFIG_DEF = new ConfigDef()
             .define(CLUSTERS_CONFIG, Type.LIST, Importance.HIGH, CLUSTERS_DOC)
+            .define(CONFIG_PROVIDERS_CONFIG, Type.LIST, Collections.emptyList(), Importance.LOW, CONFIG_PROVIDERS_DOC)
             // security support
             .define(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG,
                 Type.STRING,
@@ -209,10 +246,16 @@ public class MirrorMakerConfig extends AbstractConfig {
             .withClientSslSupport()
             .withClientSaslSupport();
 
-    private Map<String, String> stringsWithPrefix(String prefix) {
+    private Map<String, String> stringsWithPrefixStripped(String prefix) {
         return originalsStrings().entrySet().stream()
             .filter(x -> x.getKey().startsWith(prefix))
             .collect(Collectors.toMap(x -> x.getKey().substring(prefix.length()), x -> x.getValue()));
+    }
+
+    private Map<String, String> stringsWithPrefix(String prefix) {
+        Map<String, String> strings = originalsStrings();
+        strings.keySet().removeIf(x -> !x.startsWith(prefix));
+        return strings;
     } 
 
     static Map<String, String> withPrefix(String prefix, Map<String, String> props) {
