@@ -16,12 +16,14 @@
  */
 package kafka.log.remote
 
-import java.nio.ByteBuffer
+import java.io.InputStream
+import java.nio.{BufferUnderflowException, ByteBuffer}
 import java.nio.channels.FileChannel
 import java.util
 import java.util.zip.CRC32
 
 import kafka.common.KafkaException
+import org.apache.kafka.common.utils.Utils
 import kafka.utils.Logging
 
 /**
@@ -116,6 +118,60 @@ object RemoteLogIndexEntry extends Logging {
 
     val entry = RemoteLogIndexEntry(0, crc, firstOffset, lastOffset, firstTimeStamp, lastTimeStamp, dataLength, rdi)
     entry
+  }
+
+  def readAll(is: InputStream): Seq[RemoteLogIndexEntry] = {
+    var index = Seq.empty[RemoteLogIndexEntry]
+
+    var done = false
+    while (!done) {
+      parseEntry(is) match {
+        case Some(entry) =>
+          index = index :+ entry
+        case _ =>
+          done = true
+      }
+    }
+
+    index
+  }
+
+  private def parseEntry(is: InputStream): Option[RemoteLogIndexEntry] = {
+    val magicAndEntryLengthBuffer = ByteBuffer.allocate(java.lang.Short.BYTES + java.lang.Short.BYTES)
+    Utils.readFully(is, magicAndEntryLengthBuffer)
+    if (magicAndEntryLengthBuffer.hasRemaining) {
+      None
+    } else {
+      magicAndEntryLengthBuffer.flip()
+      val magic = magicAndEntryLengthBuffer.getShort()
+      magic match {
+        case 0 =>
+          val entryLength = magicAndEntryLengthBuffer.getShort()
+          val valueBuffer = ByteBuffer.allocate(entryLength)
+          Utils.readFully(is, valueBuffer)
+          valueBuffer.flip()
+
+          try {
+            val crc = valueBuffer.getInt()
+            val firstOffset = valueBuffer.getLong()
+            val lastOffset = valueBuffer.getLong()
+            val firstTimestamp = valueBuffer.getLong()
+            val lastTimestamp = valueBuffer.getLong()
+            val dataLength = valueBuffer.getInt()
+            val rdiLength = valueBuffer.getShort()
+            val rdi = Array.ofDim[Byte](rdiLength)
+            valueBuffer.get(rdi)
+            Some(RemoteLogIndexEntry(magic, crc, firstOffset, lastOffset, firstTimestamp, lastTimestamp, dataLength, rdi))
+          } catch {
+            case e: BufferUnderflowException =>
+              // TODO decide how to deal with incomplete records
+              throw new KafkaException(e)
+          }
+        case _ =>
+          // TODO: Throw Custom Exceptions?
+          throw new RuntimeException("magic version " + magic + " is not supported")
+      }
+    }
   }
 
   def parseEntry(ch: FileChannel, position: Long): Option[RemoteLogIndexEntry] = {

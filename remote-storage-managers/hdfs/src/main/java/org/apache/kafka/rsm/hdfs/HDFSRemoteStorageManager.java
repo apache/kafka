@@ -40,11 +40,10 @@ import static kafka.log.remote.RemoteLogManager.REMOTE_STORAGE_MANAGER_CONFIG_PR
 
 import java.io.File;
 import java.io.IOException;
-import java.io.RandomAccessFile;
+import java.io.InputStream;
 import java.net.URI;
 import java.nio.ByteBuffer;
 import java.nio.channels.Channels;
-import java.nio.channels.FileChannel;
 import java.nio.channels.WritableByteChannel;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -203,12 +202,8 @@ public class HDFSRemoteStorageManager implements RemoteStorageManager {
             tmpFile.deleteOnExit();
 
             Path remoteIndexPath = getPath(hdfsPath.toString(), REMOTE_INDEX_FILE_NAME);
-
-            fs.copyToLocalFile(remoteIndexPath, new Path(tmpFile.getAbsolutePath()));
-
-            try (RandomAccessFile raFile = new RandomAccessFile(tmpFile, "r")) {
-                FileChannel channel = raFile.getChannel();
-                return JavaConverters.seqAsJavaListConverter(RemoteLogIndexEntry.readAll(channel)).asJava();
+            try (InputStream is = fs.open(remoteIndexPath)) {
+                return JavaConverters.seqAsJavaList(RemoteLogIndexEntry.readAll(is));
             }
         } finally {
             if (tmpFile != null && tmpFile.exists()) {
