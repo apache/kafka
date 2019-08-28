@@ -22,6 +22,7 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.locks.ReentrantReadWriteLock
 
+import kafka.api.ApiVersion
 import kafka.log.LogConfig
 import kafka.message.UncompressedCodec
 import kafka.server.Defaults
@@ -71,7 +72,8 @@ class TransactionStateManager(brokerId: Int,
                               scheduler: Scheduler,
                               replicaManager: ReplicaManager,
                               config: TransactionConfig,
-                              time: Time) extends Logging {
+                              time: Time,
+                              interBrokerProtocolVersion: ApiVersion) extends Logging {
 
   this.logIdent = "[Transaction State Manager " + brokerId + "]: "
 
@@ -209,13 +211,15 @@ class TransactionStateManager(brokerId: Int,
     }, delay = config.removeExpiredTransactionalIdsIntervalMs, period = config.removeExpiredTransactionalIdsIntervalMs)
   }
 
-  def getTransactionState(transactionalId: String): Either[Errors, Option[CoordinatorEpochAndTxnMetadata]] =
+  def getTransactionState(transactionalId: String): Either[Errors, Option[CoordinatorEpochAndTxnMetadata]] = {
     getAndMaybeAddTransactionState(transactionalId, None)
+  }
 
   def putTransactionStateIfNotExists(transactionalId: String,
-                                     txnMetadata: TransactionMetadata): Either[Errors, CoordinatorEpochAndTxnMetadata] =
+                                     txnMetadata: TransactionMetadata): Either[Errors, CoordinatorEpochAndTxnMetadata] = {
     getAndMaybeAddTransactionState(transactionalId, Some(txnMetadata))
       .right.map(_.getOrElse(throw new IllegalStateException(s"Unexpected empty transaction metadata returned while putting $txnMetadata")))
+  }
 
   /**
    * Get the transaction metadata associated with the given transactional id, or an error if
@@ -233,15 +237,17 @@ class TransactionStateManager(brokerId: Int,
       else if (leavingPartitions.exists(_.txnPartitionId == partitionId))
         Left(Errors.NOT_COORDINATOR)
       else {
+        var isNewMetadata = false
         transactionMetadataCache.get(partitionId) match {
           case Some(cacheEntry) =>
             val txnMetadata = Option(cacheEntry.metadataPerTransactionalId.get(transactionalId)).orElse {
+              isNewMetadata = true
               createdTxnMetadataOpt.map { createdTxnMetadata =>
-                Option(cacheEntry.metadataPerTransactionalId.putIfNotExists(transactionalId, createdTxnMetadata))
-                  .getOrElse(createdTxnMetadata)
+                (Option(cacheEntry.metadataPerTransactionalId.putIfNotExists(transactionalId, createdTxnMetadata))
+                  .getOrElse(createdTxnMetadata))
               }
             }
-            Right(txnMetadata.map(CoordinatorEpochAndTxnMetadata(cacheEntry.coordinatorEpoch, _)))
+            Right(txnMetadata.map(CoordinatorEpochAndTxnMetadata(cacheEntry.coordinatorEpoch, _, isNewMetadata)))
 
           case None =>
             Left(Errors.NOT_COORDINATOR)
@@ -475,7 +481,7 @@ class TransactionStateManager(brokerId: Int,
 
     // generate the message for this transaction metadata
     val keyBytes = TransactionLog.keyToBytes(transactionalId)
-    val valueBytes = TransactionLog.valueToBytes(newMetadata)
+    val valueBytes = TransactionLog.valueToBytes(newMetadata, interBrokerProtocolVersion)
     val timestamp = time.milliseconds()
 
     val records = MemoryRecords.withRecords(TransactionLog.EnforcedCompressionType, new SimpleRecord(timestamp, keyBytes, valueBytes))
@@ -645,7 +651,9 @@ class TransactionStateManager(brokerId: Int,
 
 private[transaction] case class TxnMetadataCacheEntry(coordinatorEpoch: Int, metadataPerTransactionalId: Pool[String, TransactionMetadata])
 
-private[transaction] case class CoordinatorEpochAndTxnMetadata(coordinatorEpoch: Int, transactionMetadata: TransactionMetadata)
+private[transaction] case class CoordinatorEpochAndTxnMetadata(coordinatorEpoch: Int,
+                                                               transactionMetadata: TransactionMetadata,
+                                                               isNewMetadata: Boolean = false)
 
 private[transaction] case class TransactionConfig(transactionalIdExpirationMs: Int = TransactionStateManager.DefaultTransactionalIdExpirationMs,
                                                   transactionMaxTimeoutMs: Int = TransactionStateManager.DefaultTransactionsMaxTimeoutMs,

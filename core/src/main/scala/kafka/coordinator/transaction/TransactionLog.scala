@@ -25,6 +25,7 @@ import java.io.PrintStream
 import java.nio.ByteBuffer
 import java.nio.charset.StandardCharsets
 
+import kafka.api.{ApiVersion, KAFKA_2_3_IV1}
 import org.apache.kafka.common.record.{CompressionType, RecordBatch}
 
 import scala.collection.mutable
@@ -154,8 +155,14 @@ object TransactionLog {
     * @return value payload bytes
     */
   private[coordinator] def valueToBytes(txnMetadata: TxnTransitMetadata,
-                                        version: Short = ValueSchema.CurrentVersion): Array[Byte] = {
+                                        interBrokerProtocolVersion: ApiVersion): Array[Byte] = {
     import ValueSchema._
+
+    val version = interBrokerProtocolVersion match {
+      case v if v < KAFKA_2_3_IV1 => 0.toShort
+      case _                      => 1.toShort
+    }
+
     val value = new Struct(schemaForValue(version))
     value.set(ProducerIdKey, txnMetadata.producerId)
     value.set(ProducerEpochKey, txnMetadata.producerEpoch)

@@ -22,6 +22,7 @@ import java.nio.charset.StandardCharsets
 import java.util
 import java.util.{Collections, Optional}
 import java.util.Arrays.asList
+import java.util.concurrent.TimeUnit
 
 import kafka.api.{ApiVersion, KAFKA_0_10_2_IV0, KAFKA_2_2_IV1}
 import kafka.controller.KafkaController
@@ -48,7 +49,7 @@ import org.apache.kafka.common.requests.{FetchMetadata => JFetchMetadata, _}
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.easymock.{Capture, EasyMock, IAnswer}
 import EasyMock._
-import org.apache.kafka.common.message.{HeartbeatRequestData, JoinGroupRequestData, OffsetCommitRequestData, OffsetCommitResponseData, SyncGroupRequestData}
+import org.apache.kafka.common.message.{HeartbeatRequestData, InitProducerIdRequestData, JoinGroupRequestData, OffsetCommitRequestData, OffsetCommitResponseData, SyncGroupRequestData}
 import org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocol
 import org.apache.kafka.common.replica.ClientMetadata
 import org.junit.Assert.{assertEquals, assertNull, assertTrue}
@@ -641,6 +642,42 @@ class KafkaApisTest {
     val response = readResponse(ApiKeys.OFFSET_COMMIT, offsetCommitRequest, capturedResponse).asInstanceOf[OffsetCommitResponse]
     assertEquals(expectedTopicErrors, response.data.topics())
     EasyMock.replay(groupCoordinator)
+  }
+
+  @Test
+  def rejectInitProducerIdWhenIdButNotEpochProvided(): Unit = {
+    val capturedResponse = expectNoThrottling()
+    EasyMock.replay(clientRequestQuotaManager, requestChannel)
+
+    val (initProducerIdRequest, requestChannelRequest) = buildRequest(new InitProducerIdRequest.Builder(
+      new InitProducerIdRequestData()
+        .setTransactionalId("known")
+        .setTransactionTimeoutMs(TimeUnit.MINUTES.toMillis(15).toInt)
+        .setProducerId(10)
+        .setProducerEpoch(RecordBatch.NO_PRODUCER_EPOCH)
+        ))
+    createKafkaApis(KAFKA_2_2_IV1).handleInitProducerIdRequest(requestChannelRequest)
+
+    val response = readResponse(ApiKeys.INIT_PRODUCER_ID, initProducerIdRequest, capturedResponse).asInstanceOf[InitProducerIdResponse]
+    assertEquals(Errors.INVALID_REQUEST, response.error)
+  }
+
+  @Test
+  def rejectInitProducerIdWhenEpochButNotIdProvided(): Unit = {
+    val capturedResponse = expectNoThrottling()
+    EasyMock.replay(clientRequestQuotaManager, requestChannel)
+
+    val (initProducerIdRequest, requestChannelRequest) = buildRequest(new InitProducerIdRequest.Builder(
+      new InitProducerIdRequestData()
+        .setTransactionalId("known")
+        .setTransactionTimeoutMs(TimeUnit.MINUTES.toMillis(15).toInt)
+        .setProducerId(RecordBatch.NO_PRODUCER_ID)
+        .setProducerEpoch(2)
+    ))
+    createKafkaApis(KAFKA_2_2_IV1).handleInitProducerIdRequest(requestChannelRequest)
+
+    val response = readResponse(ApiKeys.INIT_PRODUCER_ID, initProducerIdRequest, capturedResponse).asInstanceOf[InitProducerIdResponse]
+    assertEquals(Errors.INVALID_REQUEST, response.error)
   }
 
   /**

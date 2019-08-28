@@ -24,7 +24,7 @@
     { "name": "TransactionalId", "type": "string", "versions": "0+", "nullableVersions": "0+", "entityType": "transactionalId",
       "about": "The transactional id, or null if the producer is not transactional." },
     { "name": "TransactionTimeoutMs", "type": "int32", "versions": "0+",
-      "about": "The time in ms to wait for before aborting idle transactions sent by this producer. This is only relevant if a TransactionalId has been defined." },
+      "about": "The time in ms to wait before aborting idle transactions sent by this producer. This is only relevant if a TransactionalId has been defined." },
     { "name": "ProducerId", "type": "int64", "versions": "2+", "default": "-1",
       "about": "The producer id. This is used to disambiguate requests if a transactional id is reused following its expiration." },
     { "name": "ProducerEpoch", "type": "int16", "versions": "2+", "default": "-1",

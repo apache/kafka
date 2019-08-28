@@ -216,36 +216,40 @@ private[transaction] class TransactionMetadata(val transactionalId: String,
 
   def prepareIncrementProducerEpoch(newTxnTimeoutMs: Int,
                                     currentProducerEpoch: Option[Short],
-                                    updateTimestamp: Long): Either[Errors, TxnTransitMetadata] = {
+                                    updateTimestamp: Long,
+                                    isNewMetadata: Boolean): Either[Errors, TxnTransitMetadata] = {
     if (isProducerEpochExhausted)
       throw new IllegalStateException(s"Cannot allocate any more producer epochs for producerId $producerId")
 
     // If no epoch was provided by the producer, bump the current epoch and set the last epoch to -1
     // If an epoch was provided by the producer:
+    //   If the transaction metadata has no last producer ID, then it is a newly-created producer ID. Bump the
+    // current and last epochs.
     //   If it matches the current epoch, the producer is attempting to continue after an error, and no other producer
     // has been initialized. Bump the current and last epochs.
     //   If it matches the previous epoch, it is a retry of a successful call, so just return the current epoch without
     // bumping. There is no danger of this producer being fenced, because a new producer calling InitProducerId would
     // have caused the last epoch to be set to -1.
-    //   Otherwise, the producer has a stale epoch and should receive an INVALID_PRODUCER_ERROR
-    val epochBumpResult: Either[Errors, (Int, Short)] = currentProducerEpoch match {
+    //   Otherwise, the producer has a fenced epoch and should receive an INVALID_PRODUCER_ERROR
+    val bumpedEpoch = (producerEpoch + 1).toShort
+    val epochBumpResult: Either[Errors, (Short, Short)] = currentProducerEpoch match {
       case None =>
-        Right(if (producerEpoch == RecordBatch.NO_PRODUCER_EPOCH) 0 else producerEpoch + 1, RecordBatch.NO_PRODUCER_EPOCH)
+        Right(if (producerEpoch == RecordBatch.NO_PRODUCER_EPOCH) 0 else bumpedEpoch, RecordBatch.NO_PRODUCER_EPOCH)
 
       case Some(currentEpoch) =>
-        if (currentEpoch == producerEpoch)
-          Right(producerEpoch + 1, producerEpoch)
+        if (isNewMetadata || currentEpoch == producerEpoch)
+          Right(bumpedEpoch, producerEpoch)
         else if (currentEpoch == lastProducerEpoch)
           Right(producerEpoch, lastProducerEpoch)
         else {
-          error(s"Provided producer epoch $currentEpoch does not match current " +
+          info(s"Provided producer epoch $currentEpoch does not match current " +
             s"producer epoch $producerEpoch or previous producer epoch $lastProducerEpoch")
           Left(Errors.INVALID_PRODUCER_EPOCH)
         }
     }
 
     epochBumpResult.map { case (nextEpoch, lastEpoch) =>
-        prepareTransitionTo(Empty, producerId, nextEpoch.toShort, lastEpoch, newTxnTimeoutMs,
+        prepareTransitionTo(Empty, producerId, nextEpoch, lastEpoch, newTxnTimeoutMs,
           immutable.Set.empty[TopicPartition], -1, updateTimestamp)
     }
   }
@@ -417,7 +421,7 @@ private[transaction] class TransactionMetadata(val transactionalId: String,
             s"this operation is to remove the transaction metadata from the cache, not to persist the $toState in the log.")
       }
 
-      info(s"TransactionalId $transactionalId complete transition from $state to $transitMetadata")
+      debug(s"TransactionalId $transactionalId complete transition from $state to $transitMetadata")
       txnLastUpdateTimestamp = transitMetadata.txnLastUpdateTimestamp
       pendingState = None
       state = toState

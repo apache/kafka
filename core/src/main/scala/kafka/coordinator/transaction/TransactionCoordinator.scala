@@ -23,14 +23,12 @@ import kafka.server.{DelayedOperationPurgatory, KafkaConfig, MetadataCache, Repl
 import kafka.utils.{Logging, Scheduler}
 import kafka.zk.KafkaZkClient
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.internals.Topic
+import org.apache.kafka.common.internals.{ProducerIdAndEpoch, Topic}
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.RecordBatch
 import org.apache.kafka.common.requests.TransactionResult
 import org.apache.kafka.common.utils.{LogContext, Time}
-
-case class ProducerIdAndEpoch(producerId: Long, epoch: Short)
 
 object TransactionCoordinator {
 
@@ -57,7 +55,8 @@ object TransactionCoordinator {
     // we do not need to turn on reaper thread since no tasks will be expired and there are no completed tasks to be purged
     val txnMarkerPurgatory = DelayedOperationPurgatory[DelayedTxnMarker]("txn-marker-purgatory", config.brokerId,
       reaperEnabled = false, timerEnabled = false)
-    val txnStateManager = new TransactionStateManager(config.brokerId, zkClient, scheduler, replicaManager, txnConfig, time)
+    val txnStateManager = new TransactionStateManager(config.brokerId, zkClient, scheduler, replicaManager, txnConfig,
+      time, config.interBrokerProtocolVersion)
 
     val logContext = new LogContext(s"[TransactionCoordinator id=${config.brokerId}] ")
     val txnMarkerChannelManager = TransactionMarkerChannelManager(config, metrics, metadataCache, txnStateManager,
@@ -143,10 +142,11 @@ class TransactionCoordinator(brokerId: Int,
         existingEpochAndMetadata =>
           val coordinatorEpoch = existingEpochAndMetadata.coordinatorEpoch
           val txnMetadata = existingEpochAndMetadata.transactionMetadata
+          val isNewMetadata = existingEpochAndMetadata.isNewMetadata
 
           txnMetadata.inLock {
             prepareInitProducerIdTransit(transactionalId, transactionTimeoutMs, coordinatorEpoch, txnMetadata,
-              expectedProducerIdAndEpoch)
+              expectedProducerIdAndEpoch, isNewMetadata)
           }
       }
 
@@ -193,17 +193,24 @@ class TransactionCoordinator(brokerId: Int,
                                           transactionTimeoutMs: Int,
                                           coordinatorEpoch: Int,
                                           txnMetadata: TransactionMetadata,
-                                          expectedProducerIdAndEpoch: Option[ProducerIdAndEpoch]): ApiResult[(Int, TxnTransitMetadata)] = {
+                                          expectedProducerIdAndEpoch: Option[ProducerIdAndEpoch],
+                                          isNewMetadata: Boolean): ApiResult[(Int, TxnTransitMetadata)] = {
 
-    def isStaleProducerId(producerIdAndEpoch: ProducerIdAndEpoch): Boolean = {
-      // Fence the producer if the expected producer ID doesn't match the metadata, unless the expected ID matches the
-      // previous one and the expected epoch is exhausted, because this could be a retry after a valid epoch bump that
-      // the producer never received the response for
-      !(producerIdAndEpoch.producerId == txnMetadata.producerId ||
+    def isFencedProducerId(producerIdAndEpoch: ProducerIdAndEpoch): Boolean = {
+      // If a producer ID and epoch are provided by the request, fence the producer unless one of the following is true:
+      //   1. No transaction metadata was found, so we created a new one as part of this request. This is the case of a
+      //      producer recovering from an UNKNOWN_PRODUCER_ID error, and it is safe to return the newly-generated
+      //      producer ID.
+      //   2. The expected producer ID matches the ID in current metadata (the epoch will be checked when we try to
+      //      increment it)
+      //   3. The expected producer ID matches the previous one and the expected epoch is exhausted, in which case this
+      //      could be a retry after a valid epoch bump that the producer never received the response for
+      !(isNewMetadata ||
+        producerIdAndEpoch.producerId == txnMetadata.producerId ||
         (producerIdAndEpoch.producerId == txnMetadata.lastProducerId && TransactionMetadata.isEpochExhausted(producerIdAndEpoch.epoch)))
     }
 
-    if (expectedProducerIdAndEpoch.exists(isStaleProducerId))
+    if (expectedProducerIdAndEpoch.exists(isFencedProducerId))
       Left(Errors.INVALID_PRODUCER_EPOCH)
     else if (txnMetadata.pendingTransitionInProgress) {
       // return a retriable exception to let the client backoff and retry
@@ -217,13 +224,15 @@ class TransactionCoordinator(brokerId: Int,
 
         case CompleteAbort | CompleteCommit | Empty =>
           val transitMetadataResult =
+            // If the epoch is exhausted and the expected epoch (if provided) matches it, generate a new producer ID
             if (txnMetadata.isProducerEpochExhausted &&
-                expectedProducerIdAndEpoch.forall(idAndEpoch => TransactionMetadata.isEpochExhausted(idAndEpoch.epoch))) {
+                expectedProducerIdAndEpoch.forall(_.epoch == txnMetadata.producerEpoch)) {
               val newProducerId = producerIdManager.generateProducerId()
               Right(txnMetadata.prepareProducerIdRotation(newProducerId, transactionTimeoutMs, time.milliseconds(),
                 expectedProducerIdAndEpoch.isDefined))
             } else {
-              txnMetadata.prepareIncrementProducerEpoch(transactionTimeoutMs, expectedProducerIdAndEpoch.map(_.epoch), time.milliseconds())
+              txnMetadata.prepareIncrementProducerEpoch(transactionTimeoutMs, expectedProducerIdAndEpoch.map(_.epoch),
+                time.milliseconds(), isNewMetadata)
             }
 
           transitMetadataResult.map { transitMetadata => (coordinatorEpoch, transitMetadata) }
@@ -346,6 +355,7 @@ class TransactionCoordinator(brokerId: Int,
                   // We should clear the pending state to make way for the transition to PrepareAbort and also bump
                   // the epoch in the transaction metadata we are about to append.
                   txnMetadata.pendingState = None
+                  txnMetadata.lastProducerEpoch = txnMetadata.producerEpoch
                   txnMetadata.producerEpoch = producerEpoch
                 }
 
