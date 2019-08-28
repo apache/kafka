@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.Set;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
