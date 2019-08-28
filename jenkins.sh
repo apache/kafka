@@ -25,7 +25,9 @@
     || { echo 'Validation steps failed'; exit 1; }
 
 # Run tests
-./gradlew core:test --tests GroupEndToEndAuthorizationTest.testNoDescribeProduceOrConsumeWithoutTopicDescribeAcl
+./gradlew core:test --tests GroupEndToEndAuthorizationTest.testNoDescribeProduceOrConsumeWithoutTopicDescribeAcl \
+    --profile --no-daemon --continue -PtestLoggingEvents=started,passed,skipped,failed "$@" \
+    || { echo 'Test steps failed'; exit 1; }
 #./gradlew unitTest integrationTest \
 #    --profile --no-daemon --continue -PtestLoggingEvents=started,passed,skipped,failed "$@" \
 #    || { echo 'Test steps failed'; exit 1; }
