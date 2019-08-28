@@ -80,7 +80,7 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
   }
 
   @Before
-  override def setUp() {
+  override def setUp(): Unit = {
     doSetup(createOffsetsTopic = true)
   }
 
@@ -148,7 +148,7 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
   }
 
   @After
-  override def tearDown() {
+  override def tearDown(): Unit = {
     producers.foreach(_.close(Duration.ZERO))
     consumers.foreach(_.wakeup())
     consumers.foreach(_.close(Duration.ZERO))

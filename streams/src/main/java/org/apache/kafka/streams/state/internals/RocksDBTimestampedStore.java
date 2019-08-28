@@ -23,6 +23,7 @@ import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.TimestampedBytesStore;
+import org.apache.kafka.streams.state.internals.metrics.RocksDBMetricsRecorder;
 import org.rocksdb.ColumnFamilyDescriptor;
 import org.rocksdb.ColumnFamilyHandle;
 import org.rocksdb.ColumnFamilyOptions;
@@ -51,13 +52,15 @@ import static org.apache.kafka.streams.state.TimestampedBytesStore.convertToTime
 public class RocksDBTimestampedStore extends RocksDBStore implements TimestampedBytesStore {
     private static final Logger log = LoggerFactory.getLogger(RocksDBTimestampedStore.class);
 
-    RocksDBTimestampedStore(final String name) {
-        super(name);
+    RocksDBTimestampedStore(final String name,
+                            final String metricsScope) {
+        super(name, metricsScope);
     }
 
     RocksDBTimestampedStore(final String name,
-                            final String parentDir) {
-        super(name, parentDir);
+                            final String parentDir,
+                            final RocksDBMetricsRecorder metricsRecorder) {
+        super(name, parentDir, metricsRecorder);
     }
 
     @Override
@@ -70,20 +73,7 @@ public class RocksDBTimestampedStore extends RocksDBStore implements Timestamped
 
         try {
             db = RocksDB.open(dbOptions, dbDir.getAbsolutePath(), columnFamilyDescriptors, columnFamilies);
-
-            final ColumnFamilyHandle noTimestampColumnFamily = columnFamilies.get(0);
-
-            final RocksIterator noTimestampsIter = db.newIterator(noTimestampColumnFamily);
-            noTimestampsIter.seekToFirst();
-            if (noTimestampsIter.isValid()) {
-                log.info("Opening store {} in upgrade mode", name);
-                dbAccessor = new DualColumnFamilyAccessor(noTimestampColumnFamily, columnFamilies.get(1));
-            } else {
-                log.info("Opening store {} in regular mode", name);
-                dbAccessor = new SingleColumnFamilyAccessor(columnFamilies.get(1));
-                noTimestampColumnFamily.close();
-            }
-            noTimestampsIter.close();
+            setDbAccessor(columnFamilies.get(0), columnFamilies.get(1));
         } catch (final RocksDBException e) {
             if ("Column family not found: : keyValueWithTimestamp".equals(e.getMessage())) {
                 try {
@@ -92,14 +82,27 @@ public class RocksDBTimestampedStore extends RocksDBStore implements Timestamped
                 } catch (final RocksDBException fatal) {
                     throw new ProcessorStateException("Error opening store " + name + " at location " + dbDir.toString(), fatal);
                 }
-                log.info("Opening store {} in upgrade mode", name);
-                dbAccessor = new DualColumnFamilyAccessor(columnFamilies.get(0), columnFamilies.get(1));
+                setDbAccessor(columnFamilies.get(0), columnFamilies.get(1));
             } else {
                 throw new ProcessorStateException("Error opening store " + name + " at location " + dbDir.toString(), e);
             }
         }
     }
 
+    private void setDbAccessor(final ColumnFamilyHandle noTimestampColumnFamily,
+                               final ColumnFamilyHandle withTimestampColumnFamily) {
+        final RocksIterator noTimestampsIter = db.newIterator(noTimestampColumnFamily);
+        noTimestampsIter.seekToFirst();
+        if (noTimestampsIter.isValid()) {
+            log.info("Opening store {} in upgrade mode", name);
+            dbAccessor = new DualColumnFamilyAccessor(noTimestampColumnFamily, withTimestampColumnFamily);
+        } else {
+            log.info("Opening store {} in regular mode", name);
+            dbAccessor = new SingleColumnFamilyAccessor(withTimestampColumnFamily);
+            noTimestampColumnFamily.close();
+        }
+        noTimestampsIter.close();
+    }
 
 
     private class DualColumnFamilyAccessor implements RocksDBAccessor {
@@ -339,11 +342,6 @@ public class RocksDBTimestampedStore extends RocksDBStore implements Timestamped
             }
 
             return next;
-        }
-
-        @Override
-        public void remove() {
-            throw new UnsupportedOperationException("RocksDB iterator does not support remove()");
         }
 
         @Override

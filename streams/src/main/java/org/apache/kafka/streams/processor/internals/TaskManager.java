@@ -449,9 +449,10 @@ public class TaskManager {
             for (final Map.Entry<TopicPartition, Long> entry : active.recordsToDelete().entrySet()) {
                 recordsToDelete.put(entry.getKey(), RecordsToDelete.beforeOffset(entry.getValue()));
             }
-            deleteRecordsResult = adminClient.deleteRecords(recordsToDelete);
-
-            log.trace("Sent delete-records request: {}", recordsToDelete);
+            if (!recordsToDelete.isEmpty()) {
+                deleteRecordsResult = adminClient.deleteRecords(recordsToDelete);
+                log.trace("Sent delete-records request: {}", recordsToDelete);
+            }
         }
     }
 

@@ -334,7 +334,7 @@ public class EosIntegrationTest {
 
             TestUtils.waitForCondition(
                 () -> commitRequested.get() == 2, MAX_WAIT_TIME_MS,
-                "SteamsTasks did not request commit.");
+                "StreamsTasks did not request commit.");
 
             writeInputData(uncommittedDataBeforeFailure);
 

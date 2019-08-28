@@ -82,11 +82,6 @@ public class MemoryNavigableLRUCache extends MemoryLRUCache {
         }
 
         @Override
-        public void remove() {
-            // do nothing
-        }
-
-        @Override
         public void close() {
             // do nothing
         }

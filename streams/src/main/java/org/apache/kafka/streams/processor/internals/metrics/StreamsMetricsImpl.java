@@ -57,7 +57,7 @@ public class StreamsMetricsImpl implements StreamsMetrics {
 
     public static final String THREAD_ID_TAG = "client-id";
     public static final String TASK_ID_TAG = "task-id";
-    public static final String STORE_ID_TAG = "state-id";
+    public static final String STORE_ID_TAG = "id";
 
     public static final String ALL_TASKS = "all";
 

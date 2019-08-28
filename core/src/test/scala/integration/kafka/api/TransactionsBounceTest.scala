@@ -71,7 +71,7 @@ class TransactionsBounceTest extends KafkaServerTestHarness {
   }
 
   @Test
-  def testBrokerFailure() {
+  def testBrokerFailure(): Unit = {
     // basic idea is to seed a topic with 10000 records, and copy it transactionally while bouncing brokers
     // constantly through the period.
     val consumerGroup = "myGroup"
@@ -181,7 +181,7 @@ class TransactionsBounceTest extends KafkaServerTestHarness {
       (0 until numPartitions).foreach(partition => TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, outputTopic, partition))
     }
 
-    override def shutdown(){
+    override def shutdown(): Unit = {
       super.shutdown()
    }
   }

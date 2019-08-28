@@ -59,7 +59,7 @@ class SaslPlainPlaintextConsumerTest extends BaseConsumerTest with SaslSetup {
    * when zookeeper.set.acl=false, even if ZooKeeper is SASL-enabled.
    */
   @Test
-  def testZkAclsDisabled() {
+  def testZkAclsDisabled(): Unit = {
     TestUtils.verifyUnsecureZkAcls(zkClient)
   }
 }

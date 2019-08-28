@@ -56,7 +56,7 @@ class ReplicaFetcherMockBlockingSend(offsets: java.util.Map[TopicPartition, Epoc
   var currentOffsets: java.util.Map[TopicPartition, EpochEndOffset] = offsets
   private val sourceNode = new Node(sourceBroker.id, sourceBroker.host, sourceBroker.port)
 
-  def setEpochRequestCallback(postEpochFunction: () => Unit){
+  def setEpochRequestCallback(postEpochFunction: () => Unit): Unit = {
     callback = Some(postEpochFunction)
   }
 

@@ -43,7 +43,7 @@ class BrokerEpochIntegrationTest extends ZooKeeperTestHarness {
   var servers: Seq[KafkaServer] = Seq.empty[KafkaServer]
 
   @Before
-  override def setUp() {
+  override def setUp(): Unit = {
     super.setUp()
     val configs = Seq(
       TestUtils.createBrokerConfig(brokerId1, zkConnect),
@@ -57,7 +57,7 @@ class BrokerEpochIntegrationTest extends ZooKeeperTestHarness {
   }
 
   @After
-  override def tearDown() {
+  override def tearDown(): Unit = {
     TestUtils.shutdownServers(servers)
     super.tearDown()
   }
@@ -92,16 +92,16 @@ class BrokerEpochIntegrationTest extends ZooKeeperTestHarness {
   }
 
   @Test
-  def testControlRequestWithCorrectBrokerEpoch() {
+  def testControlRequestWithCorrectBrokerEpoch(): Unit = {
     testControlRequestWithBrokerEpoch(false)
   }
 
   @Test
-  def testControlRequestWithStaleBrokerEpoch() {
+  def testControlRequestWithStaleBrokerEpoch(): Unit = {
     testControlRequestWithBrokerEpoch(true)
   }
 
-  private def testControlRequestWithBrokerEpoch(isEpochInRequestStale: Boolean) {
+  private def testControlRequestWithBrokerEpoch(isEpochInRequestStale: Boolean): Unit = {
     val tp = new TopicPartition("new-topic", 0)
 
     // create topic with 1 partition, 2 replicas, one on each broker
