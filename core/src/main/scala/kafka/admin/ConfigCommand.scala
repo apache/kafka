@@ -154,7 +154,7 @@ object ConfigCommand extends Config {
 
     adminZkClient.changeConfigs(entityType, entityName, configs)
 
-    println(s"Completed Updating config for entity: $entity.")
+    println(s"Completed updating config for entity: $entity.")
   }
 
   private def preProcessScramCredentials(configsToBeAdded: Properties): Unit = {
