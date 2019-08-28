@@ -29,7 +29,8 @@ import org.apache.kafka.common.acl._
 import org.apache.kafka.common.resource.{PatternType, ResourcePattern, ResourcePatternFilter, Resource => JResource, ResourceType => JResourceType}
 import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.security.auth.KafkaPrincipal
-import org.apache.kafka.common.utils.{SecurityUtils, Utils}
+import org.apache.kafka.common.utils.{Utils, SecurityUtils => JSecurityUtils}
+import org.apache.kafka.server.authorizer.{Authorizer => JAuthorizer}
 
 import scala.collection.JavaConverters._
 import scala.collection.mutable
@@ -53,7 +54,18 @@ object AclCommand extends Logging {
       if (opts.options.has(opts.bootstrapServerOpt)) {
         new AdminClientService(opts)
       } else {
-        new AuthorizerService(opts)
+        val authorizerClass = if (opts.options.has(opts.authorizerOpt)) {
+          val className = opts.options.valueOf(opts.authorizerOpt)
+          Class.forName(className, true, Utils.getContextOrKafkaClassLoader)
+        } else
+          classOf[SimpleAclAuthorizer]
+
+        if (classOf[JAuthorizer].isAssignableFrom(authorizerClass))
+          new JAuthorizerService(authorizerClass.asSubclass(classOf[JAuthorizer]), opts)
+        else if (classOf[Authorizer].isAssignableFrom(authorizerClass))
+          new AuthorizerService(authorizerClass.asSubclass(classOf[Authorizer]), opts)
+        else
+          throw new IllegalArgumentException(s"Authorizer $authorizerClass does not implement ${classOf[Authorizer]} or ${classOf[JAuthorizer]}.")
       }
     }
 
@@ -183,7 +195,8 @@ object AclCommand extends Logging {
     }
   }
 
-  class AuthorizerService(val opts: AclCommandOptions) extends AclCommandService with Logging {
+  @deprecated("Use JAuthorizerService", "Since 2.4")
+  class AuthorizerService(val authorizerClass: Class[_ <: Authorizer], val opts: AclCommandOptions) extends AclCommandService with Logging {
 
     private def withAuthorizer()(f: Authorizer => Unit): Unit = {
       val defaultProps = Map(KafkaConfig.ZkEnableSecureAclsProp -> JaasUtils.isZkSecurityEnabled)
@@ -195,12 +208,7 @@ object AclCommand extends Logging {
           defaultProps
         }
 
-      val authorizerClass = if (opts.options.has(opts.authorizerOpt))
-        opts.options.valueOf(opts.authorizerOpt)
-      else
-        classOf[SimpleAclAuthorizer].getName
-
-      val authZ = CoreUtils.createObject[Authorizer](authorizerClass)
+      val authZ = Utils.newInstance(authorizerClass)
       try {
         authZ.configure(authorizerProperties.asJava)
         f(authZ)
@@ -284,6 +292,114 @@ object AclCommand extends Logging {
       else
         authorizer.getAcls(listPrincipal.get).filter { case (resource, _) => filter.matches(resource.toPattern) }
 
+  }
+
+  class JAuthorizerService(val authorizerClass: Class[_ <: JAuthorizer], val opts: AclCommandOptions) extends AclCommandService with Logging {
+
+    private def withAuthorizer()(f: JAuthorizer => Unit) {
+      val defaultProps = Map(KafkaConfig.ZkEnableSecureAclsProp -> JaasUtils.isZkSecurityEnabled)
+      val authorizerProperties =
+        if (opts.options.has(opts.authorizerPropertiesOpt)) {
+          val authorizerProperties = opts.options.valuesOf(opts.authorizerPropertiesOpt).asScala
+          defaultProps ++ CommandLineUtils.parseKeyValueArgs(authorizerProperties, acceptMissingValue = false).asScala
+        } else {
+          defaultProps
+        }
+
+      val authZ = Utils.newInstance(authorizerClass)
+      try {
+        authZ.configure(authorizerProperties.asJava)
+        f(authZ)
+      }
+      finally CoreUtils.swallow(authZ.close(), this)
+    }
+
+    def addAcls(): Unit = {
+      val resourceToAcl = getResourceToAcls(opts)
+      withAuthorizer() { authorizer =>
+        for ((resource, acls) <- resourceToAcl) {
+          val resourcePattern = resource.toPattern
+          println(s"Adding ACLs for resource `$resourcePattern`: $Newline ${acls.map("\t" + _).mkString(Newline)} $Newline")
+          val aclBindings = acls.map(acl => new AclBinding(resourcePattern, getAccessControlEntry(acl)))
+          authorizer.createAcls(null, aclBindings.toList.asJava)
+        }
+
+        listAcls()
+      }
+    }
+
+    def removeAcls(): Unit = {
+      withAuthorizer() { authorizer =>
+        val filterToAcl = getResourceFilterToAcls(opts)
+
+        for ((filter, acls) <- filterToAcl) {
+          if (acls.isEmpty) {
+            if (confirmAction(opts, s"Are you sure you want to delete all ACLs for resource filter `$filter`? (y/n)"))
+              removeAcls(authorizer, acls, filter)
+          } else {
+            if (confirmAction(opts, s"Are you sure you want to remove ACLs: $Newline ${acls.map("\t" + _).mkString(Newline)} $Newline from resource filter `$filter`? (y/n)"))
+              removeAcls(authorizer, acls, filter)
+          }
+        }
+
+        listAcls()
+      }
+    }
+
+    def listAcls(): Unit = {
+      withAuthorizer() { authorizer =>
+        val filters = getResourceFilter(opts, dieIfNoResourceFound = false)
+        val listPrincipals = getPrincipals(opts, opts.listPrincipalsOpt)
+        val resourceToAcls = getAcls(authorizer, filters)
+
+        if (listPrincipals.isEmpty) {
+          for ((resource, acls) <- resourceToAcls)
+            println(s"Current ACLs for resource `$resource`: $Newline ${acls.map("\t" + _).mkString(Newline)} $Newline")
+        } else {
+          listPrincipals.foreach(principal => {
+            println(s"ACLs for principal `$principal`")
+            val filteredResourceToAcls =  resourceToAcls.mapValues(acls =>
+              acls.filter(acl => principal.toString.equals(acl.principal))).filter(entry => entry._2.nonEmpty)
+
+            for ((resource, acls) <- filteredResourceToAcls)
+              println(s"Current ACLs for resource `$resource`: $Newline ${acls.map("\t" + _).mkString(Newline)} $Newline")
+          })
+        }
+      }
+    }
+
+    private def getAccessControlEntry(acl: Acl): AccessControlEntry = {
+      new AccessControlEntry(acl.principal.toString, acl.host, acl.operation.toJava, acl.permissionType.toJava)
+    }
+
+    private def removeAcls(authorizer: JAuthorizer, acls: Set[Acl], filter: ResourcePatternFilter): Unit = {
+      if (acls.isEmpty)
+        authorizer.deleteAcls(null, List(new AclBindingFilter(filter, AccessControlEntryFilter.ANY)).asJava)
+      else {
+        val aclBindingFilters = acls.map(acl => new AclBindingFilter(filter, getAccessControlEntryFilter(acl))).toList.asJava
+        authorizer.deleteAcls(null, aclBindingFilters)
+      }
+    }
+
+    private def getAccessControlEntryFilter(acl: Acl): AccessControlEntryFilter = {
+      new AccessControlEntryFilter(acl.principal.toString, acl.host, acl.operation.toJava, acl.permissionType.toJava)
+    }
+
+    private def getAcls(authorizer: JAuthorizer, filters: Set[ResourcePatternFilter]): Map[ResourcePattern, Set[AccessControlEntry]] = {
+      val aclBindings =
+        if (filters.isEmpty) authorizer.acls(AclBindingFilter.ANY).asScala
+        else {
+          val results = for (filter <- filters) yield {
+            authorizer.acls(new AclBindingFilter(filter, AccessControlEntryFilter.ANY)).asScala
+          }
+          results.reduceLeft(_ ++ _)
+        }
+
+      val resourceToAcls = mutable.Map[ResourcePattern, Set[AccessControlEntry]]().withDefaultValue(Set())
+
+      aclBindings.foreach(aclBinding => resourceToAcls(aclBinding.pattern()) = resourceToAcls(aclBinding.pattern()) + aclBinding.entry())
+      resourceToAcls.toMap
+    }
   }
 
   private def getResourceToAcls(opts: AclCommandOptions): Map[Resource, Set[Acl]] = {
@@ -406,7 +522,7 @@ object AclCommand extends Logging {
 
   private def getPrincipals(opts: AclCommandOptions, principalOptionSpec: ArgumentAcceptingOptionSpec[String]): Set[KafkaPrincipal] = {
     if (opts.options.has(principalOptionSpec))
-      opts.options.valuesOf(principalOptionSpec).asScala.map(s => SecurityUtils.parseKafkaPrincipal(s.trim)).toSet
+      opts.options.valuesOf(principalOptionSpec).asScala.map(s => JSecurityUtils.parseKafkaPrincipal(s.trim)).toSet
     else
       Set.empty[KafkaPrincipal]
   }

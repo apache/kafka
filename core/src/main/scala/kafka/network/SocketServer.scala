@@ -36,7 +36,7 @@ import kafka.security.CredentialProvider
 import kafka.server.{BrokerReconfigurable, KafkaConfig}
 import kafka.utils._
 import org.apache.kafka.common.config.ConfigException
-import org.apache.kafka.common.{KafkaException, Reconfigurable}
+import org.apache.kafka.common.{Endpoint, KafkaException, Reconfigurable}
 import org.apache.kafka.common.memory.{MemoryPool, SimpleMemoryPool}
 import org.apache.kafka.common.metrics._
 import org.apache.kafka.common.metrics.stats.{CumulativeSum, Meter}
@@ -119,8 +119,8 @@ class SocketServer(val config: KafkaConfig,
       createControlPlaneAcceptorAndProcessor(config.controlPlaneListener)
       createDataPlaneAcceptorsAndProcessors(config.numNetworkThreads, config.dataPlaneListeners)
       if (startupProcessors) {
-        startControlPlaneProcessor()
-        startDataPlaneProcessors()
+        startControlPlaneProcessor(Map.empty)
+        startDataPlaneProcessors(Map.empty)
       }
     }
 
@@ -195,9 +195,27 @@ class SocketServer(val config: KafkaConfig,
    * Starts processors of all the data-plane acceptors of this server if they have not already been started.
    * This method is used for delayed starting of data-plane processors if [[kafka.network.SocketServer#startup]]
    * was invoked with `startupProcessors=false`.
+   *
+   * Before starting processors for each endpoint, we ensure that authorizer has all the metadata
+   * to authorize requests on that endpoint by waiting on the provided future. We start inter-broker listener
+   * before other listeners. This allows authorization metadata for other listeners to be stored in Kafka topics
+   * in this cluster.
    */
-  def startDataPlaneProcessors(): Unit = synchronized {
-    dataPlaneAcceptors.values.asScala.foreach { _.startProcessors(DataPlaneThreadPrefix) }
+  def startDataPlaneProcessors(authorizerFutures: Map[Endpoint, CompletableFuture[Void]] = Map.empty): Unit = synchronized {
+    val interBrokerListener = dataPlaneAcceptors.asScala.keySet
+      .find(_.listenerName == config.interBrokerListenerName)
+      .getOrElse(throw new IllegalStateException(s"Inter-broker listener ${config.interBrokerListenerName} not found, endpoints=${dataPlaneAcceptors.keySet}"))
+    val orderedAcceptors = List(dataPlaneAcceptors.get(interBrokerListener)) ++
+      dataPlaneAcceptors.asScala.filterKeys(_ != interBrokerListener).values
+    orderedAcceptors.foreach { acceptor =>
+      val endpoint = acceptor.endPoint
+      debug(s"Wait for authorizer to complete start up on listener ${endpoint.listener}")
+      authorizerFutures.get(endpoint).foreach { future =>
+        future.join()
+      }
+      debug(s"Start processors on listener ${endpoint.listener}")
+      acceptor.startProcessors(DataPlaneThreadPrefix)
+    }
     info(s"Started data-plane processors for ${dataPlaneAcceptors.size} acceptors")
   }
 
@@ -206,8 +224,9 @@ class SocketServer(val config: KafkaConfig,
    * This method is used for delayed starting of control-plane processor if [[kafka.network.SocketServer#startup]]
    * was invoked with `startupProcessors=false`.
    */
-  def startControlPlaneProcessor(): Unit = synchronized {
+  def startControlPlaneProcessor(authorizerFutures: Map[Endpoint, CompletableFuture[Void]] = Map.empty): Unit = synchronized {
     controlPlaneAcceptorOpt.foreach { controlPlaneAcceptor =>
+      authorizerFutures.get(controlPlaneAcceptor.endPoint).foreach(_.get)
       controlPlaneAcceptor.startProcessors(ControlPlaneThreadPrefix)
       info(s"Started control-plane processor for the control-plane acceptor")
     }

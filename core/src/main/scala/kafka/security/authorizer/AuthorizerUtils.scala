@@ -15,18 +15,21 @@
   * limitations under the License.
   */
 
-package kafka.security
+package kafka.security.authorizer
 
-import kafka.security.auth.{Acl, Operation, PermissionType, Resource, ResourceType}
-import org.apache.kafka.common.acl.{AccessControlEntry, AclBinding, AclBindingFilter}
+import kafka.security.auth._
+import org.apache.kafka.common.acl.{AccessControlEntry, AclBinding, AclBindingFilter, AclOperation}
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.ApiError
-import org.apache.kafka.common.resource.ResourcePattern
+import org.apache.kafka.common.resource.{ResourcePattern, ResourceType => JResourceType}
 import org.apache.kafka.common.utils.SecurityUtils._
+
 import scala.util.{Failure, Success, Try}
 
 
-object SecurityUtils {
+object AuthorizerUtils {
+  val WildcardPrincipal = "User:*"
+  val WildcardHost = "*"
 
   def convertToResourceAndAcl(filter: AclBindingFilter): Either[ApiError, (Resource, Acl)] = {
     (for {
@@ -44,9 +47,30 @@ object SecurityUtils {
 
   def convertToAclBinding(resource: Resource, acl: Acl): AclBinding = {
     val resourcePattern = new ResourcePattern(resource.resourceType.toJava, resource.name, resource.patternType)
-    val entry = new AccessControlEntry(acl.principal.toString, acl.host.toString,
+    new AclBinding(resourcePattern, convertToAccessControlEntry(acl))
+  }
+
+  def convertToAccessControlEntry(acl: Acl): AccessControlEntry = {
+    new AccessControlEntry(acl.principal.toString, acl.host.toString,
       acl.operation.toJava, acl.permissionType.toJava)
-    new AclBinding(resourcePattern, entry)
+  }
+
+  def convertToAcl(ace: AccessControlEntry): Acl = {
+    new Acl(parseKafkaPrincipal(ace.principal), PermissionType.fromJava(ace.permissionType), ace.host,
+      Operation.fromJava(ace.operation))
+  }
+
+  def convertToResource(resourcePattern: ResourcePattern): Resource = {
+    Resource(ResourceType.fromJava(resourcePattern.resourceType), resourcePattern.name, resourcePattern.patternType)
+  }
+
+  def validateAclBinding(aclBinding: AclBinding): Unit = {
+    if (aclBinding.isUnknown)
+      throw new IllegalArgumentException("ACL binding contains unknown elements")
+  }
+
+  def supportedOperations(resourceType: JResourceType): Set[AclOperation] = {
+    ResourceType.fromJava(resourceType).supportedOperations.map(_.toJava)
   }
 
   def isClusterResource(name: String): Boolean = name.equals(Resource.ClusterResourceName)

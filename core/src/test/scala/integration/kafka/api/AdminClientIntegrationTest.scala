@@ -44,7 +44,7 @@ import org.apache.kafka.common.acl._
 import org.apache.kafka.common.config.{ConfigResource, LogLevelConfig}
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.requests.{DeleteRecordsRequest, MetadataResponse}
-import org.apache.kafka.common.resource.{PatternType, ResourcePattern, ResourceType}
+import org.apache.kafka.common.resource.{PatternType, Resource, ResourcePattern, ResourceType}
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.junit.Assert._
 import org.junit.rules.Timeout
@@ -76,6 +76,8 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
   val topic = "topic"
   val partition = 0
   val topicPartition = new TopicPartition(topic, partition)
+  val clusterResourcePattern = new ResourcePattern(ResourceType.CLUSTER, Resource.CLUSTER_NAME, PatternType.LITERAL)
+
 
   @Before
   override def setUp(): Unit = {

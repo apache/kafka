@@ -26,10 +26,11 @@ import org.apache.kafka.common.security.auth.SecurityProtocol;
 
 import java.net.InetAddress;
 import java.nio.ByteBuffer;
+import org.apache.kafka.server.authorizer.AuthorizableRequestContext;
 
 import static org.apache.kafka.common.protocol.ApiKeys.API_VERSIONS;
 
-public class RequestContext {
+public class RequestContext implements AuthorizableRequestContext {
     public final RequestHeader header;
     public final String connectionId;
     public final InetAddress clientAddress;
@@ -89,4 +90,43 @@ public class RequestContext {
         return header.apiVersion();
     }
 
+    @Override
+    public String listener() {
+        return listenerName.value();
+    }
+
+    @Override
+    public SecurityProtocol securityProtocol() {
+        return securityProtocol;
+    }
+
+    @Override
+    public KafkaPrincipal principal() {
+        return principal;
+    }
+
+    @Override
+    public InetAddress clientAddress() {
+        return clientAddress;
+    }
+
+    @Override
+    public int requestType() {
+        return header.apiKey().id;
+    }
+
+    @Override
+    public int requestVersion() {
+        return header.apiVersion();
+    }
+
+    @Override
+    public String clientId() {
+        return header.clientId();
+    }
+
+    @Override
+    public int correlationId() {
+        return header.correlationId();
+    }
 }

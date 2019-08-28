@@ -29,6 +29,7 @@ import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.resource.PatternType.{LITERAL, PREFIXED}
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.common.utils.SecurityUtils
+import org.apache.kafka.server.authorizer.{Authorizer => JAuthorizer}
 import org.junit.{After, Before, Test}
 import org.scalatest.Assertions.intercept
 
@@ -205,7 +206,14 @@ class AclCommandTest extends ZooKeeperTestHarness with Logging {
   @Test(expected = classOf[IllegalArgumentException])
   def testInvalidAuthorizerProperty(): Unit = {
     val args = Array("--authorizer-properties", "zookeeper.connect " + zkConnect)
-    val aclCommandService = new AclCommand.AuthorizerService(new AclCommandOptions(args))
+    val aclCommandService = new AclCommand.AuthorizerService(classOf[Authorizer], new AclCommandOptions(args))
+    aclCommandService.listAcls()
+  }
+
+  @Test(expected = classOf[IllegalArgumentException])
+  def testInvalidJAuthorizerProperty() {
+    val args = Array("--authorizer-properties", "zookeeper.connect " + zkConnect)
+    val aclCommandService = new AclCommand.JAuthorizerService(classOf[JAuthorizer], new AclCommandOptions(args))
     aclCommandService.listAcls()
   }
 
@@ -232,6 +240,7 @@ class AclCommandTest extends ZooKeeperTestHarness with Logging {
         verifyPatternType(listCmd, isValid = patternType != PatternType.UNKNOWN)
         val removeCmd = zkArgs ++ Array("--topic", "Test", "--force", "--remove", "--resource-pattern-type", patternType.toString)
         verifyPatternType(removeCmd, isValid = patternType != PatternType.UNKNOWN)
+
       }
     } finally {
       Exit.resetExitProcedure()

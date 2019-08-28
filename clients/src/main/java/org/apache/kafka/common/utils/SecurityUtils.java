@@ -16,18 +16,38 @@
  */
 package org.apache.kafka.common.utils;
 
+import org.apache.kafka.common.acl.AclOperation;
 import org.apache.kafka.common.config.SecurityConfig;
+import org.apache.kafka.common.resource.ResourceType;
 import org.apache.kafka.common.security.SecurityProviderCreator;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.security.Security;
+import java.util.HashMap;
 import java.util.Map;
 
 public class SecurityUtils {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(SecurityConfig.class);
+
+    private static final Map<String, ResourceType> NAME_TO_RESOURCE_TYPES;
+    private static final Map<String, AclOperation> NAME_TO_OPERATIONS;
+
+    static {
+        NAME_TO_RESOURCE_TYPES = new HashMap<>(ResourceType.values().length);
+        NAME_TO_OPERATIONS = new HashMap<>(AclOperation.values().length);
+
+        for (ResourceType resourceType : ResourceType.values()) {
+            String resourceTypeName = toPascalCase(resourceType.name());
+            NAME_TO_RESOURCE_TYPES.put(resourceTypeName, resourceType);
+        }
+        for (AclOperation operation : AclOperation.values()) {
+            String operationName = toPascalCase(operation.name());
+            NAME_TO_OPERATIONS.put(operationName, operation);
+        }
+    }
 
     public static KafkaPrincipal parseKafkaPrincipal(String str) {
         if (str == null || str.isEmpty()) {
@@ -65,4 +85,28 @@ public class SecurityUtils {
         }
     }
 
+    public static ResourceType resourceType(String name) {
+        ResourceType resourceType = NAME_TO_RESOURCE_TYPES.get(name);
+        return resourceType == null ? ResourceType.UNKNOWN : resourceType;
+    }
+
+    public static AclOperation operation(String name) {
+        AclOperation operation = NAME_TO_OPERATIONS.get(name);
+        return operation == null ? AclOperation.UNKNOWN : operation;
+    }
+
+    private static String toPascalCase(String name) {
+        StringBuilder builder = new StringBuilder();
+        boolean capitalizeNext = true;
+        for (char c : name.toCharArray()) {
+            if (c == '_')
+                capitalizeNext = true;
+            else if (capitalizeNext) {
+                builder.append(Character.toUpperCase(c));
+                capitalizeNext = false;
+            } else
+                builder.append(Character.toLowerCase(c));
+        }
+        return builder.toString();
+    }
 }
