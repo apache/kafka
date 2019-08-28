@@ -163,17 +163,6 @@ class MetricsTest extends KafkaServerTestHarness with Logging {
     assertEquals(metrics.keySet.asScala.count(_.getMBeanName == "kafka.controller:type=KafkaController,name=ReplicasIneligibleToDeleteCount"), 1)
   }
 
-  @Test
-  def testInvalidRecordMetricsNotInitialized(): Unit = {
-    val metrics = Metrics.defaultRegistry.allMetrics
-
-    // no records have been rejected/failed yet so all these metrics have not been initialized
-    assertEquals(metrics.keySet.asScala.count(_.getMBeanName.startsWith("kafka.server:type=BrokerTopicMetrics,name=NoKeyCompactedTopicRecordsPerSec")), 0)
-    assertEquals(metrics.keySet.asScala.count(_.getMBeanName.startsWith("kafka.server:type=BrokerTopicMetrics,name=InvalidMagicNumberRecordsPerSec")), 0)
-    assertEquals(metrics.keySet.asScala.count(_.getMBeanName.startsWith("kafka.server:type=BrokerTopicMetrics,name=InvalidMessageCrcRecordsPerSec")), 0)
-    assertEquals(metrics.keySet.asScala.count(_.getMBeanName.startsWith("kafka.server:type=BrokerTopicMetrics,name=NonIncreasingOffsetRecordsPerSec")), 0)
-  }
-
   /**
    * Test that the metrics are created with the right name, testZooKeeperStateChangeRateMetrics
    * and testZooKeeperSessionStateMetric in ZooKeeperClientTest test the metrics behaviour.
