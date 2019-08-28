@@ -144,7 +144,7 @@ class ReplicaManagerTest {
       rm.shutdown(checkpointHW = false)
     }
 
-    TestUtils.verifyNonDaemonThreadsStatus(this.getClass.getName)
+    TestUtils.assertNoNonDaemonThreads(this.getClass.getName)
   }
 
   @Test

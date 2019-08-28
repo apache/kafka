@@ -44,9 +44,8 @@ import static org.powermock.api.easymock.PowerMock.verifyAll;
 public class RocksDBMetricsTest {
 
     private static final String STATE_LEVEL_GROUP = "stream-state-metrics";
-    private static final String STORE_TYPE_PREFIX = "rocksdb-";
     private final String taskName = "task";
-    private final String storeType = "storeType";
+    private final String storeType = "test-state-id";
     private final String storeName = "store";
     private final Metrics metrics = new Metrics();
     private final Sensor sensor = metrics.sensor("dummy");
@@ -263,7 +262,7 @@ public class RocksDBMetricsTest {
         )).andReturn(sensor);
         expect(streamsMetrics.storeLevelTagMap(
             taskName,
-            STORE_TYPE_PREFIX + storeType,
+            storeType,
             storeName
         )).andReturn(tags);
     }
