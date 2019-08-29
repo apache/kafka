@@ -19,6 +19,7 @@ package org.apache.kafka.clients.consumer.internals;
 import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.FetchSessionHandler;
+import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.MetadataCache;
 import org.apache.kafka.clients.NodeApiVersions;
 import org.apache.kafka.clients.StaleMetadataException;
@@ -1093,10 +1094,10 @@ public class Fetcher<K, V> implements Closeable {
      */
     private void maybeValidateAssignments() {
         int newMetadataUpdateVersion = metadata.updateVersion();
-        //if (metadataUpdateVersion.getAndSet(newMetadataUpdateVersion) != newMetadataUpdateVersion) {
+        if (metadataUpdateVersion.getAndSet(newMetadataUpdateVersion) != newMetadataUpdateVersion) {
             subscriptions.forEachAssignedPartition(
                 tp -> subscriptions.maybeValidatePositionForCurrentLeader(tp, metadata.leaderAndEpoch(tp)));
-        //}
+        }
     }
 
     /**
@@ -1116,6 +1117,7 @@ public class Fetcher<K, V> implements Closeable {
             Node node = selectReadReplica(partition, position.currentLeader.leader, currentTimeMs);
 
             if (node == null || node.isEmpty()) {
+                log.info("Requesting metadata update for partition {} since the position {} is missing the current leader node", partition, position);
                 metadata.requestUpdate();
             } else if (client.isUnavailable(node)) {
                 client.maybeThrowAuthFailure(node);
@@ -1123,7 +1125,6 @@ public class Fetcher<K, V> implements Closeable {
                 // If we try to send during the reconnect blackout window, then the request is just
                 // going to be failed anyway before being sent, so skip the send for now
                 log.trace("Skipping fetch for partition {} because node {} is awaiting reconnect backoff", partition, node);
-
             } else if (this.nodesWithPendingFetchRequests.contains(node.id())) {
                 log.trace("Skipping fetch for partition {} because previous request to {} has not been processed", partition, node);
             } else {
