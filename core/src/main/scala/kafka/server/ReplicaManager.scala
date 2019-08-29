@@ -978,6 +978,12 @@ class ReplicaManager(val config: KafkaConfig,
 
   /**
    * Read from multiple topic partitions at the given offset up to maxSize bytes
+   *
+   * If there is a topic-partition that has to read from remote storage, this function does not read the remote storage,
+   * but returns the necessary information for the remote reading (in LogReadResult of that topic-partition).
+   *
+   * This function does not try to read any more data from location storage after the 1st remote topic-partition.
+   * In most cases, there should be enough data in the remote storage.
    */
   def readFromLocalLog(replicaId: Int,
                        fetchOnlyFromLeader: Boolean,
