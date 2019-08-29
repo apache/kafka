@@ -292,9 +292,6 @@ public class MetricsIntegrationTest {
             .to(STREAM_OUTPUT_4);
         startApplication();
 
-        for (final Metric metric : new ArrayList<Metric>(kafkaStreams.metrics().values())) {
-            System.out.println(metric.metricName());
-        }
         checkThreadLevelMetrics();
         checkTaskLevelMetrics();
         checkProcessorLevelMetrics();
