@@ -1093,10 +1093,10 @@ public class Fetcher<K, V> implements Closeable {
      */
     private void maybeValidateAssignments() {
         int newMetadataUpdateVersion = metadata.updateVersion();
-        if (metadataUpdateVersion.getAndSet(newMetadataUpdateVersion) != newMetadataUpdateVersion) {
+        //if (metadataUpdateVersion.getAndSet(newMetadataUpdateVersion) != newMetadataUpdateVersion) {
             subscriptions.forEachAssignedPartition(
                 tp -> subscriptions.maybeValidatePositionForCurrentLeader(tp, metadata.leaderAndEpoch(tp)));
-        }
+        //}
     }
 
     /**
