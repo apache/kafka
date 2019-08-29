@@ -68,6 +68,8 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
     SIMPLE_AUTHORIZER = "kafka.security.auth.SimpleAclAuthorizer"
     HEAP_DUMP_FILE = os.path.join(PERSISTENT_ROOT, "kafka_heap_dump.bin")
     INTERBROKER_LISTENER_NAME = 'INTERNAL'
+    JAAS_CONF_PROPERTY = "java.security.auth.login.config=/mnt/security/jaas.conf"
+    KRB5_CONF = "java.security.krb5.conf=/mnt/security/krb5.conf"
 
     logs = {
         "kafka_server_start_stdout_stderr": {
@@ -404,6 +406,22 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
                                          clean_shutdown=False, allow_fail=True)
         node.account.ssh("sudo rm -rf -- %s" % KafkaService.PERSISTENT_ROOT, allow_fail=False)
 
+    def kafka_topics_command(self, node, use_zk_connection = False):
+        """
+        Returns kafka-topics.sh command path with jaas configuration and krb5 environment variable
+        set. If Admin client is not going to be used, don't set the environment variable.
+        """
+        kafka_topic_script = self.path.script("kafka-topics.sh", node)
+        return kafka_topic_script if use_zk_connection else \
+            "KAFKA_OPTS='-D%s -D%s' %s" % (KafkaService.JAAS_CONF_PROPERTY, KafkaService.KRB5_CONF, kafka_topic_script)
+
+    def kafka_topics_command_config(self, use_zk_connection = False):
+        """
+        Return --command-config parameter to the kafka-topics.sh command. The config parameter specifies
+        the security settings that AdminClient uses to connect to a secure kafka server.
+        """
+        return "" if use_zk_connection else " --command-config <(echo '%s')" % (self.security_config.client_config())
+
     def create_topic(self, topic_cfg, node=None):
         """Run the admin tool create topic command.
         Specifying node is optional, and may be done if for different kafka nodes have different versions,
@@ -415,11 +433,14 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
             node = self.nodes[0]
         self.logger.info("Creating topic %s with settings %s",
                          topic_cfg["topic"], topic_cfg)
-        kafka_topic_script = self.path.script("kafka-topics.sh", node)
 
-        cmd = kafka_topic_script + " "
-        cmd += "%(connection_string)s --create --topic %(topic)s " % {
-                'connection_string': self.connect_setting(node),
+        use_zk_connection = topic_cfg.get('if-not-exists', False)
+        connection_string = "--zookeeper %s" % (self.zk_connect_setting()) \
+            if use_zk_connection else self.connect_setting(node)
+
+        cmd = "%(kafka_topics_cmd)s %(connection_string)s --create --topic %(topic)s " % {
+                'kafka_topics_cmd': self.kafka_topics_command(node, use_zk_connection),
+                'connection_string': connection_string,
                 'topic': topic_cfg.get("topic"),
            }
         if 'replica-assignment' in topic_cfg:
@@ -439,6 +460,8 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
             for config_name, config_value in topic_cfg["configs"].items():
                 cmd += " --config %s=%s" % (config_name, str(config_value))
 
+        cmd += self.kafka_topics_command_config(use_zk_connection)
+
         self.logger.info("Running topic creation command...\n%s" % cmd)
         node.account.ssh(cmd)
 
@@ -450,8 +473,9 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
     def describe_topic(self, topic, node=None):
         if node is None:
             node = self.nodes[0]
-        cmd = "%s %s --topic %s --describe" % \
-              (self.path.script("kafka-topics.sh", node), self.connect_setting(node), topic)
+        cmd = "%s %s --topic %s --describe %s" % \
+              (self.kafka_topics_command(node), self.connect_setting(node),
+               topic, self.kafka_topics_command_config())
 
         self.logger.info("Running topic describe command...\n%s" % cmd)
         output = ""
@@ -462,8 +486,8 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
     def list_topics(self, topic=None, node=None):
         if node is None:
             node = self.nodes[0]
-        cmd = "%s %s --list" % \
-              (self.path.script("kafka-topics.sh", node), self.connect_setting(node))
+        cmd = "%s %s --list %s" % \
+              (self.kafka_topics_command(node), self.connect_setting(node), self.kafka_topics_command_config())
         for line in node.account.ssh_capture(cmd):
             if not line.startswith("SLF4J"):
                 yield line.rstrip()
@@ -809,15 +833,22 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         Check whether a broker is registered in Zookeeper
         """
         self.logger.debug("Querying zookeeper to see if broker %s is registered", node)
-        return self.get_broker_info(node) is not None
+        return self.get_broker_info_str(node) is not None
 
     def get_broker_info(self, node):
         """
         Get the broker information from Zookeeper.
         """
+        broker_info = self.get_broker_info_str(node)
+        return json.loads(broker_info) if broker_info else json.loads("{}")
+
+    def get_broker_info_str(self, node):
+        """
+        Get the broker information from Zookeeper.
+        """
         broker_info = self.zk.query("/brokers/ids/%s" % self.idx(node), chroot=self.zk_chroot)
         self.logger.debug("Broker info: %s", broker_info)
-        return json.loads(broker_info)
+        return broker_info
 
     def get_offset_shell(self, topic, partitions, max_wait_ms, offsets, time):
         node = self.nodes[0]
