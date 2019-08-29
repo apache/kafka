@@ -956,6 +956,7 @@ project(':clients') {
     testCompile libs.bcpkix
     testCompile libs.junit
     testCompile libs.mockitoCore
+    testCompile libs.guava
 
     testRuntime libs.slf4jlog4j
     testRuntime libs.jacksonDatabind
