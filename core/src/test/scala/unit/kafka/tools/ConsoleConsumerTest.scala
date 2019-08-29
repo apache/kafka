@@ -43,7 +43,7 @@ class ConsoleConsumerTest {
   }
 
   @Test
-  def shouldResetUnConsumedOffsetsBeforeExit() {
+  def shouldResetUnConsumedOffsetsBeforeExit(): Unit = {
     val topic = "test"
     val maxMessages: Int = 123
     val totalMessages: Int = 700
@@ -75,7 +75,7 @@ class ConsoleConsumerTest {
   }
 
   @Test
-  def shouldLimitReadsToMaxMessageLimit() {
+  def shouldLimitReadsToMaxMessageLimit(): Unit = {
     val consumer = mock(classOf[ConsumerWrapper])
     val formatter = mock(classOf[MessageFormatter])
     val record = new ConsumerRecord("foo", 1, 1, Array[Byte](), Array[Byte]())
@@ -92,7 +92,7 @@ class ConsoleConsumerTest {
   }
 
   @Test
-  def shouldStopWhenOutputCheckErrorFails() {
+  def shouldStopWhenOutputCheckErrorFails(): Unit = {
     val consumer = mock(classOf[ConsumerWrapper])
     val formatter = mock(classOf[MessageFormatter])
     val printStream = mock(classOf[PrintStream])
@@ -113,7 +113,7 @@ class ConsoleConsumerTest {
   }
 
   @Test
-  def shouldParseValidConsumerValidConfig() {
+  def shouldParseValidConsumerValidConfig(): Unit = {
     //Given
     val args: Array[String] = Array(
       "--bootstrap-server", "localhost:9092",
@@ -170,7 +170,7 @@ class ConsoleConsumerTest {
   }
 
   @Test
-  def shouldParseValidSimpleConsumerValidConfigWithStringOffset() {
+  def shouldParseValidSimpleConsumerValidConfigWithStringOffset(): Unit = {
     //Given
     val args: Array[String] = Array(
       "--bootstrap-server", "localhost:9092",
@@ -192,7 +192,7 @@ class ConsoleConsumerTest {
   }
 
   @Test
-  def shouldParseValidConsumerConfigWithAutoOffsetResetLatest() {
+  def shouldParseValidConsumerConfigWithAutoOffsetResetLatest(): Unit = {
     //Given
     val args: Array[String] = Array(
       "--bootstrap-server", "localhost:9092",
@@ -211,7 +211,7 @@ class ConsoleConsumerTest {
   }
 
   @Test
-  def shouldParseValidConsumerConfigWithAutoOffsetResetEarliest() {
+  def shouldParseValidConsumerConfigWithAutoOffsetResetEarliest(): Unit = {
     //Given
     val args: Array[String] = Array(
       "--bootstrap-server", "localhost:9092",
@@ -230,7 +230,7 @@ class ConsoleConsumerTest {
   }
 
   @Test
-  def shouldParseValidConsumerConfigWithAutoOffsetResetAndMatchingFromBeginning() {
+  def shouldParseValidConsumerConfigWithAutoOffsetResetAndMatchingFromBeginning(): Unit = {
     //Given
     val args: Array[String] = Array(
       "--bootstrap-server", "localhost:9092",
@@ -250,7 +250,7 @@ class ConsoleConsumerTest {
   }
 
   @Test
-  def shouldParseValidConsumerConfigWithNoOffsetReset() {
+  def shouldParseValidConsumerConfigWithNoOffsetReset(): Unit = {
     //Given
     val args: Array[String] = Array(
       "--bootstrap-server", "localhost:9092",
@@ -268,7 +268,7 @@ class ConsoleConsumerTest {
   }
 
   @Test(expected = classOf[IllegalArgumentException])
-  def shouldExitOnInvalidConfigWithAutoOffsetResetAndConflictingFromBeginning() {
+  def shouldExitOnInvalidConfigWithAutoOffsetResetAndConflictingFromBeginning(): Unit = {
     Exit.setExitProcedure((_, message) => throw new IllegalArgumentException(message.orNull))
 
     //Given
@@ -287,7 +287,7 @@ class ConsoleConsumerTest {
   }
 
   @Test
-  def shouldParseConfigsFromFile() {
+  def shouldParseConfigsFromFile(): Unit = {
     val propsFile = TestUtils.tempFile()
     val propsStream = Files.newOutputStream(propsFile.toPath)
     propsStream.write("request.timeout.ms=1000\n".getBytes())
@@ -306,7 +306,7 @@ class ConsoleConsumerTest {
   }
 
   @Test
-  def groupIdsProvidedInDifferentPlacesMustMatch() {
+  def groupIdsProvidedInDifferentPlacesMustMatch(): Unit = {
     Exit.setExitProcedure((_, message) => throw new IllegalArgumentException(message.orNull))
 
     // different in all three places
@@ -433,7 +433,7 @@ class ConsoleConsumerTest {
   }
 
   @Test
-  def shouldParseGroupIdFromBeginningGivenTogether() {
+  def shouldParseGroupIdFromBeginningGivenTogether(): Unit = {
     // Start from earliest
     var args: Array[String] = Array(
       "--bootstrap-server", "localhost:9092",
@@ -462,7 +462,7 @@ class ConsoleConsumerTest {
   }
 
   @Test(expected = classOf[IllegalArgumentException])
-  def shouldExitOnGroupIdAndPartitionGivenTogether() {
+  def shouldExitOnGroupIdAndPartitionGivenTogether(): Unit = {
     Exit.setExitProcedure((_, message) => throw new IllegalArgumentException(message.orNull))
     //Given
     val args: Array[String] = Array(
@@ -480,7 +480,7 @@ class ConsoleConsumerTest {
   }
 
   @Test(expected = classOf[IllegalArgumentException])
-  def shouldExitOnOffsetWithoutPartition() {
+  def shouldExitOnOffsetWithoutPartition(): Unit = {
     Exit.setExitProcedure((_, message) => throw new IllegalArgumentException(message.orNull))
     //Given
     val args: Array[String] = Array(

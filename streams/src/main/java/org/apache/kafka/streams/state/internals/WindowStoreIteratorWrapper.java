@@ -67,11 +67,6 @@ class WindowStoreIteratorWrapper {
         }
 
         @Override
-        public void remove() {
-            throw new UnsupportedOperationException("remove() is not supported in " + getClass().getName());
-        }
-
-        @Override
         public void close() {
             bytesIterator.close();
         }
@@ -102,11 +97,6 @@ class WindowStoreIteratorWrapper {
         public KeyValue<Windowed<Bytes>, byte[]> next() {
             final KeyValue<Bytes, byte[]> next = bytesIterator.next();
             return KeyValue.pair(WindowKeySchema.fromStoreBytesKey(next.key.get(), windowSize), next.value);
-        }
-
-        @Override
-        public void remove() {
-            throw new UnsupportedOperationException("remove() is not supported in " + getClass().getName());
         }
 
         @Override

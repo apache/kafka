@@ -169,7 +169,7 @@ class MetadataCache(brokerId: Int) extends Logging {
   private def addOrUpdatePartitionInfo(partitionStates: mutable.AnyRefMap[String, mutable.LongMap[UpdateMetadataRequest.PartitionState]],
                                        topic: String,
                                        partitionId: Int,
-                                       stateInfo: UpdateMetadataRequest.PartitionState) {
+                                       stateInfo: UpdateMetadataRequest.PartitionState): Unit = {
     val infos = partitionStates.getOrElseUpdate(topic, mutable.LongMap())
     infos(partitionId) = stateInfo
   }

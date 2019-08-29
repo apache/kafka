@@ -119,7 +119,7 @@ public class ProcessorStateManager implements StateManager {
             checkpointFile = null;
         }
 
-        log.debug("Created state store manager for task {} with the acquired state dir lock", taskId);
+        log.debug("Created state store manager for task {}", taskId);
     }
 
 

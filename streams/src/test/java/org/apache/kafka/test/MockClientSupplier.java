@@ -57,7 +57,7 @@ public class MockClientSupplier implements KafkaClientSupplier {
     }
 
     @Override
-    public Admin getAdminClient(final Map<String, Object> config) {
+    public Admin getAdmin(final Map<String, Object> config) {
         return new MockAdminClient(cluster.nodes(), cluster.nodeById(0));
     }
 

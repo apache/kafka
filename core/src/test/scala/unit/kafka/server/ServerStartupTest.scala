@@ -30,7 +30,7 @@ class ServerStartupTest extends ZooKeeperTestHarness {
   private var server: KafkaServer = null
 
   @After
-  override def tearDown() {
+  override def tearDown(): Unit = {
     if (server != null)
       TestUtils.shutdownServers(Seq(server))
     super.tearDown()

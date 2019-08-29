@@ -36,6 +36,12 @@ import java.util.Set;
  * assignment decisions. For this, you can override {@link #subscription(Set)} and provide custom
  * userData in the returned Subscription. For example, to have a rack-aware assignor, an implementation
  * can use this user data to forward the rackId belonging to each member.
+ *
+ * This interface has been deprecated in 2.4, custom assignors should now implement
+ * {@link org.apache.kafka.clients.consumer.ConsumerPartitionAssignor}. Note that maintaining compatibility
+ * for an internal interface here is a special case, as {@code PartitionAssignor} was meant to be a public API
+ * although it was placed in the internals package. Users should not expect internal interfaces or classes to
+ * not be removed or maintain compatibility in any way.
  */
 @Deprecated
 public interface PartitionAssignor {
@@ -73,7 +79,6 @@ public interface PartitionAssignor {
     default void onAssignment(Assignment assignment, int generation) {
         onAssignment(assignment);
     }
-
 
     /**
      * Unique name for this assignor (e.g. "range" or "roundrobin" or "sticky")

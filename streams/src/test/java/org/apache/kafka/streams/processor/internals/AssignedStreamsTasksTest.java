@@ -17,26 +17,41 @@
 
 package org.apache.kafka.streams.processor.internals;
 
-import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.utils.LogContext;
-import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.streams.errors.TaskMigratedException;
-import org.apache.kafka.streams.processor.TaskId;
-import org.easymock.EasyMock;
-import org.junit.Before;
-import org.junit.Test;
-
-import java.util.Collection;
-import java.util.Collections;
-import java.util.Set;
-
 import static org.hamcrest.CoreMatchers.not;
 import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.IsEqual.equalTo;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
+
+import java.util.Collection;
+import java.util.Collections;
+import java.util.Set;
+import kafka.utils.LogCaptureAppender;
+import org.apache.kafka.clients.consumer.MockConsumer;
+import org.apache.kafka.clients.consumer.OffsetResetStrategy;
+import org.apache.kafka.clients.producer.MockProducer;
+import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.metrics.MetricConfig;
+import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.metrics.Sensor.RecordingLevel;
+import org.apache.kafka.common.serialization.Deserializer;
+import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.streams.errors.TaskMigratedException;
+import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
+import org.apache.kafka.test.MockSourceNode;
+import org.apache.log4j.Level;
+import org.apache.log4j.spi.LoggingEvent;
+import org.easymock.EasyMock;
+import org.junit.Before;
+import org.junit.Test;
 
 public class AssignedStreamsTasksTest {
 
@@ -449,6 +464,96 @@ public class AssignedStreamsTasksTest {
 
         assertThat(assignedTasks.punctuate(), equalTo(1));
         EasyMock.verify(t1);
+    }
+
+    @Test
+    public void shouldCloseCleanlyWithSuspendedTaskAndEOS() {
+        final String topic = "topic";
+
+        final Deserializer<byte[]> deserializer = Serdes.ByteArray().deserializer();
+        final Serializer<byte[]> serializer = Serdes.ByteArray().serializer();
+
+        final MockConsumer<byte[], byte[]> consumer =
+            new MockConsumer<>(OffsetResetStrategy.EARLIEST);
+        final MockProducer<byte[], byte[]> producer =
+            new MockProducer<>(false, serializer, serializer);
+
+        final MockSourceNode<byte[], byte[]> source = new MockSourceNode<>(
+            new String[] {"topic"},
+            deserializer,
+            deserializer);
+
+        final ChangelogReader changelogReader = new MockChangelogReader();
+
+        final ProcessorTopology topology = new ProcessorTopology(
+            Collections.singletonList(source),
+            Collections.singletonMap(topic, source),
+            Collections.emptyMap(),
+            Collections.emptyList(),
+            Collections.emptyList(),
+            Collections.emptyMap(),
+            Collections.emptySet());
+
+        final Set<TopicPartition> partitions = Collections.singleton(
+            new TopicPartition(topic, 1));
+
+        final Metrics metrics = new Metrics(new MetricConfig().recordLevel(RecordingLevel.DEBUG));
+
+        final StreamsMetricsImpl streamsMetrics = new MockStreamsMetrics(metrics);
+
+        final MockTime time = new MockTime();
+
+        final StateDirectory stateDirectory = new StateDirectory(
+            StreamTaskTest.createConfig(true),
+            time,
+            true);
+
+        final StreamTask task = new StreamTask(
+            new TaskId(0, 0),
+            partitions,
+            topology,
+            consumer,
+            changelogReader,
+            StreamTaskTest.createConfig(true),
+            streamsMetrics,
+            stateDirectory,
+            null,
+            time,
+            () -> producer);
+
+        assignedTasks.addNewTask(task);
+        assignedTasks.initializeNewTasks();
+        assertNull(assignedTasks.suspend());
+
+        // We have to test for close failure by looking at the logs because the current close
+        // logic suppresses the raised exception in AssignedTasks.close. It's not clear if this
+        // is the intended behavior.
+        //
+        // Also note that capturing the failure through this side effect is very brittle.
+        final LogCaptureAppender appender = LogCaptureAppender.createAndRegister();
+        final Level previousLevel =
+            LogCaptureAppender.setClassLoggerLevel(AssignedStreamsTasks.class, Level.ERROR);
+        try {
+            assignedTasks.close(true);
+        } finally {
+            LogCaptureAppender.setClassLoggerLevel(AssignedStreamsTasks.class, previousLevel);
+            LogCaptureAppender.unregister(appender);
+        }
+        if (!appender.getMessages().isEmpty()) {
+            final LoggingEvent firstError = appender.getMessages().head();
+            final String firstErrorCause =
+                firstError.getThrowableStrRep() != null
+                    ? String.join("\n", firstError.getThrowableStrRep())
+                    : "N/A";
+
+            final String failMsg =
+                String.format("Expected no ERROR message while closing assignedTasks, but got %d. " +
+                    "First error: %s. Cause: %s",
+                    appender.getMessages().size(),
+                    firstError.getMessage(),
+                    firstErrorCause);
+            fail(failMsg);
+        }
     }
 
     private void addAndInitTask() {
