@@ -161,7 +161,7 @@ public class MergedSortedCacheKeyValueBytesStoreIteratorTest {
 
         final MergedSortedCacheKeyValueBytesStoreIterator iterator =
                 new MergedSortedCacheKeyValueBytesStoreIterator(cacheIterator,
-                        storeIterator
+                                                                storeIterator
                 );
         final byte[][] values = new byte[8][];
         int index = 0;

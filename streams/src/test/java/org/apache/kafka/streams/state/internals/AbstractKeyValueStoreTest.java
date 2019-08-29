@@ -397,7 +397,7 @@ public abstract class AbstractKeyValueStoreTest {
     }
 
     @Test
-    public void shouldNotThrowConcurrentModificationExceptionDuringRange() {
+    public void shouldNotThrowConcurrentModificationException() {
         store.put(0, "zero");
 
         final KeyValueIterator<Integer, String> results = store.range(0, 2);

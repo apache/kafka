@@ -234,7 +234,7 @@ public class ThreadCache {
             // a put on another cache. So even though the sizeInBytes() is
             // still > maxCacheSizeBytes there is nothing to evict from this
             // namespaced cache.
-            if (cache.size() == 0) {
+            if (cache.isEmpty()) {
                 return;
             }
             cache.evict();

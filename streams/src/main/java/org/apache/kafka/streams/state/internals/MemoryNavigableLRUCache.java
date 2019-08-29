@@ -39,15 +39,15 @@ public class MemoryNavigableLRUCache extends MemoryLRUCache {
 
         if (from.compareTo(to) > 0) {
             LOG.warn("Returning empty iterator for fetch with invalid key range: from > to. "
-                    + "This may be due to serdes that don't preserve ordering when lexicographically comparing the serialized bytes. " +
-                    "Note that the built-in numerical serdes do not follow this for negative numbers");
+                + "This may be due to serdes that don't preserve ordering when lexicographically comparing the serialized bytes. " +
+                "Note that the built-in numerical serdes do not follow this for negative numbers");
             return KeyValueIterators.emptyIterator();
         }
 
         final TreeMap<Bytes, byte[]> treeMap = toTreeMap();
         return new DelegatingPeekingKeyValueIterator<>(name(),
-                new MemoryNavigableLRUCache.CacheIterator(treeMap.navigableKeySet()
-                        .subSet(from, true, to, true).iterator(), treeMap));
+            new MemoryNavigableLRUCache.CacheIterator(treeMap.navigableKeySet()
+                .subSet(from, true, to, true).iterator(), treeMap));
     }
 
     @Override

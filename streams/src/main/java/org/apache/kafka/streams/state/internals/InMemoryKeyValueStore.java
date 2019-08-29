@@ -113,21 +113,21 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
 
         if (from.compareTo(to) > 0) {
             LOG.warn("Returning empty iterator for fetch with invalid key range: from > to. "
-                    + "This may be due to serdes that don't preserve ordering when lexicographically comparing the serialized bytes. " +
-                    "Note that the built-in numerical serdes do not follow this for negative numbers");
+                + "This may be due to serdes that don't preserve ordering when lexicographically comparing the serialized bytes. " +
+                "Note that the built-in numerical serdes do not follow this for negative numbers");
             return KeyValueIterators.emptyIterator();
         }
 
         return new DelegatingPeekingKeyValueIterator<>(
-                name,
-                new InMemoryKeyValueIterator(map.subMap(from, true, to, true).keySet()));
+            name,
+            new InMemoryKeyValueIterator(map.subMap(from, true, to, true).keySet()));
     }
 
     @Override
     public synchronized KeyValueIterator<Bytes, byte[]> all() {
         return new DelegatingPeekingKeyValueIterator<>(
-                name,
-                new InMemoryKeyValueIterator(map.keySet()));
+            name,
+            new InMemoryKeyValueIterator(map.keySet()));
     }
 
     @Override
