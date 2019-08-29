@@ -1318,11 +1318,21 @@ class KafkaController(val config: KafkaConfig,
         0
       } else {
         controllerContext.allPartitions.count { topicPartition =>
-          val replicas = controllerContext.partitionReplicaAssignment(topicPartition)
+          val replicaAssignment: PartitionReplicaAssignment = controllerContext.partitionFullReplicaAssignment(topicPartition)
+          val replicas = replicaAssignment.replicas
           val preferredReplica = replicas.head
-          val leadershipInfo = controllerContext.partitionLeadershipInfo.get(topicPartition)
-          leadershipInfo.map(_.leaderAndIsr.leader != preferredReplica).getOrElse(false) &&
-            !topicDeletionManager.isTopicQueuedUpForDeletion(topicPartition.topic)
+
+          val isImbalanced = controllerContext.partitionLeadershipInfo.get(topicPartition) match {
+            case Some(leadershipInfo) =>
+              if (replicaAssignment.isBeingReassigned && replicaAssignment.addingReplicas.contains(preferredReplica))
+                // reassigning partitions are not counted as imbalanced until the new replica joins the ISR (completes reassignment)
+                leadershipInfo.leaderAndIsr.isr.contains(preferredReplica)
+              else
+                leadershipInfo.leaderAndIsr.leader != preferredReplica
+            case None => false
+          }
+
+          isImbalanced && !topicDeletionManager.isTopicQueuedUpForDeletion(topicPartition.topic)
         }
       }
 
