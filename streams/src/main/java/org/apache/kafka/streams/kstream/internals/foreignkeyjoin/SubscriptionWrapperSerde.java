@@ -53,7 +53,7 @@ public class SubscriptionWrapperSerde<K> implements Serde<SubscriptionWrapper<K>
             //{1-bit-isHashNull}{7-bits-version}{1-byte-instruction}{Optional-16-byte-Hash}{PK-serialized}
 
             //7-bit (0x7F) maximum for data version.
-            if (Byte.compare((byte)0x7F, data.getVersion()) < 0) {
+            if (Byte.compare((byte) 0x7F, data.getVersion()) < 0) {
                 throw new UnsupportedVersionException("SubscriptionWrapper version is larger than maximum supported 0x7F");
             }
 
