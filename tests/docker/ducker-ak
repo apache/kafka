@@ -71,8 +71,26 @@ up [-n|--num-nodes NUM_NODES] [-f|--force] [docker-image]
     directory should be the ducktape git repo, not the ducktape installed module directory.
 
     if --expose-ports is specified then we will expose those ports to random ephemeral ports
-    on the host. The argument can be a single port (like 5005) or a port range like (5005-5009).
+    on the host. The argument can be a single port (like 5005), a port range like (5005-5009)
+    or a combination of port/port-range separated by comma (like 2181,9092 or 2181,5005-5008).
     By default no port is exposed.
+
+    The exposed port(s) are useful to attach a remote debugger to the process running
+    in the docker image. For example if port 5005 was exposed and is mapped to an ephemeral
+    port (say 33890), then a debugger attaching to port 33890 on host will be connecting to
+    a debug session started at port 5005 in the docker image. As an example, for above port
+    numbers, run following command in the docker image (say by ssh using `./docker/ducker-ak ssh ducker02'):
+
+    $ export KAFKA_OPTS="-agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=5005"
+    $ /opt/kafka-dev/bin/kafka-topics.sh --bootstrap-server ducker03:9095 --topic __consumer_offsets --describe
+
+    This will run the TopicCommand to describe the __consumer-offset topic. The java process
+    will stop and wait for debugger to attach as `suspend=y' option was specified. Now starting
+    a debugger on host with host `localhost' and following command line JVM setting:
+
+    `-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=33890'
+
+    will attach it to the TopicCommand process running in the docker image.
 
 test [test-name(s)]
     Run a test or set of tests inside the currently active Ducker nodes.
@@ -241,15 +259,19 @@ docker_run() {
     local image_name=${2}
     local ports_option=${3}
 
+    local expose_ports=""
     if [[ -n ${ports_option} ]]; then
-      ports_option="--expose ${ports_option} -P"
+        expose_ports="-P"
+        for expose_port in ${ports_option//,/ }; do
+            expose_ports="${expose_ports} --expose ${expose_port}"
+        done
     fi
 
     # Invoke docker-run. We need privileged mode to be able to run iptables
     # and mount FUSE filesystems inside the container.  We also need it to
     # run iptables inside the container.
     must_do -v docker run --privileged \
-        -d -t -h "${node}" --network ducknet "${ports_option}" \
+        -d -t -h "${node}" --network ducknet "${expose_ports}" \
         --memory=${docker_run_memory_limit} --memory-swappiness=1 \
         -v "${kafka_dir}:/opt/kafka-dev" --name "${node}" -- "${image_name}"
 }
