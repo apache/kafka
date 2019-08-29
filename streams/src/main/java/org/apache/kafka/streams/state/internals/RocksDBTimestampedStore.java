@@ -67,8 +67,8 @@ public class RocksDBTimestampedStore extends RocksDBStore implements Timestamped
     void openRocksDB(final DBOptions dbOptions,
                      final ColumnFamilyOptions columnFamilyOptions) {
         final List<ColumnFamilyDescriptor> columnFamilyDescriptors = asList(
-            new ColumnFamilyDescriptor(RocksDB.DEFAULT_COLUMN_FAMILY, columnFamilyOptions),
-            new ColumnFamilyDescriptor("keyValueWithTimestamp".getBytes(StandardCharsets.UTF_8), columnFamilyOptions));
+                new ColumnFamilyDescriptor(RocksDB.DEFAULT_COLUMN_FAMILY, columnFamilyOptions),
+                new ColumnFamilyDescriptor("keyValueWithTimestamp".getBytes(StandardCharsets.UTF_8), columnFamilyOptions));
         final List<ColumnFamilyHandle> columnFamilies = new ArrayList<>(columnFamilyDescriptors.size());
 
         try {
@@ -195,11 +195,11 @@ public class RocksDBTimestampedStore extends RocksDBStore implements Timestamped
         public KeyValueIterator<Bytes, byte[]> range(final Bytes from,
                                                      final Bytes to) {
             return new RocksDBDualCFRangeIterator(
-                name,
-                db.newIterator(newColumnFamily),
-                db.newIterator(oldColumnFamily),
-                from,
-                to);
+                    name,
+                    db.newIterator(newColumnFamily),
+                    db.newIterator(oldColumnFamily),
+                    from,
+                    to);
         }
 
         @Override
@@ -214,7 +214,7 @@ public class RocksDBTimestampedStore extends RocksDBStore implements Timestamped
         @Override
         public long approximateNumEntries() throws RocksDBException {
             return db.getLongProperty(oldColumnFamily, "rocksdb.estimate-num-keys")
-                + db.getLongProperty(newColumnFamily, "rocksdb.estimate-num-keys");
+                    + db.getLongProperty(newColumnFamily, "rocksdb.estimate-num-keys");
         }
 
         @Override
@@ -267,7 +267,7 @@ public class RocksDBTimestampedStore extends RocksDBStore implements Timestamped
     }
 
     private class RocksDBDualCFIterator extends AbstractIterator<KeyValue<Bytes, byte[]>>
-        implements KeyValueIterator<Bytes, byte[]> {
+            implements KeyValueIterator<Bytes, byte[]> {
 
         // RocksDB's JNI interface does not expose getters/setters that allow the
         // comparator to be pluggable, and the default is lexicographic, so it's
@@ -394,45 +394,6 @@ public class RocksDBTimestampedStore extends RocksDBStore implements Timestamped
                 } else {
                     return allDone();
                 }
-            }
-        }
-    }
-
-    private class RocksDBDualCFPrefixIterator extends RocksDBDualCFIterator {
-        // RocksDB's JNI interface does not expose getters/setters that allow the
-        // comparator to be pluggable, and the default is lexicographic, so it's
-        // safe to just force lexicographic comparator here for now.
-        private final Comparator<byte[]> comparator = Bytes.BYTES_LEXICO_COMPARATOR;
-        private final byte[] rawPrefix;
-
-        RocksDBDualCFPrefixIterator(final String storeName,
-                                    final RocksIterator iterWithTimestamp,
-                                    final RocksIterator iterNoTimestamp,
-                                    final Bytes prefix) {
-            super(storeName, iterWithTimestamp, iterNoTimestamp);
-            rawPrefix = prefix.get();
-            iterWithTimestamp.seek(rawPrefix);
-            iterNoTimestamp.seek(rawPrefix);
-        }
-
-        @Override
-        public KeyValue<Bytes, byte[]> makeNext() {
-            final KeyValue<Bytes, byte[]> next = super.makeNext();
-
-            if (next == null) {
-                return allDone();
-            } else {
-                //TODO - Test this.
-                final byte[] rawNextKey = next.key.get();
-                for (int i = 0; i < rawPrefix.length; i++) {
-                    if (i == rawNextKey.length) {
-                        throw new ArrayIndexOutOfBoundsException("Unexpected RocksDB Key Value. Should have been skipped with seek.");
-                    }
-                    if (rawNextKey[i] != rawPrefix[i]) {
-                        return allDone();
-                    }
-                }
-                return next;
             }
         }
     }
