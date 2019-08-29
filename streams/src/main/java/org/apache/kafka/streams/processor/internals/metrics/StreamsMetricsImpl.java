@@ -69,10 +69,11 @@ public class StreamsMetricsImpl implements StreamsMetrics {
     public static final String TOTAL_SUFFIX = "-total";
     public static final String RATIO_SUFFIX = "-ratio";
 
-    public static final String GROUP_PREFIX = "stream-";
+    public static final String GROUP_PREFIX_WO_DELIMITER = "stream";
+    public static final String GROUP_PREFIX = GROUP_PREFIX_WO_DELIMITER + "-";
     public static final String GROUP_SUFFIX = "-metrics";
     public static final String STATE_LEVEL_GROUP_SUFFIX = "-state" + GROUP_SUFFIX;
-    public static final String THREAD_LEVEL_GROUP = GROUP_PREFIX + GROUP_SUFFIX;
+    public static final String THREAD_LEVEL_GROUP = GROUP_PREFIX_WO_DELIMITER + GROUP_SUFFIX;
     public static final String TASK_LEVEL_GROUP = GROUP_PREFIX + "task" + GROUP_SUFFIX;
     public static final String STATE_LEVEL_GROUP = GROUP_PREFIX + "state" + GROUP_SUFFIX;
 
