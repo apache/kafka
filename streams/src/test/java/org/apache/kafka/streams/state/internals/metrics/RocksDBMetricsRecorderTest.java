@@ -39,6 +39,8 @@ import static org.easymock.EasyMock.expect;
 import static org.easymock.EasyMock.mock;
 import static org.easymock.EasyMock.resetToNice;
 import static org.hamcrest.CoreMatchers.containsString;
+import static org.hamcrest.CoreMatchers.hasItem;
+import static org.hamcrest.CoreMatchers.hasItems;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertThrows;
@@ -307,14 +309,12 @@ public class RocksDBMetricsRecorderTest {
 
         Thread.sleep(20);
         LogCaptureAppender.unregister(appender);
-        final List<String> logMessages = appender.getMessages().stream()
-            .filter(m ->
-                m.contains("[RocksDB Metrics Recorder for " + STORE_NAME + "] Started with recording interval PT0.01S")
-                || m.contains("[RocksDB Metrics Recorder for " + STORE_NAME + "] Stopped"))
-            .collect(Collectors.toList());
-        assertThat(logMessages.size(), is(2));
-        assertThat(logMessages.get(0), containsString("Started"));
-        assertThat(logMessages.get(1), containsString("Stopped"));
+        final List<String> logMessages = appender.getMessages();
+        assertThat(
+            logMessages,
+            hasItem("[RocksDB Metrics Recorder for " + STORE_NAME + "] Started with recording interval PT0.01S")
+        );
+        assertThat(logMessages, hasItem("[RocksDB Metrics Recorder for " + STORE_NAME + "] Stopped"));
     }
 
     private void setUpMetricsMockforInitializationOfRecorder() {
