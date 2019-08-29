@@ -34,7 +34,9 @@ import org.apache.kafka.streams.state.WindowStoreIterator;
 import java.util.Map;
 
 import static org.apache.kafka.common.metrics.Sensor.RecordingLevel.DEBUG;
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.GROUP_PREFIX;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.ROLLUP_VALUE;
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.STATE_LEVEL_GROUP_SUFFIX;
 import static org.apache.kafka.streams.state.internals.metrics.Sensors.createTaskAndStoreLatencyAndThroughputSensors;
 
 public class MeteredWindowStore<K, V>
@@ -76,7 +78,7 @@ public class MeteredWindowStore<K, V>
         metrics = (StreamsMetricsImpl) context.metrics();
 
         taskName = context.taskId().toString();
-        final String metricsGroup = "stream-" + metricsScope + "-state-metrics";
+        final String metricsGroup = GROUP_PREFIX + metricsScope + STATE_LEVEL_GROUP_SUFFIX;
         final Map<String, String> taskTags = metrics.storeLevelTagMap(taskName, metricsScope, ROLLUP_VALUE);
         final Map<String, String> storeTags = metrics.storeLevelTagMap(taskName, metricsScope, name());
 
