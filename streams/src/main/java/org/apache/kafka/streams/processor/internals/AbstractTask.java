@@ -34,9 +34,7 @@ import org.slf4j.Logger;
 
 import java.io.IOException;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashSet;
-import java.util.Map;
 import java.util.Set;
 
 public abstract class AbstractTask implements Task {
@@ -171,10 +169,6 @@ public abstract class AbstractTask implements Task {
             sb.append("]\n");
         }
         return sb.toString();
-    }
-
-    protected Map<TopicPartition, Long> activeTaskCheckpointableOffsets() {
-        return Collections.emptyMap();
     }
 
     protected void updateOffsetLimits() {
