@@ -28,9 +28,12 @@
 #./gradlew core:test --tests GroupEndToEndAuthorizationTest.testNoDescribeProduceOrConsumeWithoutTopicDescribeAcl \
 #    --profile --no-daemon --continue -PtestLoggingEvents=started,passed,skipped,failed "$@" \
 #    || { echo 'Test steps failed'; exit 1; }
-./gradlew unitTest integrationTest \
+./gradlew integrationTest \
     --profile --no-daemon --continue -PtestLoggingEvents=started,passed,skipped,failed "$@" \
     || { echo 'Test steps failed'; exit 1; }
+#./gradlew unitTest integrationTest \
+#    --profile --no-daemon --continue -PtestLoggingEvents=started,passed,skipped,failed "$@" \
+#    || { echo 'Test steps failed'; exit 1; }
 
 # Verify that Kafka Streams archetype compiles
 if [ $JAVA_HOME = "/home/jenkins/tools/java/latest11" ] ; then
