@@ -63,9 +63,9 @@ public class MeteredKeyValueStoreTest {
 
     private final TaskId taskId = new TaskId(0, 0);
     private final Map<String, String> tags = mkMap(
-        mkEntry("client-id", "test"),
-        mkEntry("task-id", taskId.toString()),
-        mkEntry("scope-id", "metered")
+            mkEntry("client-id", "test"),
+            mkEntry("task-id", taskId.toString()),
+            mkEntry("scope-id", "metered")
     );
     @Mock(type = MockType.NICE)
     private KeyValueStore<Bytes, byte[]> inner;
@@ -83,11 +83,11 @@ public class MeteredKeyValueStoreTest {
     @Before
     public void before() {
         metered = new MeteredKeyValueStore<>(
-            inner,
-            "scope",
-            new MockTime(),
-            Serdes.String(),
-            Serdes.String()
+                inner,
+                "scope",
+                new MockTime(),
+                Serdes.String(),
+                Serdes.String()
         );
         metrics.config().recordLevel(Sensor.RecordingLevel.DEBUG);
         expect(context.metrics()).andReturn(new MockStreamsMetrics(metrics));
@@ -233,11 +233,11 @@ public class MeteredKeyValueStoreTest {
         replay(cachedKeyValueStore);
 
         metered = new MeteredKeyValueStore<>(
-            cachedKeyValueStore,
-            "scope",
-            new MockTime(),
-            Serdes.String(),
-            Serdes.String()
+                cachedKeyValueStore,
+                "scope",
+                new MockTime(),
+                Serdes.String(),
+                Serdes.String()
         );
         assertTrue(metered.setFlushListener(null, false));
 
@@ -260,5 +260,4 @@ public class MeteredKeyValueStoreTest {
     private KafkaMetric metric(final MetricName metricName) {
         return this.metrics.metric(metricName);
     }
-
 }

@@ -68,6 +68,7 @@ public class MergedSortedCacheKeyValueBytesStoreIteratorTest {
         iterator.close();
     }
 
+
     @Test
     public void shouldSkipLargerDeletedCacheValue() throws Exception {
         final byte[][] bytes = {{0}, {1}};
@@ -160,7 +161,7 @@ public class MergedSortedCacheKeyValueBytesStoreIteratorTest {
 
         final MergedSortedCacheKeyValueBytesStoreIterator iterator =
                 new MergedSortedCacheKeyValueBytesStoreIterator(cacheIterator,
-                                                                storeIterator
+                        storeIterator
                 );
         final byte[][] values = new byte[8][];
         int index = 0;
