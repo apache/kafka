@@ -284,7 +284,7 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
     servers = makeServers(2)
     val controllerId = TestUtils.waitUntilControllerElected(zkClient)
 
-    val metricName = s"kafka.controller:type=ControllerStats,name=${ControllerState.PartitionReassignment.rateAndTimeMetricName.get}"
+    val metricName = s"kafka.controller:type=ControllerStats,name=${ControllerState.AlterPartitionReassignment.rateAndTimeMetricName.get}"
     val timerCount = timer(metricName).count
 
     val otherBrokerId = servers.map(_.config.brokerId).filter(_ != controllerId).head

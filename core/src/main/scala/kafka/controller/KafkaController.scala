@@ -2179,11 +2179,11 @@ case object TopicDeletion extends ControllerEvent {
 
 case class PartitionReassignment(reassignments: Option[Map[TopicPartition, Option[Seq[Int]]]],
                                  callback: Option[AlterReassignmentsCallback]) extends ControllerEvent {
-  override def state: ControllerState = ControllerState.PartitionReassignment
+  override def state: ControllerState = ControllerState.AlterPartitionReassignment
 }
 
 case class PartitionReassignmentIsrChange(partition: TopicPartition) extends ControllerEvent {
-  override def state: ControllerState = ControllerState.PartitionReassignment
+  override def state: ControllerState = ControllerState.AlterPartitionReassignment
 }
 
 case object IsrChangeNotification extends ControllerEvent {
