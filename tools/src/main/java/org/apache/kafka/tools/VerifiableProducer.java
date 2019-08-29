@@ -122,10 +122,17 @@ public class VerifiableProducer implements AutoCloseable {
 
         parser.addArgument("--broker-list")
                 .action(store())
-                .required(true)
+                .required(false)
                 .type(String.class)
                 .metavar("HOST1:PORT1[,HOST2:PORT2[...]]")
                 .dest("brokerList")
+                .help("Comma-separated list of Kafka brokers in the form HOST1:PORT1,HOST2:PORT2,. This command is deprecated and will be removed in the future.");
+        parser.addArgument("--bootstrap-server")
+                .action(store())
+                .required(false)
+                .type(String.class)
+                .metavar("HOST1:PORT1[,HOST2:PORT2[...]]")
+                .dest("bootstrapServer")
                 .help("Comma-separated list of Kafka brokers in the form HOST1:PORT1,HOST2:PORT2,...");
 
         parser.addArgument("--max-messages")
@@ -210,6 +217,10 @@ public class VerifiableProducer implements AutoCloseable {
     public static VerifiableProducer createFromArgs(ArgumentParser parser, String[] args) throws ArgumentParserException {
         Namespace res = parser.parseArgs(args);
 
+        if(res.getString("bootstrapServer").isEmpty() && res.getString("brokerList").isEmpty()) {
+            parser.printUsage();
+        }
+
         int maxMessages = res.getInt("maxMessages");
         String topic = res.getString("topic");
         int throughput = res.getInt("throughput");
@@ -222,7 +233,11 @@ public class VerifiableProducer implements AutoCloseable {
             createTime = null;
 
         Properties producerProps = new Properties();
-        producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, res.getString("brokerList"));
+        if(! res.getString("bootstrapServer").isEmpty() ) {
+            producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, res.getString("bootstrapServer"));
+        } else {
+            producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, res.getString("brokerList"));
+        }
         producerProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG,
                 "org.apache.kafka.common.serialization.StringSerializer");
         producerProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG,

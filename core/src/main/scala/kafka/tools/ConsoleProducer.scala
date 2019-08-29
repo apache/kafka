@@ -89,7 +89,7 @@ object ConsoleProducer {
       else new Properties
 
     props ++= config.extraProducerProps
-    
+
     if(config.bootstrapServer != null)
       props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, config.bootstrapServer)
     else

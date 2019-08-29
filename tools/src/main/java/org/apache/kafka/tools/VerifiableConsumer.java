@@ -503,13 +503,20 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
                 .newArgumentParser("verifiable-consumer")
                 .defaultHelp(true)
                 .description("This tool consumes messages from a specific topic and emits consumer events (e.g. group rebalances, received messages, and offsets committed) as JSON objects to STDOUT.");
-
+        // We'll check for either --broker-list or bootstrap-server later
         parser.addArgument("--broker-list")
                 .action(store())
-                .required(true)
+                .required(false)
                 .type(String.class)
                 .metavar("HOST1:PORT1[,HOST2:PORT2[...]]")
                 .dest("brokerList")
+                .help("Comma-separated list of Kafka brokers in the form HOST1:PORT1,HOST2:PORT2,. This command is deprecated and will be removed in the future.");
+        parser.addArgument("--bootstrap-server")
+                .action(store())
+                .required(false)
+                .type(String.class)
+                .metavar("HOST1:PORT1[,HOST2:PORT2[...]]")
+                .dest("bootstrapServer")
                 .help("Comma-separated list of Kafka brokers in the form HOST1:PORT1,HOST2:PORT2,...");
 
         parser.addArgument("--topic")
@@ -594,6 +601,9 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
 
     public static VerifiableConsumer createFromArgs(ArgumentParser parser, String[] args) throws ArgumentParserException {
         Namespace res = parser.parseArgs(args);
+        if(res.getString("bootstrapServer").isEmpty() && res.getString("brokerList").isEmpty()) {
+            parser.printUsage();
+        }
 
         String topic = res.getString("topic");
         boolean useAutoCommit = res.getBoolean("useAutoCommit");
@@ -616,7 +626,11 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
         if (!groupInstanceId.equals("None")) {
             consumerProps.put(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG, groupInstanceId);
         }
-        consumerProps.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, res.getString("brokerList"));
+        if(! res.getString("bootstrapServer").isEmpty() ) {
+            consumerProps.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, res.getString("bootstrapServer"));
+        } else {
+            consumerProps.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, res.getString("brokerList"));
+        }
         consumerProps.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, useAutoCommit);
         consumerProps.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, res.getString("resetPolicy"));
         consumerProps.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, Integer.toString(res.getInt("sessionTimeout")));
