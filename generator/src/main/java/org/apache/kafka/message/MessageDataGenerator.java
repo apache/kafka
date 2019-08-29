@@ -22,6 +22,7 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Optional;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.stream.Collectors;
 
 /**
@@ -293,7 +294,7 @@ public final class MessageDataGenerator {
         headerGenerator.addImport(MessageGenerator.RAW_TAGGED_FIELD_CLASS);
         buffer.printf("public List<RawTaggedField> unknownTaggedFields() {%n");
         buffer.incrementIndent();
-        // Optimize _unknownTaggedFields by not creating a new ArrayList object
+        // Optimize _unknownTaggedFields by not creating a new list object
         // unless we need it.
         buffer.printf("if (_unknownTaggedFields == null) {%n");
         buffer.incrementIndent();
@@ -760,31 +761,116 @@ public final class MessageDataGenerator {
                     "version \" + version + \" of %s\");%n", className);
             }).
             generate(buffer);
+        buffer.printf("int _numTaggedFields = 0;%n");
+        Versions curVersions = parentVersions.intersect(struct.versions());
+        TreeMap<Integer, FieldSpec> taggedFields = new TreeMap<>();
         for (FieldSpec field : struct.fields()) {
-            VersionConditional cond = VersionConditional.
-                forVersions(field.versions(), parentVersions.intersect(struct.versions())).
-                ifMember((presentVersions) -> {
-                    VersionConditional.forVersions(field.taggedVersions(), presentVersions)
-                        .ifNotMember((presentAndUntaggedVersions) -> {
+            ClauseGenerator taggedClause = (__) -> {
+                generateNonDefaultValueCheck(field);
+                buffer.incrementIndent();
+                buffer.printf("_numTaggedFields++;%n");
+                buffer.decrementIndent();
+                buffer.printf("}%n");
+                if (taggedFields.put(field.tag(), field) != null) {
+                    throw new RuntimeException("Field " + field.name() + " has tag " +
+                        field.tag() + ", but another field already used that tag.");
+                }
+            };
+            if (field.taggedVersions().intersect(field.versions())) {
+                // If the only possible versions of the field are tagged versions, we don't need
+                // to check the version here.  If someone sets a tagged field in a non-flexible version,
+                // that will be caught by the later check for _numTaggedFields > 0.
+                taggedClause.generate(field.taggedVersions());
+            } else {
+                VersionConditional cond = VersionConditional.forVersions(field.versions(), curVersions).
+                    ifMember((presentVersions) -> {
+                        VersionConditional.forVersions(field.taggedVersions(), presentVersions).
+                            ifNotMember((presentAndUntaggedVersions) -> {
+                                if (field.type().isVariableLength()) {
+                                    generateVariableLengthWriter(field.camelCaseName(),
+                                        field.type(),
+                                        presentAndUntaggedVersions,
+                                        field.nullableVersions());
+                                } else {
+                                    buffer.printf("%s;%n",
+                                        primitiveWriteExpression(field.type(), field.camelCaseName()));
+                                }
+                            }).
+                            ifMember(taggedClause).
+                            generate(buffer);
+                    });
+                if (!field.ignorable()) {
+                    cond.ifNotMember((__) -> {
+                        generateNonDefaultValueCheck(field);
+                        buffer.incrementIndent();
+                        headerGenerator.addImport(MessageGenerator.UNSUPPORTED_VERSION_EXCEPTION_CLASS);
+                        buffer.printf("throw new UnsupportedVersionException(" +
+                                "\"Attempted to write a non-default %s at version \" + version);%n",
+                            field.camelCaseName());
+                        buffer.decrementIndent();
+                        buffer.printf("}%n");
+                    });
+                }
+                cond.generate(buffer);
+            }
+        }
+        headerGenerator.addImport(MessageGenerator.RAW_TAGGED_FIELD_WRITER_CLASS);
+        buffer.printf("RawTaggedFieldWriter _rawWriter = RawTaggedFieldWriter.forFields(_unknownTaggedFields);%n");
+        buffer.printf("_numTaggedFields += _rawWriter.numFields();%n");
+        VersionConditional.forVersions(flexibleVersions, curVersions).
+            ifNotMember((__) -> {
+                buffer.printf("if (_numTaggedFields > 0) {%n");
+                buffer.incrementIndent();
+                headerGenerator.addImport(MessageGenerator.UNSUPPORTED_VERSION_EXCEPTION_CLASS);
+                buffer.printf("throw new UnsupportedVersionException(\"Tagged fields were set, " +
+                    "but version \" + version + \" of this message does not support them.\");%n");
+                buffer.decrementIndent();
+                buffer.printf("}%n");
+            }).
+            ifMember((__) -> {
+                int prevTag = -1;
+                for (FieldSpec field : taggedFields.values()) {
+                    if (prevTag + 1 != field.tag()) {
+                        buffer.printf("_rawWriter.writeRawTags(writable, %d);%n", field.tag());
+                    }
+                    VersionConditional.
+                        forVersions(field.versions(), field.taggedVersions().intersect(field.versions())).
+                        allowMembershipCheckAlwaysFalse(false).
+                        ifMember((presentAndTaggedVersions) -> {
+                            generateNonDefaultValueCheck(field);
+                            buffer.incrementIndent();
+                            buffer.printf("writable.writeUnsignedVarint(%d);%n", field.tag());
                             if (field.type().isVariableLength()) {
+                                if (field.type().isString() || field.type().isArray()) {
+                                    buffer.printf("writable.writeUnsignedVarint(sizeCache.get(this.%s));%n",
+                                        field.camelCaseName());
+                                } else if (field.type().isBytes()) {
+                                    buffer.printf("writable.writeUnsignedVarint(this.%s.length);%n",
+                                        field.camelCaseName());
+                                } else {
+                                    throw new RuntimeException("Unable to handle type " + field.type());
+                                }
                                 generateVariableLengthWriter(field.camelCaseName(),
                                     field.type(),
-                                    presentAndUntaggedVersions,
+                                    presentAndTaggedVersions,
                                     field.nullableVersions());
                             } else {
+                                buffer.printf("writable.writeUnsignedVarint(%d);%n",
+                                    field.type().fixedLength().get());
                                 buffer.printf("%s;%n",
                                     primitiveWriteExpression(field.type(), field.camelCaseName()));
                             }
+                            buffer.decrementIndent();
+                            buffer.printf("}%n");
                         }).
                         generate(buffer);
-                });
-            if (!field.ignorable()) {
-                cond.ifNotMember((__) -> {
-                    generateAbsentValueCheck(field);
-                });
-            }
-            cond.generate(buffer);
-        }
+                    prevTag = field.tag();
+                }
+                if (prevTag < Integer.MAX_VALUE) {
+                    buffer.printf("_rawWriter.writeRawTags(writable, Integer.MAX_VALUE);%n");
+                }
+            }).
+            generate(buffer);
         buffer.decrementIndent();
         buffer.printf("}%n");
     }
@@ -893,7 +979,7 @@ public final class MessageDataGenerator {
             generate(buffer);
     }
 
-    private void generateAbsentValueCheck(FieldSpec field) {
+    private void generateNonDefaultValueCheck(FieldSpec field) {
         if (field.type().isArray()) {
             if (fieldDefault(field).equals("null")) {
                 buffer.printf("if (%s != null) {%n", field.camelCaseName());
@@ -919,13 +1005,6 @@ public final class MessageDataGenerator {
         } else {
             buffer.printf("if (%s != %s) {%n", field.camelCaseName(), fieldDefault(field));
         }
-        buffer.incrementIndent();
-        headerGenerator.addImport(MessageGenerator.UNSUPPORTED_VERSION_EXCEPTION_CLASS);
-        buffer.printf("throw new UnsupportedVersionException(" +
-                "\"Attempted to write a non-default %s at version \" + version);%n",
-            field.camelCaseName());
-        buffer.decrementIndent();
-        buffer.printf("}%n");
     }
 
     private void generateClassToStruct(String className, StructSpec struct,

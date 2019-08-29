@@ -95,6 +95,8 @@ public final class MessageGenerator {
 
     static final String RAW_TAGGED_FIELD_CLASS = "org.apache.kafka.common.protocol.RawTaggedField";
 
+    static final String RAW_TAGGED_FIELD_WRITER_CLASS = "org.apache.kafka.common.protocol.RawTaggedFieldWriter";
+
     /**
      * The Jackson serializer we use for JSON objects.
      */

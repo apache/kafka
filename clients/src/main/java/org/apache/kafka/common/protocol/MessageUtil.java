@@ -20,6 +20,8 @@ package org.apache.kafka.common.protocol;
 import org.apache.kafka.common.utils.Utils;
 
 import java.util.Iterator;
+import java.util.List;
+import java.util.Set;
 
 public final class MessageUtil {
     /**

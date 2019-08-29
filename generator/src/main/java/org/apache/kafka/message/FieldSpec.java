@@ -114,6 +114,15 @@ public final class FieldSpec {
                     this.taggedVersions + ", which is not open-ended.  taggedVersions must " +
                     "be either none, or an open-ended range (that ends with a plus sign).");
             }
+            if (this.taggedVersions().intersect(this.versions).empty()) {
+                throw new RuntimeException("Field " + name + " + specified taggedVersions " +
+                    this.taggedVersions + ", but there is no overlap with the versions in " +
+                    "which this field is present, " + this.versions);
+            }
+            if (this.ignorable) {
+                throw new RuntimeException("Field " + name + " is specifies taggedVersions, but " +
+                    "is also ignorable")
+            }
         }
     }
 
