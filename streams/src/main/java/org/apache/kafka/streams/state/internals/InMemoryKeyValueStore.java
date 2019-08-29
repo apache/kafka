@@ -16,21 +16,21 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import java.util.List;
+import java.util.NavigableMap;
+import java.util.Set;
+import java.util.TreeMap;
+import java.util.TreeSet;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.Iterator;
-import java.util.List;
-import java.util.NavigableMap;
-import java.util.Set;
-import java.util.TreeMap;
-import java.util.TreeSet;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
     private final String name;
@@ -113,21 +113,21 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
 
         if (from.compareTo(to) > 0) {
             LOG.warn("Returning empty iterator for fetch with invalid key range: from > to. "
-                + "This may be due to serdes that don't preserve ordering when lexicographically comparing the serialized bytes. " +
-                "Note that the built-in numerical serdes do not follow this for negative numbers");
+                    + "This may be due to serdes that don't preserve ordering when lexicographically comparing the serialized bytes. " +
+                    "Note that the built-in numerical serdes do not follow this for negative numbers");
             return KeyValueIterators.emptyIterator();
         }
 
         return new DelegatingPeekingKeyValueIterator<>(
-            name,
-            new InMemoryKeyValueIterator(map.subMap(from, true, to, true).keySet()));
+                name,
+                new InMemoryKeyValueIterator(map.subMap(from, true, to, true).keySet()));
     }
 
     @Override
     public synchronized KeyValueIterator<Bytes, byte[]> all() {
         return new DelegatingPeekingKeyValueIterator<>(
-            name,
-            new InMemoryKeyValueIterator(map.keySet()));
+                name,
+                new InMemoryKeyValueIterator(map.keySet()));
     }
 
     @Override

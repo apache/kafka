@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.kstream.internals.foreignkeyjoin;
 
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serializer;
@@ -50,6 +51,12 @@ public class SubscriptionWrapperSerde<K> implements Serde<SubscriptionWrapper<K>
         @Override
         public byte[] serialize(final String topic, final SubscriptionWrapper<K> data) {
             //{1-bit-isHashNull}{7-bits-version}{1-byte-instruction}{Optional-16-byte-Hash}{PK-serialized}
+
+            //7-bit (0x7F) maximum for data version.
+            if (Byte.compare((byte)0x7F, data.getVersion()) < 0) {
+                throw new UnsupportedVersionException("SubscriptionWrapper version is larger than maximum supported 0x7F");
+            }
+
             final byte[] primaryKeySerializedData = primaryKeySerializer.serialize(topic, data.getPrimaryKey());
 
             final ByteBuffer buf;

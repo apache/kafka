@@ -88,12 +88,13 @@ public class StatefulProcessorNode<K, V> extends ProcessorGraphNode<K, V> {
 
         topologyBuilder.addProcessor(processorName, processorSupplier, parentNodeNames());
 
+        if (storeNames != null && storeNames.length > 0) {
+            topologyBuilder.connectProcessorAndStateStores(processorName, storeNames);
+        }
+
         if (storeBuilder != null) {
             topologyBuilder.addStateStore(storeBuilder, processorName);
         }
 
-        if (storeNames != null && storeNames.length > 0) {
-            topologyBuilder.connectProcessorAndStateStores(processorName, storeNames);
-        }
     }
 }

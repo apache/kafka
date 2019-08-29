@@ -19,12 +19,12 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.state.KeyValueIterator;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.Iterator;
 import java.util.Map;
 import java.util.TreeMap;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class MemoryNavigableLRUCache extends MemoryLRUCache {
 
@@ -39,15 +39,15 @@ public class MemoryNavigableLRUCache extends MemoryLRUCache {
 
         if (from.compareTo(to) > 0) {
             LOG.warn("Returning empty iterator for fetch with invalid key range: from > to. "
-                + "This may be due to serdes that don't preserve ordering when lexicographically comparing the serialized bytes. " +
-                "Note that the built-in numerical serdes do not follow this for negative numbers");
+                    + "This may be due to serdes that don't preserve ordering when lexicographically comparing the serialized bytes. " +
+                    "Note that the built-in numerical serdes do not follow this for negative numbers");
             return KeyValueIterators.emptyIterator();
         }
 
         final TreeMap<Bytes, byte[]> treeMap = toTreeMap();
         return new DelegatingPeekingKeyValueIterator<>(name(),
-            new MemoryNavigableLRUCache.CacheIterator(treeMap.navigableKeySet()
-                .subSet(from, true, to, true).iterator(), treeMap));
+                new MemoryNavigableLRUCache.CacheIterator(treeMap.navigableKeySet()
+                        .subSet(from, true, to, true).iterator(), treeMap));
     }
 
     @Override
@@ -59,6 +59,7 @@ public class MemoryNavigableLRUCache extends MemoryLRUCache {
     private synchronized TreeMap<Bytes, byte[]> toTreeMap() {
         return new TreeMap<>(this.map);
     }
+
 
     private static class CacheIterator implements KeyValueIterator<Bytes, byte[]> {
         private final Iterator<Bytes> keys;
