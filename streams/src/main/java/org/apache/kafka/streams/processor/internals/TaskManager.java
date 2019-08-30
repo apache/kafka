@@ -112,7 +112,7 @@ public class TaskManager {
     }
 
     private void addStreamTasks(final Collection<TopicPartition> assignment) {
-        if (assignedActiveTasks.isEmpty()) {
+        if (assignedActiveTasks == null || assignedActiveTasks.isEmpty()) {
             return;
         }
         final Map<TaskId, Set<TopicPartition>> newTasks = new HashMap<>();
@@ -151,8 +151,7 @@ public class TaskManager {
     }
 
     private void addStandbyTasks() {
-        final Map<TaskId, Set<TopicPartition>> assignedStandbyTasks = this.assignedStandbyTasks;
-        if (assignedStandbyTasks.isEmpty()) {
+        if (assignedStandbyTasks == null || assignedStandbyTasks.isEmpty()) {
             return;
         }
         log.debug("Adding assigned standby tasks {}", assignedStandbyTasks);
