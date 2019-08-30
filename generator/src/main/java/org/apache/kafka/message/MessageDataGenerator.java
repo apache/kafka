@@ -1143,6 +1143,7 @@ public final class MessageDataGenerator {
                 generateCheckForUnsupportedNumTaggedFields();
             }).
             ifMember((__) -> {
+                headerGenerator.addImport(MessageGenerator.BYTE_UTILS_CLASS);
                 buffer.printf("_size += ByteUtils.sizeOfUnsignedVarint(_numTaggedFields);%n");
             }).
             generate(buffer);
@@ -1165,6 +1166,7 @@ public final class MessageDataGenerator {
                     buffer.printf("_arraySize += _stringBytes.length + 2;%n");
                 }).
                 ifMember((__) -> {
+                    headerGenerator.addImport(MessageGenerator.BYTE_UTILS_CLASS);
                     buffer.printf("_arraySize += _stringBytes.length + " +
                         "ByteUtils.sizeOfUnsignedVarint(_stringBytes.length + 1);%n");
                 }).
@@ -1175,6 +1177,7 @@ public final class MessageDataGenerator {
                     buffer.printf("_arraySize += %s.length + 4;%n", fieldName);
                 }).
                 ifMember((__) -> {
+                    headerGenerator.addImport(MessageGenerator.BYTE_UTILS_CLASS);
                     buffer.printf("_arraySize += %s.length + " +
                         "ByteUtils.sizeOfUnsignedVarint(%s.length + 1);%n",
                         fieldName, fieldName);
@@ -1227,7 +1230,7 @@ public final class MessageDataGenerator {
             }).
             ifNotNull((ifNotNullVersions) -> {
                 if (field.type().isString()) {
-                    generateStringToBytes(field.name());
+                    generateStringToBytes(field.camelCaseName());
                     buffer.printf("_size += _stringBytes.length;%n");
                     VersionConditional.forVersions(flexibleVersions, ifNotNullVersions).
                         ifMember((__) -> {
@@ -1282,6 +1285,7 @@ public final class MessageDataGenerator {
                         buffer.printf("}%n");
                     }
                     if (tagged) {
+                        headerGenerator.addImport(MessageGenerator.BYTE_UTILS_CLASS);
                         buffer.printf("sizeCache.setArraySizeInBytes(%s, _arraySize);%n",
                             field.camelCaseName());
                         buffer.printf("_size += _arraySize + ByteUtils.sizeOfUnsignedVarint(_arraySize);%n");
@@ -1293,6 +1297,7 @@ public final class MessageDataGenerator {
                     VersionConditional.forVersions(flexibleVersions, ifNotNullVersions).
                         ifMember((__) -> {
                             headerGenerator.addImport(MessageGenerator.BYTE_UTILS_CLASS);
+                            headerGenerator.addImport(MessageGenerator.BYTE_UTILS_CLASS);
                             buffer.printf("_bytesSize += ByteUtils.sizeOfUnsignedVarint(%s.length + 1);%n",
                                 field.camelCaseName());
                         }).
@@ -1301,6 +1306,7 @@ public final class MessageDataGenerator {
                         }).
                         generate(buffer);
                     if (tagged) {
+                        headerGenerator.addImport(MessageGenerator.BYTE_UTILS_CLASS);
                         buffer.printf("_size += _bytesSize + ByteUtils.sizeOfUnsignedVarint(_bytesSize);%n");
                     } else {
                         buffer.printf("_size += _bytesSize;%n");
