@@ -16,12 +16,12 @@
  */
 package org.apache.kafka.common.protocol.types;
 
+import org.apache.kafka.common.protocol.RawTaggedField;
 import org.apache.kafka.common.protocol.types.Type.DocumentedType;
 import org.apache.kafka.common.utils.ByteUtils;
 
 import java.nio.ByteBuffer;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.Map;
 import java.util.NavigableMap;
 import java.util.TreeMap;
@@ -32,20 +32,20 @@ import java.util.TreeMap;
 public class TaggedFields extends DocumentedType {
     private static final String TAGGED_FIELDS_TYPE_NAME = "TAGGED_FIELDS";
 
-    private final NavigableMap<Integer, Type> fields;
+    private final Map<Integer, Type> fields;
 
     @SuppressWarnings("unchecked")
     public static TaggedFields of(Object... fields) {
         TreeMap<Integer, Type> newFields = new TreeMap<>();
         for (int i = 0; i < fields.length; i += 2) {
-            Integer key = (Integer) fields[i];
+            Integer tag = (Integer) fields[i];
             Type type = (Type) fields[i + 1];
-            newFields.put(key, type);
+            newFields.put(tag, type);
         }
         return new TaggedFields(newFields);
     }
 
-    public TaggedFields(NavigableMap<Integer, Type> fields) {
+    public TaggedFields(Map<Integer, Type> fields) {
         this.fields = fields;
     }
 
@@ -57,54 +57,67 @@ public class TaggedFields extends DocumentedType {
     @SuppressWarnings("unchecked")
     @Override
     public void write(ByteBuffer buffer, Object o) {
-        Map<Integer, Object> objects = (Map<Integer, Object>) o;
+        NavigableMap<Integer, Object> objects = (NavigableMap<Integer, Object>) o;
         ByteUtils.writeUnsignedVarint(fields.size(), buffer);
-        for (Map.Entry<Integer, Type> entry : fields.entrySet()) {
-            Integer key = entry.getKey();
-            if (objects.containsKey(key)) {
-                Object value = objects.get(key); // note: this may be null.
-                ByteUtils.writeUnsignedVarint(entry.getKey(), buffer);
-                Type type = entry.getValue();
-                ByteUtils.writeUnsignedVarint(type.sizeOf(value), buffer);
-                type.write(buffer, value);
+        for (Map.Entry<Integer, Object> entry : objects.entrySet()) {
+            Integer tag = entry.getKey();
+            Type type = fields.get(tag);
+            ByteUtils.writeUnsignedVarint(tag, buffer);
+            if (type == null) {
+                RawTaggedField value = (RawTaggedField) entry.getValue();
+                ByteUtils.writeUnsignedVarint(value.data().length, buffer);
+                buffer.put(value.data());
+            } else {
+                ByteUtils.writeUnsignedVarint(type.sizeOf(entry.getValue()), buffer);
+                type.write(buffer, entry.getValue());
             }
         }
     }
 
     @SuppressWarnings("unchecked")
     @Override
-    public Map<Integer, Object> read(ByteBuffer buffer) {
+    public NavigableMap<Integer, Object> read(ByteBuffer buffer) {
         int numTaggedFields = ByteUtils.readUnsignedVarint(buffer);
-        Map<Integer, Object> objects = null;
+        if (numTaggedFields == 0) {
+            return Collections.emptyNavigableMap();
+        }
+        NavigableMap<Integer, Object> objects = new TreeMap<>();
+        int prevTag = -1;
         for (int i = 0; i < numTaggedFields; i++) {
             int tag = ByteUtils.readUnsignedVarint(buffer);
+            if (tag <= prevTag) {
+                throw new RuntimeException("Invalid or out-of-order tag " + tag);
+            }
+            prevTag = tag;
             int size = ByteUtils.readUnsignedVarint(buffer);
-            Type fieldType = fields.get(tag);
-            if (fieldType != null) {
-                if (objects == null) {
-                    objects = new HashMap<>();
-                }
-                objects.put(tag, fieldType.read(buffer));
+            Type type = fields.get(tag);
+            if (type == null) {
+                byte[] bytes = new byte[size];
+                buffer.get(bytes);
+                objects.put(tag, new RawTaggedField(tag, bytes));
             } else {
-                buffer.position(buffer.position() + size);
+                objects.put(tag, type.read(buffer));
             }
         }
-        return objects == null ? Collections.<Integer, Object>emptyMap() : objects;
+        return objects;
     }
 
     @SuppressWarnings("unchecked")
     @Override
     public int sizeOf(Object o) {
         int size = 0;
-        Map<Integer, Object> objects = (Map<Integer, Object>) o;
-        size += ByteUtils.sizeOfUnsignedVarint(fields.size());
-        for (Map.Entry<Integer, Type> entry : fields.entrySet()) {
-            Integer key = entry.getKey();
-            if (objects.containsKey(key)) {
-                Object value = objects.get(key); // note: this may be null.
-                size += ByteUtils.sizeOfUnsignedVarint(entry.getKey());
-                Type type = entry.getValue();
-                size += ByteUtils.sizeOfUnsignedVarint(type.sizeOf(value));
+        NavigableMap<Integer, Object> objects = (NavigableMap<Integer, Object>) o;
+        size += ByteUtils.sizeOfUnsignedVarint(objects.size());
+        for (Map.Entry<Integer, Object> entry : objects.entrySet()) {
+            Integer tag = entry.getKey();
+            size += ByteUtils.sizeOfUnsignedVarint(tag);
+            Type type = fields.get(tag);
+            if (type == null) {
+                RawTaggedField value = (RawTaggedField) entry.getValue();
+                size += value.data().length + ByteUtils.sizeOfUnsignedVarint(value.data().length);
+            } else {
+                int valueSize = type.sizeOf(entry.getValue());
+                size += valueSize + ByteUtils.sizeOfUnsignedVarint(valueSize);
             }
         }
         return size;
@@ -127,11 +140,16 @@ public class TaggedFields extends DocumentedType {
     @Override
     public Map<Integer, Object> validate(Object item) {
         try {
-            Map<Integer, Object> objects = (Map<Integer, Object>) item;
+            NavigableMap<Integer, Object> objects = (NavigableMap<Integer, Object>) item;
             for (Map.Entry<Integer, Object> entry : objects.entrySet()) {
-                Integer key = entry.getKey();
-                Type type = fields.get(key);
-                if (type != null) {
+                Integer tag = entry.getKey();
+                Type type = fields.get(tag);
+                if (type == null) {
+                    if (!(entry.getValue() instanceof RawTaggedField)) {
+                        throw new SchemaException("The value associated with tag " + tag +
+                            " must be a RawTaggedField in this version of the software.");
+                    }
+                } else {
                     type.validate(entry.getValue());
                 }
             }

@@ -124,7 +124,7 @@ public class Field {
     }
 
     public static class TaggedFieldsSection extends Field {
-        private static final String NAME = "tagged_fields";
+        private static final String NAME = "_tagged_fields";
         private static final String DOC_STRING = "The tagged fields";
 
         public static TaggedFieldsSection of(Object... fields) {

@@ -97,6 +97,10 @@ public final class MessageGenerator {
 
     static final String RAW_TAGGED_FIELD_WRITER_CLASS = "org.apache.kafka.common.protocol.RawTaggedFieldWriter";
 
+    static final String TREE_MAP_CLASS = "java.util.TreeMap";
+
+    static final String BYTE_BUFFER_CLASS = "java.nio.ByteBuffer";
+
     /**
      * The Jackson serializer we use for JSON objects.
      */
