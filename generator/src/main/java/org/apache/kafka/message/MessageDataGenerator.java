@@ -929,15 +929,9 @@ public final class MessageDataGenerator {
             ifNotNull((ifNotNullVersions) -> {
                 final String lengthExpression;
                 if (type.isString()) {
-                    lengthExpression = "arr.length";
-                    headerGenerator.addImport(MessageGenerator.STANDARD_CHARSETS);
-                    buffer.printf("byte[] arr = %s.getBytes(StandardCharsets.UTF_8);%n", name);
-                    buffer.printf("if (%s > 0x7fff) {%n", lengthExpression);
-                    buffer.incrementIndent();
-                    buffer.printf("throw new RuntimeException(\"'%s' field is too long to " +
-                        "be serialized\");%n", name);
-                    buffer.decrementIndent();
-                    buffer.printf("}%n");
+                    buffer.printf("byte[] _stringBytes = sizeCache.getSerializedValue(%s);%n",
+                        name);
+                    lengthExpression = "_stringBytes.length";
                 } else if (type.isBytes()) {
                     lengthExpression = String.format("%s.length", name);
                 } else if (type.isArray()) {
@@ -958,7 +952,7 @@ public final class MessageDataGenerator {
                     }).
                     generate(buffer);
                 if (type.isString()) {
-                    buffer.printf("writable.writeByteArray(arr);%n");
+                    buffer.printf("writable.writeByteArray(_stringBytes);%n");
                 } else if (type.isBytes()) {
                     buffer.printf("writable.writeByteArray(%s);%n", name);
                 } else if (type.isArray()) {
