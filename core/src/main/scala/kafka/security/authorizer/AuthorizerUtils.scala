@@ -17,12 +17,17 @@
 
 package kafka.security.authorizer
 
+import java.net.InetAddress
+
+import kafka.network.RequestChannel.Session
 import kafka.security.auth._
 import org.apache.kafka.common.acl.{AccessControlEntry, AclBinding, AclBindingFilter, AclOperation}
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.ApiError
 import org.apache.kafka.common.resource.{ResourcePattern, ResourceType => JResourceType}
+import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.common.utils.SecurityUtils._
+import org.apache.kafka.server.authorizer.AuthorizableRequestContext
 
 import scala.util.{Failure, Success, Try}
 
@@ -74,4 +79,17 @@ object AuthorizerUtils {
   }
 
   def isClusterResource(name: String): Boolean = name.equals(Resource.ClusterResourceName)
+
+  def sessionToRequestContext(session: Session): AuthorizableRequestContext = {
+    new AuthorizableRequestContext {
+      override def clientId(): String = ""
+      override def requestType(): Int = -1
+      override def listener(): String = ""
+      override def clientAddress(): InetAddress = session.clientAddress
+      override def principal(): KafkaPrincipal = session.principal
+      override def securityProtocol(): SecurityProtocol = null
+      override def correlationId(): Int = -1
+      override def requestVersion(): Int = -1
+    }
+  }
 }

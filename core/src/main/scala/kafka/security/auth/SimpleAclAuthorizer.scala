@@ -16,7 +16,6 @@
  */
 package kafka.security.auth
 
-import java.net.InetAddress
 import java.util
 
 import kafka.network.RequestChannel.Session
@@ -25,7 +24,7 @@ import kafka.utils._
 import kafka.zk.ZkVersion
 import org.apache.kafka.common.acl.{AccessControlEntryFilter, AclBinding, AclBindingFilter, AclOperation, AclPermissionType}
 import org.apache.kafka.common.resource.{PatternType, ResourcePatternFilter}
-import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
+import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.server.authorizer.{Action, AuthorizableRequestContext, AuthorizationResult}
 
 import scala.collection.mutable
@@ -48,7 +47,7 @@ object SimpleAclAuthorizer {
   case class VersionedAcls(acls: Set[Acl], zkVersion: Int) {
     def exists: Boolean = zkVersion != ZkVersion.UnknownVersion
   }
-  val NoAcls = AclAuthorizer.NoAcls
+  val NoAcls = VersionedAcls(Set.empty, ZkVersion.UnknownVersion)
 }
 
 @deprecated("Use kafka.security.authorizer.AclAuthorizer", "Since 2.4")
@@ -69,16 +68,7 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
   }
 
   override def authorize(session: Session, operation: Operation, resource: Resource): Boolean = {
-    val requestContext = new AuthorizableRequestContext {
-      override def clientId(): String = ""
-      override def requestType(): Int = -1
-      override def listener(): String = ""
-      override def clientAddress(): InetAddress = session.clientAddress
-      override def principal(): KafkaPrincipal = session.principal
-      override def securityProtocol(): SecurityProtocol = null
-      override def correlationId(): Int = -1
-      override def requestVersion(): Int = -1
-    }
+    val requestContext = AuthorizerUtils.sessionToRequestContext(session)
     val action = new Action(operation.toJava, resource.toPattern, 1, true, true)
     aclAuthorizer.authorize(requestContext, List(action).asJava).asScala.head == AuthorizationResult.ALLOWED
   }

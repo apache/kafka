@@ -22,7 +22,7 @@ import java.util.concurrent.locks.ReentrantReadWriteLock
 
 import com.typesafe.scalalogging.Logger
 import kafka.api.KAFKA_2_0_IV1
-import kafka.security.auth.SimpleAclAuthorizer.VersionedAcls
+import kafka.security.authorizer.AclAuthorizer.VersionedAcls
 import kafka.security.auth.{Acl, Operation, PermissionType, Resource, ResourceType}
 import kafka.security.auth.{All, Allow, Alter, AlterConfigs, Delete, Deny, Describe, DescribeConfigs, Read, Write}
 import kafka.server.KafkaConfig
@@ -57,6 +57,9 @@ object AclAuthorizer {
   // If set to true when no acls are found for a resource, authorizer allows access to everyone. Defaults to false.
   val AllowEveryoneIfNoAclIsFoundProp = "allow.everyone.if.no.acl.found"
 
+  case class VersionedAcls(acls: Set[Acl], zkVersion: Int) {
+    def exists: Boolean = zkVersion != ZkVersion.UnknownVersion
+  }
   val NoAcls = VersionedAcls(Set.empty, ZkVersion.UnknownVersion)
 }
 

@@ -33,6 +33,7 @@ import scala.util.{Failure, Success, Try}
 
 class SaslSslAdminClientIntegrationTest extends AdminClientIntegrationTest with SaslSetup {
   this.serverConfig.setProperty(KafkaConfig.ZkEnableSecureAclsProp, "true")
+  // This tests the old SimpleAclAuthorizer, we have another test for the new AclAuthorizer
   this.serverConfig.setProperty(KafkaConfig.AuthorizerClassNameProp, classOf[SimpleAclAuthorizer].getName)
 
   override protected def securityProtocol = SecurityProtocol.SASL_SSL

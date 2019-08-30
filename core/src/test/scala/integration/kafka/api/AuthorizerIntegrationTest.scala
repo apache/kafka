@@ -1691,7 +1691,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     }
   }
 
-  private def addAndVerifyAcls(acls: Set[AccessControlEntry], resource: ResourcePattern) = {
+  private def addAndVerifyAcls(acls: Set[AccessControlEntry], resource: ResourcePattern): Unit = {
     val aclBindings = acls.map { acl => new AclBinding(resource, acl) }
     servers.head.dataPlaneRequestProcessor.authorizer.get
       .createAcls(null, aclBindings.toList.asJava).asScala.foreach {result =>
