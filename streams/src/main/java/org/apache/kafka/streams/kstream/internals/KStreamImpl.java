@@ -56,6 +56,7 @@ import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
 import org.apache.kafka.streams.state.WindowStore;
+import org.apache.kafka.streams.state.internals.InMemoryWindowBytesStoreSupplier;
 
 import java.lang.reflect.Array;
 import java.time.Duration;
@@ -1200,9 +1201,11 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
                 otherWindowStore = joinWindowStoreBuilder(otherJoinStoreName, windows, joined.keySerde(), joined.otherValueSerde());
             } else {
                 final WindowBytesStoreSupplier windowBytesStoreSupplier = (WindowBytesStoreSupplier) materializedInternal.storeSupplier();
+                final InMemoryWindowBytesStoreSupplier joinThisInMemorySupplier = new InMemoryWindowBytesStoreSupplier(windowBytesStoreSupplier.name() + joinThisSuffix, windowBytesStoreSupplier.retentionPeriod(), windowBytesStoreSupplier.windowSize(), windowBytesStoreSupplier.retainDuplicates());
+                final InMemoryWindowBytesStoreSupplier joinOtherInMemorySupplier = new InMemoryWindowBytesStoreSupplier(windowBytesStoreSupplier.name() + joinOtherSuffix, windowBytesStoreSupplier.retentionPeriod(), windowBytesStoreSupplier.windowSize(), windowBytesStoreSupplier.retainDuplicates());
 
-                thisWindowStore = joinWindowStoreBuilderFromSupplier(windowBytesStoreSupplier, joined.keySerde(), joined.valueSerde());
-                otherWindowStore = joinWindowStoreBuilderFromSupplier(windowBytesStoreSupplier, joined.keySerde(), joined.otherValueSerde());
+                thisWindowStore = joinWindowStoreBuilderFromSupplier(joinThisInMemorySupplier, joined.keySerde(), joined.valueSerde());
+                otherWindowStore = joinWindowStoreBuilderFromSupplier(joinOtherInMemorySupplier, joined.keySerde(), joined.otherValueSerde());
             }
 
 

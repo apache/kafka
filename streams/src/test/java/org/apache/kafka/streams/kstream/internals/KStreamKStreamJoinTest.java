@@ -27,7 +27,9 @@ import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.JoinWindows;
 import org.apache.kafka.streams.kstream.Joined;
 import org.apache.kafka.streams.kstream.KStream;
+import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
+import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.test.ConsumerRecordFactory;
 import org.apache.kafka.test.MockProcessor;
 import org.apache.kafka.test.MockProcessorSupplier;
@@ -35,6 +37,7 @@ import org.apache.kafka.test.MockValueJoiner;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.junit.Test;
 
+import java.time.Duration;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashSet;
@@ -81,6 +84,45 @@ public class KStreamKStreamJoinTest {
             assertThat(appender.getMessages(), hasItem("Skipping record due to null key or value. key=[A] value=[null] topic=[left] partition=[0] offset=[0]"));
 
             assertEquals(1.0, getMetricByName(driver.metrics(), "skipped-records-total", "stream-metrics").metricValue());
+        }
+    }
+
+    @Test
+    public void shouldJoinWithInMemoryStore() {
+        final StreamsBuilder builder = new StreamsBuilder();
+
+        final KStream<String, Integer> left = builder.stream("left", Consumed.with(Serdes.String(), Serdes.Integer()));
+        final KStream<String, Integer> right = builder.stream("right", Consumed.with(Serdes.String(), Serdes.Integer()));
+        final ConsumerRecordFactory<String, Integer> recordFactory =
+            new ConsumerRecordFactory<>(new StringSerializer(), new IntegerSerializer());
+        final MockProcessorSupplier<String, Integer> supplier = new MockProcessorSupplier<>();
+        final KStream<String, Integer> joinedStream;
+
+        final JoinWindows joinWindows = JoinWindows.of(ofMillis(100));
+        joinedStream = left.join(
+            right,
+            (value1, value2) -> value1 + value2,
+            joinWindows,
+            Joined.with(Serdes.String(), Serdes.Integer(), Serdes.Integer()),
+            Materialized.<String, Integer>as(Stores.inMemoryWindowStore("in-memory-join-store",
+                                                                        Duration.ofMillis(joinWindows.size() + joinWindows.gracePeriodMs()),
+                                                                        Duration.ofMillis(joinWindows.size()), true))
+                .withKeySerde(Serdes.String()).withValueSerde(Serdes.Integer())
+        );
+
+        joinedStream.process(supplier);
+
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+            final MockProcessor<String, Integer> processor = supplier.theCapturedProcessor();
+
+            driver.pipeInput(recordFactory.create("left", "A", 1, 1L));
+            driver.pipeInput(recordFactory.create("left", "B", 1, 2L));
+
+            driver.pipeInput(recordFactory.create("right", "A", 1, 1L));
+            driver.pipeInput(recordFactory.create("right", "B", 2, 2L));
+
+            processor.checkAndClearProcessResult(new KeyValueTimestamp<>("A", 2, 1L),
+                new KeyValueTimestamp<>("B", 3, 2L));
         }
     }
 
