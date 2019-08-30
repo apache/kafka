@@ -57,9 +57,9 @@ public class StreamsMetricsImpl implements StreamsMetrics {
 
     public static final String THREAD_ID_TAG = "client-id";
     public static final String TASK_ID_TAG = "task-id";
-    public static final String STORE_ID_TAG = "id";
+    public static final String STORE_ID_TAG = "state-id";
 
-    public static final String ALL_TASKS = "all";
+    public static final String ROLLUP_VALUE = "all";
 
     public static final String LATENCY_SUFFIX = "-latency";
     public static final String AVG_SUFFIX = "-avg";
@@ -69,9 +69,13 @@ public class StreamsMetricsImpl implements StreamsMetrics {
     public static final String TOTAL_SUFFIX = "-total";
     public static final String RATIO_SUFFIX = "-ratio";
 
-    public static final String THREAD_LEVEL_GROUP = "stream-metrics";
-    public static final String TASK_LEVEL_GROUP = "stream-task-metrics";
-    public static final String STATE_LEVEL_GROUP = "stream-state-metrics";
+    public static final String GROUP_PREFIX_WO_DELIMITER = "stream";
+    public static final String GROUP_PREFIX = GROUP_PREFIX_WO_DELIMITER + "-";
+    public static final String GROUP_SUFFIX = "-metrics";
+    public static final String STATE_LEVEL_GROUP_SUFFIX = "-state" + GROUP_SUFFIX;
+    public static final String THREAD_LEVEL_GROUP = GROUP_PREFIX_WO_DELIMITER + GROUP_SUFFIX;
+    public static final String TASK_LEVEL_GROUP = GROUP_PREFIX + "task" + GROUP_SUFFIX;
+    public static final String STATE_LEVEL_GROUP = GROUP_PREFIX + "state" + GROUP_SUFFIX;
 
     public static final String PROCESSOR_NODE_METRICS_GROUP = "stream-processor-node-metrics";
     public static final String PROCESSOR_NODE_ID_TAG = "processor-node-id";
