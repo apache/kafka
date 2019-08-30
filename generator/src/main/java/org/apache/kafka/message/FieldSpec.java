@@ -25,8 +25,11 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.regex.Pattern;
 
 public final class FieldSpec {
+    private static final Pattern VALID_FIELD_NAMES = Pattern.compile("[A-Za-z]([A-Za-z0-9]*)");
+
     private final String name;
 
     private final Versions versions;
@@ -65,6 +68,9 @@ public final class FieldSpec {
                      @JsonProperty("taggedVersions") String taggedVersions,
                      @JsonProperty("tag") Integer tag) {
         this.name = Objects.requireNonNull(name);
+        if (!VALID_FIELD_NAMES.matcher(this.name).matches()) {
+            throw new RuntimeException("Invalid field name " + this.name);
+        }
         this.versions = Versions.parse(versions, null);
         if (this.versions == null) {
             throw new RuntimeException("You must specify the version of the " +
