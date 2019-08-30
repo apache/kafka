@@ -63,6 +63,7 @@ public class MirrorSourceTask extends SourceTask {
     private MirrorMetrics metrics;
     private boolean stopping = false;
     private Semaphore outstandingOffsetSyncs;
+    private Semaphore consumerAccess;
 
     public MirrorSourceTask() {}
 
@@ -77,6 +78,7 @@ public class MirrorSourceTask extends SourceTask {
     public void start(Map<String, String> props) {
         MirrorTaskConfig config = new MirrorTaskConfig(props);
         outstandingOffsetSyncs = new Semaphore(MAX_OUTSTANDING_OFFSET_SYNCS);
+        consumerAccess = new Semaphore(1);  // let one thread at a time access the consumer
         sourceClusterAlias = config.sourceClusterAlias();
         metrics = config.metrics();
         pollTimeout = config.consumerPollTimeout();
@@ -107,6 +109,11 @@ public class MirrorSourceTask extends SourceTask {
         long start = System.currentTimeMillis();
         stopping = true;
         consumer.wakeup();
+        try {
+            consumerAccess.acquire();
+        } catch (InterruptedException e) {
+            log.warn("Interrupted waiting for access to consumer. Will try closing anyway."); 
+        }
         Utils.closeQuietly(consumer, "source consumer");
         Utils.closeQuietly(offsetProducer, "offset producer");
         Utils.closeQuietly(metrics, "metrics");
@@ -120,10 +127,13 @@ public class MirrorSourceTask extends SourceTask {
 
     @Override
     public List<SourceRecord> poll() {
+        if (!consumerAccess.tryAcquire()) {
+            return null;
+        }
+        if (stopping) {
+            return null;
+        }
         try {
-            if (stopping) {
-                return null;
-            }
             ConsumerRecords<byte[], byte[]> records = consumer.poll(pollTimeout);
             List<SourceRecord> sourceRecords = new ArrayList<>(records.count());
             for (ConsumerRecord<byte[], byte[]> record : records) {
@@ -149,6 +159,8 @@ public class MirrorSourceTask extends SourceTask {
             log.error("Failure during poll.", e);
             // allow Connect to deal with the exception
             throw e;
+        } finally {
+            consumerAccess.release();
         }
     }
  

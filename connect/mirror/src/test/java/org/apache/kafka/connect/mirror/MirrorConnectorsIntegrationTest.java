@@ -17,9 +17,11 @@
 package org.apache.kafka.connect.mirror;
 
 import org.apache.kafka.connect.util.clusters.EmbeddedConnectCluster;
+import org.apache.kafka.connect.util.clusters.EmbeddedKafkaCluster;
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.common.TopicPartition;
 
 import org.junit.After;
@@ -54,9 +56,9 @@ public class MirrorConnectorsIntegrationTest {
 
     private static final Logger log = LoggerFactory.getLogger(MirrorConnectorsIntegrationTest.class);
 
-    private static final int NUM_RECORDS_PRODUCED = 100;
-    private static final int RECORD_TRANSFER_DURATION_MS = 10000;
-    private static final int CHECKPOINT_DURATION_MS = 20000;
+    private static final int NUM_RECORDS_PRODUCED = 1_000;  // to save trees
+    private static final int RECORD_TRANSFER_DURATION_MS = 10_000;
+    private static final int CHECKPOINT_DURATION_MS = 20_000;
 
     private MirrorMakerConfig mm2Config; 
     private EmbeddedConnectCluster primary;
@@ -69,8 +71,7 @@ public class MirrorConnectorsIntegrationTest {
 
         Map<String, String> mm2Props = new HashMap<>();
         mm2Props.put("clusters", "primary, backup");
-        mm2Props.put("replication.factor", "1");
-        mm2Props.put("max.tasks", "1");
+        mm2Props.put("max.tasks", "10");
         mm2Props.put("topics", "test-topic-.*, primary.test-topic-.*, backup.test-topic-.*");
         mm2Props.put("groups", "consumer-group-.*");
         mm2Props.put("primary->backup.enabled", "true");
@@ -88,7 +89,7 @@ public class MirrorConnectorsIntegrationTest {
         primary = new EmbeddedConnectCluster.Builder()
                 .name("primary-connect-cluster")
                 .numWorkers(3)
-                .numBrokers(1)
+                .numBrokers(3)
                 .brokerProps(brokerProps)
                 .workerProps(primaryWorkerProps)
                 .build();
@@ -96,7 +97,7 @@ public class MirrorConnectorsIntegrationTest {
         backup = new EmbeddedConnectCluster.Builder()
                 .name("backup-connect-cluster")
                 .numWorkers(3)
-                .numBrokers(1)
+                .numBrokers(3)
                 .brokerProps(brokerProps)
                 .workerProps(backupWorkerProps)
                 .build();
@@ -168,6 +169,8 @@ public class MirrorConnectorsIntegrationTest {
         for (String x : backup.connectors()) {
             backup.deleteConnector(x);
         }
+        deleteAllTopics(primary.kafka());
+        deleteAllTopics(backup.kafka());
         primary.stop();
         backup.stop();
     }
@@ -287,5 +290,13 @@ public class MirrorConnectorsIntegrationTest {
             primary.kafka().consume(NUM_RECORDS_PRODUCED, 2 * RECORD_TRANSFER_DURATION_MS, "backup.test-topic-3").count());
         assertEquals("New topic was not replicated to backup cluster.", NUM_RECORDS_PRODUCED,
             backup.kafka().consume(NUM_RECORDS_PRODUCED, 2 * RECORD_TRANSFER_DURATION_MS, "primary.test-topic-2").count());
-    } 
+    }
+
+    private void deleteAllTopics(EmbeddedKafkaCluster cluster) {
+        Admin client = cluster.createAdminClient();
+        try {
+            client.deleteTopics(client.listTopics().names().get());
+        } catch (Throwable e) {
+        }
+    }
 }
