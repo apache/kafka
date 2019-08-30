@@ -717,6 +717,40 @@ class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Loggin
     }
   }
 
+  // Make sure that the describe command identifies adding/removing replicas.
+  @Test
+  def testDescribeReassignPartitionsMixed(): Unit = {
+    val reassigningTopic = "reassigning-describe-topic"
+    val regularTopic = "regular-describe-topic"
+
+    val reassignCreateOpts = new TopicCommandOptions(
+      Array("--replica-assignment", "2:1:0", "--topic", reassigningTopic))
+    createAndWaitTopic(reassignCreateOpts)
+
+    val regularCreateOpts = new TopicCommandOptions(
+      Array("--replica-assignment", "5:4:3", "--topic", regularTopic))
+    createAndWaitTopic(regularCreateOpts)
+
+    try {
+      killBroker(0)
+
+      // Do a replica assignment but leave the dead broker in the replica set; this should never complete.
+      topicService.alterTopic(new TopicCommandOptions(
+        Array("--topic", reassigningTopic, "--replica-assignment", "4:1:0", "--partitions", "6")))
+
+      val aliveServers = servers.filterNot(_.config.brokerId == 0)
+      TestUtils.waitUntilMetadataIsPropagated(aliveServers, reassigningTopic, 0)
+      val output = TestUtils.grabConsoleOutput(
+        topicService.describeTopic(new TopicCommandOptions(Array())))
+      val rows = output.split("\n")
+      assertTrue(rows(0).startsWith(s"\tTopic: $reassigningTopic"))
+      assertTrue(rows(1).startsWith(s"\tTopic: $regularTopic"))
+      assertEquals(2, rows.length);
+    } finally {
+      restartDeadBrokers()
+    }
+  }
+
   @Test
   def testDescribeReportOverriddenConfigs(): Unit = {
     val config = "file.delete.delay.ms=1000"

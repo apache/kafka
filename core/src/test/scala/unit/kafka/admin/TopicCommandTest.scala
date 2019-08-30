@@ -520,6 +520,38 @@ class TopicCommandTest extends ZooKeeperTestHarness with Logging with RackAwareT
   }
 
   @Test
+  def testDescribeAndListReassignment(): Unit = {
+    // Somewhat of a negative test, as ZK-based reassignment will not report this.
+    val brokers = List(0, 1, 2, 3, 4, 5)
+    val reassignmentAddingDescribe = "Adding Replicas"
+    val reassignmentRemovingDescribe = "Removing Replicas"
+    TestUtils.createBrokersInZk(zkClient, brokers)
+
+    val createOpts = new TopicCommandOptions(Array("--partitions", "1", "--replication-factor", "3",
+      "--topic", testTopicName, "--replica-assignment", "5:3:1"))
+    topicService.createTopic(createOpts)
+
+    // Test describe topics
+    def describeTopicsWithConfig(): Unit = {
+      topicService.describeTopic(new TopicCommandOptions(Array("--describe")))
+    }
+    val initialOutputWithConfig = TestUtils.grabConsoleOutput(describeTopicsWithConfig())
+    assertTrue(initialOutputWithConfig.contains(testTopicName) && !initialOutputWithConfig.contains(reassignmentAddingDescribe))
+    assertTrue(initialOutputWithConfig.contains(testTopicName) && !initialOutputWithConfig.contains(reassignmentRemovingDescribe))
+
+    // Now alter the partition assignment and get a description.
+    topicService.alterTopic(new TopicCommandOptions(
+      Array("--topic", testTopicName, "--replica-assignment", "2:4:1")))
+    // XXX: How do I avoid the race of this completing trivially?
+    val alteredOutputWithConfig = TestUtils.grabConsoleOutput(describeTopicsWithConfig())
+    assertTrue(alteredOutputWithConfig.contains(testTopicName) && !alteredOutputWithConfig.contains(reassignmentAddingDescribe))
+    assertTrue(alteredOutputWithConfig.contains(testTopicName) && !alteredOutputWithConfig.contains(reassignmentRemovingDescribe))
+
+
+  }
+
+
+  @Test
   def testDescribeAndListTopicsWithoutInternalTopics(): Unit = {
     val brokers = List(0)
     TestUtils.createBrokersInZk(zkClient, brokers)
