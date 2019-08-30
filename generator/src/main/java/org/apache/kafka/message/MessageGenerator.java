@@ -208,6 +208,18 @@ public final class MessageGenerator {
         }
     }
 
+    /**
+     * Return the number of bytes needed to encode an integer in unsigned variable-length format.
+     */
+    static int sizeOfUnsignedVarint(int value) {
+        int bytes = 1;
+        while ((value & 0xffffff80) != 0L) {
+            bytes += 1;
+            value >>>= 7;
+        }
+        return bytes;
+    }
+
     private final static String USAGE = "MessageGenerator: [output Java file] [input JSON file]";
 
     public static void main(String[] args) throws Exception {

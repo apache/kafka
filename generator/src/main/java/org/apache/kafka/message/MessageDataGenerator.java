@@ -816,13 +816,7 @@ public final class MessageDataGenerator {
         buffer.printf("_numTaggedFields += _rawWriter.numFields();%n");
         VersionConditional.forVersions(flexibleVersions, curVersions).
             ifNotMember((__) -> {
-                buffer.printf("if (_numTaggedFields > 0) {%n");
-                buffer.incrementIndent();
-                headerGenerator.addImport(MessageGenerator.UNSUPPORTED_VERSION_EXCEPTION_CLASS);
-                buffer.printf("throw new UnsupportedVersionException(\"Tagged fields were set, " +
-                    "but version \" + version + \" of this message does not support them.\");%n");
-                buffer.decrementIndent();
-                buffer.printf("}%n");
+                generateCheckForUnsupportedNumTaggedFields();
             }).
             ifMember((__) -> {
                 int prevTag = -1;
@@ -882,6 +876,16 @@ public final class MessageDataGenerator {
                 }
             }).
             generate(buffer);
+        buffer.decrementIndent();
+        buffer.printf("}%n");
+    }
+
+    private void generateCheckForUnsupportedNumTaggedFields() {
+        buffer.printf("if (_numTaggedFields > 0) {%n");
+        buffer.incrementIndent();
+        headerGenerator.addImport(MessageGenerator.UNSUPPORTED_VERSION_EXCEPTION_CLASS);
+        buffer.printf("throw new UnsupportedVersionException(\"Tagged fields were set, " +
+            "but version \" + version + \" of this message does not support them.\");%n");
         buffer.decrementIndent();
         buffer.printf("}%n");
     }
@@ -1099,7 +1103,7 @@ public final class MessageDataGenerator {
         buffer.printf("@Override%n");
         buffer.printf("public int size(ObjectSizeCache sizeCache, short version) {%n");
         buffer.incrementIndent();
-        buffer.printf("int size = 0;%n");
+        buffer.printf("int _size = 0, _numTaggedFields = 0;%n");
         VersionConditional.forVersions(parentVersions, struct.versions()).
             allowMembershipCheckAlwaysFalse(false).
             ifNotMember((__) -> {
@@ -1113,130 +1117,211 @@ public final class MessageDataGenerator {
             VersionConditional.forVersions(field.versions(), curVersions).
                 ifMember((presentVersions) -> {
                     VersionConditional.forVersions(field.taggedVersions(), presentVersions).
+                        ifMember((presentAndTaggedVersions) -> {
+                            generateNonDefaultValueCheck(field);
+                            buffer.incrementIndent();
+                            buffer.printf("_numTaggedFields++;%n");
+                            buffer.printf("_size += %d;%n",
+                                MessageGenerator.sizeOfUnsignedVarint(field.tag().get()));
+                            generateFieldSize(field, presentAndTaggedVersions, true);
+                            buffer.decrementIndent();
+                            buffer.printf("}%n");
+                        }).
                         ifNotMember((presentAndUntaggedVersions) -> {
-                            generateFieldSize(field, presentAndUntaggedVersions);
+                            generateFieldSize(field, presentAndUntaggedVersions, false);
                         }).
                         generate(buffer);
                 }).generate(buffer);
         }
-        buffer.printf("return size;%n");
+        buffer.printf("if (_unknownTaggedFields != null) {%n");
+        buffer.incrementIndent();
+        buffer.printf("_numTaggedFields += _unknownTaggedFields.size();%n");
+        buffer.decrementIndent();
+        buffer.printf("}%n");
+        VersionConditional.forVersions(flexibleVersions, curVersions).
+            ifNotMember((__) -> {
+                generateCheckForUnsupportedNumTaggedFields();
+            }).
+            ifMember((__) -> {
+                buffer.printf("_size += ByteUtils.sizeOfUnsignedVarint(_numTaggedFields);%n");
+            }).
+            generate(buffer);
+        buffer.printf("return _size;%n");
         buffer.decrementIndent();
         buffer.printf("}%n");
     }
 
-    private void generateVariableLengthFieldSize(String fieldName, FieldType type, boolean nullable) {
+    /**
+     * Generate the size calculator for a variable-length array element.
+     * Array elements cannot be null.
+     */
+    private void generateVariableLengthArrayElementSize(String fieldName,
+                                                        FieldType type,
+                                                        Versions versions) {
         if (type instanceof FieldType.StringFieldType) {
-            buffer.printf("size += 2;%n");
-            if (nullable) {
-                buffer.printf("if (%s != null) {%n", fieldName);
-                buffer.incrementIndent();
-            }
-            headerGenerator.addImport(MessageGenerator.MESSAGE_UTIL_CLASS);
-            buffer.printf("size += MessageUtil.serializedUtf8Length(%s);%n", fieldName);
-            if (nullable) {
-                buffer.decrementIndent();
-                buffer.printf("}%n");
-            }
+            generateStringToBytes(fieldName);
+            VersionConditional.forVersions(flexibleVersions, versions).
+                ifNotMember((__) -> {
+                    buffer.printf("_arraySize += _stringBytes.length + 2;%n");
+                }).
+                ifMember((__) -> {
+                    buffer.printf("_arraySize += _stringBytes.length + " +
+                        "ByteUtils.sizeOfUnsignedVarint(_stringBytes.length + 1);%n");
+                }).
+                generate(buffer);
         } else if (type instanceof FieldType.BytesFieldType) {
-            buffer.printf("size += 4;%n");
-            if (nullable) {
-                buffer.printf("if (%s != null) {%n", fieldName);
-                buffer.incrementIndent();
-            }
-            buffer.printf("size += %s.length;%n", fieldName);
-            if (nullable) {
-                buffer.decrementIndent();
-                buffer.printf("}%n");
-            }
+            VersionConditional.forVersions(flexibleVersions, versions).
+                ifNotMember((__) -> {
+                    buffer.printf("_arraySize += %s.length + 4;%n", fieldName);
+                }).
+                ifMember((__) -> {
+                    buffer.printf("_arraySize += %s.length + " +
+                        "ByteUtils.sizeOfUnsignedVarint(%s.length + 1);%n",
+                        fieldName, fieldName);
+                }).
+                generate(buffer);
         } else if (type instanceof FieldType.StructType) {
-            buffer.printf("size += %s.size(sizeCache, version);%n", fieldName);
+            buffer.printf("_arraySize += %s.size(sizeCache, version);%n", fieldName);
         } else {
             throw new RuntimeException("Unsupported type " + type);
         }
     }
 
-    private void generateFieldSize(FieldSpec field, Versions possibleVersions) {
+    private void generateFieldSize(FieldSpec field,
+                                   Versions possibleVersions,
+                                   boolean tagged) {
         if (field.type().fixedLength().isPresent()) {
-            buffer.printf("size += %d;%n", field.type().fixedLength().get());
+            if (tagged) {
+                // Account for the tagged field prefix.
+                buffer.printf("_size += %d;%n",
+                    MessageGenerator.sizeOfUnsignedVarint(field.type().fixedLength().get()));
+            }
+            buffer.printf("_size += %d;%n", field.type().fixedLength().get());
             return;
         }
         IsNullConditional.forField(field).
-            alwaysEmitBlockScope(field.type().isString()).
+            alwaysEmitBlockScope(true).
             possibleVersions(possibleVersions).
             ifNull((ifNullVersions) -> {
                 VersionConditional.forVersions(flexibleVersions, ifNullVersions).
                     ifMember((__) -> {
-                        buffer.printf("size += 1;%n");
+                        if (tagged) {
+                            // Account for the tagged field prefix.
+                            buffer.printf("_size += %d;%n", MessageGenerator.sizeOfUnsignedVarint(
+                                MessageGenerator.sizeOfUnsignedVarint(0)));
+                        }
+                        buffer.printf("_size += %d;%n", MessageGenerator.sizeOfUnsignedVarint(0));
                     }).
                     ifNotMember((__) -> {
+                        if (tagged) {
+                            throw new RuntimeException("Tagged field " + field.name() +
+                                " should not be present in non-flexible versions.");
+                        }
                         if (field.type().isString()) {
-                            buffer.printf("size += 2;%n");
+                            buffer.printf("_size += 2;%n");
                         } else {
-                            buffer.printf("size += 4;%n");
+                            buffer.printf("_size += 4;%n");
                         }
                     }).
                     generate(buffer);
             }).
             ifNotNull((ifNotNullVersions) -> {
                 if (field.type().isString()) {
-                    headerGenerator.addImport(MessageGenerator.MESSAGE_UTIL_CLASS);
-                    buffer.printf("int stringLength = MessageUtil.serializedUtf8Length(%s);%n",
-                        field.camelCaseName());
-                    buffer.printf("size += stringLength;%n");
+                    generateStringToBytes(field.name());
+                    buffer.printf("_size += _stringBytes.length;%n");
                     VersionConditional.forVersions(flexibleVersions, ifNotNullVersions).
                         ifMember((__) -> {
                             headerGenerator.addImport(MessageGenerator.BYTE_UTILS_CLASS);
-                            buffer.printf("size += ByteUtils.sizeOfUnsignedVarint(stringLength + 1);%n");
+                            if (tagged) {
+                                buffer.printf("int _stringPrefixSize = " +
+                                    "ByteUtils.sizeOfUnsignedVarint(_stringBytes.length + 1);%n");
+                                buffer.printf("_size += _stringBytes.length + _stringPrefixSize + " +
+                                    "ByteUtils.sizeOfUnsignedVarint(_stringPrefixSize);%n");
+                            } else {
+                                buffer.printf("_size += _stringBytes.length + " +
+                                    "ByteUtils.sizeOfUnsignedVarint(_stringBytes.length + 1);%n");
+                            }
                         }).
                         ifNotMember((__) -> {
-                            buffer.printf("size += 2;%n");
+                            if (tagged) {
+                                throw new RuntimeException("Tagged field " + field.name() +
+                                    " should not be present in non-flexible versions.");
+                            }
+                            buffer.printf("_size += _stringBytes.length + 2;%n");
                         }).
                         generate(buffer);
                 } else if (field.type().isArray()) {
+                    buffer.printf("int _arraySize = 0;%n");
                     VersionConditional.forVersions(flexibleVersions, ifNotNullVersions).
                         ifMember((__) -> {
                             headerGenerator.addImport(MessageGenerator.BYTE_UTILS_CLASS);
-                            buffer.printf("size += ByteUtils.sizeOfUnsignedVarint(%s.size() + 1);%n",
+                            buffer.printf("_arraySize += ByteUtils.sizeOfUnsignedVarint(%s.size() + 1);%n",
                                 field.camelCaseName());
                         }).
                         ifNotMember((__) -> {
-                            buffer.printf("size += 4;%n");
+                            buffer.printf("_arraySize += 4;%n");
                         }).
                         generate(buffer);
                     FieldType.ArrayType arrayType = (FieldType.ArrayType) field.type();
                     FieldType elementType = arrayType.elementType();
                     if (elementType.fixedLength().isPresent()) {
-                        buffer.printf("size += %s.size() * %d;%n",
+                        buffer.printf("_arraySize += %s.size() * %d;%n",
                             field.camelCaseName(),
                             elementType.fixedLength().get());
                     } else if (elementType instanceof FieldType.ArrayType) {
                         throw new RuntimeException("Arrays of arrays are not supported " +
                             "(use a struct).");
                     } else {
-                        buffer.printf("for (%s element : %s) {%n",
-                            getBoxedJavaType(elementType), field.camelCaseName());
+                        buffer.printf("for (%s %sElement : %s) {%n",
+                            getBoxedJavaType(elementType), field.camelCaseName(), field.camelCaseName());
                         buffer.incrementIndent();
-                        generateVariableLengthFieldSize("element", elementType, false);
+                        generateVariableLengthArrayElementSize(String.format("%sElement", field.camelCaseName()),
+                            elementType,
+                            ifNotNullVersions);
                         buffer.decrementIndent();
                         buffer.printf("}%n");
                     }
+                    if (tagged) {
+                        buffer.printf("sizeCache.setArraySizeInBytes(%s, _arraySize);%n",
+                            field.camelCaseName());
+                        buffer.printf("_size += _arraySize + ByteUtils.sizeOfUnsignedVarint(_arraySize);%n");
+                    } else {
+                        buffer.printf("_size += _arraySize;%n");
+                    }
                 } else if (field.type().isBytes()) {
-                    buffer.printf("size += %s.length;%n", field.camelCaseName());
+                    buffer.printf("int _bytesSize = %s.length;%n", field.camelCaseName());
                     VersionConditional.forVersions(flexibleVersions, ifNotNullVersions).
                         ifMember((__) -> {
                             headerGenerator.addImport(MessageGenerator.BYTE_UTILS_CLASS);
-                            buffer.printf("size += ByteUtils.sizeOfUnsignedVarint(%s.length + 1);%n",
+                            buffer.printf("_bytesSize += ByteUtils.sizeOfUnsignedVarint(%s.length + 1);%n",
                                 field.camelCaseName());
                         }).
                         ifNotMember((__) -> {
-                            buffer.printf("size += 4;%n");
+                            buffer.printf("_bytesSize += 4;%n");
                         }).
                         generate(buffer);
+                    if (tagged) {
+                        buffer.printf("_size += _bytesSize + ByteUtils.sizeOfUnsignedVarint(_bytesSize);%n");
+                    } else {
+                        buffer.printf("_size += _bytesSize;%n");
+                    }
                 } else {
                     throw new RuntimeException("unhandled type " + field.type());
                 }
             }).
             generate(buffer);
+    }
+
+    private void generateStringToBytes(String name) {
+        headerGenerator.addImport(MessageGenerator.STANDARD_CHARSETS);
+        buffer.printf("byte[] _stringBytes = %s.getBytes(StandardCharsets.UTF_8);%n", name);
+        buffer.printf("if (_stringBytes.length > 0x7fff) {%n");
+        buffer.incrementIndent();
+        buffer.printf("throw new RuntimeException(\"'%s' field is too long to " +
+            "be serialized\");%n", name);
+        buffer.decrementIndent();
+        buffer.printf("}%n");
+        buffer.printf("sizeCache.cacheSerializedValue(%s, _stringBytes);%n", name);
     }
 
     private void generateClassEquals(String className, StructSpec struct, boolean onlyMapKeys) {
