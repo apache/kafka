@@ -45,13 +45,13 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
   val firstControllerEpochZkVersion = KafkaController.InitialControllerEpochZkVersion + 1
 
   @Before
-  override def setUp() {
+  override def setUp(): Unit = {
     super.setUp
     servers = Seq.empty[KafkaServer]
   }
 
   @After
-  override def tearDown() {
+  override def tearDown(): Unit = {
     TestUtils.shutdownServers(servers)
     super.tearDown
   }
@@ -439,7 +439,7 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
   }
 
   @Test
-  def testControlledShutdown() {
+  def testControlledShutdown(): Unit = {
     val expectedReplicaAssignment = Map(0  -> List(0, 1, 2))
     val topic = "test"
     val partition = 0

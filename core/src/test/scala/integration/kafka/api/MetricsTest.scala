@@ -134,7 +134,7 @@ class MetricsTest extends IntegrationTestHarness with SaslSetup {
   }
 
   private def verifyKafkaRateMetricsHaveCumulativeCount(producer: KafkaProducer[Array[Byte], Array[Byte]],
-                                                        consumer: KafkaConsumer[Array[Byte], Array[Byte]]): Unit =  {
+                                                        consumer: KafkaConsumer[Array[Byte], Array[Byte]]): Unit = {
 
     def exists(name: String, rateMetricName: MetricName, allMetricNames: Set[MetricName]): Boolean = {
       allMetricNames.contains(new MetricName(name, rateMetricName.group, "", rateMetricName.tags))

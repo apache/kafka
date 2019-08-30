@@ -45,7 +45,7 @@ class ZooKeeperClientTest extends ZooKeeperTestHarness {
   private var zooKeeperClient: ZooKeeperClient = _
 
   @Before
-  override def setUp() {
+  override def setUp(): Unit = {
     ZooKeeperTestHarness.verifyNoUnexpectedThreads("@Before")
     cleanMetricsRegistry()
     super.setUp()
@@ -54,7 +54,7 @@ class ZooKeeperClientTest extends ZooKeeperTestHarness {
   }
 
   @After
-  override def tearDown() {
+  override def tearDown(): Unit = {
     if (zooKeeperClient != null)
       zooKeeperClient.close()
     super.tearDown()

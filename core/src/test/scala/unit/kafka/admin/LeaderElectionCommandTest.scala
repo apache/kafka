@@ -49,7 +49,7 @@ final class LeaderElectionCommandTest extends ZooKeeperTestHarness {
   val broker3 = 2
 
   @Before
-  override def setUp() {
+  override def setUp(): Unit = {
     super.setUp()
 
     val brokerConfigs = TestUtils.createBrokerConfigs(3, zkConnect, false)
@@ -63,7 +63,7 @@ final class LeaderElectionCommandTest extends ZooKeeperTestHarness {
   }
 
   @After
-  override def tearDown() {
+  override def tearDown(): Unit = {
     TestUtils.shutdownServers(servers)
 
     super.tearDown()

@@ -33,7 +33,7 @@ class TimerTaskListTest {
   }
 
   @Test
-  def testAll() {
+  def testAll(): Unit = {
     val sharedCounter = new AtomicInteger(0)
     val list1 = new TimerTaskList(sharedCounter)
     val list2 = new TimerTaskList(sharedCounter)

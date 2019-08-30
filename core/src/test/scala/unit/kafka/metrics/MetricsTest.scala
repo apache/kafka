@@ -45,26 +45,26 @@ class MetricsTest extends KafkaServerTestHarness with Logging {
   val nMessages = 2
 
   @Test
-  def testMetricsReporterAfterDeletingTopic() {
+  def testMetricsReporterAfterDeletingTopic(): Unit = {
     val topic = "test-topic-metric"
     createTopic(topic, 1, 1)
     adminZkClient.deleteTopic(topic)
     TestUtils.verifyTopicDeletion(zkClient, topic, 1, servers)
-    assertEquals("Topic metrics exists after deleteTopic", Set.empty, topicMetricGroups(topic))
+    assertEquals("Topic metrics exists after deleteTopic", Set.empty, topicMetrics(Some(topic)))
   }
 
   @Test
-  def testBrokerTopicMetricsUnregisteredAfterDeletingTopic() {
+  def testBrokerTopicMetricsUnregisteredAfterDeletingTopic(): Unit = {
     val topic = "test-broker-topic-metric"
     createTopic(topic, 2, 1)
     // Produce a few messages to create the metrics
     // Don't consume messages as it may cause metrics to be re-created causing the test to fail, see KAFKA-5238
     TestUtils.generateAndProduceMessages(servers, topic, nMessages)
-    assertTrue("Topic metrics don't exist", topicMetricGroups(topic).nonEmpty)
+    assertTrue("Topic metrics don't exist", topicMetrics(Some(topic)).nonEmpty)
     servers.foreach(s => assertNotNull(s.brokerTopicStats.topicStats(topic)))
     adminZkClient.deleteTopic(topic)
     TestUtils.verifyTopicDeletion(zkClient, topic, 1, servers)
-    assertEquals("Topic metrics exists after deleteTopic", Set.empty, topicMetricGroups(topic))
+    assertEquals("Topic metrics exists after deleteTopic", Set.empty, topicMetrics(Some(topic)))
   }
 
   @Test
@@ -72,6 +72,20 @@ class MetricsTest extends KafkaServerTestHarness with Logging {
     // Check if clusterId metric exists.
     val metrics = kafka.metrics.getKafkaMetrics.keySet
     assertEquals(metrics.count(_ == "kafka.server:type=KafkaServer,name=ClusterId"), 1)
+  }
+
+  @Test
+  def testGeneralBrokerTopicMetricsAreGreedilyRegistered(): Unit = {
+    val topic = "test-broker-topic-metric"
+    createTopic(topic, 2, 1)
+
+    // The broker metrics for all topics should be greedily registered
+    assertTrue("General topic metrics don't exist", topicMetrics(None).nonEmpty)
+    assertEquals(servers.head.brokerTopicStats.allTopicsStats.metricMap.size, topicMetrics(None).size)
+    // topic metrics should be lazily registered
+    assertTrue("Topic metrics aren't lazily registered", topicMetrics(Some(topic)).isEmpty)
+    TestUtils.generateAndProduceMessages(servers, topic, nMessages)
+    assertTrue("Topic metrics aren't registered", topicMetrics(Some(topic)).nonEmpty)
   }
 
   @Test
@@ -140,6 +154,10 @@ class MetricsTest extends KafkaServerTestHarness with Logging {
     assertEquals(metrics.count(_ == "kafka.controller:type=KafkaController,name=PreferredReplicaImbalanceCount"), 1)
     assertEquals(metrics.count(_ == "kafka.controller:type=KafkaController,name=GlobalTopicCount"), 1)
     assertEquals(metrics.count(_ == "kafka.controller:type=KafkaController,name=GlobalPartitionCount"), 1)
+    assertEquals(metrics.count(_ == "kafka.controller:type=KafkaController,name=TopicsToDeleteCount"), 1)
+    assertEquals(metrics.count(_ == "kafka.controller:type=KafkaController,name=ReplicasToDeleteCount"), 1)
+    assertEquals(metrics.count(_ == "kafka.controller:type=KafkaController,name=TopicsIneligibleToDeleteCount"), 1)
+    assertEquals(metrics.count(_ == "kafka.controller:type=KafkaController,name=ReplicasIneligibleToDeleteCount"), 1)
   }
 
   /**
@@ -165,9 +183,13 @@ class MetricsTest extends KafkaServerTestHarness with Logging {
       .getCount
   }
 
-  private def topicMetricGroups(topic: String): Set[String] = {
-    val topicMetricRegex = new Regex(".*BrokerTopicMetrics.*("+topic+")$")
-    val metricGroups = kafkaMetricRegistry.getMetrics.keySet.asScala
-    metricGroups.filter(topicMetricRegex.pattern.matcher(_).matches)
+  private def topicMetrics(topic: Option[String]): Set[String] = {
+    val metricNames = kafkaMetricRegistry.getMetrics.keySet.asScala
+    filterByTopicMetricRegex(metricNames, topic)
+  }
+
+  private def filterByTopicMetricRegex(metrics: Set[String], topic: Option[String]): Set[String] = {
+    val pattern = (".*BrokerTopicMetrics.*" + topic.map(t => s"($t)$$").getOrElse("")).r.pattern
+    metrics.filter(pattern.matcher(_).matches())
   }
 }

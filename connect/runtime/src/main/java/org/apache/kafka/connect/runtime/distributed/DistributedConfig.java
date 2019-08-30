@@ -144,7 +144,10 @@ public class DistributedConfig extends WorkerConfig {
      * <code>connect.protocol</code>
      */
     public static final String SCHEDULED_REBALANCE_MAX_DELAY_MS_CONFIG = "scheduled.rebalance.max.delay.ms";
-    public static final String SCHEDULED_REBALANCE_MAX_DELAY_MS_DOC = "Compatibility mode for Kafka Connect Protocol";
+    public static final String SCHEDULED_REBALANCE_MAX_DELAY_MS_DOC = "The maximum delay that is "
+            + "scheduled in order to wait for the return of one or more departed workers before "
+            + "rebalancing and reassigning their connectors and tasks to the group. During this "
+            + "period the connectors and tasks of the departed workers remain unassigned";
     public static final int SCHEDULED_REBALANCE_MAX_DELAY_MS_DEFAULT = Math.toIntExact(TimeUnit.SECONDS.toMillis(300));
 
     static {

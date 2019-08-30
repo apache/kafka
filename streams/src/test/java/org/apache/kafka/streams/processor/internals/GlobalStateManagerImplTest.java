@@ -302,7 +302,7 @@ public class GlobalStateManagerImplTest {
     @Test
     public void shouldRecoverFromInvalidOffsetExceptionAndRestoreRecords() {
         initializeConsumer(2, 0, t1);
-        consumer.setException(new InvalidOffsetException("Try Again!") {
+        consumer.setPollException(new InvalidOffsetException("Try Again!") {
             public Set<TopicPartition> partitions() {
                 return Collections.singleton(t1);
             }

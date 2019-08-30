@@ -26,7 +26,7 @@ import com.codahale.metrics.{Clock, ExponentiallyDecayingReservoir, MetricRegist
 class KafkaTimerTest {
 
   @Test
-  def testKafkaTimer() {
+  def testKafkaTimer(): Unit = {
     val clock = new ManualClock
     val testRegistry = new MetricRegistry()
     val supplier = new MetricSupplier[Timer] {
@@ -56,7 +56,7 @@ class KafkaTimerTest {
       TimeUnit.NANOSECONDS.toMillis(ticksInNanos)
     }
 
-    def addMillis(millis: Long) {
+    def addMillis(millis: Long): Unit = {
       ticksInNanos += TimeUnit.MILLISECONDS.toNanos(millis)
     }
   }

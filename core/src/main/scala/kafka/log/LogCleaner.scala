@@ -135,7 +135,7 @@ class LogCleaner(initialConfig: CleanerConfig,
   /**
    * Start the background cleaning
    */
-  def startup() {
+  def startup(): Unit = {
     info("Starting the log cleaner")
     (0 until config.numThreads).foreach { i =>
       val cleaner = new CleanerThread(i)
@@ -147,7 +147,7 @@ class LogCleaner(initialConfig: CleanerConfig,
   /**
    * Stop the background cleaning
    */
-  def shutdown() {
+  def shutdown(): Unit = {
     info("Shutting down the log cleaner.")
     cleaners.foreach(_.shutdown())
     cleaners.clear()
@@ -184,14 +184,14 @@ class LogCleaner(initialConfig: CleanerConfig,
    *  Abort the cleaning of a particular partition, if it's in progress. This call blocks until the cleaning of
    *  the partition is aborted.
    */
-  def abortCleaning(topicPartition: TopicPartition) {
+  def abortCleaning(topicPartition: TopicPartition): Unit = {
     cleanerManager.abortCleaning(topicPartition)
   }
 
   /**
    * Update checkpoint file, removing topics and partitions that no longer exist
    */
-  def updateCheckpoints(dataDir: File) {
+  def updateCheckpoints(dataDir: File): Unit = {
     cleanerManager.updateCheckpoints(dataDir, update=None)
   }
 
@@ -199,14 +199,14 @@ class LogCleaner(initialConfig: CleanerConfig,
     cleanerManager.alterCheckpointDir(topicPartition, sourceLogDir, destLogDir)
   }
 
-  def handleLogDirFailure(dir: String) {
+  def handleLogDirFailure(dir: String): Unit = {
     cleanerManager.handleLogDirFailure(dir)
   }
 
   /**
    * Truncate cleaner offset checkpoint for the given partition if its checkpointed offset is larger than the given offset
    */
-  def maybeTruncateCheckpoint(dataDir: File, topicPartition: TopicPartition, offset: Long) {
+  def maybeTruncateCheckpoint(dataDir: File, topicPartition: TopicPartition, offset: Long): Unit = {
     cleanerManager.maybeTruncateCheckpoint(dataDir, topicPartition, offset)
   }
 
@@ -214,14 +214,14 @@ class LogCleaner(initialConfig: CleanerConfig,
    *  Abort the cleaning of a particular partition if it's in progress, and pause any future cleaning of this partition.
    *  This call blocks until the cleaning of the partition is aborted and paused.
    */
-  def abortAndPauseCleaning(topicPartition: TopicPartition) {
+  def abortAndPauseCleaning(topicPartition: TopicPartition): Unit = {
     cleanerManager.abortAndPauseCleaning(topicPartition)
   }
 
   /**
     *  Resume the cleaning of paused partitions.
     */
-  def resumeCleaning(topicPartitions: Iterable[TopicPartition]) {
+  def resumeCleaning(topicPartitions: Iterable[TopicPartition]): Unit = {
     cleanerManager.resumeCleaning(topicPartitions)
   }
 
@@ -286,7 +286,7 @@ class LogCleaner(initialConfig: CleanerConfig,
     @volatile var lastStats: CleanerStats = new CleanerStats()
     @volatile var lastPreCleanStats: PreCleanStats = new PreCleanStats()
 
-    private def checkDone(topicPartition: TopicPartition) {
+    private def checkDone(topicPartition: TopicPartition): Unit = {
       if (!isRunning)
         throw new ThreadShutdownException
       cleanerManager.checkCleaningAborted(topicPartition)
@@ -296,7 +296,7 @@ class LogCleaner(initialConfig: CleanerConfig,
      * The main loop for the cleaner thread
      * Clean a log if there is a dirty log available, otherwise sleep for a bit
      */
-    override def doWork() {
+    override def doWork(): Unit = {
       val cleaned = cleanFilthiestLog()
       if (!cleaned)
         pause(config.backOffMs, TimeUnit.MILLISECONDS)
@@ -367,7 +367,7 @@ class LogCleaner(initialConfig: CleanerConfig,
     /**
      * Log out statistics on a single run of the cleaner.
      */
-    def recordStats(id: Int, name: String, from: Long, to: Long, stats: CleanerStats) {
+    def recordStats(id: Int, name: String, from: Long, to: Long, stats: CleanerStats): Unit = {
       this.lastStats = stats
       def mb(bytes: Double) = bytes / (1024*1024)
       val message =
@@ -623,7 +623,7 @@ private[log] class Cleaner(val id: Int,
                              maxLogMessageSize: Int,
                              transactionMetadata: CleanedTransactionMetadata,
                              lastRecordsOfActiveProducers: Map[Long, LastRecord],
-                             stats: CleanerStats) {
+                             stats: CleanerStats): Unit = {
     val logCleanerFilter: RecordFilter = new RecordFilter {
       var discardBatchRecords: Boolean = _
 
@@ -776,7 +776,7 @@ private[log] class Cleaner(val id: Int,
   /**
    * Double the I/O buffer capacity
    */
-  def growBuffers(maxLogMessageSize: Int) {
+  def growBuffers(maxLogMessageSize: Int): Unit = {
     val maxBufferSize = math.max(maxLogMessageSize, maxIoBufferSize)
     if(readBuffer.capacity >= maxBufferSize || writeBuffer.capacity >= maxBufferSize)
       throw new IllegalStateException("This log contains a message larger than maximum allowable size of %s.".format(maxBufferSize))
@@ -789,7 +789,7 @@ private[log] class Cleaner(val id: Int,
   /**
    * Restore the I/O buffer capacity to its original size
    */
-  def restoreBuffers() {
+  def restoreBuffers(): Unit = {
     if(this.readBuffer.capacity > this.ioBufferSize)
       this.readBuffer = ByteBuffer.allocate(this.ioBufferSize)
     if(this.writeBuffer.capacity > this.ioBufferSize)
@@ -866,7 +866,7 @@ private[log] class Cleaner(val id: Int,
                                   start: Long,
                                   end: Long,
                                   map: OffsetMap,
-                                  stats: CleanerStats) {
+                                  stats: CleanerStats): Unit = {
     map.clear()
     val dirty = log.logSegments(start, end).toBuffer
     info("Building offset map for log %s for %d segments in offset range [%d, %d).".format(log.name, dirty.size, start, end))
@@ -995,33 +995,33 @@ private class CleanerStats(time: Time = Time.SYSTEM) {
   var messagesWritten = 0L
   var bufferUtilization = 0.0d
 
-  def readMessages(messagesRead: Int, bytesRead: Int) {
+  def readMessages(messagesRead: Int, bytesRead: Int): Unit = {
     this.messagesRead += messagesRead
     this.bytesRead += bytesRead
   }
 
-  def invalidMessage() {
+  def invalidMessage(): Unit = {
     invalidMessagesRead += 1
   }
 
-  def recopyMessages(messagesWritten: Int, bytesWritten: Int) {
+  def recopyMessages(messagesWritten: Int, bytesWritten: Int): Unit = {
     this.messagesWritten += messagesWritten
     this.bytesWritten += bytesWritten
   }
 
-  def indexMessagesRead(size: Int) {
+  def indexMessagesRead(size: Int): Unit = {
     mapMessagesRead += size
   }
 
-  def indexBytesRead(size: Int) {
+  def indexBytesRead(size: Int): Unit = {
     mapBytesRead += size
   }
 
-  def indexDone() {
+  def indexDone(): Unit = {
     mapCompleteTime = time.milliseconds
   }
 
-  def allDone() {
+  def allDone(): Unit = {
     endTime = time.milliseconds
   }
 

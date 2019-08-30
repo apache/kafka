@@ -25,7 +25,7 @@ import org.scalatest.Assertions.intercept
 class KafkaServerTest extends ZooKeeperTestHarness {
 
   @Test
-  def testAlreadyRegisteredAdvertisedListeners() {
+  def testAlreadyRegisteredAdvertisedListeners(): Unit = {
     //start a server with a advertised listener
     val server1 = createServer(1, "myhost", TestUtils.RandomPort)
 
