@@ -72,7 +72,7 @@ public final class IsNullConditional {
         VersionConditional.forVersions(nullableVersions, possibleVersions).
             ifMember((versions) -> {
                 if (ifNull != null) {
-                    buffer.printf("if (this.%s == null) {%n", name);
+                    buffer.printf("if (%s == null) {%n", name);
                     buffer.incrementIndent();
                     ifNull.generate(versions);
                     buffer.decrementIndent();
@@ -84,7 +84,7 @@ public final class IsNullConditional {
                     buffer.decrementIndent();
                     buffer.printf("}%n");
                 } else if (ifNotNull != null) {
-                    buffer.printf("if (this.%s != null) {%n", name);
+                    buffer.printf("if (%s != null) {%n", name);
                     buffer.incrementIndent();
                     ifNotNull.generate(versions);
                     buffer.decrementIndent();

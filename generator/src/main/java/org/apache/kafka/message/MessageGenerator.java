@@ -101,6 +101,10 @@ public final class MessageGenerator {
 
     static final String BYTE_BUFFER_CLASS = "java.nio.ByteBuffer";
 
+    static final String NAVIGABLE_MAP_CLASS = "java.util.NavigableMap";
+
+    static final String MAP_ENTRY_CLASS = "java.util.Map.Entry";
+
     /**
      * The Jackson serializer we use for JSON objects.
      */
