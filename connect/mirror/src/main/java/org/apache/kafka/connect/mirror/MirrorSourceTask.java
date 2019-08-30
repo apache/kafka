@@ -30,6 +30,8 @@ import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.errors.WakeupException;
+import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.utils.Utils;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -40,7 +42,6 @@ import java.util.List;
 import java.util.Set;
 import java.util.ArrayList;
 import java.util.stream.Collectors;
-import java.util.concurrent.locks.ReentrantLock;
 import java.util.concurrent.Semaphore;
 import java.time.Duration;
 
@@ -60,7 +61,6 @@ public class MirrorSourceTask extends SourceTask {
     private Map<TopicPartition, PartitionState> partitionStates;
     private ReplicationPolicy replicationPolicy;
     private MirrorMetrics metrics;
-    private final ReentrantLock lock = new ReentrantLock();
     private boolean stopping = false;
     private Semaphore outstandingOffsetSyncs;
 
@@ -107,16 +107,9 @@ public class MirrorSourceTask extends SourceTask {
         long start = System.currentTimeMillis();
         stopping = true;
         consumer.wakeup();
-        lock.lock();
-        try {
-            consumer.close(Duration.ofMillis(500));
-            offsetProducer.close(Duration.ofMillis(500));
-            metrics.close();
-        } catch (Throwable e) {
-            log.error("Failure stopping task.", e);
-        } finally {
-            lock.unlock();
-        }
+        Utils.closeQuietly(consumer, "source consumer");
+        Utils.closeQuietly(offsetProducer, "offset producer");
+        Utils.closeQuietly(metrics, "metrics");
         log.info("Stopping {} took {} ms.", Thread.currentThread().getName(), System.currentTimeMillis() - start);
     }
    
@@ -127,7 +120,6 @@ public class MirrorSourceTask extends SourceTask {
 
     @Override
     public List<SourceRecord> poll() {
-        lock.lock();
         try {
             if (stopping) {
                 return null;
@@ -150,18 +142,18 @@ public class MirrorSourceTask extends SourceTask {
             }
         } catch (WakeupException e) {
             return null;
-        } catch (Throwable e) {
+        } catch (KafkaException e) {
+            log.warn("Failure during poll.", e);
+            return null;
+        } catch (Throwable e)  {
             log.error("Failure during poll.", e);
             // allow Connect to deal with the exception
             throw e;
-        } finally {
-            lock.unlock();
         }
     }
  
     @Override
     public void commitRecord(SourceRecord record, RecordMetadata metadata) {
-        lock.lock();
         try {
             if (stopping) {
                 return;
@@ -179,9 +171,7 @@ public class MirrorSourceTask extends SourceTask {
             long downstreamOffset = metadata.offset();
             maybeSyncOffsets(sourceTopicPartition, upstreamOffset, downstreamOffset);
         } catch (Throwable e) {
-            log.error("Failure committing record.", e);
-        } finally {
-            lock.unlock();
+            log.warn("Failure committing record.", e);
         }
     }
 

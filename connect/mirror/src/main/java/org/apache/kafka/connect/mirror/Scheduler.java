@@ -26,7 +26,7 @@ import java.time.Duration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-class Scheduler {
+class Scheduler implements AutoCloseable {
     private static Logger log = LoggerFactory.getLogger(Scheduler.class);
 
     private final String name;
@@ -70,7 +70,7 @@ class Scheduler {
         }
     } 
 
-    void close() {
+    public void close() {
         closed = true;
         executor.shutdown();
         try {

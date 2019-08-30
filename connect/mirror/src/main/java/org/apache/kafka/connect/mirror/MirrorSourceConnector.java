@@ -33,6 +33,7 @@ import org.apache.kafka.common.resource.ResourcePatternFilter;
 import org.apache.kafka.common.resource.PatternType;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.InvalidPartitionsException;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.TopicDescription;
 import org.apache.kafka.clients.admin.Config;
@@ -121,11 +122,11 @@ public class MirrorSourceConnector extends SourceConnector {
         if (!config.enabled()) {
             return;
         }
-        scheduler.close();
-        topicFilter.close();
-        configPropertyFilter.close();
-        sourceAdminClient.close(config.adminTimeout());
-        targetAdminClient.close(config.adminTimeout());
+        Utils.closeQuietly(scheduler, "scheduler");
+        Utils.closeQuietly(topicFilter, "topic filter");
+        Utils.closeQuietly(configPropertyFilter, "config property filter");
+        Utils.closeQuietly(sourceAdminClient, "source admin client");
+        Utils.closeQuietly(targetAdminClient, "target admin client");
         log.info("Stopping {} took {} ms.", connectorName, System.currentTimeMillis() - start);
     }
 

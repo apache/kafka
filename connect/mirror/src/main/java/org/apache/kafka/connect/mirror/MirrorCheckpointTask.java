@@ -21,6 +21,7 @@ import org.apache.kafka.connect.source.SourceRecord;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 
 import org.slf4j.Logger;
@@ -33,7 +34,6 @@ import java.util.Set;
 import java.util.Collections;
 import java.util.stream.Collectors;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.locks.ReentrantLock;
 import java.time.Duration;
 
 /** Emits checkpoints for upstream consumer groups. */
@@ -53,7 +53,6 @@ public class MirrorCheckpointTask extends SourceTask {
     private ReplicationPolicy replicationPolicy;
     private OffsetSyncStore offsetSyncStore;
     private boolean stopping;
-    private ReentrantLock lock;
     private MirrorMetrics metrics;
 
     public MirrorCheckpointTask() {}
@@ -69,7 +68,6 @@ public class MirrorCheckpointTask extends SourceTask {
 
     @Override
     public void start(Map<String, String> props) {
-        lock = new ReentrantLock();
         MirrorTaskConfig config = new MirrorTaskConfig(props);
         stopping = false;
         sourceClusterAlias = config.sourceClusterAlias();
@@ -95,16 +93,9 @@ public class MirrorCheckpointTask extends SourceTask {
     public void stop() {
         long start = System.currentTimeMillis();
         stopping = true;
-        lock.lock();
-        try {
-            offsetSyncStore.close();
-            sourceAdminClient.close(adminTimeout);
-            metrics.close();
-        } catch (Throwable e) {
-            log.error("Failure stopping task.", e);
-        } finally {
-            lock.unlock();
-        }
+        Utils.closeQuietly(offsetSyncStore, "offset sync store");
+        Utils.closeQuietly(sourceAdminClient, "source admin client");
+        Utils.closeQuietly(metrics, "metrics");
         log.info("Stopping {} took {} ms.", Thread.currentThread().getName(), System.currentTimeMillis() - start);
     }
 
@@ -115,7 +106,6 @@ public class MirrorCheckpointTask extends SourceTask {
 
     @Override
     public List<SourceRecord> poll() throws InterruptedException {
-        lock.lock();
         try { 
             long deadline = System.currentTimeMillis() + interval.toMillis();
             while (!stopping && System.currentTimeMillis() < deadline) {
@@ -131,8 +121,9 @@ public class MirrorCheckpointTask extends SourceTask {
             } else {
                 return records;
             }
-        } finally {
-            lock.unlock();
+        } catch (Throwable e) {
+            log.warn("Failure polling consumer state for checkpoints.", e);
+            return null;
         }
     }
 

@@ -19,6 +19,7 @@ package org.apache.kafka.connect.mirror;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.ConsumerGroupListing;
 import org.apache.kafka.common.config.ConfigDef;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.connector.Task;
 import org.apache.kafka.connect.source.SourceConnector;
 import org.apache.kafka.connect.util.ConnectorUtils;
@@ -70,9 +71,9 @@ public class MirrorCheckpointConnector extends SourceConnector {
         if (!config.enabled()) {
             return;
         }
-        scheduler.close();
-        groupFilter.close();
-        sourceAdminClient.close(config.adminTimeout());
+        Utils.closeQuietly(scheduler, "scheduler");
+        Utils.closeQuietly(groupFilter, "group filter");
+        Utils.closeQuietly(sourceAdminClient, "source admin client");
     }
 
     @Override
