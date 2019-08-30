@@ -24,6 +24,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 
 public final class FieldSpec {
     private final String name;
@@ -48,7 +49,7 @@ public final class FieldSpec {
 
     private final Versions taggedVersions;
 
-    private final int tag;
+    private final Optional<Integer> tag;
 
     @JsonCreator
     public FieldSpec(@JsonProperty("name") String name,
@@ -91,38 +92,41 @@ public final class FieldSpec {
             }
         }
         this.taggedVersions = Versions.parse(taggedVersions, Versions.NONE);
-        this.tag = (tag == null) ? -1 : tag;
-        if (this.taggedVersions.empty()) {
-            if (this.tag >= 0) {
-                throw new RuntimeException("Field " + name + " specifies a non-negative tag " +
-                    "of " + this.tag + ", but does not have any tagged versions.");
+        this.tag = (tag == null) ? Optional.empty() : Optional.of(tag);
+        checkTagInvariants();
+    }
+
+    private void checkTagInvariants() {
+        if (this.tag.isPresent()) {
+            if (this.tag.get() < 0) {
+                throw new RuntimeException("Field " + name + " specifies a tag of " + this.tag.get() +
+                    ".  Tags cannot be negative.");
             }
-        } else {
-            if (this.tag < 0) {
-                throw new RuntimeException("Field " + name + " specifies a negative tag " +
-                    "of " + this.tag + ", but has tagged versions.");
+            if (this.taggedVersions.empty()) {
+                throw new RuntimeException("Field " + name + " specifies a tag of " + this.tag.get() +
+                    ", but has no tagged versions.  If a tag is specified, taggedVersions must " +
+                    "be specified as well.");
             }
             Versions nullableTaggedVersions = this.nullableVersions.intersect(this.taggedVersions);
-            if (!(nullableTaggedVersions.empty() ||
-                    nullableTaggedVersions.equals(this.taggedVersions))) {
+            if (!(nullableTaggedVersions.empty() || nullableTaggedVersions.equals(this.taggedVersions))) {
                 throw new RuntimeException("Field " + name + " specifies nullableVersions " +
                     this.nullableVersions + " and taggedVersions " + this.taggedVersions + ".  " +
                     "Either all tagged versions must be nullable, or none must be.");
             }
-            if (this.taggedVersions().highest() < Short.MAX_VALUE) {
+            if (this.taggedVersions.highest() < Short.MAX_VALUE) {
                 throw new RuntimeException("Field " + name + " specifies taggedVersions " +
                     this.taggedVersions + ", which is not open-ended.  taggedVersions must " +
                     "be either none, or an open-ended range (that ends with a plus sign).");
             }
-            if (this.taggedVersions().intersect(this.versions).empty()) {
-                throw new RuntimeException("Field " + name + " + specified taggedVersions " +
-                    this.taggedVersions + ", but there is no overlap with the versions in " +
-                    "which this field is present, " + this.versions);
+            if (!this.taggedVersions.intersect(this.versions).equals(this.taggedVersions)) {
+                throw new RuntimeException("Field " + name + " specifies taggedVersions " +
+                    this.taggedVersions + ", and versions " + this.versions + ".  " +
+                    "taggedVersions must be a subset of versions.");
             }
-            if (this.ignorable) {
-                throw new RuntimeException("Field " + name + " is specifies taggedVersions, but " +
-                    "is also ignorable")
-            }
+        } else if (!this.taggedVersions.empty()) {
+            throw new RuntimeException("Field " + name + " does not specify a tag, " +
+                "but specifies tagged versions of " + this.taggedVersions + ".  " +
+                "Please specify a tag, or remove the taggedVersions.");
         }
     }
 
@@ -205,7 +209,11 @@ public final class FieldSpec {
     }
 
     @JsonProperty("tag")
-    public int tag() {
+    public Integer tagInteger() {
+        return tag.orElse(null);
+    }
+
+    public Optional<Integer> tag() {
         return tag;
     }
 }

@@ -194,7 +194,7 @@ final class SchemaGenerator {
             }
             headerGenerator.addImport(MessageGenerator.FIELD_CLASS);
             buffer.printf("%d, new Field(\"%s\", %s, \"%s\")%s%n",
-                field.tag(),
+                field.tag().get(),
                 field.snakeCaseName(),
                 fieldTypeToSchemaType(field, version),
                 field.about(),
