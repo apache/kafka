@@ -358,6 +358,8 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     setReadAndWriteAcls(tp)
     consumeRecordsIgnoreOneAuthorizationException(consumer, numRecords, startingOffset = numRecords, topic2)
     sendRecords(producer, numRecords, tp)
+    // ensure consumer has metadata for this partition
+    assertNotNull(consumer.partitionsFor(tp.topic()))
     consumeRecords(consumer, numRecords, topic = topic)
     val describeResults2 = adminClient.describeTopics(Set(topic, topic2).asJava).values
     assertEquals(1, describeResults2.get(topic).get().partitions().size())
