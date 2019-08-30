@@ -519,7 +519,8 @@ public class AssignedStreamsTasksTest {
             stateDirectory,
             null,
             time,
-            () -> producer);
+            () -> producer,
+            metrics.sensor("dummy"));
 
         assignedTasks.addNewTask(task);
         assignedTasks.initializeNewTasks();
