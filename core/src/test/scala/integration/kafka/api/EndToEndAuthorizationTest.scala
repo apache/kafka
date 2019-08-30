@@ -26,7 +26,7 @@ import kafka.admin.AclCommand
 import kafka.security.auth._
 import kafka.server._
 import kafka.utils._
-import org.apache.kafka.clients.consumer.{Consumer, ConsumerConfig, ConsumerRecords}
+import org.apache.kafka.clients.consumer.{Consumer, ConsumerConfig, ConsumerRecords, KafkaConsumer}
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.{KafkaException, TopicPartition}
@@ -360,10 +360,26 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     sendRecords(producer, numRecords, tp)
     // ensure consumer has metadata for this partition
     assertNotNull(consumer.partitionsFor(tp.topic()))
+    // ensure consumer metadata is up-to-date
+    assertTrue(isMetadataUpToDate(consumer, producer, tp))
     consumeRecords(consumer, numRecords, topic = topic)
     val describeResults2 = adminClient.describeTopics(Set(topic, topic2).asJava).values
     assertEquals(1, describeResults2.get(topic).get().partitions().size())
     assertEquals(1, describeResults2.get(topic2).get().partitions().size())
+  }
+
+  def isMetadataUpToDate(consumer: KafkaConsumer[Array[Byte], Array[Byte]], producer: KafkaProducer[Array[Byte], Array[Byte]], topic: TopicPartition): Boolean = {
+    val consumerMetadata = consumer.partitionsFor(topic.topic())
+    val producerMetadata = producer.partitionsFor(topic.topic())
+
+    var upToData = true
+    for (i <- 0 until consumerMetadata.size()) {
+      val replicasUpToData = consumerMetadata.get(i).replicas().sameElements(producerMetadata.get(i).replicas())
+      val isrUpToData = consumerMetadata.get(i).inSyncReplicas().sameElements(producerMetadata.get(i).inSyncReplicas())
+      val offlineReplicasUpToData = consumerMetadata.get(i).offlineReplicas().sameElements(producerMetadata.get(i).offlineReplicas())
+      upToData = upToData && (replicasUpToData && isrUpToData && offlineReplicasUpToData)
+    }
+    upToData
   }
 
   @Test
