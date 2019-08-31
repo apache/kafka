@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.kstream;
 
-import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.StreamsConfig;
@@ -38,7 +37,6 @@ import org.apache.kafka.streams.state.QueryableStoreType;
  * @param <V> Type of values
  * @see KTable
  */
-@InterfaceStability.Evolving
 public interface KGroupedTable<K, V> {
 
     /**

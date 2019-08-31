@@ -105,7 +105,7 @@ object PreferredReplicaLeaderElectionCommand extends Logging {
   }
 
   def writePreferredReplicaElectionData(zkClient: KafkaZkClient,
-                                        partitionsUndergoingPreferredReplicaElection: Set[TopicPartition]) {
+                                        partitionsUndergoingPreferredReplicaElection: Set[TopicPartition]): Unit = {
     try {
       zkClient.createPreferredReplicaElection(partitionsUndergoingPreferredReplicaElection.toSet)
       println("Created preferred replica election path with %s".format(partitionsUndergoingPreferredReplicaElection.mkString(",")))
@@ -158,8 +158,8 @@ object PreferredReplicaLeaderElectionCommand extends Logging {
     /** Elect the preferred leader for the given {@code partitionsForElection}.
       * If the given {@code partitionsForElection} are None then elect the preferred leader for all partitions.
       */
-    def electPreferredLeaders(partitionsForElection: Option[Set[TopicPartition]]) : Unit
-    def close() : Unit
+    def electPreferredLeaders(partitionsForElection: Option[Set[TopicPartition]]): Unit
+    def close(): Unit
   }
 
   class ZkCommand(zkConnect: String, isSecure: Boolean, timeout: Int)
@@ -169,7 +169,7 @@ object PreferredReplicaLeaderElectionCommand extends Logging {
     val time = Time.SYSTEM
     zkClient = KafkaZkClient(zkConnect, isSecure, timeout, timeout, Int.MaxValue, time)
 
-    override def electPreferredLeaders(partitionsFromUser: Option[Set[TopicPartition]]) {
+    override def electPreferredLeaders(partitionsFromUser: Option[Set[TopicPartition]]): Unit = {
       try {
         val topics =
           partitionsFromUser match {
@@ -283,7 +283,7 @@ object PreferredReplicaLeaderElectionCommand extends Logging {
 }
 
 class PreferredReplicaLeaderElectionCommand(zkClient: KafkaZkClient, partitionsFromUser: scala.collection.Set[TopicPartition]) {
-  def moveLeaderToPreferredReplica() = {
+  def moveLeaderToPreferredReplica(): Unit = {
     try {
       val topics = partitionsFromUser.map(_.topic).toSet
       val partitionsFromZk = zkClient.getPartitionsForTopics(topics).flatMap { case (topic, partitions) =>

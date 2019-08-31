@@ -22,12 +22,13 @@ import kafka.coordinator.AbstractCoordinatorConcurrencyTest
 import kafka.coordinator.AbstractCoordinatorConcurrencyTest._
 import kafka.coordinator.transaction.TransactionCoordinatorConcurrencyTest._
 import kafka.log.Log
-import kafka.server.{DelayedOperationPurgatory, FetchDataInfo, KafkaConfig, LogOffsetMetadata, MetadataCache}
+import kafka.server.{DelayedOperationPurgatory, FetchDataInfo, FetchLogEnd, KafkaConfig, LogOffsetMetadata, MetadataCache}
 import kafka.utils.timer.MockTimer
 import kafka.utils.{Pool, TestUtils}
 import org.apache.kafka.clients.{ClientResponse, NetworkClient}
 import org.apache.kafka.common.{Node, TopicPartition}
 import org.apache.kafka.common.internals.Topic.TRANSACTION_STATE_TOPIC_NAME
+import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record.{CompressionType, FileRecords, MemoryRecords, SimpleRecord}
 import org.apache.kafka.common.requests._
@@ -60,7 +61,7 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
     (0 until numPartitions).map { i => (i, mutable.ArrayBuffer[SimpleRecord]()) }.toMap
 
   @Before
-  override def setUp() {
+  override def setUp(): Unit = {
     super.setUp()
 
     EasyMock.expect(zkClient.getTopicPartitionCount(TRANSACTION_STATE_TOPIC_NAME))
@@ -68,7 +69,7 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
       .anyTimes()
     EasyMock.replay(zkClient)
 
-    txnStateManager = new TransactionStateManager(0, zkClient, scheduler, replicaManager, txnConfig, time)
+    txnStateManager = new TransactionStateManager(0, zkClient, scheduler, replicaManager, txnConfig, time, new Metrics())
     for (i <- 0 until numPartitions)
       txnStateManager.addLoadedTransactionsToCache(i, coordinatorEpoch, new Pool[String, TransactionMetadata]())
 
@@ -114,7 +115,7 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
   }
 
   @After
-  override def tearDown() {
+  override def tearDown(): Unit = {
     try {
       EasyMock.reset(zkClient, replicaManager)
       transactionCoordinator.shutdown()
@@ -257,9 +258,8 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
     EasyMock.expect(logMock.logStartOffset).andStubReturn(startOffset)
     EasyMock.expect(logMock.read(EasyMock.eq(startOffset),
       maxLength = EasyMock.anyInt(),
-      maxOffset = EasyMock.eq(None),
-      minOneMessage = EasyMock.eq(true),
-      includeAbortedTxns = EasyMock.eq(false)))
+      isolation = EasyMock.eq(FetchLogEnd),
+      minOneMessage = EasyMock.eq(true)))
       .andReturn(FetchDataInfo(LogOffsetMetadata(startOffset), fileRecordsMock))
 
     EasyMock.expect(fileRecordsMock.sizeInBytes()).andStubReturn(records.sizeInBytes)

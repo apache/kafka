@@ -44,7 +44,7 @@ public class Sensors {
             LATE_RECORD_DROP,
             Sensor.RecordingLevel.INFO
         );
-        StreamsMetricsImpl.addInvocationRateAndCount(
+        StreamsMetricsImpl.addInvocationRateAndCountToSensor(
             sensor,
             PROCESSOR_NODE_METRICS_GROUP,
             metrics.tagMap("task-id", context.taskId().toString(), PROCESSOR_NODE_ID_TAG, context.currentNode().name()),

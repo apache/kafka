@@ -16,9 +16,18 @@
  */
 package org.apache.kafka.common.utils;
 
+import org.apache.kafka.common.config.SecurityConfig;
+import org.apache.kafka.common.security.SecurityProviderCreator;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.security.Security;
+import java.util.Map;
 
 public class SecurityUtils {
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(SecurityConfig.class);
 
     public static KafkaPrincipal parseKafkaPrincipal(String str) {
         if (str == null || str.isEmpty()) {
@@ -32,6 +41,28 @@ public class SecurityUtils {
         }
 
         return new KafkaPrincipal(split[0], split[1]);
+    }
+
+    public static void addConfiguredSecurityProviders(Map<String, ?> configs) {
+        String securityProviderClassesStr = (String) configs.get(SecurityConfig.SECURITY_PROVIDERS_CONFIG);
+        if (securityProviderClassesStr == null || securityProviderClassesStr.equals("")) {
+            return;
+        }
+        try {
+            String[] securityProviderClasses = securityProviderClassesStr.replaceAll("\\s+", "").split(",");
+            for (int index = 0; index < securityProviderClasses.length; index++) {
+                SecurityProviderCreator securityProviderCreator = (SecurityProviderCreator) Class.forName(securityProviderClasses[index]).newInstance();
+                securityProviderCreator.configure(configs);
+                Security.insertProviderAt(securityProviderCreator.getProvider(), index + 1);
+            }
+        } catch (ClassCastException e) {
+            LOGGER.error("Creators provided through " + SecurityConfig.SECURITY_PROVIDERS_CONFIG +
+                    " are expected to be sub-classes of SecurityProviderCreator");
+        } catch (ClassNotFoundException cnfe) {
+            LOGGER.error("Unrecognized security provider creator class", cnfe);
+        } catch (IllegalAccessException | InstantiationException e) {
+            LOGGER.error("Unexpected implementation of security provider creator class", e);
+        }
     }
 
 }

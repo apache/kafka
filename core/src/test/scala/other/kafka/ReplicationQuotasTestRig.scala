@@ -74,7 +74,7 @@ object ReplicationQuotasTestRig {
       Exit.exit(0)
   }
 
-  def run(config: ExperimentDef, journal: Journal, displayChartsOnScreen: Boolean) {
+  def run(config: ExperimentDef, journal: Journal, displayChartsOnScreen: Boolean): Unit = {
     val experiment = new Experiment()
     try {
       experiment.setUp
@@ -101,18 +101,18 @@ object ReplicationQuotasTestRig {
     val leaderRates = mutable.Map[Int, Array[Double]]()
     val followerRates = mutable.Map[Int, Array[Double]]()
 
-    def startBrokers(brokerIds: Seq[Int]) {
+    def startBrokers(brokerIds: Seq[Int]): Unit = {
       println("Starting Brokers")
       servers = brokerIds.map(i => createBrokerConfig(i, zkConnect))
         .map(c => createServer(KafkaConfig.fromProps(c)))
     }
 
-    override def tearDown() {
+    override def tearDown(): Unit = {
       TestUtils.shutdownServers(servers)
       super.tearDown()
     }
 
-    def run(config: ExperimentDef, journal: Journal, displayChartsOnScreen: Boolean) {
+    def run(config: ExperimentDef, journal: Journal, displayChartsOnScreen: Boolean): Unit = {
       experimentName = config.name
       val brokers = (100 to 100 + config.brokers)
       var count = 0
@@ -187,7 +187,7 @@ object ReplicationQuotasTestRig {
       println(s"Worst case duration is ${config.targetBytesPerBrokerMB * 1000 * 1000/ config.throttle}")
     }
 
-    def waitForReassignmentToComplete() {
+    def waitForReassignmentToComplete(): Unit = {
       waitUntilTrue(() => {
         printRateMetrics()
         !zkClient.reassignPartitionsInProgress()
@@ -248,7 +248,7 @@ object ReplicationQuotasTestRig {
       rates.put(brokerId, leaderRatesBroker)
     }
 
-    def printRateMetrics() {
+    def printRateMetrics(): Unit = {
       for (broker <- servers) {
         val leaderRate: Double = measuredRate(broker, QuotaType.LeaderReplication)
         if (broker.config.brokerId == 100)

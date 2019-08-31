@@ -35,6 +35,7 @@ import org.slf4j.Logger;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
 
@@ -107,7 +108,7 @@ public class InternalTopicManager {
                 final Set<NewTopic> newTopics = new HashSet<>();
 
                 for (final String topicName : topicsNotReady) {
-                    final InternalTopicConfig internalTopicConfig = Utils.notNull(topics.get(topicName));
+                    final InternalTopicConfig internalTopicConfig = Objects.requireNonNull(topics.get(topicName));
                     final Map<String, String> topicConfig = internalTopicConfig.getProperties(defaultTopicConfigs, windowChangeLogAdditionalRetention);
 
                     log.debug("Going to create topic {} with {} partitions and config {}.",

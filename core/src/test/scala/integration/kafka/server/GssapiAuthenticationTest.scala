@@ -56,7 +56,7 @@ class GssapiAuthenticationTest extends IntegrationTestHarness with SaslSetup {
   private val failedAuthenticationDelayMs = 2000
 
   @Before
-  override def setUp() {
+  override def setUp(): Unit = {
     startSasl(jaasSections(kafkaServerSaslMechanisms, Option(kafkaClientSaslMechanism), Both))
     serverConfig.put(KafkaConfig.SslClientAuthProp, "required")
     serverConfig.put(KafkaConfig.FailedAuthenticationDelayMsProp, failedAuthenticationDelayMs.toString)
