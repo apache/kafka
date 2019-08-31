@@ -985,7 +985,7 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
    * @param partitions
    * @throws KeeperException if there is an error while creating the znode
    */
-  def createPreferredReplicaElection(partitions: Set[TopicPartition]): Unit  = {
+  def createPreferredReplicaElection(partitions: Set[TopicPartition]): Unit = {
     createRecursive(PreferredReplicaElectionZNode.path, PreferredReplicaElectionZNode.encode(partitions))
   }
 
@@ -1155,7 +1155,7 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
     createResponse.maybeThrow
   }
 
-  def propagateLogDirEvent(brokerId: Int) {
+  def propagateLogDirEvent(brokerId: Int): Unit = {
     val logDirEventNotificationPath: String = createSequentialPersistentPath(
       LogDirEventNotificationZNode.path + "/" + LogDirEventNotificationSequenceZNode.SequenceNumberPrefix,
       LogDirEventNotificationSequenceZNode.encode(brokerId))
@@ -1721,7 +1721,7 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
           SetDataOp(path, data, 0)))
       )
       val stat = response.resultCode match {
-        case code@ Code.OK =>
+        case Code.OK =>
           val setDataResult = response.zkOpResults(1).rawOpResult.asInstanceOf[SetDataResult]
           setDataResult.getStat
         case Code.NODEEXISTS =>

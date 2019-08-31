@@ -17,6 +17,7 @@
 package org.apache.kafka.streams;
 
 import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.streams.kstream.GlobalKTable;
@@ -31,12 +32,29 @@ import java.util.Map;
  */
 public interface KafkaClientSupplier {
     /**
+     * Create an {@link AdminClient} which is used for internal topic management.
+     *
+     * @param config Supplied by the {@link java.util.Properties} given to the {@link KafkaStreams}
+     * @return an instance of {@link AdminClient}
+     * @deprecated Not called by Kafka Streams, which now uses {@link #getAdmin} instead.
+     */
+    @Deprecated
+    default AdminClient getAdminClient(final Map<String, Object> config) {
+        throw new UnsupportedOperationException("Direct use of this method is deprecated. " +
+            "Implementations of KafkaClientSupplier should implement the getAdmin() method instead. " +
+            "The method will be removed in a future release.");
+    }
+
+    /**
      * Create an {@link Admin} which is used for internal topic management.
      *
      * @param config Supplied by the {@link java.util.Properties} given to the {@link KafkaStreams}
      * @return an instance of {@link Admin}
      */
-    Admin getAdminClient(final Map<String, Object> config);
+    @SuppressWarnings("deprecation")
+    default Admin getAdmin(final Map<String, Object> config) {
+        return getAdminClient(config);
+    }
 
     /**
      * Create a {@link Producer} which is used to write records to sink topics.

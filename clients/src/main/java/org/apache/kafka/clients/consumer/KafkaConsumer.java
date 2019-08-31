@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.clients.consumer;
 
+import static org.apache.kafka.clients.consumer.internals.PartitionAssignorAdapter.getAssignorInstances;
+
 import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.ClientDnsLookup;
 import org.apache.kafka.clients.ClientUtils;
@@ -29,7 +31,6 @@ import org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient;
 import org.apache.kafka.clients.consumer.internals.Fetcher;
 import org.apache.kafka.clients.consumer.internals.FetcherMetricsRegistry;
 import org.apache.kafka.clients.consumer.internals.NoOpConsumerRebalanceListener;
-import org.apache.kafka.clients.consumer.internals.PartitionAssignor;
 import org.apache.kafka.clients.consumer.internals.SubscriptionState;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
@@ -581,7 +582,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     private final long requestTimeoutMs;
     private final int defaultApiTimeoutMs;
     private volatile boolean closed = false;
-    private List<PartitionAssignor> assignors;
+    private List<ConsumerPartitionAssignor> assignors;
 
     // currentThread holds the threadId of the current thread accessing KafkaConsumer
     // and is used to prevent multi-threaded access
@@ -766,9 +767,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                     retryBackoffMs,
                     config.getInt(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG),
                     heartbeatIntervalMs); //Will avoid blocking an extended period of time to prevent heartbeat thread starvation
-            this.assignors = config.getConfiguredInstances(
-                    ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG,
-                    PartitionAssignor.class);
+
+            this.assignors = getAssignorInstances(config.getList(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG), config.originals());
 
             // no coordinator will be constructed for the default (null) group id
             this.coordinator = groupId == null ? null :
@@ -833,7 +833,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                   long retryBackoffMs,
                   long requestTimeoutMs,
                   int defaultApiTimeoutMs,
-                  List<PartitionAssignor> assignors,
+                  List<ConsumerPartitionAssignor> assignors,
                   String groupId) {
         this.log = logContext.logger(getClass());
         this.clientId = clientId;
@@ -1046,14 +1046,18 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     /**
      * Unsubscribe from topics currently subscribed with {@link #subscribe(Collection)} or {@link #subscribe(Pattern)}.
      * This also clears any partitions directly assigned through {@link #assign(Collection)}.
+     *
+     * @throws org.apache.kafka.common.KafkaException for any other unrecoverable errors (e.g. rebalance callback errors)
      */
     public void unsubscribe() {
         acquireAndEnsureOpen();
         try {
             fetcher.clearBufferedDataForUnassignedPartitions(Collections.emptySet());
             this.subscriptions.unsubscribe();
-            if (this.coordinator != null)
+            if (this.coordinator != null) {
+                this.coordinator.onLeavePrepare();
                 this.coordinator.maybeLeaveGroup("the consumer unsubscribed from all topics");
+            }
             log.info("Unsubscribed all topics or patterns and assigned partitions");
         } finally {
             release();
@@ -1176,7 +1180,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * @throws org.apache.kafka.common.errors.AuthorizationException if caller lacks Read access to any of the subscribed
      *             topics or to the configured groupId. See the exception for more details
      * @throws org.apache.kafka.common.KafkaException for any other unrecoverable errors (e.g. invalid groupId or
-     *             session timeout, errors deserializing key/value pairs, or any new error cases in future versions)
+     *             session timeout, errors deserializing key/value pairs, your rebalance callback thrown exceptions,
+     *             or any new error cases in future versions)
      * @throws java.lang.IllegalArgumentException if the timeout value is negative
      * @throws java.lang.IllegalStateException if the consumer is not subscribed to any topics or manually assigned any
      *             partitions to consume from
@@ -1190,6 +1195,9 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         return poll(time.timer(timeout), true);
     }
 
+    /**
+     * @throws KafkaException if the rebalance callback throws exception
+     */
     private ConsumerRecords<K, V> poll(final Timer timer, final boolean includeMetadataInTimeout) {
         acquireAndEnsureOpen();
         try {
@@ -1244,6 +1252,9 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         return updateFetchPositions(timer);
     }
 
+    /**
+     * @throws KafkaException if the rebalance callback throws exception
+     */
     private Map<TopicPartition, List<ConsumerRecord<K, V>>> pollForFetches(Timer timer) {
         long pollTimeout = coordinator == null ? timer.remainingMs() :
                 Math.min(coordinator.timeToNextPoll(timer.currentTimeMs()), timer.remainingMs());
@@ -1270,7 +1281,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         client.poll(pollTimer, () -> {
             // since a fetch might be completed by the background thread, we need this poll condition
             // to ensure that we do not block unnecessarily in poll()
-            return !fetcher.hasCompletedFetches();
+            return !fetcher.hasAvailableFetches();
         });
         timer.update(pollTimer.currentTimeMs());
 
@@ -2162,10 +2173,12 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         acquire();
         try {
             if (!closed) {
-                closed = true;
+                // need to close before setting the flag since the close function
+                // itself may trigger rebalance callback that needs the consumer to be open still
                 close(timeout.toMillis(), false);
             }
         } finally {
+            closed = true;
             release();
         }
     }

@@ -14,28 +14,18 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common.internals;
+package org.apache.kafka.common.security.ssl.mock;
 
-import static org.apache.kafka.common.record.RecordBatch.NO_PRODUCER_EPOCH;
-import static org.apache.kafka.common.record.RecordBatch.NO_PRODUCER_ID;
+import java.security.Provider;
 
-public class ProducerIdAndEpoch {
-    public static final ProducerIdAndEpoch NONE = new ProducerIdAndEpoch(NO_PRODUCER_ID, NO_PRODUCER_EPOCH);
+public class TestPlainSaslServerProvider extends Provider {
 
-    public final long producerId;
-    public final short epoch;
-
-    public ProducerIdAndEpoch(long producerId, short epoch) {
-        this.producerId = producerId;
-        this.epoch = epoch;
+    public TestPlainSaslServerProvider() {
+        this("TestPlainSaslServerProvider", 0.1, "test plain sasl server provider");
     }
 
-    public boolean isValid() {
-        return NO_PRODUCER_ID < producerId;
+    protected TestPlainSaslServerProvider(String name, double version, String info) {
+        super(name, version, info);
     }
 
-    @Override
-    public String toString() {
-        return "(producerId=" + producerId + ", epoch=" + epoch + ")";
-    }
 }

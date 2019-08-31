@@ -16,17 +16,20 @@
  */
 package kafka.coordinator.transaction
 
+import java.lang.management.ManagementFactory
 import java.nio.ByteBuffer
 import java.util.concurrent.locks.ReentrantLock
+import javax.management.ObjectName
 
 import kafka.api.KAFKA_2_3_IV1
 import kafka.log.Log
-import kafka.server.{FetchDataInfo, LogOffsetMetadata, ReplicaManager}
+import kafka.server.{FetchDataInfo, FetchLogEnd, LogOffsetMetadata, ReplicaManager}
 import kafka.utils.{MockScheduler, Pool}
 import org.scalatest.Assertions.fail
 import kafka.zk.KafkaZkClient
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.internals.Topic.TRANSACTION_STATE_TOPIC_NAME
+import org.apache.kafka.common.metrics.{JmxReporter, Metrics}
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
@@ -60,10 +63,11 @@ class TransactionStateManagerTest {
     .anyTimes()
 
   EasyMock.replay(zkClient)
+  val metrics = new Metrics()
 
   val txnConfig = TransactionConfig()
   val transactionManager: TransactionStateManager = new TransactionStateManager(0, zkClient, scheduler,
-    replicaManager, txnConfig, time, KAFKA_2_3_IV1)
+    replicaManager, txnConfig, time, metrics, KAFKA_2_3_IV1)
 
   val transactionalId1: String = "one"
   val transactionalId2: String = "two"
@@ -76,20 +80,20 @@ class TransactionStateManagerTest {
   var expectedError: Errors = Errors.NONE
 
   @Before
-  def setUp() {
+  def setUp(): Unit = {
     // make sure the transactional id hashes to the assigning partition id
     assertEquals(partitionId, transactionManager.partitionFor(transactionalId1))
     assertEquals(partitionId, transactionManager.partitionFor(transactionalId2))
   }
 
   @After
-  def tearDown() {
+  def tearDown(): Unit = {
     EasyMock.reset(zkClient, replicaManager)
     transactionManager.shutdown()
   }
 
   @Test
-  def testValidateTransactionTimeout() {
+  def testValidateTransactionTimeout(): Unit = {
     assertTrue(transactionManager.validateTransactionTimeoutMs(1))
     assertFalse(transactionManager.validateTransactionTimeoutMs(-1))
     assertFalse(transactionManager.validateTransactionTimeoutMs(0))
@@ -98,7 +102,7 @@ class TransactionStateManagerTest {
   }
 
   @Test
-  def testAddGetPids() {
+  def testAddGetPids(): Unit = {
     transactionManager.addLoadedTransactionsToCache(partitionId, coordinatorEpoch, new Pool[String, TransactionMetadata]())
 
     assertEquals(Right(None), transactionManager.getTransactionState(transactionalId1))
@@ -111,7 +115,7 @@ class TransactionStateManagerTest {
   }
 
   @Test
-  def testLoadAndRemoveTransactionsForPartition() {
+  def testLoadAndRemoveTransactionsForPartition(): Unit = {
     // generate transaction log messages for two pids traces:
 
     // pid1's transaction started with two partitions
@@ -308,7 +312,7 @@ class TransactionStateManagerTest {
   }
 
   @Test
-  def testAppendFailToUnknownError() {
+  def testAppendFailToUnknownError(): Unit = {
     transactionManager.addLoadedTransactionsToCache(partitionId, coordinatorEpoch, new Pool[String, TransactionMetadata]())
     transactionManager.putTransactionStateIfNotExists(transactionalId1, txnMetadata1)
 
@@ -328,7 +332,7 @@ class TransactionStateManagerTest {
   }
 
   @Test
-  def testPendingStateNotResetOnRetryAppend() {
+  def testPendingStateNotResetOnRetryAppend(): Unit = {
     transactionManager.addLoadedTransactionsToCache(partitionId, coordinatorEpoch, new Pool[String, TransactionMetadata]())
     transactionManager.putTransactionStateIfNotExists(transactionalId1, txnMetadata1)
 
@@ -586,9 +590,8 @@ class TransactionStateManagerTest {
     EasyMock.expect(logMock.logStartOffset).andStubReturn(startOffset)
     EasyMock.expect(logMock.read(EasyMock.eq(startOffset),
       maxLength = EasyMock.anyInt(),
-      maxOffset = EasyMock.eq(None),
-      minOneMessage = EasyMock.eq(true),
-      includeAbortedTxns = EasyMock.eq(false)))
+      isolation = EasyMock.eq(FetchLogEnd),
+      minOneMessage = EasyMock.eq(true)))
       .andReturn(FetchDataInfo(LogOffsetMetadata(startOffset), fileRecordsMock))
 
     EasyMock.expect(fileRecordsMock.sizeInBytes()).andStubReturn(records.sizeInBytes)
@@ -629,5 +632,38 @@ class TransactionStateManagerTest {
       .andStubReturn(Some(RecordBatch.MAGIC_VALUE_V1))
 
     EasyMock.replay(replicaManager)
+  }
+
+  @Test
+  def testPartitionLoadMetric(): Unit = {
+    val server = ManagementFactory.getPlatformMBeanServer
+    val mBeanName = "kafka.server:type=transaction-coordinator-metrics"
+    val reporter = new JmxReporter("kafka.server")
+    metrics.addReporter(reporter)
+
+    def partitionLoadTime(attribute: String): Double = {
+      server.getAttribute(new ObjectName(mBeanName), attribute).asInstanceOf[Double]
+    }
+
+    assertTrue(server.isRegistered(new ObjectName(mBeanName)))
+    assertEquals(Double.NaN, partitionLoadTime( "partition-load-time-max"), 0)
+    assertEquals(Double.NaN, partitionLoadTime("partition-load-time-avg"), 0)
+    assertTrue(reporter.containsMbean(mBeanName))
+
+    txnMetadata1.state = Ongoing
+    txnMetadata1.addPartitions(Set[TopicPartition](new TopicPartition("topic1", 1),
+      new TopicPartition("topic1", 1)))
+
+    txnRecords += new SimpleRecord(txnMessageKeyBytes1, TransactionLog.valueToBytes(txnMetadata1.prepareNoTransit(), KAFKA_2_3_IV1))
+
+    val startOffset = 15L
+    val records = MemoryRecords.withRecords(startOffset, CompressionType.NONE, txnRecords.toArray: _*)
+
+    prepareTxnLog(topicPartition, startOffset, records)
+    transactionManager.loadTransactionsForTxnTopicPartition(partitionId, 0, (_, _, _, _, _) => ())
+    scheduler.tick()
+
+    assertTrue(partitionLoadTime("partition-load-time-max") >= 0)
+    assertTrue(partitionLoadTime( "partition-load-time-avg") >= 0)
   }
 }

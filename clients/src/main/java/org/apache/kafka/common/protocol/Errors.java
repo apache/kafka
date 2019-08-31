@@ -65,6 +65,7 @@ import org.apache.kafka.common.errors.MemberIdRequiredException;
 import org.apache.kafka.common.errors.ElectionNotNeededException;
 import org.apache.kafka.common.errors.EligibleLeadersNotAvailableException;
 import org.apache.kafka.common.errors.NetworkException;
+import org.apache.kafka.common.errors.NoReassignmentInProgressException;
 import org.apache.kafka.common.errors.NotControllerException;
 import org.apache.kafka.common.errors.NotCoordinatorException;
 import org.apache.kafka.common.errors.NotEnoughReplicasAfterAppendException;
@@ -309,7 +310,9 @@ public enum Errors {
             FencedInstanceIdException::new),
     ELIGIBLE_LEADERS_NOT_AVAILABLE(83, "Eligible topic partition leaders are not available",
             EligibleLeadersNotAvailableException::new),
-    ELECTION_NOT_NEEDED(84, "Leader election not needed for topic partition", ElectionNotNeededException::new);
+    ELECTION_NOT_NEEDED(84, "Leader election not needed for topic partition", ElectionNotNeededException::new),
+    NO_REASSIGNMENT_IN_PROGRESS(85, "No partition reassignment is in progress.",
+            NoReassignmentInProgressException::new);
 
     private static final Logger log = LoggerFactory.getLogger(Errors.class);
 

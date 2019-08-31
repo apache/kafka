@@ -22,8 +22,9 @@ import java.util.concurrent.atomic.AtomicBoolean
 import kafka.server.{DelayedOperationPurgatory, KafkaConfig, MetadataCache, ReplicaManager}
 import kafka.utils.{Logging, Scheduler}
 import kafka.zk.KafkaZkClient
+import org.apache.kafka.clients.producer.internals.ProducerIdAndEpoch
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.internals.{ProducerIdAndEpoch, Topic}
+import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.RecordBatch
@@ -56,7 +57,7 @@ object TransactionCoordinator {
     val txnMarkerPurgatory = DelayedOperationPurgatory[DelayedTxnMarker]("txn-marker-purgatory", config.brokerId,
       reaperEnabled = false, timerEnabled = false)
     val txnStateManager = new TransactionStateManager(config.brokerId, zkClient, scheduler, replicaManager, txnConfig,
-      time, config.interBrokerProtocolVersion)
+      time, metrics, config.interBrokerProtocolVersion)
 
     val logContext = new LogContext(s"[TransactionCoordinator id=${config.brokerId}] ")
     val txnMarkerChannelManager = TransactionMarkerChannelManager(config, metrics, metadataCache, txnStateManager,
@@ -304,11 +305,11 @@ class TransactionCoordinator(brokerId: Int,
     }
   }
 
-  def handleTxnImmigration(txnTopicPartitionId: Int, coordinatorEpoch: Int) {
+  def handleTxnImmigration(txnTopicPartitionId: Int, coordinatorEpoch: Int): Unit = {
     txnManager.loadTransactionsForTxnTopicPartition(txnTopicPartitionId, coordinatorEpoch, txnMarkerChannelManager.addTxnMarkersToSend)
   }
 
-  def handleTxnEmigration(txnTopicPartitionId: Int, coordinatorEpoch: Int) {
+  def handleTxnEmigration(txnTopicPartitionId: Int, coordinatorEpoch: Int): Unit = {
       txnManager.removeTransactionsForTxnTopicPartition(txnTopicPartitionId, coordinatorEpoch)
       txnMarkerChannelManager.removeMarkersForTxnTopicPartition(txnTopicPartitionId)
   }
@@ -524,7 +525,7 @@ class TransactionCoordinator(brokerId: Int,
   /**
    * Startup logic executed at the same time when the server starts up.
    */
-  def startup(enableTransactionalIdExpiration: Boolean = true) {
+  def startup(enableTransactionalIdExpiration: Boolean = true): Unit = {
     info("Starting up.")
     scheduler.startup()
     scheduler.schedule("transaction-abort",
@@ -544,7 +545,7 @@ class TransactionCoordinator(brokerId: Int,
    * Shutdown logic executed at the same time when server shuts down.
    * Ordering of actions should be reversed from the startup process.
    */
-  def shutdown() {
+  def shutdown(): Unit = {
     info("Shutting down.")
     isActive.set(false)
     scheduler.shutdown()

@@ -179,7 +179,8 @@ public class DescribeConfigsResponse extends AbstractResponse {
         DYNAMIC_BROKER_CONFIG((byte) 2),
         DYNAMIC_DEFAULT_BROKER_CONFIG((byte) 3),
         STATIC_BROKER_CONFIG((byte) 4),
-        DEFAULT_CONFIG((byte) 5);
+        DEFAULT_CONFIG((byte) 5),
+        DYNAMIC_BROKER_LOGGER_CONFIG((byte) 6);
 
         final byte id;
         private static final ConfigSource[] VALUES = values();
