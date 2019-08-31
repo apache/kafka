@@ -215,8 +215,8 @@ class LogCleaner(initialConfig: CleanerConfig,
     cleanerManager.handleLogDirFailure(dir)
   }
 
-  def addPartition(topicPartition: TopicPartition): Unit = {
-    cleanerManager.addPartition(topicPartition)
+  def addPartition(topicPartition: TopicPartition, log: Log): Unit = {
+    cleanerManager.addPartition(topicPartition, log)
   }
 
   def removePartition(partition: TopicPartition): Unit = {

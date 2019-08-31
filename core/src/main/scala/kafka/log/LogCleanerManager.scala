@@ -152,16 +152,13 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
   /**
    * Used to add partitions to checkpoint map due to changes in current partition pool
    */
-  def addPartition(partition: TopicPartition): Unit = {
+  def addPartition(partition: TopicPartition, log: Log): Unit = {
     inLock(lock) {
-      logs.get(partition) match {
-        case log =>
-          partitionCheckpoints = partitionCheckpoints +
-            (partition -> new OffsetAndTimesCheckpointFile(new File(log.dir,
-                                                                    partition.toString()), 
-                                                           partition,
-                                                           logDirFailureChannel))
-      }
+      partitionCheckpoints = partitionCheckpoints +
+          (partition -> new OffsetAndTimesCheckpointFile(new File(log.dir,
+                                                                  partition.toString()), 
+                                                         partition,
+                                                         logDirFailureChannel))
     }
   }
 

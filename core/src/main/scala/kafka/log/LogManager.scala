@@ -723,7 +723,9 @@ class LogManager(logDirs: Seq[File],
           futureLogs.put(topicPartition, log)
         else {
           currentLogs.put(topicPartition, log)
-          cleaner.addPartition(topicPartition)
+          if (cleaner != null) {
+            cleaner.addPartition(topicPartition, log)
+          }
         }
 
         info(s"Created log for partition $topicPartition in $logDir with properties " + s"{${config.originals.asScala.mkString(", ")}}.")
