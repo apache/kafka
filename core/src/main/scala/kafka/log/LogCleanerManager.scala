@@ -150,6 +150,29 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
   newGauge("time-since-last-run-ms", new Gauge[Long] { def value = Time.SYSTEM.milliseconds - timeOfLastRun })
 
   /**
+   * Used to add partitions to checkpoint map due to changes in current partition pool
+   */
+  def addPartition(partition: TopicPartition): Unit = {
+    inLock(lock) {
+      logs.get(partition) match {
+        case log =>
+          partitionCheckpoints = partitionCheckpoints +
+            (partition -> new OffsetAndTimesCheckpointFile(new File(log.dir,
+                                                                    partition.toString()), 
+                                                           partition,
+                                                           logDirFailureChannel))
+      }
+    }
+  }
+
+  /**
+   * When a partition has been removed from the pool, this method must be called
+   */
+  def removePartition(partition: TopicPartition): Unit = {
+    partitionCheckpoints = partitionCheckpoints - partition
+  }
+
+  /**
    * @return the position processed for all logs.
    */
   def allCleanerCheckpoints: Map[TopicPartition, Long] = {

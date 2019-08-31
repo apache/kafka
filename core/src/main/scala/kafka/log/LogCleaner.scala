@@ -215,6 +215,14 @@ class LogCleaner(initialConfig: CleanerConfig,
     cleanerManager.handleLogDirFailure(dir)
   }
 
+  def addPartition(topicPartition: TopicPartition): Unit = {
+    cleanerManager.addPartition(topicPartition)
+  }
+
+  def removePartition(partition: TopicPartition): Unit = {
+    cleanerManager.removePartition(partition)
+  }
+
   /**
    * Truncate cleaner offset checkpoint for the given partition if its checkpointed offset is larger than the given offset
    */

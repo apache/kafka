@@ -721,8 +721,10 @@ class LogManager(logDirs: Seq[File],
 
         if (isFuture)
           futureLogs.put(topicPartition, log)
-        else
+        else {
           currentLogs.put(topicPartition, log)
+          cleaner.addPartition(topicPartition)
+        }
 
         info(s"Created log for partition $topicPartition in $logDir with properties " + s"{${config.originals.asScala.mkString(", ")}}.")
         // Remove the preferred log dir since it has already been satisfied
@@ -864,7 +866,7 @@ class LogManager(logDirs: Seq[File],
     val removedLog: Log = logCreationOrDeletionLock synchronized {
       if (isFuture)
         futureLogs.remove(topicPartition)
-      else
+      else 
         currentLogs.remove(topicPartition)
     }
     if (removedLog != null) {
@@ -872,6 +874,7 @@ class LogManager(logDirs: Seq[File],
       if (cleaner != null && !isFuture) {
         cleaner.abortCleaning(topicPartition)
         cleaner.updateCheckpointsWithTime(topicPartition, None)
+        cleaner.removePartition(topicPartition)
       }
       removedLog.renameDir(Log.logDeleteDirName(topicPartition))
       checkpointRecoveryOffsetsAndCleanSnapshot(removedLog.dir.getParentFile, ArrayBuffer.empty)
