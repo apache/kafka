@@ -133,8 +133,8 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
     logs.foreach {
       case (partition, log) =>
         partitionToFileMap += (partition -> 
-            new OffsetAndTimesCheckpointFile(new File(log.dir,
-                                                      partition.toString()), 
+            new OffsetAndTimesCheckpointFile(new File(log.dir.getParent,
+                                                      partition.toString() + "-cleaning-offset-checkpoint"), 
                                              partition,
                                              logDirFailureChannel))
     }
@@ -155,8 +155,8 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
   def addPartition(partition: TopicPartition, log: Log): Unit = {
     inLock(lock) {
       partitionCheckpoints = partitionCheckpoints +
-          (partition -> new OffsetAndTimesCheckpointFile(new File(log.dir,
-                                                                  partition.toString()), 
+          (partition -> new OffsetAndTimesCheckpointFile(new File(log.dir.getParent,
+                                                                  partition.toString() + "-cleaning-offset-checkpoint"), 
                                                          partition,
                                                          logDirFailureChannel))
     }
@@ -489,17 +489,20 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
       try {
         partitionCheckpoints.get(topicPartition) match {
           case Some(offsetCheckpointFile) =>
-            val offsetAndTimestamp = offsetCheckpointFile.read()(topicPartition)
+            val offsetAndTimestamp = offsetCheckpointFile.read().get(topicPartition)
             // Remove this partition from the checkpoint file in the source log directory
             updateCheckpointsWithTime(topicPartition, None)
             // Recreate the file under new destination directory
             partitionCheckpoints = partitionCheckpoints + (topicPartition -> 
               new OffsetAndTimesCheckpointFile(new File(destLogDir,
-                                                        topicPartition.toString()), 
-                                              topicPartition,
-                                              logDirFailureChannel))
+                                                        topicPartition.toString() + "-cleaning-offset-checkpoint"), 
+                                               topicPartition,
+                                               logDirFailureChannel))
             // Add offset for this partition to the checkpoint file in the source log directory
-            updateCheckpointsWithTime(topicPartition, Option(offsetAndTimestamp))
+            offsetAndTimestamp match {
+              case Some(value) => updateCheckpointsWithTime(topicPartition, Option(value))
+              case None =>
+            }
           case None =>
         }
       } catch {
