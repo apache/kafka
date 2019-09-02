@@ -20,6 +20,7 @@ import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.common.config.ConfigDef.Type;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.serialization.Deserializer;
@@ -50,10 +51,13 @@ import static org.apache.kafka.streams.StreamsConfig.adminClientPrefix;
 import static org.apache.kafka.streams.StreamsConfig.consumerPrefix;
 import static org.apache.kafka.streams.StreamsConfig.producerPrefix;
 import static org.apache.kafka.test.StreamsTestUtils.getStreamsConfig;
+import static org.hamcrest.CoreMatchers.containsString;
+import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.core.IsEqual.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -450,9 +454,96 @@ public class StreamsConfigTest {
     }
 
     @Test(expected = ConfigException.class)
-    public void shouldThrowExceptionIfNotAtLestOnceOrExactlyOnce() {
+    public void shouldThrowExceptionIfNotAtLeastOnceOrExactlyOnce() {
         props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, "bad_value");
         new StreamsConfig(props);
+    }
+
+    @Test
+    public void shouldAcceptMetricsVersion0101() {
+        // don't use `StreamsConfig.METRICS_0101` to actually do a useful test
+        props.put(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG, "0.10.1");
+        new StreamsConfig(props);
+    }
+
+    @Test
+    public void shouldAcceptMetricsVersion0102() {
+        // don't use `StreamsConfig.METRICS_0102` to actually do a useful test
+        props.put(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG, "0.10.2");
+        new StreamsConfig(props);
+    }
+
+    @Test
+    public void shouldAcceptMetricsVersion0110() {
+        // don't use `StreamsConfig.METRICS_0110` to actually do a useful test
+        props.put(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG, "0.11.0");
+        new StreamsConfig(props);
+    }
+
+    @Test
+    public void shouldAcceptMetricsVersion10() {
+        // don't use `StreamsConfig.METRICS_10` to actually do a useful test
+        props.put(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG, "1.0");
+        new StreamsConfig(props);
+    }
+
+    @Test
+    public void shouldAcceptMetricsVersion11() {
+        // don't use `StreamsConfig.METRICS_11` to actually do a useful test
+        props.put(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG, "1.1");
+        new StreamsConfig(props);
+    }
+
+    @Test
+    public void shouldAcceptMetricsVersion20() {
+        // don't use `StreamsConfig.METRICS_20` to actually do a useful test
+        props.put(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG, "2.0");
+        new StreamsConfig(props);
+    }
+
+    @Test
+    public void shouldAcceptMetricsVersion21() {
+        // don't use `StreamsConfig.METRICS_21` to actually do a useful test
+        props.put(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG, "2.1");
+        new StreamsConfig(props);
+    }
+
+    @Test
+    public void shouldAcceptMetricsVersion22() {
+        // don't use `StreamsConfig.METRICS_22` to actually do a useful test
+        props.put(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG, "2.2");
+        new StreamsConfig(props);
+    }
+
+    @Test
+    public void shouldAcceptMetricsVersion23() {
+        // don't use `StreamsConfig.METRICS_23` to actually do a useful test
+        props.put(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG, "2.3");
+        new StreamsConfig(props);
+    }
+
+    @Test
+    public void shouldAcceptMetricsVersion24() {
+        // don't use `StreamsConfig.METRICS_24` to actually do a useful test
+        props.put(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG, "2.4");
+        new StreamsConfig(props);
+    }
+
+    @Test
+    public void shouldSetDefaultMetricsVersionIfNoneIsSpecified() {
+        final StreamsConfig config = new StreamsConfig(props);
+        assertThat(config.getString(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG), is(StreamsConfig.METRICS_24));
+    }
+
+    @Test
+    public void shouldThrowIfMetricsVersionInvalid() {
+        final String invalidVersion = "0.0.1";
+        props.put(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG, invalidVersion);
+        final Exception exception = assertThrows(ConfigException.class, () -> new StreamsConfig(props));
+        assertThat(
+            exception.getMessage(),
+            containsString("Invalid value " + invalidVersion + " for configuration built.in.metrics.version")
+        );
     }
 
     @Test
