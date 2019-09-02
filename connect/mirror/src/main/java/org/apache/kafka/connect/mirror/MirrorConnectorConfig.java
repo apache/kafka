@@ -78,9 +78,17 @@ public class MirrorConnectorConfig extends AbstractConfig {
     private static final String CONFIG_PROPERTIES_BLACKLIST_DOC = "Topic config properties that should not be replicated. Supports "
             + "comma-separated property names and regexes.";
 
-    public static final String INTERNAL_TOPIC_REPLICATION_FACTOR = "internal.topic.replication.factor";
-    public static final String INTERNAL_TOPIC_REPLICATION_FACTOR_DOC = "Replication factor for internal topics.";
-    public static final short INTERNAL_TOPIC_REPLICATION_FACTOR_DEFAULT = 3;
+    public static final String HEARTBEATS_TOPIC_REPLICATION_FACTOR = "heartbeats.topic.replication.factor";
+    public static final String HEARTBEATS_TOPIC_REPLICATION_FACTOR_DOC = "Replication factor for heartbeats topic.";
+    public static final short HEARTBEATS_TOPIC_REPLICATION_FACTOR_DEFAULT = 3;
+
+    public static final String CHECKPOINTS_TOPIC_REPLICATION_FACTOR = "checkpoints.topic.replication.factor";
+    public static final String CHECKPOINTS_TOPIC_REPLICATION_FACTOR_DOC = "Replication factor for checkpoints topic.";
+    public static final short CHECKPOINTS_TOPIC_REPLICATION_FACTOR_DEFAULT = 3;
+
+    public static final String OFFSET_SYNCS_TOPIC_REPLICATION_FACTOR = "offset-syncs.topic.replication.factor";
+    public static final String OFFSET_SYNCS_TOPIC_REPLICATION_FACTOR_DOC = "Replication factor for offset-syncs topic.";
+    public static final short OFFSET_SYNCS_TOPIC_REPLICATION_FACTOR_DEFAULT = 3;
 
     protected static final String TASK_TOPIC_PARTITIONS = "task.assigned.partitions";
     protected static final String TASK_CONSUMER_GROUPS = "task.assigned.groups";
@@ -334,8 +342,16 @@ public class MirrorConnectorConfig extends AbstractConfig {
         return getInt(REPLICATION_FACTOR);
     }
 
-    short internalTopicReplicationFactor() {
-        return getShort(INTERNAL_TOPIC_REPLICATION_FACTOR);
+    short heartbeatsTopicReplicationFactor() {
+        return getShort(HEARTBEATS_TOPIC_REPLICATION_FACTOR);
+    }
+
+    short checkpointsTopicReplicationFactor() {
+        return getShort(CHECKPOINTS_TOPIC_REPLICATION_FACTOR);
+    }
+
+    short offsetSyncsTopicReplicationFactor() {
+        return getShort(OFFSET_SYNCS_TOPIC_REPLICATION_FACTOR);
     }
 
     TopicFilter topicFilter() {
@@ -519,11 +535,23 @@ public class MirrorConnectorConfig extends AbstractConfig {
                     ConfigDef.Importance.LOW,
                     REPLICATION_FACTOR_DOC)
             .define(
-                    INTERNAL_TOPIC_REPLICATION_FACTOR,
+                    HEARTBEATS_TOPIC_REPLICATION_FACTOR,
                     ConfigDef.Type.SHORT,
-                    INTERNAL_TOPIC_REPLICATION_FACTOR_DEFAULT,
+                    HEARTBEATS_TOPIC_REPLICATION_FACTOR_DEFAULT,
                     ConfigDef.Importance.LOW,
-                    INTERNAL_TOPIC_REPLICATION_FACTOR_DOC)
+                    HEARTBEATS_TOPIC_REPLICATION_FACTOR_DOC)
+            .define(
+                    CHECKPOINTS_TOPIC_REPLICATION_FACTOR,
+                    ConfigDef.Type.SHORT,
+                    CHECKPOINTS_TOPIC_REPLICATION_FACTOR_DEFAULT,
+                    ConfigDef.Importance.LOW,
+                    CHECKPOINTS_TOPIC_REPLICATION_FACTOR_DOC)
+            .define(
+                    OFFSET_SYNCS_TOPIC_REPLICATION_FACTOR,
+                    ConfigDef.Type.SHORT,
+                    OFFSET_SYNCS_TOPIC_REPLICATION_FACTOR_DEFAULT,
+                    ConfigDef.Importance.LOW,
+                    OFFSET_SYNCS_TOPIC_REPLICATION_FACTOR_DOC)
             .define(
                     OFFSET_LAG_MAX,
                     ConfigDef.Type.LONG,
