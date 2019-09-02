@@ -94,7 +94,7 @@ class Scheduler implements AutoCloseable {
             long elapsed = System.currentTimeMillis() - start;
             log.info("{} took {} ms", description, elapsed);
             if (elapsed > timeout.toMillis()) {
-                log.error("{} took too long ({} ms) running task: {}", name, elapsed, description);
+                log.warn("{} took too long ({} ms) running task: {}", name, elapsed, description);
             }
         } catch (InterruptedException e) {
             log.warn("{} was interrupted running task: {}", name, description);

@@ -25,6 +25,7 @@ import org.apache.kafka.common.config.provider.ConfigProvider;
 import org.apache.kafka.common.config.ConfigTransformer;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.connect.runtime.WorkerConfig;
+import org.apache.kafka.connect.runtime.distributed.DistributedConfig;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
 
 import java.util.Map;
@@ -63,22 +64,12 @@ public class MirrorMakerConfig extends AbstractConfig {
     private static final String SOURCE_CLUSTER_ALIAS = "source.cluster.alias";
     private static final String TARGET_CLUSTER_ALIAS = "target.cluster.alias";
     private static final String GROUP_ID_CONFIG = "group.id";
-    private static final String OFFSET_STORAGE_TOPIC_CONFIG = "offset.storage.topic";
-    private static final String OFFSET_STORAGE_REPLICATION_FACTOR_CONFIG =
-            "offset.storage.replication.factor";
-    private static final String STATUS_STORAGE_TOPIC_CONFIG = "status.storage.topic";
-    private static final String STATUS_STORAGE_REPLICATION_FACTOR_CONFIG =
-            "status.storage.replication.factor";
-    private static final String CONFIG_TOPIC_CONFIG = "config.storage.topic";
-    private static final String CONFIG_STORAGE_REPLICATION_FACTOR_CONFIG =
-            "config.storage.replication.factor";
     private static final String KEY_CONVERTER_CLASS_CONFIG = "key.converter";
     private static final String VALUE_CONVERTER_CLASS_CONFIG = "value.converter";
     private static final String HEADER_CONVERTER_CLASS_CONFIG = "header.converter";
     private static final String BYTE_ARRAY_CONVERTER_CLASS =
         "org.apache.kafka.connect.converters.ByteArrayConverter";
     private static final String REPLICATION_FACTOR = "replication.factor";
-    private static final String INTERNAL_TOPIC_REPLICATION_FACTOR = "internal.topic.replication.factor";
 
     static final String SOURCE_CLUSTER_PREFIX = "source.cluster.";
     static final String TARGET_CLUSTER_PREFIX = "target.cluster.";
@@ -151,29 +142,34 @@ public class MirrorMakerConfig extends AbstractConfig {
     Map<String, String> workerConfig(SourceAndTarget sourceAndTarget) {
         Map<String, String> props = new HashMap<>();
         props.putAll(clusterProps(sourceAndTarget.target()));
-        
+      
+        // Accept common top-level configs that are otherwise ignored by MM2.
+        // N.B. all other worker properties should be configured for specific herders,
+        // e.g. primary->backup.client.id
+        props.putAll(stringsWithPrefix("offset.storage"));
+        props.putAll(stringsWithPrefix("config.storage"));
+        props.putAll(stringsWithPrefix("status.storage"));
+        props.putAll(stringsWithPrefix("key.converter")); 
+        props.putAll(stringsWithPrefix("value.converter")); 
+        props.putAll(stringsWithPrefix("header.converter"));
+        props.putAll(stringsWithPrefix("task"));
+        props.putAll(stringsWithPrefix("worker"));
+ 
         // transform any expression like ${provider:path:key}, since the worker doesn't do so
         props = transform(props);
         props.putAll(stringsWithPrefix(CONFIG_PROVIDERS_CONFIG));
 
         // fill in reasonable defaults
         props.putIfAbsent(GROUP_ID_CONFIG, sourceAndTarget.source() + "-mm2");
-        props.putIfAbsent(OFFSET_STORAGE_TOPIC_CONFIG, "mm2-offsets."
+        props.putIfAbsent(DistributedConfig.OFFSET_STORAGE_TOPIC_CONFIG, "mm2-offsets."
                 + sourceAndTarget.source() + ".internal");
-        props.putIfAbsent(STATUS_STORAGE_TOPIC_CONFIG, "mm2-status."
+        props.putIfAbsent(DistributedConfig.STATUS_STORAGE_TOPIC_CONFIG, "mm2-status."
                 + sourceAndTarget.source() + ".internal");
-        props.putIfAbsent(CONFIG_TOPIC_CONFIG, "mm2-configs."
+        props.putIfAbsent(DistributedConfig.CONFIG_TOPIC_CONFIG, "mm2-configs."
                 + sourceAndTarget.source() + ".internal");
         props.putIfAbsent(KEY_CONVERTER_CLASS_CONFIG, BYTE_ARRAY_CONVERTER_CLASS); 
         props.putIfAbsent(VALUE_CONVERTER_CLASS_CONFIG, BYTE_ARRAY_CONVERTER_CLASS); 
         props.putIfAbsent(HEADER_CONVERTER_CLASS_CONFIG, BYTE_ARRAY_CONVERTER_CLASS);
-
-        String internalReplicationFactor = props.get(INTERNAL_TOPIC_REPLICATION_FACTOR);
-        if (internalReplicationFactor != null) {
-            props.putIfAbsent(OFFSET_STORAGE_REPLICATION_FACTOR_CONFIG, internalReplicationFactor);
-            props.putIfAbsent(CONFIG_STORAGE_REPLICATION_FACTOR_CONFIG, internalReplicationFactor);
-            props.putIfAbsent(STATUS_STORAGE_REPLICATION_FACTOR_CONFIG, internalReplicationFactor);
-        }
 
         return props;
     }
@@ -194,12 +190,6 @@ public class MirrorMakerConfig extends AbstractConfig {
         props.putIfAbsent(CONNECTOR_CLASS, connectorClass.getName());
         props.putIfAbsent(SOURCE_CLUSTER_ALIAS, sourceAndTarget.source());
         props.putIfAbsent(TARGET_CLUSTER_ALIAS, sourceAndTarget.target());
-
-        // default to replication.factor for internal MM2 topics
-        String replicationFactor = props.get(REPLICATION_FACTOR);
-        if (replicationFactor != null) {
-            props.putIfAbsent(INTERNAL_TOPIC_REPLICATION_FACTOR, replicationFactor);
-        }
 
         // override with connector-level properties
         props.putAll(stringsWithPrefixStripped(sourceAndTarget.source() + "->"

@@ -81,6 +81,13 @@ public class MirrorConnectorsIntegrationTest {
         mm2Props.put("emit.heartbeats.interval.seconds", "1");
         mm2Props.put("refresh.topics.interval.seconds", "1");
         mm2Props.put("refresh.groups.interval.seconds", "1");
+        mm2Props.put("checkpoints.topic.replication.factor", "1");
+        mm2Props.put("heartbeats.topic.replication.factor", "1");
+        mm2Props.put("offset-syncs.topic.replication.factor", "1");
+        mm2Props.put("config.storage.topic.replication.factor", "1");
+        mm2Props.put("offset.stoage.topic.replication.factor", "1");
+        mm2Props.put("status.stoage.topic.replication.factor", "1");
+        mm2Props.put("replication.factor", "1");
         
         mm2Config = new MirrorMakerConfig(mm2Props); 
         Map<String, String> primaryWorkerProps = mm2Config.workerConfig(new SourceAndTarget("backup", "primary"));
@@ -89,7 +96,7 @@ public class MirrorConnectorsIntegrationTest {
         primary = new EmbeddedConnectCluster.Builder()
                 .name("primary-connect-cluster")
                 .numWorkers(3)
-                .numBrokers(3)
+                .numBrokers(1)
                 .brokerProps(brokerProps)
                 .workerProps(primaryWorkerProps)
                 .build();
@@ -97,7 +104,7 @@ public class MirrorConnectorsIntegrationTest {
         backup = new EmbeddedConnectCluster.Builder()
                 .name("backup-connect-cluster")
                 .numWorkers(3)
-                .numBrokers(3)
+                .numBrokers(1)
                 .brokerProps(brokerProps)
                 .workerProps(backupWorkerProps)
                 .build();

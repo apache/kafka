@@ -177,8 +177,8 @@ public class MirrorMakerConfigTest {
             "config.providers", "fake",
             "config.providers.fake.class", FakeConfigProvider.class.getName(),
             "replication.policy.separator", "__",
-            "a.internal.topic.replication.factor", "123",
-            "b.internal.topic.replication.factor", "456",
+            "offset.storage.topic.replication.factor", "123",
+            "b.status.storage.topic.replication.factor", "456",
             "b.producer.client.id", "client-one",
             "b.security.protocol", "PLAINTEXT",
             "b.producer.security.protocol", "SASL",
@@ -188,13 +188,9 @@ public class MirrorMakerConfigTest {
         SourceAndTarget a = new SourceAndTarget("b", "a");
         SourceAndTarget b = new SourceAndTarget("a", "b");
         Map<String, String> aProps = mirrorConfig.workerConfig(a);
-        assertEquals("123", aProps.get("offset.storage.replication.factor"));
-        assertEquals("123", aProps.get("status.storage.replication.factor"));
-        assertEquals("123", aProps.get("config.storage.replication.factor"));
+        assertEquals("123", aProps.get("offset.storage.topic.replication.factor"));
         Map<String, String> bProps = mirrorConfig.workerConfig(b);
-        assertEquals("456", bProps.get("offset.storage.replication.factor"));
-        assertEquals("456", bProps.get("status.storage.replication.factor"));
-        assertEquals("456", bProps.get("config.storage.replication.factor"));
+        assertEquals("456", bProps.get("status.storage.topic.replication.factor"));
         assertEquals("producer props should be passed through to worker producer config: " + bProps,
             "client-one", bProps.get("producer.client.id"));
         assertEquals("replication-level security props should be passed through to worker producer config",
