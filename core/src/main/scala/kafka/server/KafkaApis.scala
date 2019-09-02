@@ -1161,7 +1161,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     val offsetFetchRequest = request.body[OffsetFetchRequest]
 
     def partitionAuthorized[T](elements: List[T], topic: T => String): (Seq[T], Seq[T]) = {
-      val authorizedTopics = filterAuthorized(request, DESCRIBE, TOPIC, elements.toList.map(topic))
+      val authorizedTopics = filterAuthorized(request, DESCRIBE, TOPIC, elements.map(topic))
       elements.partition(element => authorizedTopics.contains(topic.apply(element)))
     }
 

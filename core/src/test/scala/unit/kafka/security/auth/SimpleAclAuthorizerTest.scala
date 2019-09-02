@@ -88,7 +88,7 @@ class SimpleAclAuthorizerTest extends ZooKeeperTestHarness {
   }
 
   @Test(expected = classOf[IllegalArgumentException])
-  def testAuthorizeThrowsOnNoneLiteralResource(): Unit = {
+  def testAuthorizeThrowsOnNonLiteralResource(): Unit = {
     simpleAclAuthorizer.authorize(session, Read, Resource(Topic, "something", PREFIXED))
   }
 

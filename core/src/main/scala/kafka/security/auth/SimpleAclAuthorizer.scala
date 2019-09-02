@@ -37,7 +37,7 @@ object SimpleAclAuthorizer {
   val ZkUrlProp = AclAuthorizer.ZkUrlProp
   val ZkConnectionTimeOutProp = AclAuthorizer.ZkConnectionTimeOutProp
   val ZkSessionTimeOutProp = AclAuthorizer.ZkSessionTimeOutProp
-  val ZkMaxInFlightRequests = AclAuthorizer.ZkSessionTimeOutProp
+  val ZkMaxInFlightRequests = AclAuthorizer.ZkMaxInFlightRequests
 
   //List of users that will be treated as super users and will have access to all the resources for all actions from all hosts, defaults to no super users.
   val SuperUsersProp = AclAuthorizer.SuperUsersProp

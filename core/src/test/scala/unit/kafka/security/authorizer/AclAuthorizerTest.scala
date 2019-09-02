@@ -101,7 +101,7 @@ class AclAuthorizerTest extends ZooKeeperTestHarness {
   }
 
   @Test(expected = classOf[IllegalArgumentException])
-  def testAuthorizeThrowsOnNoneLiteralResource(): Unit = {
+  def testAuthorizeThrowsOnNonLiteralResource(): Unit = {
     authorize(aclAuthorizer, requestContext, READ, new ResourcePattern(TOPIC, "something", PREFIXED))
   }
 
@@ -246,7 +246,7 @@ class AclAuthorizerTest extends ZooKeeperTestHarness {
 
   @Test
   def testWildCardAcls(): Unit = {
-    assertFalse("when acls = [],  authorizer should fail close.", authorize(aclAuthorizer, requestContext, READ, resource))
+    assertFalse("when acls = [], authorizer should fail close.", authorize(aclAuthorizer, requestContext, READ, resource))
 
     val user1 = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, username)
     val host1 = InetAddress.getByName("192.168.3.1")
@@ -270,7 +270,7 @@ class AclAuthorizerTest extends ZooKeeperTestHarness {
 
   @Test
   def testNoAclFound(): Unit = {
-    assertFalse("when acls = [],  authorizer should deny op.",authorize(aclAuthorizer, requestContext, READ, resource))
+    assertFalse("when acls = [], authorizer should deny op.", authorize(aclAuthorizer, requestContext, READ, resource))
   }
 
   @Test
