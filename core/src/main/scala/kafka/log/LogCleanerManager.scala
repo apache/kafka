@@ -535,7 +535,6 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
         if (checkpoint != null) {
           val existing = checkpoint.read()(topicPartition)
           if (existing.offset > offset) {
-            checkpoint.write(existing)
             checkpoint.write(new OffsetAndTimestamp(offset, existing.timestamp))
           }
         }
