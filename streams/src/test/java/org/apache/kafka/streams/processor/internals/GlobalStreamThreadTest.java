@@ -234,7 +234,6 @@ public class GlobalStreamThreadTest {
     public void shouldDieOnInvalidOffsetException() throws Exception {
         initializeConsumer();
         globalStreamThread.start();
-        initializeConsumer();
         TestUtils.waitForCondition(
             () -> globalStreamThread.state() == RUNNING,
             10 * 1000,
