@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import java.util.ArrayList;
+import java.util.HashSet;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.InvalidOffsetException;
 import org.apache.kafka.clients.consumer.MockConsumer;
@@ -64,8 +66,10 @@ public class GlobalStreamThreadTest {
     private StreamsConfig config;
 
     private final static String GLOBAL_STORE_TOPIC_NAME = "foo";
+    public  final static String SECOND_TOPIC = "second-topic";
     private final static String GLOBAL_STORE_NAME = "bar";
     private final TopicPartition topicPartition = new TopicPartition(GLOBAL_STORE_TOPIC_NAME, 0);
+    private final TopicPartition secondTopicPartition = new TopicPartition(SECOND_TOPIC, 0);
 
     @SuppressWarnings("unchecked")
     @Before
@@ -222,7 +226,7 @@ public class GlobalStreamThreadTest {
     public void shouldDieOnInvalidOffsetException() throws Exception {
         initializeConsumer();
         globalStreamThread.start();
-
+        initializeConsumer();
         TestUtils.waitForCondition(
             () -> globalStreamThread.state() == RUNNING,
             10 * 1000,
@@ -249,6 +253,147 @@ public class GlobalStreamThreadTest {
             () -> globalStreamThread.state() == DEAD,
             10 * 1000,
             "GlobalStreamThread should have died.");
+    }
+
+    @Test
+    public void shouldExpectSkipUnusedTopics() throws Exception {
+        final MockConsumer<byte[], byte[]> tmpMockConsumer1 = new MockConsumer<>(OffsetResetStrategy.NONE);
+        tmpMockConsumer1.updatePartitions(
+            GLOBAL_STORE_TOPIC_NAME,
+            Collections.singletonList(new PartitionInfo(
+                GLOBAL_STORE_TOPIC_NAME,
+                0,
+                null,
+                new Node[0],
+                new Node[0])));
+        tmpMockConsumer1.updateBeginningOffsets(Collections.singletonMap(topicPartition, 0L));
+        tmpMockConsumer1.updateEndOffsets(Collections.singletonMap(topicPartition, 0L));
+        tmpMockConsumer1.assign(Collections.singleton(topicPartition));
+
+        final MaterializedInternal<Object, Object, KeyValueStore<Bytes, byte[]>> materialized =
+            new MaterializedInternal<>(Materialized.with(null, null),
+                new InternalNameProvider() {
+                    @Override
+                    public String newProcessorName(final String prefix) {
+                        return "processorName";
+                    }
+
+                    @Override
+                    public String newStoreName(final String prefix) {
+                        return GLOBAL_STORE_NAME;
+                    }
+                },
+                "store-"
+            );
+        InternalTopologyBuilder tmpBuilder = new InternalTopologyBuilder();
+        tmpBuilder.addGlobalStore(
+            new TimestampedKeyValueStoreMaterializer<>(materialized).materialize().withLoggingDisabled(),
+            "sourceName",
+            null,
+            null,
+            null,
+            GLOBAL_STORE_TOPIC_NAME,
+            "processorName",
+            new KTableSource<>(GLOBAL_STORE_NAME, GLOBAL_STORE_NAME));
+        final HashMap<String, Object> properties = new HashMap<>();
+        properties.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "blah");
+        properties.put(StreamsConfig.APPLICATION_ID_CONFIG, "blah");
+        final String tempDir = TestUtils.tempDirectory().getAbsolutePath();
+        properties.put(StreamsConfig.STATE_DIR_CONFIG, tempDir);
+        config = new StreamsConfig(properties);
+        globalStreamThread = new GlobalStreamThread(tmpBuilder.rewriteTopology(config).buildGlobalStateTopology(),
+            config,
+            tmpMockConsumer1,
+            new StateDirectory(config, time, true),
+            0,
+            new Metrics(),
+            new MockTime(),
+            "clientId",
+            stateRestoreListener);
+
+        initializeConsumer();
+        globalStreamThread.start();
+        globalStreamThread.shutdown();
+        while (globalStreamThread.stillRunning()) {
+            continue;
+        }
+        while (globalStreamThread.isAlive()) {
+            continue;
+        }
+        final MockConsumer<byte[], byte[]> tmpMockConsumer2 = new MockConsumer<>(OffsetResetStrategy.NONE);
+        tmpMockConsumer2.updatePartitions(
+            SECOND_TOPIC,
+            Collections.unmodifiableList(
+                new ArrayList<PartitionInfo>() {
+                    {
+                        add(new PartitionInfo(
+                            SECOND_TOPIC,
+                            0,
+                            null,
+                            new Node[0],
+                            new Node[0]
+                        ));
+                        add(new PartitionInfo(
+                            GLOBAL_STORE_TOPIC_NAME,
+                            0,
+                            null,
+                            new Node[0],
+                            new Node[0]
+                        ));
+                    }
+                }
+                ));
+        tmpMockConsumer2.updateBeginningOffsets(
+            Collections.unmodifiableMap(
+                new HashMap<TopicPartition, Long>() {
+                    {
+                        put(secondTopicPartition, 0L);
+                        put(topicPartition, 0L);
+                    }
+                }
+            )
+        );
+        tmpMockConsumer2.updateEndOffsets(
+            Collections.unmodifiableMap(
+                new HashMap<TopicPartition, Long>() {
+                    {
+                        put(secondTopicPartition, 0L);
+                        put(topicPartition, 0L);
+                    }
+                }
+            )
+        );
+        tmpMockConsumer2.assign(
+            Collections.unmodifiableSet(
+                new HashSet<TopicPartition>() {
+                    {
+                        add(secondTopicPartition);
+                        add(topicPartition);
+                    }
+                }
+            )
+        );
+        tmpBuilder = new InternalTopologyBuilder();
+        tmpBuilder.addGlobalStore(
+            new TimestampedKeyValueStoreMaterializer<>(materialized).materialize().withLoggingDisabled(),
+            "sourceName",
+            null,
+            null,
+            null,
+            SECOND_TOPIC,
+            "processorName",
+            new KTableSource<>(GLOBAL_STORE_NAME, GLOBAL_STORE_NAME));
+
+        globalStreamThread = new GlobalStreamThread(tmpBuilder.rewriteTopology(config).buildGlobalStateTopology(),
+            config,
+            tmpMockConsumer2,
+            new StateDirectory(config, time, true),
+            0,
+            new Metrics(),
+            new MockTime(),
+            "clientId",
+            stateRestoreListener);
+        globalStreamThread.start();
     }
 
     private void initializeConsumer() {
