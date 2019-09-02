@@ -166,7 +166,9 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
    * When a partition has been removed from the pool, this method must be called
    */
   def removePartition(partition: TopicPartition): Unit = {
-    partitionCheckpoints = partitionCheckpoints - partition
+    inLock(lock) {
+      partitionCheckpoints = partitionCheckpoints - partition
+    }
   }
 
   /**
@@ -225,7 +227,7 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
     if (currVersion < latestVersion) {
         currVersion = latestVersion
         upgradeCheckpointDir()
-      }
+    }
   }
 
    /**
