@@ -25,6 +25,7 @@ import org.apache.kafka.common.metrics.stats.Avg;
 import org.apache.kafka.common.metrics.stats.CumulativeCount;
 import org.apache.kafka.common.metrics.stats.CumulativeSum;
 import org.apache.kafka.common.metrics.stats.Max;
+import org.apache.kafka.common.metrics.stats.Min;
 import org.apache.kafka.common.metrics.stats.Rate;
 import org.apache.kafka.common.metrics.stats.Value;
 import org.apache.kafka.common.metrics.stats.WindowedCount;
@@ -63,9 +64,11 @@ public class StreamsMetricsImpl implements StreamsMetrics {
     private static final String SENSOR_PREFIX_DELIMITER = ".";
     private static final String SENSOR_NAME_DELIMITER = ".s.";
 
-    public static final String THREAD_ID_TAG = "client-id";
+    public static final String THREAD_ID_TAG = "thread-id";
+    public static final String THREAD_ID_TAG_0100_TO_23 = "client-id";
     public static final String TASK_ID_TAG = "task-id";
     public static final String STORE_ID_TAG = "state-id";
+    public static final String RECORD_CACHE_ID_TAG = "record-cache-id";
 
     public static final String ROLLUP_VALUE = "all";
 
@@ -84,6 +87,7 @@ public class StreamsMetricsImpl implements StreamsMetrics {
     public static final String THREAD_LEVEL_GROUP = GROUP_PREFIX_WO_DELIMITER + GROUP_SUFFIX;
     public static final String TASK_LEVEL_GROUP = GROUP_PREFIX + "task" + GROUP_SUFFIX;
     public static final String STATE_LEVEL_GROUP = GROUP_PREFIX + "state" + GROUP_SUFFIX;
+    public static final String CACHE_LEVEL_GROUP = GROUP_PREFIX + "record-cache" + GROUP_SUFFIX;
 
     public static final String PROCESSOR_NODE_METRICS_GROUP = "stream-processor-node-metrics";
     public static final String PROCESSOR_NODE_ID_TAG = "processor-node-id";
@@ -130,7 +134,7 @@ public class StreamsMetricsImpl implements StreamsMetrics {
 
     public Map<String, String> threadLevelTagMap() {
         final Map<String, String> tagMap = new LinkedHashMap<>();
-        tagMap.put(THREAD_ID_TAG, threadName);
+        tagMap.put(THREAD_ID_TAG_0100_TO_23, threadName);
         return tagMap;
     }
 
@@ -237,12 +241,12 @@ public class StreamsMetricsImpl implements StreamsMetrics {
         return taskSensorPrefix(taskName) + SENSOR_PREFIX_DELIMITER + "node" + SENSOR_PREFIX_DELIMITER + processorNodeName;
     }
 
-    public final Sensor cacheLevelSensor(final String taskName,
-                                         final String cacheName,
-                                         final String sensorName,
-                                         final Sensor.RecordingLevel recordingLevel,
-                                         final Sensor... parents) {
-        final String key = cacheSensorPrefix(taskName, cacheName);
+    public Sensor cacheLevelSensor(final String taskName,
+                                   final String storeName,
+                                   final String sensorName,
+                                   final Sensor.RecordingLevel recordingLevel,
+                                   final Sensor... parents) {
+        final String key = cacheSensorPrefix(taskName, storeName);
         synchronized (cacheLevelSensors) {
             if (!cacheLevelSensors.containsKey(key)) {
                 cacheLevelSensors.put(key, new LinkedList<>());
@@ -256,6 +260,18 @@ public class StreamsMetricsImpl implements StreamsMetrics {
 
             return sensor;
         }
+    }
+
+    public Map<String, String> cacheLevelTagMap(final String taskName, final String storeName) {
+        final Map<String, String> tagMap = new LinkedHashMap<>();
+        tagMap.put(TASK_ID_TAG, taskName);
+        tagMap.put(RECORD_CACHE_ID_TAG, storeName);
+        if (version == Version.FROM_100_TO_23) {
+            tagMap.put(THREAD_ID_TAG_0100_TO_23, Thread.currentThread().getName());
+        } else {
+            tagMap.put(THREAD_ID_TAG, Thread.currentThread().getName());
+        }
+        return tagMap;
     }
 
     public final void removeAllCacheLevelSensors(final String taskName, final String cacheName) {
@@ -426,12 +442,14 @@ public class StreamsMetricsImpl implements StreamsMetrics {
     public static void addAvgAndMaxToSensor(final Sensor sensor,
                                             final String group,
                                             final Map<String, String> tags,
-                                            final String operation) {
+                                            final String operation,
+                                            final String descriptionOfAvg,
+                                            final String descriptionOfMax) {
         sensor.add(
             new MetricName(
                 operation + AVG_SUFFIX,
                 group,
-                "The average value of " + operation + ".",
+                descriptionOfAvg,
                 tags),
             new Avg()
         );
@@ -439,9 +457,23 @@ public class StreamsMetricsImpl implements StreamsMetrics {
             new MetricName(
                 operation + MAX_SUFFIX,
                 group,
-                "The max value of " + operation + ".",
+                descriptionOfMax,
                 tags),
             new Max()
+        );
+    }
+
+    public static void addAvgAndMaxToSensor(final Sensor sensor,
+                                            final String group,
+                                            final Map<String, String> tags,
+                                            final String operation) {
+        addAvgAndMaxToSensor(
+            sensor,
+            group,
+            tags,
+            operation,
+            "The average value of " + operation + ".",
+            "The maximum value of " + operation + "."
         );
     }
 
@@ -464,6 +496,24 @@ public class StreamsMetricsImpl implements StreamsMetrics {
                 "The max latency of " + operation + " operation.",
                 tags),
             new Max()
+        );
+    }
+
+    public static void addAvgAndMinAndMaxToSensor(final Sensor sensor,
+                                                  final String group,
+                                                  final Map<String, String> tags,
+                                                  final String operation,
+                                                  final String descriptionOfAvg,
+                                                  final String descriptionOfMin,
+                                                  final String descriptionOfMax) {
+        addAvgAndMaxToSensor(sensor, group, tags, operation, descriptionOfAvg, descriptionOfMax);
+        sensor.add(
+            new MetricName(
+                operation + MIN_SUFFIX,
+                group,
+                descriptionOfMin,
+                tags),
+            new Min()
         );
     }
 
