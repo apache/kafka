@@ -71,24 +71,28 @@ public class GlobalStreamThreadTest {
     private final TopicPartition topicPartition = new TopicPartition(GLOBAL_STORE_TOPIC_NAME, 0);
     private final TopicPartition secondTopicPartition = new TopicPartition(SECOND_TOPIC, 0);
 
+    private MaterializedInternal<Object, Object, KeyValueStore<Bytes, byte[]>> getDefaultMaterialized() {
+        return new MaterializedInternal<>(Materialized.with(null, null),
+            new InternalNameProvider() {
+                @Override
+                public String newProcessorName(final String prefix) {
+                    return "processorName";
+                }
+
+                @Override
+                public String newStoreName(final String prefix) {
+                    return GLOBAL_STORE_NAME;
+                }
+            },
+            "store-"
+        );
+    }
+
     @SuppressWarnings("unchecked")
     @Before
     public void before() {
         final MaterializedInternal<Object, Object, KeyValueStore<Bytes, byte[]>> materialized =
-            new MaterializedInternal<>(Materialized.with(null, null),
-                new InternalNameProvider() {
-                    @Override
-                    public String newProcessorName(final String prefix) {
-                        return "processorName";
-                    }
-
-                    @Override
-                    public String newStoreName(final String prefix) {
-                        return GLOBAL_STORE_NAME;
-                    }
-                },
-                "store-"
-            );
+            getDefaultMaterialized();
 
         builder.addGlobalStore(
             new TimestampedKeyValueStoreMaterializer<>(materialized).materialize().withLoggingDisabled(),
@@ -271,20 +275,7 @@ public class GlobalStreamThreadTest {
         tmpMockConsumer1.assign(Collections.singleton(topicPartition));
 
         final MaterializedInternal<Object, Object, KeyValueStore<Bytes, byte[]>> materialized =
-            new MaterializedInternal<>(Materialized.with(null, null),
-                new InternalNameProvider() {
-                    @Override
-                    public String newProcessorName(final String prefix) {
-                        return "processorName";
-                    }
-
-                    @Override
-                    public String newStoreName(final String prefix) {
-                        return GLOBAL_STORE_NAME;
-                    }
-                },
-                "store-"
-            );
+            getDefaultMaterialized();
         InternalTopologyBuilder tmpBuilder = new InternalTopologyBuilder();
         tmpBuilder.addGlobalStore(
             new TimestampedKeyValueStoreMaterializer<>(materialized).materialize().withLoggingDisabled(),
