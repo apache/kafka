@@ -97,6 +97,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Supplier;
 import java.util.regex.Pattern;
+import java.util.stream.Stream;
 
 /**
  * This class makes it easier to write tests to verify the behavior of topologies created with {@link Topology} or
@@ -280,7 +281,11 @@ public class TopologyTestDriver implements Closeable {
         metrics = new Metrics(metricConfig, mockWallClockTime);
 
         final String threadName = "topology-test-driver-virtual-thread";
-        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, threadName);
+        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(
+            metrics,
+            threadName,
+            StreamsConfig.METRICS_LATEST
+        );
         final Sensor skippedRecordsSensor = streamsMetrics.threadLevelSensor("skipped-records", Sensor.RecordingLevel.INFO);
         final String threadLevelGroup = "stream-metrics";
         skippedRecordsSensor.add(new MetricName("skipped-records-rate",
