@@ -88,6 +88,14 @@ public class GlobalStreamThreadTest {
         );
     }
 
+    private HashMap<String, Object> getDefaultProperties() {
+        final HashMap<String, Object> properties = new HashMap<>();
+        properties.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "blah");
+        properties.put(StreamsConfig.APPLICATION_ID_CONFIG, "blah");
+        properties.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getAbsolutePath());
+        return properties;
+    }
+
     @SuppressWarnings("unchecked")
     @Before
     public void before() {
@@ -104,11 +112,7 @@ public class GlobalStreamThreadTest {
             "processorName",
             new KTableSource<>(GLOBAL_STORE_NAME, GLOBAL_STORE_NAME));
 
-        final HashMap<String, Object> properties = new HashMap<>();
-        properties.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "blah");
-        properties.put(StreamsConfig.APPLICATION_ID_CONFIG, "blah");
-        properties.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getAbsolutePath());
-        config = new StreamsConfig(properties);
+        config = new StreamsConfig(getDefaultProperties());
         globalStreamThread = new GlobalStreamThread(builder.rewriteTopology(config).buildGlobalStateTopology(),
                                                     config,
                                                     mockConsumer,
@@ -288,11 +292,7 @@ public class GlobalStreamThreadTest {
             GLOBAL_STORE_TOPIC_NAME,
             "processorName",
             new KTableSource<>(GLOBAL_STORE_NAME, GLOBAL_STORE_NAME));
-        final HashMap<String, Object> properties = new HashMap<>();
-        properties.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "blah");
-        properties.put(StreamsConfig.APPLICATION_ID_CONFIG, "blah");
-        properties.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getAbsolutePath());
-        config = new StreamsConfig(properties);
+        config = new StreamsConfig(getDefaultProperties());
         globalStreamThread = new GlobalStreamThread(tmpBuilder.rewriteTopology(config).buildGlobalStateTopology(),
             config,
             tmpMockConsumer1,
