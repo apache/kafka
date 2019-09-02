@@ -264,16 +264,18 @@ public class GlobalStreamThreadTest {
         final MockConsumer<byte[], byte[]> tmpMockConsumer1 = new MockConsumer<>(OffsetResetStrategy.NONE);
         tmpMockConsumer1.updatePartitions(
             GLOBAL_STORE_TOPIC_NAME,
-            Collections.singletonList(new PartitionInfo(
-                GLOBAL_STORE_TOPIC_NAME,
-                0,
-                null,
-                new Node[0],
-                new Node[0])));
+            Collections.singletonList(
+                new PartitionInfo(
+                    GLOBAL_STORE_TOPIC_NAME,
+                    0,
+                    null,
+                    new Node[0],
+                    new Node[0])
+            )
+        );
         tmpMockConsumer1.updateBeginningOffsets(Collections.singletonMap(topicPartition, 0L));
         tmpMockConsumer1.updateEndOffsets(Collections.singletonMap(topicPartition, 0L));
         tmpMockConsumer1.assign(Collections.singleton(topicPartition));
-
         final MaterializedInternal<Object, Object, KeyValueStore<Bytes, byte[]>> materialized =
             getDefaultMaterialized();
         InternalTopologyBuilder tmpBuilder = new InternalTopologyBuilder();
@@ -289,8 +291,7 @@ public class GlobalStreamThreadTest {
         final HashMap<String, Object> properties = new HashMap<>();
         properties.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "blah");
         properties.put(StreamsConfig.APPLICATION_ID_CONFIG, "blah");
-        final String tempDir = TestUtils.tempDirectory().getAbsolutePath();
-        properties.put(StreamsConfig.STATE_DIR_CONFIG, tempDir);
+        properties.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getAbsolutePath());
         config = new StreamsConfig(properties);
         globalStreamThread = new GlobalStreamThread(tmpBuilder.rewriteTopology(config).buildGlobalStateTopology(),
             config,
