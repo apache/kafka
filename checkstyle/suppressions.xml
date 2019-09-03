@@ -68,6 +68,11 @@
     <suppress checks="(JavaNCSS|CyclomaticComplexity|MethodLength)"
               files="CoordinatorClient.java"/>
 
+    <suppress checks="(NPathComplexity|ClassFanOutComplexity|CyclomaticComplexity|ClassDataAbstractionCoupling|LocalVariableName|MemberName)"
+            files="clients[\\/]src[\\/]generated[\\/].+.java$"/>
+    <suppress checks="NPathComplexity"
+            files="MessageTest.java"/>
+
     <!-- clients tests -->
     <suppress checks="ClassDataAbstractionCoupling"
               files="(Sender|Fetcher|KafkaConsumer|Metrics|RequestResponse|TransactionManager|KafkaAdminClient|Message)Test.java"/>
@@ -231,10 +236,5 @@
               files="KafkaLog4jAppender.java"/>
     <suppress checks="JavaNCSS"
               files="RequestResponseTest.java"/>
-
-    <suppress checks="(NPathComplexity|ClassFanOutComplexity|CyclomaticComplexity|ClassDataAbstractionCoupling)"
-            files="clients[\\/]src[\\/]generated[\\/].+.java$"/>
-    <suppress checks="NPathComplexity"
-            files="MessageTest.java"/>
 
 </suppressions>
