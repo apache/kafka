@@ -70,7 +70,7 @@ public final class IsNullConditional {
     void generate(CodeBuffer buffer) {
         // check if the current version is a nullable version
         VersionConditional.forVersions(nullableVersions, possibleVersions).
-            ifMember((versions) -> {
+            ifMember(versions -> {
                 if (ifNull != null) {
                     buffer.printf("if (%s == null) {%n", name);
                     buffer.incrementIndent();
@@ -91,7 +91,7 @@ public final class IsNullConditional {
                     buffer.printf("}%n");
                 }
             }).
-            ifNotMember((versions) -> {
+            ifNotMember(versions -> {
                 if (alwaysEmitBlockScope) {
                     buffer.printf("{%n");
                     buffer.incrementIndent();

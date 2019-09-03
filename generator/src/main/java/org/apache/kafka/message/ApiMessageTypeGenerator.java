@@ -275,10 +275,10 @@ public final class ApiMessageTypeGenerator {
             }
             VersionConditional.forVersions(data.requestSpec.flexibleVersions(),
                 data.requestSpec.validVersions()).
-                ifMember((__) -> {
+                ifMember(__ -> {
                     buffer.printf("return (short) 2;%n");
                 }).
-                ifNotMember((__) -> {
+                ifNotMember(__ -> {
                     buffer.printf("return (short) 1;%n");
                 }).generate(buffer);
             buffer.decrementIndent();
