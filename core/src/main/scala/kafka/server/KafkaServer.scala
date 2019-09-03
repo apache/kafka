@@ -23,7 +23,6 @@ import java.util
 import java.util.concurrent._
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger}
 
-import com.yammer.metrics.core.Gauge
 import kafka.api.{KAFKA_0_9_0, KAFKA_2_2_IV0}
 import kafka.cluster.Broker
 import kafka.common.{GenerateBrokerIdException, InconsistentBrokerIdException, InconsistentBrokerMetadataException, InconsistentClusterIdException}
@@ -162,28 +161,11 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
 
   private[kafka] def brokerTopicStats = _brokerTopicStats
 
-  newGauge(
-    "BrokerState",
-    new Gauge[Int] {
-      def value = brokerState.currentState
-    }
-  )
+  newGauge[Int]("BrokerState", () => brokerState.currentState)
 
-  newGauge(
-    "ClusterId",
-    new Gauge[String] {
-      def value = clusterId
-    }
-  )
+  newGauge[String]("ClusterId", () => clusterId)
 
-  newGauge(
-    "yammer-metrics-count",
-    new Gauge[Int] {
-      def value = {
-        com.yammer.metrics.Metrics.defaultRegistry.allMetrics.size
-      }
-    }
-  )
+  newGauge[Int]("dropwizard-metrics-count", () => kafka.metrics.getKafkaMetrics.size)
 
   /**
    * Start up API for bringing up a single instance of the Kafka server.

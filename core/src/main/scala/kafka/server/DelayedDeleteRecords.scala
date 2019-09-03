@@ -18,8 +18,6 @@
 package kafka.server
 
 
-import java.util.concurrent.TimeUnit
-
 import kafka.metrics.KafkaMetricsGroup
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.Errors
@@ -122,7 +120,7 @@ class DelayedDeleteRecords(delayMs: Long,
 
 object DelayedDeleteRecordsMetrics extends KafkaMetricsGroup {
 
-  private val aggregateExpirationMeter = newMeter("ExpiresPerSec", "requests", TimeUnit.SECONDS)
+  private val aggregateExpirationMeter = newMeter("ExpiresPerSec")
 
   def recordExpiration(partition: TopicPartition): Unit = {
     aggregateExpirationMeter.mark()

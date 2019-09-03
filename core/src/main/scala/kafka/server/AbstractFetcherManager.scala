@@ -20,7 +20,6 @@ package kafka.server
 import kafka.utils.Logging
 import kafka.cluster.BrokerEndPoint
 import kafka.metrics.KafkaMetricsGroup
-import com.yammer.metrics.core.Gauge
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.utils.Utils
 
@@ -37,11 +36,10 @@ abstract class AbstractFetcherManager[T <: AbstractFetcherThread](val name: Stri
   val failedPartitions = new FailedPartitions
   this.logIdent = "[" + name + "] "
 
-  newGauge(
+  newGauge[Long](
     "MaxLag",
-    new Gauge[Long] {
-      // current max lag across all fetchers/topics/partitions
-      def value: Long = fetcherThreadMap.foldLeft(0L)((curMaxAll, fetcherThreadMapEntry) => {
+    () => {
+      fetcherThreadMap.foldLeft(0L)((curMaxAll, fetcherThreadMapEntry) => {
         fetcherThreadMapEntry._2.fetcherLagStats.stats.foldLeft(0L)((curMaxThread, fetcherLagStatsEntry) => {
           curMaxThread.max(fetcherLagStatsEntry._2.lag)
         }).max(curMaxAll)
@@ -50,29 +48,21 @@ abstract class AbstractFetcherManager[T <: AbstractFetcherThread](val name: Stri
     Map("clientId" -> clientId)
   )
 
-  newGauge(
-  "MinFetchRate", {
-    new Gauge[Double] {
-      // current min fetch rate across all fetchers/topics/partitions
-      def value: Double = {
-        val headRate: Double =
-          fetcherThreadMap.headOption.map(_._2.fetcherStats.requestRate.oneMinuteRate).getOrElse(0)
+  newGauge[Double](
+    "MinFetchRate",
+    // current min fetch rate across all fetchers/topics/partitions
+    () => {
+      val headRate: Double =
+        fetcherThreadMap.headOption.map(_._2.fetcherStats.requestRate.getOneMinuteRate).getOrElse(0)
 
-        fetcherThreadMap.foldLeft(headRate)((curMinAll, fetcherThreadMapEntry) => {
-          fetcherThreadMapEntry._2.fetcherStats.requestRate.oneMinuteRate.min(curMinAll)
-        })
-      }
-    }
-  },
-  Map("clientId" -> clientId)
+      fetcherThreadMap.foldLeft(headRate)((curMinAll, fetcherThreadMapEntry) => {
+        fetcherThreadMapEntry._2.fetcherStats.requestRate.getOneMinuteRate.min(curMinAll)
+      })
+    },
+    Map("clientId" -> clientId)
   )
 
-  val failedPartitionsCount = newGauge(
-    "FailedPartitionsCount", {
-      new Gauge[Int] {
-        def value: Int = failedPartitions.size
-      }
-    },
+  val failedPartitionsCount = newGauge[Int]("FailedPartitionsCount", () => failedPartitions.size,
     Map("clientId" -> clientId)
   )
 

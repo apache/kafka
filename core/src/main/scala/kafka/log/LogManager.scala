@@ -21,7 +21,6 @@ import java.io._
 import java.nio.file.Files
 import java.util.concurrent._
 
-import com.yammer.metrics.core.Gauge
 import kafka.metrics.KafkaMetricsGroup
 import kafka.server.checkpoints.OffsetCheckpointFile
 import kafka.server.{BrokerState, RecoveringFromUncleanShutdown, _}
@@ -118,19 +117,10 @@ class LogManager(logDirs: Seq[File],
     else
       null
 
-  val offlineLogDirectoryCount = newGauge(
-    "OfflineLogDirectoryCount",
-    new Gauge[Int] {
-      def value = offlineLogDirs.size
-    }
-  )
+  val offlineLogDirectoryCount = newGauge("OfflineLogDirectoryCount", () => offlineLogDirs.size)
 
   for (dir <- logDirs) {
-    newGauge(
-      "LogDirectoryOffline",
-      new Gauge[Int] {
-        def value = if (_liveLogDirs.contains(dir)) 0 else 1
-      },
+    newGauge("LogDirectoryOffline", () => if (_liveLogDirs.contains(dir)) 0 else 1,
       Map("logDirectory" -> dir.getAbsolutePath)
     )
   }

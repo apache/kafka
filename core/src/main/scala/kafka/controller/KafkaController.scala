@@ -18,7 +18,6 @@ package kafka.controller
 
 import java.util.concurrent.TimeUnit
 
-import com.yammer.metrics.core.Gauge
 import kafka.admin.AdminOperationException
 import kafka.api._
 import kafka.common._
@@ -117,75 +116,16 @@ class KafkaController(val config: KafkaConfig,
   /* single-thread scheduler to clean expired tokens */
   private val tokenCleanScheduler = new KafkaScheduler(threads = 1, threadNamePrefix = "delegation-token-cleaner")
 
-  newGauge(
-    "ActiveControllerCount",
-    new Gauge[Int] {
-      def value = if (isActive) 1 else 0
-    }
-  )
-
-  newGauge(
-    "OfflinePartitionsCount",
-    new Gauge[Int] {
-      def value: Int = offlinePartitionCount
-    }
-  )
-
-  newGauge(
-    "PreferredReplicaImbalanceCount",
-    new Gauge[Int] {
-      def value: Int = preferredReplicaImbalanceCount
-    }
-  )
-
-  newGauge(
-    "ControllerState",
-    new Gauge[Byte] {
-      def value: Byte = state.value
-    }
-  )
-
-  newGauge(
-    "GlobalTopicCount",
-    new Gauge[Int] {
-      def value: Int = globalTopicCount
-    }
-  )
-
-  newGauge(
-    "GlobalPartitionCount",
-    new Gauge[Int] {
-      def value: Int = globalPartitionCount
-    }
-  )
-
-  newGauge(
-    "TopicsToDeleteCount",
-    new Gauge[Int] {
-      def value: Int = topicsToDeleteCount
-    }
-  )
-
-  newGauge(
-    "ReplicasToDeleteCount",
-    new Gauge[Int] {
-      def value: Int = replicasToDeleteCount
-    }
-  )
-
-  newGauge(
-    "TopicsIneligibleToDeleteCount",
-    new Gauge[Int] {
-      def value: Int = ineligibleTopicsToDeleteCount
-    }
-  )
-
-  newGauge(
-    "ReplicasIneligibleToDeleteCount",
-    new Gauge[Int] {
-      def value: Int = ineligibleReplicasToDeleteCount
-    }
-  )
+  newGauge[Int]("ActiveControllerCount", () => if (isActive) 1 else 0)
+  newGauge[Int]("OfflinePartitionsCount", () => offlinePartitionCount)
+  newGauge[Int]("PreferredReplicaImbalanceCount", () => preferredReplicaImbalanceCount)
+  newGauge[Byte]("ControllerState", () => state.value)
+  newGauge[Int]("GlobalTopicCount", () => globalTopicCount)
+  newGauge[Int]("GlobalPartitionCount", () => globalPartitionCount)
+  newGauge[Int]("TopicsToDeleteCount", () => topicsToDeleteCount)
+  newGauge[Int]("ReplicasToDeleteCount", () => replicasToDeleteCount)
+  newGauge[Int]("TopicsIneligibleToDeleteCount", () => ineligibleTopicsToDeleteCount)
+  newGauge[Int]("ReplicasIneligibleToDeleteCount", () => ineligibleReplicasToDeleteCount)
 
   /**
    * Returns true if this broker is the current controller.
@@ -1846,11 +1786,11 @@ case class LeaderIsrAndControllerEpoch(leaderAndIsr: LeaderAndIsr, controllerEpo
 }
 
 private[controller] class ControllerStats extends KafkaMetricsGroup {
-  val uncleanLeaderElectionRate = newMeter("UncleanLeaderElectionsPerSec", "elections", TimeUnit.SECONDS)
+  val uncleanLeaderElectionRate = newMeter("UncleanLeaderElectionsPerSec")
 
   val rateAndTimeMetrics: Map[ControllerState, KafkaTimer] = ControllerState.values.flatMap { state =>
     state.rateAndTimeMetricName.map { metricName =>
-      state -> new KafkaTimer(newTimer(metricName, TimeUnit.MILLISECONDS, TimeUnit.SECONDS))
+      state -> new KafkaTimer(newTimer(metricName))
     }
   }.toMap
 

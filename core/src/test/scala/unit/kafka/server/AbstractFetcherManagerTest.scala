@@ -16,8 +16,8 @@
  */
 package kafka.server
 
-import com.yammer.metrics.Metrics
-import com.yammer.metrics.core.Gauge
+import com.codahale.metrics.Gauge
+import javax.management.ObjectName
 import kafka.cluster.BrokerEndPoint
 import kafka.utils.TestUtils
 import org.apache.kafka.common.TopicPartition
@@ -25,18 +25,16 @@ import org.easymock.EasyMock
 import org.junit.{Before, Test}
 import org.junit.Assert._
 
-import scala.collection.JavaConverters._
-
 class AbstractFetcherManagerTest {
 
   @Before
   def cleanMetricRegistry(): Unit = {
-    TestUtils.clearYammerMetrics()
+    TestUtils.clearDropwizardMetrics()
   }
 
   private def getMetricValue(name: String): Any = {
-    Metrics.defaultRegistry.allMetrics.asScala.filterKeys(_.getName == name).values.headOption.get.
-      asInstanceOf[Gauge[Int]].value()
+    kafka.metrics.getKafkaMetrics.filterKeys(ObjectName.getInstance(_).getKeyProperty("name") == name).values.head
+      .asInstanceOf[Gauge[Int]].getValue
   }
 
   @Test

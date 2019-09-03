@@ -22,7 +22,7 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicLong}
 import java.util.concurrent.locks.Lock
 
-import com.yammer.metrics.core.{Gauge, Meter}
+import com.codahale.metrics.Meter
 import kafka.api._
 import kafka.cluster.{BrokerEndPoint, Partition}
 import kafka.controller.{KafkaController, StateChangeLogger}
@@ -228,46 +228,18 @@ class ReplicaManager(val config: KafkaConfig,
 
   val replicaSelectorOpt: Option[ReplicaSelector] = createReplicaSelector()
 
-  val leaderCount = newGauge(
-    "LeaderCount",
-    new Gauge[Int] {
-      def value = leaderPartitionsIterator.size
-    }
-  )
-  val partitionCount = newGauge(
-    "PartitionCount",
-    new Gauge[Int] {
-      def value = allPartitions.size
-    }
-  )
-  val offlineReplicaCount = newGauge(
-    "OfflineReplicaCount",
-    new Gauge[Int] {
-      def value = offlinePartitionCount
-    }
-  )
-  val underReplicatedPartitions = newGauge(
-    "UnderReplicatedPartitions",
-    new Gauge[Int] {
-      def value = underReplicatedPartitionCount
-    }
-  )
-  val underMinIsrPartitionCount = newGauge(
-    "UnderMinIsrPartitionCount",
-    new Gauge[Int] {
-      def value = leaderPartitionsIterator.count(_.isUnderMinIsr)
-    }
-  )
-  val atMinIsrPartitionCount = newGauge(
-    "AtMinIsrPartitionCount",
-    new Gauge[Int] {
-      def value = leaderPartitionsIterator.count(_.isAtMinIsr)
-    }
-  )
+  val leaderCount = newGauge[Int]("LeaderCount", () => leaderPartitionsIterator.size)
+  val partitionCount = newGauge[Int]("PartitionCount",() => allPartitions.size)
+  val offlineReplicaCount = newGauge[Int]("OfflineReplicaCount", () => offlinePartitionCount)
+  val underReplicatedPartitions = newGauge[Int]("UnderReplicatedPartitions", () => underReplicatedPartitionCount)
+  val underMinIsrPartitionCount = newGauge[Int]("UnderMinIsrPartitionCount",
+    () => leaderPartitionsIterator.count(_.isUnderMinIsr))
+  val atMinIsrPartitionCount = newGauge[Int]("AtMinIsrPartitionCount",
+    () => leaderPartitionsIterator.count(_.isAtMinIsr))
 
-  val isrExpandRate: Meter = newMeter("IsrExpandsPerSec", "expands", TimeUnit.SECONDS)
-  val isrShrinkRate: Meter = newMeter("IsrShrinksPerSec", "shrinks", TimeUnit.SECONDS)
-  val failedIsrUpdatesRate: Meter = newMeter("FailedIsrUpdatesPerSec", "failedUpdates", TimeUnit.SECONDS)
+  val isrExpandRate: Meter = newMeter("IsrExpandsPerSec")
+  val isrShrinkRate: Meter = newMeter("IsrShrinksPerSec")
+  val failedIsrUpdatesRate: Meter = newMeter("FailedIsrUpdatesPerSec")
 
   def underReplicatedPartitionCount: Int = leaderPartitionsIterator.count(_.isUnderReplicated)
 

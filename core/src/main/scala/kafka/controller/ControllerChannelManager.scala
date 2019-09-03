@@ -19,7 +19,7 @@ package kafka.controller
 import java.net.SocketTimeoutException
 import java.util.concurrent.{BlockingQueue, LinkedBlockingQueue, TimeUnit}
 
-import com.yammer.metrics.core.{Gauge, Timer}
+import com.codahale.metrics.{Gauge, Timer}
 import kafka.api._
 import kafka.cluster.Broker
 import kafka.metrics.KafkaMetricsGroup
@@ -42,7 +42,7 @@ import scala.collection.{Seq, Set, mutable}
 
 object ControllerChannelManager {
   val QueueSizeMetricName = "QueueSize"
-  val RequestRateAndQueueTimeMetricName = "RequestRateAndQueueTimeMs"
+  val RequestRateAndQueueTimeMetricName = "RequestRateAndQueueTime"
 }
 
 class ControllerChannelManager(controllerContext: ControllerContext,
@@ -57,14 +57,9 @@ class ControllerChannelManager(controllerContext: ControllerContext,
   private val brokerLock = new Object
   this.logIdent = "[Channel manager on controller " + config.brokerId + "]: "
 
-  newGauge(
-    "TotalQueueSize",
-    new Gauge[Int] {
-      def value: Int = brokerLock synchronized {
-        brokerStateInfo.values.iterator.map(_.messageQueue.size).sum
-      }
-    }
-  )
+  newGauge[Int]("TotalQueueSize", () => brokerLock synchronized {
+    brokerStateInfo.values.iterator.map(_.messageQueue.size).sum
+  })
 
   def startup() = {
     controllerContext.liveOrShuttingDownBrokers.foreach(addNewBroker)
@@ -166,21 +161,13 @@ class ControllerChannelManager(controllerContext: ControllerContext,
       case Some(name) => s"$name:Controller-${config.brokerId}-to-broker-${broker.id}-send-thread"
     }
 
-    val requestRateAndQueueTimeMetrics = newTimer(
-      RequestRateAndQueueTimeMetricName, TimeUnit.MILLISECONDS, TimeUnit.SECONDS, brokerMetricTags(broker.id)
-    )
+    val requestRateAndQueueTimeMetrics = newTimer(RequestRateAndQueueTimeMetricName, brokerMetricTags(broker.id))
 
     val requestThread = new RequestSendThread(config.brokerId, controllerContext, messageQueue, networkClient,
       brokerNode, config, time, requestRateAndQueueTimeMetrics, stateChangeLogger, threadName)
     requestThread.setDaemon(false)
 
-    val queueSizeGauge = newGauge(
-      QueueSizeMetricName,
-      new Gauge[Int] {
-        def value: Int = messageQueue.size
-      },
-      brokerMetricTags(broker.id)
-    )
+    val queueSizeGauge = newGauge[Int](QueueSizeMetricName, () => messageQueue.size, brokerMetricTags(broker.id))
 
     brokerStateInfo.put(broker.id, ControllerBrokerStateInfo(networkClient, brokerNode, messageQueue,
       requestThread, queueSizeGauge, requestRateAndQueueTimeMetrics, reconfigurableChannelBuilder))

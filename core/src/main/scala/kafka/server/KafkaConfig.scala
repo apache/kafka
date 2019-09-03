@@ -210,7 +210,7 @@ object Defaults {
   val MetricRecordingLevel = Sensor.RecordingLevel.INFO.toString()
 
 
-  /** ********* Kafka Yammer Metrics Reporter Configuration ***********/
+  /** ********* Kafka Dropwizard Metrics Reporter Configuration ***********/
   val KafkaMetricReporterClasses = ""
   val KafkaMetricsPollingIntervalSeconds = 10
 
@@ -428,7 +428,7 @@ object KafkaConfig {
   val MetricReporterClassesProp: String = CommonClientConfigs.METRIC_REPORTER_CLASSES_CONFIG
   val MetricRecordingLevelProp: String = CommonClientConfigs.METRICS_RECORDING_LEVEL_CONFIG
 
-  /** ********* Kafka Yammer Metrics Reporters Configuration ***********/
+  /** ********* Kafka Dropwizard Metrics Reporters Configuration ***********/
   val KafkaMetricsReporterClassesProp = "kafka.metrics.reporters"
   val KafkaMetricsPollingIntervalSecondsProp = "kafka.metrics.polling.interval.secs"
 
@@ -779,8 +779,8 @@ object KafkaConfig {
   val MetricRecordingLevelDoc = CommonClientConfigs.METRICS_RECORDING_LEVEL_DOC
 
 
-  /** ********* Kafka Yammer Metrics Reporter Configuration ***********/
-  val KafkaMetricsReporterClassesDoc = "A list of classes to use as Yammer metrics custom reporters." +
+  /** ********* Kafka Dropwizard Metrics Reporter Configuration ***********/
+  val KafkaMetricsReporterClassesDoc = "A list of classes to use as Dropwizard metrics custom reporters." +
     " The reporters should implement <code>kafka.metrics.KafkaMetricsReporter</code> trait. If a client wants" +
     " to expose JMX operations on a custom reporter, the custom reporter needs to additionally implement an MBean" +
     " trait that extends <code>kafka.metrics.KafkaMetricsReporterMBean</code> trait so that the registered MBean is compliant with" +
@@ -1022,7 +1022,7 @@ object KafkaConfig {
       .define(MetricReporterClassesProp, LIST, Defaults.MetricReporterClasses, LOW, MetricReporterClassesDoc)
       .define(MetricRecordingLevelProp, STRING, Defaults.MetricRecordingLevel, LOW, MetricRecordingLevelDoc)
 
-      /** ********* Kafka Yammer Metrics Reporter Configuration for docs ***********/
+      /** ********* Kafka Dropwizard Metrics Reporter Configuration for docs ***********/
       .define(KafkaMetricsReporterClassesProp, LIST, Defaults.KafkaMetricReporterClasses, LOW, KafkaMetricsReporterClassesDoc)
       .define(KafkaMetricsPollingIntervalSecondsProp, INT, Defaults.KafkaMetricsPollingIntervalSeconds, atLeast(1), LOW, KafkaMetricsPollingIntervalSecondsDoc)
 

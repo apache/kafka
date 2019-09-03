@@ -22,8 +22,8 @@ import java.util.{Optional, Properties}
 import java.util.concurrent.{CountDownLatch, Executors, TimeUnit, TimeoutException}
 import java.util.concurrent.atomic.AtomicBoolean
 
-import com.yammer.metrics.Metrics
-import com.yammer.metrics.core.Metric
+import com.codahale.metrics.Metric
+import javax.management.ObjectName
 import kafka.api.{ApiVersion, LeaderAndIsr}
 import kafka.common.UnexpectedAppendOffsetException
 import kafka.log.{Defaults => _, _}
@@ -66,7 +66,7 @@ class PartitionTest {
 
   @Before
   def setup(): Unit = {
-    TestUtils.clearYammerMetrics()
+    TestUtils.clearDropwizardMetrics()
 
     val logProps = createLogProperties(Map.empty)
     logConfig = LogConfig(logProps)
@@ -106,7 +106,7 @@ class PartitionTest {
   def tearDown(): Unit = {
     logManager.shutdown()
     Utils.delete(tmpDir)
-    TestUtils.clearYammerMetrics()
+    TestUtils.clearDropwizardMetrics()
   }
 
   @Test
@@ -1392,8 +1392,9 @@ class PartitionTest {
       "AtMinIsr")
 
     def getMetric(metric: String): Option[Metric] = {
-      Metrics.defaultRegistry().allMetrics().asScala.filterKeys { metricName =>
-        metricName.getName == metric && metricName.getType == "Partition"
+      kafka.metrics.getKafkaMetrics.filterKeys { metricName =>
+        val objectName = ObjectName.getInstance(metricName)
+        objectName.getKeyProperty("name") == metric && objectName.getKeyProperty("type") == "Partition"
       }.headOption.map(_._2)
     }
 
@@ -1401,7 +1402,8 @@ class PartitionTest {
 
     Partition.removeMetrics(topicPartition)
 
-    assertEquals(Set(), Metrics.defaultRegistry().allMetrics().asScala.keySet.filter(_.getType == "Partition"))
+    assertEquals(Set(), kafka.metrics.getKafkaMetrics.keySet
+      .filter(ObjectName.getInstance(_).getKeyProperty("type") == "Partition"))
   }
 
   private def seedLogData(log: Log, numRecords: Int, leaderEpoch: Int): Unit = {
