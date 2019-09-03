@@ -141,7 +141,8 @@ public class Bytes implements Comparable<Bytes> {
     }
 
     /**
-     * Increment the underlying byte array by adding 1.
+     * Increment the underlying byte array by adding 1. Throws an IndexOutOfBoundsException if incrementing would cause
+     * the underlying input byte array to overflow.
      *
      * @param input - The byte array to increment
      * @return A new copy of the incremented byte array.
