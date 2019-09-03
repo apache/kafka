@@ -246,7 +246,9 @@ public class Plugins {
                 }
                 catch (ClassNotFoundException e) {
                     throw new ConnectException(
-                        "Failed to find any class that implements Converter and which name matches "
+                        "Failed to find any class that implements Converter for the config "
+                        + classPropertyName + ", available converters are: "
+                        + pluginNames(delegatingLoader.converters())
                     );
                 }
                 break;
@@ -265,7 +267,7 @@ public class Plugins {
                 break;
         }
         if (klass == null) {
-            throw new ConnectException("Unable to instantiate the Converter specified in '" + classPropertyName + "'");
+            throw new ConnectException("Unable to initialize the Converter specified in '" + classPropertyName + "'");
         }
 
         savedLoader = compareAndSwapLoaders(klass.getClassLoader());
@@ -329,7 +331,9 @@ public class Plugins {
                 }
                 catch (ClassNotFoundException e) {
                     throw new ConnectException(
-                        "Failed to find any class that implements Converter and which name matches "
+                        "Failed to find any class that implements HeaderConverter for the config "
+                        + classPropertyName + ", available converters are: "
+                        + pluginNames(delegatingLoader.converters())
                     );
                 }
                 break;
@@ -353,7 +357,7 @@ public class Plugins {
                 }
         }
         if (klass == null) {
-            throw new ConnectException("Unable to instantiate the Converter specified in '" + classPropertyName + "'");
+            throw new ConnectException("Unable to initialize the HeaderConverter specified in '" + classPropertyName + "'");
         }
 
         String configPrefix = classPropertyName + ".";
