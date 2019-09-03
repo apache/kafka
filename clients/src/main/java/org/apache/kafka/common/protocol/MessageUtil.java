@@ -17,25 +17,9 @@
 
 package org.apache.kafka.common.protocol;
 
-import org.apache.kafka.common.utils.Utils;
-
 import java.util.Iterator;
-import java.util.List;
-import java.util.Set;
 
 public final class MessageUtil {
-    /**
-     * Get the length of the UTF8 representation of a string, without allocating
-     * a byte buffer for the string.
-     */
-    public static short serializedUtf8Length(CharSequence input) {
-        int count = Utils.utf8Length(input);
-        if (count > Short.MAX_VALUE) {
-            throw new RuntimeException("String " + input + " is too long to serialize.");
-        }
-        return (short) count;
-    }
-
     public static String deepToString(Iterator<?> iter) {
         StringBuilder bld = new StringBuilder("[");
         String prefix = "";
