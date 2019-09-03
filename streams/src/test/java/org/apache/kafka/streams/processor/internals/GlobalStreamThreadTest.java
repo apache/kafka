@@ -18,6 +18,7 @@ package org.apache.kafka.streams.processor.internals;
 
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.concurrent.TimeUnit;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.InvalidOffsetException;
 import org.apache.kafka.clients.consumer.MockConsumer;
@@ -58,6 +59,7 @@ import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 public class GlobalStreamThreadTest {
+
     private final InternalTopologyBuilder builder = new InternalTopologyBuilder();
     private final MockConsumer<byte[], byte[]> mockConsumer = new MockConsumer<>(OffsetResetStrategy.NONE);
     private final MockTime time = new MockTime();
@@ -305,11 +307,25 @@ public class GlobalStreamThreadTest {
         initializeConsumer();
         globalStreamThread.start();
         globalStreamThread.shutdown();
-        while (globalStreamThread.stillRunning()) {
+        long startTime = System.currentTimeMillis();
+        while (globalStreamThread.stillRunning() &&
+            (System.currentTimeMillis() - startTime) < TimeUnit.MINUTES.toMillis(1)
+        ) {
             continue;
         }
-        while (globalStreamThread.isAlive()) {
+        if (globalStreamThread.stillRunning()) {
+            throw new Exception("Failed to shutdown a global stream thread,"
+                + " the global stream thread is still running");
+        }
+        startTime = System.currentTimeMillis();
+        while (globalStreamThread.isAlive() &&
+            (System.currentTimeMillis() - startTime) < TimeUnit.MINUTES.toMillis(1)
+        ) {
             continue;
+        }
+        if (globalStreamThread.isAlive()) {
+            throw new Exception("Failed to shutdown a global stream thread,"
+                + " the global stream thread is still alive");
         }
         final MockConsumer<byte[], byte[]> tmpMockConsumer2 = new MockConsumer<>(OffsetResetStrategy.NONE);
         tmpMockConsumer2.updatePartitions(
