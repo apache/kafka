@@ -60,13 +60,13 @@ public class TableProcessorNode<K, V> extends StreamsGraphNode {
         final String processorName = processorParameters.processorName();
         topologyBuilder.addProcessor(processorName, processorParameters.processorSupplier(), parentNodeNames());
 
+        if (storeNames.length > 0) {
+            topologyBuilder.connectProcessorAndStateStores(processorName, storeNames);
+        }
+
         // TODO: we are enforcing this as a keyvalue store, but it should go beyond any type of stores
         if (storeBuilder != null) {
             topologyBuilder.addStateStore(storeBuilder, processorName);
-        }
-
-        if (storeNames.length > 0) {
-            topologyBuilder.connectProcessorAndStateStores(processorName, storeNames);
         }
     }
 }

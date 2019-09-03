@@ -22,8 +22,7 @@ import java.util.Comparator;
 import java.util.NavigableMap;
 import java.util.TreeMap;
 
-import static org.junit.Assert.assertArrayEquals;
-import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.*;
 
 public class BytesTest {
 
@@ -38,49 +37,7 @@ public class BytesTest {
     @Test
     public void testIncrementUpperBoundary() {
         byte[] input = new byte[]{(byte) 0xFF, (byte) 0xFF, (byte) 0xFF};
-        byte[] expected = new byte[]{(byte) 0x01, (byte) 0x00, (byte) 0x00, (byte) 0x00};
-        Bytes output = Bytes.increment(Bytes.wrap(input));
-        assertArrayEquals(output.get(), expected);
-    }
-
-    @Test
-    public void testIncrementBoundaryWithSubmap() {
-        final NavigableMap<Bytes, byte[]> map = new TreeMap<>();
-        Bytes key1 = Bytes.wrap(new byte[]{(byte) 0xFF});
-        byte[] val = new byte[]{(byte) 0x00};
-        map.put(key1, val);
-
-        Bytes key2 = Bytes.wrap(new byte[]{(byte) 0xFF, (byte) 0xAA});
-        map.put(key2, val);
-
-        Bytes key3 = Bytes.wrap(new byte[]{(byte) 0xFF, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF});
-        map.put(key3, val);
-
-        Bytes key4 = Bytes.wrap(new byte[]{(byte) 0x00, (byte) 0x01});
-        map.put(key4, val);
-
-        Bytes key5 = Bytes.wrap(new byte[]{(byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x01});
-        map.put(key5, val);
-
-        Bytes prefix = key1;
-        Bytes prefixEnd = Bytes.increment(prefix);
-
-        Comparator<? super Bytes> comparator = map.comparator();
-        final int result = comparator == null ? prefix.compareTo(prefixEnd) : comparator.compare(prefix, prefixEnd);
-        NavigableMap<Bytes, byte[]> subMapResults;
-        if (result > 0) {
-            //Prefix increment would cause a wrap-around. Get the submap from toKey to the end of the map
-            subMapResults = map.tailMap(prefix, true);
-        } else {
-            subMapResults = map.subMap(prefix, true, prefixEnd, false);
-        }
-
-        NavigableMap<Bytes, byte[]> subMapExpected = new TreeMap<>();
-        subMapExpected.put(key1, val);
-        subMapExpected.put(key2, val);
-        subMapExpected.put(key3, val);
-
-        assertEquals(subMapExpected.keySet(), subMapResults.keySet());
+        assertThrows(IndexOutOfBoundsException.class, () -> Bytes.increment(Bytes.wrap(input)));
     }
 
     @Test
