@@ -1077,7 +1077,12 @@ public final class MessageDataGenerator {
             generate(buffer);
         Versions curVersions = parentVersions.intersect(struct.versions());
         headerGenerator.addImport(MessageGenerator.TREE_MAP_CLASS);
-        buffer.printf("TreeMap<Integer, Object> _taggedFields = new TreeMap<>();%n");
+        buffer.printf("TreeMap<Integer, Object> _taggedFields = null;%n");
+        VersionConditional.forVersions(flexibleVersions, struct.versions()).
+            ifMember((__) -> {
+                buffer.printf("_taggedFields = new TreeMap<>();%n");
+            }).
+            generate(buffer);
         buffer.printf("Struct struct = new Struct(SCHEMAS[version]);%n");
         for (FieldSpec field : struct.fields()) {
             VersionConditional.forVersions(field.versions(), curVersions).
@@ -1099,9 +1104,6 @@ public final class MessageDataGenerator {
                 generate(buffer);
         }
         VersionConditional.forVersions(flexibleVersions, curVersions).
-            ifNotMember((__) -> {
-                generateCheckForUnsupportedNumTaggedFields("_taggedFields != null");
-            }).
             ifMember((__) -> {
                 buffer.printf("struct.set(\"%s\", _taggedFields);%n", TAGGED_FIELDS_SECTION_NAME);
             }).
