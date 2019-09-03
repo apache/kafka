@@ -84,9 +84,7 @@ class LogValidatorTest {
       validateMessages(recordsWithInvalidInnerMagic(batchMagic, recordMagic, compressionType), batchMagic, compressionType, compressionType)
     }
     assertEquals(metricsKeySet.count(_.getMBeanName.endsWith(s"${BrokerTopicStats.InvalidMagicNumberRecordsPerSec}")), 1)
-    assertEquals(metricsKeySet.count(_.getMBeanName.endsWith(s"${BrokerTopicStats.InvalidMagicNumberRecordsPerSec},topic=${topicPartition.topic}")), 1)
     assertTrue(meterCount(s"${BrokerTopicStats.InvalidMagicNumberRecordsPerSec}") > 0)
-    assertTrue(meterCount(s"${BrokerTopicStats.InvalidMagicNumberRecordsPerSec},topic=${topicPartition.topic}") > 0)
   }
 
   private def validateMessages(records: MemoryRecords, magic: Byte, sourceCompressionType: CompressionType, targetCompressionType: CompressionType): Unit = {
@@ -1211,9 +1209,7 @@ class LogValidatorTest {
         brokerTopicStats = brokerTopicStats)
     }
     assertEquals(metricsKeySet.count(_.getMBeanName.endsWith(s"${BrokerTopicStats.InvalidOffsetOrSequenceRecordsPerSec}")), 1)
-    assertEquals(metricsKeySet.count(_.getMBeanName.endsWith(s"${BrokerTopicStats.InvalidOffsetOrSequenceRecordsPerSec},topic=${topicPartition.topic}")), 1)
     assertTrue(meterCount(s"${BrokerTopicStats.InvalidOffsetOrSequenceRecordsPerSec}") > 0)
-    assertTrue(meterCount(s"${BrokerTopicStats.InvalidOffsetOrSequenceRecordsPerSec},topic=${topicPartition.topic}") > 0)
   }
 
   @Test(expected = classOf[InvalidRecordException])
