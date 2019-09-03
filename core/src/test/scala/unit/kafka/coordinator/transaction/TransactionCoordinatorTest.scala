@@ -17,7 +17,7 @@
 package kafka.coordinator.transaction
 
 import kafka.utils.MockScheduler
-import org.apache.kafka.clients.producer.internals.ProducerIdAndEpoch
+import org.apache.kafka.clients.producer.ProducerIdAndEpoch
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.RecordBatch

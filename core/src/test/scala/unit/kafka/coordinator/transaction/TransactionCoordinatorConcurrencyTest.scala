@@ -26,7 +26,7 @@ import kafka.log.Log
 import kafka.server.{DelayedOperationPurgatory, FetchDataInfo, FetchLogEnd, KafkaConfig, LogOffsetMetadata, MetadataCache}
 import kafka.utils.timer.MockTimer
 import kafka.utils.{Pool, TestUtils}
-import org.apache.kafka.clients.producer.internals.ProducerIdAndEpoch
+import org.apache.kafka.clients.producer.ProducerIdAndEpoch
 import org.apache.kafka.clients.{ClientResponse, NetworkClient}
 import org.apache.kafka.common.internals.Topic.TRANSACTION_STATE_TOPIC_NAME
 import org.apache.kafka.common.metrics.Metrics
