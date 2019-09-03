@@ -857,6 +857,7 @@ public class Values {
         }
         if (firstCharIsDigit) {
             // Check for a date, time, or timestamp ...
+            token = token.replace("\\", "");
             int tokenLength = token.length();
             if (tokenLength == ISO_8601_DATE_LENGTH) {
                 try {
