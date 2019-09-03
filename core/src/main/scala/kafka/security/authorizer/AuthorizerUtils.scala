@@ -15,18 +15,26 @@
   * limitations under the License.
   */
 
-package kafka.security
+package kafka.security.authorizer
 
-import kafka.security.auth.{Acl, Operation, PermissionType, Resource, ResourceType}
-import org.apache.kafka.common.acl.{AccessControlEntry, AclBinding, AclBindingFilter}
+import java.net.InetAddress
+
+import kafka.network.RequestChannel.Session
+import kafka.security.auth._
+import org.apache.kafka.common.acl.{AccessControlEntry, AclBinding, AclBindingFilter, AclOperation}
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.ApiError
-import org.apache.kafka.common.resource.ResourcePattern
+import org.apache.kafka.common.resource.{ResourcePattern, ResourceType => JResourceType}
+import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.common.utils.SecurityUtils._
+import org.apache.kafka.server.authorizer.AuthorizableRequestContext
+
 import scala.util.{Failure, Success, Try}
 
 
-object SecurityUtils {
+object AuthorizerUtils {
+  val WildcardPrincipal = "User:*"
+  val WildcardHost = "*"
 
   def convertToResourceAndAcl(filter: AclBindingFilter): Either[ApiError, (Resource, Acl)] = {
     (for {
@@ -44,10 +52,44 @@ object SecurityUtils {
 
   def convertToAclBinding(resource: Resource, acl: Acl): AclBinding = {
     val resourcePattern = new ResourcePattern(resource.resourceType.toJava, resource.name, resource.patternType)
-    val entry = new AccessControlEntry(acl.principal.toString, acl.host.toString,
+    new AclBinding(resourcePattern, convertToAccessControlEntry(acl))
+  }
+
+  def convertToAccessControlEntry(acl: Acl): AccessControlEntry = {
+    new AccessControlEntry(acl.principal.toString, acl.host.toString,
       acl.operation.toJava, acl.permissionType.toJava)
-    new AclBinding(resourcePattern, entry)
+  }
+
+  def convertToAcl(ace: AccessControlEntry): Acl = {
+    new Acl(parseKafkaPrincipal(ace.principal), PermissionType.fromJava(ace.permissionType), ace.host,
+      Operation.fromJava(ace.operation))
+  }
+
+  def convertToResource(resourcePattern: ResourcePattern): Resource = {
+    Resource(ResourceType.fromJava(resourcePattern.resourceType), resourcePattern.name, resourcePattern.patternType)
+  }
+
+  def validateAclBinding(aclBinding: AclBinding): Unit = {
+    if (aclBinding.isUnknown)
+      throw new IllegalArgumentException("ACL binding contains unknown elements")
+  }
+
+  def supportedOperations(resourceType: JResourceType): Set[AclOperation] = {
+    ResourceType.fromJava(resourceType).supportedOperations.map(_.toJava)
   }
 
   def isClusterResource(name: String): Boolean = name.equals(Resource.ClusterResourceName)
+
+  def sessionToRequestContext(session: Session): AuthorizableRequestContext = {
+    new AuthorizableRequestContext {
+      override def clientId(): String = ""
+      override def requestType(): Int = -1
+      override def listener(): String = ""
+      override def clientAddress(): InetAddress = session.clientAddress
+      override def principal(): KafkaPrincipal = session.principal
+      override def securityProtocol(): SecurityProtocol = null
+      override def correlationId(): Int = -1
+      override def requestVersion(): Int = -1
+    }
+  }
 }

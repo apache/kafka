@@ -24,12 +24,13 @@ import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger}
 import java.util.concurrent.{CountDownLatch, ExecutionException, TimeUnit}
 import java.util.{Collections, Properties}
 import java.{time, util}
+
 import kafka.log.LogConfig
 import kafka.security.auth.{Cluster, Group, Topic}
 import kafka.server.{Defaults, KafkaConfig, KafkaServer}
 import kafka.utils.Implicits._
 import kafka.utils.TestUtils._
-import kafka.utils.{Logging, TestUtils}
+import kafka.utils.{Log4jController, Logging, TestUtils}
 import kafka.zk.KafkaZkClient
 import org.apache.kafka.clients.admin._
 import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer}
@@ -40,16 +41,18 @@ import org.apache.kafka.common.ElectionType
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.TopicPartitionReplica
 import org.apache.kafka.common.acl._
-import org.apache.kafka.common.config.ConfigResource
+import org.apache.kafka.common.config.{ConfigResource, LogLevelConfig}
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.requests.{DeleteRecordsRequest, MetadataResponse}
-import org.apache.kafka.common.resource.{PatternType, ResourcePattern, ResourceType}
+import org.apache.kafka.common.resource.{PatternType, Resource, ResourcePattern, ResourceType}
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.junit.Assert._
 import org.junit.rules.Timeout
-import org.junit.{After, Before, Rule, Test}
+import org.junit.{After, Before, Ignore, Rule, Test}
 import org.scalatest.Assertions.intercept
+
 import scala.collection.JavaConverters._
+import scala.collection.Seq
 import scala.compat.java8.OptionConverters._
 import scala.concurrent.duration.Duration
 import scala.concurrent.{Await, Future}
@@ -66,20 +69,26 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
   @Rule
   def globalTimeout = Timeout.millis(120000)
 
-  var client: AdminClient = null
+  var client: Admin = null
+  var brokerLoggerConfigResource: ConfigResource = null
+  var changedBrokerLoggers = scala.collection.mutable.Set[String]()
 
   val topic = "topic"
   val partition = 0
   val topicPartition = new TopicPartition(topic, partition)
+  val clusterResourcePattern = new ResourcePattern(ResourceType.CLUSTER, Resource.CLUSTER_NAME, PatternType.LITERAL)
+
 
   @Before
   override def setUp(): Unit = {
     super.setUp
     TestUtils.waitUntilBrokerMetadataIsPropagated(servers)
+    brokerLoggerConfigResource = new ConfigResource(ConfigResource.Type.BROKER_LOGGER, servers.head.config.brokerId.toString)
   }
 
   @After
   override def tearDown(): Unit = {
+    teardownBrokerLoggers()
     if (client != null)
       Utils.closeQuietly(client, "AdminClient")
     super.tearDown()
@@ -120,7 +129,7 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
     config
   }
 
-  def waitForTopics(client: AdminClient, expectedPresent: Seq[String], expectedMissing: Seq[String]): Unit = {
+  def waitForTopics(client: Admin, expectedPresent: Seq[String], expectedMissing: Seq[String]): Unit = {
     TestUtils.waitUntilTrue(() => {
         val topics = client.listTopics.names.get()
         expectedPresent.forall(topicName => topics.contains(topicName)) &&
@@ -741,7 +750,6 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
       altered = alterResult.values.get(topic2).get
     } catch {
       case e: ExecutionException =>
-      case e: ExecutionException =>
         assertTrue(e.getCause.isInstanceOf[InvalidPartitionsException])
         assertEquals("Topic currently has 3 partitions, which is higher than the requested 2.", e.getCause.getMessage)
         // assert that the topic2 still has 3 partitions
@@ -1169,7 +1177,7 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
       try {
         // Start a consumer in a thread that will subscribe to a new group.
         val consumerThread = new Thread {
-          override def run {
+          override def run : Unit = {
             consumer.subscribe(Collections.singleton(testTopicName))
 
             try {
@@ -1280,8 +1288,8 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
     /** Changes the <i>preferred</i> leader without changing the <i>current</i> leader. */
     def changePreferredLeader(newAssignment: Seq[Int]) = {
       val preferred = newAssignment.head
-      val prior1 = currentLeader(client, partition1).get
-      val prior2 = currentLeader(client, partition2).get
+      val prior1 = TestUtils.currentLeader(client, partition1).get
+      val prior2 = TestUtils.currentLeader(client, partition2).get
 
       var m = Map.empty[TopicPartition, Seq[Int]]
 
@@ -1296,26 +1304,26 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
         s"Expected preferred leader to become $preferred, but is ${preferredLeader(partition1)} and ${preferredLeader(partition2)}",
         10000)
       // Check the leader hasn't moved
-      assertEquals(Some(prior1), currentLeader(client, partition1))
-      assertEquals(Some(prior2), currentLeader(client, partition2))
+      assertEquals(Some(prior1), TestUtils.currentLeader(client, partition1))
+      assertEquals(Some(prior2), TestUtils.currentLeader(client, partition2))
     }
 
     // Check current leaders are 0
-    assertEquals(Some(0), currentLeader(client, partition1))
-    assertEquals(Some(0), currentLeader(client, partition2))
+    assertEquals(Some(0), TestUtils.currentLeader(client, partition1))
+    assertEquals(Some(0), TestUtils.currentLeader(client, partition2))
 
     // Noop election
     var electResult = client.electLeaders(ElectionType.PREFERRED, Set(partition1).asJava)
     var exception = electResult.partitions.get.get(partition1).get
     assertEquals(classOf[ElectionNotNeededException], exception.getClass)
     assertEquals("Leader election not needed for topic partition", exception.getMessage)
-    assertEquals(Some(0), currentLeader(client, partition1))
+    assertEquals(Some(0), TestUtils.currentLeader(client, partition1))
 
     // Noop election with null partitions
     electResult = client.electLeaders(ElectionType.PREFERRED, null)
     assertTrue(electResult.partitions.get.isEmpty)
-    assertEquals(Some(0), currentLeader(client, partition1))
-    assertEquals(Some(0), currentLeader(client, partition2))
+    assertEquals(Some(0), TestUtils.currentLeader(client, partition1))
+    assertEquals(Some(0), TestUtils.currentLeader(client, partition2))
 
     // Now change the preferred leader to 1
     changePreferredLeader(prefer1)
@@ -1324,17 +1332,17 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
     electResult = client.electLeaders(ElectionType.PREFERRED, Set(partition1).asJava)
     assertEquals(Set(partition1).asJava, electResult.partitions.get.keySet)
     assertFalse(electResult.partitions.get.get(partition1).isPresent)
-    waitForLeaderToBecome(client, partition1, Some(1))
+    TestUtils.waitForLeaderToBecome(client, partition1, Some(1))
 
     // topic 2 unchanged
     assertFalse(electResult.partitions.get.containsKey(partition2))
-    assertEquals(Some(0), currentLeader(client, partition2))
+    assertEquals(Some(0), TestUtils.currentLeader(client, partition2))
 
     // meaningful election with null partitions
     electResult = client.electLeaders(ElectionType.PREFERRED, null)
     assertEquals(Set(partition2), electResult.partitions.get.keySet.asScala)
     assertFalse(electResult.partitions.get.get(partition2).isPresent)
-    waitForLeaderToBecome(client, partition2, Some(1))
+    TestUtils.waitForLeaderToBecome(client, partition2, Some(1))
 
     // unknown topic
     val unknownPartition = new TopicPartition("topic-does-not-exist", 0)
@@ -1343,8 +1351,8 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
     exception = electResult.partitions.get.get(unknownPartition).get
     assertEquals(classOf[UnknownTopicOrPartitionException], exception.getClass)
     assertEquals("The partition does not exist.", exception.getMessage)
-    assertEquals(Some(1), currentLeader(client, partition1))
-    assertEquals(Some(1), currentLeader(client, partition2))
+    assertEquals(Some(1), TestUtils.currentLeader(client, partition1))
+    assertEquals(Some(1), TestUtils.currentLeader(client, partition2))
 
     // Now change the preferred leader to 2
     changePreferredLeader(prefer2)
@@ -1352,8 +1360,8 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
     // mixed results
     electResult = client.electLeaders(ElectionType.PREFERRED, Set(unknownPartition, partition1).asJava)
     assertEquals(Set(unknownPartition, partition1).asJava, electResult.partitions.get.keySet)
-    waitForLeaderToBecome(client, partition1, Some(2))
-    assertEquals(Some(1), currentLeader(client, partition2))
+    TestUtils.waitForLeaderToBecome(client, partition1, Some(2))
+    assertEquals(Some(1), TestUtils.currentLeader(client, partition2))
     exception = electResult.partitions.get.get(unknownPartition).get
     assertEquals(classOf[UnknownTopicOrPartitionException], exception.getClass)
     assertEquals("The partition does not exist.", exception.getMessage)
@@ -1362,13 +1370,13 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
     electResult = client.electLeaders(ElectionType.PREFERRED, Set(partition2).asJava)
     assertEquals(Set(partition2).asJava, electResult.partitions.get.keySet)
     assertFalse(electResult.partitions.get.get(partition2).isPresent)
-    waitForLeaderToBecome(client, partition2, Some(2))
+    TestUtils.waitForLeaderToBecome(client, partition2, Some(2))
 
     // Now change the preferred leader to 1
     changePreferredLeader(prefer1)
     // but shut it down...
     servers(1).shutdown()
-    waitForBrokerOutOfIsr(client, Set(partition1, partition2), 1)
+    TestUtils.waitForBrokersOutOfIsr(client, Set(partition1, partition2), Set(1))
 
     // ... now what happens if we try to elect the preferred leader and it's down?
     val shortTimeout = new ElectLeadersOptions().timeoutMs(10000)
@@ -1378,7 +1386,7 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
     assertEquals(classOf[PreferredLeaderNotAvailableException], exception.getClass)
     assertTrue(s"Wrong message ${exception.getMessage}", exception.getMessage.contains(
       "Failed to elect leader for partition elect-preferred-leaders-topic-1-0 under strategy PreferredReplicaPartitionLeaderElectionStrategy"))
-    assertEquals(Some(2), currentLeader(client, partition1))
+    assertEquals(Some(2), TestUtils.currentLeader(client, partition1))
 
     // preferred leader unavailable with null argument
     electResult = client.electLeaders(ElectionType.PREFERRED, null, shortTimeout)
@@ -1393,8 +1401,8 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
     assertTrue(s"Wrong message ${exception.getMessage}", exception.getMessage.contains(
       "Failed to elect leader for partition elect-preferred-leaders-topic-2-0 under strategy PreferredReplicaPartitionLeaderElectionStrategy"))
 
-    assertEquals(Some(2), currentLeader(client, partition1))
-    assertEquals(Some(2), currentLeader(client, partition2))
+    assertEquals(Some(2), TestUtils.currentLeader(client, partition1))
+    assertEquals(Some(2), TestUtils.currentLeader(client, partition2))
   }
 
   @Test
@@ -1409,17 +1417,17 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
     val partition1 = new TopicPartition("unclean-test-topic-1", 0)
     TestUtils.createTopic(zkClient, partition1.topic, Map[Int, Seq[Int]](partition1.partition -> assignment1), servers)
 
-    waitForLeaderToBecome(client, partition1, Option(broker1))
+    TestUtils.waitForLeaderToBecome(client, partition1, Option(broker1))
 
     servers(broker2).shutdown()
-    waitForBrokerOutOfIsr(client, Set(partition1), broker2)
+    TestUtils.waitForBrokersOutOfIsr(client, Set(partition1), Set(broker2))
     servers(broker1).shutdown()
-    waitForLeaderToBecome(client, partition1, None)
+    TestUtils.waitForLeaderToBecome(client, partition1, None)
     servers(broker2).startup()
 
     val electResult = client.electLeaders(ElectionType.UNCLEAN, Set(partition1).asJava)
     assertFalse(electResult.partitions.get.get(partition1).isPresent)
-    assertEquals(Option(broker2), currentLeader(client, partition1))
+    assertEquals(Option(broker2), TestUtils.currentLeader(client, partition1))
   }
 
   @Test
@@ -1443,21 +1451,21 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
       servers
     )
 
-    waitForLeaderToBecome(client, partition1, Option(broker1))
-    waitForLeaderToBecome(client, partition2, Option(broker1))
+    TestUtils.waitForLeaderToBecome(client, partition1, Option(broker1))
+    TestUtils.waitForLeaderToBecome(client, partition2, Option(broker1))
 
     servers(broker2).shutdown()
-    waitForBrokerOutOfIsr(client, Set(partition1, partition2), broker2)
+    TestUtils.waitForBrokersOutOfIsr(client, Set(partition1, partition2), Set(broker2))
     servers(broker1).shutdown()
-    waitForLeaderToBecome(client, partition1, None)
-    waitForLeaderToBecome(client, partition2, None)
+    TestUtils.waitForLeaderToBecome(client, partition1, None)
+    TestUtils.waitForLeaderToBecome(client, partition2, None)
     servers(broker2).startup()
 
     val electResult = client.electLeaders(ElectionType.UNCLEAN, Set(partition1, partition2).asJava)
     assertFalse(electResult.partitions.get.get(partition1).isPresent)
     assertFalse(electResult.partitions.get.get(partition2).isPresent)
-    assertEquals(Option(broker2), currentLeader(client, partition1))
-    assertEquals(Option(broker2), currentLeader(client, partition2))
+    assertEquals(Option(broker2), TestUtils.currentLeader(client, partition1))
+    assertEquals(Option(broker2), TestUtils.currentLeader(client, partition2))
   }
 
   @Test
@@ -1482,21 +1490,21 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
       servers
     )
 
-    waitForLeaderToBecome(client, partition1, Option(broker1))
-    waitForLeaderToBecome(client, partition2, Option(broker1))
+    TestUtils.waitForLeaderToBecome(client, partition1, Option(broker1))
+    TestUtils.waitForLeaderToBecome(client, partition2, Option(broker1))
 
     servers(broker2).shutdown()
-    waitForBrokerOutOfIsr(client, Set(partition1), broker2)
+    TestUtils.waitForBrokersOutOfIsr(client, Set(partition1), Set(broker2))
     servers(broker1).shutdown()
-    waitForLeaderToBecome(client, partition1, None)
-    waitForLeaderToBecome(client, partition2, Some(broker3))
+    TestUtils.waitForLeaderToBecome(client, partition1, None)
+    TestUtils.waitForLeaderToBecome(client, partition2, Some(broker3))
     servers(broker2).startup()
 
     val electResult = client.electLeaders(ElectionType.UNCLEAN, null)
     assertFalse(electResult.partitions.get.get(partition1).isPresent)
     assertFalse(electResult.partitions.get.containsKey(partition2))
-    assertEquals(Option(broker2), currentLeader(client, partition1))
-    assertEquals(Option(broker3), currentLeader(client, partition2))
+    assertEquals(Option(broker2), TestUtils.currentLeader(client, partition1))
+    assertEquals(Option(broker3), TestUtils.currentLeader(client, partition2))
   }
 
   @Test
@@ -1519,7 +1527,7 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
       servers
     )
 
-    waitForLeaderToBecome(client, new TopicPartition(topic, 0), Option(broker1))
+    TestUtils.waitForLeaderToBecome(client, new TopicPartition(topic, 0), Option(broker1))
 
     val electResult = client.electLeaders(ElectionType.UNCLEAN, Set(unknownPartition, unknownTopic).asJava)
     assertTrue(electResult.partitions.get.get(unknownPartition).get.isInstanceOf[UnknownTopicOrPartitionException])
@@ -1545,12 +1553,12 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
       servers
     )
 
-    waitForLeaderToBecome(client, partition1, Option(broker1))
+    TestUtils.waitForLeaderToBecome(client, partition1, Option(broker1))
 
     servers(broker2).shutdown()
-    waitForBrokerOutOfIsr(client, Set(partition1), broker2)
+    TestUtils.waitForBrokersOutOfIsr(client, Set(partition1), Set(broker2))
     servers(broker1).shutdown()
-    waitForLeaderToBecome(client, partition1, None)
+    TestUtils.waitForLeaderToBecome(client, partition1, None)
 
     val electResult = client.electLeaders(ElectionType.UNCLEAN, Set(partition1).asJava)
     assertTrue(electResult.partitions.get.get(partition1).get.isInstanceOf[EligibleLeadersNotAvailableException])
@@ -1575,10 +1583,10 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
       servers
     )
 
-    waitForLeaderToBecome(client, partition1, Option(broker1))
+    TestUtils.waitForLeaderToBecome(client, partition1, Option(broker1))
 
     servers(broker1).shutdown()
-    waitForLeaderToBecome(client, partition1, Some(broker2))
+    TestUtils.waitForLeaderToBecome(client, partition1, Some(broker2))
     servers(broker1).startup()
 
     val electResult = client.electLeaders(ElectionType.UNCLEAN, Set(partition1).asJava)
@@ -1607,21 +1615,21 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
       servers
     )
 
-    waitForLeaderToBecome(client, partition1, Option(broker1))
-    waitForLeaderToBecome(client, partition2, Option(broker1))
+    TestUtils.waitForLeaderToBecome(client, partition1, Option(broker1))
+    TestUtils.waitForLeaderToBecome(client, partition2, Option(broker1))
 
     servers(broker2).shutdown()
-    waitForBrokerOutOfIsr(client, Set(partition1), broker2)
+    TestUtils.waitForBrokersOutOfIsr(client, Set(partition1), Set(broker2))
     servers(broker1).shutdown()
-    waitForLeaderToBecome(client, partition1, None)
-    waitForLeaderToBecome(client, partition2, Some(broker3))
+    TestUtils.waitForLeaderToBecome(client, partition1, None)
+    TestUtils.waitForLeaderToBecome(client, partition2, Some(broker3))
     servers(broker2).startup()
 
     val electResult = client.electLeaders(ElectionType.UNCLEAN, Set(partition1, partition2).asJava)
     assertFalse(electResult.partitions.get.get(partition1).isPresent)
     assertTrue(electResult.partitions.get.get(partition2).get.isInstanceOf[ElectionNotNeededException])
-    assertEquals(Option(broker2), currentLeader(client, partition1))
-    assertEquals(Option(broker3), currentLeader(client, partition2))
+    assertEquals(Option(broker2), TestUtils.currentLeader(client, partition1))
+    assertEquals(Option(broker3), TestUtils.currentLeader(client, partition2))
   }
 
   @Test
@@ -1819,11 +1827,235 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
       classOf[InvalidTopicException])
     client.close()
   }
+
+  @Test
+  def testDescribeConfigsForLog4jLogLevels(): Unit = {
+    client = AdminClient.create(createConfig())
+
+    val loggerConfig = describeBrokerLoggers()
+    val rootLogLevel = loggerConfig.get(Log4jController.ROOT_LOGGER).value()
+    val logCleanerLogLevelConfig = loggerConfig.get("kafka.cluster.Replica")
+    assertEquals(rootLogLevel, logCleanerLogLevelConfig.value()) // we expect an undefined log level to be the same as the root logger
+    assertEquals("kafka.cluster.Replica", logCleanerLogLevelConfig.name())
+    assertEquals(ConfigEntry.ConfigSource.DYNAMIC_BROKER_LOGGER_CONFIG, logCleanerLogLevelConfig.source())
+    assertEquals(false, logCleanerLogLevelConfig.isReadOnly)
+    assertEquals(false, logCleanerLogLevelConfig.isSensitive)
+    assertTrue(logCleanerLogLevelConfig.synonyms().isEmpty)
+  }
+
+  @Test
+  @Ignore // To be re-enabled once KAFKA-8779 is resolved
+  def testIncrementalAlterConfigsForLog4jLogLevels(): Unit = {
+    client = AdminClient.create(createConfig())
+
+    val initialLoggerConfig = describeBrokerLoggers()
+    val initialRootLogLevel = initialLoggerConfig.get(Log4jController.ROOT_LOGGER).value()
+    assertEquals(initialRootLogLevel, initialLoggerConfig.get("kafka.controller.KafkaController").value())
+    assertEquals(initialRootLogLevel, initialLoggerConfig.get("kafka.log.LogCleaner").value())
+    assertEquals(initialRootLogLevel, initialLoggerConfig.get("kafka.server.ReplicaManager").value())
+
+    val newRootLogLevel = LogLevelConfig.DEBUG_LOG_LEVEL
+    val alterRootLoggerEntry = Seq(
+      new AlterConfigOp(new ConfigEntry(Log4jController.ROOT_LOGGER, newRootLogLevel), AlterConfigOp.OpType.SET)
+    ).asJavaCollection
+    // Test validateOnly does not change anything
+    alterBrokerLoggers(alterRootLoggerEntry, validateOnly = true)
+    val validatedLoggerConfig = describeBrokerLoggers()
+    assertEquals(initialRootLogLevel, validatedLoggerConfig.get(Log4jController.ROOT_LOGGER).value())
+    assertEquals(initialRootLogLevel, validatedLoggerConfig.get("kafka.controller.KafkaController").value())
+    assertEquals(initialRootLogLevel, validatedLoggerConfig.get("kafka.log.LogCleaner").value())
+    assertEquals(initialRootLogLevel, validatedLoggerConfig.get("kafka.server.ReplicaManager").value())
+    assertEquals(initialRootLogLevel, validatedLoggerConfig.get("kafka.zookeeper.ZooKeeperClient").value())
+
+    // test that we can change them and unset loggers still use the root's log level
+    alterBrokerLoggers(alterRootLoggerEntry)
+    val changedRootLoggerConfig = describeBrokerLoggers()
+    assertEquals(newRootLogLevel, changedRootLoggerConfig.get(Log4jController.ROOT_LOGGER).value())
+    assertEquals(newRootLogLevel, changedRootLoggerConfig.get("kafka.controller.KafkaController").value())
+    assertEquals(newRootLogLevel, changedRootLoggerConfig.get("kafka.log.LogCleaner").value())
+    assertEquals(newRootLogLevel, changedRootLoggerConfig.get("kafka.server.ReplicaManager").value())
+    assertEquals(newRootLogLevel, changedRootLoggerConfig.get("kafka.zookeeper.ZooKeeperClient").value())
+
+    // alter the ZK client's logger so we can later test resetting it
+    val alterZKLoggerEntry = Seq(
+      new AlterConfigOp(new ConfigEntry("kafka.zookeeper.ZooKeeperClient", LogLevelConfig.ERROR_LOG_LEVEL), AlterConfigOp.OpType.SET)
+    ).asJavaCollection
+    alterBrokerLoggers(alterZKLoggerEntry)
+    val changedZKLoggerConfig = describeBrokerLoggers()
+    assertEquals(LogLevelConfig.ERROR_LOG_LEVEL, changedZKLoggerConfig.get("kafka.zookeeper.ZooKeeperClient").value())
+
+    // properly test various set operations and one delete
+    val alterLogLevelsEntries = Seq(
+      new AlterConfigOp(new ConfigEntry("kafka.controller.KafkaController", LogLevelConfig.INFO_LOG_LEVEL), AlterConfigOp.OpType.SET),
+      new AlterConfigOp(new ConfigEntry("kafka.log.LogCleaner", LogLevelConfig.ERROR_LOG_LEVEL), AlterConfigOp.OpType.SET),
+      new AlterConfigOp(new ConfigEntry("kafka.server.ReplicaManager", LogLevelConfig.TRACE_LOG_LEVEL), AlterConfigOp.OpType.SET),
+      new AlterConfigOp(new ConfigEntry("kafka.zookeeper.ZooKeeperClient", ""), AlterConfigOp.OpType.DELETE) // should reset to the root logger level
+    ).asJavaCollection
+    alterBrokerLoggers(alterLogLevelsEntries)
+    val alteredLoggerConfig = describeBrokerLoggers()
+    assertEquals(newRootLogLevel, alteredLoggerConfig.get(Log4jController.ROOT_LOGGER).value())
+    assertEquals(LogLevelConfig.INFO_LOG_LEVEL, alteredLoggerConfig.get("kafka.controller.KafkaController").value())
+    assertEquals(LogLevelConfig.ERROR_LOG_LEVEL, alteredLoggerConfig.get("kafka.log.LogCleaner").value())
+    assertEquals(LogLevelConfig.TRACE_LOG_LEVEL, alteredLoggerConfig.get("kafka.server.ReplicaManager").value())
+    assertEquals(newRootLogLevel, alteredLoggerConfig.get("kafka.zookeeper.ZooKeeperClient").value())
+  }
+
+  /**
+    * 1. Assume ROOT logger == TRACE
+    * 2. Change kafka.controller.KafkaController logger to INFO
+    * 3. Unset kafka.controller.KafkaController via AlterConfigOp.OpType.DELETE (resets it to the root logger - TRACE)
+    * 4. Change ROOT logger to ERROR
+    * 5. Ensure the kafka.controller.KafkaController logger's level is ERROR (the curent root logger level)
+    */
+  @Test
+  @Ignore // To be re-enabled once KAFKA-8779 is resolved
+  def testIncrementalAlterConfigsForLog4jLogLevelsCanResetLoggerToCurrentRoot(): Unit = {
+    client = AdminClient.create(createConfig())
+    // step 1 - configure root logger
+    val initialRootLogLevel = LogLevelConfig.TRACE_LOG_LEVEL
+    val alterRootLoggerEntry = Seq(
+      new AlterConfigOp(new ConfigEntry(Log4jController.ROOT_LOGGER, initialRootLogLevel), AlterConfigOp.OpType.SET)
+    ).asJavaCollection
+    alterBrokerLoggers(alterRootLoggerEntry)
+    val initialLoggerConfig = describeBrokerLoggers()
+    assertEquals(initialRootLogLevel, initialLoggerConfig.get(Log4jController.ROOT_LOGGER).value())
+    assertEquals(initialRootLogLevel, initialLoggerConfig.get("kafka.controller.KafkaController").value())
+
+    // step 2 - change KafkaController logger to INFO
+    val alterControllerLoggerEntry = Seq(
+      new AlterConfigOp(new ConfigEntry("kafka.controller.KafkaController", LogLevelConfig.INFO_LOG_LEVEL), AlterConfigOp.OpType.SET)
+    ).asJavaCollection
+    alterBrokerLoggers(alterControllerLoggerEntry)
+    val changedControllerLoggerConfig = describeBrokerLoggers()
+    assertEquals(initialRootLogLevel, changedControllerLoggerConfig.get(Log4jController.ROOT_LOGGER).value())
+    assertEquals(LogLevelConfig.INFO_LOG_LEVEL, changedControllerLoggerConfig.get("kafka.controller.KafkaController").value())
+
+    // step 3 - unset KafkaController logger
+    val deleteControllerLoggerEntry = Seq(
+      new AlterConfigOp(new ConfigEntry("kafka.controller.KafkaController", ""), AlterConfigOp.OpType.DELETE)
+    ).asJavaCollection
+    alterBrokerLoggers(deleteControllerLoggerEntry)
+    val deletedControllerLoggerConfig = describeBrokerLoggers()
+    assertEquals(initialRootLogLevel, deletedControllerLoggerConfig.get(Log4jController.ROOT_LOGGER).value())
+    assertEquals(initialRootLogLevel, deletedControllerLoggerConfig.get("kafka.controller.KafkaController").value())
+
+    val newRootLogLevel = LogLevelConfig.ERROR_LOG_LEVEL
+    val newAlterRootLoggerEntry = Seq(
+      new AlterConfigOp(new ConfigEntry(Log4jController.ROOT_LOGGER, newRootLogLevel), AlterConfigOp.OpType.SET)
+    ).asJavaCollection
+    alterBrokerLoggers(newAlterRootLoggerEntry)
+    val newRootLoggerConfig = describeBrokerLoggers()
+    assertEquals(newRootLogLevel, newRootLoggerConfig.get(Log4jController.ROOT_LOGGER).value())
+    assertEquals(newRootLogLevel, newRootLoggerConfig.get("kafka.controller.KafkaController").value())
+  }
+
+  @Test
+  @Ignore // To be re-enabled once KAFKA-8779 is resolved
+  def testIncrementalAlterConfigsForLog4jLogLevelsCannotResetRootLogger(): Unit = {
+    client = AdminClient.create(createConfig())
+    val deleteRootLoggerEntry = Seq(
+      new AlterConfigOp(new ConfigEntry(Log4jController.ROOT_LOGGER, ""), AlterConfigOp.OpType.DELETE)
+    ).asJavaCollection
+
+    assertTrue(intercept[ExecutionException](alterBrokerLoggers(deleteRootLoggerEntry)).getCause.isInstanceOf[InvalidRequestException])
+  }
+
+  @Test
+  @Ignore // To be re-enabled once KAFKA-8779 is resolved
+  def testIncrementalAlterConfigsForLog4jLogLevelsDoesNotWorkWithInvalidConfigs(): Unit = {
+    client = AdminClient.create(createConfig())
+    val validLoggerName = "kafka.server.KafkaRequestHandler"
+    val expectedValidLoggerLogLevel = describeBrokerLoggers().get(validLoggerName)
+    def assertLogLevelDidNotChange(): Unit = {
+      assertEquals(
+        expectedValidLoggerLogLevel,
+        describeBrokerLoggers().get(validLoggerName)
+      )
+    }
+
+    val appendLogLevelEntries = Seq(
+      new AlterConfigOp(new ConfigEntry("kafka.server.KafkaRequestHandler", LogLevelConfig.INFO_LOG_LEVEL), AlterConfigOp.OpType.SET), // valid
+      new AlterConfigOp(new ConfigEntry("kafka.network.SocketServer", LogLevelConfig.ERROR_LOG_LEVEL), AlterConfigOp.OpType.APPEND) // append is not supported
+    ).asJavaCollection
+    assertTrue(intercept[ExecutionException](alterBrokerLoggers(appendLogLevelEntries)).getCause.isInstanceOf[InvalidRequestException])
+    assertLogLevelDidNotChange()
+
+    val subtractLogLevelEntries = Seq(
+      new AlterConfigOp(new ConfigEntry("kafka.server.KafkaRequestHandler", LogLevelConfig.INFO_LOG_LEVEL), AlterConfigOp.OpType.SET), // valid
+      new AlterConfigOp(new ConfigEntry("kafka.network.SocketServer", LogLevelConfig.ERROR_LOG_LEVEL), AlterConfigOp.OpType.SUBTRACT) // subtract is not supported
+    ).asJavaCollection
+    assertTrue(intercept[ExecutionException](alterBrokerLoggers(subtractLogLevelEntries)).getCause.isInstanceOf[InvalidRequestException])
+    assertLogLevelDidNotChange()
+
+    val invalidLogLevelLogLevelEntries = Seq(
+      new AlterConfigOp(new ConfigEntry("kafka.server.KafkaRequestHandler", LogLevelConfig.INFO_LOG_LEVEL), AlterConfigOp.OpType.SET), // valid
+      new AlterConfigOp(new ConfigEntry("kafka.network.SocketServer", "OFF"), AlterConfigOp.OpType.SET) // OFF is not a valid log level
+    ).asJavaCollection
+    assertTrue(intercept[ExecutionException](alterBrokerLoggers(invalidLogLevelLogLevelEntries)).getCause.isInstanceOf[InvalidRequestException])
+    assertLogLevelDidNotChange()
+
+    val invalidLoggerNameLogLevelEntries = Seq(
+      new AlterConfigOp(new ConfigEntry("kafka.server.KafkaRequestHandler", LogLevelConfig.INFO_LOG_LEVEL), AlterConfigOp.OpType.SET), // valid
+      new AlterConfigOp(new ConfigEntry("Some Other LogCleaner", LogLevelConfig.ERROR_LOG_LEVEL), AlterConfigOp.OpType.SET) // invalid logger name is not supported
+    ).asJavaCollection
+    assertTrue(intercept[ExecutionException](alterBrokerLoggers(invalidLoggerNameLogLevelEntries)).getCause.isInstanceOf[InvalidRequestException])
+    assertLogLevelDidNotChange()
+  }
+
+  /**
+    * The AlterConfigs API is deprecated and should not support altering log levels
+    */
+  @Test
+  @Ignore // To be re-enabled once KAFKA-8779 is resolved
+  def testAlterConfigsForLog4jLogLevelsDoesNotWork(): Unit = {
+    client = AdminClient.create(createConfig())
+
+    val alterLogLevelsEntries = Seq(
+      new ConfigEntry("kafka.controller.KafkaController", LogLevelConfig.INFO_LOG_LEVEL)
+    ).asJavaCollection
+    val alterResult = client.alterConfigs(Map(brokerLoggerConfigResource -> new Config(alterLogLevelsEntries)).asJava)
+    assertTrue(intercept[ExecutionException](alterResult.values.get(brokerLoggerConfigResource).get).getCause.isInstanceOf[InvalidRequestException])
+  }
+
+  def alterBrokerLoggers(entries: util.Collection[AlterConfigOp], validateOnly: Boolean = false): Unit = {
+    if (!validateOnly) {
+      for (entry <- entries.asScala)
+        changedBrokerLoggers.add(entry.configEntry().name())
+    }
+
+    client.incrementalAlterConfigs(Map(brokerLoggerConfigResource -> entries).asJava, new AlterConfigsOptions().validateOnly(validateOnly))
+      .values.get(brokerLoggerConfigResource).get()
+  }
+
+  def describeBrokerLoggers(): Config =
+    client.describeConfigs(Collections.singletonList(brokerLoggerConfigResource)).values.get(brokerLoggerConfigResource).get()
+
+  /**
+    * Due to the fact that log4j is not re-initialized across tests, changing a logger's log level persists across test classes.
+    * We need to clean up the changes done while testing.
+    */
+  def teardownBrokerLoggers(): Unit = {
+    if (changedBrokerLoggers.nonEmpty) {
+      val validLoggers = describeBrokerLoggers().entries().asScala.filterNot(_.name().equals(Log4jController.ROOT_LOGGER)).map(_.name).toSet
+      val unsetBrokerLoggersEntries = changedBrokerLoggers
+        .intersect(validLoggers)
+        .map { logger => new AlterConfigOp(new ConfigEntry(logger, ""), AlterConfigOp.OpType.DELETE) }
+        .asJavaCollection
+
+      // ensure that we first reset the root logger to an arbitrary log level. Note that we cannot reset it to its original value
+      alterBrokerLoggers(List(
+        new AlterConfigOp(new ConfigEntry(Log4jController.ROOT_LOGGER, LogLevelConfig.FATAL_LOG_LEVEL), AlterConfigOp.OpType.SET)
+      ).asJavaCollection)
+      alterBrokerLoggers(unsetBrokerLoggersEntries)
+
+      changedBrokerLoggers.clear()
+    }
+  }
 }
 
 object AdminClientIntegrationTest {
 
-  def checkValidAlterConfigs(client: AdminClient, topicResource1: ConfigResource, topicResource2: ConfigResource): Unit = {
+  def checkValidAlterConfigs(client: Admin, topicResource1: ConfigResource, topicResource2: ConfigResource): Unit = {
     // Alter topics
     var topicConfigEntries1 = Seq(
       new ConfigEntry(LogConfig.FlushMsProp, "1000")
@@ -1885,7 +2117,7 @@ object AdminClientIntegrationTest {
     assertEquals("0.9", configs.get(topicResource2).get(LogConfig.MinCleanableDirtyRatioProp).value)
   }
 
-  def checkInvalidAlterConfigs(zkClient: KafkaZkClient, servers: Seq[KafkaServer], client: AdminClient): Unit = {
+  def checkInvalidAlterConfigs(zkClient: KafkaZkClient, servers: Seq[KafkaServer], client: Admin): Unit = {
     // Create topics
     val topic1 = "invalid-alter-configs-topic-1"
     val topicResource1 = new ConfigResource(ConfigResource.Type.TOPIC, topic1)
@@ -1958,36 +2190,5 @@ object AdminClientIntegrationTest {
     assertEquals("snappy", configs.get(topicResource2).get(LogConfig.CompressionTypeProp).value)
 
     assertEquals(Defaults.CompressionType.toString, configs.get(brokerResource).get(KafkaConfig.CompressionTypeProp).value)
-  }
-
-  def currentLeader(client: AdminClient, topicPartition: TopicPartition): Option[Int] = {
-    Option(
-      client
-        .describeTopics(asList(topicPartition.topic))
-        .all
-        .get
-        .get(topicPartition.topic)
-        .partitions
-        .get(topicPartition.partition)
-        .leader
-    ).map(_.id)
-  }
-
-  def waitForLeaderToBecome(client: AdminClient, topicPartition: TopicPartition, leader: Option[Int]): Unit = {
-    TestUtils.waitUntilTrue(
-      () => currentLeader(client, topicPartition) == leader,
-      s"Expected leader to become $leader", 10000
-    )
-  }
-
-  def waitForBrokerOutOfIsr(client: AdminClient, partitions: Set[TopicPartition], brokerId: Int): Unit = {
-    TestUtils.waitUntilTrue(
-      () => {
-        val description = client.describeTopics(partitions.map(_.topic).asJava).all.get.asScala
-        val isr = description.values.flatMap(_.partitions.asScala.flatMap(_.isr.asScala))
-        isr.forall(_.id != brokerId)
-      },
-      s"Expect broker $brokerId to no longer be in any ISR for $partitions"
-    )
   }
 }

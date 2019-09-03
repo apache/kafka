@@ -31,6 +31,7 @@ import org.apache.kafka.clients.consumer.OffsetOutOfRangeException;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
@@ -42,14 +43,15 @@ import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
+import org.apache.kafka.common.metrics.Gauge;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Avg;
-import org.apache.kafka.common.metrics.stats.Count;
 import org.apache.kafka.common.metrics.stats.Max;
 import org.apache.kafka.common.metrics.stats.Meter;
 import org.apache.kafka.common.metrics.stats.Min;
 import org.apache.kafka.common.metrics.stats.Value;
+import org.apache.kafka.common.metrics.stats.WindowedCount;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.BufferSupplier;
@@ -79,6 +81,7 @@ import org.slf4j.helpers.MessageFormatter;
 
 import java.io.Closeable;
 import java.nio.ByteBuffer;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -91,6 +94,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.PriorityQueue;
+import java.util.Queue;
 import java.util.Set;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -138,7 +142,7 @@ public class Fetcher<K, V> implements Closeable {
     private final ConsumerMetadata metadata;
     private final FetchManagerMetrics sensors;
     private final SubscriptionState subscriptions;
-    private final ConcurrentLinkedQueue<CompletedFetch> completedFetches;
+    private final ConcurrentLinkedQueue<PartitionRecords> completedFetches;
     private final BufferSupplier decompressionBufferSupplier = BufferSupplier.create();
     private final Deserializer<K> keyDeserializer;
     private final Deserializer<V> valueDeserializer;
@@ -214,11 +218,20 @@ public class Fetcher<K, V> implements Closeable {
     }
 
     /**
-     * Return whether we have any completed fetches pending return to the user. This method is thread-safe.
+     * Return whether we have any completed fetches pending return to the user. This method is thread-safe. Has
+     * visibility for testing.
      * @return true if there are completed fetches, false otherwise
      */
-    public boolean hasCompletedFetches() {
+    protected boolean hasCompletedFetches() {
         return !completedFetches.isEmpty();
+    }
+
+    /**
+     * Return whether we have any completed fetches that are fetchable. This method is thread-safe.
+     * @return true if there are completed fetches that can be returned, false otherwise
+     */
+    public boolean hasAvailableFetches() {
+        return completedFetches.stream().anyMatch(fetch -> subscriptions.isFetchable(fetch.partition));
     }
 
     /**
@@ -289,8 +302,11 @@ public class Fetcher<K, V> implements Closeable {
 
                                             log.debug("Fetch {} at offset {} for partition {} returned fetch data {}",
                                                     isolationLevel, fetchOffset, partition, fetchData);
-                                            completedFetches.add(new CompletedFetch(partition, fetchOffset, fetchData, metricAggregator,
-                                                    resp.requestHeader().apiVersion()));
+
+                                            CompletedFetch completedFetch = new CompletedFetch(partition, fetchOffset,
+                                                    fetchData, metricAggregator, resp.requestHeader().apiVersion());
+
+                                            completedFetches.add(parseCompletedFetch(completedFetch));
                                         }
                                     }
 
@@ -575,33 +591,45 @@ public class Fetcher<K, V> implements Closeable {
      */
     public Map<TopicPartition, List<ConsumerRecord<K, V>>> fetchedRecords() {
         Map<TopicPartition, List<ConsumerRecord<K, V>>> fetched = new HashMap<>();
+        Queue<PartitionRecords> pausedCompletedFetches = new ArrayDeque<>();
         int recordsRemaining = maxPollRecords;
 
         try {
             while (recordsRemaining > 0) {
                 if (nextInLineRecords == null || nextInLineRecords.isFetched) {
-                    CompletedFetch completedFetch = completedFetches.peek();
-                    if (completedFetch == null) break;
+                    PartitionRecords records = completedFetches.peek();
+                    if (records == null) break;
 
-                    try {
-                        nextInLineRecords = parseCompletedFetch(completedFetch);
-                    } catch (Exception e) {
-                        // Remove a completedFetch upon a parse with exception if (1) it contains no records, and
-                        // (2) there are no fetched records with actual content preceding this exception.
-                        // The first condition ensures that the completedFetches is not stuck with the same completedFetch
-                        // in cases such as the TopicAuthorizationException, and the second condition ensures that no
-                        // potential data loss due to an exception in a following record.
-                        FetchResponse.PartitionData partition = completedFetch.partitionData;
-                        if (fetched.isEmpty() && (partition.records == null || partition.records.sizeInBytes() == 0)) {
-                            completedFetches.poll();
+                    if (records.notInitialized()) {
+                        try {
+                            nextInLineRecords = initializePartitionRecords(records);
+                        } catch (Exception e) {
+                            // Remove a completedFetch upon a parse with exception if (1) it contains no records, and
+                            // (2) there are no fetched records with actual content preceding this exception.
+                            // The first condition ensures that the completedFetches is not stuck with the same completedFetch
+                            // in cases such as the TopicAuthorizationException, and the second condition ensures that no
+                            // potential data loss due to an exception in a following record.
+                            FetchResponse.PartitionData partition = records.completedFetch.partitionData;
+                            if (fetched.isEmpty() && (partition.records == null || partition.records.sizeInBytes() == 0)) {
+                                completedFetches.poll();
+                            }
+                            throw e;
                         }
-                        throw e;
+                    } else {
+                        nextInLineRecords = records;
                     }
                     completedFetches.poll();
+                } else if (subscriptions.isPaused(nextInLineRecords.partition)) {
+                    // when the partition is paused we add the records back to the completedFetches queue instead of draining
+                    // them so that they can be returned on a subsequent poll if the partition is resumed at that time
+                    log.debug("Skipping fetching records for assigned partition {} because it is paused", nextInLineRecords.partition);
+                    pausedCompletedFetches.add(nextInLineRecords);
+                    nextInLineRecords = null;
                 } else {
                     List<ConsumerRecord<K, V>> records = fetchRecords(nextInLineRecords, recordsRemaining);
-                    TopicPartition partition = nextInLineRecords.partition;
+
                     if (!records.isEmpty()) {
+                        TopicPartition partition = nextInLineRecords.partition;
                         List<ConsumerRecord<K, V>> currentRecords = fetched.get(partition);
                         if (currentRecords == null) {
                             fetched.put(partition, records);
@@ -621,7 +649,12 @@ public class Fetcher<K, V> implements Closeable {
         } catch (KafkaException e) {
             if (fetched.isEmpty())
                 throw e;
+        } finally {
+            // add any polled completed fetches for paused partitions back to the completed fetches queue to be
+            // re-evaluated in the next poll
+            completedFetches.addAll(pausedCompletedFetches);
         }
+
         return fetched;
     }
 
@@ -668,7 +701,9 @@ public class Fetcher<K, V> implements Closeable {
             }
         }
 
+        log.trace("Draining fetched records for partition {}", partitionRecords.partition);
         partitionRecords.drain();
+
         return emptyList();
     }
 
@@ -1023,7 +1058,7 @@ public class Fetcher<K, V> implements Closeable {
         if (nextInLineRecords != null && !nextInLineRecords.isFetched) {
             exclude.add(nextInLineRecords.partition);
         }
-        for (CompletedFetch completedFetch : completedFetches) {
+        for (PartitionRecords completedFetch : completedFetches) {
             exclude.add(completedFetch.partition);
         }
         return subscriptions.fetchablePartitions(tp -> !exclude.contains(tp));
@@ -1123,9 +1158,21 @@ public class Fetcher<K, V> implements Closeable {
     }
 
     /**
-     * The callback for fetch completion
+     * Parse a PartitionRecords object from a CompletedFetch
      */
     private PartitionRecords parseCompletedFetch(CompletedFetch completedFetch) {
+        TopicPartition tp = completedFetch.partition;
+        FetchResponse.PartitionData<Records> partition = completedFetch.partitionData;
+
+        Iterator<? extends RecordBatch> batches = partition.records.batches().iterator();
+        return new PartitionRecords(tp, completedFetch, batches);
+    }
+
+    /**
+     * Initialize a PartitionRecords object.
+     */
+    private PartitionRecords initializePartitionRecords(PartitionRecords partitionRecordsToInitialize) {
+        CompletedFetch completedFetch = partitionRecordsToInitialize.completedFetch;
         TopicPartition tp = completedFetch.partition;
         FetchResponse.PartitionData<Records> partition = completedFetch.partitionData;
         long fetchOffset = completedFetch.fetchedOffset;
@@ -1133,10 +1180,9 @@ public class Fetcher<K, V> implements Closeable {
         Errors error = partition.error;
 
         try {
-            if (!subscriptions.isFetchable(tp)) {
-                // this can happen when a rebalance happened or a partition consumption paused
-                // while fetch is still in-flight
-                log.debug("Ignoring fetched records for partition {} since it is no longer fetchable", tp);
+            if (!subscriptions.hasValidPosition(tp)) {
+                // this can happen when a rebalance happened while fetch is still in-flight
+                log.debug("Ignoring fetched records for partition {} since it no longer has valid position", tp);
             } else if (error == Errors.NONE) {
                 // we are interested in this fetch only if the beginning offset matches the
                 // current consumed position
@@ -1150,7 +1196,7 @@ public class Fetcher<K, V> implements Closeable {
                 log.trace("Preparing to read {} bytes of data for partition {} with offset {}",
                         partition.records.sizeInBytes(), tp, position);
                 Iterator<? extends RecordBatch> batches = partition.records.batches().iterator();
-                partitionRecords = new PartitionRecords(tp, completedFetch, batches);
+                partitionRecords = partitionRecordsToInitialize;
 
                 if (!batches.hasNext() && partition.records.sizeInBytes() > 0) {
                     if (completedFetch.responseVersion < 3) {
@@ -1194,6 +1240,8 @@ public class Fetcher<K, V> implements Closeable {
                     });
                 }
 
+
+                partitionRecordsToInitialize.initialized = true;
             } else if (error == Errors.NOT_LEADER_FOR_PARTITION ||
                        error == Errors.REPLICA_NOT_AVAILABLE ||
                        error == Errors.KAFKA_STORAGE_ERROR ||
@@ -1284,13 +1332,16 @@ public class Fetcher<K, V> implements Closeable {
      * @param assignedPartitions  newly assigned {@link TopicPartition}
      */
     public void clearBufferedDataForUnassignedPartitions(Collection<TopicPartition> assignedPartitions) {
-        Iterator<CompletedFetch> itr = completedFetches.iterator();
-        while (itr.hasNext()) {
-            TopicPartition tp = itr.next().partition;
+        Iterator<PartitionRecords> completedFetchesItr = completedFetches.iterator();
+        while (completedFetchesItr.hasNext()) {
+            PartitionRecords records = completedFetchesItr.next();
+            TopicPartition tp = records.partition;
             if (!assignedPartitions.contains(tp)) {
-                itr.remove();
+                records.drain();
+                completedFetchesItr.remove();
             }
         }
+
         if (nextInLineRecords != null && !assignedPartitions.contains(nextInLineRecords.partition)) {
             nextInLineRecords.drain();
             nextInLineRecords = null;
@@ -1343,6 +1394,7 @@ public class Fetcher<K, V> implements Closeable {
         private boolean isFetched = false;
         private Exception cachedRecordException = null;
         private boolean corruptLastRecord = false;
+        private boolean initialized = false;
 
         private PartitionRecords(TopicPartition partition,
                                  CompletedFetch completedFetch,
@@ -1544,6 +1596,10 @@ public class Fetcher<K, V> implements Closeable {
             Record firstRecord = batchIterator.next();
             return ControlRecordType.ABORT == ControlRecordType.parse(firstRecord.key());
         }
+
+        private boolean notInitialized() {
+            return !this.initialized;
+        }
     }
 
     private static class CompletedFetch {
@@ -1655,7 +1711,7 @@ public class Fetcher<K, V> implements Closeable {
             this.fetchLatency = metrics.sensor("fetch-latency");
             this.fetchLatency.add(metrics.metricInstance(metricsRegistry.fetchLatencyAvg), new Avg());
             this.fetchLatency.add(metrics.metricInstance(metricsRegistry.fetchLatencyMax), new Max());
-            this.fetchLatency.add(new Meter(new Count(), metrics.metricInstance(metricsRegistry.fetchRequestRate),
+            this.fetchLatency.add(new Meter(new WindowedCount(), metrics.metricInstance(metricsRegistry.fetchRequestRate),
                     metrics.metricInstance(metricsRegistry.fetchRequestTotal)));
 
             this.recordsFetchLag = metrics.sensor("records-lag");
@@ -1706,8 +1762,20 @@ public class Fetcher<K, V> implements Closeable {
                     if (!newAssignedPartitions.contains(tp)) {
                         metrics.removeSensor(partitionLagMetricName(tp));
                         metrics.removeSensor(partitionLeadMetricName(tp));
+                        metrics.removeMetric(partitionPreferredReadReplicaMetricName(tp));
                     }
                 }
+
+                for (TopicPartition tp : newAssignedPartitions) {
+                    if (!this.assignedPartitions.contains(tp)) {
+                        MetricName metricName = partitionPreferredReadReplicaMetricName(tp);
+                        if (metrics.metric(metricName) == null) {
+                            metrics.addMetric(metricName, (Gauge<Integer>) (config, now) ->
+                                subscription.preferredReadReplica(tp, 0L).orElse(-1));
+                        }
+                    }
+                }
+
                 this.assignedPartitions = newAssignedPartitions;
                 this.assignmentId = newAssignmentId;
             }
@@ -1719,9 +1787,7 @@ public class Fetcher<K, V> implements Closeable {
             String name = partitionLeadMetricName(tp);
             Sensor recordsLead = this.metrics.getSensor(name);
             if (recordsLead == null) {
-                Map<String, String> metricTags = new HashMap<>(2);
-                metricTags.put("topic", tp.topic().replace('.', '_'));
-                metricTags.put("partition", String.valueOf(tp.partition()));
+                Map<String, String> metricTags = topicPartitionTags(tp);
 
                 recordsLead = this.metrics.sensor(name);
 
@@ -1738,10 +1804,7 @@ public class Fetcher<K, V> implements Closeable {
             String name = partitionLagMetricName(tp);
             Sensor recordsLag = this.metrics.getSensor(name);
             if (recordsLag == null) {
-                Map<String, String> metricTags = new HashMap<>(2);
-                metricTags.put("topic", tp.topic().replace('.', '_'));
-                metricTags.put("partition", String.valueOf(tp.partition()));
-
+                Map<String, String> metricTags = topicPartitionTags(tp);
                 recordsLag = this.metrics.sensor(name);
 
                 recordsLag.add(this.metrics.metricInstance(metricsRegistry.partitionRecordsLag, metricTags), new Value());
@@ -1759,6 +1822,17 @@ public class Fetcher<K, V> implements Closeable {
             return tp + ".records-lead";
         }
 
+        private MetricName partitionPreferredReadReplicaMetricName(TopicPartition tp) {
+            Map<String, String> metricTags = topicPartitionTags(tp);
+            return this.metrics.metricInstance(metricsRegistry.partitionPreferredReadReplica, metricTags);
+        }
+
+        private Map<String, String> topicPartitionTags(TopicPartition tp) {
+            Map<String, String> metricTags = new HashMap<>(2);
+            metricTags.put("topic", tp.topic().replace('.', '_'));
+            metricTags.put("partition", String.valueOf(tp.partition()));
+            return metricTags;
+        }
     }
 
     @Override

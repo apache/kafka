@@ -79,11 +79,6 @@ public class DelegatingPeekingKeyValueIterator<K, V> implements KeyValueIterator
     }
 
     @Override
-    public void remove() {
-        throw new UnsupportedOperationException("remove() is not supported in " + getClass().getName());
-    }
-
-    @Override
     public KeyValue<K, V> peekNext() {
         if (!hasNext()) {
             throw new NoSuchElementException();

@@ -20,7 +20,7 @@ import java.io.File
 import java.util.Properties
 import java.util.concurrent.atomic.AtomicBoolean
 
-import kafka.cluster.{Partition, Replica}
+import kafka.cluster.Partition
 import kafka.log.{Log, LogManager}
 import kafka.utils._
 import org.apache.kafka.common.TopicPartition
@@ -30,6 +30,7 @@ import org.easymock.EasyMock
 import org.junit.Assert._
 import org.junit.{After, Before, Test}
 
+import scala.collection.Seq
 import scala.collection.mutable.{HashMap, Map}
 
 class IsrExpirationTest {
@@ -51,7 +52,7 @@ class IsrExpirationTest {
   var replicaManager: ReplicaManager = null
 
   @Before
-  def setUp() {
+  def setUp(): Unit = {
     val logManager: LogManager = EasyMock.createMock(classOf[LogManager])
     EasyMock.expect(logManager.liveLogDirs).andReturn(Array.empty[File]).anyTimes()
     EasyMock.replay(logManager)
@@ -62,7 +63,7 @@ class IsrExpirationTest {
   }
 
   @After
-  def tearDown() {
+  def tearDown(): Unit = {
     replicaManager.shutdown(false)
     metrics.close()
   }
@@ -71,12 +72,12 @@ class IsrExpirationTest {
    * Test the case where a follower is caught up but stops making requests to the leader. Once beyond the configured time limit, it should fall out of ISR
    */
   @Test
-  def testIsrExpirationForStuckFollowers() {
+  def testIsrExpirationForStuckFollowers(): Unit = {
     val log = logMock
 
     // create one partition and all replicas
     val partition0 = getPartitionWithAllReplicasInIsr(topic, 0, time, configs.head, log)
-    assertEquals("All replicas should be in ISR", configs.map(_.brokerId).toSet, partition0.inSyncReplicas)
+    assertEquals("All replicas should be in ISR", configs.map(_.brokerId).toSet, partition0.inSyncReplicaIds)
 
     // let the follower catch up to the Leader logEndOffset - 1
     for (replica <- partition0.remoteReplicas)
@@ -101,12 +102,12 @@ class IsrExpirationTest {
    * Test the case where a follower never makes a fetch request. It should fall out of ISR because it will be declared stuck
    */
   @Test
-  def testIsrExpirationIfNoFetchRequestMade() {
+  def testIsrExpirationIfNoFetchRequestMade(): Unit = {
     val log = logMock
 
     // create one partition and all replicas
     val partition0 = getPartitionWithAllReplicasInIsr(topic, 0, time, configs.head, log)
-    assertEquals("All replicas should be in ISR", configs.map(_.brokerId).toSet, partition0.inSyncReplicas)
+    assertEquals("All replicas should be in ISR", configs.map(_.brokerId).toSet, partition0.inSyncReplicaIds)
 
     // Let enough time pass for the replica to be considered stuck
     time.sleep(150)
@@ -121,12 +122,12 @@ class IsrExpirationTest {
    * However, any time it makes a request to the LogEndOffset it should be back in the ISR
    */
   @Test
-  def testIsrExpirationForSlowFollowers() {
+  def testIsrExpirationForSlowFollowers(): Unit = {
     // create leader replica
     val log = logMock
     // add one partition
     val partition0 = getPartitionWithAllReplicasInIsr(topic, 0, time, configs.head, log)
-    assertEquals("All replicas should be in ISR", configs.map(_.brokerId).toSet, partition0.inSyncReplicas)
+    assertEquals("All replicas should be in ISR", configs.map(_.brokerId).toSet, partition0.inSyncReplicaIds)
     // Make the remote replica not read to the end of log. It should be not be out of sync for at least 100 ms
     for (replica <- partition0.remoteReplicas)
       replica.updateFetchState(
@@ -176,12 +177,12 @@ class IsrExpirationTest {
    * Test the case where a follower has already caught up with same log end offset with the leader. This follower should not be considered as out-of-sync
    */
   @Test
-  def testIsrExpirationForCaughtUpFollowers() {
+  def testIsrExpirationForCaughtUpFollowers(): Unit = {
     val log = logMock
 
     // create one partition and all replicas
     val partition0 = getPartitionWithAllReplicasInIsr(topic, 0, time, configs.head, log)
-    assertEquals("All replicas should be in ISR", configs.map(_.brokerId).toSet, partition0.inSyncReplicas)
+    assertEquals("All replicas should be in ISR", configs.map(_.brokerId).toSet, partition0.inSyncReplicaIds)
 
     // let the follower catch up to the Leader logEndOffset
     for (replica <- partition0.remoteReplicas)
@@ -210,10 +211,11 @@ class IsrExpirationTest {
     val partition = replicaManager.createPartition(tp)
     partition.setLog(localLog, isFutureLog = false)
 
-    val allReplicas = getFollowerReplicas(partition, leaderId, time)
-    allReplicas.foreach(r => partition.addReplicaIfNotExists(r))
-    // set in sync replicas for this partition to all the assigned replicas
-    partition.inSyncReplicas = allReplicas.map(_.brokerId).toSet + leaderId
+    partition.updateAssignmentAndIsr(
+      assignment = configs.map(_.brokerId),
+      isr = configs.map(_.brokerId).toSet
+    )
+
     // set lastCaughtUpTime to current time
     for (replica <- partition.remoteReplicas)
       replica.updateFetchState(
@@ -234,11 +236,5 @@ class IsrExpirationTest {
     EasyMock.expect(log.logEndOffset).andReturn(leaderLogEndOffset).anyTimes()
     EasyMock.replay(log)
     log
-  }
-
-  private def getFollowerReplicas(partition: Partition, leaderId: Int, time: Time): Seq[Replica] = {
-    configs.filter(_.brokerId != leaderId).map { config =>
-      new Replica(config.brokerId, partition.topicPartition)
-    }
   }
 }

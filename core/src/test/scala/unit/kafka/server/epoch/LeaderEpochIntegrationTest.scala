@@ -52,7 +52,7 @@ class LeaderEpochIntegrationTest extends ZooKeeperTestHarness with Logging {
   var producer: KafkaProducer[Array[Byte], Array[Byte]] = null
 
   @After
-  override def tearDown() {
+  override def tearDown(): Unit = {
     if (producer != null)
       producer.close()
     TestUtils.shutdownServers(brokers)
@@ -60,7 +60,7 @@ class LeaderEpochIntegrationTest extends ZooKeeperTestHarness with Logging {
   }
 
   @Test
-  def shouldAddCurrentLeaderEpochToMessagesAsTheyAreWrittenToLeader() {
+  def shouldAddCurrentLeaderEpochToMessagesAsTheyAreWrittenToLeader(): Unit = {
     brokers ++= (0 to 1).map { id => createServer(fromProps(createBrokerConfig(id, zkConnect))) }
 
     // Given two topics with replication of a single partition
@@ -245,10 +245,10 @@ class LeaderEpochIntegrationTest extends ZooKeeperTestHarness with Logging {
       val leo = broker.getLogManager().getLog(tp).get.logEndOffset
       result = result && leo > 0 && brokers.forall { broker =>
         broker.getLogManager().getLog(tp).get.logSegments.iterator.forall { segment =>
-          if (segment.read(minOffset, None, Integer.MAX_VALUE) == null) {
+          if (segment.read(minOffset, Integer.MAX_VALUE) == null) {
             false
           } else {
-            segment.read(minOffset, None, Integer.MAX_VALUE)
+            segment.read(minOffset, Integer.MAX_VALUE)
               .records.batches().iterator().asScala.forall(
               expectedLeaderEpoch == _.partitionLeaderEpoch()
             )
@@ -278,7 +278,7 @@ class LeaderEpochIntegrationTest extends ZooKeeperTestHarness with Logging {
 
     def leaderOffsetsFor(partitions: Map[TopicPartition, Int]): Map[TopicPartition, EpochEndOffset] = {
       val partitionData = partitions.mapValues(
-        new OffsetsForLeaderEpochRequest.PartitionData(Optional.empty(), _))
+        new OffsetsForLeaderEpochRequest.PartitionData(Optional.empty(), _)).toMap
 
       val request = OffsetsForLeaderEpochRequest.Builder.forFollower(
         ApiKeys.OFFSET_FOR_LEADER_EPOCH.latestVersion, partitionData.asJava, 1)

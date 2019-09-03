@@ -14,25 +14,15 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.processor.internals.metrics;
-
-import org.apache.kafka.common.metrics.MeasurableStat;
-import org.apache.kafka.common.metrics.MetricConfig;
+package org.apache.kafka.common.config;
 
 /**
- * A non-SampledStat version of Count for measuring -total metrics in streams
+ * Contains the common security config for SSL and SASL
  */
-public class CumulativeCount implements MeasurableStat {
+public class SecurityConfig {
 
-    private double count = 0.0;
+    public static final String SECURITY_PROVIDERS_CONFIG = "security.providers";
+    public static final String SECURITY_PROVIDERS_DOC = "A list of configurable creators each returning a provider " +
+            "implementing security algorithms";
 
-    @Override
-    public void record(final MetricConfig config, final double value, final long timeMs) {
-        count += 1;
-    }
-
-    @Override
-    public double measure(final MetricConfig config, final long now) {
-        return count;
-    }
 }

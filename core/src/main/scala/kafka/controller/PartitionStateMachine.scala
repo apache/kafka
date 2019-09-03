@@ -28,14 +28,13 @@ import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.ControllerMovedException
 import org.apache.zookeeper.KeeperException
 import org.apache.zookeeper.KeeperException.Code
-import scala.collection.breakOut
-import scala.collection.mutable
+import scala.collection.{Map, Seq, mutable}
 
 abstract class PartitionStateMachine(controllerContext: ControllerContext) extends Logging {
   /**
    * Invoked on successful controller election.
    */
-  def startup() {
+  def startup(): Unit = {
     info("Initializing partition state")
     initializePartitionState()
     info("Triggering online partition state changes")
@@ -46,7 +45,7 @@ abstract class PartitionStateMachine(controllerContext: ControllerContext) exten
   /**
    * Invoked on controller shutdown.
    */
-  def shutdown() {
+  def shutdown(): Unit = {
     info("Stopped partition state machine")
   }
 
@@ -80,7 +79,7 @@ abstract class PartitionStateMachine(controllerContext: ControllerContext) exten
    * Invoked on startup of the partition's state machine to set the initial state for all existing partitions in
    * zookeeper
    */
-  private def initializePartitionState() {
+  private def initializePartitionState(): Unit = {
     for (topicPartition <- controllerContext.allPartitions) {
       // check if leader and isr path exists for partition. If not, then it is in NEW state
       controllerContext.partitionLeadershipInfo.get(topicPartition) match {
@@ -165,7 +164,7 @@ class ZkPartitionStateMachine(config: KafkaConfig,
           throw e
         case e: Throwable =>
           error(s"Error while moving some partitions to $targetState state", e)
-          partitions.map(_ -> Left(e))(breakOut)
+          partitions.iterator.map(_ -> Left(e)).toMap
       }
     } else {
       Map.empty
@@ -368,7 +367,7 @@ class ZkPartitionStateMachine(config: KafkaConfig,
       zkClient.getTopicPartitionStatesRaw(partitions)
     } catch {
       case e: Exception =>
-        return (partitions.map(_ -> Left(e))(breakOut), Seq.empty)
+        return (partitions.iterator.map(_ -> Left(e)).toMap, Seq.empty)
     }
     val failedElections = mutable.Map.empty[TopicPartition, Either[Exception, LeaderAndIsr]]
     val validLeaderAndIsrs = mutable.Buffer.empty[(TopicPartition, LeaderAndIsr)]
@@ -470,7 +469,7 @@ class ZkPartitionStateMachine(config: KafkaConfig,
       }
     } else {
       val (logConfigs, failed) = zkClient.getLogConfigs(
-        partitionsWithNoLiveInSyncReplicas.map { case (partition, _) => partition.topic }(breakOut),
+        partitionsWithNoLiveInSyncReplicas.iterator.map { case (partition, _) => partition.topic }.toSet,
         config.originals()
       )
 

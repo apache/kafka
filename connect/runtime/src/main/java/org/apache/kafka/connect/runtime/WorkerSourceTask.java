@@ -24,9 +24,9 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Avg;
+import org.apache.kafka.common.metrics.stats.CumulativeSum;
 import org.apache.kafka.common.metrics.stats.Max;
 import org.apache.kafka.common.metrics.stats.Rate;
-import org.apache.kafka.common.metrics.stats.Total;
 import org.apache.kafka.common.metrics.stats.Value;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.connect.errors.ConnectException;
@@ -57,6 +57,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * WorkerTask that uses a SourceTask to ingest data into Kafka.
@@ -78,6 +79,7 @@ class WorkerSourceTask extends WorkerTask {
     private final OffsetStorageWriter offsetWriter;
     private final Time time;
     private final SourceTaskMetricsGroup sourceTaskMetricsGroup;
+    private final AtomicReference<Exception> producerSendException;
 
     private List<SourceRecord> toSend;
     private boolean lastSendFailed; // Whether the last send failed *synchronously*, i.e. never made it into the producer's RecordAccumulator
@@ -133,6 +135,7 @@ class WorkerSourceTask extends WorkerTask {
         this.flushing = false;
         this.stopRequestedLatch = new CountDownLatch(1);
         this.sourceTaskMetricsGroup = new SourceTaskMetricsGroup(id, connectMetrics);
+        this.producerSendException = new AtomicReference<>();
     }
 
     @Override
@@ -215,6 +218,8 @@ class WorkerSourceTask extends WorkerTask {
                     continue;
                 }
 
+                maybeThrowProducerSendException();
+
                 if (toSend == null) {
                     log.trace("{} Nothing to send to Kafka. Polling source for additional records", this);
                     long start = time.milliseconds();
@@ -225,7 +230,7 @@ class WorkerSourceTask extends WorkerTask {
                 }
                 if (toSend == null)
                     continue;
-                log.debug("{} About to send " + toSend.size() + " records to Kafka", this);
+                log.trace("{} About to send {} records to Kafka", this, toSend.size());
                 if (!sendRecords())
                     stopRequestedLatch.await(SEND_FAILED_BACKOFF_MS, TimeUnit.MILLISECONDS);
             }
@@ -237,6 +242,15 @@ class WorkerSourceTask extends WorkerTask {
             // and commit offsets. Worst case, task.flush() will also throw an exception causing the offset commit
             // to fail.
             commitOffsets();
+        }
+    }
+
+    private void maybeThrowProducerSendException() {
+        if (producerSendException.get() != null) {
+            throw new ConnectException(
+                "Unrecoverable exception from producer send callback",
+                producerSendException.get()
+            );
         }
     }
 
@@ -288,6 +302,7 @@ class WorkerSourceTask extends WorkerTask {
         recordBatch(toSend.size());
         final SourceRecordWriteCounter counter = new SourceRecordWriteCounter(toSend.size(), sourceTaskMetricsGroup);
         for (final SourceRecord preTransformRecord : toSend) {
+            maybeThrowProducerSendException();
 
             retryWithToleranceOperator.sourceRecord(preTransformRecord);
             final SourceRecord record = transformationChain.apply(preTransformRecord);
@@ -322,22 +337,18 @@ class WorkerSourceTask extends WorkerTask {
                             @Override
                             public void onCompletion(RecordMetadata recordMetadata, Exception e) {
                                 if (e != null) {
-                                    // Given the default settings for zero data loss, this should basically never happen --
-                                    // between "infinite" retries, indefinite blocking on full buffers, and "infinite" request
-                                    // timeouts, callbacks with exceptions should never be invoked in practice. If the
-                                    // user overrode these settings, the best we can do is notify them of the failure via
-                                    // logging.
-                                    log.error("{} failed to send record to {}: {}", WorkerSourceTask.this, topic, e);
+                                    log.error("{} failed to send record to {}:", WorkerSourceTask.this, topic, e);
                                     log.debug("{} Failed record: {}", WorkerSourceTask.this, preTransformRecord);
+                                    producerSendException.compareAndSet(null, e);
                                 } else {
+                                    recordSent(producerRecord);
+                                    counter.completeRecord();
                                     log.trace("{} Wrote record successfully: topic {} partition {} offset {}",
                                             WorkerSourceTask.this,
                                             recordMetadata.topic(), recordMetadata.partition(),
                                             recordMetadata.offset());
                                     commitTaskRecord(preTransformRecord);
                                 }
-                                recordSent(producerRecord);
-                                counter.completeRecord();
                             }
                         });
                 lastSendFailed = false;
@@ -591,11 +602,11 @@ class WorkerSourceTask extends WorkerTask {
 
             sourceRecordPoll = metricGroup.sensor("source-record-poll");
             sourceRecordPoll.add(metricGroup.metricName(registry.sourceRecordPollRate), new Rate());
-            sourceRecordPoll.add(metricGroup.metricName(registry.sourceRecordPollTotal), new Total());
+            sourceRecordPoll.add(metricGroup.metricName(registry.sourceRecordPollTotal), new CumulativeSum());
 
             sourceRecordWrite = metricGroup.sensor("source-record-write");
             sourceRecordWrite.add(metricGroup.metricName(registry.sourceRecordWriteRate), new Rate());
-            sourceRecordWrite.add(metricGroup.metricName(registry.sourceRecordWriteTotal), new Total());
+            sourceRecordWrite.add(metricGroup.metricName(registry.sourceRecordWriteTotal), new CumulativeSum());
 
             pollTime = metricGroup.sensor("poll-batch-time");
             pollTime.add(metricGroup.metricName(registry.sourceRecordPollBatchTimeMax), new Max());

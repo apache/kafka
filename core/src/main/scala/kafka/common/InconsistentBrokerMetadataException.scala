@@ -1,4 +1,4 @@
-/*
+/**
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -6,7 +6,7 @@
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -15,26 +15,13 @@
  * limitations under the License.
  */
 
-package kafka.tools
-
-import kafka.utils.Exit
-import org.apache.zookeeper.ZooKeeperMain
-
-class ZooKeeperMainWrapper(args: Array[String]) extends ZooKeeperMain(args) {
-  def runCmd(): Unit = {
-    processCmd(this.cl)
-    Exit.exit(0)
-  }
-}
+package kafka.common
 
 /**
- * ZooKeeper 3.4.6 broke being able to pass commands on command line.
- * See ZOOKEEPER-1897.  This class is a hack to restore this facility.
+ * Indicates the BrokerMetadata stored in logDirs is not consistent across logDirs.
  */
-object ZooKeeperMainWrapper {
-
-  def main(args: Array[String]): Unit = {
-    val main: ZooKeeperMainWrapper = new ZooKeeperMainWrapper(args)
-    main.runCmd()
-  }
+class InconsistentBrokerMetadataException(message: String, cause: Throwable) extends RuntimeException(message, cause) {
+  def this(message: String) = this(message, null)
+  def this(cause: Throwable) = this(null, cause)
+  def this() = this(null, null)
 }

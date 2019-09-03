@@ -26,7 +26,7 @@ import org.apache.kafka.common.errors.{InvalidTimestampException, UnsupportedCom
 import org.apache.kafka.common.record.{AbstractRecords, CompressionType, InvalidRecordException, MemoryRecords, Record, RecordBatch, RecordConversionStats, TimestampType, BufferSupplier}
 import org.apache.kafka.common.utils.Time
 
-import scala.collection.mutable
+import scala.collection.{Seq, mutable}
 import scala.collection.JavaConverters._
 
 private[kafka] object LogValidator extends Logging {
@@ -422,7 +422,7 @@ private[kafka] object LogValidator extends Logging {
       recordConversionStats = recordConversionStats)
   }
 
-  private def validateKey(record: Record, compactedTopic: Boolean) {
+  private def validateKey(record: Record, compactedTopic: Boolean): Unit = {
     if (compactedTopic && !record.hasKey)
       throw new InvalidRecordException("Compacted topic cannot accept message without key.")
   }
@@ -435,7 +435,7 @@ private[kafka] object LogValidator extends Logging {
                                 record: Record,
                                 now: Long,
                                 timestampType: TimestampType,
-                                timestampDiffMaxMs: Long) {
+                                timestampDiffMaxMs: Long): Unit = {
     if (timestampType == TimestampType.CREATE_TIME
       && record.timestamp != RecordBatch.NO_TIMESTAMP
       && math.abs(record.timestamp - now) > timestampDiffMaxMs)

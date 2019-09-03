@@ -20,6 +20,7 @@ import org.apache.kafka.common.config.ConfigChangeCallback;
 import org.apache.kafka.common.config.ConfigData;
 import org.apache.kafka.common.config.provider.ConfigProvider;
 import org.easymock.EasyMock;
+import static org.easymock.EasyMock.eq;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -34,6 +35,7 @@ import java.util.Set;
 
 import static org.apache.kafka.connect.runtime.ConnectorConfig.CONFIG_RELOAD_ACTION_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.CONFIG_RELOAD_ACTION_NONE;
+import static org.easymock.EasyMock.notNull;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 import static org.powermock.api.easymock.PowerMock.replayAll;
@@ -84,8 +86,7 @@ public class WorkerConfigTransformerTest {
     @Test
     public void testReplaceVariableWithTTLAndScheduleRestart() {
         EasyMock.expect(worker.herder()).andReturn(herder);
-        EasyMock.expect(herder.restartConnector(1L, MY_CONNECTOR, null)).andReturn(requestId);
-
+        EasyMock.expect(herder.restartConnector(eq(1L), eq(MY_CONNECTOR), notNull())).andReturn(requestId);
         replayAll();
 
         Map<String, String> result = configTransformer.transform(MY_CONNECTOR, Collections.singletonMap(MY_KEY, "${test:testPath:testKeyWithTTL}"));
@@ -95,13 +96,13 @@ public class WorkerConfigTransformerTest {
     @Test
     public void testReplaceVariableWithTTLFirstCancelThenScheduleRestart() {
         EasyMock.expect(worker.herder()).andReturn(herder);
-        EasyMock.expect(herder.restartConnector(1L, MY_CONNECTOR, null)).andReturn(requestId);
+        EasyMock.expect(herder.restartConnector(eq(1L), eq(MY_CONNECTOR), notNull())).andReturn(requestId);
 
         EasyMock.expect(worker.herder()).andReturn(herder);
         EasyMock.expectLastCall();
         requestId.cancel();
         EasyMock.expectLastCall();
-        EasyMock.expect(herder.restartConnector(10L, MY_CONNECTOR, null)).andReturn(requestId);
+        EasyMock.expect(herder.restartConnector(eq(10L), eq(MY_CONNECTOR), notNull())).andReturn(requestId);
 
         replayAll();
 

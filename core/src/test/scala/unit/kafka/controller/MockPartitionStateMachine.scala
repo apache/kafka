@@ -21,7 +21,7 @@ import kafka.common.StateChangeFailedException
 import kafka.controller.Election._
 import org.apache.kafka.common.TopicPartition
 
-import scala.collection.{breakOut, mutable}
+import scala.collection.{Seq, mutable}
 
 class MockPartitionStateMachine(controllerContext: ControllerContext,
                                 uncleanLeaderElectionEnabled: Boolean)
@@ -111,7 +111,7 @@ class MockPartitionStateMachine(controllerContext: ControllerContext,
       }
 
       partition -> value
-    }(breakOut)
+    }.toMap
 
     results ++ failedElections
   }

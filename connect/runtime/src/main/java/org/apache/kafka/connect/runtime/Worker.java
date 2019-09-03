@@ -24,8 +24,8 @@ import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.config.ConfigValue;
 import org.apache.kafka.common.config.provider.ConfigProvider;
 import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.common.metrics.stats.CumulativeSum;
 import org.apache.kafka.common.metrics.stats.Frequencies;
-import org.apache.kafka.common.metrics.stats.Total;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.connector.Connector;
@@ -545,8 +545,8 @@ public class Worker {
         producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, Utils.join(config.getList(WorkerConfig.BOOTSTRAP_SERVERS_CONFIG), ","));
         producerProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer");
         producerProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer");
-        // These settings are designed to ensure there is no data loss. They *may* be overridden via configs passed to the
-        // worker, but this may compromise the delivery guarantees of Kafka Connect.
+        // These settings will execute infinite retries on retriable exceptions. They *may* be overridden via configs passed to the worker,
+        // but this may compromise the delivery guarantees of Kafka Connect.
         producerProps.put(ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG, Integer.toString(Integer.MAX_VALUE));
         producerProps.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, Long.toString(Long.MAX_VALUE));
         producerProps.put(ProducerConfig.ACKS_CONFIG, "all");
@@ -863,13 +863,13 @@ public class Worker {
             connectorStartupResults.add(connectorStartupResultFrequencies);
 
             connectorStartupAttempts = metricGroup.sensor("connector-startup-attempts");
-            connectorStartupAttempts.add(metricGroup.metricName(registry.connectorStartupAttemptsTotal), new Total());
+            connectorStartupAttempts.add(metricGroup.metricName(registry.connectorStartupAttemptsTotal), new CumulativeSum());
 
             connectorStartupSuccesses = metricGroup.sensor("connector-startup-successes");
-            connectorStartupSuccesses.add(metricGroup.metricName(registry.connectorStartupSuccessTotal), new Total());
+            connectorStartupSuccesses.add(metricGroup.metricName(registry.connectorStartupSuccessTotal), new CumulativeSum());
 
             connectorStartupFailures = metricGroup.sensor("connector-startup-failures");
-            connectorStartupFailures.add(metricGroup.metricName(registry.connectorStartupFailureTotal), new Total());
+            connectorStartupFailures.add(metricGroup.metricName(registry.connectorStartupFailureTotal), new CumulativeSum());
 
             MetricName taskFailurePct = metricGroup.metricName(registry.taskStartupFailurePercentage);
             MetricName taskSuccessPct = metricGroup.metricName(registry.taskStartupSuccessPercentage);
@@ -878,13 +878,13 @@ public class Worker {
             taskStartupResults.add(taskStartupResultFrequencies);
 
             taskStartupAttempts = metricGroup.sensor("task-startup-attempts");
-            taskStartupAttempts.add(metricGroup.metricName(registry.taskStartupAttemptsTotal), new Total());
+            taskStartupAttempts.add(metricGroup.metricName(registry.taskStartupAttemptsTotal), new CumulativeSum());
 
             taskStartupSuccesses = metricGroup.sensor("task-startup-successes");
-            taskStartupSuccesses.add(metricGroup.metricName(registry.taskStartupSuccessTotal), new Total());
+            taskStartupSuccesses.add(metricGroup.metricName(registry.taskStartupSuccessTotal), new CumulativeSum());
 
             taskStartupFailures = metricGroup.sensor("task-startup-failures");
-            taskStartupFailures.add(metricGroup.metricName(registry.taskStartupFailureTotal), new Total());
+            taskStartupFailures.add(metricGroup.metricName(registry.taskStartupFailureTotal), new CumulativeSum());
         }
 
         void close() {

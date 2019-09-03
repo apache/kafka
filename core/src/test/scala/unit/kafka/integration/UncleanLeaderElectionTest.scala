@@ -22,6 +22,7 @@ import org.junit.{After, Before, Test}
 
 import scala.util.Random
 import scala.collection.JavaConverters._
+import scala.collection.Seq
 import org.apache.log4j.{Level, Logger}
 import java.util.Properties
 import java.util.concurrent.ExecutionException
@@ -35,7 +36,7 @@ import org.apache.kafka.common.errors.TimeoutException
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.serialization.StringDeserializer
-import org.apache.kafka.clients.admin.{AdminClient, AdminClientConfig}
+import org.apache.kafka.clients.admin.{Admin, AdminClient, AdminClientConfig}
 import org.junit.Assert._
 import org.scalatest.Assertions.intercept
 
@@ -61,7 +62,7 @@ class UncleanLeaderElectionTest extends ZooKeeperTestHarness {
   val networkProcessorLogger = Logger.getLogger(classOf[kafka.network.Processor])
 
   @Before
-  override def setUp() {
+  override def setUp(): Unit = {
     super.setUp()
 
     configProps1 = createBrokerConfig(brokerId1, zkConnect)
@@ -79,7 +80,7 @@ class UncleanLeaderElectionTest extends ZooKeeperTestHarness {
   }
 
   @After
-  override def tearDown() {
+  override def tearDown(): Unit = {
     servers.foreach(server => shutdownServer(server))
     servers.foreach(server => CoreUtils.delete(server.config.logDirs))
 
@@ -90,7 +91,7 @@ class UncleanLeaderElectionTest extends ZooKeeperTestHarness {
     super.tearDown()
   }
 
-  private def startBrokers(cluster: Seq[Properties]) {
+  private def startBrokers(cluster: Seq[Properties]): Unit = {
     for (props <- cluster) {
       val config = KafkaConfig.fromProps(props)
       val server = createServer(config)
@@ -346,7 +347,7 @@ class UncleanLeaderElectionTest extends ZooKeeperTestHarness {
     assertEquals(List("first", "third"), consumeAllMessages(topic, 2))
   }
 
-  private def createAdminClient(): AdminClient = {
+  private def createAdminClient(): Admin = {
     val config = new Properties
     val bootstrapServers = TestUtils.bootstrapServers(servers, new ListenerName("PLAINTEXT"))
     config.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers)

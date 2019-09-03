@@ -23,6 +23,7 @@ import org.apache.kafka.common.resource.PatternType.LITERAL
 import org.junit.{After, Before, Test}
 
 import scala.collection.mutable.ArrayBuffer
+import scala.collection.Seq
 
 class ZkNodeChangeNotificationListenerTest extends ZooKeeperTestHarness {
 
@@ -46,7 +47,7 @@ class ZkNodeChangeNotificationListenerTest extends ZooKeeperTestHarness {
   }
 
   @Test
-  def testProcessNotification() {
+  def testProcessNotification(): Unit = {
     val notificationMessage1 = Resource(Group, "messageA", LITERAL)
     val notificationMessage2 = Resource(Group, "messageB", LITERAL)
 
@@ -77,7 +78,7 @@ class ZkNodeChangeNotificationListenerTest extends ZooKeeperTestHarness {
   }
 
   @Test
-  def testSwallowsProcessorException() : Unit = {
+  def testSwallowsProcessorException(): Unit = {
     notificationHandler.setThrowSize(2)
     notificationListener = new ZkNodeChangeNotificationListener(zkClient, LiteralAclChangeStore.aclChangePath,
       ZkAclChangeStore.SequenceNumberPrefix, notificationHandler, changeExpirationMs)

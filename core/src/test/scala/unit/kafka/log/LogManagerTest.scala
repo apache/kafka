@@ -20,14 +20,21 @@ package kafka.log
 import java.io._
 import java.util.{Collections, Properties}
 
-import kafka.server.{FetchDataInfo, LogOffsetMetadata}
+import kafka.server.{FetchDataInfo, FetchLogEnd}
 import kafka.server.checkpoints.OffsetCheckpointFile
 import kafka.utils._
-import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.apache.kafka.common.errors.OffsetOutOfRangeException
 import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.junit.Assert._
 import org.junit.{After, Before, Test}
+import org.mockito.ArgumentMatchers.any
+import org.mockito.Mockito.{doAnswer, spy}
+import org.mockito.invocation.InvocationOnMock
+import org.mockito.stubbing.Answer
+
+import scala.collection.mutable
+import scala.util.{Failure, Try}
 
 class LogManagerTest {
 
@@ -46,14 +53,14 @@ class LogManagerTest {
   val veryLargeLogFlushInterval = 10000000L
 
   @Before
-  def setUp() {
+  def setUp(): Unit = {
     logDir = TestUtils.tempDir()
     logManager = createLogManager()
     logManager.startup()
   }
 
   @After
-  def tearDown() {
+  def tearDown(): Unit = {
     if (logManager != null)
       logManager.shutdown()
     Utils.delete(logDir)
@@ -65,7 +72,7 @@ class LogManagerTest {
    * Test that getOrCreateLog on a non-existent log creates a new log and that we can append to the new log.
    */
   @Test
-  def testCreateLog() {
+  def testCreateLog(): Unit = {
     val log = logManager.getOrCreateLog(new TopicPartition(name, 0), logConfig)
     assertEquals(1, logManager.liveLogDirs.size)
 
@@ -79,7 +86,7 @@ class LogManagerTest {
    * The LogManager is configured with one invalid log directory which should be marked as offline.
    */
   @Test
-  def testCreateLogWithInvalidLogDir() {
+  def testCreateLogWithInvalidLogDir(): Unit = {
     // Configure the log dir with the Nul character as the path, which causes dir.getCanonicalPath() to throw an
     // IOException. This simulates the scenario where the disk is not properly mounted (which is hard to achieve in
     // a unit test)
@@ -95,11 +102,52 @@ class LogManagerTest {
     log.appendAsLeader(TestUtils.singletonRecords("test".getBytes()), leaderEpoch = 0)
   }
 
+  @Test
+  def testCreateLogWithLogDirFallback(): Unit = {
+    // Configure a number of directories one level deeper in logDir,
+    // so they all get cleaned up in tearDown().
+    val dirs = (0 to 4)
+      .map(_.toString)
+      .map(logDir.toPath.resolve(_).toFile)
+
+    // Create a new LogManager with the configured directories and an overridden createLogDirectory.
+    logManager.shutdown()
+    logManager = spy(createLogManager(dirs))
+    val brokenDirs = mutable.Set[File]()
+    doAnswer(new Answer[Try[File]] {
+      override def answer(invocation: InvocationOnMock): Try[File] = {
+        // The first half of directories tried will fail, the rest goes through.
+        val logDir = invocation.getArgument[File](0)
+        if (brokenDirs.contains(logDir) || brokenDirs.size < dirs.length / 2) {
+          brokenDirs.add(logDir)
+          Failure(new Throwable("broken dir"))
+        } else {
+          invocation.callRealMethod().asInstanceOf[Try[File]]
+        }
+      }
+    }).when(logManager).createLogDirectory(any(), any())
+    logManager.startup()
+
+    // Request creating a new log.
+    // LogManager should try using all configured log directories until one succeeds.
+    logManager.getOrCreateLog(new TopicPartition(name, 0), logConfig, isNew = true)
+
+    // Verify that half the directories were considered broken,
+    assertEquals(dirs.length / 2, brokenDirs.size)
+
+    // and that exactly one log file was created,
+    val containsLogFile: File => Boolean = dir => new File(dir, name + "-0").exists()
+    assertEquals("More than one log file created", 1, dirs.count(containsLogFile))
+
+    // and that it wasn't created in one of the broken directories.
+    assertFalse(brokenDirs.exists(containsLogFile))
+  }
+
   /**
    * Test that get on a non-existent returns None and no log is created.
    */
   @Test
-  def testGetNonExistentLog() {
+  def testGetNonExistentLog(): Unit = {
     val log = logManager.getLog(new TopicPartition(name, 0))
     assertEquals("No log should be found.", None, log)
     val logFile = new File(logDir, name + "-0")
@@ -110,7 +158,7 @@ class LogManagerTest {
    * Test time-based log cleanup. First append messages, then set the time into the future and run cleanup.
    */
   @Test
-  def testCleanupExpiredSegments() {
+  def testCleanupExpiredSegments(): Unit = {
     val log = logManager.getOrCreateLog(new TopicPartition(name, 0), logConfig)
     var offset = 0L
     for(_ <- 0 until 200) {
@@ -119,8 +167,7 @@ class LogManagerTest {
       offset = info.lastOffset
     }
     assertTrue("There should be more than one segment now.", log.numberOfSegments > 1)
-    log.highWatermarkMetadata = LogOffsetMetadata(log.logEndOffset)
-    log.highWatermark = log.logEndOffset
+    log.updateHighWatermark(log.logEndOffset)
 
     log.logSegments.foreach(_.log.file.setLastModified(time.milliseconds))
 
@@ -151,7 +198,7 @@ class LogManagerTest {
    * Test size-based cleanup. Append messages, then run cleanup and check that segments are deleted.
    */
   @Test
-  def testCleanupSegmentsToMaintainSize() {
+  def testCleanupSegmentsToMaintainSize(): Unit = {
     val setSize = TestUtils.singletonRecords("test".getBytes()).sizeInBytes
     logManager.shutdown()
     val logProps = new Properties()
@@ -174,8 +221,7 @@ class LogManagerTest {
       offset = info.firstOffset.get
     }
 
-    log.highWatermarkMetadata = LogOffsetMetadata(log.logEndOffset)
-    log.highWatermark = log.logEndOffset
+    log.updateHighWatermark(log.logEndOffset)
     assertEquals("Check we have the expected number of segments.", numMessages * setSize / config.segmentSize, log.numberOfSegments)
 
     // this cleanup shouldn't find any expired segments but should delete some to reduce size
@@ -202,7 +248,7 @@ class LogManagerTest {
     * LogCleaner.CleanerThread handles all logs where compaction is enabled.
     */
   @Test
-  def testDoesntCleanLogsWithCompactDeletePolicy() {
+  def testDoesntCleanLogsWithCompactDeletePolicy(): Unit = {
     testDoesntCleanLogs(LogConfig.Compact + "," + LogConfig.Delete)
   }
 
@@ -211,11 +257,11 @@ class LogManagerTest {
     * LogCleaner.CleanerThread handles all logs where compaction is enabled.
     */
   @Test
-  def testDoesntCleanLogsWithCompactPolicy() {
+  def testDoesntCleanLogsWithCompactPolicy(): Unit = {
     testDoesntCleanLogs(LogConfig.Compact)
   }
 
-  private def testDoesntCleanLogs(policy: String) {
+  private def testDoesntCleanLogs(policy: String): Unit = {
     val logProps = new Properties()
     logProps.put(LogConfig.CleanupPolicyProp, policy)
     val log = logManager.getOrCreateLog(new TopicPartition(name, 0), LogConfig.fromProps(logConfig.originals, logProps))
@@ -239,7 +285,7 @@ class LogManagerTest {
    * Test that flush is invoked by the background scheduler thread.
    */
   @Test
-  def testTimeBasedFlush() {
+  def testTimeBasedFlush(): Unit = {
     logManager.shutdown()
     val logProps = new Properties()
     logProps.put(LogConfig.FlushMsProp, 1000: java.lang.Integer)
@@ -261,7 +307,7 @@ class LogManagerTest {
    * Test that new logs that are created are assigned to the least loaded log directory
    */
   @Test
-  def testLeastLoadedAssignment() {
+  def testLeastLoadedAssignment(): Unit = {
     // create a log manager with multiple data directories
     val dirs = Seq(TestUtils.tempDir(),
                      TestUtils.tempDir(),
@@ -282,7 +328,7 @@ class LogManagerTest {
    * Test that it is not possible to open two log managers using the same data directory
    */
   @Test
-  def testTwoLogManagersUsingSameDirFails() {
+  def testTwoLogManagersUsingSameDirFails(): Unit = {
     try {
       createLogManager()
       fail("Should not be able to create a second log manager instance with the same data directory")
@@ -295,7 +341,7 @@ class LogManagerTest {
    * Test that recovery points are correctly written out to disk
    */
   @Test
-  def testCheckpointRecoveryPoints() {
+  def testCheckpointRecoveryPoints(): Unit = {
     verifyCheckpointRecovery(Seq(new TopicPartition("test-a", 1), new TopicPartition("test-b", 1)), logManager, logDir)
   }
 
@@ -303,7 +349,7 @@ class LogManagerTest {
    * Test that recovery points directory checking works with trailing slash
    */
   @Test
-  def testRecoveryDirectoryMappingWithTrailingSlash() {
+  def testRecoveryDirectoryMappingWithTrailingSlash(): Unit = {
     logManager.shutdown()
     logManager = TestUtils.createLogManager(logDirs = Seq(new File(TestUtils.tempDir().getAbsolutePath + File.separator)))
     logManager.startup()
@@ -314,14 +360,14 @@ class LogManagerTest {
    * Test that recovery points directory checking works with relative directory
    */
   @Test
-  def testRecoveryDirectoryMappingWithRelativeDirectory() {
+  def testRecoveryDirectoryMappingWithRelativeDirectory(): Unit = {
     logManager.shutdown()
     logManager = createLogManager(Seq(new File("data", logDir.getName).getAbsoluteFile))
     logManager.startup()
     verifyCheckpointRecovery(Seq(new TopicPartition("test-a", 1)), logManager, logManager.liveLogDirs.head)
   }
 
-  private def verifyCheckpointRecovery(topicPartitions: Seq[TopicPartition], logManager: LogManager, logDir: File) {
+  private def verifyCheckpointRecovery(topicPartitions: Seq[TopicPartition], logManager: LogManager, logDir: File): Unit = {
     val logs = topicPartitions.map(logManager.getOrCreateLog(_, logConfig))
     logs.foreach { log =>
       for (_ <- 0 until 50)
@@ -347,7 +393,7 @@ class LogManagerTest {
   }
 
   @Test
-  def testFileReferencesAfterAsyncDelete() {
+  def testFileReferencesAfterAsyncDelete(): Unit = {
     val log = logManager.getOrCreateLog(new TopicPartition(name, 0), logConfig)
     val activeSegment = log.activeSegment
     val logName = activeSegment.log.file.getName
@@ -390,7 +436,7 @@ class LogManagerTest {
   }
 
   @Test
-  def testCheckpointForOnlyAffectedLogs() {
+  def testCheckpointForOnlyAffectedLogs(): Unit = {
     val tps = Seq(
       new TopicPartition("test-a", 0),
       new TopicPartition("test-a", 1),
@@ -419,7 +465,7 @@ class LogManagerTest {
   }
 
   private def readLog(log: Log, offset: Long, maxLength: Int = 1024): FetchDataInfo = {
-    log.read(offset, maxLength, maxOffset = None, minOneMessage = true, includeAbortedTxns = false)
+    log.read(offset, maxLength, isolation = FetchLogEnd, minOneMessage = true)
   }
 
 }

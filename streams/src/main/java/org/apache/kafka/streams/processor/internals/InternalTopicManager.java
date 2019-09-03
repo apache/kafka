@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import org.apache.kafka.clients.admin.AdminClient;
+import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.CreateTopicsResult;
 import org.apache.kafka.clients.admin.DescribeTopicsResult;
@@ -35,6 +35,7 @@ import org.slf4j.Logger;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
 
@@ -53,12 +54,12 @@ public class InternalTopicManager {
     private final Map<String, String> defaultTopicConfigs = new HashMap<>();
 
     private final short replicationFactor;
-    private final AdminClient adminClient;
+    private final Admin adminClient;
 
     private final int retries;
     private final long retryBackOffMs;
 
-    public InternalTopicManager(final AdminClient adminClient,
+    public InternalTopicManager(final Admin adminClient,
                                 final StreamsConfig streamsConfig) {
         this.adminClient = adminClient;
 
@@ -107,7 +108,7 @@ public class InternalTopicManager {
                 final Set<NewTopic> newTopics = new HashSet<>();
 
                 for (final String topicName : topicsNotReady) {
-                    final InternalTopicConfig internalTopicConfig = Utils.notNull(topics.get(topicName));
+                    final InternalTopicConfig internalTopicConfig = Objects.requireNonNull(topics.get(topicName));
                     final Map<String, String> topicConfig = internalTopicConfig.getProperties(defaultTopicConfigs, windowChangeLogAdditionalRetention);
 
                     log.debug("Going to create topic {} with {} partitions and config {}.",

@@ -429,7 +429,7 @@ public class EmbeddedConnectCluster {
         private int numWorkers = DEFAULT_NUM_WORKERS;
         private int numBrokers = DEFAULT_NUM_BROKERS;
         private Properties brokerProps = DEFAULT_BROKER_CONFIG;
-        private boolean maskExitProcedures = false;
+        private boolean maskExitProcedures = true;
 
         public Builder name(String name) {
             this.name = name;

@@ -1,14 +1,10 @@
-package kafka.common
-
-import org.apache.kafka.common.TopicPartition
-
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -18,13 +14,18 @@ import org.apache.kafka.common.TopicPartition
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package org.apache.kafka.common.security.ssl.mock;
 
-/**
- * Convenience case class since (topic, partition) pairs are ubiquitous.
- */
-case class TopicAndPartition(topic: String, partition: Int) {
+import java.security.Provider;
 
-  def this(topicPartition: TopicPartition) = this(topicPartition.topic, topicPartition.partition)
+public class TestPlainSaslServerProvider extends Provider {
 
-  override def toString: String = s"$topic-$partition"
+    public TestPlainSaslServerProvider() {
+        this("TestPlainSaslServerProvider", 0.1, "test plain sasl server provider");
+    }
+
+    protected TestPlainSaslServerProvider(String name, double version, String info) {
+        super(name, version, info);
+    }
+
 }

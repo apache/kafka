@@ -39,7 +39,7 @@ object DumpLogSegments {
   // visible for testing
   private[tools] val RecordIndent = "|"
 
-  def main(args: Array[String]) {
+  def main(args: Array[String]): Unit = {
     val opts = new DumpLogSegmentsOptions(args)
     CommandLineUtils.printHelpAndExitIfNeeded(opts, "This tool helps to parse a log file and dump its contents to the console, useful for debugging a seemingly corrupt log segment.")
     opts.checkArgs()
@@ -119,7 +119,7 @@ object DumpLogSegments {
                                indexSanityOnly: Boolean,
                                verifyOnly: Boolean,
                                misMatchesForIndexFilesMap: mutable.Map[String, List[(Long, Long)]],
-                               maxMessageSize: Int) {
+                               maxMessageSize: Int): Unit = {
     val startOffset = file.getName.split("\\.")(0).toLong
     val logFile = new File(file.getAbsoluteFile.getParent, file.getName.split("\\.")(0) + Log.LogFileSuffix)
     val fileRecords = FileRecords.open(logFile, false)
@@ -156,7 +156,7 @@ object DumpLogSegments {
                                    indexSanityOnly: Boolean,
                                    verifyOnly: Boolean,
                                    timeIndexDumpErrors: TimeIndexDumpErrors,
-                                   maxMessageSize: Int) {
+                                   maxMessageSize: Int): Unit = {
     val startOffset = file.getName.split("\\.")(0).toLong
     val logFile = new File(file.getAbsoluteFile.getParent, file.getName.split("\\.")(0) + Log.LogFileSuffix)
     val fileRecords = FileRecords.open(logFile, false)
@@ -218,14 +218,14 @@ object DumpLogSegments {
 
   private class DecoderMessageParser[K, V](keyDecoder: Decoder[K], valueDecoder: Decoder[V]) extends MessageParser[K, V] {
     override def parse(record: Record): (Option[K], Option[V]) = {
-      if (!record.hasValue) {
-        (None, None)
-      } else {
-        val key = if (record.hasKey)
-          Some(keyDecoder.fromBytes(Utils.readBytes(record.key)))
-        else
-          None
+      val key = if (record.hasKey)
+        Some(keyDecoder.fromBytes(Utils.readBytes(record.key)))
+      else
+        None
 
+      if (!record.hasValue) {
+        (key, None)
+      } else {
         val payload = Some(valueDecoder.fromBytes(Utils.readBytes(record.value)))
 
         (key, payload)
@@ -326,7 +326,7 @@ object DumpLogSegments {
                       nonConsecutivePairsForLogFilesMap: mutable.Map[String, List[(Long, Long)]],
                       isDeepIteration: Boolean,
                       maxMessageSize: Int,
-                      parser: MessageParser[_, _]) {
+                      parser: MessageParser[_, _]): Unit = {
     val startOffset = file.getName.split("\\.")(0).toLong
     println("Starting offset: " + startOffset)
     val fileRecords = FileRecords.open(file, false)
@@ -401,28 +401,28 @@ object DumpLogSegments {
     val outOfOrderTimestamp = mutable.Map[String, ArrayBuffer[(Long, Long)]]()
     val shallowOffsetNotFound = mutable.Map[String, ArrayBuffer[(Long, Long)]]()
 
-    def recordMismatchTimeIndex(file: File, indexTimestamp: Long, logTimestamp: Long) {
+    def recordMismatchTimeIndex(file: File, indexTimestamp: Long, logTimestamp: Long): Unit = {
       val misMatchesSeq = misMatchesForTimeIndexFilesMap.getOrElse(file.getAbsolutePath, new ArrayBuffer[(Long, Long)]())
       if (misMatchesSeq.isEmpty)
         misMatchesForTimeIndexFilesMap.put(file.getAbsolutePath, misMatchesSeq)
       misMatchesSeq += ((indexTimestamp, logTimestamp))
     }
 
-    def recordOutOfOrderIndexTimestamp(file: File, indexTimestamp: Long, prevIndexTimestamp: Long) {
+    def recordOutOfOrderIndexTimestamp(file: File, indexTimestamp: Long, prevIndexTimestamp: Long): Unit = {
       val outOfOrderSeq = outOfOrderTimestamp.getOrElse(file.getAbsolutePath, new ArrayBuffer[(Long, Long)]())
       if (outOfOrderSeq.isEmpty)
         outOfOrderTimestamp.put(file.getAbsolutePath, outOfOrderSeq)
       outOfOrderSeq += ((indexTimestamp, prevIndexTimestamp))
     }
 
-    def recordShallowOffsetNotFound(file: File, indexOffset: Long, logOffset: Long) {
+    def recordShallowOffsetNotFound(file: File, indexOffset: Long, logOffset: Long): Unit = {
       val shallowOffsetNotFoundSeq = shallowOffsetNotFound.getOrElse(file.getAbsolutePath, new ArrayBuffer[(Long, Long)]())
       if (shallowOffsetNotFoundSeq.isEmpty)
         shallowOffsetNotFound.put(file.getAbsolutePath, shallowOffsetNotFoundSeq)
       shallowOffsetNotFoundSeq += ((indexOffset, logOffset))
     }
 
-    def printErrors() {
+    def printErrors(): Unit = {
       misMatchesForTimeIndexFilesMap.foreach {
         case (fileName, listOfMismatches) => {
           System.err.println("Found timestamp mismatch in :" + fileName)

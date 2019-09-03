@@ -27,12 +27,13 @@ import java.util.Properties
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig}
 import kafka.server.KafkaConfig
 import kafka.integration.KafkaServerTestHarness
-import org.apache.kafka.clients.admin.{AdminClient, AdminClientConfig}
+import org.apache.kafka.clients.admin.{Admin, AdminClient, AdminClientConfig}
 import org.apache.kafka.common.network.{ListenerName, Mode}
 import org.apache.kafka.common.serialization.{ByteArrayDeserializer, ByteArraySerializer, Deserializer, Serializer}
 import org.junit.{After, Before}
 
 import scala.collection.mutable
+import scala.collection.Seq
 
 /**
  * A helper class for writing integration tests that involve producers, consumers, and servers
@@ -48,7 +49,7 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
 
   private val consumers = mutable.Buffer[KafkaConsumer[_, _]]()
   private val producers = mutable.Buffer[KafkaProducer[_, _]]()
-  private val adminClients = mutable.Buffer[AdminClient]()
+  private val adminClients = mutable.Buffer[Admin]()
 
   protected def interBrokerListenerName: ListenerName = listenerName
 
@@ -79,7 +80,7 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
   }
 
   @Before
-  override def setUp() {
+  override def setUp(): Unit = {
     doSetup(createOffsetsTopic = true)
   }
 
@@ -137,7 +138,7 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
     consumer
   }
 
-  def createAdminClient(configOverrides: Properties = new Properties): AdminClient = {
+  def createAdminClient(configOverrides: Properties = new Properties): Admin = {
     val props = new Properties
     props ++= adminClientConfig
     props ++= configOverrides
@@ -147,7 +148,7 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
   }
 
   @After
-  override def tearDown() {
+  override def tearDown(): Unit = {
     producers.foreach(_.close(Duration.ZERO))
     consumers.foreach(_.wakeup())
     consumers.foreach(_.close(Duration.ZERO))

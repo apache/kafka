@@ -25,7 +25,7 @@ import kafka.server.{ConfigType, KafkaConfig}
 import kafka.utils.{Exit, Logging, TestUtils}
 import kafka.zk.{ConfigEntityChangeNotificationZNode, DeleteTopicsTopicZNode}
 import org.apache.kafka.clients.CommonClientConfigs
-import org.apache.kafka.clients.admin.{ListTopicsOptions, NewTopic, AdminClient => JAdminClient}
+import org.apache.kafka.clients.admin.{Admin, AdminClient, ListTopicsOptions, NewTopic}
 import org.apache.kafka.common.config.{ConfigException, ConfigResource, TopicConfig}
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.network.ListenerName
@@ -37,6 +37,7 @@ import org.junit.{After, Before, Rule, Test}
 import org.scalatest.Assertions.{fail, intercept}
 
 import scala.collection.JavaConverters._
+import scala.collection.Seq
 import scala.concurrent.ExecutionException
 import scala.util.Random
 
@@ -58,13 +59,13 @@ class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Loggin
   private val defaultReplicationFactor = 1.toShort
 
   private var topicService: AdminClientTopicService = _
-  private var adminClient: JAdminClient = _
+  private var adminClient: Admin = _
   private var testTopicName: String = _
 
   private val _testName = new TestName
   @Rule def testName = _testName
 
-  def assertExitCode(expected: Int, method: () => Unit) {
+  def assertExitCode(expected: Int, method: () => Unit): Unit = {
     def mockExitProcedure(exitCode: Int, exitMessage: Option[String]): Nothing = {
       assertEquals(expected, exitCode)
       throw new RuntimeException
@@ -79,7 +80,7 @@ class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Loggin
     }
   }
 
-  def assertCheckArgsExitCode(expected: Int, options: TopicCommandOptions) {
+  def assertCheckArgsExitCode(expected: Int, options: TopicCommandOptions): Unit = {
     assertExitCode(expected, options.checkArgs _)
   }
 
@@ -100,11 +101,11 @@ class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Loggin
   }
 
   @Before
-  def setup() {
+  def setup(): Unit = {
     // create adminClient
     val props = new Properties()
     props.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, brokerList)
-    adminClient = JAdminClient.create(props)
+    adminClient = AdminClient.create(props)
     topicService = AdminClientTopicService(adminClient)
     testTopicName = s"${testName.getMethodName}-${Random.alphanumeric.take(10).mkString}"
   }
@@ -253,7 +254,7 @@ class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Loggin
   }
 
   @Test
-  def testCreateWithInvalidReplicationFactor() {
+  def testCreateWithInvalidReplicationFactor(): Unit = {
     intercept[IllegalArgumentException] {
       topicService.createTopic(new TopicCommandOptions(
         Array("--partitions", "2", "--replication-factor", (Short.MaxValue+1).toString, "--topic", testTopicName)))
@@ -601,7 +602,7 @@ class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Loggin
           topicService.describeTopic(new TopicCommandOptions(Array("--topic", testTopicName, "--unavailable-partitions"))))
       val rows = output.split("\n")
       assertTrue(rows(0).startsWith(s"\tTopic: $testTopicName"))
-      assertTrue(rows(0).endsWith("Leader: none\tReplicas: 0\tIsr: "))
+      assertTrue(rows(0).contains("Leader: none\tReplicas: 0\tIsr:"))
     } finally {
       restartDeadBrokers()
     }

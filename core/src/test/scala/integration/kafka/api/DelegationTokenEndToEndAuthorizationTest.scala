@@ -47,14 +47,14 @@ class DelegationTokenEndToEndAuthorizationTest extends EndToEndAuthorizationTest
 
   this.serverConfig.setProperty(KafkaConfig.DelegationTokenMasterKeyProp, "testKey")
 
-  override def configureSecurityBeforeServersStart() {
+  override def configureSecurityBeforeServersStart(): Unit = {
     super.configureSecurityBeforeServersStart()
     zkClient.makeSurePersistentPathExists(ConfigEntityChangeNotificationZNode.path)
     // Create broker admin credentials before starting brokers
     createScramCredentials(zkConnect, kafkaPrincipal, kafkaPassword)
   }
 
-  override def configureSecurityAfterServersStart() {
+  override def configureSecurityAfterServersStart(): Unit = {
     super.configureSecurityAfterServersStart()
 
     // create scram credential for user "scram-user"
@@ -68,6 +68,7 @@ class DelegationTokenEndToEndAuthorizationTest extends EndToEndAuthorizationTest
     val clientLoginContext = JaasTestUtils.tokenClientLoginModule(token.tokenInfo().tokenId(), token.hmacAsBase64String())
     producerConfig.put(SaslConfigs.SASL_JAAS_CONFIG, clientLoginContext)
     consumerConfig.put(SaslConfigs.SASL_JAAS_CONFIG, clientLoginContext)
+    adminClientConfig.put(SaslConfigs.SASL_JAAS_CONFIG, clientLoginContext)
   }
 
   private def waitForScramCredentials(clientPrincipal: String): Unit = {
@@ -78,7 +79,7 @@ class DelegationTokenEndToEndAuthorizationTest extends EndToEndAuthorizationTest
   }
 
   @Before
-  override def setUp() {
+  override def setUp(): Unit = {
     startSasl(jaasSections(kafkaServerSaslMechanisms, Option(kafkaClientSaslMechanism), Both))
     super.setUp()
   }

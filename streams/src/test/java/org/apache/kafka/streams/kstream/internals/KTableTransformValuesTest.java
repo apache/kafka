@@ -20,8 +20,9 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.StreamsBuilder;
+import org.apache.kafka.streams.KeyValueTimestamp;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.Grouped;
@@ -331,7 +332,11 @@ public class KTableTransformValuesTest {
         driver.pipeInput(recordFactory.create(INPUT_TOPIC, "B", "b", 10L));
         driver.pipeInput(recordFactory.create(INPUT_TOPIC, "D", (String) null, 15L));
 
-        assertThat(output(), hasItems("A:A->a! (ts: 5)", "B:B->b! (ts: 10)", "D:D->null! (ts: 15)"));
+
+        assertThat(output(), hasItems(new KeyValueTimestamp<>("A", "A->a!", 5),
+                new KeyValueTimestamp<>("B", "B->b!", 10),
+                new KeyValueTimestamp<>("D", "D->null!", 15)
+        ));
         assertNull("Store should not be materialized", driver.getKeyValueStore(QUERYABLE_NAME));
     }
 
@@ -355,7 +360,9 @@ public class KTableTransformValuesTest {
         driver.pipeInput(recordFactory.create(INPUT_TOPIC, "B", "b", 10L));
         driver.pipeInput(recordFactory.create(INPUT_TOPIC, "C", (String) null, 15L));
 
-        assertThat(output(), hasItems("A:A->a! (ts: 5)", "B:B->b! (ts: 10)", "C:C->null! (ts: 15)"));
+        assertThat(output(), hasItems(new KeyValueTimestamp<>("A", "A->a!", 5),
+                new KeyValueTimestamp<>("B", "B->b!", 10),
+                new KeyValueTimestamp<>("C", "C->null!", 15)));
 
         {
             final KeyValueStore<String, String> keyValueStore = driver.getKeyValueStore(QUERYABLE_NAME);
@@ -392,7 +399,11 @@ public class KTableTransformValuesTest {
         driver.pipeInput(recordFactory.create(INPUT_TOPIC, "A", "ignored", 15L));
         driver.pipeInput(recordFactory.create(INPUT_TOPIC, "A", "ignored", 10L));
 
-        assertThat(output(), hasItems("A:1 (ts: 5)", "A:0 (ts: 15)", "A:2 (ts: 15)", "A:0 (ts: 15)", "A:3 (ts: 15)"));
+        assertThat(output(), hasItems(new KeyValueTimestamp<>("A", "1", 5),
+                new KeyValueTimestamp<>("A", "0", 15),
+                new KeyValueTimestamp<>("A", "2", 15),
+                new KeyValueTimestamp<>("A", "0", 15),
+                new KeyValueTimestamp<>("A", "3", 15)));
 
         final KeyValueStore<String, Integer> keyValueStore = driver.getKeyValueStore(QUERYABLE_NAME);
         assertThat(keyValueStore.get("A"), is(3));
@@ -415,10 +426,14 @@ public class KTableTransformValuesTest {
         driver.pipeInput(recordFactory.create(INPUT_TOPIC, "A", "aa", 15L));
         driver.pipeInput(recordFactory.create(INPUT_TOPIC, "A", "aaa", 10));
 
-        assertThat(output(), hasItems("A:1 (ts: 5)", "A:0 (ts: 15)", "A:2 (ts: 15)", "A:0 (ts: 15)", "A:3 (ts: 15)"));
+        assertThat(output(), hasItems(new KeyValueTimestamp<>("A", "1", 5),
+                 new KeyValueTimestamp<>("A", "0", 15),
+                 new KeyValueTimestamp<>("A", "2", 15),
+                 new KeyValueTimestamp<>("A", "0", 15),
+                 new KeyValueTimestamp<>("A", "3", 15)));
     }
 
-    private ArrayList<String> output() {
+    private ArrayList<KeyValueTimestamp<Object, Object>> output() {
         return capture.capturedProcessors(1).get(0).processed;
     }
 

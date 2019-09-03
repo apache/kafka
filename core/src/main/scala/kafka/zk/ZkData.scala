@@ -26,7 +26,7 @@ import kafka.cluster.{Broker, EndPoint}
 import kafka.common.{NotificationHandler, ZkNodeChangeNotificationListener}
 import kafka.controller.{IsrChangeNotificationHandler, LeaderIsrAndControllerEpoch}
 import kafka.security.auth.Resource.Separator
-import kafka.security.auth.SimpleAclAuthorizer.VersionedAcls
+import kafka.security.authorizer.AclAuthorizer.VersionedAcls
 import kafka.security.auth.{Acl, Resource, ResourceType}
 import kafka.server.{ConfigType, DelegationTokenManager}
 import kafka.utils.Json
@@ -43,7 +43,7 @@ import org.apache.zookeeper.data.{ACL, Stat}
 import scala.beans.BeanProperty
 import scala.collection.JavaConverters._
 import scala.collection.mutable.ArrayBuffer
-import scala.collection.{Seq, breakOut}
+import scala.collection.{Map, Seq}
 import scala.util.{Failure, Success, Try}
 
 // This file contains objects for encoding/decoding data stored in ZooKeeper nodes (znodes).
@@ -405,9 +405,9 @@ object ReassignPartitionsZNode {
 
   def decode(bytes: Array[Byte]): Either[JsonProcessingException, collection.Map[TopicPartition, Seq[Int]]] =
     Json.parseBytesAs[PartitionAssignment](bytes).right.map { partitionAssignment =>
-      partitionAssignment.partitions.asScala.map { replicaAssignment =>
+      partitionAssignment.partitions.asScala.iterator.map { replicaAssignment =>
         new TopicPartition(replicaAssignment.topic, replicaAssignment.partition) -> replicaAssignment.replicas.asScala
-      }(breakOut)
+      }.toMap
     }
 }
 

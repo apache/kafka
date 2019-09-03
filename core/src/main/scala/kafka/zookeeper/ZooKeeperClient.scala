@@ -35,6 +35,7 @@ import org.apache.zookeeper.data.{ACL, Stat}
 import org.apache.zookeeper._
 
 import scala.collection.JavaConverters._
+import scala.collection.Seq
 import scala.collection.mutable.Set
 
 /**

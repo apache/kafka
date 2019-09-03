@@ -19,7 +19,7 @@ package kafka.server
 import java.util
 
 import kafka.utils.TestUtils
-import org.apache.kafka.clients.admin.{AdminClient, AdminClientConfig}
+import org.apache.kafka.clients.admin.{Admin, AdminClient, AdminClientConfig}
 import org.apache.kafka.common.errors.UnsupportedByAuthenticationException
 import org.junit.{After, Before, Test}
 import org.scalatest.Assertions.intercept
@@ -28,7 +28,7 @@ import scala.collection.JavaConverters._
 import scala.concurrent.ExecutionException
 
 class DelegationTokenRequestsOnPlainTextTest extends BaseRequestTest {
-  var adminClient: AdminClient = null
+  var adminClient: Admin = null
 
   override def brokerCount = 1
 

@@ -22,7 +22,7 @@ import java.util.Properties
 
 import kafka.api.KAFKA_0_11_0_IV0
 import kafka.api.{KAFKA_0_10_0_IV1, KAFKA_0_9_0}
-import kafka.server.{KafkaConfig, LogOffsetMetadata}
+import kafka.server.KafkaConfig
 import kafka.server.checkpoints.OffsetCheckpointFile
 import kafka.utils._
 import org.apache.kafka.common.TopicPartition
@@ -33,7 +33,6 @@ import org.junit.runner.RunWith
 import org.junit.runners.Parameterized
 import org.junit.runners.Parameterized.Parameters
 
-import scala.Seq
 import scala.collection._
 
 /**
@@ -49,7 +48,7 @@ class LogCleanerParameterizedIntegrationTest(compressionCodec: String) extends A
 
 
   @Test
-  def cleanerTest() {
+  def cleanerTest(): Unit = {
     val largeMessageKey = 20
     val (largeMessageValue, largeMessageSet) = createLargeSingleMessageSet(largeMessageKey, RecordBatch.CURRENT_MAGIC_VALUE)
     val maxMessageSize = largeMessageSet.sizeInBytes
@@ -102,7 +101,7 @@ class LogCleanerParameterizedIntegrationTest(compressionCodec: String) extends A
       val messages = writeDups(numKeys = numKeys, numDups = 3, log = log, codec = codec)
       val startSize = log.size
 
-      log.highWatermarkMetadata = LogOffsetMetadata(log.logEndOffset)
+      log.updateHighWatermark(log.logEndOffset)
 
       val firstDirty = log.activeSegment.baseOffset
       cleaner.startup()
@@ -227,7 +226,7 @@ class LogCleanerParameterizedIntegrationTest(compressionCodec: String) extends A
   }
 
   @Test
-  def cleanerConfigUpdateTest() {
+  def cleanerConfigUpdateTest(): Unit = {
     val largeMessageKey = 20
     val (largeMessageValue, largeMessageSet) = createLargeSingleMessageSet(largeMessageKey, RecordBatch.CURRENT_MAGIC_VALUE)
     val maxMessageSize = largeMessageSet.sizeInBytes
@@ -276,7 +275,7 @@ class LogCleanerParameterizedIntegrationTest(compressionCodec: String) extends A
     assertTrue(s"log should have been compacted: startSize=$startSize compactedSize=$compactedSize", startSize > compactedSize)
   }
 
-  private def checkLastCleaned(topic: String, partitionId: Int, firstDirty: Long) {
+  private def checkLastCleaned(topic: String, partitionId: Int, firstDirty: Long): Unit = {
     // wait until cleaning up to base_offset, note that cleaning happens only when "log dirty ratio" is higher than
     // LogConfig.MinCleanableDirtyRatioProp
     val topicPartition = new TopicPartition(topic, partitionId)
@@ -286,7 +285,7 @@ class LogCleanerParameterizedIntegrationTest(compressionCodec: String) extends A
       lastCleaned >= firstDirty)
   }
 
-  private def checkLogAfterAppendingDups(log: Log, startSize: Long, appends: Seq[(Int, String, Long)]) {
+  private def checkLogAfterAppendingDups(log: Log, startSize: Long, appends: Seq[(Int, String, Long)]): Unit = {
     val read = readFromLog(log)
     assertEquals("Contents of the map shouldn't change", toMap(appends), toMap(read))
     assertTrue(startSize > log.size)
