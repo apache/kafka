@@ -214,7 +214,7 @@ class VerifiableProperties(val props: Properties) extends Logging {
     }
   }
 
-  def verify() {
+  def verify(): Unit = {
     info("Verifying properties")
     val propNames = Collections.list(props.propertyNames).asScala.map(_.toString).sorted
     for(key <- propNames) {

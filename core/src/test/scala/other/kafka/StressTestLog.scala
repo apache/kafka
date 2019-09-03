@@ -34,7 +34,7 @@ import org.apache.kafka.common.utils.Utils
 object StressTestLog {
   val running = new AtomicBoolean(true)
 
-  def main(args: Array[String]) {
+  def main(args: Array[String]): Unit = {
     val dir = TestUtils.randomPartitionLogDir(TestUtils.tempDir())
     val time = new MockTime
     val logProperties = new Properties()
@@ -77,7 +77,7 @@ object StressTestLog {
   abstract class WorkerThread extends Thread {
     val threadInfo = "Thread: " + Thread.currentThread.getName + " Class: " + getClass.getName
 
-    override def run() {
+    override def run(): Unit = {
       try {
         while(running.get)
           work()
@@ -90,7 +90,7 @@ object StressTestLog {
       }
     }
 
-    def work()
+    def work(): Unit
     def isMakingProgress(): Boolean
   }
 
@@ -108,7 +108,7 @@ object StressTestLog {
       false
     }
 
-    def checkProgress() {
+    def checkProgress(): Unit = {
       // Check if we are making progress every 500ms
       val curTime = System.currentTimeMillis
       if ((curTime - lastProgressCheckTime) > 500) {
@@ -119,7 +119,7 @@ object StressTestLog {
   }
 
   class WriterThread(val log: Log) extends WorkerThread with LogProgress {
-    override def work() {
+    override def work(): Unit = {
       val logAppendInfo = log.appendAsLeader(TestUtils.singletonRecords(currentOffset.toString.getBytes), 0)
       require(logAppendInfo.firstOffset.forall(_ == currentOffset) && logAppendInfo.lastOffset == currentOffset)
       currentOffset += 1
@@ -129,7 +129,7 @@ object StressTestLog {
   }
 
   class ReaderThread(val log: Log) extends WorkerThread with LogProgress {
-    override def work() {
+    override def work(): Unit = {
       try {
         log.read(currentOffset,
           maxLength = 1,

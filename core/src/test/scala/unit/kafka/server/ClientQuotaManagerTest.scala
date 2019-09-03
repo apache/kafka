@@ -33,25 +33,26 @@ import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.common.utils.{MockTime, Sanitizer}
 import org.easymock.EasyMock
 import org.junit.Assert.{assertEquals, assertTrue}
-import org.junit.{Before, Test}
+import org.junit.{After, Test}
 
 class ClientQuotaManagerTest {
   private val time = new MockTime
-
+  private val metrics = new Metrics(new MetricConfig(), Collections.emptyList(), time)
   private val config = ClientQuotaManagerConfig(quotaBytesPerSecondDefault = 500)
 
   var numCallbacks: Int = 0
-  def callback (response: RequestChannel.Response) {
+
+  @After
+  def tearDown(): Unit = {
+    metrics.close()
+  }
+
+  def callback (response: RequestChannel.Response): Unit = {
     // Count how many times this callback is called for notifyThrottlingDone().
     response match {
       case _: StartThrottlingResponse =>
       case _: EndThrottlingResponse => numCallbacks += 1
     }
-  }
-
-  @Before
-  def beforeMethod() {
-    numCallbacks = 0
   }
 
   private def buildRequest[T <: AbstractRequest](builder: AbstractRequest.Builder[T],
@@ -75,13 +76,13 @@ class ClientQuotaManagerTest {
   }
 
   private def throttle(quotaManager: ClientQuotaManager, user: String, clientId: String, throttleTimeMs: Int,
-                       channelThrottlingCallback: (RequestChannel.Response) => Unit) {
+                       channelThrottlingCallback: (RequestChannel.Response) => Unit): Unit = {
     val (_, request) = buildRequest(FetchRequest.Builder.forConsumer(0, 1000, new util.HashMap[TopicPartition, PartitionData]))
     quotaManager.throttle(request, throttleTimeMs, channelThrottlingCallback)
   }
 
-  private def testQuotaParsing(config: ClientQuotaManagerConfig, client1: UserClient, client2: UserClient, randomClient: UserClient, defaultConfigClient: UserClient) {
-    val clientMetrics = new ClientQuotaManager(config, newMetrics, Produce, time, "")
+  private def testQuotaParsing(config: ClientQuotaManagerConfig, client1: UserClient, client2: UserClient, randomClient: UserClient, defaultConfigClient: UserClient): Unit = {
+    val clientMetrics = new ClientQuotaManager(config, metrics, Produce, time, "")
 
     try {
       // Case 1: Update the quota. Assert that the new quota value is returned
@@ -130,7 +131,7 @@ class ClientQuotaManagerTest {
    * Quota overrides persisted in ZooKeeper in /config/clients/<client-id>, default persisted in /config/clients/<default>
    */
   @Test
-  def testClientIdQuotaParsing() {
+  def testClientIdQuotaParsing(): Unit = {
     val client1 = UserClient("ANONYMOUS", "p1", None, Some("p1"))
     val client2 = UserClient("ANONYMOUS", "p2", None, Some("p2"))
     val randomClient = UserClient("ANONYMOUS", "random-client-id", None, None)
@@ -143,7 +144,7 @@ class ClientQuotaManagerTest {
    * Quota overrides persisted in ZooKeeper in /config/users/<user>, default persisted in /config/users/<default>
    */
   @Test
-  def testUserQuotaParsing() {
+  def testUserQuotaParsing(): Unit = {
     val client1 = UserClient("User1", "p1", Some("User1"), None)
     val client2 = UserClient("User2", "p2", Some("User2"), None)
     val randomClient = UserClient("RandomUser", "random-client-id", None, None)
@@ -157,7 +158,7 @@ class ClientQuotaManagerTest {
    * Quotas persisted in ZooKeeper in /config/users/<user>/clients/<client-id>, default in /config/users/<default>/clients/<default>
    */
   @Test
-  def testUserClientIdQuotaParsing() {
+  def testUserClientIdQuotaParsing(): Unit = {
     val client1 = UserClient("User1", "p1", Some("User1"), Some("p1"))
     val client2 = UserClient("User2", "p2", Some("User2"), Some("p2"))
     val randomClient = UserClient("RandomUser", "random-client-id", None, None)
@@ -170,7 +171,7 @@ class ClientQuotaManagerTest {
    * Tests parsing for <user> quotas when client-id default quota properties are set.
    */
   @Test
-  def testUserQuotaParsingWithDefaultClientIdQuota() {
+  def testUserQuotaParsingWithDefaultClientIdQuota(): Unit = {
     val client1 = UserClient("User1", "p1", Some("User1"), None)
     val client2 = UserClient("User2", "p2", Some("User2"), None)
     val randomClient = UserClient("RandomUser", "random-client-id", None, None)
@@ -182,7 +183,7 @@ class ClientQuotaManagerTest {
    * Tests parsing for <user, client-id> quotas when client-id default quota properties are set.
    */
   @Test
-  def testUserClientQuotaParsingIdWithDefaultClientIdQuota() {
+  def testUserClientQuotaParsingIdWithDefaultClientIdQuota(): Unit = {
     val client1 = UserClient("User1", "p1", Some("User1"), Some("p1"))
     val client2 = UserClient("User2", "p2", Some("User2"), Some("p2"))
     val randomClient = UserClient("RandomUser", "random-client-id", None, None)
@@ -191,11 +192,11 @@ class ClientQuotaManagerTest {
   }
 
   @Test
-  def testQuotaConfigPrecedence() {
+  def testQuotaConfigPrecedence(): Unit = {
     val quotaManager = new ClientQuotaManager(ClientQuotaManagerConfig(quotaBytesPerSecondDefault=Long.MaxValue),
-        newMetrics, Produce, time, "")
+      metrics, Produce, time, "")
 
-    def checkQuota(user: String, clientId: String, expectedBound: Int, value: Int, expectThrottle: Boolean) {
+    def checkQuota(user: String, clientId: String, expectedBound: Int, value: Int, expectThrottle: Boolean): Unit = {
       assertEquals(expectedBound, quotaManager.quota(user, clientId).bound, 0.0)
       val throttleTimeMs = maybeRecord(quotaManager, user, clientId, value * config.numQuotaSamples)
       if (expectThrottle)
@@ -264,8 +265,7 @@ class ClientQuotaManagerTest {
   }
 
   @Test
-  def testQuotaViolation() {
-    val metrics = newMetrics
+  def testQuotaViolation(): Unit = {
     val clientMetrics = new ClientQuotaManager(config, metrics, Produce, time, "")
     val queueSizeMetric = metrics.metrics().get(metrics.metricName("queue-size", "Produce", ""))
     try {
@@ -312,8 +312,7 @@ class ClientQuotaManagerTest {
   }
 
   @Test
-  def testRequestPercentageQuotaViolation() {
-    val metrics = newMetrics
+  def testRequestPercentageQuotaViolation(): Unit = {
     val quotaManager = new ClientRequestQuotaManager(config, metrics, time, "", None)
     quotaManager.updateQuota(Some("ANONYMOUS"), Some("test-client"), Some("test-client"), Some(Quota.upperBound(1)))
     val queueSizeMetric = metrics.metrics().get(metrics.metricName("queue-size", "Request", ""))
@@ -375,8 +374,7 @@ class ClientQuotaManagerTest {
   }
 
   @Test
-  def testExpireThrottleTimeSensor() {
-    val metrics = newMetrics
+  def testExpireThrottleTimeSensor(): Unit = {
     val clientMetrics = new ClientQuotaManager(config, metrics, Produce, time, "")
     try {
       maybeRecord(clientMetrics, "ANONYMOUS", "client1", 100)
@@ -395,8 +393,7 @@ class ClientQuotaManagerTest {
   }
 
   @Test
-  def testExpireQuotaSensors() {
-    val metrics = newMetrics
+  def testExpireQuotaSensors(): Unit = {
     val clientMetrics = new ClientQuotaManager(config, metrics, Produce, time, "")
     try {
       maybeRecord(clientMetrics, "ANONYMOUS", "client1", 100)
@@ -419,8 +416,7 @@ class ClientQuotaManagerTest {
   }
 
   @Test
-  def testClientIdNotSanitized() {
-    val metrics = newMetrics
+  def testClientIdNotSanitized(): Unit = {
     val clientMetrics = new ClientQuotaManager(config, metrics, Produce, time, "")
     val clientId = "client@#$%"
     try {
@@ -435,10 +431,6 @@ class ClientQuotaManagerTest {
     } finally {
       clientMetrics.shutdown()
     }
-  }
-
-  def newMetrics: Metrics = {
-    new Metrics(new MetricConfig(), Collections.emptyList(), time)
   }
 
   private case class UserClient(val user: String, val clientId: String, val configUser: Option[String] = None, val configClientId: Option[String] = None) {

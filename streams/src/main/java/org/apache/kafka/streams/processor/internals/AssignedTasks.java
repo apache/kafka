@@ -331,18 +331,23 @@ abstract class AssignedTasks<T extends Task> {
 
     void close(final boolean clean) {
         final AtomicReference<RuntimeException> firstException = new AtomicReference<>(null);
-        for (final T task : allTasks()) {
+
+        for (final T task: allTasks()) {
             try {
-                task.close(clean, false);
+                if (suspended.containsKey(task.id())) {
+                    task.closeSuspended(clean, false, null);
+                } else {
+                    task.close(clean, false);
+                }
             } catch (final TaskMigratedException e) {
                 log.info("Failed to close {} {} since it got migrated to another thread already. " +
-                        "Closing it as zombie and move on.", taskTypeName, task.id());
+                    "Closing it as zombie and move on.", taskTypeName, task.id());
                 firstException.compareAndSet(null, closeZombieTask(task));
             } catch (final RuntimeException t) {
                 log.error("Failed while closing {} {} due to the following error:",
-                          task.getClass().getSimpleName(),
-                          task.id(),
-                          t);
+                    task.getClass().getSimpleName(),
+                    task.id(),
+                    t);
                 if (clean) {
                     if (!closeUnclean(task)) {
                         firstException.compareAndSet(null, t);

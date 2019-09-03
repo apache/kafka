@@ -76,7 +76,7 @@ class TopicCommandTest extends ZooKeeperTestHarness with Logging with RackAwareT
   }
 
   @Test
-  def testCreateIfNotExists() {
+  def testCreateIfNotExists(): Unit = {
     // create brokers
     val brokers = List(0, 1, 2)
     TestUtils.createBrokersInZk(zkClient, brokers)
@@ -115,7 +115,7 @@ class TopicCommandTest extends ZooKeeperTestHarness with Logging with RackAwareT
   }
 
   @Test
-  def testCreateWithInvalidReplicationFactor() {
+  def testCreateWithInvalidReplicationFactor(): Unit = {
     val brokers = List(0)
     TestUtils.createBrokersInZk(zkClient, brokers)
 
@@ -260,7 +260,7 @@ class TopicCommandTest extends ZooKeeperTestHarness with Logging with RackAwareT
   }
 
   @Test
-  def testAlterIfExists() {
+  def testAlterIfExists(): Unit = {
     // create brokers
     val brokers = List(0, 1, 2)
     TestUtils.createBrokersInZk(zkClient, brokers)
@@ -277,7 +277,7 @@ class TopicCommandTest extends ZooKeeperTestHarness with Logging with RackAwareT
   }
 
   @Test
-  def testAlterConfigs() {
+  def testAlterConfigs(): Unit = {
     // create brokers
     val brokers = List(0, 1, 2)
     TestUtils.createBrokersInZk(zkClient, brokers)
@@ -301,7 +301,7 @@ class TopicCommandTest extends ZooKeeperTestHarness with Logging with RackAwareT
   }
 
   @Test
-  def testConfigPreservationAcrossPartitionAlteration() {
+  def testConfigPreservationAcrossPartitionAlteration(): Unit = {
     val numPartitionsOriginal = 1
     val cleanupKey = "cleanup.policy"
     val cleanupVal = "compact"
@@ -331,7 +331,7 @@ class TopicCommandTest extends ZooKeeperTestHarness with Logging with RackAwareT
   }
 
   @Test
-  def testTopicDeletion() {
+  def testTopicDeletion(): Unit = {
 
     val numPartitionsOriginal = 1
 
@@ -369,7 +369,7 @@ class TopicCommandTest extends ZooKeeperTestHarness with Logging with RackAwareT
   }
 
   @Test
-  def testDeleteIfExists() {
+  def testDeleteIfExists(): Unit = {
     // create brokers
     val brokers = List(0, 1, 2)
     TestUtils.createBrokersInZk(zkClient, brokers)
@@ -405,7 +405,7 @@ class TopicCommandTest extends ZooKeeperTestHarness with Logging with RackAwareT
   }
 
   @Test
-  def testDescribeIfTopicNotExists() {
+  def testDescribeIfTopicNotExists(): Unit = {
     // create brokers
     val brokers = List(0, 1, 2)
     TestUtils.createBrokersInZk(zkClient, brokers)
@@ -428,7 +428,7 @@ class TopicCommandTest extends ZooKeeperTestHarness with Logging with RackAwareT
   }
 
   @Test
-  def testCreateAlterTopicWithRackAware() {
+  def testCreateAlterTopicWithRackAware(): Unit = {
     val rackInfo = Map(0 -> "rack1", 1 -> "rack2", 2 -> "rack2", 3 -> "rack1", 4 -> "rack3", 5 -> "rack3")
     TestUtils.createBrokersInZk(toBrokerMetadata(rackInfo), zkClient)
 
@@ -485,7 +485,7 @@ class TopicCommandTest extends ZooKeeperTestHarness with Logging with RackAwareT
   }
 
   @Test
-  def testDescribeAndListTopicsMarkedForDeletion() {
+  def testDescribeAndListTopicsMarkedForDeletion(): Unit = {
     val brokers = List(0)
     val markedForDeletionDescribe = "MarkedForDeletion"
     val markedForDeletionList = "marked for deletion"
@@ -499,20 +499,20 @@ class TopicCommandTest extends ZooKeeperTestHarness with Logging with RackAwareT
     topicService.deleteTopic(new TopicCommandOptions(Array("--topic", testTopicName)))
 
     // Test describe topics
-    def describeTopicsWithConfig() {
+    def describeTopicsWithConfig(): Unit = {
       topicService.describeTopic(new TopicCommandOptions(Array("--describe")))
     }
     val outputWithConfig = TestUtils.grabConsoleOutput(describeTopicsWithConfig())
     assertTrue(outputWithConfig.contains(testTopicName) && outputWithConfig.contains(markedForDeletionDescribe))
 
-    def describeTopicsNoConfig() {
+    def describeTopicsNoConfig(): Unit = {
       topicService.describeTopic(new TopicCommandOptions(Array("--describe", "--unavailable-partitions")))
     }
     val outputNoConfig = TestUtils.grabConsoleOutput(describeTopicsNoConfig())
     assertTrue(outputNoConfig.contains(testTopicName) && outputNoConfig.contains(markedForDeletionDescribe))
 
     // Test list topics
-    def listTopics() {
+    def listTopics(): Unit = {
       topicService.listTopics(new TopicCommandOptions(Array("--list")))
     }
     val output = TestUtils.grabConsoleOutput(listTopics())
@@ -520,7 +520,7 @@ class TopicCommandTest extends ZooKeeperTestHarness with Logging with RackAwareT
   }
 
   @Test
-  def testDescribeAndListTopicsWithoutInternalTopics() {
+  def testDescribeAndListTopicsWithoutInternalTopics(): Unit = {
     val brokers = List(0)
     TestUtils.createBrokersInZk(zkClient, brokers)
 

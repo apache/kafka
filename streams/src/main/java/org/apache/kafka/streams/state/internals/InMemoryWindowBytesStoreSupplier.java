@@ -52,7 +52,7 @@ public class InMemoryWindowBytesStoreSupplier implements WindowBytesStoreSupplie
 
     @Override
     public String metricsScope() {
-        return "in-memory-window-state";
+        return "in-memory-window";
     }
 
     @Deprecated

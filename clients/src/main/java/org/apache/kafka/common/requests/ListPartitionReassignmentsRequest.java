@@ -24,9 +24,11 @@ import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import static org.apache.kafka.common.message.ListPartitionReassignmentsRequestData.ListPartitionReassignmentsTopics;
 
 public class ListPartitionReassignmentsRequest extends AbstractRequest {
 
@@ -86,14 +88,17 @@ public class ListPartitionReassignmentsRequest extends AbstractRequest {
     public AbstractResponse getErrorResponse(int throttleTimeMs, Throwable e) {
         ApiError apiError = ApiError.fromThrowable(e);
 
-        List<OngoingTopicReassignment> ongoingTopicReassignments = data.topics().stream().map(topic ->
-                new OngoingTopicReassignment()
-                        .setName(topic.name())
-                        .setPartitions(topic.partitionIndexes().stream().map(partitionIndex ->
-                                new OngoingPartitionReassignment().setPartitionIndex(partitionIndex)).collect(Collectors.toList())
-                        )
-        ).collect(Collectors.toList());
-
+        List<OngoingTopicReassignment> ongoingTopicReassignments = new ArrayList<>();
+        if (data.topics() != null) {
+            for (ListPartitionReassignmentsTopics topic : data.topics()) {
+                ongoingTopicReassignments.add(
+                        new OngoingTopicReassignment()
+                                .setName(topic.name())
+                                .setPartitions(topic.partitionIndexes().stream().map(partitionIndex ->
+                                        new OngoingPartitionReassignment().setPartitionIndex(partitionIndex)).collect(Collectors.toList()))
+                );
+            }
+        }
         ListPartitionReassignmentsResponseData responseData = new ListPartitionReassignmentsResponseData()
                 .setTopics(ongoingTopicReassignments)
                 .setErrorCode(apiError.error().code())
