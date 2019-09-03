@@ -28,50 +28,50 @@ import java.util.Map;
 
 public class InsertHeader<R extends ConnectRecord<R>> implements Transformation<R> {
 
-	public static final String OVERVIEW_DOC =
-		"Insert header as a literal value.";
+    public static final String OVERVIEW_DOC =
+        "Insert header as a literal value.";
 
-	private interface ConfigName {
-		String HEADER_CONFIG = "header";
-		String HEADER_VALUE_CONFIG = "value";
-	}
+    private interface ConfigName {
+        String HEADER_CONFIG = "header";
+        String HEADER_VALUE_CONFIG = "value";
+    }
 
-	/**
-	 * Maps known logical types to a list of Java classes that can be used to represent them.
-	 */
-	private static final Map<String, List<Class>> LOGICAL_TYPE_CLASSES = new HashMap<>();
+    /**
+     * Maps known logical types to a list of Java classes that can be used to represent them.
+     */
+    private static final Map<String, List<Class>> LOGICAL_TYPE_CLASSES = new HashMap<>();
 
-	public static final ConfigDef CONFIG_DEF = new ConfigDef()
-		.define(ConfigName.HEADER_CONFIG, ConfigDef.Type.STRING, ConfigDef.NO_DEFAULT_VALUE, ConfigDef.Importance.MEDIUM,
-			"Name of the header to add.")
-		.define(ConfigName.HEADER_VALUE_CONFIG, ConfigDef.Type.STRING, ConfigDef.NO_DEFAULT_VALUE, ConfigDef.Importance.MEDIUM,
-			"Value of the header to add.");
+    public static final ConfigDef CONFIG_DEF = new ConfigDef()
+        .define(ConfigName.HEADER_CONFIG, ConfigDef.Type.STRING, ConfigDef.NO_DEFAULT_VALUE, ConfigDef.Importance.MEDIUM,
+            "Name of the header to add.")
+        .define(ConfigName.HEADER_VALUE_CONFIG, ConfigDef.Type.STRING, ConfigDef.NO_DEFAULT_VALUE, ConfigDef.Importance.MEDIUM,
+            "Value of the header to add.");
 
-	private String headerName;
-	private String headerValue;
-	private String headerType;
+    private String headerName;
+    private String headerValue;
+    private String headerType;
 
-	@Override
-	public void configure(Map<String, ?> props) {
-		final SimpleConfig config = new SimpleConfig(CONFIG_DEF, props);
-		headerName = config.getString(ConfigName.HEADER_CONFIG);
-		headerValue = config.getString(ConfigName.HEADER_VALUE_CONFIG);
-	}
+    @Override
+    public void configure(Map<String, ?> props) {
+        final SimpleConfig config = new SimpleConfig(CONFIG_DEF, props);
+        headerName = config.getString(ConfigName.HEADER_CONFIG);
+        headerValue = config.getString(ConfigName.HEADER_VALUE_CONFIG);
+    }
 
-	@Override
-	public R apply(R record) {
-		if (headerValue == null) return null;
-		SchemaAndValue schemaAndValue = Values.parseString(headerValue);
-		record.headers().add(headerName, schemaAndValue);
-		return record;
-	}
+    @Override
+    public R apply(R record) {
+        if (headerValue == null) return null;
+        SchemaAndValue schemaAndValue = Values.parseString(headerValue);
+        record.headers().add(headerName, schemaAndValue);
+        return record;
+    }
 
-	@Override
-	public void close() {
-	}
+    @Override
+    public void close() {
+    }
 
-	@Override
-	public ConfigDef config() {
-		return CONFIG_DEF;
-	}
+    @Override
+    public ConfigDef config() {
+        return CONFIG_DEF;
+    }
 }
