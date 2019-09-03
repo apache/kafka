@@ -17,6 +17,7 @@
 
 package org.apache.kafka.common.protocol;
 
+import org.apache.kafka.common.protocol.types.RawTaggedField;
 import org.apache.kafka.common.protocol.types.Struct;
 
 import java.util.List;

@@ -17,6 +17,8 @@
 
 package org.apache.kafka.common.protocol;
 
+import org.apache.kafka.common.protocol.types.RawTaggedField;
+
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;

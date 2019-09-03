@@ -15,7 +15,9 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.common.protocol;
+package org.apache.kafka.common.protocol.types;
+
+import org.apache.kafka.common.protocol.Writable;
 
 import java.util.ArrayList;
 import java.util.Iterator;

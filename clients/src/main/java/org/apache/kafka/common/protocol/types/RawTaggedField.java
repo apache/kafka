@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.common.protocol;
+package org.apache.kafka.common.protocol.types;
 
 public class RawTaggedField {
     private final int tag;

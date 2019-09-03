@@ -93,9 +93,9 @@ public final class MessageGenerator {
 
     static final String OBJECT_SIZE_CACHE_CLASS = "org.apache.kafka.common.protocol.ObjectSizeCache";
 
-    static final String RAW_TAGGED_FIELD_CLASS = "org.apache.kafka.common.protocol.RawTaggedField";
+    static final String RAW_TAGGED_FIELD_CLASS = "org.apache.kafka.common.protocol.types.RawTaggedField";
 
-    static final String RAW_TAGGED_FIELD_WRITER_CLASS = "org.apache.kafka.common.protocol.RawTaggedFieldWriter";
+    static final String RAW_TAGGED_FIELD_WRITER_CLASS = "org.apache.kafka.common.protocol.types.RawTaggedFieldWriter";
 
     static final String TREE_MAP_CLASS = "java.util.TreeMap";
 
