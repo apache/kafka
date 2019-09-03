@@ -82,7 +82,7 @@ class LogValidatorTest {
     assertThrows[InvalidRecordException] {
       validateMessages(recordsWithInvalidInnerMagic(batchMagic, recordMagic, compressionType), batchMagic, compressionType, compressionType)
     }
-    assertEquals(metricsKeySet.count(_.getMBeanName.startsWith("kafka.server:type=BrokerTopicMetrics,name=InvalidMagicNumberRecordsPerSec")), 1)
+    assertEquals(metricsKeySet.count(_.getMBeanName.startsWith("kafka.server:type=BrokerTopicMetrics,name=InvalidMagicNumberRecordsPerSec")), 2)
   }
 
   private def validateMessages(records: MemoryRecords, magic: Byte, sourceCompressionType: CompressionType, targetCompressionType: CompressionType): Unit = {
