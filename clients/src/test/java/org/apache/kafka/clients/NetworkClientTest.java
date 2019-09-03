@@ -156,8 +156,13 @@ public class NetworkClientTest {
 
     private void checkSimpleRequestResponse(NetworkClient networkClient) {
         awaitReady(networkClient, node); // has to be before creating any request, as it may send ApiVersionsRequest and its response is mocked with correlation id 0
-        ProduceRequest.Builder builder = ProduceRequest.Builder.forCurrentMagic((short) 1, 1000,
-                        Collections.emptyMap());
+        ProduceRequest.Builder builder = new ProduceRequest.Builder(
+                ApiKeys.PRODUCE.latestVersion(),
+                ApiKeys.PRODUCE.latestVersion(),
+                (short) 1,
+                1000,
+                Collections.emptyMap(),
+                null);
         TestCallbackHandler handler = new TestCallbackHandler();
         ClientRequest request = networkClient.newClientRequest(
                 node.idString(), builder, time.milliseconds(), true, defaultRequestTimeoutMs, handler);
@@ -165,7 +170,8 @@ public class NetworkClientTest {
         networkClient.poll(1, time.milliseconds());
         assertEquals(1, networkClient.inFlightRequestCount());
         ResponseHeader respHeader =
-            new ResponseHeader(request.correlationId(), builder.latestAllowedVersion());
+            new ResponseHeader(request.correlationId(),
+                request.apiKey().headerVersion(ApiKeys.PRODUCE.latestVersion()));
         Struct resp = new Struct(ApiKeys.PRODUCE.responseSchema(ApiKeys.PRODUCE.latestVersion()));
         resp.set("responses", new Object[0]);
         Struct responseHeaderStruct = respHeader.toStruct();
@@ -237,15 +243,21 @@ public class NetworkClientTest {
     public void testConnectionThrottling() {
         // Instrument the test to return a response with a 100ms throttle delay.
         awaitReady(client, node);
-        ProduceRequest.Builder builder = ProduceRequest.Builder.forCurrentMagic((short) 1, 1000,
-            Collections.emptyMap());
+        ProduceRequest.Builder builder = new ProduceRequest.Builder(
+            ApiKeys.PRODUCE.latestVersion(),
+            ApiKeys.PRODUCE.latestVersion(),
+            (short) 1,
+            1000,
+            Collections.emptyMap(),
+            null);
         TestCallbackHandler handler = new TestCallbackHandler();
         ClientRequest request = client.newClientRequest(node.idString(), builder, time.milliseconds(), true,
                 defaultRequestTimeoutMs, handler);
         client.send(request, time.milliseconds());
         client.poll(1, time.milliseconds());
         ResponseHeader respHeader =
-            new ResponseHeader(request.correlationId(), builder.latestAllowedVersion());
+            new ResponseHeader(request.correlationId(),
+                request.apiKey().headerVersion(ApiKeys.PRODUCE.latestVersion()));
         Struct resp = new Struct(ApiKeys.PRODUCE.responseSchema(ApiKeys.PRODUCE.latestVersion()));
         resp.set("responses", new Object[0]);
         resp.set(CommonFields.THROTTLE_TIME_MS, 100);
