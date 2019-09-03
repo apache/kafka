@@ -895,7 +895,8 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
             joiner,
             windows,
             joined,
-            materialized, new KStreamImplJoin(true, false)
+            materialized,
+            new KStreamImplJoin(true, false)
         );
     }
 
@@ -1201,8 +1202,16 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
                 otherWindowStore = joinWindowStoreBuilder(otherJoinStoreName, windows, joined.keySerde(), joined.otherValueSerde());
             } else {
                 final WindowBytesStoreSupplier windowBytesStoreSupplier = (WindowBytesStoreSupplier) materializedInternal.storeSupplier();
-                final InMemoryWindowBytesStoreSupplier joinThisInMemorySupplier = new InMemoryWindowBytesStoreSupplier(windowBytesStoreSupplier.name() + joinThisSuffix, windowBytesStoreSupplier.retentionPeriod(), windowBytesStoreSupplier.windowSize(), windowBytesStoreSupplier.retainDuplicates());
-                final InMemoryWindowBytesStoreSupplier joinOtherInMemorySupplier = new InMemoryWindowBytesStoreSupplier(windowBytesStoreSupplier.name() + joinOtherSuffix, windowBytesStoreSupplier.retentionPeriod(), windowBytesStoreSupplier.windowSize(), windowBytesStoreSupplier.retainDuplicates());
+
+                final InMemoryWindowBytesStoreSupplier joinThisInMemorySupplier = new InMemoryWindowBytesStoreSupplier(windowBytesStoreSupplier.name() + joinThisSuffix,
+                    windowBytesStoreSupplier.retentionPeriod(),
+                    windowBytesStoreSupplier.windowSize(),
+                    windowBytesStoreSupplier.retainDuplicates());
+
+                final InMemoryWindowBytesStoreSupplier joinOtherInMemorySupplier = new InMemoryWindowBytesStoreSupplier(windowBytesStoreSupplier.name() + joinOtherSuffix,
+                    windowBytesStoreSupplier.retentionPeriod(),
+                    windowBytesStoreSupplier.windowSize(),
+                    windowBytesStoreSupplier.retainDuplicates());
 
                 thisWindowStore = joinWindowStoreBuilderFromSupplier(joinThisInMemorySupplier, joined.keySerde(), joined.valueSerde());
                 otherWindowStore = joinWindowStoreBuilderFromSupplier(joinOtherInMemorySupplier, joined.keySerde(), joined.otherValueSerde());
