@@ -100,7 +100,7 @@ public class VersionsTest {
             newVersions(1, 2).subtract(newVersions(2, 2)));
         assertEquals(newVersions(2, 2),
             newVersions(1, 2).subtract(newVersions(1, 1)));
-        assertEquals(newVersions(0, Short.MAX_VALUE),
+        assertEquals(null,
             newVersions(0, Short.MAX_VALUE).subtract(newVersions(1, 100)));
         assertEquals(newVersions(10, 10),
             newVersions(1, 10).subtract(newVersions(1, 9)));
