@@ -692,9 +692,38 @@ public class NetworkClient implements KafkaClient {
             log.trace("Found least loaded node {} with no active connection", foundCanConnect);
             return foundCanConnect;
         } else {
+            // instead of giving up get one of the bootstrap nodes
+            Node foundBootStrap = getBootStrapNodeForMetadata();
+            if (foundBootStrap != null) {
+                return foundBootStrap;
+            }
             log.trace("Least loaded node selection failed to find an available node");
             return null;
         }
+    }
+
+    /**
+     * Get one bootstrap node to query the metadata info.
+     */
+    private Node getBootStrapNodeForMetadata() {
+        List<Node> allNodes = this.metadataUpdater.fetchNodes();
+        List<Node> bootStrapNodes = this.metadataUpdater.fetchBootStrapNodes();
+        if (bootStrapNodes == null || bootStrapNodes.isEmpty()) {
+            log.warn("No bootstrap nodes found");
+            return null;
+        }
+
+        // if bootstrap list is just a subset of the existing nodes on the
+        // cluster, then we have no choice but to just return null.
+        boolean isSubset = allNodes.containsAll(bootStrapNodes);
+        if (isSubset) {
+            return null;
+        }
+
+        int idx = this.randOffset.nextInt(bootStrapNodes.size());
+        Node found = bootStrapNodes.get(idx);
+        log.info("Found bootstrap node for metadata request {}", found);
+        return found;
     }
 
     public static AbstractResponse parseResponse(ByteBuffer responseBuffer, RequestHeader requestHeader) {
@@ -971,6 +1000,11 @@ public class NetworkClient implements KafkaClient {
         @Override
         public List<Node> fetchNodes() {
             return metadata.fetch().nodes();
+        }
+
+        @Override
+        public List<Node> fetchBootStrapNodes() {
+            return metadata.getBootStrapNodes();
         }
 
         @Override

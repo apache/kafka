@@ -59,6 +59,11 @@ public class ManualMetadataUpdater implements MetadataUpdater {
     }
 
     @Override
+    public List<Node> fetchBootStrapNodes() {
+        return new ArrayList<>(0);
+    }
+
+    @Override
     public boolean isUpdateDue(long now) {
         return false;
     }

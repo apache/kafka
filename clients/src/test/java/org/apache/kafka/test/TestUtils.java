@@ -110,6 +110,10 @@ public class TestUtils {
         return new Cluster("kafka-cluster", asList(ns), parts, Collections.emptySet(), Collections.emptySet());
     }
 
+    public static Node getRandomNode() {
+        return new Node(RANDOM.nextInt(), "localhost", 2000);
+    }
+
     public static MetadataResponse metadataUpdateWith(final int numNodes,
                                                       final Map<String, Integer> topicPartitionCounts) {
         return metadataUpdateWith("kafka-cluster", numNodes, topicPartitionCounts);

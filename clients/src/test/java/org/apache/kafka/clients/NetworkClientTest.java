@@ -57,11 +57,16 @@ public class NetworkClientTest {
     protected final MockTime time = new MockTime();
     protected final MockSelector selector = new MockSelector(time);
     protected final Node node = TestUtils.singletonCluster().nodes().iterator().next();
+    protected final Node bootStrapNode = TestUtils.getRandomNode();
     protected final long reconnectBackoffMsTest = 10 * 1000;
     protected final long reconnectBackoffMaxMsTest = 10 * 10000;
 
     private final TestMetadataUpdater metadataUpdater = new TestMetadataUpdater(Collections.singletonList(node));
+    private final TestMetadataUpdater metadataUpdaterWithBootStrap = new TestMetadataUpdater(Collections.singletonList(node));
+    private final TestMetadataUpdater metadataUpdaterWithSubBootStrap = new TestMetadataUpdater(Collections.singletonList(node));
     private final NetworkClient client = createNetworkClient(reconnectBackoffMaxMsTest);
+    private final NetworkClient clientWithBootStrap = createNetworkClientWithBootStrap(metadataUpdaterWithBootStrap, Collections.singletonList(bootStrapNode));
+    private final NetworkClient clientWithSubBootStrap = createNetworkClientWithBootStrap(metadataUpdaterWithSubBootStrap, Collections.singletonList(node));
     private final NetworkClient clientWithNoExponentialBackoff = createNetworkClient(reconnectBackoffMsTest);
     private final NetworkClient clientWithStaticNodes = createNetworkClientWithStaticNodes();
     private final NetworkClient clientWithNoVersionDiscovery = createNetworkClientWithNoVersionDiscovery();
@@ -69,6 +74,15 @@ public class NetworkClientTest {
     private NetworkClient createNetworkClient(long reconnectBackoffMaxMs) {
         return new NetworkClient(selector, metadataUpdater, "mock", Integer.MAX_VALUE,
                 reconnectBackoffMsTest, reconnectBackoffMaxMs, 64 * 1024, 64 * 1024,
+                defaultRequestTimeoutMs, ClientDnsLookup.DEFAULT, time, true, new ApiVersions(), new LogContext());
+    }
+
+    private NetworkClient createNetworkClientWithBootStrap(TestMetadataUpdater localMetadataUpdater, List<Node> nodes) {
+        // set the bootstrap node
+        localMetadataUpdater.setBootStrapNodes(nodes);
+        long reconnectBackoffMsTest = 10 * 1000;
+        return new NetworkClient(selector, localMetadataUpdater, "mock", Integer.MAX_VALUE,
+                reconnectBackoffMsTest, reconnectBackoffMsTest, 64 * 1024, 64 * 1024,
                 defaultRequestTimeoutMs, ClientDnsLookup.DEFAULT, time, true, new ApiVersions(), new LogContext());
     }
 
@@ -361,6 +375,58 @@ public class NetworkClientTest {
     }
 
     @Test
+    public void testLeastLoadedNodeWithBootstrap() {
+        clientWithBootStrap.ready(node, time.milliseconds());
+        assertFalse(clientWithBootStrap.isReady(node, time.milliseconds()));
+        assertEquals(node, clientWithBootStrap.leastLoadedNode(time.milliseconds()));
+
+        awaitReady(clientWithBootStrap, node);
+        clientWithBootStrap.poll(1, time.milliseconds());
+        assertTrue("The client should be ready", clientWithBootStrap.isReady(node, time.milliseconds()));
+
+        // leastloadednode should be our single node
+        Node leastNode = clientWithBootStrap.leastLoadedNode(time.milliseconds());
+        assertEquals("There should be one leastloadednode", leastNode.id(), node.id());
+
+        // sleep for longer than reconnect backoff
+        time.sleep(reconnectBackoffMsTest);
+
+        // CLOSE node
+        selector.serverDisconnect(node.idString());
+
+        clientWithBootStrap.poll(1, time.milliseconds());
+        assertFalse("After we forced the disconnection the client is no longer ready.", clientWithBootStrap.ready(node, time.milliseconds()));
+        leastNode = clientWithBootStrap.leastLoadedNode(time.milliseconds());
+        assertEquals("We should have the bootstrap node now", leastNode.id(), bootStrapNode.id());
+    }
+
+    @Test
+    public void testLeastLoadedNodeWithSubsetBootstrap() {
+        clientWithSubBootStrap.ready(node, time.milliseconds());
+        assertFalse(clientWithSubBootStrap.isReady(node, time.milliseconds()));
+        assertEquals(node, clientWithSubBootStrap.leastLoadedNode(time.milliseconds()));
+
+        awaitReady(clientWithSubBootStrap, node);
+        clientWithSubBootStrap.poll(1, time.milliseconds());
+        assertTrue("The client should be ready", clientWithSubBootStrap.isReady(node, time.milliseconds()));
+
+        // leastloadednode should be our single node
+        Node leastNode = clientWithSubBootStrap.leastLoadedNode(time.milliseconds());
+        assertEquals("There should be one leastloadednode", leastNode.id(), node.id());
+
+        // sleep for longer than reconnect backoff
+        time.sleep(reconnectBackoffMsTest);
+
+        // CLOSE node
+        selector.serverDisconnect(node.idString());
+
+        clientWithSubBootStrap.poll(1, time.milliseconds());
+        assertFalse("After we forced the disconnection the client is no longer ready.", clientWithSubBootStrap.ready(node, time.milliseconds()));
+        leastNode = clientWithSubBootStrap.leastLoadedNode(time.milliseconds());
+        assertNull("There should be NO leastloadednode", leastNode);
+    }
+
+    @Test
     public void testLeastLoadedNodeConsidersThrottledConnections() {
         client.ready(node, time.milliseconds());
         awaitReady(client, node);
@@ -602,9 +668,19 @@ public class NetworkClientTest {
     // ManualMetadataUpdater with ability to keep track of failures
     private static class TestMetadataUpdater extends ManualMetadataUpdater {
         KafkaException failure;
+        private List<Node> bootStrapNodes;
 
         public TestMetadataUpdater(List<Node> nodes) {
             super(nodes);
+        }
+
+        public void setBootStrapNodes(List<Node> nodes) {
+            this.bootStrapNodes = nodes;
+        }
+
+        @Override
+        public List<Node> fetchBootStrapNodes() {
+            return this.bootStrapNodes;
         }
 
         @Override

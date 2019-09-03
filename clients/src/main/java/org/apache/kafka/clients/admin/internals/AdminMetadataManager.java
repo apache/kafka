@@ -27,6 +27,7 @@ import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.common.utils.LogContext;
 import org.slf4j.Logger;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
@@ -87,6 +88,11 @@ public class AdminMetadataManager {
         @Override
         public List<Node> fetchNodes() {
             return cluster.nodes();
+        }
+
+        @Override
+        public List<Node> fetchBootStrapNodes() {
+            return new ArrayList<>(0);
         }
 
         @Override

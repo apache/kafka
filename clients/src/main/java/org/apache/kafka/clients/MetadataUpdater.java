@@ -38,6 +38,11 @@ public interface MetadataUpdater extends Closeable {
     List<Node> fetchNodes();
 
     /**
+     * Gets the initial set of nodes used for bootstrap.
+     */
+    List<Node> fetchBootStrapNodes();
+
+    /**
      * Returns true if an update to the cluster metadata info is due.
      */
     boolean isUpdateDue(long now);
