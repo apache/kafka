@@ -38,14 +38,14 @@ public final class JaasUtils {
 
     public static String zkSecuritySysConfigString() {
         String loginConfig = System.getProperty(JAVA_LOGIN_CONFIG_PARAM);
-        String clientEnabled = System.getProperty(ZK_SASL_CLIENT);
-        String contextName = System.getProperty(ZK_LOGIN_CONTEXT_NAME_KEY);
+        String clientEnabled = System.getProperty(ZK_SASL_CLIENT, "default:" + DEFAULT_ZK_SASL_CLIENT);
+        String contextName = System.getProperty(ZK_LOGIN_CONTEXT_NAME_KEY, "default:" + DEFAULT_ZK_LOGIN_CONTEXT_NAME);
         return "[" +
                 JAVA_LOGIN_CONFIG_PARAM + "=" + loginConfig +
                 ", " +
-                ZK_SASL_CLIENT + "=" + (clientEnabled == null ? "default:" + DEFAULT_ZK_SASL_CLIENT : clientEnabled) +
+                ZK_SASL_CLIENT + "=" + clientEnabled +
                 ", " +
-                ZK_LOGIN_CONTEXT_NAME_KEY + "=" + (contextName == null ? "default:" + DEFAULT_ZK_LOGIN_CONTEXT_NAME : contextName) +
+                ZK_LOGIN_CONTEXT_NAME_KEY + "=" + contextName +
                 "]";
     }
 
