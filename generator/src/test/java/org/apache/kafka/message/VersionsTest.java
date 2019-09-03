@@ -91,24 +91,24 @@ public class VersionsTest {
     }
 
     @Test
-    public void testTrim() {
+    public void testSubtract() {
         assertEquals(Versions.NONE,
-            Versions.NONE.trim(Versions.NONE));
+            Versions.NONE.subtract(Versions.NONE));
         assertEquals(newVersions(0, 0),
-            newVersions(0, 0).trim(Versions.NONE));
+            newVersions(0, 0).subtract(Versions.NONE));
         assertEquals(newVersions(1, 1),
-            newVersions(1, 2).trim(newVersions(2, 2)));
+            newVersions(1, 2).subtract(newVersions(2, 2)));
         assertEquals(newVersions(2, 2),
-            newVersions(1, 2).trim(newVersions(1, 1)));
+            newVersions(1, 2).subtract(newVersions(1, 1)));
         assertEquals(newVersions(0, Short.MAX_VALUE),
-            newVersions(0, Short.MAX_VALUE).trim(newVersions(1, 100)));
+            newVersions(0, Short.MAX_VALUE).subtract(newVersions(1, 100)));
         assertEquals(newVersions(10, 10),
-            newVersions(1, 10).trim(newVersions(1, 9)));
+            newVersions(1, 10).subtract(newVersions(1, 9)));
         assertEquals(newVersions(1, 1),
-            newVersions(1, 10).trim(newVersions(2, 10)));
+            newVersions(1, 10).subtract(newVersions(2, 10)));
         assertEquals(newVersions(2, 4),
-            newVersions(2, Short.MAX_VALUE).trim(newVersions(5, Short.MAX_VALUE)));
+            newVersions(2, Short.MAX_VALUE).subtract(newVersions(5, Short.MAX_VALUE)));
         assertEquals(newVersions(5, Short.MAX_VALUE),
-            newVersions(0, Short.MAX_VALUE).trim(newVersions(0, 4)));
+            newVersions(0, Short.MAX_VALUE).subtract(newVersions(0, 4)));
     }
 }
