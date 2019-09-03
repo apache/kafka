@@ -16,6 +16,7 @@ import java.io.File
 import java.util
 
 import kafka.security.auth.{All, Allow, Alter, AlterConfigs, Authorizer, ClusterAction, Create, Delete, Deny, Describe, Group, Operation, PermissionType, SimpleAclAuthorizer, Topic, Acl => AuthAcl, Resource => AuthResource}
+import kafka.security.authorizer.AuthorizerWrapper
 import kafka.server.KafkaConfig
 import kafka.utils.{CoreUtils, JaasTestUtils, TestUtils}
 import kafka.utils.TestUtils._
@@ -32,6 +33,7 @@ import scala.util.{Failure, Success, Try}
 
 class SaslSslAdminClientIntegrationTest extends AdminClientIntegrationTest with SaslSetup {
   this.serverConfig.setProperty(KafkaConfig.ZkEnableSecureAclsProp, "true")
+  // This tests the old SimpleAclAuthorizer, we have another test for the new AclAuthorizer
   this.serverConfig.setProperty(KafkaConfig.AuthorizerClassNameProp, classOf[SimpleAclAuthorizer].getName)
 
   override protected def securityProtocol = SecurityProtocol.SASL_SSL
@@ -59,8 +61,12 @@ class SaslSslAdminClientIntegrationTest extends AdminClientIntegrationTest with 
 
   @Before
   override def setUp(): Unit = {
-    startSasl(jaasSections(Seq("GSSAPI"), Some("GSSAPI"), Both, JaasTestUtils.KafkaServerContextName))
+    setUpSasl()
     super.setUp()
+  }
+
+  def setUpSasl(): Unit = {
+    startSasl(jaasSections(Seq("GSSAPI"), Some("GSSAPI"), Both, JaasTestUtils.KafkaServerContextName))
   }
 
   private def clusterAcl(permissionType: PermissionType, operation: Operation): AuthAcl = {
@@ -68,17 +74,17 @@ class SaslSslAdminClientIntegrationTest extends AdminClientIntegrationTest with 
       AuthAcl.WildCardHost, operation)
   }
 
-  private def addClusterAcl(permissionType: PermissionType, operation: Operation): Unit = {
+  def addClusterAcl(permissionType: PermissionType, operation: Operation): Unit = {
     val acls = Set(clusterAcl(permissionType, operation))
-    val authorizer = servers.head.dataPlaneRequestProcessor.authorizer.get
+    val authorizer = simpleAclAuthorizer
     val prevAcls = authorizer.getAcls(AuthResource.ClusterResource)
     authorizer.addAcls(acls, AuthResource.ClusterResource)
     TestUtils.waitAndVerifyAcls(prevAcls ++ acls, authorizer, AuthResource.ClusterResource)
   }
 
-  private def removeClusterAcl(permissionType: PermissionType, operation: Operation): Unit = {
+  def removeClusterAcl(permissionType: PermissionType, operation: Operation): Unit = {
     val acls = Set(clusterAcl(permissionType, operation))
-    val authorizer = servers.head.dataPlaneRequestProcessor.authorizer.get
+    val authorizer = simpleAclAuthorizer
     val prevAcls = authorizer.getAcls(AuthResource.ClusterResource)
     Assert.assertTrue(authorizer.removeAcls(acls, AuthResource.ClusterResource))
     TestUtils.waitAndVerifyAcls(prevAcls -- acls, authorizer, AuthResource.ClusterResource)
@@ -411,5 +417,10 @@ class SaslSslAdminClientIntegrationTest extends AdminClientIntegrationTest with 
 
   private def getAcls(allTopicAcls: AclBindingFilter) = {
     client.describeAcls(allTopicAcls).values.get().asScala.toSet
+  }
+
+  private def simpleAclAuthorizer: Authorizer = {
+    val authorizerWrapper = servers.head.dataPlaneRequestProcessor.authorizer.get.asInstanceOf[AuthorizerWrapper]
+    authorizerWrapper.baseAuthorizer
   }
 }

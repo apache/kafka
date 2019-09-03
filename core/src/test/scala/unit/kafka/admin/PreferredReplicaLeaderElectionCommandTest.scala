@@ -19,25 +19,29 @@ package kafka.admin
 import java.io.File
 import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, Paths}
+import java.util
 import java.util.Properties
 
 import scala.collection.Seq
-
 import kafka.common.AdminCommandFailedException
-import kafka.network.RequestChannel
-import kafka.security.auth._
+import kafka.security.authorizer.AclAuthorizer
 import kafka.server.{KafkaConfig, KafkaServer}
 import kafka.utils.{Logging, TestUtils}
 import kafka.zk.ZooKeeperTestHarness
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.acl.AclOperation
 import org.apache.kafka.common.errors.ClusterAuthorizationException
 import org.apache.kafka.common.errors.PreferredLeaderNotAvailableException
 import org.apache.kafka.common.errors.TimeoutException
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException
 import org.apache.kafka.common.network.ListenerName
+import org.apache.kafka.common.resource.ResourceType
+import org.apache.kafka.server.authorizer.{Action, AuthorizableRequestContext, AuthorizationResult}
 import org.apache.kafka.test
 import org.junit.Assert._
 import org.junit.{After, Test}
+
+import scala.collection.JavaConverters._
 
 class PreferredReplicaLeaderElectionCommandTest extends ZooKeeperTestHarness with Logging {
   var servers: Seq[KafkaServer] = Seq()
@@ -375,7 +379,13 @@ class PreferredReplicaLeaderElectionCommandTest extends ZooKeeperTestHarness wit
   }
 }
 
-class PreferredReplicaLeaderElectionCommandTestAuthorizer extends SimpleAclAuthorizer {
-  override def authorize(session: RequestChannel.Session, operation: Operation, resource: Resource): Boolean =
-    operation != Alter || resource.resourceType != Cluster
+class PreferredReplicaLeaderElectionCommandTestAuthorizer extends AclAuthorizer {
+  override def authorize(requestContext: AuthorizableRequestContext, actions: util.List[Action]): util.List[AuthorizationResult] = {
+    actions.asScala.map { action =>
+      if (action.operation != AclOperation.ALTER || action.resourcePattern.resourceType != ResourceType.CLUSTER)
+        AuthorizationResult.ALLOWED
+      else
+        AuthorizationResult.DENIED
+    }.asJava
+  }
 }

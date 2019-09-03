@@ -147,6 +147,8 @@
       <allow pkg="org.apache.kafka.common.requests" />
       <allow pkg="org.apache.kafka.common.resource" />
       <allow pkg="org.apache.kafka.common.record" />
+      <!-- for AuthorizableRequestContext interface -->
+      <allow pkg="org.apache.kafka.server.authorizer" />
       <!-- for testing -->
       <allow pkg="org.apache.kafka.common.errors" />
     </subpackage>

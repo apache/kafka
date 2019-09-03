@@ -25,6 +25,7 @@ import kafka.cluster.EndPoint
 import kafka.coordinator.group.OffsetConfig
 import kafka.coordinator.transaction.{TransactionLog, TransactionStateManager}
 import kafka.message.{BrokerCompressionCodec, CompressionCodec, ZStdCompressionCodec}
+import kafka.security.authorizer.AuthorizerWrapper
 import kafka.utils.CoreUtils
 import kafka.utils.Implicits._
 import org.apache.kafka.clients.CommonClientConfigs
@@ -38,6 +39,7 @@ import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.record.{LegacyRecord, Records, TimestampType}
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.server.authorizer.Authorizer
 
 import scala.collection.JavaConverters._
 import scala.collection.{Map, Seq}
@@ -515,7 +517,9 @@ object KafkaConfig {
   val QueuedMaxRequestBytesDoc = "The number of queued bytes allowed before no more requests are read"
   val RequestTimeoutMsDoc = CommonClientConfigs.REQUEST_TIMEOUT_MS_DOC
   /************* Authorizer Configuration ***********/
-  val AuthorizerClassNameDoc = "The authorizer class that should be used for authorization"
+  val AuthorizerClassNameDoc = s"The fully qualified name of a class that implements s${classOf[Authorizer].getName}" +
+  " interface, which is used by the broker for authorization. This config also supports authorizers that implement the deprecated" +
+  " kafka.security.auth.Authorizer trait which was previously used for authorization."
   /** ********* Socket Server Configuration ***********/
   val PortDoc = "DEPRECATED: only used when <code>listeners</code> is not set. " +
   "Use <code>listeners</code> instead. \n" +
@@ -1055,7 +1059,7 @@ object KafkaConfig {
       .define(SslSecureRandomImplementationProp, STRING, null, LOW, SslSecureRandomImplementationDoc)
       .define(SslClientAuthProp, STRING, Defaults.SslClientAuthentication, in(Defaults.SslClientAuthenticationValidValues:_*), MEDIUM, SslClientAuthDoc)
       .define(SslCipherSuitesProp, LIST, Collections.emptyList(), MEDIUM, SslCipherSuitesDoc)
-      .define(SslPrincipalMappingRulesProp, LIST, Defaults.SslPrincipalMappingRules, LOW, SslPrincipalMappingRulesDoc)
+      .define(SslPrincipalMappingRulesProp, STRING, Defaults.SslPrincipalMappingRules, LOW, SslPrincipalMappingRulesDoc)
 
       /** ********* Sasl Configuration ****************/
       .define(SaslMechanismInterBrokerProtocolProp, STRING, Defaults.SaslMechanismInterBrokerProtocol, MEDIUM, SaslMechanismInterBrokerProtocolDoc)
@@ -1173,7 +1177,19 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigO
   }
 
   /************* Authorizer Configuration ***********/
-  val authorizerClassName: String = getString(KafkaConfig.AuthorizerClassNameProp)
+  val authorizer: Option[Authorizer] = {
+    val className = getString(KafkaConfig.AuthorizerClassNameProp)
+    if (className == null || className.isEmpty)
+      None
+    else {
+      val authZ = Utils.newInstance(className, classOf[Object]) match {
+        case auth: Authorizer => auth
+        case auth: kafka.security.auth.Authorizer => new AuthorizerWrapper(auth)
+        case auth => throw new ConfigException(s"Authorizer does not implement ${classOf[Authorizer].getName} or kafka.security.auth.Authorizer .")
+      }
+      Some(authZ)
+    }
+  }
 
   /** ********* Socket Server Configuration ***********/
   val hostName = getString(KafkaConfig.HostNameProp)
