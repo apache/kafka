@@ -107,6 +107,7 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.notNull;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -512,14 +513,38 @@ public class KafkaProducerTest {
         producer.close(Duration.ofMillis(0));
     }
 
-    @Test
-    public void testMetadataTimeoutWithPartitionOutOfRange() throws Exception {
+    private void doSendToNonexistentPartition(ProducerMetadata metadata, MockTime mockTime) throws Exception {
         Map<String, Object> configs = new HashMap<>();
         configs.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
         configs.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, 60000);
 
         // Create a record with a partition higher than the initial (outdated) partition range
         ProducerRecord<String, String> record = new ProducerRecord<>(topic, 2, null, "value");
+
+        KafkaProducer<String, String> producer = new KafkaProducer<String, String>(configs, new StringSerializer(),
+                new StringSerializer(), metadata, new MockClient(Time.SYSTEM, metadata), null, mockTime) {
+            @Override
+            Sender newSender(LogContext logContext, KafkaClient kafkaClient, ProducerMetadata metadata) {
+                // give Sender its own Metadata instance so that we can isolate Metadata calls from KafkaProducer
+                return super.newSender(logContext, kafkaClient, newMetadata(0, 100_000));
+            }
+        };
+
+        Future<RecordMetadata> future = producer.send(record);
+        producer.close(Duration.ofMillis(0));
+        try {
+            future.get();
+        } catch (ExecutionException e) {
+            assertTrue(e.getCause() instanceof TimeoutException);
+            assertEquals(
+                    "Partition 2 of topic topic with partition count 1 is not present in metadata after 60000 ms.",
+                    e.getCause().getMessage());
+        }
+    }
+
+    @Test
+    public void testMetadataTimeoutWithPartitionOutOfRange() throws Exception {
+
         ProducerMetadata metadata = mock(ProducerMetadata.class);
 
         MockTime mockTime = new MockTime();
@@ -532,29 +557,34 @@ public class KafkaProducerTest {
 
             return onePartitionCluster;
         });
+        doSendToNonexistentPartition(metadata, mockTime);
 
-        KafkaProducer<String, String> producer = new KafkaProducer<String, String>(configs, new StringSerializer(),
-                new StringSerializer(), metadata, new MockClient(Time.SYSTEM, metadata), null, mockTime) {
-            @Override
-            Sender newSender(LogContext logContext, KafkaClient kafkaClient, ProducerMetadata metadata) {
-                // give Sender its own Metadata instance so that we can isolate Metadata calls from KafkaProducer
-                return super.newSender(logContext, kafkaClient, newMetadata(0, 100_000));
-            }
-        };
-
-        // Four request updates where the requested partition is out of range, at which point the timeout expires
-        // and a TimeoutException is thrown
-        Future<RecordMetadata> future = producer.send(record);
         verify(metadata, times(4)).requestUpdateForTopic(topic);
         verify(metadata, times(4)).awaitUpdate(anyInt(), anyLong());
         verify(metadata, times(5)).fetch();
-        try {
-            future.get();
-        } catch (ExecutionException e) {
-            assertTrue(e.getCause() instanceof TimeoutException);
-        } finally {
-            producer.close(Duration.ofMillis(0));
-        }
+    }
+
+    @Test
+    public void testMetadataTimeoutOnRequestUpdateWithPartitionOutOfRange() throws Exception {
+        ProducerMetadata metadata = mock(ProducerMetadata.class);
+        MockTime mockTime = new MockTime();
+        AtomicInteger invocationCount = new AtomicInteger(0);
+        when(metadata.fetch()).then(invocation -> {
+            invocationCount.incrementAndGet();
+            if (invocationCount.get() == 5) {
+                mockTime.setCurrentTimeMs(mockTime.milliseconds() + 70000);
+            }
+
+            return onePartitionCluster;
+        });
+        doThrow(new TimeoutException()).when(metadata).awaitUpdate(anyInt(), anyLong());
+
+        doSendToNonexistentPartition(metadata, mockTime);
+
+        // Since the awaitUpdate() call times out immediate we expect just one request update
+        verify(metadata, times(1)).requestUpdateForTopic(topic);
+        verify(metadata, times(1)).awaitUpdate(anyInt(), anyLong());
+        verify(metadata, times(1)).fetch();
     }
 
     @Test

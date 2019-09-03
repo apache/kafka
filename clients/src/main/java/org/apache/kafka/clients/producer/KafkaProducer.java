@@ -1032,18 +1032,13 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                 metadata.awaitUpdate(version, remainingWaitMs);
             } catch (TimeoutException ex) {
                 // Rethrow with original maxWaitMs to prevent logging exception with remainingWaitMs
-                throw new TimeoutException(
-                        String.format("Topic %s not present in metadata after %d ms.",
-                                topic, maxWaitMs));
+                throw timeoutForAbsentMetadata(topic, partition, maxWaitMs, partitionsCount);
+
             }
             cluster = metadata.fetch();
             elapsed = time.milliseconds() - nowMs;
             if (elapsed >= maxWaitMs) {
-                throw new TimeoutException(partitionsCount == null ?
-                        String.format("Topic %s not present in metadata after %d ms.",
-                                topic, maxWaitMs) :
-                        String.format("Partition %d of topic %s with partition count %d is not present in metadata after %d ms.",
-                                partition, topic, partitionsCount, maxWaitMs));
+                throw timeoutForAbsentMetadata(topic, partition, maxWaitMs, partitionsCount);
             }
             metadata.maybeThrowExceptionForTopic(topic);
             remainingWaitMs = maxWaitMs - elapsed;
@@ -1051,6 +1046,14 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         } while (partitionsCount == null || (partition != null && partition >= partitionsCount));
 
         return new ClusterAndWaitTime(cluster, elapsed);
+    }
+
+    private TimeoutException timeoutForAbsentMetadata(String topic, Integer partition, long maxWaitMs, Integer partitionsCount) {
+        return new TimeoutException(partitionsCount == null ?
+                String.format("Topic %s not present in metadata after %d ms.",
+                        topic, maxWaitMs) :
+                String.format("Partition %d of topic %s with partition count %d is not present in metadata after %d ms.",
+                        partition, topic, partitionsCount, maxWaitMs));
     }
 
     /**
