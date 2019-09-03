@@ -18,12 +18,14 @@
 package org.apache.kafka.common.protocol;
 
 import java.nio.charset.StandardCharsets;
+import java.util.UUID;
 
 public interface Readable {
     byte readByte();
     short readShort();
     int readInt();
     long readLong();
+    UUID readUUID();
     void readArray(byte[] arr);
 
     /**

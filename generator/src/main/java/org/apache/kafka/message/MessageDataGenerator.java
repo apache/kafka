@@ -22,6 +22,7 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Optional;
 import java.util.Set;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 /**
@@ -311,6 +312,8 @@ public final class MessageDataGenerator {
             return "int";
         } else if (field.type() instanceof FieldType.Int64FieldType) {
             return "long";
+        } else if (field.type() instanceof FieldType.UUIDFieldType) {
+            return "UUID";
         } else if (field.type().isString()) {
             return "String";
         } else if (field.type().isBytes()) {
@@ -475,6 +478,8 @@ public final class MessageDataGenerator {
             return "readable.readInt()";
         } else if (type instanceof FieldType.Int64FieldType) {
             return "readable.readLong()";
+        } else if (type instanceof FieldType.UUIDFieldType) {
+            return "readable.readUUID()";
         } else if (type.isString()) {
             return "readable.readNullableString()";
         } else if (type.isBytes()) {
@@ -581,6 +586,8 @@ public final class MessageDataGenerator {
             return "Integer";
         } else if (type instanceof FieldType.Int64FieldType) {
             return "Long";
+        } else if (type instanceof FieldType.UUIDFieldType) {
+            return "UUID";
         } else if (type.isString()) {
             return "String";
         } else if (type.isStruct()) {
@@ -601,6 +608,8 @@ public final class MessageDataGenerator {
             return String.format("struct.getInt(\"%s\")", name);
         } else if (type instanceof FieldType.Int64FieldType) {
             return String.format("struct.getLong(\"%s\")", name);
+        } else if (type instanceof FieldType.UUIDFieldType) {
+            return String.format("struct.getUUID(\"%s\")", name);
         } else if (type.isString()) {
             return String.format("struct.getString(\"%s\")", name);
         } else if (type.isBytes()) {
@@ -649,6 +658,8 @@ public final class MessageDataGenerator {
             return String.format("writable.writeInt(%s)", name);
         } else if (type instanceof FieldType.Int64FieldType) {
             return String.format("writable.writeLong(%s)", name);
+        } else if (type instanceof FieldType.UUIDFieldType) {
+            return String.format("writable.writeUUID(%s)", name);
         } else if (type instanceof FieldType.StringFieldType) {
             if (nullable) {
                 return String.format("writable.writeNullableString(%s)", name);
@@ -750,6 +761,7 @@ public final class MessageDataGenerator {
                 (field.type() instanceof FieldType.Int16FieldType) ||
                 (field.type() instanceof FieldType.Int32FieldType) ||
                 (field.type() instanceof FieldType.Int64FieldType) ||
+                (field.type() instanceof FieldType.UUIDFieldType) ||
                 (field.type() instanceof FieldType.StringFieldType)) {
             boolean maybeAbsent =
                 generateVersionCheck(curVersions, field.versions());
@@ -1039,6 +1051,9 @@ public final class MessageDataGenerator {
         } else if (field.type() instanceof FieldType.Int64FieldType) {
             buffer.printf("hashCode = 31 * hashCode + ((int) (%s >> 32) ^ (int) %s);%n",
                 field.camelCaseName(), field.camelCaseName());
+        } else if (field.type() instanceof FieldType.UUIDFieldType) {
+            buffer.printf("hashCode = 31 * hashCode + (%s == null ? 0 : %s.hashCode());%n",
+                field.camelCaseName(), field.camelCaseName());
         } else if (field.type().isString()) {
             buffer.printf("hashCode = 31 * hashCode + (%s == null ? 0 : %s.hashCode());%n",
                 field.camelCaseName(), field.camelCaseName());
@@ -1078,7 +1093,8 @@ public final class MessageDataGenerator {
         } else if ((field.type() instanceof FieldType.Int8FieldType) ||
                 (field.type() instanceof FieldType.Int16FieldType) ||
                 (field.type() instanceof FieldType.Int32FieldType) ||
-                (field.type() instanceof FieldType.Int64FieldType)) {
+                (field.type() instanceof FieldType.Int64FieldType) ||
+                (field.type() instanceof FieldType.UUIDFieldType)) {
             buffer.printf("+ \"%s%s=\" + %s%n",
                 prefix, field.camelCaseName(), field.camelCaseName());
         } else if (field.type().isString()) {
@@ -1226,6 +1242,20 @@ public final class MessageDataGenerator {
                         field.name() + ": " + field.defaultString(), e);
                 }
                 return field.defaultString() + "L";
+            }
+        } else if (field.type() instanceof FieldType.UUIDFieldType) {
+            if (field.defaultString().isEmpty()) {
+                validateNullDefault(field);
+                return "null";
+            } else {
+                try {
+                    UUID.fromString(field.defaultString());
+                } catch (IllegalArgumentException e) {
+                    throw new RuntimeException("Invalid default for uuid field " +
+                        field.name() + ": " + field.defaultString(), e);
+                }
+                headerGenerator.addImport(MessageGenerator.UUID_CLASS);
+                return "UUID.fromString(\"" + field.defaultString() + "\")";
             }
         } else if (field.type() instanceof FieldType.StringFieldType) {
             if (field.defaultString().equals("null")) {

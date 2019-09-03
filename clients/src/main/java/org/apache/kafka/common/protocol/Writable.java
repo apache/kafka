@@ -18,12 +18,14 @@
 package org.apache.kafka.common.protocol;
 
 import java.nio.charset.StandardCharsets;
+import java.util.UUID;
 
 public interface Writable {
     void writeByte(byte val);
     void writeShort(short val);
     void writeInt(int val);
     void writeLong(long val);
+    void writeUUID(UUID uuid);
     void writeArray(byte[] arr);
 
     /**

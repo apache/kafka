@@ -18,6 +18,7 @@
 package org.apache.kafka.common.protocol;
 
 import java.nio.ByteBuffer;
+import java.util.UUID;
 
 public class ByteBufferAccessor implements Readable, Writable {
     private final ByteBuffer buf;
@@ -47,6 +48,11 @@ public class ByteBufferAccessor implements Readable, Writable {
     }
 
     @Override
+    public UUID readUUID() {
+        return new UUID(buf.getLong(), buf.getLong());
+    }
+
+    @Override
     public void readArray(byte[] arr) {
         buf.get(arr);
     }
@@ -69,6 +75,12 @@ public class ByteBufferAccessor implements Readable, Writable {
     @Override
     public void writeLong(long val) {
         buf.putLong(val);
+    }
+
+    @Override
+    public void writeUUID(UUID uuid) {
+        buf.putLong(uuid.getMostSignificantBits());
+        buf.putLong(uuid.getLeastSignificantBits());
     }
 
     @Override

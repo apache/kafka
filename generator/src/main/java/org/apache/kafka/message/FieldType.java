@@ -97,6 +97,21 @@ public interface FieldType {
         }
     }
 
+    final class UUIDFieldType implements FieldType {
+        static final UUIDFieldType INSTANCE = new UUIDFieldType();
+        private static final String NAME = "uuid";
+
+        @Override
+        public Optional<Integer> fixedLength() {
+            return Optional.of(16);
+        }
+
+        @Override
+        public String toString() {
+            return NAME;
+        }
+    }
+
     final class StringFieldType implements FieldType {
         static final StringFieldType INSTANCE = new StringFieldType();
         private static final String NAME = "string";
@@ -204,6 +219,8 @@ public interface FieldType {
                 return Int32FieldType.INSTANCE;
             case Int64FieldType.NAME:
                 return Int64FieldType.INSTANCE;
+            case UUIDFieldType.NAME:
+                return UUIDFieldType.INSTANCE;
             case StringFieldType.NAME:
                 return StringFieldType.INSTANCE;
             case BytesFieldType.NAME:
