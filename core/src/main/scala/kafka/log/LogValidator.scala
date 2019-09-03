@@ -101,6 +101,7 @@ private[kafka] object LogValidator extends Logging {
     // batch magic byte should have the same magic as the first batch
     if (firstBatch.magic() != batch.magic()) {
       brokerTopicStats.topicStats(topicPartition.topic).invalidMagicNumberRecordsPerSec.mark()
+      brokerTopicStats.allTopicsStats.invalidMagicNumberRecordsPerSec.mark()
       throw new InvalidRecordException(s"Batch magic ${batch.magic()} is not the same as the first batch'es magic byte ${firstBatch.magic()}")
     }
 
@@ -109,6 +110,7 @@ private[kafka] object LogValidator extends Logging {
         val countFromOffsets = batch.lastOffset - batch.baseOffset + 1
         if (countFromOffsets <= 0) {
           brokerTopicStats.topicStats(topicPartition.topic).invalidOffsetOrSequenceRecordsPerSec.mark()
+          brokerTopicStats.allTopicsStats.invalidOffsetOrSequenceRecordsPerSec.mark()
           throw new InvalidRecordException(s"Batch has an invalid offset range: [${batch.baseOffset}, ${batch.lastOffset}]")
         }
 
@@ -116,11 +118,13 @@ private[kafka] object LogValidator extends Logging {
         val count = batch.countOrNull
         if (count <= 0) {
           brokerTopicStats.topicStats(topicPartition.topic).invalidOffsetOrSequenceRecordsPerSec.mark()
+          brokerTopicStats.allTopicsStats.invalidOffsetOrSequenceRecordsPerSec.mark()
           throw new InvalidRecordException(s"Invalid reported count for record batch: $count")
         }
 
         if (countFromOffsets != batch.countOrNull) {
           brokerTopicStats.topicStats(topicPartition.topic).invalidOffsetOrSequenceRecordsPerSec.mark()
+          brokerTopicStats.allTopicsStats.invalidOffsetOrSequenceRecordsPerSec.mark()
           throw new InvalidRecordException(s"Inconsistent batch offset range [${batch.baseOffset}, ${batch.lastOffset}] " +
             s"and count of records $count")
         }
@@ -128,12 +132,14 @@ private[kafka] object LogValidator extends Logging {
 
       if (batch.hasProducerId && batch.baseSequence < 0) {
         brokerTopicStats.topicStats(topicPartition.topic).invalidOffsetOrSequenceRecordsPerSec.mark()
+        brokerTopicStats.allTopicsStats.invalidOffsetOrSequenceRecordsPerSec.mark()
         throw new InvalidRecordException(s"Invalid sequence number ${batch.baseSequence} in record batch " +
           s"with producerId ${batch.producerId}")
       }
 
       if (batch.isControlBatch) {
         brokerTopicStats.topicStats(topicPartition.topic).invalidOffsetOrSequenceRecordsPerSec.mark()
+        brokerTopicStats.allTopicsStats.invalidOffsetOrSequenceRecordsPerSec.mark()
         throw new InvalidRecordException("Clients are not allowed to write control records")
       }
     }
@@ -149,6 +155,7 @@ private[kafka] object LogValidator extends Logging {
                              timestampDiffMaxMs: Long, compactedTopic: Boolean, brokerTopicStats: BrokerTopicStats): Unit = {
     if (!record.hasMagic(batch.magic)) {
       brokerTopicStats.topicStats(topicPartition.topic).invalidMagicNumberRecordsPerSec.mark()
+      brokerTopicStats.allTopicsStats.invalidMagicNumberRecordsPerSec.mark()
       throw new InvalidRecordException(s"Log record $record's magic does not match outer magic ${batch.magic}")
     }
 
@@ -162,6 +169,7 @@ private[kafka] object LogValidator extends Logging {
       } catch {
         case e: InvalidRecordException =>
           brokerTopicStats.topicStats(topicPartition.topic).invalidMessageCrcRecordsPerSec.mark()
+          brokerTopicStats.allTopicsStats.invalidMessageCrcRecordsPerSec.mark()
           throw e
       }
     }
@@ -360,6 +368,7 @@ private[kafka] object LogValidator extends Logging {
             val expectedOffset = expectedInnerOffset.getAndIncrement()
             if (record.offset != expectedOffset) {
               brokerTopicStats.topicStats(topicPartition.topic).invalidOffsetOrSequenceRecordsPerSec.mark()
+              brokerTopicStats.allTopicsStats.invalidOffsetOrSequenceRecordsPerSec.mark()
               throw new InvalidRecordException(s"Inner record $record inside the compressed record batch does not have incremental offsets, expected offset is $expectedOffset")
             }
             if (record.timestamp > maxTimestamp)
@@ -458,6 +467,7 @@ private[kafka] object LogValidator extends Logging {
   private def validateKey(record: Record, topicPartition: TopicPartition, compactedTopic: Boolean, brokerTopicStats: BrokerTopicStats) {
     if (compactedTopic && !record.hasKey) {
       brokerTopicStats.topicStats(topicPartition.topic).noKeyCompactedTopicRecordsPerSec.mark()
+      brokerTopicStats.allTopicsStats.noKeyCompactedTopicRecordsPerSec.mark()
       throw new InvalidRecordException("Compacted topic cannot accept message without key.")
     }
   }

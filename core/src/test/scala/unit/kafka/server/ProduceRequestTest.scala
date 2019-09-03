@@ -39,6 +39,8 @@ import scala.collection.JavaConverters._
   */
 class ProduceRequestTest extends BaseRequestTest {
 
+  val metricsKeySet = Metrics.defaultRegistry.allMetrics.keySet.asScala
+
   @Test
   def testSimpleProduceRequest(): Unit = {
     val (partition, leader) = createTopicAndFindPartitionWithLeader("topic")
@@ -116,6 +118,10 @@ class ProduceRequestTest extends BaseRequestTest {
     assertEquals(-1, partitionResponse.baseOffset)
     assertEquals(-1, partitionResponse.logAppendTime)
     assertEquals(Metrics.defaultRegistry.allMetrics.keySet.asScala.count(_.getMBeanName.endsWith(s"name=InvalidMessageCrcRecordsPerSec,topic=topic")), 1)
+    assertEquals(metricsKeySet.count(_.getMBeanName.endsWith(s"${BrokerTopicStats.InvalidMessageCrcRecordsPerSec}")), 1)
+    assertEquals(metricsKeySet.count(_.getMBeanName.endsWith(s"${BrokerTopicStats.InvalidMessageCrcRecordsPerSec},topic=${topicPartition.topic}")), 1)
+    assertTrue(TestUtils.meterCount(s"${BrokerTopicStats.InvalidMessageCrcRecordsPerSec}") > 0)
+    assertTrue(TestUtils.meterCount(s"${BrokerTopicStats.InvalidMessageCrcRecordsPerSec},topic=${topicPartition.topic}") > 0)
   }
 
   @Test

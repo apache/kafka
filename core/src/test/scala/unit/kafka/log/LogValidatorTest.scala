@@ -24,6 +24,7 @@ import kafka.api.{ApiVersion, KAFKA_2_0_IV1, KAFKA_2_3_IV1}
 import kafka.common.LongRef
 import kafka.message._
 import kafka.server.BrokerTopicStats
+import kafka.utils.TestUtils.meterCount
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.{InvalidTimestampException, UnsupportedCompressionTypeException, UnsupportedForMessageFormatException}
 import org.apache.kafka.common.record._
@@ -82,7 +83,10 @@ class LogValidatorTest {
     assertThrows[InvalidRecordException] {
       validateMessages(recordsWithInvalidInnerMagic(batchMagic, recordMagic, compressionType), batchMagic, compressionType, compressionType)
     }
-    assertEquals(metricsKeySet.count(_.getMBeanName.startsWith("kafka.server:type=BrokerTopicMetrics,name=InvalidMagicNumberRecordsPerSec")), 2)
+    assertEquals(metricsKeySet.count(_.getMBeanName.endsWith(s"${BrokerTopicStats.InvalidMagicNumberRecordsPerSec}")), 1)
+    assertEquals(metricsKeySet.count(_.getMBeanName.endsWith(s"${BrokerTopicStats.InvalidMagicNumberRecordsPerSec},topic=${topicPartition.topic}")), 1)
+    assertTrue(meterCount(s"${BrokerTopicStats.InvalidMagicNumberRecordsPerSec}") > 0)
+    assertTrue(meterCount(s"${BrokerTopicStats.InvalidMagicNumberRecordsPerSec},topic=${topicPartition.topic}") > 0)
   }
 
   private def validateMessages(records: MemoryRecords, magic: Byte, sourceCompressionType: CompressionType, targetCompressionType: CompressionType): Unit = {
@@ -1206,7 +1210,10 @@ class LogValidatorTest {
         interBrokerProtocolVersion = ApiVersion.latestVersion,
         brokerTopicStats = brokerTopicStats)
     }
-    assertEquals(metricsKeySet.count(_.getMBeanName.endsWith(s"name=InvalidOffsetOrSequenceRecordsPerSec,topic=${topicPartition.topic}")), 1)
+    assertEquals(metricsKeySet.count(_.getMBeanName.endsWith(s"${BrokerTopicStats.InvalidOffsetOrSequenceRecordsPerSec}")), 1)
+    assertEquals(metricsKeySet.count(_.getMBeanName.endsWith(s"${BrokerTopicStats.InvalidOffsetOrSequenceRecordsPerSec},topic=${topicPartition.topic}")), 1)
+    assertTrue(meterCount(s"${BrokerTopicStats.InvalidOffsetOrSequenceRecordsPerSec}") > 0)
+    assertTrue(meterCount(s"${BrokerTopicStats.InvalidOffsetOrSequenceRecordsPerSec},topic=${topicPartition.topic}") > 0)
   }
 
   @Test(expected = classOf[InvalidRecordException])
