@@ -367,6 +367,9 @@ public enum ApiKeys {
         Schema.Visitor detector = new Schema.Visitor() {
             @Override
             public void visit(Type field) {
+                while (field.isArray()) {
+                    field = field.arrayElementType().get();
+                }
                 if (field == BYTES || field == NULLABLE_BYTES || field == RECORDS)
                     hasBuffer.set(true);
             }

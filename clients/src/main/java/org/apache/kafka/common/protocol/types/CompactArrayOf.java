@@ -20,6 +20,7 @@ import org.apache.kafka.common.protocol.types.Type.DocumentedType;
 import org.apache.kafka.common.utils.ByteUtils;
 
 import java.nio.ByteBuffer;
+import java.util.Optional;
 
 /**
  * Represents a type for a compact array of a particular type.
@@ -97,8 +98,9 @@ public class CompactArrayOf extends DocumentedType {
         return size;
     }
 
-    public Type type() {
-        return type;
+    @Override
+    public Optional<Type> arrayElementType() {
+        return Optional.of(type);
     }
 
     @Override

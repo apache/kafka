@@ -23,6 +23,7 @@ import org.apache.kafka.common.utils.ByteUtils;
 import org.apache.kafka.common.utils.Utils;
 
 import java.nio.ByteBuffer;
+import java.util.Optional;
 
 /**
  * A serializable type
@@ -61,6 +62,20 @@ public abstract class Type {
      */
     public boolean isNullable() {
         return false;
+    }
+
+    /**
+     * If the type is an array, return the type of the array elements.  Otherwise, return empty.
+     */
+    public Optional<Type> arrayElementType() {
+        return Optional.empty();
+    }
+
+    /**
+     * Returns true if the type is an array.
+     */
+    public final boolean  isArray() {
+        return arrayElementType().isPresent();
     }
 
     /**
@@ -905,7 +920,7 @@ public abstract class Type {
             UNSIGNED_INT32, VARINT, VARLONG,
             STRING, COMPACT_STRING, NULLABLE_STRING, COMPACT_NULLABLE_STRING,
             BYTES, COMPACT_BYTES, NULLABLE_BYTES, COMPACT_NULLABLE_BYTES,
-            RECORDS, new ArrayOf(STRING)};
+            RECORDS, new ArrayOf(STRING), new CompactArrayOf(COMPACT_STRING)};
         final StringBuilder b = new StringBuilder();
         b.append("<table class=\"data-table\"><tbody>\n");
         b.append("<tr>");
