@@ -214,6 +214,8 @@
               files="SignalLogger.java"/>
     <suppress checks="ParameterNumber"
               files="ProduceBenchSpec.java"/>
+    <suppress checks="ParameterNumber"
+              files="SustainedConnectionSpec.java"/>
 
     <!-- Log4J-Appender -->
     <suppress checks="CyclomaticComplexity"
