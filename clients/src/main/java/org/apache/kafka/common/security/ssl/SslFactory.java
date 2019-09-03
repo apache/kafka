@@ -55,7 +55,7 @@ public class SslFactory implements Reconfigurable {
     private final String clientAuthConfigOverride;
     private final boolean keystoreVerifiableUsingTruststore;
     private String endpointIdentification;
-    private SslEngineBuilder sslEngineBuilder;
+    private ISslEngineBuilder sslEngineBuilder;
 
     public SslFactory(Mode mode) {
         this(mode, null, false);
@@ -92,7 +92,7 @@ public class SslFactory implements Reconfigurable {
         if (clientAuthConfigOverride != null) {
             nextConfigs.put(BrokerSecurityConfigs.SSL_CLIENT_AUTH_CONFIG, clientAuthConfigOverride);
         }
-        SslEngineBuilder builder = new SslEngineBuilder(nextConfigs);
+        ISslEngineBuilder builder = new DefaultSslEngineBuilder(nextConfigs);
         if (keystoreVerifiableUsingTruststore) {
             try {
                 SslEngineValidator.validate(builder, builder);
@@ -106,7 +106,7 @@ public class SslFactory implements Reconfigurable {
 
     @Override
     public Set<String> reconfigurableConfigs() {
-        return SslConfigs.RECONFIGURABLE_CONFIGS;
+        return sslEngineBuilder.reconfigurableConfigs();
     }
 
     @Override
@@ -116,7 +116,7 @@ public class SslFactory implements Reconfigurable {
 
     @Override
     public void reconfigure(Map<String, ?> newConfigs) throws KafkaException {
-        SslEngineBuilder newSslEngineBuilder = createNewSslEngineBuilder(newConfigs);
+       ISslEngineBuilder newSslEngineBuilder = createNewSslEngineBuilder(newConfigs);
         if (newSslEngineBuilder != this.sslEngineBuilder) {
             this.sslEngineBuilder = newSslEngineBuilder;
             log.info("Created new {} SSL engine builder with keystore {} truststore {}", mode,
@@ -124,11 +124,15 @@ public class SslFactory implements Reconfigurable {
         }
     }
 
-    private SslEngineBuilder createNewSslEngineBuilder(Map<String, ?> newConfigs) {
+    public SSLContext sslContext() {
+        return sslEngineBuilder.getSSLContext();
+    }
+
+    private ISslEngineBuilder createNewSslEngineBuilder(Map<String, ?> newConfigs) {
         if (sslEngineBuilder == null) {
             throw new IllegalStateException("SslFactory has not been configured.");
         }
-        Map<String, Object> nextConfigs = new HashMap<>(sslEngineBuilder.configs());
+        Map<String, Object> nextConfigs = new HashMap<>(sslEngineBuilder.currentConfigs());
         copyMapEntries(nextConfigs, newConfigs, SslConfigs.RECONFIGURABLE_CONFIGS);
         if (clientAuthConfigOverride != null) {
             nextConfigs.put(BrokerSecurityConfigs.SSL_CLIENT_AUTH_CONFIG, clientAuthConfigOverride);
@@ -137,7 +141,7 @@ public class SslFactory implements Reconfigurable {
             return sslEngineBuilder;
         }
         try {
-            SslEngineBuilder newSslEngineBuilder = new SslEngineBuilder(nextConfigs);
+            ISslEngineBuilder newSslEngineBuilder = new DefaultSslEngineBuilder(nextConfigs);
             if (sslEngineBuilder.keystore() == null) {
                 if (newSslEngineBuilder.keystore() != null) {
                     throw new ConfigException("Cannot add SSL keystore to an existing listener for " +
@@ -148,8 +152,8 @@ public class SslFactory implements Reconfigurable {
                     throw new ConfigException("Cannot remove the SSL keystore from an existing listener for " +
                             "which a keystore was configured.");
                 }
-                if (!CertificateEntries.create(sslEngineBuilder.keystore().load()).equals(
-                        CertificateEntries.create(newSslEngineBuilder.keystore().load()))) {
+                if (!CertificateEntries.create(sslEngineBuilder.keystore()).equals(
+                        CertificateEntries.create(newSslEngineBuilder.keystore()))) {
                     throw new ConfigException("Keystore DistinguishedName or SubjectAltNames do not match");
                 }
             }
@@ -173,15 +177,10 @@ public class SslFactory implements Reconfigurable {
         if (sslEngineBuilder == null) {
             throw new IllegalStateException("SslFactory has not been configured.");
         }
-        return sslEngineBuilder.createSslEngine(mode, peerHost, peerPort, endpointIdentification);
+        return sslEngineBuilder.build(mode, peerHost, peerPort, endpointIdentification);
     }
 
-    @Deprecated
-    public SSLContext sslContext() {
-        return sslEngineBuilder.sslContext();
-    }
-
-    public SslEngineBuilder sslEngineBuilder() {
+    ISslEngineBuilder sslEngineBuilder() {
         return sslEngineBuilder;
     }
 
@@ -275,17 +274,17 @@ public class SslFactory implements Reconfigurable {
         private ByteBuffer appBuffer;
         private ByteBuffer netBuffer;
 
-        static void validate(SslEngineBuilder oldEngineBuilder,
-                             SslEngineBuilder newEngineBuilder) throws SSLException {
+        static void validate(ISslEngineBuilder oldEngineBuilder,
+                             ISslEngineBuilder newEngineBuilder) throws SSLException {
             validate(createSslEngineForValidation(oldEngineBuilder, Mode.SERVER),
                     createSslEngineForValidation(newEngineBuilder, Mode.CLIENT));
             validate(createSslEngineForValidation(newEngineBuilder, Mode.SERVER),
                     createSslEngineForValidation(oldEngineBuilder, Mode.CLIENT));
         }
 
-        private static SSLEngine createSslEngineForValidation(SslEngineBuilder sslEngineBuilder, Mode mode) {
+        private static SSLEngine createSslEngineForValidation(ISslEngineBuilder sslEngineBuilder, Mode mode) {
             // Use empty hostname, disable hostname verification
-            return sslEngineBuilder.createSslEngine(mode, "", 0, "");
+            return sslEngineBuilder.build(mode, "", 0, "");
         }
 
         static void validate(SSLEngine clientEngine, SSLEngine serverEngine) throws SSLException {

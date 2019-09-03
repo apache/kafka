@@ -134,7 +134,7 @@ public class SslFactoryTest {
                 createSslConfig(false, true, Mode.SERVER, trustStoreFile, "server");
         SslFactory sslFactory = new SslFactory(Mode.SERVER);
         sslFactory.configure(sslConfig);
-        SslEngineBuilder sslEngineBuilder = sslFactory.sslEngineBuilder();
+        ISslEngineBuilder sslEngineBuilder = sslFactory.sslEngineBuilder();
         assertNotNull("SslEngineBuilder not created", sslEngineBuilder);
 
         // Verify that SslEngineBuilder is not recreated on reconfigure() if config and
@@ -192,10 +192,10 @@ public class SslFactoryTest {
         sslConfig.remove(SslConfigs.SSL_TRUSTSTORE_TYPE_CONFIG);
         SslFactory sslFactory = new SslFactory(Mode.SERVER);
         sslFactory.configure(sslConfig);
-        SSLContext sslContext = sslFactory.sslEngineBuilder().sslContext();
+        SSLContext sslContext = sslFactory.sslContext();
         assertNotNull("SSL context not created", sslContext);
         assertSame("SSL context recreated unnecessarily", sslContext,
-                sslFactory.sslEngineBuilder().sslContext());
+                sslFactory.sslContext());
         assertFalse(sslFactory.createSslEngine("localhost", 0).getUseClientMode());
 
         Map<String, Object> sslConfig2 = TestSslUtils.
@@ -218,10 +218,10 @@ public class SslFactoryTest {
         sslConfig.remove(SslConfigs.SSL_KEYSTORE_TYPE_CONFIG);
         SslFactory sslFactory = new SslFactory(Mode.SERVER);
         sslFactory.configure(sslConfig);
-        SSLContext sslContext = sslFactory.sslEngineBuilder().sslContext();
+        SSLContext sslContext = sslFactory.sslContext();
         assertNotNull("SSL context not created", sslContext);
         assertSame("SSL context recreated unnecessarily", sslContext,
-                sslFactory.sslEngineBuilder().sslContext());
+                sslFactory.sslContext());
         assertFalse(sslFactory.createSslEngine("localhost", 0).getUseClientMode());
 
         File newTrustStoreFile = File.createTempFile("truststore", ".jks");
@@ -232,7 +232,7 @@ public class SslFactoryTest {
         sslConfig.remove(SslConfigs.SSL_KEYSTORE_TYPE_CONFIG);
         sslFactory.reconfigure(sslConfig);
         assertNotSame("SSL context not recreated", sslContext,
-                sslFactory.sslEngineBuilder().sslContext());
+                sslFactory.sslContext());
 
         sslConfig = TestSslUtils.
                 createSslConfig(false, true, Mode.SERVER, newTrustStoreFile, "server");
