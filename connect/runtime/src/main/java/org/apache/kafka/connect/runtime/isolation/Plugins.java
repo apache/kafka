@@ -243,8 +243,7 @@ public class Plugins {
 
                 try {
                     klass = pluginClassFromConfig(config, classPropertyName, Converter.class);
-                }
-                catch (ClassNotFoundException e) {
+                } catch (ClassNotFoundException e) {
                     throw new ConnectException(
                         "Failed to find any class that implements Converter for the config "
                         + classPropertyName + ", available converters are: "
@@ -328,8 +327,7 @@ public class Plugins {
                 // before calling config(...)
                 try {
                     klass = pluginClassFromConfig(config, classPropertyName, HeaderConverter.class);
-                }
-                catch (ClassNotFoundException e) {
+                } catch (ClassNotFoundException e) {
                     throw new ConnectException(
                         "Failed to find any class that implements HeaderConverter for the config "
                         + classPropertyName + ", available converters are: "
@@ -368,8 +366,7 @@ public class Plugins {
         try {
             plugin = newPlugin(klass);
             plugin.configure(converterConfig);
-        }
-        finally {
+        } finally {
             compareAndSwapLoaders(savedLoader);
         }
         return plugin;
