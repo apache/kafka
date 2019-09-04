@@ -236,7 +236,10 @@ class TransactionCoordinator(brokerId: Int,
                 time.milliseconds(), isNewMetadata)
             }
 
-          transitMetadataResult.map { transitMetadata => (coordinatorEpoch, transitMetadata) }
+          transitMetadataResult match {
+            case Right(transitMetadata) => Right((coordinatorEpoch, transitMetadata))
+            case Left(err) => Left(err)
+          }
 
         case Ongoing =>
           // indicate to abort the current ongoing txn first. Note that this epoch is never returned to the

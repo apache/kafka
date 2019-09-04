@@ -248,9 +248,11 @@ private[transaction] class TransactionMetadata(val transactionalId: String,
         }
     }
 
-    epochBumpResult.map { case (nextEpoch, lastEpoch) =>
-        prepareTransitionTo(Empty, producerId, nextEpoch, lastEpoch, newTxnTimeoutMs,
-          immutable.Set.empty[TopicPartition], -1, updateTimestamp)
+    epochBumpResult match {
+      case Right((nextEpoch, lastEpoch)) => Right(prepareTransitionTo(Empty, producerId, nextEpoch, lastEpoch, newTxnTimeoutMs,
+        immutable.Set.empty[TopicPartition], -1, updateTimestamp))
+
+      case Left(err) => Left(err)
     }
   }
 
