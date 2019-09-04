@@ -19,6 +19,8 @@ package org.apache.kafka.server.authorizer;
 
 import java.util.Collections;
 import java.util.Collection;
+import java.util.Optional;
+
 import org.apache.kafka.common.acl.AclBinding;
 import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.errors.ApiException;
@@ -44,8 +46,8 @@ public class AclDeleteResult {
     /**
      * Returns any exception while attempting to match ACL filter to delete ACLs.
      */
-    public ApiException exception() {
-        return exception;
+    public Optional<ApiException> exception() {
+        return exception == null ? Optional.empty() : Optional.of(exception);
     }
 
     /**
@@ -81,10 +83,10 @@ public class AclDeleteResult {
         }
 
         /**
-         * Returns exception that resulted in failure to delete ACL binding.
+         * Returns any exception that resulted in failure to delete ACL binding.
          */
-        public ApiException exception() {
-            return exception;
+        public Optional<ApiException> exception() {
+            return exception == null ? Optional.empty() : Optional.of(exception);
         }
 
         /**

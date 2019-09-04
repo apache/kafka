@@ -281,8 +281,7 @@ class DelegationTokenManagerTest extends ZooKeeperTestHarness  {
 
     def createAcl(aclBinding: AclBinding): Unit = {
       val result = aclAuthorizer.createAcls(null, List(aclBinding).asJava).get(0)
-      if (result.failed)
-        throw result.exception
+      result.exception.ifPresent(e => throw e)
     }
 
     //get all tokens for multiple owners (owner1, renewer4) and with permission

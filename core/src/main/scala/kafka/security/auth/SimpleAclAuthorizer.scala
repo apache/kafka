@@ -125,14 +125,14 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
   private def createAcls(bindings: Set[AclBinding]): Unit = {
     aclAuthorizer.maxUpdateRetries = maxUpdateRetries
     val results = aclAuthorizer.createAcls(null, bindings.toList.asJava).asScala
-    results.find(_.exception != null).foreach { r => throw r.exception }
+    results.foreach { result => result.exception.ifPresent(e => throw e) }
   }
 
   private def deleteAcls(filters: Set[AclBindingFilter]): Boolean = {
     aclAuthorizer.maxUpdateRetries = maxUpdateRetries
     val results = aclAuthorizer.deleteAcls(null, filters.toList.asJava).asScala
-    results.find(_.exception != null).foreach { r => throw r.exception }
-    results.flatMap(_.aclBindingDeleteResults.asScala).find(_.exception != null).foreach { r => throw r.exception }
+    results.foreach { result => result.exception.ifPresent(e => throw e) }
+    results.flatMap(_.aclBindingDeleteResults.asScala).foreach { result => result.exception.ifPresent(e => throw e) }
     results.exists(r => r.aclBindingDeleteResults.asScala.exists(_.deleted))
   }
 
