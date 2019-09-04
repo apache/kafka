@@ -33,7 +33,7 @@ public class InsertHeader<R extends ConnectRecord<R>> implements Transformation<
 
     private interface ConfigName {
         String HEADER_CONFIG = "header";
-        String HEADER_VALUE_CONFIG = "value";
+        String HEADER_VALUE_CONFIG = "literal.value";
     }
 
     /**
@@ -49,7 +49,6 @@ public class InsertHeader<R extends ConnectRecord<R>> implements Transformation<
 
     private String headerName;
     private String headerValue;
-    private String headerType;
 
     @Override
     public void configure(Map<String, ?> props) {
