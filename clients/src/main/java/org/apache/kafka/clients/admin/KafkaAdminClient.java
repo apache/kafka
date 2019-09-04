@@ -3339,7 +3339,7 @@ public class KafkaAdminClient extends AdminClient {
      */
     private boolean dependsOnSpecificNode(ConfigResource resource) {
         return (resource.type() == ConfigResource.Type.BROKER && !resource.isDefault())
-                   || resource.type() == ConfigResource.Type.BROKER_LOGGER;
+                || resource.type() == ConfigResource.Type.BROKER_LOGGER;
     }
 
     @Override
@@ -3382,20 +3382,8 @@ public class KafkaAdminClient extends AdminClient {
                     return;
                 }
 
-                Errors error = response.error();
-
-                // If this is a known top level error, we will throw exception directly. This is
-                // because no member should have been removed successfully.
-                // For transit coordinator error, the whole process will retry.
-                if (error == Errors.COORDINATOR_LOAD_IN_PROGRESS
-                        || error == Errors.COORDINATOR_NOT_AVAILABLE
-                        || error == Errors.GROUP_AUTHORIZATION_FAILED
-                        || error == Errors.NOT_COORDINATOR) {
-                    throw error.exception();
-                }
-
                 final RemoveMemberFromGroupResult membershipChangeResult =
-                    new RemoveMemberFromGroupResult(error,
+                    new RemoveMemberFromGroupResult(response.error(),
                                                     context.getOptions().getMembers(),
                                                     response.memberResponses());
 

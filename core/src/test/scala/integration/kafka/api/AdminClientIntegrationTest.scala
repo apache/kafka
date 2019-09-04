@@ -43,10 +43,11 @@ import org.apache.kafka.common.TopicPartitionReplica
 import org.apache.kafka.common.acl._
 import org.apache.kafka.common.config.{ConfigResource, LogLevelConfig}
 import org.apache.kafka.common.errors._
+import org.apache.kafka.common.internals.KafkaFutureImpl
 import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity
 import org.apache.kafka.common.message.LeaveGroupResponseData.MemberResponse
 import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.requests.{DeleteRecordsRequest, MetadataResponse}
+import org.apache.kafka.common.requests.{DeleteRecordsRequest, JoinGroupRequest, MetadataResponse}
 import org.apache.kafka.common.resource.{PatternType, Resource, ResourcePattern, ResourceType}
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.junit.Assert._
@@ -1256,9 +1257,18 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
           assertTrue(removeMemberResult.hasError)
           assertEquals(Errors.UNKNOWN_MEMBER_ID, removeMemberResult.error)
 
-          assertEquals(Collections.singletonList(new MemberResponse()
-            .setGroupInstanceId(invalidInstanceId)
-            .setErrorCode(Errors.UNKNOWN_MEMBER_ID.code())), removeMemberResult.memberFutures())
+          val firstMemberFutures = removeMemberResult.memberFutures()
+          assertEquals(1, firstMemberFutures.size)
+          firstMemberFutures.values.asScala foreach { case value =>
+            try {
+              value.get()
+            } catch {
+              case e: ExecutionException =>
+                assertTrue(e.getCause.isInstanceOf[UnknownMemberIdException])
+              case _ =>
+                fail("Should have caught exception in getting member future")
+            }
+          }
 
           // Test consumer group deletion
           var deleteResult = client.deleteConsumerGroups(Seq(testGroupId, fakeGroupId).asJava)
@@ -1281,8 +1291,19 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
 
           assertFalse(removeMemberResult.hasError)
           assertEquals(Errors.NONE, removeMemberResult.error)
-          assertEquals(Collections.singletonList(new MemberIdentity()
-            .setGroupInstanceId(testInstanceId)), removeMemberResult.memberFutures)
+
+          val deletedMemberFutures = removeMemberResult.memberFutures()
+          assertEquals(1, firstMemberFutures.size)
+          deletedMemberFutures.values.asScala foreach { case value =>
+            try {
+              value.get()
+            } catch {
+              case e: ExecutionException =>
+                assertTrue(e.getCause.isInstanceOf[UnknownMemberIdException])
+              case _ =>
+                fail("Should have caught exception in getting member future")
+            }
+          }
 
           // The group should contain no member now.
           val describeTestGroupResult = client.describeConsumerGroups(Seq(testGroupId).asJava,
