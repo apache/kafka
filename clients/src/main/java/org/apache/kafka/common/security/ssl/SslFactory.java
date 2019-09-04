@@ -223,7 +223,6 @@ public class SslFactory implements Reconfigurable {
 
         private static ISslEngineBuilder createInstance(Class<ISslEngineBuilder> sslEngineBuilderClass, Map<String, Object> configs) {
             try {
-                Object o = sslEngineBuilderClass.getDeclaredConstructor(Map.class);
                 return sslEngineBuilderClass.getDeclaredConstructor(Map.class).newInstance(configs);
             } catch (InstantiationException|IllegalAccessException|InvocationTargetException|NoSuchMethodException e) {
                 log.warn("Failed to instantiate {} {}",SSL_ENGINEBUILDER_CLASS_CONFIG, sslEngineBuilderClass.getCanonicalName(),e);
