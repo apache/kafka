@@ -46,7 +46,7 @@ public class CodeBufferTest {
     }
 
     @Test
-    public void testEquals() throws Exception {
+    public void testEquals() {
         CodeBuffer buffer1 = new CodeBuffer();
         CodeBuffer buffer2 = new CodeBuffer();
         Assert.assertEquals(buffer1, buffer2);
@@ -57,5 +57,17 @@ public class CodeBufferTest {
         buffer1.printf("foo, bar, and baz");
         buffer2.printf("foo, bar, and baz");
         Assert.assertEquals(buffer1, buffer2);
+    }
+
+    @Test
+    public void testIndentMustBeNonNegative() {
+        CodeBuffer buffer = new CodeBuffer();
+        buffer.incrementIndent();
+        buffer.decrementIndent();
+        try {
+            buffer.decrementIndent();
+        } catch (RuntimeException e) {
+            Assert.assertTrue(e.getMessage().contains("Indent < 0"));
+        }
     }
 }
