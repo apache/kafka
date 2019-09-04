@@ -31,22 +31,14 @@ import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLEngine;
 import javax.net.ssl.SSLEngineResult;
 import javax.net.ssl.SSLException;
+import java.lang.reflect.InvocationTargetException;
 import java.nio.ByteBuffer;
 import java.security.cert.Certificate;
 import java.security.cert.X509Certificate;
 import java.security.GeneralSecurityException;
 import java.security.KeyStore;
 import java.security.Principal;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.Enumeration;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Set;
-import java.util.HashSet;
+import java.util.*;
 
 public class SslFactory implements Reconfigurable {
     private static final Logger log = LoggerFactory.getLogger(SslFactory.class);
@@ -92,7 +84,7 @@ public class SslFactory implements Reconfigurable {
         if (clientAuthConfigOverride != null) {
             nextConfigs.put(BrokerSecurityConfigs.SSL_CLIENT_AUTH_CONFIG, clientAuthConfigOverride);
         }
-        ISslEngineBuilder builder = new DefaultSslEngineBuilder(nextConfigs);
+        ISslEngineBuilder builder = SslEngineBuilderInstantiator.instantiateSslEngineBuilder(nextConfigs);
         if (keystoreVerifiableUsingTruststore) {
             try {
                 SslEngineValidator.validate(builder, builder);
@@ -141,7 +133,7 @@ public class SslFactory implements Reconfigurable {
             return sslEngineBuilder;
         }
         try {
-            ISslEngineBuilder newSslEngineBuilder = new DefaultSslEngineBuilder(nextConfigs);
+            ISslEngineBuilder newSslEngineBuilder = SslEngineBuilderInstantiator.instantiateSslEngineBuilder(nextConfigs);
             if (sslEngineBuilder.keystore() == null) {
                 if (newSslEngineBuilder.keystore() != null) {
                     throw new ConfigException("Cannot add SSL keystore to an existing listener for " +
@@ -215,6 +207,49 @@ public class SslFactory implements Reconfigurable {
                                             K key) {
         if (srcMap.containsKey(key)) {
             destMap.put(key, srcMap.get(key));
+        }
+    }
+
+    static class SslEngineBuilderInstantiator {
+
+        final static String SSL_ENGINEBUILDER_CLASS_CONFIG = "ssl.engine.builder.class";
+        final static String DEFAULT_SSL_ENGINEBUILDER_CLASS = "org.apache.kafka.common.security.ssl.DefaultSslEngineBuilder";
+
+        static ISslEngineBuilder instantiateSslEngineBuilder(Map<String,Object> configs) {
+            Class<ISslEngineBuilder> sslEngineBuilderClass = loadSslEngineBuilderClass(configs);
+            ISslEngineBuilder sslEngineBuilder = createInstance(sslEngineBuilderClass,configs);
+            return sslEngineBuilder;
+        }
+
+        private static ISslEngineBuilder createInstance(Class<ISslEngineBuilder> sslEngineBuilderClass, Map<String, Object> configs) {
+            try {
+                Object o = sslEngineBuilderClass.getDeclaredConstructor(Map.class);
+                return sslEngineBuilderClass.getDeclaredConstructor(Map.class).newInstance(configs);
+            } catch (InstantiationException|IllegalAccessException|InvocationTargetException|NoSuchMethodException e) {
+                log.warn("Failed to instantiate {} {}",SSL_ENGINEBUILDER_CLASS_CONFIG, sslEngineBuilderClass.getCanonicalName(),e);
+                throw new ConfigException("Failed to instantiate "+SSL_ENGINEBUILDER_CLASS_CONFIG+" "+
+                        sslEngineBuilderClass.getCanonicalName()+". msg="+e.getMessage());
+            }
+        }
+
+        private static Class<ISslEngineBuilder> loadSslEngineBuilderClass(Map<String,Object> configs) {
+
+            String sslEngineBuilderClassConfig = (String)configs.getOrDefault(SSL_ENGINEBUILDER_CLASS_CONFIG,
+                    DEFAULT_SSL_ENGINEBUILDER_CLASS);
+
+            try {
+                Class clazz = Class.forName(sslEngineBuilderClassConfig);
+                if ( ISslEngineBuilder.class.isAssignableFrom(clazz)) {
+                    return (Class<ISslEngineBuilder>)clazz;
+                } else {
+                    throw new ConfigException("Specified "+SSL_ENGINEBUILDER_CLASS_CONFIG+" is not instance of ISslEngineBuilder ",
+                            sslEngineBuilderClassConfig);
+                }
+            } catch(ClassNotFoundException e) {
+                log.warn("Could not find specified class {} for {}", sslEngineBuilderClassConfig, SSL_ENGINEBUILDER_CLASS_CONFIG, e);
+                throw new ConfigException("Failed to load specified class "+sslEngineBuilderClassConfig+" for " +
+                        SSL_ENGINEBUILDER_CLASS_CONFIG+" "+e);
+            }
         }
     }
 
