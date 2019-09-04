@@ -503,8 +503,7 @@ public class AssignedStreamsTasksTest {
 
         final StateDirectory stateDirectory = new StateDirectory(
             StreamTaskTest.createConfig(true),
-            time,
-            true);
+            time);
 
         final StreamTask task = new StreamTask(
             new TaskId(0, 0),
@@ -517,7 +516,8 @@ public class AssignedStreamsTasksTest {
             stateDirectory,
             null,
             time,
-            () -> producer);
+            () -> producer,
+            metrics.sensor("dummy"));
 
         assignedTasks.addNewTask(task);
         assignedTasks.initializeNewTasks();
