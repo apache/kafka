@@ -116,7 +116,8 @@ versions += [
   spotbugsPlugin: "1.6.9",
   spotlessPlugin: "3.23.1",
   zookeeper: "3.5.5",
-  zstd: "1.4.2-1"
+  zstd: "1.4.2-1",
+  mx4jtools: "3.0.1"
 ]
 
 libs += [
@@ -186,5 +187,6 @@ libs += [
   jfreechart: "jfreechart:jfreechart:$versions.jfreechart",
   mavenArtifact: "org.apache.maven:maven-artifact:$versions.mavenArtifact",
   zstd: "com.github.luben:zstd-jni:$versions.zstd",
-  httpclient: "org.apache.httpcomponents:httpclient:$versions.httpclient"
+  httpclient: "org.apache.httpcomponents:httpclient:$versions.httpclient",
+  mx4jtools: "mx4j:mx4j-tools:$versions.mx4jtools"
 ]
