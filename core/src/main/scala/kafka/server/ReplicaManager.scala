@@ -157,6 +157,7 @@ class ReplicaManager(val config: KafkaConfig,
                      val zkClient: KafkaZkClient,
                      scheduler: Scheduler,
                      val logManager: LogManager,
+                     remoteLogManager: Option[RemoteLogManager],
                      val isShuttingDown: AtomicBoolean,
                      quotaManagers: QuotaManagers,
                      val brokerTopicStats: BrokerTopicStats,
@@ -175,13 +176,14 @@ class ReplicaManager(val config: KafkaConfig,
            zkClient: KafkaZkClient,
            scheduler: Scheduler,
            logManager: LogManager,
+           remoteLogManager: Option[RemoteLogManager],
            isShuttingDown: AtomicBoolean,
            quotaManagers: QuotaManagers,
            brokerTopicStats: BrokerTopicStats,
            metadataCache: MetadataCache,
            logDirFailureChannel: LogDirFailureChannel,
            threadNamePrefix: Option[String] = None) {
-    this(config, metrics, time, zkClient, scheduler, logManager, isShuttingDown,
+    this(config, metrics, time, zkClient, scheduler, logManager, remoteLogManager, isShuttingDown,
       quotaManagers, brokerTopicStats, metadataCache, logDirFailureChannel,
       DelayedOperationPurgatory[DelayedProduce](
         purgatoryName = "Produce", brokerId = config.brokerId,
@@ -921,7 +923,7 @@ class ReplicaManager(val config: KafkaConfig,
         val remoteFetchResult = new CompletableFuture[RemoteLogReadResult]
         var remoteFetchTask: RemoteLogManager#AsyncReadTask  = null
         try {
-          remoteFetchTask = logManager.remoteLogManager.get.asyncRead(remoteFetchInfo.get, (result:RemoteLogReadResult) => {
+          remoteFetchTask = remoteLogManager.get.asyncRead(remoteFetchInfo.get, (result:RemoteLogReadResult) => {
             remoteFetchResult.complete(result)
             remoteFetchPurgatory.checkAndComplete(key)
           })
@@ -1098,7 +1100,7 @@ class ReplicaManager(val config: KafkaConfig,
           // Incase of offset out of range errors, check for remote log manager to fetch from remote storage.
           // if it is from a follower then send the offset metadata but not the records data as that can be fetched
           // from the remote store.
-          logManager.remoteLogManager.map(rlm => {
+          remoteLogManager.map(rlm => {
             val log = getPartitionOrException(tp, expectLeader = fetchOnlyFromLeader).localLogOrException
             val highWatermark = log.highWatermark
             val leaderLogStartOffset = log.logStartOffset
@@ -1398,7 +1400,7 @@ class ReplicaManager(val config: KafkaConfig,
         replicaFetcherManager.shutdownIdleFetcherThreads()
         replicaAlterLogDirsManager.shutdownIdleFetcherThreads()
 
-        logManager.onLeadershipChange(partitionsBecomeLeader, partitionsBecomeFollower)
+        remoteLogManager.foreach(rlm => rlm.onLeadershipChange(partitionsBecomeLeader, partitionsBecomeFollower))
 
         onLeadershipChange(partitionsBecomeLeader, partitionsBecomeFollower)
         new LeaderAndIsrResponse(Errors.NONE, responseMap.asJava)

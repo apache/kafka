@@ -22,7 +22,8 @@ import java.util.concurrent._
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.function.{BiConsumer, Consumer, Function}
 
-import kafka.log.{Log, LogSegment}
+import kafka.cluster.Partition
+import kafka.log.Log
 import kafka.server.{Defaults, FetchDataInfo, KafkaConfig, LogOffsetMetadata, RemoteStorageFetchInfo}
 import kafka.utils.Logging
 import org.apache.kafka.common.TopicPartition
@@ -54,9 +55,14 @@ class RLMScheduledThreadPool(poolSize: Int) extends Logging {
     scheduledThreadPool.setCorePoolSize(size)
   }
 
-  def scheduleWithFixedDelay(runnable: CancellableRunnable, initialDelay: Long, delay: Long,
+  def scheduleWithFixedDelay(runnable: Runnable, initialDelay: Long, delay: Long,
                              timeUnit: TimeUnit): ScheduledFuture[_] = {
     scheduledThreadPool.scheduleWithFixedDelay(runnable, initialDelay, delay, timeUnit)
+  }
+
+  def scheduleOnceWithDelay(runnable: Runnable, delay: Long,
+                            timeUnit: TimeUnit): ScheduledFuture[_] = {
+    scheduledThreadPool.schedule(runnable, delay, timeUnit)
   }
 
   def shutdown(): Unit = {
@@ -78,14 +84,20 @@ trait CancellableRunnable extends Runnable {
   }
 }
 
-class RemoteLogManager(logFetcher: TopicPartition => Option[Log],
-                       segmentCleaner: (TopicPartition, LogSegment) => Unit,
+class RemoteLogManager(fetchLog: TopicPartition => Option[Log],
+                       updateRemoteLogStartOffset: (TopicPartition, Long) => Unit,
                        rlmConfig: RemoteLogManagerConfig,
                        time: Time = Time.SYSTEM) extends Logging with Closeable {
 
   private val leaderOrFollowerTasks: ConcurrentMap[TopicPartition, RLMTaskWithFuture] =
     new ConcurrentHashMap[TopicPartition, RLMTaskWithFuture]()
-  val remoteStorageFetcherThreadPool = new RemoteStorageReaderThreadPool(rlmConfig.remoteLogReaderThreads, rlmConfig.remoteLogReaderMaxPendingTasks, time)
+  val remoteStorageFetcherThreadPool = new RemoteStorageReaderThreadPool(rlmConfig.remoteLogReaderThreads,
+    rlmConfig.remoteLogReaderMaxPendingTasks, time)
+
+  private val delayInMs = rlmConfig.remoteLogManagerTaskIntervalMs
+  private val poolSize = rlmConfig.remoteLogManagerThreadPoolSize
+  private val rlmScheduledThreadPool = new RLMScheduledThreadPool(poolSize)
+  @volatile private var closed = false
 
   private def createRemoteStorageManager(): RemoteStorageManager = {
     val rsm = Class.forName(rlmConfig.remoteLogStorageManagerClass)
@@ -96,16 +108,24 @@ class RemoteLogManager(logFetcher: TopicPartition => Option[Log],
     rsmProps.put(KafkaConfig.RemoteLogRetentionMillisProp, rlmConfig.remoteLogRetentionMillis)
     rsmProps.put(KafkaConfig.RemoteLogRetentionBytesProp, rlmConfig.remoteLogRetentionBytes)
     rsm.configure(rsmProps)
+
     rsm
   }
 
   private val remoteStorageManager: RemoteStorageManager = createRemoteStorageManager()
-  private val rlmIndexer: RLMIndexer = new RLMIndexer(remoteStorageManager, logFetcher)
+  private val rlmIndexer: RLMIndexer = new RLMIndexer(remoteStorageManager, fetchLog)
 
-  // add a config to take no of threads
-  private val delayInMs = 30 * 1000L
-  private val poolSize = 10
-  private val rlmScheduledThreadPool = new RLMScheduledThreadPool(poolSize)
+  def handleLogStartOffsetUpdate(topicPartition: TopicPartition, logStartOffset: Long): Unit = {
+    updateRemoteLogStartOffset(topicPartition, logStartOffset)
+    info(s"Cleaning remote log indexes of partition $topicPartition till logStartOffset:$logStartOffset")
+    // remove all indexes earlier to lso, may be rename now and they will GCed later.
+    val cleanedUpIndexes = rlmIndexer.maybeLoadIndex(topicPartition).cleanupIndexesUntil(logStartOffset)
+
+    // deleting files in the current thread for now. These can be scheduled in a separate thread pool as it is more of
+    // a cleanup activity. If the broker shutsdown in the middle of this activity, restart will delete all these files
+    // as part of deleting files with a suffix of [Log.DeletedFileSuffix]
+    cleanedUpIndexes.foreach { x => x.deleteIfExists() }
+  }
 
   /**
    * Ask RLM to monitor the given TopicPartitions, and copy inactive Log
@@ -124,7 +144,7 @@ class RemoteLogManager(logFetcher: TopicPartition => Option[Log],
   }
 
   private def doHandleLeaderOrFollowerPartitions(topicPartitions: Set[TopicPartition],
-                                                 convertToLeaderOrFollower: RLMTask => Unit) = {
+                                                 convertToLeaderOrFollower: RLMTask => Unit): Unit = {
     topicPartitions.foreach { topicPartition =>
       val rlmTaskWithFuture = leaderOrFollowerTasks.computeIfAbsent(topicPartition,
         new Function[TopicPartition, RLMTaskWithFuture] {
@@ -136,6 +156,11 @@ class RemoteLogManager(logFetcher: TopicPartition => Option[Log],
         })
       convertToLeaderOrFollower(rlmTaskWithFuture.rlmTask)
     }
+  }
+
+  def onLeadershipChange(partitionsBecomeLeader: Set[Partition], partitionsBecomeFollower: Set[Partition]): Unit = {
+    handleFollowerPartitions(partitionsBecomeFollower.map(x => x.topicPartition))
+    handleLeaderPartitions(partitionsBecomeLeader.map(x => x.topicPartition))
   }
 
   /**
@@ -158,7 +183,7 @@ class RemoteLogManager(logFetcher: TopicPartition => Option[Log],
   }
 
   class RLMTask(tp: TopicPartition) extends CancellableRunnable with Logging {
-    this.logIdent = s"[RLMTask partition:$tp] "
+    this.logIdent = s"[RLMTask partition:$tp ] "
     @volatile var isLeader: Boolean = false
 
     private var readOffset: Long = rlmIndexer.getOrLoadIndexOffset(tp).getOrElse(0L)
@@ -172,43 +197,53 @@ class RemoteLogManager(logFetcher: TopicPartition => Option[Log],
     }
 
     def copyLogSegmentsToRemote(): Unit = {
-      logFetcher(tp).foreach { log => {
+      fetchLog(tp).foreach { log => {
         if (isCancelled()) {
           info(s"Skipping copying log segments as the current task is cancelled")
           return
         }
 
-        val baseOffset = log.activeSegment.baseOffset
-        if (readOffset >= baseOffset) {
-          info(s"Skipping building indexes, current read offset:$readOffset is more than >= active segment " +
-            s"base offset:$baseOffset ")
-          return
-        }
-
-        val segments = log.logSegments(readOffset + 1, baseOffset)
-        segments.foreach { segment =>
-          if (isCancelled() || !isLeader) {
-            info(
-              s"Skipping copying log segments as the current task state is changed, cancelled:$isCancelled() leader:$isLeader")
+        if (log.replicaHighWatermark.isEmpty) {
+          info(s"Skipping copy of log for: $tp has no high-watermark.")
+        } else {
+          val highWatermark = log.replicaHighWatermark.get
+          // copy segments only till the min of highWatermark or stable-offset
+          // remote storage should contain only committed/acked messages
+          val fetchOffset = log.firstUnstableOffset match {
+            case Some(offsetMetadata) if offsetMetadata.messageOffset < highWatermark => offsetMetadata.messageOffset
+            case _ => highWatermark
+          }
+          if (readOffset >= fetchOffset) {
+            info(s"Skipping building indexes, current read offset:$readOffset is more than committed/acked " +
+              s"message offset:$fetchOffset ")
             return
           }
-          val entries = remoteStorageManager.copyLogSegment(tp, segment)
-          val file = segment.log.file()
-          val fileName = file.getName
-          val baseOffsetStr = fileName.substring(0, fileName.indexOf("."))
-          rlmIndexer.maybeBuildIndexes(tp, entries, file.getParentFile, baseOffsetStr)
-          readOffset = entries.get(entries.size() - 1).lastOffset
+
+          val segments = log.logSegments(readOffset + 1, fetchOffset)
+          segments.foreach { segment =>
+            if (isCancelled() || !isLeader) {
+              info(s"Skipping copying log segments as the current task state is changed, cancelled:$isCancelled() " +
+                s"leader:$isLeader")
+              return
+            }
+            val entries = remoteStorageManager.copyLogSegment(tp, segment)
+            val file = segment.log.file()
+            val fileName = file.getName
+            val baseOffsetStr = fileName.substring(0, fileName.indexOf("."))
+            rlmIndexer.maybeBuildIndexes(tp, entries, file.getParentFile, baseOffsetStr)
+            readOffset = entries.get(entries.size() - 1).lastOffset
+          }
         }
       }
       }
     }
 
     def updateRemoteLogIndexes(): Unit = {
-      remoteStorageManager.listRemoteSegments(tp, readOffset).forEach {
-        rlsInfo =>
+      remoteStorageManager.listRemoteSegments(tp, readOffset).forEach(new Consumer[RemoteLogSegmentInfo] {
+        override def accept(rlsInfo: RemoteLogSegmentInfo): Unit = {
           val entries = remoteStorageManager.getRemoteLogIndexEntries(rlsInfo)
           if (!entries.isEmpty) {
-            logFetcher(tp).foreach { log: Log =>
+            fetchLog(tp).foreach { log: Log =>
               if (isCancelled()) {
                 info(s"Skipping building indexes as the current task is cancelled")
                 return
@@ -219,11 +254,14 @@ class RemoteLogManager(logFetcher: TopicPartition => Option[Log],
               readOffset = entries.get(entries.size() - 1).lastOffset
             }
           }
-      }
+        }
+      })
     }
 
     def deleteExpiredRemoteLogSegments(): Unit = {
-      remoteStorageManager.cleanupLogUntil(tp, time.milliseconds() - rlmConfig.remoteLogRetentionMillis)
+      val newRemoteLogStartOffset = remoteStorageManager.cleanupLogUntil(tp,
+        time.milliseconds() - rlmConfig.remoteLogRetentionMillis)
+      handleLogStartOffsetUpdate(tp, newRemoteLogStartOffset)
     }
 
     override def run(): Unit = {
@@ -307,11 +345,16 @@ class RemoteLogManager(logFetcher: TopicPartition => Option[Log],
    * Stops all the threads and releases all the resources.
    */
   def close(): Unit = {
-    Utils.closeQuietly(remoteStorageManager, "RemoteLogStorageManager")
-    leaderOrFollowerTasks.values().forEach(new Consumer[RLMTaskWithFuture] {
-      override def accept(taskWithFuture: RLMTaskWithFuture): Unit = taskWithFuture.cancel()
-    })
-    rlmScheduledThreadPool.shutdown()
+    if (closed)
+      warn("Trying to close an already closed RemoteLogManager")
+    else this synchronized {
+      Utils.closeQuietly(remoteStorageManager, "RemoteLogStorageManager")
+      leaderOrFollowerTasks.values().forEach(new Consumer[RLMTaskWithFuture] {
+        override def accept(taskWithFuture: RLMTaskWithFuture): Unit = taskWithFuture.cancel()
+      })
+      rlmScheduledThreadPool.shutdown()
+      closed = true
+    }
   }
 
 }
@@ -336,7 +379,6 @@ case class RemoteLogManagerConfig(remoteLogStorageEnable: Boolean, remoteLogStor
                                   remoteLogRetentionBytes: Long, remoteLogRetentionMillis: Long,
                                   remoteStorageConfig: Map[String, Any], remoteLogManagerThreadPoolSize: Int,
                                   remoteLogManagerTaskIntervalMs: Long)
-
 
 object RemoteLogManager {
   def REMOTE_STORAGE_MANAGER_CONFIG_PREFIX = "remote.log.storage."

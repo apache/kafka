@@ -17,6 +17,7 @@
 package org.apache.kafka.rsm.hdfs;
 
 import kafka.log.LogSegment;
+import kafka.log.remote.LogStartOffsetUpdateListener;
 import kafka.log.remote.RemoteLogIndexEntry;
 import kafka.log.remote.RemoteLogSegmentInfo;
 import kafka.log.remote.RemoteStorageManager;
@@ -83,6 +84,7 @@ public class HDFSRemoteStorageManager implements RemoteStorageManager {
     private String baseDir = null;
     private Configuration hadoopConf = null;
     private ThreadLocal<FileSystem> fs = new ThreadLocal<>();
+    private LogStartOffsetUpdateListener lsoUpdater;
 
     @Override
     public List<RemoteLogIndexEntry> copyLogSegment(TopicPartition topicPartition, LogSegment logSegment)
@@ -145,6 +147,10 @@ public class HDFSRemoteStorageManager implements RemoteStorageManager {
         // Not implemented
     }
 
+    public List<RemoteLogSegmentInfo> listRemoteSegments(TopicPartition topicPartition) throws IOException {
+        return listRemoteSegments(topicPartition, 0);
+    }
+
     @Override
     public List<RemoteLogSegmentInfo> listRemoteSegments(TopicPartition topicPartition, long minBaseOffset) throws IOException {
         ArrayList<RemoteLogSegmentInfo> segments = new ArrayList<>();
@@ -190,7 +196,7 @@ public class HDFSRemoteStorageManager implements RemoteStorageManager {
 
             try (RandomAccessFile raFile = new RandomAccessFile(tmpFile, "r")) {
                 FileChannel channel = raFile.getChannel();
-                return JavaConverters.seqAsJavaList(RemoteLogIndexEntry.readAll(channel));
+                return JavaConverters.seqAsJavaListConverter(RemoteLogIndexEntry.readAll(channel)).asJava();
             }
         } finally {
             if (tmpFile != null && tmpFile.exists()) {
@@ -214,9 +220,9 @@ public class HDFSRemoteStorageManager implements RemoteStorageManager {
     }
 
     @Override
-    public boolean cleanupLogUntil(TopicPartition topicPartition, long cleanUpTillMs) {
+    public long cleanupLogUntil(TopicPartition topicPartition, long cleanUpTillMs) {
         //todo
-        return true;
+        return 0L;
     }
 
     /**

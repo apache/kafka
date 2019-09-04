@@ -62,7 +62,7 @@ class RemoteLogIndexTest extends JUnitSuite {
 object RemoteLogIndexTest {
 
   def generateEntries(numEntries: Int, offsetStep: Integer = 100, baseOffset: Long = 1000): util.List[RemoteLogIndexEntry] = {
-    require(offsetStep > 1, "offsetStep should be greater than 1")
+    require(offsetStep >= 1, "offsetStep should be >= 1")
     require(baseOffset >= 0, " base offset can not be negative")
 
     val entries = new util.ArrayList[RemoteLogIndexEntry]

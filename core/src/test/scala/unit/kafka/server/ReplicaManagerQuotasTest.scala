@@ -239,7 +239,7 @@ class ReplicaManagerQuotasTest {
     replay(logManager)
 
     val leaderBrokerId = configs.head.brokerId
-    replicaManager = new ReplicaManager(configs.head, metrics, time, zkClient, scheduler, logManager,
+    replicaManager = new ReplicaManager(configs.head, metrics, time, zkClient, scheduler, logManager, None,
       new AtomicBoolean(false), QuotaFactory.instantiate(configs.head, metrics, time, ""),
       new BrokerTopicStats, new MetadataCache(leaderBrokerId), new LogDirFailureChannel(configs.head.logDirs.size))
 

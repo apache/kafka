@@ -207,7 +207,8 @@ class Log(@volatile var dir: File,
           val producerIdExpirationCheckIntervalMs: Int,
           val topicPartition: TopicPartition,
           val producerStateManager: ProducerStateManager,
-          logDirFailureChannel: LogDirFailureChannel) extends Logging with KafkaMetricsGroup {
+          logDirFailureChannel: LogDirFailureChannel,
+          val remoteLogEnabled:Boolean = false) extends Logging with KafkaMetricsGroup {
 
   import kafka.log.Log._
 
@@ -266,13 +267,15 @@ class Log(@volatile var dir: File,
    * equals the log end offset (which may never happen for a partition under consistent load). This is needed to
    * prevent the log start offset (which is exposed in fetch responses) from getting ahead of the high watermark.
    */
-  @volatile private var highWatermarkMetadata: LogOffsetMetadata = LogOffsetMetadata(logStartOffset)
+  @volatile var highWatermarkMetadata: LogOffsetMetadata = LogOffsetMetadata(logStartOffset)
 
   /* the actual segments of the log */
   private val segments: ConcurrentNavigableMap[java.lang.Long, LogSegment] = new ConcurrentSkipListMap[java.lang.Long, LogSegment]
 
   // Visible for testing
   @volatile var leaderEpochCache: Option[LeaderEpochFileCache] = None
+
+  @volatile private var localLogStartOffset:Long = logStartOffset
 
   locally {
     val startMs = time.milliseconds
@@ -289,7 +292,9 @@ class Log(@volatile var dir: File,
 
     leaderEpochCache.foreach(_.truncateFromEnd(nextOffsetMetadata.messageOffset))
 
-    logStartOffset = math.max(logStartOffset, segments.firstEntry.getValue.baseOffset)
+    localLogStartOffset = math.max(logStartOffset, segments.firstEntry.getValue.baseOffset)
+
+    if(!remoteLogEnabled) logStartOffset = localLogStartOffset
 
     // The earliest leader epoch may not be flushed during a hard failure. Recover it here.
     leaderEpochCache.foreach(_.truncateFromStart(logStartOffset))
@@ -300,8 +305,12 @@ class Log(@volatile var dir: File,
       throw new IllegalStateException("Producer state must be empty during log initialization")
     loadProducerState(logEndOffset, reloadFromCleanShutdown = hasCleanShutdownFile)
 
-    info(s"Completed load of log with ${segments.size} segments, log start offset $logStartOffset and " +
+    info(s"Completed load of log with ${segments.size} segments, local log start offset $localLogStartOffset and " +
       s"log end offset $logEndOffset in ${time.milliseconds() - startMs} ms")
+  }
+
+  def updateLogStartOffsetFromRemoteTier(lso: Long): Unit = {
+    logStartOffset = lso
   }
 
   def highWatermark: Long = highWatermarkMetadata.messageOffset
@@ -775,17 +784,18 @@ class Log(@volatile var dir: File,
 
     if (logSegments.nonEmpty) {
       val logEndOffset = activeSegment.readNextOffset
-      if (logEndOffset < logStartOffset) {
-        warn(s"Deleting all segments because logEndOffset ($logEndOffset) is smaller than logStartOffset ($logStartOffset). " +
+      if (logEndOffset < localLogStartOffset) {
+        warn(s"Deleting all segments because logEndOffset ($logEndOffset) is smaller than localLogStartOffset ($localLogStartOffset). " +
           "This could happen if segment files were deleted from the file system.")
         removeAndDeleteSegments(logSegments, asyncDelete = true)
       }
     }
 
     if (logSegments.isEmpty) {
+      //todo-tiering where should this begin from when there are no segments?
       // no existing segments, create a new mutable segment beginning at logStartOffset
       addSegment(LogSegment.open(dir = dir,
-        baseOffset = logStartOffset,
+        baseOffset = localLogStartOffset,
         config,
         time = time,
         fileAlreadyExists = false,
@@ -1234,12 +1244,14 @@ class Log(@volatile var dir: File,
     // We don't have to write the log start offset to log-start-offset-checkpoint immediately.
     // The deleteRecordsOffset may be lost only if all in-sync replicas of this broker are shutdown
     // in an unclean manner within log.flush.start.offset.checkpoint.interval.ms. The chance of this happening is low.
+    //todo-tiering it should even update remote storage to clean until LSO
     maybeHandleIOException(s"Exception while increasing log start offset for $topicPartition to $newLogStartOffset in dir ${dir.getParent}") {
       lock synchronized {
         checkIfMemoryMappedBufferClosed()
         if (newLogStartOffset > logStartOffset) {
           info(s"Incrementing log start offset to $newLogStartOffset")
           logStartOffset = newLogStartOffset
+          localLogStartOffset = math.max(newLogStartOffset, localLogStartOffset)
           leaderEpochCache.foreach(_.truncateFromStart(logStartOffset))
           producerStateManager.truncateHead(logStartOffset)
           maybeIncrementFirstUnstableOffset()
@@ -1447,11 +1459,12 @@ class Log(@volatile var dir: File,
         return emptyFetchDataInfo(endOffsetMetadata, includeAbortedTxns)
 
       var segmentEntry = segments.floorEntry(startOffset)
-
+      // todo-tiering better to have check whether the requested offset is beyond current localLogStartOffset instead of
+      //catching this exception later to fetch from remote storage
       // return error on attempt to read beyond the log end offset or read below log start offset
-      if (startOffset > endOffset || segmentEntry == null || startOffset < logStartOffset)
+      if (startOffset > endOffset || segmentEntry == null || startOffset < localLogStartOffset)
         throw new OffsetOutOfRangeException(s"Received request for offset $startOffset for partition $topicPartition, " +
-          s"but we only have log segments in the range $logStartOffset to $endOffset.")
+          s"but we only have local log segments in the range $localLogStartOffset to $endOffset.")
 
       val maxOffsetMetadata = isolation match {
         case FetchLogEnd => nextOffsetMetadata
@@ -1767,9 +1780,9 @@ class Log(@volatile var dir: File,
 
   private def deleteLogStartOffsetBreachedSegments(): Int = {
     def shouldDelete(segment: LogSegment, nextSegmentOpt: Option[LogSegment]) =
-      nextSegmentOpt.exists(_.baseOffset <= logStartOffset)
+      nextSegmentOpt.exists(_.baseOffset <= localLogStartOffset)
 
-    deleteOldSegments(shouldDelete, reason = s"log start offset $logStartOffset breach")
+    deleteOldSegments(shouldDelete, reason = s"log start offset $localLogStartOffset breach")
   }
 
   def isFuture: Boolean = dir.getName.endsWith(Log.FutureDirSuffix)
@@ -2027,6 +2040,7 @@ class Log(@volatile var dir: File,
    * @return True iff targetOffset < logEndOffset
    */
   private[log] def truncateTo(targetOffset: Long): Boolean = {
+    //todo-tiering truncation is generally done to recover segments
     maybeHandleIOException(s"Error while truncating log to offset $targetOffset for $topicPartition in dir ${dir.getParent}") {
       if (targetOffset < 0)
         throw new IllegalArgumentException(s"Cannot truncate partition $topicPartition to a negative offset (%d).".format(targetOffset))
@@ -2045,7 +2059,8 @@ class Log(@volatile var dir: File,
             activeSegment.truncateTo(targetOffset)
             updateLogEndOffset(targetOffset)
             this.recoveryPoint = math.min(targetOffset, this.recoveryPoint)
-            this.logStartOffset = math.min(targetOffset, this.logStartOffset)
+            this.localLogStartOffset = math.min(targetOffset, this.localLogStartOffset)
+            this.logStartOffset = math.min(this.localLogStartOffset, this.logStartOffset)
             leaderEpochCache.foreach(_.truncateFromEnd(targetOffset))
             loadProducerState(targetOffset, reloadFromCleanShutdown = false)
           }
@@ -2081,6 +2096,7 @@ class Log(@volatile var dir: File,
         maybeIncrementFirstUnstableOffset()
 
         this.recoveryPoint = math.min(newOffset, this.recoveryPoint)
+        //todo-tiering cleanup remote logs
         this.logStartOffset = newOffset
       }
     }

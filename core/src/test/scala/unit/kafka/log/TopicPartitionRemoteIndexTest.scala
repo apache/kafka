@@ -14,14 +14,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package unit.kafka.log
+package kafka.log
 
 import java.io.File
 import java.util.concurrent._
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.function.Consumer
 
-import kafka.log.Log
-import kafka.log.remote.TopicPartitionRemoteIndex
+import kafka.log.remote.{RemoteLogIndexEntry, TopicPartitionRemoteIndex}
 import kafka.utils.{Logging, TestUtils}
 import org.apache.kafka.common.TopicPartition
 import org.junit.Assert.assertEquals
@@ -29,7 +29,7 @@ import org.junit.Test
 import org.scalatest.junit.JUnitSuite
 import unit.kafka.log.RemoteLogIndexTest.generateEntries
 
-import scala.collection.JavaConverters
+import scala.collection.JavaConverters._
 import scala.collection.mutable.ListBuffer
 
 class TopicPartitionRemoteIndexTest extends JUnitSuite with Logging {
@@ -56,12 +56,15 @@ class TopicPartitionRemoteIndexTest extends JUnitSuite with Logging {
     assertThrows[IllegalArgumentException](doTestIndexes(10, 50, -1L, dir, rlmIndex))
   }
 
-  private def doTestIndexes(entriesCt: Int, offsetStep: Integer, baseOffset: Long, dir: File, rlmIndex: TopicPartitionRemoteIndex) = {
+  private def doTestIndexes(entriesCt: Int, offsetStep: Integer, baseOffset: Long, dir: File,
+                            rlmIndex: TopicPartitionRemoteIndex) = {
     val entries = generateEntries(entriesCt, offsetStep, baseOffset)
     rlmIndex.appendEntries(entries, baseOffset.toString)
 
-    entries.forEach(entry => {
-      assertEquals(entry, rlmIndex.lookupEntryForOffset(entry.firstOffset).get)
+    entries.forEach(new Consumer[RemoteLogIndexEntry] {
+      override def accept(entry: RemoteLogIndexEntry): Unit = {
+        assertEquals(entry, rlmIndex.lookupEntryForOffset(entry.firstOffset).get)
+      }
     })
   }
 
@@ -87,7 +90,7 @@ class TopicPartitionRemoteIndexTest extends JUnitSuite with Logging {
           val mayBeAddedOffset = rlmIndex.appendEntries(entries, Log.filenamePrefixFromOffset(firstOffset))
 
           val result = if (mayBeAddedOffset.isDefined) {
-            JavaConverters.asScalaIterator(entries.iterator()).count(entry => {
+            entries.iterator().asScala.count(entry => {
               entry.equals(rlmIndex.lookupEntryForOffset(entry.firstOffset).get)
             }) == entries.size
           } else {
@@ -109,5 +112,33 @@ class TopicPartitionRemoteIndexTest extends JUnitSuite with Logging {
     }
   }
 
-}
+  @Test
+  def testCleanupIndexUntilOffset(): Unit = {
+    val dir = TestUtils.tempDir()
+    val rlmIndex = TopicPartitionRemoteIndex.open(new TopicPartition("topic", 0), dir)
+    List(100, 300, 500, 700, 900).foreach(x =>
+      rlmIndex.appendEntries(generateEntries(100, 1, x), x.toString))
 
+    val indexes = rlmIndex.cleanupIndexesUntil(300)
+    assertEquals(3, indexes.size)
+
+    indexes.foreach( x=> assert(x.file.getName.endsWith(Log.DeletedFileSuffix)))
+
+    assert(rlmIndex.lookupEntryForOffset(100).isEmpty)
+    assert(rlmIndex.lookupEntryForOffset(150).isEmpty)
+    assert(rlmIndex.lookupEntryForOffset(200).isEmpty)
+    assert(rlmIndex.lookupEntryForOffset(250).isEmpty)
+    assert(rlmIndex.lookupEntryForOffset(300).isDefined)
+    assert(rlmIndex.lookupEntryForOffset(450).isDefined)
+
+    val indexesTill750 = rlmIndex.cleanupIndexesUntil(750)
+    assertEquals(6, indexesTill750.size)
+
+    assert(rlmIndex.lookupEntryForOffset(100).isEmpty)
+    assert(rlmIndex.lookupEntryForOffset(250).isEmpty)
+    assert(rlmIndex.lookupEntryForOffset(500).isEmpty)
+    assert(rlmIndex.lookupEntryForOffset(700).isDefined)
+    assert(rlmIndex.lookupEntryForOffset(950).isDefined)
+
+  }
+}

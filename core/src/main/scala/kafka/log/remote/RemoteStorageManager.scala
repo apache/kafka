@@ -23,6 +23,10 @@ import kafka.log.LogSegment
 import org.apache.kafka.common.record.Records
 import org.apache.kafka.common.{Configurable, TopicPartition}
 
+trait LogStartOffsetUpdateListener {
+  def handleLogStartOffsetUpdate(tp: TopicPartition, lso: Long)
+}
+
 // all these APIs are still experimental, in poc mode.
 trait RemoteStorageManager extends Configurable with AutoCloseable {
 
@@ -100,7 +104,7 @@ trait RemoteStorageManager extends Configurable with AutoCloseable {
    * @param cleanUpTillMs
    * @return
    */
-  def cleanupLogUntil(topicPartition: TopicPartition, cleanUpTillMs: Long): Boolean
+  def cleanupLogUntil(topicPartition: TopicPartition, cleanUpTillMs: Long): Long
 
   /**
    * Read up to maxBytes data from remote storage, starting from the 1st batch that

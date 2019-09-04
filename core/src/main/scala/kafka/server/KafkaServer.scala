@@ -30,7 +30,8 @@ import kafka.common.{GenerateBrokerIdException, InconsistentBrokerIdException, I
 import kafka.controller.KafkaController
 import kafka.coordinator.group.GroupCoordinator
 import kafka.coordinator.transaction.TransactionCoordinator
-import kafka.log.{LogConfig, LogManager}
+import kafka.log.remote.{RemoteLogManager, RemoteLogManagerConfig}
+import kafka.log.{Log, LogConfig, LogManager}
 import kafka.metrics.{KafkaMetricsGroup, KafkaMetricsReporter}
 import kafka.network.SocketServer
 import kafka.security.CredentialProvider
@@ -47,7 +48,7 @@ import org.apache.kafka.common.security.scram.internals.ScramMechanism
 import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCache
 import org.apache.kafka.common.security.{JaasContext, JaasUtils}
 import org.apache.kafka.common.utils.{AppInfoParser, LogContext, Time}
-import org.apache.kafka.common.{ClusterResource, Endpoint, Node}
+import org.apache.kafka.common.{ClusterResource, Endpoint, Node, TopicPartition}
 import org.apache.kafka.server.authorizer.Authorizer
 
 import scala.collection.JavaConverters._
@@ -125,6 +126,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
 
   var logDirFailureChannel: LogDirFailureChannel = null
   var logManager: LogManager = null
+  var remoteLogManager: Option[RemoteLogManager] = None
 
   var replicaManager: ReplicaManager = null
   var adminManager: AdminManager = null
@@ -246,8 +248,11 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
 
         logDirFailureChannel = new LogDirFailureChannel(config.logDirs.size)
 
+        val remoteLogManagerConfig = RemoteLogManager.createRemoteLogManagerConfig(config)
+
         /* start log manager */
-        logManager = LogManager(config, initialOfflineDirs, zkClient, brokerState, kafkaScheduler, time, brokerTopicStats, logDirFailureChannel)
+        logManager = LogManager(config, initialOfflineDirs, zkClient, brokerState, kafkaScheduler, time,
+          brokerTopicStats, logDirFailureChannel, remoteLogManagerConfig)
         logManager.startup()
 
         metadataCache = new MetadataCache(config.brokerId)
@@ -261,6 +266,8 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
         // that credentials have been loaded before processing authentications.
         socketServer = new SocketServer(config, metrics, time, credentialProvider)
         socketServer.startup(startupProcessors = false)
+
+        remoteLogManager = createRemoteLogManager(remoteLogManagerConfig)
 
         /* start replica manager */
         replicaManager = createReplicaManager(isShuttingDown)
@@ -363,9 +370,26 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
     clusterResourceListeners.onUpdate(new ClusterResource(clusterId))
   }
 
+  protected def createRemoteLogManager(remoteLogManagerConfig: RemoteLogManagerConfig): Option[RemoteLogManager] = {
+    if (remoteLogManagerConfig.remoteLogStorageEnable) {
+      def fetchLog(tp: TopicPartition): Option[Log] = {
+        logManager.getLog(tp)
+      }
+
+      def updateRemoteLogStartOffset(tp:TopicPartition, lso:Long) : Unit = {
+        logManager.getLog(tp).foreach(log => {
+          log.updateLogStartOffsetFromRemoteTier(lso)
+        })
+      }
+      Some(new RemoteLogManager(fetchLog, updateRemoteLogStartOffset, remoteLogManagerConfig, time))
+    } else {
+      None
+    }
+  }
+
   protected def createReplicaManager(isShuttingDown: AtomicBoolean): ReplicaManager =
-    new ReplicaManager(config, metrics, time, zkClient, kafkaScheduler, logManager, isShuttingDown, quotaManagers,
-      brokerTopicStats, metadataCache, logDirFailureChannel)
+    new ReplicaManager(config, metrics, time, zkClient, kafkaScheduler, logManager, remoteLogManager, isShuttingDown,
+      quotaManagers, brokerTopicStats, metadataCache, logDirFailureChannel)
 
   private def initZkClient(time: Time): Unit = {
     info(s"Connecting to zookeeper on ${config.zkConnect}")
@@ -631,6 +655,8 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
 
         if (tokenManager != null)
           CoreUtils.swallow(tokenManager.shutdown(), this)
+
+        remoteLogManager.foreach(x => CoreUtils.swallow(x.close(), this))
 
         if (replicaManager != null)
           CoreUtils.swallow(replicaManager.shutdown(), this)

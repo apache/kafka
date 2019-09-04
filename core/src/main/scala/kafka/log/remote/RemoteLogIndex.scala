@@ -23,11 +23,12 @@ import java.nio.channels.FileChannel
 import java.nio.file.{Files, StandardOpenOption}
 import java.util.concurrent.locks.ReentrantLock
 
+import kafka.log.CleanableIndex
 import kafka.utils.CoreUtils.inLock
 import kafka.utils.Logging
 import org.apache.kafka.common.utils.Utils
 
-import scala.collection.JavaConverters
+import scala.collection.JavaConverters._
 
 /**
  * The remote log index maintains the information of log records for each topic partition maintained in the remote log.
@@ -39,7 +40,7 @@ import scala.collection.JavaConverters
  * read/write the entries. Need to add methods to fetch remote log offset for a given offset/timestamp.
  *
  */
-class RemoteLogIndex(@volatile var file: File, val startOffset: Long) extends Logging with Closeable {
+class RemoteLogIndex(_file: File, val startOffset: Long) extends CleanableIndex(_file) with Logging {
 
   @volatile private var maybeChannel: Option[FileChannel] = None
 
@@ -60,12 +61,18 @@ class RemoteLogIndex(@volatile var file: File, val startOffset: Long) extends Lo
     } else None
   }
 
-  private var _lastOffset: Option[Long] = loadLastOffset()
+  private var _lastOffset: Option[Long] = {
+    inLock(lock) {
+      loadLastOffset()
+    }
+  }
 
   def append(entries: util.List[RemoteLogIndexEntry]): Seq[Long] = {
-    val positions: Seq[Long] = JavaConverters.asScalaIterator(entries.iterator()).map(entry => append(entry)).toSeq
-    flush()
-    positions
+    inLock(lock) {
+      val positions: Seq[Long] = entries.iterator().asScala.map(entry => append(entry)).toSeq
+      flush()
+      positions
+    }
   }
 
   /**
@@ -151,6 +158,11 @@ class RemoteLogIndex(@volatile var file: File, val startOffset: Long) extends Lo
     maybeChannel = Some(channel)
     channel.position(channel.size)
     channel
+  }
+
+  def renameTo(renamedFile: File) = {
+    try Utils.atomicMoveWithFallback(file.toPath, renamedFile.toPath)
+    finally file = renamedFile
   }
 
   /**

@@ -38,8 +38,8 @@ import scala.math.ceil
  * @param baseOffset the base offset of the segment that this index is corresponding to.
  * @param maxIndexSize The maximum index size in bytes.
  */
-abstract class AbstractIndex[K, V](@volatile var file: File, val baseOffset: Long,
-                                   val maxIndexSize: Int = -1, val writable: Boolean) extends Closeable {
+abstract class AbstractIndex[K, V](_file: File, val baseOffset: Long,
+                                   val maxIndexSize: Int = -1, val writable: Boolean) extends CleanableIndex(_file) {
   import AbstractIndex._
 
   // Length of the index file

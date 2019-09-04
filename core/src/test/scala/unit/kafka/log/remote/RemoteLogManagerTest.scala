@@ -23,7 +23,7 @@ import java.util.function.Consumer
 import java.util.{Collections, Optional, Properties}
 
 import kafka.log.remote.RemoteLogManager.REMOTE_STORAGE_MANAGER_CONFIG_PREFIX
-import kafka.log.{CleanerConfig, LogConfig, LogManager, LogSegment}
+import kafka.log.{CleanerConfig, Log, LogConfig, LogManager, LogSegment}
 import kafka.server.QuotaFactory.UnboundedQuota
 import kafka.server._
 import kafka.server.checkpoints.LazyOffsetCheckpoints
@@ -55,6 +55,7 @@ class RemoteLogManagerTest {
   var tmpDir: File = _
   var replicaManager: ReplicaManager = _
   var logManager: LogManager = _
+  var rlmMock:RemoteLogManager = EasyMock.createMock(classOf[RemoteLogManager])
 
   @Before
   def setup(): Unit = {
@@ -75,7 +76,7 @@ class RemoteLogManagerTest {
     val quotaManagers = QuotaFactory.instantiate(brokerConfig, metrics, time, "")
     replicaManager = new ReplicaManager(
       config = brokerConfig, metrics, time, zkClient = kafkaZkClient, new MockScheduler(time),
-      logManager, new AtomicBoolean(false), quotaManagers,
+      logManager, Option(rlmMock), new AtomicBoolean(false), quotaManagers,
       brokerTopicStats, new MetadataCache(brokerId), new LogDirFailureChannel(brokerConfig.logDirs.size))
 
     EasyMock.expect(kafkaZkClient.getEntityConfigs(EasyMock.anyString(), EasyMock.anyString())).andReturn(
@@ -89,6 +90,7 @@ class RemoteLogManagerTest {
 
   @After
   def tearDown(): Unit = {
+    EasyMock.reset(rlmMock)
     brokerTopicStats.close()
     metrics.close()
 
@@ -109,6 +111,11 @@ class RemoteLogManagerTest {
 
   @Test
   def testRSMConfigInvocation() {
+    def logFetcher(tp:TopicPartition):Option[Log] = logManager.getLog(tp)
+    def lsoUpdater(tp:TopicPartition, los:Long):Unit = {}
+    // this should initialize RSM
+    val remoteLogManager = new RemoteLogManager(logFetcher, lsoUpdater, rlmConfig, time)
+
     assertTrue(rsmConfig.count { case (k, v) => MockRemoteStorageManager.configs.get(k) == v } == rsmConfig.size)
     assertEquals(MockRemoteStorageManager.configs.get(KafkaConfig.RemoteLogRetentionBytesProp),
       rlmConfig.remoteLogRetentionBytes)
@@ -119,12 +126,10 @@ class RemoteLogManagerTest {
   @Test
   def testRemoteLogRecordsFetch() {
     val lastOffset = 5
-    val rlmMock: RemoteLogManager = EasyMock.createMock(classOf[RemoteLogManager])
     // return the lastOffset to verify when out of range offsets are requested.
     EasyMock.expect(rlmMock.lookupLastOffset(EasyMock.anyObject())).andReturn(Some(lastOffset)).anyTimes()
     EasyMock.expect(rlmMock.close()).anyTimes()
     EasyMock.replay(rlmMock)
-    logManager.setRemoteLogManager(Some(rlmMock))
 
     val leaderEpoch = 1
     val partition = replicaManager.getPartitionOrException(topicPartition, true)
@@ -205,5 +210,6 @@ class MockRemoteStorageManager extends RemoteStorageManager {
     MockRemoteStorageManager.configs = configs
   }
 
-  override def cleanupLogUntil(topicPartition: TopicPartition, cleanUpTillMs: Long): Boolean = true
+  override def cleanupLogUntil(topicPartition: TopicPartition, cleanUpTillMs: Long): Long = 0L
+
 }

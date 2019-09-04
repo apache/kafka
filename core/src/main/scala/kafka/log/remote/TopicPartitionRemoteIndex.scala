@@ -24,12 +24,12 @@ import java.util.concurrent.{ConcurrentNavigableMap, ConcurrentSkipListMap}
 import java.util.function.{Consumer, Predicate}
 
 import kafka.log.remote.TopicPartitionRemoteIndex.{REMOTE_OFFSET_INDEX_SUFFIX, REMOTE_TIME_INDEX_SUFFIX}
-import kafka.log.{Log, OffsetIndex, TimeIndex}
+import kafka.log.{CleanableIndex, Log, OffsetIndex, TimeIndex}
 import kafka.utils.{CoreUtils, Logging}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.utils.Utils
 
-import scala.collection.JavaConverters
+import scala.collection.JavaConverters._
 
 class TopicPartitionRemoteIndex(val topicPartition: TopicPartition, logDir: File) extends AutoCloseable with Logging {
 
@@ -50,7 +50,8 @@ class TopicPartitionRemoteIndex(val topicPartition: TopicPartition, logDir: File
     _currentLastOffset
   }
 
-  private def addIndex(offset: Long, remoteLogIndex: RemoteLogIndex, remoteOffsetIndex: OffsetIndex, remoteTimestampIndex: TimeIndex): Unit = {
+  private def addIndex(offset: Long, remoteLogIndex: RemoteLogIndex, remoteOffsetIndex: OffsetIndex,
+                       remoteTimestampIndex: TimeIndex): Unit = {
     CoreUtils.inLock(lock) {
       _currentStartOffset.foreach { currentStartOffset =>
         if (currentStartOffset >= offset)
@@ -66,13 +67,47 @@ class TopicPartitionRemoteIndex(val topicPartition: TopicPartition, logDir: File
     }
   }
 
+  def cleanupIndexesUntil(offset: Long): Seq[CleanableIndex] = {
+
+    def removeIndexes[T <: CleanableIndex](indexes: ConcurrentNavigableMap[Long, T], fn: T => Any): Seq[T] = {
+      val keys = indexes.headMap(offset, true).keySet().asScala
+      val max = keys.max
+      // do not remove it as that would remove the entry from indexes map
+      // filter max key as that should not be removed
+      keys.filter(key => key != max).map { key =>
+        val index = indexes.remove(key)
+        fn(index)
+        index
+      }.toSeq
+    }
+
+    def closeAndRenameIndex(index: CleanableIndex): Unit = {
+      Utils.closeQuietly(index, index.getClass.getSimpleName)
+      try {
+        index.renameTo(new File(CoreUtils.replaceSuffix(index.file.getPath, "", Log.DeletedFileSuffix)))
+      } catch {
+        case ex: IOException => warn(s"remoteLogIndex with file: ${index.file} could not be renamed", ex)
+      }
+    }
+
+    CoreUtils.inLock(lock) {
+      // get the entries which have key <= the given offset
+      val removedOffsetIndexes = removeIndexes(remoteOffsetIndexes, closeAndRenameIndex)
+      val removedTimeIndexes = removeIndexes(remoteTimeIndexes, closeAndRenameIndex)
+      val removedRemoteLogIndexes = removeIndexes(remoteLogIndexes, closeAndRenameIndex)
+
+      List(removedOffsetIndexes, removedTimeIndexes, removedRemoteLogIndexes).flatten
+    }
+  }
+
   def appendEntries(entries: util.List[RemoteLogIndexEntry], baseOffsetStr: String): Option[Long] = {
     val baseOffset = baseOffsetStr.toLong
     require(baseOffset >= 0, "baseOffsetStr must not be a negative number")
 
     val firstOffset = entries.get(0).firstOffset
     val lastOffset = entries.get(entries.size() - 1).lastOffset
-    if (baseOffset > firstOffset) throw new IllegalArgumentException(s"base offset '$baseOffsetStr' can not be greater than start off set of the given entry $baseOffset'")
+    if (baseOffset > firstOffset) throw new IllegalArgumentException(
+      s"base offset '$baseOffsetStr' can not be greater than start off set of the given entry $baseOffset'")
 
     CoreUtils.inLock(lock) {
       val resultantStartOffset: Long =
@@ -111,7 +146,7 @@ class TopicPartitionRemoteIndex(val topicPartition: TopicPartition, logDir: File
 
         var position: Long = 0
 
-        JavaConverters.asScalaIterator(entries.iterator()).filter(entry => entry.firstOffset >= resultantStartOffset)
+        entries.iterator().asScala.filter(entry => entry.firstOffset >= resultantStartOffset)
           .foreach(entry => {
             position = remoteLogIndex.append(entry)
             remoteOffsetIndex.append(entry.firstOffset, position.toInt)
@@ -130,8 +165,12 @@ class TopicPartitionRemoteIndex(val topicPartition: TopicPartition, logDir: File
   }
 
   def lookupEntryForOffset(offset: Long): Option[RemoteLogIndexEntry] = {
-    val offsetPosition = remoteOffsetIndexes.floorEntry(offset).getValue.lookup(offset)
-    remoteLogIndexes.floorEntry(offsetPosition.offset).getValue.lookupEntry(offsetPosition.position)
+    val offsetEntry = remoteOffsetIndexes.floorEntry(offset)
+    if (offsetEntry != null) {
+      val offsetPosition = offsetEntry.getValue.lookup(offset)
+      val entry = remoteLogIndexes.floorEntry(offsetPosition.offset)
+      if (entry != null) entry.getValue.lookupEntry(offsetPosition.position) else None
+    } else None
   }
 
   override def close(): Unit = {
