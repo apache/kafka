@@ -626,14 +626,19 @@ class DynamicLogConfig(logManager: LogManager, server: KafkaServer) extends Brok
 
     logManager.reconfigureDefaultLogConfig(LogConfig(newBrokerDefaults))
 
-    logManager.allLogs.foreach { log =>
-      val props = mutable.Map.empty[Any, Any]
-      props ++= newBrokerDefaults.asScala
-      props ++= log.config.originals.asScala.filterKeys(log.config.overriddenConfigs.contains)
+    def updateLogsConfig: Unit = {
+      logManager.brokerConfigUpdated()
+      logManager.allLogs.foreach { log =>
+        val props = mutable.Map.empty[Any, Any]
+        props ++= newBrokerDefaults.asScala
+        props ++= log.config.originals.asScala.filterKeys(log.config.overriddenConfigs.contains)
 
-      val logConfig = LogConfig(props.asJava)
-      log.updateConfig(newBrokerDefaults.asScala.keySet, logConfig)
+        val logConfig = LogConfig(props.asJava)
+        log.updateConfig(newBrokerDefaults.asScala.keySet, logConfig)
+      }
     }
+    updateLogsConfig
+
     if (logManager.currentDefaultConfig.uncleanLeaderElectionEnable && !origUncleanLeaderElectionEnable) {
       server.kafkaController.enableDefaultUncleanLeaderElection()
     }

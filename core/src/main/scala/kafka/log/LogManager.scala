@@ -82,6 +82,16 @@ class LogManager(logDirs: Seq[File],
   @volatile private var _currentDefaultConfig = initialDefaultConfig
   @volatile private var numRecoveryThreadsPerDataDir = recoveryThreadsPerDataDir
 
+  /**
+   * Lock object to protect modification to partitionsInitializing variable. Also serializes calls to
+   * topicConfigUpdated/brokerConfigUpdated and finishedInitializingLog, which makes sure that log's
+   * config variable isn't modified until finishedInitializingLog is done (which involves reading
+   * configuration from ZK).
+   */
+  private val configUpdateLock = new Object
+  // Visible for testing
+  private[log] val partitionsInitializing = mutable.Map[TopicPartition, Boolean]()
+
   def reconfigureDefaultLogConfig(logConfig: LogConfig): Unit = {
     this._currentDefaultConfig = logConfig
   }
@@ -660,6 +670,47 @@ class LogManager(logDirs: Seq[File],
   }
 
   /**
+   * Method to indicate that logs are getting initialized for the partition passed in as argument.
+   * This method should always be followed by [[kafka.log.LogManager#finishedInitializingLog]] to indicate that log
+   * initialization is done.
+   */
+  def initializingLog(topicPartition: TopicPartition): Unit = configUpdateLock synchronized {
+    partitionsInitializing(topicPartition) = false
+  }
+
+  /**
+   * Mark the partition configuration for partitions that are getting initialized for topic
+   * as dirty. That will result in reloading of configuration once initialization is done.
+   */
+  def topicConfigUpdated(topic: String): Unit = configUpdateLock synchronized {
+    partitionsInitializing.collect {
+      case (topicPartition, _) if topicPartition.topic() == topic => partitionsInitializing(topicPartition) = true
+    }
+  }
+
+  /**
+   * Mark all in progress partitions having dirty configuration if broker configuration is updated.
+   */
+  def brokerConfigUpdated(): Unit = configUpdateLock synchronized {
+    partitionsInitializing.foreach {
+      case (topicPartition, _) => partitionsInitializing(topicPartition) = true
+    }
+  }
+
+  /**
+   * Method to indicate that the log initialization for the partition passed in as argument is
+   * finished. This method should follow a call to [[kafka.log.LogManager#initializingLog]]
+   */
+  def finishedInitializingLog(topicPartition: TopicPartition,
+                              log: Option[Log],
+                              config: => LogConfig): Unit = configUpdateLock synchronized {
+    if (partitionsInitializing(topicPartition)) {
+      log.foreach(_.config = config)
+    }
+    partitionsInitializing -= topicPartition
+  }
+
+  /**
    * If the log already exists, just return a copy of the existing log
    * Otherwise if isNew=true or if there is no offline log directory, create a log for the given topic and the given partition
    * Otherwise throw KafkaStorageException
@@ -955,9 +1006,9 @@ class LogManager(logDirs: Seq[File],
   def allLogs: Iterable[Log] = currentLogs.values ++ futureLogs.values
 
   def logsByTopic(topic: String): Seq[Log] = {
-    (currentLogs.toList ++ futureLogs.toList).filter { case (topicPartition, _) =>
-      topicPartition.topic() == topic
-    }.map { case (_, log) => log }
+    (currentLogs.toList ++ futureLogs.toList).collect {
+      case (topicPartition, log) if topicPartition.topic() == topic => log
+    }
   }
 
   /**

@@ -54,16 +54,20 @@ class TopicConfigHandler(private val logManager: LogManager, kafkaConfig: KafkaC
     // Validate the configurations.
     val configNamesToExclude = excludedConfigs(topic, topicConfig)
 
-    val logs = logManager.logsByTopic(topic).toBuffer
-    if (logs.nonEmpty) {
-      /* combine the default properties with the overrides in zk to create the new LogConfig */
-      val props = new Properties()
-      topicConfig.asScala.foreach { case (key, value) =>
-        if (!configNamesToExclude.contains(key)) props.put(key, value)
+    def updateLogConfig: Unit = {
+      logManager.topicConfigUpdated(topic)
+      val logs = logManager.logsByTopic(topic)
+      if (logs.nonEmpty) {
+        /* combine the default properties with the overrides in zk to create the new LogConfig */
+        val props = new Properties()
+        topicConfig.asScala.foreach { case (key, value) =>
+          if (!configNamesToExclude.contains(key)) props.put(key, value)
+        }
+        val logConfig = LogConfig.fromProps(logManager.currentDefaultConfig.originals, props)
+        logs.foreach(_.updateConfig(topicConfig.asScala.keySet, logConfig))
       }
-      val logConfig = LogConfig.fromProps(logManager.currentDefaultConfig.originals, props)
-      logs.foreach(_.updateConfig(topicConfig.asScala.keySet, logConfig))
     }
+    updateLogConfig
 
     def updateThrottledList(prop: String, quotaManager: ReplicationQuotaManager) = {
       if (topicConfig.containsKey(prop) && topicConfig.getProperty(prop).length > 0) {
