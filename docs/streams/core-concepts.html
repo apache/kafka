@@ -124,7 +124,7 @@
     <ul>
         <li> When new output records are generated via processing some input record, for example, <code>context.forward()</code> triggered in the <code>process()</code> function call, output record timestamps are inherited from input record timestamps directly.</li>
         <li> When new output records are generated via periodic functions such as <code>Punctuator#punctuate()</code>, the output record timestamp is defined as the current internal time (obtained through <code>context.timestamp()</code>) of the stream task.</li>
-        <li> For aggregations, the timestamp of a resulting aggregate update record will be maximum timestamp of all input record contributing to the result.</li>
+        <li> For aggregations, the timestamp of a resulting aggregate update record will be the maximum timestamp of all input record contributing to the result.</li>
     </ul>
 
     <p>
