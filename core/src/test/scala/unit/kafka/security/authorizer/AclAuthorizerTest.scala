@@ -693,17 +693,17 @@ class AclAuthorizerTest extends ZooKeeperTestHarness {
     val acl4 = new AclBinding(prefixedResource, new AccessControlEntry(wildcardPrincipal.toString, WildcardHost, READ, ALLOW))
 
     aclAuthorizer.createAcls(requestContext, List(acl1, acl2, acl3, acl4).asJava)
-    assertEquals(Set(acl1, acl2, acl3, acl4), aclAuthorizer.acls(AclBindingFilter.ANY).asScala.toSet)
-    assertEquals(Set(acl1, acl2), aclAuthorizer.acls(new AclBindingFilter(resource1.toFilter, AccessControlEntryFilter.ANY)).asScala.toSet)
-    assertEquals(Set(acl4), aclAuthorizer.acls(new AclBindingFilter(prefixedResource.toFilter, AccessControlEntryFilter.ANY)).asScala.toSet)
+    assertEquals(Set(acl1, acl2, acl3, acl4), aclAuthorizer.acls(AclBindingFilter.ANY).toCompletableFuture.get.asScala.toSet)
+    assertEquals(Set(acl1, acl2), aclAuthorizer.acls(new AclBindingFilter(resource1.toFilter, AccessControlEntryFilter.ANY)).toCompletableFuture.get.asScala.toSet)
+    assertEquals(Set(acl4), aclAuthorizer.acls(new AclBindingFilter(prefixedResource.toFilter, AccessControlEntryFilter.ANY)).toCompletableFuture.get.asScala.toSet)
     val matchingFilter = new AclBindingFilter(new ResourcePatternFilter(ResourceType.ANY, resource2.name, MATCH), AccessControlEntryFilter.ANY)
-    assertEquals(Set(acl3, acl4), aclAuthorizer.acls(matchingFilter).asScala.toSet)
+    assertEquals(Set(acl3, acl4), aclAuthorizer.acls(matchingFilter).toCompletableFuture.get.asScala.toSet)
 
     val filters = List(matchingFilter,
       acl1.toFilter,
       new AclBindingFilter(resource2.toFilter, AccessControlEntryFilter.ANY),
       new AclBindingFilter(new ResourcePatternFilter(TOPIC, "baz", PatternType.ANY), AccessControlEntryFilter.ANY))
-    val deleteResults = aclAuthorizer.deleteAcls(requestContext, filters.asJava).asScala
+    val deleteResults = aclAuthorizer.deleteAcls(requestContext, filters.asJava).asScala.map(_.toCompletableFuture.get)
     assertEquals(List.empty, deleteResults.filter(_.exception != null))
     filters.indices.foreach { i =>
       assertEquals(Set.empty, deleteResults(i).aclBindingDeleteResults.asScala.toSet.filter(_.exception != null))
@@ -829,12 +829,12 @@ class AclAuthorizerTest extends ZooKeeperTestHarness {
 
   private def authorize(authorizer: AclAuthorizer, requestContext: RequestContext, operation: AclOperation, resource: ResourcePattern): Boolean = {
     val action = new Action(operation, resource, 1, true, true)
-    authorizer.authorize(requestContext, List(action).asJava).asScala.head == AuthorizationResult.ALLOWED
+    authorizer.authorize(requestContext, List(action).asJava).asScala.map(_.toCompletableFuture.get).head == AuthorizationResult.ALLOWED
   }
 
   private def addAcls(authorizer: AclAuthorizer, aces: Set[AccessControlEntry], resourcePattern: ResourcePattern): Unit = {
     val bindings = aces.map { ace => new AclBinding(resourcePattern, ace) }
-    authorizer.createAcls(requestContext, bindings.toList.asJava).asScala.foreach { result =>
+    authorizer.createAcls(requestContext, bindings.toList.asJava).asScala.map(_.toCompletableFuture.get).foreach { result =>
       if (result.exception != null)
         throw result.exception
     }
@@ -845,7 +845,7 @@ class AclAuthorizerTest extends ZooKeeperTestHarness {
       Set(new AclBindingFilter(resourcePattern.toFilter, AccessControlEntryFilter.ANY) )
     else
       aces.map { ace => new AclBinding(resourcePattern, ace).toFilter }
-    authorizer.deleteAcls(requestContext, bindings.toList.asJava).asScala.forall { result =>
+    authorizer.deleteAcls(requestContext, bindings.toList.asJava).asScala.map(_.toCompletableFuture.get).forall { result =>
       if (result.exception != null)
         throw result.exception
       result.aclBindingDeleteResults.asScala.foreach { r =>
@@ -857,18 +857,18 @@ class AclAuthorizerTest extends ZooKeeperTestHarness {
   }
 
   private def getAcls(authorizer: AclAuthorizer, resourcePattern: ResourcePattern): Set[AccessControlEntry] = {
-    val acls = authorizer.acls(new AclBindingFilter(resourcePattern.toFilter, AccessControlEntryFilter.ANY)).asScala.toSet
+    val acls = authorizer.acls(new AclBindingFilter(resourcePattern.toFilter, AccessControlEntryFilter.ANY)).toCompletableFuture.get.asScala.toSet
     acls.map(_.entry)
   }
 
   private def getAcls(authorizer: AclAuthorizer, principal: KafkaPrincipal): Set[AclBinding] = {
     val filter = new AclBindingFilter(ResourcePatternFilter.ANY,
       new AccessControlEntryFilter(principal.toString, null, AclOperation.ANY, AclPermissionType.ANY))
-    authorizer.acls(filter).asScala.toSet
+    authorizer.acls(filter).toCompletableFuture.get.asScala.toSet
   }
 
   private def getAcls(authorizer: AclAuthorizer): Set[AclBinding] = {
-    authorizer.acls(AclBindingFilter.ANY).asScala.toSet
+    authorizer.acls(AclBindingFilter.ANY).toCompletableFuture.get.asScala.toSet
   }
 
   private def validOp(op: AclOperation): Boolean = {

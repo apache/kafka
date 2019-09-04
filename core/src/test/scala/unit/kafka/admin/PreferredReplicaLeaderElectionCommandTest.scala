@@ -21,6 +21,7 @@ import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, Paths}
 import java.util
 import java.util.Properties
+import java.util.concurrent.{CompletableFuture, CompletionStage}
 
 import scala.collection.Seq
 import kafka.common.AdminCommandFailedException
@@ -380,12 +381,13 @@ class PreferredReplicaLeaderElectionCommandTest extends ZooKeeperTestHarness wit
 }
 
 class PreferredReplicaLeaderElectionCommandTestAuthorizer extends AclAuthorizer {
-  override def authorize(requestContext: AuthorizableRequestContext, actions: util.List[Action]): util.List[AuthorizationResult] = {
+  override def authorize(requestContext: AuthorizableRequestContext,
+                         actions: util.List[Action]): util.List[_ <: CompletionStage[AuthorizationResult]] = {
     actions.asScala.map { action =>
       if (action.operation != AclOperation.ALTER || action.resourcePattern.resourceType != ResourceType.CLUSTER)
         AuthorizationResult.ALLOWED
       else
         AuthorizationResult.DENIED
-    }.asJava
+    }.map(CompletableFuture.completedFuture[AuthorizationResult]).asJava
   }
 }

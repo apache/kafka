@@ -16,8 +16,8 @@
  */
 package kafka.security.authorizer
 
-import java.{lang, util}
-import java.util.concurrent.CompletableFuture
+import java.util
+import java.util.concurrent.{CompletableFuture, CompletionStage}
 import java.util.concurrent.locks.ReentrantReadWriteLock
 
 import com.typesafe.scalalogging.Logger
@@ -118,16 +118,19 @@ class AclAuthorizer extends Authorizer with Logging {
     loadCache()
   }
 
-  override def start(serverInfo: AuthorizerServerInfo): util.Map[Endpoint, CompletableFuture[Void]] = {
+  override def start(serverInfo: AuthorizerServerInfo): util.Map[Endpoint, _ <: CompletionStage[Void]] = {
     serverInfo.endpoints.asScala.map { endpoint =>
-      endpoint -> CompletableFuture.completedFuture[Void](null) }.toMap.asJava
+      endpoint -> CompletableFuture.completedFuture[Void](null)
+    }.toMap.asJava
   }
 
-  override def authorize(requestContext: AuthorizableRequestContext, actions: util.List[Action]): util.List[AuthorizationResult] = {
+  override def authorize(requestContext: AuthorizableRequestContext,
+                         actions: util.List[Action]): util.List[_ <: CompletionStage[AuthorizationResult]] = {
     actions.asScala.map { action => authorizeAction(requestContext, action) }.asJava
   }
 
-  override def createAcls(requestContext: AuthorizableRequestContext, aclBindings: util.List[AclBinding]): util.List[AclCreateResult] = {
+  override def createAcls(requestContext: AuthorizableRequestContext,
+                          aclBindings: util.List[AclBinding]): util.List[_ <: CompletionStage[AclCreateResult]] = {
     val results = new Array[AclCreateResult](aclBindings.size)
     val aclsToCreate = aclBindings.asScala.zipWithIndex
       .filter { case (aclBinding, i) =>
@@ -159,10 +162,11 @@ class AclAuthorizer extends Authorizer with Logging {
         }
       }
     }
-    results.toList.asJava
+    results.toList.map(CompletableFuture.completedFuture[AclCreateResult]).asJava
   }
 
-  override def deleteAcls(requestContext: AuthorizableRequestContext, aclBindingFilters: util.List[AclBindingFilter]): util.List[AclDeleteResult] = {
+  override def deleteAcls(requestContext: AuthorizableRequestContext,
+                          aclBindingFilters: util.List[AclBindingFilter]): util.List[_ <: CompletionStage[AclDeleteResult]] = {
     val deletedBindings = new mutable.HashMap[AclBinding, Int]()
     val filters = aclBindingFilters.asScala.zipWithIndex
     inWriteLock(lock) {
@@ -191,16 +195,17 @@ class AclAuthorizer extends Authorizer with Logging {
       .mapValues(_.map{ case (binding, _) => new AclBindingDeleteResult(binding) })
     (0 until aclBindingFilters.size).map { i =>
       new AclDeleteResult(deletedResult.getOrElse(i, Set.empty[AclBindingDeleteResult]).toSet.asJava)
-    }.asJava
+    }.map(CompletableFuture.completedFuture[AclDeleteResult]).asJava
   }
 
-  override def acls(filter: AclBindingFilter): lang.Iterable[AclBinding] = {
-    inReadLock(lock) {
+  override def acls(filter: AclBindingFilter): CompletionStage[util.Collection[AclBinding]] = {
+    val bindings = inReadLock(lock) {
       unorderedAcls.flatMap { case (resource, versionedAcls) =>
         versionedAcls.acls.map(acl => AuthorizerUtils.convertToAclBinding(resource, acl))
             .filter(filter.matches)
-      }.asJava
+      }
     }
+    CompletableFuture.completedFuture(bindings.toSet.asJava)
   }
 
   override def close(): Unit = {
@@ -208,7 +213,7 @@ class AclAuthorizer extends Authorizer with Logging {
     if (zkClient != null) zkClient.close()
   }
 
-  private def authorizeAction(requestContext: AuthorizableRequestContext, action: Action): AuthorizationResult = {
+  private def authorizeAction(requestContext: AuthorizableRequestContext, action: Action): CompletionStage[AuthorizationResult] = {
     val resource = AuthorizerUtils.convertToResource(action.resourcePattern)
     if (resource.patternType != PatternType.LITERAL) {
       throw new IllegalArgumentException("Only literal resources are supported. Got: " + resource.patternType)
@@ -260,7 +265,7 @@ class AclAuthorizer extends Authorizer with Logging {
     val authorized = isSuperUser(principal) || aclsAllowAccess
 
     logAuditMessage(requestContext, action, authorized)
-    if (authorized) AuthorizationResult.ALLOWED else AuthorizationResult.DENIED
+    CompletableFuture.completedFuture(if (authorized) AuthorizationResult.ALLOWED else AuthorizationResult.DENIED)
   }
 
   def isSuperUser(principal: KafkaPrincipal): Boolean = {

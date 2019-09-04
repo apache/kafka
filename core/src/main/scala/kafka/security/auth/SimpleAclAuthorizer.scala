@@ -70,7 +70,7 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
   override def authorize(session: Session, operation: Operation, resource: Resource): Boolean = {
     val requestContext = AuthorizerUtils.sessionToRequestContext(session)
     val action = new Action(operation.toJava, resource.toPattern, 1, true, true)
-    aclAuthorizer.authorize(requestContext, List(action).asJava).asScala.head == AuthorizationResult.ALLOWED
+    aclAuthorizer.authorize(requestContext, List(action).asJava).asScala.head.toCompletableFuture.get == AuthorizationResult.ALLOWED
   }
 
   def isSuperUser(operation: Operation, resource: Resource, principal: KafkaPrincipal, host: String): Boolean = {
@@ -124,13 +124,13 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
 
   private def createAcls(bindings: Set[AclBinding]): Unit = {
     aclAuthorizer.maxUpdateRetries = maxUpdateRetries
-    val results = aclAuthorizer.createAcls(null, bindings.toList.asJava).asScala
+    val results = aclAuthorizer.createAcls(null, bindings.toList.asJava).asScala.map(_.toCompletableFuture.get)
     results.find(_.exception != null).foreach { r => throw r.exception }
   }
 
   private def deleteAcls(filters: Set[AclBindingFilter]): Boolean = {
     aclAuthorizer.maxUpdateRetries = maxUpdateRetries
-    val results = aclAuthorizer.deleteAcls(null, filters.toList.asJava).asScala
+    val results = aclAuthorizer.deleteAcls(null, filters.toList.asJava).asScala.map(_.toCompletableFuture.get)
     results.find(_.exception != null).foreach { r => throw r.exception }
     results.flatMap(_.aclBindingDeleteResults.asScala).find(_.exception != null).foreach { r => throw r.exception }
     results.exists(r => r.aclBindingDeleteResults.asScala.exists(_.deleted))
@@ -138,7 +138,7 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
 
   private def acls(filter: AclBindingFilter): Map[Resource, Set[Acl]] = {
     val result = mutable.Map[Resource, mutable.Set[Acl]]()
-    aclAuthorizer.acls(filter).asScala.foreach { binding =>
+    aclAuthorizer.acls(filter).toCompletableFuture.get.asScala.foreach { binding =>
       val resource = AuthorizerUtils.convertToResource(binding.pattern)
       val acl = AuthorizerUtils.convertToAcl(binding.entry)
       result.getOrElseUpdate(resource, mutable.Set()).add(acl)

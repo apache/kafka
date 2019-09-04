@@ -1177,9 +1177,9 @@ object TestUtils extends Logging {
     val newLine = scala.util.Properties.lineSeparator
 
     val filter = new AclBindingFilter(resource.toFilter, AccessControlEntryFilter.ANY)
-    waitUntilTrue(() => authorizer.acls(filter).asScala.map(_.entry).toSet == expected,
+    waitUntilTrue(() => authorizer.acls(filter).toCompletableFuture.get.asScala.map(_.entry).toSet == expected,
       s"expected acls:${expected.mkString(newLine + "\t", newLine + "\t", newLine)}" +
-        s"but got:${authorizer.acls(filter).asScala.map(_.entry).mkString(newLine + "\t", newLine + "\t", newLine)}", waitTimeMs = JTestUtils.DEFAULT_MAX_WAIT_MS)
+        s"but got:${authorizer.acls(filter).toCompletableFuture.get.asScala.map(_.entry).mkString(newLine + "\t", newLine + "\t", newLine)}", waitTimeMs = JTestUtils.DEFAULT_MAX_WAIT_MS)
   }
 
   def waitAndVerifyAcls(expected: Set[Acl], authorizer: Authorizer, resource: Resource) = {

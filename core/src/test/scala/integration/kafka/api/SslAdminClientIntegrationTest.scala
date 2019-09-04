@@ -67,7 +67,7 @@ class SslAdminClientIntegrationTest extends SaslSslAdminClientIntegrationTest {
     val aclBinding = new AclBinding(clusterResourcePattern, ace)
     val authorizer = servers.head.dataPlaneRequestProcessor.authorizer.get
     val prevAcls = authorizer.acls(new AclBindingFilter(clusterResourcePattern.toFilter, AccessControlEntryFilter.ANY))
-      .asScala.map(_.entry).toSet
+      .toCompletableFuture.get.asScala.map(_.entry).toSet
     authorizer.createAcls(null, Collections.singletonList(aclBinding))
     TestUtils.waitAndVerifyAcls(prevAcls ++ Set(ace), authorizer, clusterResourcePattern)
   }
@@ -76,10 +76,10 @@ class SslAdminClientIntegrationTest extends SaslSslAdminClientIntegrationTest {
     val ace = clusterAcl(permissionType.toJava, operation.toJava)
     val authorizer = servers.head.dataPlaneRequestProcessor.authorizer.get
     val clusterFilter = new AclBindingFilter(clusterResourcePattern.toFilter, AccessControlEntryFilter.ANY)
-    val prevAcls = authorizer.acls(clusterFilter).asScala.map(_.entry).toSet
+    val prevAcls = authorizer.acls(clusterFilter).toCompletableFuture.get.asScala.map(_.entry).toSet
     val deleteFilter = new AclBindingFilter(clusterResourcePattern.toFilter, ace.toFilter)
     Assert.assertTrue(authorizer.deleteAcls(null, Collections.singletonList(deleteFilter))
-      .get(0).aclBindingDeleteResults().asScala.head.deleted)
+      .get(0).toCompletableFuture.get.aclBindingDeleteResults().asScala.head.deleted)
     TestUtils.waitAndVerifyAcls(prevAcls -- Set(ace), authorizer, clusterResourcePattern)
   }
 

@@ -2158,7 +2158,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       case Some(auth) =>
         val filter = describeAclsRequest.filter
         val returnedAcls = new util.HashSet[AclBinding]()
-        auth.acls(filter).asScala.foreach(returnedAcls.add)
+        auth.acls(filter).toCompletableFuture.get.asScala.foreach(returnedAcls.add)
         sendResponseMaybeThrottle(request, requestThrottleMs =>
           new DescribeAclsResponse(requestThrottleMs, ApiError.NONE, returnedAcls))
     }
@@ -2196,7 +2196,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         val createResults = auth.createAcls(request.context, validBindings.asJava)
 
         val aclCreationResults = aclBindings.map { acl =>
-          val result = errorResults.getOrElse(acl, createResults.get(validBindings.indexOf(acl)))
+          val result = errorResults.getOrElse(acl, createResults.get(validBindings.indexOf(acl)).toCompletableFuture.get)
           if (result.failed)
             new AclCreationResponse(ApiError.fromThrowable(result.exception))
           else
@@ -2222,7 +2222,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         def toErrorCode(exception: ApiException): ApiError = {
           if (exception != null) ApiError.fromThrowable(exception) else ApiError.NONE
         }
-        val filterResponses = results.asScala.map { result =>
+        val filterResponses = results.asScala.map(_.toCompletableFuture.get).map { result =>
           val deletions = result.aclBindingDeleteResults().asScala.toList.map { deletionResult =>
             new AclDeletionResult(toErrorCode(deletionResult.exception), deletionResult.aclBinding)
           }.asJava
@@ -2608,7 +2608,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     authorizer.forall { authZ =>
       val resource = new ResourcePattern(resourceType, resourceName, PatternType.LITERAL)
       val actions = Collections.singletonList(new Action(operation, resource, refCount, logIfAllowed, logIfDenied))
-      authZ.authorize(request.context, actions).asScala.head == AuthorizationResult.ALLOWED
+      authZ.authorize(request.context, actions).asScala.head.toCompletableFuture.get == AuthorizationResult.ALLOWED
     }
   }
 
@@ -2627,7 +2627,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         }
         authZ.authorize(request.context, actions.asJava).asScala
           .zip(resources.map(_._1)) // zip with resource name
-          .filter(_._1 == AuthorizationResult.ALLOWED) // filter authorized resources
+          .filter(_._1.toCompletableFuture.get == AuthorizationResult.ALLOWED) // filter authorized resources
           .map(_._2).toSet
       case None =>
         resourceNames.toSet
@@ -2647,7 +2647,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         val actions = supportedOps.map { op => new Action(op, resourcePattern, 1, false, false) }
         authZ.authorize(request.context, actions.asJava).asScala
           .zip(supportedOps)
-          .filter(_._1 == AuthorizationResult.ALLOWED)
+          .filter(_._1.toCompletableFuture.get == AuthorizationResult.ALLOWED)
           .map(_._2).toSet
       case None =>
         supportedOps.toSet

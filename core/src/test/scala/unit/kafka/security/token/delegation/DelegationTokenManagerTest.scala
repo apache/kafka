@@ -280,7 +280,7 @@ class DelegationTokenManagerTest extends ZooKeeperTestHarness  {
     assert(tokens.size == 2)
 
     def createAcl(aclBinding: AclBinding): Unit = {
-      val result = aclAuthorizer.createAcls(null, List(aclBinding).asJava).get(0)
+      val result = aclAuthorizer.createAcls(null, List(aclBinding).asJava).get(0).toCompletableFuture.get
       if (result.failed)
         throw result.exception
     }
@@ -320,7 +320,7 @@ class DelegationTokenManagerTest extends ZooKeeperTestHarness  {
         val requestContext = AuthorizerUtils.sessionToRequestContext(hostSession)
         val action = new Action(AclOperation.DESCRIBE,
           new ResourcePattern(DELEGATION_TOKEN, tokenId, LITERAL), 1, true, true)
-        aclAuthorizer.authorize(requestContext, List(action).asJava).asScala.head == AuthorizationResult.ALLOWED
+        aclAuthorizer.authorize(requestContext, List(action).asJava).asScala.head.toCompletableFuture.get == AuthorizationResult.ALLOWED
       }
       def eligible(token: TokenInformation) = DelegationTokenManager.filterToken(requestPrincipal, Option(requestedOwners), token, authorizeToken)
       tokenManager.getTokens(eligible)

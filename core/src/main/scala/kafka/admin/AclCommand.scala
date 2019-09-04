@@ -314,7 +314,7 @@ object AclCommand extends Logging {
         for ((resource, acls) <- resourceToAcl) {
           println(s"Adding ACLs for resource `$resource`: $Newline ${acls.map("\t" + _).mkString(Newline)} $Newline")
           val aclBindings = acls.map(acl => new AclBinding(resource, acl))
-          authorizer.createAcls(null, aclBindings.toList.asJava).asScala.foreach { result =>
+          authorizer.createAcls(null, aclBindings.toList.asJava).asScala.map(_.toCompletableFuture.get).foreach { result =>
             if (result.failed) {
               println(s"Error while adding ACLs: ${result.exception.getMessage}")
               println(Utils.stackTrace(result.exception))
@@ -373,7 +373,7 @@ object AclCommand extends Logging {
         val aclBindingFilters = acls.map(acl => new AclBindingFilter(filter, acl.toFilter)).toList.asJava
         authorizer.deleteAcls(null, aclBindingFilters)
       }
-      result.asScala.foreach { result =>
+      result.asScala.map(_.toCompletableFuture.get).foreach { result =>
         if (result.exception != null) {
           println(s"Error while removing ACLs: ${result.exception.getMessage}")
           println(Utils.stackTrace(result.exception))
@@ -389,10 +389,10 @@ object AclCommand extends Logging {
 
     private def getAcls(authorizer: JAuthorizer, filters: Set[ResourcePatternFilter]): Map[ResourcePattern, Set[AccessControlEntry]] = {
       val aclBindings =
-        if (filters.isEmpty) authorizer.acls(AclBindingFilter.ANY).asScala
+        if (filters.isEmpty) authorizer.acls(AclBindingFilter.ANY).toCompletableFuture.get.asScala
         else {
           val results = for (filter <- filters) yield {
-            authorizer.acls(new AclBindingFilter(filter, AccessControlEntryFilter.ANY)).asScala
+            authorizer.acls(new AclBindingFilter(filter, AccessControlEntryFilter.ANY)).toCompletableFuture.get.asScala
           }
           results.reduceLeft(_ ++ _)
         }

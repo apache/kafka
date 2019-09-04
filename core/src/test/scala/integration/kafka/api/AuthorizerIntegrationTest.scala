@@ -1635,7 +1635,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   def removeAllAcls(): Unit = {
     val authorizer = servers.head.dataPlaneRequestProcessor.authorizer.get
     val aclFilter = AclBindingFilter.ANY
-    authorizer.deleteAcls(null, List(aclFilter).asJava).asScala.flatMap { deletion =>
+    authorizer.deleteAcls(null, List(aclFilter).asJava).asScala.map(_.toCompletableFuture.get).flatMap { deletion =>
       deletion.aclBindingDeleteResults().asScala.map(_.aclBinding.pattern).toSet
     }.foreach { resource =>
       TestUtils.waitAndVerifyAcls(Set.empty[AccessControlEntry], authorizer, resource)
@@ -1694,13 +1694,13 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   private def addAndVerifyAcls(acls: Set[AccessControlEntry], resource: ResourcePattern): Unit = {
     val aclBindings = acls.map { acl => new AclBinding(resource, acl) }
     servers.head.dataPlaneRequestProcessor.authorizer.get
-      .createAcls(null, aclBindings.toList.asJava).asScala.foreach {result =>
+      .createAcls(null, aclBindings.toList.asJava).asScala.map(_.toCompletableFuture.get).foreach {result =>
         if (result.failed())
           throw result.exception()
       }
     val aclFilter = new AclBindingFilter(resource.toFilter, AccessControlEntryFilter.ANY)
     TestUtils.waitAndVerifyAcls(
-      servers.head.dataPlaneRequestProcessor.authorizer.get.acls(aclFilter).asScala.map(_.entry).toSet ++ acls,
+      servers.head.dataPlaneRequestProcessor.authorizer.get.acls(aclFilter).toCompletableFuture.get.asScala.map(_.entry).toSet ++ acls,
       servers.head.dataPlaneRequestProcessor.authorizer.get, resource)
   }
 

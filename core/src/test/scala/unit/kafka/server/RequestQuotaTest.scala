@@ -16,7 +16,7 @@ package kafka.server
 
 import java.util
 import java.util.{Collections, LinkedHashMap, Optional, Properties}
-import java.util.concurrent.{Executors, Future, TimeUnit}
+import java.util.concurrent._
 
 import kafka.log.LogConfig
 import kafka.network.RequestChannel.Session
@@ -652,10 +652,11 @@ object RequestQuotaTest {
   // check unauthorized code path
   var principal = KafkaPrincipal.ANONYMOUS
   class TestAuthorizer extends AclAuthorizer {
-    override def authorize(requestContext: AuthorizableRequestContext, actions: util.List[Action]): util.List[AuthorizationResult] = {
+    override def authorize(requestContext: AuthorizableRequestContext,
+                           actions: util.List[Action]): util.List[_ <: CompletionStage[AuthorizationResult]] = {
       actions.asScala.map { _ =>
         if (requestContext.principal != UnauthorizedPrincipal) AuthorizationResult.ALLOWED else AuthorizationResult.DENIED
-      }.asJava
+      }.map(CompletableFuture.completedFuture[AuthorizationResult]).asJava
     }
   }
   class TestPrincipalBuilder extends KafkaPrincipalBuilder {

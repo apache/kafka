@@ -18,9 +18,11 @@
 package org.apache.kafka.server.authorizer;
 
 import java.io.Closeable;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
+
 import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.Endpoint;
 import org.apache.kafka.common.acl.AclBinding;
@@ -47,7 +49,18 @@ import org.apache.kafka.common.annotation.InterfaceStability;
  * Authorizer implementation class may optionally implement @{@link org.apache.kafka.common.Reconfigurable}
  * to enable dynamic reconfiguration without restarting the broker.
  * <p>
- * <b>Thread safety:</b> All authorizer operations including authorization and ACL updates must be thread-safe.
+ * <b>Threading model:</b>
+ * <ul>
+ *   <li>All authorizer operations including authorization and ACL updates must be thread-safe.</li>
+ *   <li>Authorizer API is asynchronous. For operations that do not block, return a completed future using
+ *       {@link java.util.concurrent.CompletableFuture#completedFuture(Object)}. This ensures that the request
+ *       will be handled synchronously by the caller without using a purgatory to wait for the result.</li>
+ *   <li>If an operation requires remote communication that is likely to block, return a future that is
+ *       completed asynchronously when the remote operation completes. This enables the caller to process
+ *       other requests on the request threads without blocking.</li>
+ *   <li>Any threads or thread pools used for processing remote operations asynchronously can be started during
+ *       {@link #start(AuthorizerServerInfo)}. All threads must be shutdown during {@link Authorizer#close()}.</li>
+ * </ul>
  * </p>
  */
 @InterfaceStability.Evolving
@@ -60,35 +73,49 @@ public interface Authorizer extends Configurable, Closeable {
      * requests on that listener.
      *
      * @param serverInfo Metadata for the broker including broker id and listener endpoints
-     * @return CompletableFutures for each endpoint that completes when authorizer is ready to
+     * @return CompletionStage for each endpoint that completes when authorizer is ready to
      *         start authorizing requests on that listener.
      */
-    Map<Endpoint, CompletableFuture<Void>> start(AuthorizerServerInfo serverInfo);
+    Map<Endpoint, ? extends CompletionStage<Void>> start(AuthorizerServerInfo serverInfo);
 
     /**
-     * Authorizes the specified action. Additional metadata for the action is specified
-     * in `requestContext`.
+     * Authorizes the specified action. Additional metadata for the action is specified in `requestContext`.
+     * <p>
+     * This is an asynchronous API that enables the caller to avoid blocking if authorization metadata
+     * is not available in the local cache. Implementations of this API can return completed futures using
+     * {@link java.util.concurrent.CompletableFuture#completedFuture(Object)} to process the results synchronously
+     * when authorization metadata is available locally.
      *
      * @param requestContext Request context including request type, security protocol and listener name
      * @param actions Actions being authorized including resource and operation for each action
-     * @return List of authorization results for each action in the same order as the provided actions
+     * @return List of authorization results for each action in the same order as the provided actions. Each result
+     *         is returned as a CompletionStage that completes when the result is available.
      */
-    List<AuthorizationResult> authorize(AuthorizableRequestContext requestContext, List<Action> actions);
+    List<? extends CompletionStage<AuthorizationResult>> authorize(AuthorizableRequestContext requestContext, List<Action> actions);
 
     /**
      * Creates new ACL bindings.
+     * <p>
+     * This is an asynchronous API that enables the caller to avoid blocking during the update. Implementations of this
+     * API can return completed futures using {@link java.util.concurrent.CompletableFuture#completedFuture(Object)}
+     * to process the update synchronously on the request thread.
      *
      * @param requestContext Request context if the ACL is being created by a broker to handle
      *        a client request to create ACLs. This may be null if ACLs are created directly in ZooKeeper
      *        using AclCommand.
      * @param aclBindings ACL bindings to create
      *
-     * @return Create result for each ACL binding in the same order as in the input list
+     * @return Create result for each ACL binding in the same order as in the input list. Each result
+     *         is returned as a CompletionStage that completes when the result is available.
      */
-    List<AclCreateResult> createAcls(AuthorizableRequestContext requestContext, List<AclBinding> aclBindings);
+    List<? extends CompletionStage<AclCreateResult>> createAcls(AuthorizableRequestContext requestContext, List<AclBinding> aclBindings);
 
     /**
      * Deletes all ACL bindings that match the provided filters.
+     * <p>
+     * This is an asynchronous API that enables the caller to avoid blocking during the update. Implementations of this
+     * API can return completed futures using {@link java.util.concurrent.CompletableFuture#completedFuture(Object)}
+     * to process the update synchronously on the request thread.
      *
      * @param requestContext Request context if the ACL is being deleted by a broker to handle
      *        a client request to delete ACLs. This may be null if ACLs are deleted directly in ZooKeeper
@@ -97,14 +124,20 @@ public interface Authorizer extends Configurable, Closeable {
      *
      * @return Delete result for each filter in the same order as in the input list.
      *         Each result indicates which ACL bindings were actually deleted as well as any
-     *         bindings that matched but could not be deleted.
+     *         bindings that matched but could not be deleted. Each result is returned as a
+     *         CompletionStage that completes when the result is available.
      */
-    List<AclDeleteResult> deleteAcls(AuthorizableRequestContext requestContext, List<AclBindingFilter> aclBindingFilters);
+    List<? extends CompletionStage<AclDeleteResult>> deleteAcls(AuthorizableRequestContext requestContext, List<AclBindingFilter> aclBindingFilters);
 
     /**
      * Returns ACL bindings which match the provided filter.
+     * <p>
+     * This is an asynchronous API that enables the caller to avoid blocking if ACLs are not available locally.
+     * Implementations of this API can return completed futures using {@link java.util.concurrent.CompletableFuture#completedFuture(Object)}
+     * to process the result synchronously when remote operations are not required.
      *
-     * @return Iterator for ACL bindings, which may be populated lazily.
+     * @return Collection of matching ACL bindings, returned as a CompletionStage that completes when
+     *         the results are available.
      */
-    Iterable<AclBinding> acls(AclBindingFilter filter);
+    CompletionStage<Collection<AclBinding>> acls(AclBindingFilter filter);
 }
