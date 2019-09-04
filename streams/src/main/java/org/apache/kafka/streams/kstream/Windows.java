@@ -26,9 +26,10 @@ import static org.apache.kafka.streams.kstream.internals.WindowingDefaults.DEFAU
 
 /**
  * The window specification for fixed size windows that is used to define window boundaries and grace period.
- *
+ * <p>
  * Grace period defines how long to wait on out-of-order events, where delay is defined as (stream_time - record_timestamp).
- *
+ * Records that arrive after the grace period passed are considered <em>late</em> and will not be processed but are dropped.
+ * <p>
  * Warning: It may be unsafe to use objects of this class in set- or map-like collections,
  * since the equals and hashCode methods depend on mutable fields.
  *

@@ -215,9 +215,9 @@ public final class JoinWindows extends Windows<Window> {
     }
 
     /**
-     * Reject out-of-order events that arrive more than {@code afterWindowEnd}
+     * Reject out-of-order events that are delayed more than {@code afterWindowEnd}
      * after the end of its window.
-     *
+     * <p>
      * Delay is defined as (stream_time - record_timestamp).
      *
      * @param afterWindowEnd The grace period to admit out-of-order events to a window.
