@@ -141,39 +141,44 @@ public class StoreChangelogReader implements ChangelogReader {
 
         // try to fetch end offsets for the initializable restorers and remove any partitions
         // where we already have all of the data
+        final Map<TopicPartition, Long> queriedEndOffsets;
         try {
-            endOffsets.putAll(restoreConsumer.endOffsets(initializable));
+            queriedEndOffsets = restoreConsumer.endOffsets(initializable);
         } catch (final TimeoutException e) {
             // if timeout exception gets thrown we just give up this time and retry in the next run loop
             log.debug("Could not fetch end offset for {}; will fall back to partition by partition fetching", initializable);
             return;
         }
 
+        queriedEndOffsets.forEach((tp, endOffset) -> {
+            if (endOffset != null) {
+                final StateRestorer restorer = stateRestorers.get(tp);
+                final long offsetLimit = restorer.offsetLimit();
+                endOffsets.put(tp, Math.min(endOffset, offsetLimit));
+            } else {
+                log.info("End offset cannot be found form the returned metadata; removing this partition from the current run loop");
+                initializable.remove(tp);
+            }
+        });
+
         final Iterator<TopicPartition> iter = initializable.iterator();
         while (iter.hasNext()) {
             final TopicPartition topicPartition = iter.next();
             final Long endOffset = endOffsets.get(topicPartition);
 
-            // offset should not be null; but since the consumer API does not guarantee it
-            // we add this check just in case
-            if (endOffset != null) {
-                final StateRestorer restorer = stateRestorers.get(topicPartition);
-                if (restorer.checkpoint() >= endOffset) {
-                    restorer.setRestoredOffset(restorer.checkpoint());
-                    iter.remove();
-                    completedRestorers.add(topicPartition);
-                } else if (restorer.offsetLimit() == 0 || endOffset == 0) {
-                    restorer.setRestoredOffset(0);
-                    iter.remove();
-                    completedRestorers.add(topicPartition);
-                } else {
-                    restorer.setEndingOffset(endOffset);
-                }
-                needsInitializing.remove(topicPartition);
-            } else {
-                log.info("End offset cannot be found form the returned metadata; removing this partition from the current run loop");
+            final StateRestorer restorer = stateRestorers.get(topicPartition);
+            if (restorer.checkpoint() >= endOffset) {
+                restorer.setRestoredOffset(restorer.checkpoint());
                 iter.remove();
+                completedRestorers.add(topicPartition);
+            } else if (restorer.offsetLimit() == 0 || endOffset == 0) {
+                restorer.setRestoredOffset(0);
+                iter.remove();
+                completedRestorers.add(topicPartition);
+            } else {
+                restorer.setEndingOffset(endOffset);
             }
+            needsInitializing.remove(topicPartition);
         }
 
         // set up restorer for those initializable
