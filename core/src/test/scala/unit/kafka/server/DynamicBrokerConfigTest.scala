@@ -17,14 +17,17 @@
 
 package kafka.server
 
-import java.util
+import java.{lang, util}
 import java.util.Properties
+import java.util.concurrent.CompletableFuture
 
 import kafka.utils.TestUtils
 import kafka.zk.KafkaZkClient
-import org.apache.kafka.common.Reconfigurable
+import org.apache.kafka.common.{Endpoint, Reconfigurable}
+import org.apache.kafka.common.acl.{AclBinding, AclBindingFilter}
 import org.apache.kafka.common.config.types.Password
 import org.apache.kafka.common.config.{ConfigException, SslConfigs}
+import org.apache.kafka.server.authorizer._
 import org.easymock.EasyMock
 import org.junit.Assert._
 import org.junit.Test
@@ -319,6 +322,43 @@ class DynamicBrokerConfigTest {
 
     val dynamicListenerConfig = new DynamicListenerConfig(kafkaServer)
     dynamicListenerConfig.validateReconfiguration(newConfig)
+  }
+
+  @Test
+  def testAuthorizerConfig(): Unit = {
+    val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 9092)
+    val oldConfig =  KafkaConfig.fromProps(props)
+    val kafkaServer: KafkaServer = EasyMock.createMock(classOf[kafka.server.KafkaServer])
+
+    class TestAuthorizer extends Authorizer with Reconfigurable {
+      @volatile var superUsers = ""
+      override def acls(filter: AclBindingFilter): lang.Iterable[AclBinding] = null
+      override def start(serverInfo: AuthorizerServerInfo): util.Map[Endpoint, CompletableFuture[Void]] = Map.empty.asJava
+      override def deleteAcls(requestContext: AuthorizableRequestContext, aclBindingFilters: util.List[AclBindingFilter]): util.List[AclDeleteResult] = null
+      override def createAcls(requestContext: AuthorizableRequestContext, aclBindings: util.List[AclBinding]): util.List[AclCreateResult] = null
+      override def authorize(requestContext: AuthorizableRequestContext, actions: util.List[Action]): util.List[AuthorizationResult] = null
+      override def configure(configs: util.Map[String, _]): Unit = {}
+      override def close(): Unit = {}
+      override def reconfigurableConfigs(): util.Set[String] = Set("super.users").asJava
+      override def validateReconfiguration(configs: util.Map[String, _]): Unit = {}
+      override def reconfigure(configs: util.Map[String, _]): Unit = {
+        superUsers = configs.get("super.users").toString
+      }
+    }
+
+    val authorizer = new TestAuthorizer
+    EasyMock.expect(kafkaServer.config).andReturn(oldConfig).anyTimes()
+    EasyMock.expect(kafkaServer.authorizer).andReturn(Some(authorizer)).anyTimes()
+    EasyMock.replay(kafkaServer)
+    try {
+      kafkaServer.config.dynamicConfig.addReconfigurables(kafkaServer)
+    } catch {
+      case _: Throwable => // We are only testing authorizer reconfiguration, ignore any exceptions due to incomplete mock
+    }
+
+    props.put("super.users", "User:admin")
+    kafkaServer.config.dynamicConfig.updateBrokerConfig(0, props)
+    assertEquals("User:admin", authorizer.superUsers)
   }
 
   @Test

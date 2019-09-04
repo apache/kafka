@@ -34,13 +34,14 @@ import java.util.Map;
 import java.util.Objects;
 
 import static org.apache.kafka.common.metrics.Sensor.RecordingLevel.DEBUG;
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.ROLLUP_VALUE;
 import static org.apache.kafka.streams.state.internals.metrics.Sensors.createTaskAndStoreLatencyAndThroughputSensors;
 
 public class MeteredSessionStore<K, V>
     extends WrappedStateStore<SessionStore<Bytes, byte[]>, Windowed<K>, V>
     implements SessionStore<K, V> {
 
-    private final String metricScope;
+    private final String metricsScope;
     private final Serde<K> keySerde;
     private final Serde<V> valueSerde;
     private final Time time;
@@ -53,12 +54,12 @@ public class MeteredSessionStore<K, V>
     private String taskName;
 
     MeteredSessionStore(final SessionStore<Bytes, byte[]> inner,
-                        final String metricScope,
+                        final String metricsScope,
                         final Serde<K> keySerde,
                         final Serde<V> valueSerde,
                         final Time time) {
         super(inner);
-        this.metricScope = metricScope;
+        this.metricsScope = metricsScope;
         this.keySerde = keySerde;
         this.valueSerde = valueSerde;
         this.time = time;
@@ -76,9 +77,9 @@ public class MeteredSessionStore<K, V>
         metrics = (StreamsMetricsImpl) context.metrics();
 
         taskName = context.taskId().toString();
-        final String metricsGroup = "stream-" + metricScope + "-metrics";
-        final Map<String, String> taskTags = metrics.tagMap("task-id", taskName, metricScope + "-id", "all");
-        final Map<String, String> storeTags = metrics.tagMap("task-id", taskName, metricScope + "-id", name());
+        final String metricsGroup = "stream-" + metricsScope + "-state-metrics";
+        final Map<String, String> taskTags = metrics.storeLevelTagMap(taskName, metricsScope, ROLLUP_VALUE);
+        final Map<String, String> storeTags = metrics.storeLevelTagMap(taskName, metricsScope, name());
 
         putTime = createTaskAndStoreLatencyAndThroughputSensors(DEBUG, "put", metrics, metricsGroup, taskName, name(), taskTags, storeTags);
         fetchTime = createTaskAndStoreLatencyAndThroughputSensors(DEBUG, "fetch", metrics, metricsGroup, taskName, name(), taskTags, storeTags);

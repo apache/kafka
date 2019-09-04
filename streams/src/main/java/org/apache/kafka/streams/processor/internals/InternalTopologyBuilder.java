@@ -1196,6 +1196,7 @@ public class InternalTopologyBuilder {
                 for (final List<String> topics : nodeToSourceTopics.values()) {
                     allSourceTopics.addAll(maybeDecorateInternalSourceTopics(topics));
                 }
+                allSourceTopics.removeAll(globalTopics);
             }
             Collections.sort(allSourceTopics);
 
