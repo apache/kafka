@@ -2197,7 +2197,7 @@ class KafkaApis(val requestChannel: RequestChannel,
 
         val aclCreationResults = aclBindings.map { acl =>
           val result = errorResults.getOrElse(acl, createResults.get(validBindings.indexOf(acl)))
-          new AclCreationResponse(result.exception.map[ApiError](e => ApiError.fromThrowable(e)).orElse(ApiError.NONE))
+          new AclCreationResponse(result.exception.asScala.map(ApiError.fromThrowable).getOrElse(ApiError.NONE))
         }
 
         sendResponseMaybeThrottle(request, requestThrottleMs =>
@@ -2217,7 +2217,7 @@ class KafkaApis(val requestChannel: RequestChannel,
 
         val results = auth.deleteAcls(request.context, deleteAclsRequest.filters)
         def toErrorCode(exception: Optional[ApiException]): ApiError = {
-          exception.map[ApiError](e => ApiError.fromThrowable(e)).orElse(ApiError.NONE)
+          exception.asScala.map(ApiError.fromThrowable).getOrElse(ApiError.NONE)
         }
         val filterResponses = results.asScala.map { result =>
           val deletions = result.aclBindingDeleteResults().asScala.toList.map { deletionResult =>

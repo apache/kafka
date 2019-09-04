@@ -46,6 +46,7 @@ import org.junit.Assert._
 import org.junit.{After, Before, Test}
 
 import scala.collection.JavaConverters._
+import scala.compat.java8.OptionConverters._
 
 class AclAuthorizerTest extends ZooKeeperTestHarness {
 
@@ -835,7 +836,7 @@ class AclAuthorizerTest extends ZooKeeperTestHarness {
   private def addAcls(authorizer: AclAuthorizer, aces: Set[AccessControlEntry], resourcePattern: ResourcePattern): Unit = {
     val bindings = aces.map { ace => new AclBinding(resourcePattern, ace) }
     authorizer.createAcls(requestContext, bindings.toList.asJava).asScala.foreach { result =>
-      result.exception.ifPresent(e => throw e)
+      result.exception.asScala.foreach { e => throw e }
     }
   }
 
@@ -845,11 +846,11 @@ class AclAuthorizerTest extends ZooKeeperTestHarness {
     else
       aces.map { ace => new AclBinding(resourcePattern, ace).toFilter }
     authorizer.deleteAcls(requestContext, bindings.toList.asJava).asScala.forall { result =>
-      result.exception.ifPresent(e => throw e)
+      result.exception.asScala.foreach { e => throw e }
       result.aclBindingDeleteResults.asScala.foreach { r =>
-        r.exception.ifPresent(e => throw e)
+        r.exception.asScala.foreach { e => throw e }
       }
-      result.aclBindingDeleteResults.asScala.exists(_.deleted)
+      result.aclBindingDeleteResults.asScala.exists(_.exception.asScala.isEmpty)
     }
   }
 
