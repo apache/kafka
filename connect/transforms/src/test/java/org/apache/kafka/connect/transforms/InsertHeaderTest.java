@@ -17,6 +17,7 @@
 package org.apache.kafka.connect.transforms;
 
 import org.apache.kafka.connect.data.SchemaAndValue;
+import org.apache.kafka.connect.data.Time;
 import org.apache.kafka.connect.data.Timestamp;
 import org.apache.kafka.connect.header.ConnectHeaders;
 import org.apache.kafka.connect.header.Headers;
@@ -43,7 +44,7 @@ public class InsertHeaderTest {
     public void insertConfiguredHeaderWithStringValue() {
         final Map<String, Object> props = new HashMap<>();
         props.put("header", "dummy header");
-        props.put("value", "dummy value");
+        props.put("literal.value", "dummy value");
 
         xform.configure(props);
 
@@ -61,7 +62,7 @@ public class InsertHeaderTest {
     public void insertConfiguredHeaderWithStringValueWhenOneExists() {
         final Map<String, Object> props = new HashMap<>();
         props.put("header", "dummy header");
-        props.put("value", "dummy value");
+        props.put("literal.value", "dummy value");
 
         xform.configure(props);
 
@@ -82,7 +83,7 @@ public class InsertHeaderTest {
     public void insertConfiguredHeaderWithInt8Value() {
         final Map<String, Object> props = new HashMap<>();
         props.put("header", "dummy header");
-        props.put("value", "2");
+        props.put("literal.value", "2");
 
         xform.configure(props);
 
@@ -100,7 +101,7 @@ public class InsertHeaderTest {
     public void insertConfiguredHeaderWithInt16Value() {
         final Map<String, Object> props = new HashMap<>();
         props.put("header", "dummy header");
-        props.put("value", "18000");
+        props.put("literal.value", "18000");
 
         xform.configure(props);
 
@@ -118,7 +119,7 @@ public class InsertHeaderTest {
     public void insertConfiguredHeaderWithInt32Value() {
         final Map<String, Object> props = new HashMap<>();
         props.put("header", "dummy header");
-        props.put("value", "50000");
+        props.put("literal.value", "50000");
 
         xform.configure(props);
 
@@ -136,7 +137,7 @@ public class InsertHeaderTest {
     public void insertConfiguredHeaderWithInt64Value() {
         final Map<String, Object> props = new HashMap<>();
         props.put("header", "dummy header");
-        props.put("value", "87474836647");
+        props.put("literal.value", "87474836647");
 
         xform.configure(props);
 
@@ -154,7 +155,7 @@ public class InsertHeaderTest {
     public void insertConfiguredHeaderWithFloatValue() {
         final Map<String, Object> props = new HashMap<>();
         props.put("header", "dummy header");
-        props.put("value", "2353245343456.435435");
+        props.put("literal.value", "2353245343456.435435");
 
         xform.configure(props);
 
@@ -172,7 +173,7 @@ public class InsertHeaderTest {
     public void insertConfiguredHeaderWithDateValue() throws ParseException {
         final Map<String, Object> props = new HashMap<>();
         props.put("header", "dummy header");
-        props.put("value", "2019-08-23");
+        props.put("literal.value", "2019-08-23");
 
         xform.configure(props);
 
@@ -193,14 +194,14 @@ public class InsertHeaderTest {
     public void insertConfiguredHeaderWithTimeValue() throws ParseException {
         final Map<String, Object> props = new HashMap<>();
         props.put("header", "dummy header");
-        props.put("value", "14\\:34\\:54.346Z");
+        props.put("literal.value", "14\\:34\\:54.346Z");
         xform.configure(props);
 
         final SourceRecord record = new SourceRecord(null, null, "test",
             0, null, null, null, null, null, null);
         final SourceRecord transformedRecord = xform.apply(record);
 
-        SchemaAndValue schemaAndValue = new SchemaAndValue(Timestamp.SCHEMA,
+        SchemaAndValue schemaAndValue = new SchemaAndValue(Time.SCHEMA,
             new SimpleDateFormat("HH:mm:ss.SSS'Z'").parse("14:34:54.346Z"));
 
         Headers expected = new ConnectHeaders().add("dummy header", schemaAndValue);
@@ -213,7 +214,7 @@ public class InsertHeaderTest {
     public void insertConfiguredHeaderWithTimestampValue() throws ParseException {
         final Map<String, Object> props = new HashMap<>();
         props.put("header", "dummy header");
-        props.put("value", "2019-08-23T14\\:34\\:54.346Z");
+        props.put("literal.value", "2019-08-23T14\\:34\\:54.346Z");
 
         xform.configure(props);
 
