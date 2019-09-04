@@ -311,8 +311,8 @@ public class RegexSourceIntegrationTest {
             partitionedStreamLeader.to(DEFAULT_OUTPUT_TOPIC, Produced.with(stringSerde, stringSerde));
             partitionedStreamFollower.to(DEFAULT_OUTPUT_TOPIC, Produced.with(stringSerde, stringSerde));
 
-            final List<String> leaderAssignment = new ArrayList<>();
-            final List<String> followerAssignment = new ArrayList<>();
+            final List<String> leaderAssignment = new CopyOnWriteArrayList<>();
+            final List<String> followerAssignment = new CopyOnWriteArrayList<>();
 
             partitionedStreamsLeader  = new KafkaStreams(builderLeader.build(), streamsConfiguration, new DefaultKafkaClientSupplier() {
                 @Override
