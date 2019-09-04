@@ -1255,12 +1255,10 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
 
           assertTrue(removeMemberResult.hasError)
           assertEquals(Errors.UNKNOWN_MEMBER_ID, removeMemberResult.error)
-          assertEquals(Collections.singletonList(new MemberIdentity()
-            .setGroupInstanceId(invalidInstanceId)), removeMemberResult.membersToRemove)
-          assertEquals(Collections.emptyList(), removeMemberResult.succeedMembers())
+
           assertEquals(Collections.singletonList(new MemberResponse()
             .setGroupInstanceId(invalidInstanceId)
-            .setErrorCode(Errors.UNKNOWN_MEMBER_ID.code())), removeMemberResult.failedMembers())
+            .setErrorCode(Errors.UNKNOWN_MEMBER_ID.code())), removeMemberResult.memberFutures())
 
           // Test consumer group deletion
           var deleteResult = client.deleteConsumerGroups(Seq(testGroupId, fakeGroupId).asJava)
@@ -1284,10 +1282,7 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
           assertFalse(removeMemberResult.hasError)
           assertEquals(Errors.NONE, removeMemberResult.error)
           assertEquals(Collections.singletonList(new MemberIdentity()
-            .setGroupInstanceId(testInstanceId)), removeMemberResult.membersToRemove)
-          assertEquals(Collections.singletonList(new MemberIdentity()
-            .setGroupInstanceId(testInstanceId)), removeMemberResult.succeedMembers())
-          assertEquals(Collections.emptyList(), removeMemberResult.failedMembers())
+            .setGroupInstanceId(testInstanceId)), removeMemberResult.memberFutures)
 
           // The group should contain no member now.
           val describeTestGroupResult = client.describeConsumerGroups(Seq(testGroupId).asJava,

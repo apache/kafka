@@ -50,6 +50,7 @@ import org.apache.kafka.common.errors.SaslAuthenticationException;
 import org.apache.kafka.common.errors.SecurityDisabledException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicDeletionDisabledException;
+import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.message.AlterPartitionReassignmentsResponseData;
@@ -1581,17 +1582,14 @@ public class KafkaAdminClientTest {
             final String instanceTwo = "instance-2";
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
 
-            MemberIdentity memberOne = new MemberIdentity().setGroupInstanceId(instanceOne);
             MemberResponse responseOne = new MemberResponse()
                                              .setGroupInstanceId(instanceOne)
                                              .setErrorCode(Errors.UNKNOWN_MEMBER_ID.code());
 
-            MemberIdentity memberTwo = new MemberIdentity().setGroupInstanceId(instanceTwo);
             MemberResponse responseTwo = new MemberResponse()
                                              .setGroupInstanceId(instanceTwo)
                                              .setErrorCode(Errors.NONE.code());
 
-            List<MemberIdentity> memberIdentities = Arrays.asList(memberOne, memberTwo);
             List<MemberResponse> memberResponses = Arrays.asList(responseOne, responseTwo);
 
             // Retriable FindCoordinatorResponse errors should be retried
@@ -1608,7 +1606,7 @@ public class KafkaAdminClientTest {
 
             // Inject an unknown error
             env.kafkaClient().prepareResponse(new LeaveGroupResponse(new LeaveGroupResponseData()
-                                                                      .setErrorCode(Errors.UNKNOWN_SERVER_ERROR.code())));
+                                                                         .setErrorCode(Errors.UNKNOWN_SERVER_ERROR.code())));
 
             String groupId = "groupId";
             List<String> membersToRemove = Arrays.asList(instanceOne, instanceTwo);
@@ -1620,10 +1618,7 @@ public class KafkaAdminClientTest {
             RemoveMemberFromGroupResult result = unknownErrorResult.all();
             assertTrue(result.hasError());
             assertEquals(Errors.UNKNOWN_SERVER_ERROR, result.error());
-
-            assertEquals(memberIdentities, result.membersToRemove());
-//            assertEquals(Collections.emptyList(), result.succeedMembers());
-//            assertEquals(Collections.emptyList(), result.failedMembers());
+            assertTrue(result.memberFutures().isEmpty());
 
             // Inject a top-level non-retriable error
             env.kafkaClient().prepareResponse(prepareFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
@@ -1652,9 +1647,18 @@ public class KafkaAdminClientTest {
             assertTrue(result.hasError());
             assertEquals(Errors.UNKNOWN_MEMBER_ID, result.error());
 
-            assertEquals(memberIdentities, result.membersToRemove());
-//            assertEquals(singletonList(memberTwo), result.succeedMembers());
-//            assertEquals(singletonList(responseOne), result.failedMembers());
+            Map<MemberIdentity, KafkaFuture<Void>> memberFutures = result.memberFutures();
+            assertEquals(2, memberFutures.size());
+            for (Map.Entry<MemberIdentity, KafkaFuture<Void>> entry : memberFutures.entrySet()) {
+                KafkaFuture<Void> memberFuture = entry.getValue();
+                assertTrue(memberFuture.isCompletedExceptionally());
+                try {
+                    memberFuture.get();
+                    fail("get() should throw ExecutionException");
+                } catch (ExecutionException | InterruptedException e0) {
+                    assertTrue(e0.getCause() instanceof UnknownMemberIdException);
+                }
+            }
 
             // Return success.
             env.kafkaClient().prepareResponse(prepareFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
@@ -1669,9 +1673,11 @@ public class KafkaAdminClientTest {
             assertFalse(result.hasError());
             assertEquals(Errors.NONE, result.error());
 
-            assertEquals(memberIdentities, result.membersToRemove());
-//            assertEquals(memberIdentities, result.succeedMembers());
-//            assertEquals(Collections.emptyList(), result.failedMembers());
+            memberFutures = result.memberFutures();
+            assertEquals(2, memberFutures.size());
+            for (Map.Entry<MemberIdentity, KafkaFuture<Void>> entry : memberFutures.entrySet()) {
+                assertTrue(entry.getValue().isDone());
+            }
         }
     }
 

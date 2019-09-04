@@ -18,10 +18,7 @@ package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.annotation.InterfaceStability;
-import org.apache.kafka.common.message.LeaveGroupRequestData;
-import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity;
 
-import java.util.Map;
 import java.util.concurrent.ExecutionException;
 
 /**

@@ -25,7 +25,6 @@ import org.apache.kafka.common.protocol.Errors;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 /**
  * Result of a batch member removal operation.
@@ -43,16 +42,16 @@ public class RemoveMemberFromGroupResult {
 
         if (!hasError()) {
             for (MemberIdentity memberIdentity : membersToRemove) {
-                KafkaFutureImpl future = new KafkaFutureImpl();
+                KafkaFutureImpl<Void> future = new KafkaFutureImpl<>();
                 future.complete(null);
                 memberFutures.put(memberIdentity, future);
             }
         } else {
             for (MemberResponse memberResponse : memberResponses) {
-                KafkaFutureImpl future = new KafkaFutureImpl();
+                KafkaFutureImpl<Void> future = new KafkaFutureImpl<>();
                 Errors memberError = Errors.forCode(memberResponse.errorCode());
                 if (memberError != Errors.NONE) {
-                  future.completeExceptionally(memberError.exception());
+                    future.completeExceptionally(memberError.exception());
                 } else {
                     future.completeExceptionally(error.exception());
                 }
@@ -69,15 +68,6 @@ public class RemoveMemberFromGroupResult {
 
     public boolean hasError() {
         return error != Errors.NONE;
-    }
-
-    /**
-     * Members set for removal in the original request.
-     *
-     * @return list of members to be removed.
-     */
-    public Set<MemberIdentity> membersToRemove() {
-        return memberFutures.keySet();
     }
 
     /**
