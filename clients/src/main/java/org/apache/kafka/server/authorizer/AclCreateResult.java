@@ -42,11 +42,4 @@ public class AclCreateResult {
     public Optional<ApiException> exception() {
         return exception == null ? Optional.empty() : Optional.of(exception);
     }
-
-    /**
-     * Returns true if the request failed.
-     */
-    public boolean failed() {
-        return exception != null;
-    }
 }
