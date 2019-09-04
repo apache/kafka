@@ -30,7 +30,7 @@ public class VersionConditionalTest {
     @Rule
     final public Timeout globalTimeout = Timeout.millis(120000);
 
-    private void assertEquals(CodeBuffer buffer, String... lines) throws Exception {
+    static void assertEquals(CodeBuffer buffer, String... lines) throws Exception {
         StringWriter stringWriter = new StringWriter();
         buffer.write(stringWriter);
         StringBuilder expectedStringBuilder = new StringBuilder();

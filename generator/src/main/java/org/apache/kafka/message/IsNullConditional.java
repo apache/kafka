@@ -69,7 +69,8 @@ public final class IsNullConditional {
 
     void generate(CodeBuffer buffer) {
         // check if the current version is a nullable version
-        VersionConditional.forVersions(nullableVersions, possibleVersions).
+        VersionConditional cond =
+            VersionConditional.forVersions(nullableVersions, possibleVersions).
             ifMember(versions -> {
                 if (ifNull != null) {
                     buffer.printf("if (%s == null) {%n", name);
@@ -80,8 +81,8 @@ public final class IsNullConditional {
                         buffer.printf("} else {%n");
                         buffer.incrementIndent();
                         ifNotNull.generate(versions);
+                        buffer.decrementIndent();
                     }
-                    buffer.decrementIndent();
                     buffer.printf("}%n");
                 } else if (ifNotNull != null) {
                     buffer.printf("if (%s != null) {%n", name);
@@ -90,8 +91,9 @@ public final class IsNullConditional {
                     buffer.decrementIndent();
                     buffer.printf("}%n");
                 }
-            }).
-            ifNotMember(versions -> {
+            });
+        if (ifNotNull != null) {
+            cond.ifNotMember(versions -> {
                 if (alwaysEmitBlockScope) {
                     buffer.printf("{%n");
                     buffer.incrementIndent();
@@ -101,7 +103,8 @@ public final class IsNullConditional {
                     buffer.decrementIndent();
                     buffer.printf("}%n");
                 }
-            }).
-            generate(buffer);
+            });
+        }
+        cond.generate(buffer);
     }
 }
