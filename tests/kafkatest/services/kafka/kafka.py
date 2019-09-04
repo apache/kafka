@@ -333,6 +333,12 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         return cmd
 
     def start_node(self, node):
+
+        # prevent linux from throwing IOExceptions at scale
+        node.account.ssh("sudo sysctl -w vm.max_map_count=10000000")
+        node.account.ssh("sudo sysctl -w fs.file-max=10000000")
+        node.account.ssh("sudo sed -i -e \"s/nofile [0-9]\+/nofile 10000000/g\" /etc/security/limits.conf")
+
         node.account.mkdirs(KafkaService.PERSISTENT_ROOT)
         prop_file = self.prop_file(node)
         self.logger.info("kafka.properties:")
