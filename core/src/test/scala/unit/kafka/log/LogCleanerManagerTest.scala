@@ -169,7 +169,6 @@ class LogCleanerManagerTest extends Logging {
     val logs = setupIncreasinglyFilthyLogs(Seq(tp), startNumBatches = 20, batchIncrement = 5)
 
     logs.get(tp).maybeIncrementLogStartOffset(10L)
-    logs.get(tp).maybeIncrementLogStartOffset(10L)
 
     val cleanerManager = createCleanerManagerMock(logs)
     cleanerCheckpoints.put(tp, 0L)
