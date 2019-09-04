@@ -45,6 +45,7 @@ object ApiUtils {
    * @param buffer The buffer to write to
    * @param string The string to write
    */
+   /* test*/
   def writeShortString(buffer: ByteBuffer, string: String) {
     if(string == null) {
       buffer.putShort(-1)
