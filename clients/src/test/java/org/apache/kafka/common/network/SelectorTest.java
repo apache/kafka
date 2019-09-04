@@ -21,7 +21,9 @@ import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.memory.MemoryPool;
 import org.apache.kafka.common.memory.SimpleMemoryPool;
 import org.apache.kafka.common.metrics.KafkaMetric;
+import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
@@ -79,6 +81,7 @@ public class SelectorTest {
     protected Selector selector;
     protected ChannelBuilder channelBuilder;
     protected Metrics metrics;
+    protected Sensor sensor;
 
     @Before
     public void setUp() throws Exception {
@@ -90,6 +93,7 @@ public class SelectorTest {
         this.channelBuilder.configure(configs);
         this.metrics = new Metrics();
         this.selector = new Selector(5000, this.metrics, time, "MetricGroup", channelBuilder, new LogContext());
+        this.sensor = metrics.sensor("infoSensor", new MetricConfig().recordLevel(Sensor.RecordingLevel.INFO), Sensor.RecordingLevel.INFO);
     }
 
     @After
@@ -534,7 +538,7 @@ public class SelectorTest {
     public void testMuteOnOOM() throws Exception {
         //clean up default selector, replace it with one that uses a finite mem pool
         selector.close();
-        MemoryPool pool = new SimpleMemoryPool(900, 900, false, null);
+        MemoryPool pool = new SimpleMemoryPool(900, 900, false, null, sensor);
         selector = new Selector(NetworkReceive.UNLIMITED, 5000, metrics, time, "MetricGroup",
             new HashMap<String, String>(), true, false, channelBuilder, pool, new LogContext());
 

@@ -22,7 +22,9 @@ import javax.net.ssl.SSLEngine;
 import org.apache.kafka.common.config.SecurityConfig;
 import org.apache.kafka.common.memory.MemoryPool;
 import org.apache.kafka.common.memory.SimpleMemoryPool;
+import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.security.ssl.SslFactory;
 import org.apache.kafka.common.security.ssl.mock.TestKeyManagerFactory;
@@ -78,6 +80,7 @@ public class SslSelectorTest extends SelectorTest {
         this.channelBuilder.configure(sslClientConfigs);
         this.metrics = new Metrics();
         this.selector = new Selector(5000, metrics, time, "MetricGroup", channelBuilder, new LogContext());
+        this.sensor = metrics.sensor("infoSensor", new MetricConfig().recordLevel(Sensor.RecordingLevel.INFO), Sensor.RecordingLevel.INFO);
     }
 
     @After
@@ -270,7 +273,7 @@ public class SslSelectorTest extends SelectorTest {
     public void testMuteOnOOM() throws Exception {
         //clean up default selector, replace it with one that uses a finite mem pool
         selector.close();
-        MemoryPool pool = new SimpleMemoryPool(900, 900, false, null);
+        MemoryPool pool = new SimpleMemoryPool(900, 900, false, null, sensor);
         //the initial channel builder is for clients, we need a server one
         File trustStoreFile = File.createTempFile("truststore", ".jks");
         Map<String, Object> sslServerConfigs = TestSslUtils.createSslConfig(false, true, Mode.SERVER, trustStoreFile, "server");

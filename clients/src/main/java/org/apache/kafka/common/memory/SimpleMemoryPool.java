@@ -38,8 +38,9 @@ public class SimpleMemoryPool implements MemoryPool {
     protected final int maxSingleAllocationSize;
     protected final AtomicLong startOfNoMemPeriod = new AtomicLong(); //nanoseconds
     protected volatile Sensor oomTimeSensor;
+    protected volatile Sensor allocateSensor;
 
-    public SimpleMemoryPool(long sizeInBytes, int maxSingleAllocationBytes, boolean strict, Sensor oomPeriodSensor) {
+    public SimpleMemoryPool(long sizeInBytes, int maxSingleAllocationBytes, boolean strict, Sensor oomPeriodSensor, Sensor allocateSensor) {
         if (sizeInBytes <= 0 || maxSingleAllocationBytes <= 0 || maxSingleAllocationBytes > sizeInBytes)
             throw new IllegalArgumentException("must provide a positive size and max single allocation size smaller than size."
                 + "provided " + sizeInBytes + " and " + maxSingleAllocationBytes + " respectively");
@@ -48,6 +49,7 @@ public class SimpleMemoryPool implements MemoryPool {
         this.availableMemory = new AtomicLong(sizeInBytes);
         this.maxSingleAllocationSize = maxSingleAllocationBytes;
         this.oomTimeSensor = oomPeriodSensor;
+        this.allocateSensor = allocateSensor;
     }
 
     @Override
@@ -111,6 +113,7 @@ public class SimpleMemoryPool implements MemoryPool {
 
     //allows subclasses to do their own bookkeeping (and validation) _before_ memory is returned to client code.
     protected void bufferToBeReturned(ByteBuffer justAllocated) {
+        this.allocateSensor.record(justAllocated.capacity());
         log.trace("allocated buffer of size {} ", justAllocated.capacity());
     }
 
