@@ -154,7 +154,7 @@ public class Fetcher<K, V> implements Closeable {
     private final Set<Integer> nodesWithPendingFetchRequests;
     private final ApiVersions apiVersions;
 
-    private CompletedFetch nextInLineRecords = null;
+    private CompletedFetch nextInLineFetch = null;
 
     public Fetcher(LogContext logContext,
                    ConsumerNetworkClient client,
@@ -597,13 +597,13 @@ public class Fetcher<K, V> implements Closeable {
 
         try {
             while (recordsRemaining > 0) {
-                if (nextInLineRecords == null || nextInLineRecords.isFetched) {
+                if (nextInLineFetch == null || nextInLineFetch.isConsumed) {
                     CompletedFetch records = completedFetches.peek();
                     if (records == null) break;
 
                     if (records.notInitialized()) {
                         try {
-                            nextInLineRecords = initializeCompletedFetch(records);
+                            nextInLineFetch = initializeCompletedFetch(records);
                         } catch (Exception e) {
                             // Remove a completedFetch upon a parse with exception if (1) it contains no records, and
                             // (2) there are no fetched records with actual content preceding this exception.
@@ -617,20 +617,20 @@ public class Fetcher<K, V> implements Closeable {
                             throw e;
                         }
                     } else {
-                        nextInLineRecords = records;
+                        nextInLineFetch = records;
                     }
                     completedFetches.poll();
-                } else if (subscriptions.isPaused(nextInLineRecords.partition)) {
+                } else if (subscriptions.isPaused(nextInLineFetch.partition)) {
                     // when the partition is paused we add the records back to the completedFetches queue instead of draining
                     // them so that they can be returned on a subsequent poll if the partition is resumed at that time
-                    log.debug("Skipping fetching records for assigned partition {} because it is paused", nextInLineRecords.partition);
-                    pausedCompletedFetches.add(nextInLineRecords);
-                    nextInLineRecords = null;
+                    log.debug("Skipping fetching records for assigned partition {} because it is paused", nextInLineFetch.partition);
+                    pausedCompletedFetches.add(nextInLineFetch);
+                    nextInLineFetch = null;
                 } else {
-                    List<ConsumerRecord<K, V>> records = fetchRecords(nextInLineRecords, recordsRemaining);
+                    List<ConsumerRecord<K, V>> records = fetchRecords(nextInLineFetch, recordsRemaining);
 
                     if (!records.isEmpty()) {
-                        TopicPartition partition = nextInLineRecords.partition;
+                        TopicPartition partition = nextInLineFetch.partition;
                         List<ConsumerRecord<K, V>> currentRecords = fetched.get(partition);
                         if (currentRecords == null) {
                             fetched.put(partition, records);
@@ -1056,8 +1056,8 @@ public class Fetcher<K, V> implements Closeable {
 
     private List<TopicPartition> fetchablePartitions() {
         Set<TopicPartition> exclude = new HashSet<>();
-        if (nextInLineRecords != null && !nextInLineRecords.isFetched) {
-            exclude.add(nextInLineRecords.partition);
+        if (nextInLineFetch != null && !nextInLineFetch.isConsumed) {
+            exclude.add(nextInLineFetch.partition);
         }
         for (CompletedFetch completedFetch : completedFetches) {
             exclude.add(completedFetch.partition);
@@ -1331,9 +1331,9 @@ public class Fetcher<K, V> implements Closeable {
             }
         }
 
-        if (nextInLineRecords != null && !assignedPartitions.contains(nextInLineRecords.partition)) {
-            nextInLineRecords.drain();
-            nextInLineRecords = null;
+        if (nextInLineFetch != null && !assignedPartitions.contains(nextInLineFetch.partition)) {
+            nextInLineFetch.drain();
+            nextInLineFetch = null;
         }
     }
 
@@ -1382,7 +1382,7 @@ public class Fetcher<K, V> implements Closeable {
         private CloseableIterator<Record> records;
         private long nextFetchOffset;
         private Optional<Integer> lastEpoch;
-        private boolean isFetched = false;
+        private boolean isConsumed = false;
         private Exception cachedRecordException = null;
         private boolean corruptLastRecord = false;
         private boolean initialized = false;
@@ -1405,10 +1405,10 @@ public class Fetcher<K, V> implements Closeable {
         }
 
         private void drain() {
-            if (!isFetched) {
+            if (!isConsumed) {
                 maybeCloseRecordStream();
                 cachedRecordException = null;
-                this.isFetched = true;
+                this.isConsumed = true;
                 this.metricAggregator.record(partition, bytesRead, recordsRead);
 
                 // we move the partition to the end if we received some bytes. This way, it's more likely that partitions
@@ -1515,7 +1515,7 @@ public class Fetcher<K, V> implements Closeable {
                                              + ". If needed, please seek past the record to "
                                              + "continue consumption.", cachedRecordException);
 
-            if (isFetched)
+            if (isConsumed)
                 return Collections.emptyList();
 
             List<ConsumerRecord<K, V>> records = new ArrayList<>();
@@ -1809,8 +1809,8 @@ public class Fetcher<K, V> implements Closeable {
 
     @Override
     public void close() {
-        if (nextInLineRecords != null)
-            nextInLineRecords.drain();
+        if (nextInLineFetch != null)
+            nextInLineFetch.drain();
         decompressionBufferSupplier.close();
     }
 
