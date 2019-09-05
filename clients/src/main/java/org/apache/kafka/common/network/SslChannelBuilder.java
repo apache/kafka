@@ -50,7 +50,7 @@ public class SslChannelBuilder implements ChannelBuilder, ListenerReconfigurable
     private SslPrincipalMapper sslPrincipalMapper;
 
     /**
-     * Constructs a SSL channel builder. ListenerName is provided only
+     * Constructs an SSL channel builder. ListenerName is provided only
      * for server channel builder and will be null for client channel builder.
      */
     public SslChannelBuilder(Mode mode, ListenerName listenerName, boolean isInterBrokerListener) {
