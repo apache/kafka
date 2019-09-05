@@ -94,7 +94,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
                  client_sasl_mechanism=SecurityConfig.SASL_MECHANISM_GSSAPI, interbroker_sasl_mechanism=SecurityConfig.SASL_MECHANISM_GSSAPI,
                  authorizer_class_name=None, topics=None, version=DEV_BRANCH, jmx_object_names=None,
                  jmx_attributes=None, zk_connect_timeout=5000, zk_session_timeout=6000, server_prop_overides=None, zk_chroot=None,
-                 listener_security_config=ListenerSecurityConfig(), per_node_server_prop_overrides={}, jvm_heap_size="500m"):
+                 listener_security_config=ListenerSecurityConfig(), per_node_server_prop_overrides={}, extra_kafka_opts=""):
         """
         :param context: test context
         :param ZookeeperService zk:
@@ -113,7 +113,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         :param zk_chroot:
         :param ListenerSecurityConfig listener_security_config: listener config to use
         :param dict per_node_server_prop_overrides:
-        :param str jvm_heap_size: jvm heap size. "500m" for 500MB, "1g" for 1GB
+        :param str extra_kafka_opts: jvm args to add to KAFKA_OPTS variable
         """
         Service.__init__(self, context, num_nodes)
         JmxMixin.__init__(self, num_nodes=num_nodes, jmx_object_names=jmx_object_names, jmx_attributes=(jmx_attributes or []),
@@ -138,7 +138,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         self.log_level = "DEBUG"
         self.zk_chroot = zk_chroot
         self.listener_security_config = listener_security_config
-        self.jvm_heap_size = jvm_heap_size
+        self.extra_kafka_opts = extra_kafka_opts
 
         #
         # In a heavily loaded and not very fast machine, it is
@@ -326,12 +326,8 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         cmd += "export KAFKA_LOG4J_OPTS=\"-Dlog4j.configuration=file:%s\"; " % self.LOG4J_CONFIG
         heap_kafka_opts = "-XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=%s" % \
                           self.logs["kafka_heap_dump_file"]["path"]
-        # https://docs.confluent.io/current/kafka/deployment.html#jvm
-        prod_kafka_opts = ("-Xms{0} -Xmx{0} -XX:MetaspaceSize=96m -XX:+UseG1GC -XX:MaxGCPauseMillis=20 ".format(self.jvm_heap_size)
-                           + "-XX:InitiatingHeapOccupancyPercent=35 -XX:G1HeapRegionSize=16M "
-                           + "-XX:MinMetaspaceFreeRatio=50 -XX:MaxMetaspaceFreeRatio=80")
-        other_kafka_opts = self.security_config.kafka_opts.strip('\"')
-        cmd += "export KAFKA_OPTS=\"%s %s %s\"; " % (heap_kafka_opts, prod_kafka_opts, other_kafka_opts)
+        security_kafka_opts = self.security_config.kafka_opts.strip('\"')
+        cmd += "export KAFKA_OPTS=\"%s %s %s\"; " % (heap_kafka_opts, security_kafka_opts, extra_kafka_opts)
         cmd += "%s %s 1>> %s 2>> %s &" % \
                (self.path.script("kafka-server-start.sh", node),
                 KafkaService.CONFIG_FILE,
@@ -342,9 +338,12 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
     def start_node(self, node):
 
         # prevent linux from throwing IOExceptions at scale
-        node.account.ssh("sudo sysctl -w vm.max_map_count=10000000")
-        node.account.ssh("sudo sysctl -w fs.file-max=10000000")
-        node.account.ssh("sudo sed -i -e \"s/nofile [0-9]\+/nofile 10000000/g\" /etc/security/limits.conf")
+        try:
+            node.account.ssh("sudo sysctl -w vm.max_map_count=10000000")
+            node.account.ssh("sudo sysctl -w fs.file-max=10000000")
+        except:
+            self.logger.warn("Could not change vm.max_map_count or fs.file-max. " \
+                             "This could mean your OS does not support this.")
 
         node.account.mkdirs(KafkaService.PERSISTENT_ROOT)
         prop_file = self.prop_file(node)
