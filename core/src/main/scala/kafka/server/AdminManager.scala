@@ -88,6 +88,7 @@ class AdminManager(val config: KafkaConfig,
     val brokers = metadataCache.getAliveBrokers.map { b => kafka.admin.BrokerMetadata(b.id, b.rack) }
     val metadata = toCreate.values.map(topic =>
       try {
+        adminZkClient.validateTopicExists(topic.name)
         val configs = new Properties()
         topic.configs.asScala.foreach { entry =>
           configs.setProperty(entry.name, entry.value)

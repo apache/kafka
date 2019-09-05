@@ -95,6 +95,11 @@ class AdminZkClient(zkClient: KafkaZkClient) extends Logging {
     writeTopicPartitionAssignment(topic, partitionReplicaAssignment, isUpdate = false)
   }
 
+  def validateTopicExists(topic: String) {
+    if (zkClient.topicExists(topic))
+      throw new TopicExistsException(s"Topic '$topic' already exists.")
+  }
+
   /**
    * Validate topic creation parameters
    */
@@ -103,9 +108,8 @@ class AdminZkClient(zkClient: KafkaZkClient) extends Logging {
                           config: Properties): Unit = {
     Topic.validate(topic)
 
-    if (zkClient.topicExists(topic))
-      throw new TopicExistsException(s"Topic '$topic' already exists.")
-    else if (Topic.hasCollisionChars(topic)) {
+    validateTopicExists(topic)
+    if (Topic.hasCollisionChars(topic)) {
       val allTopics = zkClient.getAllTopicsInCluster
       // check again in case the topic was created in the meantime, otherwise the
       // topic could potentially collide with itself
