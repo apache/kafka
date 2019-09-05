@@ -250,7 +250,7 @@ public abstract class AbstractTask implements Task {
         return stateMgr.changelogPartitions();
     }
 
-    protected long getConsumerCommittedOffset(final TopicPartition partition) {
+    long committedOffsetForPartition(final TopicPartition partition) {
         try {
             final OffsetAndMetadata metadata = consumer.committed(partition);
             return metadata != null ? metadata.offset() : 0L;

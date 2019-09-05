@@ -248,7 +248,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         partitions.stream()
             .filter(tp -> changelogTopicNames.contains(tp.topic()))
             .forEach(tp -> {
-                final long offset = getConsumerCommittedOffset(tp);
+                final long offset = committedOffsetForPartition(tp);
                 stateMgr.putOffsetLimit(tp, offset);
                 log.trace("Updating store offset limits {} for changelog {}", offset, tp);
             });

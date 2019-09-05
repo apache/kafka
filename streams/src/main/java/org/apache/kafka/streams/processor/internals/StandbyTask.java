@@ -173,6 +173,10 @@ public class StandbyTask extends AbstractTask {
      */
     public List<ConsumerRecord<byte[], byte[]>> update(final TopicPartition partition,
                                                        final List<ConsumerRecord<byte[], byte[]>> records) {
+        if (records.isEmpty()) {
+            return Collections.emptyList();
+        }
+
         log.trace("Updating standby replicas of its state store for partition [{}]", partition);
         long limit = offsetLimits.getOrDefault(partition, Long.MAX_VALUE);
 
@@ -180,17 +184,15 @@ public class StandbyTask extends AbstractTask {
         final List<ConsumerRecord<byte[], byte[]>> restoreRecords = new ArrayList<>(records.size());
         final List<ConsumerRecord<byte[], byte[]>> remainingRecords = new ArrayList<>();
 
-        // Check if we are unable to process one or more records due to an offset limit (e.g. when
-        // our partition is both a source and changelog). If we are limited then try to refresh
-        // the offset limit if possible.
-        if (!records.isEmpty() &&
-            records.get(records.size() - 1).offset() >= limit &&
-            updateableOffsetLimits.remove(partition)) {
-
-            limit = updateOffsetLimits(partition);
-        }
-
         for (final ConsumerRecord<byte[], byte[]> record : records) {
+            // Check if we're unable to process records due to an offset limit (e.g. when our
+            // partition is both a source and a changelog). If we're limited then try to refresh
+            // the offset limit if possible.
+            if (record.offset() >= limit && updateableOffsetLimits.contains(partition)) {
+                updateableOffsetLimits.remove(partition);
+                limit = updateOffsetLimits(partition);
+            }
+
             if (record.offset() < limit) {
                 restoreRecords.add(record);
                 lastOffset = record.offset();
@@ -216,7 +218,7 @@ public class StandbyTask extends AbstractTask {
             throw new IllegalArgumentException("Topic is not both a source and a changelog: " + partition);
         }
 
-        final long newLimit = getConsumerCommittedOffset(partition);
+        final long newLimit = committedOffsetForPartition(partition);
         final long previousLimit = offsetLimits.put(partition, newLimit);
         if (previousLimit > newLimit) {
             throw new IllegalStateException("Offset limit should monotonically increase, but was reduced. " +
