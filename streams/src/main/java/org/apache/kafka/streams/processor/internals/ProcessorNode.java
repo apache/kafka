@@ -114,7 +114,11 @@ public class ProcessorNode<K, V> {
 
     public void process(final K key, final V value) {
         final long startNs = time.nanoseconds();
-        processor.process(key, value);
+        try {
+            processor.process(key, value);
+        } catch (final ClassCastException e) {
+            throw new StreamsException("ClassCastException in processor node. Are your Serdes correct? Are default Serdes specified?", e);
+        }
         nodeMetrics.nodeProcessTimeSensor.record(time.nanoseconds() - startNs);
     }
 

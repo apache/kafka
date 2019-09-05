@@ -16,12 +16,16 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
+import java.util.Arrays;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.TopologyTestDriver;
+import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.ValueTransformerSupplier;
@@ -136,4 +140,38 @@ public class AbstractStreamTest {
             }
         }
     }
+
+    @Test(expected = StreamsException.class)
+    public void testClassCastException() {
+        final Properties props = new Properties();
+        props.put(StreamsConfig.APPLICATION_ID_CONFIG, "test");
+        props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy:1234");
+
+        final StreamsBuilder builder = new StreamsBuilder();
+
+        builder.<String, String>stream("streams-plaintext-input")
+            .flatMapValues(value -> {
+                return Arrays.asList(value.split("\\W+"));
+            })
+            .to("streams-linesplit-output");
+
+        Topology topology = builder.build();
+
+        final TopologyTestDriver testDriver = new TopologyTestDriver(topology, props);
+
+        final ConsumerRecordFactory<String, String> factory = new ConsumerRecordFactory<>(new StringSerializer(), new StringSerializer());
+
+        final ConsumerRecord<byte[], byte[]> consumerRecord = factory.create("streams-plaintext-input", "a-key", "a value");
+
+        try{
+            testDriver.pipeInput(consumerRecord);
+        } catch (StreamsException s) {
+            String msg = s.getMessage();
+            assertTrue("Error about class cast with Serdes", msg.contains("ClassCastException"));
+            assertTrue("Error about class cast with Serdes", msg.contains("Serdes"));
+            throw s;
+        }
+
+    }
+
 }
