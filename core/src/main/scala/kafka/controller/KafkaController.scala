@@ -533,16 +533,16 @@ class KafkaController(val config: KafkaConfig,
    *   5 Update ZK with RS = ORS + OVRS, AR = OVRS, RS = []
    *
    * Phase A: Initial trigger (when TRS != ISR)
-   *   0. Update memory with RS = ORS + TRS, AR = TRS - ORS and RR = ORS - TRS
+   *
    *   A1. Update ZK with RS = ORS + TRS,
    *                      AR = TRS - ORS and
    *                      RR = ORS - TRS.
-   *   A2. Send LeaderAndIsr request to every replica in ORS + TRS (with the new RS, AR and RR).
+   *   A2. Update memory with RS = ORS + TRS, AR = TRS - ORS and RR = ORS - TRS
+   *   A3. Send LeaderAndIsr request to every replica in ORS + TRS (with the new RS, AR and RR).
    *       We do this by forcing an update of the leader epoch in zookeeper.
-   *   A3. Start new replicas AR by moving replicas in AR to NewReplica state.
+   *   A4. Start new replicas AR by moving replicas in AR to NewReplica state.
    *
    * Phase B: All of TRS have caught up with the leaders and are in ISR
-   *   0. Update memory with RS = ORS + TRS, AR = TRS - ORS and RR = ORS - TRS (needed in cases where TRS == ISR from the initial trigger)
    *   B1. Move all replicas in TRS to OnlineReplica state.
    *   B2. Set RS = TRS, AR = [], RR = [] in memory.
    *   B3. Send a LeaderAndIsr request with RS = TRS. This will prevent the leader from adding any replica in TRS - ORS back in the isr.
@@ -573,6 +573,7 @@ class KafkaController(val config: KafkaConfig,
   private def onPartitionReassignment(topicPartition: TopicPartition, reassignedPartitionContext: ReassignedPartitionsContext): Unit = {
     maybeRevertOngoingReassignment(topicPartition, reassignedPartitionContext)
 
+    // RS = ORS + TRS, AR = TRS - ORS and RR = ORS - TRS
     val partitionAssignment = PartitionReplicaAssignment.fromOldAndNewReplicas(
       oldReplicas = controllerContext.partitionFullReplicaAssignment(topicPartition).previousAssignment.replicas,
       newReplicas = reassignedPartitionContext.newReplicas)
@@ -580,19 +581,18 @@ class KafkaController(val config: KafkaConfig,
       s"newReplicas ${reassignedPartitionContext.newReplicas} were not equal to the expected targetReplicas ${partitionAssignment.targetReplicas}")
     val targetReplicas = partitionAssignment.targetReplicas
 
-    // 0. Update memory with RS = ORS + TRS, AR = TRS - ORS and RR = ORS - TRS
-    controllerContext.updatePartitionFullReplicaAssignment(topicPartition, partitionAssignment)
-
     if (!areReplicasInIsr(topicPartition, targetReplicas)) {
       info(s"New replicas ${targetReplicas.mkString(",")} for partition $topicPartition being reassigned not yet " +
         "caught up with the leader")
 
       // A1. Update ZK with RS = ORS + TRS, AR = TRS - ORS and RR = ORS - TRS.
       updateReplicaAssignmentForPartition(topicPartition, partitionAssignment)
-      // A2. Send LeaderAndIsr request to every replica in ORS + TRS (with the new RS, AR and RR).
+      // A2. Update memory with RS = ORS + TRS, AR = TRS - ORS and RR = ORS - TRS
+      controllerContext.updatePartitionFullReplicaAssignment(topicPartition, partitionAssignment)
+      // A3. Send LeaderAndIsr request to every replica in ORS + TRS (with the new RS, AR and RR).
       val updatedAssignment = controllerContext.partitionFullReplicaAssignment(topicPartition)
       updateLeaderEpochAndSendRequest(topicPartition, updatedAssignment.replicas, updatedAssignment)
-      // A3. replicas in AR -> NewReplica
+      // A4. replicas in AR -> NewReplica
       startNewReplicasForReassignedPartition(topicPartition, updatedAssignment.addingReplicas)
       info(s"Waiting for new replicas ${updatedAssignment.addingReplicas.mkString(",")} for partition $topicPartition being " +
         s"reassigned to catch up with the leader (target replicas ${updatedAssignment.targetReplicas})")
@@ -604,7 +604,7 @@ class KafkaController(val config: KafkaConfig,
       // B2. Set RS = TRS, AR = [], RR = [] in memory.
       // B3. Send LeaderAndIsr request with a potential new leader (if current leader not in TRS) and
       //   a new RS (using TRS) and same isr to every broker in ORS + TRS or TRS
-      moveReassignedPartitionLeaderIfRequired(topicPartition, reassignedPartitionContext)
+      moveReassignedPartitionLeaderIfRequired(topicPartition, reassignedPartitionContext, partitionAssignment)
       // B4. replicas in RR -> Offline (force those replicas out of isr)
       // B5. replicas in RR -> NonExistentReplica (force those replicas to be deleted)
       stopRemovedReplicasOfReassignedPartition(topicPartition, partitionAssignment.removingReplicas)
@@ -879,16 +879,17 @@ class KafkaController(val config: KafkaConfig,
   }
 
   private def moveReassignedPartitionLeaderIfRequired(topicPartition: TopicPartition,
-                                                      reassignedPartitionContext: ReassignedPartitionsContext): Unit = {
+                                                      reassignedPartitionContext: ReassignedPartitionsContext,
+                                                      currentAssignment: PartitionReplicaAssignment): Unit = {
     val reassignedReplicas = reassignedPartitionContext.newReplicas
     val currentLeader = controllerContext.partitionLeadershipInfo(topicPartition).leaderAndIsr.leader
 
     // change the assigned replica list to just the reassigned replicas in the cache so it gets sent out on the LeaderAndIsr
     // request to the current or new leader. This will prevent it from adding the old replicas to the ISR
-    val oldAssignment = controllerContext.partitionFullReplicaAssignment(topicPartition)
+    val newAssignment = PartitionReplicaAssignment(replicas = reassignedReplicas, addingReplicas = Seq(), removingReplicas = Seq())
     controllerContext.updatePartitionFullReplicaAssignment(
       topicPartition,
-      PartitionReplicaAssignment(replicas = reassignedReplicas, addingReplicas = Seq(), removingReplicas = Seq())
+      newAssignment
     )
 
     if (!reassignedPartitionContext.newReplicas.contains(currentLeader)) {
@@ -902,7 +903,7 @@ class KafkaController(val config: KafkaConfig,
         info(s"Leader $currentLeader for partition $topicPartition being reassigned, " +
           s"is already in the new list of replicas ${reassignedReplicas.mkString(",")} and is alive")
         // shrink replication factor and update the leader epoch in zookeeper to use on the next LeaderAndIsrRequest
-        updateLeaderEpochAndSendRequest(topicPartition, oldAssignment.replicas, controllerContext.partitionFullReplicaAssignment(topicPartition))
+        updateLeaderEpochAndSendRequest(topicPartition, currentAssignment.replicas, newAssignment)
       } else {
         info(s"Leader $currentLeader for partition $topicPartition being reassigned, " +
           s"is already in the new list of replicas ${reassignedReplicas.mkString(",")} but is dead")
