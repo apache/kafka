@@ -242,13 +242,10 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
     val newTopicsWithInvalidRF = Seq(
       new NewTopic(topic, 1, (servers.size + 1).toShort),
     )
-    try {
+    val e = intercept[ExecutionException] {
       client.createTopics(newTopicsWithInvalidRF.asJava, new CreateTopicsOptions().validateOnly(true)).all.get()
-      waitForTopics(client, topics, List())
-    } catch {
-      case e: ExecutionException =>
-        assertTrue(e.getCause.isInstanceOf[TopicExistsException])
     }
+    assertTrue(e.getCause.isInstanceOf[TopicExistsException])
   }
 
   @Test

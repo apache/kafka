@@ -95,7 +95,7 @@ class AdminZkClient(zkClient: KafkaZkClient) extends Logging {
     writeTopicPartitionAssignment(topic, partitionReplicaAssignment, isUpdate = false)
   }
 
-  def validateTopicExists(topic: String) {
+  def validateTopicExists(topic: String): Unit = {
     if (zkClient.topicExists(topic))
       throw new TopicExistsException(s"Topic '$topic' already exists.")
   }
