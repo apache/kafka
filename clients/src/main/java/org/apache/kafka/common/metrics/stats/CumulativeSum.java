@@ -42,6 +42,10 @@ public class CumulativeSum implements MeasurableStat {
         total += value;
     }
 
+    public void record(double value) {
+        total += value;
+    }
+
     @Override
     public double measure(MetricConfig config, long now) {
         return total;

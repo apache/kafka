@@ -16,8 +16,10 @@
  */
 package org.apache.kafka.common.network;
 
+import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.security.ssl.SslFactory;
+import org.apache.kafka.common.security.ssl.SslMetrics;
 
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLSocket;
@@ -45,10 +47,12 @@ class EchoServer extends Thread {
     private final SslFactory sslFactory;
     private final AtomicBoolean renegotiate = new AtomicBoolean();
 
-    public EchoServer(SecurityProtocol securityProtocol, Map<String, ?> configs) throws Exception {
+    public EchoServer(SecurityProtocol securityProtocol,
+                      Map<String, ?> configs,
+                      Metrics metrics) throws Exception {
         switch (securityProtocol) {
             case SSL:
-                this.sslFactory = new SslFactory(Mode.SERVER);
+                this.sslFactory = new SslFactory(Mode.SERVER, new SslMetrics(metrics, "EchoServer"));
                 this.sslFactory.configure(configs);
                 SSLContext sslContext = this.sslFactory.sslEngineBuilder().sslContext();
                 this.serverSocket = sslContext.getServerSocketFactory().createServerSocket(0);

@@ -117,10 +117,23 @@ public class NioEchoServer extends Thread {
                     credentialCache.createCache(mechanism, ScramCredential.class);
             }
         }
-        if (channelBuilder == null)
-            channelBuilder = ChannelBuilders.serverChannelBuilder(listenerName, false, securityProtocol, config, credentialCache, tokenCache, time);
         this.metrics = new Metrics();
-        this.selector = new Selector(10000, failedAuthenticationDelayMs, metrics, time, "MetricGroup", channelBuilder, new LogContext());
+        final String metricsGroup = "NioEchoServer";
+        if (channelBuilder == null)
+            channelBuilder = ChannelBuilders.serverChannelBuilder(listenerName,
+                false,
+                securityProtocol,
+                config,
+                credentialCache,
+                tokenCache,
+                time,
+                metrics,
+                metricsGroup);
+        this.selector = new Selector(10000,
+            failedAuthenticationDelayMs,
+            metrics, time, metricsGroup,
+            channelBuilder,
+            new LogContext());
         acceptorThread = new AcceptorThread();
         this.time = time;
     }

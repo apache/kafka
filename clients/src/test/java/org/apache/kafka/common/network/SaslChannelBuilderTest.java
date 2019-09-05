@@ -18,6 +18,7 @@ package org.apache.kafka.common.network;
 
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.SslConfigs;
+import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.security.JaasContext;
 import org.apache.kafka.common.security.authenticator.TestJaasConfig;
@@ -74,8 +75,18 @@ public class SaslChannelBuilderTest {
         jaasConfig.addEntry("jaasContext", PlainLoginModule.class.getName(), new HashMap<String, Object>());
         JaasContext jaasContext = new JaasContext("jaasContext", JaasContext.Type.SERVER, jaasConfig, null);
         Map<String, JaasContext> jaasContexts = Collections.singletonMap("PLAIN", jaasContext);
-        return new SaslChannelBuilder(Mode.CLIENT, jaasContexts, securityProtocol, new ListenerName("PLAIN"),
-                false, "PLAIN", true, null, null, Time.SYSTEM);
+        return new SaslChannelBuilder(Mode.CLIENT,
+            jaasContexts,
+            securityProtocol,
+            new ListenerName("PLAIN"),
+            false,
+            "PLAIN",
+            true,
+            null,
+            null,
+            Time.SYSTEM,
+            new Metrics(),
+            "MetricsGroup");
     }
 
 }

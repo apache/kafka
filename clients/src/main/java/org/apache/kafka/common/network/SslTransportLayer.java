@@ -38,6 +38,7 @@ import javax.net.ssl.SSLSession;
 
 import org.apache.kafka.common.errors.SslAuthenticationException;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
+import org.apache.kafka.common.security.ssl.SslMetrics;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
@@ -69,17 +70,22 @@ public class SslTransportLayer implements TransportLayer {
     private ByteBuffer appReadBuffer;
     private boolean hasBytesBuffered;
     private ByteBuffer emptyBuf = ByteBuffer.allocate(0);
+    private final SslMetrics sslMetrics;
 
-    public static SslTransportLayer create(String channelId, SelectionKey key, SSLEngine sslEngine) throws IOException {
-        return new SslTransportLayer(channelId, key, sslEngine);
+    public static SslTransportLayer create(String channelId,
+                                           SelectionKey key,
+                                           SSLEngine sslEngine,
+                                           SslMetrics sslMetrics) throws IOException {
+        return new SslTransportLayer(channelId, key, sslEngine, sslMetrics);
     }
 
     // Prefer `create`, only use this in tests
-    SslTransportLayer(String channelId, SelectionKey key, SSLEngine sslEngine) {
+    SslTransportLayer(String channelId, SelectionKey key, SSLEngine sslEngine, SslMetrics sslMetrics) {
         this.channelId = channelId;
         this.key = key;
         this.socketChannel = (SocketChannel) key.channel();
         this.sslEngine = sslEngine;
+        this.sslMetrics = sslMetrics;
         this.state = State.NOT_INITALIZED;
 
         final LogContext logContext = new LogContext(String.format("[SslTransportLayer channelId=%s key=%s] ", channelId, key));
@@ -423,6 +429,9 @@ public class SslTransportLayer implements TransportLayer {
                 SSLSession session = sslEngine.getSession();
                 log.debug("SSL handshake completed successfully with peerHost '{}' peerPort {} peerPrincipal '{}' cipherSuite '{}'",
                         session.getPeerHost(), session.getPeerPort(), peerPrincipal(), session.getCipherSuite());
+                if (sslMetrics != null) {
+                    sslMetrics.addCipherUse(session.getCipherSuite());
+                }
             }
 
             log.trace("SSLHandshake FINISHED channelId {}, appReadBuffer pos {}, netReadBuffer pos {}, netWriteBuffer pos {} ",

@@ -117,6 +117,7 @@ class ControllerChannelManager(controllerContext: ControllerContext,
     val brokerNode = broker.node(controllerToBrokerListenerName)
     val logContext = new LogContext(s"[Controller id=${config.brokerId}, targetBrokerId=${brokerNode.idString}] ")
     val (networkClient, reconfigurableChannelBuilder) = {
+      val metricsGroupPrefix = "controller-channel"
       val channelBuilder = ChannelBuilders.clientChannelBuilder(
         controllerToBrokerSecurityProtocol,
         JaasContext.Type.SERVER,
@@ -124,7 +125,9 @@ class ControllerChannelManager(controllerContext: ControllerContext,
         controllerToBrokerListenerName,
         config.saslMechanismInterBrokerProtocol,
         time,
-        config.saslInterBrokerHandshakeRequestEnable
+        config.saslInterBrokerHandshakeRequestEnable,
+        metrics,
+        metricsGroupPrefix
       )
       val reconfigurableChannelBuilder = channelBuilder match {
         case reconfigurable: Reconfigurable =>
@@ -137,7 +140,7 @@ class ControllerChannelManager(controllerContext: ControllerContext,
         Selector.NO_IDLE_TIMEOUT_MS,
         metrics,
         time,
-        "controller-channel",
+        metricsGroupPrefix,
         Map("broker-id" -> brokerNode.idString).asJava,
         false,
         channelBuilder,

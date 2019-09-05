@@ -55,6 +55,7 @@ import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.errors.SaslAuthenticationException;
 import org.apache.kafka.common.message.SaslAuthenticateRequestData;
 import org.apache.kafka.common.message.SaslHandshakeRequestData;
+import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.network.CertStores;
 import org.apache.kafka.common.network.ChannelBuilder;
 import org.apache.kafka.common.network.ChannelBuilders;
@@ -1442,9 +1443,20 @@ public class SaslAuthenticatorTest {
 
         String saslMechanism = (String) saslClientConfigs.get(SaslConfigs.SASL_MECHANISM);
         Map<String, ?> configs = new TestSecurityConfig(saslClientConfigs).values();
+        Metrics metrics = new Metrics();
+        final String metricsGroup = "MetricsGroup";
         this.channelBuilder = new AlternateSaslChannelBuilder(Mode.CLIENT,
-                Collections.singletonMap(saslMechanism, JaasContext.loadClientContext(configs)), securityProtocol, null,
-                false, saslMechanism, true, credentialCache, null, time);
+                Collections.singletonMap(saslMechanism, JaasContext.loadClientContext(configs)),
+                securityProtocol,
+                null,
+                false,
+                saslMechanism,
+                true,
+                credentialCache,
+                null,
+                time,
+                metrics,
+                metricsGroup);
         this.channelBuilder.configure(configs);
         // initial authentication must succeed
         this.selector = NetworkTestUtils.createSelector(channelBuilder, time);
@@ -1660,9 +1672,20 @@ public class SaslAuthenticatorTest {
         boolean isScram = ScramMechanism.isScram(saslMechanism);
         if (isScram)
             ScramCredentialUtils.createCache(credentialCache, Arrays.asList(saslMechanism));
-        SaslChannelBuilder serverChannelBuilder = new SaslChannelBuilder(Mode.SERVER, jaasContexts,
-                securityProtocol, listenerName, false, saslMechanism, true, credentialCache, null, time) {
-
+        Metrics metrics = new Metrics();
+        final String metricsGroup = "MetricsGroup";
+        SaslChannelBuilder serverChannelBuilder = new SaslChannelBuilder(Mode.SERVER,
+                jaasContexts,
+                securityProtocol,
+                listenerName,
+                false,
+                saslMechanism,
+                true,
+                credentialCache,
+                null,
+                time,
+                metrics,
+                metricsGroup) {
             @Override
             protected SaslServerAuthenticator buildServerAuthenticator(Map<String, ?> configs,
                                                                        Map<String, AuthenticateCallbackHandler> callbackHandlers,
@@ -1707,8 +1730,20 @@ public class SaslAuthenticatorTest {
         final JaasContext jaasContext = JaasContext.loadClientContext(configs);
         final Map<String, JaasContext> jaasContexts = Collections.singletonMap(saslMechanism, jaasContext);
 
-        SaslChannelBuilder clientChannelBuilder = new SaslChannelBuilder(Mode.CLIENT, jaasContexts,
-                securityProtocol, listenerName, false, saslMechanism, true, null, null, time) {
+        Metrics metrics = new Metrics();
+        final String metricsGroup = "MetricsGroup";
+        SaslChannelBuilder clientChannelBuilder = new SaslChannelBuilder(Mode.CLIENT,
+                jaasContexts,
+                securityProtocol,
+                listenerName,
+                false,
+                saslMechanism,
+                true,
+                null,
+                null,
+                time,
+                metrics,
+                metricsGroup) {
 
             @Override
             protected SaslClientAuthenticator buildClientAuthenticator(Map<String, ?> configs,
@@ -1837,9 +1872,17 @@ public class SaslAuthenticatorTest {
             selector = null;
         }
 
-        String saslMechanism = (String) saslClientConfigs.get(SaslConfigs.SASL_MECHANISM);
-        this.channelBuilder = ChannelBuilders.clientChannelBuilder(securityProtocol, JaasContext.Type.CLIENT,
-                new TestSecurityConfig(clientConfigs), null, saslMechanism, time, true);
+        Metrics metrics = new Metrics();
+        final String metricsGroup = "MetricsGroup";
+        this.channelBuilder = ChannelBuilders.clientChannelBuilder(securityProtocol,
+            JaasContext.Type.CLIENT,
+            new TestSecurityConfig(clientConfigs),
+            null,
+            (String) saslClientConfigs.get(SaslConfigs.SASL_MECHANISM),
+            time,
+            true,
+            metrics,
+            metricsGroup);
         this.selector = NetworkTestUtils.createSelector(channelBuilder, time);
     }
 
@@ -2225,9 +2268,9 @@ public class SaslAuthenticatorTest {
         public AlternateSaslChannelBuilder(Mode mode, Map<String, JaasContext> jaasContexts,
                 SecurityProtocol securityProtocol, ListenerName listenerName, boolean isInterBrokerListener,
                 String clientSaslMechanism, boolean handshakeRequestEnable, CredentialCache credentialCache,
-                DelegationTokenCache tokenCache, Time time) {
+                DelegationTokenCache tokenCache, Time time, Metrics metrics, String metricsGroup) {
             super(mode, jaasContexts, securityProtocol, listenerName, isInterBrokerListener, clientSaslMechanism,
-                    handshakeRequestEnable, credentialCache, tokenCache, time);
+                    handshakeRequestEnable, credentialCache, tokenCache, time, metrics, metricsGroup);
         }
 
         @Override

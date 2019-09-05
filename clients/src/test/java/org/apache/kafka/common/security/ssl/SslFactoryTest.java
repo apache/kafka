@@ -54,7 +54,7 @@ public class SslFactoryTest {
         File trustStoreFile = File.createTempFile("truststore", ".jks");
         Map<String, Object> serverSslConfig =
                 TestSslUtils.createSslConfig(false, true, Mode.SERVER, trustStoreFile, "server");
-        SslFactory sslFactory = new SslFactory(Mode.SERVER);
+        SslFactory sslFactory = new SslFactory(Mode.SERVER, null);
         sslFactory.configure(serverSslConfig);
         //host and port are hints
         SSLEngine engine = sslFactory.createSslEngine("localhost", 0);
@@ -71,7 +71,7 @@ public class SslFactoryTest {
                 TestTrustManagerFactory.ALGORITHM
         );
         serverSslConfig.put(SecurityConfig.SECURITY_PROVIDERS_CONFIG, testProviderCreator.getClass().getName());
-        SslFactory sslFactory = new SslFactory(Mode.SERVER);
+        SslFactory sslFactory = new SslFactory(Mode.SERVER, null);
         sslFactory.configure(serverSslConfig);
         assertNotNull("SslEngineBuilder not created", sslFactory.sslEngineBuilder());
         Security.removeProvider(testProviderCreator.getProvider().getName());
@@ -84,7 +84,7 @@ public class SslFactoryTest {
                 TestKeyManagerFactory.ALGORITHM,
                 TestTrustManagerFactory.ALGORITHM
         );
-        SslFactory sslFactory = new SslFactory(Mode.SERVER);
+        SslFactory sslFactory = new SslFactory(Mode.SERVER, null);
         sslFactory.configure(serverSslConfig);
     }
 
@@ -97,7 +97,7 @@ public class SslFactoryTest {
         );
         serverSslConfig.put(SecurityConfig.SECURITY_PROVIDERS_CONFIG,
                 "com.fake.ProviderClass1,com.fake.ProviderClass2");
-        SslFactory sslFactory = new SslFactory(Mode.SERVER);
+        SslFactory sslFactory = new SslFactory(Mode.SERVER, null);
         sslFactory.configure(serverSslConfig);
     }
 
@@ -107,7 +107,7 @@ public class SslFactoryTest {
         Map<String, Object> serverSslConfig = TestSslUtils.createSslConfig(false, true, Mode.SERVER, trustStoreFile, "server");
         // unset the password
         serverSslConfig.remove(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG);
-        SslFactory sslFactory = new SslFactory(Mode.SERVER);
+        SslFactory sslFactory = new SslFactory(Mode.SERVER, null);
         try {
             sslFactory.configure(serverSslConfig);
         } catch (Exception e) {
@@ -120,7 +120,7 @@ public class SslFactoryTest {
         File trustStoreFile = File.createTempFile("truststore", ".jks");
         Map<String, Object> clientSslConfig =
                 TestSslUtils.createSslConfig(false, true, Mode.CLIENT, trustStoreFile, "client");
-        SslFactory sslFactory = new SslFactory(Mode.CLIENT);
+        SslFactory sslFactory = new SslFactory(Mode.CLIENT, null);
         sslFactory.configure(clientSslConfig);
         //host and port are hints
         SSLEngine engine = sslFactory.createSslEngine("localhost", 0);
@@ -132,7 +132,7 @@ public class SslFactoryTest {
         File trustStoreFile = File.createTempFile("truststore", ".jks");
         Map<String, Object> sslConfig = TestSslUtils.
                 createSslConfig(false, true, Mode.SERVER, trustStoreFile, "server");
-        SslFactory sslFactory = new SslFactory(Mode.SERVER);
+        SslFactory sslFactory = new SslFactory(Mode.SERVER, null);
         sslFactory.configure(sslConfig);
         SslEngineBuilder sslEngineBuilder = sslFactory.sslEngineBuilder();
         assertNotNull("SslEngineBuilder not created", sslEngineBuilder);
@@ -190,7 +190,7 @@ public class SslFactoryTest {
         sslConfig.remove(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG);
         sslConfig.remove(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG);
         sslConfig.remove(SslConfigs.SSL_TRUSTSTORE_TYPE_CONFIG);
-        SslFactory sslFactory = new SslFactory(Mode.SERVER);
+        SslFactory sslFactory = new SslFactory(Mode.SERVER, null);
         sslFactory.configure(sslConfig);
         SSLContext sslContext = sslFactory.sslEngineBuilder().sslContext();
         assertNotNull("SSL context not created", sslContext);
@@ -216,7 +216,7 @@ public class SslFactoryTest {
         sslConfig.remove(SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG);
         sslConfig.remove(SslConfigs.SSL_KEYSTORE_PASSWORD_CONFIG);
         sslConfig.remove(SslConfigs.SSL_KEYSTORE_TYPE_CONFIG);
-        SslFactory sslFactory = new SslFactory(Mode.SERVER);
+        SslFactory sslFactory = new SslFactory(Mode.SERVER, null);
         sslFactory.configure(sslConfig);
         SSLContext sslContext = sslFactory.sslEngineBuilder().sslContext();
         assertNotNull("SSL context not created", sslContext);
@@ -249,7 +249,7 @@ public class SslFactoryTest {
         File trustStoreFile = File.createTempFile("truststore", ".jks");
         Map<String, Object> serverSslConfig = TestSslUtils.createSslConfig(false, true,
                 Mode.SERVER, trustStoreFile, "server");
-        SslFactory sslFactory = new SslFactory(Mode.SERVER);
+        SslFactory sslFactory = new SslFactory(Mode.SERVER, null);
         sslFactory.configure(serverSslConfig);
         assertNotNull("SslEngineBuilder not created", sslFactory.sslEngineBuilder());
     }
@@ -262,7 +262,7 @@ public class SslFactoryTest {
                 Mode.SERVER, trustStoreFile1, "server");
         Map<String, Object> sslConfig2 = TestSslUtils.createSslConfig(false, true,
                 Mode.SERVER, trustStoreFile2, "server");
-        SslFactory sslFactory = new SslFactory(Mode.SERVER, null, true);
+        SslFactory sslFactory = new SslFactory(Mode.SERVER, null, null, true);
         for (String key : Arrays.asList(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG,
                 SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG,
                 SslConfigs.SSL_TRUSTSTORE_TYPE_CONFIG,
@@ -282,7 +282,7 @@ public class SslFactoryTest {
         File trustStoreFile1 = File.createTempFile("truststore1", ".jks");
         Map<String, Object> sslConfig1 = TestSslUtils.createSslConfig(false, true,
                 Mode.SERVER, trustStoreFile1, "server");
-        SslFactory sslFactory = new SslFactory(Mode.SERVER, null, true);
+        SslFactory sslFactory = new SslFactory(Mode.SERVER, null, null, true);
         sslFactory.configure(sslConfig1);
 
         File trustStoreFile2 = File.createTempFile("truststore2", ".jks");

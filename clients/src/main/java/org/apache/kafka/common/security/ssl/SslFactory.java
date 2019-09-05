@@ -52,28 +52,39 @@ public class SslFactory implements Reconfigurable {
     private static final Logger log = LoggerFactory.getLogger(SslFactory.class);
 
     private final Mode mode;
+    private final SslMetrics sslMetrics;
     private final String clientAuthConfigOverride;
     private final boolean keystoreVerifiableUsingTruststore;
     private String endpointIdentification;
     private SslEngineBuilder sslEngineBuilder;
 
-    public SslFactory(Mode mode) {
-        this(mode, null, false);
+    /**
+     * Create an SslFactory.
+     *
+     * @param mode                                  Whether to use client or server mode.
+     * @param sslMetrics                            The metrics to use for the ssl connections we create, or null.
+     */
+    public SslFactory(Mode mode,
+                      SslMetrics sslMetrics) {
+        this(mode, sslMetrics, null, false);
     }
 
     /**
      * Create an SslFactory.
      *
      * @param mode                                  Whether to use client or server mode.
+     * @param sslMetrics                            The metrics to use for the ssl connections we create, or null.
      * @param clientAuthConfigOverride              The value to override ssl.client.auth with, or null
      *                                              if we don't want to override it.
      * @param keystoreVerifiableUsingTruststore     True if we should require the keystore to be verifiable
      *                                              using the truststore.
      */
     public SslFactory(Mode mode,
+                      SslMetrics sslMetrics,
                       String clientAuthConfigOverride,
                       boolean keystoreVerifiableUsingTruststore) {
         this.mode = mode;
+        this.sslMetrics = sslMetrics;
         this.clientAuthConfigOverride = clientAuthConfigOverride;
         this.keystoreVerifiableUsingTruststore = keystoreVerifiableUsingTruststore;
     }
@@ -381,5 +392,9 @@ public class SslFactory implements Reconfigurable {
                 // ignore
             }
         }
+    }
+
+    public SslMetrics sslMetrics() {
+        return sslMetrics;
     }
 }

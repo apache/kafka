@@ -26,6 +26,7 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.security.TestSecurityConfig;
 import org.apache.kafka.common.security.ssl.SslFactory;
+import org.apache.kafka.common.security.ssl.SslMetrics;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
@@ -80,9 +81,11 @@ public class SslTransportLayerTest {
         clientCertStores = new CertStores(false, "client", "localhost");
         sslServerConfigs = serverCertStores.getTrustingConfig(clientCertStores);
         sslClientConfigs = clientCertStores.getTrustingConfig(serverCertStores);
-        this.channelBuilder = new SslChannelBuilder(Mode.CLIENT, null, false);
+        Metrics metrics = new Metrics();
+        final String metricsGroup = "MetricGroup";
+        this.channelBuilder = new SslChannelBuilder(Mode.CLIENT, null, false, metrics, metricsGroup);
         this.channelBuilder.configure(sslClientConfigs);
-        this.selector = new Selector(5000, new Metrics(), time, "MetricGroup", channelBuilder, new LogContext());
+        this.selector = new Selector(5000, metrics, time, metricsGroup, channelBuilder, new LogContext());
     }
 
     @After
@@ -193,7 +196,9 @@ public class SslTransportLayerTest {
         sslClientConfigs = clientCertStores.getTrustingConfig(serverCertStores);
 
         // Create a server with endpoint validation enabled on the server SSL engine
-        SslChannelBuilder serverChannelBuilder = new TestSslChannelBuilder(Mode.SERVER) {
+        Metrics metrics = new Metrics();
+        final String metricsGroup = "MetricGroup";
+        SslChannelBuilder serverChannelBuilder = new TestSslChannelBuilder(Mode.SERVER, metrics, metricsGroup) {
             @Override
             protected TestSslTransportLayer newTransportLayer(String id, SelectionKey key, SSLEngine sslEngine) throws IOException {
                 SSLParameters sslParams = sslEngine.getSSLParameters();
@@ -447,7 +452,13 @@ public class SslTransportLayerTest {
      */
     @Test
     public void testInvalidSecureRandomImplementation() throws Exception {
-        try (SslChannelBuilder channelBuilder = new SslChannelBuilder(Mode.CLIENT, null, false)) {
+        Metrics metrics = new Metrics();
+        final String metricsGroup = "MetricGroup";
+        try (SslChannelBuilder channelBuilder = new SslChannelBuilder(Mode.CLIENT,
+                null,
+                false,
+                metrics,
+                metricsGroup)) {
             sslClientConfigs.put(SslConfigs.SSL_SECURE_RANDOM_IMPLEMENTATION_CONFIG, "invalid");
             channelBuilder.configure(sslClientConfigs);
             fail("SSL channel configured with invalid SecureRandom implementation");
@@ -461,7 +472,13 @@ public class SslTransportLayerTest {
      */
     @Test
     public void testInvalidTruststorePassword() throws Exception {
-        try (SslChannelBuilder channelBuilder = new SslChannelBuilder(Mode.CLIENT, null, false)) {
+        Metrics metrics = new Metrics();
+        final String metricsGroup = "MetricGroup";
+        try (SslChannelBuilder channelBuilder = new SslChannelBuilder(Mode.CLIENT,
+                null,
+                false,
+                metrics,
+                metricsGroup)) {
             sslClientConfigs.put(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG, "invalid");
             channelBuilder.configure(sslClientConfigs);
             fail("SSL channel configured with invalid truststore password");
@@ -475,7 +492,13 @@ public class SslTransportLayerTest {
      */
     @Test
     public void testInvalidKeystorePassword() throws Exception {
-        try (SslChannelBuilder channelBuilder = new SslChannelBuilder(Mode.CLIENT, null, false)) {
+        Metrics metrics = new Metrics();
+        final String metricsGroup = "MetricGroup";
+        try (SslChannelBuilder channelBuilder = new SslChannelBuilder(Mode.CLIENT,
+                null,
+                false,
+                metrics,
+                metricsGroup)) {
             sslClientConfigs.put(SslConfigs.SSL_KEYSTORE_PASSWORD_CONFIG, "invalid");
             channelBuilder.configure(sslClientConfigs);
             fail("SSL channel configured with invalid keystore password");
@@ -777,7 +800,9 @@ public class SslTransportLayerTest {
 
     private void testIOExceptionsDuringHandshake(FailureAction readFailureAction,
                                                  FailureAction flushFailureAction) throws Exception {
-        TestSslChannelBuilder channelBuilder = new TestSslChannelBuilder(Mode.CLIENT);
+        Metrics metrics = new Metrics();
+        final String metricsGroup = "MetricGroup";
+        TestSslChannelBuilder channelBuilder = new TestSslChannelBuilder(Mode.CLIENT, metrics, metricsGroup);
         boolean done = false;
         for (int i = 1; i <= 100; i++) {
             String node = String.valueOf(i);
@@ -786,7 +811,7 @@ public class SslTransportLayerTest {
             channelBuilder.flushFailureAction = flushFailureAction;
             channelBuilder.failureIndex = i;
             channelBuilder.configure(sslClientConfigs);
-            this.selector = new Selector(5000, new Metrics(), time, "MetricGroup", channelBuilder, new LogContext());
+            this.selector = new Selector(5000, new Metrics(), time, metricsGroup, channelBuilder, new LogContext());
 
             InetSocketAddress addr = new InetSocketAddress("localhost", server.port());
             selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
@@ -824,7 +849,11 @@ public class SslTransportLayerTest {
         // Test without delay and a couple of delay counts to ensure delay applies to handshake failure
         for (int i = 0; i < 3; i++) {
             String node = "0";
-            TestSslChannelBuilder serverChannelBuilder = new TestSslChannelBuilder(Mode.SERVER);
+            Metrics metrics = new Metrics();
+            final String metricsGroup = "MetricGroup" + i;
+            TestSslChannelBuilder serverChannelBuilder = new TestSslChannelBuilder(Mode.SERVER,
+                metrics,
+                metricsGroup);
             serverChannelBuilder.configure(sslServerConfigs);
             serverChannelBuilder.flushDelayCount = i;
             server = new NioEchoServer(ListenerName.forSecurityProtocol(SecurityProtocol.SSL),
@@ -843,7 +872,11 @@ public class SslTransportLayerTest {
 
     @Test
     public void testCloseSsl() throws Exception {
-        testClose(SecurityProtocol.SSL, new SslChannelBuilder(Mode.CLIENT, null, false));
+        testClose(SecurityProtocol.SSL, new SslChannelBuilder(Mode.CLIENT,
+            null,
+            false,
+            new Metrics(),
+            "MetricGroup"));
     }
 
     @Test
@@ -903,8 +936,17 @@ public class SslTransportLayerTest {
         sslClientConfigs.putAll(serverCertStores.trustStoreProps());
         TestSecurityConfig config = new TestSecurityConfig(sslServerConfigs);
         ListenerName listenerName = ListenerName.forSecurityProtocol(securityProtocol);
+        Metrics metrics = new Metrics();
+        final String metricsGroup = "MetricGroup";
         ChannelBuilder serverChannelBuilder = ChannelBuilders.serverChannelBuilder(listenerName,
-                true, securityProtocol, config, null, null, time);
+            true,
+            securityProtocol,
+            config,
+            null,
+            null,
+            time,
+            metrics,
+            metricsGroup);
         server = new NioEchoServer(listenerName, securityProtocol, config,
                 "localhost", serverChannelBuilder, null, time);
         server.start();
@@ -925,7 +967,17 @@ public class SslTransportLayerTest {
         sslServerConfigs.put(BrokerSecurityConfigs.SSL_CLIENT_AUTH_CONFIG, "required");
         TestSecurityConfig config = new TestSecurityConfig(sslServerConfigs);
         ListenerName listenerName = ListenerName.forSecurityProtocol(securityProtocol);
-        ChannelBuilders.serverChannelBuilder(listenerName, true, securityProtocol, config, null, null, time);
+        Metrics metrics = new Metrics();
+        final String metricsGroup = "MetricGroup";
+        ChannelBuilders.serverChannelBuilder(listenerName,
+            true,
+            securityProtocol,
+            config,
+            null,
+            null,
+            time,
+            metrics,
+            metricsGroup);
     }
 
     /**
@@ -937,8 +989,17 @@ public class SslTransportLayerTest {
         SecurityProtocol securityProtocol = SecurityProtocol.SSL;
         TestSecurityConfig config = new TestSecurityConfig(sslServerConfigs);
         ListenerName listenerName = ListenerName.forSecurityProtocol(securityProtocol);
+        Metrics metrics = new Metrics();
+        final String metricsGroup = "MetricGroup";
         ChannelBuilder serverChannelBuilder = ChannelBuilders.serverChannelBuilder(listenerName,
-                false, securityProtocol, config, null, null, time);
+            false,
+            securityProtocol,
+            config,
+            null,
+            null,
+            time,
+            metrics,
+            metricsGroup);
         server = new NioEchoServer(listenerName, securityProtocol, config,
                 "localhost", serverChannelBuilder, null, time);
         server.start();
@@ -997,8 +1058,17 @@ public class SslTransportLayerTest {
         sslServerConfigs.put(BrokerSecurityConfigs.SSL_CLIENT_AUTH_CONFIG, "required");
         TestSecurityConfig config = new TestSecurityConfig(sslServerConfigs);
         ListenerName listenerName = ListenerName.forSecurityProtocol(securityProtocol);
+        Metrics metrics = new Metrics();
+        final String metricsGroup = "MetricGroup";
         ChannelBuilder serverChannelBuilder = ChannelBuilders.serverChannelBuilder(listenerName,
-                false, securityProtocol, config, null, null, time);
+            false,
+            securityProtocol,
+            config,
+            null,
+            null,
+            time,
+            metrics,
+            metricsGroup);
         server = new NioEchoServer(listenerName, securityProtocol, config,
                 "localhost", serverChannelBuilder, null, time);
         server.start();
@@ -1068,11 +1138,13 @@ public class SslTransportLayerTest {
 
     private Selector createSelector(Map<String, Object> sslClientConfigs, final Integer netReadBufSize,
                                 final Integer netWriteBufSize, final Integer appBufSize) {
-        TestSslChannelBuilder channelBuilder = new TestSslChannelBuilder(Mode.CLIENT);
+        Metrics metrics = new Metrics();
+        final String metricsGroup = "MetricGroup";
+        TestSslChannelBuilder channelBuilder = new TestSslChannelBuilder(Mode.CLIENT, metrics, metricsGroup);
         channelBuilder.configureBufferSizes(netReadBufSize, netWriteBufSize, appBufSize);
         this.channelBuilder = channelBuilder;
         this.channelBuilder.configure(sslClientConfigs);
-        this.selector = new Selector(5000, new Metrics(), time, "MetricGroup", channelBuilder, new LogContext());
+        this.selector = new Selector(5000, metrics, time, metricsGroup, channelBuilder, new LogContext());
         return selector;
     }
 
@@ -1103,8 +1175,8 @@ public class SslTransportLayerTest {
         FailureAction flushFailureAction = FailureAction.NO_OP;
         int flushDelayCount = 0;
 
-        public TestSslChannelBuilder(Mode mode) {
-            super(mode, null, false);
+        public TestSslChannelBuilder(Mode mode, Metrics metrics, String metricsGroup) {
+            super(mode, null, false, metrics, metricsGroup);
         }
 
         public void configureBufferSizes(Integer netReadBufSize, Integer netWriteBufSize, Integer appBufSize) {
@@ -1122,7 +1194,7 @@ public class SslTransportLayerTest {
         }
 
         protected TestSslTransportLayer newTransportLayer(String id, SelectionKey key, SSLEngine sslEngine) throws IOException {
-            return new TestSslTransportLayer(id, key, sslEngine);
+            return new TestSslTransportLayer(id, key, sslEngine, new SslMetrics(metrics(), metricsGroup()));
         }
 
         /**
@@ -1144,8 +1216,11 @@ public class SslTransportLayerTest {
             private final AtomicLong numFlushesRemaining;
             private final AtomicInteger numDelayedFlushesRemaining;
 
-            public TestSslTransportLayer(String channelId, SelectionKey key, SSLEngine sslEngine) throws IOException {
-                super(channelId, key, sslEngine);
+            public TestSslTransportLayer(String channelId,
+                                         SelectionKey key,
+                                         SSLEngine sslEngine,
+                                         SslMetrics sslMetrics) throws IOException {
+                super(channelId, key, sslEngine, sslMetrics);
                 this.netReadBufSize = new ResizeableBufferSize(netReadBufSizeOverride);
                 this.netWriteBufSize = new ResizeableBufferSize(netWriteBufSizeOverride);
                 this.appBufSize = new ResizeableBufferSize(appBufSizeOverride);

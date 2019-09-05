@@ -21,6 +21,7 @@ import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
 import org.apache.kafka.common.memory.MemoryPool;
+import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.security.JaasContext;
 import org.apache.kafka.common.security.auth.AuthenticateCallbackHandler;
 import org.apache.kafka.common.security.auth.Login;
@@ -45,6 +46,7 @@ import org.apache.kafka.common.security.scram.ScramCredential;
 import org.apache.kafka.common.security.scram.internals.ScramMechanism;
 import org.apache.kafka.common.security.scram.internals.ScramServerCallbackHandler;
 import org.apache.kafka.common.security.ssl.SslFactory;
+import org.apache.kafka.common.security.ssl.SslMetrics;
 import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCache;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
@@ -86,6 +88,8 @@ public class SaslChannelBuilder implements ChannelBuilder, ListenerReconfigurabl
     private Map<String, AuthenticateCallbackHandler> saslCallbackHandlers;
     private Map<String, Long> connectionsMaxReauthMsByMechanism;
     private final Time time;
+    private final Metrics metrics;
+    private final String metricsGroup;
 
     public SaslChannelBuilder(Mode mode,
                               Map<String, JaasContext> jaasContexts,
@@ -96,7 +100,9 @@ public class SaslChannelBuilder implements ChannelBuilder, ListenerReconfigurabl
                               boolean handshakeRequestEnable,
                               CredentialCache credentialCache,
                               DelegationTokenCache tokenCache,
-                              Time time) {
+                              Time time,
+                              Metrics metrics,
+                              String metricsGroup) {
         this.mode = mode;
         this.jaasContexts = jaasContexts;
         this.loginManagers = new HashMap<>(jaasContexts.size());
@@ -111,6 +117,8 @@ public class SaslChannelBuilder implements ChannelBuilder, ListenerReconfigurabl
         this.saslCallbackHandlers = new HashMap<>();
         this.connectionsMaxReauthMsByMechanism = new HashMap<>();
         this.time = time;
+        this.metrics = metrics;
+        this.metricsGroup = metricsGroup;
     }
 
     @SuppressWarnings("unchecked")
@@ -150,7 +158,10 @@ public class SaslChannelBuilder implements ChannelBuilder, ListenerReconfigurabl
             }
             if (this.securityProtocol == SecurityProtocol.SASL_SSL) {
                 // Disable SSL client authentication as we are using SASL authentication
-                this.sslFactory = new SslFactory(mode, "none", isInterBrokerListener);
+                this.sslFactory = new SslFactory(mode,
+                    new SslMetrics(metrics, metricsGroup),
+                    "none",
+                    isInterBrokerListener);
                 this.sslFactory.configure(configs);
             }
         } catch (Throwable e) {
@@ -225,7 +236,8 @@ public class SaslChannelBuilder implements ChannelBuilder, ListenerReconfigurabl
     protected TransportLayer buildTransportLayer(String id, SelectionKey key, SocketChannel socketChannel) throws IOException {
         if (this.securityProtocol == SecurityProtocol.SASL_SSL) {
             return SslTransportLayer.create(id, key,
-                sslFactory.createSslEngine(socketChannel.socket().getInetAddress().getHostName(), socketChannel.socket().getPort()));
+                sslFactory.createSslEngine(socketChannel.socket().getInetAddress().getHostName(), socketChannel.socket().getPort()),
+                sslFactory.sslMetrics());
         } else {
             return new PlaintextTransportLayer(key);
         }

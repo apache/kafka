@@ -153,7 +153,7 @@ public class ConnectionStressWorker implements TaskWorker {
                 conf.getList(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG),
                 conf.getString(AdminClientConfig.CLIENT_DNS_LOOKUP_CONFIG));
             this.updater = new ManualMetadataUpdater(Cluster.bootstrap(addresses).nodes());
-            this.channelBuilder = ClientUtils.createChannelBuilder(conf, TIME);
+            this.channelBuilder = ClientUtils.createChannelBuilder(conf, TIME, new Metrics(), "ConnectStressor");
         }
 
         @Override

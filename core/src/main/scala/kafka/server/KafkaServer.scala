@@ -441,6 +441,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
 
     def doControlledShutdown(retries: Int): Boolean = {
       val metadataUpdater = new ManualMetadataUpdater()
+      val metricsGroup = "kafka-server-controlled-shutdown"
       val networkClient = {
         val channelBuilder = ChannelBuilders.clientChannelBuilder(
           config.interBrokerSecurityProtocol,
@@ -449,13 +450,15 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
           config.interBrokerListenerName,
           config.saslMechanismInterBrokerProtocol,
           time,
-          config.saslInterBrokerHandshakeRequestEnable)
+          config.saslInterBrokerHandshakeRequestEnable,
+          metrics,
+          metricsGroup)
         val selector = new Selector(
           NetworkReceive.UNLIMITED,
           config.connectionsMaxIdleMs,
           metrics,
           time,
-          "kafka-server-controlled-shutdown",
+          metricsGroup,
           Map.empty.asJava,
           false,
           channelBuilder,

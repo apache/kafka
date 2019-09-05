@@ -25,6 +25,7 @@ import org.apache.kafka.common.memory.SimpleMemoryPool;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.security.ssl.SslFactory;
+import org.apache.kafka.common.security.ssl.SslMetrics;
 import org.apache.kafka.common.security.ssl.mock.TestKeyManagerFactory;
 import org.apache.kafka.common.security.ssl.mock.TestProviderCreator;
 import org.apache.kafka.common.security.ssl.mock.TestTrustManagerFactory;
@@ -70,14 +71,15 @@ public class SslSelectorTest extends SelectorTest {
         File trustStoreFile = File.createTempFile("truststore", ".jks");
 
         Map<String, Object> sslServerConfigs = TestSslUtils.createSslConfig(false, true, Mode.SERVER, trustStoreFile, "server");
-        this.server = new EchoServer(SecurityProtocol.SSL, sslServerConfigs);
+        this.metrics = new Metrics();
+        this.server = new EchoServer(SecurityProtocol.SSL, sslServerConfigs, metrics);
         this.server.start();
         this.time = new MockTime();
         sslClientConfigs = TestSslUtils.createSslConfig(false, false, Mode.CLIENT, trustStoreFile, "client");
-        this.channelBuilder = new SslChannelBuilder(Mode.CLIENT, null, false);
+        final String metricsGroup = "MetricGroup";
+        this.channelBuilder = new SslChannelBuilder(Mode.CLIENT, null, false, metrics, metricsGroup);
         this.channelBuilder.configure(sslClientConfigs);
-        this.metrics = new Metrics();
-        this.selector = new Selector(5000, metrics, time, "MetricGroup", channelBuilder, new LogContext());
+        this.selector = new Selector(5000, metrics, time, metricsGroup, channelBuilder, new LogContext());
     }
 
     @After
@@ -105,17 +107,18 @@ public class SslSelectorTest extends SelectorTest {
                 TestKeyManagerFactory.ALGORITHM,
                 TestTrustManagerFactory.ALGORITHM
         );
+        Metrics metrics = new Metrics();
         sslServerConfigs.put(SecurityConfig.SECURITY_PROVIDERS_CONFIG, testProviderCreator.getClass().getName());
-        EchoServer server = new EchoServer(SecurityProtocol.SSL, sslServerConfigs);
+        EchoServer server = new EchoServer(SecurityProtocol.SSL, sslServerConfigs, metrics);
         server.start();
         Time time = new MockTime();
         File trustStoreFile = new File(TestKeyManagerFactory.TestKeyManager.mockTrustStoreFile);
         Map<String, Object> sslClientConfigs = TestSslUtils.createSslConfig(true, true, Mode.CLIENT, trustStoreFile, "client");
 
-        ChannelBuilder channelBuilder = new TestSslChannelBuilder(Mode.CLIENT);
+        final String metricsGroup = "MetricGroup";
+        ChannelBuilder channelBuilder = new TestSslChannelBuilder(Mode.CLIENT, metrics, metricsGroup);
         channelBuilder.configure(sslClientConfigs);
-        Metrics metrics = new Metrics();
-        Selector selector = new Selector(5000, metrics, time, "MetricGroup", channelBuilder, new LogContext());
+        Selector selector = new Selector(5000, metrics, time, metricsGroup, channelBuilder, new LogContext());
 
         selector.connect(node, new InetSocketAddress("localhost", server.port), BUFFER_SIZE, BUFFER_SIZE);
         while (!selector.connected().contains(node))
@@ -144,9 +147,11 @@ public class SslSelectorTest extends SelectorTest {
 
         this.selector.close();
 
-        this.channelBuilder = new TestSslChannelBuilder(Mode.CLIENT);
+        Metrics metrics = new Metrics();
+        final String metricsGroup = "MetricGroup";
+        this.channelBuilder = new TestSslChannelBuilder(Mode.CLIENT, metrics, metricsGroup);
         this.channelBuilder.configure(sslClientConfigs);
-        this.selector = new Selector(5000, metrics, time, "MetricGroup", channelBuilder, new LogContext());
+        this.selector = new Selector(5000, metrics, time, metricsGroup, channelBuilder, new LogContext());
         connect(node, new InetSocketAddress("localhost", server.port));
         selector.send(createSend(node, request));
 
@@ -189,9 +194,10 @@ public class SslSelectorTest extends SelectorTest {
         String node2 = "2";
         final AtomicInteger node1Polls = new AtomicInteger();
 
-        this.channelBuilder = new TestSslChannelBuilder(Mode.CLIENT);
+        final String metricsGroup = "MetricGroup";
+        this.channelBuilder = new TestSslChannelBuilder(Mode.CLIENT, metrics, metricsGroup);
         this.channelBuilder.configure(sslClientConfigs);
-        this.selector = new Selector(5000, metrics, time, "MetricGroup", channelBuilder, new LogContext()) {
+        this.selector = new Selector(5000, metrics, time, metricsGroup, channelBuilder, new LogContext()) {
             @Override
             void pollSelectionKeys(Set<SelectionKey> selectionKeys, boolean isImmediatelyConnected, long currentTimeNanos) {
                 for (SelectionKey key : selectionKeys) {
@@ -274,9 +280,10 @@ public class SslSelectorTest extends SelectorTest {
         //the initial channel builder is for clients, we need a server one
         File trustStoreFile = File.createTempFile("truststore", ".jks");
         Map<String, Object> sslServerConfigs = TestSslUtils.createSslConfig(false, true, Mode.SERVER, trustStoreFile, "server");
-        channelBuilder = new SslChannelBuilder(Mode.SERVER, null, false);
+        final String metricsGroup = "MetricGroup";
+        channelBuilder = new SslChannelBuilder(Mode.SERVER, null, false, metrics, metricsGroup);
         channelBuilder.configure(sslServerConfigs);
-        selector = new Selector(NetworkReceive.UNLIMITED, 5000, metrics, time, "MetricGroup",
+        selector = new Selector(NetworkReceive.UNLIMITED, 5000, metrics, time, metricsGroup,
                 new HashMap<String, String>(), true, false, channelBuilder, pool, new LogContext());
 
         try (ServerSocketChannel ss = ServerSocketChannel.open()) {
@@ -360,15 +367,15 @@ public class SslSelectorTest extends SelectorTest {
 
     private static class TestSslChannelBuilder extends SslChannelBuilder {
 
-        public TestSslChannelBuilder(Mode mode) {
-            super(mode, null, false);
+        public TestSslChannelBuilder(Mode mode, Metrics metrics, String metricsGroup) {
+            super(mode, null, false, metrics, metricsGroup);
         }
 
         @Override
         protected SslTransportLayer buildTransportLayer(SslFactory sslFactory, String id, SelectionKey key, String host) throws IOException {
             SocketChannel socketChannel = (SocketChannel) key.channel();
             SSLEngine sslEngine = sslFactory.createSslEngine(host, socketChannel.socket().getPort());
-            TestSslTransportLayer transportLayer = new TestSslTransportLayer(id, key, sslEngine);
+            TestSslTransportLayer transportLayer = new TestSslTransportLayer(id, key, sslEngine, sslFactory.sslMetrics());
             return transportLayer;
         }
 
@@ -380,8 +387,11 @@ public class SslSelectorTest extends SelectorTest {
             static Map<String, TestSslTransportLayer> transportLayers = new HashMap<>();
             boolean muteSocket = false;
 
-            public TestSslTransportLayer(String channelId, SelectionKey key, SSLEngine sslEngine) throws IOException {
-                super(channelId, key, sslEngine);
+            public TestSslTransportLayer(String channelId,
+                                         SelectionKey key,
+                                         SSLEngine sslEngine,
+                                         SslMetrics sslMetrics) throws IOException {
+                super(channelId, key, sslEngine, sslMetrics);
                 transportLayers.put(channelId, this);
             }
 

@@ -74,21 +74,21 @@ public class SelectorTest {
 
     protected static final int BUFFER_SIZE = 4 * 1024;
 
+    protected Metrics metrics;
     protected EchoServer server;
     protected Time time;
     protected Selector selector;
     protected ChannelBuilder channelBuilder;
-    protected Metrics metrics;
 
     @Before
     public void setUp() throws Exception {
         Map<String, Object> configs = new HashMap<>();
-        this.server = new EchoServer(SecurityProtocol.PLAINTEXT, configs);
+        this.metrics = new Metrics();
+        this.server = new EchoServer(SecurityProtocol.PLAINTEXT, configs, metrics);
         this.server.start();
         this.time = new MockTime();
         this.channelBuilder = new PlaintextChannelBuilder(ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT));
         this.channelBuilder.configure(configs);
-        this.metrics = new Metrics();
         this.selector = new Selector(5000, this.metrics, time, "MetricGroup", channelBuilder, new LogContext());
     }
 
