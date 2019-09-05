@@ -45,6 +45,7 @@ public class TxnOffsetCommitRequestTest extends OffsetCommitRequestTest {
     @Before
     @Override
     public void setUp() {
+        super.setUp();
         data = new TxnOffsetCommitRequestData()
                    .setGroupId(groupId)
                    .setTransactionalId(transactionalId)
