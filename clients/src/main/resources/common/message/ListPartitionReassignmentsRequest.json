@@ -19,6 +19,8 @@
   "name": "ListPartitionReassignmentsRequest",
   "validVersions": "0",
   "fields": [
+    { "name": "TimeoutMs", "type": "int32", "versions": "0+", "default": "60000",
+      "about": "The time in ms to wait for the request to complete." },
     { "name": "Topics", "type": "[]ListPartitionReassignmentsTopics", "versions": "0+", "nullableVersions": "0+", "default": "null",
       "about": "The topics to list partition reassignments for, or null to list everything.", "fields": [
       { "name": "Name", "type": "string", "versions": "0+", "entityType": "topicName",

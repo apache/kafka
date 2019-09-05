@@ -3159,6 +3159,7 @@ public class KafkaAdminClient extends AdminClient {
                             .setPartitions(reassignablePartitions);
                     data.topics().add(reassignableTopic);
                 }
+                data.setTimeoutMs(timeoutMs);
                 return new AlterPartitionReassignmentsRequest.Builder(data);
             }
 
@@ -3270,6 +3271,8 @@ public class KafkaAdminClient extends AdminClient {
             @Override
             AbstractRequest.Builder createRequest(int timeoutMs) {
                 ListPartitionReassignmentsRequestData listData = new ListPartitionReassignmentsRequestData();
+                listData.setTimeoutMs(timeoutMs);
+
                 if (partitions.isPresent()) {
                     Map<String, ListPartitionReassignmentsTopics> reassignmentTopicByTopicName = new HashMap<>();
 
