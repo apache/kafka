@@ -151,10 +151,7 @@ public class StoreChangelogReader implements ChangelogReader {
             return;
         }
 
-        for (final Entry<TopicPartition, Long> endOffsetEntry : endOffsets.entrySet()) {
-            final Long endOffset = endOffsetEntry.getValue();
-            final TopicPartition partition = endOffsetEntry.getKey();
-
+        endOffsets.forEach((partition, endOffset) -> {
             if (endOffset != null) {
                 final StateRestorer restorer = stateRestorers.get(partition);
                 final long offsetLimit = restorer.offsetLimit();
@@ -163,7 +160,7 @@ public class StoreChangelogReader implements ChangelogReader {
                 log.info("End offset cannot be found form the returned metadata; removing this partition from the current run loop");
                 initializable.remove(partition);
             }
-        }
+        });
 
         final Iterator<TopicPartition> iter = initializable.iterator();
         while (iter.hasNext()) {
