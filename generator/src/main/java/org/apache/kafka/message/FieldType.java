@@ -42,6 +42,11 @@ public interface FieldType {
         private static final String NAME = "int8";
 
         @Override
+        public boolean isInteger() {
+            return true;
+        }
+
+        @Override
         public Optional<Integer> fixedLength() {
             return Optional.of(1);
         }
@@ -55,6 +60,11 @@ public interface FieldType {
     final class Int16FieldType implements FieldType {
         static final Int16FieldType INSTANCE = new Int16FieldType();
         private static final String NAME = "int16";
+
+        @Override
+        public boolean isInteger() {
+            return true;
+        }
 
         @Override
         public Optional<Integer> fixedLength() {
@@ -72,6 +82,11 @@ public interface FieldType {
         private static final String NAME = "int32";
 
         @Override
+        public boolean isInteger() {
+            return true;
+        }
+
+        @Override
         public Optional<Integer> fixedLength() {
             return Optional.of(4);
         }
@@ -85,6 +100,11 @@ public interface FieldType {
     final class Int64FieldType implements FieldType {
         static final Int64FieldType INSTANCE = new Int64FieldType();
         private static final String NAME = "int64";
+
+        @Override
+        public boolean isInteger() {
+            return true;
+        }
 
         @Override
         public Optional<Integer> fixedLength() {
@@ -244,6 +264,10 @@ public interface FieldType {
                     throw new RuntimeException("Can't parse type " + string);
                 }
         }
+    }
+
+    default boolean isInteger() {
+        return false;
     }
 
     /**

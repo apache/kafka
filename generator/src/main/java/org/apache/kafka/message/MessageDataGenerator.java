@@ -757,10 +757,7 @@ public final class MessageDataGenerator {
                 " cannot be nullable.");
         }
         if ((field.type() instanceof FieldType.BoolFieldType) ||
-                (field.type() instanceof FieldType.Int8FieldType) ||
-                (field.type() instanceof FieldType.Int16FieldType) ||
-                (field.type() instanceof FieldType.Int32FieldType) ||
-                (field.type() instanceof FieldType.Int64FieldType) ||
+                (field.type().isInteger()) ||
                 (field.type() instanceof FieldType.UUIDFieldType) ||
                 (field.type() instanceof FieldType.StringFieldType)) {
             boolean maybeAbsent =
@@ -1059,7 +1056,7 @@ public final class MessageDataGenerator {
                    || field.type().isArray()
                    || field.type().isString()
                    || field.type() instanceof  FieldType.UUIDFieldType
-                  ) {
+        ) {
             buffer.printf("hashCode = 31 * hashCode + (%s == null ? 0 : %s.hashCode());%n",
                           field.camelCaseName(), field.camelCaseName());
         } else {
