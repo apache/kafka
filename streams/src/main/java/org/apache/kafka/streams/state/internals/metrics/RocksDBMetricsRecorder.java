@@ -18,6 +18,7 @@ package org.apache.kafka.streams.state.internals.metrics;
 
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.internals.metrics.RocksDBMetrics.RocksDBMetricContext;
@@ -27,11 +28,12 @@ import org.rocksdb.TickerType;
 import org.slf4j.Logger;
 
 import java.time.Duration;
-import java.util.HashMap;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class RocksDBMetricsRecorder {
-
     private Logger log;
 
     private Sensor bytesWrittenToDatabaseSensor;
@@ -47,23 +49,91 @@ public class RocksDBMetricsRecorder {
     private Sensor numberOfOpenFilesSensor;
     private Sensor numberOfFileErrorsSensor;
 
-    private final Map<String, Statistics> statisticsToRecord = new HashMap<>();
+    private final Map<String, Statistics> statisticsToRecord = new ConcurrentHashMap<>();
     private final String metricsScope;
     private final String storeName;
 
-    private Duration recordingInterval = Duration.ZERO;
-    private volatile boolean stopRecording = false;
-    private boolean recordingAlreadyStarted = false;
+    private enum State { NEW, RUNNING, NOT_RUNNING, ERROR, MANUAL }
+    private volatile State state = State.NEW;
+    private final Duration recordingInterval = Duration.ofMinutes(10);
+    private final boolean startRecordingThread;
+    private Thread thread;
 
     public RocksDBMetricsRecorder(final String metricsScope, final String storeName) {
-        this.metricsScope = metricsScope;
-        this.storeName = storeName;
-        final String logPrefix = String.format("[RocksDB Metrics Recorder for %s] ", storeName);
-        final LogContext logContext = new LogContext(logPrefix);
-        this.log = logContext.logger(RocksDBMetricsRecorder.class);
+        this(metricsScope, storeName, true);
     }
 
-    private void init(final StreamsMetricsImpl streamsMetrics, final TaskId taskId) {
+    // visible for testing
+    RocksDBMetricsRecorder(final String metricsScope, final String storeName, final boolean startRecordingThread) {
+        this.metricsScope = metricsScope;
+        this.storeName = storeName;
+        this.startRecordingThread = startRecordingThread;
+        final LogContext logContext = new LogContext(String.format("[RocksDB Metrics Recorder for %s] ", storeName));
+        log = logContext.logger(RocksDBMetricsRecorder.class);
+    }
+
+    public boolean isRunning() {
+        return state == State.RUNNING;
+    }
+
+    public boolean error() {
+        return state == State.ERROR;
+    }
+
+    public void addStatistics(final String storeName,
+                              final Statistics statistics,
+                              final StreamsMetricsImpl streamsMetrics,
+                              final TaskId taskId) {
+        if (state == State.NEW) {
+            initSensors(streamsMetrics, taskId);
+            if (!startRecordingThread) {
+                state = State.MANUAL;
+            }
+        }
+        if (state == State.NEW || state == State.NOT_RUNNING) {
+            createThread();
+        } else {
+            if (statisticsToRecord.containsKey(storeName)) {
+                throw new IllegalStateException("Statistics for store \"" + storeName + "\" has been already added. "
+                    + "This is a bug in Kafka Streams.");
+            }
+        }
+        statistics.setStatsLevel(StatsLevel.EXCEPT_DETAILED_TIMERS);
+        statisticsToRecord.put(storeName, statistics);
+        log.debug("Added statistics for store {}", storeName);
+        if (state == State.NEW || state == State.NOT_RUNNING) {
+            state = State.RUNNING;
+            thread.start();
+        }
+    }
+
+    private void waitForThreadToDie() {
+        if (thread == null) {
+            return;
+        }
+        boolean wait = true;
+        log.debug("Wait for recording thread to die");
+        while (wait) {
+            try {
+                thread.join();
+                wait = false;
+            } catch (final InterruptedException e) {
+                // go to next iteration
+            }
+        }
+    }
+
+    private void createThread() {
+        thread = new Thread(this::recordLoop);
+        thread.setName(storeName + "-RocksDB-metrics-recorder");
+        thread.setUncaughtExceptionHandler((thread, exception) -> {
+            state = State.ERROR;
+            log.info(Utils.stackTrace(exception));
+            close();
+        });
+    }
+
+    private void initSensors(final StreamsMetricsImpl streamsMetrics, final TaskId taskId) {
         final RocksDBMetricContext metricContext = new RocksDBMetricContext(taskId.toString(), metricsScope, storeName);
         bytesWrittenToDatabaseSensor = RocksDBMetrics.bytesWrittenToDatabaseSensor(streamsMetrics, metricContext);
         bytesReadFromDatabaseSensor = RocksDBMetrics.bytesReadFromDatabaseSensor(streamsMetrics, metricContext);
@@ -80,46 +150,25 @@ public class RocksDBMetricsRecorder {
         numberOfFileErrorsSensor = RocksDBMetrics.numberOfFileErrorsSensor(streamsMetrics, metricContext);
     }
 
-    public void addStatistics(final String storeName,
-                              final Statistics statistics,
-                              final StreamsMetricsImpl streamsMetrics,
-                              final TaskId taskId) {
-        if (statisticsToRecord.isEmpty()) {
-            init(streamsMetrics, taskId);
-        }
-        if (statisticsToRecord.containsKey(storeName)) {
-            throw new IllegalStateException("A statistics for store \"" + storeName + "\" has been already added. "
-                + "This is a bug in Kafka Streams.");
-        }
-        statistics.setStatsLevel(StatsLevel.EXCEPT_DETAILED_TIMERS);
-        statisticsToRecord.put(storeName, statistics);
-        log.debug("Added Statistics for store segment {}", storeName);
-    }
-
     public void removeStatistics(final String storeName) {
         final Statistics removedStatistics = statisticsToRecord.remove(storeName);
         if (removedStatistics != null) {
             removedStatistics.close();
+            log.debug("Removed statistics for store {}", storeName);
         } else {
             throw new IllegalStateException("No statistics for store \"" + storeName
                 + "\" found. This is a bug in Kafka Streams.");
         }
-        log.debug("Removed Statistics for store segment {}", storeName);
-    }
-
-    public void startRecording(final Duration recordingInterval) {
-        this.recordingInterval = recordingInterval;
-        if (!recordingAlreadyStarted) {
-            final Thread thread = new Thread(this::recordLoop);
-            thread.setName(storeName.replace(" ", "-") + "-RocksDB-metrics-recorder");
-            thread.start();
-            recordingAlreadyStarted = true;
+        if (state == State.RUNNING && statisticsToRecord.isEmpty()) {
+            state = State.NOT_RUNNING;
+            thread.interrupt();
+            waitForThreadToDie();
         }
     }
 
     private void recordLoop() {
         log.info("Started with recording interval {}", recordingInterval.toString());
-        while (!stopRecording) {
+        while (state == State.RUNNING) {
             recordOnce();
             try {
                 Thread.sleep(recordingInterval.toMillis());
@@ -127,10 +176,11 @@ public class RocksDBMetricsRecorder {
                 // do nothing and wait until next iteration
             }
         }
-        log.info("Stopped", storeName);
+        log.info("Stopped");
     }
 
     public void recordOnce() {
+        log.debug("Recording metrics for store {}", storeName);
         long bytesWrittenToDatabase = 0;
         long bytesReadFromDatabase = 0;
         long memtableBytesFlushed = 0;
@@ -147,26 +197,24 @@ public class RocksDBMetricsRecorder {
         long bytesReadDuringCompaction = 0;
         long numberOfOpenFiles = 0;
         long numberOfFileErrors = 0;
-        synchronized (statisticsToRecord) {
-            for (final Statistics statistics : statisticsToRecord.values()) {
-                bytesWrittenToDatabase += statistics.getTickerCount(TickerType.BYTES_WRITTEN);
-                bytesReadFromDatabase += statistics.getTickerCount(TickerType.BYTES_READ);
-                memtableBytesFlushed += statistics.getTickerCount(TickerType.FLUSH_WRITE_BYTES);
-                memtableHits += statistics.getAndResetTickerCount(TickerType.MEMTABLE_HIT);
-                memtableMisses += statistics.getAndResetTickerCount(TickerType.MEMTABLE_MISS);
-                blockCacheDataHits += statistics.getAndResetTickerCount(TickerType.BLOCK_CACHE_DATA_HIT);
-                blockCacheDataMisses += statistics.getAndResetTickerCount(TickerType.BLOCK_CACHE_DATA_MISS);
-                blockCacheIndexHits += statistics.getAndResetTickerCount(TickerType.BLOCK_CACHE_INDEX_HIT);
-                blockCacheIndexMisses += statistics.getAndResetTickerCount(TickerType.BLOCK_CACHE_INDEX_MISS);
-                blockCacheFilterHits += statistics.getAndResetTickerCount(TickerType.BLOCK_CACHE_FILTER_HIT);
-                blockCacheFilterMisses += statistics.getAndResetTickerCount(TickerType.BLOCK_CACHE_FILTER_MISS);
-                writeStallDuration += statistics.getTickerCount(TickerType.STALL_MICROS);
-                bytesWrittenDuringCompaction += statistics.getTickerCount(TickerType.COMPACT_WRITE_BYTES);
-                bytesReadDuringCompaction += statistics.getTickerCount(TickerType.COMPACT_READ_BYTES);
-                numberOfOpenFiles += statistics.getTickerCount(TickerType.NO_FILE_OPENS)
-                    - statistics.getTickerCount(TickerType.NO_FILE_CLOSES);
-                numberOfFileErrors += statistics.getTickerCount(TickerType.NO_FILE_ERRORS);
-            }
+        for (final Statistics statistics : statisticsToRecord.values()) {
+            bytesWrittenToDatabase += statistics.getTickerCount(TickerType.BYTES_WRITTEN);
+            bytesReadFromDatabase += statistics.getTickerCount(TickerType.BYTES_READ);
+            memtableBytesFlushed += statistics.getTickerCount(TickerType.FLUSH_WRITE_BYTES);
+            memtableHits += statistics.getAndResetTickerCount(TickerType.MEMTABLE_HIT);
+            memtableMisses += statistics.getAndResetTickerCount(TickerType.MEMTABLE_MISS);
+            blockCacheDataHits += statistics.getAndResetTickerCount(TickerType.BLOCK_CACHE_DATA_HIT);
+            blockCacheDataMisses += statistics.getAndResetTickerCount(TickerType.BLOCK_CACHE_DATA_MISS);
+            blockCacheIndexHits += statistics.getAndResetTickerCount(TickerType.BLOCK_CACHE_INDEX_HIT);
+            blockCacheIndexMisses += statistics.getAndResetTickerCount(TickerType.BLOCK_CACHE_INDEX_MISS);
+            blockCacheFilterHits += statistics.getAndResetTickerCount(TickerType.BLOCK_CACHE_FILTER_HIT);
+            blockCacheFilterMisses += statistics.getAndResetTickerCount(TickerType.BLOCK_CACHE_FILTER_MISS);
+            writeStallDuration += statistics.getTickerCount(TickerType.STALL_MICROS);
+            bytesWrittenDuringCompaction += statistics.getTickerCount(TickerType.COMPACT_WRITE_BYTES);
+            bytesReadDuringCompaction += statistics.getTickerCount(TickerType.COMPACT_READ_BYTES);
+            numberOfOpenFiles += statistics.getTickerCount(TickerType.NO_FILE_OPENS)
+                - statistics.getTickerCount(TickerType.NO_FILE_CLOSES);
+            numberOfFileErrors += statistics.getTickerCount(TickerType.NO_FILE_ERRORS);
         }
         bytesWrittenToDatabaseSensor.record(bytesWrittenToDatabase);
         bytesReadFromDatabaseSensor.record(bytesReadFromDatabase);
@@ -190,11 +238,10 @@ public class RocksDBMetricsRecorder {
     }
 
     public void close() {
-        stopRecording = true;
-        for (final Statistics statistics : statisticsToRecord.values()) {
-            statistics.close();
+        final List<String> storeNames = new ArrayList<>(statisticsToRecord.keySet());
+        for (final String storeName : storeNames) {
+            removeStatistics(storeName);
         }
-        statisticsToRecord.clear();
-        log.debug("Closed", storeName);
+        log.debug("Closed");
     }
 }

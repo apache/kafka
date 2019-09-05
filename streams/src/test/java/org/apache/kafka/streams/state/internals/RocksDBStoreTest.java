@@ -128,6 +128,7 @@ public class RocksDBStoreTest {
         replay(mockContext);
         store.openDB(mockContext);
         reset(metricsRecorder);
+        expect(metricsRecorder.isRunning()).andReturn(true);
         metricsRecorder.removeStatistics(DB_NAME);
         replay(metricsRecorder);
 
@@ -139,6 +140,7 @@ public class RocksDBStoreTest {
     @Test
     public void shouldNotRemoveStatisticsFromInjectedMetricsRecorderOnCloseWhenRecordingLevelIsInfo() {
         final RocksDBMetricsRecorder metricsRecorder = mock(RocksDBMetricsRecorder.class);
+        expect(metricsRecorder.isRunning()).andReturn(false);
         replay(metricsRecorder);
         final RocksDBStore store = new RocksDBStore(DB_NAME, METRICS_SCOPE, metricsRecorder);
         final ProcessorContext mockContext = mock(ProcessorContext.class);
@@ -154,8 +156,8 @@ public class RocksDBStoreTest {
         verify(metricsRecorder);
     }
 
-    public static class TestRocksDBConfigSetter implements RocksDBConfigSetter {
-        public TestRocksDBConfigSetter(){}
+    public static class RocksDBConfigSetterWithUserProvidedStatistics implements RocksDBConfigSetter {
+        public RocksDBConfigSetterWithUserProvidedStatistics(){}
 
         public void setConfig(final String storeName, final Options options, final Map<String, Object> configs) {
             options.setStatistics(new Statistics());
@@ -169,12 +171,13 @@ public class RocksDBStoreTest {
     @Test
     public void shouldNotRemoveStatisticsFromInjectedMetricsRecorderOnCloseWhenUserProvidesStatistics() {
         final RocksDBMetricsRecorder metricsRecorder = mock(RocksDBMetricsRecorder.class);
+        expect(metricsRecorder.isRunning()).andReturn(false);
         replay(metricsRecorder);
         final RocksDBStore store = new RocksDBStore(DB_NAME, METRICS_SCOPE, metricsRecorder);
         final ProcessorContext mockContext = mock(ProcessorContext.class);
         expect(mockContext.appConfigs()).andReturn(mkMap(
             mkEntry(METRICS_RECORDING_LEVEL_CONFIG, "DEBUG"),
-            mkEntry(ROCKSDB_CONFIG_SETTER_CLASS_CONFIG, TestRocksDBConfigSetter.class)));
+            mkEntry(ROCKSDB_CONFIG_SETTER_CLASS_CONFIG, RocksDBConfigSetterWithUserProvidedStatistics.class)));
         final String directoryPath = TestUtils.tempDirectory().getAbsolutePath();
         final File directory = new File(directoryPath);
         expect(mockContext.stateDir()).andReturn(directory);

@@ -58,7 +58,6 @@ import org.slf4j.LoggerFactory;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
-import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -105,8 +104,6 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BulkLoadingSt
     private RocksDBConfigSetter configSetter;
 
     private final RocksDBMetricsRecorder metricsRecorder;
-    private boolean closeMetricsRecorder = false;
-    private boolean metricsRecorderIsRunning = false;
 
     private volatile boolean prepareForBulkload = false;
     ProcessorContext internalProcessorContext;
@@ -118,7 +115,6 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BulkLoadingSt
     RocksDBStore(final String name,
                  final String metricsScope) {
         this(name, DB_FILE_DIR, new RocksDBMetricsRecorder(metricsScope, name));
-        closeMetricsRecorder = true;
     }
 
     RocksDBStore(final String name,
@@ -191,13 +187,13 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BulkLoadingSt
             throw new ProcessorStateException(fatal);
         }
 
-        setUpAndStartMetricsRecorder(context, configs);
+        maybeSetUpMetricsRecorder(context, configs);
 
         openRocksDB(dbOptions, columnFamilyOptions);
         open = true;
     }
 
-    private void setUpAndStartMetricsRecorder(final ProcessorContext context, final Map<String, Object> configs) {
+    private void maybeSetUpMetricsRecorder(final ProcessorContext context, final Map<String, Object> configs) {
         if (userSpecifiedOptions.statistics() == null &&
             RecordingLevel.forName((String) configs.get(METRICS_RECORDING_LEVEL_CONFIG)) == RecordingLevel.DEBUG) {
 
@@ -210,8 +206,6 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BulkLoadingSt
                 (StreamsMetricsImpl) context.metrics(),
                 context.taskId()
             );
-            metricsRecorder.startRecording(Duration.ofMinutes(10));
-            metricsRecorderIsRunning = true;
         }
     }
 
@@ -436,7 +430,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BulkLoadingSt
             configSetter = null;
         }
 
-        closeOrUpdateMetricsRecorder();
+        maybeCleanUpMetricsRecorder();
 
         // Important: do not rearrange the order in which the below objects are closed!
         // Order of closing must follow: ColumnFamilyHandle > RocksDB > DBOptions > ColumnFamilyOptions
@@ -457,6 +451,12 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BulkLoadingSt
         cache = null;
     }
 
+    private void maybeCleanUpMetricsRecorder() {
+        if (metricsRecorder.isRunning()) {
+            metricsRecorder.removeStatistics(name);
+        }
+    }
+
     private void closeOpenIterators() {
         final HashSet<KeyValueIterator<Bytes, byte[]>> iterators;
         synchronized (openIterators) {
@@ -467,15 +467,6 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BulkLoadingSt
             for (final KeyValueIterator<Bytes, byte[]> iterator : iterators) {
                 iterator.close();
             }
-        }
-    }
-
-    private void closeOrUpdateMetricsRecorder() {
-        if (closeMetricsRecorder) {
-            metricsRecorder.close();
-            metricsRecorderIsRunning = false;
-        } else if (metricsRecorderIsRunning) {
-            metricsRecorder.removeStatistics(name);
         }
     }
 
