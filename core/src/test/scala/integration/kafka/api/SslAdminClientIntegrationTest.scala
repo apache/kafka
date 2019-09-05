@@ -78,8 +78,8 @@ class SslAdminClientIntegrationTest extends SaslSslAdminClientIntegrationTest {
     val clusterFilter = new AclBindingFilter(clusterResourcePattern.toFilter, AccessControlEntryFilter.ANY)
     val prevAcls = authorizer.acls(clusterFilter).asScala.map(_.entry).toSet
     val deleteFilter = new AclBindingFilter(clusterResourcePattern.toFilter, ace.toFilter)
-    Assert.assertTrue(authorizer.deleteAcls(null, Collections.singletonList(deleteFilter))
-      .get(0).aclBindingDeleteResults().asScala.head.deleted)
+    Assert.assertFalse(authorizer.deleteAcls(null, Collections.singletonList(deleteFilter))
+      .get(0).aclBindingDeleteResults().asScala.head.exception.isPresent)
     TestUtils.waitAndVerifyAcls(prevAcls -- Set(ace), authorizer, clusterResourcePattern)
   }
 

@@ -28,7 +28,7 @@ import org.apache.kafka.common.resource.{PatternType, ResourcePattern, ResourceT
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.server.authorizer.Authorizer
-import org.junit.Assert.{assertEquals, assertNull}
+import org.junit.Assert.{assertEquals, assertFalse}
 import org.junit.{After, Before, Test}
 
 import scala.collection.JavaConverters._
@@ -60,7 +60,7 @@ class DescribeAuthorizedOperationsTest extends IntegrationTestHarness with SaslS
         new AclBinding(clusterResource, accessControlEntry(JaasTestUtils.KafkaServerPrincipalUnqualifiedName.toString, ALLOW, CLUSTER_ACTION)),
         new AclBinding(clusterResource, accessControlEntry(JaasTestUtils.KafkaClientPrincipalUnqualifiedName2.toString, ALLOW, ALTER)),
         new AclBinding(topicResource, accessControlEntry(JaasTestUtils.KafkaClientPrincipalUnqualifiedName2.toString, ALLOW, DESCRIBE))).asJava)
-      result.asScala.foreach { result => assertNull(result.exception) }
+      result.asScala.foreach { result => assertFalse(result.exception.isPresent) }
 
     } finally {
       authorizer.close()

@@ -65,7 +65,7 @@ class AuthorizerWrapper(private[kafka] val baseAuthorizer: kafka.security.auth.A
           case Right((resource, acl)) =>
             try {
               baseAuthorizer.addAcls(Set(acl), resource)
-              new AclCreateResult
+              AclCreateResult.SUCCESS
             } catch {
               case e: ApiException => new AclCreateResult(e)
               case e: Throwable => new AclCreateResult(new InvalidRequestException("Failed to create ACL", e))

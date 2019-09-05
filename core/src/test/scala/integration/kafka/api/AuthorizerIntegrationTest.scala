@@ -70,6 +70,7 @@ import org.junit.{After, Assert, Before, Test}
 import org.scalatest.Assertions.intercept
 
 import scala.collection.JavaConverters._
+import scala.compat.java8.OptionConverters._
 import scala.collection.mutable
 import scala.collection.mutable.Buffer
 
@@ -1695,8 +1696,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     val aclBindings = acls.map { acl => new AclBinding(resource, acl) }
     servers.head.dataPlaneRequestProcessor.authorizer.get
       .createAcls(null, aclBindings.toList.asJava).asScala.foreach {result =>
-        if (result.failed())
-          throw result.exception()
+        result.exception.asScala.foreach { e => throw e }
       }
     val aclFilter = new AclBindingFilter(resource.toFilter, AccessControlEntryFilter.ANY)
     TestUtils.waitAndVerifyAcls(

@@ -29,6 +29,7 @@ import org.apache.kafka.server.authorizer.{Action, AuthorizableRequestContext, A
 
 import scala.collection.mutable
 import scala.collection.JavaConverters._
+import scala.compat.java8.OptionConverters._
 
 @deprecated("Use kafka.security.authorizer.AclAuthorizer", "Since 2.4")
 object SimpleAclAuthorizer {
@@ -125,15 +126,15 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
   private def createAcls(bindings: Set[AclBinding]): Unit = {
     aclAuthorizer.maxUpdateRetries = maxUpdateRetries
     val results = aclAuthorizer.createAcls(null, bindings.toList.asJava).asScala
-    results.find(_.exception != null).foreach { r => throw r.exception }
+    results.foreach { result => result.exception.asScala.foreach(e => throw e) }
   }
 
   private def deleteAcls(filters: Set[AclBindingFilter]): Boolean = {
     aclAuthorizer.maxUpdateRetries = maxUpdateRetries
     val results = aclAuthorizer.deleteAcls(null, filters.toList.asJava).asScala
-    results.find(_.exception != null).foreach { r => throw r.exception }
-    results.flatMap(_.aclBindingDeleteResults.asScala).find(_.exception != null).foreach { r => throw r.exception }
-    results.exists(r => r.aclBindingDeleteResults.asScala.exists(_.deleted))
+    results.foreach { result => result.exception.asScala.foreach(e => throw e) }
+    results.flatMap(_.aclBindingDeleteResults.asScala).foreach { result => result.exception.asScala.foreach(e => throw e) }
+    results.exists(r => r.aclBindingDeleteResults.asScala.exists(d => !d.exception.isPresent))
   }
 
   private def acls(filter: AclBindingFilter): Map[Resource, Set[Acl]] = {

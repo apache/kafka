@@ -46,6 +46,7 @@ import org.junit.Assert._
 import org.junit.{After, Before, Test}
 
 import scala.collection.JavaConverters._
+import scala.compat.java8.OptionConverters._
 
 class AclAuthorizerTest extends ZooKeeperTestHarness {
 
@@ -704,9 +705,9 @@ class AclAuthorizerTest extends ZooKeeperTestHarness {
       new AclBindingFilter(resource2.toFilter, AccessControlEntryFilter.ANY),
       new AclBindingFilter(new ResourcePatternFilter(TOPIC, "baz", PatternType.ANY), AccessControlEntryFilter.ANY))
     val deleteResults = aclAuthorizer.deleteAcls(requestContext, filters.asJava).asScala
-    assertEquals(List.empty, deleteResults.filter(_.exception != null))
+    assertEquals(List.empty, deleteResults.filter(_.exception.isPresent))
     filters.indices.foreach { i =>
-      assertEquals(Set.empty, deleteResults(i).aclBindingDeleteResults.asScala.toSet.filter(_.exception != null))
+      assertEquals(Set.empty, deleteResults(i).aclBindingDeleteResults.asScala.toSet.filter(_.exception.isPresent))
     }
     assertEquals(Set(acl3, acl4), deleteResults(0).aclBindingDeleteResults.asScala.map(_.aclBinding).toSet)
     assertEquals(Set(acl1), deleteResults(1).aclBindingDeleteResults.asScala.map(_.aclBinding).toSet)
@@ -835,8 +836,7 @@ class AclAuthorizerTest extends ZooKeeperTestHarness {
   private def addAcls(authorizer: AclAuthorizer, aces: Set[AccessControlEntry], resourcePattern: ResourcePattern): Unit = {
     val bindings = aces.map { ace => new AclBinding(resourcePattern, ace) }
     authorizer.createAcls(requestContext, bindings.toList.asJava).asScala.foreach { result =>
-      if (result.exception != null)
-        throw result.exception
+      result.exception.asScala.foreach { e => throw e }
     }
   }
 
@@ -846,13 +846,11 @@ class AclAuthorizerTest extends ZooKeeperTestHarness {
     else
       aces.map { ace => new AclBinding(resourcePattern, ace).toFilter }
     authorizer.deleteAcls(requestContext, bindings.toList.asJava).asScala.forall { result =>
-      if (result.exception != null)
-        throw result.exception
+      result.exception.asScala.foreach { e => throw e }
       result.aclBindingDeleteResults.asScala.foreach { r =>
-        if (r.exception != null)
-          throw r.exception
+        r.exception.asScala.foreach { e => throw e }
       }
-      result.aclBindingDeleteResults.asScala.exists(_.deleted)
+      result.aclBindingDeleteResults.asScala.exists(_.exception.asScala.isEmpty)
     }
   }
 

@@ -36,6 +36,7 @@ import org.apache.kafka.common.utils.{Utils, SecurityUtils => JSecurityUtils}
 import org.apache.kafka.server.authorizer.{Authorizer => JAuthorizer}
 
 import scala.collection.JavaConverters._
+import scala.compat.java8.OptionConverters._
 import scala.collection.mutable
 import scala.io.StdIn
 
@@ -315,9 +316,9 @@ object AclCommand extends Logging {
           println(s"Adding ACLs for resource `$resource`: $Newline ${acls.map("\t" + _).mkString(Newline)} $Newline")
           val aclBindings = acls.map(acl => new AclBinding(resource, acl))
           authorizer.createAcls(null, aclBindings.toList.asJava).asScala.foreach { result =>
-            if (result.failed) {
-              println(s"Error while adding ACLs: ${result.exception.getMessage}")
-              println(Utils.stackTrace(result.exception))
+            result.exception.asScala.foreach { exception =>
+              println(s"Error while adding ACLs: ${exception.getMessage}")
+              println(Utils.stackTrace(exception))
             }
           }
         }
@@ -374,14 +375,14 @@ object AclCommand extends Logging {
         authorizer.deleteAcls(null, aclBindingFilters)
       }
       result.asScala.foreach { result =>
-        if (result.exception != null) {
-          println(s"Error while removing ACLs: ${result.exception.getMessage}")
-          println(Utils.stackTrace(result.exception))
+        result.exception.asScala.foreach { exception =>
+          println(s"Error while removing ACLs: ${exception.getMessage}")
+          println(Utils.stackTrace(exception))
         }
         result.aclBindingDeleteResults.asScala.foreach { deleteResult =>
-          if (deleteResult.exception != null) {
-            println(s"Error while removing ACLs: ${deleteResult.exception.getMessage}")
-            println(Utils.stackTrace(deleteResult.exception))
+          deleteResult.exception.asScala.foreach { exception =>
+            println(s"Error while removing ACLs: ${exception.getMessage}")
+            println(Utils.stackTrace(exception))
           }
         }
       }

@@ -44,6 +44,7 @@ import org.junit.Assert._
 import org.junit.{After, Before, Test}
 
 import scala.collection.JavaConverters._
+import scala.compat.java8.OptionConverters._
 import scala.collection.mutable.Buffer
 
 class DelegationTokenManagerTest extends ZooKeeperTestHarness  {
@@ -281,8 +282,7 @@ class DelegationTokenManagerTest extends ZooKeeperTestHarness  {
 
     def createAcl(aclBinding: AclBinding): Unit = {
       val result = aclAuthorizer.createAcls(null, List(aclBinding).asJava).get(0)
-      if (result.failed)
-        throw result.exception
+      result.exception.asScala.foreach { e => throw e }
     }
 
     //get all tokens for multiple owners (owner1, renewer4) and with permission
