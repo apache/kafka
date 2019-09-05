@@ -25,7 +25,6 @@ public interface Readable {
     short readShort();
     int readInt();
     long readLong();
-    UUID readUUID();
     void readArray(byte[] arr);
 
     /**
@@ -55,5 +54,12 @@ public interface Readable {
         byte[] arr = new byte[length];
         readArray(arr);
         return arr;
+    }
+
+    /**
+     * Read a UUID with the most significant digits first.
+     */
+    default UUID readUUID() {
+        return new UUID(readLong(), readLong());
     }
 }

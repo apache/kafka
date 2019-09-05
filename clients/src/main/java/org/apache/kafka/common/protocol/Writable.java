@@ -25,7 +25,6 @@ public interface Writable {
     void writeShort(short val);
     void writeInt(int val);
     void writeLong(long val);
-    void writeUUID(UUID uuid);
     void writeArray(byte[] arr);
 
     /**
@@ -69,5 +68,13 @@ public interface Writable {
         }
         writeShort((short) arr.length);
         writeArray(arr);
+    }
+
+    /**
+     * Write a UUID with the most significant digits first.
+     */
+    default void writeUUID(UUID uuid) {
+        writeLong(uuid.getMostSignificantBits());
+        writeLong(uuid.getLeastSignificantBits());
     }
 }
