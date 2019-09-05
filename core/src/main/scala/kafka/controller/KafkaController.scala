@@ -541,8 +541,8 @@ class KafkaController(val config: KafkaConfig,
    *       We do this by forcing an update of the leader epoch in zookeeper.
    *   A3. Start new replicas AR by moving replicas in AR to NewReplica state.
    *
-   * Phase B: All of RAR have caught up with the leaders and are in ISR
-   *   0. Update memory with RS = ORS + TRS, AR = TRS - ORS and RR = ORS - TRS (needed in cases where RAR == ISR from the initial trigger)
+   * Phase B: All of TRS have caught up with the leaders and are in ISR
+   *   0. Update memory with RS = ORS + TRS, AR = TRS - ORS and RR = ORS - TRS (needed in cases where TRS == ISR from the initial trigger)
    *   B1. Move all replicas in TRS to OnlineReplica state.
    *   B2. Set RS = TRS, AR = [], RR = [] in memory.
    *   B3. If the leader is not in TRS, elect a new leader from TRS. If new leader needs to be elected from TRS, a LeaderAndIsr
