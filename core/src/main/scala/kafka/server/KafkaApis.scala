@@ -2331,7 +2331,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       }
 
       sendResponseMaybeThrottle(request, requestThrottleMs =>
-        new AlterPartitionReassignmentsResponse(responseData.setThrottleTimeMs(requestThrottleMs).toStruct(request.header.apiVersion))
+        new AlterPartitionReassignmentsResponse(responseData.setThrottleTimeMs(requestThrottleMs))
       )
     }
 
@@ -2377,7 +2377,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       }
 
       sendResponseMaybeThrottle(request, requestThrottleMs =>
-        new ListPartitionReassignmentsResponse(responseData.setThrottleTimeMs(requestThrottleMs).toStruct(request.header.apiVersion))
+        new ListPartitionReassignmentsResponse(responseData.setThrottleTimeMs(requestThrottleMs))
       )
     }
 

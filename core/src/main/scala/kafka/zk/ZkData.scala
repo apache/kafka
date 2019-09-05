@@ -405,6 +405,10 @@ object DeleteTopicsTopicZNode {
   def path(topic: String) = s"${DeleteTopicsZNode.path}/$topic"
 }
 
+/**
+ * The znode for initiating a partition reassignment.
+ * @deprecated Since 2.4, use the PartitionReassignment Kafka API instead.
+ */
 object ReassignPartitionsZNode {
 
   /**

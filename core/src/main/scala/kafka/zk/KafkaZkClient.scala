@@ -571,6 +571,7 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
 
   /**
    * Gets the replica assignments for the given topics.
+   * This function does not return information about which replicas are being added or removed from the assignment.
    * @param topics the topics whose partitions we wish to get the assignments for.
    * @return the replica assignment for each partition from the given topics.
    */

@@ -512,10 +512,10 @@ class KafkaController(val config: KafkaConfig,
    * RS = current assigned replica set
    * ORS = Original replica set for partition
    * TRS = Reassigned (target) replica set
-   * AR = The replica we are adding as part of this reassignment
-   * RR = The replica we are removing as part of this reassignment
+   * AR = The replicas we are adding as part of this reassignment
+   * RR = The replicas we are removing as part of this reassignment
    *
-   * We can explain a reassignment in two consecutive phases and a possibly-prerequisite cleanup phase, each with its own steps:
+   * A reassignment may have up to three phases, each with its own steps:
    *
    *
    * Cleanup Phase: In the cases where this reassignment has to override an ongoing reassignment.
@@ -526,12 +526,13 @@ class KafkaController(val config: KafkaConfig,
    *       (it is essentially (RS - ORS) - URS)
    *   1 Set RS = ORS + OVRS, AR = OVRS, RS = [] in memory
    *   2 Send LeaderAndIsr request with RS = ORS + OVRS, AR = [], RS = [] to all brokers in ORS + OVRS
-   *     (because the ongoing reassignment is in phase A, we know we wouldn't have a leader in URS)
+   *     (because the ongoing reassignment is in phase A, we know we wouldn't have a leader in URS
+   *      unless a preferred leader election was triggered while the reassignment was happening)
    *   3 Replicas in URS -> Offline (force those replicas out of ISR)
    *   4 Replicas in URS -> NonExistentReplica (force those replicas to be deleted)
    *   5 Update ZK with RS = ORS + OVRS, AR = OVRS, RS = []
    *
-   * Phase A: Initial trigger (when RAR != ISR)
+   * Phase A: Initial trigger (when TRS != ISR)
    *   0. Update memory with RS = ORS + TRS, AR = TRS - ORS and RR = ORS - TRS
    *   A1. Update ZK with RS = ORS + TRS,
    *                      AR = TRS - ORS and
