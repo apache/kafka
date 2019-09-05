@@ -545,10 +545,9 @@ class KafkaController(val config: KafkaConfig,
    *   0. Update memory with RS = ORS + TRS, AR = TRS - ORS and RR = ORS - TRS (needed in cases where TRS == ISR from the initial trigger)
    *   B1. Move all replicas in TRS to OnlineReplica state.
    *   B2. Set RS = TRS, AR = [], RR = [] in memory.
-   *   B3. If the leader is not in TRS, elect a new leader from TRS. If new leader needs to be elected from TRS, a LeaderAndIsr
-   *       will be sent. If not, then leader epoch will be incremented in zookeeper and a LeaderAndIsr request will be sent.
-   *       In any case, the LeaderAndIsr request will have RS = TRS. This will prevent the leader from adding any replica in
-   *       TRS - ORS back in the isr.
+   *   B3. Send a LeaderAndIsr request with RS = TRS. This will prevent the leader from adding any replica in TRS - ORS back in the isr.
+   *       If the current leader is not in TRS or isn't alive, we move the leader to a new replica in TRS and send the LeaderAndIsr to all TRS replicas.
+   *       If the current leader is alive and in TRS, we send the LeaderAndIsr to all replicas.
    *   B4. Move all replicas in RR to OfflineReplica state. As part of OfflineReplica state change, we shrink the
    *       isr to remove RR in ZooKeeper and send a LeaderAndIsr ONLY to the Leader to notify it of the shrunk isr.
    *       After that, we send a StopReplica (delete = false) to the replicas in RR.
@@ -604,7 +603,7 @@ class KafkaController(val config: KafkaConfig,
       }
       // B2. Set RS = TRS, AR = [], RR = [] in memory.
       // B3. Send LeaderAndIsr request with a potential new leader (if current leader not in TRS) and
-      //   a new RS (using TRS) and same isr to every broker in ORS + TRS
+      //   a new RS (using TRS) and same isr to every broker in ORS + TRS or TRS
       moveReassignedPartitionLeaderIfRequired(topicPartition, reassignedPartitionContext)
       // B4. replicas in RR -> Offline (force those replicas out of isr)
       // B5. replicas in RR -> NonExistentReplica (force those replicas to be deleted)
@@ -613,7 +612,7 @@ class KafkaController(val config: KafkaConfig,
       updateReplicaAssignmentForPartition(topicPartition, controllerContext.partitionFullReplicaAssignment(topicPartition))
       // B7. Remove the ISR reassign listener and maybe update the /admin/reassign_partitions path in ZK to remove this partition from it.
       removePartitionFromReassignedPartitions(topicPartition)
-      // B8. After electing leader, the replicas and isr information changes, so resend the update metadata request to every broker
+      // B8. After electing a leader in B3, the replicas and isr information changes, so resend the update metadata request to every broker
       sendUpdateMetadataRequest(controllerContext.liveOrShuttingDownBrokerIds.toSeq, Set(topicPartition))
       // signal delete topic thread if reassignment for some partitions belonging to topics being deleted just completed
       topicDeletionManager.resumeDeletionForTopics(Set(topicPartition.topic))
