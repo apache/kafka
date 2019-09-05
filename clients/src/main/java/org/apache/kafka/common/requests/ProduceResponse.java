@@ -170,7 +170,8 @@ public class ProduceResponse extends AbstractResponse {
                                     "If LogAppendTime is used for the topic, the timestamp will be the broker local " +
                                     "time when the messages are appended."),
                             LOG_START_OFFSET_FIELD,
-                            new Field(ERROR_RECORDS_KEY_NAME, new ArrayOf(INT32)),
+                            new Field(ERROR_RECORDS_KEY_NAME, new ArrayOf(INT32), "The relative offset of records" +
+                                    "that cause the batch to be dropped"),
                             ERROR_MESSAGE_FIELD)))))),
             THROTTLE_TIME_MS);
 
