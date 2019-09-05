@@ -1051,19 +1051,17 @@ public final class MessageDataGenerator {
         } else if (field.type() instanceof FieldType.Int64FieldType) {
             buffer.printf("hashCode = 31 * hashCode + ((int) (%s >> 32) ^ (int) %s);%n",
                 field.camelCaseName(), field.camelCaseName());
-        } else if (field.type() instanceof FieldType.UUIDFieldType) {
-            buffer.printf("hashCode = 31 * hashCode + (%s == null ? 0 : %s.hashCode());%n",
-                field.camelCaseName(), field.camelCaseName());
-        } else if (field.type().isString()) {
-            buffer.printf("hashCode = 31 * hashCode + (%s == null ? 0 : %s.hashCode());%n",
-                field.camelCaseName(), field.camelCaseName());
         } else if (field.type().isBytes()) {
             headerGenerator.addImport(MessageGenerator.ARRAYS_CLASS);
             buffer.printf("hashCode = 31 * hashCode + Arrays.hashCode(%s);%n",
                 field.camelCaseName());
-        } else if (field.type().isStruct() || field.type().isArray()) {
+        } else if (field.type().isStruct()
+                   || field.type().isArray()
+                   || field.type().isString()
+                   || field.type() instanceof  FieldType.UUIDFieldType
+                  ) {
             buffer.printf("hashCode = 31 * hashCode + (%s == null ? 0 : %s.hashCode());%n",
-                field.camelCaseName(), field.camelCaseName());
+                          field.camelCaseName(), field.camelCaseName());
         } else {
             throw new RuntimeException("Unsupported field type " + field.type());
         }
