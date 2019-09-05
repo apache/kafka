@@ -95,6 +95,7 @@ trait RemoteStorageManager extends Configurable with AutoCloseable {
    * @param topicPartition
    * @return
    */
+  @throws(classOf[IOException])
   def deleteTopicPartition(topicPartition: TopicPartition): Boolean
 
   /**
@@ -104,6 +105,7 @@ trait RemoteStorageManager extends Configurable with AutoCloseable {
    * @param cleanUpTillMs
    * @return
    */
+  @throws(classOf[IOException])
   def cleanupLogUntil(topicPartition: TopicPartition, cleanUpTillMs: Long): Long
 
   /**

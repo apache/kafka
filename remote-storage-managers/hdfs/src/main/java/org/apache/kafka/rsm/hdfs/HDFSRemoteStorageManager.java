@@ -114,7 +114,10 @@ public class HDFSRemoteStorageManager implements RemoteStorageManager {
         fs.mkdirs(tmpDirPath);
 
         // copy local files to remote temporary directory
-        fs.copyFromLocalFile(new Path(logFile.getAbsolutePath()), getPath(tmpDir, LOG_FILE_NAME));
+        Path logFilePath = getPath(tmpDir, LOG_FILE_NAME);
+        fs.copyFromLocalFile(new Path(logFile.getAbsolutePath()), logFilePath);
+        // keep the original mtime. we will use the mtime to calculate retention time
+        fs.setTimes(logFilePath, logFile.lastModified(), System.currentTimeMillis());
         fs.copyFromLocalFile(new Path(offsetIdxFile.getAbsolutePath()), getPath(tmpDir, OFFSET_INDEX_FILE_NAME));
         fs.copyFromLocalFile(new Path(tsIdxFile.getAbsolutePath()), getPath(tmpDir, TIME_INDEX_FILE_NAME));
 
@@ -157,6 +160,8 @@ public class HDFSRemoteStorageManager implements RemoteStorageManager {
 
         FileSystem fs = getFS();
         Path path = new Path(getTPRemoteDir(topicPartition));
+        if (!fs.exists(path))
+            return segments;
         FileStatus[] files = fs.listStatus(path);
 
         for (FileStatus file : files) {
@@ -214,15 +219,35 @@ public class HDFSRemoteStorageManager implements RemoteStorageManager {
         return fs.delete(segment.getPath(), true);
     }
 
-    public boolean deleteTopicPartition(TopicPartition tp) {
-        // todo
-        return true;
+    @Override
+    public boolean deleteTopicPartition(TopicPartition tp) throws IOException {
+        FileSystem fs = getFS();
+        Path path = new Path(getTPRemoteDir(tp));
+        return fs.delete(path, true);
     }
 
     @Override
-    public long cleanupLogUntil(TopicPartition topicPartition, long cleanUpTillMs) {
-        //todo
-        return 0L;
+    public long cleanupLogUntil(TopicPartition topicPartition, long cleanUpTillMs) throws IOException {
+        FileSystem fs = getFS();
+        Path path = new Path(getTPRemoteDir(topicPartition));
+        FileStatus[] files = fs.listStatus(path);
+
+        long minStartOffset = Long.MAX_VALUE;
+        for (FileStatus file : files) {
+            Path segDirPath = file.getPath();
+            String segmentName = segDirPath.getName();
+            Matcher m = REMOTE_SEGMENT_DIR_NAME_PATTERN.matcher(segmentName);
+            if (m.matches()) {
+                Path logFilePath = getPath(segDirPath.toString(), LOG_FILE_NAME);
+                if (fs.exists(logFilePath) && fs.getFileStatus(logFilePath).getModificationTime() < cleanUpTillMs) {
+                    fs.delete(segDirPath, true);
+                } else {
+                    minStartOffset = Math.min(minStartOffset, Long.parseLong(m.group(1)));
+                }
+            }
+        }
+
+        return minStartOffset;
     }
 
     /**

@@ -413,4 +413,61 @@ public class HDFSRemoteStorageManagerTest {
             assertEquals(segmentSize * (i + 1) - 1, segment.endOffset());
         }
     }
+
+    @Test
+    public void testDeleteTP() throws Exception {
+        HDFSRemoteStorageManager rsm = new HDFSRemoteStorageManager();
+        rsm.configure(config);
+
+        TopicPartition tp = new TopicPartition("test", 3);
+        int segmentSize = 20;
+        for (int i = 0; i < 5; i++) {
+            LogSegment seg = LogUtils.createSegment(segmentSize * i, logDir, 4096, Time.SYSTEM);
+            appendRecords(seg, segmentSize * i, segmentSize);
+            seg.onBecomeInactiveSegment();
+            rsm.copyLogSegment(tp, seg);
+        }
+
+        List<RemoteLogSegmentInfo> remoteSegments = rsm.listRemoteSegments(tp, 0);
+        assertEquals(5, remoteSegments.size());
+
+        rsm.deleteTopicPartition(tp);
+
+        assertEquals(0, rsm.listRemoteSegments(tp, 0).size());
+    }
+
+    @Test
+    public void testDeleteUntil() throws Exception {
+        HDFSRemoteStorageManager rsm = new HDFSRemoteStorageManager();
+        rsm.configure(config);
+
+        TopicPartition tp = new TopicPartition("test", 3);
+        long timestamp = 0;
+        int segmentSize = 20;
+        ArrayList<LogSegment> segments = new ArrayList<>();
+        for (int i = 0; i < 5; i++) {
+            LogSegment seg = LogUtils.createSegment(segmentSize * i, logDir, 4096, Time.SYSTEM);
+            appendRecords(seg, segmentSize * i, segmentSize);
+            seg.onBecomeInactiveSegment();
+            segments.add(seg);
+
+            if (i == 2) {
+                timestamp = System.currentTimeMillis();
+                Thread.sleep(2000);
+            }
+        }
+
+        Thread.sleep(2000);
+
+        for (LogSegment s : segments) {
+            rsm.copyLogSegment(tp, s);
+        }
+
+        List<RemoteLogSegmentInfo> remoteSegments = rsm.listRemoteSegments(tp, 0);
+        assertEquals(5, remoteSegments.size());
+
+        rsm.cleanupLogUntil(tp, timestamp);
+
+        assertEquals(2, rsm.listRemoteSegments(tp, 0).size());
+    }
 }
