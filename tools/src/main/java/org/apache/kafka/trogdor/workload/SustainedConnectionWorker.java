@@ -30,6 +30,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.trogdor.common.JsonUtil;
 import org.apache.kafka.trogdor.common.Platform;
@@ -48,7 +49,6 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.Random;
-import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
@@ -60,13 +60,14 @@ import java.util.stream.Collectors;
 
 public class SustainedConnectionWorker implements TaskWorker {
     private static final Logger log = LoggerFactory.getLogger(SustainedConnectionWorker.class);
+    private static final Time time = new SystemTime();
 
     // This is the metadata for the test itself.
     private final String id;
     private final SustainedConnectionSpec spec;
 
     // These variables are used to maintain the connections.
-    private static final int THROTTLE_PERIOD_MS = 10;
+    private static final int BACKOFF_PERIOD_MS = 10;
     private ExecutorService workerExecutor;
     private final AtomicBoolean running = new AtomicBoolean(false);
     private KafkaFutureImpl<String> doneFuture;
@@ -81,7 +82,7 @@ public class SustainedConnectionWorker implements TaskWorker {
     private AtomicLong totalConsumerFailedConnections;
     private AtomicLong totalMetadataConnections;
     private AtomicLong totalMetadataFailedConnections;
-    private AtomicLong totalAborts;
+    private AtomicLong totalAbortedThreads;
     private Future<?> statusUpdaterFuture;
     private ScheduledExecutorService statusUpdaterExecutor;
 
@@ -108,7 +109,7 @@ public class SustainedConnectionWorker implements TaskWorker {
         this.totalConsumerFailedConnections = new AtomicLong(0);
         this.totalMetadataConnections = new AtomicLong(0);
         this.totalMetadataFailedConnections = new AtomicLong(0);
-        this.totalAborts = new AtomicLong(0);
+        this.totalAbortedThreads = new AtomicLong(0);
 
         // Create the worker classes and add them to the list of items to act on.
         for (int i = 0; i < this.spec.producerConnectionCount(); i++) {
@@ -143,13 +144,13 @@ public class SustainedConnectionWorker implements TaskWorker {
 
     private abstract class ClaimableConnection implements SustainedConnection {
 
-        // These variables are used to maintain the scheduling of the connection keep-alive.
         protected long nextUpdate = 0;
+        protected long refreshRate;
         protected boolean inUse = false;
 
         @Override
         public boolean needsRefresh() {
-            return !this.inUse && (System.currentTimeMillis() > this.nextUpdate);
+            return !this.inUse && (SustainedConnectionWorker.time.milliseconds() > this.nextUpdate);
         }
 
         @Override
@@ -162,26 +163,24 @@ public class SustainedConnectionWorker implements TaskWorker {
             this.closeQuietly();
         }
 
+        protected void complete() {
+            this.nextUpdate = SustainedConnectionWorker.time.milliseconds() + this.refreshRate;
+            this.inUse = false;
+        }
+
         protected abstract void closeQuietly();
 
     }
 
     private class MetadataSustainedConnection extends ClaimableConnection {
 
-        // This variable is used to maintain the connection itself.
         private AdminClient client;
-
-        // This variable is used to maintain the scheduling of the connection keep-alive.
-        private long refreshRate;
-
-        // This variable is used to maintain the connection properties.
         private final Properties props;
 
         MetadataSustainedConnection() {
-            // This variable is used to maintain the connection itself.
-            this.client = null;
 
-            // This variable is used to maintain the scheduling of the connection keep-alive.
+            // These variables are used to maintain the connection itself.
+            this.client = null;
             this.refreshRate = SustainedConnectionWorker.this.spec.refreshRateMs();
 
             // This variable is used to maintain the connection properties.
@@ -212,12 +211,11 @@ public class SustainedConnectionWorker implements TaskWorker {
                 // Housekeeping to track the number of opened connections and failed connection attempts.
                 SustainedConnectionWorker.this.totalMetadataConnections.decrementAndGet();
                 SustainedConnectionWorker.this.totalMetadataFailedConnections.incrementAndGet();
-                SustainedConnectionWorker.log.error("Error while refreshing sustained AdminClient connection", e.getMessage());
+                SustainedConnectionWorker.log.error("Error while refreshing sustained AdminClient connection", e);
             }
 
             // Schedule this again and set to not in use.
-            this.nextUpdate = System.currentTimeMillis() + this.refreshRate;
-            this.inUse = false;
+            this.complete();
         }
 
         @Override
@@ -229,18 +227,12 @@ public class SustainedConnectionWorker implements TaskWorker {
 
     private class ProducerSustainedConnection extends ClaimableConnection {
 
-        // These variables are used to maintain the connection itself.
         private KafkaProducer<byte[], byte[]> producer;
         private List<TopicPartition> partitions;
         private String topicName;
         private Iterator<TopicPartition> partitionsIterator;
         private PayloadIterator keys;
         private PayloadIterator values;
-
-        // This variable is used to maintain the scheduling of the connection keep-alive.
-        private long refreshRate;
-
-        // This variable is used to maintain the connection properties.
         private final Properties props;
 
         ProducerSustainedConnection() {
@@ -252,14 +244,11 @@ public class SustainedConnectionWorker implements TaskWorker {
             this.partitionsIterator = null;
             this.keys = new PayloadIterator(SustainedConnectionWorker.this.spec.keyGenerator());
             this.values = new PayloadIterator(SustainedConnectionWorker.this.spec.valueGenerator());
-
-            // This variable is used to maintain the scheduling of the connection keep-alive.
             this.refreshRate = SustainedConnectionWorker.this.spec.refreshRateMs();
 
             // This variable is used to maintain the connection properties.
             this.props = new Properties();
             this.props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, SustainedConnectionWorker.this.spec.bootstrapServers());
-            this.props.put(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, 1);
             WorkerUtils.addConfigsToProperties(
                     this.props, SustainedConnectionWorker.this.spec.commonClientConf(), SustainedConnectionWorker.this.spec.producerConf());
         }
@@ -297,13 +286,12 @@ public class SustainedConnectionWorker implements TaskWorker {
                 // Housekeeping to track the number of opened connections and failed connection attempts.
                 SustainedConnectionWorker.this.totalProducerConnections.decrementAndGet();
                 SustainedConnectionWorker.this.totalProducerFailedConnections.incrementAndGet();
-                SustainedConnectionWorker.log.error("Error while refreshing sustained KafkaProducer connection", e.getMessage());
+                SustainedConnectionWorker.log.error("Error while refreshing sustained KafkaProducer connection", e);
 
             }
 
             // Schedule this again and set to not in use.
-            this.nextUpdate = System.currentTimeMillis() + this.refreshRate;
-            this.inUse = false;
+            this.complete();
         }
 
         @Override
@@ -317,34 +305,23 @@ public class SustainedConnectionWorker implements TaskWorker {
 
     private class ConsumerSustainedConnection extends ClaimableConnection {
 
-        // These variables are used to maintain the connection itself.
         private String topicName;
         private KafkaConsumer<byte[], byte[]> consumer;
-        private String consumerGroup;
         private TopicPartition activePartition;
         private Random rand;
-
-        // This variable is used to maintain the scheduling of the connection keep-alive.
-        private long refreshRate;
-
-        // This variable is used to maintain the connection properties.
         private final Properties props;
 
         ConsumerSustainedConnection() {
             // These variables are used to maintain the connection itself.
             this.topicName = SustainedConnectionWorker.this.spec.topicName();
             this.consumer = null;
-            this.consumerGroup = UUID.randomUUID().toString();
             this.activePartition = null;
             this.rand = new Random();
-
-            // This variable is used to maintain the scheduling of the connection keep-alive.
             this.refreshRate = SustainedConnectionWorker.this.spec.refreshRateMs();
 
             // This variable is used to maintain the connection properties.
             this.props = new Properties();
             this.props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, SustainedConnectionWorker.this.spec.bootstrapServers());
-            this.props.put(ConsumerConfig.GROUP_ID_CONFIG, this.consumerGroup);
             this.props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "latest");
             this.props.put(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, 1);
             this.props.put(ConsumerConfig.FETCH_MAX_BYTES_CONFIG, 1024);
@@ -386,13 +363,12 @@ public class SustainedConnectionWorker implements TaskWorker {
                 // Housekeeping to track the number of opened connections and failed connection attempts.
                 SustainedConnectionWorker.this.totalConsumerConnections.decrementAndGet();
                 SustainedConnectionWorker.this.totalConsumerFailedConnections.incrementAndGet();
-                SustainedConnectionWorker.log.error("Error while refreshing sustained KafkaConsumer connection", e.getMessage());
+                SustainedConnectionWorker.log.error("Error while refreshing sustained KafkaConsumer connection", e);
 
             }
 
             // Schedule this again and set to not in use.
-            this.nextUpdate = System.currentTimeMillis() + this.refreshRate;
-            this.inUse = false;
+            this.complete();
         }
 
         @Override
@@ -403,28 +379,21 @@ public class SustainedConnectionWorker implements TaskWorker {
         }
     }
 
-    private static class SustainedConnectionThrottle extends Throttle {
-        SustainedConnectionThrottle(int maxPerPeriod) {
-            super(maxPerPeriod, THROTTLE_PERIOD_MS);
-        }
-    }
-
     public class MaintainLoop implements Runnable {
         @Override
         public void run() {
-            Throttle throttle = new SustainedConnectionThrottle(1);
             try {
                 while (!doneFuture.isDone()) {
                     Optional<SustainedConnection> currentConnection = SustainedConnectionWorker.this.findConnectionToMaintain();
                     if (currentConnection.isPresent()) {
                         currentConnection.get().refresh();
                     } else {
-                        throttle.increment();
+                        SustainedConnectionWorker.time.sleep(SustainedConnectionWorker.BACKOFF_PERIOD_MS);
                     }
                 }
             } catch (Exception e) {
-                SustainedConnectionWorker.this.totalAborts.incrementAndGet();
-                SustainedConnectionWorker.log.error("Abort while maintaining sustained connections", e.getMessage());
+                SustainedConnectionWorker.this.totalAbortedThreads.incrementAndGet();
+                SustainedConnectionWorker.log.error("Aborted thread while maintaining sustained connections", e);
             }
         }
     }
@@ -453,11 +422,11 @@ public class SustainedConnectionWorker implements TaskWorker {
                             SustainedConnectionWorker.this.totalConsumerFailedConnections.get(),
                             SustainedConnectionWorker.this.totalMetadataConnections.get(),
                             SustainedConnectionWorker.this.totalMetadataFailedConnections.get(),
-                            SustainedConnectionWorker.this.totalAborts.get(),
-                            System.currentTimeMillis()));
+                            SustainedConnectionWorker.this.totalAbortedThreads.get(),
+                            SustainedConnectionWorker.time.milliseconds()));
                 status.update(node);
             } catch (Exception e) {
-                SustainedConnectionWorker.log.error("Abort while running StatusUpdater", e.getMessage());
+                SustainedConnectionWorker.log.error("Aborted test while running StatusUpdater", e);
                 WorkerUtils.abort(log, "StatusUpdater", e, doneFuture);
             }
         }
@@ -480,7 +449,7 @@ public class SustainedConnectionWorker implements TaskWorker {
                    @JsonProperty("totalConsumerFailedConnections") long totalConsumerFailedConnections,
                    @JsonProperty("totalMetadataConnections") long totalMetadataConnections,
                    @JsonProperty("totalMetadataFailedConnections") long totalMetadataFailedConnections,
-                   @JsonProperty("totalAborts") long totalAborts,
+                   @JsonProperty("totalAbortedThreads") long totalAbortedThreads,
                    @JsonProperty("updatedMs") long updatedMs) {
             this.totalProducerConnections = totalProducerConnections;
             this.totalProducerFailedConnections = totalProducerFailedConnections;
@@ -488,7 +457,7 @@ public class SustainedConnectionWorker implements TaskWorker {
             this.totalConsumerFailedConnections = totalConsumerFailedConnections;
             this.totalMetadataConnections = totalMetadataConnections;
             this.totalMetadataFailedConnections = totalMetadataFailedConnections;
-            this.totalAborts = totalAborts;
+            this.totalAbortedThreads = totalAbortedThreads;
             this.updatedMs = updatedMs;
         }
 
@@ -523,8 +492,8 @@ public class SustainedConnectionWorker implements TaskWorker {
         }
 
         @JsonProperty
-        public long totalAborts() {
-            return totalAborts;
+        public long totalAbortedThreads() {
+            return totalAbortedThreads;
         }
 
         @JsonProperty
