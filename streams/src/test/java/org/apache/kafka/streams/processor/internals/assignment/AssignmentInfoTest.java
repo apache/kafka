@@ -94,4 +94,11 @@ public class AssignmentInfoTest {
         final AssignmentInfo expectedInfo = new AssignmentInfo(4, AssignmentInfo.LATEST_SUPPORTED_VERSION, activeTasks, standbyTasks, globalAssignment, 2);
         assertEquals(expectedInfo, AssignmentInfo.decode(info.encode()));
     }
+
+    @Test
+    public void shouldEncodeAndDecodeVersion5() {
+        final AssignmentInfo info = new AssignmentInfo(5, activeTasks, standbyTasks, globalAssignment, 2);
+        final AssignmentInfo expectedInfo = new AssignmentInfo(5, AssignmentInfo.LATEST_SUPPORTED_VERSION, activeTasks, standbyTasks, globalAssignment, 2);
+        assertEquals(expectedInfo, AssignmentInfo.decode(info.encode()));
+    }
 }
