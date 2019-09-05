@@ -31,19 +31,26 @@ import java.util.Map;
  */
 public class RemoveMemberFromGroupResult {
 
-    private final Errors error;
+    private final Errors populatedError;
     private final Map<MemberIdentity, KafkaFuture<Void>> memberFutures;
 
-    RemoveMemberFromGroupResult(Errors error,
+    RemoveMemberFromGroupResult(Errors populatedError,
                                 List<MemberIdentity> membersToRemove,
                                 List<MemberResponse> memberResponses) {
-        this.error = error;
+        this.populatedError = populatedError;
         this.memberFutures = new HashMap<>(membersToRemove.size());
 
         if (!hasError()) {
             for (MemberIdentity memberIdentity : membersToRemove) {
                 KafkaFutureImpl<Void> future = new KafkaFutureImpl<>();
                 future.complete(null);
+                memberFutures.put(memberIdentity, future);
+            }
+        } else if (!isMemberLevelError(this.populatedError)) {
+            // If the populated error is a top-level error, fail every member's future.
+            for (MemberIdentity memberIdentity : membersToRemove) {
+                KafkaFutureImpl<Void> future = new KafkaFutureImpl<>();
+                future.completeExceptionally(populatedError.exception());
                 memberFutures.put(memberIdentity, future);
             }
         } else {
@@ -53,7 +60,7 @@ public class RemoveMemberFromGroupResult {
                 if (memberError != Errors.NONE) {
                     future.completeExceptionally(memberError.exception());
                 } else {
-                    future.completeExceptionally(error.exception());
+                    future.complete(null);
                 }
                 memberFutures.put(new MemberIdentity()
                                       .setMemberId(memberResponse.memberId())
@@ -63,11 +70,15 @@ public class RemoveMemberFromGroupResult {
     }
 
     public Errors error() {
-        return error;
+        return populatedError;
     }
 
     public boolean hasError() {
-        return error != Errors.NONE;
+        return populatedError != Errors.NONE;
+    }
+
+    private static boolean isMemberLevelError(Errors error) {
+        return error == Errors.UNKNOWN_MEMBER_ID || error == Errors.FENCED_INSTANCE_ID;
     }
 
     /**

@@ -22,6 +22,7 @@ import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity;
 import org.apache.kafka.common.message.LeaveGroupResponseData.MemberResponse;
 import org.apache.kafka.common.protocol.Errors;
+import org.junit.Before;
 import org.junit.Test;
 
 import java.util.Arrays;
@@ -38,19 +39,26 @@ public class RemoveMemberFromGroupResultTest {
 
     private String instanceOne = "instance-1";
     private String instanceTwo = "instance-2";
-    private List<MemberIdentity> membersToRemove = Arrays.asList(
-        new MemberIdentity()
-            .setGroupInstanceId(instanceOne),
-        new MemberIdentity()
-            .setGroupInstanceId(instanceTwo)
-    );
+    private List<MemberIdentity> membersToRemove;
 
-    private List<MemberResponse> memberResponses = Arrays.asList(
-        new MemberResponse()
-            .setGroupInstanceId(instanceOne),
-        new MemberResponse()
-            .setGroupInstanceId(instanceTwo)
-    );
+    private List<MemberResponse> memberResponses;
+
+    @Before
+    public void setUp() {
+        membersToRemove = Arrays.asList(
+            new MemberIdentity()
+                .setGroupInstanceId(instanceOne),
+            new MemberIdentity()
+                .setGroupInstanceId(instanceTwo)
+        );
+
+        memberResponses = Arrays.asList(
+            new MemberResponse()
+                .setGroupInstanceId(instanceOne),
+            new MemberResponse()
+                .setGroupInstanceId(instanceTwo)
+        );
+    }
 
     @Test
     public void testTopLevelErrorConstructor() {
@@ -105,7 +113,12 @@ public class RemoveMemberFromGroupResultTest {
                     assertTrue(e0.getCause() instanceof FencedInstanceIdException);
                 }
             } else {
-                assertTrue(memberFuture.isDone());
+                assertFalse(memberFuture.isCompletedExceptionally());
+                try {
+                    memberFuture.get();
+                } catch (ExecutionException | InterruptedException e0) {
+                    fail("get() shouldn't throw exception");
+                }
             }
         }
     }
@@ -128,7 +141,11 @@ public class RemoveMemberFromGroupResultTest {
         Map<MemberIdentity, KafkaFuture<Void>> memberFutures = noErrorResult.memberFutures();
         assertEquals(2, memberFutures.size());
         for (Map.Entry<MemberIdentity, KafkaFuture<Void>> entry : memberFutures.entrySet()) {
-            assertTrue(entry.getValue().isDone());
+            try {
+                entry.getValue().get();
+            } catch (ExecutionException | InterruptedException e0) {
+                fail("get() shouldn't throw exception");
+            }
         }
     }
 }
