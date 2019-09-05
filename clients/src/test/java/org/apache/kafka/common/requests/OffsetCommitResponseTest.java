@@ -71,17 +71,17 @@ public class OffsetCommitResponseTest {
     @Test
     public void testConstructorWithStruct() {
         OffsetCommitResponseData data = new OffsetCommitResponseData()
-                                               .setTopics(Arrays.asList(
-                                                   new OffsetCommitResponseTopic().setPartitions(
-                                                       Collections.singletonList(new OffsetCommitResponsePartition()
-                                                                                     .setPartitionIndex(partitionOne)
-                                                                                     .setErrorCode(errorOne.code()))),
-                                                   new OffsetCommitResponseTopic().setPartitions(
-                                                       Collections.singletonList(new OffsetCommitResponsePartition()
-                                                                                     .setPartitionIndex(partitionTwo)
-                                                                                     .setErrorCode(errorTwo.code()))
-                                                   )
-                                               ));
+                                            .setTopics(Arrays.asList(
+                                                new OffsetCommitResponseTopic().setPartitions(
+                                                    Collections.singletonList(new OffsetCommitResponsePartition()
+                                                                                  .setPartitionIndex(partitionOne)
+                                                                                  .setErrorCode(errorOne.code()))),
+                                                new OffsetCommitResponseTopic().setPartitions(
+                                                    Collections.singletonList(new OffsetCommitResponsePartition()
+                                                                                  .setPartitionIndex(partitionTwo)
+                                                                                  .setErrorCode(errorTwo.code())))
+                                            ))
+                                            .setThrottleTimeMs(throttleTimeMs);
 
         for (short version = 0; version <= ApiKeys.OFFSET_COMMIT.latestVersion(); version++) {
             OffsetCommitResponse response = new OffsetCommitResponse(data.toStruct(version), version);

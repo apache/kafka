@@ -174,7 +174,7 @@ public class TxnOffsetCommitRequest extends AbstractRequest {
 
             return this.offset == otherOffset.offset
                        && this.leaderEpoch.equals(otherOffset.leaderEpoch)
-                       && this.metadata.equals(otherOffset.metadata);
+                       && Objects.equals(this.metadata, otherOffset.metadata);
         }
 
         @Override

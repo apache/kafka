@@ -126,7 +126,7 @@ public class OffsetCommitRequestTest {
     }
 
     @Test
-    public void testRequestVersionCompatibilityFailBuild() {
+    public void testVersionSupportForGroupInstanceId() {
         OffsetCommitRequest.Builder builder = new OffsetCommitRequest.Builder(
             new OffsetCommitRequestData()
                 .setGroupId("groupId")
