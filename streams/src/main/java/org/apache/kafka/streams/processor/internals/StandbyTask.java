@@ -189,7 +189,6 @@ public class StandbyTask extends AbstractTask {
             // partition is both a source and a changelog). If we're limited then try to refresh
             // the offset limit if possible.
             if (record.offset() >= limit && updateableOffsetLimits.contains(partition)) {
-                updateableOffsetLimits.remove(partition);
                 limit = updateOffsetLimits(partition);
             }
 
@@ -217,6 +216,8 @@ public class StandbyTask extends AbstractTask {
         if (!offsetLimits.containsKey(partition)) {
             throw new IllegalArgumentException("Topic is not both a source and a changelog: " + partition);
         }
+
+        updateableOffsetLimits.remove(partition);
 
         final long newLimit = committedOffsetForPartition(partition);
         final long previousLimit = offsetLimits.put(partition, newLimit);

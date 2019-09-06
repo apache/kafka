@@ -21,6 +21,8 @@ import static org.hamcrest.Matchers.anyOf;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.greaterThan;
 import static org.hamcrest.Matchers.is;
+import static org.hamcrest.Matchers.notNullValue;
+import static org.junit.Assert.fail;
 
 import java.util.Arrays;
 import java.util.Collection;
@@ -28,7 +30,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
@@ -75,9 +76,9 @@ public class OptimizedKTableIntegrationTest {
     @Rule
     public final EmbeddedKafkaCluster cluster = new EmbeddedKafkaCluster(NUM_BROKERS);
 
-    private final Map<KafkaStreams, State> clientStates = new HashMap<>();
-    private final Lock clientStatesLock = new ReentrantLock();
-    private final Condition clientStateUpdate = clientStatesLock.newCondition();
+    private final Map<KafkaStreams, State> instanceStates = new HashMap<>();
+    private final Lock instanceStatesLock = new ReentrantLock();
+    private final Condition instanceStateUpdate = instanceStatesLock.newCondition();
     private final MockTime mockTime = cluster.time;
 
     @Before
@@ -87,13 +88,13 @@ public class OptimizedKTableIntegrationTest {
 
     @After
     public void after() {
-        for (final KafkaStreams client : clientStates.keySet()) {
-            client.close();
+        for (final KafkaStreams instance : instanceStates.keySet()) {
+            instance.close();
         }
     }
 
     @Test
-    public void standbyShouldNotPerformRestoreAtStartup() throws InterruptedException, ExecutionException {
+    public void standbyShouldNotPerformRestoreAtStartup() throws Exception {
         final int numMessages = 10;
         final int key = 1;
         final Semaphore semaphore = new Semaphore(0);
@@ -106,27 +107,28 @@ public class OptimizedKTableIntegrationTest {
             .toStream()
             .peek((k, v) -> semaphore.release());
 
-        final KafkaStreams client1 = createClient(builder, streamsConfiguration());
-        final KafkaStreams client2 = createClient(builder, streamsConfiguration());
-        final List<KafkaStreams> clients = Arrays.asList(client1, client2);
-
-        final AtomicLong restoreStartOffset = new AtomicLong(-1);
-        clients.forEach(client -> {
-            client.setGlobalStateRestoreListener(createTrackingRestoreListener(restoreStartOffset));
-            client.start();
-        });
-        waitForClientsToEnterRunningState(clients, 60, TimeUnit.SECONDS);
+        final KafkaStreams instance1 = createInstance(builder, streamsConfiguration());
+        final KafkaStreams instance2 = createInstance(builder, streamsConfiguration());
+        final List<KafkaStreams> instances = Arrays.asList(instance1, instance2);
 
         produceValueRange(key, 0, 10);
 
-        assertThat("all messages in the first batch were processed in a timely manner",
-            semaphore.tryAcquire(numMessages, 60, TimeUnit.SECONDS));
+        final AtomicLong restoreStartOffset = new AtomicLong(-1);
+        instances.forEach(instance -> {
+            instance.setGlobalStateRestoreListener(createTrackingRestoreListener(restoreStartOffset, new AtomicLong()));
+            instance.start();
+        });
+        waitForInstancesToEnterRunningState(instances, 60, TimeUnit.SECONDS);
 
-        assertThat("no restore has occurred", restoreStartOffset.get(), is(equalTo(-1L)));
+        // Assert that all messages in the first batch were processed in a timely manner
+        assertThat(semaphore.tryAcquire(numMessages, 60, TimeUnit.SECONDS), is(equalTo(true)));
+
+        // Assert that no restore occurred
+        assertThat(restoreStartOffset.get(), is(equalTo(-1L)));
     }
 
     @Test
-    public void shouldApplyUpdatesToStandbyStore() throws InterruptedException, ExecutionException {
+    public void shouldApplyUpdatesToStandbyStore() throws Exception {
         final int batch1NumMessages = 100;
         final int batch2NumMessages = 100;
         final int key = 1;
@@ -140,61 +142,76 @@ public class OptimizedKTableIntegrationTest {
             .toStream()
             .peek((k, v) -> semaphore.release());
 
-        final KafkaStreams client1 = createClient(builder, streamsConfiguration());
-        final KafkaStreams client2 = createClient(builder, streamsConfiguration());
-        final List<KafkaStreams> clients = Arrays.asList(client1, client2);
+        final KafkaStreams instance1 = createInstance(builder, streamsConfiguration());
+        final KafkaStreams instance2 = createInstance(builder, streamsConfiguration());
+        final List<KafkaStreams> instances = Arrays.asList(instance1, instance2);
 
         final AtomicLong restoreStartOffset = new AtomicLong(-1L);
-        clients.forEach(client -> {
-            client.setGlobalStateRestoreListener(createTrackingRestoreListener(restoreStartOffset));
-            client.start();
+        final AtomicLong restoreEndOffset = new AtomicLong(-1L);
+        instances.forEach(instance -> {
+            instance.setGlobalStateRestoreListener(createTrackingRestoreListener(restoreStartOffset, restoreEndOffset));
+            instance.start();
         });
-        waitForClientsToEnterRunningState(clients, 60, TimeUnit.SECONDS);
+        waitForInstancesToEnterRunningState(instances, 60, TimeUnit.SECONDS);
 
         produceValueRange(key, 0, batch1NumMessages);
 
-        assertThat("all messages in the first batch were processed in a timely manner",
-            semaphore.tryAcquire(batch1NumMessages, 60, TimeUnit.SECONDS));
+        // Assert that all messages in the first batch were processed in a timely manner
+        assertThat(semaphore.tryAcquire(batch1NumMessages, 60, TimeUnit.SECONDS), is(equalTo(true)));
 
-        final ReadOnlyKeyValueStore<Integer, Integer> store1 = client1
+        final ReadOnlyKeyValueStore<Integer, Integer> store1 = instance1
             .store(TABLE_NAME, QueryableStoreTypes.keyValueStore());
 
-        final ReadOnlyKeyValueStore<Integer, Integer> store2 = client2
+        final ReadOnlyKeyValueStore<Integer, Integer> store2 = instance2
             .store(TABLE_NAME, QueryableStoreTypes.keyValueStore());
 
-        final boolean client1WasFirstActive;
+        final boolean instance1WasFirstActive;
         if (store1.get(key) != null) {
-            client1WasFirstActive = true;
+            instance1WasFirstActive = true;
         } else {
-            assertThat("data from the job was sent to the store", store2.get(key) != null);
-            client1WasFirstActive = false;
+            // Assert that data from the job was sent to the store
+            assertThat(store2.get(key), is(notNullValue()));
+            instance1WasFirstActive = false;
         }
 
-        assertThat("no restore has occurred", restoreStartOffset.get(), is(equalTo(-1L)));
-        assertThat("current value in store should reflect all messages being processed",
-            client1WasFirstActive ? store1.get(key) : store2.get(key), is(equalTo(batch1NumMessages - 1)));
+        // Assert that no restore has occurred, ensures that when we check later that the restore
+        // notification actually came from after the rebalance.
+        assertThat(restoreStartOffset.get(), is(equalTo(-1L)));
 
-        if (client1WasFirstActive) {
-            client1.close();
+        // Assert that the current value in store reflects all messages being processed
+        assertThat(instance1WasFirstActive ? store1.get(key) : store2.get(key), is(equalTo(batch1NumMessages - 1)));
+
+        if (instance1WasFirstActive) {
+            instance1.close();
         } else {
-            client2.close();
+            instance2.close();
         }
+
+        final ReadOnlyKeyValueStore<Integer, Integer> newActiveStore =
+            instance1WasFirstActive ? store2 : store1;
+        retryOnExceptionWithTimeout(100, 60 * 1000, TimeUnit.MILLISECONDS, () -> {
+            // Assert that after failover we have recovered to the last store write
+            assertThat(newActiveStore.get(key), is(equalTo(batch1NumMessages - 1)));
+        });
 
         final int totalNumMessages = batch1NumMessages + batch2NumMessages;
 
         produceValueRange(key, batch1NumMessages, totalNumMessages);
 
-        assertThat("all messages in the second batch were processed in a timely manner",
-            semaphore.tryAcquire(batch2NumMessages, 60, TimeUnit.SECONDS));
+        // Assert that all messages in the second batch were processed in a timely manner
+        assertThat(semaphore.tryAcquire(batch2NumMessages, 60, TimeUnit.SECONDS), is(equalTo(true)));
 
-        assertThat("either restore was unnecessary or we restored from an offset later than 0",
-            restoreStartOffset.get(), is(anyOf(greaterThan(0L), equalTo(-1L))));
+        // Assert that either restore was unnecessary or we restored from an offset later than 0
+        assertThat(restoreStartOffset.get(), is(anyOf(greaterThan(0L), equalTo(-1L))));
 
-        assertThat("current value in store should reflect all messages being processed",
-            client1WasFirstActive ? store2.get(key) : store1.get(key), is(equalTo(totalNumMessages - 1)));
+        // Assert that either restore was unnecessary or we restored to the last offset before we closed the instance
+        assertThat(restoreEndOffset.get(), is(anyOf(equalTo(batch1NumMessages - 1), equalTo(-1L))));
+
+        // Assert that the current value in store reflects all messages being processed
+        assertThat(newActiveStore.get(key), is(equalTo(totalNumMessages - 1)));
     }
 
-    private void produceValueRange(final int key, final int start, final int endExclusive) throws ExecutionException, InterruptedException {
+    private void produceValueRange(final int key, final int start, final int endExclusive) throws Exception {
         final Properties producerProps = new Properties();
         producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, cluster.bootstrapServers());
         producerProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, IntegerSerializer.class);
@@ -209,57 +226,80 @@ public class OptimizedKTableIntegrationTest {
             mockTime);
     }
 
-    private void waitForClientsToEnterRunningState(final Collection<KafkaStreams> clients,
+    private void retryOnExceptionWithTimeout(final long pollInterval,
+                                             final long timeout,
+                                             final TimeUnit timeUnit,
+                                             final Runnable runnable) throws InterruptedException {
+        final long expectedEnd = System.currentTimeMillis() + timeUnit.toMillis(timeout);
+
+        while (true) {
+            try {
+                runnable.run();
+                return;
+            } catch (final Throwable t) {
+                if (expectedEnd <= System.currentTimeMillis()) {
+                    throw new AssertionError(t);
+                }
+                Thread.sleep(timeUnit.toMillis(pollInterval));
+            }
+        }
+    }
+
+    private void waitForInstancesToEnterRunningState(final Collection<KafkaStreams> instances,
                                                    final long time,
                                                    final TimeUnit timeUnit) throws InterruptedException {
 
         final long expectedEnd = System.currentTimeMillis() + timeUnit.toMillis(time);
 
-        clientStatesLock.lock();
+        instanceStatesLock.lock();
         try {
-            while (!clients.stream().allMatch(client -> clientStates.get(client) == State.RUNNING)) {
+            while (!instances.stream().allMatch(instance -> instanceStates.get(instance) == State.RUNNING)) {
                 if (expectedEnd <= System.currentTimeMillis()) {
-                    assertThat("requested clients entered " + State.RUNNING + " in a timely manner", false);
+                    fail("one or more instances did not enter RUNNING in a timely manner");
                 }
                 final long millisRemaining = Math.max(1, expectedEnd - System.currentTimeMillis());
-                clientStateUpdate.await(millisRemaining, TimeUnit.MILLISECONDS);
+                instanceStateUpdate.await(millisRemaining, TimeUnit.MILLISECONDS);
             }
         } finally {
-            clientStatesLock.unlock();
+            instanceStatesLock.unlock();
         }
     }
 
-    private KafkaStreams createClient(final StreamsBuilder builder, final Properties config) {
-        final KafkaStreams client = new KafkaStreams(builder.build(config), config);
-        clientStatesLock.lock();
+    private KafkaStreams createInstance(final StreamsBuilder builder, final Properties config) {
+        final KafkaStreams instance = new KafkaStreams(builder.build(config), config);
+        instanceStatesLock.lock();
         try {
-            clientStates.put(client, client.state());
+            instanceStates.put(instance, instance.state());
         } finally {
-            clientStatesLock.unlock();
+            instanceStatesLock.unlock();
         }
 
-        client.setStateListener((newState, oldState) -> {
-            clientStatesLock.lock();
+        instance.setStateListener((newState, oldState) -> {
+            instanceStatesLock.lock();
             try {
-                clientStates.put(client, newState);
+                instanceStates.put(instance, newState);
                 if (newState == State.RUNNING) {
-                    if (clientStates.values().stream().allMatch(state -> state == State.RUNNING)) {
-                        clientStateUpdate.signalAll();
+                    if (instanceStates.values().stream().allMatch(state -> state == State.RUNNING)) {
+                        instanceStateUpdate.signalAll();
                     }
                 }
             } finally {
-                clientStatesLock.unlock();
+                instanceStatesLock.unlock();
             }
         });
-        return client;
+        return instance;
     }
 
-    private StateRestoreListener createTrackingRestoreListener(final AtomicLong restoreStartOffset) {
+    private StateRestoreListener createTrackingRestoreListener(final AtomicLong restoreStartOffset,
+                                                               final AtomicLong restoreEndOffset) {
         return new StateRestoreListener() {
             @Override
-            public void onRestoreStart(final TopicPartition topicPartition, final String storeName,
-                final long startingOffset, final long endingOffset) {
+            public void onRestoreStart(final TopicPartition topicPartition,
+                                       final String storeName,
+                                       final long startingOffset,
+                                       final long endingOffset) {
                 restoreStartOffset.set(startingOffset);
+                restoreEndOffset.set(endingOffset);
             }
 
             @Override
