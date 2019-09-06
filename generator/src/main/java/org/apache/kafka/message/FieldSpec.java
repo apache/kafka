@@ -52,6 +52,8 @@ public final class FieldSpec {
 
     private final Versions taggedVersions;
 
+    private final Optional<Versions> flexibleVersions;
+
     private final Optional<Integer> tag;
 
     @JsonCreator
@@ -66,6 +68,7 @@ public final class FieldSpec {
                      @JsonProperty("entityType") EntityType entityType,
                      @JsonProperty("about") String about,
                      @JsonProperty("taggedVersions") String taggedVersions,
+                     @JsonProperty("flexibleVersions") String flexibleVersions,
                      @JsonProperty("tag") Integer tag) {
         this.name = Objects.requireNonNull(name);
         if (!VALID_FIELD_NAMES.matcher(this.name).matches()) {
@@ -98,6 +101,11 @@ public final class FieldSpec {
             }
         }
         this.taggedVersions = Versions.parse(taggedVersions, Versions.NONE);
+        if ((flexibleVersions == null) || flexibleVersions.isEmpty()) {
+            this.flexibleVersions = Optional.empty();
+        } else {
+            this.flexibleVersions = Optional.of(Versions.parse(flexibleVersions, null));
+        }
         this.tag = (tag == null) ? Optional.empty() : Optional.of(tag);
         checkTagInvariants();
     }
@@ -212,6 +220,15 @@ public final class FieldSpec {
 
     public Versions taggedVersions() {
         return taggedVersions;
+    }
+
+    @JsonProperty("flexibleVersions")
+    public String flexibleVersionsString() {
+        return flexibleVersions.isPresent() ? flexibleVersions.get().toString() : null;
+    }
+
+    public Optional<Versions> flexibleVersions() {
+        return flexibleVersions;
     }
 
     @JsonProperty("tag")

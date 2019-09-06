@@ -35,7 +35,7 @@ public final class MessageDataGenerator {
     private final HeaderGenerator headerGenerator;
     private final SchemaGenerator schemaGenerator;
     private final CodeBuffer buffer;
-    private Versions flexibleVersions;
+    private Versions messageFlexibleVersions;
 
     MessageDataGenerator() {
         this.structRegistry = new StructRegistry();
@@ -51,7 +51,7 @@ public final class MessageDataGenerator {
         }
         structRegistry.register(message);
         schemaGenerator.generateSchemas(message, message.flexibleVersions());
-        flexibleVersions = message.flexibleVersions();
+        messageFlexibleVersions = message.flexibleVersions();
         generateClass(Optional.of(message),
             message.name() + "Data",
             message.struct(),
@@ -438,10 +438,11 @@ public final class MessageDataGenerator {
             generate(buffer);
         Versions curVersions = parentVersions.intersect(struct.versions());
         for (FieldSpec field : struct.fields()) {
-            if (!field.taggedVersions().intersect(flexibleVersions).equals(field.taggedVersions())) {
+            Versions fieldFlexibleVersions = fieldFlexibleVersions(field);
+            if (!field.taggedVersions().intersect(fieldFlexibleVersions).equals(field.taggedVersions())) {
                 throw new RuntimeException("Field " + field.name() + " specifies tagged " +
                     "versions " + field.taggedVersions() + " that are not a subset of the " +
-                    "flexible versions " + flexibleVersions);
+                    "flexible versions " + fieldFlexibleVersions);
             }
             Versions mandatoryVersions = field.versions().subtract(field.taggedVersions());
             VersionConditional.forVersions(mandatoryVersions, curVersions).
@@ -452,7 +453,8 @@ public final class MessageDataGenerator {
                 }).
                 ifMember(presentAndUntaggedVersions -> {
                     if (field.type().isVariableLength()) {
-                        generateVariableLengthReader(field.camelCaseName(),
+                        generateVariableLengthReader(fieldFlexibleVersions(field),
+                            field.camelCaseName(),
                             field.type(),
                             presentAndUntaggedVersions,
                             field.nullableVersions(),
@@ -467,7 +469,7 @@ public final class MessageDataGenerator {
                 generate(buffer);
         }
         buffer.printf("this._unknownTaggedFields = null;%n");
-        VersionConditional.forVersions(flexibleVersions, curVersions).
+        VersionConditional.forVersions(messageFlexibleVersions, curVersions).
             ifMember(curFlexibleVersions -> {
                 buffer.printf("int _numTaggedFields = readable.readUnsignedVarint();%n");
                 buffer.printf("for (int _i = 0; _i < _numTaggedFields; _i++) {%n");
@@ -487,7 +489,8 @@ public final class MessageDataGenerator {
                         VersionConditional.forVersions(validTaggedVersions, curFlexibleVersions).
                             ifMember(presentAndTaggedVersions -> {
                                 if (field.type().isVariableLength()) {
-                                    generateVariableLengthReader(field.camelCaseName(),
+                                    generateVariableLengthReader(fieldFlexibleVersions(field),
+                                        field.camelCaseName(),
                                         field.type(),
                                         presentAndTaggedVersions,
                                         field.nullableVersions(),
@@ -542,7 +545,8 @@ public final class MessageDataGenerator {
         }
     }
 
-    private void generateVariableLengthReader(String name,
+    private void generateVariableLengthReader(Versions fieldFlexibleVersions,
+                                              String name,
                                               FieldType type,
                                               Versions versions,
                                               Versions nullableVersions,
@@ -551,7 +555,7 @@ public final class MessageDataGenerator {
                                               boolean isStructArrayWithKeys) {
         String lengthVar = type.isArray() ? "arrayLength" : "length";
         buffer.printf("int %s;%n", lengthVar);
-        VersionConditional.forVersions(flexibleVersions, versions).
+        VersionConditional.forVersions(fieldFlexibleVersions, versions).
             ifMember(__ -> {
                 buffer.printf("%s = readable.readUnsignedVarint() - 1;%n", lengthVar);
             }).
@@ -612,7 +616,8 @@ public final class MessageDataGenerator {
                 throw new RuntimeException("Nested arrays are not supported.  " +
                     "Use an array of structures containing another array.");
             } else if (arrayType.elementType().isBytes() || arrayType.elementType().isString()) {
-                generateVariableLengthReader(name + " element",
+                generateVariableLengthReader(fieldFlexibleVersions,
+                    name + " element",
                     arrayType.elementType(),
                     versions,
                     Versions.NONE,
@@ -649,11 +654,11 @@ public final class MessageDataGenerator {
             }).
             generate(buffer);
         Versions curVersions = parentVersions.intersect(struct.versions());
-        if (!flexibleVersions.intersect(struct.versions()).empty()) {
+        if (!messageFlexibleVersions.intersect(struct.versions()).empty()) {
             buffer.printf("NavigableMap<Integer, Object> _taggedFields = null;%n");
         }
         buffer.printf("this._unknownTaggedFields = null;%n");
-        VersionConditional.forVersions(flexibleVersions, struct.versions()).
+        VersionConditional.forVersions(messageFlexibleVersions, struct.versions()).
             ifMember(__ -> {
                 headerGenerator.addImport(MessageGenerator.NAVIGABLE_MAP_CLASS);
                 buffer.printf("_taggedFields = (NavigableMap<Integer, Object>) " +
@@ -703,7 +708,7 @@ public final class MessageDataGenerator {
                 }).
                 generate(buffer);
         }
-        VersionConditional.forVersions(flexibleVersions, struct.versions()).
+        VersionConditional.forVersions(messageFlexibleVersions, struct.versions()).
             ifMember(__ -> {
                 headerGenerator.addImport(MessageGenerator.NAVIGABLE_MAP_CLASS);
                 buffer.printf("if (!_taggedFields.isEmpty()) {%n");
@@ -820,7 +825,8 @@ public final class MessageDataGenerator {
                     VersionConditional.forVersions(field.taggedVersions(), presentVersions).
                         ifNotMember(presentAndUntaggedVersions -> {
                             if (field.type().isVariableLength()) {
-                                generateVariableLengthWriter(field.camelCaseName(),
+                                generateVariableLengthWriter(fieldFlexibleVersions(field),
+                                    field.camelCaseName(),
                                     field.type(),
                                     presentAndUntaggedVersions,
                                     field.nullableVersions());
@@ -859,7 +865,7 @@ public final class MessageDataGenerator {
         headerGenerator.addImport(MessageGenerator.RAW_TAGGED_FIELD_WRITER_CLASS);
         buffer.printf("RawTaggedFieldWriter _rawWriter = RawTaggedFieldWriter.forFields(_unknownTaggedFields);%n");
         buffer.printf("_numTaggedFields += _rawWriter.numFields();%n");
-        VersionConditional.forVersions(flexibleVersions, curVersions).
+        VersionConditional.forVersions(messageFlexibleVersions, curVersions).
             ifNotMember(__ -> {
                 generateCheckForUnsupportedNumTaggedFields("_numTaggedFields > 0");
             }).
@@ -900,7 +906,8 @@ public final class MessageDataGenerator {
                                 } else {
                                     throw new RuntimeException("Unable to handle type " + field.type());
                                 }
-                                generateVariableLengthWriter(field.camelCaseName(),
+                                generateVariableLengthWriter(fieldFlexibleVersions(field),
+                                    field.camelCaseName(),
                                     field.type(),
                                     presentAndTaggedVersions,
                                     field.nullableVersions());
@@ -953,7 +960,8 @@ public final class MessageDataGenerator {
         }
     }
 
-    private void generateVariableLengthWriter(String name,
+    private void generateVariableLengthWriter(Versions fieldFlexibleVersions,
+                                              String name,
                                               FieldType type,
                                               Versions versions,
                                               Versions nullableVersions) {
@@ -962,7 +970,7 @@ public final class MessageDataGenerator {
             nullableVersions(nullableVersions).
             alwaysEmitBlockScope(type.isString()).
             ifNull(ifNullVersions -> {
-                VersionConditional.forVersions(flexibleVersions, ifNullVersions).
+                VersionConditional.forVersions(fieldFlexibleVersions, ifNullVersions).
                     ifMember(__ -> {
                         buffer.printf("writable.writeUnsignedVarint(0);%n");
                     }).
@@ -988,7 +996,7 @@ public final class MessageDataGenerator {
                 } else {
                     throw new RuntimeException("Unhandled type " + type);
                 }
-                VersionConditional.forVersions(flexibleVersions, ifNotNullVersions).
+                VersionConditional.forVersions(fieldFlexibleVersions, ifNotNullVersions).
                     ifMember(__ -> {
                         buffer.printf("writable.writeUnsignedVarint(%s + 1);%n", lengthExpression);
                     }).
@@ -1017,7 +1025,8 @@ public final class MessageDataGenerator {
                         throw new RuntimeException("Nested arrays are not supported.  " +
                             "Use an array of structures containing another array.");
                     } else if (elementType.isBytes() || elementType.isString()) {
-                        generateVariableLengthWriter(elementName,
+                        generateVariableLengthWriter(fieldFlexibleVersions,
+                            elementName,
                             elementType,
                             versions,
                             Versions.NONE);
@@ -1078,7 +1087,7 @@ public final class MessageDataGenerator {
         Versions curVersions = parentVersions.intersect(struct.versions());
         headerGenerator.addImport(MessageGenerator.TREE_MAP_CLASS);
         buffer.printf("TreeMap<Integer, Object> _taggedFields = null;%n");
-        VersionConditional.forVersions(flexibleVersions, struct.versions()).
+        VersionConditional.forVersions(messageFlexibleVersions, struct.versions()).
             ifMember(__ -> {
                 buffer.printf("_taggedFields = new TreeMap<>();%n");
             }).
@@ -1103,7 +1112,7 @@ public final class MessageDataGenerator {
                 }).
                 generate(buffer);
         }
-        VersionConditional.forVersions(flexibleVersions, curVersions).
+        VersionConditional.forVersions(messageFlexibleVersions, curVersions).
             ifMember(__ -> {
                 buffer.printf("struct.set(\"%s\", _taggedFields);%n", TAGGED_FIELDS_SECTION_NAME);
             }).
@@ -1244,7 +1253,7 @@ public final class MessageDataGenerator {
         buffer.printf("_numTaggedFields += _unknownTaggedFields.size();%n");
         buffer.decrementIndent();
         buffer.printf("}%n");
-        VersionConditional.forVersions(flexibleVersions, curVersions).
+        VersionConditional.forVersions(messageFlexibleVersions, curVersions).
             ifNotMember(__ -> {
                 generateCheckForUnsupportedNumTaggedFields("_numTaggedFields > 0");
             }).
@@ -1262,7 +1271,8 @@ public final class MessageDataGenerator {
      * Generate the size calculator for a variable-length array element.
      * Array elements cannot be null.
      */
-    private void generateVariableLengthArrayElementSize(String fieldName,
+    private void generateVariableLengthArrayElementSize(Versions flexibleVersions,
+                                                        String fieldName,
                                                         FieldType type,
                                                         Versions versions) {
         if (type instanceof FieldType.StringFieldType) {
@@ -1312,7 +1322,7 @@ public final class MessageDataGenerator {
             alwaysEmitBlockScope(true).
             possibleVersions(possibleVersions).
             ifNull(ifNullVersions -> {
-                VersionConditional.forVersions(flexibleVersions, ifNullVersions).
+                VersionConditional.forVersions(fieldFlexibleVersions(field), ifNullVersions).
                     ifMember(__ -> {
                         if (tagged) {
                             // Account for the tagged field prefix.
@@ -1338,7 +1348,7 @@ public final class MessageDataGenerator {
                 if (field.type().isString()) {
                     generateStringToBytes(field.camelCaseName());
                     buffer.printf("_size += _stringBytes.length;%n");
-                    VersionConditional.forVersions(flexibleVersions, ifNotNullVersions).
+                    VersionConditional.forVersions(fieldFlexibleVersions(field), ifNotNullVersions).
                         ifMember(__ -> {
                             headerGenerator.addImport(MessageGenerator.BYTE_UTILS_CLASS);
                             if (tagged) {
@@ -1361,7 +1371,7 @@ public final class MessageDataGenerator {
                         generate(buffer);
                 } else if (field.type().isArray()) {
                     buffer.printf("int _arraySize = 0;%n");
-                    VersionConditional.forVersions(flexibleVersions, ifNotNullVersions).
+                    VersionConditional.forVersions(fieldFlexibleVersions(field), ifNotNullVersions).
                         ifMember(__ -> {
                             headerGenerator.addImport(MessageGenerator.BYTE_UTILS_CLASS);
                             buffer.printf("_arraySize += ByteUtils.sizeOfUnsignedVarint(%s.size() + 1);%n",
@@ -1384,7 +1394,8 @@ public final class MessageDataGenerator {
                         buffer.printf("for (%s %sElement : %s) {%n",
                             getBoxedJavaType(elementType), field.camelCaseName(), field.camelCaseName());
                         buffer.incrementIndent();
-                        generateVariableLengthArrayElementSize(String.format("%sElement", field.camelCaseName()),
+                        generateVariableLengthArrayElementSize(fieldFlexibleVersions(field),
+                            String.format("%sElement", field.camelCaseName()),
                             elementType,
                             ifNotNullVersions);
                         buffer.decrementIndent();
@@ -1400,7 +1411,7 @@ public final class MessageDataGenerator {
                     }
                 } else if (field.type().isBytes()) {
                     buffer.printf("int _bytesSize = %s.length;%n", field.camelCaseName());
-                    VersionConditional.forVersions(flexibleVersions, ifNotNullVersions).
+                    VersionConditional.forVersions(fieldFlexibleVersions(field), ifNotNullVersions).
                         ifMember(__ -> {
                             headerGenerator.addImport(MessageGenerator.BYTE_UTILS_CLASS);
                             headerGenerator.addImport(MessageGenerator.BYTE_UTILS_CLASS);
@@ -1717,5 +1728,20 @@ public final class MessageDataGenerator {
         buffer.printf("this.%s = v;%n", memberName);
         buffer.decrementIndent();
         buffer.printf("}%n");
+    }
+
+    private Versions fieldFlexibleVersions(FieldSpec field) {
+        if (field.flexibleVersions().isPresent()) {
+            if (!messageFlexibleVersions.intersect(field.flexibleVersions().get()).
+                    equals(field.flexibleVersions().get())) {
+                throw new RuntimeException("The flexible versions for field " +
+                    field.name() + " are " + field.flexibleVersions().get() +
+                    ", which are not a subset of the flexible versions for the " +
+                    "message as a whole, which are " + messageFlexibleVersions);
+            }
+            return field.flexibleVersions().get();
+        } else {
+            return messageFlexibleVersions;
+        }
     }
 }

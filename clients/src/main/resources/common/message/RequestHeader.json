@@ -17,16 +17,25 @@
   "type": "header",
   "name": "RequestHeader",
 
+  // Kafka clients send out the request header before sending any request.
+  //
+  // The request header doesn't have an explicit version number attached to it.
+  // Instead, the server must deduce what version of the request header is in
+  // use by examining the first two fields we were sent: RequestApiKey and
+  // RequestApiVersion.  Every (apiKey, apiVersion) tuple maps to a unique
+  // header version.
+  //
+  // In the special case of an ApiVersionsRequest, the ==
   // In order to know what version of the request and response headers to use
   // for deserialization, we first read the 16-bit request API key and API version.
   // The (API key, API version) tuple maps to a header version.
-
-  // Version 0 of this header was used only by v0 of the controlled shutdown.
-  // For some reason, that verison of that request left out the client id.
-
+  //
+  // Version 0 of this header was used only by v0 of the controlled shutdown request.
+  // No other requests ever used this version.
+  //
   // Version 1 of the header is used by requests that do not have a flexible schema.
-
-  // Version 2 is the first flexible version which allows tagged fields.
+  //
+  // Version 2 is the first flexible version, which allows tagged fields.
 
   "validVersions": "0-2",
   "flexibleVersions": "2+",
@@ -41,7 +50,9 @@
       "about": "The API version of this request." },
     { "name": "CorrelationId", "type": "int32", "versions": "0+",
       "about": "The correlation ID of this request." },
+    // The clientID is always serialized with a two-byte prefix, even in versions
+    // of this message with a flexible schema.
     { "name": "ClientId", "type": "string", "versions": "1+", "ignorable": true,
-      "about": "The client ID string." }
+      "about": "The client ID string.", "flexibleVersions": "none" }
   ]
 }
