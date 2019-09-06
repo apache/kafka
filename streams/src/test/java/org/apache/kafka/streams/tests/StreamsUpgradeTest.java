@@ -189,6 +189,12 @@ public class StreamsUpgradeTest {
         @Override
         public GroupAssignment assign(final Cluster metadata, final GroupSubscription groupSubscription) {
             final Map<String, Subscription> subscriptions = groupSubscription.groupSubscription();
+            final Set<Integer> supportedVersions = new HashSet<>();
+            for (final Map.Entry<String, Subscription> entry : subscriptions.entrySet()) {
+                final Subscription subscription = entry.getValue();
+                final SubscriptionInfo info = SubscriptionInfo.decode(subscription.userData());
+                supportedVersions.add(info.latestSupportedVersion());
+            }
             Map<String, Assignment> assignment = null;
 
             final Map<String, Subscription> downgradedSubscriptions = new HashMap<>();
@@ -203,20 +209,14 @@ public class StreamsUpgradeTest {
             boolean bumpUsedVersion = false;
             final boolean bumpSupportedVersion;
             if (assignment != null) {
-                final Set<Integer> supportedVersions = new HashSet<>();
-                for (final Map.Entry<String, Subscription> entry : subscriptions.entrySet()) {
-                    final Subscription subscription = entry.getValue();
-                    final SubscriptionInfo info = SubscriptionInfo.decode(subscription.userData());
-                    supportedVersions.add(info.latestSupportedVersion());
-                }
                 bumpSupportedVersion = supportedVersions.size() == 1 && supportedVersions.iterator().next() == LATEST_SUPPORTED_VERSION + 1;
             } else {
                 for (final Map.Entry<String, Subscription> entry : subscriptions.entrySet()) {
                     final Subscription subscription = entry.getValue();
 
                     final SubscriptionInfo info = SubscriptionInfo.decode(subscription.userData()
-                                                                                      .putInt(0, LATEST_SUPPORTED_VERSION)
-                                                                                      .putInt(4, LATEST_SUPPORTED_VERSION));
+                        .putInt(0, LATEST_SUPPORTED_VERSION)
+                        .putInt(4, LATEST_SUPPORTED_VERSION));
 
                     downgradedSubscriptions.put(
                         entry.getKey(),

@@ -39,53 +39,21 @@ import static org.apache.kafka.streams.processor.internals.assignment.StreamsAss
 public final class AssignorConfiguration {
     private final String logPrefix;
     private final Logger log;
-    private final int configuredMetadataVersion;
     private final Integer numStandbyReplicas;
     private final PartitionGrouper partitionGrouper;
     private final String userEndPoint;
     private final TaskManager taskManager;
     private final InternalTopicManager internalTopicManager;
     private final CopartitionedTopicsEnforcer copartitionedTopicsEnforcer;
+    private final StreamsConfig streamsConfig;
 
     public AssignorConfiguration(final Map<String, ?> configs) {
-        final StreamsConfig streamsConfig = new QuietStreamsConfig(configs);
+        streamsConfig = new QuietStreamsConfig(configs);
 
         // Setting the logger with the passed in client thread name
         logPrefix = String.format("stream-thread [%s] ", streamsConfig.getString(CommonClientConfigs.CLIENT_ID_CONFIG));
         final LogContext logContext = new LogContext(logPrefix);
         log = logContext.logger(getClass());
-
-        final String upgradeFrom = streamsConfig.getString(StreamsConfig.UPGRADE_FROM_CONFIG);
-        if (upgradeFrom != null) {
-            switch (upgradeFrom) {
-                case StreamsConfig.UPGRADE_FROM_0100:
-                    log.info(
-                        "Downgrading metadata version from {} to 1 for upgrade from 0.10.0.x.",
-                        LATEST_SUPPORTED_VERSION
-                    );
-                    configuredMetadataVersion = VERSION_ONE;
-                    break;
-                case StreamsConfig.UPGRADE_FROM_0101:
-                case StreamsConfig.UPGRADE_FROM_0102:
-                case StreamsConfig.UPGRADE_FROM_0110:
-                case StreamsConfig.UPGRADE_FROM_10:
-                case StreamsConfig.UPGRADE_FROM_11:
-                    log.info(
-                        "Downgrading metadata version from {} to 2 for upgrade from {}.x.",
-                        LATEST_SUPPORTED_VERSION,
-                        upgradeFrom
-                    );
-                    configuredMetadataVersion = VERSION_TWO;
-                    break;
-                default:
-                    throw new IllegalArgumentException(
-                        "Unknown configuration value for parameter 'upgrade.from': " + upgradeFrom
-                    );
-            }
-        } else {
-            configuredMetadataVersion = LATEST_SUPPORTED_VERSION;
-        }
-
 
         numStandbyReplicas = streamsConfig.getInt(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG);
 
@@ -167,8 +135,35 @@ public final class AssignorConfiguration {
         return logPrefix;
     }
 
-    public int configuredMetadataVersion() {
-        return configuredMetadataVersion;
+    public int configuredMetadataVersion(final int priorVersion) {
+        final String upgradeFrom = streamsConfig.getString(StreamsConfig.UPGRADE_FROM_CONFIG);
+        if (upgradeFrom != null) {
+            switch (upgradeFrom) {
+                case StreamsConfig.UPGRADE_FROM_0100:
+                    log.info(
+                        "Downgrading metadata version from {} to 1 for upgrade from 0.10.0.x.",
+                        LATEST_SUPPORTED_VERSION
+                    );
+                    return VERSION_ONE;
+                case StreamsConfig.UPGRADE_FROM_0101:
+                case StreamsConfig.UPGRADE_FROM_0102:
+                case StreamsConfig.UPGRADE_FROM_0110:
+                case StreamsConfig.UPGRADE_FROM_10:
+                case StreamsConfig.UPGRADE_FROM_11:
+                    log.info(
+                        "Downgrading metadata version from {} to 2 for upgrade from {}.x.",
+                        LATEST_SUPPORTED_VERSION,
+                        upgradeFrom
+                    );
+                    return VERSION_TWO;
+                default:
+                    throw new IllegalArgumentException(
+                        "Unknown configuration value for parameter 'upgrade.from': " + upgradeFrom
+                    );
+            }
+        } else {
+            return priorVersion;
+        }
     }
 
     public int getNumStandbyReplicas() {

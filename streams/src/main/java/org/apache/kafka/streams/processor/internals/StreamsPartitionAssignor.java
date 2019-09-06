@@ -186,7 +186,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
 
         logPrefix = assignorConfiguration.logPrefix();
         log = new LogContext(logPrefix).logger(getClass());
-        usedSubscriptionMetadataVersion = assignorConfiguration.configuredMetadataVersion();
+        usedSubscriptionMetadataVersion = assignorConfiguration.configuredMetadataVersion(usedSubscriptionMetadataVersion);
         taskManager = assignorConfiguration.getTaskManager();
         assignmentErrorCode = assignorConfiguration.getAssignmentErrorCode(configs);
         numStandbyReplicas = assignorConfiguration.getNumStandbyReplicas();
