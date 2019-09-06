@@ -88,6 +88,7 @@ import org.apache.kafka.common.message.SaslAuthenticateRequestData;
 import org.apache.kafka.common.message.SaslAuthenticateResponseData;
 import org.apache.kafka.common.message.SaslHandshakeRequestData;
 import org.apache.kafka.common.message.SaslHandshakeResponseData;
+import org.apache.kafka.common.message.TxnOffsetCommitRequestData;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.network.Send;
 import org.apache.kafka.common.protocol.ApiKeys;
@@ -1384,7 +1385,14 @@ public class RequestResponseTest {
                     new TxnOffsetCommitRequest.CommittedOffset(100, null, Optional.empty()));
         offsets.put(new TopicPartition("topic", 74),
                 new TxnOffsetCommitRequest.CommittedOffset(100, "blah", Optional.of(27)));
-        return new TxnOffsetCommitRequest.Builder("transactionalId", "groupId", 21L, (short) 42, offsets).build();
+        return new TxnOffsetCommitRequest.Builder(
+            new TxnOffsetCommitRequestData()
+                .setTransactionalId("transactionalId")
+                .setGroupId("groupId")
+                .setProducerId(21L)
+                .setProducerEpoch((short) 42)
+                .setTopics(TxnOffsetCommitRequest.getTopics(offsets))
+            ).build();
     }
 
     private TxnOffsetCommitResponse createTxnOffsetCommitResponse() {

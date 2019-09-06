@@ -22,9 +22,17 @@ import org.apache.kafka.common.message.AddPartitionsToTxnRequestData.AddPartitio
 import org.apache.kafka.common.message.AddPartitionsToTxnRequestData.AddPartitionsToTxnTopicCollection;
 import org.apache.kafka.common.message.JoinGroupResponseData.JoinGroupResponseMember;
 import org.apache.kafka.common.message.LeaveGroupResponseData.MemberResponse;
+import org.apache.kafka.common.message.OffsetCommitRequestData.OffsetCommitRequestPartition;
+import org.apache.kafka.common.message.OffsetCommitRequestData.OffsetCommitRequestTopic;
+import org.apache.kafka.common.message.OffsetCommitResponseData.OffsetCommitResponsePartition;
+import org.apache.kafka.common.message.OffsetCommitResponseData.OffsetCommitResponseTopic;
 import org.apache.kafka.common.message.OffsetFetchRequestData.OffsetFetchRequestTopic;
 import org.apache.kafka.common.message.OffsetFetchResponseData.OffsetFetchResponsePartition;
 import org.apache.kafka.common.message.OffsetFetchResponseData.OffsetFetchResponseTopic;
+import org.apache.kafka.common.message.TxnOffsetCommitRequestData.TxnOffsetCommitRequestPartition;
+import org.apache.kafka.common.message.TxnOffsetCommitRequestData.TxnOffsetCommitRequestTopic;
+import org.apache.kafka.common.message.TxnOffsetCommitResponseData.TxnOffsetCommitResponsePartition;
+import org.apache.kafka.common.message.TxnOffsetCommitResponseData.TxnOffsetCommitResponseTopic;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
@@ -269,6 +277,176 @@ public final class MessageTest {
                 new LeaderAndIsrRequestData().setTopicStates(Collections.singletonList(partitionStateWithAddingRemovingReplicas)),
                 new LeaderAndIsrRequestData().setTopicStates(Collections.singletonList(partitionStateNoAddingRemovingReplicas)));
         testAllMessageRoundTripsFromVersion((short) 3, new LeaderAndIsrRequestData().setTopicStates(Collections.singletonList(partitionStateWithAddingRemovingReplicas)));
+    }
+
+    @Test
+    public void testOffsetCommitRequestVersions() throws Exception {
+        String groupId = "groupId";
+        String topicName = "topic";
+        String metadata = "metadata";
+        int partition = 2;
+        int offset = 100;
+
+        testAllMessageRoundTrips(new OffsetCommitRequestData()
+                                     .setGroupId(groupId)
+                                     .setTopics(Collections.singletonList(
+                                         new OffsetCommitRequestTopic()
+                                             .setName(topicName)
+                                             .setPartitions(Collections.singletonList(
+                                                 new OffsetCommitRequestPartition()
+                                                     .setPartitionIndex(partition)
+                                                     .setCommittedMetadata(metadata)
+                                                     .setCommittedOffset(offset)
+                                             )))));
+
+        Supplier<OffsetCommitRequestData> request =
+            () -> new OffsetCommitRequestData()
+                      .setGroupId(groupId)
+                      .setMemberId("memberId")
+                      .setGroupInstanceId("instanceId")
+                      .setTopics(Collections.singletonList(
+                          new OffsetCommitRequestTopic()
+                              .setName(topicName)
+                              .setPartitions(Collections.singletonList(
+                                  new OffsetCommitRequestPartition()
+                                      .setPartitionIndex(partition)
+                                      .setCommittedLeaderEpoch(10)
+                                      .setCommittedMetadata(metadata)
+                                      .setCommittedOffset(offset)
+                                      .setCommitTimestamp(20)
+                            ))))
+                    .setRetentionTimeMs(20);
+
+        for (short version = 0; version <= ApiKeys.OFFSET_COMMIT.latestVersion(); version++) {
+            OffsetCommitRequestData requestData = request.get();
+            if (version < 1) {
+                requestData.setMemberId("");
+                requestData.setGenerationId(-1);
+            }
+
+            if (version != 1) {
+                requestData.topics().get(0).partitions().get(0).setCommitTimestamp(-1);
+            }
+
+            if (version < 2 || version > 4) {
+                requestData.setRetentionTimeMs(-1);
+            }
+
+            if (version < 6) {
+                requestData.topics().get(0).partitions().get(0).setCommittedLeaderEpoch(-1);
+
+            }
+
+            if (version < 7) {
+                requestData.setGroupInstanceId(null);
+            }
+
+            if (version == 1) {
+                testEquivalentMessageRoundTrip(version, requestData);
+            } else if (version >= 2 && version <= 4) {
+                testAllMessageRoundTripsBetweenVersions(version, (short) 4, requestData, requestData);
+            } else {
+                testAllMessageRoundTripsFromVersion(version, requestData);
+            }
+        }
+    }
+
+    @Test
+    public void testOffsetCommitResponseVersions() throws Exception {
+        Supplier<OffsetCommitResponseData> response =
+            () -> new OffsetCommitResponseData()
+                      .setTopics(
+                          singletonList(
+                              new OffsetCommitResponseTopic()
+                                  .setName("topic")
+                                  .setPartitions(singletonList(
+                                      new OffsetCommitResponsePartition()
+                                          .setPartitionIndex(1)
+                                          .setErrorCode(Errors.UNKNOWN_MEMBER_ID.code())
+                                  ))
+                          )
+                      )
+                      .setThrottleTimeMs(20);
+
+        for (short version = 0; version <= ApiKeys.OFFSET_COMMIT.latestVersion(); version++) {
+            OffsetCommitResponseData responseData = response.get();
+            if (version < 3) {
+                responseData.setThrottleTimeMs(0);
+            }
+            testAllMessageRoundTripsFromVersion(version, responseData);
+        }
+    }
+
+    @Test
+    public void testTxnOffsetCommitRequestVersions() throws Exception {
+        String groupId = "groupId";
+        String topicName = "topic";
+        String metadata = "metadata";
+        String txnId = "transactionalId";
+        int producerId = 25;
+        short producerEpoch = 10;
+
+        int partition = 2;
+        int offset = 100;
+
+        testAllMessageRoundTrips(new TxnOffsetCommitRequestData()
+                                     .setGroupId(groupId)
+                                     .setTransactionalId(txnId)
+                                     .setProducerId(producerId)
+                                     .setProducerEpoch(producerEpoch)
+                                     .setTopics(Collections.singletonList(
+                                         new TxnOffsetCommitRequestTopic()
+                                             .setName(topicName)
+                                             .setPartitions(Collections.singletonList(
+                                                 new TxnOffsetCommitRequestPartition()
+                                                     .setPartitionIndex(partition)
+                                                     .setCommittedMetadata(metadata)
+                                                     .setCommittedOffset(offset)
+                                             )))));
+
+        Supplier<TxnOffsetCommitRequestData> request =
+            () -> new TxnOffsetCommitRequestData()
+                      .setGroupId(groupId)
+                      .setTransactionalId(txnId)
+                      .setProducerId(producerId)
+                      .setProducerEpoch(producerEpoch)
+                      .setTopics(Collections.singletonList(
+                          new TxnOffsetCommitRequestTopic()
+                              .setName(topicName)
+                              .setPartitions(Collections.singletonList(
+                                  new TxnOffsetCommitRequestPartition()
+                                      .setPartitionIndex(partition)
+                                      .setCommittedLeaderEpoch(10)
+                                      .setCommittedMetadata(metadata)
+                                      .setCommittedOffset(offset)
+                              ))));
+
+        for (short version = 0; version <= ApiKeys.TXN_OFFSET_COMMIT.latestVersion(); version++) {
+            TxnOffsetCommitRequestData requestData = request.get();
+            if (version < 6) {
+                requestData.topics().get(0).partitions().get(0).setCommittedLeaderEpoch(-1);
+            }
+
+            testAllMessageRoundTripsFromVersion(version, requestData);
+        }
+    }
+
+    @Test
+    public void testTxnOffsetCommitResponseVersions() throws Exception {
+        testAllMessageRoundTrips(
+            new TxnOffsetCommitResponseData()
+                .setTopics(
+                   singletonList(
+                       new TxnOffsetCommitResponseTopic()
+                           .setName("topic")
+                           .setPartitions(singletonList(
+                               new TxnOffsetCommitResponsePartition()
+                                   .setPartitionIndex(1)
+                                   .setErrorCode(Errors.UNKNOWN_MEMBER_ID.code())
+                           ))
+                   )
+               )
+               .setThrottleTimeMs(20));
     }
 
     @Test
