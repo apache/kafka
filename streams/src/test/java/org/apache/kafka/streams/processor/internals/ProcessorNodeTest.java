@@ -16,15 +16,25 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import java.util.Arrays;
+import java.util.Properties;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.streams.StreamsBuilder;
+import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.Topology;
+import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.errors.DefaultProductionExceptionHandler;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.state.StateSerdes;
+import org.apache.kafka.streams.test.ConsumerRecordFactory;
 import org.apache.kafka.test.InternalMockProcessorContext;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.junit.Test;
@@ -33,6 +43,9 @@ import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
+import static org.hamcrest.CoreMatchers.containsString;
+import static org.hamcrest.CoreMatchers.instanceOf;
+import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
@@ -142,4 +155,82 @@ public class ProcessorNodeTest {
                 groupName, threadId, context.taskId().toString(), node.name())));
     }
 
+    @Test(expected = StreamsException.class)
+    public void testTopologyLevelClassCastException() {
+        final Properties props = new Properties();
+        props.put(StreamsConfig.APPLICATION_ID_CONFIG, "test");
+        props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy:1234");
+        final StreamsBuilder builder = new StreamsBuilder();
+
+        builder.<String, String>stream("streams-plaintext-input")
+            .flatMapValues(value -> {
+                return Arrays.asList("");
+            });
+        Topology topology = builder.build();
+
+        final TopologyTestDriver testDriver = new TopologyTestDriver(topology, props);
+        final ConsumerRecordFactory<String, String> factory = new ConsumerRecordFactory<>(new StringSerializer(), new StringSerializer());
+        final ConsumerRecord<byte[], byte[]> consumerRecord = factory.create("streams-plaintext-input", "a-key", "a value");
+
+        try {
+            testDriver.pipeInput(consumerRecord);
+        } catch (StreamsException s) {
+            String msg = s.getMessage();
+            assertTrue("Error about class cast with Serdes", msg.contains("ClassCastException"));
+            assertTrue("Error about class cast with Serdes", msg.contains("Serdes"));
+            throw s;
+        }
+    }
+
+    @Test
+    public void testTopologyLevelClassCastExceptionCorrect() {
+        final Properties props = new Properties();
+        props.put(StreamsConfig.APPLICATION_ID_CONFIG, "test");
+        props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy:1234");
+        props.setProperty(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
+        props.setProperty(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
+        final StreamsBuilder builder = new StreamsBuilder();
+
+        builder.<String, String>stream("streams-plaintext-input")
+            .flatMapValues(value -> {
+                return Arrays.asList("");
+            });
+
+        Topology topology = builder.build();
+
+        final TopologyTestDriver testDriver = new TopologyTestDriver(topology, props);
+        final ConsumerRecordFactory<String, String> factory = new ConsumerRecordFactory<>(new StringSerializer(), new StringSerializer());
+        final ConsumerRecord<byte[], byte[]> consumerRecord = factory.create("streams-plaintext-input", "a-key", "a-value");
+
+        try {
+            testDriver.pipeInput(consumerRecord);
+        } catch (StreamsException s) {
+            String msg = s.getMessage();
+            assertTrue("Error about class cast with Serdes", msg.contains("ClassCastException"));
+            assertTrue("Error about class cast with Serdes", msg.contains("Serdes"));
+            throw s;
+        }
+    }
+
+    private static class ClassCastProcessor extends ExceptionalProcessor{
+        @Override
+        public void process(Object key, Object value) {
+            throw new ClassCastException("Incompatible types simulation exception.");
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test(expected = StreamsException.class)
+    public void testTopologyLevelClassCastExceptionDirect() {
+        final ProcessorNode node = new ProcessorNode("name", new ClassCastProcessor(), Collections.emptySet());
+        try {
+            node.process("aKey", "aValue");
+        } catch (final StreamsException e) {
+            assertThat(e.getCause(), instanceOf(ClassCastException.class));
+            assertThat(e.getMessage(), containsString("default Serdes"));
+            assertThat(e.getMessage(), containsString("input types"));
+            throw e;
+        }
+
+    }
 }
