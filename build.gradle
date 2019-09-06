@@ -16,6 +16,8 @@
 import org.ajoberstar.grgit.Grgit
 
 import java.nio.charset.StandardCharsets
+import javax.xml.bind.DatatypeConverter
+import java.security.MessageDigest
 
 buildscript {
   repositories {
@@ -341,6 +343,39 @@ subprojects {
   }
 
   jar {
+
+    doFirst {
+      //version embedding at build time
+      //we create a file called __Versioning__[md5] and set its payload to contain versioning info
+      //
+      //the file name is not fixed, but contains an md5 hash of the project group name and version.
+      //its not fixed so that if multiple libraries are repackaged (think fat/shaded jar) the versioning files
+      //are unlikely to conflict or get overwritten. the md5 hash part is chosen such that builds are
+      //"repeatable" - re-running the same build results in the same output. this is nice for incremental builds.
+      //
+      //the value contains versioning information for both this module and the entire project it was built as part of.
+      //
+      //this information allows us, at runtime, to determine what libraries/versions exist on a given classpath
+
+      MessageDigest md = MessageDigest.getInstance("MD5")
+      md.update(String.valueOf(project.group).getBytes("UTF-8"))
+      md.update(String.valueOf(project.name).getBytes("UTF-8"))
+      md.update(String.valueOf(project.version).getBytes("UTF-8"))
+      byte[] digest = md.digest()
+      String hash = DatatypeConverter.printHexBinary(digest).toUpperCase()
+
+      String versioningFileName = "__Versioning__" + hash
+      String versioningPayload = "{" +
+          "\"format\":\"v1\"," +
+          "\"project\":\"" + rootProject.group + ":" + rootProject.name + ":" + rootProject.version + "\"," +
+          "\"module\":\"" + project.group + ":" + project.name + ":" + project.version + "\"" +
+          "}"
+
+      String outFolder = "${project.buildDir}/resources/main/META-INF/"
+      mkdir outFolder
+      file("${outFolder}/${versioningFileName}").text = versioningPayload
+    }
+
     from "$rootDir/LICENSE"
     from "$rootDir/NOTICE"
   }
