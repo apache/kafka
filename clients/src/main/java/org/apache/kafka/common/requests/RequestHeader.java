@@ -76,6 +76,10 @@ public class RequestHeader extends AbstractRequestResponse {
         return data.correlationId();
     }
 
+    public RequestHeaderData data() {
+        return data;
+    }
+
     public ResponseHeader toResponseHeader() {
         return new ResponseHeader(data.correlationId(), headerVersion);
     }

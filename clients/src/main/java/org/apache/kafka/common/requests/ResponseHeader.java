@@ -60,6 +60,10 @@ public class ResponseHeader extends AbstractRequestResponse {
         return headerVersion;
     }
 
+    public ResponseHeaderData data() {
+        return data;
+    }
+
     public static ResponseHeader parse(ByteBuffer buffer, short headerVersion) {
         return new ResponseHeader(
             new ResponseHeaderData(new ByteBufferAccessor(buffer), headerVersion),

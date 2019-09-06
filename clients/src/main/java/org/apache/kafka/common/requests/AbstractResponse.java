@@ -31,7 +31,7 @@ public abstract class AbstractResponse extends AbstractRequestResponse {
     public static final int DEFAULT_THROTTLE_TIME = 0;
 
     protected Send toSend(String destination, ResponseHeader header, short apiVersion) {
-        return new NetworkSend(destination, serialize(toStruct(apiVersion), header.toStruct()));
+        return new NetworkSend(destination, serialize(header.toStruct(), toStruct(apiVersion)));
     }
 
     /**
