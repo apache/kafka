@@ -576,11 +576,14 @@ class KafkaController(val config: KafkaConfig,
    * This way, if the controller crashes before that step, we can still recover.
    */
   private def onPartitionReassignment(topicPartition: TopicPartition, reassignedPartitionContext: ReassignedPartitionsContext): Unit = {
-    maybeRevertOngoingReassignment(topicPartition, reassignedPartitionContext)
-
+    val originalAssignmentOpt = maybeRevertOngoingReassignment(topicPartition, reassignedPartitionContext)
+    val oldReplicas = originalAssignmentOpt match {
+      case Some(originalReplicas) => originalReplicas
+      case None => controllerContext.partitionFullReplicaAssignment(topicPartition).previousAssignment.replicas
+    }
     // RS = ORS + TRS, AR = TRS - ORS and RR = ORS - TRS
     val partitionAssignment = PartitionReplicaAssignment.fromOldAndNewReplicas(
-      oldReplicas = controllerContext.partitionFullReplicaAssignment(topicPartition).previousAssignment.replicas,
+      oldReplicas = oldReplicas,
       newReplicas = reassignedPartitionContext.newReplicas)
     assert(reassignedPartitionContext.newReplicas == partitionAssignment.targetReplicas,
       s"newReplicas ${reassignedPartitionContext.newReplicas} were not equal to the expected targetReplicas ${partitionAssignment.targetReplicas}")
@@ -627,8 +630,9 @@ class KafkaController(val config: KafkaConfig,
   /**
     * This is called in case we need to override/revert an ongoing reassignment.
     * Note that due to the way we compute the original replica set, we have no guarantee that a revert would put it in the same order.
+    * @return An option of the original replicas prior to the ongoing reassignment. None if there is no ongoing reassignment
     */
-  private def maybeRevertOngoingReassignment(topicPartition: TopicPartition, reassignedPartitionContext: ReassignedPartitionsContext): Unit = {
+  private def maybeRevertOngoingReassignment(topicPartition: TopicPartition, reassignedPartitionContext: ReassignedPartitionsContext): Option[Seq[Int]] = {
     reassignedPartitionContext.ongoingReassignmentOpt match {
       case Some(ongoingAssignment) =>
         val originalAssignment = ongoingAssignment.previousAssignment
@@ -656,7 +660,8 @@ class KafkaController(val config: KafkaConfig,
         // replicas in URS -> NonExistentReplica (force those replicas to be deleted)
         stopRemovedReplicasOfReassignedPartition(topicPartition, replicasToRemove)
         reassignedPartitionContext.ongoingReassignmentOpt = None
-      case None => // nothing to revert
+        Some(originalAssignment.replicas)
+      case None => None // nothing to revert
     }
   }
 
@@ -929,8 +934,10 @@ class KafkaController(val config: KafkaConfig,
 
   private def updateReplicaAssignmentForPartition(partition: TopicPartition,
                                                   assignment: PartitionReplicaAssignment): Unit = {
-    val setDataResponse = zkClient.setTopicAssignmentRaw(partition.topic,
-      controllerContext.partitionFullReplicaAssignmentForTopic(partition.topic), controllerContext.epochZkVersion)
+    var topicAssignment = controllerContext.partitionFullReplicaAssignmentForTopic(partition.topic)
+    topicAssignment += partition -> assignment
+
+    val setDataResponse = zkClient.setTopicAssignmentRaw(partition.topic, topicAssignment, controllerContext.epochZkVersion)
     setDataResponse.resultCode match {
       case Code.OK =>
         info(s"Updated assigned replicas for partition $partition being reassigned to ${assignment.targetReplicas.mkString(",")}" +
