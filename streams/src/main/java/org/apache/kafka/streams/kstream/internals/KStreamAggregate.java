@@ -16,23 +16,30 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
+import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.streams.kstream.Aggregator;
 import org.apache.kafka.streams.kstream.Initializer;
 import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
-import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
+import org.apache.kafka.streams.processor.internals.metrics.ThreadMetrics;
+import org.apache.kafka.streams.state.TimestampedKeyValueStore;
+import org.apache.kafka.streams.state.ValueAndTimestamp;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import static org.apache.kafka.streams.state.ValueAndTimestamp.getValueOrNull;
 
 public class KStreamAggregate<K, V, T> implements KStreamAggProcessorSupplier<K, K, V, T> {
-
+    private static final Logger LOG = LoggerFactory.getLogger(KStreamAggregate.class);
     private final String storeName;
     private final Initializer<T> initializer;
     private final Aggregator<? super K, ? super V, T> aggregator;
 
-
     private boolean sendOldValues = false;
 
-    public KStreamAggregate(String storeName, Initializer<T> initializer, Aggregator<? super K, ? super V, T> aggregator) {
+    KStreamAggregate(final String storeName, final Initializer<T> initializer, final Aggregator<? super K, ? super V, T> aggregator) {
         this.storeName = storeName;
         this.initializer = initializer;
         this.aggregator = aggregator;
@@ -48,46 +55,62 @@ public class KStreamAggregate<K, V, T> implements KStreamAggProcessorSupplier<K,
         sendOldValues = true;
     }
 
-    private class KStreamAggregateProcessor extends AbstractProcessor<K, V> {
 
-        private KeyValueStore<K, T> store;
-        private TupleForwarder<K, T> tupleForwarder;
+    private class KStreamAggregateProcessor extends AbstractProcessor<K, V> {
+        private TimestampedKeyValueStore<K, T> store;
+        private StreamsMetricsImpl metrics;
+        private Sensor skippedRecordsSensor;
+        private TimestampedTupleForwarder<K, T> tupleForwarder;
 
         @SuppressWarnings("unchecked")
         @Override
-        public void init(ProcessorContext context) {
+        public void init(final ProcessorContext context) {
             super.init(context);
-            store = (KeyValueStore<K, T>) context.getStateStore(storeName);
-            tupleForwarder = new TupleForwarder<>(store, context, new ForwardingCacheFlushListener<K, V>(context, sendOldValues), sendOldValues);
+            metrics = (StreamsMetricsImpl) context.metrics();
+            skippedRecordsSensor = ThreadMetrics.skipRecordSensor(metrics);
+            store = (TimestampedKeyValueStore<K, T>) context.getStateStore(storeName);
+            tupleForwarder = new TimestampedTupleForwarder<>(
+                store,
+                context,
+                new TimestampedCacheFlushListener<>(context),
+                sendOldValues);
         }
 
-
         @Override
-        public void process(K key, V value) {
-            if (key == null)
+        public void process(final K key, final V value) {
+            // If the key or value is null we don't need to proceed
+            if (key == null || value == null) {
+                LOG.warn(
+                    "Skipping record due to null key or value. key=[{}] value=[{}] topic=[{}] partition=[{}] offset=[{}]",
+                    key, value, context().topic(), context().partition(), context().offset()
+                );
+                skippedRecordsSensor.record();
                 return;
-
-            T oldAgg = store.get(key);
-
-            if (oldAgg == null)
-                oldAgg = initializer.apply();
-
-            T newAgg = oldAgg;
-
-            // try to add the new new value
-            if (value != null) {
-                newAgg = aggregator.apply(key, value, newAgg);
             }
 
-            // update the store with the new value
-            store.put(key, newAgg);
-            tupleForwarder.maybeForward(key, newAgg, oldAgg);
+            final ValueAndTimestamp<T> oldAggAndTimestamp = store.get(key);
+            T oldAgg = getValueOrNull(oldAggAndTimestamp);
+
+            final T newAgg;
+            final long newTimestamp;
+
+            if (oldAgg == null) {
+                oldAgg = initializer.apply();
+                newTimestamp = context().timestamp();
+            } else {
+                oldAgg = oldAggAndTimestamp.value();
+                newTimestamp = Math.max(context().timestamp(), oldAggAndTimestamp.timestamp());
+            }
+
+            newAgg = aggregator.apply(key, value, oldAgg);
+
+            store.put(key, ValueAndTimestamp.make(newAgg, newTimestamp));
+            tupleForwarder.maybeForward(key, newAgg, sendOldValues ? oldAgg : null, newTimestamp);
         }
     }
 
     @Override
     public KTableValueGetterSupplier<K, T> view() {
-
         return new KTableValueGetterSupplier<K, T>() {
 
             public KTableValueGetter<K, T> get() {
@@ -101,19 +124,22 @@ public class KStreamAggregate<K, V, T> implements KStreamAggProcessorSupplier<K,
         };
     }
 
-    private class KStreamAggregateValueGetter implements KTableValueGetter<K, T> {
 
-        private KeyValueStore<K, T> store;
+    private class KStreamAggregateValueGetter implements KTableValueGetter<K, T> {
+        private TimestampedKeyValueStore<K, T> store;
 
         @SuppressWarnings("unchecked")
         @Override
-        public void init(ProcessorContext context) {
-            store = (KeyValueStore<K, T>) context.getStateStore(storeName);
+        public void init(final ProcessorContext context) {
+            store = (TimestampedKeyValueStore<K, T>) context.getStateStore(storeName);
         }
 
         @Override
-        public T get(K key) {
+        public ValueAndTimestamp<T> get(final K key) {
             return store.get(key);
         }
+
+        @Override
+        public void close() {}
     }
 }

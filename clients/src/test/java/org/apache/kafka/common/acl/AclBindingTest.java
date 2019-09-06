@@ -16,68 +16,71 @@
  */
 package org.apache.kafka.common.acl;
 
-import org.apache.kafka.common.resource.Resource;
-import org.apache.kafka.common.resource.ResourceFilter;
+import org.apache.kafka.common.resource.PatternType;
+import org.apache.kafka.common.resource.ResourcePattern;
+import org.apache.kafka.common.resource.ResourcePatternFilter;
 import org.apache.kafka.common.resource.ResourceType;
 import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotEquals;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 public class AclBindingTest {
     private static final AclBinding ACL1 = new AclBinding(
-        new Resource(ResourceType.TOPIC, "mytopic"),
+        new ResourcePattern(ResourceType.TOPIC, "mytopic", PatternType.LITERAL),
         new AccessControlEntry("User:ANONYMOUS", "", AclOperation.ALL, AclPermissionType.ALLOW));
 
     private static final AclBinding ACL2 = new AclBinding(
-        new Resource(ResourceType.TOPIC, "mytopic"),
+        new ResourcePattern(ResourceType.TOPIC, "mytopic", PatternType.LITERAL),
         new AccessControlEntry("User:*", "", AclOperation.READ, AclPermissionType.ALLOW));
 
     private static final AclBinding ACL3 = new AclBinding(
-        new Resource(ResourceType.TOPIC, "mytopic2"),
+        new ResourcePattern(ResourceType.TOPIC, "mytopic2", PatternType.LITERAL),
         new AccessControlEntry("User:ANONYMOUS", "127.0.0.1", AclOperation.READ, AclPermissionType.DENY));
 
     private static final AclBinding UNKNOWN_ACL = new AclBinding(
-        new Resource(ResourceType.TOPIC, "mytopic2"),
+        new ResourcePattern(ResourceType.TOPIC, "mytopic2", PatternType.LITERAL),
         new AccessControlEntry("User:ANONYMOUS", "127.0.0.1", AclOperation.UNKNOWN, AclPermissionType.DENY));
 
     private static final AclBindingFilter ANY_ANONYMOUS = new AclBindingFilter(
-        new ResourceFilter(ResourceType.ANY, null),
+        ResourcePatternFilter.ANY,
         new AccessControlEntryFilter("User:ANONYMOUS", null, AclOperation.ANY, AclPermissionType.ANY));
 
     private static final AclBindingFilter ANY_DENY = new AclBindingFilter(
-        new ResourceFilter(ResourceType.ANY, null),
+        ResourcePatternFilter.ANY,
         new AccessControlEntryFilter(null, null, AclOperation.ANY, AclPermissionType.DENY));
 
     private static final AclBindingFilter ANY_MYTOPIC = new AclBindingFilter(
-        new ResourceFilter(ResourceType.TOPIC, "mytopic"),
+        new ResourcePatternFilter(ResourceType.TOPIC, "mytopic", PatternType.LITERAL),
         new AccessControlEntryFilter(null, null, AclOperation.ANY, AclPermissionType.ANY));
 
     @Test
-    public void testMatching() throws Exception {
-        assertTrue(ACL1.equals(ACL1));
+    public void testMatching() {
+        assertEquals(ACL1, ACL1);
         final AclBinding acl1Copy = new AclBinding(
-            new Resource(ResourceType.TOPIC, "mytopic"),
+            new ResourcePattern(ResourceType.TOPIC, "mytopic", PatternType.LITERAL),
             new AccessControlEntry("User:ANONYMOUS", "", AclOperation.ALL, AclPermissionType.ALLOW));
-        assertTrue(ACL1.equals(acl1Copy));
-        assertTrue(acl1Copy.equals(ACL1));
-        assertTrue(ACL2.equals(ACL2));
-        assertFalse(ACL1.equals(ACL2));
-        assertFalse(ACL2.equals(ACL1));
+        assertEquals(ACL1, acl1Copy);
+        assertEquals(acl1Copy, ACL1);
+        assertEquals(ACL2, ACL2);
+        assertNotEquals(ACL1, ACL2);
+        assertNotEquals(ACL2, ACL1);
         assertTrue(AclBindingFilter.ANY.matches(ACL1));
-        assertFalse(AclBindingFilter.ANY.equals(ACL1));
+        assertNotEquals(AclBindingFilter.ANY, ACL1);
         assertTrue(AclBindingFilter.ANY.matches(ACL2));
-        assertFalse(AclBindingFilter.ANY.equals(ACL2));
+        assertNotEquals(AclBindingFilter.ANY, ACL2);
         assertTrue(AclBindingFilter.ANY.matches(ACL3));
-        assertFalse(AclBindingFilter.ANY.equals(ACL3));
-        assertTrue(AclBindingFilter.ANY.equals(AclBindingFilter.ANY));
+        assertNotEquals(AclBindingFilter.ANY, ACL3);
+        assertEquals(AclBindingFilter.ANY, AclBindingFilter.ANY);
         assertTrue(ANY_ANONYMOUS.matches(ACL1));
-        assertFalse(ANY_ANONYMOUS.equals(ACL1));
+        assertNotEquals(ANY_ANONYMOUS, ACL1);
         assertFalse(ANY_ANONYMOUS.matches(ACL2));
-        assertFalse(ANY_ANONYMOUS.equals(ACL2));
+        assertNotEquals(ANY_ANONYMOUS, ACL2);
         assertTrue(ANY_ANONYMOUS.matches(ACL3));
-        assertFalse(ANY_ANONYMOUS.equals(ACL3));
+        assertNotEquals(ANY_ANONYMOUS, ACL3);
         assertFalse(ANY_DENY.matches(ACL1));
         assertFalse(ANY_DENY.matches(ACL2));
         assertTrue(ANY_DENY.matches(ACL3));
@@ -86,12 +89,12 @@ public class AclBindingTest {
         assertFalse(ANY_MYTOPIC.matches(ACL3));
         assertTrue(ANY_ANONYMOUS.matches(UNKNOWN_ACL));
         assertTrue(ANY_DENY.matches(UNKNOWN_ACL));
-        assertTrue(UNKNOWN_ACL.equals(UNKNOWN_ACL));
+        assertEquals(UNKNOWN_ACL, UNKNOWN_ACL);
         assertFalse(ANY_MYTOPIC.matches(UNKNOWN_ACL));
     }
 
     @Test
-    public void testUnknowns() throws Exception {
+    public void testUnknowns() {
         assertFalse(ACL1.isUnknown());
         assertFalse(ACL2.isUnknown());
         assertFalse(ACL3.isUnknown());
@@ -102,12 +105,37 @@ public class AclBindingTest {
     }
 
     @Test
-    public void testMatchesAtMostOne() throws Exception {
-        assertEquals(null, ACL1.toFilter().findIndefiniteField());
-        assertEquals(null, ACL2.toFilter().findIndefiniteField());
-        assertEquals(null, ACL3.toFilter().findIndefiniteField());
+    public void testMatchesAtMostOne() {
+        assertNull(ACL1.toFilter().findIndefiniteField());
+        assertNull(ACL2.toFilter().findIndefiniteField());
+        assertNull(ACL3.toFilter().findIndefiniteField());
         assertFalse(ANY_ANONYMOUS.matchesAtMostOne());
         assertFalse(ANY_DENY.matchesAtMostOne());
         assertFalse(ANY_MYTOPIC.matchesAtMostOne());
+    }
+
+    @Test
+    public void shouldNotThrowOnUnknownPatternType() {
+        new AclBinding(new ResourcePattern(ResourceType.TOPIC, "foo", PatternType.UNKNOWN), ACL1.entry());
+    }
+
+    @Test
+    public void shouldNotThrowOnUnknownResourceType() {
+        new AclBinding(new ResourcePattern(ResourceType.UNKNOWN, "foo", PatternType.LITERAL), ACL1.entry());
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void shouldThrowOnMatchPatternType() {
+        new AclBinding(new ResourcePattern(ResourceType.TOPIC, "foo", PatternType.MATCH), ACL1.entry());
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void shouldThrowOnAnyPatternType() {
+        new AclBinding(new ResourcePattern(ResourceType.TOPIC, "foo", PatternType.ANY), ACL1.entry());
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void shouldThrowOnAnyResourceType() {
+        new AclBinding(new ResourcePattern(ResourceType.ANY, "foo", PatternType.LITERAL), ACL1.entry());
     }
 }

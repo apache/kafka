@@ -45,9 +45,8 @@ class LogDirFailureChannel(logDirNum: Int) extends Logging {
    */
   def maybeAddOfflineLogDir(logDir: String, msg: => String, e: IOException): Unit = {
     error(msg, e)
-    if (offlineLogDirs.putIfAbsent(logDir, logDir) == null) {
+    if (offlineLogDirs.putIfAbsent(logDir, logDir) == null)
       offlineLogDirQueue.add(logDir)
-    }
   }
 
   /*

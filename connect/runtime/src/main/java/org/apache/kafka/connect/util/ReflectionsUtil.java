@@ -52,6 +52,7 @@ public class ReflectionsUtil {
             this.endings = endings;
         }
 
+        @Override
         public boolean matches(URL url) {
             final String protocol = url.getProtocol();
             final String externalForm = url.toExternalForm();
@@ -66,6 +67,7 @@ public class ReflectionsUtil {
             return false;
         }
 
+        @Override
         public Dir createDir(final URL url) throws Exception {
             return emptyVfsDir(url);
         }

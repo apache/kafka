@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.file;
 
+import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.common.config.ConfigDef.Type;
@@ -47,7 +48,8 @@ public class FileStreamSinkConnector extends SinkConnector {
 
     @Override
     public void start(Map<String, String> props) {
-        filename = props.get(FILE_CONFIG);
+        AbstractConfig parsedConfig = new AbstractConfig(CONFIG_DEF, props);
+        filename = parsedConfig.getString(FILE_CONFIG);
     }
 
     @Override

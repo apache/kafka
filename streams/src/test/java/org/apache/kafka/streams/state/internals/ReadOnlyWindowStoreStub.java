@@ -18,6 +18,7 @@ package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
+import org.apache.kafka.streams.internals.ApiUtils;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.TimeWindow;
 import org.apache.kafka.streams.processor.ProcessorContext;
@@ -26,6 +27,7 @@ import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.ReadOnlyWindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
 
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -34,6 +36,8 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.NavigableMap;
 import java.util.TreeMap;
+
+import static org.apache.kafka.streams.internals.ApiUtils.prepareMillisCheckFailMsgPrefix;
 
 /**
  * A very simple window store stub for testing purposes.
@@ -44,10 +48,21 @@ public class ReadOnlyWindowStoreStub<K, V> implements ReadOnlyWindowStore<K, V>,
     private final Map<Long, NavigableMap<K, V>> data = new HashMap<>();
     private boolean open  = true;
 
-    public ReadOnlyWindowStoreStub(long windowSize) {
+    ReadOnlyWindowStoreStub(final long windowSize) {
         this.windowSize = windowSize;
     }
 
+    @Override
+    public V fetch(final K key, final long time) {
+        final Map<K, V> kvMap = data.get(time);
+        if (kvMap != null) {
+            return kvMap.get(key);
+        } else {
+            return null;
+        }
+    }
+
+    @SuppressWarnings("deprecation")
     @Override
     public WindowStoreIterator<V> fetch(final K key, final long timeFrom, final long timeTo) {
         if (!open) {
@@ -64,15 +79,23 @@ public class ReadOnlyWindowStoreStub<K, V> implements ReadOnlyWindowStore<K, V>,
     }
 
     @Override
-    public KeyValueIterator<Windowed<K>, V> fetch(K from, K to, long timeFrom, long timeTo) {
+    public WindowStoreIterator<V> fetch(final K key, final Instant from, final Instant to) throws IllegalArgumentException {
+        return fetch(
+            key, 
+            ApiUtils.validateMillisecondInstant(from, prepareMillisCheckFailMsgPrefix(from, "from")),
+            ApiUtils.validateMillisecondInstant(to, prepareMillisCheckFailMsgPrefix(to, "to")));
+    }
+
+    @Override
+    public KeyValueIterator<Windowed<K>, V> all() {
         if (!open) {
             throw new InvalidStateStoreException("Store is not open");
         }
         final List<KeyValue<Windowed<K>, V>> results = new ArrayList<>();
-        for (long now = timeFrom; now <= timeTo; now++) {
+        for (final long now : data.keySet()) {
             final NavigableMap<K, V> kvMap = data.get(now);
             if (kvMap != null) {
-                for (Entry<K, V> entry : kvMap.subMap(from, true, to, true).entrySet()) {
+                for (final Entry<K, V> entry : kvMap.entrySet()) {
                     results.add(new KeyValue<>(new Windowed<>(entry.getKey(), new TimeWindow(now, now + windowSize)), entry.getValue()));
                 }
             }
@@ -81,9 +104,7 @@ public class ReadOnlyWindowStoreStub<K, V> implements ReadOnlyWindowStore<K, V>,
 
         return new KeyValueIterator<Windowed<K>, V>() {
             @Override
-            public void close() {
-
-            }
+            public void close() {}
 
             @Override
             public Windowed<K> peekNextKey() {
@@ -100,17 +121,111 @@ public class ReadOnlyWindowStoreStub<K, V> implements ReadOnlyWindowStore<K, V>,
                 return iterator.next();
             }
 
+        };
+    }
+
+    @SuppressWarnings("deprecation")
+    @Override
+    public KeyValueIterator<Windowed<K>, V> fetchAll(final long timeFrom, final long timeTo) {
+        if (!open) {
+            throw new InvalidStateStoreException("Store is not open");
+        }
+        final List<KeyValue<Windowed<K>, V>> results = new ArrayList<>();
+        for (final long now : data.keySet()) {
+            if (!(now >= timeFrom && now <= timeTo)) {
+                continue;
+            }
+            final NavigableMap<K, V> kvMap = data.get(now);
+            if (kvMap != null) {
+                for (final Entry<K, V> entry : kvMap.entrySet()) {
+                    results.add(new KeyValue<>(new Windowed<>(entry.getKey(), new TimeWindow(now, now + windowSize)), entry.getValue()));
+                }
+            }
+        }
+        final Iterator<KeyValue<Windowed<K>, V>> iterator = results.iterator();
+
+        return new KeyValueIterator<Windowed<K>, V>() {
+            @Override
+            public void close() {}
 
             @Override
-            public void remove() {
-                throw new UnsupportedOperationException("remove() not supported in " + getClass().getName());
+            public Windowed<K> peekNextKey() {
+                throw new UnsupportedOperationException("peekNextKey() not supported in " + getClass().getName());
             }
+
+            @Override
+            public boolean hasNext() {
+                return iterator.hasNext();
+            }
+
+            @Override
+            public KeyValue<Windowed<K>, V> next() {
+                return iterator.next();
+            }
+
         };
+    }
+
+    @Override
+    public KeyValueIterator<Windowed<K>, V> fetchAll(final Instant from, final Instant to) throws IllegalArgumentException {
+        return fetchAll(
+            ApiUtils.validateMillisecondInstant(from, prepareMillisCheckFailMsgPrefix(from, "from")),
+            ApiUtils.validateMillisecondInstant(to, prepareMillisCheckFailMsgPrefix(to, "to")));
+    }
+
+    @SuppressWarnings("deprecation")
+    @Override
+    public KeyValueIterator<Windowed<K>, V> fetch(final K from, final K to, final long timeFrom, final long timeTo) {
+        if (!open) {
+            throw new InvalidStateStoreException("Store is not open");
+        }
+        final List<KeyValue<Windowed<K>, V>> results = new ArrayList<>();
+        for (long now = timeFrom; now <= timeTo; now++) {
+            final NavigableMap<K, V> kvMap = data.get(now);
+            if (kvMap != null) {
+                for (final Entry<K, V> entry : kvMap.subMap(from, true, to, true).entrySet()) {
+                    results.add(new KeyValue<>(new Windowed<>(entry.getKey(), new TimeWindow(now, now + windowSize)), entry.getValue()));
+                }
+            }
+        }
+        final Iterator<KeyValue<Windowed<K>, V>> iterator = results.iterator();
+
+        return new KeyValueIterator<Windowed<K>, V>() {
+            @Override
+            public void close() {}
+
+            @Override
+            public Windowed<K> peekNextKey() {
+                throw new UnsupportedOperationException("peekNextKey() not supported in " + getClass().getName());
+            }
+
+            @Override
+            public boolean hasNext() {
+                return iterator.hasNext();
+            }
+
+            @Override
+            public KeyValue<Windowed<K>, V> next() {
+                return iterator.next();
+            }
+
+        };
+    }
+
+    @Override public KeyValueIterator<Windowed<K>, V> fetch(final K from,
+                                                            final K to,
+                                                            final Instant fromTime,
+                                                            final Instant toTime) throws IllegalArgumentException {
+        return fetch(
+            from,
+            to, 
+            ApiUtils.validateMillisecondInstant(fromTime, prepareMillisCheckFailMsgPrefix(fromTime, "fromTime")),
+            ApiUtils.validateMillisecondInstant(toTime, prepareMillisCheckFailMsgPrefix(toTime, "toTime")));
     }
 
     public void put(final K key, final V value, final long timestamp) {
         if (!data.containsKey(timestamp)) {
-            data.put(timestamp, new TreeMap<K, V>());
+            data.put(timestamp, new TreeMap<>());
         }
         data.get(timestamp).put(key, value);
     }
@@ -121,19 +236,13 @@ public class ReadOnlyWindowStoreStub<K, V> implements ReadOnlyWindowStore<K, V>,
     }
 
     @Override
-    public void init(final ProcessorContext context, final StateStore root) {
-
-    }
+    public void init(final ProcessorContext context, final StateStore root) {}
 
     @Override
-    public void flush() {
-
-    }
+    public void flush() {}
 
     @Override
-    public void close() {
-
-    }
+    public void close() {}
 
     @Override
     public boolean persistent() {
@@ -145,7 +254,7 @@ public class ReadOnlyWindowStoreStub<K, V> implements ReadOnlyWindowStore<K, V>,
         return open;
     }
 
-    public void setOpen(final boolean open) {
+    void setOpen(final boolean open) {
         this.open = open;
     }
 
@@ -158,9 +267,7 @@ public class ReadOnlyWindowStoreStub<K, V> implements ReadOnlyWindowStore<K, V>,
         }
 
         @Override
-        public void close() {
-
-        }
+        public void close() {}
 
         @Override
         public Long peekNextKey() {
@@ -175,11 +282,6 @@ public class ReadOnlyWindowStoreStub<K, V> implements ReadOnlyWindowStore<K, V>,
         @Override
         public KeyValue<Long, E> next() {
             return underlying.next();
-        }
-
-        @Override
-        public void remove() {
-            throw new UnsupportedOperationException("remove() not supported in " + getClass().getName());
         }
     }
 }

@@ -16,15 +16,17 @@
  */
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.message.HeartbeatResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
+import java.util.Collections;
+import java.util.Map;
+
 
 public class HeartbeatResponse extends AbstractResponse {
-
-    private static final String ERROR_CODE_KEY_NAME = "error_code";
 
     /**
      * Possible error codes:
@@ -36,41 +38,41 @@ public class HeartbeatResponse extends AbstractResponse {
      * REBALANCE_IN_PROGRESS (27)
      * GROUP_AUTHORIZATION_FAILED (30)
      */
-    private final Errors error;
-    private final int throttleTimeMs;
+    private final HeartbeatResponseData data;
 
-    public HeartbeatResponse(Errors error) {
-        this(DEFAULT_THROTTLE_TIME, error);
+    public HeartbeatResponse(HeartbeatResponseData data) {
+        this.data = data;
     }
 
-    public HeartbeatResponse(int throttleTimeMs, Errors error) {
-        this.throttleTimeMs = throttleTimeMs;
-        this.error = error;
+    public HeartbeatResponse(Struct struct, short version) {
+        this.data = new HeartbeatResponseData(struct, version);
     }
 
-    public HeartbeatResponse(Struct struct) {
-        this.throttleTimeMs = struct.hasField(THROTTLE_TIME_KEY_NAME) ? struct.getInt(THROTTLE_TIME_KEY_NAME) : DEFAULT_THROTTLE_TIME;
-        error = Errors.forCode(struct.getShort(ERROR_CODE_KEY_NAME));
-    }
-
+    @Override
     public int throttleTimeMs() {
-        return throttleTimeMs;
+        return data.throttleTimeMs();
     }
 
     public Errors error() {
-        return error;
+        return Errors.forCode(data.errorCode());
+    }
+
+    @Override
+    public Map<Errors, Integer> errorCounts() {
+        return Collections.singletonMap(error(), 1);
     }
 
     @Override
     protected Struct toStruct(short version) {
-        Struct struct = new Struct(ApiKeys.HEARTBEAT.responseSchema(version));
-        if (struct.hasField(THROTTLE_TIME_KEY_NAME))
-            struct.set(THROTTLE_TIME_KEY_NAME, throttleTimeMs);
-        struct.set(ERROR_CODE_KEY_NAME, error.code());
-        return struct;
+        return data.toStruct(version);
     }
 
     public static HeartbeatResponse parse(ByteBuffer buffer, short version) {
-        return new HeartbeatResponse(ApiKeys.HEARTBEAT.parseResponse(version, buffer));
+        return new HeartbeatResponse(ApiKeys.HEARTBEAT.parseResponse(version, buffer), version);
+    }
+
+    @Override
+    public boolean shouldClientThrottle(short version) {
+        return version >= 2;
     }
 }

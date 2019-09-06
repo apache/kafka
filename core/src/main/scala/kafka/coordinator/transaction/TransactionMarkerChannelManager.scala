@@ -20,24 +20,22 @@ package kafka.coordinator.transaction
 import kafka.common.{InterBrokerSendThread, RequestAndCompletionHandler}
 import kafka.metrics.KafkaMetricsGroup
 import kafka.server.{DelayedOperationPurgatory, KafkaConfig, MetadataCache}
-import kafka.utils.Logging
+import kafka.utils.{CoreUtils, Logging}
 import org.apache.kafka.clients._
-import org.apache.kafka.common.{Node, TopicPartition}
+import org.apache.kafka.common.{Node, Reconfigurable, TopicPartition}
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network._
 import org.apache.kafka.common.requests.{TransactionResult, WriteTxnMarkersRequest}
 import org.apache.kafka.common.security.JaasContext
-import org.apache.kafka.common.utils.Time
+import org.apache.kafka.common.utils.{LogContext, Time}
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.WriteTxnMarkersRequest.TxnMarkerEntry
-
 import com.yammer.metrics.core.Gauge
-
 import java.util
 import java.util.concurrent.{BlockingQueue, ConcurrentHashMap, LinkedBlockingQueue}
 
 import collection.JavaConverters._
-import scala.collection.{concurrent, immutable, mutable}
+import scala.collection.{concurrent, immutable}
 
 object TransactionMarkerChannelManager {
   def apply(config: KafkaConfig,
@@ -45,16 +43,21 @@ object TransactionMarkerChannelManager {
             metadataCache: MetadataCache,
             txnStateManager: TransactionStateManager,
             txnMarkerPurgatory: DelayedOperationPurgatory[DelayedTxnMarker],
-            time: Time): TransactionMarkerChannelManager = {
-
+            time: Time,
+            logContext: LogContext): TransactionMarkerChannelManager = {
     val channelBuilder = ChannelBuilders.clientChannelBuilder(
       config.interBrokerSecurityProtocol,
       JaasContext.Type.SERVER,
       config,
       config.interBrokerListenerName,
       config.saslMechanismInterBrokerProtocol,
+      time,
       config.saslInterBrokerHandshakeRequestEnable
     )
+    channelBuilder match {
+      case reconfigurable: Reconfigurable => config.addReconfigurable(reconfigurable)
+      case _ =>
+    }
     val selector = new Selector(
       NetworkReceive.UNLIMITED,
       config.connectionsMaxIdleMs,
@@ -63,7 +66,8 @@ object TransactionMarkerChannelManager {
       "txn-marker-channel",
       Map.empty[String, String].asJava,
       false,
-      channelBuilder
+      channelBuilder,
+      logContext
     )
     val networkClient = new NetworkClient(
       selector,
@@ -75,9 +79,11 @@ object TransactionMarkerChannelManager {
       Selectable.USE_DEFAULT_BUFFER_SIZE,
       config.socketReceiveBufferBytes,
       config.requestTimeoutMs,
+      ClientDnsLookup.DEFAULT,
       time,
       false,
-      new ApiVersions
+      new ApiVersions,
+      logContext
     )
 
     new TransactionMarkerChannelManager(config,
@@ -102,7 +108,8 @@ class TxnMarkerQueue(@volatile var destination: Node) {
   }
 
   def addMarkers(txnTopicPartition: Int, txnIdAndMarker: TxnIdAndMarkerEntry): Unit = {
-    val queue = markersPerTxnTopicPartition.getOrElseUpdate(txnTopicPartition, new LinkedBlockingQueue[TxnIdAndMarkerEntry]())
+    val queue = CoreUtils.atomicGetOrUpdate(markersPerTxnTopicPartition, txnTopicPartition,
+        new LinkedBlockingQueue[TxnIdAndMarkerEntry]())
     queue.add(txnIdAndMarker)
   }
 
@@ -134,6 +141,8 @@ class TransactionMarkerChannelManager(config: KafkaConfig,
 
   private val txnLogAppendRetryQueue = new LinkedBlockingQueue[TxnLogAppend]()
 
+  override val requestTimeoutMs: Int = config.requestTimeoutMs
+
   newGauge(
     "UnknownDestinationQueueSize",
     new Gauge[Int] {
@@ -164,12 +173,13 @@ class TransactionMarkerChannelManager(config: KafkaConfig,
   // visible for testing
   private[transaction] def queueForUnknownBroker = markersQueueForUnknownBroker
 
-  private[transaction] def addMarkersForBroker(broker: Node, txnTopicPartition: Int, txnIdAndMarker: TxnIdAndMarkerEntry) {
+  private[transaction] def addMarkersForBroker(broker: Node, txnTopicPartition: Int, txnIdAndMarker: TxnIdAndMarkerEntry): Unit = {
     val brokerId = broker.id
 
     // we do not synchronize on the update of the broker node with the enqueuing,
     // since even if there is a race condition we will just retry
-    val brokerRequestQueue = markersQueuePerBroker.getOrElseUpdate(brokerId, new TxnMarkerQueue(broker))
+    val brokerRequestQueue = CoreUtils.atomicGetOrUpdate(markersQueuePerBroker, brokerId,
+        new TxnMarkerQueue(broker))
     brokerRequestQueue.destination = broker
     brokerRequestQueue.addMarkers(txnTopicPartition, txnIdAndMarker)
 
@@ -184,7 +194,6 @@ class TransactionMarkerChannelManager(config: KafkaConfig,
       tryAppendToLog(txnLogAppend)
     }
   }
-
 
   private[transaction] def drainQueuedTransactionMarkers(): Iterable[RequestAndCompletionHandler] = {
     retryLogAppends()
@@ -263,7 +272,7 @@ class TransactionMarkerChannelManager(config: KafkaConfig,
       }
     }
 
-    val delayedTxnMarker = new DelayedTxnMarker(txnMetadata, appendToLogCallback)
+    val delayedTxnMarker = new DelayedTxnMarker(txnMetadata, appendToLogCallback, txnStateManager.stateReadLock)
     txnMarkerPurgatory.tryCompleteElseWatch(delayedTxnMarker, Seq(transactionalId))
 
     addTxnMarkersToBrokerQueue(transactionalId, txnMetadata.producerId, txnMetadata.producerEpoch, txnResult, coordinatorEpoch, txnMetadata.topicPartitions.toSet)
@@ -340,7 +349,7 @@ class TransactionMarkerChannelManager(config: KafkaConfig,
 
                 val txnMetadata = epochAndMetadata.transactionMetadata
 
-                txnMetadata synchronized {
+                txnMetadata.inLock {
                   topicPartitions.foreach(txnMetadata.removePartition)
                 }
 

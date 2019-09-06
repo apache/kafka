@@ -16,57 +16,75 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
-import org.apache.kafka.common.serialization.Serde;
+import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.streams.KeyValueTimestamp;
 import org.apache.kafka.streams.StreamsBuilder;
+import org.apache.kafka.streams.TopologyTestDriver;
+import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.KStream;
-import org.apache.kafka.streams.kstream.ValueMapper;
-import org.apache.kafka.test.KStreamTestDriver;
+import org.apache.kafka.streams.kstream.ValueMapperWithKey;
+import org.apache.kafka.streams.test.ConsumerRecordFactory;
 import org.apache.kafka.test.MockProcessorSupplier;
-import org.junit.Rule;
+import org.apache.kafka.test.StreamsTestUtils;
 import org.junit.Test;
 
-import static org.junit.Assert.assertEquals;
+import java.util.Properties;
+
+import static org.junit.Assert.assertArrayEquals;
 
 public class KStreamMapValuesTest {
-
-    private String topicName = "topic";
-
-    final private Serde<Integer> intSerde = Serdes.Integer();
-    final private Serde<String> stringSerde = Serdes.String();
-    @Rule
-    public final KStreamTestDriver driver = new KStreamTestDriver();
+    private final String topicName = "topic";
+    private final MockProcessorSupplier<Integer, Integer> supplier = new MockProcessorSupplier<>();
+    private final ConsumerRecordFactory<Integer, String> recordFactory =
+        new ConsumerRecordFactory<>(new IntegerSerializer(), new StringSerializer(), 0L);
+    private final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.Integer(), Serdes.String());
 
     @Test
     public void testFlatMapValues() {
-        StreamsBuilder builder = new StreamsBuilder();
-
-        ValueMapper<CharSequence, Integer> mapper =
-            new ValueMapper<CharSequence, Integer>() {
-                @Override
-                public Integer apply(CharSequence value) {
-                    return value.length();
-                }
-            };
+        final StreamsBuilder builder = new StreamsBuilder();
 
         final int[] expectedKeys = {1, 10, 100, 1000};
 
-        KStream<Integer, String> stream;
-        MockProcessorSupplier<Integer, Integer> processor = new MockProcessorSupplier<>();
-        stream = builder.stream(intSerde, stringSerde, topicName);
-        stream.mapValues(mapper).process(processor);
+        final KStream<Integer, String> stream = builder.stream(topicName, Consumed.with(Serdes.Integer(), Serdes.String()));
+        stream.mapValues(CharSequence::length).process(supplier);
 
-        driver.setUp(builder);
-        for (int expectedKey : expectedKeys) {
-            driver.process(topicName, expectedKey, Integer.toString(expectedKey));
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+            for (final int expectedKey : expectedKeys) {
+                driver.pipeInput(recordFactory.create(topicName, expectedKey, Integer.toString(expectedKey), expectedKey / 2L));
+            }
         }
+        final KeyValueTimestamp[] expected = {new KeyValueTimestamp<>(1, 1, 0),
+            new KeyValueTimestamp<>(10, 2, 5),
+            new KeyValueTimestamp<>(100, 3, 50),
+            new KeyValueTimestamp<>(1000, 4, 500)};
 
-        assertEquals(4, processor.processed.size());
-
-        String[] expected = {"1:1", "10:2", "100:3", "1000:4"};
-
-        for (int i = 0; i < expected.length; i++) {
-            assertEquals(expected[i], processor.processed.get(i));
-        }
+        assertArrayEquals(expected, supplier.theCapturedProcessor().processed.toArray());
     }
+
+    @Test
+    public void testMapValuesWithKeys() {
+        final StreamsBuilder builder = new StreamsBuilder();
+
+        final ValueMapperWithKey<Integer, CharSequence, Integer> mapper = (readOnlyKey, value) -> value.length() + readOnlyKey;
+
+        final int[] expectedKeys = {1, 10, 100, 1000};
+
+        final KStream<Integer, String> stream = builder.stream(topicName, Consumed.with(Serdes.Integer(), Serdes.String()));
+        stream.mapValues(mapper).process(supplier);
+
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+            for (final int expectedKey : expectedKeys) {
+                driver.pipeInput(recordFactory.create(topicName, expectedKey, Integer.toString(expectedKey), expectedKey / 2L));
+            }
+        }
+        final KeyValueTimestamp[] expected = {new KeyValueTimestamp<>(1, 2, 0),
+            new KeyValueTimestamp<>(10, 12, 5),
+            new KeyValueTimestamp<>(100, 103, 50),
+            new KeyValueTimestamp<>(1000, 1004, 500)};
+
+        assertArrayEquals(expected, supplier.theCapturedProcessor().processed.toArray());
+    }
+
 }

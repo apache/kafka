@@ -17,10 +17,10 @@
 
 package kafka.utils.json
 
-import scala.collection._
+import scala.collection.{Map, Seq}
+import scala.collection.compat._
 import scala.language.higherKinds
-import JavaConverters._
-import generic.CanBuildFrom
+import scala.collection.JavaConverters._
 
 import com.fasterxml.jackson.databind.{JsonMappingException, JsonNode}
 
@@ -43,11 +43,7 @@ trait DecodeJson[T] {
   def decode(node: JsonNode): T =
     decodeEither(node) match {
       case Right(x) => x
-      case Left(x) =>
-        // Non-deprecated constructors were only introduced in Jackson 2.7, so stick with the deprecated one in case
-        // people have older versions of Jackson in their classpath. Once the Scala clients are removed, we can loosen
-        // this restriction.
-        throw new JsonMappingException(x)
+      case Left(x) => throw new JsonMappingException(null, x)
     }
 
 }
@@ -92,7 +88,7 @@ object DecodeJson {
     }
   }
 
-  implicit def decodeSeq[E, S[+T] <: Seq[E]](implicit decodeJson: DecodeJson[E], cbf: CanBuildFrom[Nothing, E, S[E]]): DecodeJson[S[E]] = new DecodeJson[S[E]] {
+  implicit def decodeSeq[E, S[+T] <: Seq[E]](implicit decodeJson: DecodeJson[E], factory: Factory[E, S[E]]): DecodeJson[S[E]] = new DecodeJson[S[E]] {
     def decodeEither(node: JsonNode): Either[String, S[E]] = {
       if (node.isArray)
         decodeIterator(node.elements.asScala)(decodeJson.decodeEither)
@@ -100,16 +96,16 @@ object DecodeJson {
     }
   }
 
-  implicit def decodeMap[V, M[K, +V] <: Map[K, V]](implicit decodeJson: DecodeJson[V], cbf: CanBuildFrom[Nothing, (String, V), M[String, V]]): DecodeJson[M[String, V]] = new DecodeJson[M[String, V]] {
+  implicit def decodeMap[V, M[K, +V] <: Map[K, V]](implicit decodeJson: DecodeJson[V], factory: Factory[(String, V), M[String, V]]): DecodeJson[M[String, V]] = new DecodeJson[M[String, V]] {
     def decodeEither(node: JsonNode): Either[String, M[String, V]] = {
       if (node.isObject)
-        decodeIterator(node.fields.asScala)(e => decodeJson.decodeEither(e.getValue).right.map(v => (e.getKey, v)))(cbf)
+        decodeIterator(node.fields.asScala)(e => decodeJson.decodeEither(e.getValue).right.map(v => (e.getKey, v)))
       else Left(s"Expected JSON object, received $node")
     }
   }
 
-  private def decodeIterator[S, T, C](it: Iterator[S])(f: S => Either[String, T])(implicit cbf: CanBuildFrom[Nothing, T, C]): Either[String, C] = {
-    val result = cbf()
+  private def decodeIterator[S, T, C](it: Iterator[S])(f: S => Either[String, T])(implicit factory: Factory[T, C]): Either[String, C] = {
+    val result = factory.newBuilder
     while (it.hasNext) {
       f(it.next) match {
         case Right(x) => result += x

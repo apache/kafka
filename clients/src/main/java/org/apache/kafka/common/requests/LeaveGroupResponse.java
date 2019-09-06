@@ -16,61 +16,142 @@
  */
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.message.LeaveGroupResponseData;
+import org.apache.kafka.common.message.LeaveGroupResponseData.MemberResponse;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 
+/**
+ * Possible error codes.
+ *
+ * Top level errors:
+ * - {@link Errors#COORDINATOR_LOAD_IN_PROGRESS}
+ * - {@link Errors#COORDINATOR_NOT_AVAILABLE}
+ * - {@link Errors#NOT_COORDINATOR}
+ * - {@link Errors#GROUP_AUTHORIZATION_FAILED}
+ *
+ * Member level errors:
+ * - {@link Errors#FENCED_INSTANCE_ID}
+ * - {@link Errors#UNKNOWN_MEMBER_ID}
+ *
+ * If the top level error code is set, normally this indicates that broker early stops the request
+ * handling due to some severe global error, so it is expected to see the member level errors to be empty.
+ * For older version response, we may populate member level error towards top level because older client
+ * couldn't parse member level.
+ */
 public class LeaveGroupResponse extends AbstractResponse {
 
-    private static final String ERROR_CODE_KEY_NAME = "error_code";
+    public final LeaveGroupResponseData data;
 
-    /**
-     * Possible error code:
-     *
-     * GROUP_LOAD_IN_PROGRESS (14)
-     * CONSUMER_COORDINATOR_NOT_AVAILABLE (15)
-     * NOT_COORDINATOR_FOR_CONSUMER (16)
-     * UNKNOWN_CONSUMER_ID (25)
-     * GROUP_AUTHORIZATION_FAILED (30)
-     */
-    private final Errors error;
-    private final int throttleTimeMs;
-
-    public LeaveGroupResponse(Errors error) {
-        this(DEFAULT_THROTTLE_TIME, error);
+    public LeaveGroupResponse(LeaveGroupResponseData data) {
+        this.data = data;
     }
 
-    public LeaveGroupResponse(int throttleTimeMs, Errors error) {
-        this.throttleTimeMs = throttleTimeMs;
-        this.error = error;
+    public LeaveGroupResponse(List<MemberResponse> memberResponses,
+                              Errors topLevelError,
+                              final int throttleTimeMs,
+                              final short version) {
+        if (version <= 2) {
+            // Populate member level error.
+            final short errorCode = getError(topLevelError, memberResponses).code();
+
+            this.data = new LeaveGroupResponseData()
+                            .setErrorCode(errorCode);
+        } else {
+            this.data = new LeaveGroupResponseData()
+                            .setErrorCode(topLevelError.code())
+                            .setMembers(memberResponses);
+        }
+
+        if (version >= 1) {
+            this.data.setThrottleTimeMs(throttleTimeMs);
+        }
     }
 
     public LeaveGroupResponse(Struct struct) {
-        this.throttleTimeMs = struct.hasField(THROTTLE_TIME_KEY_NAME) ? struct.getInt(THROTTLE_TIME_KEY_NAME) : DEFAULT_THROTTLE_TIME;
-        error = Errors.forCode(struct.getShort(ERROR_CODE_KEY_NAME));
+        short latestVersion = (short) (LeaveGroupResponseData.SCHEMAS.length - 1);
+        this.data = new LeaveGroupResponseData(struct, latestVersion);
     }
 
+    public LeaveGroupResponse(Struct struct, short version) {
+        this.data = new LeaveGroupResponseData(struct, version);
+    }
+
+    @Override
     public int throttleTimeMs() {
-        return throttleTimeMs;
+        return data.throttleTimeMs();
+    }
+
+    public List<MemberResponse> memberResponses() {
+        return data.members();
     }
 
     public Errors error() {
-        return error;
+        return getError(Errors.forCode(data.errorCode()), data.members());
+    }
+
+    private static Errors getError(Errors topLevelError, List<MemberResponse> memberResponses) {
+        if (topLevelError != Errors.NONE) {
+            return topLevelError;
+        } else {
+            for (MemberResponse memberResponse : memberResponses) {
+                Errors memberError = Errors.forCode(memberResponse.errorCode());
+                if (memberError != Errors.NONE) {
+                    return memberError;
+                }
+            }
+            return Errors.NONE;
+        }
+    }
+
+    @Override
+    public Map<Errors, Integer> errorCounts() {
+        Map<Errors, Integer> combinedErrorCounts = new HashMap<>();
+        // Top level error.
+        Errors topLevelError = Errors.forCode(data.errorCode());
+        if (topLevelError != Errors.NONE) {
+            updateErrorCounts(combinedErrorCounts, topLevelError);
+        }
+
+        // Member level error.
+        for (MemberResponse memberResponse : data.members()) {
+            Errors memberError = Errors.forCode(memberResponse.errorCode());
+            if (memberError != Errors.NONE) {
+                updateErrorCounts(combinedErrorCounts, memberError);
+            }
+        }
+        return combinedErrorCounts;
     }
 
     @Override
     public Struct toStruct(short version) {
-        Struct struct = new Struct(ApiKeys.LEAVE_GROUP.responseSchema(version));
-        if (struct.hasField(THROTTLE_TIME_KEY_NAME))
-            struct.set(THROTTLE_TIME_KEY_NAME, throttleTimeMs);
-        struct.set(ERROR_CODE_KEY_NAME, error.code());
-        return struct;
+        return data.toStruct(version);
     }
 
     public static LeaveGroupResponse parse(ByteBuffer buffer, short versionId) {
-        return new LeaveGroupResponse(ApiKeys.LEAVE_GROUP.parseResponse(versionId, buffer));
+        return new LeaveGroupResponse(ApiKeys.LEAVE_GROUP.parseResponse(versionId, buffer), versionId);
     }
 
+    @Override
+    public boolean shouldClientThrottle(short version) {
+        return version >= 2;
+    }
+
+    @Override
+    public boolean equals(Object other) {
+        return other instanceof LeaveGroupResponse &&
+                   ((LeaveGroupResponse) other).data.equals(this.data);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hashCode(data);
+    }
 }

@@ -19,84 +19,103 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.network.NetworkSend;
 import org.apache.kafka.common.network.Send;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
 
 public abstract class AbstractResponse extends AbstractRequestResponse {
-    public static final String THROTTLE_TIME_KEY_NAME = "throttle_time_ms";
     public static final int DEFAULT_THROTTLE_TIME = 0;
 
-    public Send toSend(String destination, RequestHeader requestHeader) {
-        return toSend(destination, requestHeader.apiVersion(), requestHeader.toResponseHeader());
+    protected Send toSend(String destination, ResponseHeader header, short apiVersion) {
+        return new NetworkSend(destination, serialize(apiVersion, header));
     }
 
     /**
-     * This should only be used if we need to return a response with a different version than the request, which
-     * should be very rare (an example is @link {@link ApiVersionsResponse#unsupportedVersionSend(String, RequestHeader)}).
-     * Typically {@link #toSend(String, RequestHeader)} should be used.
-     */
-    public Send toSend(String destination, short version, ResponseHeader responseHeader) {
-        return new NetworkSend(destination, serialize(version, responseHeader));
-    }
-
-    /**
-     * Visible for testing, typically {@link #toSend(String, RequestHeader)} should be used instead.
+     * Visible for testing, typically {@link #toSend(String, ResponseHeader, short)} should be used instead.
      */
     public ByteBuffer serialize(short version, ResponseHeader responseHeader) {
         return serialize(responseHeader.toStruct(), toStruct(version));
     }
 
+    public abstract Map<Errors, Integer> errorCounts();
+
+    protected Map<Errors, Integer> errorCounts(Errors error) {
+        return Collections.singletonMap(error, 1);
+    }
+
+    protected Map<Errors, Integer> errorCounts(Map<?, Errors> errors) {
+        Map<Errors, Integer> errorCounts = new HashMap<>();
+        for (Errors error : errors.values())
+            updateErrorCounts(errorCounts, error);
+        return errorCounts;
+    }
+
+    protected Map<Errors, Integer> apiErrorCounts(Map<?, ApiError> errors) {
+        Map<Errors, Integer> errorCounts = new HashMap<>();
+        for (ApiError apiError : errors.values())
+            updateErrorCounts(errorCounts, apiError.error());
+        return errorCounts;
+    }
+
+    protected void updateErrorCounts(Map<Errors, Integer> errorCounts, Errors error) {
+        Integer count = errorCounts.get(error);
+        errorCounts.put(error, count == null ? 1 : count + 1);
+    }
+
     protected abstract Struct toStruct(short version);
 
-    public static AbstractResponse getResponse(ApiKeys apiKey, Struct struct) {
+    public static AbstractResponse parseResponse(ApiKeys apiKey, Struct struct, short version) {
         switch (apiKey) {
             case PRODUCE:
                 return new ProduceResponse(struct);
             case FETCH:
-                return new FetchResponse(struct);
+                return FetchResponse.parse(struct);
             case LIST_OFFSETS:
                 return new ListOffsetResponse(struct);
             case METADATA:
-                return new MetadataResponse(struct);
+                return new MetadataResponse(struct, version);
             case OFFSET_COMMIT:
-                return new OffsetCommitResponse(struct);
+                return new OffsetCommitResponse(struct, version);
             case OFFSET_FETCH:
-                return new OffsetFetchResponse(struct);
+                return new OffsetFetchResponse(struct, version);
             case FIND_COORDINATOR:
-                return new FindCoordinatorResponse(struct);
+                return new FindCoordinatorResponse(struct, version);
             case JOIN_GROUP:
-                return new JoinGroupResponse(struct);
+                return new JoinGroupResponse(struct, version);
             case HEARTBEAT:
-                return new HeartbeatResponse(struct);
+                return new HeartbeatResponse(struct, version);
             case LEAVE_GROUP:
-                return new LeaveGroupResponse(struct);
+                return new LeaveGroupResponse(struct, version);
             case SYNC_GROUP:
-                return new SyncGroupResponse(struct);
+                return new SyncGroupResponse(struct, version);
             case STOP_REPLICA:
                 return new StopReplicaResponse(struct);
-            case CONTROLLED_SHUTDOWN_KEY:
-                return new ControlledShutdownResponse(struct);
-            case UPDATE_METADATA_KEY:
+            case CONTROLLED_SHUTDOWN:
+                return new ControlledShutdownResponse(struct, version);
+            case UPDATE_METADATA:
                 return new UpdateMetadataResponse(struct);
             case LEADER_AND_ISR:
                 return new LeaderAndIsrResponse(struct);
             case DESCRIBE_GROUPS:
-                return new DescribeGroupsResponse(struct);
+                return new DescribeGroupsResponse(struct, version);
             case LIST_GROUPS:
-                return new ListGroupsResponse(struct);
+                return new ListGroupsResponse(struct, version);
             case SASL_HANDSHAKE:
-                return new SaslHandshakeResponse(struct);
+                return new SaslHandshakeResponse(struct, version);
             case API_VERSIONS:
                 return new ApiVersionsResponse(struct);
             case CREATE_TOPICS:
-                return new CreateTopicsResponse(struct);
+                return new CreateTopicsResponse(struct, version);
             case DELETE_TOPICS:
-                return new DeleteTopicsResponse(struct);
+                return new DeleteTopicsResponse(struct, version);
             case DELETE_RECORDS:
                 return new DeleteRecordsResponse(struct);
             case INIT_PRODUCER_ID:
-                return new InitProducerIdResponse(struct);
+                return new InitProducerIdResponse(struct, version);
             case OFFSET_FOR_LEADER_EPOCH:
                 return new OffsetsForLeaderEpochResponse(struct);
             case ADD_PARTITIONS_TO_TXN:
@@ -108,7 +127,7 @@ public abstract class AbstractResponse extends AbstractRequestResponse {
             case WRITE_TXN_MARKERS:
                 return new WriteTxnMarkersResponse(struct);
             case TXN_OFFSET_COMMIT:
-                return new TxnOffsetCommitResponse(struct);
+                return new TxnOffsetCommitResponse(struct, version);
             case DESCRIBE_ACLS:
                 return new DescribeAclsResponse(struct);
             case CREATE_ACLS:
@@ -119,10 +138,49 @@ public abstract class AbstractResponse extends AbstractRequestResponse {
                 return new DescribeConfigsResponse(struct);
             case ALTER_CONFIGS:
                 return new AlterConfigsResponse(struct);
+            case ALTER_REPLICA_LOG_DIRS:
+                return new AlterReplicaLogDirsResponse(struct);
+            case DESCRIBE_LOG_DIRS:
+                return new DescribeLogDirsResponse(struct);
+            case SASL_AUTHENTICATE:
+                return new SaslAuthenticateResponse(struct, version);
+            case CREATE_PARTITIONS:
+                return new CreatePartitionsResponse(struct);
+            case CREATE_DELEGATION_TOKEN:
+                return new CreateDelegationTokenResponse(struct, version);
+            case RENEW_DELEGATION_TOKEN:
+                return new RenewDelegationTokenResponse(struct, version);
+            case EXPIRE_DELEGATION_TOKEN:
+                return new ExpireDelegationTokenResponse(struct, version);
+            case DESCRIBE_DELEGATION_TOKEN:
+                return new DescribeDelegationTokenResponse(struct, version);
+            case DELETE_GROUPS:
+                return new DeleteGroupsResponse(struct, version);
+            case ELECT_LEADERS:
+                return new ElectLeadersResponse(struct, version);
+            case INCREMENTAL_ALTER_CONFIGS:
+                return new IncrementalAlterConfigsResponse(struct, version);
+            case ALTER_PARTITION_REASSIGNMENTS:
+                return new AlterPartitionReassignmentsResponse(struct, version);
+            case LIST_PARTITION_REASSIGNMENTS:
+                return new ListPartitionReassignmentsResponse(struct, version);
             default:
-                throw new AssertionError(String.format("ApiKey %s is not currently handled in `getResponse`, the " +
+                throw new AssertionError(String.format("ApiKey %s is not currently handled in `parseResponse`, the " +
                         "code should be updated to do so.", apiKey));
         }
+    }
+
+    /**
+     * Returns whether or not client should throttle upon receiving a response of the specified version with a non-zero
+     * throttle time. Client-side throttling is needed when communicating with a newer version of broker which, on
+     * quota violation, sends out responses before throttling.
+     */
+    public boolean shouldClientThrottle(short version) {
+        return false;
+    }
+
+    public int throttleTimeMs() {
+        return DEFAULT_THROTTLE_TIME;
     }
 
     public String toString(short version) {

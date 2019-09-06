@@ -25,7 +25,7 @@
 
   <!-- header -->
   <module name="Header">
-    <property name="headerFile" value="checkstyle/java.header" />
+    <property name="headerFile" value="${headerFile}" />
   </module>
 
   <module name="TreeWalker">
@@ -71,6 +71,12 @@
     <module name="TypeName"/>
     <module name="AvoidStarImport"/>
 
+    <!-- variables that can be final should be final (suppressed except for Streams) -->
+    <module name="FinalLocalVariable">
+      <property name="tokens" value="VARIABLE_DEF,PARAMETER_DEF"/>
+      <property name="validateEnhancedForLoopVariable" value="true"/>
+    </module>
+
     <!-- dependencies -->
     <module name="ImportControl">
       <property name="file" value="${importControlFile}"/>
@@ -105,7 +111,7 @@
     </module>
     <module name="ClassDataAbstractionCoupling">
       <!-- default is 7 -->
-      <property name="max" value="20"/>
+      <property name="max" value="25"/>
     </module>
     <module name="BooleanExpressionComplexity">
       <!-- default is 3 -->
@@ -114,7 +120,7 @@
 
     <module name="ClassFanOutComplexity">
       <!-- default is 20 -->
-      <property name="max" value="40"/>
+      <property name="max" value="50"/>
     </module>
     <module name="CyclomaticComplexity">
       <!-- default is 10-->
@@ -131,6 +137,6 @@
   </module>
 
   <module name="SuppressionFilter">
-    <property name="file" value="checkstyle/suppressions.xml"/>
+    <property name="file" value="${suppressionsFile}"/>
   </module>
 </module>

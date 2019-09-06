@@ -31,35 +31,37 @@ import org.junit.Test
 class PlaintextProducerSendTest extends BaseProducerSendTest {
 
   @Test(expected = classOf[SerializationException])
-  def testWrongSerializer() {
+  def testWrongSerializer(): Unit = {
     val producerProps = new Properties()
     producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
     producerProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.StringSerializer")
     producerProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.StringSerializer")
     val producer = registerProducer(new KafkaProducer(producerProps))
-    val record = new ProducerRecord[Array[Byte], Array[Byte]](topic, new Integer(0), "key".getBytes, "value".getBytes)
+    val record = new ProducerRecord[Array[Byte], Array[Byte]](topic, 0, "key".getBytes, "value".getBytes)
     producer.send(record)
   }
 
   @Test
-  def testBatchSizeZero() {
-    val producerProps = new Properties()
-    producerProps.setProperty(ProducerConfig.BATCH_SIZE_CONFIG, "0")
-    val producer = createProducer(brokerList = brokerList, lingerMs = Long.MaxValue, props = Some(producerProps))
+  def testBatchSizeZero(): Unit = {
+    val producer = createProducer(brokerList = brokerList,
+      lingerMs = Int.MaxValue,
+      deliveryTimeoutMs = Int.MaxValue,
+      batchSize = 0)
     sendAndVerify(producer)
   }
 
   @Test
-  def testSendCompressedMessageWithLogAppendTime() {
-    val producerProps = new Properties()
-    producerProps.setProperty(ProducerConfig.COMPRESSION_TYPE_CONFIG, "gzip")
-    val producer = createProducer(brokerList = brokerList, lingerMs = Long.MaxValue, props = Some(producerProps))
+  def testSendCompressedMessageWithLogAppendTime(): Unit = {
+    val producer = createProducer(brokerList = brokerList,
+      compressionType = "gzip",
+      lingerMs = Int.MaxValue,
+      deliveryTimeoutMs = Int.MaxValue)
     sendAndVerifyTimestamp(producer, TimestampType.LOG_APPEND_TIME)
   }
 
   @Test
-  def testSendNonCompressedMessageWithLogAppendTime() {
-    val producer = createProducer(brokerList = brokerList, lingerMs = Long.MaxValue)
+  def testSendNonCompressedMessageWithLogAppendTime(): Unit = {
+    val producer = createProducer(brokerList = brokerList, lingerMs = Int.MaxValue, deliveryTimeoutMs = Int.MaxValue)
     sendAndVerifyTimestamp(producer, TimestampType.LOG_APPEND_TIME)
   }
 
@@ -69,16 +71,15 @@ class PlaintextProducerSendTest extends BaseProducerSendTest {
    * The topic should be created upon sending the first message
    */
   @Test
-  def testAutoCreateTopic() {
-    val producer = createProducer(brokerList, retries = 5)
-
+  def testAutoCreateTopic(): Unit = {
+    val producer = createProducer(brokerList)
     try {
       // Send a message to auto-create the topic
       val record = new ProducerRecord(topic, null, "key".getBytes, "value".getBytes)
       assertEquals("Should have offset 0", 0L, producer.send(record).get.offset)
 
       // double check that the topic is created with leader elected
-      TestUtils.waitUntilLeaderIsElectedOrChanged(zkUtils, topic, 0)
+      TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, topic, 0)
 
     } finally {
       producer.close()
@@ -86,10 +87,10 @@ class PlaintextProducerSendTest extends BaseProducerSendTest {
   }
 
   @Test
-  def testSendWithInvalidCreateTime() {
+  def testSendWithInvalidCreateTime(): Unit = {
     val topicProps = new Properties()
     topicProps.setProperty(LogConfig.MessageTimestampDifferenceMaxMsProp, "1000")
-    TestUtils.createTopic(zkUtils, topic, 1, 2, servers, topicProps)
+    createTopic(topic, 1, 2, topicProps)
 
     val producer = createProducer(brokerList = brokerList)
     try {
@@ -102,9 +103,7 @@ class PlaintextProducerSendTest extends BaseProducerSendTest {
     }
 
     // Test compressed messages.
-    val producerProps = new Properties()
-    producerProps.setProperty(ProducerConfig.COMPRESSION_TYPE_CONFIG, "gzip")
-    val compressedProducer = createProducer(brokerList = brokerList, props = Some(producerProps))
+    val compressedProducer = createProducer(brokerList = brokerList, compressionType = "gzip")
     try {
       compressedProducer.send(new ProducerRecord(topic, 0, System.currentTimeMillis() - 1001, "key".getBytes, "value".getBytes)).get()
       fail("Should throw CorruptedRecordException")

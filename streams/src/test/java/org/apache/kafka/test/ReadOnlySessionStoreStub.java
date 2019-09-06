@@ -37,7 +37,7 @@ public class ReadOnlySessionStoreStub<K, V> implements ReadOnlySessionStore<K, V
 
     public void put(final Windowed<K> sessionKey, final V value) {
         if (!sessions.containsKey(sessionKey.key())) {
-            sessions.put(sessionKey.key(), new ArrayList<KeyValue<Windowed<K>, V>>());
+            sessions.put(sessionKey.key(), new ArrayList<>());
         }
         sessions.get(sessionKey.key()).add(KeyValue.pair(sessionKey, value));
     }
@@ -54,14 +54,14 @@ public class ReadOnlySessionStoreStub<K, V> implements ReadOnlySessionStore<K, V
     }
 
     @Override
-    public KeyValueIterator<Windowed<K>, V> fetch(K from, K to) {
+    public KeyValueIterator<Windowed<K>, V> fetch(final K from, final K to) {
         if (!open) {
             throw new InvalidStateStoreException("not open");
         }
-        if (!sessions.subMap(from, to).isEmpty()) {
+        if (sessions.subMap(from, true, to, true).isEmpty()) {
             return new KeyValueIteratorStub<>(Collections.<KeyValue<Windowed<K>, V>>emptyIterator());
         }
-        final Iterator<List<KeyValue<Windowed<K>, V>>> keysIterator = sessions.subMap(from, to).values().iterator();
+        final Iterator<List<KeyValue<Windowed<K>, V>>> keysIterator = sessions.subMap(from, true,  to, true).values().iterator();
         return new KeyValueIteratorStub<>(
             new Iterator<KeyValue<Windowed<K>, V>>() {
 
@@ -83,10 +83,6 @@ public class ReadOnlySessionStoreStub<K, V> implements ReadOnlySessionStore<K, V
                     return it.next();
                 }
 
-                @Override
-                public void remove() {
-                    throw new UnsupportedOperationException();
-                }
             }
         );
     }

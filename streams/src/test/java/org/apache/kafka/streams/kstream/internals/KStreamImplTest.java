@@ -18,42 +18,79 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.KeyValueTimestamp;
 import org.apache.kafka.streams.StreamsBuilder;
-import org.apache.kafka.streams.StreamsBuilderTest;
-import org.apache.kafka.streams.errors.TopologyException;
+import org.apache.kafka.streams.TopologyTestDriver;
+import org.apache.kafka.streams.TopologyWrapper;
+import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.GlobalKTable;
+import org.apache.kafka.streams.kstream.Grouped;
 import org.apache.kafka.streams.kstream.JoinWindows;
+import org.apache.kafka.streams.kstream.Joined;
 import org.apache.kafka.streams.kstream.KStream;
-import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.Predicate;
+import org.apache.kafka.streams.kstream.Produced;
+import org.apache.kafka.streams.kstream.Transformer;
+import org.apache.kafka.streams.kstream.TransformerSupplier;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.kstream.ValueMapper;
+import org.apache.kafka.streams.kstream.ValueMapperWithKey;
+import org.apache.kafka.streams.kstream.ValueTransformer;
+import org.apache.kafka.streams.kstream.ValueTransformerSupplier;
+import org.apache.kafka.streams.kstream.ValueTransformerWithKeySupplier;
 import org.apache.kafka.streams.processor.FailOnInvalidTimestamp;
+import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.TopicNameExtractor;
 import org.apache.kafka.streams.processor.internals.ProcessorTopology;
 import org.apache.kafka.streams.processor.internals.SourceNode;
-import org.apache.kafka.test.MockKeyValueMapper;
+import org.apache.kafka.streams.test.ConsumerRecordFactory;
+import org.apache.kafka.test.MockMapper;
+import org.apache.kafka.test.MockProcessor;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.MockValueJoiner;
+import org.apache.kafka.test.StreamsTestUtils;
 import org.junit.Before;
 import org.junit.Test;
 
+import java.time.Duration;
+import java.util.Arrays;
 import java.util.Collections;
+import java.util.List;
+import java.util.Properties;
 import java.util.concurrent.TimeUnit;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
+import static java.time.Duration.ofMillis;
+import static java.util.Arrays.asList;
+import static org.hamcrest.CoreMatchers.equalTo;
+import static org.hamcrest.CoreMatchers.notNullValue;
 import static org.hamcrest.core.IsInstanceOf.instanceOf;
+import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertThat;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertThrows;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
-
+@SuppressWarnings("unchecked")
 public class KStreamImplTest {
 
-    final private Serde<String> stringSerde = Serdes.String();
-    final private Serde<Integer> intSerde = Serdes.Integer();
+    private final Consumed<String, String> stringConsumed = Consumed.with(Serdes.String(), Serdes.String());
+    private final MockProcessorSupplier<String, String> processorSupplier = new MockProcessorSupplier<>();
+
     private KStream<String, String> testStream;
     private StreamsBuilder builder;
+
+    private final ConsumerRecordFactory<String, String> recordFactory =
+        new ConsumerRecordFactory<>(new StringSerializer(), new StringSerializer(), 0L);
+    private final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.String(), Serdes.String());
+
+    private final Serde<String> mySerde = new Serdes.StringSerde();
 
     @Before
     public void before() {
@@ -65,85 +102,39 @@ public class KStreamImplTest {
     public void testNumProcesses() {
         final StreamsBuilder builder = new StreamsBuilder();
 
-        KStream<String, String> source1 = builder.stream(stringSerde, stringSerde, "topic-1", "topic-2");
+        final KStream<String, String> source1 = builder.stream(Arrays.asList("topic-1", "topic-2"), stringConsumed);
 
-        KStream<String, String> source2 = builder.stream(stringSerde, stringSerde, "topic-3", "topic-4");
+        final KStream<String, String> source2 = builder.stream(Arrays.asList("topic-3", "topic-4"), stringConsumed);
 
-        KStream<String, String> stream1 =
-            source1.filter(new Predicate<String, String>() {
-                @Override
-                public boolean test(String key, String value) {
-                    return true;
-                }
-            }).filterNot(new Predicate<String, String>() {
-                @Override
-                public boolean test(String key, String value) {
-                    return false;
-                }
-            });
+        final KStream<String, String> stream1 = source1.filter((key, value) -> true)
+                                                       .filterNot((key, value) -> false);
 
-        KStream<String, Integer> stream2 = stream1.mapValues(new ValueMapper<String, Integer>() {
-            @Override
-            public Integer apply(String value) {
-                return new Integer(value);
-            }
-        });
+        final KStream<String, Integer> stream2 = stream1.mapValues(Integer::new);
 
-        KStream<String, Integer> stream3 = source2.flatMapValues(new ValueMapper<String, Iterable<Integer>>() {
-            @Override
-            public Iterable<Integer> apply(String value) {
-                return Collections.singletonList(new Integer(value));
-            }
-        });
+        final KStream<String, Integer> stream3 = source2.flatMapValues((ValueMapper<String, Iterable<Integer>>)
+            value -> Collections.singletonList(new Integer(value)));
 
-        KStream<String, Integer>[] streams2 = stream2.branch(
-                new Predicate<String, Integer>() {
-                    @Override
-                    public boolean test(String key, Integer value) {
-                        return (value % 2) == 0;
-                    }
-                },
-                new Predicate<String, Integer>() {
-                    @Override
-                    public boolean test(String key, Integer value) {
-                        return true;
-                    }
-                }
+        final KStream<String, Integer>[] streams2 = stream2.branch(
+            (key, value) -> (value % 2) == 0,
+            (key, value) -> true
         );
 
-        KStream<String, Integer>[] streams3 = stream3.branch(
-                new Predicate<String, Integer>() {
-                    @Override
-                    public boolean test(String key, Integer value) {
-                        return (value % 2) == 0;
-                    }
-                },
-                new Predicate<String, Integer>() {
-                    @Override
-                    public boolean test(String key, Integer value) {
-                        return true;
-                    }
-                }
+        final KStream<String, Integer>[] streams3 = stream3.branch(
+            (key, value) -> (value % 2) == 0,
+            (key, value) -> true
         );
 
         final int anyWindowSize = 1;
-        KStream<String, Integer> stream4 = streams2[0].join(streams3[0], new ValueJoiner<Integer, Integer, Integer>() {
-            @Override
-            public Integer apply(Integer value1, Integer value2) {
-                return value1 + value2;
-            }
-        }, JoinWindows.of(anyWindowSize), stringSerde, intSerde, intSerde);
+        final Joined<String, Integer, Integer> joined = Joined.with(Serdes.String(), Serdes.Integer(), Serdes.Integer());
+        final KStream<String, Integer> stream4 = streams2[0].join(streams3[0],
+            (value1, value2) -> value1 + value2, JoinWindows.of(ofMillis(anyWindowSize)), joined);
 
-        KStream<String, Integer> stream5 = streams2[1].join(streams3[1], new ValueJoiner<Integer, Integer, Integer>() {
-            @Override
-            public Integer apply(Integer value1, Integer value2) {
-                return value1 + value2;
-            }
-        }, JoinWindows.of(anyWindowSize), stringSerde, intSerde, intSerde);
+        streams2[1].join(streams3[1], (value1, value2) -> value1 + value2,
+            JoinWindows.of(ofMillis(anyWindowSize)), joined);
 
         stream4.to("topic-5");
 
-        streams2[1].through("topic-6").process(new MockProcessorSupplier<String, Integer>());
+        streams2[1].through("topic-6").process(new MockProcessorSupplier<>());
 
         assertEquals(2 + // sources
             2 + // stream1
@@ -155,222 +146,627 @@ public class KStreamImplTest {
             1 + // to
             2 + // through
             1, // process
-            StreamsBuilderTest.internalTopologyBuilder(builder).setApplicationId("X").build(null).processors().size());
+            TopologyWrapper.getInternalTopologyBuilder(builder.build()).setApplicationId("X").build(null).processors().size());
+    }
+
+    @Test
+    public void shouldPreserveSerdesForOperators() {
+        final StreamsBuilder builder = new StreamsBuilder();
+        final KStream<String, String> stream1 = builder.stream(Collections.singleton("topic-1"), stringConsumed);
+        final KTable<String, String> table1 = builder.table("topic-2", stringConsumed);
+        final GlobalKTable<String, String> table2 = builder.globalTable("topic-2", stringConsumed);
+        final ConsumedInternal<String, String> consumedInternal = new ConsumedInternal<>(stringConsumed);
+
+        final KeyValueMapper<String, String, String> selector = (key, value) -> key;
+        final KeyValueMapper<String, String, Iterable<KeyValue<String, String>>> flatSelector = (key, value) -> Collections.singleton(new KeyValue<>(key, value));
+        final ValueMapper<String, String> mapper = value -> value;
+        final ValueMapper<String, Iterable<String>> flatMapper = Collections::singleton;
+        final ValueJoiner<String, String, String> joiner = (value1, value2) -> value1;
+        final TransformerSupplier<String, String, KeyValue<String, String>> transformerSupplier = () -> new Transformer<String, String, KeyValue<String, String>>() {
+            @Override
+            public void init(final ProcessorContext context) {}
+
+            @Override
+            public KeyValue<String, String> transform(final String key, final String value) {
+                return new KeyValue<>(key, value);
+            }
+
+            @Override
+            public void close() {}
+        };
+        final ValueTransformerSupplier<String, String> valueTransformerSupplier = () -> new ValueTransformer<String, String>() {
+            @Override
+            public void init(final ProcessorContext context) {}
+
+            @Override
+            public String transform(final String value) {
+                return value;
+            }
+
+            @Override
+            public void close() {}
+        };
+
+        assertEquals(((AbstractStream) stream1.filter((key, value) -> false)).keySerde(), consumedInternal.keySerde());
+        assertEquals(((AbstractStream) stream1.filter((key, value) -> false)).valueSerde(), consumedInternal.valueSerde());
+
+        assertEquals(((AbstractStream) stream1.filterNot((key, value) -> false)).keySerde(), consumedInternal.keySerde());
+        assertEquals(((AbstractStream) stream1.filterNot((key, value) -> false)).valueSerde(), consumedInternal.valueSerde());
+
+        assertNull(((AbstractStream) stream1.selectKey(selector)).keySerde());
+        assertEquals(((AbstractStream) stream1.selectKey(selector)).valueSerde(), consumedInternal.valueSerde());
+
+        assertNull(((AbstractStream) stream1.map(KeyValue::new)).keySerde());
+        assertNull(((AbstractStream) stream1.map(KeyValue::new)).valueSerde());
+
+        assertEquals(((AbstractStream) stream1.mapValues(mapper)).keySerde(), consumedInternal.keySerde());
+        assertNull(((AbstractStream) stream1.mapValues(mapper)).valueSerde());
+
+        assertNull(((AbstractStream) stream1.flatMap(flatSelector)).keySerde());
+        assertNull(((AbstractStream) stream1.flatMap(flatSelector)).valueSerde());
+
+        assertEquals(((AbstractStream) stream1.flatMapValues(flatMapper)).keySerde(), consumedInternal.keySerde());
+        assertNull(((AbstractStream) stream1.flatMapValues(flatMapper)).valueSerde());
+
+        assertNull(((AbstractStream) stream1.transform(transformerSupplier)).keySerde());
+        assertNull(((AbstractStream) stream1.transform(transformerSupplier)).valueSerde());
+
+        assertEquals(((AbstractStream) stream1.transformValues(valueTransformerSupplier)).keySerde(), consumedInternal.keySerde());
+        assertNull(((AbstractStream) stream1.transformValues(valueTransformerSupplier)).valueSerde());
+
+        assertNull(((AbstractStream) stream1.merge(stream1)).keySerde());
+        assertNull(((AbstractStream) stream1.merge(stream1)).valueSerde());
+
+        assertEquals(((AbstractStream) stream1.through("topic-3")).keySerde(), consumedInternal.keySerde());
+        assertEquals(((AbstractStream) stream1.through("topic-3")).valueSerde(), consumedInternal.valueSerde());
+        assertEquals(((AbstractStream) stream1.through("topic-3", Produced.with(mySerde, mySerde))).keySerde(), mySerde);
+        assertEquals(((AbstractStream) stream1.through("topic-3", Produced.with(mySerde, mySerde))).valueSerde(), mySerde);
+
+        assertEquals(((AbstractStream) stream1.groupByKey()).keySerde(), consumedInternal.keySerde());
+        assertEquals(((AbstractStream) stream1.groupByKey()).valueSerde(), consumedInternal.valueSerde());
+        assertEquals(((AbstractStream) stream1.groupByKey(Grouped.with(mySerde, mySerde))).keySerde(), mySerde);
+        assertEquals(((AbstractStream) stream1.groupByKey(Grouped.with(mySerde, mySerde))).valueSerde(), mySerde);
+
+        assertNull(((AbstractStream) stream1.groupBy(selector)).keySerde());
+        assertEquals(((AbstractStream) stream1.groupBy(selector)).valueSerde(), consumedInternal.valueSerde());
+        assertEquals(((AbstractStream) stream1.groupBy(selector, Grouped.with(mySerde, mySerde))).keySerde(), mySerde);
+        assertEquals(((AbstractStream) stream1.groupBy(selector, Grouped.with(mySerde, mySerde))).valueSerde(), mySerde);
+
+        assertNull(((AbstractStream) stream1.join(stream1, joiner, JoinWindows.of(Duration.ofMillis(100L)))).keySerde());
+        assertNull(((AbstractStream) stream1.join(stream1, joiner, JoinWindows.of(Duration.ofMillis(100L)))).valueSerde());
+        assertEquals(((AbstractStream) stream1.join(stream1, joiner, JoinWindows.of(Duration.ofMillis(100L)), Joined.with(mySerde, mySerde, mySerde))).keySerde(), mySerde);
+        assertNull(((AbstractStream) stream1.join(stream1, joiner, JoinWindows.of(Duration.ofMillis(100L)), Joined.with(mySerde, mySerde, mySerde))).valueSerde());
+
+        assertNull(((AbstractStream) stream1.leftJoin(stream1, joiner, JoinWindows.of(Duration.ofMillis(100L)))).keySerde());
+        assertNull(((AbstractStream) stream1.leftJoin(stream1, joiner, JoinWindows.of(Duration.ofMillis(100L)))).valueSerde());
+        assertEquals(((AbstractStream) stream1.leftJoin(stream1, joiner, JoinWindows.of(Duration.ofMillis(100L)), Joined.with(mySerde, mySerde, mySerde))).keySerde(), mySerde);
+        assertNull(((AbstractStream) stream1.leftJoin(stream1, joiner, JoinWindows.of(Duration.ofMillis(100L)), Joined.with(mySerde, mySerde, mySerde))).valueSerde());
+
+        assertNull(((AbstractStream) stream1.outerJoin(stream1, joiner, JoinWindows.of(Duration.ofMillis(100L)))).keySerde());
+        assertNull(((AbstractStream) stream1.outerJoin(stream1, joiner, JoinWindows.of(Duration.ofMillis(100L)))).valueSerde());
+        assertEquals(((AbstractStream) stream1.outerJoin(stream1, joiner, JoinWindows.of(Duration.ofMillis(100L)), Joined.with(mySerde, mySerde, mySerde))).keySerde(), mySerde);
+        assertNull(((AbstractStream) stream1.outerJoin(stream1, joiner, JoinWindows.of(Duration.ofMillis(100L)), Joined.with(mySerde, mySerde, mySerde))).valueSerde());
+
+        assertEquals(((AbstractStream) stream1.join(table1, joiner)).keySerde(), consumedInternal.keySerde());
+        assertNull(((AbstractStream) stream1.join(table1, joiner)).valueSerde());
+        assertEquals(((AbstractStream) stream1.join(table1, joiner, Joined.with(mySerde, mySerde, mySerde))).keySerde(), mySerde);
+        assertNull(((AbstractStream) stream1.join(table1, joiner, Joined.with(mySerde, mySerde, mySerde))).valueSerde());
+
+        assertEquals(((AbstractStream) stream1.leftJoin(table1, joiner)).keySerde(), consumedInternal.keySerde());
+        assertNull(((AbstractStream) stream1.leftJoin(table1, joiner)).valueSerde());
+        assertEquals(((AbstractStream) stream1.leftJoin(table1, joiner, Joined.with(mySerde, mySerde, mySerde))).keySerde(), mySerde);
+        assertNull(((AbstractStream) stream1.leftJoin(table1, joiner, Joined.with(mySerde, mySerde, mySerde))).valueSerde());
+
+        assertEquals(((AbstractStream) stream1.join(table2, selector, joiner)).keySerde(), consumedInternal.keySerde());
+        assertNull(((AbstractStream) stream1.join(table2, selector, joiner)).valueSerde());
+
+        assertEquals(((AbstractStream) stream1.leftJoin(table2, selector, joiner)).keySerde(), consumedInternal.keySerde());
+        assertNull(((AbstractStream) stream1.leftJoin(table2, selector, joiner)).valueSerde());
     }
 
     @Test
     public void shouldUseRecordMetadataTimestampExtractorWithThrough() {
         final StreamsBuilder builder = new StreamsBuilder();
-        KStream<String, String> stream1 = builder.stream(stringSerde, stringSerde, "topic-1", "topic-2");
-        KStream<String, String> stream2 = builder.stream(stringSerde, stringSerde, "topic-3", "topic-4");
+        final KStream<String, String> stream1 = builder.stream(Arrays.asList("topic-1", "topic-2"), stringConsumed);
+        final KStream<String, String> stream2 = builder.stream(Arrays.asList("topic-3", "topic-4"), stringConsumed);
 
         stream1.to("topic-5");
         stream2.through("topic-6");
 
-        ProcessorTopology processorTopology = StreamsBuilderTest.internalTopologyBuilder(builder).setApplicationId("X").build(null);
+        final ProcessorTopology processorTopology = TopologyWrapper.getInternalTopologyBuilder(builder.build()).setApplicationId("X").build(null);
         assertThat(processorTopology.source("topic-6").getTimestampExtractor(), instanceOf(FailOnInvalidTimestamp.class));
-        assertEquals(processorTopology.source("topic-4").getTimestampExtractor(), null);
-        assertEquals(processorTopology.source("topic-3").getTimestampExtractor(), null);
-        assertEquals(processorTopology.source("topic-2").getTimestampExtractor(), null);
-        assertEquals(processorTopology.source("topic-1").getTimestampExtractor(), null);
+        assertNull(processorTopology.source("topic-4").getTimestampExtractor());
+        assertNull(processorTopology.source("topic-3").getTimestampExtractor());
+        assertNull(processorTopology.source("topic-2").getTimestampExtractor());
+        assertNull(processorTopology.source("topic-1").getTimestampExtractor());
     }
 
     @Test
-    // TODO: this test should be refactored when we removed KStreamBuilder so that the created Topology contains internal topics as well
-    public void shouldUseRecordMetadataTimestampExtractorWhenInternalRepartitioningTopicCreated() {
-        final KStreamBuilder builder = new KStreamBuilder();
-        KStream<String, String> kStream = builder.stream(stringSerde, stringSerde, "topic-1");
-        ValueJoiner<String, String, String> valueJoiner = MockValueJoiner.instance(":");
-        long windowSize = TimeUnit.MILLISECONDS.convert(1, TimeUnit.DAYS);
+    public void shouldSendDataThroughTopicUsingProduced() {
+        final StreamsBuilder builder = new StreamsBuilder();
+        final String input = "topic";
+        final KStream<String, String> stream = builder.stream(input, stringConsumed);
+        stream.through("through-topic", Produced.with(Serdes.String(), Serdes.String())).process(processorSupplier);
+
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+            driver.pipeInput(recordFactory.create(input, "a", "b"));
+        }
+        assertThat(processorSupplier.theCapturedProcessor().processed, equalTo(Collections.singletonList(new KeyValueTimestamp<>("a", "b", 0))));
+    }
+
+    @Test
+    public void shouldSendDataToTopicUsingProduced() {
+        final StreamsBuilder builder = new StreamsBuilder();
+        final String input = "topic";
+        final KStream<String, String> stream = builder.stream(input, stringConsumed);
+        stream.to("to-topic", Produced.with(Serdes.String(), Serdes.String()));
+        builder.stream("to-topic", stringConsumed).process(processorSupplier);
+
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+            driver.pipeInput(recordFactory.create(input, "e", "f"));
+        }
+        assertThat(processorSupplier.theCapturedProcessor().processed, equalTo(Collections.singletonList(new KeyValueTimestamp<>("e", "f", 0))));
+    }
+
+    @Test
+    public void shouldSendDataToDynamicTopics() {
+        final StreamsBuilder builder = new StreamsBuilder();
+        final String input = "topic";
+        final KStream<String, String> stream = builder.stream(input, stringConsumed);
+        stream.to((key, value, context) -> context.topic() + "-" + key + "-" + value.substring(0, 1),
+                  Produced.with(Serdes.String(), Serdes.String()));
+        builder.stream(input + "-a-v", stringConsumed).process(processorSupplier);
+        builder.stream(input + "-b-v", stringConsumed).process(processorSupplier);
+
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+            driver.pipeInput(recordFactory.create(input, "a", "v1"));
+            driver.pipeInput(recordFactory.create(input, "a", "v2"));
+            driver.pipeInput(recordFactory.create(input, "b", "v1"));
+        }
+        final List<MockProcessor<String, String>> mockProcessors = processorSupplier.capturedProcessors(2);
+        assertThat(mockProcessors.get(0).processed, equalTo(asList(new KeyValueTimestamp<>("a", "v1", 0),
+                new KeyValueTimestamp<>("a", "v2", 0))));
+        assertThat(mockProcessors.get(1).processed, equalTo(Collections.singletonList(new KeyValueTimestamp<>("b", "v1", 0))));
+    }
+
+    @SuppressWarnings("deprecation") // specifically testing the deprecated variant
+    @Test
+    public void shouldUseRecordMetadataTimestampExtractorWhenInternalRepartitioningTopicCreatedWithRetention() {
+        final StreamsBuilder builder = new StreamsBuilder();
+        final KStream<String, String> kStream = builder.stream("topic-1", stringConsumed);
+        final ValueJoiner<String, String, String> valueJoiner = MockValueJoiner.instance(":");
+        final long windowSize = TimeUnit.MILLISECONDS.convert(1, TimeUnit.DAYS);
         final KStream<String, String> stream = kStream
-                        .map(new KeyValueMapper<String, String, KeyValue<? extends String, ? extends String>>() {
-                            @Override
-                            public KeyValue<? extends String, ? extends String> apply(String key, String value) {
-                                return KeyValue.pair(value, value);
-                            }
-                        });
+            .map((key, value) -> KeyValue.pair(value, value));
         stream.join(kStream,
-                valueJoiner,
-                JoinWindows.of(windowSize).until(3 * windowSize),
-                Serdes.String(),
-                Serdes.String(),
-                Serdes.String())
-                .to(Serdes.String(), Serdes.String(), "output-topic");
+                    valueJoiner,
+                    JoinWindows.of(ofMillis(windowSize)).grace(ofMillis(3 * windowSize)),
+                    Joined.with(Serdes.String(),
+                                Serdes.String(),
+                                Serdes.String()))
+              .to("output-topic", Produced.with(Serdes.String(), Serdes.String()));
 
-        ProcessorTopology processorTopology = builder.setApplicationId("X").build(null);
-        SourceNode originalSourceNode = processorTopology.source("topic-1");
+        final ProcessorTopology topology = TopologyWrapper.getInternalTopologyBuilder(builder.build()).setApplicationId("X").build();
 
-        for (SourceNode sourceNode: processorTopology.sources()) {
+        final SourceNode originalSourceNode = topology.source("topic-1");
+
+        for (final SourceNode sourceNode : topology.sources()) {
             if (sourceNode.name().equals(originalSourceNode.name())) {
-                assertEquals(sourceNode.getTimestampExtractor(), null);
+                assertNull(sourceNode.getTimestampExtractor());
             } else {
                 assertThat(sourceNode.getTimestampExtractor(), instanceOf(FailOnInvalidTimestamp.class));
             }
         }
     }
-    
+
+    @Test
+    public void shouldUseRecordMetadataTimestampExtractorWhenInternalRepartitioningTopicCreated() {
+        final StreamsBuilder builder = new StreamsBuilder();
+        final KStream<String, String> kStream = builder.stream("topic-1", stringConsumed);
+        final ValueJoiner<String, String, String> valueJoiner = MockValueJoiner.instance(":");
+        final long windowSize = TimeUnit.MILLISECONDS.convert(1, TimeUnit.DAYS);
+        final KStream<String, String> stream = kStream
+            .map((key, value) -> KeyValue.pair(value, value));
+        stream.join(
+            kStream,
+            valueJoiner,
+            JoinWindows.of(ofMillis(windowSize)).grace(ofMillis(3L * windowSize)),
+            Joined.with(Serdes.String(), Serdes.String(), Serdes.String())
+        )
+              .to("output-topic", Produced.with(Serdes.String(), Serdes.String()));
+
+        final ProcessorTopology topology = TopologyWrapper.getInternalTopologyBuilder(builder.build()).setApplicationId("X").build();
+
+        final SourceNode originalSourceNode = topology.source("topic-1");
+
+        for (final SourceNode sourceNode : topology.sources()) {
+            if (sourceNode.name().equals(originalSourceNode.name())) {
+                assertNull(sourceNode.getTimestampExtractor());
+            } else {
+                assertThat(sourceNode.getTimestampExtractor(), instanceOf(FailOnInvalidTimestamp.class));
+            }
+        }
+    }
+
+    @Test
+    public void shouldPropagateRepartitionFlagAfterGlobalKTableJoin() {
+        final StreamsBuilder builder = new StreamsBuilder();
+        final GlobalKTable<String, String> globalKTable = builder.globalTable("globalTopic");
+        final KeyValueMapper<String, String, String> kvMappper = (k, v) -> k + v;
+        final ValueJoiner<String, String, String> valueJoiner = (v1, v2) -> v1 + v2;
+        builder.<String, String>stream("topic").selectKey((k, v) -> v)
+            .join(globalKTable, kvMappper, valueJoiner)
+            .groupByKey()
+            .count();
+
+        final Pattern repartitionTopicPattern = Pattern.compile("Sink: .*-repartition");
+        final String topology = builder.build().describe().toString();
+        final Matcher matcher = repartitionTopicPattern.matcher(topology);
+        assertTrue(matcher.find());
+        final String match = matcher.group();
+        assertThat(match, notNullValue());
+        assertTrue(match.endsWith("repartition"));
+    }
+
     @Test
     public void testToWithNullValueSerdeDoesntNPE() {
         final StreamsBuilder builder = new StreamsBuilder();
-        final KStream<String, String> inputStream = builder.stream(stringSerde, stringSerde, "input");
-        inputStream.to(stringSerde, null, "output");
+        final Consumed<String, String> consumed = Consumed.with(Serdes.String(), Serdes.String());
+        final KStream<String, String> inputStream = builder.stream(Collections.singleton("input"), consumed);
+
+        inputStream.to("output", Produced.with(Serdes.String(), Serdes.String()));
     }
 
     @Test(expected = NullPointerException.class)
-    public void shouldNotAllowNullPredicateOnFilter() throws Exception {
+    public void shouldNotAllowNullPredicateOnFilter() {
         testStream.filter(null);
     }
 
     @Test(expected = NullPointerException.class)
-    public void shouldNotAllowNullPredicateOnFilterNot() throws Exception {
+    public void shouldNotAllowNullPredicateOnFilterNot() {
         testStream.filterNot(null);
     }
 
     @Test(expected = NullPointerException.class)
-    public void shouldNotAllowNullMapperOnSelectKey() throws Exception {
+    public void shouldNotAllowNullMapperOnSelectKey() {
         testStream.selectKey(null);
     }
 
     @Test(expected = NullPointerException.class)
-    public void shouldNotAllowNullMapperOnMap() throws Exception {
+    public void shouldNotAllowNullMapperOnMap() {
         testStream.map(null);
     }
 
     @Test(expected = NullPointerException.class)
-    public void shouldNotAllowNullMapperOnMapValues() throws Exception {
-        testStream.mapValues(null);
+    public void shouldNotAllowNullMapperOnMapValues() {
+        testStream.mapValues((ValueMapper) null);
     }
 
     @Test(expected = NullPointerException.class)
-    public void shouldNotAllowNullFilePathOnWriteAsText() throws Exception {
-        testStream.writeAsText(null);
-    }
-
-    @Test(expected = TopologyException.class)
-    public void shouldNotAllowEmptyFilePathOnWriteAsText() throws Exception {
-        testStream.writeAsText("\t    \t");
+    public void shouldNotAllowNullMapperOnMapValuesWithKey() {
+        testStream.mapValues((ValueMapperWithKey) null);
     }
 
     @Test(expected = NullPointerException.class)
-    public void shouldNotAllowNullMapperOnFlatMap() throws Exception {
+    public void shouldNotAllowNullMapperOnFlatMap() {
         testStream.flatMap(null);
     }
 
     @Test(expected = NullPointerException.class)
-    public void shouldNotAllowNullMapperOnFlatMapValues() throws Exception {
-        testStream.flatMapValues(null);
+    public void shouldNotAllowNullMapperOnFlatMapValues() {
+        testStream.flatMapValues((ValueMapper<? super String, ? extends Iterable<? extends String>>) null);
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldNotAllowNullMapperOnFlatMapValuesWithKey() {
+        testStream.flatMapValues((ValueMapperWithKey<? super String, ? super String, ? extends Iterable<? extends String>>) null);
     }
 
     @Test(expected = IllegalArgumentException.class)
-    public void shouldHaveAtLeastOnPredicateWhenBranching() throws Exception {
+    public void shouldHaveAtLeastOnPredicateWhenBranching() {
         testStream.branch();
     }
 
     @Test(expected = NullPointerException.class)
-    public void shouldCantHaveNullPredicate() throws Exception {
+    public void shouldCantHaveNullPredicate() {
         testStream.branch((Predicate) null);
     }
 
     @Test(expected = NullPointerException.class)
-    public void shouldNotAllowNullTopicOnThrough() throws Exception {
+    public void shouldNotAllowNullTopicOnThrough() {
         testStream.through(null);
     }
 
     @Test(expected = NullPointerException.class)
-    public void shouldNotAllowNullTopicOnTo() throws Exception {
-        testStream.to(null);
+    public void shouldNotAllowNullTopicOnTo() {
+        testStream.to((String) null);
     }
 
     @Test(expected = NullPointerException.class)
-    public void shouldNotAllowNullTransformSupplierOnTransform() throws Exception {
-        testStream.transform(null);
+    public void shouldNotAllowNullTopicChooserOnTo() {
+        testStream.to((TopicNameExtractor<String, String>) null);
+    }
+
+    @Test
+    public void shouldNotAllowNullTransformerSupplierOnTransform() {
+        final Exception e = assertThrows(NullPointerException.class, () -> testStream.transform(null));
+        assertEquals("transformerSupplier can't be null", e.getMessage());
+    }
+
+    @Test
+    public void shouldNotAllowNullTransformerSupplierOnFlatTransform() {
+        final Exception e = assertThrows(NullPointerException.class, () -> testStream.flatTransform(null));
+        assertEquals("transformerSupplier can't be null", e.getMessage());
+    }
+
+    @Test
+    public void shouldNotAllowNullValueTransformerWithKeySupplierOnTransformValues() {
+        final Exception e =
+            assertThrows(NullPointerException.class, () -> testStream.transformValues((ValueTransformerWithKeySupplier) null));
+        assertEquals("valueTransformerSupplier can't be null", e.getMessage());
+    }
+
+    @Test
+    public void shouldNotAllowNullValueTransformerSupplierOnTransformValues() {
+        final Exception e =
+            assertThrows(NullPointerException.class, () -> testStream.transformValues((ValueTransformerSupplier) null));
+        assertEquals("valueTransformerSupplier can't be null", e.getMessage());
+    }
+
+    @Test
+    public void shouldNotAllowNullValueTransformerWithKeySupplierOnFlatTransformValues() {
+        final Exception e =
+            assertThrows(NullPointerException.class, () -> testStream.flatTransformValues((ValueTransformerWithKeySupplier) null));
+        assertEquals("valueTransformerSupplier can't be null", e.getMessage());
+    }
+
+    @Test
+    public void shouldNotAllowNullValueTransformerSupplierOnFlatTransformValues() {
+        final Exception e =
+            assertThrows(NullPointerException.class, () -> testStream.flatTransformValues((ValueTransformerSupplier) null));
+        assertEquals("valueTransformerSupplier can't be null", e.getMessage());
     }
 
     @Test(expected = NullPointerException.class)
-    public void shouldNotAllowNullTransformSupplierOnTransformValues() throws Exception {
-        testStream.transformValues(null);
-    }
-
-    @Test(expected = NullPointerException.class)
-    public void shouldNotAllowNullProcessSupplier() throws Exception {
+    public void shouldNotAllowNullProcessSupplier() {
         testStream.process(null);
     }
 
     @Test(expected = NullPointerException.class)
-    public void shouldNotAllowNullOtherStreamOnJoin() throws Exception {
-        testStream.join(null, MockValueJoiner.TOSTRING_JOINER, JoinWindows.of(10));
+    public void shouldNotAllowNullOtherStreamOnJoin() {
+        testStream.join(null, MockValueJoiner.TOSTRING_JOINER, JoinWindows.of(ofMillis(10)));
     }
 
     @Test(expected = NullPointerException.class)
-    public void shouldNotAllowNullValueJoinerOnJoin() throws Exception {
-        testStream.join(testStream, null, JoinWindows.of(10));
+    public void shouldNotAllowNullValueJoinerOnJoin() {
+        testStream.join(testStream, null, JoinWindows.of(ofMillis(10)));
     }
 
     @Test(expected = NullPointerException.class)
-    public void shouldNotAllowNullJoinWindowsOnJoin() throws Exception {
+    public void shouldNotAllowNullJoinWindowsOnJoin() {
         testStream.join(testStream, MockValueJoiner.TOSTRING_JOINER, null);
     }
 
     @Test(expected = NullPointerException.class)
-    public void shouldNotAllowNullTableOnTableJoin() throws Exception {
+    public void shouldNotAllowNullTableOnTableJoin() {
         testStream.leftJoin((KTable) null, MockValueJoiner.TOSTRING_JOINER);
     }
 
     @Test(expected = NullPointerException.class)
-    public void shouldNotAllowNullValueMapperOnTableJoin() throws Exception {
-        testStream.leftJoin(builder.table(Serdes.String(), Serdes.String(), "topic", "store"), null);
+    public void shouldNotAllowNullValueMapperOnTableJoin() {
+        testStream.leftJoin(builder.table("topic", stringConsumed), null);
     }
 
     @Test(expected = NullPointerException.class)
-    public void shouldNotAllowNullSelectorOnGroupBy() throws Exception {
+    public void shouldNotAllowNullSelectorOnGroupBy() {
         testStream.groupBy(null);
     }
 
     @Test(expected = NullPointerException.class)
-    public void shouldNotAllowNullActionOnForEach() throws Exception {
+    public void shouldNotAllowNullActionOnForEach() {
         testStream.foreach(null);
     }
 
     @Test(expected = NullPointerException.class)
-    public void shouldNotAllowNullTableOnJoinWithGlobalTable() throws Exception {
+    public void shouldNotAllowNullTableOnJoinWithGlobalTable() {
         testStream.join((GlobalKTable) null,
-                        MockKeyValueMapper.<String, String>SelectValueMapper(),
+                        MockMapper.selectValueMapper(),
                         MockValueJoiner.TOSTRING_JOINER);
     }
 
     @Test(expected = NullPointerException.class)
-    public void shouldNotAllowNullMapperOnJoinWithGlobalTable() throws Exception {
-        testStream.join(builder.globalTable(Serdes.String(), Serdes.String(), null, "global", "global"),
+    public void shouldNotAllowNullMapperOnJoinWithGlobalTable() {
+        testStream.join(builder.globalTable("global", stringConsumed),
                         null,
                         MockValueJoiner.TOSTRING_JOINER);
     }
 
     @Test(expected = NullPointerException.class)
-    public void shouldNotAllowNullJoinerOnJoinWithGlobalTable() throws Exception {
-        testStream.join(builder.globalTable(Serdes.String(), Serdes.String(), null, "global", "global"),
-                        MockKeyValueMapper.<String, String>SelectValueMapper(),
+    public void shouldNotAllowNullJoinerOnJoinWithGlobalTable() {
+        testStream.join(builder.globalTable("global", stringConsumed),
+                        MockMapper.selectValueMapper(),
                         null);
     }
 
     @Test(expected = NullPointerException.class)
-    public void shouldNotAllowNullTableOnJLeftJoinWithGlobalTable() throws Exception {
+    public void shouldNotAllowNullTableOnJLeftJoinWithGlobalTable() {
         testStream.leftJoin((GlobalKTable) null,
-                        MockKeyValueMapper.<String, String>SelectValueMapper(),
+                        MockMapper.selectValueMapper(),
                         MockValueJoiner.TOSTRING_JOINER);
     }
 
     @Test(expected = NullPointerException.class)
-    public void shouldNotAllowNullMapperOnLeftJoinWithGlobalTable() throws Exception {
-        testStream.leftJoin(builder.globalTable(Serdes.String(), Serdes.String(), null, "global", "global"),
+    public void shouldNotAllowNullMapperOnLeftJoinWithGlobalTable() {
+        testStream.leftJoin(builder.globalTable("global", stringConsumed),
                         null,
                         MockValueJoiner.TOSTRING_JOINER);
     }
 
     @Test(expected = NullPointerException.class)
-    public void shouldNotAllowNullJoinerOnLeftJoinWithGlobalTable() throws Exception {
-        testStream.leftJoin(builder.globalTable(Serdes.String(), Serdes.String(), null, "global", "global"),
-                        MockKeyValueMapper.<String, String>SelectValueMapper(),
+    public void shouldNotAllowNullJoinerOnLeftJoinWithGlobalTable() {
+        testStream.leftJoin(builder.globalTable("global", stringConsumed),
+                        MockMapper.selectValueMapper(),
                         null);
     }
 
+    @Test(expected = NullPointerException.class)
+    public void shouldThrowNullPointerOnPrintIfPrintedIsNull() {
+        testStream.print(null);
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldThrowNullPointerOnThroughWhenProducedIsNull() {
+        testStream.through("topic", null);
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldThrowNullPointerOnToWhenProducedIsNull() {
+        testStream.to("topic", null);
+    }
+
+    @Test
+    public void shouldThrowNullPointerOnLeftJoinWithTableWhenJoinedIsNull() {
+        final KTable<String, String> table = builder.table("blah", stringConsumed);
+        try {
+            testStream.leftJoin(table,
+                                MockValueJoiner.TOSTRING_JOINER,
+                                null);
+            fail("Should have thrown NullPointerException");
+        } catch (final NullPointerException e) {
+            // ok
+        }
+    }
+
+    @Test
+    public void shouldThrowNullPointerOnJoinWithTableWhenJoinedIsNull() {
+        final KTable<String, String> table = builder.table("blah", stringConsumed);
+        try {
+            testStream.join(table,
+                            MockValueJoiner.TOSTRING_JOINER,
+                            null);
+            fail("Should have thrown NullPointerException");
+        } catch (final NullPointerException e) {
+            // ok
+        }
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldThrowNullPointerOnJoinWithStreamWhenJoinedIsNull() {
+        testStream.join(testStream, MockValueJoiner.TOSTRING_JOINER, JoinWindows.of(ofMillis(10)), null);
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldThrowNullPointerOnOuterJoinJoinedIsNull() {
+        testStream.outerJoin(testStream, MockValueJoiner.TOSTRING_JOINER, JoinWindows.of(ofMillis(10)), null);
+    }
+
+    @Test
+    public void shouldMergeTwoStreams() {
+        final String topic1 = "topic-1";
+        final String topic2 = "topic-2";
+
+        final KStream<String, String> source1 = builder.stream(topic1);
+        final KStream<String, String> source2 = builder.stream(topic2);
+        final KStream<String, String> merged = source1.merge(source2);
+
+        merged.process(processorSupplier);
+
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+            driver.pipeInput(recordFactory.create(topic1, "A", "aa"));
+            driver.pipeInput(recordFactory.create(topic2, "B", "bb"));
+            driver.pipeInput(recordFactory.create(topic2, "C", "cc"));
+            driver.pipeInput(recordFactory.create(topic1, "D", "dd"));
+        }
+
+        assertEquals(asList(new KeyValueTimestamp<>("A", "aa", 0),
+                new KeyValueTimestamp<>("B", "bb", 0),
+                new KeyValueTimestamp<>("C", "cc", 0),
+                new KeyValueTimestamp<>("D", "dd", 0)), processorSupplier.theCapturedProcessor().processed);
+    }
+
+    @Test
+    public void shouldMergeMultipleStreams() {
+        final String topic1 = "topic-1";
+        final String topic2 = "topic-2";
+        final String topic3 = "topic-3";
+        final String topic4 = "topic-4";
+
+        final KStream<String, String> source1 = builder.stream(topic1);
+        final KStream<String, String> source2 = builder.stream(topic2);
+        final KStream<String, String> source3 = builder.stream(topic3);
+        final KStream<String, String> source4 = builder.stream(topic4);
+        final KStream<String, String> merged = source1.merge(source2).merge(source3).merge(source4);
+
+        merged.process(processorSupplier);
+
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+            driver.pipeInput(recordFactory.create(topic1, "A", "aa", 1L));
+            driver.pipeInput(recordFactory.create(topic2, "B", "bb", 9L));
+            driver.pipeInput(recordFactory.create(topic3, "C", "cc", 2L));
+            driver.pipeInput(recordFactory.create(topic4, "D", "dd", 8L));
+            driver.pipeInput(recordFactory.create(topic4, "E", "ee", 3L));
+            driver.pipeInput(recordFactory.create(topic3, "F", "ff", 7L));
+            driver.pipeInput(recordFactory.create(topic2, "G", "gg", 4L));
+            driver.pipeInput(recordFactory.create(topic1, "H", "hh", 6L));
+        }
+
+        assertEquals(asList(new KeyValueTimestamp<>("A", "aa", 1),
+                new KeyValueTimestamp<>("B", "bb", 9),
+                new KeyValueTimestamp<>("C", "cc", 2),
+                new KeyValueTimestamp<>("D", "dd", 8),
+                new KeyValueTimestamp<>("E", "ee", 3),
+                new KeyValueTimestamp<>("F", "ff", 7),
+                new KeyValueTimestamp<>("G", "gg", 4),
+                new KeyValueTimestamp<>("H", "hh", 6)),
+                     processorSupplier.theCapturedProcessor().processed);
+    }
+
+    @Test
+    public void shouldProcessFromSourceThatMatchPattern() {
+        final KStream<String, String> pattern2Source = builder.stream(Pattern.compile("topic-\\d"));
+
+        pattern2Source.process(processorSupplier);
+
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+            driver.pipeInput(recordFactory.create("topic-3", "A", "aa", 1L));
+            driver.pipeInput(recordFactory.create("topic-4", "B", "bb", 5L));
+            driver.pipeInput(recordFactory.create("topic-5", "C", "cc", 10L));
+            driver.pipeInput(recordFactory.create("topic-6", "D", "dd", 8L));
+            driver.pipeInput(recordFactory.create("topic-7", "E", "ee", 3L));
+        }
+
+        assertEquals(asList(new KeyValueTimestamp<>("A", "aa", 1),
+                new KeyValueTimestamp<>("B", "bb", 5),
+                new KeyValueTimestamp<>("C", "cc", 10),
+                new KeyValueTimestamp<>("D", "dd", 8),
+                new KeyValueTimestamp<>("E", "ee", 3)),
+                processorSupplier.theCapturedProcessor().processed);
+    }
+
+    @Test
+    public void shouldProcessFromSourcesThatMatchMultiplePattern() {
+        final String topic3 = "topic-without-pattern";
+
+        final KStream<String, String> pattern2Source1 = builder.stream(Pattern.compile("topic-\\d"));
+        final KStream<String, String> pattern2Source2 = builder.stream(Pattern.compile("topic-[A-Z]"));
+        final KStream<String, String> source3 = builder.stream(topic3);
+        final KStream<String, String> merged = pattern2Source1.merge(pattern2Source2).merge(source3);
+
+        merged.process(processorSupplier);
+
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+            driver.pipeInput(recordFactory.create("topic-3", "A", "aa", 1L));
+            driver.pipeInput(recordFactory.create("topic-4", "B", "bb", 5L));
+            driver.pipeInput(recordFactory.create("topic-A", "C", "cc", 10L));
+            driver.pipeInput(recordFactory.create("topic-Z", "D", "dd", 8L));
+            driver.pipeInput(recordFactory.create(topic3, "E", "ee", 3L));
+        }
+
+        assertEquals(asList(new KeyValueTimestamp<>("A", "aa", 1),
+                new KeyValueTimestamp<>("B", "bb", 5),
+                new KeyValueTimestamp<>("C", "cc", 10),
+                new KeyValueTimestamp<>("D", "dd", 8),
+                new KeyValueTimestamp<>("E", "ee", 3)),
+                processorSupplier.theCapturedProcessor().processed);
+    }
 }

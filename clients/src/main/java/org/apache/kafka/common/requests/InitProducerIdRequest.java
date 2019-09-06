@@ -16,89 +16,71 @@
  */
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.message.InitProducerIdRequestData;
+import org.apache.kafka.common.message.InitProducerIdResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
+import org.apache.kafka.common.record.RecordBatch;
 
 import java.nio.ByteBuffer;
 
 public class InitProducerIdRequest extends AbstractRequest {
-    public static final int NO_TRANSACTION_TIMEOUT_MS = Integer.MAX_VALUE;
-
-    private static final String TRANSACTIONAL_ID_KEY_NAME = "transactional_id";
-    private static final String TRANSACTION_TIMEOUT_KEY_NAME = "transaction_timeout_ms";
-
-    private final String transactionalId;
-    private final int transactionTimeoutMs;
-
     public static class Builder extends AbstractRequest.Builder<InitProducerIdRequest> {
-        private final String transactionalId;
-        private final int transactionTimeoutMs;
+        private final InitProducerIdRequestData data;
 
-        public Builder(String transactionalId) {
-            this(transactionalId, NO_TRANSACTION_TIMEOUT_MS);
-        }
-
-        public Builder(String transactionalId, int transactionTimeoutMs) {
+        public Builder(InitProducerIdRequestData data) {
             super(ApiKeys.INIT_PRODUCER_ID);
-
-            if (transactionTimeoutMs <= 0)
-                throw new IllegalArgumentException("transaction timeout value is not positive: " + transactionTimeoutMs);
-
-            if (transactionalId != null && transactionalId.isEmpty())
-                throw new IllegalArgumentException("Must set either a null or a non-empty transactional id.");
-
-            this.transactionalId = transactionalId;
-            this.transactionTimeoutMs = transactionTimeoutMs;
+            this.data = data;
         }
 
         @Override
         public InitProducerIdRequest build(short version) {
-            return new InitProducerIdRequest(version, transactionalId, transactionTimeoutMs);
+            if (data.transactionTimeoutMs() <= 0)
+                throw new IllegalArgumentException("transaction timeout value is not positive: " + data.transactionTimeoutMs());
+
+            if (data.transactionalId() != null && data.transactionalId().isEmpty())
+                throw new IllegalArgumentException("Must set either a null or a non-empty transactional id.");
+
+            return new InitProducerIdRequest(data, version);
         }
 
         @Override
         public String toString() {
-            return "(type=InitProducerIdRequest, transactionalId=" + transactionalId + ", transactionTimeoutMs=" +
-                    transactionTimeoutMs + ")";
+            return data.toString();
         }
     }
 
-    public InitProducerIdRequest(Struct struct, short version) {
-        super(version);
-        this.transactionalId = struct.getString(TRANSACTIONAL_ID_KEY_NAME);
-        this.transactionTimeoutMs = struct.getInt(TRANSACTION_TIMEOUT_KEY_NAME);
+    public final InitProducerIdRequestData data;
+
+    private InitProducerIdRequest(InitProducerIdRequestData data, short version) {
+        super(ApiKeys.INIT_PRODUCER_ID, version);
+        this.data = data;
     }
 
-    private InitProducerIdRequest(short version, String transactionalId, int transactionTimeoutMs) {
-        super(version);
-        this.transactionalId = transactionalId;
-        this.transactionTimeoutMs = transactionTimeoutMs;
+    public InitProducerIdRequest(Struct struct, short version) {
+        super(ApiKeys.INIT_PRODUCER_ID, version);
+        this.data = new InitProducerIdRequestData(struct, version);
     }
+
 
     @Override
     public AbstractResponse getErrorResponse(int throttleTimeMs, Throwable e) {
-        return new InitProducerIdResponse(throttleTimeMs, Errors.forException(e));
+        InitProducerIdResponseData response = new InitProducerIdResponseData()
+                .setErrorCode(Errors.forException(e).code())
+                .setProducerId(RecordBatch.NO_PRODUCER_ID)
+                .setProducerEpoch(RecordBatch.NO_PRODUCER_EPOCH)
+                .setThrottleTimeMs(0);
+        return new InitProducerIdResponse(response);
     }
 
     public static InitProducerIdRequest parse(ByteBuffer buffer, short version) {
         return new InitProducerIdRequest(ApiKeys.INIT_PRODUCER_ID.parseRequest(version, buffer), version);
     }
 
-    public String transactionalId() {
-        return transactionalId;
-    }
-
-    public int transactionTimeoutMs() {
-        return transactionTimeoutMs;
-    }
-
     @Override
     protected Struct toStruct() {
-        Struct struct = new Struct(ApiKeys.INIT_PRODUCER_ID.requestSchema(version()));
-        struct.set(TRANSACTIONAL_ID_KEY_NAME, transactionalId);
-        struct.set(TRANSACTION_TIMEOUT_KEY_NAME, transactionTimeoutMs);
-        return struct;
+        return data.toStruct(version());
     }
 
 }

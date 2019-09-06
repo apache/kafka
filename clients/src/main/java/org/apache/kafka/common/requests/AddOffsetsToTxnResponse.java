@@ -18,12 +18,28 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
+import java.util.Map;
+
+import static org.apache.kafka.common.protocol.CommonFields.ERROR_CODE;
+import static org.apache.kafka.common.protocol.CommonFields.THROTTLE_TIME_MS;
 
 public class AddOffsetsToTxnResponse extends AbstractResponse {
-    private static final String ERROR_CODE_KEY_NAME = "error_code";
+    private static final Schema ADD_OFFSETS_TO_TXN_RESPONSE_V0 = new Schema(
+            THROTTLE_TIME_MS,
+            ERROR_CODE);
+
+    /**
+     * The version number is bumped to indicate that on quota violation brokers send out responses before throttling.
+     */
+    private static final Schema ADD_OFFSETS_TO_TXN_RESPONSE_V1 = ADD_OFFSETS_TO_TXN_RESPONSE_V0;
+
+    public static Schema[] schemaVersions() {
+        return new Schema[]{ADD_OFFSETS_TO_TXN_RESPONSE_V0, ADD_OFFSETS_TO_TXN_RESPONSE_V1};
+    }
 
     // Possible error codes:
     //   NotCoordinator
@@ -44,10 +60,11 @@ public class AddOffsetsToTxnResponse extends AbstractResponse {
     }
 
     public AddOffsetsToTxnResponse(Struct struct) {
-        this.throttleTimeMs = struct.getInt(THROTTLE_TIME_KEY_NAME);
-        this.error = Errors.forCode(struct.getShort(ERROR_CODE_KEY_NAME));
+        this.throttleTimeMs = struct.get(THROTTLE_TIME_MS);
+        this.error = Errors.forCode(struct.get(ERROR_CODE));
     }
 
+    @Override
     public int throttleTimeMs() {
         return throttleTimeMs;
     }
@@ -57,10 +74,15 @@ public class AddOffsetsToTxnResponse extends AbstractResponse {
     }
 
     @Override
+    public Map<Errors, Integer> errorCounts() {
+        return errorCounts(error);
+    }
+
+    @Override
     protected Struct toStruct(short version) {
         Struct struct = new Struct(ApiKeys.ADD_OFFSETS_TO_TXN.responseSchema(version));
-        struct.set(THROTTLE_TIME_KEY_NAME, throttleTimeMs);
-        struct.set(ERROR_CODE_KEY_NAME, error.code());
+        struct.set(THROTTLE_TIME_MS, throttleTimeMs);
+        struct.set(ERROR_CODE, error.code());
         return struct;
     }
 
@@ -76,4 +98,8 @@ public class AddOffsetsToTxnResponse extends AbstractResponse {
                 ')';
     }
 
+    @Override
+    public boolean shouldClientThrottle(short version) {
+        return version >= 1;
+    }
 }

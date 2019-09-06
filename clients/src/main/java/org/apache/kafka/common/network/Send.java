@@ -20,12 +20,12 @@ import java.io.IOException;
 import java.nio.channels.GatheringByteChannel;
 
 /**
- * This interface models the in-progress sending of data to a destination identified by an integer id.
+ * This interface models the in-progress sending of data to a specific destination
  */
 public interface Send {
 
     /**
-     * The numeric id for the destination of this send
+     * The id for the destination of this send
      */
     String destination();
 

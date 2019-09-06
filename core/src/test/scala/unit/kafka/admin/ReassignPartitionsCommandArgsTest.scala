@@ -17,19 +17,18 @@
 package kafka.admin
 
 import kafka.utils.Exit
-import org.junit.Assert.assertTrue
+import org.junit.Assert._
 import org.junit.{After, Before, Test}
-import org.scalatest.junit.JUnitSuite
 
-class ReassignPartitionsCommandArgsTest extends JUnitSuite {
+class ReassignPartitionsCommandArgsTest {
 
   @Before
-  def setUp() {
+  def setUp(): Unit = {
     Exit.setExitProcedure((_, message) => throw new IllegalArgumentException(message.orNull))
   }
 
   @After
-  def tearDown() {
+  def tearDown(): Unit = {
     Exit.resetExitProcedure()
   }
 
@@ -75,6 +74,17 @@ class ReassignPartitionsCommandArgsTest extends JUnitSuite {
     ReassignPartitionsCommand.validateAndParseArgs(args)
   }
 
+  @Test
+  def shouldUseDefaultsIfEnabled(): Unit = {
+    val args = Array(
+      "--zookeeper", "localhost:1234",
+      "--execute",
+      "--reassignment-json-file", "myfile.json")
+    val opts = ReassignPartitionsCommand.validateAndParseArgs(args)
+    assertEquals(10000L, opts.options.valueOf(opts.timeoutOpt))
+    assertEquals(-1L, opts.options.valueOf(opts.interBrokerThrottleOpt))
+  }
+
   /**
     * NO ARGS
     */
@@ -82,7 +92,7 @@ class ReassignPartitionsCommandArgsTest extends JUnitSuite {
   @Test
   def shouldFailIfNoArgs(): Unit = {
     val args: Array[String]= Array()
-    shouldFailWith("This command moves topic partitions between replicas.", args)
+    shouldFailWith(ReassignPartitionsCommand.helpText, args)
   }
 
   @Test
@@ -102,7 +112,7 @@ class ReassignPartitionsCommandArgsTest extends JUnitSuite {
       "--execute",
       "--reassignment-json-file", "myfile.json",
       "--topics-to-move-json-file", "myfile.json")
-    shouldFailWith("Option \"[execute]\" can't be used with option\"[topics-to-move-json-file]\"", args)
+    shouldFailWith("Option \"[execute]\" can't be used with option \"[topics-to-move-json-file]\"", args)
   }
 
   @Test
@@ -113,7 +123,7 @@ class ReassignPartitionsCommandArgsTest extends JUnitSuite {
       "--reassignment-json-file", "myfile.json",
       "--broker-list", "101,102"
     )
-    shouldFailWith("Option \"[execute]\" can't be used with option\"[broker-list]\"", args)
+    shouldFailWith("Option \"[execute]\" can't be used with option \"[broker-list]\"", args)
   }
 
   @Test
@@ -162,7 +172,7 @@ class ReassignPartitionsCommandArgsTest extends JUnitSuite {
       "--broker-list", "101,102",
       "--throttle", "100",
       "--topics-to-move-json-file", "myfile.json")
-    shouldFailWith("Option \"[generate]\" can't be used with option\"[throttle]\"", args)
+    shouldFailWith("Option \"[generate]\" can't be used with option \"[throttle]\"", args)
   }
 
   @Test
@@ -173,7 +183,7 @@ class ReassignPartitionsCommandArgsTest extends JUnitSuite {
       "--broker-list", "101,102",
       "--topics-to-move-json-file", "myfile.json",
       "--reassignment-json-file", "myfile.json")
-    shouldFailWith("Option \"[generate]\" can't be used with option\"[reassignment-json-file]\"", args)
+    shouldFailWith("Option \"[generate]\" can't be used with option \"[reassignment-json-file]\"", args)
   }
 
   /**
@@ -195,7 +205,7 @@ class ReassignPartitionsCommandArgsTest extends JUnitSuite {
       "--verify",
       "--broker-list", "100,101",
       "--reassignment-json-file", "myfile.json")
-    shouldFailWith("Option \"[verify]\" can't be used with option\"[broker-list]\"", args)
+    shouldFailWith("Option \"[verify]\" can't be used with option \"[broker-list]\"", args)
   }
 
   @Test
@@ -205,7 +215,7 @@ class ReassignPartitionsCommandArgsTest extends JUnitSuite {
       "--verify",
       "--throttle", "100",
       "--reassignment-json-file", "myfile.json")
-    shouldFailWith("Option \"[verify]\" can't be used with option\"[throttle]\"", args)
+    shouldFailWith("Option \"[verify]\" can't be used with option \"[throttle]\"", args)
   }
 
   @Test
@@ -215,7 +225,7 @@ class ReassignPartitionsCommandArgsTest extends JUnitSuite {
       "--verify",
       "--reassignment-json-file", "myfile.json",
       "--topics-to-move-json-file", "myfile.json")
-    shouldFailWith("Option \"[verify]\" can't be used with option\"[topics-to-move-json-file]\"", args)
+    shouldFailWith("Option \"[verify]\" can't be used with option \"[topics-to-move-json-file]\"", args)
   }
 
   def shouldFailWith(msg: String, args: Array[String]): Unit = {

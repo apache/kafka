@@ -16,76 +16,101 @@
  */
 package org.apache.kafka.common.requests;
 
-import java.nio.ByteBuffer;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
+import org.apache.kafka.common.message.LeaveGroupRequestData;
+import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity;
+import org.apache.kafka.common.message.LeaveGroupResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.MessageUtil;
 import org.apache.kafka.common.protocol.types.Struct;
 
+import java.nio.ByteBuffer;
+import java.util.Collections;
+import java.util.List;
+
 public class LeaveGroupRequest extends AbstractRequest {
-    private static final String GROUP_ID_KEY_NAME = "group_id";
-    private static final String MEMBER_ID_KEY_NAME = "member_id";
 
     public static class Builder extends AbstractRequest.Builder<LeaveGroupRequest> {
         private final String groupId;
-        private final String memberId;
+        private final List<MemberIdentity> members;
 
-        public Builder(String groupId, String memberId) {
+        public Builder(String groupId, List<MemberIdentity> members) {
             super(ApiKeys.LEAVE_GROUP);
             this.groupId = groupId;
-            this.memberId = memberId;
+            this.members = members;
+            if (members.isEmpty()) {
+                throw new IllegalArgumentException("leaving members should not be empty");
+            }
         }
 
+        /**
+         * Based on the request version to choose fields.
+         */
         @Override
         public LeaveGroupRequest build(short version) {
-            return new LeaveGroupRequest(groupId, memberId, version);
+            final LeaveGroupRequestData data;
+            // Starting from version 3, all the leave group request will be in batch.
+            if (version >= 3) {
+                data = new LeaveGroupRequestData()
+                           .setGroupId(groupId)
+                           .setMembers(members);
+            } else {
+                if (members.size() != 1) {
+                    throw new UnsupportedVersionException("Version " + version + " leave group request only " +
+                                                              "supports single member instance than " + members.size() + " members");
+                }
+
+                data = new LeaveGroupRequestData()
+                           .setGroupId(groupId)
+                           .setMemberId(members.get(0).memberId());
+            }
+            return new LeaveGroupRequest(data, version);
         }
 
         @Override
         public String toString() {
-            StringBuilder bld = new StringBuilder();
-            bld.append("(type=LeaveGroupRequest").
-                append(", groupId=").append(groupId).
-                append(", memberId=").append(memberId).
-                append(")");
-            return bld.toString();
+            return "(type=LeaveGroupRequest" +
+                       ", groupId=" + groupId +
+                       ", members=" + MessageUtil.deepToString(members.iterator()) +
+                       ")";
         }
     }
+    private final LeaveGroupRequestData data;
+    private final short version;
 
-    private final String groupId;
-    private final String memberId;
-
-    private LeaveGroupRequest(String groupId, String memberId, short version) {
-        super(version);
-        this.groupId = groupId;
-        this.memberId = memberId;
+    private LeaveGroupRequest(LeaveGroupRequestData data, short version) {
+        super(ApiKeys.LEAVE_GROUP, version);
+        this.data = data;
+        this.version = version;
     }
 
     public LeaveGroupRequest(Struct struct, short version) {
-        super(version);
-        groupId = struct.getString(GROUP_ID_KEY_NAME);
-        memberId = struct.getString(MEMBER_ID_KEY_NAME);
+        super(ApiKeys.LEAVE_GROUP, version);
+        this.data = new LeaveGroupRequestData(struct, version);
+        this.version = version;
+    }
+
+    public LeaveGroupRequestData data() {
+        return data;
+    }
+
+    public List<MemberIdentity> members() {
+        // Before version 3, leave group request is still in single mode
+        return version <= 2 ? Collections.singletonList(
+            new MemberIdentity()
+                .setMemberId(data.memberId())) : data.members();
     }
 
     @Override
     public AbstractResponse getErrorResponse(int throttleTimeMs, Throwable e) {
-        short versionId = version();
-        switch (versionId) {
-            case 0:
-                return new LeaveGroupResponse(Errors.forException(e));
-            case 1:
-                return new LeaveGroupResponse(throttleTimeMs, Errors.forException(e));
-            default:
-                throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
-                        versionId, this.getClass().getSimpleName(), ApiKeys.LEAVE_GROUP.latestVersion()));
+        LeaveGroupResponseData responseData = new LeaveGroupResponseData()
+                                                  .setErrorCode(Errors.forException(e).code());
+
+        if (version() >= 1) {
+            responseData.setThrottleTimeMs(throttleTimeMs);
         }
-    }
-
-    public String groupId() {
-        return groupId;
-    }
-
-    public String memberId() {
-        return memberId;
+        return new LeaveGroupResponse(responseData);
     }
 
     public static LeaveGroupRequest parse(ByteBuffer buffer, short version) {
@@ -94,9 +119,6 @@ public class LeaveGroupRequest extends AbstractRequest {
 
     @Override
     protected Struct toStruct() {
-        Struct struct = new Struct(ApiKeys.LEAVE_GROUP.requestSchema(version()));
-        struct.set(GROUP_ID_KEY_NAME, groupId);
-        struct.set(MEMBER_ID_KEY_NAME, memberId);
-        return struct;
+        return data.toStruct(version);
     }
 }

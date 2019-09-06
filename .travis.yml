@@ -39,7 +39,7 @@ before_install:
 
 script:
   - ./gradlew rat
-  - ./gradlew releaseTarGz && /bin/bash ./tests/docker/run_tests.sh
+  - ./gradlew systemTestLibs && /bin/bash ./tests/docker/run_tests.sh
 
 services:
   - docker

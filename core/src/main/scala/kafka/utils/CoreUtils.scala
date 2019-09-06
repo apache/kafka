@@ -22,17 +22,18 @@ import java.nio._
 import java.nio.channels._
 import java.util.concurrent.locks.{Lock, ReadWriteLock}
 import java.lang.management._
-import java.util.{Properties, UUID}
-import javax.management._
-import javax.xml.bind.DatatypeConverter
+import java.util.{Base64, Properties, UUID}
 
-import org.apache.kafka.common.protocol.SecurityProtocol
+import com.typesafe.scalalogging.Logger
+import javax.management._
 
 import scala.collection._
-import scala.collection.mutable
+import scala.collection.{Seq, mutable}
 import kafka.cluster.EndPoint
 import org.apache.kafka.common.network.ListenerName
+import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.{KafkaThread, Utils}
+import org.slf4j.event.Level
 
 /**
  * General helper functions!
@@ -45,7 +46,14 @@ import org.apache.kafka.common.utils.{KafkaThread, Utils}
  * 2. It is the most general possible utility, not just the thing you needed in one particular place
  * 3. You have tests for it if it is nontrivial in any way
  */
-object CoreUtils extends Logging {
+object CoreUtils {
+  private val logger = Logger(getClass)
+
+  /**
+   * Return the smallest element in `iterable` if it is not empty. Otherwise return `ifEmpty`.
+   */
+  def min[A, B >: A](iterable: Iterable[A], ifEmpty: A)(implicit cmp: Ordering[B]): A =
+    if (iterable.isEmpty) ifEmpty else iterable.min(cmp)
 
   /**
    * Wrap the given function in a java.lang.Runnable
@@ -69,15 +77,23 @@ object CoreUtils extends Logging {
     new KafkaThread(name, runnable(fun), daemon)
 
   /**
-   * Do the given action and log any exceptions thrown without rethrowing them
-   * @param log The log method to use for logging. E.g. logger.warn
-   * @param action The action to execute
-   */
-  def swallow(log: (Object, Throwable) => Unit, action: => Unit) {
+    * Do the given action and log any exceptions thrown without rethrowing them.
+    *
+    * @param action The action to execute.
+    * @param logging The logging instance to use for logging the thrown exception.
+    * @param logLevel The log level to use for logging.
+    */
+  def swallow(action: => Unit, logging: Logging, logLevel: Level = Level.WARN): Unit = {
     try {
       action
     } catch {
-      case e: Throwable => log(e.getMessage(), e)
+      case e: Throwable => logLevel match {
+        case Level.ERROR => logger.error(e.getMessage, e)
+        case Level.WARN => logger.warn(e.getMessage, e)
+        case Level.INFO => logger.info(e.getMessage, e)
+        case Level.DEBUG => logger.debug(e.getMessage, e)
+        case Level.TRACE => logger.trace(e.getMessage, e)
+      }
     }
   }
 
@@ -86,6 +102,30 @@ object CoreUtils extends Logging {
    * @param files sequence of files to be deleted
    */
   def delete(files: Seq[String]): Unit = files.foreach(f => Utils.delete(new File(f)))
+
+  /**
+   * Invokes every function in `all` even if one or more functions throws an exception.
+   *
+   * If any of the functions throws an exception, the first one will be rethrown at the end with subsequent exceptions
+   * added as suppressed exceptions.
+   */
+  // Note that this is a generalised version of `Utils.closeAll`. We could potentially make it more general by
+  // changing the signature to `def tryAll[R](all: Seq[() => R]): Seq[R]`
+  def tryAll(all: Seq[() => Unit]): Unit = {
+    var exception: Throwable = null
+    all.foreach { element =>
+      try element.apply()
+      catch {
+        case e: Throwable =>
+          if (exception != null)
+            exception.addSuppressed(e)
+          else
+            exception = e
+      }
+    }
+    if (exception != null)
+      throw exception
+  }
 
   /**
    * Register the given mbean with the platform mbean server,
@@ -109,7 +149,7 @@ object CoreUtils extends Logging {
       }
     } catch {
       case e: Exception => {
-        error("Failed to register Mbean " + name, e)
+        logger.error(s"Failed to register Mbean $name", e)
         false
       }
     }
@@ -119,7 +159,7 @@ object CoreUtils extends Logging {
    * Unregister the mbean with the given name, if there is one registered
    * @param name The mbean name to unregister
    */
-  def unregisterMBean(name: String) {
+  def unregisterMBean(name: String): Unit = {
     val mbs = ManagementFactory.getPlatformMBeanServer()
     mbs synchronized {
       val objName = new ObjectName(name)
@@ -220,31 +260,6 @@ object CoreUtils extends Logging {
 
   def inWriteLock[T](lock: ReadWriteLock)(fun: => T): T = inLock[T](lock.writeLock)(fun)
 
-
-  //JSON strings need to be escaped based on ECMA-404 standard http://json.org
-  def JSONEscapeString (s : String) : String = {
-    s.map {
-      case '"'  => "\\\""
-      case '\\' => "\\\\"
-      case '/'  => "\\/"
-      case '\b' => "\\b"
-      case '\f' => "\\f"
-      case '\n' => "\\n"
-      case '\r' => "\\r"
-      case '\t' => "\\t"
-      /* We'll unicode escape any control characters. These include:
-       * 0x0 -> 0x1f  : ASCII Control (C0 Control Codes)
-       * 0x7f         : ASCII DELETE
-       * 0x80 -> 0x9f : C1 Control Codes
-       *
-       * Per RFC4627, section 2.5, we're not technically required to
-       * encode the C1 codes, but we do to be safe.
-       */
-      case c if (c >= '\u0000' && c <= '\u001f') || (c >= '\u007f' && c <= '\u009f') => "\\u%04x".format(c: Int)
-      case c => c
-    }.mkString
-  }
-
   /**
    * Returns a list of duplicated items
    */
@@ -279,7 +294,7 @@ object CoreUtils extends Logging {
 
   def generateUuidAsBase64(): String = {
     val uuid = UUID.randomUUID()
-    urlSafeBase64EncodeNoPadding(getBytesFromUuid(uuid))
+    Base64.getUrlEncoder.withoutPadding.encodeToString(getBytesFromUuid(uuid))
   }
 
   def getBytesFromUuid(uuid: UUID): Array[Byte] = {
@@ -290,14 +305,6 @@ object CoreUtils extends Logging {
     uuidBytes.array
   }
 
-  def urlSafeBase64EncodeNoPadding(data: Array[Byte]): String = {
-    val base64EncodedUUID = DatatypeConverter.printBase64Binary(data)
-    //Convert to URL safe variant by replacing + and / with - and _ respectively.
-    val urlSafeBase64EncodedUUID = base64EncodedUUID.replace("+", "-").replace("/", "_")
-    // Remove the "==" padding at the end.
-    urlSafeBase64EncodedUUID.substring(0, urlSafeBase64EncodedUUID.length - 2)
-  }
-
   def propsWith(key: String, value: String): Properties = {
     propsWith((key, value))
   }
@@ -306,5 +313,24 @@ object CoreUtils extends Logging {
     val properties = new Properties()
     props.foreach { case (k, v) => properties.put(k, v) }
     properties
+  }
+
+  /**
+   * Atomic `getOrElseUpdate` for concurrent maps. This is optimized for the case where
+   * keys often exist in the map, avoiding the need to create a new value. `createValue`
+   * may be invoked more than once if multiple threads attempt to insert a key at the same
+   * time, but the same inserted value will be returned to all threads.
+   *
+   * In Scala 2.12, `ConcurrentMap.getOrElse` has the same behaviour as this method, but that
+   * is not the case in Scala 2.11. We can remove this method once we drop support for Scala
+   * 2.11.
+   */
+  def atomicGetOrUpdate[K, V](map: concurrent.Map[K, V], key: K, createValue: => V): V = {
+    map.get(key) match {
+      case Some(value) => value
+      case None =>
+        val value = createValue
+        map.putIfAbsent(key, value).getOrElse(value)
+    }
   }
 }

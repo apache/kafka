@@ -26,6 +26,7 @@ public class ClientState {
     private final Set<TaskId> standbyTasks;
     private final Set<TaskId> assignedTasks;
     private final Set<TaskId> prevActiveTasks;
+    private final Set<TaskId> prevStandbyTasks;
     private final Set<TaskId> prevAssignedTasks;
 
     private int capacity;
@@ -36,21 +37,34 @@ public class ClientState {
     }
 
     ClientState(final int capacity) {
-        this(new HashSet<TaskId>(), new HashSet<TaskId>(), new HashSet<TaskId>(), new HashSet<TaskId>(), new HashSet<TaskId>(), capacity);
+        this(new HashSet<>(), new HashSet<>(), new HashSet<>(), new HashSet<>(), new HashSet<>(), new HashSet<>(), capacity);
     }
 
-    private ClientState(Set<TaskId> activeTasks, Set<TaskId> standbyTasks, Set<TaskId> assignedTasks, Set<TaskId> prevActiveTasks, Set<TaskId> prevAssignedTasks, int capacity) {
+    private ClientState(final Set<TaskId> activeTasks,
+                        final Set<TaskId> standbyTasks,
+                        final Set<TaskId> assignedTasks,
+                        final Set<TaskId> prevActiveTasks,
+                        final Set<TaskId> prevStandbyTasks,
+                        final Set<TaskId> prevAssignedTasks,
+                        final int capacity) {
         this.activeTasks = activeTasks;
         this.standbyTasks = standbyTasks;
         this.assignedTasks = assignedTasks;
         this.prevActiveTasks = prevActiveTasks;
+        this.prevStandbyTasks = prevStandbyTasks;
         this.prevAssignedTasks = prevAssignedTasks;
         this.capacity = capacity;
     }
 
     public ClientState copy() {
-        return new ClientState(new HashSet<>(activeTasks), new HashSet<>(standbyTasks), new HashSet<>(assignedTasks),
-                new HashSet<>(prevActiveTasks), new HashSet<>(prevAssignedTasks), capacity);
+        return new ClientState(
+            new HashSet<>(activeTasks),
+            new HashSet<>(standbyTasks),
+            new HashSet<>(assignedTasks),
+            new HashSet<>(prevActiveTasks),
+            new HashSet<>(prevStandbyTasks),
+            new HashSet<>(prevAssignedTasks),
+            capacity);
     }
 
     public void assign(final TaskId taskId, final boolean active) {
@@ -71,6 +85,15 @@ public class ClientState {
         return standbyTasks;
     }
 
+    public Set<TaskId> prevActiveTasks() {
+        return prevActiveTasks;
+    }
+
+    public Set<TaskId> prevStandbyTasks() {
+        return prevStandbyTasks;
+    }
+
+    @SuppressWarnings("WeakerAccess")
     public int assignedTaskCount() {
         return assignedTasks.size();
     }
@@ -79,6 +102,7 @@ public class ClientState {
         capacity++;
     }
 
+    @SuppressWarnings("WeakerAccess")
     public int activeTaskCount() {
         return activeTasks.size();
     }
@@ -89,6 +113,7 @@ public class ClientState {
     }
 
     public void addPreviousStandbyTasks(final Set<TaskId> standbyTasks) {
+        prevStandbyTasks.addAll(standbyTasks);
         prevAssignedTasks.addAll(standbyTasks);
     }
 
@@ -98,6 +123,7 @@ public class ClientState {
                 ") standbyTasks: (" + standbyTasks +
                 ") assignedTasks: (" + assignedTasks +
                 ") prevActiveTasks: (" + prevActiveTasks +
+                ") prevStandbyTasks: (" + prevStandbyTasks +
                 ") prevAssignedTasks: (" + prevAssignedTasks +
                 ") capacity: " + capacity +
                 "]";
@@ -119,12 +145,13 @@ public class ClientState {
         final double otherLoad = (double) other.assignedTaskCount() / other.capacity;
         final double thisLoad = (double) assignedTaskCount() / capacity;
 
-        if (thisLoad < otherLoad)
+        if (thisLoad < otherLoad) {
             return true;
-        else if (thisLoad > otherLoad)
+        } else if (thisLoad > otherLoad) {
             return false;
-        else
+        } else {
             return capacity > other.capacity;
+        }
     }
 
     Set<TaskId> previousStandbyTasks() {

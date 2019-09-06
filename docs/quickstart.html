@@ -25,11 +25,11 @@ Since Kafka console scripts are different for Unix-based and Windows platforms, 
 
 <h4><a id="quickstart_download" href="#quickstart_download">Step 1: Download the code</a></h4>
 
-<a href="https://www.apache.org/dyn/closer.cgi?path=/kafka/{{fullDotVersion}}/kafka_2.11-{{fullDotVersion}}.tgz" title="Kafka downloads">Download</a> the {{fullDotVersion}} release and un-tar it.
+<a href="https://www.apache.org/dyn/closer.cgi?path=/kafka/{{fullDotVersion}}/kafka_{{scalaVersion}}-{{fullDotVersion}}.tgz" title="Kafka downloads">Download</a> the {{fullDotVersion}} release and un-tar it.
 
 <pre class="brush: bash;">
-&gt; tar -xzf kafka_2.11-{{fullDotVersion}}.tgz
-&gt; cd kafka_2.11-{{fullDotVersion}}
+&gt; tar -xzf kafka_{{scalaVersion}}-{{fullDotVersion}}.tgz
+&gt; cd kafka_{{scalaVersion}}-{{fullDotVersion}}
 </pre>
 
 <h4><a id="quickstart_startserver" href="#quickstart_startserver">Step 2: Start the server</a></h4>
@@ -56,12 +56,12 @@ Kafka uses <a href="https://zookeeper.apache.org/">ZooKeeper</a> so you need to 
 
 <p>Let's create a topic named "test" with a single partition and only one replica:</p>
 <pre class="brush: bash;">
-&gt; bin/kafka-topics.sh --create --zookeeper localhost:2181 --replication-factor 1 --partitions 1 --topic test
+&gt; bin/kafka-topics.sh --create --bootstrap-server localhost:9092 --replication-factor 1 --partitions 1 --topic test
 </pre>
 
 <p>We can now see that topic if we run the list topic command:</p>
 <pre class="brush: bash;">
-&gt; bin/kafka-topics.sh --list --zookeeper localhost:2181
+&gt; bin/kafka-topics.sh --list --bootstrap-server localhost:9092
 test
 </pre>
 <p>Alternatively, instead of manually creating topics you can also configure your brokers to auto-create topics when a non-existent topic is published to.</p>
@@ -113,12 +113,12 @@ Now edit these new files and set the following properties:
 config/server-1.properties:
     broker.id=1
     listeners=PLAINTEXT://:9093
-    log.dir=/tmp/kafka-logs-1
+    log.dirs=/tmp/kafka-logs-1
 
 config/server-2.properties:
     broker.id=2
     listeners=PLAINTEXT://:9094
-    log.dir=/tmp/kafka-logs-2
+    log.dirs=/tmp/kafka-logs-2
 </pre>
 <p>The <code>broker.id</code> property is the unique and permanent name of each node in the cluster. We have to override the port and log directory only because we are running these all on the same machine and we want to keep the brokers from all trying to register on the same port or overwrite each other's data.</p>
 <p>
@@ -133,12 +133,12 @@ We already have Zookeeper and our single node started, so we just need to start 
 
 <p>Now create a new topic with a replication factor of three:</p>
 <pre class="brush: bash;">
-&gt; bin/kafka-topics.sh --create --zookeeper localhost:2181 --replication-factor 3 --partitions 1 --topic my-replicated-topic
+&gt; bin/kafka-topics.sh --create --bootstrap-server localhost:9092 --replication-factor 3 --partitions 1 --topic my-replicated-topic
 </pre>
 
 <p>Okay but now that we have a cluster how can we know which broker is doing what? To see that run the "describe topics" command:</p>
 <pre class="brush: bash;">
-&gt; bin/kafka-topics.sh --describe --zookeeper localhost:2181 --topic my-replicated-topic
+&gt; bin/kafka-topics.sh --describe --bootstrap-server localhost:9092 --topic my-replicated-topic
 Topic:my-replicated-topic	PartitionCount:1	ReplicationFactor:3	Configs:
 	Topic: my-replicated-topic	Partition: 0	Leader: 1	Replicas: 1,2,0	Isr: 1,2,0
 </pre>
@@ -153,7 +153,7 @@ Topic:my-replicated-topic	PartitionCount:1	ReplicationFactor:3	Configs:
 We can run the same command on the original topic we created to see where it is:
 </p>
 <pre class="brush: bash;">
-&gt; bin/kafka-topics.sh --describe --zookeeper localhost:2181 --topic test
+&gt; bin/kafka-topics.sh --describe --bootstrap-server localhost:9092 --topic test
 Topic:test	PartitionCount:1	ReplicationFactor:1	Configs:
 	Topic: test	Partition: 0	Leader: 0	Replicas: 0	Isr: 0
 </pre>
@@ -186,15 +186,16 @@ my test message 2
 
 On Windows use:
 <pre class="brush: bash;">
-&gt; wmic process get processid,caption,commandline | find "java.exe" | find "server-1.properties"
-java.exe    java  -Xmx1G -Xms1G -server -XX:+UseG1GC ... build\libs\kafka_2.11-{{fullDotVersion}}.jar"  kafka.Kafka config\server-1.properties    644
-&gt; taskkill /pid 644 /f
+&gt; wmic process where "caption = 'java.exe' and commandline like '%server-1.properties%'" get processid
+ProcessId
+6016
+&gt; taskkill /pid 6016 /f
 </pre>
 
-<p>Leadership has switched to one of the slaves and node 1 is no longer in the in-sync replica set:</p>
+<p>Leadership has switched to one of the followers and node 1 is no longer in the in-sync replica set:</p>
 
 <pre class="brush: bash;">
-&gt; bin/kafka-topics.sh --describe --zookeeper localhost:2181 --topic my-replicated-topic
+&gt; bin/kafka-topics.sh --describe --bootstrap-server localhost:9092 --topic my-replicated-topic
 Topic:my-replicated-topic	PartitionCount:1	ReplicationFactor:3	Configs:
 	Topic: my-replicated-topic	Partition: 0	Leader: 2	Replicas: 1,2,0	Isr: 2,0
 </pre>

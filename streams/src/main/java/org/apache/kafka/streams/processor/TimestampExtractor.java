@@ -17,14 +17,12 @@
 package org.apache.kafka.streams.processor;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
-import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.streams.kstream.KTable;
 
 /**
  * An interface that allows the Kafka Streams framework to extract a timestamp from an instance of {@link ConsumerRecord}.
  * The extracted timestamp is defined as milliseconds.
  */
-@InterfaceStability.Evolving
 public interface TimestampExtractor {
 
     /**
@@ -46,8 +44,8 @@ public interface TimestampExtractor {
      *
      *
      * @param record a data record
-     * @param previousTimestamp the latest extracted valid timestamp of the current record's partition˙ (could be -1 if unknown)
+     * @param partitionTime the highest extracted valid timestamp of the current record's partition˙ (could be -1 if unknown)
      * @return the timestamp of the record
      */
-    long extract(ConsumerRecord<Object, Object> record, long previousTimestamp);
+    long extract(ConsumerRecord<Object, Object> record, long partitionTime);
 }

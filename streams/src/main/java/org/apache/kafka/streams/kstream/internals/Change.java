@@ -23,7 +23,7 @@ public class Change<T> {
     public final T newValue;
     public final T oldValue;
 
-    public Change(T newValue, T oldValue) {
+    public Change(final T newValue, final T oldValue) {
         this.newValue = newValue;
         this.oldValue = oldValue;
     }
@@ -35,8 +35,12 @@ public class Change<T> {
 
     @Override
     public boolean equals(final Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
+        if (this == o) {
+            return true;
+        }
+        if (o == null || getClass() != o.getClass()) {
+            return false;
+        }
         final Change<?> change = (Change<?>) o;
         return Objects.equals(newValue, change.newValue) &&
                 Objects.equals(oldValue, change.oldValue);

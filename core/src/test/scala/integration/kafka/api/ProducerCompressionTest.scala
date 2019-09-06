@@ -18,8 +18,8 @@
 package kafka.api.test
 
 import java.util.{Collection, Collections, Properties}
-import scala.collection.JavaConverters._
 
+import scala.collection.JavaConverters._
 import org.junit.runners.Parameterized
 import org.junit.runner.RunWith
 import org.junit.runners.Parameterized.Parameters
@@ -30,7 +30,6 @@ import kafka.server.{KafkaConfig, KafkaServer}
 import kafka.zk.ZooKeeperTestHarness
 import kafka.utils.TestUtils
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.protocol.SecurityProtocol
 import org.apache.kafka.common.serialization.ByteArraySerializer
 
 @RunWith(value = classOf[Parameterized])
@@ -43,14 +42,14 @@ class ProducerCompressionTest(compression: String) extends ZooKeeperTestHarness 
   private var server: KafkaServer = null
 
   @Before
-  override def setUp() {
+  override def setUp(): Unit = {
     super.setUp()
     val props = TestUtils.createBrokerConfig(brokerId, zkConnect)
     server = TestUtils.createServer(KafkaConfig.fromProps(props))
   }
 
   @After
-  override def tearDown() {
+  override def tearDown(): Unit = {
     TestUtils.shutdownServers(Seq(server))
     super.tearDown()
   }
@@ -61,7 +60,7 @@ class ProducerCompressionTest(compression: String) extends ZooKeeperTestHarness 
    * Compressed messages should be able to sent and consumed correctly
    */
   @Test
-  def testCompression() {
+  def testCompression(): Unit = {
 
     val producerProps = new Properties()
     val bootstrapServers = TestUtils.getBrokerListStrFromServers(Seq(server))
@@ -70,11 +69,11 @@ class ProducerCompressionTest(compression: String) extends ZooKeeperTestHarness 
     producerProps.put(ProducerConfig.BATCH_SIZE_CONFIG, "66000")
     producerProps.put(ProducerConfig.LINGER_MS_CONFIG, "200")
     val producer = new KafkaProducer(producerProps, new ByteArraySerializer, new ByteArraySerializer)
-    val consumer = TestUtils.createNewConsumer(bootstrapServers, securityProtocol = SecurityProtocol.PLAINTEXT)
+    val consumer = TestUtils.createConsumer(bootstrapServers)
 
     try {
       // create topic
-      TestUtils.createTopic(zkUtils, topic, 1, 1, List(server))
+      TestUtils.createTopic(zkClient, topic, 1, 1, List(server))
       val partition = 0
 
       // prepare the messages
@@ -114,7 +113,8 @@ object ProducerCompressionTest {
       Array("none"),
       Array("gzip"),
       Array("snappy"),
-      Array("lz4")
+      Array("lz4"),
+      Array("zstd")
     ).asJava
   }
 }

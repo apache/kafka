@@ -17,8 +17,10 @@
 package kafka.common
 
 /**
- * Generic Kafka exception
-*/
+ * Usage of this class is discouraged. Use org.apache.kafka.common.KafkaException instead.
+ *
+ * This class will be removed once kafka.security.auth classes are removed.
+ */
 class KafkaException(message: String, t: Throwable) extends RuntimeException(message, t) {
   def this(message: String) = this(message, null)
   def this(t: Throwable) = this("", t)

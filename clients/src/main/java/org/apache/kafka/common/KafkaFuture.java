@@ -35,22 +35,30 @@ public abstract class KafkaFuture<T> implements Future<T> {
     /**
      * A function which takes objects of type A and returns objects of type B.
      */
-    public static abstract class Function<A, B> {
-        public abstract B apply(A a);
+    public interface BaseFunction<A, B> {
+        B apply(A a);
     }
+
+    /**
+     * A function which takes objects of type A and returns objects of type B.
+     *
+     * Prefer the functional interface {@link BaseFunction} over the class {@link Function}.  This class is here for
+     * backwards compatibility reasons and might be deprecated/removed in a future release.
+     */
+    public static abstract class Function<A, B> implements BaseFunction<A, B> { }
 
     /**
      * A consumer of two different types of object.
      */
-    public static abstract class BiConsumer<A, B> {
-        public abstract void accept(A a, B b);
+    public interface BiConsumer<A, B> {
+        void accept(A a, B b);
     }
 
-    private static class AllOfAdapter<R> extends BiConsumer<R, Throwable> {
+    private static class AllOfAdapter<R> implements BiConsumer<R, Throwable> {
         private int remainingResponses;
-        private KafkaFuture future;
+        private KafkaFuture<?> future;
 
-        public AllOfAdapter(int remainingResponses, KafkaFuture future) {
+        public AllOfAdapter(int remainingResponses, KafkaFuture<?> future) {
             this.remainingResponses = remainingResponses;
             this.future = future;
             maybeComplete();
@@ -91,7 +99,7 @@ public abstract class KafkaFuture<T> implements Future<T> {
      */
     public static KafkaFuture<Void> allOf(KafkaFuture<?>... futures) {
         KafkaFuture<Void> allOfFuture = new KafkaFutureImpl<>();
-        AllOfAdapter allOfWaiter = new AllOfAdapter(futures.length, allOfFuture);
+        AllOfAdapter<Object> allOfWaiter = new AllOfAdapter<>(futures.length, allOfFuture);
         for (KafkaFuture<?> future : futures) {
             future.addWaiter(allOfWaiter);
         }
@@ -101,11 +109,43 @@ public abstract class KafkaFuture<T> implements Future<T> {
     /**
      * Returns a new KafkaFuture that, when this future completes normally, is executed with this
      * futures's result as the argument to the supplied function.
+     *
+     * The function may be invoked by the thread that calls {@code thenApply} or it may be invoked by the thread that
+     * completes the future.
+     */
+    public abstract <R> KafkaFuture<R> thenApply(BaseFunction<T, R> function);
+
+    /**
+     * @see KafkaFuture#thenApply(BaseFunction)
+     *
+     * Prefer {@link KafkaFuture#thenApply(BaseFunction)} as this function is here for backwards compatibility reasons
+     * and might be deprecated/removed in a future release.
      */
     public abstract <R> KafkaFuture<R> thenApply(Function<T, R> function);
 
-    protected abstract void addWaiter(BiConsumer<? super T, ? super Throwable> action);
+    /**
+     * Returns a new KafkaFuture with the same result or exception as this future, that executes the given action
+     * when this future completes.
+     *
+     * When this future is done, the given action is invoked with the result (or null if none) and the exception
+     * (or null if none) of this future as arguments.
+     *
+     * The returned future is completed when the action returns.
+     * The supplied action should not throw an exception. However, if it does, the following rules apply:
+     * if this future completed normally but the supplied action throws an exception, then the returned future completes
+     * exceptionally with the supplied action's exception.
+     * Or, if this future completed exceptionally and the supplied action throws an exception, then the returned future
+     * completes exceptionally with this future's exception.
+     *
+     * The action may be invoked by the thread that calls {@code whenComplete} or it may be invoked by the thread that
+     * completes the future.
+     *
+     * @param action the action to preform
+     * @return the new future
+     */
+    public abstract KafkaFuture<T> whenComplete(BiConsumer<? super T, ? super Throwable> action);
 
+    protected abstract void addWaiter(BiConsumer<? super T, ? super Throwable> action);
     /**
      * If not already completed, sets the value returned by get() and related methods to the given
      * value.

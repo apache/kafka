@@ -20,15 +20,17 @@ import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.network.Mode;
 
 import java.io.File;
-import java.io.FileOutputStream;
-import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.EOFException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.math.BigInteger;
 import java.net.InetAddress;
 
 import javax.net.ssl.TrustManagerFactory;
 
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.security.GeneralSecurityException;
 import java.security.Key;
 import java.security.KeyPair;
@@ -68,6 +70,8 @@ import java.util.ArrayList;
 
 public class TestSslUtils {
 
+    public static final String TRUST_STORE_PASSWORD = "TrustStorePassword";
+
     /**
      * Create a self-signed X.509 Certificate.
      * From http://bfo.com/blog/2011/03/08/odds_and_ends_creating_a_new_x_509_certificate.html.
@@ -87,7 +91,7 @@ public class TestSslUtils {
 
     public static KeyPair generateKeyPair(String algorithm) throws NoSuchAlgorithmException {
         KeyPairGenerator keyGen = KeyPairGenerator.getInstance(algorithm);
-        keyGen.initialize(1024);
+        keyGen.initialize(2048);
         return keyGen.genKeyPair();
     }
 
@@ -99,7 +103,7 @@ public class TestSslUtils {
 
     private static void saveKeyStore(KeyStore ks, String filename,
                                      Password password) throws GeneralSecurityException, IOException {
-        try (FileOutputStream out = new FileOutputStream(filename)) {
+        try (OutputStream out = Files.newOutputStream(Paths.get(filename))) {
             ks.store(out, password.value().toCharArray());
         }
     }
@@ -137,7 +141,7 @@ public class TestSslUtils {
     public static <T extends Certificate> void createTrustStore(
             String filename, Password password, Map<String, T> certs) throws GeneralSecurityException, IOException {
         KeyStore ks = KeyStore.getInstance("JKS");
-        try (FileInputStream in = new FileInputStream(filename)) {
+        try (InputStream in = Files.newInputStream(Paths.get(filename))) {
             ks.load(in, password.value().toCharArray());
         } catch (EOFException e) {
             ks = createEmptyKeyStore();
@@ -173,15 +177,29 @@ public class TestSslUtils {
         return sslConfigs;
     }
 
+    public static Map<String, Object> createSslConfig(String keyManagerAlgorithm, String trustManagerAlgorithm) {
+        Map<String, Object> sslConfigs = new HashMap<>();
+        sslConfigs.put(SslConfigs.SSL_PROTOCOL_CONFIG, "TLSv1.2"); // protocol to create SSLContext
+
+        sslConfigs.put(SslConfigs.SSL_KEYMANAGER_ALGORITHM_CONFIG, keyManagerAlgorithm);
+        sslConfigs.put(SslConfigs.SSL_TRUSTMANAGER_ALGORITHM_CONFIG, trustManagerAlgorithm);
+
+        List<String> enabledProtocols  = new ArrayList<>();
+        enabledProtocols.add("TLSv1.2");
+        sslConfigs.put(SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG, enabledProtocols);
+
+        return sslConfigs;
+    }
+
     public static  Map<String, Object> createSslConfig(boolean useClientCert, boolean trustStore, Mode mode, File trustStoreFile, String certAlias)
         throws IOException, GeneralSecurityException {
         return createSslConfig(useClientCert, trustStore, mode, trustStoreFile, certAlias, "localhost");
     }
 
     public static  Map<String, Object> createSslConfig(boolean useClientCert, boolean trustStore,
-            Mode mode, File trustStoreFile, String certAlias, String hostName)
+            Mode mode, File trustStoreFile, String certAlias, String cn)
         throws IOException, GeneralSecurityException {
-        return createSslConfig(useClientCert, trustStore, mode, trustStoreFile, certAlias, hostName, new CertificateBuilder());
+        return createSslConfig(useClientCert, trustStore, mode, trustStoreFile, certAlias, cn, new CertificateBuilder());
     }
 
     public static  Map<String, Object> createSslConfig(boolean useClientCert, boolean trustStore,
@@ -191,7 +209,7 @@ public class TestSslUtils {
         File keyStoreFile = null;
         Password password = mode == Mode.SERVER ? new Password("ServerPassword") : new Password("ClientPassword");
 
-        Password trustStorePassword = new Password("TrustStorePassword");
+        Password trustStorePassword = new Password(TRUST_STORE_PASSWORD);
 
         if (mode == Mode.CLIENT && useClientCert) {
             keyStoreFile = File.createTempFile("clientKS", ".jks");

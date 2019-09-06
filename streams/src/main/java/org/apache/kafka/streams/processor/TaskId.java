@@ -33,7 +33,7 @@ public class TaskId implements Comparable<TaskId> {
     /** The ID of the partition. */
     public final int partition;
 
-    public TaskId(int topicGroupId, int partition) {
+    public TaskId(final int topicGroupId, final int partition) {
         this.topicGroupId = topicGroupId;
         this.partition = partition;
     }
@@ -43,26 +43,28 @@ public class TaskId implements Comparable<TaskId> {
     }
 
     /**
-     * @throws TaskIdFormatException if the string is not a valid {@link TaskId}
+     * @throws TaskIdFormatException if the taskIdStr is not a valid {@link TaskId}
      */
-    public static TaskId parse(String string) {
-        int index = string.indexOf('_');
-        if (index <= 0 || index + 1 >= string.length()) throw new TaskIdFormatException(string);
+    public static TaskId parse(final String taskIdStr) {
+        final int index = taskIdStr.indexOf('_');
+        if (index <= 0 || index + 1 >= taskIdStr.length()) {
+            throw new TaskIdFormatException(taskIdStr);
+        }
 
         try {
-            int topicGroupId = Integer.parseInt(string.substring(0, index));
-            int partition = Integer.parseInt(string.substring(index + 1));
+            final int topicGroupId = Integer.parseInt(taskIdStr.substring(0, index));
+            final int partition = Integer.parseInt(taskIdStr.substring(index + 1));
 
             return new TaskId(topicGroupId, partition);
-        } catch (Exception e) {
-            throw new TaskIdFormatException(string);
+        } catch (final Exception e) {
+            throw new TaskIdFormatException(taskIdStr);
         }
     }
 
     /**
      * @throws IOException if cannot write to output stream
      */
-    public void writeTo(DataOutputStream out) throws IOException {
+    public void writeTo(final DataOutputStream out) throws IOException {
         out.writeInt(topicGroupId);
         out.writeInt(partition);
     }
@@ -70,26 +72,27 @@ public class TaskId implements Comparable<TaskId> {
     /**
      * @throws IOException if cannot read from input stream
      */
-    public static TaskId readFrom(DataInputStream in) throws IOException {
+    public static TaskId readFrom(final DataInputStream in) throws IOException {
         return new TaskId(in.readInt(), in.readInt());
     }
 
-    public void writeTo(ByteBuffer buf) {
+    public void writeTo(final ByteBuffer buf) {
         buf.putInt(topicGroupId);
         buf.putInt(partition);
     }
 
-    public static TaskId readFrom(ByteBuffer buf) {
+    public static TaskId readFrom(final ByteBuffer buf) {
         return new TaskId(buf.getInt(), buf.getInt());
     }
 
     @Override
-    public boolean equals(Object o) {
-        if (this == o)
+    public boolean equals(final Object o) {
+        if (this == o) {
             return true;
+        }
 
         if (o instanceof TaskId) {
-            TaskId other = (TaskId) o;
+            final TaskId other = (TaskId) o;
             return other.topicGroupId == this.topicGroupId && other.partition == this.partition;
         } else {
             return false;
@@ -98,17 +101,13 @@ public class TaskId implements Comparable<TaskId> {
 
     @Override
     public int hashCode() {
-        long n = ((long) topicGroupId << 32) | (long) partition;
+        final long n = ((long) topicGroupId << 32) | (long) partition;
         return (int) (n % 0xFFFFFFFFL);
     }
 
     @Override
-    public int compareTo(TaskId other) {
-        return
-            this.topicGroupId < other.topicGroupId ? -1 :
-                (this.topicGroupId > other.topicGroupId ? 1 :
-                    (this.partition < other.partition ? -1 :
-                        (this.partition > other.partition ? 1 :
-                            0)));
+    public int compareTo(final TaskId other) {
+        final int compare = Integer.compare(this.topicGroupId, other.topicGroupId);
+        return compare != 0 ? compare : Integer.compare(this.partition, other.partition);
     }
 }

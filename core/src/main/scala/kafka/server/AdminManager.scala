@@ -18,31 +18,42 @@ package kafka.server
 
 import java.util.{Collections, Properties}
 
-import kafka.admin.AdminUtils
+import kafka.admin.{AdminOperationException, AdminUtils}
 import kafka.common.TopicAlreadyMarkedForDeletionException
 import kafka.log.LogConfig
+import kafka.utils.Log4jController
 import kafka.metrics.KafkaMetricsGroup
 import kafka.utils._
-import org.apache.kafka.common.config.{AbstractConfig, ConfigDef, ConfigException, ConfigResource}
-import org.apache.kafka.common.errors.{ApiException, InvalidRequestException, PolicyViolationException}
+import kafka.zk.{AdminZkClient, KafkaZkClient}
+import org.apache.kafka.clients.admin.AlterConfigOp
+import org.apache.kafka.clients.admin.AlterConfigOp.OpType
+import org.apache.kafka.common.config.ConfigDef.ConfigKey
+import org.apache.kafka.common.config.{AbstractConfig, ConfigDef, ConfigException, ConfigResource, LogLevelConfig}
+import org.apache.kafka.common.errors.{ApiException, InvalidConfigurationException, InvalidPartitionsException, InvalidReplicaAssignmentException, InvalidRequestException, ReassignmentInProgressException, UnknownTopicOrPartitionException}
 import org.apache.kafka.common.internals.Topic
+import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopic
 import org.apache.kafka.common.metrics.Metrics
+import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.Errors
+import org.apache.kafka.common.requests.CreatePartitionsRequest.PartitionDetails
 import org.apache.kafka.common.requests.CreateTopicsRequest._
-import org.apache.kafka.common.requests.{AlterConfigsRequest, ApiError, DescribeConfigsResponse, Resource, ResourceType}
+import org.apache.kafka.common.requests.DescribeConfigsResponse.ConfigSource
+import org.apache.kafka.common.requests.{AlterConfigsRequest, ApiError, DescribeConfigsResponse}
 import org.apache.kafka.server.policy.{AlterConfigPolicy, CreateTopicPolicy}
 import org.apache.kafka.server.policy.CreateTopicPolicy.RequestMetadata
 
-import scala.collection._
+import scala.collection.{Map, mutable, _}
 import scala.collection.JavaConverters._
 
 class AdminManager(val config: KafkaConfig,
                    val metrics: Metrics,
                    val metadataCache: MetadataCache,
-                   val zkUtils: ZkUtils) extends Logging with KafkaMetricsGroup {
+                   val zkClient: KafkaZkClient) extends Logging with KafkaMetricsGroup {
+
   this.logIdent = "[Admin Manager on Broker " + config.brokerId + "]: "
 
   private val topicPurgatory = DelayedOperationPurgatory[DelayedOperation]("topic", config.brokerId)
+  private val adminZkClient = new AdminZkClient(zkClient)
 
   private val createTopicPolicy =
     Option(config.getConfiguredInstance(KafkaConfig.CreateTopicPolicyClassNameProp, classOf[CreateTopicPolicy]))
@@ -50,12 +61,15 @@ class AdminManager(val config: KafkaConfig,
   private val alterConfigPolicy =
     Option(config.getConfiguredInstance(KafkaConfig.AlterConfigPolicyClassNameProp, classOf[AlterConfigPolicy]))
 
-  def hasDelayedTopicOperations = topicPurgatory.delayed != 0
+  def hasDelayedTopicOperations = topicPurgatory.numDelayed != 0
+
+  private val defaultNumPartitions = config.numPartitions.intValue()
+  private val defaultReplicationFactor = config.defaultReplicationFactor.shortValue()
 
   /**
     * Try to complete delayed topic operations with the request key
     */
-  def tryCompleteDelayedTopicOperations(topic: String) {
+  def tryCompleteDelayedTopicOperations(topic: String): Unit = {
     val key = TopicKey(topic)
     val completed = topicPurgatory.checkAndComplete(key)
     debug(s"Request key ${key.keyLabel} unblocked $completed topic requests.")
@@ -67,69 +81,88 @@ class AdminManager(val config: KafkaConfig,
     */
   def createTopics(timeout: Int,
                    validateOnly: Boolean,
-                   createInfo: Map[String, TopicDetails],
-                   responseCallback: Map[String, ApiError] => Unit) {
+                   toCreate: Map[String, CreatableTopic],
+                   responseCallback: Map[String, ApiError] => Unit): Unit = {
 
     // 1. map over topics creating assignment and calling zookeeper
     val brokers = metadataCache.getAliveBrokers.map { b => kafka.admin.BrokerMetadata(b.id, b.rack) }
-    val metadata = createInfo.map { case (topic, arguments) =>
+    val metadata = toCreate.values.map(topic =>
       try {
         val configs = new Properties()
-        arguments.configs.asScala.foreach { case (key, value) =>
-          configs.setProperty(key, value)
+        topic.configs.asScala.foreach { entry =>
+          configs.setProperty(entry.name, entry.value)
         }
         LogConfig.validate(configs)
 
-        val assignments = {
-          if ((arguments.numPartitions != NO_NUM_PARTITIONS || arguments.replicationFactor != NO_REPLICATION_FACTOR)
-            && !arguments.replicasAssignments.isEmpty)
-            throw new InvalidRequestException("Both numPartitions or replicationFactor and replicasAssignments were set. " +
-              "Both cannot be used at the same time.")
-          else if (!arguments.replicasAssignments.isEmpty) {
-            // Note: we don't check that replicaAssignment contains unknown brokers - unlike in add-partitions case,
-            // this follows the existing logic in TopicCommand
-            arguments.replicasAssignments.asScala.map { case (partitionId, replicas) =>
-              (partitionId.intValue, replicas.asScala.map(_.intValue))
-            }
-          } else
-            AdminUtils.assignReplicasToBrokers(brokers, arguments.numPartitions, arguments.replicationFactor)
+        if ((topic.numPartitions != NO_NUM_PARTITIONS || topic.replicationFactor != NO_REPLICATION_FACTOR)
+            && !topic.assignments().isEmpty) {
+          throw new InvalidRequestException("Both numPartitions or replicationFactor and replicasAssignments were set. " +
+            "Both cannot be used at the same time.")
+        }
+
+        val resolvedNumPartitions = if (topic.numPartitions == NO_NUM_PARTITIONS)
+          defaultNumPartitions else topic.numPartitions
+        val resolvedReplicationFactor = if (topic.replicationFactor == NO_REPLICATION_FACTOR)
+          defaultReplicationFactor else topic.replicationFactor
+
+        val assignments = if (topic.assignments().isEmpty) {
+          AdminUtils.assignReplicasToBrokers(
+            brokers, resolvedNumPartitions, resolvedReplicationFactor)
+        } else {
+          val assignments = new mutable.HashMap[Int, Seq[Int]]
+          // Note: we don't check that replicaAssignment contains unknown brokers - unlike in add-partitions case,
+          // this follows the existing logic in TopicCommand
+          topic.assignments.asScala.foreach {
+            case assignment => assignments(assignment.partitionIndex()) =
+              assignment.brokerIds().asScala.map(a => a: Int)
+          }
+          assignments
         }
         trace(s"Assignments for topic $topic are $assignments ")
 
         createTopicPolicy match {
           case Some(policy) =>
-            AdminUtils.validateCreateOrUpdateTopic(zkUtils, topic, assignments, configs, update = false)
+            adminZkClient.validateTopicCreate(topic.name(), assignments, configs)
 
             // Use `null` for unset fields in the public API
             val numPartitions: java.lang.Integer =
-              if (arguments.numPartitions == NO_NUM_PARTITIONS) null else arguments.numPartitions
+              if (topic.assignments().isEmpty) resolvedNumPartitions else null
             val replicationFactor: java.lang.Short =
-              if (arguments.replicationFactor == NO_REPLICATION_FACTOR) null else arguments.replicationFactor
-            val replicaAssignments = if (arguments.replicasAssignments.isEmpty) null else arguments.replicasAssignments
-
-            policy.validate(new RequestMetadata(topic, numPartitions, replicationFactor, replicaAssignments,
-              arguments.configs))
+              if (topic.assignments().isEmpty) resolvedReplicationFactor else null
+            val javaAssignments = if (topic.assignments().isEmpty) {
+              null
+            } else {
+              assignments.map { case (k, v) =>
+                (k: java.lang.Integer) -> v.map(i => i: java.lang.Integer).asJava
+              }.asJava
+            }
+            val javaConfigs = new java.util.HashMap[String, String]
+            topic.configs().asScala.foreach(config => javaConfigs.put(config.name(), config.value()))
+            policy.validate(new RequestMetadata(topic.name, numPartitions, replicationFactor,
+              javaAssignments, javaConfigs))
 
             if (!validateOnly)
-              AdminUtils.createOrUpdateTopicPartitionAssignmentPathInZK(zkUtils, topic, assignments, configs, update = false)
+              adminZkClient.createTopicWithAssignment(topic.name, configs, assignments)
 
           case None =>
             if (validateOnly)
-              AdminUtils.validateCreateOrUpdateTopic(zkUtils, topic, assignments, configs, update = false)
+              adminZkClient.validateTopicCreate(topic.name, assignments, configs)
             else
-              AdminUtils.createOrUpdateTopicPartitionAssignmentPathInZK(zkUtils, topic, assignments, configs, update = false)
+              adminZkClient.createTopicWithAssignment(topic.name, configs, assignments)
         }
-        CreateTopicMetadata(topic, assignments, ApiError.NONE)
+        CreatePartitionsMetadata(topic.name, assignments, ApiError.NONE)
       } catch {
         // Log client errors at a lower level than unexpected exceptions
-        case e@ (_: PolicyViolationException | _: ApiException) =>
-          info(s"Error processing create topic request for topic $topic with arguments $arguments", e)
-          CreateTopicMetadata(topic, Map(), ApiError.fromThrowable(e))
+        case e: ApiException =>
+          info(s"Error processing create topic request $topic", e)
+          CreatePartitionsMetadata(topic.name, Map(), ApiError.fromThrowable(e))
+        case e: ConfigException =>
+          info(s"Error processing create topic request $topic", e)
+          CreatePartitionsMetadata(topic.name, Map(), ApiError.fromThrowable(new InvalidConfigurationException(e.getMessage, e.getCause)))
         case e: Throwable =>
-          error(s"Error processing create topic request for topic $topic with arguments $arguments", e)
-          CreateTopicMetadata(topic, Map(), ApiError.fromThrowable(e))
-      }
-    }
+          error(s"Error processing create topic request $topic", e)
+          CreatePartitionsMetadata(topic.name, Map(), ApiError.fromThrowable(e))
+      }).toIndexedSeq
 
     // 2. if timeout <= 0, validateOnly or no topics can proceed return immediately
     if (timeout <= 0 || validateOnly || !metadata.exists(_.error.is(Errors.NONE))) {
@@ -144,8 +177,8 @@ class AdminManager(val config: KafkaConfig,
       responseCallback(results)
     } else {
       // 3. else pass the assignments and errors to the delayed operation and set the keys
-      val delayedCreate = new DelayedCreateTopics(timeout, metadata.toSeq, this, responseCallback)
-      val delayedCreateKeys = createInfo.keys.map(new TopicKey(_)).toSeq
+      val delayedCreate = new DelayedCreatePartitions(timeout, metadata, this, responseCallback)
+      val delayedCreateKeys = toCreate.values.map(topic => new TopicKey(topic.name)).toIndexedSeq
       // try to complete the request immediately, otherwise put it into the purgatory
       topicPurgatory.tryCompleteElseWatch(delayedCreate, delayedCreateKeys)
     }
@@ -157,12 +190,12 @@ class AdminManager(val config: KafkaConfig,
     */
   def deleteTopics(timeout: Int,
                    topics: Set[String],
-                   responseCallback: Map[String, Errors] => Unit) {
+                   responseCallback: Map[String, Errors] => Unit): Unit = {
 
     // 1. map over topics calling the asynchronous delete
     val metadata = topics.map { topic =>
         try {
-          AdminUtils.deleteTopic(zkUtils, topic)
+          adminZkClient.deleteTopic(topic)
           DeleteTopicMetadata(topic, Errors.NONE)
         } catch {
           case _: TopicAlreadyMarkedForDeletionException =>
@@ -194,48 +227,137 @@ class AdminManager(val config: KafkaConfig,
     }
   }
 
-  def describeConfigs(resourceToConfigNames: Map[Resource, Option[Set[String]]]): Map[Resource, DescribeConfigsResponse.Config] = {
-    resourceToConfigNames.map { case (resource, configNames) =>
+  def createPartitions(timeout: Int,
+                       newPartitions: Map[String, PartitionDetails],
+                       validateOnly: Boolean,
+                       listenerName: ListenerName,
+                       callback: Map[String, ApiError] => Unit): Unit = {
 
-      def createResponseConfig(config: AbstractConfig, isReadOnly: Boolean, isDefault: String => Boolean): DescribeConfigsResponse.Config = {
-        val filteredConfigPairs = config.values.asScala.filter { case (configName, _) =>
-          /* Always returns true if configNames is None */
-          configNames.map(_.contains(configName)).getOrElse(true)
-        }.toIndexedSeq
+    val reassignPartitionsInProgress = zkClient.reassignPartitionsInProgress
+    val allBrokers = adminZkClient.getBrokerMetadatas()
+    val allBrokerIds = allBrokers.map(_.id)
 
-        val configEntries = filteredConfigPairs.map { case (name, value) =>
-          val configEntryType = config.typeOf(name)
-          val isSensitive = configEntryType == ConfigDef.Type.PASSWORD
-          val valueAsString =
-            if (isSensitive) null
-            else ConfigDef.convertToString(value, configEntryType)
-          new DescribeConfigsResponse.ConfigEntry(name, valueAsString, isSensitive, isDefault(name), isReadOnly)
+    // 1. map over topics creating assignment and calling AdminUtils
+    val metadata = newPartitions.map { case (topic, newPartition) =>
+      try {
+        // We prevent addition partitions while a reassignment is in progress, since
+        // during reassignment there is no meaningful notion of replication factor
+        if (reassignPartitionsInProgress)
+          throw new ReassignmentInProgressException("A partition reassignment is in progress.")
+
+        val existingAssignment = zkClient.getReplicaAssignmentForTopics(immutable.Set(topic)).map {
+          case (topicPartition, replicas) => topicPartition.partition -> replicas
+        }
+        if (existingAssignment.isEmpty)
+          throw new UnknownTopicOrPartitionException(s"The topic '$topic' does not exist.")
+
+        val oldNumPartitions = existingAssignment.size
+        val newNumPartitions = newPartition.totalCount
+        val numPartitionsIncrement = newNumPartitions - oldNumPartitions
+        if (numPartitionsIncrement < 0) {
+          throw new InvalidPartitionsException(
+            s"Topic currently has $oldNumPartitions partitions, which is higher than the requested $newNumPartitions.")
+        } else if (numPartitionsIncrement == 0) {
+          throw new InvalidPartitionsException(s"Topic already has $oldNumPartitions partitions.")
         }
 
+        val reassignment = Option(newPartition.newAssignments).map(_.asScala.map(_.asScala.map(_.toInt))).map { assignments =>
+          val unknownBrokers = assignments.flatten.toSet -- allBrokerIds
+          if (unknownBrokers.nonEmpty)
+            throw new InvalidReplicaAssignmentException(
+              s"Unknown broker(s) in replica assignment: ${unknownBrokers.mkString(", ")}.")
+
+          if (assignments.size != numPartitionsIncrement)
+            throw new InvalidReplicaAssignmentException(
+              s"Increasing the number of partitions by $numPartitionsIncrement " +
+                s"but ${assignments.size} assignments provided.")
+
+          assignments.zipWithIndex.map { case (replicas, index) =>
+            existingAssignment.size + index -> replicas
+          }.toMap
+        }
+
+        val updatedReplicaAssignment = adminZkClient.addPartitions(topic, existingAssignment, allBrokers,
+          newPartition.totalCount, reassignment, validateOnly = validateOnly)
+        CreatePartitionsMetadata(topic, updatedReplicaAssignment, ApiError.NONE)
+      } catch {
+        case e: AdminOperationException =>
+          CreatePartitionsMetadata(topic, Map.empty, ApiError.fromThrowable(e))
+        case e: ApiException =>
+          CreatePartitionsMetadata(topic, Map.empty, ApiError.fromThrowable(e))
+      }
+    }
+
+    // 2. if timeout <= 0, validateOnly or no topics can proceed return immediately
+    if (timeout <= 0 || validateOnly || !metadata.exists(_.error.is(Errors.NONE))) {
+      val results = metadata.map { createPartitionMetadata =>
+        // ignore topics that already have errors
+        if (createPartitionMetadata.error.isSuccess() && !validateOnly) {
+          (createPartitionMetadata.topic, new ApiError(Errors.REQUEST_TIMED_OUT, null))
+        } else {
+          (createPartitionMetadata.topic, createPartitionMetadata.error)
+        }
+      }.toMap
+      callback(results)
+    } else {
+      // 3. else pass the assignments and errors to the delayed operation and set the keys
+      val delayedCreate = new DelayedCreatePartitions(timeout, metadata.toSeq, this, callback)
+      val delayedCreateKeys = newPartitions.keySet.map(new TopicKey(_)).toSeq
+      // try to complete the request immediately, otherwise put it into the purgatory
+      topicPurgatory.tryCompleteElseWatch(delayedCreate, delayedCreateKeys)
+    }
+  }
+
+  def describeConfigs(resourceToConfigNames: Map[ConfigResource, Option[Set[String]]], includeSynonyms: Boolean): Map[ConfigResource, DescribeConfigsResponse.Config] = {
+    resourceToConfigNames.map { case (resource, configNames) =>
+
+      def allConfigs(config: AbstractConfig) = {
+        config.originals.asScala.filter(_._2 != null) ++ config.values.asScala
+      }
+      def createResponseConfig(configs: Map[String, Any],
+                               createConfigEntry: (String, Any) => DescribeConfigsResponse.ConfigEntry): DescribeConfigsResponse.Config = {
+        val filteredConfigPairs = configs.filter { case (configName, _) =>
+          /* Always returns true if configNames is None */
+          configNames.forall(_.contains(configName))
+        }.toIndexedSeq
+
+        val configEntries = filteredConfigPairs.map { case (name, value) => createConfigEntry(name, value) }
         new DescribeConfigsResponse.Config(ApiError.NONE, configEntries.asJava)
       }
 
       try {
         val resourceConfig = resource.`type` match {
 
-          case ResourceType.TOPIC =>
+          case ConfigResource.Type.TOPIC =>
             val topic = resource.name
             Topic.validate(topic)
-            // Consider optimizing this by caching the configs or retrieving them from the `Log` when possible
-            val topicProps = AdminUtils.fetchEntityConfig(zkUtils, ConfigType.Topic, topic)
-            val logConfig = LogConfig.fromProps(KafkaServer.copyKafkaConfigToLog(config), topicProps)
-            createResponseConfig(logConfig, isReadOnly = false, name => !topicProps.containsKey(name))
-
-          case ResourceType.BROKER =>
-            val brokerId = try resource.name.toInt catch {
-              case _: NumberFormatException =>
-                throw new InvalidRequestException(s"Broker id must be an integer, but it is: ${resource.name}")
+            if (metadataCache.contains(topic)) {
+              // Consider optimizing this by caching the configs or retrieving them from the `Log` when possible
+              val topicProps = adminZkClient.fetchEntityConfig(ConfigType.Topic, topic)
+              val logConfig = LogConfig.fromProps(KafkaServer.copyKafkaConfigToLog(config), topicProps)
+              createResponseConfig(allConfigs(logConfig), createTopicConfigEntry(logConfig, topicProps, includeSynonyms))
+            } else {
+              new DescribeConfigsResponse.Config(new ApiError(Errors.UNKNOWN_TOPIC_OR_PARTITION, null), Collections.emptyList[DescribeConfigsResponse.ConfigEntry])
             }
-            if (brokerId == config.brokerId)
-              createResponseConfig(config, isReadOnly = true, name => !config.originals.containsKey(name))
-            else
-              throw new InvalidRequestException(s"Unexpected broker id, expected ${config.brokerId}, but received $brokerId")
 
+          case ConfigResource.Type.BROKER =>
+            if (resource.name == null || resource.name.isEmpty)
+              createResponseConfig(config.dynamicConfig.currentDynamicDefaultConfigs,
+                createBrokerConfigEntry(perBrokerConfig = false, includeSynonyms))
+            else if (resourceNameToBrokerId(resource.name) == config.brokerId)
+              createResponseConfig(allConfigs(config),
+                createBrokerConfigEntry(perBrokerConfig = true, includeSynonyms))
+            else
+              throw new InvalidRequestException(s"Unexpected broker id, expected ${config.brokerId} or empty string, but received ${resource.name}")
+
+          case ConfigResource.Type.BROKER_LOGGER =>
+            if (resource.name == null || resource.name.isEmpty)
+              throw new InvalidRequestException("Broker id must not be empty")
+            else if (resourceNameToBrokerId(resource.name) != config.brokerId)
+              throw new InvalidRequestException(s"Unexpected broker id, expected ${config.brokerId} but received ${resource.name}")
+            else
+              createResponseConfig(Log4jController.loggers,
+                (name, value) => new DescribeConfigsResponse.ConfigEntry(name, value.toString, ConfigSource.DYNAMIC_BROKER_LOGGER_CONFIG, false, false, List.empty.asJava))
           case resourceType => throw new InvalidRequestException(s"Unsupported resource type: $resourceType")
         }
         resource -> resourceConfig
@@ -252,47 +374,32 @@ class AdminManager(val config: KafkaConfig,
     }.toMap
   }
 
-  def alterConfigs(configs: Map[Resource, AlterConfigsRequest.Config], validateOnly: Boolean): Map[Resource, ApiError] = {
+  def alterConfigs(configs: Map[ConfigResource, AlterConfigsRequest.Config], validateOnly: Boolean): Map[ConfigResource, ApiError] = {
     configs.map { case (resource, config) =>
+
       try {
+        val configEntriesMap = config.entries.asScala.map(entry => (entry.name, entry.value)).toMap
+
+        val configProps = new Properties
+        config.entries.asScala.foreach { configEntry =>
+          configProps.setProperty(configEntry.name, configEntry.value)
+        }
+
         resource.`type` match {
-          case ResourceType.TOPIC =>
-            val topic = resource.name
-
-            val properties = new Properties
-            config.entries.asScala.foreach { configEntry =>
-              properties.setProperty(configEntry.name(), configEntry.value())
-            }
-
-            alterConfigPolicy match {
-              case Some(policy) =>
-                AdminUtils.validateTopicConfig(zkUtils, topic, properties)
-
-                val configEntriesMap = config.entries.asScala.map(entry => (entry.name, entry.value)).toMap
-                policy.validate(new AlterConfigPolicy.RequestMetadata(
-                  new ConfigResource(ConfigResource.Type.TOPIC, resource.name), configEntriesMap.asJava))
-
-                if (!validateOnly)
-                  AdminUtils.changeTopicConfig(zkUtils, topic, properties)
-              case None =>
-                if (validateOnly)
-                  AdminUtils.validateTopicConfig(zkUtils, topic, properties)
-                else
-                  AdminUtils.changeTopicConfig(zkUtils, topic, properties)
-            }
-            resource -> ApiError.NONE
+          case ConfigResource.Type.TOPIC => alterTopicConfigs(resource, validateOnly, configProps, configEntriesMap)
+          case ConfigResource.Type.BROKER => alterBrokerConfigs(resource, validateOnly, configProps, configEntriesMap)
           case resourceType =>
-            throw new InvalidRequestException(s"AlterConfigs is only supported for topics, but resource type is $resourceType")
+            throw new InvalidRequestException(s"AlterConfigs is only supported for topics and brokers, but resource type is $resourceType")
         }
       } catch {
-        case e: ConfigException =>
+        case e @ (_: ConfigException | _: IllegalArgumentException) =>
           val message = s"Invalid config value for resource $resource: ${e.getMessage}"
           info(message)
           resource -> ApiError.fromThrowable(new InvalidRequestException(message, e))
         case e: Throwable =>
           // Log client errors at a lower level than unexpected exceptions
           val message = s"Error processing alter configs request for resource $resource, config $config"
-          if (e.isInstanceOf[ApiException] || e.isInstanceOf[PolicyViolationException])
+          if (e.isInstanceOf[ApiException])
             info(message, e)
           else
             error(message, e)
@@ -301,9 +408,260 @@ class AdminManager(val config: KafkaConfig,
     }.toMap
   }
 
-  def shutdown() {
+  private def alterTopicConfigs(resource: ConfigResource, validateOnly: Boolean,
+                                configProps: Properties, configEntriesMap: Map[String, String]): (ConfigResource, ApiError) = {
+    val topic = resource.name
+    adminZkClient.validateTopicConfig(topic, configProps)
+    validateConfigPolicy(resource, configEntriesMap)
+    if (!validateOnly) {
+      info(s"Updating topic $topic with new configuration $config")
+      adminZkClient.changeTopicConfig(topic, configProps)
+    }
+
+    resource -> ApiError.NONE
+  }
+
+  private def alterBrokerConfigs(resource: ConfigResource, validateOnly: Boolean,
+                                 configProps: Properties, configEntriesMap: Map[String, String]): (ConfigResource, ApiError) = {
+    val brokerId = getBrokerId(resource)
+    val perBrokerConfig = brokerId.nonEmpty
+    this.config.dynamicConfig.validate(configProps, perBrokerConfig)
+    validateConfigPolicy(resource, configEntriesMap)
+    if (!validateOnly) {
+      if (perBrokerConfig)
+        this.config.dynamicConfig.reloadUpdatedFilesWithoutConfigChange(configProps)
+      adminZkClient.changeBrokerConfig(brokerId,
+        this.config.dynamicConfig.toPersistentProps(configProps, perBrokerConfig))
+    }
+
+    resource -> ApiError.NONE
+  }
+
+  private def alterLogLevelConfigs(alterConfigOps: List[AlterConfigOp]): Unit = {
+    alterConfigOps.foreach { alterConfigOp =>
+      val loggerName = alterConfigOp.configEntry().name()
+      val logLevel = alterConfigOp.configEntry().value()
+      alterConfigOp.opType() match {
+        case OpType.SET => Log4jController.logLevel(loggerName, logLevel)
+        case OpType.DELETE => Log4jController.unsetLogLevel(loggerName)
+      }
+    }
+  }
+
+  private def getBrokerId(resource: ConfigResource) = {
+    if (resource.name == null || resource.name.isEmpty)
+      None
+    else {
+      val id = resourceNameToBrokerId(resource.name)
+      if (id != this.config.brokerId)
+        throw new InvalidRequestException(s"Unexpected broker id, expected ${this.config.brokerId}, but received ${resource.name}")
+      Some(id)
+    }
+  }
+
+  private def validateConfigPolicy(resource: ConfigResource, configEntriesMap: Map[String, String]): Unit = {
+    alterConfigPolicy match {
+      case Some(policy) =>
+        policy.validate(new AlterConfigPolicy.RequestMetadata(
+          new ConfigResource(resource.`type`(), resource.name), configEntriesMap.asJava))
+      case None =>
+    }
+  }
+
+  def incrementalAlterConfigs(configs: Map[ConfigResource, List[AlterConfigOp]], validateOnly: Boolean): Map[ConfigResource, ApiError] = {
+    configs.map { case (resource, alterConfigOps) =>
+      try {
+        // throw InvalidRequestException if any duplicate keys
+        val duplicateKeys = alterConfigOps.groupBy(config => config.configEntry().name())
+          .mapValues(_.size).filter(_._2 > 1).keys.toSet
+        if (duplicateKeys.nonEmpty)
+          throw new InvalidRequestException(s"Error due to duplicate config keys : ${duplicateKeys.mkString(",")}")
+
+        val configEntriesMap = alterConfigOps.map(entry => (entry.configEntry().name(), entry.configEntry().value())).toMap
+
+        resource.`type` match {
+          case ConfigResource.Type.TOPIC =>
+            val configProps = adminZkClient.fetchEntityConfig(ConfigType.Topic, resource.name)
+            prepareIncrementalConfigs(alterConfigOps, configProps, LogConfig.configKeys)
+            alterTopicConfigs(resource, validateOnly, configProps, configEntriesMap)
+
+          case ConfigResource.Type.BROKER =>
+            val brokerId = getBrokerId(resource)
+            val perBrokerConfig = brokerId.nonEmpty
+
+            val persistentProps = if (perBrokerConfig) adminZkClient.fetchEntityConfig(ConfigType.Broker, brokerId.get.toString)
+            else adminZkClient.fetchEntityConfig(ConfigType.Broker, ConfigEntityName.Default)
+
+            val configProps = this.config.dynamicConfig.fromPersistentProps(persistentProps, perBrokerConfig)
+            prepareIncrementalConfigs(alterConfigOps, configProps, KafkaConfig.configKeys)
+            alterBrokerConfigs(resource, validateOnly, configProps, configEntriesMap)
+
+          case ConfigResource.Type.BROKER_LOGGER =>
+            getBrokerId(resource)
+            validateLogLevelConfigs(alterConfigOps)
+
+            if (!validateOnly)
+              alterLogLevelConfigs(alterConfigOps)
+            resource -> ApiError.NONE
+          case resourceType =>
+            throw new InvalidRequestException(s"AlterConfigs is only supported for topics and brokers, but resource type is $resourceType")
+        }
+      } catch {
+        case e @ (_: ConfigException | _: IllegalArgumentException) =>
+          val message = s"Invalid config value for resource $resource: ${e.getMessage}"
+          info(message)
+          resource -> ApiError.fromThrowable(new InvalidRequestException(message, e))
+        case e: Throwable =>
+          // Log client errors at a lower level than unexpected exceptions
+          val message = s"Error processing alter configs request for resource $resource, config $alterConfigOps"
+          if (e.isInstanceOf[ApiException])
+            info(message, e)
+          else
+            error(message, e)
+          resource -> ApiError.fromThrowable(e)
+      }
+    }.toMap
+  }
+
+  private def validateLogLevelConfigs(alterConfigOps: List[AlterConfigOp]): Unit = {
+    def validateLoggerNameExists(loggerName: String): Unit = {
+      if (!Log4jController.loggerExists(loggerName))
+        throw new ConfigException(s"Logger $loggerName does not exist!")
+    }
+
+    alterConfigOps.foreach { alterConfigOp =>
+      val loggerName = alterConfigOp.configEntry().name()
+      alterConfigOp.opType() match {
+        case OpType.SET =>
+          validateLoggerNameExists(loggerName)
+          val logLevel = alterConfigOp.configEntry().value()
+          if (!LogLevelConfig.VALID_LOG_LEVELS.contains(logLevel)) {
+            val validLevelsStr = LogLevelConfig.VALID_LOG_LEVELS.asScala.mkString(", ")
+            throw new ConfigException(
+              s"Cannot set the log level of $loggerName to $logLevel as it is not a supported log level. " +
+              s"Valid log levels are $validLevelsStr"
+            )
+          }
+        case OpType.DELETE =>
+          validateLoggerNameExists(loggerName)
+          if (loggerName == Log4jController.ROOT_LOGGER)
+            throw new InvalidRequestException(s"Removing the log level of the ${Log4jController.ROOT_LOGGER} logger is not allowed")
+        case OpType.APPEND => throw new InvalidRequestException(s"${OpType.APPEND} operation is not allowed for the ${ConfigResource.Type.BROKER_LOGGER} resource")
+        case OpType.SUBTRACT => throw new InvalidRequestException(s"${OpType.SUBTRACT} operation is not allowed for the ${ConfigResource.Type.BROKER_LOGGER} resource")
+      }
+    }
+  }
+
+  private def prepareIncrementalConfigs(alterConfigOps: List[AlterConfigOp], configProps: Properties, configKeys: Map[String, ConfigKey]): Unit = {
+
+    def listType(configName: String, configKeys: Map[String, ConfigKey]): Boolean = {
+      val configKey = configKeys(configName)
+      if (configKey == null)
+        throw new InvalidConfigurationException(s"Unknown topic config name: $configName")
+      configKey.`type` == ConfigDef.Type.LIST
+    }
+
+    alterConfigOps.foreach { alterConfigOp =>
+      alterConfigOp.opType() match {
+        case OpType.SET => configProps.setProperty(alterConfigOp.configEntry().name(), alterConfigOp.configEntry().value())
+        case OpType.DELETE => configProps.remove(alterConfigOp.configEntry().name())
+        case OpType.APPEND => {
+          if (!listType(alterConfigOp.configEntry().name(), configKeys))
+            throw new InvalidRequestException(s"Config value append is not allowed for config key: ${alterConfigOp.configEntry().name()}")
+          val oldValueList = configProps.getProperty(alterConfigOp.configEntry().name()).split(",").toList
+          val newValueList = oldValueList ::: alterConfigOp.configEntry().value().split(",").toList
+          configProps.setProperty(alterConfigOp.configEntry().name(), newValueList.mkString(","))
+        }
+        case OpType.SUBTRACT => {
+          if (!listType(alterConfigOp.configEntry().name(), configKeys))
+            throw new InvalidRequestException(s"Config value subtract is not allowed for config key: ${alterConfigOp.configEntry().name()}")
+          val oldValueList = configProps.getProperty(alterConfigOp.configEntry().name()).split(",").toList
+          val newValueList = oldValueList.diff(alterConfigOp.configEntry().value().split(",").toList)
+          configProps.setProperty(alterConfigOp.configEntry().name(), newValueList.mkString(","))
+        }
+      }
+    }
+  }
+
+  def shutdown(): Unit = {
     topicPurgatory.shutdown()
-    CoreUtils.swallow(createTopicPolicy.foreach(_.close()))
-    CoreUtils.swallow(alterConfigPolicy.foreach(_.close()))
+    CoreUtils.swallow(createTopicPolicy.foreach(_.close()), this)
+    CoreUtils.swallow(alterConfigPolicy.foreach(_.close()), this)
+  }
+
+  private def resourceNameToBrokerId(resourceName: String): Int = {
+    try resourceName.toInt catch {
+      case _: NumberFormatException =>
+        throw new InvalidRequestException(s"Broker id must be an integer, but it is: $resourceName")
+    }
+  }
+
+  private def brokerSynonyms(name: String): List[String] = {
+    DynamicBrokerConfig.brokerConfigSynonyms(name, matchListenerOverride = true)
+  }
+
+  private def configType(name: String, synonyms: List[String]): ConfigDef.Type = {
+    val configType = config.typeOf(name)
+    if (configType != null)
+      configType
+    else
+      synonyms.iterator.map(config.typeOf).find(_ != null).orNull
+  }
+
+  private def configSynonyms(name: String, synonyms: List[String], isSensitive: Boolean): List[DescribeConfigsResponse.ConfigSynonym] = {
+    val dynamicConfig = config.dynamicConfig
+    val allSynonyms = mutable.Buffer[DescribeConfigsResponse.ConfigSynonym]()
+
+    def maybeAddSynonym(map: Map[String, String], source: ConfigSource)(name: String): Unit = {
+      map.get(name).map { value =>
+        val configValue = if (isSensitive) null else value
+        allSynonyms += new DescribeConfigsResponse.ConfigSynonym(name, configValue, source)
+      }
+    }
+
+    synonyms.foreach(maybeAddSynonym(dynamicConfig.currentDynamicBrokerConfigs, ConfigSource.DYNAMIC_BROKER_CONFIG))
+    synonyms.foreach(maybeAddSynonym(dynamicConfig.currentDynamicDefaultConfigs, ConfigSource.DYNAMIC_DEFAULT_BROKER_CONFIG))
+    synonyms.foreach(maybeAddSynonym(dynamicConfig.staticBrokerConfigs, ConfigSource.STATIC_BROKER_CONFIG))
+    synonyms.foreach(maybeAddSynonym(dynamicConfig.staticDefaultConfigs, ConfigSource.DEFAULT_CONFIG))
+    allSynonyms.dropWhile(s => s.name != name).toList // e.g. drop listener overrides when describing base config
+  }
+
+  private def createTopicConfigEntry(logConfig: LogConfig, topicProps: Properties, includeSynonyms: Boolean)
+                                    (name: String, value: Any): DescribeConfigsResponse.ConfigEntry = {
+    val configEntryType = logConfig.typeOf(name)
+    val isSensitive = configEntryType == ConfigDef.Type.PASSWORD
+    val valueAsString = if (isSensitive) null else ConfigDef.convertToString(value, configEntryType)
+    val allSynonyms = {
+      val list = LogConfig.TopicConfigSynonyms.get(name)
+        .map(s => configSynonyms(s, brokerSynonyms(s), isSensitive))
+        .getOrElse(List.empty)
+      if (!topicProps.containsKey(name))
+        list
+      else
+        new DescribeConfigsResponse.ConfigSynonym(name, valueAsString, ConfigSource.TOPIC_CONFIG) +: list
+    }
+    val source = if (allSynonyms.isEmpty) ConfigSource.DEFAULT_CONFIG else allSynonyms.head.source
+    val synonyms = if (!includeSynonyms) List.empty else allSynonyms
+    new DescribeConfigsResponse.ConfigEntry(name, valueAsString, source, isSensitive, false, synonyms.asJava)
+  }
+
+  private def createBrokerConfigEntry(perBrokerConfig: Boolean, includeSynonyms: Boolean)
+                                     (name: String, value: Any): DescribeConfigsResponse.ConfigEntry = {
+    val allNames = brokerSynonyms(name)
+    val configEntryType = configType(name, allNames)
+    // If we can't determine the config entry type, treat it as a sensitive config to be safe
+    val isSensitive = configEntryType == ConfigDef.Type.PASSWORD || configEntryType == null
+    val valueAsString = if (isSensitive)
+      null
+    else value match {
+      case v: String => v
+      case _ => ConfigDef.convertToString(value, configEntryType)
+    }
+    val allSynonyms = configSynonyms(name, allNames, isSensitive)
+        .filter(perBrokerConfig || _.source == ConfigSource.DYNAMIC_DEFAULT_BROKER_CONFIG)
+    val synonyms = if (!includeSynonyms) List.empty else allSynonyms
+    val source = if (allSynonyms.isEmpty) ConfigSource.DEFAULT_CONFIG else allSynonyms.head.source
+    val readOnly = !DynamicBrokerConfig.AllDynamicConfigs.contains(name)
+    new DescribeConfigsResponse.ConfigEntry(name, valueAsString, source, isSensitive, readOnly, synonyms.asJava)
   }
 }

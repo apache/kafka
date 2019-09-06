@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.message.ListGroupsRequestData;
+import org.apache.kafka.common.message.ListGroupsResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
@@ -23,39 +25,63 @@ import org.apache.kafka.common.protocol.types.Struct;
 import java.nio.ByteBuffer;
 import java.util.Collections;
 
+/**
+ * Possible error codes:
+ *
+ * COORDINATOR_LOAD_IN_PROGRESS (14)
+ * COORDINATOR_NOT_AVAILABLE (15)
+ * AUTHORIZATION_FAILED (29)
+ */
 public class ListGroupsRequest extends AbstractRequest {
+
     public static class Builder extends AbstractRequest.Builder<ListGroupsRequest> {
-        public Builder() {
+
+        private final ListGroupsRequestData data;
+
+        public Builder(ListGroupsRequestData data) {
             super(ApiKeys.LIST_GROUPS);
+            this.data = data;
         }
 
         @Override
         public ListGroupsRequest build(short version) {
-            return new ListGroupsRequest(version);
+            return new ListGroupsRequest(data, version);
         }
 
         @Override
         public String toString() {
-            return "(type=ListGroupsRequest)";
+            return data.toString();
         }
     }
 
-    public ListGroupsRequest(short version) {
-        super(version);
+    private final ListGroupsRequestData data;
+
+    public ListGroupsRequest(ListGroupsRequestData data, short version) {
+        super(ApiKeys.LIST_GROUPS, version);
+        this.data = data;
     }
 
-    public ListGroupsRequest(Struct struct, short versionId) {
-        super(versionId);
+    public ListGroupsRequest(Struct struct, short version) {
+        super(ApiKeys.LIST_GROUPS, version);
+        this.data = new ListGroupsRequestData(struct, version);
     }
 
     @Override
-    public AbstractResponse getErrorResponse(int throttleTimeMs, Throwable e) {
+    public ListGroupsResponse getErrorResponse(int throttleTimeMs, Throwable e) {
         short versionId = version();
         switch (versionId) {
             case 0:
-                return new ListGroupsResponse(Errors.forException(e), Collections.<ListGroupsResponse.Group>emptyList());
+                return new ListGroupsResponse(new ListGroupsResponseData()
+                        .setGroups(Collections.emptyList())
+                        .setErrorCode(Errors.forException(e).code())
+                );
             case 1:
-                return new ListGroupsResponse(throttleTimeMs, Errors.forException(e), Collections.<ListGroupsResponse.Group>emptyList());
+            case 2:
+                return new ListGroupsResponse(new ListGroupsResponseData()
+                        .setGroups(Collections.emptyList())
+                        .setErrorCode(Errors.forException(e).code())
+                        .setThrottleTimeMs(throttleTimeMs)
+                );
             default:
                 throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
                         versionId, this.getClass().getSimpleName(), ApiKeys.LIST_GROUPS.latestVersion()));

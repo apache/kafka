@@ -17,21 +17,24 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.streams.StreamsBuilder;
-import org.apache.kafka.streams.kstream.ForeachAction;
+import org.apache.kafka.streams.TopologyTestDriver;
+import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.GlobalKTable;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
-import org.apache.kafka.test.KStreamTestDriver;
+import org.apache.kafka.streams.state.ValueAndTimestamp;
+import org.apache.kafka.streams.test.ConsumerRecordFactory;
+import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.MockValueJoiner;
-import org.apache.kafka.test.TestUtils;
+import org.apache.kafka.test.StreamsTestUtils;
 import org.junit.Before;
-import org.junit.Rule;
 import org.junit.Test;
 
-import java.io.File;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Properties;
 
 import static org.junit.Assert.assertEquals;
 
@@ -39,74 +42,64 @@ import static org.junit.Assert.assertEquals;
 public class GlobalKTableJoinsTest {
 
     private final StreamsBuilder builder = new StreamsBuilder();
-    private final Map<String, String> results = new HashMap<>();
     private final String streamTopic = "stream";
     private final String globalTopic = "global";
-    private File stateDir;
     private GlobalKTable<String, String> global;
     private KStream<String, String> stream;
     private KeyValueMapper<String, String, String> keyValueMapper;
-    private ForeachAction<String, String> action;
-    @Rule
-    public final KStreamTestDriver driver = new KStreamTestDriver();
 
     @Before
-    public void setUp() throws Exception {
-        stateDir = TestUtils.tempDirectory();
-        global = builder.globalTable(Serdes.String(), Serdes.String(), null, globalTopic, "global-store");
-        stream = builder.stream(Serdes.String(), Serdes.String(), streamTopic);
-        keyValueMapper = new KeyValueMapper<String, String, String>() {
-            @Override
-            public String apply(final String key, final String value) {
-                return value;
-            }
-        };
-        action = new ForeachAction<String, String>() {
-            @Override
-            public void apply(final String key, final String value) {
-                results.put(key, value);
-            }
-        };
+    public void setUp() {
+        final Consumed<String, String> consumed = Consumed.with(Serdes.String(), Serdes.String());
+        global = builder.globalTable(globalTopic, consumed);
+        stream = builder.stream(streamTopic, consumed);
+        keyValueMapper = (key, value) -> value;
     }
 
     @Test
     public void shouldLeftJoinWithStream() {
-        stream.leftJoin(global, keyValueMapper, MockValueJoiner.TOSTRING_JOINER)
-                .foreach(action);
+        final MockProcessorSupplier<String, String> supplier = new MockProcessorSupplier<>();
+        stream
+            .leftJoin(global, keyValueMapper, MockValueJoiner.TOSTRING_JOINER)
+            .process(supplier);
 
-        final Map<String, String> expected = new HashMap<>();
-        expected.put("1", "a+A");
-        expected.put("2", "b+B");
-        expected.put("3", "c+null");
+        final Map<String, ValueAndTimestamp<String>> expected = new HashMap<>();
+        expected.put("1", ValueAndTimestamp.make("a+A", 2L));
+        expected.put("2", ValueAndTimestamp.make("b+B", 10L));
+        expected.put("3", ValueAndTimestamp.make("c+null", 3L));
 
-        verifyJoin(expected, streamTopic);
-
+        verifyJoin(expected, supplier);
     }
 
     @Test
     public void shouldInnerJoinWithStream() {
-        stream.join(global, keyValueMapper,  MockValueJoiner.TOSTRING_JOINER)
-                .foreach(action);
+        final MockProcessorSupplier<String, String> supplier = new MockProcessorSupplier<>();
+        stream
+            .join(global, keyValueMapper, MockValueJoiner.TOSTRING_JOINER)
+            .process(supplier);
 
-        final Map<String, String> expected = new HashMap<>();
-        expected.put("1", "a+A");
-        expected.put("2", "b+B");
+        final Map<String, ValueAndTimestamp<String>> expected = new HashMap<>();
+        expected.put("1", ValueAndTimestamp.make("a+A", 2L));
+        expected.put("2", ValueAndTimestamp.make("b+B", 10L));
 
-        verifyJoin(expected, streamTopic);
+        verifyJoin(expected, supplier);
     }
 
-    private void verifyJoin(final Map<String, String> expected, final String joinInput) {
-        driver.setUp(builder, stateDir);
-        driver.setTime(0L);
-        // write some data to the global table
-        driver.process(globalTopic, "a", "A");
-        driver.process(globalTopic, "b", "B");
-        //write some data to the stream
-        driver.process(joinInput, "1", "a");
-        driver.process(joinInput, "2", "b");
-        driver.process(joinInput, "3", "c");
-        driver.flushState();
+    private void verifyJoin(final Map<String, ValueAndTimestamp<String>> expected,
+                            final MockProcessorSupplier<String, String> supplier) {
+        final ConsumerRecordFactory<String, String> recordFactory = new ConsumerRecordFactory<>(new StringSerializer(), new StringSerializer());
+        final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.String(), Serdes.String());
 
-        assertEquals(expected, results);
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+            // write some data to the global table
+            driver.pipeInput(recordFactory.create(globalTopic, "a", "A", 1L));
+            driver.pipeInput(recordFactory.create(globalTopic, "b", "B", 5L));
+            //write some data to the stream
+            driver.pipeInput(recordFactory.create(streamTopic, "1", "a", 2L));
+            driver.pipeInput(recordFactory.create(streamTopic, "2", "b", 10L));
+            driver.pipeInput(recordFactory.create(streamTopic, "3", "c", 3L));
+        }
+
+        assertEquals(expected, supplier.theCapturedProcessor().lastValueAndTimestampPerKey);
     }
 }

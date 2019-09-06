@@ -20,13 +20,14 @@ import org.apache.kafka.common.utils.Bytes;
 
 import java.nio.ByteBuffer;
 import java.util.Map;
+import java.util.UUID;
 
 /**
  * Factory for creating serializers / deserializers.
  */
 public class Serdes {
 
-    static protected class WrapperSerde<T> implements Serde<T> {
+    static public class WrapperSerde<T> implements Serde<T> {
         final private Serializer<T> serializer;
         final private Deserializer<T> deserializer;
 
@@ -112,6 +113,12 @@ public class Serdes {
         }
     }
 
+    static public final class UUIDSerde extends WrapperSerde<UUID> {
+        public UUIDSerde() {
+            super(new UUIDSerializer(), new UUIDDeserializer());
+        }
+    }
+
     @SuppressWarnings("unchecked")
     static public <T> Serde<T> serdeFrom(Class<T> type) {
         if (String.class.isAssignableFrom(type)) {
@@ -150,8 +157,13 @@ public class Serdes {
             return (Serde<T>) Bytes();
         }
 
+        if (UUID.class.isAssignableFrom(type)) {
+            return (Serde<T>) UUID();
+        }
+
         // TODO: we can also serializes objects of type T using generic Java serialization by default
-        throw new IllegalArgumentException("Unknown class for built-in serializer");
+        throw new IllegalArgumentException("Unknown class for built-in serializer. Supported types are: " +
+            "String, Short, Integer, Long, Float, Double, ByteArray, ByteBuffer, Bytes, UUID");
     }
 
     /**
@@ -225,6 +237,13 @@ public class Serdes {
      */
     static public Serde<Bytes> Bytes() {
         return new BytesSerde();
+    }
+
+    /*
+     * A serde for nullable {@code UUID} type
+     */
+    static public Serde<UUID> UUID() {
+        return new UUIDSerde();
     }
 
     /*

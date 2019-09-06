@@ -37,8 +37,7 @@ public class ConsumerMetrics {
     }
 
     private List<MetricNameTemplate> getAllTemplates() {
-        List<MetricNameTemplate> l = new ArrayList<>();
-        l.addAll(this.fetcherMetrics.getAllTemplates());
+        List<MetricNameTemplate> l = new ArrayList<>(this.fetcherMetrics.getAllTemplates());
         return l;
     }
 

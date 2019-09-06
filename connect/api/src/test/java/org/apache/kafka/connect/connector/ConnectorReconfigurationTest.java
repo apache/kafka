@@ -29,7 +29,7 @@ import static org.junit.Assert.assertEquals;
 public class ConnectorReconfigurationTest {
 
     @Test
-    public void testDefaultReconfigure() throws Exception {
+    public void testDefaultReconfigure() {
         TestConnector conn = new TestConnector(false);
         conn.reconfigure(Collections.<String, String>emptyMap());
         assertEquals(conn.stopOrder, 0);
@@ -37,7 +37,7 @@ public class ConnectorReconfigurationTest {
     }
 
     @Test(expected = ConnectException.class)
-    public void testReconfigureStopException() throws Exception {
+    public void testReconfigureStopException() {
         TestConnector conn = new TestConnector(true);
         conn.reconfigure(Collections.<String, String>emptyMap());
     }

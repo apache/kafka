@@ -18,30 +18,30 @@ package org.apache.kafka.tools;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import net.sourceforge.argparse4j.ArgumentParsers;
+import net.sourceforge.argparse4j.inf.ArgumentParser;
+import net.sourceforge.argparse4j.inf.ArgumentParserException;
+import net.sourceforge.argparse4j.inf.Namespace;
+
 import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
+import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.common.utils.Exit;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
-
-import java.io.FileInputStream;
-import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.Properties;
 
 import static net.sourceforge.argparse4j.impl.Arguments.store;
-
-import net.sourceforge.argparse4j.ArgumentParsers;
-import net.sourceforge.argparse4j.inf.ArgumentParser;
-import net.sourceforge.argparse4j.inf.ArgumentParserException;
-import net.sourceforge.argparse4j.inf.Namespace;
-import org.apache.kafka.common.serialization.StringSerializer;
-import org.apache.kafka.common.utils.Exit;
 
 /**
  * Primarily intended for use with system testing, this producer prints metadata
@@ -56,7 +56,7 @@ import org.apache.kafka.common.utils.Exit;
  * If logging is left enabled, log output on stdout can be easily ignored by checking
  * whether a given line is valid JSON.
  */
-public class VerifiableProducer {
+public class VerifiableProducer implements AutoCloseable {
 
     private final ObjectMapper mapper = new ObjectMapper();
     private final String topic;
@@ -80,13 +80,30 @@ public class VerifiableProducer {
     // if null, then values are produced without a prefix
     private final Integer valuePrefix;
 
-    public VerifiableProducer(KafkaProducer<String, String> producer, String topic, int throughput, int maxMessages, Integer valuePrefix) {
+    // Send messages with a key of 0 incrementing by 1 for
+    // each message produced when number specified is reached
+    // key is reset to 0
+    private final Integer repeatingKeys;
+
+    private int keyCounter;
+
+    // The create time to set in messages, in milliseconds since epoch
+    private Long createTime;
+
+    private final Long startTime;
+
+    public VerifiableProducer(KafkaProducer<String, String> producer, String topic, int throughput, int maxMessages,
+                              Integer valuePrefix, Long createTime, Integer repeatingKeys) {
 
         this.topic = topic;
         this.throughput = throughput;
         this.maxMessages = maxMessages;
         this.producer = producer;
         this.valuePrefix = valuePrefix;
+        this.createTime = createTime;
+        this.startTime = System.currentTimeMillis();
+        this.repeatingKeys = repeatingKeys;
+
     }
 
     /** Get the command-line argument parser. */
@@ -144,6 +161,15 @@ public class VerifiableProducer {
                 .metavar("CONFIG_FILE")
                 .help("Producer config properties file.");
 
+        parser.addArgument("--message-create-time")
+                .action(store())
+                .required(false)
+                .setDefault(-1L)
+                .type(Long.class)
+                .metavar("CREATETIME")
+                .dest("createTime")
+                .help("Send messages with creation time starting at the arguments value, in milliseconds since epoch");
+
         parser.addArgument("--value-prefix")
             .action(store())
             .required(false)
@@ -151,6 +177,14 @@ public class VerifiableProducer {
             .metavar("VALUE-PREFIX")
             .dest("valuePrefix")
             .help("If specified, each produced value will have this prefix with a dot separator");
+
+        parser.addArgument("--repeating-keys")
+            .action(store())
+            .required(false)
+            .type(Integer.class)
+            .metavar("REPEATING-KEYS")
+            .dest("repeatingKeys")
+            .help("If specified, each produced record will have a key starting at 0 increment by 1 up to the number specified (exclusive), then the key is set to 0 again");
 
         return parser;
     }
@@ -164,9 +198,9 @@ public class VerifiableProducer {
      * we use VerifiableProducer from the development tools package, and run it against 0.8.X.X kafka jars.
      * Since this method is not in Utils in the 0.8.X.X jars, we have to cheat a bit and duplicate.
      */
-    public static Properties loadProps(String filename) throws IOException, FileNotFoundException {
+    public static Properties loadProps(String filename) throws IOException {
         Properties props = new Properties();
-        try (InputStream propStream = new FileInputStream(filename)) {
+        try (InputStream propStream = Files.newInputStream(Paths.get(filename))) {
             props.load(propStream);
         }
         return props;
@@ -181,6 +215,11 @@ public class VerifiableProducer {
         int throughput = res.getInt("throughput");
         String configFile = res.getString("producer.config");
         Integer valuePrefix = res.getInt("valuePrefix");
+        Long createTime = res.getLong("createTime");
+        Integer repeatingKeys = res.getInt("repeatingKeys");
+
+        if (createTime == -1L)
+            createTime = null;
 
         Properties producerProps = new Properties();
         producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, res.getString("brokerList"));
@@ -202,12 +241,23 @@ public class VerifiableProducer {
         StringSerializer serializer = new StringSerializer();
         KafkaProducer<String, String> producer = new KafkaProducer<>(producerProps, serializer, serializer);
 
-        return new VerifiableProducer(producer, topic, throughput, maxMessages, valuePrefix);
+        return new VerifiableProducer(producer, topic, throughput, maxMessages, valuePrefix, createTime, repeatingKeys);
     }
 
     /** Produce a message with given key and value. */
     public void send(String key, String value) {
-        ProducerRecord<String, String> record = new ProducerRecord<>(topic, key, value);
+        ProducerRecord<String, String> record;
+
+        // Older versions of ProducerRecord don't include the message create time in the constructor. So including
+        // even a 'null' argument results in a NoSuchMethodException. Thus we only include the create time if it is
+        // explicitly specified to remain fully backward compatible with older clients.
+        if (createTime != null) {
+            record = new ProducerRecord<>(topic, null, createTime, key, value);
+            createTime += System.currentTimeMillis() - startTime;
+        } else {
+            record = new ProducerRecord<>(topic, key, value);
+        }
+
         numSent++;
         try {
             producer.send(record, new PrintInfoCallback(key, value));
@@ -225,6 +275,17 @@ public class VerifiableProducer {
             return String.format("%d.%d", this.valuePrefix, val);
         }
         return String.format("%d", val);
+    }
+
+    public String getKey() {
+        String key = null;
+        if (repeatingKeys != null) {
+            key = Integer.toString(keyCounter++);
+            if (keyCounter == repeatingKeys) {
+                keyCounter = 0;
+            }
+        }
+        return key;
     }
 
     /** Close the producer to flush any remaining messages. */
@@ -435,7 +496,7 @@ public class VerifiableProducer {
             }
             long sendStartMs = System.currentTimeMillis();
 
-            this.send(null, this.getValue(i));
+            this.send(this.getKey(), this.getValue(i));
 
             if (throttler.shouldThrottle(i, sendStartMs)) {
                 throttler.throttle();
@@ -456,22 +517,19 @@ public class VerifiableProducer {
             final long startMs = System.currentTimeMillis();
             ThroughputThrottler throttler = new ThroughputThrottler(producer.throughput, startMs);
 
-            Runtime.getRuntime().addShutdownHook(new Thread() {
-                @Override
-                public void run() {
-                    // Trigger main thread to stop producing messages
-                    producer.stopProducing = true;
+            Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+                // Trigger main thread to stop producing messages
+                producer.stopProducing = true;
 
-                    // Flush any remaining messages
-                    producer.close();
+                // Flush any remaining messages
+                producer.close();
 
-                    // Print a summary
-                    long stopMs = System.currentTimeMillis();
-                    double avgThroughput = 1000 * ((producer.numAcked) / (double) (stopMs - startMs));
+                // Print a summary
+                long stopMs = System.currentTimeMillis();
+                double avgThroughput = 1000 * ((producer.numAcked) / (double) (stopMs - startMs));
 
-                    producer.printJson(new ToolData(producer.numSent, producer.numAcked, producer.throughput, avgThroughput));
-                }
-            });
+                producer.printJson(new ToolData(producer.numSent, producer.numAcked, producer.throughput, avgThroughput));
+            }));
 
             producer.run(throttler);
         } catch (ArgumentParserException e) {

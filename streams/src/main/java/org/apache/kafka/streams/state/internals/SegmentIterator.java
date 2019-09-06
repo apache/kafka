@@ -20,25 +20,24 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.state.KeyValueIterator;
-import org.apache.kafka.streams.state.KeyValueStore;
 
 import java.util.Iterator;
 import java.util.NoSuchElementException;
 
 /**
- * Iterate over multiple Segments
+ * Iterate over multiple KeyValueSegments
  */
-class SegmentIterator implements KeyValueIterator<Bytes, byte[]> {
+class SegmentIterator<S extends Segment> implements KeyValueIterator<Bytes, byte[]> {
 
     private final Bytes from;
     private final Bytes to;
-    private final Iterator<Segment> segments;
-    private final HasNextCondition hasNextCondition;
+    protected final Iterator<S> segments;
+    protected final HasNextCondition hasNextCondition;
 
-    private KeyValueStore<Bytes, byte[]> currentSegment;
-    private KeyValueIterator<Bytes, byte[]> currentIterator;
+    private S currentSegment;
+    KeyValueIterator<Bytes, byte[]> currentIterator;
 
-    SegmentIterator(final Iterator<Segment> segments,
+    SegmentIterator(final Iterator<S> segments,
                     final HasNextCondition hasNextCondition,
                     final Bytes from,
                     final Bytes to) {
@@ -48,6 +47,7 @@ class SegmentIterator implements KeyValueIterator<Bytes, byte[]> {
         this.to = to;
     }
 
+    @Override
     public void close() {
         if (currentIterator != null) {
             currentIterator.close();
@@ -66,27 +66,38 @@ class SegmentIterator implements KeyValueIterator<Bytes, byte[]> {
     @Override
     public boolean hasNext() {
         boolean hasNext = false;
-        while ((currentIterator == null || !(hasNext = hasNextCondition.hasNext(currentIterator)) || !currentSegment.isOpen())
+        while ((currentIterator == null || !(hasNext = hasNextConditionHasNext()) || !currentSegment.isOpen())
                 && segments.hasNext()) {
             close();
             currentSegment = segments.next();
             try {
-                currentIterator = currentSegment.range(from, to);
-            } catch (InvalidStateStoreException e) {
+                if (from == null || to == null) {
+                    currentIterator = currentSegment.all();
+                } else {
+                    currentIterator = currentSegment.range(from, to);
+                }
+            } catch (final InvalidStateStoreException e) {
                 // segment may have been closed so we ignore it.
             }
         }
         return currentIterator != null && hasNext;
     }
 
+    private boolean hasNextConditionHasNext() {
+        boolean hasNext = false;
+        try {
+            hasNext = hasNextCondition.hasNext(currentIterator);
+        } catch (final InvalidStateStoreException e) {
+            //already closed so ignore
+        }
+        return hasNext;
+    }
+
+    @Override
     public KeyValue<Bytes, byte[]> next() {
         if (!hasNext()) {
             throw new NoSuchElementException();
         }
         return currentIterator.next();
-    }
-
-    public void remove() {
-        throw new UnsupportedOperationException("remove() is not supported in " + getClass().getName());
     }
 }

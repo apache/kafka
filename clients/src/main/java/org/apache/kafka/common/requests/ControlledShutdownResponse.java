@@ -17,23 +17,19 @@
 package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.message.ControlledShutdownResponseData;
+import org.apache.kafka.common.message.ControlledShutdownResponseData.RemainingPartition;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.List;
+import java.util.Collections;
+import java.util.Map;
 import java.util.Set;
 
+
 public class ControlledShutdownResponse extends AbstractResponse {
-
-    private static final String ERROR_CODE_KEY_NAME = "error_code";
-    private static final String PARTITIONS_REMAINING_KEY_NAME = "partitions_remaining";
-
-    private static final String TOPIC_KEY_NAME = "topic";
-    private static final String PARTITION_KEY_NAME = "partition";
 
     /**
      * Possible error codes:
@@ -42,54 +38,49 @@ public class ControlledShutdownResponse extends AbstractResponse {
      * BROKER_NOT_AVAILABLE(8)
      * STALE_CONTROLLER_EPOCH(11)
      */
-    private final Errors error;
+    private final ControlledShutdownResponseData data;
 
-    private final Set<TopicPartition> partitionsRemaining;
-
-    public ControlledShutdownResponse(Errors error, Set<TopicPartition> partitionsRemaining) {
-        this.error = error;
-        this.partitionsRemaining = partitionsRemaining;
+    public ControlledShutdownResponse(ControlledShutdownResponseData data) {
+        this.data = data;
     }
 
-    public ControlledShutdownResponse(Struct struct) {
-        error = Errors.forCode(struct.getShort(ERROR_CODE_KEY_NAME));
-        Set<TopicPartition> partitions = new HashSet<>();
-        for (Object topicPartitionObj : struct.getArray(PARTITIONS_REMAINING_KEY_NAME)) {
-            Struct topicPartition = (Struct) topicPartitionObj;
-            String topic = topicPartition.getString(TOPIC_KEY_NAME);
-            int partition = topicPartition.getInt(PARTITION_KEY_NAME);
-            partitions.add(new TopicPartition(topic, partition));
-        }
-        partitionsRemaining = partitions;
+    public ControlledShutdownResponse(Struct struct, short version) {
+        this.data = new ControlledShutdownResponseData(struct, version);
     }
 
     public Errors error() {
-        return error;
+        return Errors.forCode(data.errorCode());
     }
 
-    public Set<TopicPartition> partitionsRemaining() {
-        return partitionsRemaining;
+    @Override
+    public Map<Errors, Integer> errorCounts() {
+        return Collections.singletonMap(error(), 1);
     }
 
     public static ControlledShutdownResponse parse(ByteBuffer buffer, short version) {
-        return new ControlledShutdownResponse(ApiKeys.CONTROLLED_SHUTDOWN_KEY.parseResponse(version, buffer));
+        return new ControlledShutdownResponse(ApiKeys.CONTROLLED_SHUTDOWN.parseResponse(version, buffer), version);
     }
 
     @Override
     protected Struct toStruct(short version) {
-        Struct struct = new Struct(ApiKeys.CONTROLLED_SHUTDOWN_KEY.responseSchema(version));
-
-        struct.set(ERROR_CODE_KEY_NAME, error.code());
-
-        List<Struct> partitionsRemainingList = new ArrayList<>(partitionsRemaining.size());
-        for (TopicPartition topicPartition : partitionsRemaining) {
-            Struct topicPartitionStruct = struct.instance(PARTITIONS_REMAINING_KEY_NAME);
-            topicPartitionStruct.set(TOPIC_KEY_NAME, topicPartition.topic());
-            topicPartitionStruct.set(PARTITION_KEY_NAME, topicPartition.partition());
-            partitionsRemainingList.add(topicPartitionStruct);
-        }
-        struct.set(PARTITIONS_REMAINING_KEY_NAME, partitionsRemainingList.toArray());
-
-        return struct;
+        return data.toStruct(version);
     }
+
+    public ControlledShutdownResponseData data() {
+        return data;
+    }
+
+    public static ControlledShutdownResponse prepareResponse(Errors error, Set<TopicPartition> tps) {
+        ControlledShutdownResponseData data = new ControlledShutdownResponseData();
+        data.setErrorCode(error.code());
+        ControlledShutdownResponseData.RemainingPartitionCollection pSet = new ControlledShutdownResponseData.RemainingPartitionCollection();
+        tps.forEach(tp -> {
+            pSet.add(new RemainingPartition()
+                    .setTopicName(tp.topic())
+                    .setPartitionIndex(tp.partition()));
+        });
+        data.setRemainingPartitions(pSet);
+        return new ControlledShutdownResponse(data);
+    }
+
 }

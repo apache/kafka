@@ -28,12 +28,12 @@ import java.io.EOFException;
 import java.io.IOException;
 import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
-import java.nio.channels.FileChannel;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.NoSuchElementException;
+import java.util.Objects;
 
 import static org.apache.kafka.common.record.Records.LOG_OVERHEAD;
 
@@ -106,7 +106,7 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
     static final int CRC_LENGTH = 4;
     static final int ATTRIBUTES_OFFSET = CRC_OFFSET + CRC_LENGTH;
     static final int ATTRIBUTE_LENGTH = 2;
-    static final int LAST_OFFSET_DELTA_OFFSET = ATTRIBUTES_OFFSET + ATTRIBUTE_LENGTH;
+    public static final int LAST_OFFSET_DELTA_OFFSET = ATTRIBUTES_OFFSET + ATTRIBUTE_LENGTH;
     static final int LAST_OFFSET_DELTA_LENGTH = 4;
     static final int FIRST_TIMESTAMP_OFFSET = LAST_OFFSET_DELTA_OFFSET + LAST_OFFSET_DELTA_LENGTH;
     static final int FIRST_TIMESTAMP_LENGTH = 8;
@@ -118,7 +118,7 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
     static final int PRODUCER_EPOCH_LENGTH = 2;
     static final int BASE_SEQUENCE_OFFSET = PRODUCER_EPOCH_OFFSET + PRODUCER_EPOCH_LENGTH;
     static final int BASE_SEQUENCE_LENGTH = 4;
-    static final int RECORDS_COUNT_OFFSET = BASE_SEQUENCE_OFFSET + BASE_SEQUENCE_LENGTH;
+    public static final int RECORDS_COUNT_OFFSET = BASE_SEQUENCE_OFFSET + BASE_SEQUENCE_LENGTH;
     static final int RECORDS_COUNT_LENGTH = 4;
     static final int RECORDS_OFFSET = RECORDS_COUNT_OFFSET + RECORDS_COUNT_LENGTH;
     public static final int RECORD_BATCH_OVERHEAD = RECORDS_OFFSET;
@@ -127,6 +127,8 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
     private static final byte TRANSACTIONAL_FLAG_MASK = 0x10;
     private static final int CONTROL_FLAG_MASK = 0x20;
     private static final byte TIMESTAMP_TYPE_MASK = 0x08;
+
+    private static final int MAX_SKIP_BUFFER_SIZE = 2048;
 
     private final ByteBuffer buffer;
 
@@ -251,42 +253,30 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
         return buffer.getInt(PARTITION_LEADER_EPOCH_OFFSET);
     }
 
-    private CloseableIterator<Record> compressedIterator(BufferSupplier bufferSupplier) {
+    private CloseableIterator<Record> compressedIterator(BufferSupplier bufferSupplier, boolean skipKeyValue) {
         final ByteBuffer buffer = this.buffer.duplicate();
         buffer.position(RECORDS_OFFSET);
         final DataInputStream inputStream = new DataInputStream(compressionType().wrapForInput(buffer, magic(),
-                bufferSupplier));
+            bufferSupplier));
 
-        return new RecordIterator() {
-            @Override
-            protected Record readNext(long baseOffset, long firstTimestamp, int baseSequence, Long logAppendTime) {
-                try {
+        if (skipKeyValue) {
+            // this buffer is used to skip length delimited fields like key, value, headers
+            byte[] skipArray = new byte[MAX_SKIP_BUFFER_SIZE];
+
+            return new StreamRecordIterator(inputStream) {
+                @Override
+                protected Record doReadRecord(long baseOffset, long firstTimestamp, int baseSequence, Long logAppendTime) throws IOException {
+                    return DefaultRecord.readPartiallyFrom(inputStream, skipArray, baseOffset, firstTimestamp, baseSequence, logAppendTime);
+                }
+            };
+        } else {
+            return new StreamRecordIterator(inputStream) {
+                @Override
+                protected Record doReadRecord(long baseOffset, long firstTimestamp, int baseSequence, Long logAppendTime) throws IOException {
                     return DefaultRecord.readFrom(inputStream, baseOffset, firstTimestamp, baseSequence, logAppendTime);
-                } catch (EOFException e) {
-                    throw new InvalidRecordException("Incorrect declared batch size, premature EOF reached");
-                } catch (IOException e) {
-                    throw new KafkaException("Failed to decompress record stream", e);
                 }
-            }
-
-            @Override
-            protected boolean ensureNoneRemaining() {
-                try {
-                    return inputStream.read() == -1;
-                } catch (IOException e) {
-                    throw new KafkaException("Error checking for remaining bytes after reading batch", e);
-                }
-            }
-
-            @Override
-            public void close() {
-                try {
-                    inputStream.close();
-                } catch (IOException e) {
-                    throw new KafkaException("Failed to close record stream", e);
-                }
-            }
-        };
+            };
+        }
     }
 
     private CloseableIterator<Record> uncompressedIterator() {
@@ -321,7 +311,7 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
         // for a normal iterator, we cannot ensure that the underlying compression stream is closed,
         // so we decompress the full record set here. Use cases which call for a lower memory footprint
         // can use `streamingIterator` at the cost of additional complexity
-        try (CloseableIterator<Record> iterator = compressedIterator(BufferSupplier.NO_CACHING)) {
+        try (CloseableIterator<Record> iterator = compressedIterator(BufferSupplier.NO_CACHING, false)) {
             List<Record> records = new ArrayList<>(count());
             while (iterator.hasNext())
                 records.add(iterator.next());
@@ -330,9 +320,28 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
     }
 
     @Override
+    public CloseableIterator<Record> skipKeyValueIterator(BufferSupplier bufferSupplier) {
+        if (count() == 0) {
+            return CloseableIterator.wrap(Collections.emptyIterator());
+        }
+
+        /*
+         * For uncompressed iterator, it is actually not worth skipping key / value / headers at all since
+         * its ByteBufferInputStream's skip() function is less efficient compared with just reading it actually
+         * as it will allocate new byte array.
+         */
+        if (!isCompressed())
+            return uncompressedIterator();
+
+        // we define this to be a closable iterator so that caller (i.e. the log validator) needs to close it
+        // while we can save memory footprint of not decompressing the full record set ahead of time
+        return compressedIterator(bufferSupplier, true);
+    }
+
+    @Override
     public CloseableIterator<Record> streamingIterator(BufferSupplier bufferSupplier) {
         if (isCompressed())
-            return compressedIterator(bufferSupplier);
+            return compressedIterator(bufferSupplier, false);
         else
             return uncompressedIterator();
     }
@@ -387,7 +396,7 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
             return false;
 
         DefaultRecordBatch that = (DefaultRecordBatch) o;
-        return buffer != null ? buffer.equals(that.buffer) : that.buffer == null;
+        return Objects.equals(buffer, that.buffer);
     }
 
     @Override
@@ -523,10 +532,16 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
         return RECORD_BATCH_OVERHEAD + DefaultRecord.recordSizeUpperBound(key, value, headers);
     }
 
-    static int incrementSequence(int baseSequence, int increment) {
+    public static int incrementSequence(int baseSequence, int increment) {
         if (baseSequence > Integer.MAX_VALUE - increment)
             return increment - (Integer.MAX_VALUE - baseSequence) - 1;
         return baseSequence + increment;
+    }
+
+    public static int decrementSequence(int baseSequence, int decrement) {
+        if (baseSequence < decrement)
+            return Integer.MAX_VALUE - (decrement - baseSequence) + 1;
+        return baseSequence - decrement;
     }
 
     private abstract class RecordIterator implements CloseableIterator<Record> {
@@ -537,7 +552,7 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
         private final int numRecords;
         private int readRecords = 0;
 
-        public RecordIterator() {
+        RecordIterator() {
             this.logAppendTime = timestampType() == TimestampType.LOG_APPEND_TIME ? maxTimestamp() : null;
             this.baseOffset = baseOffset();
             this.firstTimestamp = firstTimestamp();
@@ -582,14 +597,54 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
 
     }
 
+    private abstract class StreamRecordIterator extends RecordIterator {
+        private final DataInputStream inputStream;
+
+        StreamRecordIterator(DataInputStream inputStream) {
+            super();
+            this.inputStream = inputStream;
+        }
+
+        abstract Record doReadRecord(long baseOffset, long firstTimestamp, int baseSequence, Long logAppendTime) throws IOException;
+
+        @Override
+        protected Record readNext(long baseOffset, long firstTimestamp, int baseSequence, Long logAppendTime) {
+            try {
+                return doReadRecord(baseOffset, firstTimestamp, baseSequence, logAppendTime);
+            } catch (EOFException e) {
+                throw new InvalidRecordException("Incorrect declared batch size, premature EOF reached");
+            } catch (IOException e) {
+                throw new KafkaException("Failed to decompress record stream", e);
+            }
+        }
+
+        @Override
+        protected boolean ensureNoneRemaining() {
+            try {
+                return inputStream.read() == -1;
+            } catch (IOException e) {
+                throw new KafkaException("Error checking for remaining bytes after reading batch", e);
+            }
+        }
+
+        @Override
+        public void close() {
+            try {
+                inputStream.close();
+            } catch (IOException e) {
+                throw new KafkaException("Failed to close record stream", e);
+            }
+        }
+    }
+
     static class DefaultFileChannelRecordBatch extends FileLogInputStream.FileChannelRecordBatch {
 
         DefaultFileChannelRecordBatch(long offset,
                                       byte magic,
-                                      FileChannel channel,
+                                      FileRecords fileRecords,
                                       int position,
                                       int batchSize) {
-            super(offset, magic, channel, position, batchSize);
+            super(offset, magic, fileRecords, position, batchSize);
         }
 
         @Override

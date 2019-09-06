@@ -19,4 +19,4 @@ IF [%1] EQU [] (
 	EXIT /B 1
 )
 
-%~dp0kafka-run-class.bat org.apache.zookeeper.ZooKeeperMain -server %*
+"%~dp0kafka-run-class.bat" org.apache.zookeeper.ZooKeeperMain -server %*

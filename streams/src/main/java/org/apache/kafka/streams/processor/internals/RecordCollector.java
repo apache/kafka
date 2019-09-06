@@ -18,16 +18,18 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 
 import java.util.Map;
 
-public interface RecordCollector {
+public interface RecordCollector extends AutoCloseable {
 
     <K, V> void send(final String topic,
                      final K key,
                      final V value,
+                     final Headers headers,
                      final Integer partition,
                      final Long timestamp,
                      final Serializer<K> keySerializer,
@@ -36,10 +38,17 @@ public interface RecordCollector {
     <K, V> void send(final String topic,
                      final K key,
                      final V value,
+                     final Headers headers,
                      final Long timestamp,
                      final Serializer<K> keySerializer,
                      final Serializer<V> valueSerializer,
                      final StreamPartitioner<? super K, ? super V> partitioner);
+
+    /**
+     * Initialize the collector with a producer.
+     * @param producer the producer that should be used by this collector
+     */
+    void init(final Producer<byte[], byte[]> producer);
 
     /**
      * Flush the internal {@link Producer}.
@@ -54,7 +63,7 @@ public interface RecordCollector {
     /**
      * The last acked offsets from the internal {@link Producer}.
      *
-     * @return the map from TopicPartition to offset
+     * @return an immutable map from TopicPartition to offset
      */
     Map<TopicPartition, Long> offsets();
 

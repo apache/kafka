@@ -23,6 +23,7 @@ import org.apache.kafka.streams.processor.StateStore;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.Collection;
 import java.util.Map;
 
 public class StateManagerStub implements StateManager {
@@ -33,13 +34,18 @@ public class StateManagerStub implements StateManager {
     }
 
     @Override
-    public void register(final StateStore store, final boolean loggingEnabled, final StateRestoreCallback stateRestoreCallback) {}
+    public void register(final StateStore store,
+                         final StateRestoreCallback stateRestoreCallback) {}
+
+    @Override
+    public void reinitializeStateStoresForPartitions(final Collection<TopicPartition> partitions,
+                                                     final InternalProcessorContext processorContext) {}
 
     @Override
     public void flush() {}
 
     @Override
-    public void close(final Map<TopicPartition, Long> offsets) throws IOException {}
+    public void close(final boolean clean) throws IOException {}
 
     @Override
     public StateStore getGlobalStore(final String name) {

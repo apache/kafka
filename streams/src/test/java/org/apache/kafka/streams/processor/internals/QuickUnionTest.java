@@ -28,13 +28,13 @@ public class QuickUnionTest {
 
     @Test
     public void testUnite() {
-        QuickUnion<Long> qu = new QuickUnion<>();
+        final QuickUnion<Long> qu = new QuickUnion<>();
 
-        long[] ids = {
+        final long[] ids = {
             1L, 2L, 3L, 4L, 5L
         };
 
-        for (long id : ids) {
+        for (final long id : ids) {
             qu.add(id);
         }
 
@@ -65,13 +65,13 @@ public class QuickUnionTest {
 
     @Test
     public void testUniteMany() {
-        QuickUnion<Long> qu = new QuickUnion<>();
+        final QuickUnion<Long> qu = new QuickUnion<>();
 
-        long[] ids = {
+        final long[] ids = {
             1L, 2L, 3L, 4L, 5L
         };
 
-        for (long id : ids) {
+        for (final long id : ids) {
             qu.add(id);
         }
 
@@ -85,9 +85,9 @@ public class QuickUnionTest {
         assertNotEquals(qu.root(1L), qu.root(5L));
     }
 
-    private Set<Long> roots(QuickUnion<Long> qu, long... ids) {
-        HashSet<Long> roots = new HashSet<>();
-        for (long id : ids) {
+    private Set<Long> roots(final QuickUnion<Long> qu, final long... ids) {
+        final HashSet<Long> roots = new HashSet<>();
+        for (final long id : ids) {
             roots.add(qu.root(id));
         }
         return roots;

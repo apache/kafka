@@ -63,16 +63,16 @@ public class KeyValue<K, V> {
 
     @Override
     public boolean equals(final Object obj) {
-        if (this == obj)
+        if (this == obj) {
             return true;
+        }
 
         if (!(obj instanceof KeyValue)) {
             return false;
         }
 
         final KeyValue other = (KeyValue) obj;
-        return (key == null ? other.key == null : key.equals(other.key))
-                && (value == null ? other.value == null : value.equals(other.value));
+        return Objects.equals(key, other.key) && Objects.equals(value, other.value);
     }
 
     @Override

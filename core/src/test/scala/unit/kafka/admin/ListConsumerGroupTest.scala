@@ -16,77 +16,32 @@
  */
 package kafka.admin
 
-import java.util.Properties
-
-import org.easymock.EasyMock
-import org.junit.Before
+import joptsimple.OptionException
 import org.junit.Test
-
-import kafka.admin.ConsumerGroupCommand.ConsumerGroupCommandOptions
-import kafka.admin.ConsumerGroupCommand.ZkConsumerGroupService
-import kafka.consumer.OldConsumer
-import kafka.consumer.Whitelist
-import kafka.integration.KafkaServerTestHarness
-import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
 
-
-class ListConsumerGroupTest extends KafkaServerTestHarness {
-
-  val overridingProps = new Properties()
-  val topic = "foo"
-  val topicFilter = Whitelist(topic)
-  val group = "test.group"
-  val props = new Properties
-
-  // configure the servers and clients
-  override def generateConfigs =
-    TestUtils.createBrokerConfigs(1, zkConnect, enableControlledShutdown = false).map(KafkaConfig.fromProps(_, overridingProps))
-
-  @Before
-  override def setUp() {
-    super.setUp()
-
-    AdminUtils.createTopic(zkUtils, topic, 1, 1)
-    props.setProperty("group.id", group)
-    props.setProperty("zookeeper.connect", zkConnect)
-  }
+class ListConsumerGroupTest extends ConsumerGroupCommandTest {
 
   @Test
-  def testListGroupWithNoExistingGroup() {
-    val opts = new ConsumerGroupCommandOptions(Array("--zookeeper", zkConnect))
-    val consumerGroupCommand = new ZkConsumerGroupService(opts)
-    try {
-      assert(consumerGroupCommand.listGroups().isEmpty)
-    } finally {
-      consumerGroupCommand.close()
-    }
-  }
+  def testListConsumerGroups(): Unit = {
+    val simpleGroup = "simple-group"
+    addSimpleGroupExecutor(group = simpleGroup)
+    addConsumerGroupExecutor(numConsumers = 1)
 
-  @Test
-  def testListGroupWithSomeGroups() {
-    // mocks
-    val consumer1Mock = EasyMock.createMockBuilder(classOf[OldConsumer]).withConstructor(topicFilter, props).createMock()
-    props.setProperty("group.id", "some.other.group")
-    val consumer2Mock = EasyMock.createMockBuilder(classOf[OldConsumer]).withConstructor(topicFilter, props).createMock()
+    val cgcArgs = Array("--bootstrap-server", brokerList, "--list")
+    val service = getConsumerGroupService(cgcArgs)
 
-    // stubs
-    val opts = new ConsumerGroupCommandOptions(Array("--zookeeper", zkConnect))
-    val consumerGroupCommand = new ZkConsumerGroupService(opts)
-
-    // simulation
-    EasyMock.replay(consumer1Mock)
-    EasyMock.replay(consumer2Mock)
-
-    // action/test
+    val expectedGroups = Set(group, simpleGroup)
+    var foundGroups = Set.empty[String]
     TestUtils.waitUntilTrue(() => {
-        val groups = consumerGroupCommand.listGroups()
-        groups.size == 2 && groups.contains(group)
-      }, "Expected a different list group results.")
+      foundGroups = service.listGroups().toSet
+      expectedGroups == foundGroups
+    }, s"Expected --list to show groups $expectedGroups, but found $foundGroups.")
+  }
 
-    // cleanup
-    consumerGroupCommand.close()
-    consumer1Mock.stop()
-    consumer2Mock.stop()
+  @Test(expected = classOf[OptionException])
+  def testListWithUnrecognizedNewConsumerOption(): Unit = {
+    val cgcArgs = Array("--new-consumer", "--bootstrap-server", brokerList, "--list")
+    getConsumerGroupService(cgcArgs)
   }
 }

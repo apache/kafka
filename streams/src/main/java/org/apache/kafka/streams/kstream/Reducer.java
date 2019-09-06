@@ -28,12 +28,12 @@ import org.apache.kafka.streams.KeyValue;
  * {@code Reducer} can be used to implement aggregation functions like sum, min, or max.
  *
  * @param <V> value type
- * @see KGroupedStream#reduce(Reducer, String)
- * @see KGroupedStream#reduce(Reducer, org.apache.kafka.streams.processor.StateStoreSupplier)
- * @see KGroupedStream#reduce(Reducer, Windows, String)
- * @see KGroupedStream#reduce(Reducer, org.apache.kafka.streams.processor.StateStoreSupplier)
- * @see KGroupedStream#reduce(Reducer, SessionWindows, String)
- * @see KGroupedStream#reduce(Reducer, SessionWindows, org.apache.kafka.streams.processor.StateStoreSupplier)
+ * @see KGroupedStream#reduce(Reducer)
+ * @see KGroupedStream#reduce(Reducer, Materialized)
+ * @see TimeWindowedKStream#reduce(Reducer)
+ * @see TimeWindowedKStream#reduce(Reducer, Materialized)
+ * @see SessionWindowedKStream#reduce(Reducer)
+ * @see SessionWindowedKStream#reduce(Reducer, Materialized)
  * @see Aggregator
  */
 public interface Reducer<V> {

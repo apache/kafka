@@ -35,6 +35,7 @@ import org.apache.kafka.common.errors.OutOfOrderSequenceException;
 import org.apache.kafka.common.errors.ProducerFencedException;
 
 import java.io.IOException;
+import java.time.Duration;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
@@ -149,6 +150,11 @@ public class TransactionalMessageCopier {
                 "org.apache.kafka.common.serialization.StringSerializer");
         props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG,
                 "org.apache.kafka.common.serialization.StringSerializer");
+        // We set a small batch size to ensure that we have multiple inflight requests per transaction.
+        // If it is left at the default, each transaction will have only one batch per partition, hence not testing
+        // the case with multiple inflights.
+        props.put(ProducerConfig.BATCH_SIZE_CONFIG, "512");
+        props.put(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, "5");
 
         return new KafkaProducer<>(props);
     }
@@ -252,24 +258,20 @@ public class TransactionalMessageCopier {
         maxMessages = Math.min(messagesRemaining(consumer, inputPartition), maxMessages);
         final boolean enableRandomAborts = parsedArgs.getBoolean("enableRandomAborts");
 
-
         producer.initTransactions();
 
         final AtomicBoolean isShuttingDown = new AtomicBoolean(false);
         final AtomicLong remainingMessages = new AtomicLong(maxMessages);
         final AtomicLong numMessagesProcessed = new AtomicLong(0);
-        Runtime.getRuntime().addShutdownHook(new Thread() {
-            @Override
-            public void run() {
-                isShuttingDown.set(true);
-                // Flush any remaining messages
-                producer.close();
-                synchronized (consumer) {
-                    consumer.close();
-                }
-                System.out.println(shutDownString(numMessagesProcessed.get(), remainingMessages.get(), transactionalId));
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            isShuttingDown.set(true);
+            // Flush any remaining messages
+            producer.close();
+            synchronized (consumer) {
+                consumer.close();
             }
-        });
+            System.out.println(shutDownString(numMessagesProcessed.get(), remainingMessages.get(), transactionalId));
+        }));
 
         try {
             Random random = new Random();
@@ -283,7 +285,7 @@ public class TransactionalMessageCopier {
                 try {
                     producer.beginTransaction();
                     while (messagesInCurrentTransaction < numMessagesForNextTransaction) {
-                        ConsumerRecords<String, String> records = consumer.poll(200L);
+                        ConsumerRecords<String, String> records = consumer.poll(Duration.ofMillis(200));
                         for (ConsumerRecord<String, String> record : records) {
                             producer.send(producerRecordFromConsumerRecord(outputTopic, record));
                             messagesInCurrentTransaction++;

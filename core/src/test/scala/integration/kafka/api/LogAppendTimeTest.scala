@@ -21,14 +21,10 @@ import java.util.concurrent.TimeUnit
 
 import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
-import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.common.record.TimestampType
 import org.junit.{Before, Test}
 import org.junit.Assert.{assertEquals, assertNotEquals, assertTrue}
-
-import scala.collection.JavaConverters._
-import scala.collection.mutable.ArrayBuffer
 
 /**
   * Tests where the broker is configured to use LogAppendTime. For tests where LogAppendTime is configured via topic
@@ -37,7 +33,7 @@ import scala.collection.mutable.ArrayBuffer
 class LogAppendTimeTest extends IntegrationTestHarness {
   val producerCount: Int = 1
   val consumerCount: Int = 1
-  val serverCount: Int = 2
+  val brokerCount: Int = 2
 
   // This will be used for the offsets topic as well
   serverConfig.put(KafkaConfig.LogMessageTimestampTypeProp, TimestampType.LOG_APPEND_TIME.name)
@@ -46,14 +42,14 @@ class LogAppendTimeTest extends IntegrationTestHarness {
   private val topic = "topic"
 
   @Before
-  override def setUp() {
+  override def setUp(): Unit = {
     super.setUp()
-    TestUtils.createTopic(zkUtils, topic, servers = servers)
+    createTopic(topic)
   }
 
   @Test
-  def testProduceConsume() {
-    val producer = producers.head
+  def testProduceConsume(): Unit = {
+    val producer = createProducer()
     val now = System.currentTimeMillis()
     val createTime = now - TimeUnit.DAYS.toMillis(1)
     val producerRecords = (1 to 10).map(i => new ProducerRecord(topic, null, createTime, s"key$i".getBytes,
@@ -64,13 +60,9 @@ class LogAppendTimeTest extends IntegrationTestHarness {
       assertTrue(recordMetadata.timestamp < now + TimeUnit.SECONDS.toMillis(60))
     }
 
-    val consumer = consumers.head
+    val consumer = createConsumer()
     consumer.subscribe(Collections.singleton(topic))
-    val consumerRecords = new ArrayBuffer[ConsumerRecord[Array[Byte], Array[Byte]]]
-    TestUtils.waitUntilTrue(() => {
-      consumerRecords ++= consumer.poll(50).asScala
-      consumerRecords.size == producerRecords.size
-    }, s"Consumed ${consumerRecords.size} records until timeout instead of the expected ${producerRecords.size} records")
+    val consumerRecords = TestUtils.consumeRecords(consumer, producerRecords.size)
 
     consumerRecords.zipWithIndex.foreach { case (consumerRecord, index) =>
       val producerRecord = producerRecords(index)

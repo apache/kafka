@@ -50,37 +50,37 @@ public class QueryableStoreProviderTest {
     }
 
     @Test(expected = InvalidStateStoreException.class)
-    public void shouldThrowExceptionIfKVStoreDoesntExist() throws Exception {
+    public void shouldThrowExceptionIfKVStoreDoesntExist() {
         storeProvider.getStore("not-a-store", QueryableStoreTypes.keyValueStore());
     }
 
     @Test(expected = InvalidStateStoreException.class)
-    public void shouldThrowExceptionIfWindowStoreDoesntExist() throws Exception {
+    public void shouldThrowExceptionIfWindowStoreDoesntExist() {
         storeProvider.getStore("not-a-store", QueryableStoreTypes.windowStore());
     }
 
     @Test
-    public void shouldReturnKVStoreWhenItExists() throws Exception {
+    public void shouldReturnKVStoreWhenItExists() {
         assertNotNull(storeProvider.getStore(keyValueStore, QueryableStoreTypes.keyValueStore()));
     }
 
     @Test
-    public void shouldReturnWindowStoreWhenItExists() throws Exception {
+    public void shouldReturnWindowStoreWhenItExists() {
         assertNotNull(storeProvider.getStore(windowStore, QueryableStoreTypes.windowStore()));
     }
 
     @Test(expected = InvalidStateStoreException.class)
-    public void shouldThrowExceptionWhenLookingForWindowStoreWithDifferentType() throws Exception {
+    public void shouldThrowExceptionWhenLookingForWindowStoreWithDifferentType() {
         storeProvider.getStore(windowStore, QueryableStoreTypes.keyValueStore());
     }
 
     @Test(expected = InvalidStateStoreException.class)
-    public void shouldThrowExceptionWhenLookingForKVStoreWithDifferentType() throws Exception {
+    public void shouldThrowExceptionWhenLookingForKVStoreWithDifferentType() {
         storeProvider.getStore(keyValueStore, QueryableStoreTypes.windowStore());
     }
 
     @Test
-    public void shouldFindGlobalStores() throws Exception {
+    public void shouldFindGlobalStores() {
         globalStateStores.put("global", new NoOpReadOnlyStore<>());
         assertNotNull(storeProvider.getStore("global", QueryableStoreTypes.keyValueStore()));
     }

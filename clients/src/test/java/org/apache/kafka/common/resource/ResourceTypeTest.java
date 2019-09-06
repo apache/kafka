@@ -41,11 +41,12 @@ public class ResourceTypeTest {
         new AclResourceTypeTestInfo(ResourceType.TOPIC, 2, "topic", false),
         new AclResourceTypeTestInfo(ResourceType.GROUP, 3, "group", false),
         new AclResourceTypeTestInfo(ResourceType.CLUSTER, 4, "cluster", false),
-        new AclResourceTypeTestInfo(ResourceType.TRANSACTIONAL_ID, 5, "transactional_id", false)
+        new AclResourceTypeTestInfo(ResourceType.TRANSACTIONAL_ID, 5, "transactional_id", false),
+        new AclResourceTypeTestInfo(ResourceType.DELEGATION_TOKEN, 6, "delegation_token", false)
     };
 
     @Test
-    public void testIsUnknown() throws Exception {
+    public void testIsUnknown() {
         for (AclResourceTypeTestInfo info : INFOS) {
             assertEquals(info.resourceType + " was supposed to have unknown == " + info.unknown,
                 info.unknown, info.resourceType.isUnknown());
@@ -53,7 +54,7 @@ public class ResourceTypeTest {
     }
 
     @Test
-    public void testCode() throws Exception {
+    public void testCode() {
         assertEquals(ResourceType.values().length, INFOS.length);
         for (AclResourceTypeTestInfo info : INFOS) {
             assertEquals(info.resourceType + " was supposed to have code == " + info.code,
@@ -65,7 +66,7 @@ public class ResourceTypeTest {
     }
 
     @Test
-    public void testName() throws Exception {
+    public void testName() {
         for (AclResourceTypeTestInfo info : INFOS) {
             assertEquals("ResourceType.fromString(" + info.name + ") was supposed to be " +
                 info.resourceType, info.resourceType, ResourceType.fromString(info.name));
@@ -74,7 +75,7 @@ public class ResourceTypeTest {
     }
 
     @Test
-    public void testExhaustive() throws Exception {
+    public void testExhaustive() {
         assertEquals(INFOS.length, ResourceType.values().length);
         for (int i = 0; i < INFOS.length; i++) {
             assertEquals(INFOS[i].resourceType, ResourceType.values()[i]);

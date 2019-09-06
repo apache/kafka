@@ -16,56 +16,95 @@
  */
 package kafka.common
 
-import kafka.integration.KafkaServerTestHarness
-import kafka.server.KafkaConfig
+import kafka.security.auth.{Group, Resource}
 import kafka.utils.TestUtils
-import org.junit.Test
+import kafka.zk.{LiteralAclChangeStore, LiteralAclStore, ZkAclChangeStore, ZooKeeperTestHarness}
+import org.apache.kafka.common.resource.PatternType.LITERAL
+import org.junit.{After, Before, Test}
 
-class ZkNodeChangeNotificationListenerTest extends KafkaServerTestHarness {
+import scala.collection.mutable.ArrayBuffer
+import scala.collection.Seq
 
-  override def generateConfigs = List(KafkaConfig.fromProps(TestUtils.createBrokerConfig(0, zkConnect)))
+class ZkNodeChangeNotificationListenerTest extends ZooKeeperTestHarness {
+
+  private val changeExpirationMs = 1000
+  private var notificationListener: ZkNodeChangeNotificationListener = _
+  private var notificationHandler: TestNotificationHandler = _
+
+  @Before
+  override def setUp(): Unit = {
+    super.setUp()
+    zkClient.createAclPaths()
+    notificationHandler = new TestNotificationHandler()
+  }
+
+  @After
+  override def tearDown(): Unit = {
+    if (notificationListener != null) {
+      notificationListener.close()
+    }
+    super.tearDown()
+  }
 
   @Test
-  def testProcessNotification() {
-    @volatile var notification: String = null
-    @volatile var invocationCount = 0
-    val notificationHandler = new NotificationHandler {
-      override def processNotification(notificationMessage: String): Unit = {
-        notification = notificationMessage
-        invocationCount += 1
-      }
-    }
+  def testProcessNotification(): Unit = {
+    val notificationMessage1 = Resource(Group, "messageA", LITERAL)
+    val notificationMessage2 = Resource(Group, "messageB", LITERAL)
 
-    val seqNodeRoot = "/root"
-    val seqNodePrefix = "prefix"
-    val seqNodePath = seqNodeRoot + "/" + seqNodePrefix
-    val notificationMessage1 = "message1"
-    val notificationMessage2 = "message2"
-    val changeExpirationMs = 1000
-
-    val notificationListener = new ZkNodeChangeNotificationListener(zkUtils, seqNodeRoot, seqNodePrefix, notificationHandler, changeExpirationMs)
+    notificationListener = new ZkNodeChangeNotificationListener(zkClient, LiteralAclChangeStore.aclChangePath,
+      ZkAclChangeStore.SequenceNumberPrefix, notificationHandler, changeExpirationMs)
     notificationListener.init()
 
-    zkUtils.createSequentialPersistentPath(seqNodePath, notificationMessage1)
-
-    TestUtils.waitUntilTrue(() => invocationCount == 1 && notification == notificationMessage1,
+    zkClient.createAclChangeNotification(notificationMessage1)
+    TestUtils.waitUntilTrue(() => notificationHandler.received().size == 1 && notificationHandler.received().last == notificationMessage1,
       "Failed to send/process notification message in the timeout period.")
 
     /*
      * There is no easy way to test purging. Even if we mock kafka time with MockTime, the purging compares kafka time
-     * with the time stored in zookeeper stat and the embedded zookeeper server does not provide a way to mock time.
+     * with the time stored in ZooKeeper stat and the embedded ZooKeeper server does not provide a way to mock time.
      * So to test purging we would have to use Time.SYSTEM.sleep(changeExpirationMs + 1) issue a write and check
-     * Assert.assertEquals(1, ZkUtils.getChildren(zkClient, seqNodeRoot).size). However even that the assertion
+     * Assert.assertEquals(1, KafkaZkClient.getChildren(seqNodeRoot).size). However even that the assertion
      * can fail as the second node can be deleted depending on how threads get scheduled.
      */
 
-    zkUtils.createSequentialPersistentPath(seqNodePath, notificationMessage2)
-    TestUtils.waitUntilTrue(() => invocationCount == 2 && notification == notificationMessage2,
+    zkClient.createAclChangeNotification(notificationMessage2)
+    TestUtils.waitUntilTrue(() => notificationHandler.received().size == 2 && notificationHandler.received().last == notificationMessage2,
       "Failed to send/process notification message in the timeout period.")
 
-    (3 to 10).foreach(i => zkUtils.createSequentialPersistentPath(seqNodePath, "message" + i))
+    (3 to 10).foreach(i => zkClient.createAclChangeNotification(Resource(Group, "message" + i, LITERAL)))
 
-    TestUtils.waitUntilTrue(() => invocationCount == 10 ,
-      s"Expected 10 invocations of processNotifications, but there were $invocationCount")
+    TestUtils.waitUntilTrue(() => notificationHandler.received().size == 10,
+      s"Expected 10 invocations of processNotifications, but there were ${notificationHandler.received()}")
+  }
+
+  @Test
+  def testSwallowsProcessorException(): Unit = {
+    notificationHandler.setThrowSize(2)
+    notificationListener = new ZkNodeChangeNotificationListener(zkClient, LiteralAclChangeStore.aclChangePath,
+      ZkAclChangeStore.SequenceNumberPrefix, notificationHandler, changeExpirationMs)
+    notificationListener.init()
+
+    zkClient.createAclChangeNotification(Resource(Group, "messageA", LITERAL))
+    zkClient.createAclChangeNotification(Resource(Group, "messageB", LITERAL))
+    zkClient.createAclChangeNotification(Resource(Group, "messageC", LITERAL))
+
+    TestUtils.waitUntilTrue(() => notificationHandler.received().size == 3,
+      s"Expected 2 invocations of processNotifications, but there were ${notificationHandler.received()}")
+  }
+
+  private class TestNotificationHandler extends NotificationHandler {
+    private val messages = ArrayBuffer.empty[Resource]
+    @volatile private var throwSize = Option.empty[Int]
+
+    override def processNotification(notificationMessage: Array[Byte]): Unit = {
+      messages += LiteralAclStore.changeStore.decode(notificationMessage)
+
+      if (throwSize.contains(messages.size))
+        throw new RuntimeException("Oh no, my processing failed!")
+    }
+
+    def received(): Seq[Resource] = messages
+
+    def setThrowSize(index: Int): Unit = throwSize = Option(index)
   }
 }

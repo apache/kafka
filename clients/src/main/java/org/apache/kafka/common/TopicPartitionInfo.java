@@ -21,6 +21,7 @@ import org.apache.kafka.common.utils.Utils;
 
 import java.util.Collections;
 import java.util.List;
+import java.util.Objects;
 
 /**
  * A class containing leadership, replicas and ISR information for a topic partition.
@@ -81,5 +82,27 @@ public class TopicPartitionInfo {
     public String toString() {
         return "(partition=" + partition + ", leader=" + leader + ", replicas=" +
             Utils.join(replicas, ", ") + ", isr=" + Utils.join(isr, ", ") + ")";
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+
+        TopicPartitionInfo that = (TopicPartitionInfo) o;
+
+        return partition == that.partition &&
+            Objects.equals(leader, that.leader) &&
+            Objects.equals(replicas, that.replicas) &&
+            Objects.equals(isr, that.isr);
+    }
+
+    @Override
+    public int hashCode() {
+        int result = partition;
+        result = 31 * result + (leader != null ? leader.hashCode() : 0);
+        result = 31 * result + (replicas != null ? replicas.hashCode() : 0);
+        result = 31 * result + (isr != null ? isr.hashCode() : 0);
+        return result;
     }
 }

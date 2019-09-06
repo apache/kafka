@@ -16,13 +16,15 @@
  */
 package org.apache.kafka.streams.processor;
 
+import java.time.Duration;
+
 /**
- * Controls what notion of time is used for punctuation scheduled via {@link ProcessorContext#schedule(long, PunctuationType, Punctuator)} schedule}:
+ * Controls what notion of time is used for punctuation scheduled via {@link ProcessorContext#schedule(Duration, PunctuationType, Punctuator)} schedule}:
  * <ul>
  *   <li>STREAM_TIME - uses "stream time", which is advanced by the processing of messages
  *   in accordance with the timestamp as extracted by the {@link TimestampExtractor} in use.
  *   <b>NOTE:</b> Only advanced if messages arrive</li>
- *   <li>SYSTEM_TIME - uses system time (the wall-clock time),
+ *   <li>WALL_CLOCK_TIME - uses system time (the wall-clock time),
  *   which is advanced at the polling interval ({@link org.apache.kafka.streams.StreamsConfig#POLL_MS_CONFIG})
  *   independent of whether new messages arrive. <b>NOTE:</b> This is best effort only as its granularity is limited
  *   by how long an iteration of the processing loop takes to complete</li>
@@ -30,5 +32,5 @@ package org.apache.kafka.streams.processor;
  */
 public enum PunctuationType {
    STREAM_TIME,
-   SYSTEM_TIME,
+   WALL_CLOCK_TIME,
 }

@@ -11,8 +11,7 @@ Running tests using docker
 Docker containers can be used for running kafka system tests locally.
 * Requirements
   - Docker 1.12.3 (or higher) is installed and running on the machine.
-  - Test require a single kafka_*SNAPSHOT.tgz to be present in core/build/distributions, as well as the system test libs.
-   This can be done by running ./gradlew clean systemTestLibs releaseTarGz
+  - Test require that Kafka, including system test libs, is built. This can be done by running ./gradlew clean systemTestLibs
 * Run all tests
 ```
 bash tests/docker/run_tests.sh
@@ -25,6 +24,23 @@ _DUCKTAPE_OPTIONS="--debug" bash tests/docker/run_tests.sh | tee debug_logs.txt
 ```
 TC_PATHS="tests/kafkatest/tests/streams tests/kafkatest/tests/tools" bash tests/docker/run_tests.sh
 ```
+* Run a specific tests file
+```
+TC_PATHS="tests/kafkatest/tests/client/pluggable_test.py" bash tests/docker/run_tests.sh
+```
+* Run a specific test class
+```
+TC_PATHS="tests/kafkatest/tests/client/pluggable_test.py::PluggableConsumerTest" bash tests/docker/run_tests.sh
+```
+* Run a specific test method
+```
+TC_PATHS="tests/kafkatest/tests/client/pluggable_test.py::PluggableConsumerTest.test_start_stop" bash tests/docker/run_tests.sh
+```
+* Run tests with a different JVM
+```
+bash tests/docker/ducker-ak up -j 'openjdk:11'; tests/docker/run_tests.sh
+```
+
 * Notes
   - The scripts to run tests creates and destroys docker network named *knw*.
    This network can't be used for any other purpose.
@@ -80,7 +96,7 @@ This produces a json about the build which looks like:
     ],
     "before_install": null,
     "script": [
-      "./gradlew releaseTarGz && /bin/bash ./tests/travis/run_tests.sh"
+      "./gradlew systemTestLibs && /bin/bash ./tests/travis/run_tests.sh"
     ],
     "services": [
       "docker"
@@ -128,7 +144,7 @@ This produces a json about the build which looks like:
         "jdk": "oraclejdk8",
         "before_install": null,
         "script": [
-          "./gradlew releaseTarGz && /bin/bash ./tests/travis/run_tests.sh"
+          "./gradlew systemTestLibs && /bin/bash ./tests/travis/run_tests.sh"
         ],
         "services": [
           "docker"
@@ -165,7 +181,7 @@ This produces a json about the build which looks like:
         "jdk": "oraclejdk8",
         "before_install": null,
         "script": [
-          "./gradlew releaseTarGz && /bin/bash ./tests/travis/run_tests.sh"
+          "./gradlew systemTestLibs && /bin/bash ./tests/travis/run_tests.sh"
         ],
         "services": [
           "docker"
@@ -215,7 +231,7 @@ The resulting json looks like:
       "jdk": "oraclejdk8",
       "before_install": null,
       "script": [
-        "./gradlew releaseTarGz && /bin/bash ./tests/travis/run_tests.sh"
+        "./gradlew systemTestLibs && /bin/bash ./tests/travis/run_tests.sh"
       ],
       "services": [
         "docker"
@@ -252,7 +268,7 @@ The resulting json looks like:
       "jdk": "oraclejdk8",
       "before_install": null,
       "script": [
-        "./gradlew releaseTarGz && /bin/bash ./tests/travis/run_tests.sh"
+        "./gradlew systemTestLibs && /bin/bash ./tests/travis/run_tests.sh"
       ],
       "services": [
         "docker"
@@ -341,7 +357,7 @@ For a tutorial on how to setup and run the Kafka system tests, see
 https://cwiki.apache.org/confluence/display/KAFKA/tutorial+-+set+up+and+run+Kafka+system+tests+with+ducktape
 
 * Install Virtual Box from [https://www.virtualbox.org/](https://www.virtualbox.org/) (run `$ vboxmanage --version` to check if it's installed).
-* Install Vagrant >= 1.6.4 from [http://www.vagrantup.com/](http://www.vagrantup.com/) (run `vagrant --version` to check if it's installed).
+* Install Vagrant >= 1.6.4 from [https://www.vagrantup.com/](https://www.vagrantup.com/) (run `vagrant --version` to check if it's installed).
 * Install system test dependencies, including ducktape, a command-line tool and library for testing distributed systems. We recommend to use virtual env for system test development
 
         $ cd kafka/tests
@@ -385,12 +401,12 @@ Preparation
 In these steps, we will create an IAM role which has permission to create and destroy EC2 instances,
 set up a keypair used for ssh access to the test driver and worker machines, and create a security group to allow the test driver and workers to all communicate via TCP.
 
-* [Create an IAM role](http://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_create_for-user.html). We'll give this role the ability to launch or kill additional EC2 machines.
+* [Create an IAM role](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_create_for-user.html). We'll give this role the ability to launch or kill additional EC2 machines.
  - Create role "kafkatest-master"
  - Role type: Amazon EC2
  - Attach policy: AmazonEC2FullAccess (this will allow our test-driver to create and destroy EC2 instances)
 
-* If you haven't already, [set up a keypair to use for SSH access](http://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-key-pairs.html). For the purpose
+* If you haven't already, [set up a keypair to use for SSH access](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-key-pairs.html). For the purpose
 of this quickstart, let's say the keypair name is kafkatest, and you've saved the private key in kafktest.pem
 
 * Next, create a EC2 security group called "kafkatest".
@@ -449,6 +465,7 @@ the test driver machine.
         ec2_instance_type = "..." # Pick something appropriate for your
                                   # test. Note that the default m3.medium has
                                   # a small disk.
+        ec2_spot_max_price = "0.123"  # On-demand price for instance type
         enable_hostmanager = false
         num_zookeepers = 0
         num_kafka = 0

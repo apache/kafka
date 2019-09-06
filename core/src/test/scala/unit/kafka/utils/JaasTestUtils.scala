@@ -18,6 +18,9 @@ package kafka.utils
 
 import java.io.{File, BufferedWriter, FileWriter}
 import java.util.Properties
+
+import scala.collection.Seq
+
 import kafka.server.KafkaConfig
 import org.apache.kafka.common.utils.Java
 
@@ -31,13 +34,13 @@ object JaasTestUtils {
                              serviceName: Option[String]) extends JaasModule {
 
     def name =
-      if (Java.isIBMJdk)
+      if (Java.isIbmJdk)
         "com.ibm.security.auth.module.Krb5LoginModule"
       else
         "com.sun.security.auth.module.Krb5LoginModule"
 
     def entries: Map[String, String] =
-      if (Java.isIBMJdk)
+      if (Java.isIbmJdk)
         Map(
           "principal" -> principal,
           "credsType" -> "both"
@@ -72,14 +75,26 @@ object JaasTestUtils {
 
   case class ScramLoginModule(username: String,
                               password: String,
-                              debug: Boolean = false) extends JaasModule {
+                              debug: Boolean = false,
+                              tokenProps: Map[String, String] = Map.empty) extends JaasModule {
 
     def name = "org.apache.kafka.common.security.scram.ScramLoginModule"
 
     def entries: Map[String, String] = Map(
       "username" -> username,
       "password" -> password
+    ) ++ tokenProps.map { case (name, value) => name -> value }
+  }
+
+  case class OAuthBearerLoginModule(username: String,
+                              debug: Boolean = false) extends JaasModule {
+
+    def name = "org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule"
+
+    def entries: Map[String, String] = Map(
+      "unsecuredLoginStringClaim_sub" -> username
     )
+
   }
 
   sealed trait JaasModule {
@@ -113,7 +128,7 @@ object JaasTestUtils {
   val KafkaServerContextName = "KafkaServer"
   val KafkaServerPrincipalUnqualifiedName = "kafka"
   private val KafkaServerPrincipal = KafkaServerPrincipalUnqualifiedName + "/localhost@EXAMPLE.COM"
-  private val KafkaClientContextName = "KafkaClient"
+  val KafkaClientContextName = "KafkaClient"
   val KafkaClientPrincipalUnqualifiedName = "client"
   private val KafkaClientPrincipal = KafkaClientPrincipalUnqualifiedName + "@EXAMPLE.COM"
   val KafkaClientPrincipalUnqualifiedName2 = "client2"
@@ -133,16 +148,17 @@ object JaasTestUtils {
   val KafkaScramAdmin = "scram-admin"
   val KafkaScramAdminPassword = "scram-admin-secret"
 
+  val KafkaOAuthBearerUser = "oauthbearer-user"
+  val KafkaOAuthBearerUser2 = "oauthbearer-user2"
+  val KafkaOAuthBearerAdmin = "oauthbearer-admin"
+
   val serviceName = "kafka"
 
   def saslConfigs(saslProperties: Option[Properties]): Properties = {
-    val result = saslProperties match {
-      case Some(properties) => properties
-      case None => new Properties
-    }
+    val result = saslProperties.getOrElse(new Properties)
     // IBM Kerberos module doesn't support the serviceName JAAS property, hence it needs to be
     // passed as a Kafka property
-    if (Java.isIBMJdk && !result.contains(KafkaConfig.SaslKerberosServiceNameProp))
+    if (Java.isIbmJdk && !result.contains(KafkaConfig.SaslKerberosServiceNameProp))
       result.put(KafkaConfig.SaslKerberosServiceNameProp, serviceName)
     result
   }
@@ -154,13 +170,23 @@ object JaasTestUtils {
   }
 
   // Returns the dynamic configuration, using credentials for user #1
-  def clientLoginModule(mechanism: String, keytabLocation: Option[File]): String =
-    kafkaClientModule(mechanism, keytabLocation, KafkaClientPrincipal, KafkaPlainUser, KafkaPlainPassword, KafkaScramUser, KafkaScramPassword).toString
+  def clientLoginModule(mechanism: String, keytabLocation: Option[File], serviceName: String = serviceName): String =
+    kafkaClientModule(mechanism, keytabLocation, KafkaClientPrincipal, KafkaPlainUser, KafkaPlainPassword, KafkaScramUser, KafkaScramPassword, KafkaOAuthBearerUser, serviceName).toString
+
+  def tokenClientLoginModule(tokenId: String, password: String): String = {
+    ScramLoginModule(
+      tokenId,
+      password,
+      debug = false,
+      Map(
+        "tokenauth" -> "true"
+      )).toString
+  }
 
   def zkSections: Seq[JaasSection] = Seq(
-    new JaasSection(ZkServerContextName, Seq(ZkDigestModule(debug = false,
+    JaasSection(ZkServerContextName, Seq(ZkDigestModule(debug = false,
       Map("user_super" -> ZkUserSuperPasswd, s"user_$ZkUser" -> ZkUserPassword)))),
-    new JaasSection(ZkClientContextName, Seq(ZkDigestModule(debug = false,
+    JaasSection(ZkClientContextName, Seq(ZkDigestModule(debug = false,
       Map("username" -> ZkUser, "password" -> ZkUserPassword))))
   )
 
@@ -189,16 +215,19 @@ object JaasTestUtils {
           KafkaScramAdmin,
           KafkaScramAdminPassword,
           debug = false)
+      case "OAUTHBEARER" =>
+        OAuthBearerLoginModule(KafkaOAuthBearerAdmin)
       case mechanism => throw new IllegalArgumentException("Unsupported server mechanism " + mechanism)
     }
-    new JaasSection(contextName, modules)
+    JaasSection(contextName, modules)
   }
 
   // consider refactoring if more mechanisms are added
-  private def kafkaClientModule(mechanism: String, 
+  private def kafkaClientModule(mechanism: String,
       keytabLocation: Option[File], clientPrincipal: String,
       plainUser: String, plainPassword: String, 
-      scramUser: String, scramPassword: String): JaasModule = {
+      scramUser: String, scramPassword: String,
+      oauthBearerUser: String, serviceName: String = serviceName): JaasModule = {
     mechanism match {
       case "GSSAPI" =>
         Krb5LoginModule(
@@ -219,6 +248,10 @@ object JaasTestUtils {
           scramUser,
           scramPassword
         )
+      case "OAUTHBEARER" =>
+        OAuthBearerLoginModule(
+          oauthBearerUser
+        )
       case mechanism => throw new IllegalArgumentException("Unsupported client mechanism " + mechanism)
     }
   }
@@ -227,14 +260,14 @@ object JaasTestUtils {
    * Used for the static JAAS configuration and it uses the credentials for client#2
    */
   def kafkaClientSection(mechanism: Option[String], keytabLocation: Option[File]): JaasSection = {
-    new JaasSection(KafkaClientContextName, mechanism.map(m =>
-      kafkaClientModule(m, keytabLocation, KafkaClientPrincipal2, KafkaPlainUser2, KafkaPlainPassword2, KafkaScramUser2, KafkaScramPassword2)).toSeq)
+    JaasSection(KafkaClientContextName, mechanism.map(m =>
+      kafkaClientModule(m, keytabLocation, KafkaClientPrincipal2, KafkaPlainUser2, KafkaPlainPassword2, KafkaScramUser2, KafkaScramPassword2, KafkaOAuthBearerUser2)).toSeq)
   }
 
   private def jaasSectionsToString(jaasSections: Seq[JaasSection]): String =
     jaasSections.mkString
 
-  private def writeToFile(file: File, jaasSections: Seq[JaasSection]) {
+  private def writeToFile(file: File, jaasSections: Seq[JaasSection]): Unit = {
     val writer = new BufferedWriter(new FileWriter(file))
     try writer.write(jaasSectionsToString(jaasSections))
     finally writer.close()

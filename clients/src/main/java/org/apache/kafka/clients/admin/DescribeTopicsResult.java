@@ -28,7 +28,7 @@ import java.util.concurrent.ExecutionException;
 /**
  * The result of the {@link KafkaAdminClient#describeTopics(Collection)} call.
  *
- * The API of this class is evolving, see {@link AdminClient} for details.
+ * The API of this class is evolving, see {@link Admin} for details.
  */
 @InterfaceStability.Evolving
 public class DescribeTopicsResult {
@@ -51,7 +51,7 @@ public class DescribeTopicsResult {
      */
     public KafkaFuture<Map<String, TopicDescription>> all() {
         return KafkaFuture.allOf(futures.values().toArray(new KafkaFuture[0])).
-            thenApply(new KafkaFuture.Function<Void, Map<String, TopicDescription>>() {
+            thenApply(new KafkaFuture.BaseFunction<Void, Map<String, TopicDescription>>() {
                 @Override
                 public Map<String, TopicDescription> apply(Void v) {
                     Map<String, TopicDescription> descriptions = new HashMap<>(futures.size());

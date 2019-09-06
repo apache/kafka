@@ -30,9 +30,9 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * The result of the {@link AdminClient#deleteAcls(Collection)} call.
+ * The result of the {@link Admin#deleteAcls(Collection)} call.
  *
- * The API of this class is evolving, see {@link AdminClient} for details.
+ * The API of this class is evolving, see {@link Admin} for details.
  */
 @InterfaceStability.Evolving
 public class DeleteAclsResult {
@@ -101,29 +101,26 @@ public class DeleteAclsResult {
      * Note that it if the filters don't match any ACLs, this is not considered an error.
      */
     public KafkaFuture<Collection<AclBinding>> all() {
-        return KafkaFuture.allOf(futures.values().toArray(new KafkaFuture[0])).thenApply(
-            new KafkaFuture.Function<Void, Collection<AclBinding>>() {
-                @Override
-                public Collection<AclBinding> apply(Void v) {
-                    List<AclBinding> acls = new ArrayList<>();
-                    for (Map.Entry<AclBindingFilter, KafkaFuture<FilterResults>> entry : futures.entrySet()) {
-                        FilterResults results;
-                        try {
-                            results = entry.getValue().get();
-                        } catch (Throwable e) {
-                            // This should be unreachable, since the future returned by KafkaFuture#allOf should
-                            // have failed if any Future failed.
-                            throw new KafkaException("DeleteAclsResult#all: internal error", e);
-                        }
-                        for (FilterResult result : results.values()) {
-                            if (result.exception() != null) {
-                                throw result.exception();
-                            }
-                            acls.add(result.binding());
-                        }
-                    }
-                    return acls;
-                }
-            });
+        return KafkaFuture.allOf(futures.values().toArray(new KafkaFuture[0])).thenApply(v -> getAclBindings(futures));
+    }
+
+    private List<AclBinding> getAclBindings(Map<AclBindingFilter, KafkaFuture<FilterResults>> futures) {
+        List<AclBinding> acls = new ArrayList<>();
+        for (KafkaFuture<FilterResults> value: futures.values()) {
+            FilterResults results;
+            try {
+                results = value.get();
+            } catch (Throwable e) {
+                // This should be unreachable, since the future returned by KafkaFuture#allOf should
+                // have failed if any Future failed.
+                throw new KafkaException("DeleteAclsResult#all: internal error", e);
+            }
+            for (FilterResult result : results.values()) {
+                if (result.exception() != null)
+                    throw result.exception();
+                acls.add(result.binding());
+            }
+        }
+        return acls;
     }
 }

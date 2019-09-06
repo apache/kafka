@@ -19,7 +19,7 @@ package kafka.log
 import java.io.{File, IOException}
 import java.nio.ByteBuffer
 import java.nio.channels.FileChannel
-import java.nio.file.StandardOpenOption
+import java.nio.file.{Files, StandardOpenOption}
 
 import kafka.utils.{Logging, nonthreadsafe}
 import org.apache.kafka.common.KafkaException
@@ -53,23 +53,28 @@ class TransactionIndex(val startOffset: Long, @volatile var file: File) extends 
   def append(abortedTxn: AbortedTxn): Unit = {
     lastOffset.foreach { offset =>
       if (offset >= abortedTxn.lastOffset)
-        throw new IllegalArgumentException("The last offset of appended transactions must increase sequentially")
+        throw new IllegalArgumentException(s"The last offset of appended transactions must increase sequentially, but " +
+          s"${abortedTxn.lastOffset} is not greater than current last offset $offset of index ${file.getAbsolutePath}")
     }
     lastOffset = Some(abortedTxn.lastOffset)
-    Utils.writeFully(channel, abortedTxn.buffer.duplicate())
+    Utils.writeFully(channel(), abortedTxn.buffer.duplicate())
   }
 
   def flush(): Unit = maybeChannel.foreach(_.force(true))
 
-  def delete(): Boolean = {
-    maybeChannel.forall { channel =>
-      channel.force(true)
-      close()
-      file.delete()
-    }
+  /**
+   * Delete this index.
+   *
+   * @throws IOException if deletion fails due to an I/O error
+   * @return `true` if the file was deleted by this method; `false` if the file could not be deleted because it did
+   *         not exist
+   */
+  def deleteIfExists(): Boolean = {
+    close()
+    Files.deleteIfExists(file.toPath)
   }
 
-  private def channel: FileChannel = {
+  private def channel(): FileChannel = {
     maybeChannel match {
       case Some(channel) => channel
       case None => openChannel()
@@ -77,14 +82,17 @@ class TransactionIndex(val startOffset: Long, @volatile var file: File) extends 
   }
 
   private def openChannel(): FileChannel = {
-    val channel = FileChannel.open(file.toPath, StandardOpenOption.READ, StandardOpenOption.WRITE,
-      StandardOpenOption.CREATE)
+    val channel = FileChannel.open(file.toPath, StandardOpenOption.CREATE, StandardOpenOption.READ,
+      StandardOpenOption.WRITE)
     maybeChannel = Some(channel)
     channel.position(channel.size)
     channel
   }
 
-  def truncate() = {
+  /**
+   * Remove all the entries from the index. Unlike `AbstractIndex`, this index is not resized ahead of time.
+   */
+  def reset(): Unit = {
     maybeChannel.foreach(_.truncate(0))
     lastOffset = None
   }
@@ -106,7 +114,7 @@ class TransactionIndex(val startOffset: Long, @volatile var file: File) extends 
     var newLastOffset: Option[Long] = None
     for ((abortedTxn, position) <- iterator(() => buffer)) {
       if (abortedTxn.lastOffset >= offset) {
-        channel.truncate(position)
+        channel().truncate(position)
         lastOffset = newLastOffset
         return
       }
@@ -131,8 +139,8 @@ class TransactionIndex(val startOffset: Long, @volatile var file: File) extends 
 
               val abortedTxn = new AbortedTxn(buffer)
               if (abortedTxn.version > AbortedTxn.CurrentVersion)
-                throw new KafkaException(s"Unexpected aborted transaction version ${abortedTxn.version}, " +
-                  s"current version is ${AbortedTxn.CurrentVersion}")
+                throw new KafkaException(s"Unexpected aborted transaction version ${abortedTxn.version} " +
+                  s"in transaction index ${file.getAbsolutePath}, current version is ${AbortedTxn.CurrentVersion}")
               val nextEntry = (abortedTxn, position)
               position += AbortedTxn.TotalSize
               nextEntry
@@ -140,7 +148,7 @@ class TransactionIndex(val startOffset: Long, @volatile var file: File) extends 
               case e: IOException =>
                 // We received an unexpected error reading from the index file. We propagate this as an
                 // UNKNOWN error to the consumer, which will cause it to retry the fetch.
-                throw new KafkaException(s"Failed to read from the transaction index $file", e)
+                throw new KafkaException(s"Failed to read from the transaction index ${file.getAbsolutePath}", e)
             }
           }
         }
@@ -171,11 +179,17 @@ class TransactionIndex(val startOffset: Long, @volatile var file: File) extends 
     TxnIndexSearchResult(abortedTransactions.toList, isComplete = false)
   }
 
+  /**
+   * Do a basic sanity check on this index to detect obvious problems.
+   *
+   * @throws CorruptIndexException if any problems are found.
+   */
   def sanityCheck(): Unit = {
     val buffer = ByteBuffer.allocate(AbortedTxn.TotalSize)
     for ((abortedTxn, _) <- iterator(() => buffer)) {
-      require(abortedTxn.lastOffset >= startOffset, s"Last offset of aborted transaction $abortedTxn is less than " +
-        s"start offset $startOffset")
+      if (abortedTxn.lastOffset < startOffset)
+        throw new CorruptIndexException(s"Last offset of aborted transaction $abortedTxn in index " +
+          s"${file.getAbsolutePath} is less than start offset $startOffset")
     }
   }
 

@@ -20,7 +20,7 @@ import kafka.utils.MockScheduler
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.TransactionResult
-import org.apache.kafka.common.utils.MockTime
+import org.apache.kafka.common.utils.{LogContext, MockTime}
 import org.easymock.{Capture, EasyMock, IAnswer}
 import org.junit.Assert._
 import org.junit.Test
@@ -48,11 +48,13 @@ class TransactionCoordinatorTest {
   private val scheduler = new MockScheduler(time)
 
   val coordinator = new TransactionCoordinator(brokerId,
+    new TransactionConfig(),
     scheduler,
     pidManager,
     transactionManager,
     transactionMarkerChannelManager,
-    time)
+    time,
+    new LogContext)
 
   var result: InitProducerIdResult = _
   var error: Errors = Errors.NONE
@@ -597,7 +599,7 @@ class TransactionCoordinatorTest {
   }
 
   @Test
-  def shouldAbortExpiredTransactionsInOngoingState(): Unit = {
+  def shouldAbortExpiredTransactionsInOngoingStateAndBumpEpoch(): Unit = {
     val now = time.milliseconds()
     val txnMetadata = new TransactionMetadata(transactionalId, producerId, producerEpoch, txnTimeoutMs, Ongoing,
       partitions, now, now)
@@ -607,9 +609,10 @@ class TransactionCoordinatorTest {
       .andReturn(List(TransactionalIdAndProducerIdEpoch(transactionalId, producerId, producerEpoch)))
     EasyMock.expect(transactionManager.getTransactionState(EasyMock.eq(transactionalId)))
       .andReturn(Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, txnMetadata))))
-      .once()
+      .times(2)
 
-    val expectedTransition = TxnTransitMetadata(producerId, producerEpoch, txnTimeoutMs, PrepareAbort,
+    val bumpedEpoch = (producerEpoch + 1).toShort
+    val expectedTransition = TxnTransitMetadata(producerId, bumpedEpoch, txnTimeoutMs, PrepareAbort,
       partitions.toSet, now, now + TransactionStateManager.DefaultAbortTimedOutTransactionsIntervalMs)
 
     EasyMock.expect(transactionManager.appendTransactionToLog(EasyMock.eq(transactionalId),
@@ -639,7 +642,7 @@ class TransactionCoordinatorTest {
     EasyMock.expect(transactionManager.timedOutTransactions())
       .andReturn(List(TransactionalIdAndProducerIdEpoch(transactionalId, producerId, producerEpoch)))
     EasyMock.expect(transactionManager.getTransactionState(EasyMock.eq(transactionalId)))
-      .andReturn(Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, metadata))))
+      .andReturn(Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, metadata)))).once()
 
     EasyMock.replay(transactionManager, transactionMarkerChannelManager)
 

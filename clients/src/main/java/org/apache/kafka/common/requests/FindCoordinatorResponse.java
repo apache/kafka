@@ -17,102 +17,90 @@
 package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.Node;
+import org.apache.kafka.common.message.FindCoordinatorResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
+import java.util.Collections;
+import java.util.Map;
+
 
 public class FindCoordinatorResponse extends AbstractResponse {
-
-    private static final String ERROR_CODE_KEY_NAME = "error_code";
-    private static final String ERROR_MESSAGE_KEY_NAME = "error_message";
-    private static final String COORDINATOR_KEY_NAME = "coordinator";
 
     /**
      * Possible error codes:
      *
+     * COORDINATOR_LOAD_IN_PROGRESS (14)
      * COORDINATOR_NOT_AVAILABLE (15)
-     * NOT_COORDINATOR (16)
      * GROUP_AUTHORIZATION_FAILED (30)
+     * INVALID_REQUEST (42)
+     * TRANSACTIONAL_ID_AUTHORIZATION_FAILED (53)
      */
 
-    // coordinator level field names
-    private static final String NODE_ID_KEY_NAME = "node_id";
-    private static final String HOST_KEY_NAME = "host";
-    private static final String PORT_KEY_NAME = "port";
+    private final FindCoordinatorResponseData data;
 
-    private final int throttleTimeMs;
-    private final String errorMessage;
-    private final Errors error;
-    private final Node node;
-
-    public FindCoordinatorResponse(Errors error, Node node) {
-        this(DEFAULT_THROTTLE_TIME, error, node);
+    public FindCoordinatorResponse(FindCoordinatorResponseData data) {
+        this.data = data;
     }
 
-    public FindCoordinatorResponse(int throttleTimeMs, Errors error, Node node) {
-        this.throttleTimeMs = throttleTimeMs;
-        this.error = error;
-        this.node = node;
-        this.errorMessage = null;
+    public FindCoordinatorResponse(Struct struct, short version) {
+        this.data = new FindCoordinatorResponseData(struct, version);
     }
 
-    public FindCoordinatorResponse(Struct struct) {
-        this.throttleTimeMs = struct.hasField(THROTTLE_TIME_KEY_NAME) ? struct.getInt(THROTTLE_TIME_KEY_NAME) : DEFAULT_THROTTLE_TIME;
-        error = Errors.forCode(struct.getShort(ERROR_CODE_KEY_NAME));
-        if (struct.hasField(ERROR_MESSAGE_KEY_NAME))
-            errorMessage = struct.getString(ERROR_MESSAGE_KEY_NAME);
-        else
-            errorMessage = null;
-
-        Struct broker = (Struct) struct.get(COORDINATOR_KEY_NAME);
-        int nodeId = broker.getInt(NODE_ID_KEY_NAME);
-        String host = broker.getString(HOST_KEY_NAME);
-        int port = broker.getInt(PORT_KEY_NAME);
-        node = new Node(nodeId, host, port);
-    }
-
-    public int throttleTimeMs() {
-        return throttleTimeMs;
-    }
-
-    public Errors error() {
-        return error;
+    public FindCoordinatorResponseData data() {
+        return data;
     }
 
     public Node node() {
-        return node;
+        return new Node(data.nodeId(), data.host(), data.port());
+    }
+
+    @Override
+    public int throttleTimeMs() {
+        return data.throttleTimeMs();
+    }
+
+    public boolean hasError() {
+        return error() != Errors.NONE;
+    }
+
+    public Errors error() {
+        return Errors.forCode(data.errorCode());
+    }
+
+    @Override
+    public Map<Errors, Integer> errorCounts() {
+        return Collections.singletonMap(error(), 1);
     }
 
     @Override
     protected Struct toStruct(short version) {
-        Struct struct = new Struct(ApiKeys.FIND_COORDINATOR.responseSchema(version));
-        if (struct.hasField(THROTTLE_TIME_KEY_NAME))
-            struct.set(THROTTLE_TIME_KEY_NAME, throttleTimeMs);
-        struct.set(ERROR_CODE_KEY_NAME, error.code());
-        if (struct.hasField(ERROR_MESSAGE_KEY_NAME))
-            struct.set(ERROR_MESSAGE_KEY_NAME, errorMessage);
-
-        Struct coordinator = struct.instance(COORDINATOR_KEY_NAME);
-        coordinator.set(NODE_ID_KEY_NAME, node.id());
-        coordinator.set(HOST_KEY_NAME, node.host());
-        coordinator.set(PORT_KEY_NAME, node.port());
-        struct.set(COORDINATOR_KEY_NAME, coordinator);
-        return struct;
+        return data.toStruct(version);
     }
 
     public static FindCoordinatorResponse parse(ByteBuffer buffer, short version) {
-        return new FindCoordinatorResponse(ApiKeys.FIND_COORDINATOR.responseSchema(version).read(buffer));
+        return new FindCoordinatorResponse(ApiKeys.FIND_COORDINATOR.responseSchema(version).read(buffer), version);
     }
 
     @Override
     public String toString() {
-        return "FindCoordinatorResponse(" +
-                "throttleTimeMs=" + throttleTimeMs +
-                ", errorMessage='" + errorMessage + '\'' +
-                ", error=" + error +
-                ", node=" + node +
-                ')';
+        return data.toString();
+    }
+
+    @Override
+    public boolean shouldClientThrottle(short version) {
+        return version >= 2;
+    }
+
+    public static FindCoordinatorResponse prepareResponse(Errors error, Node node) {
+        FindCoordinatorResponseData data = new FindCoordinatorResponseData();
+        data.setErrorCode(error.code())
+            .setErrorMessage(error.message())
+            .setNodeId(node.id())
+            .setHost(node.host())
+            .setPort(node.port());
+        return new FindCoordinatorResponse(data);
     }
 }

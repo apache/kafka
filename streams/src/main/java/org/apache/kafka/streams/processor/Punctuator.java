@@ -16,11 +16,19 @@
  */
 package org.apache.kafka.streams.processor;
 
+import java.time.Duration;
+
 /**
- * A functional interface used as an argument to {@link ProcessorContext#schedule(long, PunctuationType, Punctuator)}.
+ * A functional interface used as an argument to {@link ProcessorContext#schedule(Duration, PunctuationType, Punctuator)}.
+ *
+ * @see Cancellable
  */
 public interface Punctuator {
 
+    /**
+     * Perform the scheduled periodic operation.
+     *
+     * @param timestamp when the operation is being called, depending on {@link PunctuationType}
+     */
     void punctuate(long timestamp);
-
 }

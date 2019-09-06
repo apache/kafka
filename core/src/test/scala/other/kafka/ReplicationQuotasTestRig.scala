@@ -15,21 +15,21 @@
   * limitations under the License.
   */
 
-package other.kafka
+package kafka
 
-import java.io.{File, FileOutputStream, PrintWriter}
+import java.io.{File, PrintWriter}
+import java.nio.charset.StandardCharsets
+import java.nio.file.{Files, StandardOpenOption}
 import javax.imageio.ImageIO
 
 import kafka.admin.ReassignPartitionsCommand
 import kafka.admin.ReassignPartitionsCommand.Throttle
-import kafka.common.TopicAndPartition
-import org.apache.kafka.common.TopicPartition
 import kafka.server.{KafkaConfig, KafkaServer, QuotaType}
 import kafka.utils.TestUtils._
-import kafka.utils.ZkUtils._
-import kafka.utils.{Exit, Logging, TestUtils, ZkUtils}
-import kafka.zk.ZooKeeperTestHarness
+import kafka.utils.{Exit, Logging, TestUtils}
+import kafka.zk.{ReassignPartitionsZNode, ZooKeeperTestHarness}
 import org.apache.kafka.clients.producer.ProducerRecord
+import org.apache.kafka.common.TopicPartition
 import org.jfree.chart.plot.PlotOrientation
 import org.jfree.chart.{ChartFactory, ChartFrame, JFreeChart}
 import org.jfree.data.xy.{XYSeries, XYSeriesCollection}
@@ -74,7 +74,7 @@ object ReplicationQuotasTestRig {
       Exit.exit(0)
   }
 
-  def run(config: ExperimentDef, journal: Journal, displayChartsOnScreen: Boolean) {
+  def run(config: ExperimentDef, journal: Journal, displayChartsOnScreen: Boolean): Unit = {
     val experiment = new Experiment()
     try {
       experiment.setUp
@@ -101,18 +101,18 @@ object ReplicationQuotasTestRig {
     val leaderRates = mutable.Map[Int, Array[Double]]()
     val followerRates = mutable.Map[Int, Array[Double]]()
 
-    def startBrokers(brokerIds: Seq[Int]) {
+    def startBrokers(brokerIds: Seq[Int]): Unit = {
       println("Starting Brokers")
       servers = brokerIds.map(i => createBrokerConfig(i, zkConnect))
         .map(c => createServer(KafkaConfig.fromProps(c)))
     }
 
-    override def tearDown() {
+    override def tearDown(): Unit = {
       TestUtils.shutdownServers(servers)
       super.tearDown()
     }
 
-    def run(config: ExperimentDef, journal: Journal, displayChartsOnScreen: Boolean) {
+    def run(config: ExperimentDef, journal: Journal, displayChartsOnScreen: Boolean): Unit = {
       experimentName = config.name
       val brokers = (100 to 100 + config.brokers)
       var count = 0
@@ -125,10 +125,10 @@ object ReplicationQuotasTestRig {
       val replicas = (0 to config.partitions).map(partition => partition -> Seq(nextReplicaRoundRobin())).toMap
 
       startBrokers(brokers)
-      createTopic(zkUtils, topicName, replicas, servers)
+      createTopic(zkClient, topicName, replicas, servers)
 
       println("Writing Data")
-      val producer = TestUtils.createNewProducer(TestUtils.getBrokerListStrFromServers(servers), retries = 5, acks = 0)
+      val producer = TestUtils.createProducer(TestUtils.getBrokerListStrFromServers(servers), acks = 0)
       (0 until config.msgsPerPartition).foreach { x =>
         (0 until config.partitions).foreach { partition =>
           producer.send(new ProducerRecord(topicName, partition, null, new Array[Byte](config.msgSize)))
@@ -136,10 +136,11 @@ object ReplicationQuotasTestRig {
       }
 
       println("Starting Reassignment")
-      val newAssignment = ReassignPartitionsCommand.generateAssignment(zkUtils, brokers, json(topicName), true)._1
+      val newAssignment = ReassignPartitionsCommand.generateAssignment(zkClient, brokers, json(topicName), true)._1
 
       val start = System.currentTimeMillis()
-      ReassignPartitionsCommand.executeAssignment(zkUtils, ZkUtils.formatAsReassignmentJson(newAssignment), Throttle(config.throttle))
+      ReassignPartitionsCommand.executeAssignment(zkClient, None,
+        new String(ReassignPartitionsZNode.encode(newAssignment), StandardCharsets.UTF_8), Throttle(config.throttle))
 
       //Await completion
       waitForReassignmentToComplete()
@@ -167,15 +168,14 @@ object ReplicationQuotasTestRig {
     }
   }
 
-    def logOutput(config: ExperimentDef, replicas: Map[Int, Seq[Int]], newAssignment: Map[TopicAndPartition, Seq[Int]]): Unit = {
-      val actual = zkUtils.getPartitionAssignmentForTopics(Seq(topicName))(topicName)
-      val existing = zkUtils.getReplicaAssignmentForTopics(newAssignment.map(_._1.topic).toSeq)
+    def logOutput(config: ExperimentDef, replicas: Map[Int, Seq[Int]], newAssignment: Map[TopicPartition, Seq[Int]]): Unit = {
+      val actual = zkClient.getPartitionAssignmentForTopics(Set(topicName))(topicName)
 
       //Long stats
       println("The replicas are " + replicas.toSeq.sortBy(_._1).map("\n" + _))
       println("This is the current replica assignment:\n" + actual.toSeq)
       println("proposed assignment is: \n" + newAssignment)
-      println("This is the assigment we eneded up with" + actual)
+      println("This is the assignment we ended up with" + actual)
 
       //Test Stats
       println(s"numBrokers: ${config.brokers}")
@@ -187,11 +187,11 @@ object ReplicationQuotasTestRig {
       println(s"Worst case duration is ${config.targetBytesPerBrokerMB * 1000 * 1000/ config.throttle}")
     }
 
-    def waitForReassignmentToComplete() {
+    def waitForReassignmentToComplete(): Unit = {
       waitUntilTrue(() => {
         printRateMetrics()
-        !zkUtils.pathExists(ReassignPartitionsPath)
-      }, s"Znode ${ZkUtils.ReassignPartitionsPath} wasn't deleted", 60 * 60 * 1000, pause = 1000L)
+        !zkClient.reassignPartitionsInProgress()
+      }, s"Znode ${ReassignPartitionsZNode.path} wasn't deleted", 60 * 60 * 1000, pause = 1000L)
     }
 
     def renderChart(data: mutable.Map[Int, Array[Double]], name: String, journal: Journal, displayChartsOnScreen: Boolean): Unit = {
@@ -248,7 +248,7 @@ object ReplicationQuotasTestRig {
       rates.put(brokerId, leaderRatesBroker)
     }
 
-    def printRateMetrics() {
+    def printRateMetrics(): Unit = {
       for (broker <- servers) {
         val leaderRate: Double = measuredRate(broker, QuotaType.LeaderReplication)
         if (broker.config.brokerId == 100)
@@ -267,7 +267,7 @@ object ReplicationQuotasTestRig {
     private def measuredRate(broker: KafkaServer, repType: QuotaType): Double = {
       val metricName = broker.metrics.metricName("byte-rate", repType.toString)
       if (broker.metrics.metrics.asScala.contains(metricName))
-        broker.metrics.metrics.asScala(metricName).value
+        broker.metrics.metrics.asScala(metricName).metricValue.asInstanceOf[Double]
       else -1
     }
 
@@ -313,7 +313,7 @@ object ReplicationQuotasTestRig {
     }
 
     def append(message: String): Unit = {
-      val stream = new FileOutputStream(log, true)
+      val stream = Files.newOutputStream(log.toPath, StandardOpenOption.CREATE, StandardOpenOption.APPEND)
       new PrintWriter(stream) {
         append(message)
         close

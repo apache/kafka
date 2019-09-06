@@ -20,15 +20,15 @@ import net.sourceforge.argparse4j.ArgumentParsers;
 import net.sourceforge.argparse4j.inf.ArgumentParser;
 import net.sourceforge.argparse4j.inf.ArgumentParserException;
 import net.sourceforge.argparse4j.inf.Namespace;
-import org.apache.kafka.common.protocol.SecurityProtocol;
+import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.log4j.Logger;
 import org.apache.log4j.PropertyConfigurator;
 
-import java.io.FileInputStream;
-import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.Properties;
 
 import static net.sourceforge.argparse4j.impl.Arguments.store;
@@ -161,9 +161,9 @@ public class VerifiableLog4jAppender {
      * we use VerifiableProducer from the development tools package, and run it against 0.8.X.X kafka jars.
      * Since this method is not in Utils in the 0.8.X.X jars, we have to cheat a bit and duplicate.
      */
-    public static Properties loadProps(String filename) throws IOException, FileNotFoundException {
+    public static Properties loadProps(String filename) throws IOException {
         Properties props = new Properties();
-        try (InputStream propStream = new FileInputStream(filename)) {
+        try (InputStream propStream = Files.newInputStream(Paths.get(filename))) {
             props.load(propStream);
         }
         return props;
@@ -204,6 +204,9 @@ public class VerifiableLog4jAppender {
                 props.setProperty("log4j.appender.KAFKA.kerb5ConfPath", res.getString("kerb5ConfPath"));
             }
             props.setProperty("log4j.logger.kafka.log4j", "INFO, KAFKA");
+            // Changing log level from INFO to WARN as a temporary workaround for KAFKA-6415. This is to
+            // avoid deadlock in system tests when producer network thread appends to log while updating metadata.
+            props.setProperty("log4j.logger.org.apache.kafka.clients.Metadata", "WARN, KAFKA");
 
             if (configFile != null) {
                 try {
@@ -238,13 +241,10 @@ public class VerifiableLog4jAppender {
         final VerifiableLog4jAppender appender = createFromArgs(args);
         boolean infinite = appender.maxMessages < 0;
 
-        Runtime.getRuntime().addShutdownHook(new Thread() {
-            @Override
-            public void run() {
-                // Trigger main thread to stop producing messages
-                appender.stopLogging = true;
-            }
-        });
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            // Trigger main thread to stop producing messages
+            appender.stopLogging = true;
+        }));
 
         long maxMessages = infinite ? Long.MAX_VALUE : appender.maxMessages;
         for (long i = 0; i < maxMessages; i++) {

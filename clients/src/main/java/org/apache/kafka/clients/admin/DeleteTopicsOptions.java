@@ -22,29 +22,22 @@ import org.apache.kafka.common.annotation.InterfaceStability;
 import java.util.Collection;
 
 /**
- * Options for {@link AdminClient#deleteTopics(Collection)}.
+ * Options for {@link Admin#deleteTopics(Collection)}.
  *
- * The API of this class is evolving, see {@link AdminClient} for details.
+ * The API of this class is evolving, see {@link Admin} for details.
  */
 @InterfaceStability.Evolving
-public class DeleteTopicsOptions {
-    private Integer timeoutMs = null;
+public class DeleteTopicsOptions extends AbstractOptions<DeleteTopicsOptions> {
 
     /**
      * Set the request timeout in milliseconds for this operation or {@code null} if the default request timeout for the
      * AdminClient should be used.
+     *
      */
+    // This method is retained to keep binary compatibility with 0.11
     public DeleteTopicsOptions timeoutMs(Integer timeoutMs) {
         this.timeoutMs = timeoutMs;
         return this;
-    }
-
-    /**
-     * The request timeout in milliseconds for this operation or {@code null} if the default request timeout for the
-     * AdminClient should be used.
-     */
-    public Integer timeoutMs() {
-        return timeoutMs;
     }
 
 }

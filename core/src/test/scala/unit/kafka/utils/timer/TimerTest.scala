@@ -16,14 +16,13 @@
  */
 package kafka.utils.timer
 
-import java.util.concurrent.{CountDownLatch, ExecutorService, Executors, TimeUnit}
+import java.util.concurrent.{CountDownLatch, TimeUnit}
 
 import org.junit.Assert._
 import java.util.concurrent.atomic._
 import org.junit.{Test, After, Before}
 
 import scala.collection.mutable.ArrayBuffer
-import scala.util.Random
 
 class TimerTest {
 
@@ -40,7 +39,7 @@ class TimerTest {
   private[this] var timer: Timer = null
 
   @Before
-  def setup() {
+  def setup(): Unit = {
     timer = new SystemTimer("test", tickMs = 1, wheelSize = 3)
   }
 

@@ -30,20 +30,28 @@ public class ConnectorInfo {
     private final String name;
     private final Map<String, String> config;
     private final List<ConnectorTaskId> tasks;
+    private final ConnectorType type;
 
     @JsonCreator
     public ConnectorInfo(@JsonProperty("name") String name,
                          @JsonProperty("config") Map<String, String> config,
-                         @JsonProperty("tasks") List<ConnectorTaskId> tasks) {
+                         @JsonProperty("tasks") List<ConnectorTaskId> tasks,
+                         @JsonProperty("type") ConnectorType type) {
         this.name = name;
         this.config = config;
         this.tasks = tasks;
+        this.type = type;
     }
 
 
     @JsonProperty
     public String name() {
         return name;
+    }
+
+    @JsonProperty
+    public ConnectorType type() {
+        return type;
     }
 
     @JsonProperty
@@ -63,12 +71,13 @@ public class ConnectorInfo {
         ConnectorInfo that = (ConnectorInfo) o;
         return Objects.equals(name, that.name) &&
                 Objects.equals(config, that.config) &&
-                Objects.equals(tasks, that.tasks);
+                Objects.equals(tasks, that.tasks) &&
+                Objects.equals(type, that.type);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(name, config, tasks);
+        return Objects.hash(name, config, tasks, type);
     }
 
 }

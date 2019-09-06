@@ -39,14 +39,18 @@ import org.apache.kafka.clients.consumer.OffsetCommitCallback;
 import org.apache.kafka.clients.consumer.RangeAssignor;
 import org.apache.kafka.clients.consumer.RoundRobinAssignor;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.FencedInstanceIdException;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Utils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.Closeable;
 import java.io.IOException;
 import java.io.PrintStream;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -80,6 +84,8 @@ import static net.sourceforge.argparse4j.impl.Arguments.storeTrue;
  * </ul>
  */
 public class VerifiableConsumer implements Closeable, OffsetCommitCallback, ConsumerRebalanceListener {
+
+    private static final Logger log = LoggerFactory.getLogger(VerifiableConsumer.class);
 
     private final ObjectMapper mapper = new ObjectMapper();
     private final PrintStream out;
@@ -209,6 +215,8 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
             // we only call wakeup() once to close the consumer, so this recursion should be safe
             commitSync(offsets);
             throw e;
+        } catch (FencedInstanceIdException e) {
+            throw e;
         } catch (Exception e) {
             onComplete(offsets, e);
         }
@@ -219,8 +227,8 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
             printJson(new StartupComplete());
             consumer.subscribe(Collections.singletonList(topic), this);
 
-            while (true) {
-                ConsumerRecords<String, String> records = consumer.poll(Long.MAX_VALUE);
+            while (!isFinished()) {
+                ConsumerRecords<String, String> records = consumer.poll(Duration.ofMillis(Long.MAX_VALUE));
                 Map<TopicPartition, OffsetAndMetadata> offsets = onRecordsReceived(records);
 
                 if (!useAutoCommit) {
@@ -232,6 +240,10 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
             }
         } catch (WakeupException e) {
             // ignore, we are closing
+            log.trace("Caught WakeupException because consumer is shutdown, ignore and terminate.", e);
+        } catch (Throwable t) {
+            // Log the error so it goes to the service log and not stdout
+            log.error("Error during processing, terminating consumer process: ", t);
         } finally {
             consumer.close();
             printJson(new ShutdownComplete());
@@ -515,6 +527,14 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
                 .dest("groupId")
                 .help("The groupId shared among members of the consumer group");
 
+        parser.addArgument("--group-instance-id")
+                .action(store())
+                .required(true)
+                .type(String.class)
+                .metavar("GROUP_INSTANCE_ID")
+                .dest("groupInstanceId")
+                .help("A unique identifier of the consumer instance");
+
         parser.addArgument("--max-messages")
                 .action(store())
                 .required(false)
@@ -591,6 +611,11 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
         }
 
         consumerProps.put(ConsumerConfig.GROUP_ID_CONFIG, res.getString("groupId"));
+
+        String groupInstanceId = res.getString("groupInstanceId");
+        if (!groupInstanceId.equals("None")) {
+            consumerProps.put(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG, groupInstanceId);
+        }
         consumerProps.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, res.getString("brokerList"));
         consumerProps.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, useAutoCommit);
         consumerProps.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, res.getString("resetPolicy"));
@@ -619,12 +644,7 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
 
         try {
             final VerifiableConsumer consumer = createFromArgs(parser, args);
-            Runtime.getRuntime().addShutdownHook(new Thread() {
-                @Override
-                public void run() {
-                    consumer.close();
-                }
-            });
+            Runtime.getRuntime().addShutdownHook(new Thread(() -> consumer.close()));
 
             consumer.run();
         } catch (ArgumentParserException e) {

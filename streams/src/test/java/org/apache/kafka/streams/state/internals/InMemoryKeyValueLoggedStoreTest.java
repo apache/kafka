@@ -16,50 +16,29 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.processor.ProcessorContext;
-import org.apache.kafka.streams.processor.StateStoreSupplier;
+import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
-import org.junit.Test;
 
-import java.util.ArrayList;
 import java.util.Collections;
-import java.util.List;
-
-import static org.junit.Assert.assertEquals;
 
 public class InMemoryKeyValueLoggedStoreTest extends AbstractKeyValueStoreTest {
 
     @SuppressWarnings("unchecked")
     @Override
-    protected <K, V> KeyValueStore<K, V> createKeyValueStore(
-            ProcessorContext context,
-            Class<K> keyClass,
-            Class<V> valueClass,
-            boolean useContextSerdes) {
+    protected <K, V> KeyValueStore<K, V> createKeyValueStore(final ProcessorContext context) {
+        final StoreBuilder storeBuilder = Stores.keyValueStoreBuilder(
+            Stores.inMemoryKeyValueStore("my-store"),
+            (Serde<K>) context.keySerde(),
+            (Serde<V>) context.valueSerde())
+            .withLoggingEnabled(Collections.singletonMap("retention.ms", "1000"));
 
-        StateStoreSupplier supplier;
-        if (useContextSerdes) {
-            supplier = Stores.create("my-store").withKeys(context.keySerde()).withValues(context.valueSerde())
-                .inMemory().enableLogging(Collections.singletonMap("retention.ms", "1000")).build();
-        } else {
-            supplier = Stores.create("my-store").withKeys(keyClass).withValues(valueClass)
-                .inMemory().enableLogging(Collections.singletonMap("retention.ms", "1000")).build();
-        }
-
-        KeyValueStore<K, V> store = (KeyValueStore<K, V>) supplier.get();
+        final StateStore store = storeBuilder.build();
         store.init(context, store);
-        return store;
-    }
 
-    @Test
-    public void shouldPutAll() {
-        List<KeyValue<Integer, String>> entries = new ArrayList<>();
-        entries.add(new KeyValue<>(1, "1"));
-        entries.add(new KeyValue<>(2, "2"));
-        store.putAll(entries);
-        assertEquals(store.get(1), "1");
-        assertEquals(store.get(2), "2");
+        return (KeyValueStore<K, V>) store;
     }
 }

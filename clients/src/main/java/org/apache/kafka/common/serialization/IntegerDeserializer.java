@@ -18,14 +18,7 @@ package org.apache.kafka.common.serialization;
 
 import org.apache.kafka.common.errors.SerializationException;
 
-import java.util.Map;
-
 public class IntegerDeserializer implements Deserializer<Integer> {
-
-    public void configure(Map<String, ?> configs, boolean isKey) {
-        // nothing to do
-    }
-
     public Integer deserialize(String topic, byte[] data) {
         if (data == null)
             return null;
@@ -39,9 +32,5 @@ public class IntegerDeserializer implements Deserializer<Integer> {
             value |= b & 0xFF;
         }
         return value;
-    }
-
-    public void close() {
-        // nothing to do
     }
 }

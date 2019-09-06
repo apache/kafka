@@ -17,10 +17,13 @@
 
 package kafka.tools
 
-import kafka.producer.ProducerConfig
+import java.util
+
 import ConsoleProducer.LineMessageReader
-import org.apache.kafka.clients.producer.KafkaProducer
+import org.apache.kafka.clients.producer.ProducerConfig
 import org.junit.{Assert, Test}
+import Assert.assertEquals
+import kafka.utils.Exit
 
 class ConsoleProducerTest {
 
@@ -41,35 +44,27 @@ class ConsoleProducerTest {
   )
 
   @Test
-  def testValidConfigsNewProducer() {
+  def testValidConfigs(): Unit = {
     val config = new ConsoleProducer.ProducerConfig(validArgs)
-    // New ProducerConfig constructor is package private, so we can't call it directly
-    // Creating new Producer to validate instead
-    val producer = new KafkaProducer(ConsoleProducer.getNewProducerProps(config))
-    producer.close()
+    val producerConfig = new ProducerConfig(ConsoleProducer.producerProps(config))
+    assertEquals(util.Arrays.asList("localhost:1001", "localhost:1002"),
+      producerConfig.getList(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG))
   }
 
-  @Test
-  @deprecated("This test has been deprecated and it will be removed in a future release.", "0.10.0.0")
-  def testValidConfigsOldProducer() {
-    val config = new ConsoleProducer.ProducerConfig(validArgs)
-    new ProducerConfig(ConsoleProducer.getOldProducerProps(config))
-  }
-
-  @Test
-  def testInvalidConfigs() {
+  @Test(expected = classOf[IllegalArgumentException])
+  def testInvalidConfigs(): Unit = {
+    Exit.setExitProcedure((_, message) => throw new IllegalArgumentException(message.orNull))
     try {
       new ConsoleProducer.ProducerConfig(invalidArgs)
-      Assert.fail("Should have thrown an UnrecognizedOptionException")
-    } catch {
-      case _: joptsimple.OptionException => // expected exception
+    } finally {
+      Exit.resetExitProcedure()
     }
   }
 
   @Test
   def testParseKeyProp(): Unit = {
     val config = new ConsoleProducer.ProducerConfig(validArgs)
-    val reader = Class.forName(config.readerClass).newInstance().asInstanceOf[LineMessageReader]
+    val reader = Class.forName(config.readerClass).getDeclaredConstructor().newInstance().asInstanceOf[LineMessageReader]
     reader.init(System.in,ConsoleProducer.getReaderProps(config))
     assert(reader.keySeparator == "#")
     assert(reader.parseKey)

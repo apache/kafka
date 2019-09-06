@@ -28,14 +28,17 @@ public class ConnectorStateInfo {
     private final String name;
     private final ConnectorState connector;
     private final List<TaskState> tasks;
+    private final ConnectorType type;
 
     @JsonCreator
     public ConnectorStateInfo(@JsonProperty("name") String name,
                               @JsonProperty("connector") ConnectorState connector,
-                              @JsonProperty("tasks") List<TaskState> tasks) {
+                              @JsonProperty("tasks") List<TaskState> tasks,
+                              @JsonProperty("type") ConnectorType type) {
         this.name = name;
         this.connector = connector;
         this.tasks = tasks;
+        this.type = type;
     }
 
     @JsonProperty
@@ -51,6 +54,11 @@ public class ConnectorStateInfo {
     @JsonProperty
     public List<TaskState> tasks() {
         return tasks;
+    }
+
+    @JsonProperty
+    public ConnectorType type() {
+        return type;
     }
 
     public abstract static class AbstractState {
@@ -82,7 +90,10 @@ public class ConnectorStateInfo {
     }
 
     public static class ConnectorState extends AbstractState {
-        public ConnectorState(String state, String worker, String msg) {
+        @JsonCreator
+        public ConnectorState(@JsonProperty("state") String state,
+                              @JsonProperty("worker_id") String worker,
+                              @JsonProperty("msg") String msg) {
             super(state, worker, msg);
         }
     }
@@ -90,7 +101,11 @@ public class ConnectorStateInfo {
     public static class TaskState extends AbstractState implements Comparable<TaskState> {
         private final int id;
 
-        public TaskState(int id, String state, String worker, String msg) {
+        @JsonCreator
+        public TaskState(@JsonProperty("id") int id,
+                         @JsonProperty("state") String state,
+                         @JsonProperty("worker_id") String worker,
+                         @JsonProperty("msg") String msg) {
             super(state, worker, msg);
             this.id = id;
         }

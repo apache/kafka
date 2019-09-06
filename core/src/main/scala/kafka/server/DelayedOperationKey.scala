@@ -17,7 +17,6 @@
 
 package kafka.server
 
-import kafka.common.TopicAndPartition
 import org.apache.kafka.common.TopicPartition
 
 /**
@@ -34,9 +33,14 @@ object DelayedOperationKey {
 /* used by delayed-produce and delayed-fetch operations */
 case class TopicPartitionOperationKey(topic: String, partition: Int) extends DelayedOperationKey {
 
-  def this(topicPartition: TopicPartition) = this(topicPartition.topic, topicPartition.partition)
 
   override def keyLabel = "%s-%d".format(topic, partition)
+}
+
+object TopicPartitionOperationKey {
+  def apply(topicPartition: TopicPartition): TopicPartitionOperationKey = {
+    apply(topicPartition.topic, topicPartition.partition)
+  }
 }
 
 /* used by delayed-join-group operations */

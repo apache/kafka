@@ -16,81 +16,79 @@
  */
 package org.apache.kafka.common.requests;
 
-import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.message.ControlledShutdownRequestData;
+import org.apache.kafka.common.message.ControlledShutdownResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
-import java.util.Collections;
+
 
 public class ControlledShutdownRequest extends AbstractRequest {
-    private static final String BROKER_ID_KEY_NAME = "broker_id";
 
     public static class Builder extends AbstractRequest.Builder<ControlledShutdownRequest> {
-        private final int brokerId;
 
-        public Builder(int brokerId) {
-            this(brokerId, null);
-        }
+        private final ControlledShutdownRequestData data;
 
-        public Builder(int brokerId, Short desiredVersion) {
-            super(ApiKeys.CONTROLLED_SHUTDOWN_KEY, desiredVersion);
-            this.brokerId = brokerId;
+        public Builder(ControlledShutdownRequestData data, short desiredVersion) {
+            super(ApiKeys.CONTROLLED_SHUTDOWN, desiredVersion);
+            this.data = data;
         }
 
         @Override
         public ControlledShutdownRequest build(short version) {
-            return new ControlledShutdownRequest(brokerId, version);
+            return new ControlledShutdownRequest(data, version);
         }
 
         @Override
         public String toString() {
-            StringBuilder bld = new StringBuilder();
-            bld.append("(type=ControlledShutdownRequest").
-                append(", brokerId=").append(brokerId).
-                append(")");
-            return bld.toString();
+            return data.toString();
         }
     }
-    private final int brokerId;
 
-    private ControlledShutdownRequest(int brokerId, short version) {
-        super(version);
-        this.brokerId = brokerId;
+    private final ControlledShutdownRequestData data;
+    private final short version;
+
+    private ControlledShutdownRequest(ControlledShutdownRequestData data, short version) {
+        super(ApiKeys.CONTROLLED_SHUTDOWN, version);
+        this.data = data;
+        this.version = version;
     }
 
     public ControlledShutdownRequest(Struct struct, short version) {
-        super(version);
-        brokerId = struct.getInt(BROKER_ID_KEY_NAME);
+        super(ApiKeys.CONTROLLED_SHUTDOWN, version);
+        this.data = new ControlledShutdownRequestData(struct, version);
+        this.version = version;
     }
 
     @Override
     public AbstractResponse getErrorResponse(int throttleTimeMs, Throwable e) {
+        ControlledShutdownResponseData response = new ControlledShutdownResponseData();
+        response.setErrorCode(Errors.forException(e).code());
         short versionId = version();
         switch (versionId) {
             case 0:
             case 1:
-                return new ControlledShutdownResponse(Errors.forException(e), Collections.<TopicPartition>emptySet());
+            case 2:
+                return new ControlledShutdownResponse(response);
             default:
                 throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
-                        versionId, this.getClass().getSimpleName(), ApiKeys.CONTROLLED_SHUTDOWN_KEY.latestVersion()));
+                    versionId, this.getClass().getSimpleName(), ApiKeys.CONTROLLED_SHUTDOWN.latestVersion()));
         }
-    }
-
-    public int brokerId() {
-        return brokerId;
     }
 
     public static ControlledShutdownRequest parse(ByteBuffer buffer, short version) {
         return new ControlledShutdownRequest(
-                ApiKeys.CONTROLLED_SHUTDOWN_KEY.parseRequest(version, buffer), version);
+                ApiKeys.CONTROLLED_SHUTDOWN.parseRequest(version, buffer), version);
     }
 
     @Override
     protected Struct toStruct() {
-        Struct struct = new Struct(ApiKeys.CONTROLLED_SHUTDOWN_KEY.requestSchema(version()));
-        struct.set(BROKER_ID_KEY_NAME, brokerId);
-        return struct;
+        return data.toStruct(version);
+    }
+
+    public ControlledShutdownRequestData data() {
+        return data;
     }
 }

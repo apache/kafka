@@ -16,15 +16,15 @@
  */
 package org.apache.kafka.common.protocol;
 
+import org.apache.kafka.common.protocol.types.BoundField;
+import org.apache.kafka.common.protocol.types.Schema;
+import org.junit.Test;
+
 import java.util.Arrays;
 import java.util.List;
 
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
-
-import org.apache.kafka.common.protocol.types.Field;
-import org.apache.kafka.common.protocol.types.Schema;
-import org.junit.Test;
 
 public class ApiKeysTest {
 
@@ -40,26 +40,25 @@ public class ApiKeysTest {
 
     @Test(expected = IllegalArgumentException.class)
     public void schemaVersionOutOfRange() {
-        ApiKeys.PRODUCE.requestSchema((short) Protocol.REQUESTS[ApiKeys.PRODUCE.id].length);
+        ApiKeys.PRODUCE.requestSchema((short) ApiKeys.PRODUCE.requestSchemas.length);
     }
 
     /**
      * All valid client responses which may be throttled should have a field named
      * 'throttle_time_ms' to return the throttle time to the client. Exclusions are
      * <ul>
-     *   <li>Cluster actions used only for inter-broker are throttled only if unauthorized
-     *   <li> SASL_HANDSHAKE is not throttled when used for authentication when a connection
-     *        is established. At any other time, this request returns an error response that
-     *        may be throttled.
+     *   <li> Cluster actions used only for inter-broker are throttled only if unauthorized
+     *   <li> SASL_HANDSHAKE and SASL_AUTHENTICATE are not throttled when used for authentication
+     *        when a connection is established or for re-authentication thereafter; these requests
+     *        return an error response that may be throttled if they are sent otherwise.
      * </ul>
      */
     @Test
     public void testResponseThrottleTime() {
-        List<ApiKeys> authenticationKeys = Arrays.asList(ApiKeys.SASL_HANDSHAKE);
-
+        List<ApiKeys> authenticationKeys = Arrays.asList(ApiKeys.SASL_HANDSHAKE, ApiKeys.SASL_AUTHENTICATE);
         for (ApiKeys apiKey: ApiKeys.values()) {
             Schema responseSchema = apiKey.responseSchema(apiKey.latestVersion());
-            Field throttleTimeField = responseSchema.get("throttle_time_ms");
+            BoundField throttleTimeField = responseSchema.get(CommonFields.THROTTLE_TIME_MS.name);
             if (apiKey.clusterAction || authenticationKeys.contains(apiKey))
                 assertNull("Unexpected throttle time field: " + apiKey, throttleTimeField);
             else

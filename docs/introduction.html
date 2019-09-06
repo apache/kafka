@@ -18,23 +18,22 @@
 <script><!--#include virtual="js/templateData.js" --></script>
 
 <script id="introduction-template" type="text/x-handlebars-template">
-  <h3> Apache Kafka&trade; is <i>a distributed streaming platform</i>. What exactly does that mean?</h3>
-  <p>We think of a streaming platform as having three key capabilities:</p>
-  <ol>
-    <li>It lets you publish and subscribe to streams of records. In this respect it is similar to a message queue or enterprise messaging system.
-    <li>It lets you store streams of records in a fault-tolerant way.
-    <li>It lets you process streams of records as they occur.
-  </ol>
-  <p>What is Kafka good for?</p>
-  <p>It gets used for two broad classes of application:</p>
-  <ol>
+  <h3> Apache Kafka&reg; is <i>a distributed streaming platform</i>. What exactly does that mean?</h3>
+  <p>A streaming platform has three key capabilities:</p>
+  <ul>
+    <li>Publish and subscribe to streams of records, similar to a message queue or enterprise messaging system.
+    <li>Store streams of records in a fault-tolerant durable way.
+    <li>Process streams of records as they occur.
+  </ul>
+  <p>Kafka is generally used for two broad classes of applications:</p>
+  <ul>
     <li>Building real-time streaming data pipelines that reliably get data between systems or applications
     <li>Building real-time streaming applications that transform or react to the streams of data
-  </ol>
+  </ul>
   <p>To understand how Kafka does these things, let's dive in and explore Kafka's capabilities from the bottom up.</p>
   <p>First a few concepts:</p>
   <ul>
-    <li>Kafka is run as a cluster on one or more servers.
+    <li>Kafka is run as a cluster on one or more servers that can span multiple datacenters.
       <li>The Kafka cluster stores streams of <i>records</i> in categories called <i>topics</i>.
     <li>Each record consists of a key, a value, and a timestamp.
   </ul>
@@ -60,7 +59,7 @@
   <p> Each partition is an ordered, immutable sequence of records that is continually appended to&mdash;a structured commit log. The records in the partitions are each assigned a sequential id number called the <i>offset</i> that uniquely identifies each record within the partition.
   </p>
   <p>
-  The Kafka cluster retains all published records&mdash;whether or not they have been consumed&mdash;using a configurable retention period. For example, if the retention policy is set to two days, then for the two days after a record is published, it is available for consumption, after which it will be discarded to free up space. Kafka's performance is effectively constant with respect to data size so storing data for a long time is not a problem.
+  The Kafka cluster durably persists all published records&mdash;whether or not they have been consumed&mdash;using a configurable retention period. For example, if the retention policy is set to two days, then for the two days after a record is published, it is available for consumption, after which it will be discarded to free up space. Kafka's performance is effectively constant with respect to data size so storing data for a long time is not a problem.
   </p>
   <img class="centered" src="/{{version}}/images/log_consumer.png" style="width:400px">
   <p>
@@ -81,6 +80,10 @@
   <p>
   Each partition has one server which acts as the "leader" and zero or more servers which act as "followers". The leader handles all read and write requests for the partition while the followers passively replicate the leader. If the leader fails, one of the followers will automatically become the new leader. Each server acts as a leader for some of its partitions and a follower for others so load is well balanced within the cluster.
   </p>
+
+  <h4><a id="intro_geo-replication" href="#intro_geo-replication">Geo-Replication</a></h4>
+
+  <p>Kafka MirrorMaker provides geo-replication support for your clusters. With MirrorMaker, messages are replicated across multiple datacenters or cloud regions. You can use this in active/passive scenarios for backup and recovery; or in active/active scenarios to place data closer to your users, or support data locality requirements. </p>
 
   <h4><a id="intro_producers" href="#intro_producers">Producers</a></h4>
   <p>
@@ -111,6 +114,8 @@
   <p>
   Kafka only provides a total order over records <i>within</i> a partition, not between different partitions in a topic. Per-partition ordering combined with the ability to partition data by key is sufficient for most applications. However, if you require a total order over records this can be achieved with a topic that has only one partition, though this will mean only one consumer process per consumer group.
   </p>
+  <h4><a id="intro_multi-tenancy" href="#intro_multi-tenancy">Multi-tenancy</a></h4>
+  <p>You can deploy Kafka as a multi-tenant solution. Multi-tenancy is enabled by configuring which topics can produce or consume data. There is also operations support for quotas.  Administrators can define and enforce quotas on requests to control the broker resources that are used by clients.  For more information, see the <a href="https://kafka.apache.org/documentation/#security">security documentation</a>. </p>
   <h4><a id="intro_guarantees" href="#intro_guarantees">Guarantees</a></h4>
   <p>
   At a high-level Kafka gives the following guarantees:
@@ -202,7 +207,7 @@
   Likewise for streaming data pipelines the combination of subscription to real-time events make it possible to use Kafka for very low-latency pipelines; but the ability to store data reliably make it possible to use it for critical data where the delivery of data must be guaranteed or for integration with offline systems that load data only periodically or may go down for extended periods of time for maintenance. The stream processing facilities make it possible to transform data as it arrives.
   </p>
   <p>
-  For more information on the guarantees, apis, and capabilities Kafka provides see the rest of the <a href="/documentation.html">documentation</a>.
+  For more information on the guarantees, APIs, and capabilities Kafka provides see the rest of the <a href="/documentation.html">documentation</a>.
   </p>
 </script>
 

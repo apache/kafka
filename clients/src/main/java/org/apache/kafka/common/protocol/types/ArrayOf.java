@@ -16,12 +16,16 @@
  */
 package org.apache.kafka.common.protocol.types;
 
+import org.apache.kafka.common.protocol.types.Type.DocumentedType;
+
 import java.nio.ByteBuffer;
 
 /**
  * Represents a type for an array of a particular type
  */
-public class ArrayOf extends Type {
+public class ArrayOf extends DocumentedType {
+
+    private static final String ARRAY_TYPE_NAME = "ARRAY";
 
     private final Type type;
     private final boolean nullable;
@@ -93,7 +97,7 @@ public class ArrayOf extends Type {
 
     @Override
     public String toString() {
-        return "ARRAY(" + type + ")";
+        return ARRAY_TYPE_NAME + "(" + type + ")";
     }
 
     @Override
@@ -109,5 +113,19 @@ public class ArrayOf extends Type {
         } catch (ClassCastException e) {
             throw new SchemaException("Not an Object[].");
         }
+    }
+
+    @Override
+    public String typeName() {
+        return ARRAY_TYPE_NAME;
+    }
+
+    @Override
+    public String documentation() {
+        return "Represents a sequence of objects of a given type T. " +
+                "Type T can be either a primitive type (e.g. " + STRING + ") or a structure. " +
+                "First, the length N is given as an " + INT32 + ". Then N instances of type T follow. " +
+                "A null array is represented with a length of -1. " +
+                "In protocol documentation an array of T instances is referred to as [T].";
     }
 }

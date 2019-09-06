@@ -18,6 +18,7 @@ package org.apache.kafka.connect.runtime;
 
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.util.ConnectorTaskId;
+import org.apache.kafka.connect.util.LoggingContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -79,7 +80,9 @@ class SourceTaskOffsetCommitter {
         ScheduledFuture<?> commitFuture = commitExecutorService.scheduleWithFixedDelay(new Runnable() {
             @Override
             public void run() {
-                commit(workerTask);
+                try (LoggingContext loggingContext = LoggingContext.forOffsets(id)) {
+                    commit(workerTask);
+                }
             }
         }, commitIntervalMs, commitIntervalMs, TimeUnit.MILLISECONDS);
         committers.put(id, commitFuture);
@@ -90,7 +93,7 @@ class SourceTaskOffsetCommitter {
         if (task == null)
             return;
 
-        try {
+        try (LoggingContext loggingContext = LoggingContext.forTask(id)) {
             task.cancel(false);
             if (!task.isDone())
                 task.get();

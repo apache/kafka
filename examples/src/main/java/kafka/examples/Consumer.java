@@ -22,6 +22,7 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 
+import java.time.Duration;
 import java.util.Collections;
 import java.util.Properties;
 
@@ -47,7 +48,7 @@ public class Consumer extends ShutdownableThread {
     @Override
     public void doWork() {
         consumer.subscribe(Collections.singletonList(this.topic));
-        ConsumerRecords<Integer, String> records = consumer.poll(1000);
+        ConsumerRecords<Integer, String> records = consumer.poll(Duration.ofSeconds(1));
         for (ConsumerRecord<Integer, String> record : records) {
             System.out.println("Received message: (" + record.key() + ", " + record.value() + ") at offset " + record.offset());
         }

@@ -17,71 +17,106 @@
 
 package kafka.tools
 
-import java.io.{PrintStream, FileOutputStream}
+import java.io.PrintStream
+import java.nio.file.Files
 
 import kafka.common.MessageFormatter
-import kafka.consumer.{BaseConsumer, BaseConsumerRecord}
+import kafka.tools.ConsoleConsumer.ConsumerWrapper
 import kafka.utils.{Exit, TestUtils}
+import org.apache.kafka.clients.consumer.{ConsumerRecord, MockConsumer, OffsetResetStrategy}
+import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.clients.consumer.ConsumerConfig
-import org.easymock.EasyMock
+import org.apache.kafka.test.MockDeserializer
+import org.mockito.Mockito._
+import org.mockito.ArgumentMatchers
+import ArgumentMatchers._
 import org.junit.Assert._
-import org.junit.Test
+import org.junit.{Before, Test}
+
+import scala.collection.JavaConverters._
 
 class ConsoleConsumerTest {
 
-  @Test
-  def shouldLimitReadsToMaxMessageLimit() {
-    //Mocks
-    val consumer = EasyMock.createNiceMock(classOf[BaseConsumer])
-    val formatter = EasyMock.createNiceMock(classOf[MessageFormatter])
-
-    //Stubs
-    val record = new BaseConsumerRecord(topic = "foo", partition = 1, offset = 1, key = Array[Byte](), value = Array[Byte]())
-
-    //Expectations
-    val messageLimit: Int = 10
-    EasyMock.expect(formatter.writeTo(EasyMock.anyObject(), EasyMock.anyObject())).times(messageLimit)
-    EasyMock.expect(consumer.receive()).andReturn(record).times(messageLimit)
-
-    EasyMock.replay(consumer)
-    EasyMock.replay(formatter)
-
-    //Test
-    ConsoleConsumer.process(messageLimit, formatter, consumer, System.out, true)
+  @Before
+  def setup(): Unit = {
+    ConsoleConsumer.messageCount = 0
   }
 
   @Test
-  def shouldStopWhenOutputCheckErrorFails() {
-    //Mocks
-    val consumer = EasyMock.createNiceMock(classOf[BaseConsumer])
-    val formatter = EasyMock.createNiceMock(classOf[MessageFormatter])
-    val printStream = EasyMock.createNiceMock(classOf[PrintStream])
+  def shouldResetUnConsumedOffsetsBeforeExit(): Unit = {
+    val topic = "test"
+    val maxMessages: Int = 123
+    val totalMessages: Int = 700
+    val startOffset: java.lang.Long = 0L
 
-    //Stubs
-    val record = new BaseConsumerRecord(topic = "foo", partition = 1, offset = 1, key = Array[Byte](), value = Array[Byte]())
+    val mockConsumer = new MockConsumer[Array[Byte], Array[Byte]](OffsetResetStrategy.EARLIEST)
+    val tp1 = new TopicPartition(topic, 0)
+    val tp2 = new TopicPartition(topic, 1)
 
-    //Expectations
-    EasyMock.expect(consumer.receive()).andReturn(record)
-    EasyMock.expect(formatter.writeTo(EasyMock.anyObject(), EasyMock.eq(printStream)))
+    val consumer = new ConsumerWrapper(Some(topic), None, None, None, mockConsumer)
+
+    mockConsumer.rebalance(List(tp1, tp2).asJava)
+    mockConsumer.updateBeginningOffsets(Map(tp1 -> startOffset, tp2 -> startOffset).asJava)
+
+    0 until totalMessages foreach { i =>
+      // add all records, each partition should have half of `totalMessages`
+      mockConsumer.addRecord(new ConsumerRecord[Array[Byte], Array[Byte]](topic, i % 2, i / 2, "key".getBytes, "value".getBytes))
+    }
+
+    val formatter = mock(classOf[MessageFormatter])
+
+    ConsoleConsumer.process(maxMessages, formatter, consumer, System.out, skipMessageOnError = false)
+    assertEquals(totalMessages, mockConsumer.position(tp1) + mockConsumer.position(tp2))
+
+    consumer.resetUnconsumedOffsets()
+    assertEquals(maxMessages, mockConsumer.position(tp1) + mockConsumer.position(tp2))
+
+    verify(formatter, times(maxMessages)).writeTo(any(), any())
+  }
+
+  @Test
+  def shouldLimitReadsToMaxMessageLimit(): Unit = {
+    val consumer = mock(classOf[ConsumerWrapper])
+    val formatter = mock(classOf[MessageFormatter])
+    val record = new ConsumerRecord("foo", 1, 1, Array[Byte](), Array[Byte]())
+
+    val messageLimit: Int = 10
+    when(consumer.receive()).thenReturn(record)
+
+    ConsoleConsumer.process(messageLimit, formatter, consumer, System.out, true)
+
+    verify(consumer, times(messageLimit)).receive()
+    verify(formatter, times(messageLimit)).writeTo(any(), any())
+
+    consumer.cleanup()
+  }
+
+  @Test
+  def shouldStopWhenOutputCheckErrorFails(): Unit = {
+    val consumer = mock(classOf[ConsumerWrapper])
+    val formatter = mock(classOf[MessageFormatter])
+    val printStream = mock(classOf[PrintStream])
+
+    val record = new ConsumerRecord("foo", 1, 1, Array[Byte](), Array[Byte]())
+
+    when(consumer.receive()).thenReturn(record)
     //Simulate an error on System.out after the first record has been printed
-    EasyMock.expect(printStream.checkError()).andReturn(true)
+    when(printStream.checkError()).thenReturn(true)
 
-    EasyMock.replay(consumer)
-    EasyMock.replay(formatter)
-    EasyMock.replay(printStream)
-
-    //Test
     ConsoleConsumer.process(-1, formatter, consumer, printStream, true)
 
-    //Verify
-    EasyMock.verify(consumer, formatter, printStream)
+    verify(formatter).writeTo(any(), ArgumentMatchers.eq(printStream))
+    verify(consumer).receive()
+    verify(printStream).checkError()
+
+    consumer.cleanup()
   }
 
   @Test
-  def shouldParseValidOldConsumerValidConfig() {
+  def shouldParseValidConsumerValidConfig(): Unit = {
     //Given
     val args: Array[String] = Array(
-      "--zookeeper", "localhost:2181",
+      "--bootstrap-server", "localhost:9092",
       "--topic", "test",
       "--from-beginning")
 
@@ -89,46 +124,24 @@ class ConsoleConsumerTest {
     val config = new ConsoleConsumer.ConsumerConfig(args)
 
     //Then
-    assertTrue(config.useOldConsumer)
-    assertEquals("localhost:2181", config.zkConnectionStr)
-    assertEquals("test", config.topicArg)
-    assertEquals(true, config.fromBeginning)
-  }
-
-  @Test
-  def shouldParseValidNewConsumerValidConfig() {
-    //Given
-    val args: Array[String] = Array(
-      "--bootstrap-server", "localhost:9092",
-      "--topic", "test",
-      "--from-beginning",
-      "--new-consumer") //new
-
-    //When
-    val config = new ConsoleConsumer.ConsumerConfig(args)
-
-    //Then
-    assertFalse(config.useOldConsumer)
     assertEquals("localhost:9092", config.bootstrapServer)
     assertEquals("test", config.topicArg)
     assertEquals(true, config.fromBeginning)
   }
 
   @Test
-  def shouldParseValidNewSimpleConsumerValidConfigWithNumericOffset(): Unit = {
+  def shouldParseValidSimpleConsumerValidConfigWithNumericOffset(): Unit = {
     //Given
     val args: Array[String] = Array(
       "--bootstrap-server", "localhost:9092",
       "--topic", "test",
       "--partition", "0",
-      "--offset", "3",
-      "--new-consumer") //new
+      "--offset", "3")
 
     //When
     val config = new ConsoleConsumer.ConsumerConfig(args)
 
     //Then
-    assertFalse(config.useOldConsumer)
     assertEquals("localhost:9092", config.bootstrapServer)
     assertEquals("test", config.topicArg)
     assertEquals(0, config.partitionArg.get)
@@ -137,37 +150,39 @@ class ConsoleConsumerTest {
 
   }
 
-  @Test
-  def testDefaultConsumer() {
+  @Test(expected = classOf[IllegalArgumentException])
+  def shouldExitOnUnrecognizedNewConsumerOption(): Unit = {
+    Exit.setExitProcedure((_, message) => throw new IllegalArgumentException(message.orNull))
+
     //Given
     val args: Array[String] = Array(
+      "--new-consumer",
       "--bootstrap-server", "localhost:9092",
       "--topic", "test",
       "--from-beginning")
 
     //When
-    val config = new ConsoleConsumer.ConsumerConfig(args)
-
-    //Then
-    assertFalse(config.useOldConsumer)
+    try {
+      new ConsoleConsumer.ConsumerConfig(args)
+    } finally {
+      Exit.resetExitProcedure()
+    }
   }
 
   @Test
-  def shouldParseValidNewSimpleConsumerValidConfigWithStringOffset() {
+  def shouldParseValidSimpleConsumerValidConfigWithStringOffset(): Unit = {
     //Given
     val args: Array[String] = Array(
       "--bootstrap-server", "localhost:9092",
       "--topic", "test",
       "--partition", "0",
       "--offset", "LatEst",
-      "--new-consumer", //new
       "--property", "print.value=false")
 
     //When
     val config = new ConsoleConsumer.ConsumerConfig(args)
 
     //Then
-    assertFalse(config.useOldConsumer)
     assertEquals("localhost:9092", config.bootstrapServer)
     assertEquals("test", config.topicArg)
     assertEquals(0, config.partitionArg.get)
@@ -177,67 +192,7 @@ class ConsoleConsumerTest {
   }
 
   @Test
-  def shouldParseValidOldConsumerConfigWithAutoOffsetResetSmallest() {
-    //Given
-    val args: Array[String] = Array(
-      "--zookeeper", "localhost:2181",
-      "--topic", "test",
-      "--consumer-property", "auto.offset.reset=smallest")
-
-    //When
-    val config = new ConsoleConsumer.ConsumerConfig(args)
-    val consumerProperties = ConsoleConsumer.getOldConsumerProps(config)
-
-    //Then
-    assertTrue(config.useOldConsumer)
-    assertEquals("localhost:2181", config.zkConnectionStr)
-    assertEquals("test", config.topicArg)
-    assertEquals(false, config.fromBeginning)
-    assertEquals("smallest", consumerProperties.getProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG))
-  }
-
-  @Test
-  def shouldParseValidOldConsumerConfigWithAutoOffsetResetLargest() {
-    //Given
-    val args: Array[String] = Array(
-      "--zookeeper", "localhost:2181",
-      "--topic", "test",
-      "--consumer-property", "auto.offset.reset=largest")
-
-    //When
-    val config = new ConsoleConsumer.ConsumerConfig(args)
-    val consumerProperties = ConsoleConsumer.getOldConsumerProps(config)
-
-    //Then
-    assertTrue(config.useOldConsumer)
-    assertEquals("localhost:2181", config.zkConnectionStr)
-    assertEquals("test", config.topicArg)
-    assertEquals(false, config.fromBeginning)
-    assertEquals("largest", consumerProperties.getProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG))
-  }
-
-  @Test
-  def shouldSetAutoResetToSmallestWhenFromBeginningConfigured() {
-    //Given
-    val args = Array(
-      "--zookeeper", "localhost:2181",
-      "--topic", "test",
-      "--from-beginning")
-
-    //When
-    val config = new ConsoleConsumer.ConsumerConfig(args)
-    val consumerProperties = ConsoleConsumer.getOldConsumerProps(config)
-
-    //Then
-    assertTrue(config.useOldConsumer)
-    assertEquals("localhost:2181", config.zkConnectionStr)
-    assertEquals("test", config.topicArg)
-    assertEquals(true, config.fromBeginning)
-    assertEquals("smallest", consumerProperties.getProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG))
-  }
-
-  @Test
-  def shouldParseValidNewConsumerConfigWithAutoOffsetResetLatest() {
+  def shouldParseValidConsumerConfigWithAutoOffsetResetLatest(): Unit = {
     //Given
     val args: Array[String] = Array(
       "--bootstrap-server", "localhost:9092",
@@ -246,10 +201,9 @@ class ConsoleConsumerTest {
 
     //When
     val config = new ConsoleConsumer.ConsumerConfig(args)
-    val consumerProperties = ConsoleConsumer.getNewConsumerProps(config)
+    val consumerProperties = ConsoleConsumer.consumerProps(config)
 
     //Then
-    assertFalse(config.useOldConsumer)
     assertEquals("localhost:9092", config.bootstrapServer)
     assertEquals("test", config.topicArg)
     assertEquals(false, config.fromBeginning)
@@ -257,7 +211,7 @@ class ConsoleConsumerTest {
   }
 
   @Test
-  def shouldParseValidNewConsumerConfigWithAutoOffsetResetEarliest() {
+  def shouldParseValidConsumerConfigWithAutoOffsetResetEarliest(): Unit = {
     //Given
     val args: Array[String] = Array(
       "--bootstrap-server", "localhost:9092",
@@ -266,10 +220,9 @@ class ConsoleConsumerTest {
 
     //When
     val config = new ConsoleConsumer.ConsumerConfig(args)
-    val consumerProperties = ConsoleConsumer.getNewConsumerProps(config)
+    val consumerProperties = ConsoleConsumer.consumerProps(config)
 
     //Then
-    assertFalse(config.useOldConsumer)
     assertEquals("localhost:9092", config.bootstrapServer)
     assertEquals("test", config.topicArg)
     assertEquals(false, config.fromBeginning)
@@ -277,7 +230,7 @@ class ConsoleConsumerTest {
   }
 
   @Test
-  def shouldParseValidNewConsumerConfigWithAutoOffsetResetAndMatchingFromBeginning() {
+  def shouldParseValidConsumerConfigWithAutoOffsetResetAndMatchingFromBeginning(): Unit = {
     //Given
     val args: Array[String] = Array(
       "--bootstrap-server", "localhost:9092",
@@ -287,10 +240,9 @@ class ConsoleConsumerTest {
 
     //When
     val config = new ConsoleConsumer.ConsumerConfig(args)
-    val consumerProperties = ConsoleConsumer.getNewConsumerProps(config)
+    val consumerProperties = ConsoleConsumer.consumerProps(config)
 
     //Then
-    assertFalse(config.useOldConsumer)
     assertEquals("localhost:9092", config.bootstrapServer)
     assertEquals("test", config.topicArg)
     assertEquals(true, config.fromBeginning)
@@ -298,7 +250,7 @@ class ConsoleConsumerTest {
   }
 
   @Test
-  def shouldParseValidNewConsumerConfigWithNoOffsetReset() {
+  def shouldParseValidConsumerConfigWithNoOffsetReset(): Unit = {
     //Given
     val args: Array[String] = Array(
       "--bootstrap-server", "localhost:9092",
@@ -306,10 +258,9 @@ class ConsoleConsumerTest {
 
     //When
     val config = new ConsoleConsumer.ConsumerConfig(args)
-    val consumerProperties = ConsoleConsumer.getNewConsumerProps(config)
+    val consumerProperties = ConsoleConsumer.consumerProps(config)
 
     //Then
-    assertFalse(config.useOldConsumer)
     assertEquals("localhost:9092", config.bootstrapServer)
     assertEquals("test", config.topicArg)
     assertEquals(false, config.fromBeginning)
@@ -317,10 +268,7 @@ class ConsoleConsumerTest {
   }
 
   @Test(expected = classOf[IllegalArgumentException])
-  def shouldExitOnInvalidConfigWithAutoOffsetResetAndConflictingFromBeginningNewConsumer() {
-
-    // Override exit procedure to throw an exception instead of exiting, so we can catch the exit
-    // properly for this test case
+  def shouldExitOnInvalidConfigWithAutoOffsetResetAndConflictingFromBeginning(): Unit = {
     Exit.setExitProcedure((_, message) => throw new IllegalArgumentException(message.orNull))
 
     //Given
@@ -332,43 +280,18 @@ class ConsoleConsumerTest {
 
     try {
       val config = new ConsoleConsumer.ConsumerConfig(args)
-      ConsoleConsumer.getNewConsumerProps(config)
+      ConsoleConsumer.consumerProps(config)
     } finally {
       Exit.resetExitProcedure()
     }
-
-    fail("Expected consumer property construction to fail due to inconsistent reset options")
-  }
-
-  @Test(expected = classOf[IllegalArgumentException])
-  def shouldExitOnInvalidConfigWithAutoOffsetResetAndConflictingFromBeginningOldConsumer() {
-
-    // Override exit procedure to throw an exception instead of exiting, so we can catch the exit
-    // properly for this test case
-    Exit.setExitProcedure((_, message) => throw new IllegalArgumentException(message.orNull))
-
-    //Given
-    val args: Array[String] = Array(
-      "--zookeeper", "localhost:2181",
-      "--topic", "test",
-      "--consumer-property", "auto.offset.reset=largest",
-      "--from-beginning")
-
-    try {
-      val config = new ConsoleConsumer.ConsumerConfig(args)
-      ConsoleConsumer.getOldConsumerProps(config)
-    } finally {
-      Exit.resetExitProcedure()
-    }
-
-    fail("Expected consumer property construction to fail due to inconsistent reset options")
   }
 
   @Test
-  def shouldParseConfigsFromFile() {
+  def shouldParseConfigsFromFile(): Unit = {
     val propsFile = TestUtils.tempFile()
-    val propsStream = new FileOutputStream(propsFile)
-    propsStream.write("request.timeout.ms=1000".getBytes())
+    val propsStream = Files.newOutputStream(propsFile.toPath)
+    propsStream.write("request.timeout.ms=1000\n".getBytes())
+    propsStream.write("group.id=group1".getBytes())
     propsStream.close()
     val args: Array[String] = Array(
       "--bootstrap-server", "localhost:9092",
@@ -379,5 +302,197 @@ class ConsoleConsumerTest {
     val config = new ConsoleConsumer.ConsumerConfig(args)
 
     assertEquals("1000", config.consumerProps.getProperty("request.timeout.ms"))
+    assertEquals("group1", config.consumerProps.getProperty("group.id"))
+  }
+
+  @Test
+  def groupIdsProvidedInDifferentPlacesMustMatch(): Unit = {
+    Exit.setExitProcedure((_, message) => throw new IllegalArgumentException(message.orNull))
+
+    // different in all three places
+    var propsFile = TestUtils.tempFile()
+    var propsStream = Files.newOutputStream(propsFile.toPath)
+    propsStream.write("group.id=group-from-file".getBytes())
+    propsStream.close()
+    var args: Array[String] = Array(
+      "--bootstrap-server", "localhost:9092",
+      "--topic", "test",
+      "--group", "group-from-arguments",
+      "--consumer-property", "group.id=group-from-properties",
+      "--consumer.config", propsFile.getAbsolutePath
+    )
+
+    try {
+      new ConsoleConsumer.ConsumerConfig(args)
+      fail("Expected groups ids provided in different places to match")
+    } catch {
+      case e: IllegalArgumentException => //OK
+    }
+
+    // the same in all three places
+    propsFile = TestUtils.tempFile()
+    propsStream = Files.newOutputStream(propsFile.toPath)
+    propsStream.write("group.id=test-group".getBytes())
+    propsStream.close()
+    args = Array(
+      "--bootstrap-server", "localhost:9092",
+      "--topic", "test",
+      "--group", "test-group",
+      "--consumer-property", "group.id=test-group",
+      "--consumer.config", propsFile.getAbsolutePath
+    )
+
+    var config = new ConsoleConsumer.ConsumerConfig(args)
+    var props = ConsoleConsumer.consumerProps(config)
+    assertEquals("test-group", props.getProperty("group.id"))
+
+    // different via --consumer-property and --consumer.config
+    propsFile = TestUtils.tempFile()
+    propsStream = Files.newOutputStream(propsFile.toPath)
+    propsStream.write("group.id=group-from-file".getBytes())
+    propsStream.close()
+    args = Array(
+      "--bootstrap-server", "localhost:9092",
+      "--topic", "test",
+      "--consumer-property", "group.id=group-from-properties",
+      "--consumer.config", propsFile.getAbsolutePath
+    )
+
+    try {
+      new ConsoleConsumer.ConsumerConfig(args)
+      fail("Expected groups ids provided in different places to match")
+    } catch {
+      case e: IllegalArgumentException => //OK
+    }
+
+    // different via --consumer-property and --group
+    args = Array(
+      "--bootstrap-server", "localhost:9092",
+      "--topic", "test",
+      "--group", "group-from-arguments",
+      "--consumer-property", "group.id=group-from-properties"
+    )
+
+    try {
+      new ConsoleConsumer.ConsumerConfig(args)
+      fail("Expected groups ids provided in different places to match")
+    } catch {
+      case e: IllegalArgumentException => //OK
+    }
+
+    // different via --group and --consumer.config
+    propsFile = TestUtils.tempFile()
+    propsStream = Files.newOutputStream(propsFile.toPath)
+    propsStream.write("group.id=group-from-file".getBytes())
+    propsStream.close()
+    args = Array(
+      "--bootstrap-server", "localhost:9092",
+      "--topic", "test",
+      "--group", "group-from-arguments",
+      "--consumer.config", propsFile.getAbsolutePath
+    )
+
+    try {
+      new ConsoleConsumer.ConsumerConfig(args)
+      fail("Expected groups ids provided in different places to match")
+    } catch {
+      case e: IllegalArgumentException => //OK
+    }
+
+    // via --group only
+    args = Array(
+      "--bootstrap-server", "localhost:9092",
+      "--topic", "test",
+      "--group", "group-from-arguments"
+    )
+
+    config = new ConsoleConsumer.ConsumerConfig(args)
+    props = ConsoleConsumer.consumerProps(config)
+    assertEquals("group-from-arguments", props.getProperty("group.id"))
+
+    Exit.resetExitProcedure()
+  }
+
+  @Test
+  def testCustomPropertyShouldBePassedToConfigureMethod(): Unit = {
+    val args = Array(
+      "--bootstrap-server", "localhost:9092",
+      "--topic", "test",
+      "--property", "print.key=true",
+      "--property", "key.deserializer=org.apache.kafka.test.MockDeserializer",
+      "--property", "key.deserializer.my-props=abc"
+    )
+    val config = new ConsoleConsumer.ConsumerConfig(args)
+    assertTrue(config.formatter.isInstanceOf[DefaultMessageFormatter])
+    assertTrue(config.formatterArgs.containsKey("key.deserializer.my-props"))
+    val formatter = config.formatter.asInstanceOf[DefaultMessageFormatter]
+    assertTrue(formatter.keyDeserializer.get.isInstanceOf[MockDeserializer])
+    assertEquals(1, formatter.keyDeserializer.get.asInstanceOf[MockDeserializer].configs.size)
+    assertEquals("abc", formatter.keyDeserializer.get.asInstanceOf[MockDeserializer].configs.get("my-props"))
+    assertTrue(formatter.keyDeserializer.get.asInstanceOf[MockDeserializer].isKey)
+  }
+
+  @Test
+  def shouldParseGroupIdFromBeginningGivenTogether(): Unit = {
+    // Start from earliest
+    var args: Array[String] = Array(
+      "--bootstrap-server", "localhost:9092",
+      "--topic", "test",
+      "--group", "test-group",
+      "--from-beginning")
+
+    var config = new ConsoleConsumer.ConsumerConfig(args)
+    assertEquals("localhost:9092", config.bootstrapServer)
+    assertEquals("test", config.topicArg)
+    assertEquals(-2, config.offsetArg)
+    assertEquals(true, config.fromBeginning)
+
+    // Start from latest
+    args = Array(
+      "--bootstrap-server", "localhost:9092",
+      "--topic", "test",
+      "--group", "test-group"
+    )
+
+    config = new ConsoleConsumer.ConsumerConfig(args)
+    assertEquals("localhost:9092", config.bootstrapServer)
+    assertEquals("test", config.topicArg)
+    assertEquals(-1, config.offsetArg)
+    assertEquals(false, config.fromBeginning)
+  }
+
+  @Test(expected = classOf[IllegalArgumentException])
+  def shouldExitOnGroupIdAndPartitionGivenTogether(): Unit = {
+    Exit.setExitProcedure((_, message) => throw new IllegalArgumentException(message.orNull))
+    //Given
+    val args: Array[String] = Array(
+      "--bootstrap-server", "localhost:9092",
+      "--topic", "test",
+      "--group", "test-group",
+      "--partition", "0")
+
+    //When
+    try {
+      new ConsoleConsumer.ConsumerConfig(args)
+    } finally {
+      Exit.resetExitProcedure()
+    }
+  }
+
+  @Test(expected = classOf[IllegalArgumentException])
+  def shouldExitOnOffsetWithoutPartition(): Unit = {
+    Exit.setExitProcedure((_, message) => throw new IllegalArgumentException(message.orNull))
+    //Given
+    val args: Array[String] = Array(
+      "--bootstrap-server", "localhost:9092",
+      "--topic", "test",
+      "--offset", "10")
+
+    //When
+    try {
+      new ConsoleConsumer.ConsumerConfig(args)
+    } finally {
+      Exit.resetExitProcedure()
+    }
   }
 }

@@ -16,10 +16,12 @@
  */
 package org.apache.kafka.streams.processor;
 
+import org.apache.kafka.streams.Topology;
+
 /**
  * A processor supplier that can create one or more {@link Processor} instances.
  *
- * It is used in {@link TopologyBuilder} for adding new processor operators, whose generated
+ * It is used in {@link Topology} for adding new processor operators, whose generated
  * topology can then be replicated (and thus creating one or more {@link Processor} instances)
  * and distributed to multiple stream threads.
  *

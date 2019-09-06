@@ -27,7 +27,7 @@ import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
-import org.apache.kafka.common.metrics.stats.Rate;
+import org.apache.kafka.common.metrics.stats.Meter;
 import org.apache.kafka.common.utils.Time;
 
 
@@ -75,10 +75,13 @@ public class BufferPool {
         this.metrics = metrics;
         this.time = time;
         this.waitTime = this.metrics.sensor(WAIT_TIME_SENSOR_NAME);
-        MetricName metricName = metrics.metricName("bufferpool-wait-ratio",
+        MetricName rateMetricName = metrics.metricName("bufferpool-wait-ratio",
                                                    metricGrpName,
                                                    "The fraction of time an appender waits for space allocation.");
-        this.waitTime.add(metricName, new Rate(TimeUnit.NANOSECONDS));
+        MetricName totalMetricName = metrics.metricName("bufferpool-wait-time-total",
+                                                   metricGrpName,
+                                                   "The total time an appender waits for space allocation.");
+        this.waitTime.add(new Meter(TimeUnit.NANOSECONDS, rateMetricName, totalMetricName));
     }
 
     /**
@@ -132,7 +135,7 @@ public class BufferPool {
                         } finally {
                             long endWaitNs = time.nanoseconds();
                             timeNs = Math.max(0L, endWaitNs - startWaitNs);
-                            this.waitTime.record(timeNs, time.milliseconds());
+                            recordWaitTime(timeNs);
                         }
 
                         if (waitingTimeElapsed) {
@@ -180,6 +183,11 @@ public class BufferPool {
             return safeAllocateByteBuffer(size);
         else
             return buffer;
+    }
+
+    // Protected for testing
+    protected void recordWaitTime(long timeNs) {
+        this.waitTime.record(timeNs, time.milliseconds());
     }
 
     /**

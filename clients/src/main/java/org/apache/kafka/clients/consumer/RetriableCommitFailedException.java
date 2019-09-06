@@ -24,11 +24,13 @@ public class RetriableCommitFailedException extends RetriableException {
 
     public static RetriableCommitFailedException withUnderlyingMessage(String additionalMessage) {
         return new RetriableCommitFailedException("Offset commit failed with a retriable exception. " +
-                "You should retry committing offsets. The underlying error was: " + additionalMessage);
+                "You should retry committing the latest consumed offsets. " +
+                "The underlying error was: " + additionalMessage);
     }
 
     public RetriableCommitFailedException(Throwable t) {
-        super("Offset commit failed with a retriable exception. You should retry committing offsets.", t);
+        super("Offset commit failed with a retriable exception. You should retry committing " +
+                "the latest consumed offsets.", t);
     }
 
     public RetriableCommitFailedException(String message) {

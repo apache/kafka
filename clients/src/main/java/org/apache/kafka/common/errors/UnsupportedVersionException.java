@@ -16,6 +16,18 @@
  */
 package org.apache.kafka.common.errors;
 
+import java.util.Map;
+
+/**
+ * Indicates that a request API or version needed by the client is not supported by the broker. This is
+ * typically a fatal error as Kafka clients will downgrade request versions as needed except in cases where
+ * a needed feature is not available in old versions. Fatal errors can generally only be handled by closing
+ * the client instance, although in some cases it may be possible to continue without relying on the
+ * underlying feature. For example, when the producer is used with idempotence enabled, this error is fatal
+ * since the producer does not support reverting to weaker semantics. On the other hand, if this error
+ * is raised from {@link org.apache.kafka.clients.consumer.KafkaConsumer#offsetsForTimes(Map)}, it would
+ * be possible to revert to alternative logic to set the consumer's position.
+ */
 public class UnsupportedVersionException extends ApiException {
     private static final long serialVersionUID = 1L;
 

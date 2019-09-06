@@ -16,11 +16,11 @@
  */
 package kafka.coordinator.transaction
 
-import kafka.common.{KafkaException, MessageFormatter}
+import kafka.common.MessageFormatter
 import org.apache.kafka.clients.consumer.ConsumerRecord
-import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.apache.kafka.common.protocol.types.Type._
-import org.apache.kafka.common.protocol.types.{ArrayOf, Field, Schema, Struct}
+import org.apache.kafka.common.protocol.types._
 import java.io.PrintStream
 import java.nio.ByteBuffer
 import java.nio.charset.StandardCharsets
@@ -29,13 +29,13 @@ import org.apache.kafka.common.record.CompressionType
 
 import scala.collection.mutable
 
-/*
+/**
  * Messages stored for the transaction topic represent the producer id and transactional status of the corresponding
  * transactional id, which have versions for both the key and value fields. Key and value
  * versions are used to evolve the message formats:
  *
  * key version 0:               [transactionalId]
- *    -> value version 0:       [producer_id, producer_epoch, expire_timestamp, status, [topic [partition], timestamp]
+ *    -> value version 0:       [producer_id, producer_epoch, expire_timestamp, status, [topic, [partition] ], timestamp]
  */
 object TransactionLog {
 
@@ -252,7 +252,7 @@ object TransactionLog {
 
   // Formatter for use with tools to read transaction log messages
   class TransactionLogMessageFormatter extends MessageFormatter {
-    def writeTo(consumerRecord: ConsumerRecord[Array[Byte], Array[Byte]], output: PrintStream) {
+    def writeTo(consumerRecord: ConsumerRecord[Array[Byte], Array[Byte]], output: PrintStream): Unit = {
       Option(consumerRecord.key).map(key => readTxnRecordKey(ByteBuffer.wrap(key))).foreach { txnKey =>
         val transactionalId = txnKey.transactionalId
         val value = consumerRecord.value

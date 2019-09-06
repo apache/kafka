@@ -20,7 +20,7 @@ then
   exit 1
 fi
 
-# CYGINW == 1 if Cygwin is detected, else 0.
+# CYGWIN == 1 if Cygwin is detected, else 0.
 if [[ $(uname -a) =~ "CYGWIN" ]]; then
   CYGWIN=1
 else
@@ -32,7 +32,7 @@ if [ -z "$INCLUDE_TEST_JARS" ]; then
 fi
 
 # Exclude jars not necessary for running commands.
-regex="(-(test|src|scaladoc|javadoc)\.jar|jar.asc)$"
+regex="(-(test|test-sources|src|scaladoc|javadoc)\.jar|jar.asc)$"
 should_include_file() {
   if [ "$INCLUDE_TEST_JARS" = true ]; then
     return 0
@@ -48,7 +48,7 @@ should_include_file() {
 base_dir=$(dirname $0)/..
 
 if [ -z "$SCALA_VERSION" ]; then
-  SCALA_VERSION=2.11.11
+  SCALA_VERSION=2.12.9
 fi
 
 if [ -z "$SCALA_BINARY_VERSION" ]; then
@@ -57,14 +57,12 @@ fi
 
 # run ./gradlew copyDependantLibs to get all dependant jars in a local dir
 shopt -s nullglob
-for dir in "$base_dir"/core/build/dependant-libs-${SCALA_VERSION}*;
-do
-  if [ -z "$CLASSPATH" ] ; then
-    CLASSPATH="$dir/*"
-  else
+if [ -z "$UPGRADE_KAFKA_STREAMS_TEST_VERSION" ]; then
+  for dir in "$base_dir"/core/build/dependant-libs-${SCALA_VERSION}*;
+  do
     CLASSPATH="$CLASSPATH:$dir/*"
-  fi
-done
+  done
+fi
 
 for file in "$base_dir"/examples/build/libs/kafka-examples*.jar;
 do
@@ -73,28 +71,58 @@ do
   fi
 done
 
-for file in "$base_dir"/clients/build/libs/kafka-clients*.jar;
+if [ -z "$UPGRADE_KAFKA_STREAMS_TEST_VERSION" ]; then
+  clients_lib_dir=$(dirname $0)/../clients/build/libs
+  streams_lib_dir=$(dirname $0)/../streams/build/libs
+  rocksdb_lib_dir=$(dirname $0)/../streams/build/dependant-libs-${SCALA_VERSION}
+else
+  clients_lib_dir=/opt/kafka-$UPGRADE_KAFKA_STREAMS_TEST_VERSION/libs
+  streams_lib_dir=$clients_lib_dir
+  rocksdb_lib_dir=$streams_lib_dir
+fi
+
+
+for file in "$clients_lib_dir"/kafka-clients*.jar;
 do
   if should_include_file "$file"; then
     CLASSPATH="$CLASSPATH":"$file"
   fi
 done
 
-for file in "$base_dir"/streams/build/libs/kafka-streams*.jar;
+for file in "$streams_lib_dir"/kafka-streams*.jar;
 do
   if should_include_file "$file"; then
     CLASSPATH="$CLASSPATH":"$file"
   fi
 done
 
-for file in "$base_dir"/streams/examples/build/libs/kafka-streams-examples*.jar;
-do
-  if should_include_file "$file"; then
-    CLASSPATH="$CLASSPATH":"$file"
+if [ -z "$UPGRADE_KAFKA_STREAMS_TEST_VERSION" ]; then
+  for file in "$base_dir"/streams/examples/build/libs/kafka-streams-examples*.jar;
+  do
+    if should_include_file "$file"; then
+      CLASSPATH="$CLASSPATH":"$file"
+    fi
+  done
+else
+  VERSION_NO_DOTS=`echo $UPGRADE_KAFKA_STREAMS_TEST_VERSION | sed 's/\.//g'`
+  SHORT_VERSION_NO_DOTS=${VERSION_NO_DOTS:0:((${#VERSION_NO_DOTS} - 1))} # remove last char, ie, bug-fix number
+  for file in "$base_dir"/streams/upgrade-system-tests-$SHORT_VERSION_NO_DOTS/build/libs/kafka-streams-upgrade-system-tests*.jar;
+  do
+    if should_include_file "$file"; then
+      CLASSPATH="$file":"$CLASSPATH"
+    fi
+  done
+  if [ "$SHORT_VERSION_NO_DOTS" = "0100" ]; then
+    CLASSPATH="/opt/kafka-$UPGRADE_KAFKA_STREAMS_TEST_VERSION/libs/zkclient-0.8.jar":"$CLASSPATH"
+    CLASSPATH="/opt/kafka-$UPGRADE_KAFKA_STREAMS_TEST_VERSION/libs/zookeeper-3.4.6.jar":"$CLASSPATH"
   fi
-done
+  if [ "$SHORT_VERSION_NO_DOTS" = "0101" ]; then
+    CLASSPATH="/opt/kafka-$UPGRADE_KAFKA_STREAMS_TEST_VERSION/libs/zkclient-0.9.jar":"$CLASSPATH"
+    CLASSPATH="/opt/kafka-$UPGRADE_KAFKA_STREAMS_TEST_VERSION/libs/zookeeper-3.4.8.jar":"$CLASSPATH"
+  fi
+fi
 
-for file in "$base_dir"/streams/build/dependant-libs-${SCALA_VERSION}/rocksdb*.jar;
+for file in "$rocksdb_lib_dir"/rocksdb*.jar;
 do
   CLASSPATH="$CLASSPATH":"$file"
 done
@@ -111,7 +139,7 @@ do
   CLASSPATH="$CLASSPATH:$dir/*"
 done
 
-for cc_pkg in "api" "transforms" "runtime" "file" "json" "tools"
+for cc_pkg in "api" "transforms" "runtime" "file" "json" "tools" "basic-auth-extension"
 do
   for file in "$base_dir"/connect/${cc_pkg}/build/libs/connect-${cc_pkg}*.jar;
   do
@@ -141,7 +169,7 @@ done
 shopt -u nullglob
 
 if [ -z "$CLASSPATH" ] ; then
-  echo "Classpath is empty. Please build the project first e.g. by running './gradlew jar -Pscala_version=$SCALA_VERSION'"
+  echo "Classpath is empty. Please build the project first e.g. by running './gradlew jar -PscalaVersion=$SCALA_VERSION'"
   exit 1
 fi
 
@@ -220,7 +248,6 @@ if [ -z "$KAFKA_JVM_PERFORMANCE_OPTS" ]; then
   KAFKA_JVM_PERFORMANCE_OPTS="-server -XX:+UseG1GC -XX:MaxGCPauseMillis=20 -XX:InitiatingHeapOccupancyPercent=35 -XX:+ExplicitGCInvokesConcurrent -Djava.awt.headless=true"
 fi
 
-
 while [ $# -gt 0 ]; do
   COMMAND=$1
   case $COMMAND in
@@ -250,15 +277,27 @@ GC_FILE_SUFFIX='-gc.log'
 GC_LOG_FILE_NAME=''
 if [ "x$GC_LOG_ENABLED" = "xtrue" ]; then
   GC_LOG_FILE_NAME=$DAEMON_NAME$GC_FILE_SUFFIX
-  # the first segment of the version number, which is '1' for releases before Java 9
+
+  # The first segment of the version number, which is '1' for releases before Java 9
   # it then becomes '9', '10', ...
-  JAVA_MAJOR_VERSION=$($JAVA -version 2>&1 | sed -E -n 's/.* version "([^.-]*).*"/\1/p')
+  # Some examples of the first line of `java --version`:
+  # 8 -> java version "1.8.0_152"
+  # 9.0.4 -> java version "9.0.4"
+  # 10 -> java version "10" 2018-03-20
+  # 10.0.1 -> java version "10.0.1" 2018-04-17
+  # We need to match to the end of the line to prevent sed from printing the characters that do not match
+  JAVA_MAJOR_VERSION=$($JAVA -version 2>&1 | sed -E -n 's/.* version "([0-9]*).*$/\1/p')
   if [[ "$JAVA_MAJOR_VERSION" -ge "9" ]] ; then
     KAFKA_GC_LOG_OPTS="-Xlog:gc*:file=$LOG_DIR/$GC_LOG_FILE_NAME:time,tags:filecount=10,filesize=102400"
   else
     KAFKA_GC_LOG_OPTS="-Xloggc:$LOG_DIR/$GC_LOG_FILE_NAME -verbose:gc -XX:+PrintGCDetails -XX:+PrintGCDateStamps -XX:+PrintGCTimeStamps -XX:+UseGCLogFileRotation -XX:NumberOfGCLogFiles=10 -XX:GCLogFileSize=100M"
   fi
 fi
+
+# Remove a possible colon prefix from the classpath (happens at lines like `CLASSPATH="$CLASSPATH:$file"` when CLASSPATH is blank)
+# Syntax used on the right side is native Bash string manipulation; for more details see
+# http://tldp.org/LDP/abs/html/string-manipulation.html, specifically the section titled "Substring Removal"
+CLASSPATH=${CLASSPATH#:}
 
 # If Cygwin is detected, classpath is converted to Windows format.
 (( CYGWIN )) && CLASSPATH=$(cygpath --path --mixed "${CLASSPATH}")

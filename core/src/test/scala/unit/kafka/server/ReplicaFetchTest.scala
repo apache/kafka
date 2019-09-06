@@ -17,9 +17,8 @@
 
 package kafka.server
 
-import java.io.File
+import scala.collection.Seq
 
-import org.apache.kafka.common.protocol.SecurityProtocol
 import org.junit.{After, Before, Test}
 import kafka.zk.ZooKeeperTestHarness
 import kafka.utils.TestUtils
@@ -34,32 +33,31 @@ class ReplicaFetchTest extends ZooKeeperTestHarness  {
   val topic2 = "bar"
 
   @Before
-  override def setUp() {
+  override def setUp(): Unit = {
     super.setUp()
     val props = createBrokerConfigs(2, zkConnect)
     brokers = props.map(KafkaConfig.fromProps).map(TestUtils.createServer(_))
   }
 
   @After
-  override def tearDown() {
+  override def tearDown(): Unit = {
     TestUtils.shutdownServers(brokers)
     super.tearDown()
   }
 
   @Test
-  def testReplicaFetcherThread() {
+  def testReplicaFetcherThread(): Unit = {
     val partition = 0
     val testMessageList1 = List("test1", "test2", "test3", "test4")
     val testMessageList2 = List("test5", "test6", "test7", "test8")
 
     // create a topic and partition and await leadership
     for (topic <- List(topic1,topic2)) {
-      createTopic(zkUtils, topic, numPartitions = 1, replicationFactor = 2, servers = brokers)
+      createTopic(zkClient, topic, numPartitions = 1, replicationFactor = 2, servers = brokers)
     }
 
     // send test messages to leader
-    val producer = TestUtils.createNewProducer(TestUtils.getBrokerListStrFromServers(brokers),
-                                               retries = 5,
+    val producer = TestUtils.createProducer(TestUtils.getBrokerListStrFromServers(brokers),
                                                keySerializer = new StringSerializer,
                                                valueSerializer = new StringSerializer)
     val records = testMessageList1.map(m => new ProducerRecord(topic1, m, m)) ++

@@ -16,84 +16,63 @@
  */
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.message.InitProducerIdResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
-import org.apache.kafka.common.record.RecordBatch;
 
 import java.nio.ByteBuffer;
+import java.util.Map;
 
+/**
+ * Possible error codes:
+ * - {@link Errors#NOT_COORDINATOR}
+ * - {@link Errors#COORDINATOR_NOT_AVAILABLE}
+ * - {@link Errors#COORDINATOR_LOAD_IN_PROGRESS}
+ * - {@link Errors#TRANSACTIONAL_ID_AUTHORIZATION_FAILED}
+ * - {@link Errors#CLUSTER_AUTHORIZATION_FAILED}
+ */
 public class InitProducerIdResponse extends AbstractResponse {
-    // Possible error codes:
-    //   NotCoordinator
-    //   CoordinatorNotAvailable
-    //   CoordinatorLoadInProgress
-    //   TransactionalIdAuthorizationFailed
-    //   ClusterAuthorizationFailed
+    public final InitProducerIdResponseData data;
 
-    private static final String PRODUCER_ID_KEY_NAME = "producer_id";
-    private static final String EPOCH_KEY_NAME = "producer_epoch";
-    private static final String ERROR_CODE_KEY_NAME = "error_code";
-    private final int throttleTimeMs;
-    private final Errors error;
-    private final long producerId;
-    private final short epoch;
-
-    public InitProducerIdResponse(int throttleTimeMs, Errors error, long producerId, short epoch) {
-        this.throttleTimeMs = throttleTimeMs;
-        this.error = error;
-        this.producerId = producerId;
-        this.epoch = epoch;
+    public InitProducerIdResponse(InitProducerIdResponseData data) {
+        this.data = data;
     }
 
-    public InitProducerIdResponse(Struct struct) {
-        this.throttleTimeMs = struct.getInt(THROTTLE_TIME_KEY_NAME);
-        this.error = Errors.forCode(struct.getShort(ERROR_CODE_KEY_NAME));
-        this.producerId = struct.getLong(PRODUCER_ID_KEY_NAME);
-        this.epoch = struct.getShort(EPOCH_KEY_NAME);
+    public InitProducerIdResponse(Struct struct, short version) {
+        this.data = new InitProducerIdResponseData(struct, version);
     }
 
-    public InitProducerIdResponse(int throttleTimeMs, Errors errors) {
-        this(throttleTimeMs, errors, RecordBatch.NO_PRODUCER_ID, (short) 0);
-    }
-
+    @Override
     public int throttleTimeMs() {
-        return throttleTimeMs;
+        return data.throttleTimeMs();
     }
 
-    public long producerId() {
-        return producerId;
-    }
-
-    public Errors error() {
-        return error;
-    }
-
-    public short epoch() {
-        return epoch;
+    @Override
+    public Map<Errors, Integer> errorCounts() {
+        return errorCounts(Errors.forCode(data.errorCode()));
     }
 
     @Override
     protected Struct toStruct(short version) {
-        Struct struct = new Struct(ApiKeys.INIT_PRODUCER_ID.responseSchema(version));
-        struct.set(THROTTLE_TIME_KEY_NAME, throttleTimeMs);
-        struct.set(PRODUCER_ID_KEY_NAME, producerId);
-        struct.set(EPOCH_KEY_NAME, epoch);
-        struct.set(ERROR_CODE_KEY_NAME, error.code());
-        return struct;
+        return data.toStruct(version);
     }
 
     public static InitProducerIdResponse parse(ByteBuffer buffer, short version) {
-        return new InitProducerIdResponse(ApiKeys.INIT_PRODUCER_ID.parseResponse(version, buffer));
+        return new InitProducerIdResponse(ApiKeys.INIT_PRODUCER_ID.parseResponse(version, buffer), version);
     }
 
     @Override
     public String toString() {
-        return "InitProducerIdResponse(" +
-                "error=" + error +
-                ", producerId=" + producerId +
-                ", producerEpoch=" + epoch +
-                ", throttleTimeMs=" + throttleTimeMs +
-                ')';
+        return data.toString();
+    }
+
+    public Errors error() {
+        return Errors.forCode(data.errorCode());
+    }
+
+    @Override
+    public boolean shouldClientThrottle(short version) {
+        return version >= 1;
     }
 }

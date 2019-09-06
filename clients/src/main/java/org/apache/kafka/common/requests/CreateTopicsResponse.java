@@ -14,28 +14,26 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.common.requests;
 
-
+import org.apache.kafka.common.message.CreateTopicsResponseData;
+import org.apache.kafka.common.message.CreateTopicsResponseData.CreatableTopicResult;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
-import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 
 public class CreateTopicsResponse extends AbstractResponse {
-    private static final String TOPIC_ERRORS_KEY_NAME = "topic_errors";
-    private static final String TOPIC_KEY_NAME = "topic";
-
     /**
      * Possible error codes:
      *
      * REQUEST_TIMED_OUT(7)
      * INVALID_TOPIC_EXCEPTION(17)
-     * CLUSTER_AUTHORIZATION_FAILED(31)
+     * TOPIC_AUTHORIZATION_FAILED(29)
      * TOPIC_ALREADY_EXISTS(36)
      * INVALID_PARTITIONS(37)
      * INVALID_REPLICATION_FACTOR(38)
@@ -43,59 +41,50 @@ public class CreateTopicsResponse extends AbstractResponse {
      * INVALID_CONFIG(40)
      * NOT_CONTROLLER(41)
      * INVALID_REQUEST(42)
+     * POLICY_VIOLATION(44)
      */
 
-    private final Map<String, ApiError> errors;
-    private final int throttleTimeMs;
+    private final CreateTopicsResponseData data;
 
-    public CreateTopicsResponse(Map<String, ApiError> errors) {
-        this(DEFAULT_THROTTLE_TIME, errors);
+    public CreateTopicsResponse(CreateTopicsResponseData data) {
+        this.data = data;
     }
 
-    public CreateTopicsResponse(int throttleTimeMs, Map<String, ApiError> errors) {
-        this.throttleTimeMs = throttleTimeMs;
-        this.errors = errors;
+    public CreateTopicsResponse(Struct struct, short version) {
+        this.data = new CreateTopicsResponseData(struct, version);
     }
 
-    public CreateTopicsResponse(Struct struct) {
-        Object[] topicErrorStructs = struct.getArray(TOPIC_ERRORS_KEY_NAME);
-        Map<String, ApiError> errors = new HashMap<>();
-        for (Object topicErrorStructObj : topicErrorStructs) {
-            Struct topicErrorStruct = (Struct) topicErrorStructObj;
-            String topic = topicErrorStruct.getString(TOPIC_KEY_NAME);
-            errors.put(topic, new ApiError(topicErrorStruct));
-        }
-
-        this.throttleTimeMs = struct.hasField(THROTTLE_TIME_KEY_NAME) ? struct.getInt(THROTTLE_TIME_KEY_NAME) : DEFAULT_THROTTLE_TIME;
-        this.errors = errors;
+    public CreateTopicsResponseData data() {
+        return data;
     }
 
     @Override
     protected Struct toStruct(short version) {
-        Struct struct = new Struct(ApiKeys.CREATE_TOPICS.responseSchema(version));
-        if (struct.hasField(THROTTLE_TIME_KEY_NAME))
-            struct.set(THROTTLE_TIME_KEY_NAME, throttleTimeMs);
-
-        List<Struct> topicErrorsStructs = new ArrayList<>(errors.size());
-        for (Map.Entry<String, ApiError> topicError : errors.entrySet()) {
-            Struct topicErrorsStruct = struct.instance(TOPIC_ERRORS_KEY_NAME);
-            topicErrorsStruct.set(TOPIC_KEY_NAME, topicError.getKey());
-            topicError.getValue().write(topicErrorsStruct);
-            topicErrorsStructs.add(topicErrorsStruct);
-        }
-        struct.set(TOPIC_ERRORS_KEY_NAME, topicErrorsStructs.toArray());
-        return struct;
+        return data.toStruct(version);
     }
 
+    @Override
     public int throttleTimeMs() {
-        return throttleTimeMs;
+        return data.throttleTimeMs();
     }
 
-    public Map<String, ApiError> errors() {
-        return errors;
+    @Override
+    public Map<Errors, Integer> errorCounts() {
+        HashMap<Errors, Integer> counts = new HashMap<>();
+        for (CreatableTopicResult result : data.topics()) {
+            Errors error = Errors.forCode(result.errorCode());
+            counts.put(error, counts.getOrDefault(error, 0) + 1);
+        }
+        return counts;
     }
 
     public static CreateTopicsResponse parse(ByteBuffer buffer, short version) {
-        return new CreateTopicsResponse(ApiKeys.CREATE_TOPICS.responseSchema(version).read(buffer));
+        return new CreateTopicsResponse(
+            ApiKeys.CREATE_TOPICS.responseSchema(version).read(buffer), version);
+    }
+
+    @Override
+    public boolean shouldClientThrottle(short version) {
+        return version >= 3;
     }
 }

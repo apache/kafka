@@ -15,23 +15,34 @@
 
 import os.path
 import signal
-
+import streams_property
+import consumer_property
 from ducktape.services.service import Service
 from ducktape.utils.util import wait_until
-
 from kafkatest.directory_layout.kafka_path import KafkaPathResolverMixin
+from kafkatest.services.kafka import KafkaConfig
+from kafkatest.services.monitor.jmx import JmxMixin
+from kafkatest.version import LATEST_0_10_0, LATEST_0_10_1, LATEST_0_10_2, LATEST_0_11_0, LATEST_1_0, LATEST_1_1, \
+    LATEST_2_0, LATEST_2_1, LATEST_2_2, LATEST_2_3
 
+STATE_DIR = "state.dir"
 
-class StreamsTestBaseService(KafkaPathResolverMixin, Service):
+class StreamsTestBaseService(KafkaPathResolverMixin, JmxMixin, Service):
     """Base class for Streams Test services providing some common settings and functionality"""
 
     PERSISTENT_ROOT = "/mnt/streams"
+
     # The log file contains normal log4j logs written using a file appender. stdout and stderr are handled separately
+    CONFIG_FILE = os.path.join(PERSISTENT_ROOT, "streams.properties")
     LOG_FILE = os.path.join(PERSISTENT_ROOT, "streams.log")
     STDOUT_FILE = os.path.join(PERSISTENT_ROOT, "streams.stdout")
     STDERR_FILE = os.path.join(PERSISTENT_ROOT, "streams.stderr")
+    JMX_LOG_FILE = os.path.join(PERSISTENT_ROOT, "jmx_tool.log")
+    JMX_ERR_FILE = os.path.join(PERSISTENT_ROOT, "jmx_tool.err.log")
     LOG4J_CONFIG_FILE = os.path.join(PERSISTENT_ROOT, "tools-log4j.properties")
     PID_FILE = os.path.join(PERSISTENT_ROOT, "streams.pid")
+
+    CLEAN_NODE_ENABLED = True
 
     logs = {
         "streams_log": {
@@ -43,16 +54,157 @@ class StreamsTestBaseService(KafkaPathResolverMixin, Service):
         "streams_stderr": {
             "path": STDERR_FILE,
             "collect_default": True},
+        "streams_log.1": {
+            "path": LOG_FILE + ".1",
+            "collect_default": True},
+        "streams_stdout.1": {
+            "path": STDOUT_FILE + ".1",
+            "collect_default": True},
+        "streams_stderr.1": {
+            "path": STDERR_FILE + ".1",
+            "collect_default": True},
+        "streams_log.2": {
+            "path": LOG_FILE + ".2",
+            "collect_default": True},
+        "streams_stdout.2": {
+            "path": STDOUT_FILE + ".2",
+            "collect_default": True},
+        "streams_stderr.2": {
+            "path": STDERR_FILE + ".2",
+            "collect_default": True},
+        "streams_log.3": {
+            "path": LOG_FILE + ".3",
+            "collect_default": True},
+        "streams_stdout.3": {
+            "path": STDOUT_FILE + ".3",
+            "collect_default": True},
+        "streams_stderr.3": {
+            "path": STDERR_FILE + ".3",
+            "collect_default": True},
+        "streams_log.0-1": {
+            "path": LOG_FILE + ".0-1",
+            "collect_default": True},
+        "streams_stdout.0-1": {
+            "path": STDOUT_FILE + ".0-1",
+            "collect_default": True},
+        "streams_stderr.0-1": {
+            "path": STDERR_FILE + ".0-1",
+            "collect_default": True},
+        "streams_log.0-2": {
+            "path": LOG_FILE + ".0-2",
+            "collect_default": True},
+        "streams_stdout.0-2": {
+            "path": STDOUT_FILE + ".0-2",
+            "collect_default": True},
+        "streams_stderr.0-2": {
+            "path": STDERR_FILE + ".0-2",
+            "collect_default": True},
+        "streams_log.0-3": {
+            "path": LOG_FILE + ".0-3",
+            "collect_default": True},
+        "streams_stdout.0-3": {
+            "path": STDOUT_FILE + ".0-3",
+            "collect_default": True},
+        "streams_stderr.0-3": {
+            "path": STDERR_FILE + ".0-3",
+            "collect_default": True},
+        "streams_log.0-4": {
+            "path": LOG_FILE + ".0-4",
+            "collect_default": True},
+        "streams_stdout.0-4": {
+            "path": STDOUT_FILE + ".0-4",
+            "collect_default": True},
+        "streams_stderr.0-4": {
+            "path": STDERR_FILE + ".0-4",
+            "collect_default": True},
+        "streams_log.0-5": {
+            "path": LOG_FILE + ".0-5",
+            "collect_default": True},
+        "streams_stdout.0-5": {
+            "path": STDOUT_FILE + ".0-5",
+            "collect_default": True},
+        "streams_stderr.0-5": {
+            "path": STDERR_FILE + ".0-5",
+            "collect_default": True},
+        "streams_log.0-6": {
+            "path": LOG_FILE + ".0-6",
+            "collect_default": True},
+        "streams_stdout.0-6": {
+            "path": STDOUT_FILE + ".0-6",
+            "collect_default": True},
+        "streams_stderr.0-6": {
+            "path": STDERR_FILE + ".0-6",
+            "collect_default": True},
+        "streams_log.1-1": {
+            "path": LOG_FILE + ".1-1",
+            "collect_default": True},
+        "streams_stdout.1-1": {
+            "path": STDOUT_FILE + ".1-1",
+            "collect_default": True},
+        "streams_stderr.1-1": {
+            "path": STDERR_FILE + ".1-1",
+            "collect_default": True},
+        "streams_log.1-2": {
+            "path": LOG_FILE + ".1-2",
+            "collect_default": True},
+        "streams_stdout.1-2": {
+            "path": STDOUT_FILE + ".1-2",
+            "collect_default": True},
+        "streams_stderr.1-2": {
+            "path": STDERR_FILE + ".1-2",
+            "collect_default": True},
+        "streams_log.1-3": {
+            "path": LOG_FILE + ".1-3",
+            "collect_default": True},
+        "streams_stdout.1-3": {
+            "path": STDOUT_FILE + ".1-3",
+            "collect_default": True},
+        "streams_stderr.1-3": {
+            "path": STDERR_FILE + ".1-3",
+            "collect_default": True},
+        "streams_log.1-4": {
+            "path": LOG_FILE + ".1-4",
+            "collect_default": True},
+        "streams_stdout.1-4": {
+            "path": STDOUT_FILE + ".1-4",
+            "collect_default": True},
+        "streams_stderr.1-4": {
+            "path": STDERR_FILE + ".1-4",
+            "collect_default": True},
+        "streams_log.1-5": {
+            "path": LOG_FILE + ".1-5",
+            "collect_default": True},
+        "streams_stdout.1-5": {
+            "path": STDOUT_FILE + ".1-5",
+            "collect_default": True},
+        "streams_stderr.1-5": {
+            "path": STDERR_FILE + ".1-5",
+            "collect_default": True},
+        "streams_log.1-6": {
+            "path": LOG_FILE + ".1-6",
+            "collect_default": True},
+        "streams_stdout.1-6": {
+            "path": STDOUT_FILE + ".1-6",
+            "collect_default": True},
+        "streams_stderr.1-6": {
+            "path": STDERR_FILE + ".1-6",
+            "collect_default": True},
+        "jmx_log": {
+            "path": JMX_LOG_FILE,
+            "collect_default": True},
+        "jmx_err": {
+            "path": JMX_ERR_FILE,
+            "collect_default": True},
     }
 
-    def __init__(self, test_context, kafka, streams_class_name, user_test_args, user_test_args1=None, user_test_args2=None, user_test_args3=None):
-        super(StreamsTestBaseService, self).__init__(test_context, 1)
+    def __init__(self, test_context, kafka, streams_class_name, user_test_args1, user_test_args2=None, user_test_args3=None, user_test_args4=None):
+        Service.__init__(self, test_context, num_nodes=1)
         self.kafka = kafka
         self.args = {'streams_class_name': streams_class_name,
-                     'user_test_args': user_test_args,
                      'user_test_args1': user_test_args1,
                      'user_test_args2': user_test_args2,
-                     'user_test_args3': user_test_args3}
+                     'user_test_args3': user_test_args3,
+                     'user_test_args4': user_test_args4}
         self.log_level = "DEBUG"
 
     @property
@@ -108,12 +260,12 @@ class StreamsTestBaseService(KafkaPathResolverMixin, Service):
 
     def clean_node(self, node):
         node.account.kill_process("streams", clean_shutdown=False, allow_fail=True)
-        node.account.ssh("rm -rf " + self.PERSISTENT_ROOT, allow_fail=False)
+        if self.CLEAN_NODE_ENABLED:
+            node.account.ssh("rm -rf " + self.PERSISTENT_ROOT, allow_fail=False)
 
     def start_cmd(self, node):
         args = self.args.copy()
-        args['kafka'] = self.kafka.bootstrap_servers()
-        args['state_dir'] = self.PERSISTENT_ROOT
+        args['config_file'] = self.CONFIG_FILE
         args['stdout'] = self.STDOUT_FILE
         args['stderr'] = self.STDERR_FILE
         args['pidfile'] = self.PID_FILE
@@ -122,20 +274,27 @@ class StreamsTestBaseService(KafkaPathResolverMixin, Service):
 
         cmd = "( export KAFKA_LOG4J_OPTS=\"-Dlog4j.configuration=file:%(log4j)s\"; " \
               "INCLUDE_TEST_JARS=true %(kafka_run_class)s %(streams_class_name)s " \
-              " %(kafka)s %(state_dir)s %(user_test_args)s %(user_test_args1)s %(user_test_args2)s" \
-              " %(user_test_args3)s & echo $! >&3 ) 1>> %(stdout)s 2>> %(stderr)s 3> %(pidfile)s" % args
+              " %(config_file)s %(user_test_args1)s %(user_test_args2)s %(user_test_args3)s" \
+              " %(user_test_args4)s & echo $! >&3 ) 1>> %(stdout)s 2>> %(stderr)s 3> %(pidfile)s" % args
+
+        self.logger.info("Executing streams cmd: " + cmd)
 
         return cmd
 
-    def start_node(self, node):
-        node.account.ssh("mkdir -p %s" % self.PERSISTENT_ROOT, allow_fail=False)
+    def prop_file(self):
+        cfg = KafkaConfig(**{streams_property.STATE_DIR: self.PERSISTENT_ROOT, streams_property.KAFKA_SERVERS: self.kafka.bootstrap_servers()})
+        return cfg.render()
 
+    def start_node(self, node):
+        node.account.mkdirs(self.PERSISTENT_ROOT)
+        prop_file = self.prop_file()
+        node.account.create_file(self.CONFIG_FILE, prop_file)
         node.account.create_file(self.LOG4J_CONFIG_FILE, self.render('tools_log4j.properties', log_file=self.LOG_FILE))
 
         self.logger.info("Starting StreamsTest process on " + str(node.account))
         with node.account.monitor_log(self.STDOUT_FILE) as monitor:
             node.account.ssh(self.start_cmd(node))
-            monitor.wait_until('StreamsTest instance started', timeout_sec=15, err_msg="Never saw message indicating StreamsTest finished startup on " + str(node.account))
+            monitor.wait_until('StreamsTest instance started', timeout_sec=60, err_msg="Never saw message indicating StreamsTest finished startup on " + str(node.account))
 
         if len(self.pids(node)) == 0:
             raise RuntimeError("No process ids recorded")
@@ -154,21 +313,51 @@ class StreamsSmokeTestBaseService(StreamsTestBaseService):
 class StreamsEosTestBaseService(StreamsTestBaseService):
     """Base class for Streams EOS Test services providing some common settings and functionality"""
 
+    clean_node_enabled = True
+
     def __init__(self, test_context, kafka, command):
         super(StreamsEosTestBaseService, self).__init__(test_context,
                                                         kafka,
                                                         "org.apache.kafka.streams.tests.StreamsEosTest",
                                                         command)
 
+    def clean_node(self, node):
+        if self.clean_node_enabled:
+            super(StreamsEosTestBaseService, self).clean_node(node)
+
 
 class StreamsSmokeTestDriverService(StreamsSmokeTestBaseService):
     def __init__(self, test_context, kafka):
         super(StreamsSmokeTestDriverService, self).__init__(test_context, kafka, "run")
+        self.DISABLE_AUTO_TERMINATE = ""
 
+    def disable_auto_terminate(self):
+        self.DISABLE_AUTO_TERMINATE = "disableAutoTerminate"
+
+    def start_cmd(self, node):
+        args = self.args.copy()
+        args['config_file'] = self.CONFIG_FILE
+        args['stdout'] = self.STDOUT_FILE
+        args['stderr'] = self.STDERR_FILE
+        args['pidfile'] = self.PID_FILE
+        args['log4j'] = self.LOG4J_CONFIG_FILE
+        args['disable_auto_terminate'] = self.DISABLE_AUTO_TERMINATE
+        args['kafka_run_class'] = self.path.script("kafka-run-class.sh", node)
+
+        cmd = "( export KAFKA_LOG4J_OPTS=\"-Dlog4j.configuration=file:%(log4j)s\"; " \
+              "INCLUDE_TEST_JARS=true %(kafka_run_class)s %(streams_class_name)s " \
+              " %(config_file)s %(user_test_args1)s %(disable_auto_terminate)s" \
+              " & echo $! >&3 ) 1>> %(stdout)s 2>> %(stderr)s 3> %(pidfile)s" % args
+
+        return cmd
 
 class StreamsSmokeTestJobRunnerService(StreamsSmokeTestBaseService):
     def __init__(self, test_context, kafka):
         super(StreamsSmokeTestJobRunnerService, self).__init__(test_context, kafka, "process")
+
+class StreamsSmokeTestEOSJobRunnerService(StreamsSmokeTestBaseService):
+    def __init__(self, test_context, kafka):
+        super(StreamsSmokeTestEOSJobRunnerService, self).__init__(test_context, kafka, "process-eos")
 
 
 class StreamsEosTestDriverService(StreamsEosTestBaseService):
@@ -180,11 +369,9 @@ class StreamsEosTestJobRunnerService(StreamsEosTestBaseService):
     def __init__(self, test_context, kafka):
         super(StreamsEosTestJobRunnerService, self).__init__(test_context, kafka, "process")
 
-
 class StreamsComplexEosTestJobRunnerService(StreamsEosTestBaseService):
     def __init__(self, test_context, kafka):
         super(StreamsComplexEosTestJobRunnerService, self).__init__(test_context, kafka, "process-complex")
-
 
 class StreamsEosTestVerifyRunnerService(StreamsEosTestBaseService):
     def __init__(self, test_context, kafka):
@@ -207,3 +394,165 @@ class StreamsBrokerCompatibilityService(StreamsTestBaseService):
                                                                 kafka,
                                                                 "org.apache.kafka.streams.tests.BrokerCompatibilityTest",
                                                                 eosEnabled)
+
+
+class StreamsBrokerDownResilienceService(StreamsTestBaseService):
+    def __init__(self, test_context, kafka, configs):
+        super(StreamsBrokerDownResilienceService, self).__init__(test_context,
+                                                                 kafka,
+                                                                 "org.apache.kafka.streams.tests.StreamsBrokerDownResilienceTest",
+                                                                 configs)
+
+    def start_cmd(self, node):
+        args = self.args.copy()
+        args['config_file'] = self.CONFIG_FILE
+        args['stdout'] = self.STDOUT_FILE
+        args['stderr'] = self.STDERR_FILE
+        args['pidfile'] = self.PID_FILE
+        args['log4j'] = self.LOG4J_CONFIG_FILE
+        args['kafka_run_class'] = self.path.script("kafka-run-class.sh", node)
+
+        cmd = "( export KAFKA_LOG4J_OPTS=\"-Dlog4j.configuration=file:%(log4j)s\"; " \
+              "INCLUDE_TEST_JARS=true %(kafka_run_class)s %(streams_class_name)s " \
+              " %(config_file)s %(user_test_args1)s %(user_test_args2)s %(user_test_args3)s" \
+              " %(user_test_args4)s & echo $! >&3 ) 1>> %(stdout)s 2>> %(stderr)s 3> %(pidfile)s" % args
+
+        self.logger.info("Executing: " + cmd)
+
+        return cmd
+
+
+class StreamsStandbyTaskService(StreamsTestBaseService):
+    def __init__(self, test_context, kafka, configs):
+        super(StreamsStandbyTaskService, self).__init__(test_context,
+                                                        kafka,
+                                                        "org.apache.kafka.streams.tests.StreamsStandByReplicaTest",
+                                                        configs)
+
+
+class StreamsOptimizedUpgradeTestService(StreamsTestBaseService):
+    def __init__(self, test_context, kafka):
+        super(StreamsOptimizedUpgradeTestService, self).__init__(test_context,
+                                                                 kafka,
+                                                                 "org.apache.kafka.streams.tests.StreamsOptimizedTest",
+                                                                 "")
+        self.OPTIMIZED_CONFIG = 'none'
+        self.INPUT_TOPIC = None
+        self.AGGREGATION_TOPIC = None
+        self.REDUCE_TOPIC = None
+        self.JOIN_TOPIC = None
+
+    def prop_file(self):
+        properties = {streams_property.STATE_DIR: self.PERSISTENT_ROOT,
+                      streams_property.KAFKA_SERVERS: self.kafka.bootstrap_servers()}
+
+        properties['topology.optimization'] = self.OPTIMIZED_CONFIG
+        properties['input.topic'] = self.INPUT_TOPIC
+        properties['aggregation.topic'] = self.AGGREGATION_TOPIC
+        properties['reduce.topic'] = self.REDUCE_TOPIC
+        properties['join.topic'] = self.JOIN_TOPIC
+
+        cfg = KafkaConfig(**properties)
+        return cfg.render()
+
+
+class StreamsUpgradeTestJobRunnerService(StreamsTestBaseService):
+    def __init__(self, test_context, kafka):
+        super(StreamsUpgradeTestJobRunnerService, self).__init__(test_context,
+                                                                 kafka,
+                                                                 "org.apache.kafka.streams.tests.StreamsUpgradeTest",
+                                                                 "")
+        self.UPGRADE_FROM = None
+        self.UPGRADE_TO = None
+
+    def set_version(self, kafka_streams_version):
+        self.KAFKA_STREAMS_VERSION = kafka_streams_version
+
+    def set_upgrade_from(self, upgrade_from):
+        self.UPGRADE_FROM = upgrade_from
+
+    def set_upgrade_to(self, upgrade_to):
+        self.UPGRADE_TO = upgrade_to
+
+    def prop_file(self):
+        properties = {streams_property.STATE_DIR: self.PERSISTENT_ROOT,
+                      streams_property.KAFKA_SERVERS: self.kafka.bootstrap_servers()}
+        if self.UPGRADE_FROM is not None:
+            properties['upgrade.from'] = self.UPGRADE_FROM
+        if self.UPGRADE_TO == "future_version":
+            properties['test.future.metadata'] = "any_value"
+
+        cfg = KafkaConfig(**properties)
+        return cfg.render()
+
+    def start_cmd(self, node):
+        args = self.args.copy()
+        if self.KAFKA_STREAMS_VERSION in [str(LATEST_0_10_0), str(LATEST_0_10_1), str(LATEST_0_10_2),
+                                          str(LATEST_0_11_0), str(LATEST_1_0), str(LATEST_1_1),
+                                          str(LATEST_2_0), str(LATEST_2_1), str(LATEST_2_2), str(LATEST_2_3)]:
+            args['kafka'] = self.kafka.bootstrap_servers()
+        else:
+            args['kafka'] = ""
+        if self.KAFKA_STREAMS_VERSION == str(LATEST_0_10_0) or self.KAFKA_STREAMS_VERSION == str(LATEST_0_10_1):
+            args['zk'] = self.kafka.zk.connect_setting()
+        else:
+            args['zk'] = ""
+        args['config_file'] = self.CONFIG_FILE
+        args['stdout'] = self.STDOUT_FILE
+        args['stderr'] = self.STDERR_FILE
+        args['pidfile'] = self.PID_FILE
+        args['log4j'] = self.LOG4J_CONFIG_FILE
+        args['version'] = self.KAFKA_STREAMS_VERSION
+        args['kafka_run_class'] = self.path.script("kafka-run-class.sh", node)
+
+        cmd = "( export KAFKA_LOG4J_OPTS=\"-Dlog4j.configuration=file:%(log4j)s\"; " \
+              "INCLUDE_TEST_JARS=true UPGRADE_KAFKA_STREAMS_TEST_VERSION=%(version)s " \
+              " %(kafka_run_class)s %(streams_class_name)s %(kafka)s %(zk)s %(config_file)s " \
+              " & echo $! >&3 ) 1>> %(stdout)s 2>> %(stderr)s 3> %(pidfile)s" % args
+
+        self.logger.info("Executing: " + cmd)
+
+        return cmd
+
+
+class StreamsNamedRepartitionTopicService(StreamsTestBaseService):
+    def __init__(self, test_context, kafka):
+        super(StreamsNamedRepartitionTopicService, self).__init__(test_context,
+                                                                  kafka,
+                                                                  "org.apache.kafka.streams.tests.StreamsNamedRepartitionTest",
+                                                                  "")
+        self.ADD_ADDITIONAL_OPS = 'false'
+        self.INPUT_TOPIC = None
+        self.AGGREGATION_TOPIC = None
+
+    def prop_file(self):
+        properties = {streams_property.STATE_DIR: self.PERSISTENT_ROOT,
+                      streams_property.KAFKA_SERVERS: self.kafka.bootstrap_servers()}
+
+        properties['input.topic'] = self.INPUT_TOPIC
+        properties['aggregation.topic'] = self.AGGREGATION_TOPIC
+        properties['add.operations'] = self.ADD_ADDITIONAL_OPS
+
+        cfg = KafkaConfig(**properties)
+        return cfg.render()
+
+class StaticMemberTestService(StreamsTestBaseService):
+    def __init__(self, test_context, kafka, group_instance_id, num_threads):
+        super(StaticMemberTestService, self).__init__(test_context,
+                                                      kafka,
+                                                      "org.apache.kafka.streams.tests.StaticMemberTestClient",
+                                                      "")
+        self.INPUT_TOPIC = None
+        self.GROUP_INSTANCE_ID = group_instance_id
+        self.NUM_THREADS = num_threads
+    def prop_file(self):
+        properties = {streams_property.STATE_DIR: self.PERSISTENT_ROOT,
+                      streams_property.KAFKA_SERVERS: self.kafka.bootstrap_servers(),
+                      streams_property.NUM_THREADS: self.NUM_THREADS,
+                      consumer_property.GROUP_INSTANCE_ID: self.GROUP_INSTANCE_ID,
+                      consumer_property.SESSION_TIMEOUT_MS: 60000}
+
+        properties['input.topic'] = self.INPUT_TOPIC
+
+        cfg = KafkaConfig(**properties)
+        return cfg.render()

@@ -47,7 +47,7 @@ public class UsePreviousTimeOnInvalidTimestampTest extends TimestampExtractorTes
     @Test
     public void shouldThrowStreamsException() {
         final TimestampExtractor extractor = new UsePreviousTimeOnInvalidTimestamp();
-        final ConsumerRecord record = new ConsumerRecord<>("anyTopic", 0, 0, null, null);
+        final ConsumerRecord<Object, Object> record = new ConsumerRecord<>("anyTopic", 0, 0, null, null);
         try {
             extractor.extract(record, -1);
             fail("should have thrown StreamsException");

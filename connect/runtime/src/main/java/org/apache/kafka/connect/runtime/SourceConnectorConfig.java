@@ -32,4 +32,8 @@ public class SourceConnectorConfig extends ConnectorConfig {
     public SourceConnectorConfig(Plugins plugins, Map<String, String> props) {
         super(plugins, config, props);
     }
+
+    public static void main(String[] args) {
+        System.out.println(config.toHtmlTable());
+    }
 }

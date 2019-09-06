@@ -18,6 +18,8 @@ package org.apache.kafka.clients.producer;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.record.DefaultRecord;
+import org.apache.kafka.common.record.RecordBatch;
+import org.apache.kafka.common.requests.ProduceResponse;
 
 /**
  * The metadata for a record that has been acknowledged by the server
@@ -55,27 +57,36 @@ public final class RecordMetadata {
     }
 
     /**
-     * @deprecated As of 0.11.0. Use @{@link RecordMetadata#RecordMetadata(TopicPartition, long, long, long, Long, int, int)}.
+     * Indicates whether the record metadata includes the offset.
+     * @return true if the offset is included in the metadata, false otherwise.
      */
-    @Deprecated
-    public RecordMetadata(TopicPartition topicPartition, long baseOffset, long relativeOffset, long timestamp,
-                          long checksum, int serializedKeySize, int serializedValueSize) {
-        this(topicPartition, baseOffset, relativeOffset, timestamp, Long.valueOf(checksum), serializedKeySize,
-                serializedValueSize);
+    public boolean hasOffset() {
+        return this.offset != ProduceResponse.INVALID_OFFSET;
     }
 
     /**
      * The offset of the record in the topic/partition.
+     * @return the offset of the record, or -1 if {{@link #hasOffset()}} returns false.
      */
     public long offset() {
         return this.offset;
     }
 
     /**
+     * Indicates whether the record metadata includes the timestamp.
+     * @return true if a valid timestamp exists, false otherwise.
+     */
+    public boolean hasTimestamp() {
+        return this.timestamp != RecordBatch.NO_TIMESTAMP;
+    }
+
+    /**
      * The timestamp of the record in the topic/partition.
+     *
+     * @return the timestamp of the record, or -1 if the {{@link #hasTimestamp()}} returns false.
      */
     public long timestamp() {
-        return timestamp;
+        return this.timestamp;
     }
 
     /**

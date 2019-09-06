@@ -16,20 +16,29 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
+import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.streams.kstream.Reducer;
 import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
-import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
+import org.apache.kafka.streams.processor.internals.metrics.ThreadMetrics;
+import org.apache.kafka.streams.state.TimestampedKeyValueStore;
+import org.apache.kafka.streams.state.ValueAndTimestamp;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import static org.apache.kafka.streams.state.ValueAndTimestamp.getValueOrNull;
 
 public class KStreamReduce<K, V> implements KStreamAggProcessorSupplier<K, K, V, V> {
+    private static final Logger LOG = LoggerFactory.getLogger(KStreamReduce.class);
 
     private final String storeName;
     private final Reducer<V> reducer;
 
     private boolean sendOldValues = false;
 
-    public KStreamReduce(String storeName, Reducer<V> reducer) {
+    KStreamReduce(final String storeName, final Reducer<V> reducer) {
         this.storeName = storeName;
         this.reducer = reducer;
     }
@@ -44,47 +53,60 @@ public class KStreamReduce<K, V> implements KStreamAggProcessorSupplier<K, K, V,
         sendOldValues = true;
     }
 
-    private class KStreamReduceProcessor extends AbstractProcessor<K, V> {
 
-        private KeyValueStore<K, V> store;
-        private TupleForwarder<K, V> tupleForwarder;
+    private class KStreamReduceProcessor extends AbstractProcessor<K, V> {
+        private TimestampedKeyValueStore<K, V> store;
+        private TimestampedTupleForwarder<K, V> tupleForwarder;
+        private StreamsMetricsImpl metrics;
+        private Sensor skippedRecordsSensor;
 
         @SuppressWarnings("unchecked")
         @Override
-        public void init(ProcessorContext context) {
+        public void init(final ProcessorContext context) {
             super.init(context);
-
-            store = (KeyValueStore<K, V>) context.getStateStore(storeName);
-            tupleForwarder = new TupleForwarder<>(store, context, new ForwardingCacheFlushListener<K, V>(context, sendOldValues), sendOldValues);
+            metrics = (StreamsMetricsImpl) context.metrics();
+            skippedRecordsSensor = ThreadMetrics.skipRecordSensor(metrics);
+            store = (TimestampedKeyValueStore<K, V>) context.getStateStore(storeName);
+            tupleForwarder = new TimestampedTupleForwarder<>(
+                store,
+                context,
+                new TimestampedCacheFlushListener<>(context),
+                sendOldValues);
         }
 
-
         @Override
-        public void process(K key, V value) {
-            // If the key is null we don't need to proceed
-            if (key == null)
+        public void process(final K key, final V value) {
+            // If the key or value is null we don't need to proceed
+            if (key == null || value == null) {
+                LOG.warn(
+                    "Skipping record due to null key or value. key=[{}] value=[{}] topic=[{}] partition=[{}] offset=[{}]",
+                    key, value, context().topic(), context().partition(), context().offset()
+                );
+                skippedRecordsSensor.record();
                 return;
-
-            V oldAgg = store.get(key);
-            V newAgg = oldAgg;
-
-            // try to add the new new value
-            if (value != null) {
-                if (newAgg == null) {
-                    newAgg = value;
-                } else {
-                    newAgg = reducer.apply(newAgg, value);
-                }
             }
-            // update the store with the new value
-            store.put(key, newAgg);
-            tupleForwarder.maybeForward(key, newAgg, oldAgg);
+
+            final ValueAndTimestamp<V> oldAggAndTimestamp = store.get(key);
+            final V oldAgg = getValueOrNull(oldAggAndTimestamp);
+
+            final V newAgg;
+            final long newTimestamp;
+
+            if (oldAgg == null) {
+                newAgg = value;
+                newTimestamp = context().timestamp();
+            } else {
+                newAgg = reducer.apply(oldAgg, value);
+                newTimestamp = Math.max(context().timestamp(), oldAggAndTimestamp.timestamp());
+            }
+
+            store.put(key, ValueAndTimestamp.make(newAgg, newTimestamp));
+            tupleForwarder.maybeForward(key, newAgg, sendOldValues ? oldAgg : null, newTimestamp);
         }
     }
 
     @Override
     public KTableValueGetterSupplier<K, V> view() {
-
         return new KTableValueGetterSupplier<K, V>() {
 
             public KTableValueGetter<K, V> get() {
@@ -98,20 +120,23 @@ public class KStreamReduce<K, V> implements KStreamAggProcessorSupplier<K, K, V,
         };
     }
 
-    private class KStreamReduceValueGetter implements KTableValueGetter<K, V> {
 
-        private KeyValueStore<K, V> store;
+    private class KStreamReduceValueGetter implements KTableValueGetter<K, V> {
+        private TimestampedKeyValueStore<K, V> store;
 
         @SuppressWarnings("unchecked")
         @Override
-        public void init(ProcessorContext context) {
-            store = (KeyValueStore<K, V>) context.getStateStore(storeName);
+        public void init(final ProcessorContext context) {
+            store = (TimestampedKeyValueStore<K, V>) context.getStateStore(storeName);
         }
 
         @Override
-        public V get(K key) {
+        public ValueAndTimestamp<V> get(final K key) {
             return store.get(key);
         }
+
+        @Override
+        public void close() {}
     }
 }
 

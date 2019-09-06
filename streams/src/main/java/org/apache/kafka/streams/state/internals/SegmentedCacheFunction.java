@@ -29,42 +29,54 @@ class SegmentedCacheFunction implements CacheFunction {
     private final KeySchema keySchema;
     private final long segmentInterval;
 
-    SegmentedCacheFunction(KeySchema keySchema, long segmentInterval) {
+    SegmentedCacheFunction(final KeySchema keySchema, final long segmentInterval) {
         this.keySchema = keySchema;
         this.segmentInterval = segmentInterval;
     }
 
     @Override
-    public Bytes key(Bytes cacheKey) {
+    public Bytes key(final Bytes cacheKey) {
         return Bytes.wrap(bytesFromCacheKey(cacheKey));
     }
 
     @Override
-    public Bytes cacheKey(Bytes key) {
+    public Bytes cacheKey(final Bytes key) {
+        return cacheKey(key, segmentId(key));
+    }
+
+    Bytes cacheKey(final Bytes key, final long segmentId) {
         final byte[] keyBytes = key.get();
-        ByteBuffer buf = ByteBuffer.allocate(SEGMENT_ID_BYTES + keyBytes.length);
-        buf.putLong(segmentId(key)).put(keyBytes);
+        final ByteBuffer buf = ByteBuffer.allocate(SEGMENT_ID_BYTES + keyBytes.length);
+        buf.putLong(segmentId).put(keyBytes);
         return Bytes.wrap(buf.array());
     }
 
-    static byte[] bytesFromCacheKey(Bytes cacheKey) {
-        byte[] binaryKey = new byte[cacheKey.get().length - SEGMENT_ID_BYTES];
+    static byte[] bytesFromCacheKey(final Bytes cacheKey) {
+        final byte[] binaryKey = new byte[cacheKey.get().length - SEGMENT_ID_BYTES];
         System.arraycopy(cacheKey.get(), SEGMENT_ID_BYTES, binaryKey, 0, binaryKey.length);
         return binaryKey;
     }
 
-    public long segmentId(Bytes key) {
-        return keySchema.segmentTimestamp(key) / segmentInterval;
+    public long segmentId(final Bytes key) {
+        return segmentId(keySchema.segmentTimestamp(key));
     }
 
-    int compareSegmentedKeys(Bytes cacheKey, Bytes storeKey) {
-        long storeSegmentId = segmentId(storeKey);
-        long cacheSegmentId = ByteBuffer.wrap(cacheKey.get()).getLong();
+    long segmentId(final long timestamp) {
+        return timestamp / segmentInterval;
+    }
+
+    long getSegmentInterval() {
+        return segmentInterval;
+    }
+
+    int compareSegmentedKeys(final Bytes cacheKey, final Bytes storeKey) {
+        final long storeSegmentId = segmentId(storeKey);
+        final long cacheSegmentId = ByteBuffer.wrap(cacheKey.get()).getLong();
 
         final int segmentCompare = Long.compare(cacheSegmentId, storeSegmentId);
         if (segmentCompare == 0) {
-            byte[] cacheKeyBytes = cacheKey.get();
-            byte[] storeKeyBytes = storeKey.get();
+            final byte[] cacheKeyBytes = cacheKey.get();
+            final byte[] storeKeyBytes = storeKey.get();
             return Bytes.BYTES_LEXICO_COMPARATOR.compare(
                 cacheKeyBytes, SEGMENT_ID_BYTES, cacheKeyBytes.length - SEGMENT_ID_BYTES,
                 storeKeyBytes, 0, storeKeyBytes.length

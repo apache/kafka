@@ -23,8 +23,7 @@ import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
-import org.apache.kafka.streams.kstream.KeyValueMapper;
-import org.apache.kafka.streams.kstream.ValueMapper;
+import org.apache.kafka.streams.kstream.Produced;
 
 import java.util.Arrays;
 import java.util.Locale;
@@ -34,19 +33,19 @@ import java.util.concurrent.CountDownLatch;
 /**
  * Demonstrates, using the high-level KStream DSL, how to implement the WordCount program
  * that computes a simple word occurrence histogram from an input text.
- *
+ * <p>
  * In this example, the input stream reads from a topic named "streams-plaintext-input", where the values of messages
  * represent lines of text; and the histogram output is written to topic "streams-wordcount-output" where each record
  * is an updated count of a single word.
- *
+ * <p>
  * Before running this example you must create the input topic and the output topic (e.g. via
- * bin/kafka-topics.sh --create ...), and write some data to the input topic (e.g. via
- * bin/kafka-console-producer.sh). Otherwise you won't see any data arriving in the output topic.
+ * {@code bin/kafka-topics.sh --create ...}), and write some data to the input topic (e.g. via
+ * {@code bin/kafka-console-producer.sh}). Otherwise you won't see any data arriving in the output topic.
  */
-public class WordCountDemo {
+public final class WordCountDemo {
 
-    public static void main(String[] args) throws Exception {
-        Properties props = new Properties();
+    public static void main(final String[] args) {
+        final Properties props = new Properties();
         props.put(StreamsConfig.APPLICATION_ID_CONFIG, "streams-wordcount");
         props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
         props.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0);
@@ -58,27 +57,17 @@ public class WordCountDemo {
         // https://cwiki.apache.org/confluence/display/KAFKA/Kafka+Streams+Application+Reset+Tool
         props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
 
-        StreamsBuilder builder = new StreamsBuilder();
+        final StreamsBuilder builder = new StreamsBuilder();
 
-        KStream<String, String> source = builder.stream("streams-plaintext-input");
+        final KStream<String, String> source = builder.stream("streams-plaintext-input");
 
-        KTable<String, Long> counts = source
-                .flatMapValues(new ValueMapper<String, Iterable<String>>() {
-                    @Override
-                    public Iterable<String> apply(String value) {
-                        return Arrays.asList(value.toLowerCase(Locale.getDefault()).split(" "));
-                    }
-                })
-                .groupBy(new KeyValueMapper<String, String, String>() {
-                    @Override
-                    public String apply(String key, String value) {
-                        return value;
-                    }
-                })
-                .count("Counts");
+        final KTable<String, Long> counts = source
+            .flatMapValues(value -> Arrays.asList(value.toLowerCase(Locale.getDefault()).split(" ")))
+            .groupBy((key, value) -> value)
+            .count();
 
         // need to override value serde to Long type
-        counts.to(Serdes.String(), Serdes.Long(), "streams-wordcount-output");
+        counts.toStream().to("streams-wordcount-output", Produced.with(Serdes.String(), Serdes.Long()));
 
         final KafkaStreams streams = new KafkaStreams(builder.build(), props);
         final CountDownLatch latch = new CountDownLatch(1);
@@ -95,7 +84,7 @@ public class WordCountDemo {
         try {
             streams.start();
             latch.await();
-        } catch (Throwable e) {
+        } catch (final Throwable e) {
             System.exit(1);
         }
         System.exit(0);
