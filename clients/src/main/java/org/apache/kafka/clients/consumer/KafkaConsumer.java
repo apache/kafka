@@ -79,6 +79,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 /**
  * A client that consumes records from a Kafka cluster.
@@ -1210,9 +1211,11 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                 client.maybeTriggerWakeup();
 
                 if (includeMetadataInTimeout) {
-                    if (!updateAssignmentMetadataIfNeeded(timer)) {
-                        return ConsumerRecords.empty();
-                    }
+                    // try to update assignment metadata BUT do not need to block on the timer,
+                    // since even if we are 1) in the middle of a rebalance or 2) have partitions
+                    // with unknown starting positions we may still want to return some data
+                    // as long as there are some partitions fetchable
+                    updateAssignmentMetadataIfNeeded(time.timer(0L));
                 } else {
                     while (!updateAssignmentMetadataIfNeeded(time.timer(Long.MAX_VALUE))) {
                         log.warn("Still waiting for metadata");
@@ -1231,7 +1234,13 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                         client.pollNoWakeup();
                     }
 
-                    return this.interceptors.onConsume(new ConsumerRecords<>(records));
+                    // after the long poll, we should filter the returned data if their belonging
+                    // partitions are no longer owned by the consumer
+                    final Set<TopicPartition> assignedPartitions = subscriptions.assignedPartitions();
+                    return this.interceptors.onConsume(new ConsumerRecords<>(records.entrySet()
+                        .stream()
+                        .filter(entry -> !assignedPartitions.contains(entry.getKey()))
+                        .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue))));
                 }
             } while (timer.notExpired());
 
@@ -1284,12 +1293,6 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             return !fetcher.hasAvailableFetches();
         });
         timer.update(pollTimer.currentTimeMs());
-
-        // after the long poll, we should check whether the group needs to rebalance
-        // prior to returning data so that the group can stabilize faster
-        if (coordinator != null && coordinator.rejoinNeededOrPending()) {
-            return Collections.emptyMap();
-        }
 
         return fetcher.fetchedRecords();
     }
