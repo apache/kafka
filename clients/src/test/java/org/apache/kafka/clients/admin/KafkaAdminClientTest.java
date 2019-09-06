@@ -1604,7 +1604,7 @@ public class KafkaAdminClientTest {
             env.kafkaClient().prepareResponse(new LeaveGroupResponse(new LeaveGroupResponseData()
                                                                          .setErrorCode(Errors.COORDINATOR_LOAD_IN_PROGRESS.code())));
 
-            // Inject an unknown error
+            // Inject a top-level non-retriable error
             env.kafkaClient().prepareResponse(new LeaveGroupResponse(new LeaveGroupResponseData()
                                                                          .setErrorCode(Errors.UNKNOWN_SERVER_ERROR.code())));
 
@@ -1618,19 +1618,19 @@ public class KafkaAdminClientTest {
             RemoveMemberFromGroupResult result = unknownErrorResult.all();
             assertTrue(result.hasError());
             assertEquals(Errors.UNKNOWN_SERVER_ERROR, result.error());
-            assertTrue(result.memberFutures().isEmpty());
 
-            // Inject a top-level non-retriable error
-            env.kafkaClient().prepareResponse(prepareFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
-            env.kafkaClient().prepareResponse(new LeaveGroupResponse(new LeaveGroupResponseData()
-                                                                         .setErrorCode(Errors.GROUP_AUTHORIZATION_FAILED.code())
-                                                                         .setMembers(memberResponses)));
-
-            final MembershipChangeResult topLevelErrorResult = env.adminClient().removeMemberFromConsumerGroup(
-                groupId,
-                new RemoveMemberFromConsumerGroupOptions(membersToRemove)
-            );
-            TestUtils.assertFutureError(topLevelErrorResult.future(), GroupAuthorizationException.class);
+            Map<MemberIdentity, KafkaFuture<Void>> memberFutures = result.memberFutures();
+            assertEquals(2, memberFutures.size());
+            for (Map.Entry<MemberIdentity, KafkaFuture<Void>> entry : memberFutures.entrySet()) {
+                KafkaFuture<Void> memberFuture = entry.getValue();
+                assertTrue(memberFuture.isCompletedExceptionally());
+                try {
+                    memberFuture.get();
+                    fail("get() should throw exception");
+                } catch (ExecutionException | InterruptedException e0) {
+                    assertTrue(e0.getCause() instanceof UnknownServerException);
+                }
+            }
 
             // Inject one member level error.
             env.kafkaClient().prepareResponse(prepareFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
@@ -1647,16 +1647,19 @@ public class KafkaAdminClientTest {
             assertTrue(result.hasError());
             assertEquals(Errors.UNKNOWN_MEMBER_ID, result.error());
 
-            Map<MemberIdentity, KafkaFuture<Void>> memberFutures = result.memberFutures();
+            memberFutures = result.memberFutures();
             assertEquals(2, memberFutures.size());
             for (Map.Entry<MemberIdentity, KafkaFuture<Void>> entry : memberFutures.entrySet()) {
                 KafkaFuture<Void> memberFuture = entry.getValue();
-                assertTrue(memberFuture.isCompletedExceptionally());
-                try {
-                    memberFuture.get();
-                    fail("get() should throw ExecutionException");
-                } catch (ExecutionException | InterruptedException e0) {
-                    assertTrue(e0.getCause() instanceof UnknownMemberIdException);
+                if (entry.getKey().groupInstanceId().equals(instanceOne)) {
+                    try {
+                        memberFuture.get();
+                        fail("get() should throw ExecutionException");
+                    } catch (ExecutionException | InterruptedException e0) {
+                        assertTrue(e0.getCause() instanceof UnknownMemberIdException);
+                    }
+                } else {
+                    assertFalse(memberFuture.isCompletedExceptionally());
                 }
             }
 

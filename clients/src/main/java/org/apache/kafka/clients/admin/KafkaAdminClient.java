@@ -3382,8 +3382,14 @@ public class KafkaAdminClient extends AdminClient {
                     return;
                 }
 
+                // If error is transient coordinator error, retry
+                Errors error = response.error();
+                if (error == Errors.COORDINATOR_LOAD_IN_PROGRESS || error == Errors.COORDINATOR_NOT_AVAILABLE) {
+                    throw error.exception();
+                }
+
                 final RemoveMemberFromGroupResult membershipChangeResult =
-                    new RemoveMemberFromGroupResult(response.error(),
+                    new RemoveMemberFromGroupResult(error,
                                                     context.getOptions().getMembers(),
                                                     response.memberResponses());
 
