@@ -58,6 +58,7 @@ public class DelegatingClassLoaderTest {
         classLoader.initLoaders();
         for (String pluginClassName : TestPlugins.pluginClasses()) {
             assertNotNull(classLoader.loadClass(pluginClassName));
+            assertNotNull(classLoader.pluginClassLoader(pluginClassName));
         }
     }
 }

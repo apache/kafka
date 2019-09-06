@@ -71,10 +71,23 @@ public class Plugins {
         return Utils.join(plugins, ", ");
     }
 
-    protected static <T> T newPlugin(Class<T> klass) {
+    protected <T> T newPlugin(Class<T> klass) {
+        ClassLoader classLoader = delegatingLoader.pluginClassLoader(klass.getName());
+        if (classLoader == null) {
+            classLoader = delegatingLoader;
+        }
+        return newPlugin(classLoader, klass);
+    }
+
+    protected static <T> T newPlugin(ClassLoader classLoader, Class<T> klass) {
+        ClassLoader oldClassLoader = compareAndSwapLoaders(classLoader);
+        // This doesn't use a finally block for performance reasons
         try {
-            return Utils.newInstance(klass);
+            T ret = Utils.newInstance(klass);
+            compareAndSwapLoaders(oldClassLoader);
+            return ret;
         } catch (Throwable t) {
+            compareAndSwapLoaders(oldClassLoader);
             throw new ConnectException("Instantiation error", t);
         }
     }

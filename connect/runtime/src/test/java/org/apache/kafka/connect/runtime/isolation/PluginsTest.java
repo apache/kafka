@@ -208,7 +208,7 @@ public class PluginsTest {
             ClassLoader classLoader = Thread.currentThread().getContextClassLoader();
             assertFalse(classLoader instanceof PluginClassLoader);
             Class<?> clazz = plugins.delegatingLoader().loadClass(TestPlugins.EXPECT_PLUGIN_CLASS_LOADER);
-            Plugins.newPlugin(clazz);
+            Plugins.newPlugin(classLoader, clazz);
             fail("Should have thrown exception with wrong classloader");
         } catch (ConnectException | ClassNotFoundException e) { }
         // Attempt to load it with the correct classloader after the failure
@@ -232,8 +232,7 @@ public class PluginsTest {
         ));
     }
 
-    // This is currently an error case, and will be fixed in the following commit
-    @Test(expected = ConnectException.class)
+    @Test
     public void shouldLoadPluginWithPluginClassloader() {
         TestPlugins.assertInitialized();
         assertNotNull(plugins.newPlugin(
@@ -249,7 +248,7 @@ public class PluginsTest {
         ClassLoader classLoader = Thread.currentThread().getContextClassLoader();
         assertFalse(classLoader instanceof PluginClassLoader);
         Class<?> clazz = plugins.delegatingLoader().loadClass(TestPlugins.EXPECT_PLUGIN_CLASS_LOADER);
-        Plugins.newPlugin(clazz);
+        Plugins.newPlugin(classLoader, clazz);
     }
 
     protected void instantiateAndConfigureConverter(String configPropName, ClassLoaderUsage classLoaderUsage) {

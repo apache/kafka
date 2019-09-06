@@ -132,17 +132,28 @@ public class DelegatingClassLoader extends URLClassLoader {
         return connectorClientConfigPolicies;
     }
 
+    public PluginClassLoader pluginClassLoader(String name) {
+        if (PluginUtils.shouldLoadInIsolation(name)) {
+            SortedMap<PluginDesc<?>, ClassLoader> inner = pluginLoaders.get(name);
+            if (inner != null) {
+                ClassLoader pluginLoader = inner.get(inner.lastKey());
+                if (pluginLoader instanceof PluginClassLoader)  {
+                    return (PluginClassLoader) pluginLoader;
+                }
+            }
+        }
+        return null;
+    }
+
     public ClassLoader connectorLoader(Connector connector) {
         return connectorLoader(connector.getClass().getName());
     }
 
     public ClassLoader connectorLoader(String connectorClassOrAlias) {
         log.debug("Getting plugin class loader for connector: '{}'", connectorClassOrAlias);
-        String fullName = aliases.containsKey(connectorClassOrAlias)
-                          ? aliases.get(connectorClassOrAlias)
-                          : connectorClassOrAlias;
-        SortedMap<PluginDesc<?>, ClassLoader> inner = pluginLoaders.get(fullName);
-        if (inner == null) {
+        String fullName = aliases.getOrDefault(connectorClassOrAlias, connectorClassOrAlias);
+        PluginClassLoader classLoader = pluginClassLoader(fullName);
+        if (classLoader == null) {
             log.error(
                     "Plugin class loader for connector: '{}' was not found. Returning: {}",
                     connectorClassOrAlias,
@@ -150,7 +161,7 @@ public class DelegatingClassLoader extends URLClassLoader {
             );
             return this;
         }
-        return inner.get(inner.lastKey());
+        return classLoader;
     }
 
     private static PluginClassLoader newPluginClassLoader(
@@ -357,19 +368,11 @@ public class DelegatingClassLoader extends URLClassLoader {
 
     @Override
     protected Class<?> loadClass(String name, boolean resolve) throws ClassNotFoundException {
-        if (!PluginUtils.shouldLoadInIsolation(name)) {
-            // There are no paths in this classloader, will attempt to load with the parent.
-            return super.loadClass(name, resolve);
-        }
-
-        String fullName = aliases.containsKey(name) ? aliases.get(name) : name;
-        SortedMap<PluginDesc<?>, ClassLoader> inner = pluginLoaders.get(fullName);
-        if (inner != null) {
-            ClassLoader pluginLoader = inner.get(inner.lastKey());
+        String fullName = aliases.getOrDefault(name, name);
+        PluginClassLoader pluginLoader = pluginClassLoader(fullName);
+        if (pluginLoader != null) {
             log.trace("Retrieving loaded class '{}' from '{}'", fullName, pluginLoader);
-            return pluginLoader instanceof PluginClassLoader
-                   ? ((PluginClassLoader) pluginLoader).loadClass(fullName, resolve)
-                   : super.loadClass(fullName, resolve);
+            return pluginLoader.loadClass(fullName, resolve);
         }
 
         return super.loadClass(fullName, resolve);
