@@ -453,8 +453,8 @@ object TopicCommand extends Logging {
             println(s"Topic $topic is already marked for deletion.")
           case e: AdminOperationException =>
             throw e
-          case _: Throwable =>
-            throw new AdminOperationException(s"Error while deleting topic $topic")
+          case e: Throwable =>
+            throw new AdminOperationException(s"Error while deleting topic $topic", e)
         }
       }
     }
