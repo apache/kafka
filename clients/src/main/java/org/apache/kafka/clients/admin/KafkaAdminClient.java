@@ -53,6 +53,7 @@ import org.apache.kafka.common.acl.AclBinding;
 import org.apache.kafka.common.acl.AclBindingFilter;
 import org.apache.kafka.common.acl.AclOperation;
 import org.apache.kafka.common.annotation.InterfaceStability;
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.errors.AuthenticationException;
@@ -263,7 +264,12 @@ public class KafkaAdminClient extends AdminClient {
     /**
      * The default timeout to use for an operation.
      */
-    private final int defaultTimeoutMs;
+    private int defaultTimeoutMs;
+
+    /**
+     * The timeout to use for a single request.
+     */
+    private int requestTimeoutMs;
 
     /**
      * The name of this AdminClient instance.
@@ -500,9 +506,9 @@ public class KafkaAdminClient extends AdminClient {
                              KafkaClient client,
                              TimeoutProcessorFactory timeoutProcessorFactory,
                              LogContext logContext) {
-        this.defaultTimeoutMs = config.getInt(AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG);
         this.clientId = clientId;
         this.log = logContext.logger(KafkaAdminClient.class);
+        configureDefaultApiTimeoutMsAndRequestTimeoutMs(config);
         this.time = time;
         this.metadataManager = metadataManager;
         this.metrics = metrics;
@@ -520,8 +526,40 @@ public class KafkaAdminClient extends AdminClient {
         thread.start();
     }
 
+    /**
+     * If a default.api.timeout.ms has been explicitly specified, raise an error if it conflicts with request.timeout.ms.
+     * If no default.api.timeout.ms has been configured, then set its value as the max of the default and request.timeout.ms. Also we should probably log a warning.
+     * Otherwise, use the provided values for both configurations.
+     *
+     * @param config The configuration
+     */
+    private void configureDefaultApiTimeoutMsAndRequestTimeoutMs(AdminClientConfig config) {
+        this.requestTimeoutMs = config.getInt(AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG);
+        this.defaultTimeoutMs = config.getInt(AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG);
+
+        if (this.defaultTimeoutMs < this.requestTimeoutMs) {
+            if (config.originals().containsKey(AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG)) {
+                throw new ConfigException("The specified value of " + AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG +
+                        " must be no smaller than the value of " + AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG + ".");
+            } else {
+                log.warn("Overriding the default value for {} to {}.", AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG, this.requestTimeoutMs);
+                this.defaultTimeoutMs = Math.max(this.defaultTimeoutMs, this.requestTimeoutMs);
+            }
+        }
+    }
+
     Time time() {
         return time;
+    }
+
+    // package level visibility for testing only
+    int defaultTimeoutMs() {
+        return this.defaultTimeoutMs;
+    }
+
+    // package level visibility for testing only
+    int requestTimeoutMs() {
+        return this.requestTimeoutMs;
     }
 
     @Override
@@ -993,7 +1031,7 @@ public class KafkaAdminClient extends AdminClient {
                     continue;
                 }
                 Call call = calls.remove(0);
-                int timeoutMs = calcTimeoutMsRemainingAsInt(now, call.deadlineMs);
+                int timeoutMs = Math.min(requestTimeoutMs, calcTimeoutMsRemainingAsInt(now, call.deadlineMs));
                 AbstractRequest.Builder<?> requestBuilder;
                 try {
                     requestBuilder = call.createRequest(timeoutMs);
@@ -1002,7 +1040,8 @@ public class KafkaAdminClient extends AdminClient {
                         "Internal error sending %s to %s.", call.callName, node)));
                     continue;
                 }
-                ClientRequest clientRequest = client.newClientRequest(node.idString(), requestBuilder, now, true);
+                ClientRequest clientRequest = client.newClientRequest(node.idString(), requestBuilder, now,
+                        true, timeoutMs, null);
                 log.trace("Sending {} to {}. correlationId={}", requestBuilder, node, clientRequest.correlationId());
                 client.send(clientRequest, now);
                 getOrCreateListValue(callsInFlight, node.idString()).add(call);

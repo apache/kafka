@@ -38,6 +38,7 @@ import org.apache.kafka.common.acl.AclBinding;
 import org.apache.kafka.common.acl.AclBindingFilter;
 import org.apache.kafka.common.acl.AclOperation;
 import org.apache.kafka.common.acl.AclPermissionType;
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.ClusterAuthorizationException;
@@ -177,6 +178,22 @@ public class KafkaAdminClientTest {
 
     @Rule
     final public Timeout globalTimeout = Timeout.millis(120000);
+
+    @Test
+    public void testDefaultApiTimeoutAndRequestTimeoutConflicts() {
+        AdminClientConfig config = newConfMap(AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG, "500");
+        try (Admin client = KafkaAdminClient.createInternal(config, null)) {
+            fail("Expected KafkaException");
+        } catch (KafkaException e) {
+            assertTrue(e.getCause() instanceof ConfigException);
+        }
+
+        config = newConfMap(AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG, "3000000");
+        try (KafkaAdminClient client = KafkaAdminClient.createInternal(config, null)) {
+            // default api timeout should be overridden to request timeout.
+            assertEquals(client.defaultTimeoutMs(), client.requestTimeoutMs());
+        }
+    }
 
     @Test
     public void testGetOrCreateListValue() {
@@ -591,7 +608,7 @@ public class KafkaAdminClientTest {
 
         try (final AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(Time.SYSTEM, bootstrapCluster,
                 newStrMap(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999",
-                        AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG, "10000000",
+                        AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG, "10000000",
                         AdminClientConfig.RETRIES_CONFIG, "0"))) {
 
             // The first request fails with a disconnect
@@ -2552,6 +2569,49 @@ public class KafkaAdminClientTest {
         assertNull(KafkaAdminClient.getSubLevelError(errorsMap, memberIdentities.get(0), "For unit test"));
         assertEquals(FencedInstanceIdException.class, KafkaAdminClient.getSubLevelError(
             errorsMap, memberIdentities.get(1), "For unit test").getClass());
+    }
+
+    @Test
+    public void testSingleRequestTimeoutAndRetryWithoutApiTimeout() throws Exception {
+        HashMap<Integer, Node> nodes = new HashMap<>();
+        MockTime time = new MockTime();
+        Node node0 = new Node(0, "localhost", 8121);
+        nodes.put(0, node0);
+        Cluster cluster = new Cluster("mockClusterId", nodes.values(),
+                Arrays.asList(new PartitionInfo("foo", 0, node0, new Node[]{node0}, new Node[]{node0})),
+                Collections.emptySet(), Collections.emptySet(),
+                Collections.emptySet(), nodes.get(0));
+
+        final int requestTimeoutMs = 1000;
+        final int retryBackoff = 100;
+        try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(time, cluster,
+                AdminClientConfig.RETRY_BACKOFF_MS_CONFIG, String.valueOf(retryBackoff),
+                AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG, String.valueOf(requestTimeoutMs))) {
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+            assertEquals(time, env.time());
+            assertEquals(env.time(), ((KafkaAdminClient) env.adminClient()).time());
+
+            final int apiTimeoutMs = 3000;
+            final long startTimeMs = time.milliseconds();
+            final ListTopicsResult result = env.adminClient().listTopics(new ListTopicsOptions().timeoutMs(apiTimeoutMs));
+
+            // Wait until the first attempt has failed, then advance the time
+            TestUtils.waitForCondition(() -> env.kafkaClient().hasInFlightRequests(), "Timed out waiting for inFlightRequests");
+            time.sleep(requestTimeoutMs + retryBackoff);
+            final long betweenTimeoutMs = time.milliseconds();
+
+            // Since api timeout bound is not hit, AdminClient should add the retry call to the queue
+            TestUtils.waitForCondition(() -> ((KafkaAdminClient) env.adminClient()).numPendingCalls() == 1,
+                    "Failed to add retry listTopics call");
+            env.kafkaClient().prepareResponse(prepareMetadataResponse(cluster, Errors.NONE));
+            time.sleep(requestTimeoutMs);
+
+            assertEquals(apiTimeoutMs - requestTimeoutMs - retryBackoff,
+                    KafkaAdminClient.calcTimeoutMsRemainingAsInt(betweenTimeoutMs, apiTimeoutMs + startTimeMs));
+            assertEquals(result.listings().get().size(), 1);
+            assertEquals("foo", result.listings().get().iterator().next().name());
+
+        }
     }
 
     private static MemberDescription convertToMemberDescriptions(DescribedGroupMember member,
