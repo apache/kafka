@@ -21,6 +21,7 @@ import java.io._
 import java.net._
 import java.nio.ByteBuffer
 import java.nio.channels.SocketChannel
+import java.util.concurrent.{CompletableFuture, Executors}
 import java.util.{HashMap, Properties, Random}
 
 import com.yammer.metrics.core.{Gauge, Meter}
@@ -30,8 +31,8 @@ import javax.net.ssl._
 import kafka.security.CredentialProvider
 import kafka.server.{KafkaConfig, ThrottledChannel}
 import kafka.utils.Implicits._
-import kafka.utils.TestUtils
-import org.apache.kafka.common.TopicPartition
+import kafka.utils.{CoreUtils, TestUtils}
+import org.apache.kafka.common.{Endpoint, TopicPartition}
 import org.apache.kafka.common.memory.MemoryPool
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.KafkaChannel.ChannelMuteState
@@ -188,6 +189,52 @@ class SocketServerTest {
     processRequest(server.dataPlaneRequestChannel)
     assertEquals(serializedBytes.toSeq, receiveResponse(plainSocket).toSeq)
     verifyAcceptorBlockedPercent("PLAINTEXT", expectBlocked = false)
+  }
+
+  @Test
+  def testStagedListenerStartup(): Unit = {
+    val testProps = new Properties
+    testProps ++= props
+    testProps.put("listeners", "EXTERNAL://localhost:0,INTERNAL://localhost:0,CONTROLLER://localhost:0")
+    testProps.put("listener.security.protocol.map", "EXTERNAL:PLAINTEXT,INTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT")
+    testProps.put("control.plane.listener.name", "CONTROLLER")
+    testProps.put("inter.broker.listener.name", "INTERNAL")
+    val config = KafkaConfig.fromProps(testProps)
+    val testableServer = new TestableSocketServer(config)
+    testableServer.startup(startupProcessors = false)
+    val externalReadyFuture = new CompletableFuture[Void]()
+    val executor = Executors.newSingleThreadExecutor()
+
+    def listenerStarted(listenerName: ListenerName) = {
+      try {
+        val socket = connect(testableServer, listenerName, localAddr = InetAddress.getLocalHost)
+        sendAndReceiveRequest(socket, testableServer)
+        true
+      } catch {
+        case _: Throwable => false
+      }
+    }
+
+    try {
+      testableServer.startControlPlaneProcessor()
+      val socket1 = connect(testableServer, config.controlPlaneListenerName.get, localAddr = InetAddress.getLocalHost)
+      sendAndReceiveControllerRequest(socket1, testableServer)
+
+      val externalListener = new ListenerName("EXTERNAL")
+      val externalEndpoint = new Endpoint(externalListener.value, SecurityProtocol.PLAINTEXT, "localhost", 0)
+      val futures =  Map(externalEndpoint -> externalReadyFuture)
+      val startFuture = executor.submit(CoreUtils.runnable(testableServer.startDataPlaneProcessors(futures)))
+      TestUtils.waitUntilTrue(() => listenerStarted(config.interBrokerListenerName), "Inter-broker listener not started")
+      assertFalse("Socket server startup did not wait for future to complete", startFuture.isDone)
+
+      assertFalse(listenerStarted(externalListener))
+
+      externalReadyFuture.complete(null)
+      TestUtils.waitUntilTrue(() => listenerStarted(externalListener), "External listener not started")
+    } finally {
+      executor.shutdownNow()
+      shutdownServerAndMetrics(testableServer)
+    }
   }
 
   @Test

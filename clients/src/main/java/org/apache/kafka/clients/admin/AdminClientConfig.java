@@ -23,6 +23,7 @@ import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.common.config.ConfigDef.Type;
+import org.apache.kafka.common.config.SecurityConfig;
 import org.apache.kafka.common.metrics.Sensor;
 
 import java.util.Map;
@@ -107,6 +108,12 @@ public class AdminClientConfig extends AbstractConfig {
 
     public static final String RETRIES_CONFIG = CommonClientConfigs.RETRIES_CONFIG;
 
+    /**
+     * <code>security.providers</code>
+     */
+    public static final String SECURITY_PROVIDERS_CONFIG = SecurityConfig.SECURITY_PROVIDERS_CONFIG;
+    private static final String SECURITY_PROVIDERS_DOC = SecurityConfig.SECURITY_PROVIDERS_DOC;
+
     static {
         CONFIG = new ConfigDef().define(BOOTSTRAP_SERVERS_CONFIG,
                                         Type.LIST,
@@ -174,6 +181,11 @@ public class AdminClientConfig extends AbstractConfig {
                                         Importance.MEDIUM,
                                         CLIENT_DNS_LOOKUP_DOC)
                                 // security support
+                                .define(SECURITY_PROVIDERS_CONFIG,
+                                        Type.STRING,
+                                        null,
+                                        Importance.LOW,
+                                        SECURITY_PROVIDERS_DOC)
                                 .define(SECURITY_PROTOCOL_CONFIG,
                                         Type.STRING,
                                         DEFAULT_SECURITY_PROTOCOL,

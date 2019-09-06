@@ -14,12 +14,13 @@
 
 package kafka.server
 
+import java.util
 import java.util.{Collections, LinkedHashMap, Optional, Properties}
 import java.util.concurrent.{Executors, Future, TimeUnit}
 
 import kafka.log.LogConfig
 import kafka.network.RequestChannel.Session
-import kafka.security.auth._
+import kafka.security.authorizer.AclAuthorizer
 import kafka.utils.TestUtils
 import org.apache.kafka.common.{ElectionType, Node, TopicPartition}
 import org.apache.kafka.common.acl._
@@ -38,6 +39,7 @@ import org.apache.kafka.common.requests._
 import org.apache.kafka.common.resource.{PatternType, ResourcePattern, ResourcePatternFilter, ResourceType => AdminResourceType}
 import org.apache.kafka.common.security.auth.{AuthenticationContext, KafkaPrincipal, KafkaPrincipalBuilder, SecurityProtocol}
 import org.apache.kafka.common.utils.{Sanitizer, SecurityUtils}
+import org.apache.kafka.server.authorizer.{Action, AuthorizableRequestContext, AuthorizationResult}
 import org.junit.Assert._
 import org.junit.{After, Before, Test}
 
@@ -377,8 +379,16 @@ class RequestQuotaTest extends BaseRequestTest {
           new WriteTxnMarkersRequest.Builder(List.empty.asJava)
 
         case ApiKeys.TXN_OFFSET_COMMIT =>
-          new TxnOffsetCommitRequest.Builder("test-transactional-id", "test-txn-group", 2, 0,
-            Map.empty[TopicPartition, TxnOffsetCommitRequest.CommittedOffset].asJava)
+          new TxnOffsetCommitRequest.Builder(
+            new TxnOffsetCommitRequestData()
+              .setTransactionalId("test-transactional-id")
+              .setGroupId("test-txn-group")
+              .setProducerId(2)
+              .setProducerEpoch(0)
+              .setTopics(TxnOffsetCommitRequest.getTopics(
+                Map.empty[TopicPartition, TxnOffsetCommitRequest.CommittedOffset].asJava
+              ))
+          )
 
         case ApiKeys.DESCRIBE_ACLS =>
           new DescribeAclsRequest.Builder(AclBindingFilter.ANY)
@@ -541,14 +551,14 @@ class RequestQuotaTest extends BaseRequestTest {
       case ApiKeys.API_VERSIONS => new ApiVersionsResponse(response).throttleTimeMs
       case ApiKeys.CREATE_TOPICS =>
         new CreateTopicsResponse(response, ApiKeys.CREATE_TOPICS.latestVersion).throttleTimeMs
-      case ApiKeys.DELETE_TOPICS => 
+      case ApiKeys.DELETE_TOPICS =>
         new DeleteTopicsResponse(response, ApiKeys.DELETE_TOPICS.latestVersion).throttleTimeMs
       case ApiKeys.DELETE_RECORDS => new DeleteRecordsResponse(response).throttleTimeMs
       case ApiKeys.INIT_PRODUCER_ID => new InitProducerIdResponse(response, ApiKeys.INIT_PRODUCER_ID.latestVersion).throttleTimeMs
       case ApiKeys.ADD_PARTITIONS_TO_TXN => new AddPartitionsToTxnResponse(response).throttleTimeMs
       case ApiKeys.ADD_OFFSETS_TO_TXN => new AddOffsetsToTxnResponse(response).throttleTimeMs
       case ApiKeys.END_TXN => new EndTxnResponse(response).throttleTimeMs
-      case ApiKeys.TXN_OFFSET_COMMIT => new TxnOffsetCommitResponse(response).throttleTimeMs
+      case ApiKeys.TXN_OFFSET_COMMIT => new TxnOffsetCommitResponse(response, ApiKeys.TXN_OFFSET_COMMIT.latestVersion).throttleTimeMs
       case ApiKeys.DESCRIBE_ACLS => new DescribeAclsResponse(response).throttleTimeMs
       case ApiKeys.CREATE_ACLS => new CreateAclsResponse(response).throttleTimeMs
       case ApiKeys.DELETE_ACLS => new DeleteAclsResponse(response).throttleTimeMs
@@ -649,9 +659,11 @@ object RequestQuotaTest {
   // Principal used for all client connections. This is modified by tests which
   // check unauthorized code path
   var principal = KafkaPrincipal.ANONYMOUS
-  class TestAuthorizer extends SimpleAclAuthorizer {
-    override def authorize(session: Session, operation: Operation, resource: Resource): Boolean = {
-      session.principal != UnauthorizedPrincipal
+  class TestAuthorizer extends AclAuthorizer {
+    override def authorize(requestContext: AuthorizableRequestContext, actions: util.List[Action]): util.List[AuthorizationResult] = {
+      actions.asScala.map { _ =>
+        if (requestContext.principal != UnauthorizedPrincipal) AuthorizationResult.ALLOWED else AuthorizationResult.DENIED
+      }.asJava
     }
   }
   class TestPrincipalBuilder extends KafkaPrincipalBuilder {

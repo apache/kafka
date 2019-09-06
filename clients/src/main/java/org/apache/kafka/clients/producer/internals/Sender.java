@@ -159,7 +159,7 @@ public class Sender implements Runnable {
         return inFlightBatches.containsKey(tp) ? inFlightBatches.get(tp) : new ArrayList<>();
     }
 
-    public void maybeRemoveFromInflightBatches(ProducerBatch batch) {
+    private void maybeRemoveFromInflightBatches(ProducerBatch batch) {
         List<ProducerBatch> batches = inFlightBatches.get(batch.topicPartition);
         if (batches != null) {
             batches.remove(batch);
@@ -167,6 +167,11 @@ public class Sender implements Runnable {
                 inFlightBatches.remove(batch.topicPartition);
             }
         }
+    }
+
+    private void maybeRemoveAndDeallocateBatch(ProducerBatch batch) {
+        maybeRemoveFromInflightBatches(batch);
+        this.accumulator.deallocate(batch);
     }
 
     /**
@@ -625,7 +630,7 @@ public class Sender implements Runnable {
             if (transactionManager != null)
                 transactionManager.removeInFlightBatch(batch);
             this.accumulator.splitAndReenqueue(batch);
-            this.accumulator.deallocate(batch);
+            maybeRemoveAndDeallocateBatch(batch);
             this.sensors.recordBatchSplit();
         } else if (error != Errors.NONE) {
             if (canRetry(batch, response, now)) {
@@ -700,8 +705,7 @@ public class Sender implements Runnable {
         }
 
         if (batch.done(response.baseOffset, response.logAppendTime, null)) {
-            maybeRemoveFromInflightBatches(batch);
-            this.accumulator.deallocate(batch);
+            maybeRemoveAndDeallocateBatch(batch);
         }
     }
 
@@ -724,8 +728,7 @@ public class Sender implements Runnable {
         this.sensors.recordErrors(batch.topicPartition.topic(), batch.recordCount);
 
         if (batch.done(baseOffset, logAppendTime, exception)) {
-            maybeRemoveFromInflightBatches(batch);
-            this.accumulator.deallocate(batch);
+            maybeRemoveAndDeallocateBatch(batch);
         }
     }
 

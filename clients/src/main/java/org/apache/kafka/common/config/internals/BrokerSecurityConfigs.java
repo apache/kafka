@@ -55,7 +55,7 @@ public class BrokerSecurityConfigs {
             " see <a href=\"#security_authz\"> security authorization and acls</a>. Note that this configuration is ignored" +
             " if an extension of KafkaPrincipalBuilder is provided by the <code>" + PRINCIPAL_BUILDER_CLASS_CONFIG + "</code>" +
            " configuration.";
-    public static final List<String> DEFAULT_SSL_PRINCIPAL_MAPPING_RULES = Collections.singletonList("DEFAULT");
+    public static final String DEFAULT_SSL_PRINCIPAL_MAPPING_RULES = "DEFAULT";
 
     public static final String SASL_KERBEROS_PRINCIPAL_TO_LOCAL_RULES_DOC = "A list of rules for mapping from principal " +
             "names to short names (typically operating system usernames). The rules are evaluated in order and the " +

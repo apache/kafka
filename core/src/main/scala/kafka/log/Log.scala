@@ -1034,6 +1034,7 @@ class Log(@volatile var dir: File,
           val now = time.milliseconds
           val validateAndOffsetAssignResult = try {
             LogValidator.validateMessagesAndAssignOffsets(validRecords,
+              topicPartition,
               offset,
               time,
               now,
@@ -1045,7 +1046,8 @@ class Log(@volatile var dir: File,
               config.messageTimestampDifferenceMaxMs,
               leaderEpoch,
               isFromClient,
-              interBrokerProtocolVersion)
+              interBrokerProtocolVersion,
+              brokerTopicStats)
           } catch {
             case e: IOException =>
               throw new KafkaException(s"Error validating messages while appending to log $name", e)
@@ -1350,7 +1352,10 @@ class Log(@volatile var dir: File,
       }
 
       // check the validity of the message by checking CRC
-      batch.ensureValid()
+      if (!batch.isValid) {
+        brokerTopicStats.allTopicsStats.invalidMessageCrcRecordsPerSec.mark()
+        throw new InvalidRecordException(s"Record is corrupt (stored crc = ${batch.checksum()}) in topic partition $topicPartition.")
+      }
 
       if (batch.maxTimestamp > maxTimestamp) {
         maxTimestamp = batch.maxTimestamp
@@ -2101,9 +2106,21 @@ class Log(@volatile var dir: File,
   def logSegments(from: Long, to: Long): Iterable[LogSegment] = {
     lock synchronized {
       val view = Option(segments.floorKey(from)).map { floor =>
+        if (to < floor)
+          throw new IllegalArgumentException(s"Invalid log segment range: requested segments from offset $from " +
+            s"mapping to segment with base offset $floor, which is greater than limit offset $to")
         segments.subMap(floor, to)
       }.getOrElse(segments.headMap(to))
       view.values.asScala
+    }
+  }
+
+  def nonActiveLogSegmentsFrom(from: Long): Iterable[LogSegment] = {
+    lock synchronized {
+      if (from > activeSegment.baseOffset)
+        throw new IllegalArgumentException("Illegal request for non-active segments beginning at " +
+          s"offset $from, which is larger than the active segment's base offset ${activeSegment.baseOffset}")
+      logSegments(from, activeSegment.baseOffset)
     }
   }
 

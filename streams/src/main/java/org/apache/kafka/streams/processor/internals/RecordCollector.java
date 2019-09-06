@@ -63,7 +63,7 @@ public interface RecordCollector extends AutoCloseable {
     /**
      * The last acked offsets from the internal {@link Producer}.
      *
-     * @return the map from TopicPartition to offset
+     * @return an immutable map from TopicPartition to offset
      */
     Map<TopicPartition, Long> offsets();
 

@@ -22,6 +22,7 @@ import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.common.config.ConfigDef.Type;
+import org.apache.kafka.common.config.SecurityConfig;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.requests.IsolationLevel;
 import org.apache.kafka.common.serialization.Deserializer;
@@ -267,7 +268,13 @@ public class ConsumerConfig extends AbstractConfig {
             " broker allows for it using `auto.create.topics.enable` broker configuration. This configuration must" +
             " be set to `false` when using brokers older than 0.11.0";
     public static final boolean DEFAULT_ALLOW_AUTO_CREATE_TOPICS = true;
-    
+
+    /**
+     * <code>security.providers</code>
+     */
+    public static final String SECURITY_PROVIDERS_CONFIG = SecurityConfig.SECURITY_PROVIDERS_CONFIG;
+    private static final String SECURITY_PROVIDERS_DOC = SecurityConfig.SECURITY_PROVIDERS_DOC;
+
     static {
         CONFIG = new ConfigDef().define(BOOTSTRAP_SERVERS_CONFIG,
                                         Type.LIST,
@@ -486,6 +493,11 @@ public class ConsumerConfig extends AbstractConfig {
                                         Importance.MEDIUM,
                                         ALLOW_AUTO_CREATE_TOPICS_DOC)
                                 // security support
+                                .define(SECURITY_PROVIDERS_CONFIG,
+                                        Type.STRING,
+                                        null,
+                                        Importance.LOW,
+                                        SECURITY_PROVIDERS_DOC)
                                 .define(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG,
                                         Type.STRING,
                                         CommonClientConfigs.DEFAULT_SECURITY_PROTOCOL,

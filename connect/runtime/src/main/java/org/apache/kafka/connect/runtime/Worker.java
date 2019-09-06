@@ -545,8 +545,8 @@ public class Worker {
         producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, Utils.join(config.getList(WorkerConfig.BOOTSTRAP_SERVERS_CONFIG), ","));
         producerProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer");
         producerProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer");
-        // These settings are designed to ensure there is no data loss. They *may* be overridden via configs passed to the
-        // worker, but this may compromise the delivery guarantees of Kafka Connect.
+        // These settings will execute infinite retries on retriable exceptions. They *may* be overridden via configs passed to the worker,
+        // but this may compromise the delivery guarantees of Kafka Connect.
         producerProps.put(ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG, Integer.toString(Integer.MAX_VALUE));
         producerProps.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, Long.toString(Long.MAX_VALUE));
         producerProps.put(ProducerConfig.ACKS_CONFIG, "all");
