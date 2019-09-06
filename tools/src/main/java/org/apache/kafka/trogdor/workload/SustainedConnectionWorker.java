@@ -30,7 +30,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
-import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.trogdor.common.JsonUtil;
 import org.apache.kafka.trogdor.common.Platform;
@@ -60,7 +60,7 @@ import java.util.stream.Collectors;
 
 public class SustainedConnectionWorker implements TaskWorker {
     private static final Logger log = LoggerFactory.getLogger(SustainedConnectionWorker.class);
-    private static final Time time = new SystemTime();
+    private static final SystemTime SYSTEM_TIME = new SystemTime();
 
     // This is the metadata for the test itself.
     private final String id;
@@ -145,12 +145,12 @@ public class SustainedConnectionWorker implements TaskWorker {
     private abstract class ClaimableConnection implements SustainedConnection {
 
         protected long nextUpdate = 0;
-        protected long refreshRate;
         protected boolean inUse = false;
+        protected long refreshRate;
 
         @Override
         public boolean needsRefresh() {
-            return !this.inUse && (SustainedConnectionWorker.time.milliseconds() > this.nextUpdate);
+            return !this.inUse && (SustainedConnectionWorker.SYSTEM_TIME.milliseconds() > this.nextUpdate);
         }
 
         @Override
@@ -163,8 +163,8 @@ public class SustainedConnectionWorker implements TaskWorker {
             this.closeQuietly();
         }
 
-        protected void complete() {
-            this.nextUpdate = SustainedConnectionWorker.time.milliseconds() + this.refreshRate;
+        protected void completeRefresh() {
+            this.nextUpdate = SustainedConnectionWorker.SYSTEM_TIME.milliseconds() + this.refreshRate;
             this.inUse = false;
         }
 
@@ -215,7 +215,7 @@ public class SustainedConnectionWorker implements TaskWorker {
             }
 
             // Schedule this again and set to not in use.
-            this.complete();
+            this.completeRefresh();
         }
 
         @Override
@@ -229,10 +229,10 @@ public class SustainedConnectionWorker implements TaskWorker {
 
         private KafkaProducer<byte[], byte[]> producer;
         private List<TopicPartition> partitions;
-        private String topicName;
         private Iterator<TopicPartition> partitionsIterator;
-        private PayloadIterator keys;
-        private PayloadIterator values;
+        private final String topicName;
+        private final PayloadIterator keys;
+        private final PayloadIterator values;
         private final Properties props;
 
         ProducerSustainedConnection() {
@@ -291,7 +291,7 @@ public class SustainedConnectionWorker implements TaskWorker {
             }
 
             // Schedule this again and set to not in use.
-            this.complete();
+            this.completeRefresh();
         }
 
         @Override
@@ -305,10 +305,10 @@ public class SustainedConnectionWorker implements TaskWorker {
 
     private class ConsumerSustainedConnection extends ClaimableConnection {
 
-        private String topicName;
         private KafkaConsumer<byte[], byte[]> consumer;
         private TopicPartition activePartition;
-        private Random rand;
+        private final String topicName;
+        private final Random rand;
         private final Properties props;
 
         ConsumerSustainedConnection() {
@@ -368,7 +368,7 @@ public class SustainedConnectionWorker implements TaskWorker {
             }
 
             // Schedule this again and set to not in use.
-            this.complete();
+            this.completeRefresh();
         }
 
         @Override
@@ -388,7 +388,7 @@ public class SustainedConnectionWorker implements TaskWorker {
                     if (currentConnection.isPresent()) {
                         currentConnection.get().refresh();
                     } else {
-                        SustainedConnectionWorker.time.sleep(SustainedConnectionWorker.BACKOFF_PERIOD_MS);
+                        SustainedConnectionWorker.SYSTEM_TIME.sleep(SustainedConnectionWorker.BACKOFF_PERIOD_MS);
                     }
                 }
             } catch (Exception e) {
@@ -398,13 +398,11 @@ public class SustainedConnectionWorker implements TaskWorker {
         }
     }
 
-    private Optional<SustainedConnection> findConnectionToMaintain() {
-        synchronized (SustainedConnectionWorker.this) {
-            for (SustainedConnection connection : this.connections) {
-                if (connection.needsRefresh()) {
-                    connection.claim();
-                    return Optional.of(connection);
-                }
+    private synchronized Optional<SustainedConnection> findConnectionToMaintain() {
+        for (SustainedConnection connection : this.connections) {
+            if (connection.needsRefresh()) {
+                connection.claim();
+                return Optional.of(connection);
             }
         }
         return Optional.empty();
@@ -423,7 +421,7 @@ public class SustainedConnectionWorker implements TaskWorker {
                             SustainedConnectionWorker.this.totalMetadataConnections.get(),
                             SustainedConnectionWorker.this.totalMetadataFailedConnections.get(),
                             SustainedConnectionWorker.this.totalAbortedThreads.get(),
-                            SustainedConnectionWorker.time.milliseconds()));
+                            SustainedConnectionWorker.SYSTEM_TIME.milliseconds()));
                 status.update(node);
             } catch (Exception e) {
                 SustainedConnectionWorker.log.error("Aborted test while running StatusUpdater", e);
@@ -439,7 +437,7 @@ public class SustainedConnectionWorker implements TaskWorker {
         private final long totalConsumerFailedConnections;
         private final long totalMetadataConnections;
         private final long totalMetadataFailedConnections;
-        private final long totalAborts;
+        private final long totalAbortedThreads;
         private final long updatedMs;
 
         @JsonCreator
