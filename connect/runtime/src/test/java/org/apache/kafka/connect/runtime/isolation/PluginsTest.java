@@ -17,11 +17,13 @@
 
 package org.apache.kafka.connect.runtime.isolation;
 
+import java.util.Collections;
 import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaAndValue;
+import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.json.JsonConverter;
 import org.apache.kafka.connect.json.JsonConverterConfig;
 import org.apache.kafka.connect.rest.ConnectRestExtension;
@@ -43,9 +45,11 @@ import java.util.List;
 import java.util.Map;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 public class PluginsTest {
 
@@ -63,13 +67,13 @@ public class PluginsTest {
 
         // Set up the plugins to have no additional plugin directories.
         // This won't allow us to test classpath isolation, but it will allow us to test some of the utility methods.
-        pluginProps.put(WorkerConfig.PLUGIN_PATH_CONFIG, "");
-        plugins = new Plugins(pluginProps);
+        pluginProps.put(WorkerConfig.PLUGIN_PATH_CONFIG, String.join(",", TestPlugins.pluginPath()));
     }
 
     @SuppressWarnings("deprecation")
     @Before
     public void setup() {
+        plugins = new Plugins(pluginProps);
         props = new HashMap<>(pluginProps);
         props.put(WorkerConfig.KEY_CONVERTER_CLASS_CONFIG, TestConverter.class.getName());
         props.put(WorkerConfig.VALUE_CONVERTER_CLASS_CONFIG, TestConverter.class.getName());
@@ -183,6 +187,69 @@ public class PluginsTest {
                                                      ClassLoaderUsage.PLUGINS);
         assertNotNull(headerConverter);
         assertTrue(headerConverter instanceof SimpleHeaderConverter);
+    }
+
+    @Test(expected = ConnectException.class)
+    public void shouldThrowIfPluginThrows() {
+        TestPlugins.assertInitialized();
+
+        assertNotNull(plugins.newPlugin(
+            TestPlugins.ALWAYS_THROW_EXCEPTION,
+            new AbstractConfig(new ConfigDef(), Collections.emptyMap()),
+            Converter.class
+        ));
+    }
+
+    @Test(expected = ConnectException.class)
+    public void shouldCacheExceptionalClassInitialization() {
+        TestPlugins.assertInitialized();
+        // Attempt to load the class with the wrong classloader first
+        try {
+            ClassLoader classLoader = Thread.currentThread().getContextClassLoader();
+            assertFalse(classLoader instanceof PluginClassLoader);
+            Class<?> clazz = plugins.delegatingLoader().loadClass(TestPlugins.EXPECT_PLUGIN_CLASS_LOADER);
+            Plugins.newPlugin(clazz);
+            fail("Should have thrown exception with wrong classloader");
+        } catch (ConnectException | ClassNotFoundException e) { }
+        // Attempt to load it with the correct classloader after the failure
+        // This will throw an exception because the classloader caches the first initialization
+        // Even though this call appears that it would work, the background cache makes it throw
+        plugins.newPlugin(
+            TestPlugins.EXPECT_PLUGIN_CLASS_LOADER,
+            new AbstractConfig(new ConfigDef(), Collections.emptyMap()),
+            Converter.class
+        );
+        fail("Should have thrown exception because of negative cache result");
+    }
+
+    @Test
+    public void shouldLoadPlugin() {
+        TestPlugins.assertInitialized();
+        assertNotNull(plugins.newPlugin(
+            TestPlugins.ALWAYS_SUCCEED,
+            new AbstractConfig(new ConfigDef(), Collections.emptyMap()),
+            Converter.class
+        ));
+    }
+
+    // This is currently an error case, and will be fixed in the following commit
+    @Test(expected = ConnectException.class)
+    public void shouldLoadPluginWithPluginClassloader() {
+        TestPlugins.assertInitialized();
+        assertNotNull(plugins.newPlugin(
+            TestPlugins.EXPECT_PLUGIN_CLASS_LOADER,
+            new AbstractConfig(new ConfigDef(), Collections.emptyMap()),
+            Converter.class
+        ));
+    }
+
+    @Test(expected = ConnectException.class)
+    public void shouldThrowIfLoadedWithThreadClassloader() throws ClassNotFoundException {
+        TestPlugins.assertInitialized();
+        ClassLoader classLoader = Thread.currentThread().getContextClassLoader();
+        assertFalse(classLoader instanceof PluginClassLoader);
+        Class<?> clazz = plugins.delegatingLoader().loadClass(TestPlugins.EXPECT_PLUGIN_CLASS_LOADER);
+        Plugins.newPlugin(clazz);
     }
 
     protected void instantiateAndConfigureConverter(String configPropName, ClassLoaderUsage classLoaderUsage) {
