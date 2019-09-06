@@ -521,9 +521,10 @@ class KafkaController(val config: KafkaConfig,
    * Cleanup Phase: In the cases where this reassignment has to override an ongoing reassignment.
    *   . The ongoing reassignment is in phase A
    *   . ORS denotes the original replica set, prior to the ongoing reassignment
-   *   . URS denotes the unnecessary replicas, ones which are currently part of the ongoing reassignment but will not be part of the new one
-   *   . OVRS denotes the overlapping replica set - replicas which are part of the ongoing reassignment and will be part of the overriding reassignment
+   *   . URS denotes the unnecessary replicas, ones which are currently part of the AR of the ongoing reassignment but will not be part of the new one
+   *   . OVRS denotes the overlapping replica set - replicas which are part of the AR of the ongoing reassignment and will be part of the overriding reassignment
    *       (it is essentially (RS - ORS) - URS)
+   *
    *   1 Set RS = ORS + OVRS, AR = OVRS, RS = [] in memory
    *   2 Send LeaderAndIsr request with RS = ORS + OVRS, AR = [], RS = [] to all brokers in ORS + OVRS
    *     (because the ongoing reassignment is in phase A, we know we wouldn't have a leader in URS
@@ -533,7 +534,6 @@ class KafkaController(val config: KafkaConfig,
    *   5 Update ZK with RS = ORS + OVRS, AR = OVRS, RS = []
    *
    * Phase A: Initial trigger (when TRS != ISR)
-   *
    *   A1. Update ZK with RS = ORS + TRS,
    *                      AR = TRS - ORS and
    *                      RR = ORS - TRS.
@@ -656,9 +656,6 @@ class KafkaController(val config: KafkaConfig,
         // replicas in URS -> NonExistentReplica (force those replicas to be deleted)
         stopRemovedReplicasOfReassignedPartition(topicPartition, replicasToRemove)
         reassignedPartitionContext.ongoingReassignmentOpt = None
-
-        // Update ZK with RS = ORS + OVRS, AR = OVRS, RR = [].
-        updateReplicaAssignmentForPartition(topicPartition, intermediateReplicaAssignment)
       case None => // nothing to revert
     }
   }
