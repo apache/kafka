@@ -52,9 +52,10 @@ object LogAppendInfo {
   val UnknownLogAppendInfo = LogAppendInfo(None, -1, RecordBatch.NO_TIMESTAMP, -1L, RecordBatch.NO_TIMESTAMP, -1L,
     RecordConversionStats.EMPTY, NoCompressionCodec, NoCompressionCodec, -1, -1, offsetsMonotonic = false, -1L)
 
-  def unknownLogAppendInfoWithLogStartOffset(logStartOffset: Long): LogAppendInfo =
+  def unknownLogAppendInfoWithAdditionalInfo(logStartOffset: Long, errorRecords: List[Int], errorMessage: String): LogAppendInfo =
     LogAppendInfo(None, -1, RecordBatch.NO_TIMESTAMP, -1L, RecordBatch.NO_TIMESTAMP, logStartOffset,
-      RecordConversionStats.EMPTY, NoCompressionCodec, NoCompressionCodec, -1, -1, offsetsMonotonic = false, -1L)
+      RecordConversionStats.EMPTY, NoCompressionCodec, NoCompressionCodec, -1, -1,
+      offsetsMonotonic = false, -1L, errorRecords, errorMessage)
 }
 
 /**
@@ -74,6 +75,7 @@ object LogAppendInfo {
  * @param validBytes The number of valid bytes
  * @param offsetsMonotonic Are the offsets in this message set monotonically increasing
  * @param lastOffsetOfFirstBatch The last offset of the first batch
+  (
  */
 case class LogAppendInfo(var firstOffset: Option[Long],
                          var lastOffset: Long,
@@ -87,7 +89,9 @@ case class LogAppendInfo(var firstOffset: Option[Long],
                          shallowCount: Int,
                          validBytes: Int,
                          offsetsMonotonic: Boolean,
-                         lastOffsetOfFirstBatch: Long) {
+                         lastOffsetOfFirstBatch: Long,
+                         errorRecords: List[Int] = List(),
+                         errorMessage: String = "") {
   /**
    * Get the first offset if it exists, else get the last offset of the first batch
    * For magic versions 2 and newer, this method will return first offset. For magic versions
