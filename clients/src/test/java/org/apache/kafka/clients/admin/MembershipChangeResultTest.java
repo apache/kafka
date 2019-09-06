@@ -17,7 +17,8 @@
 package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.common.internals.KafkaFutureImpl;
-import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.message.LeaveGroupResponseData;
+import org.apache.kafka.common.requests.LeaveGroupResponse;
 import org.junit.Test;
 
 import java.util.Collections;
@@ -35,8 +36,7 @@ public class MembershipChangeResultTest {
         MembershipChangeResult changeResult = new MembershipChangeResult(removeMemberFuture);
         assertEquals(removeMemberFuture, changeResult.future());
         RemoveMemberFromGroupResult removeMemberFromGroupResult = new RemoveMemberFromGroupResult(
-            Errors.NONE,
-            Collections.emptyList(),
+            new LeaveGroupResponse(new LeaveGroupResponseData()),
             Collections.emptyList()
         );
 

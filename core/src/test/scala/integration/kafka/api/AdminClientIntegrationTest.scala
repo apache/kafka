@@ -1255,7 +1255,7 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
           )).all()
 
           assertTrue(removeMemberResult.hasError)
-          assertEquals(Errors.UNKNOWN_MEMBER_ID, removeMemberResult.error)
+          assertEquals(Errors.NONE, removeMemberResult.topLevelError)
 
           val firstMemberFutures = removeMemberResult.memberFutures()
           assertEquals(1, firstMemberFutures.size)
@@ -1290,7 +1290,7 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
           )).all()
 
           assertFalse(removeMemberResult.hasError)
-          assertEquals(Errors.NONE, removeMemberResult.error)
+          assertEquals(Errors.NONE, removeMemberResult.topLevelError)
 
           val deletedMemberFutures = removeMemberResult.memberFutures()
           assertEquals(1, firstMemberFutures.size)

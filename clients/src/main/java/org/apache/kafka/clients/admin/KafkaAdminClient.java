@@ -3389,10 +3389,7 @@ public class KafkaAdminClient extends AdminClient {
                 }
 
                 final RemoveMemberFromGroupResult membershipChangeResult =
-                    new RemoveMemberFromGroupResult(error,
-                                                    context.getOptions().getMembers(),
-                                                    response.memberResponses());
-
+                    new RemoveMemberFromGroupResult(response, context.getOptions().getMembers());
 
                 context.getFuture().complete(membershipChangeResult);
             }

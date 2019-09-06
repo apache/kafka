@@ -21,6 +21,7 @@ import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity;
 import org.apache.kafka.common.message.LeaveGroupResponseData.MemberResponse;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.requests.LeaveGroupResponse;
 
 import java.util.HashMap;
 import java.util.List;
@@ -31,34 +32,30 @@ import java.util.Map;
  */
 public class RemoveMemberFromGroupResult {
 
-    private final Errors populatedError;
+    private final Errors topLevelError;
     private final Map<MemberIdentity, KafkaFuture<Void>> memberFutures;
+    private boolean hasError = false;
 
-    RemoveMemberFromGroupResult(Errors populatedError,
-                                List<MemberIdentity> membersToRemove,
-                                List<MemberResponse> memberResponses) {
-        this.populatedError = populatedError;
+    RemoveMemberFromGroupResult(LeaveGroupResponse response,
+                                List<MemberIdentity> membersToRemove) {
+        this.topLevelError = response.topLevelError();
         this.memberFutures = new HashMap<>(membersToRemove.size());
 
-        if (!hasError()) {
-            for (MemberIdentity memberIdentity : membersToRemove) {
-                KafkaFutureImpl<Void> future = new KafkaFutureImpl<>();
-                future.complete(null);
-                memberFutures.put(memberIdentity, future);
-            }
-        } else if (!isMemberLevelError(this.populatedError)) {
+        if (this.topLevelError != Errors.NONE) {
             // If the populated error is a top-level error, fail every member's future.
             for (MemberIdentity memberIdentity : membersToRemove) {
                 KafkaFutureImpl<Void> future = new KafkaFutureImpl<>();
-                future.completeExceptionally(populatedError.exception());
+                future.completeExceptionally(topLevelError.exception());
                 memberFutures.put(memberIdentity, future);
             }
+            hasError = true;
         } else {
-            for (MemberResponse memberResponse : memberResponses) {
+            for (MemberResponse memberResponse : response.memberResponses()) {
                 KafkaFutureImpl<Void> future = new KafkaFutureImpl<>();
                 Errors memberError = Errors.forCode(memberResponse.errorCode());
                 if (memberError != Errors.NONE) {
                     future.completeExceptionally(memberError.exception());
+                    hasError = true;
                 } else {
                     future.complete(null);
                 }
@@ -69,16 +66,12 @@ public class RemoveMemberFromGroupResult {
         }
     }
 
-    public Errors error() {
-        return populatedError;
+    public Errors topLevelError() {
+        return topLevelError;
     }
 
     public boolean hasError() {
-        return populatedError != Errors.NONE;
-    }
-
-    private static boolean isMemberLevelError(Errors error) {
-        return error == Errors.UNKNOWN_MEMBER_ID || error == Errors.FENCED_INSTANCE_ID;
+        return hasError;
     }
 
     /**

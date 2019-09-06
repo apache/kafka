@@ -20,8 +20,10 @@ import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.errors.FencedInstanceIdException;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity;
+import org.apache.kafka.common.message.LeaveGroupResponseData;
 import org.apache.kafka.common.message.LeaveGroupResponseData.MemberResponse;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.requests.LeaveGroupResponse;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -63,12 +65,13 @@ public class RemoveMemberFromGroupResultTest {
     @Test
     public void testTopLevelErrorConstructor() {
         RemoveMemberFromGroupResult topLevelErrorResult =
-            new RemoveMemberFromGroupResult(Errors.GROUP_AUTHORIZATION_FAILED,
-                                            membersToRemove,
-                                            memberResponses);
+            new RemoveMemberFromGroupResult(new LeaveGroupResponse(
+                new LeaveGroupResponseData()
+                    .setErrorCode(Errors.GROUP_AUTHORIZATION_FAILED.code())
+                    .setMembers(memberResponses)), membersToRemove);
 
         assertTrue(topLevelErrorResult.hasError());
-        assertEquals(Errors.GROUP_AUTHORIZATION_FAILED, topLevelErrorResult.error());
+        assertEquals(Errors.GROUP_AUTHORIZATION_FAILED, topLevelErrorResult.topLevelError());
 
         Map<MemberIdentity, KafkaFuture<Void>> memberFutures = topLevelErrorResult.memberFutures();
         assertEquals(2, memberFutures.size());
@@ -94,11 +97,11 @@ public class RemoveMemberFromGroupResultTest {
                                          .setErrorCode(Errors.NONE.code());
 
         RemoveMemberFromGroupResult memberLevelErrorResult = new RemoveMemberFromGroupResult(
-            Errors.FENCED_INSTANCE_ID,
-            membersToRemove,
-            Arrays.asList(responseOne, responseTwo));
+            new LeaveGroupResponse(new LeaveGroupResponseData()
+                                       .setMembers(Arrays.asList(responseOne, responseTwo))),
+            membersToRemove);
         assertTrue(memberLevelErrorResult.hasError());
-        assertEquals(Errors.FENCED_INSTANCE_ID, memberLevelErrorResult.error());
+        assertEquals(Errors.NONE, memberLevelErrorResult.topLevelError());
 
         Map<MemberIdentity, KafkaFuture<Void>> memberFutures = memberLevelErrorResult.memberFutures();
         assertEquals(2, memberFutures.size());
@@ -127,17 +130,17 @@ public class RemoveMemberFromGroupResultTest {
     public void testNoErrorConstructor() {
         MemberResponse responseOne = new MemberResponse()
                                          .setGroupInstanceId(instanceOne)
-                                         .setErrorCode(Errors.FENCED_INSTANCE_ID.code());
+                                         .setErrorCode(Errors.NONE.code());
         MemberResponse responseTwo = new MemberResponse()
                                          .setGroupInstanceId(instanceTwo)
                                          .setErrorCode(Errors.NONE.code());
         // If no error is specified, failed members are not visible.
         RemoveMemberFromGroupResult noErrorResult = new RemoveMemberFromGroupResult(
-            Errors.NONE,
-            membersToRemove,
-            Arrays.asList(responseOne, responseTwo));
+            new LeaveGroupResponse(new LeaveGroupResponseData()
+                                       .setMembers(Arrays.asList(responseOne, responseTwo))),
+            membersToRemove);
         assertFalse(noErrorResult.hasError());
-        assertEquals(Errors.NONE, noErrorResult.error());
+        assertEquals(Errors.NONE, noErrorResult.topLevelError());
         Map<MemberIdentity, KafkaFuture<Void>> memberFutures = noErrorResult.memberFutures();
         assertEquals(2, memberFutures.size());
         for (Map.Entry<MemberIdentity, KafkaFuture<Void>> entry : memberFutures.entrySet()) {

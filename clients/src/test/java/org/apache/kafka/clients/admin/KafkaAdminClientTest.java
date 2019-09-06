@@ -1617,7 +1617,7 @@ public class KafkaAdminClientTest {
 
             RemoveMemberFromGroupResult result = unknownErrorResult.all();
             assertTrue(result.hasError());
-            assertEquals(Errors.UNKNOWN_SERVER_ERROR, result.error());
+            assertEquals(Errors.UNKNOWN_SERVER_ERROR, result.topLevelError());
 
             Map<MemberIdentity, KafkaFuture<Void>> memberFutures = result.memberFutures();
             assertEquals(2, memberFutures.size());
@@ -1645,7 +1645,7 @@ public class KafkaAdminClientTest {
 
             result = memberLevelErrorResult.all();
             assertTrue(result.hasError());
-            assertEquals(Errors.UNKNOWN_MEMBER_ID, result.error());
+            assertEquals(Errors.NONE, result.topLevelError());
 
             memberFutures = result.memberFutures();
             assertEquals(2, memberFutures.size());
@@ -1666,7 +1666,8 @@ public class KafkaAdminClientTest {
             // Return success.
             env.kafkaClient().prepareResponse(prepareFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
             env.kafkaClient().prepareResponse(new LeaveGroupResponse(new LeaveGroupResponseData()
-                                                                         .setErrorCode(Errors.NONE.code())));
+                                                                         .setErrorCode(Errors.NONE.code())
+                                                                         .setMembers(Collections.singletonList(responseTwo))));
 
             final MembershipChangeResult noErrorResult = env.adminClient().removeMemberFromConsumerGroup(
                 groupId,
@@ -1674,12 +1675,12 @@ public class KafkaAdminClientTest {
             );
             result = noErrorResult.all();
             assertFalse(result.hasError());
-            assertEquals(Errors.NONE, result.error());
+            assertEquals(Errors.NONE, result.topLevelError());
 
             memberFutures = result.memberFutures();
-            assertEquals(2, memberFutures.size());
+            assertEquals(1, memberFutures.size());
             for (Map.Entry<MemberIdentity, KafkaFuture<Void>> entry : memberFutures.entrySet()) {
-                assertTrue(entry.getValue().isDone());
+                assertFalse(entry.getValue().isCompletedExceptionally());
             }
         }
     }
