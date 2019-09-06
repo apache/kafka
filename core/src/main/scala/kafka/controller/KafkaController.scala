@@ -546,8 +546,9 @@ class KafkaController(val config: KafkaConfig,
    *   B1. Move all replicas in TRS to OnlineReplica state.
    *   B2. Set RS = TRS, AR = [], RR = [] in memory.
    *   B3. Send a LeaderAndIsr request with RS = TRS. This will prevent the leader from adding any replica in TRS - ORS back in the isr.
-   *       If the current leader is not in TRS or isn't alive, we move the leader to a new replica in TRS and send the LeaderAndIsr to all TRS replicas.
-   *       If the current leader is alive and in TRS, we send the LeaderAndIsr to all replicas.
+   *       If the current leader is not in TRS or isn't alive, we move the leader to a new replica in TRS.
+   *       We may send the LeaderAndIsr to more than the TRS replicas due to the
+   *       way the partition state machine works (it reads replicas from ZK)
    *   B4. Move all replicas in RR to OfflineReplica state. As part of OfflineReplica state change, we shrink the
    *       isr to remove RR in ZooKeeper and send a LeaderAndIsr ONLY to the Leader to notify it of the shrunk isr.
    *       After that, we send a StopReplica (delete = false) to the replicas in RR.
@@ -556,6 +557,10 @@ class KafkaController(val config: KafkaConfig,
    *   B6. Update ZK with RS=TRS, AR=[], RR=[].
    *   B7. Remove the ISR reassign listener and maybe update the /admin/reassign_partitions path in ZK to remove this partition from it if present.
    *   B8. After electing leader, the replicas and isr information changes. So resend the update metadata request to every broker.
+   *
+   * In general, there are two goals we want to aim for:
+   * 1. Every replica present in the replica set of a LeaderAndIsrRequest gets the request sent to it
+   * 2. Replicas that are removed from a partition's assignment get StopReplica sent to them
    *
    * For example, if ORS = {1,2,3} and TRS = {4,5,6}, the values in the topic and leader/isr paths in ZK
    * may go through the following transitions.
@@ -632,6 +637,7 @@ class KafkaController(val config: KafkaConfig,
 
         val unnecessaryReplicas = ongoingAssignment.replicas.filterNot(originalAssignment.replicas.contains(_))
         val (overlappingReplicas, replicasToRemove) = unnecessaryReplicas.partition(reassignedPartitionContext.newReplicas.contains(_))
+        // RS = ORS + OVRS, AR = OVRS, RR = []
         val intermediateReplicaAssignment = PartitionReplicaAssignment(originalAssignment.replicas ++ overlappingReplicas, overlappingReplicas, Seq())
 
         if (isDebugEnabled)
@@ -652,7 +658,7 @@ class KafkaController(val config: KafkaConfig,
         reassignedPartitionContext.ongoingReassignmentOpt = None
 
         // Update ZK with RS = ORS + OVRS, AR = OVRS, RR = [].
-        updateReplicaAssignmentForPartition(topicPartition, controllerContext.partitionFullReplicaAssignment(topicPartition))
+        updateReplicaAssignmentForPartition(topicPartition, intermediateReplicaAssignment)
       case None => // nothing to revert
     }
   }
@@ -903,7 +909,7 @@ class KafkaController(val config: KafkaConfig,
         info(s"Leader $currentLeader for partition $topicPartition being reassigned, " +
           s"is already in the new list of replicas ${reassignedReplicas.mkString(",")} and is alive")
         // shrink replication factor and update the leader epoch in zookeeper to use on the next LeaderAndIsrRequest
-        updateLeaderEpochAndSendRequest(topicPartition, currentAssignment.replicas, newAssignment)
+        updateLeaderEpochAndSendRequest(topicPartition, newAssignment.replicas, newAssignment)
       } else {
         info(s"Leader $currentLeader for partition $topicPartition being reassigned, " +
           s"is already in the new list of replicas ${reassignedReplicas.mkString(",")} but is dead")
