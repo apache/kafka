@@ -137,7 +137,7 @@ public class SustainedConnectionWorker implements TaskWorker {
     }
 
     private interface SustainedConnection extends AutoCloseable {
-        boolean needsRefresh();
+        boolean needsRefresh(long milliseconds);
         void refresh();
         void claim();
     }
@@ -149,8 +149,8 @@ public class SustainedConnectionWorker implements TaskWorker {
         protected long refreshRate;
 
         @Override
-        public boolean needsRefresh() {
-            return !this.inUse && (SustainedConnectionWorker.SYSTEM_TIME.milliseconds() > this.nextUpdate);
+        public boolean needsRefresh(long milliseconds) {
+            return !this.inUse && (milliseconds > this.nextUpdate);
         }
 
         @Override
@@ -399,8 +399,9 @@ public class SustainedConnectionWorker implements TaskWorker {
     }
 
     private synchronized Optional<SustainedConnection> findConnectionToMaintain() {
+        final long milliseconds = SustainedConnectionWorker.SYSTEM_TIME.milliseconds();
         for (SustainedConnection connection : this.connections) {
-            if (connection.needsRefresh()) {
+            if (connection.needsRefresh(milliseconds)) {
                 connection.claim();
                 return Optional.of(connection);
             }
