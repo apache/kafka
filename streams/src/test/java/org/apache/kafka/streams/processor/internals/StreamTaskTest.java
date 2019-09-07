@@ -95,7 +95,6 @@ public class StreamTaskTest {
     private final Serializer<Integer> intSerializer = Serdes.Integer().serializer();
     private final Serializer<byte[]> bytesSerializer = Serdes.ByteArray().serializer();
     private final Deserializer<Integer> intDeserializer = Serdes.Integer().deserializer();
-    private final String applicationId = "stream-task-test";
     private final String topic1 = "topic1";
     private final String topic2 = "topic2";
     private final TopicPartition partition1 = new TopicPartition(topic1, 1);
@@ -149,6 +148,7 @@ public class StreamTaskTest {
     private StreamTask task;
     private long punctuatedAt;
 
+    private static final String APPLICATION_ID = "stream-task-test";
     private static final long DEFAULT_TIMESTAMP = 1000;
 
     private final Punctuator punctuator = new Punctuator() {
@@ -189,7 +189,7 @@ public class StreamTaskTest {
             throw new RuntimeException(e);
         }
         return new StreamsConfig(mkProperties(mkMap(
-            mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, applicationId),
+            mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, APPLICATION_ID),
             mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:2171"),
             mkEntry(StreamsConfig.BUFFERED_RECORDS_PER_PARTITION_CONFIG, "3"),
             mkEntry(StreamsConfig.STATE_DIR_CONFIG, canonicalPath),
@@ -666,7 +666,7 @@ public class StreamTaskTest {
         // extract the committed metadata from MockProducer
         final List<Map<String, Map<TopicPartition, OffsetAndMetadata>>> metadataList = 
             producer.consumerGroupOffsetsHistory();
-        final String storedMetadata = metadataList.get(0).get(applicationId).get(partition1).metadata();
+        final String storedMetadata = metadataList.get(0).get(APPLICATION_ID).get(partition1).metadata();
         final long partitionTime = task.decodeTimestamp(storedMetadata);
         assertEquals(DEFAULT_TIMESTAMP, partitionTime);
 
