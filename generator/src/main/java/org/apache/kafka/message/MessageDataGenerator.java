@@ -50,7 +50,7 @@ public final class MessageDataGenerator {
                 "not specify a maximum version.");
         }
         structRegistry.register(message);
-        schemaGenerator.generateSchemas(message, message.flexibleVersions());
+        schemaGenerator.generateSchemas(message);
         messageFlexibleVersions = message.flexibleVersions();
         generateClass(Optional.of(message),
             message.name() + "Data",

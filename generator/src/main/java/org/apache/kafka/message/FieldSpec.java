@@ -105,6 +105,14 @@ public final class FieldSpec {
             this.flexibleVersions = Optional.empty();
         } else {
             this.flexibleVersions = Optional.of(Versions.parse(flexibleVersions, null));
+            if (!(this.type.isString() || this.type.isBytes())) {
+                // For now, only allow flexibleVersions overrides for the string and bytes
+                // types.  Overrides are only needed to keep compatibility with some old formats,
+                // so there isn't any need to support them for all types.
+                throw new RuntimeException("Invalid flexibleVersions override for " + name +
+                    ".  Only fields of type string or bytes can specify a flexibleVersions " +
+                    "override.");
+            }
         }
         this.tag = (tag == null) ? Optional.empty() : Optional.of(tag);
         checkTagInvariants();
