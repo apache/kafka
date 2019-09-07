@@ -2683,6 +2683,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       s"clientId=${request.header.clientId}, " +
       s"correlationId=${request.header.correlationId}, " +
       s"api=${request.header.apiKey}, " +
+      s"version=${request.header.apiVersion}, " +
       s"body=${request.body[AbstractRequest]}", e)
     if (mayThrottle)
       sendErrorResponseMaybeThrottle(request, e)
