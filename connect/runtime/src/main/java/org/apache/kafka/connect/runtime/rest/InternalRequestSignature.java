@@ -68,10 +68,17 @@ public class InternalRequestSignature {
             throw new BadRequestException(e.getMessage());
         }
 
+        byte[] decodedSignature;
+        try {
+            decodedSignature = Base64.getDecoder().decode(encodedSignature);
+        } catch (IllegalArgumentException e) {
+            throw new BadRequestException(e.getMessage());
+        }
+
         return new InternalRequestSignature(
             requestBody,
             mac,
-            Base64.getDecoder().decode(encodedSignature)
+            decodedSignature
         );
     }
 

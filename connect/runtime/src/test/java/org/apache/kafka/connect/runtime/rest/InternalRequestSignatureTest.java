@@ -75,6 +75,11 @@ public class InternalRequestSignatureTest {
         InternalRequestSignature.fromHeaders(REQUEST_BODY, internalRequestHeaders(ENCODED_SIGNATURE, "doesn'texist"));
     }
 
+    @Test(expected = BadRequestException.class)
+    public void fromHeadersShouldThrowExceptionOnInvalidBase64Signature() {
+        InternalRequestSignature.fromHeaders(REQUEST_BODY, internalRequestHeaders("not valid base 64", SIGNATURE_ALGORITHM));
+    }
+
     @Test
     public void fromHeadersShouldReturnNonNullResultOnValidSignatureAndSignatureAlgorithm() {
         InternalRequestSignature signature =
