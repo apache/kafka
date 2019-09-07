@@ -218,7 +218,7 @@ class LogCleanerManagerTest extends Logging {
   @Test
   def testCheckpointDirUpgrade(): Unit = {
     val records = TestUtils.singletonRecords("test".getBytes)
-    val log: Log = createLog(records.sizeInBytes * 5, LogConfig.Compact, 1)
+    val log: Log = createLog(records.sizeInBytes * 5, LogConfig.Compact)
     val cleanerManager: LogCleanerManager = createCleanerManager(log)
 
     cleanerManager.updateCheckpoints(logDir, Some(topicPartition, 1L))
