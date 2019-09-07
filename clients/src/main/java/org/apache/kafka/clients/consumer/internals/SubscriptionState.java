@@ -222,19 +222,43 @@ public class SubscriptionState {
         if (this.assignment.partitionSet().equals(partitions))
             return false;
 
+        Map<TopicPartition, TopicPartitionState> assignedPartitionStates = partitionToStateMap(partitions);
+
         assignmentId++;
 
+        // update the subscribed topics
         Set<String> manualSubscribedTopics = new HashSet<>();
-        Map<TopicPartition, TopicPartitionState> partitionToState = new HashMap<>();
         for (TopicPartition partition : partitions) {
-            TopicPartitionState state = assignment.stateValue(partition);
-            if (state == null)
-                state = new TopicPartitionState();
-            partitionToState.put(partition, state);
             manualSubscribedTopics.add(partition.topic());
         }
-        this.assignment.set(partitionToState);
+
+        this.assignment.set(assignedPartitionStates);
         return changeSubscription(manualSubscribedTopics);
+    }
+
+    /**
+     * Change the assignment to the specified partitions returned from the coordinator, note this is
+     * different from {@link #assignFromUser(Set)} which directly set the assignment from user inputs.
+     */
+    public synchronized void assignFromSubscribed(Collection<TopicPartition> assignments) {
+        if (!this.partitionsAutoAssigned())
+            throw new IllegalArgumentException("Attempt to dynamically assign partitions while manual assignment in use");
+
+
+        Map<TopicPartition, TopicPartitionState> assignedPartitionStates = partitionToStateMap(assignments);
+        assignmentId++;
+        this.assignment.set(assignedPartitionStates);
+    }
+
+    private Map<TopicPartition, TopicPartitionState> partitionToStateMap(Collection<TopicPartition> assignments) {
+        Map<TopicPartition, TopicPartitionState> map = new HashMap<>(assignments.size());
+        for (TopicPartition tp : assignments) {
+            if (assignment.contains(tp))
+                map.put(tp, assignment.stateValue(tp));
+            else
+                map.put(tp, new TopicPartitionState());
+        }
+        return map;
     }
 
     /**
@@ -260,20 +284,6 @@ public class SubscriptionState {
         }
 
         return true;
-    }
-
-    /**
-     * Change the assignment to the specified partitions returned from the coordinator, note this is
-     * different from {@link #assignFromUser(Set)} which directly set the assignment from user inputs.
-     */
-    public synchronized void assignFromSubscribed(Collection<TopicPartition> assignments) {
-        if (!this.partitionsAutoAssigned())
-            throw new IllegalArgumentException("Attempt to dynamically assign partitions while manual assignment in use");
-
-
-        Map<TopicPartition, TopicPartitionState> assignedPartitionStates = partitionToStateMap(assignments);
-        assignmentId++;
-        this.assignment.set(assignedPartitionStates);
     }
 
     private void registerRebalanceListener(ConsumerRebalanceListener listener) {
@@ -667,13 +677,6 @@ public class SubscriptionState {
 
     public synchronized ConsumerRebalanceListener rebalanceListener() {
         return rebalanceListener;
-    }
-
-    private static Map<TopicPartition, TopicPartitionState> partitionToStateMap(Collection<TopicPartition> assignments) {
-        Map<TopicPartition, TopicPartitionState> map = new HashMap<>(assignments.size());
-        for (TopicPartition tp : assignments)
-            map.put(tp, new TopicPartitionState());
-        return map;
     }
 
     private static class TopicPartitionState {

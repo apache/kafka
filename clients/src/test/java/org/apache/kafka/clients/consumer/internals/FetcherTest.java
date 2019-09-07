@@ -866,8 +866,10 @@ public class FetcherTest {
         client.prepareResponse(fullFetchResponse(tp0, this.records, Errors.NONE, 100L, 0));
         consumerClient.poll(time.timer(0));
 
-        // The active fetch should be ignored since its position is no longer valid
-        assertTrue(fetcher.fetchedRecords().isEmpty());
+        // The active fetch should NOT be ignored since its position is retained
+        final Map<TopicPartition, List<ConsumerRecord<Object, Object>>> fetched = fetchedRecords();
+        assertEquals(1, fetched.size());
+        assertEquals(3, fetched.get(tp0).size());
     }
 
     @Test

@@ -1239,7 +1239,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                     final Set<TopicPartition> assignedPartitions = subscriptions.assignedPartitions();
                     return this.interceptors.onConsume(new ConsumerRecords<>(records.entrySet()
                         .stream()
-                        .filter(entry -> !assignedPartitions.contains(entry.getKey()))
+                        .filter(entry -> assignedPartitions.contains(entry.getKey()))
                         .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue))));
                 }
             } while (timer.notExpired());

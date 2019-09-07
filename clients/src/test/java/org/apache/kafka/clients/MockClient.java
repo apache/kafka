@@ -298,7 +298,6 @@ public class MockClient implements KafkaClient {
         return Math.max(0, currentTimeMs - startTimeMs);
     }
 
-
     private void checkTimeoutOfPendingRequests(long nowMs) {
         ClientRequest request = requests.peek();
         while (request != null && elapsedTimeMs(nowMs, request.createdTimeMs()) > request.requestTimeoutMs()) {
@@ -330,7 +329,6 @@ public class MockClient implements KafkaClient {
 
     // Utility method to enable out of order responses
     public void respondToRequest(ClientRequest clientRequest, AbstractResponse response) {
-        AbstractRequest request = clientRequest.requestBuilder().build();
         requests.remove(clientRequest);
         short version = clientRequest.requestBuilder().latestAllowedVersion();
         responses.add(new ClientResponse(clientRequest.makeHeader(version), clientRequest.callback(), clientRequest.destination(),

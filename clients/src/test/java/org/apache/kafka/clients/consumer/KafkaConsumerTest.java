@@ -1685,6 +1685,108 @@ public class KafkaConsumerTest {
         assertTrue(subscription.assignedPartitions().isEmpty());
     }
 
+    @Test
+    public void testReturnRecordsDuringRebalance() {
+        Time time = new MockTime();
+        SubscriptionState subscription = new SubscriptionState(new LogContext(), OffsetResetStrategy.EARLIEST);
+        ConsumerMetadata metadata = createMetadata(subscription);
+        MockClient client = new MockClient(time, metadata);
+        ConsumerPartitionAssignor assignor = new CooperativeStickyAssignor();
+        KafkaConsumer<String, String> consumer = newConsumer(time, client, subscription, metadata, assignor, true, groupInstanceId);
+
+        initMetadata(client, Utils.mkMap(Utils.mkEntry(topic, 1), Utils.mkEntry(topic2, 1), Utils.mkEntry(topic3, 1)));
+
+        consumer.subscribe(Arrays.asList(topic, topic2), getConsumerRebalanceListener(consumer));
+        Node node = metadata.fetch().nodes().get(0);
+        Node coordinator = prepareRebalance(client, node, assignor, Arrays.asList(tp0, t2p0), null);
+
+        // a first rebalance to get the assignment
+        consumer.updateAssignmentMetadataIfNeeded(time.timer(Long.MAX_VALUE));
+        consumer.poll(Duration.ZERO);
+
+        assertEquals(Utils.mkSet(topic, topic2), consumer.subscription());
+        assertEquals(Utils.mkSet(tp0, t2p0), consumer.assignment());
+
+        // prepare a response of the outstanding fetch so that we have data available on the next poll
+        Map<TopicPartition, FetchInfo> fetches1 = new HashMap<>();
+        fetches1.put(tp0, new FetchInfo(0, 1));
+        fetches1.put(t2p0, new FetchInfo(0, 10));
+        client.respondFrom(fetchResponse(fetches1), node);
+
+        ConsumerRecords<String, String> records = consumer.poll(Duration.ofMillis(1));
+
+        // prepare the next response of the prefetch
+        fetches1.clear();
+        fetches1.put(tp0, new FetchInfo(1, 1));
+        fetches1.put(t2p0, new FetchInfo(10, 20));
+        client.respondFrom(fetchResponse(fetches1), node);
+
+        // verify that the fetch occurred as expected
+        assertEquals(11, records.count());
+        assertEquals(1L, consumer.position(tp0));
+        assertEquals(10L, consumer.position(t2p0));
+
+        // subscription change
+        consumer.subscribe(Arrays.asList(topic, topic3), getConsumerRebalanceListener(consumer));
+
+        // verify that subscription has changed but assignment is still unchanged
+        assertEquals(Utils.mkSet(topic, topic3), consumer.subscription());
+        assertEquals(Utils.mkSet(tp0, t2p0), consumer.assignment());
+
+        // mock the offset commit response for to be revoked partitions
+        Map<TopicPartition, Long> partitionOffsets1 = new HashMap<>();
+        partitionOffsets1.put(t2p0, 10L);
+        AtomicBoolean commitReceived = prepareOffsetCommitResponse(client, coordinator, partitionOffsets1);
+
+        // poll once which would not complete the rebalance
+        records = consumer.poll(Duration.ofMillis(1));
+
+        // clear out the prefetch so it doesn't interfere with the rest of the test
+        fetches1.clear();
+        fetches1.put(tp0, new FetchInfo(2, 1));
+        client.respondFrom(fetchResponse(fetches1), node);
+
+        // verify that the fetch still occurred as expected
+        assertEquals(Utils.mkSet(topic, topic3), consumer.subscription());
+        assertEquals(Collections.singleton(tp0), consumer.assignment());
+        assertEquals(1, records.count());
+        assertEquals(2L, consumer.position(tp0));
+
+        // verify that the offset commits occurred as expected
+        assertTrue(commitReceived.get());
+
+        // mock rebalance responses
+        client.respondFrom(joinGroupFollowerResponse(assignor, 2, "memberId", "leaderId", Errors.NONE), coordinator);
+        client.prepareResponseFrom(syncGroupResponse(Arrays.asList(tp0, t3p0), Errors.NONE), coordinator);
+
+        consumer.updateAssignmentMetadataIfNeeded(time.timer(Long.MAX_VALUE));
+        records = consumer.poll(Duration.ZERO);
+
+        assertEquals(Utils.mkSet(topic, topic3), consumer.subscription());
+        assertEquals(Utils.mkSet(tp0, t3p0), consumer.assignment());
+        assertEquals(1, records.count());
+        assertEquals(3L, consumer.position(tp0));
+
+        // mock a response to the third fetch from the new assignment
+        fetches1.clear();
+        fetches1.put(tp0, new FetchInfo(3, 1));
+        fetches1.put(t3p0, new FetchInfo(0, 100));
+        client.respondFrom(fetchResponse(fetches1), node);
+
+        records = consumer.poll(Duration.ofMillis(1));
+
+        // verify that subscription is still the same, and now assignment has caught up
+        assertEquals(Utils.mkSet(topic, topic3), consumer.subscription());
+        assertEquals(Utils.mkSet(tp0, t3p0), consumer.assignment());
+        assertEquals(101, records.count());
+        assertEquals(4L, consumer.position(tp0));
+        assertEquals(100L, consumer.position(t3p0));
+
+        client.requests().clear();
+        consumer.unsubscribe();
+        consumer.close();
+    }
+
     private KafkaConsumer<String, String> consumerWithPendingAuthenticationError() {
         Time time = new MockTime();
         SubscriptionState subscription = new SubscriptionState(new LogContext(), OffsetResetStrategy.EARLIEST);
