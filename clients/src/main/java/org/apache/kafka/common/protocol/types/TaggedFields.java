@@ -57,7 +57,7 @@ public class TaggedFields extends DocumentedType {
     @Override
     public void write(ByteBuffer buffer, Object o) {
         NavigableMap<Integer, Object> objects = (NavigableMap<Integer, Object>) o;
-        ByteUtils.writeUnsignedVarint(fields.size(), buffer);
+        ByteUtils.writeUnsignedVarint(objects.size(), buffer);
         for (Map.Entry<Integer, Object> entry : objects.entrySet()) {
             Integer tag = entry.getKey();
             Field field = fields.get(tag);
