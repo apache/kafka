@@ -281,7 +281,7 @@ class DelegationTokenManagerTest extends ZooKeeperTestHarness  {
     assert(tokens.size == 2)
 
     def createAcl(aclBinding: AclBinding): Unit = {
-      val result = aclAuthorizer.createAcls(null, List(aclBinding).asJava).get(0)
+      val result = aclAuthorizer.createAcls(null, List(aclBinding).asJava).get(0).toCompletableFuture.get
       result.exception.asScala.foreach { e => throw e }
     }
 

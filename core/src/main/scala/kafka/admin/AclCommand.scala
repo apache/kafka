@@ -315,7 +315,7 @@ object AclCommand extends Logging {
         for ((resource, acls) <- resourceToAcl) {
           println(s"Adding ACLs for resource `$resource`: $Newline ${acls.map("\t" + _).mkString(Newline)} $Newline")
           val aclBindings = acls.map(acl => new AclBinding(resource, acl))
-          authorizer.createAcls(null, aclBindings.toList.asJava).asScala.foreach { result =>
+          authorizer.createAcls(null,aclBindings.toList.asJava).asScala.map(_.toCompletableFuture.get).foreach { result =>
             result.exception.asScala.foreach { exception =>
               println(s"Error while adding ACLs: ${exception.getMessage}")
               println(Utils.stackTrace(exception))
@@ -374,7 +374,7 @@ object AclCommand extends Logging {
         val aclBindingFilters = acls.map(acl => new AclBindingFilter(filter, acl.toFilter)).toList.asJava
         authorizer.deleteAcls(null, aclBindingFilters)
       }
-      result.asScala.foreach { result =>
+      result.asScala.map(_.toCompletableFuture.get).foreach { result =>
         result.exception.asScala.foreach { exception =>
           println(s"Error while removing ACLs: ${exception.getMessage}")
           println(Utils.stackTrace(exception))
