@@ -145,7 +145,7 @@ public class TestInputTopicTest {
         long baseTime = 3;
         final TestInputTopic<Long, String> inputTopic = testDriver.createInputTopic( INPUT_TOPIC, longSerde, stringSerde);
         final TestOutputTopic<Long, String> outputTopic = testDriver.createOutputTopic(OUTPUT_TOPIC, longSerde, stringSerde);
-        inputTopic.pipeInput("Hello", baseTime);
+        inputTopic.pipeInput(null, "Hello", baseTime);
         assertThat(outputTopic.readRecord(), is(equalTo(new TestRecord<Long, String>(null,"Hello", baseTime))));
 
         inputTopic.pipeInput(2L, "Kafka", ++baseTime);

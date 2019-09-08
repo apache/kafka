@@ -71,8 +71,6 @@ import org.apache.kafka.streams.state.TimestampedWindowStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.internals.ThreadCache;
-import org.apache.kafka.streams.test.ConsumerRecordFactory;
-import org.apache.kafka.streams.test.OutputVerifier;
 import org.apache.kafka.streams.test.TestRecord;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -107,13 +105,15 @@ import java.util.regex.Pattern;
  * Best of all, the class works without a real Kafka broker, so the tests execute very quickly with very little overhead.
  * <p>
  * Using the {@code TopologyTestDriver} in tests is easy: simply instantiate the driver and provide a {@link Topology}
- * (cf. {@link StreamsBuilder#build()}) and {@link Properties configs}, use the driver to supply an
- * input message to the topology, and then use the driver to read and verify any messages output by the topology.
+ * (cf. {@link StreamsBuilder#build()}) and {@link Properties configs}, create {@link #createInputTopic(String, Serde, Serde)}
+ * and use the {@link TestInputTopic} to supply an input message to the topology,
+ * and then create {@link #createOutputTopic(String, Serde, Serde)} and use the {@link TestOutputTopic} to read and
+ * verify any messages output by the topology.
  * <p>
  * Although the driver doesn't use a real Kafka broker, it does simulate Kafka {@link Consumer consumers} and
  * {@link Producer producers} that read and write raw {@code byte[]} messages.
- * You can either deal with messages that have {@code byte[]} keys and values or you use {@link ConsumerRecordFactory}
- * and {@link OutputVerifier} that work with regular Java objects instead of raw bytes.
+ * You can let {@link TestInputTopic} and {@link TestOutputTopic} to handle conversion
+ * form regular Java objects to raw bytes.
  *
  * <h2>Driver setup</h2>
  * In order to create a {@code TopologyTestDriver} instance, you need a {@link Topology} and a {@link Properties config}.
@@ -138,32 +138,31 @@ import java.util.regex.Pattern;
  * This test driver simulates single-partitioned input topics.
  * Here's an example of an input message on the topic named {@code input-topic}:
  *
- * <pre>
- * ConsumerRecordFactory factory = new ConsumerRecordFactory(strSerializer, strSerializer);
- * driver.pipeInput(factory.create("input-topic","key1", "value1"));
- * </pre>
+ * <pre>{@code
+ * TestInputTopic<String, String> inputTopic = driver.createInputTopic("input-topic", stringSerde, stringSerde);
+ * inputTopic.pipeInput("key1", "value1");
+ * }</pre>
  *
- * When {@code #pipeInput()} is called, the driver passes the input message through to the appropriate source that
+ * When {@link TestInputTopic#pipeInput(Object, Object)} is called, the driver passes the input message through to the appropriate source that
  * consumes the named topic, and will invoke the processor(s) downstream of the source.
  * If your topology's processors forward messages to sinks, your test can then consume these output messages to verify
  * they match the expected outcome.
  * For example, if our topology should have generated 2 messages on {@code output-topic-1} and 1 message on
  * {@code output-topic-2}, then our test can obtain these messages using the
- * {@link #readOutput(String, Deserializer, Deserializer)} method:
+ * {@link TestOutputTopic#readKeyValue()}  method:
  *
  * <pre>{@code
- * ProducerRecord<String, String> record1 = driver.readOutput("output-topic-1", strDeserializer, strDeserializer);
- * ProducerRecord<String, String> record2 = driver.readOutput("output-topic-1", strDeserializer, strDeserializer);
- * ProducerRecord<String, String> record3 = driver.readOutput("output-topic-2", strDeserializer, strDeserializer);
+ * TestOutputTopic<String, String> outputTopic1 = driver.createOutputTopic("output-topic-1", stringSerde, stringSerde);
+ * TestOutputTopic<String, String> outputTopic2 = driver.createOutputTopic("output-topic-2", stringSerde, stringSerde);
+ *
+ * KeyValue<String, String> record1 = outputTopic1.readKeyValue();
+ * KeyValue<String, String> record2 = outputTopic1.readKeyValue();
+ * KeyValue<String, String> record3 = outputTopic1.readKeyValue();
  * }</pre>
  *
  * Again, our example topology generates messages with string keys and values, so we supply our string deserializer
  * instance for use on both the keys and values. Your test logic can then verify whether these output records are
  * correct.
- * Note, that calling {@link ProducerRecord#equals(Object)} compares all attributes including key, value, timestamp,
- * topic, partition, and headers.
- * If you only want to compare key and value (and maybe timestamp), using {@link OutputVerifier} instead of
- * {@link ProducerRecord#equals(Object)} can simplify your code as you can ignore attributes you are not interested in.
  * <p>
  * Note, that calling {@code pipeInput()} will also trigger {@link PunctuationType#STREAM_TIME event-time} base
  * {@link ProcessorContext#schedule(Duration, PunctuationType, Punctuator) punctuation} callbacks.
@@ -183,8 +182,8 @@ import java.util.regex.Pattern;
  * Or, our test might have pre-populated some state <em>before</em> submitting the input message, and verified afterward
  * that the processor(s) correctly updated the state.
  *
- * @see ConsumerRecordFactory
- * @see OutputVerifier
+ * @see TestInputTopic
+ * @see TestOutputTopic
  */
 @InterfaceStability.Evolving
 public class TopologyTestDriver implements Closeable {
@@ -597,7 +596,7 @@ public class TopologyTestDriver implements Closeable {
     }
 
 
-    final protected Queue<ProducerRecord<byte[], byte[]>> getRecordsQueue(String topicName) {
+    final private Queue<ProducerRecord<byte[], byte[]>> getRecordsQueue(final String topicName) {
         final Queue<ProducerRecord<byte[], byte[]>> outputRecords = outputRecordsByTopic.get(topicName);
         if (outputRecords == null) {
             if (!processorTopology.sinkTopics().contains(topicName)) {
@@ -607,12 +606,37 @@ public class TopologyTestDriver implements Closeable {
         return outputRecords;
     }
 
+    /**
+     * Create {@link TestInputTopic} to be used for piping records to topic
+     * Uses current system time as start timestamp for records.
+     * Auto-advance is disabled.
+     *
+     * @param topicName             the name of the topic
+     * @param keySerde   the serde for the key type
+     * @param valueSerde the serde for the value type
+     * @param <K> the key type
+     * @param <V> the value type
+     * @return {@link TestInputTopic} object
+     */
     public final <K, V> TestInputTopic<K, V> createInputTopic(final String topicName,
                                                               final Serde<K> keySerde,
                                                               final Serde<V> valueSerde) {
         return new TestInputTopic<K, V>(this, topicName, keySerde, valueSerde);
     }
 
+    /**
+     * Create {@link TestInputTopic} to be used for piping records to topic
+     * Uses provided start timestamp and autoAdvance parameter for records
+     *
+     * @param topicName             the name of the topic
+     * @param keySerde   the serde for the key type
+     * @param valueSerde the serde for the value type
+     * @param startTimestamp Start timestamp for auto-generated record time
+     * @param autoAdvance autoAdvance duration for auto-generated record time
+     * @param <K> the key type
+     * @param <V> the value type
+     * @return {@link TestInputTopic} object
+     */
     public final <K, V> TestInputTopic<K, V> createInputTopic(final String topicName,
                                                               final Serde<K> keySerde,
                                                               final Serde<V> valueSerde,
@@ -621,6 +645,16 @@ public class TopologyTestDriver implements Closeable {
         return new TestInputTopic<K, V>(this, topicName, keySerde, valueSerde, startTimestamp, autoAdvance);
     }
 
+    /**
+     * Create {@link TestOutputTopic} to be used for reading records from topic
+     *
+     * @param topicName             the name of the topic
+     * @param keySerde   the serde for the key type
+     * @param valueSerde the serde for the value type
+     * @param <K> the key type
+     * @param <V> the value type
+     * @return {@link TestOutputTopic} object
+     */
     public final <K, V> TestOutputTopic<K, V> createOutputTopic(final String topicName,
                                                                 final Serde<K> keySerde,
                                                                 final Serde<V> valueSerde) {
@@ -650,6 +684,8 @@ public class TopologyTestDriver implements Closeable {
      * @param topic             the name of the topic
      * @param keyDeserializer   the deserializer for the key type
      * @param valueDeserializer the deserializer for the value type
+     * @param <K> the key type
+     * @param <V> the value type
      * @return the next record on that topic, or {@code null} if there is no record available
      */
     @SuppressWarnings("WeakerAccess")
@@ -677,6 +713,8 @@ public class TopologyTestDriver implements Closeable {
      * @param record          TestRecord to be send
      * @param keySerializer   the key serializer
      * @param valueSerializer the value serializer
+     * @param <K> the key type
+     * @param <V> the value type*
      * @param time            timestamp to override the record timestamp
      */
     @SuppressWarnings("WeakerAccess")
@@ -687,13 +725,13 @@ public class TopologyTestDriver implements Closeable {
                            final Instant time) {
         final byte[] serializedKey = keySerializer.serialize(topic, record.headers(), record.key());
         final byte[] serializedValue = valueSerializer.serialize(topic, record.headers(), record.value());
-        long timestamp = (time != null) ? time.toEpochMilli() : record.timestamp();
+        final long timestamp = (time != null) ? time.toEpochMilli() : record.timestamp();
         pipeRecord(topic, timestamp, serializedKey, serializedValue, record.headers());
     }
 
     final long getQueueSize(final String topic) {
         final Queue<ProducerRecord<byte[], byte[]>> queue = getRecordsQueue(topic);
-        if (queue == null ) {
+        if (queue == null) {
             //Return 0 if not initialized, getRecordsQueue throw exception if non existing topic
             return 0;
         }

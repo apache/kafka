@@ -16,11 +16,8 @@
  */
 package org.apache.kafka.streams;
 
-import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serde;
-import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.test.TestRecord;
 
 import java.util.HashMap;
@@ -31,10 +28,9 @@ import java.util.Objects;
 
 /**
  * TestOutputTopic is used to read records from topic in {@link TopologyTestDriver}.
- * This class makes it easier to write tests with {@link TopologyTestDriver}.
- * To use {@code TestOutputTopic} create new class with topicName and correct Serdes or Deserializers
- * In actual test code, you can read message values, keys, {@link KeyValue} or {@link ProducerRecord}
- * without needing to pass serdes each time You need to have own TestOutputTopic for each topic.
+ * To use {@code TestOutputTopic} create new class {@link TopologyTestDriver#createOutputTopic(String, Serde, Serde)}
+ * In actual test code, you can read message values, keys, {@link KeyValue} or {@link TestRecord}
+ * You need to have own TestOutputTopic for each topic.
  * <p>
  * If you need to test key, value and headers, use {@link #readRecord()} methods.
  * Using {@link #readKeyValue()} you get directly KeyValue, but have no access to headers any more
@@ -44,7 +40,7 @@ import java.util.Objects;
  * <pre>{@code
  *     private TestOutputTopic<String, Long> outputTopic;
  *      ...
- *     outputTopic = new TestOutputTopic<>(testDriver, outputTopic, new Serdes.StringSerde(), new Serdes.LongSerde());
+ *     outputTopic = testDriver.createOutputTopic(OUTPUT_TOPIC, stringSerde, longSerde);
  *     ...
  *     assertThat(outputTopic.readValue()).isEqual(1);
  * }</pre>
@@ -137,8 +133,7 @@ public class TestOutputTopic<K, V> {
      */
     @SuppressWarnings({"WeakerAccess", "unused"})
     public List<TestRecord<K, V>> readRecordsToList() {
-        List<TestRecord<K, V>> output = new LinkedList<>();
-        TestRecord<K, V> outputRow;
+        final List<TestRecord<K, V>> output = new LinkedList<>();
         while (!isEmpty()) {
             output.add(readRecord());
         }
