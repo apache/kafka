@@ -300,6 +300,7 @@ public class TopologyTest {
         EasyMock.expect(otherStoreBuilder.name()).andReturn("store").anyTimes();
         EasyMock.expect(otherStoreBuilder.logConfig()).andReturn(Collections.emptyMap());
         EasyMock.expect(otherStoreBuilder.loggingEnabled()).andReturn(false);
+        EasyMock.replay(otherStoreBuilder);
         try {
             topology.addStateStore(otherStoreBuilder);
             fail("Should have thrown TopologyException for same store name with different StoreBuilder");
