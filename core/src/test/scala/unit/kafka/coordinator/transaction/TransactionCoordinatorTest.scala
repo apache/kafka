@@ -17,12 +17,11 @@
 package kafka.coordinator.transaction
 
 import kafka.utils.MockScheduler
-import org.apache.kafka.clients.producer.ProducerIdAndEpoch
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.RecordBatch
 import org.apache.kafka.common.requests.TransactionResult
-import org.apache.kafka.common.utils.{LogContext, MockTime}
+import org.apache.kafka.common.utils.{LogContext, MockTime, ProducerIdAndEpoch}
 import org.easymock.{Capture, EasyMock, IAnswer}
 import org.junit.Assert._
 import org.junit.Test
@@ -149,7 +148,7 @@ class TransactionCoordinatorTest {
       .andAnswer(new IAnswer[Either[Errors, CoordinatorEpochAndTxnMetadata]] {
         override def answer(): Either[Errors, CoordinatorEpochAndTxnMetadata] = {
           assertTrue(capturedTxn.hasCaptured)
-          Right(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, capturedTxn.getValue, true))
+          Right(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, capturedTxn.getValue))
         }
       })
       .once()

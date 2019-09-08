@@ -22,14 +22,13 @@ import java.util.concurrent.atomic.AtomicBoolean
 import kafka.server.{DelayedOperationPurgatory, KafkaConfig, MetadataCache, ReplicaManager}
 import kafka.utils.{Logging, Scheduler}
 import kafka.zk.KafkaZkClient
-import org.apache.kafka.clients.producer.ProducerIdAndEpoch
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.RecordBatch
 import org.apache.kafka.common.requests.TransactionResult
-import org.apache.kafka.common.utils.{LogContext, Time}
+import org.apache.kafka.common.utils.{LogContext, ProducerIdAndEpoch, Time}
 
 object TransactionCoordinator {
 
@@ -143,11 +142,10 @@ class TransactionCoordinator(brokerId: Int,
         existingEpochAndMetadata =>
           val coordinatorEpoch = existingEpochAndMetadata.coordinatorEpoch
           val txnMetadata = existingEpochAndMetadata.transactionMetadata
-          val isNewMetadata = existingEpochAndMetadata.isNewMetadata
 
           txnMetadata.inLock {
             prepareInitProducerIdTransit(transactionalId, transactionTimeoutMs, coordinatorEpoch, txnMetadata,
-              expectedProducerIdAndEpoch, isNewMetadata)
+              expectedProducerIdAndEpoch)
           }
       }
 
@@ -194,24 +192,23 @@ class TransactionCoordinator(brokerId: Int,
                                           transactionTimeoutMs: Int,
                                           coordinatorEpoch: Int,
                                           txnMetadata: TransactionMetadata,
-                                          expectedProducerIdAndEpoch: Option[ProducerIdAndEpoch],
-                                          isNewMetadata: Boolean): ApiResult[(Int, TxnTransitMetadata)] = {
+                                          expectedProducerIdAndEpoch: Option[ProducerIdAndEpoch]): ApiResult[(Int, TxnTransitMetadata)] = {
 
-    def isFencedProducerId(producerIdAndEpoch: ProducerIdAndEpoch): Boolean = {
+    def isValidProducerId(producerIdAndEpoch: ProducerIdAndEpoch): Boolean = {
       // If a producer ID and epoch are provided by the request, fence the producer unless one of the following is true:
-      //   1. No transaction metadata was found, so we created a new one as part of this request. This is the case of a
+      //   1. The producer epoch is equal to -1, which implies that the metadata was just created. This is the case of a
       //      producer recovering from an UNKNOWN_PRODUCER_ID error, and it is safe to return the newly-generated
       //      producer ID.
       //   2. The expected producer ID matches the ID in current metadata (the epoch will be checked when we try to
       //      increment it)
       //   3. The expected producer ID matches the previous one and the expected epoch is exhausted, in which case this
       //      could be a retry after a valid epoch bump that the producer never received the response for
-      !(isNewMetadata ||
+      txnMetadata.producerEpoch == RecordBatch.NO_PRODUCER_EPOCH ||
         producerIdAndEpoch.producerId == txnMetadata.producerId ||
-        (producerIdAndEpoch.producerId == txnMetadata.lastProducerId && TransactionMetadata.isEpochExhausted(producerIdAndEpoch.epoch)))
+        (producerIdAndEpoch.producerId == txnMetadata.lastProducerId && TransactionMetadata.isEpochExhausted(producerIdAndEpoch.epoch))
     }
 
-    if (expectedProducerIdAndEpoch.exists(isFencedProducerId))
+    if (!expectedProducerIdAndEpoch.forall(isValidProducerId))
       Left(Errors.INVALID_PRODUCER_EPOCH)
     else if (txnMetadata.pendingTransitionInProgress) {
       // return a retriable exception to let the client backoff and retry
@@ -233,7 +230,7 @@ class TransactionCoordinator(brokerId: Int,
                 expectedProducerIdAndEpoch.isDefined))
             } else {
               txnMetadata.prepareIncrementProducerEpoch(transactionTimeoutMs, expectedProducerIdAndEpoch.map(_.epoch),
-                time.milliseconds(), isNewMetadata)
+                time.milliseconds())
             }
 
           transitMetadataResult match {

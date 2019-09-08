@@ -106,7 +106,7 @@ class TransactionStateManagerTest {
     transactionManager.addLoadedTransactionsToCache(partitionId, coordinatorEpoch, new Pool[String, TransactionMetadata]())
 
     assertEquals(Right(None), transactionManager.getTransactionState(transactionalId1))
-    assertEquals(Right(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, txnMetadata1, isNewMetadata = true)),
+    assertEquals(Right(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, txnMetadata1)),
       transactionManager.putTransactionStateIfNotExists(transactionalId1, txnMetadata1))
     assertEquals(Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, txnMetadata1))),
       transactionManager.getTransactionState(transactionalId1))

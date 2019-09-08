@@ -215,34 +215,32 @@ private[transaction] class TransactionMetadata(val transactionalId: String,
   }
 
   def prepareIncrementProducerEpoch(newTxnTimeoutMs: Int,
-                                    currentProducerEpoch: Option[Short],
-                                    updateTimestamp: Long,
-                                    isNewMetadata: Boolean): Either[Errors, TxnTransitMetadata] = {
+                                    expectedProducerEpoch: Option[Short],
+                                    updateTimestamp: Long): Either[Errors, TxnTransitMetadata] = {
     if (isProducerEpochExhausted)
       throw new IllegalStateException(s"Cannot allocate any more producer epochs for producerId $producerId")
 
-    // If no epoch was provided by the producer, bump the current epoch and set the last epoch to -1
-    // If an epoch was provided by the producer:
-    //   If the transaction metadata has no last producer ID, then it is a newly-created producer ID. Bump the
-    // current and last epochs.
-    //   If it matches the current epoch, the producer is attempting to continue after an error, and no other producer
-    // has been initialized. Bump the current and last epochs.
-    //   If it matches the previous epoch, it is a retry of a successful call, so just return the current epoch without
-    // bumping. There is no danger of this producer being fenced, because a new producer calling InitProducerId would
-    // have caused the last epoch to be set to -1.
-    //   Otherwise, the producer has a fenced epoch and should receive an INVALID_PRODUCER_ERROR
     val bumpedEpoch = (producerEpoch + 1).toShort
-    val epochBumpResult: Either[Errors, (Short, Short)] = currentProducerEpoch match {
+    val epochBumpResult: Either[Errors, (Short, Short)] = expectedProducerEpoch match {
       case None =>
-        Right(if (producerEpoch == RecordBatch.NO_PRODUCER_EPOCH) 0 else bumpedEpoch, RecordBatch.NO_PRODUCER_EPOCH)
+        // If no expected epoch was provided by the producer, bump the current epoch and set the last epoch to -1
+        // In the case of a new producer, producerEpoch will be -1 and bumpedEpoch will be 0
+        Right(bumpedEpoch, RecordBatch.NO_PRODUCER_EPOCH)
 
-      case Some(currentEpoch) =>
-        if (isNewMetadata || currentEpoch == producerEpoch)
+      case Some(expectedEpoch) =>
+        if (producerEpoch == RecordBatch.NO_PRODUCER_EPOCH || expectedEpoch == producerEpoch)
+          // If the expected epoch matches the current epoch, or if there is no current epoch, the producer is attempting
+          // to continue after an error and no other producer has been initialized. Bump the current and last epochs.
+          // The no current epoch case means this is a new producer; producerEpoch will be -1 and bumpedEpoch will be 0
           Right(bumpedEpoch, producerEpoch)
-        else if (currentEpoch == lastProducerEpoch)
+        else if (expectedEpoch == lastProducerEpoch)
+          // If the expected epoch matches the previous epoch, it is a retry of a successful call, so just return the
+          // current epoch without bumping. There is no danger of this producer being fenced, because a new producer
+          // calling InitProducerId would have caused the last epoch to be set to -1.
           Right(producerEpoch, lastProducerEpoch)
         else {
-          info(s"Provided producer epoch $currentEpoch does not match current " +
+          // Otherwise, the producer has a fenced epoch and should receive an INVALID_PRODUCER_EPOCH error
+          info(s"Expected producer epoch $expectedEpoch does not match current " +
             s"producer epoch $producerEpoch or previous producer epoch $lastProducerEpoch")
           Left(Errors.INVALID_PRODUCER_EPOCH)
         }

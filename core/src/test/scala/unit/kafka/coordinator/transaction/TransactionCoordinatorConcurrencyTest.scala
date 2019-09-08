@@ -26,14 +26,13 @@ import kafka.log.Log
 import kafka.server.{DelayedOperationPurgatory, FetchDataInfo, FetchLogEnd, KafkaConfig, LogOffsetMetadata, MetadataCache}
 import kafka.utils.timer.MockTimer
 import kafka.utils.{Pool, TestUtils}
-import org.apache.kafka.clients.producer.ProducerIdAndEpoch
 import org.apache.kafka.clients.{ClientResponse, NetworkClient}
 import org.apache.kafka.common.internals.Topic.TRANSACTION_STATE_TOPIC_NAME
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record.{CompressionType, FileRecords, MemoryRecords, RecordBatch, SimpleRecord}
 import org.apache.kafka.common.requests._
-import org.apache.kafka.common.utils.{LogContext, MockTime}
+import org.apache.kafka.common.utils.{LogContext, MockTime, ProducerIdAndEpoch}
 import org.apache.kafka.common.{Node, TopicPartition}
 import org.easymock.{EasyMock, IAnswer}
 import org.junit.Assert._
@@ -204,7 +203,7 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
   }
 
   @Test
-  def testConcurrentInitProducerIdRequests(): Unit = {
+  def testConcurrentInitProducerIdRequestsOneNewOneContinuing(): Unit = {
     val transactions = (1 to 10).flatMap(i => createTransactions(s"testConcurrentInitProducerID$i-"))
     transactions.foreach { txn =>
       val firstInitReq = new InitProducerIdOperation()
@@ -227,6 +226,30 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
           assertEquals(producerIdAndEpoch.epoch + 1, bumpEpochOp.result.get.producerEpoch)
         case (_, Errors.NONE) =>
           assertEquals(producerIdAndEpoch.epoch + 1, newProducerOp.result.get.producerEpoch)
+        case (_, _) => fail("One of two InitProducerId requests should succeed")
+      }
+    }
+  }
+
+  @Test
+  def testConcurrentContinuingInitProducerIdRequests(): Unit = {
+    val transactions = (1 to 100).flatMap(i => createTransactions(s"testConcurrentInitProducerID$i-"))
+    transactions.foreach { txn =>
+      // Test simultaneous requests from an existing producers trying to re-initialize when no state is present
+      val producerIdAndEpoch = new ProducerIdAndEpoch(producerId, 10)
+      val bumpEpochOp1 = new InitProducerIdOperation(Some(producerIdAndEpoch))
+      val bumpEpochOp2 = new InitProducerIdOperation(Some(producerIdAndEpoch))
+      verifyConcurrentActions(Set(bumpEpochOp1, bumpEpochOp2).map(_.actionNoVerify(txn)))
+
+      // If only one request succeeds, assert that the epoch was successfully increased
+      // If both requests succeed, the new producer must have run after the existing one and should have the higher epoch
+      (bumpEpochOp1.result.get.error, bumpEpochOp2.result.get.error) match {
+        case (Errors.NONE, Errors.NONE) =>
+          fail("One of two InitProducerId requests should fail due to concurrent requests or non-matching epochs")
+        case (Errors.NONE, _) =>
+          assertEquals(0, bumpEpochOp1.result.get.producerEpoch)
+        case (_, Errors.NONE) =>
+          assertEquals(0, bumpEpochOp2.result.get.producerEpoch)
         case (_, _) => fail("One of two InitProducerId requests should succeed")
       }
     }

@@ -46,7 +46,7 @@ class TransactionMetadataTest {
       txnLastUpdateTimestamp = time.milliseconds())
 
     val transitMetadata = txnMetadata.prepareIncrementProducerEpoch(30000, None,
-      time.milliseconds(), isNewMetadata = true).right.get
+      time.milliseconds()).right.get
     txnMetadata.completeTransitionTo(transitMetadata)
     assertEquals(producerId, txnMetadata.producerId)
     assertEquals(0, txnMetadata.producerEpoch)
@@ -70,7 +70,7 @@ class TransactionMetadataTest {
       topicPartitions = mutable.Set.empty,
       txnLastUpdateTimestamp = time.milliseconds())
 
-    val transitMetadata = txnMetadata.prepareIncrementProducerEpoch(30000, None, time.milliseconds(), isNewMetadata = false).right.get
+    val transitMetadata = txnMetadata.prepareIncrementProducerEpoch(30000, None, time.milliseconds()).right.get
     txnMetadata.completeTransitionTo(transitMetadata)
     assertEquals(producerId, txnMetadata.producerId)
     assertEquals(producerEpoch + 1, txnMetadata.producerEpoch)
@@ -95,7 +95,7 @@ class TransactionMetadataTest {
       txnLastUpdateTimestamp = time.milliseconds())
     assertTrue(txnMetadata.isProducerEpochExhausted)
 
-    txnMetadata.prepareIncrementProducerEpoch(30000, Some(RecordBatch.NO_PRODUCER_EPOCH), time.milliseconds(), isNewMetadata = false)
+    txnMetadata.prepareIncrementProducerEpoch(30000, Some(RecordBatch.NO_PRODUCER_EPOCH), time.milliseconds())
   }
 
   @Test
@@ -208,7 +208,7 @@ class TransactionMetadataTest {
       txnLastUpdateTimestamp = time.milliseconds())
 
     val transitMetadata = txnMetadata.prepareIncrementProducerEpoch(30000, Some(producerEpoch),
-      time.milliseconds(), isNewMetadata = true).right.get
+      time.milliseconds()).right.get
     txnMetadata.completeTransitionTo(transitMetadata)
     assertEquals(producerId, txnMetadata.producerId)
     assertEquals(0, txnMetadata.producerEpoch)
@@ -233,7 +233,7 @@ class TransactionMetadataTest {
       txnLastUpdateTimestamp = time.milliseconds())
 
     val transitMetadata = txnMetadata.prepareIncrementProducerEpoch(30000, Some(producerEpoch),
-      time.milliseconds(), isNewMetadata = false).right.get
+      time.milliseconds()).right.get
     txnMetadata.completeTransitionTo(transitMetadata)
     assertEquals(producerId, txnMetadata.producerId)
     assertEquals(producerEpoch + 1, txnMetadata.producerEpoch)
@@ -259,7 +259,7 @@ class TransactionMetadataTest {
       txnLastUpdateTimestamp = time.milliseconds())
 
     val transitMetadata = txnMetadata.prepareIncrementProducerEpoch(30000, Some(lastProducerEpoch),
-      time.milliseconds(), isNewMetadata = false).right.get
+      time.milliseconds()).right.get
     txnMetadata.completeTransitionTo(transitMetadata)
     assertEquals(producerId, txnMetadata.producerId)
     assertEquals(producerEpoch, txnMetadata.producerEpoch)
@@ -285,7 +285,7 @@ class TransactionMetadataTest {
       txnLastUpdateTimestamp = time.milliseconds())
 
     val error = txnMetadata.prepareIncrementProducerEpoch(30000, Some((lastProducerEpoch - 1).toShort),
-      time.milliseconds(), isNewMetadata = false).left.get
+      time.milliseconds()).left.get
     assertEquals(Errors.INVALID_PRODUCER_EPOCH, error)
   }
 

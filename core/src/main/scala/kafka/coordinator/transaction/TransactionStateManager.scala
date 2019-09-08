@@ -249,17 +249,15 @@ class TransactionStateManager(brokerId: Int,
       else if (leavingPartitions.exists(_.txnPartitionId == partitionId))
         Left(Errors.NOT_COORDINATOR)
       else {
-        var isNewMetadata = false
         transactionMetadataCache.get(partitionId) match {
           case Some(cacheEntry) =>
             val txnMetadata = Option(cacheEntry.metadataPerTransactionalId.get(transactionalId)).orElse {
-              isNewMetadata = true
               createdTxnMetadataOpt.map { createdTxnMetadata =>
-                (Option(cacheEntry.metadataPerTransactionalId.putIfNotExists(transactionalId, createdTxnMetadata))
-                  .getOrElse(createdTxnMetadata))
+                Option(cacheEntry.metadataPerTransactionalId.putIfNotExists(transactionalId, createdTxnMetadata))
+                  .getOrElse(createdTxnMetadata)
               }
             }
-            Right(txnMetadata.map(CoordinatorEpochAndTxnMetadata(cacheEntry.coordinatorEpoch, _, isNewMetadata)))
+            Right(txnMetadata.map(CoordinatorEpochAndTxnMetadata(cacheEntry.coordinatorEpoch, _)))
 
           case None =>
             Left(Errors.NOT_COORDINATOR)
@@ -667,8 +665,7 @@ class TransactionStateManager(brokerId: Int,
 private[transaction] case class TxnMetadataCacheEntry(coordinatorEpoch: Int, metadataPerTransactionalId: Pool[String, TransactionMetadata])
 
 private[transaction] case class CoordinatorEpochAndTxnMetadata(coordinatorEpoch: Int,
-                                                               transactionMetadata: TransactionMetadata,
-                                                               isNewMetadata: Boolean = false)
+                                                               transactionMetadata: TransactionMetadata)
 
 private[transaction] case class TransactionConfig(transactionalIdExpirationMs: Int = TransactionStateManager.DefaultTransactionalIdExpirationMs,
                                                   transactionMaxTimeoutMs: Int = TransactionStateManager.DefaultTransactionsMaxTimeoutMs,
