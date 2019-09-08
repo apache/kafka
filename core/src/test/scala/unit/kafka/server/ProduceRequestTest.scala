@@ -19,6 +19,7 @@ package kafka.server
 
 import java.util.Properties
 
+import com.yammer.metrics.Metrics
 import kafka.log.LogConfig
 import kafka.message.ZStdCompressionCodec
 import kafka.utils.TestUtils
@@ -38,8 +39,10 @@ import scala.collection.JavaConverters._
   */
 class ProduceRequestTest extends BaseRequestTest {
 
+  val metricsKeySet = Metrics.defaultRegistry.allMetrics.keySet.asScala
+
   @Test
-  def testSimpleProduceRequest() {
+  def testSimpleProduceRequest(): Unit = {
     val (partition, leader) = createTopicAndFindPartitionWithLeader("topic")
 
     def sendAndCheck(memoryRecords: MemoryRecords, expectedOffset: Long): ProduceResponse.PartitionResponse = {
@@ -65,7 +68,7 @@ class ProduceRequestTest extends BaseRequestTest {
   }
 
   @Test
-  def testProduceToNonReplica() {
+  def testProduceToNonReplica(): Unit = {
     val topic = "topic"
     val partition = 0
 
@@ -96,7 +99,7 @@ class ProduceRequestTest extends BaseRequestTest {
   }
 
   @Test
-  def testCorruptLz4ProduceRequest() {
+  def testCorruptLz4ProduceRequest(): Unit = {
     val (partition, leader) = createTopicAndFindPartitionWithLeader("topic")
     val timestamp = 1000000
     val memoryRecords = MemoryRecords.withRecords(CompressionType.LZ4,
@@ -114,6 +117,8 @@ class ProduceRequestTest extends BaseRequestTest {
     assertEquals(Errors.CORRUPT_MESSAGE, partitionResponse.error)
     assertEquals(-1, partitionResponse.baseOffset)
     assertEquals(-1, partitionResponse.logAppendTime)
+    assertEquals(metricsKeySet.count(_.getMBeanName.endsWith(s"${BrokerTopicStats.InvalidMessageCrcRecordsPerSec}")), 1)
+    assertTrue(TestUtils.meterCount(s"${BrokerTopicStats.InvalidMessageCrcRecordsPerSec}") > 0)
   }
 
   @Test

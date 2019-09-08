@@ -158,7 +158,7 @@ public class StoreChangelogReaderTest {
     public void shouldRecoverFromInvalidOffsetExceptionAndFinishRestore() {
         final int messages = 10;
         setupConsumer(messages, topicPartition);
-        consumer.setException(new InvalidOffsetException("Try Again!") {
+        consumer.setPollException(new InvalidOffsetException("Try Again!") {
             @Override
             public Set<TopicPartition> partitions() {
                 return Collections.singleton(topicPartition);

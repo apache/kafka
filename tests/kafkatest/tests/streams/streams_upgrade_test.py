@@ -25,10 +25,11 @@ from kafkatest.services.streams import StreamsSmokeTestDriverService, StreamsSmo
 from kafkatest.services.zookeeper import ZookeeperService
 from kafkatest.tests.streams.utils import extract_generation_from_logs
 from kafkatest.version import LATEST_0_10_0, LATEST_0_10_1, LATEST_0_10_2, LATEST_0_11_0, LATEST_1_0, LATEST_1_1, \
-    LATEST_2_0, LATEST_2_1, LATEST_2_2, DEV_BRANCH, DEV_VERSION, KafkaVersion
+    LATEST_2_0, LATEST_2_1, LATEST_2_2, LATEST_2_3, DEV_BRANCH, DEV_VERSION, KafkaVersion
 
 # broker 0.10.0 is not compatible with newer Kafka Streams versions
-broker_upgrade_versions = [str(LATEST_0_10_1), str(LATEST_0_10_2), str(LATEST_0_11_0), str(LATEST_1_0), str(LATEST_1_1), str(LATEST_2_0), str(LATEST_2_1), str(DEV_BRANCH)]
+broker_upgrade_versions = [str(LATEST_0_10_1), str(LATEST_0_10_2), str(LATEST_0_11_0), str(LATEST_1_0), str(LATEST_1_1), \
+                           str(LATEST_2_0), str(LATEST_2_1), str(LATEST_2_2), str(LATEST_2_3), str(DEV_BRANCH)]
 
 metadata_1_versions = [str(LATEST_0_10_0)]
 metadata_2_versions = [str(LATEST_0_10_1), str(LATEST_0_10_2), str(LATEST_0_11_0), str(LATEST_1_0), str(LATEST_1_1)]
@@ -37,7 +38,7 @@ metadata_2_versions = [str(LATEST_0_10_1), str(LATEST_0_10_2), str(LATEST_0_11_0
 backward_compatible_metadata_2_versions = [str(LATEST_0_10_2), str(LATEST_0_11_0), str(LATEST_1_0), str(LATEST_1_1)]
 # If we add a new version below, we also need to add this version to `streams.py`:
 # -> class `StreamsUpgradeTestJobRunnerService`, method `start_cmd`, variable `KAFKA_STREAMS_VERSION`
-metadata_3_or_higher_versions = [str(LATEST_2_0), str(LATEST_2_1), str(LATEST_2_2), str(DEV_VERSION)]
+metadata_3_or_higher_versions = [str(LATEST_2_0), str(LATEST_2_1), str(LATEST_2_2), str(LATEST_2_3), str(DEV_VERSION)]
 
 """
 After each release one should first check that the released version has been uploaded to 
@@ -570,24 +571,24 @@ class StreamsUpgradeTest(Test):
                     monitors[first_other_processor] = first_other_monitor
                     monitors[second_other_processor] = second_other_monitor
 
-                    leader_monitor.wait_until("Received a future (version probing) subscription (version: 5). Sending empty assignment back (with supported version 4).",
+                    leader_monitor.wait_until("Received a future (version probing) subscription (version: 6). Sending empty assignment back (with supported version 5).",
                                               timeout_sec=60,
                                               err_msg="Could not detect 'version probing' attempt at leader " + str(self.leader.node.account))
 
                     if len(self.old_processors) > 0:
-                        log_monitor.wait_until("Sent a version 5 subscription and got version 4 assignment back (successful version probing). Downgrading subscription metadata to received version and trigger new rebalance.",
+                        log_monitor.wait_until("Sent a version 6 subscription and got version 5 assignment back (successful version probing). Downgrading subscription metadata to received version and trigger new rebalance.",
                                                timeout_sec=60,
                                                err_msg="Could not detect 'successful version probing' at upgrading node " + str(node.account))
                     else:
-                        log_monitor.wait_until("Sent a version 5 subscription and got version 4 assignment back (successful version probing). Setting subscription metadata to leaders supported version 5 and trigger new rebalance.",
+                        log_monitor.wait_until("Sent a version 6 subscription and got version 5 assignment back (successful version probing). Setting subscription metadata to leaders supported version 6 and trigger new rebalance.",
                                                timeout_sec=60,
                                                err_msg="Could not detect 'successful version probing with upgraded leader' at upgrading node " + str(node.account))
-                        first_other_monitor.wait_until("Sent a version 4 subscription and group leader.s latest supported version is 5. Upgrading subscription metadata version to 5 for next rebalance.",
+                        first_other_monitor.wait_until("Sent a version 5 subscription and group leader.s latest supported version is 6. Upgrading subscription metadata version to 6 for next rebalance.",
                                                        timeout_sec=60,
-                                                       err_msg="Never saw output 'Upgrade metadata to version 4' on" + str(first_other_node.account))
-                        second_other_monitor.wait_until("Sent a version 4 subscription and group leader.s latest supported version is 5. Upgrading subscription metadata version to 5 for next rebalance.",
+                                                       err_msg="Never saw output 'Upgrade metadata to version 5' on" + str(first_other_node.account))
+                        second_other_monitor.wait_until("Sent a version 5 subscription and group leader.s latest supported version is 6. Upgrading subscription metadata version to 6 for next rebalance.",
                                                         timeout_sec=60,
-                                                        err_msg="Never saw output 'Upgrade metadata to version 4' on" + str(second_other_node.account))
+                                                        err_msg="Never saw output 'Upgrade metadata to version 5' on" + str(second_other_node.account))
 
                     log_monitor.wait_until("Version probing detected. Triggering new rebalance.",
                                            timeout_sec=60,

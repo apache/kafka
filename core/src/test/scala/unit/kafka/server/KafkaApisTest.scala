@@ -29,7 +29,6 @@ import kafka.coordinator.group.GroupCoordinator
 import kafka.coordinator.transaction.TransactionCoordinator
 import kafka.network.RequestChannel
 import kafka.network.RequestChannel.SendResponse
-import kafka.security.auth.Authorizer
 import kafka.server.QuotaFactory.QuotaManagers
 import kafka.utils.{MockTime, TestUtils}
 import kafka.zk.KafkaZkClient
@@ -48,10 +47,11 @@ import org.apache.kafka.common.requests.{FetchMetadata => JFetchMetadata, _}
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.easymock.{Capture, EasyMock, IAnswer}
 import EasyMock._
-import org.apache.kafka.common.message.{HeartbeatRequestData, JoinGroupRequestData, OffsetCommitRequestData, OffsetCommitResponseData, SyncGroupRequestData}
+import org.apache.kafka.common.message.{HeartbeatRequestData, JoinGroupRequestData, OffsetCommitRequestData, OffsetCommitResponseData, SyncGroupRequestData, TxnOffsetCommitRequestData}
 import org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocol
 import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity
 import org.apache.kafka.common.replica.ClientMetadata
+import org.apache.kafka.server.authorizer.Authorizer
 import org.junit.Assert.{assertEquals, assertNull, assertTrue}
 import org.junit.{After, Test}
 
@@ -83,7 +83,7 @@ class KafkaApisTest {
   private val time = new MockTime
 
   @After
-  def tearDown() {
+  def tearDown(): Unit = {
     quotas.shutdown()
     metrics.close()
   }
@@ -161,8 +161,15 @@ class KafkaApisTest {
 
       val invalidTopicPartition = new TopicPartition(topic, invalidPartitionId)
       val partitionOffsetCommitData = new TxnOffsetCommitRequest.CommittedOffset(15L, "", Optional.empty())
-      val (offsetCommitRequest, request) = buildRequest(new TxnOffsetCommitRequest.Builder("txnlId", "groupId",
-        15L, 0.toShort, Map(invalidTopicPartition -> partitionOffsetCommitData).asJava))
+      val (offsetCommitRequest, request) = buildRequest(new TxnOffsetCommitRequest.Builder(
+        new TxnOffsetCommitRequestData()
+          .setTransactionalId("txnlId")
+          .setGroupId("groupId")
+          .setProducerId(15L)
+          .setProducerEpoch(0.toShort)
+          .setTopics(TxnOffsetCommitRequest.getTopics(
+            Map(invalidTopicPartition -> partitionOffsetCommitData).asJava))
+      ))
 
       val capturedResponse = expectNoThrottling()
       EasyMock.replay(replicaManager, clientRequestQuotaManager, requestChannel)
@@ -548,7 +555,7 @@ class KafkaApisTest {
   }
 
   @Test
-  def rejectJoinGroupRequestWhenStaticMembershipNotSupported() {
+  def rejectJoinGroupRequestWhenStaticMembershipNotSupported(): Unit = {
     val capturedResponse = expectNoThrottling()
     EasyMock.replay(clientRequestQuotaManager, requestChannel)
 
@@ -568,7 +575,7 @@ class KafkaApisTest {
   }
 
   @Test
-  def rejectSyncGroupRequestWhenStaticMembershipNotSupported() {
+  def rejectSyncGroupRequestWhenStaticMembershipNotSupported(): Unit = {
     val capturedResponse = expectNoThrottling()
     EasyMock.replay(clientRequestQuotaManager, requestChannel)
 
@@ -587,7 +594,7 @@ class KafkaApisTest {
   }
 
   @Test
-  def rejectHeartbeatRequestWhenStaticMembershipNotSupported() {
+  def rejectHeartbeatRequestWhenStaticMembershipNotSupported(): Unit = {
     val capturedResponse = expectNoThrottling()
     EasyMock.replay(clientRequestQuotaManager, requestChannel)
 
@@ -606,7 +613,7 @@ class KafkaApisTest {
   }
 
   @Test
-  def rejectOffsetCommitRequestWhenStaticMembershipNotSupported() {
+  def rejectOffsetCommitRequestWhenStaticMembershipNotSupported(): Unit = {
     val capturedResponse = expectNoThrottling()
     EasyMock.replay(clientRequestQuotaManager, requestChannel)
 
@@ -645,7 +652,7 @@ class KafkaApisTest {
   }
 
   @Test
-  def testMultipleLeaveGroup() {
+  def testMultipleLeaveGroup(): Unit = {
     val groupId = "groupId"
 
     val leaveMemberList = List(
@@ -675,7 +682,7 @@ class KafkaApisTest {
   }
 
   @Test
-  def testSingleLeaveGroup() {
+  def testSingleLeaveGroup(): Unit = {
     val groupId = "groupId"
     val memberId = "member"
 

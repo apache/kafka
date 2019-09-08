@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.state.internals.metrics.RocksDBMetricsRecorder;
 import org.apache.kafka.test.TestUtils;
 import org.junit.Test;
 
@@ -24,7 +25,9 @@ import java.io.File;
 import java.util.HashSet;
 import java.util.Set;
 
-import static java.util.Collections.emptyMap;
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
+import static org.apache.kafka.streams.StreamsConfig.METRICS_RECORDING_LEVEL_CONFIG;
 import static org.easymock.EasyMock.expect;
 import static org.easymock.EasyMock.mock;
 import static org.easymock.EasyMock.replay;
@@ -36,14 +39,16 @@ import static org.junit.Assert.assertTrue;
 
 public class KeyValueSegmentTest {
 
+    private final RocksDBMetricsRecorder metricsRecorder = new RocksDBMetricsRecorder("metrics-scope", "store-name");
+
     @Test
     public void shouldDeleteStateDirectoryOnDestroy() throws Exception {
-        final KeyValueSegment segment = new KeyValueSegment("segment", "window", 0L);
+        final KeyValueSegment segment = new KeyValueSegment("segment", "window", 0L, metricsRecorder);
         final String directoryPath = TestUtils.tempDirectory().getAbsolutePath();
         final File directory = new File(directoryPath);
 
         final ProcessorContext mockContext = mock(ProcessorContext.class);
-        expect(mockContext.appConfigs()).andReturn(emptyMap());
+        expect(mockContext.appConfigs()).andReturn(mkMap(mkEntry(METRICS_RECORDING_LEVEL_CONFIG, "INFO")));
         expect(mockContext.stateDir()).andReturn(directory);
         replay(mockContext);
 
@@ -59,9 +64,10 @@ public class KeyValueSegmentTest {
 
     @Test
     public void shouldBeEqualIfIdIsEqual() {
-        final KeyValueSegment segment = new KeyValueSegment("anyName", "anyName", 0L);
-        final KeyValueSegment segmentSameId = new KeyValueSegment("someOtherName", "someOtherName", 0L);
-        final KeyValueSegment segmentDifferentId = new KeyValueSegment("anyName", "anyName", 1L);
+        final KeyValueSegment segment = new KeyValueSegment("anyName", "anyName", 0L, metricsRecorder);
+        final KeyValueSegment segmentSameId =
+            new KeyValueSegment("someOtherName", "someOtherName", 0L, metricsRecorder);
+        final KeyValueSegment segmentDifferentId = new KeyValueSegment("anyName", "anyName", 1L, metricsRecorder);
 
         assertThat(segment, equalTo(segment));
         assertThat(segment, equalTo(segmentSameId));
@@ -72,9 +78,10 @@ public class KeyValueSegmentTest {
 
     @Test
     public void shouldHashOnSegmentIdOnly() {
-        final KeyValueSegment segment = new KeyValueSegment("anyName", "anyName", 0L);
-        final KeyValueSegment segmentSameId = new KeyValueSegment("someOtherName", "someOtherName", 0L);
-        final KeyValueSegment segmentDifferentId = new KeyValueSegment("anyName", "anyName", 1L);
+        final KeyValueSegment segment = new KeyValueSegment("anyName", "anyName", 0L, metricsRecorder);
+        final KeyValueSegment segmentSameId =
+            new KeyValueSegment("someOtherName", "someOtherName", 0L, metricsRecorder);
+        final KeyValueSegment segmentDifferentId = new KeyValueSegment("anyName", "anyName", 1L, metricsRecorder);
 
         final Set<KeyValueSegment> set = new HashSet<>();
         assertTrue(set.add(segment));
@@ -84,9 +91,9 @@ public class KeyValueSegmentTest {
 
     @Test
     public void shouldCompareSegmentIdOnly() {
-        final KeyValueSegment segment1 = new KeyValueSegment("a", "C", 50L);
-        final KeyValueSegment segment2 = new KeyValueSegment("b", "B", 100L);
-        final KeyValueSegment segment3 = new KeyValueSegment("c", "A", 0L);
+        final KeyValueSegment segment1 = new KeyValueSegment("a", "C", 50L, metricsRecorder);
+        final KeyValueSegment segment2 = new KeyValueSegment("b", "B", 100L, metricsRecorder);
+        final KeyValueSegment segment3 = new KeyValueSegment("c", "A", 0L, metricsRecorder);
 
         assertThat(segment1.compareTo(segment1), equalTo(0));
         assertThat(segment1.compareTo(segment2), equalTo(-1));

@@ -26,7 +26,6 @@ import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.DeleteTopicsResult;
 import org.apache.kafka.clients.admin.DescribeConsumerGroupsOptions;
 import org.apache.kafka.clients.admin.DescribeConsumerGroupsResult;
-import org.apache.kafka.clients.admin.KafkaAdminClient;
 import org.apache.kafka.clients.admin.MemberDescription;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
@@ -136,8 +135,7 @@ public class StreamsResetter {
                    final Properties config) {
         int exitCode;
 
-        KafkaAdminClient kafkaAdminClient = null;
-
+        Admin adminClient = null;
         try {
             parseArguments(args);
 
@@ -150,11 +148,11 @@ public class StreamsResetter {
             }
             properties.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, options.valueOf(bootstrapServerOption));
 
-            kafkaAdminClient = (KafkaAdminClient) Admin.create(properties);
-            validateNoActiveConsumers(groupId, kafkaAdminClient);
+            adminClient = Admin.create(properties);
+            validateNoActiveConsumers(groupId, adminClient);
 
             allTopics.clear();
-            allTopics.addAll(kafkaAdminClient.listTopics().names().get(60, TimeUnit.SECONDS));
+            allTopics.addAll(adminClient.listTopics().names().get(60, TimeUnit.SECONDS));
 
             if (dryRun) {
                 System.out.println("----Dry run displays the actions which will be performed when running Streams Reset Tool----");
@@ -163,15 +161,15 @@ public class StreamsResetter {
             final HashMap<Object, Object> consumerConfig = new HashMap<>(config);
             consumerConfig.putAll(properties);
             exitCode = maybeResetInputAndSeekToEndIntermediateTopicOffsets(consumerConfig, dryRun);
-            maybeDeleteInternalTopics(kafkaAdminClient, dryRun);
+            maybeDeleteInternalTopics(adminClient, dryRun);
 
         } catch (final Throwable e) {
             exitCode = EXIT_CODE_ERROR;
             System.err.println("ERROR: " + e);
             e.printStackTrace(System.err);
         } finally {
-            if (kafkaAdminClient != null) {
-                kafkaAdminClient.close(Duration.ofSeconds(60));
+            if (adminClient != null) {
+                adminClient.close(Duration.ofSeconds(60));
             }
         }
 
@@ -182,8 +180,9 @@ public class StreamsResetter {
                                            final Admin adminClient)
         throws ExecutionException, InterruptedException {
 
-        final DescribeConsumerGroupsResult describeResult = adminClient.describeConsumerGroups(Collections.singleton(groupId),
-                (new DescribeConsumerGroupsOptions()).timeoutMs(10 * 1000));
+        final DescribeConsumerGroupsResult describeResult = adminClient.describeConsumerGroups(
+            Collections.singleton(groupId),
+            new DescribeConsumerGroupsOptions().timeoutMs(10 * 1000));
         final List<MemberDescription> members =
             new ArrayList<>(describeResult.describedGroups().get(groupId).get().members());
         if (!members.isEmpty()) {
@@ -193,8 +192,7 @@ public class StreamsResetter {
         }
     }
 
-    private void parseArguments(final String[] args) throws IOException {
-
+    private void parseArguments(final String[] args) {
         final OptionParser optionParser = new OptionParser(false);
         applicationIdOption = optionParser.accepts("application-id", "The Kafka Streams application ID (application.id).")
             .withRequiredArg()
@@ -280,11 +278,17 @@ public class StreamsResetter {
         checkInvalidArgs(optionParser, options, allScenarioOptions, shiftByOption);
     }
 
-    private <T> void checkInvalidArgs(OptionParser optionParser, OptionSet options, Set<OptionSpec<?>> allOptions,
-                                  OptionSpec<T> option) {
-        Set<OptionSpec<?>> invalidOptions = new HashSet<>(allOptions);
+    private <T> void checkInvalidArgs(final OptionParser optionParser,
+                                      final OptionSet options,
+                                      final Set<OptionSpec<?>> allOptions,
+                                      final OptionSpec<T> option) {
+        final Set<OptionSpec<?>> invalidOptions = new HashSet<>(allOptions);
         invalidOptions.remove(option);
-        CommandLineUtils.checkInvalidArgs(optionParser, options, option, JavaConverters.asScalaSetConverter(invalidOptions).asScala());
+        CommandLineUtils.checkInvalidArgs(
+            optionParser,
+            options,
+            option,
+            JavaConverters.asScalaSetConverter(invalidOptions).asScala());
     }
 
     private int maybeResetInputAndSeekToEndIntermediateTopicOffsets(final Map consumerConfig,
@@ -408,7 +412,6 @@ public class StreamsResetter {
                     System.out.println("Topic: " + topicPartition.topic());
                 }
             }
-
             client.seekToEnd(intermediateTopicPartitions);
         }
     }
@@ -626,8 +629,7 @@ public class StreamsResetter {
         return options.valuesOf(intermediateTopicsOption).contains(topic);
     }
 
-    private void maybeDeleteInternalTopics(final KafkaAdminClient adminClient, final boolean dryRun) {
-
+    private void maybeDeleteInternalTopics(final Admin adminClient, final boolean dryRun) {
         System.out.println("Deleting all internal/auto-created topics for application " + options.valueOf(applicationIdOption));
         final List<String> topicsToDelete = new ArrayList<>();
         for (final String listing : allTopics) {
@@ -666,7 +668,6 @@ public class StreamsResetter {
         }
     }
 
-
     private boolean isInternalTopic(final String topicName) {
         // Specified input/intermediate topics might be named like internal topics (by chance).
         // Even is this is not expected in general, we need to exclude those topics here
@@ -675,11 +676,6 @@ public class StreamsResetter {
         return !isInputTopic(topicName) && !isIntermediateTopic(topicName)
             && topicName.startsWith(options.valueOf(applicationIdOption) + "-")
             && (topicName.endsWith("-changelog") || topicName.endsWith("-repartition"));
-    }
-
-    private void printHelp(final OptionParser parser) throws IOException {
-        System.err.println(usage);
-        parser.printHelpOn(System.err);
     }
 
     public static void main(final String[] args) {

@@ -24,7 +24,7 @@ import kafka.cluster.Broker
 import kafka.controller.{KafkaController, LeaderIsrAndControllerEpoch}
 import kafka.log.LogConfig
 import kafka.metrics.KafkaMetricsGroup
-import kafka.security.auth.SimpleAclAuthorizer.{NoAcls, VersionedAcls}
+import kafka.security.authorizer.AclAuthorizer.{NoAcls, VersionedAcls}
 import kafka.security.auth.{Acl, Resource, ResourceType}
 import kafka.server.ConfigType
 import kafka.utils.Logging
@@ -985,7 +985,7 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
    * @param partitions
    * @throws KeeperException if there is an error while creating the znode
    */
-  def createPreferredReplicaElection(partitions: Set[TopicPartition]): Unit  = {
+  def createPreferredReplicaElection(partitions: Set[TopicPartition]): Unit = {
     createRecursive(PreferredReplicaElectionZNode.path, PreferredReplicaElectionZNode.encode(partitions))
   }
 
@@ -1155,7 +1155,7 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
     createResponse.maybeThrow
   }
 
-  def propagateLogDirEvent(brokerId: Int) {
+  def propagateLogDirEvent(brokerId: Int): Unit = {
     val logDirEventNotificationPath: String = createSequentialPersistentPath(
       LogDirEventNotificationZNode.path + "/" + LogDirEventNotificationSequenceZNode.SequenceNumberPrefix,
       LogDirEventNotificationSequenceZNode.encode(brokerId))

@@ -17,7 +17,6 @@
 package org.apache.kafka.streams.processor;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
-import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.streams.errors.StreamsException;
 
 /**
@@ -43,7 +42,6 @@ import org.apache.kafka.streams.errors.StreamsException;
  * @see LogAndSkipOnInvalidTimestamp
  * @see WallclockTimestampExtractor
  */
-@InterfaceStability.Evolving
 public class UsePreviousTimeOnInvalidTimestamp extends ExtractRecordMetadataTimestamp {
 
     /**

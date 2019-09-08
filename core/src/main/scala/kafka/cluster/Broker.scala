@@ -17,12 +17,17 @@
 
 package kafka.cluster
 
+import java.util
+
 import kafka.common.BrokerEndPointNotAvailableException
-import org.apache.kafka.common.Node
+import kafka.server.KafkaConfig
+import org.apache.kafka.common.{ClusterResource, Endpoint, Node}
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.auth.SecurityProtocol
+import org.apache.kafka.server.authorizer.AuthorizerServerInfo
 
 import scala.collection.Seq
+import scala.collection.JavaConverters._
 
 /**
  * A Kafka broker.
@@ -59,9 +64,26 @@ case class Broker(id: Int, endPoints: Seq[EndPoint], rack: Option[String]) {
     endPointsMap.get(listenerName).map(endpoint => new Node(id, endpoint.host, endpoint.port, rack.orNull))
 
   def brokerEndPoint(listenerName: ListenerName): BrokerEndPoint = {
-    val endpoint = endPointsMap.getOrElse(listenerName,
-      throw new BrokerEndPointNotAvailableException(s"End point with listener name ${listenerName.value} not found for broker $id"))
+    val endpoint = endPoint(listenerName)
     new BrokerEndPoint(id, endpoint.host, endpoint.port)
   }
+
+  def endPoint(listenerName: ListenerName): EndPoint = {
+    endPointsMap.getOrElse(listenerName,
+      throw new BrokerEndPointNotAvailableException(s"End point with listener name ${listenerName.value} not found for broker $id"))
+  }
+
+  def toServerInfo(clusterId: String, config: KafkaConfig): AuthorizerServerInfo = {
+    val clusterResource: ClusterResource = new ClusterResource(clusterId)
+    val interBrokerEndpoint: Endpoint = endPoint(config.interBrokerListenerName)
+    val brokerEndpoints: util.List[Endpoint] = endPoints.toList.map(_.asInstanceOf[Endpoint]).asJava
+    BrokerEndpointInfo(clusterResource, id, brokerEndpoints, interBrokerEndpoint)
+  }
+
+  case class BrokerEndpointInfo(clusterResource: ClusterResource,
+                                brokerId: Int,
+                                endpoints: util.List[Endpoint],
+                                interBrokerEndpoint: Endpoint)
+    extends AuthorizerServerInfo
 
 }

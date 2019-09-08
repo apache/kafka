@@ -370,7 +370,8 @@ public class FileRecords extends AbstractRecords implements Closeable {
 
     @Override
     public String toString() {
-        return "FileRecords(file= " + file +
+        return "FileRecords(size=" + sizeInBytes() +
+                ", file=" + file +
                 ", start=" + start +
                 ", end=" + end +
                 ")";
