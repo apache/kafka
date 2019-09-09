@@ -40,6 +40,9 @@ public class RoundRobinAssignorTest {
     private String topic = "topic";
     private String consumerId = "consumer";
 
+    private String topic1 = "topic1";
+    private String topic2 = "topic2";
+
     @Test
     public void testOneConsumerNoTopic() {
         Map<String, Integer> partitionsPerTopic = new HashMap<>();
@@ -85,12 +88,7 @@ public class RoundRobinAssignorTest {
 
     @Test
     public void testOneConsumerMultipleTopics() {
-        String topic1 = "topic1";
-        String topic2 = "topic2";
-
-        Map<String, Integer> partitionsPerTopic = new HashMap<>();
-        partitionsPerTopic.put(topic1, 1);
-        partitionsPerTopic.put(topic2, 2);
+        Map<String, Integer> partitionsPerTopic = setupPartitionsPerTopicWithTwoTopics(1, 2);
 
         Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic,
                 Collections.singletonMap(consumerId, new Subscription(topics(topic1, topic2))));
@@ -139,9 +137,7 @@ public class RoundRobinAssignorTest {
         String consumer2 = "consumer2";
         String consumer3 = "consumer3";
 
-        Map<String, Integer> partitionsPerTopic = new HashMap<>();
-        partitionsPerTopic.put(topic1, 3);
-        partitionsPerTopic.put(topic2, 2);
+        Map<String, Integer> partitionsPerTopic = setupPartitionsPerTopicWithTwoTopics(3, 2);
 
         Map<String, Subscription> consumers = new HashMap<>();
         consumers.put(consumer1, new Subscription(topics(topic1)));
@@ -161,9 +157,7 @@ public class RoundRobinAssignorTest {
         String consumer1 = "consumer1";
         String consumer2 = "consumer2";
 
-        Map<String, Integer> partitionsPerTopic = new HashMap<>();
-        partitionsPerTopic.put(topic1, 3);
-        partitionsPerTopic.put(topic2, 3);
+        Map<String, Integer> partitionsPerTopic = setupPartitionsPerTopicWithTwoTopics(3, 3);
 
         Map<String, Subscription> consumers = new HashMap<>();
         consumers.put(consumer1, new Subscription(topics(topic1, topic2)));
@@ -185,9 +179,7 @@ public class RoundRobinAssignorTest {
         String consumer2 = "consumer-a";
         String instance2 = "instance2";
 
-        Map<String, Integer> partitionsPerTopic = new HashMap<>();
-        partitionsPerTopic.put(topic1, 3);
-        partitionsPerTopic.put(topic2, 3);
+        Map<String, Integer> partitionsPerTopic = setupPartitionsPerTopicWithTwoTopics(3, 3);
 
         Map<String, Subscription> consumers = new HashMap<>();
         Subscription consumer1Subscription = new Subscription(topics(topic1, topic2), null);
@@ -205,15 +197,11 @@ public class RoundRobinAssignorTest {
     public void testOneStaticConsumerAndOneDynamicConsumerTwoTopicsSixPartitions() {
         // although consumer 2 has a higher rank than 1, consumer 1 will win the comparison
         // because it has instance id while consumer 2 doesn't.
-        String topic1 = "topic1";
-        String topic2 = "topic2";
         String consumer1 = "consumer-b";
         String instance1 = "instance1";
         String consumer2 = "consumer-a";
 
-        Map<String, Integer> partitionsPerTopic = new HashMap<>();
-        partitionsPerTopic.put(topic1, 3);
-        partitionsPerTopic.put(topic2, 3);
+        Map<String, Integer> partitionsPerTopic = setupPartitionsPerTopicWithTwoTopics(3, 3);
 
         Map<String, Subscription> consumers = new HashMap<>();
 
@@ -231,8 +219,6 @@ public class RoundRobinAssignorTest {
     public void testStaticMemberRoundRobinAssignmentPersistent() {
         // Have 3 static members instance1, instance2, instance3 to be persistent
         // across generations. Their assignment shall be the same.
-        String topic1 = "topic1";
-        String topic2 = "topic2";
         String consumer1 = "consumer1";
         String instance1 = "instance1";
         String consumer2 = "consumer2";
@@ -248,9 +234,8 @@ public class RoundRobinAssignorTest {
         // Consumer 4 is a dynamic member.
         String consumer4 = "consumer4";
 
-        Map<String, Integer> partitionsPerTopic = new HashMap<>();
-        partitionsPerTopic.put(topic1, 3);
-        partitionsPerTopic.put(topic2, 3);
+        Map<String, Integer> partitionsPerTopic = setupPartitionsPerTopicWithTwoTopics(3, 3);
+
         Map<String, Subscription> consumers = new HashMap<>();
         for (MemberInfo m : staticMemberInfos) {
             Subscription subscription = new Subscription(topics(topic1, topic2), null);
@@ -281,8 +266,6 @@ public class RoundRobinAssignorTest {
 
     @Test
     public void testStaticMemberRoundRobinAssignmentPersistentAfterMemberIdChanges() {
-        String topic1 = "topic1";
-        String topic2 = "topic2";
         String consumer1 = "consumer1";
         String instance1 = "instance1";
         String consumer2 = "consumer2";
@@ -294,9 +277,8 @@ public class RoundRobinAssignorTest {
         memberIdToInstanceId.put(consumer2, instance2);
         memberIdToInstanceId.put(consumer3, instance3);
 
-        Map<String, Integer> partitionsPerTopic = new HashMap<>();
-        partitionsPerTopic.put(topic1, 5);
-        partitionsPerTopic.put(topic2, 5);
+        Map<String, Integer> partitionsPerTopic = setupPartitionsPerTopicWithTwoTopics(5, 5);
+
         Map<String, List<TopicPartition>> expectedInstanceAssignment = new HashMap<>();
         expectedInstanceAssignment.put(instance1,
                                        partitions(tp(topic1, 0), tp(topic1, 3), tp(topic2, 1), tp(topic2, 4)));
@@ -345,5 +327,12 @@ public class RoundRobinAssignorTest {
 
     private static TopicPartition tp(String topic, int partition) {
         return new TopicPartition(topic, partition);
+    }
+
+    private Map<String, Integer> setupPartitionsPerTopicWithTwoTopics(int numberOfPartitions1, int numberOfPartitions2) {
+        Map<String, Integer> partitionsPerTopic = new HashMap<>();
+        partitionsPerTopic.put(topic1, numberOfPartitions1);
+        partitionsPerTopic.put(topic2, numberOfPartitions2);
+        return partitionsPerTopic;
     }
 }

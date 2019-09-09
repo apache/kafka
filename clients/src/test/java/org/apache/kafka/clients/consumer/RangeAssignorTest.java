@@ -81,7 +81,8 @@ public class RangeAssignorTest {
 
     @Test
     public void testOneConsumerOneTopic() {
-        Map<String, Integer> partitionsPerTopic = setupPartitionsPerTopicWithTwoTopics(3, 0);
+        Map<String, Integer> partitionsPerTopic = new HashMap<>();
+        partitionsPerTopic.put(topic1, 3);
 
         Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic,
                 Collections.singletonMap(consumer1, new Subscription(topics(topic1))));
@@ -117,7 +118,8 @@ public class RangeAssignorTest {
 
     @Test
     public void testTwoConsumersOneTopicOnePartition() {
-        Map<String, Integer> partitionsPerTopic = setupPartitionsPerTopicWithTwoTopics(1, 0);
+        Map<String, Integer> partitionsPerTopic = new HashMap<>();
+        partitionsPerTopic.put(topic1, 1);
 
         Map<String, Subscription> consumers = new HashMap<>();
         consumers.put(consumer1, new Subscription(topics(topic1)));
@@ -131,7 +133,8 @@ public class RangeAssignorTest {
 
     @Test
     public void testTwoConsumersOneTopicTwoPartitions() {
-        Map<String, Integer> partitionsPerTopic = setupPartitionsPerTopicWithTwoTopics(2, 0);
+        Map<String, Integer> partitionsPerTopic = new HashMap<>();
+        partitionsPerTopic.put(topic1, 2);
 
         Map<String, Subscription> consumers = new HashMap<>();
         consumers.put(consumer1, new Subscription(topics(topic1)));
