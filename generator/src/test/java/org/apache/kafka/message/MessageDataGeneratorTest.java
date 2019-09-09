@@ -245,7 +245,7 @@ public class MessageDataGeneratorTest {
                 "  \"flexibleVersions\": \"0+\",",
                 "  \"fields\": [",
                 "    { \"name\": \"field1\", \"type\": \"string\", \"versions\": \"0+\", ",
-                "        \"tag\": 5, \"taggedVersions\": \"1-2\" }",
+                "        \"tag\": 0, \"taggedVersions\": \"1-2\" }",
                 "  ]",
                 "}")), MessageSpec.class);
             fail("Expected the MessageSpec constructor to fail");
@@ -253,6 +253,29 @@ public class MessageDataGeneratorTest {
             assertTrue("Invalid error message: " + e.getMessage(),
                 e.getMessage().contains("taggedVersions must be either none, " +
                     "or an open-ended range"));
+        }
+    }
+
+    @Test
+    public void testDuplicateTags() {
+        try {
+            MessageGenerator.JSON_SERDE.readValue(String.join("", Arrays.asList(
+                "{",
+                "  \"type\": \"request\",",
+                "  \"name\": \"FooBar\",",
+                "  \"validVersions\": \"0-2\",",
+                "  \"flexibleVersions\": \"0+\",",
+                "  \"fields\": [",
+                "    { \"name\": \"field1\", \"type\": \"string\", \"versions\": \"0+\", ",
+                "        \"tag\": 0, \"taggedVersions\": \"0+\" },",
+                "    { \"name\": \"field2\", \"type\": \"int64\", \"versions\": \"0+\", ",
+                "        \"tag\": 0, \"taggedVersions\": \"0+\" }",
+                "  ]",
+                "}")), MessageSpec.class);
+            fail("Expected the MessageSpec constructor to fail");
+        } catch (Exception e) {
+            assertTrue("Invalid error message: " + e.getMessage(),
+                e.getMessage().contains("duplicate tag"));
         }
     }
 }
