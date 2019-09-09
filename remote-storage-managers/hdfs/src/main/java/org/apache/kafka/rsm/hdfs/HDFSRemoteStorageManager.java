@@ -75,6 +75,7 @@ public class HDFSRemoteStorageManager implements RemoteStorageManager {
     private static final String TIME_INDEX_FILE_NAME = "timeindex";
     private static final String REMOTE_INDEX_FILE_NAME = "remotelogindex";
     private static final Pattern RDI_PATTERN = Pattern.compile("(.*):(\\d+)");
+    private static final String FILE_PATH = "file_path";
 
     private static AtomicInteger seqNum = new AtomicInteger(0);
 
@@ -177,7 +178,8 @@ public class HDFSRemoteStorageManager implements RemoteStorageManager {
                     long baseOffset = Long.parseLong(m.group(1));
                     if (baseOffset >= minBaseOffset) {
                         long endOffset = Long.parseLong(m.group(2));
-                        HDFSRemoteLogSegmentInfo segment = new HDFSRemoteLogSegmentInfo(baseOffset, endOffset, file.getPath());
+                        RemoteLogSegmentInfo segment = new RemoteLogSegmentInfo(baseOffset, endOffset, topicPartition,
+                                Collections.singletonMap(FILE_PATH, file.getPath()));
                         segments.add(segment);
                     }
                 } catch (NumberFormatException e) {
@@ -192,17 +194,17 @@ public class HDFSRemoteStorageManager implements RemoteStorageManager {
 
     @Override
     public List<RemoteLogIndexEntry> getRemoteLogIndexEntries(RemoteLogSegmentInfo remoteLogSegment) throws IOException {
-        HDFSRemoteLogSegmentInfo segment = (HDFSRemoteLogSegmentInfo) remoteLogSegment;
         FileSystem fs = getFS();
 
         File tmpFile = null;
         try {
-            tmpFile = File.createTempFile("kafka-hdfs-rsm-" + segment.getPath().getName(), null);
+            Path hdfsPath = (Path) remoteLogSegment.props().get(FILE_PATH);
+            tmpFile = File.createTempFile("kafka-hdfs-rsm-" + hdfsPath.getName(), null);
             tmpFile.deleteOnExit();
 
-            Path path = getPath(segment.getPath().toString(), REMOTE_INDEX_FILE_NAME);
+            Path remoteIndexPath = getPath(hdfsPath.toString(), REMOTE_INDEX_FILE_NAME);
 
-            fs.copyToLocalFile(path, new Path(tmpFile.getAbsolutePath()));
+            fs.copyToLocalFile(remoteIndexPath, new Path(tmpFile.getAbsolutePath()));
 
             try (RandomAccessFile raFile = new RandomAccessFile(tmpFile, "r")) {
                 FileChannel channel = raFile.getChannel();
@@ -218,10 +220,9 @@ public class HDFSRemoteStorageManager implements RemoteStorageManager {
     }
 
     @Override
-    public boolean deleteLogSegment(RemoteLogSegmentInfo remoteLogSegment) throws IOException {
-        HDFSRemoteLogSegmentInfo segment = (HDFSRemoteLogSegmentInfo) remoteLogSegment;
+    public boolean deleteLogSegment(RemoteLogSegmentInfo remoteLogSegmentInfo) throws IOException {
         FileSystem fs = getFS();
-        return fs.delete(segment.getPath(), true);
+        return fs.delete((Path) remoteLogSegmentInfo.props().get(FILE_PATH), true);
     }
 
     @Override
