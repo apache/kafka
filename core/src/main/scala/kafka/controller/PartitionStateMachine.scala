@@ -342,6 +342,9 @@ class ZkPartitionStateMachine(config: KafkaConfig,
       }
 
       finishedElections ++= finished
+
+      if (remaining.nonEmpty)
+        logger.info(s"Retrying leader election with strategy $partitionLeaderElectionStrategy for partitions $remaining")
     }
 
     finishedElections.toMap

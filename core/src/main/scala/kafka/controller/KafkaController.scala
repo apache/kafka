@@ -531,7 +531,6 @@ class KafkaController(val config: KafkaConfig,
    *      unless a preferred leader election was triggered while the reassignment was happening)
    *   3 Replicas in URS -> Offline (force those replicas out of ISR)
    *   4 Replicas in URS -> NonExistentReplica (force those replicas to be deleted)
-   *   5 Update ZK with RS = ORS + OVRS, AR = OVRS, RS = []
    *
    * Phase A: Initial trigger (when TRS != ISR)
    *   A1. Update ZK with RS = ORS + TRS,
@@ -722,6 +721,11 @@ class KafkaController(val config: KafkaConfig,
               case e: Throwable =>
                 error(s"Error completing reassignment of partition $tp", e)
                 partitionsToBeRemovedFromReassignment.add(tp)
+                zkClient.getFullReplicaAssignmentForTopics(immutable.Set(tp.topic())).find(_._1 == tp) match {
+                  case Some(persistedAssignment) =>
+                    controllerContext.updatePartitionFullReplicaAssignment(tp, persistedAssignment._2)
+                  case None =>
+                }
                 reassignmentResults.put(tp, new ApiError(Errors.UNKNOWN_SERVER_ERROR))
             }
           }
