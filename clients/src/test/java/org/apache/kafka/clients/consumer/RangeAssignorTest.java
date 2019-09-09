@@ -38,8 +38,6 @@ import static org.junit.Assert.assertTrue;
 public class RangeAssignorTest {
 
     private RangeAssignor assignor = new RangeAssignor();
-    private String consumerId = "consumer";
-    private String topic = "topic";
 
     // For plural tests
     private String topic1 = "topic1";
@@ -66,31 +64,30 @@ public class RangeAssignorTest {
         Map<String, Integer> partitionsPerTopic = new HashMap<>();
 
         Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic,
-                Collections.singletonMap(consumerId, new Subscription(Collections.emptyList())));
+                Collections.singletonMap(consumer1, new Subscription(Collections.emptyList())));
 
-        assertEquals(Collections.singleton(consumerId), assignment.keySet());
-        assertTrue(assignment.get(consumerId).isEmpty());
+        assertEquals(Collections.singleton(consumer1), assignment.keySet());
+        assertTrue(assignment.get(consumer1).isEmpty());
     }
 
     @Test
     public void testOneConsumerNonexistentTopic() {
         Map<String, Integer> partitionsPerTopic = new HashMap<>();
         Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic,
-                Collections.singletonMap(consumerId, new Subscription(topics(topic))));
-        assertEquals(Collections.singleton(consumerId), assignment.keySet());
-        assertTrue(assignment.get(consumerId).isEmpty());
+                Collections.singletonMap(consumer1, new Subscription(topics(topic1))));
+        assertEquals(Collections.singleton(consumer1), assignment.keySet());
+        assertTrue(assignment.get(consumer1).isEmpty());
     }
 
     @Test
     public void testOneConsumerOneTopic() {
-        Map<String, Integer> partitionsPerTopic = new HashMap<>();
-        partitionsPerTopic.put(topic, 3);
+        Map<String, Integer> partitionsPerTopic = setupPartitionsPerTopicWithTwoTopics(3, 0);
 
         Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic,
-                Collections.singletonMap(consumerId, new Subscription(topics(topic))));
+                Collections.singletonMap(consumer1, new Subscription(topics(topic1))));
 
-        assertEquals(Collections.singleton(consumerId), assignment.keySet());
-        assertAssignment(partitions(tp(topic, 0), tp(topic, 1), tp(topic, 2)), assignment.get(consumerId));
+        assertEquals(Collections.singleton(consumer1), assignment.keySet());
+        assertAssignment(partitions(tp(topic1, 0), tp(topic1, 1), tp(topic1, 2)), assignment.get(consumer1));
     }
 
     @Test
@@ -98,62 +95,56 @@ public class RangeAssignorTest {
         String otherTopic = "other";
 
         Map<String, Integer> partitionsPerTopic = new HashMap<>();
-        partitionsPerTopic.put(topic, 3);
+        partitionsPerTopic.put(topic1, 3);
         partitionsPerTopic.put(otherTopic, 3);
 
         Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic,
-                Collections.singletonMap(consumerId, new Subscription(topics(topic))));
-        assertEquals(Collections.singleton(consumerId), assignment.keySet());
-        assertAssignment(partitions(tp(topic, 0), tp(topic, 1), tp(topic, 2)), assignment.get(consumerId));
+                Collections.singletonMap(consumer1, new Subscription(topics(topic1))));
+        assertEquals(Collections.singleton(consumer1), assignment.keySet());
+        assertAssignment(partitions(tp(topic1, 0), tp(topic1, 1), tp(topic1, 2)), assignment.get(consumer1));
     }
 
     @Test
     public void testOneConsumerMultipleTopics() {
-        Map<String, Integer> partitionsPerTopic = new HashMap<>();
-        partitionsPerTopic.put(topic1, 1);
-        partitionsPerTopic.put(topic2, 2);
+        Map<String, Integer> partitionsPerTopic = setupPartitionsPerTopicWithTwoTopics(1, 2);
 
         Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic,
-                Collections.singletonMap(consumerId, new Subscription(topics(topic1, topic2))));
+                Collections.singletonMap(consumer1, new Subscription(topics(topic1, topic2))));
 
-        assertEquals(Collections.singleton(consumerId), assignment.keySet());
-        assertAssignment(partitions(tp(topic1, 0), tp(topic2, 0), tp(topic2, 1)), assignment.get(consumerId));
+        assertEquals(Collections.singleton(consumer1), assignment.keySet());
+        assertAssignment(partitions(tp(topic1, 0), tp(topic2, 0), tp(topic2, 1)), assignment.get(consumer1));
     }
 
     @Test
     public void testTwoConsumersOneTopicOnePartition() {
-        Map<String, Integer> partitionsPerTopic = new HashMap<>();
-        partitionsPerTopic.put(topic, 1);
+        Map<String, Integer> partitionsPerTopic = setupPartitionsPerTopicWithTwoTopics(1, 0);
 
         Map<String, Subscription> consumers = new HashMap<>();
-        consumers.put(consumer1, new Subscription(topics(topic)));
-        consumers.put(consumer2, new Subscription(topics(topic)));
+        consumers.put(consumer1, new Subscription(topics(topic1)));
+        consumers.put(consumer2, new Subscription(topics(topic1)));
 
         Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic, consumers);
-        assertAssignment(partitions(tp(topic, 0)), assignment.get(consumer1));
+        assertAssignment(partitions(tp(topic1, 0)), assignment.get(consumer1));
         assertAssignment(Collections.emptyList(), assignment.get(consumer2));
     }
 
 
     @Test
     public void testTwoConsumersOneTopicTwoPartitions() {
-        Map<String, Integer> partitionsPerTopic = new HashMap<>();
-        partitionsPerTopic.put(topic, 2);
+        Map<String, Integer> partitionsPerTopic = setupPartitionsPerTopicWithTwoTopics(2, 0);
 
         Map<String, Subscription> consumers = new HashMap<>();
-        consumers.put(consumer1, new Subscription(topics(topic)));
-        consumers.put(consumer2, new Subscription(topics(topic)));
+        consumers.put(consumer1, new Subscription(topics(topic1)));
+        consumers.put(consumer2, new Subscription(topics(topic1)));
 
         Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic, consumers);
-        assertAssignment(partitions(tp(topic, 0)), assignment.get(consumer1));
-        assertAssignment(partitions(tp(topic, 1)), assignment.get(consumer2));
+        assertAssignment(partitions(tp(topic1, 0)), assignment.get(consumer1));
+        assertAssignment(partitions(tp(topic1, 1)), assignment.get(consumer2));
     }
 
     @Test
     public void testMultipleConsumersMixedTopics() {
-        Map<String, Integer> partitionsPerTopic = new HashMap<>();
-        partitionsPerTopic.put(topic1, 3);
-        partitionsPerTopic.put(topic2, 2);
+        Map<String, Integer> partitionsPerTopic = setupPartitionsPerTopicWithTwoTopics(3, 2);
 
         Map<String, Subscription> consumers = new HashMap<>();
         consumers.put(consumer1, new Subscription(topics(topic1)));
@@ -173,9 +164,7 @@ public class RangeAssignorTest {
         String consumer1 = "consumer1";
         String consumer2 = "consumer2";
 
-        Map<String, Integer> partitionsPerTopic = new HashMap<>();
-        partitionsPerTopic.put(topic1, 3);
-        partitionsPerTopic.put(topic2, 3);
+        Map<String, Integer> partitionsPerTopic = setupPartitionsPerTopicWithTwoTopics(3, 3);
 
         Map<String, Subscription> consumers = new HashMap<>();
         consumers.put(consumer1, new Subscription(topics(topic1, topic2)));
@@ -188,61 +177,56 @@ public class RangeAssignorTest {
 
     @Test
     public void testTwoStaticConsumersTwoTopicsSixPartitions() {
-        // although consumer 2 has a higher rank than 1, the comparison happens on
+        // although consumer high has a higher rank than consumer low, the comparison happens on
         // instance id level.
-        String consumer1 = "consumer-b";
-        String consumer2 = "consumer-a";
+        String consumerIdLow = "consumer-b";
+        String consumerIdHigh = "consumer-a";
 
-        Map<String, Integer> partitionsPerTopic = new HashMap<>();
-        partitionsPerTopic.put(topic1, 3);
-        partitionsPerTopic.put(topic2, 3);
+        Map<String, Integer> partitionsPerTopic = setupPartitionsPerTopicWithTwoTopics(3, 3);
 
         Map<String, Subscription> consumers = new HashMap<>();
-        Subscription consumer1Subscription = new Subscription(topics(topic1, topic2),
+        Subscription consumerLowSubscription = new Subscription(topics(topic1, topic2),
                                                               null,
                                                               Collections.emptyList());
-        consumer1Subscription.setGroupInstanceId(Optional.of(instance1));
-        consumers.put(consumer1, consumer1Subscription);
-        Subscription consumer2Subscription = new Subscription(topics(topic1, topic2),
+        consumerLowSubscription.setGroupInstanceId(Optional.of(instance1));
+        consumers.put(consumerIdLow, consumerLowSubscription);
+        Subscription consumerHighSubscription = new Subscription(topics(topic1, topic2),
                                                               null,
                                                               Collections.emptyList());
-        consumer2Subscription.setGroupInstanceId(Optional.of(instance2));
-        consumers.put(consumer2, consumer2Subscription);
+        consumerHighSubscription.setGroupInstanceId(Optional.of(instance2));
+        consumers.put(consumerIdHigh, consumerHighSubscription);
         Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic, consumers);
-        assertAssignment(partitions(tp(topic1, 0), tp(topic1, 1), tp(topic2, 0), tp(topic2, 1)), assignment.get(consumer1));
-        assertAssignment(partitions(tp(topic1, 2), tp(topic2, 2)), assignment.get(consumer2));
+        assertAssignment(partitions(tp(topic1, 0), tp(topic1, 1), tp(topic2, 0), tp(topic2, 1)), assignment.get(consumerIdLow));
+        assertAssignment(partitions(tp(topic1, 2), tp(topic2, 2)), assignment.get(consumerIdHigh));
     }
 
     @Test
     public void testOneStaticConsumerAndOneDynamicConsumerTwoTopicsSixPartitions() {
-        // although consumer 2 has a higher rank than 1, consumer 1 will win the comparison
+        // although consumer high has a higher rank than low, consumer low will win the comparison
         // because it has instance id while consumer 2 doesn't.
-        String consumer1 = "consumer-b";
-        String consumer2 = "consumer-a";
+        String consumerIdLow = "consumer-b";
+        String consumerIdHigh = "consumer-a";
 
-        Map<String, Integer> partitionsPerTopic = new HashMap<>();
-        partitionsPerTopic.put(topic1, 3);
-        partitionsPerTopic.put(topic2, 3);
+        Map<String, Integer> partitionsPerTopic = setupPartitionsPerTopicWithTwoTopics(3, 3);
 
         Map<String, Subscription> consumers = new HashMap<>();
 
-        Subscription consumer1Subscription = new Subscription(topics(topic1, topic2),
+        Subscription consumerLowSubscription = new Subscription(topics(topic1, topic2),
                                                               null,
                                                               Collections.emptyList());
-        consumer1Subscription.setGroupInstanceId(Optional.of(instance1));
-        consumers.put(consumer1, consumer1Subscription);
-        consumers.put(consumer2, new Subscription(topics(topic1, topic2)));
+        consumerLowSubscription.setGroupInstanceId(Optional.of(instance1));
+        consumers.put(consumerIdLow, consumerLowSubscription);
+        consumers.put(consumerIdHigh, new Subscription(topics(topic1, topic2)));
 
         Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic, consumers);
-        assertAssignment(partitions(tp(topic1, 0), tp(topic1, 1), tp(topic2, 0), tp(topic2, 1)), assignment.get(consumer1));
-        assertAssignment(partitions(tp(topic1, 2), tp(topic2, 2)), assignment.get(consumer2));
+        assertAssignment(partitions(tp(topic1, 0), tp(topic1, 1), tp(topic2, 0), tp(topic2, 1)), assignment.get(consumerIdLow));
+        assertAssignment(partitions(tp(topic1, 2), tp(topic2, 2)), assignment.get(consumerIdHigh));
     }
 
     @Test
     public void testStaticMemberRangeAssignmentPersistent() {
-        Map<String, Integer> partitionsPerTopic = new HashMap<>();
-        partitionsPerTopic.put(topic1, 5);
-        partitionsPerTopic.put(topic2, 4);
+        Map<String, Integer> partitionsPerTopic = setupPartitionsPerTopicWithTwoTopics(5, 4);
+
         Map<String, Subscription> consumers = new HashMap<>();
         for (MemberInfo m : staticMemberInfos) {
             Subscription subscription = new Subscription(topics(topic1, topic2),
@@ -279,9 +263,7 @@ public class RangeAssignorTest {
 
     @Test
     public void testStaticMemberRangeAssignmentPersistentAfterMemberIdChanges() {
-        Map<String, Integer> partitionsPerTopic = new HashMap<>();
-        partitionsPerTopic.put(topic1, 5);
-        partitionsPerTopic.put(topic2, 5);
+        Map<String, Integer> partitionsPerTopic = setupPartitionsPerTopicWithTwoTopics(5, 5);
 
         Map<String, Subscription> consumers = new HashMap<>();
         for (MemberInfo m : staticMemberInfos) {
@@ -333,6 +315,13 @@ public class RangeAssignorTest {
     private void assertAssignment(List<TopicPartition> expected, List<TopicPartition> actual) {
         // order doesn't matter for assignment, so convert to a set
         assertEquals(new HashSet<>(expected), new HashSet<>(actual));
+    }
+
+    private Map<String, Integer> setupPartitionsPerTopicWithTwoTopics(int numberOfPartitions1, int numberOfPartitions2) {
+        Map<String, Integer> partitionsPerTopic = new HashMap<>();
+        partitionsPerTopic.put(topic1, numberOfPartitions1);
+        partitionsPerTopic.put(topic2, numberOfPartitions2);
+        return partitionsPerTopic;
     }
 
     private static List<String> topics(String... topics) {

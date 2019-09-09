@@ -51,9 +51,9 @@ import java.util.Map;
  * <li><code>C2 (was C1): [t0p0, t0p1, t1p0, t1p1] (before was [t0p2, t1p2])</code>
  * </ul>
  *
- * The assignment change was caused by the change of <code>member.id</code> relative order, and could be
- * mitigated by the introduction of static membership. Consumers will have individual instance ids
- * <code>I1</code>, <code>I2</code>. As long as
+ * The assignment change was caused by the change of <code>member.id</code> relative order, and
+ * can be avoided by setting the group.instance.id.
+ * Consumers will have individual instance ids <code>I1</code>, <code>I2</code>. As long as
  * 1. Number of members remain the same across generation
  * 2. Static members' identities persist across generation
  * 3. Subscription pattern doesn't change for any member
