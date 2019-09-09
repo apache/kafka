@@ -58,6 +58,8 @@ import org.apache.kafka.common.message.DescribeGroupsResponseData;
 import org.apache.kafka.common.message.DescribeGroupsResponseData.DescribedGroup;
 import org.apache.kafka.common.message.ElectLeadersResponseData.PartitionResult;
 import org.apache.kafka.common.message.ElectLeadersResponseData.ReplicaElectionResult;
+import org.apache.kafka.common.message.ExpireDelegationTokenRequestData;
+import org.apache.kafka.common.message.ExpireDelegationTokenResponseData;
 import org.apache.kafka.common.message.FindCoordinatorRequestData;
 import org.apache.kafka.common.message.HeartbeatRequestData;
 import org.apache.kafka.common.message.HeartbeatResponseData;
@@ -80,10 +82,13 @@ import org.apache.kafka.common.message.ListGroupsRequestData;
 import org.apache.kafka.common.message.ListGroupsResponseData;
 import org.apache.kafka.common.message.OffsetCommitRequestData;
 import org.apache.kafka.common.message.OffsetCommitResponseData;
+import org.apache.kafka.common.message.RenewDelegationTokenRequestData;
+import org.apache.kafka.common.message.RenewDelegationTokenResponseData;
 import org.apache.kafka.common.message.SaslAuthenticateRequestData;
 import org.apache.kafka.common.message.SaslAuthenticateResponseData;
 import org.apache.kafka.common.message.SaslHandshakeRequestData;
 import org.apache.kafka.common.message.SaslHandshakeResponseData;
+import org.apache.kafka.common.message.TxnOffsetCommitRequestData;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.network.Send;
 import org.apache.kafka.common.protocol.ApiKeys;
@@ -1018,7 +1023,6 @@ public class RequestResponseTest {
         return MetadataResponse.prepareResponse(asList(node), null, MetadataResponse.NO_CONTROLLER_ID, allTopicMetadata);
     }
 
-    @SuppressWarnings("deprecation")
     private OffsetCommitRequest createOffsetCommitRequest(int version) {
         return new OffsetCommitRequest.Builder(new OffsetCommitRequestData()
                 .setGroupId("group1")
@@ -1381,7 +1385,14 @@ public class RequestResponseTest {
                     new TxnOffsetCommitRequest.CommittedOffset(100, null, Optional.empty()));
         offsets.put(new TopicPartition("topic", 74),
                 new TxnOffsetCommitRequest.CommittedOffset(100, "blah", Optional.of(27)));
-        return new TxnOffsetCommitRequest.Builder("transactionalId", "groupId", 21L, (short) 42, offsets).build();
+        return new TxnOffsetCommitRequest.Builder(
+            new TxnOffsetCommitRequestData()
+                .setTransactionalId("transactionalId")
+                .setGroupId("groupId")
+                .setProducerId(21L)
+                .setProducerEpoch((short) 42)
+                .setTopics(TxnOffsetCommitRequest.getTopics(offsets))
+            ).build();
     }
 
     private TxnOffsetCommitResponse createTxnOffsetCommitResponse() {
@@ -1543,19 +1554,33 @@ public class RequestResponseTest {
     }
 
     private RenewDelegationTokenRequest createRenewTokenRequest() {
-        return new RenewDelegationTokenRequest.Builder("test".getBytes(), System.currentTimeMillis()).build();
+        RenewDelegationTokenRequestData data = new RenewDelegationTokenRequestData()
+                .setHmac("test".getBytes())
+                .setRenewPeriodMs(System.currentTimeMillis());
+        return new RenewDelegationTokenRequest.Builder(data).build();
     }
 
     private RenewDelegationTokenResponse createRenewTokenResponse() {
-        return new RenewDelegationTokenResponse(20, Errors.NONE, System.currentTimeMillis());
+        RenewDelegationTokenResponseData data = new RenewDelegationTokenResponseData()
+                .setThrottleTimeMs(20)
+                .setErrorCode(Errors.NONE.code())
+                .setExpiryTimestampMs(System.currentTimeMillis());
+        return new RenewDelegationTokenResponse(data);
     }
 
     private ExpireDelegationTokenRequest createExpireTokenRequest() {
-        return new ExpireDelegationTokenRequest.Builder("test".getBytes(), System.currentTimeMillis()).build();
+        ExpireDelegationTokenRequestData data = new ExpireDelegationTokenRequestData()
+                .setHmac("test".getBytes())
+                .setExpiryTimePeriodMs(System.currentTimeMillis());
+        return new ExpireDelegationTokenRequest.Builder(data).build();
     }
 
     private ExpireDelegationTokenResponse createExpireTokenResponse() {
-        return new ExpireDelegationTokenResponse(20, Errors.NONE, System.currentTimeMillis());
+        ExpireDelegationTokenResponseData data = new ExpireDelegationTokenResponseData()
+                .setThrottleTimeMs(20)
+                .setErrorCode(Errors.NONE.code())
+                .setExpiryTimestampMs(System.currentTimeMillis());
+        return new ExpireDelegationTokenResponse(data);
     }
 
     private DescribeDelegationTokenRequest createDescribeTokenRequest() {
@@ -1685,8 +1710,8 @@ public class RequestResponseTest {
 
     private ListPartitionReassignmentsResponse createListPartitionReassignmentsResponse() {
         ListPartitionReassignmentsResponseData data = new ListPartitionReassignmentsResponseData();
-        data.topics().add(
-                new ListPartitionReassignmentsResponseData.OngoingTopicReassignment()
+        data.setTopics(Collections.singletonList(
+            new ListPartitionReassignmentsResponseData.OngoingTopicReassignment()
                         .setName("topic")
                         .setPartitions(Collections.singletonList(
                                 new ListPartitionReassignmentsResponseData.OngoingPartitionReassignment()
@@ -1696,7 +1721,7 @@ public class RequestResponseTest {
                                         .setRemovingReplicas(Collections.singletonList(1))
                                 )
                         )
-        );
+        ));
         return new ListPartitionReassignmentsResponse(data);
     }
 }

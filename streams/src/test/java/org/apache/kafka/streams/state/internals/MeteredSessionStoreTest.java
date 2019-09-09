@@ -67,7 +67,7 @@ public class MeteredSessionStoreTest {
     private final Map<String, String> tags = mkMap(
         mkEntry("client-id", "test"),
         mkEntry("task-id", taskId.toString()),
-        mkEntry("scope-id", "metered")
+        mkEntry("scope-state-id", "metered")
     );
     private final Metrics metrics = new Metrics();
     private MeteredSessionStore<String, String> metered;
@@ -104,9 +104,9 @@ public class MeteredSessionStoreTest {
         init();
         final JmxReporter reporter = new JmxReporter("kafka.streams");
         metrics.addReporter(reporter);
-        assertTrue(reporter.containsMbean(String.format("kafka.streams:type=stream-%s-metrics,client-id=%s,task-id=%s,%s-id=%s",
+        assertTrue(reporter.containsMbean(String.format("kafka.streams:type=stream-%s-state-metrics,client-id=%s,task-id=%s,%s-state-id=%s",
                 "scope", "test", taskId.toString(), "scope", "metered")));
-        assertTrue(reporter.containsMbean(String.format("kafka.streams:type=stream-%s-metrics,client-id=%s,task-id=%s,%s-id=%s",
+        assertTrue(reporter.containsMbean(String.format("kafka.streams:type=stream-%s-state-metrics,client-id=%s,task-id=%s,%s-state-id=%s",
                 "scope", "test", taskId.toString(), "scope", "all")));
     }
 
@@ -287,7 +287,7 @@ public class MeteredSessionStoreTest {
     }
 
     private KafkaMetric metric(final String name) {
-        return this.metrics.metric(new MetricName(name, "stream-scope-metrics", "", this.tags));
+        return this.metrics.metric(new MetricName(name, "stream-scope-state-metrics", "", this.tags));
     }
 
 }

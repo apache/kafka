@@ -41,9 +41,9 @@ class MockScheduler(val time: Time) extends Scheduler {
   
   def isStarted = true
 
-  def startup() {}
+  def startup(): Unit = {}
   
-  def shutdown() {
+  def shutdown(): Unit = {
     this synchronized {
       tasks.foreach(_.fun())
       tasks.clear()
@@ -55,7 +55,7 @@ class MockScheduler(val time: Time) extends Scheduler {
    * when this method is called and the execution happens synchronously in the calling thread.
    * If you are using the scheduler associated with a MockTime instance this call be triggered automatically.
    */
-  def tick() {
+  def tick(): Unit = {
     this synchronized {
       val now = time.milliseconds
       while(tasks.nonEmpty && tasks.head.nextExecution <= now) {
@@ -107,10 +107,10 @@ case class MockTask(name: String, fun: () => Unit, var nextExecution: Long, peri
     false
   }
 
-  def get() {
+  def get(): Unit = {
   }
 
-  def get(timeout: Long, unit: TimeUnit){
+  def get(timeout: Long, unit: TimeUnit): Unit = {
   }
 
   def isCancelled: Boolean = {

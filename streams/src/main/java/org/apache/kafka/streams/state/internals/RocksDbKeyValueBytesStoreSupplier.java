@@ -38,11 +38,13 @@ public class RocksDbKeyValueBytesStoreSupplier implements KeyValueBytesStoreSupp
 
     @Override
     public KeyValueStore<Bytes, byte[]> get() {
-        return returnTimestampedStore ? new RocksDBTimestampedStore(name) : new RocksDBStore(name);
+        return returnTimestampedStore ?
+            new RocksDBTimestampedStore(name, metricsScope()) :
+            new RocksDBStore(name, metricsScope());
     }
 
     @Override
     public String metricsScope() {
-        return "rocksdb-state";
+        return "rocksdb";
     }
 }

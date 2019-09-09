@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.common;
 
-import org.apache.kafka.common.utils.Utils;
-
 import java.net.InetSocketAddress;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -108,23 +106,64 @@ public final class Cluster {
 
         // Index the nodes for quick lookup
         Map<Integer, Node> tmpNodesById = new HashMap<>();
-        for (Node node : nodes)
+        Map<Integer, List<PartitionInfo>> tmpPartitionsByNode = new HashMap<>(nodes.size());
+        for (Node node : nodes) {
             tmpNodesById.put(node.id(), node);
+            // Populate the map here to make it easy to add the partitions per node efficiently when iterating over
+            // the partitions
+            tmpPartitionsByNode.put(node.id(), new ArrayList<>());
+        }
         this.nodesById = Collections.unmodifiableMap(tmpNodesById);
 
         // index the partition infos by topic, topic+partition, and node
+        // note that this code is performance sensitive if there are a large number of partitions so we are careful
+        // to avoid unnecessary work
         Map<TopicPartition, PartitionInfo> tmpPartitionsByTopicPartition = new HashMap<>(partitions.size());
         Map<String, List<PartitionInfo>> tmpPartitionsByTopic = new HashMap<>();
-        Map<String, List<PartitionInfo>> tmpAvailablePartitionsByTopic = new HashMap<>();
-        Map<Integer, List<PartitionInfo>> tmpPartitionsByNode = new HashMap<>();
         for (PartitionInfo p : partitions) {
             tmpPartitionsByTopicPartition.put(new TopicPartition(p.topic(), p.partition()), p);
-            tmpPartitionsByTopic.merge(p.topic(), Collections.singletonList(p), Utils::concatListsUnmodifiable);
+            List<PartitionInfo> partitionsForTopic = tmpPartitionsByTopic.get(p.topic());
+            if (partitionsForTopic == null) {
+                partitionsForTopic = new ArrayList<>();
+                tmpPartitionsByTopic.put(p.topic(), partitionsForTopic);
+            }
+            partitionsForTopic.add(p);
             if (p.leader() != null) {
-                tmpAvailablePartitionsByTopic.merge(p.topic(), Collections.singletonList(p), Utils::concatListsUnmodifiable);
-                tmpPartitionsByNode.merge(p.leader().id(), Collections.singletonList(p), Utils::concatListsUnmodifiable);
+                // The broker guarantees that if a partition has a non-null leader, it is one of the brokers returned
+                // in the metadata response
+                List<PartitionInfo> partitionsForNode = Objects.requireNonNull(tmpPartitionsByNode.get(p.leader().id()));
+                partitionsForNode.add(p);
             }
         }
+
+        // Update the values of `tmpPartitionsByNode` to contain unmodifiable lists
+        for (Map.Entry<Integer, List<PartitionInfo>> entry : tmpPartitionsByNode.entrySet()) {
+            tmpPartitionsByNode.put(entry.getKey(), Collections.unmodifiableList(entry.getValue()));
+        }
+
+        // Populate `tmpAvailablePartitionsByTopic` and update the values of `tmpPartitionsByTopic` to contain
+        // unmodifiable lists
+        Map<String, List<PartitionInfo>> tmpAvailablePartitionsByTopic = new HashMap<>(tmpPartitionsByTopic.size());
+        for (Map.Entry<String, List<PartitionInfo>> entry : tmpPartitionsByTopic.entrySet()) {
+            String topic = entry.getKey();
+            List<PartitionInfo> partitionsForTopic = Collections.unmodifiableList(entry.getValue());
+            tmpPartitionsByTopic.put(topic, partitionsForTopic);
+            // Optimise for the common case where all partitions are available
+            boolean foundUnavailablePartition = partitionsForTopic.stream().anyMatch(p -> p.leader() == null);
+            List<PartitionInfo> availablePartitionsForTopic;
+            if (foundUnavailablePartition) {
+                availablePartitionsForTopic = new ArrayList<>(partitionsForTopic.size());
+                for (PartitionInfo p : partitionsForTopic) {
+                    if (p.leader() != null)
+                        availablePartitionsForTopic.add(p);
+                }
+                availablePartitionsForTopic = Collections.unmodifiableList(availablePartitionsForTopic);
+            } else {
+                availablePartitionsForTopic = partitionsForTopic;
+            }
+            tmpAvailablePartitionsByTopic.put(topic, availablePartitionsForTopic);
+        }
+
         this.partitionsByTopicPartition = Collections.unmodifiableMap(tmpPartitionsByTopicPartition);
         this.partitionsByTopic = Collections.unmodifiableMap(tmpPartitionsByTopic);
         this.availablePartitionsByTopic = Collections.unmodifiableMap(tmpAvailablePartitionsByTopic);

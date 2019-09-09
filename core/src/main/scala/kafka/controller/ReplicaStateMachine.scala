@@ -32,7 +32,7 @@ abstract class ReplicaStateMachine(controllerContext: ControllerContext) extends
   /**
    * Invoked on successful controller election.
    */
-  def startup() {
+  def startup(): Unit = {
     info("Initializing replica state")
     initializeReplicaState()
     info("Triggering online replica state changes")
@@ -46,7 +46,7 @@ abstract class ReplicaStateMachine(controllerContext: ControllerContext) extends
   /**
    * Invoked on controller shutdown.
    */
-  def shutdown() {
+  def shutdown(): Unit = {
     info("Stopped replica state machine")
   }
 
@@ -54,7 +54,7 @@ abstract class ReplicaStateMachine(controllerContext: ControllerContext) extends
    * Invoked on startup of the replica's state machine to set the initial state for replicas of all existing partitions
    * in zookeeper
    */
-  private def initializeReplicaState() {
+  private def initializeReplicaState(): Unit = {
     controllerContext.allPartitions.foreach { partition =>
       val replicas = controllerContext.partitionReplicaAssignment(partition)
       replicas.foreach { replicaId =>

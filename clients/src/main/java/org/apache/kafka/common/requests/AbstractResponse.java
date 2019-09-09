@@ -127,7 +127,7 @@ public abstract class AbstractResponse extends AbstractRequestResponse {
             case WRITE_TXN_MARKERS:
                 return new WriteTxnMarkersResponse(struct);
             case TXN_OFFSET_COMMIT:
-                return new TxnOffsetCommitResponse(struct);
+                return new TxnOffsetCommitResponse(struct, version);
             case DESCRIBE_ACLS:
                 return new DescribeAclsResponse(struct);
             case CREATE_ACLS:
@@ -149,11 +149,11 @@ public abstract class AbstractResponse extends AbstractRequestResponse {
             case CREATE_DELEGATION_TOKEN:
                 return new CreateDelegationTokenResponse(struct, version);
             case RENEW_DELEGATION_TOKEN:
-                return new RenewDelegationTokenResponse(struct);
+                return new RenewDelegationTokenResponse(struct, version);
             case EXPIRE_DELEGATION_TOKEN:
-                return new ExpireDelegationTokenResponse(struct);
+                return new ExpireDelegationTokenResponse(struct, version);
             case DESCRIBE_DELEGATION_TOKEN:
-                return new DescribeDelegationTokenResponse(struct);
+                return new DescribeDelegationTokenResponse(struct, version);
             case DELETE_GROUPS:
                 return new DeleteGroupsResponse(struct, version);
             case ELECT_LEADERS:

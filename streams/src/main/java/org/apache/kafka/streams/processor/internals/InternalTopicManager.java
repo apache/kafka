@@ -35,6 +35,8 @@ import org.slf4j.Logger;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
 
@@ -103,11 +105,11 @@ public class InternalTopicManager {
         while (!topicsNotReady.isEmpty() && remainingRetries >= 0) {
             topicsNotReady = validateTopics(topicsNotReady, topics);
 
-            if (topicsNotReady.size() > 0) {
+            if (!topicsNotReady.isEmpty()) {
                 final Set<NewTopic> newTopics = new HashSet<>();
 
                 for (final String topicName : topicsNotReady) {
-                    final InternalTopicConfig internalTopicConfig = Utils.notNull(topics.get(topicName));
+                    final InternalTopicConfig internalTopicConfig = Objects.requireNonNull(topics.get(topicName));
                     final Map<String, String> topicConfig = internalTopicConfig.getProperties(defaultTopicConfigs, windowChangeLogAdditionalRetention);
 
                     log.debug("Going to create topic {} with {} partitions and config {}.",
@@ -119,7 +121,7 @@ public class InternalTopicManager {
                         new NewTopic(
                             internalTopicConfig.name(),
                             internalTopicConfig.numberOfPartitions(),
-                            replicationFactor)
+                            Optional.of(replicationFactor))
                             .configs(topicConfig));
                 }
 
@@ -223,13 +225,13 @@ public class InternalTopicManager {
         final Set<String> topicsToCreate = new HashSet<>();
         for (final Map.Entry<String, InternalTopicConfig> entry : topicsMap.entrySet()) {
             final String topicName = entry.getKey();
-            final int numberOfPartitions = entry.getValue().numberOfPartitions();
-            if (existedTopicPartition.containsKey(topicName)) {
-                if (!existedTopicPartition.get(topicName).equals(numberOfPartitions)) {
+            final Optional<Integer> numberOfPartitions = entry.getValue().numberOfPartitions();
+            if (existedTopicPartition.containsKey(topicName) && numberOfPartitions.isPresent()) {
+                if (!existedTopicPartition.get(topicName).equals(numberOfPartitions.get())) {
                     final String errorMsg = String.format("Existing internal topic %s has invalid partitions: " +
                             "expected: %d; actual: %d. " +
                             "Use 'kafka.tools.StreamsResetter' tool to clean up invalid topics before processing.",
-                        topicName, numberOfPartitions, existedTopicPartition.get(topicName));
+                        topicName, numberOfPartitions.get(), existedTopicPartition.get(topicName));
                     log.error(errorMsg);
                     throw new StreamsException(errorMsg);
                 }

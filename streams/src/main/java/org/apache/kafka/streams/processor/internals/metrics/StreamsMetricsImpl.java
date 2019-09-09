@@ -59,7 +59,7 @@ public class StreamsMetricsImpl implements StreamsMetrics {
     public static final String TASK_ID_TAG = "task-id";
     public static final String STORE_ID_TAG = "state-id";
 
-    public static final String ALL_TASKS = "all";
+    public static final String ROLLUP_VALUE = "all";
 
     public static final String LATENCY_SUFFIX = "-latency";
     public static final String AVG_SUFFIX = "-avg";
@@ -69,9 +69,13 @@ public class StreamsMetricsImpl implements StreamsMetrics {
     public static final String TOTAL_SUFFIX = "-total";
     public static final String RATIO_SUFFIX = "-ratio";
 
-    public static final String THREAD_LEVEL_GROUP = "stream-metrics";
-    public static final String TASK_LEVEL_GROUP = "stream-task-metrics";
-    public static final String STATE_LEVEL_GROUP = "stream-state-metrics";
+    public static final String GROUP_PREFIX_WO_DELIMITER = "stream";
+    public static final String GROUP_PREFIX = GROUP_PREFIX_WO_DELIMITER + "-";
+    public static final String GROUP_SUFFIX = "-metrics";
+    public static final String STATE_LEVEL_GROUP_SUFFIX = "-state" + GROUP_SUFFIX;
+    public static final String THREAD_LEVEL_GROUP = GROUP_PREFIX_WO_DELIMITER + GROUP_SUFFIX;
+    public static final String TASK_LEVEL_GROUP = GROUP_PREFIX + "task" + GROUP_SUFFIX;
+    public static final String STATE_LEVEL_GROUP = GROUP_PREFIX + "state" + GROUP_SUFFIX;
 
     public static final String PROCESSOR_NODE_METRICS_GROUP = "stream-processor-node-metrics";
     public static final String PROCESSOR_NODE_ID_TAG = "processor-node-id";
@@ -344,13 +348,13 @@ public class StreamsMetricsImpl implements StreamsMetrics {
 
         // first add the global operation metrics if not yet, with the global tags only
         final Sensor parent = metrics.sensor(externalParentSensorName(operationName), recordingLevel);
-        addAvgMaxLatency(parent, group, allTagMap, operationName);
-        addInvocationRateAndCount(parent, group, allTagMap, operationName);
+        addAvgAndMaxLatencyToSensor(parent, group, allTagMap, operationName);
+        addInvocationRateAndCountToSensor(parent, group, allTagMap, operationName);
 
         // add the operation metrics with additional tags
         final Sensor sensor = metrics.sensor(externalChildSensorName(operationName, entityName), recordingLevel, parent);
-        addAvgMaxLatency(sensor, group, tagMap, operationName);
-        addInvocationRateAndCount(sensor, group, tagMap, operationName);
+        addAvgAndMaxLatencyToSensor(sensor, group, tagMap, operationName);
+        addInvocationRateAndCountToSensor(sensor, group, tagMap, operationName);
 
         parentSensors.put(sensor, parent);
 
@@ -374,11 +378,11 @@ public class StreamsMetricsImpl implements StreamsMetrics {
 
         // first add the global operation metrics if not yet, with the global tags only
         final Sensor parent = metrics.sensor(externalParentSensorName(operationName), recordingLevel);
-        addInvocationRateAndCount(parent, group, allTagMap, operationName);
+        addInvocationRateAndCountToSensor(parent, group, allTagMap, operationName);
 
         // add the operation metrics with additional tags
         final Sensor sensor = metrics.sensor(externalChildSensorName(operationName, entityName), recordingLevel, parent);
-        addInvocationRateAndCount(sensor, group, tagMap, operationName);
+        addInvocationRateAndCountToSensor(sensor, group, tagMap, operationName);
 
         parentSensors.put(sensor, parent);
 
@@ -397,10 +401,10 @@ public class StreamsMetricsImpl implements StreamsMetrics {
     }
 
 
-    public static void addAvgAndMax(final Sensor sensor,
-                                    final String group,
-                                    final Map<String, String> tags,
-                                    final String operation) {
+    public static void addAvgAndMaxToSensor(final Sensor sensor,
+                                            final String group,
+                                            final Map<String, String> tags,
+                                            final String operation) {
         sensor.add(
             new MetricName(
                 operation + AVG_SUFFIX,
@@ -419,10 +423,10 @@ public class StreamsMetricsImpl implements StreamsMetrics {
         );
     }
 
-    public static void addAvgMaxLatency(final Sensor sensor,
-                                        final String group,
-                                        final Map<String, String> tags,
-                                        final String operation) {
+    public static void addAvgAndMaxLatencyToSensor(final Sensor sensor,
+                                                   final String group,
+                                                   final Map<String, String> tags,
+                                                   final String operation) {
         sensor.add(
             new MetricName(
                 operation + "-latency-avg",
@@ -441,12 +445,12 @@ public class StreamsMetricsImpl implements StreamsMetrics {
         );
     }
 
-    public static void addInvocationRateAndCount(final Sensor sensor,
-                                                 final String group,
-                                                 final Map<String, String> tags,
-                                                 final String operation,
-                                                 final String descriptionOfInvocation,
-                                                 final String descriptionOfRate) {
+    public static void addInvocationRateAndCountToSensor(final Sensor sensor,
+                                                         final String group,
+                                                         final Map<String, String> tags,
+                                                         final String operation,
+                                                         final String descriptionOfInvocation,
+                                                         final String descriptionOfRate) {
         sensor.add(
             new MetricName(
                 operation + TOTAL_SUFFIX,
@@ -467,11 +471,11 @@ public class StreamsMetricsImpl implements StreamsMetrics {
         );
     }
 
-    public static void addInvocationRateAndCount(final Sensor sensor,
-                                                 final String group,
-                                                 final Map<String, String> tags,
-                                                 final String operation) {
-        addInvocationRateAndCount(
+    public static void addInvocationRateAndCountToSensor(final Sensor sensor,
+                                                         final String group,
+                                                         final Map<String, String> tags,
+                                                         final String operation) {
+        addInvocationRateAndCountToSensor(
             sensor,
             group,
             tags,

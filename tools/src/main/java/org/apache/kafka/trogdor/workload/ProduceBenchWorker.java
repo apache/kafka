@@ -247,7 +247,11 @@ public class ProduceBenchWorker implements TaskWorker {
                     throw e;
                 } finally {
                     if (sendFuture != null) {
-                        sendFuture.get();
+                        try {
+                            sendFuture.get();
+                        } catch (Exception e) {
+                            log.error("Exception on final future", e);
+                        }
                     }
                     producer.close();
                 }
