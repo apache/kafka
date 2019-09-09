@@ -30,7 +30,7 @@ public abstract class InternalTopicConfig {
     final String name;
     final Map<String, String> topicConfigs;
 
-    Optional<Integer> numberOfPartitions ;
+    Optional<Integer> numberOfPartitions;
 
     InternalTopicConfig(final String name,
                         final Integer numberOfPartitions,
