@@ -231,6 +231,5 @@ public class ProcessorNodeTest {
             assertThat(e.getMessage(), containsString("input types"));
             throw e;
         }
-
     }
 }
