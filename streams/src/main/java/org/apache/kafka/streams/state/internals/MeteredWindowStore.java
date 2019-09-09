@@ -34,6 +34,9 @@ import org.apache.kafka.streams.state.WindowStoreIterator;
 import java.util.Map;
 
 import static org.apache.kafka.common.metrics.Sensor.RecordingLevel.DEBUG;
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.GROUP_PREFIX;
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.ROLLUP_VALUE;
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.STATE_LEVEL_GROUP_SUFFIX;
 import static org.apache.kafka.streams.state.internals.metrics.Sensors.createTaskAndStoreLatencyAndThroughputSensors;
 
 public class MeteredWindowStore<K, V>
@@ -41,7 +44,7 @@ public class MeteredWindowStore<K, V>
     implements WindowStore<K, V> {
 
     private final long windowSizeMs;
-    private final String metricScope;
+    private final String metricsScope;
     private final Time time;
     final Serde<K> keySerde;
     final Serde<V> valueSerde;
@@ -55,13 +58,13 @@ public class MeteredWindowStore<K, V>
 
     MeteredWindowStore(final WindowStore<Bytes, byte[]> inner,
                        final long windowSizeMs,
-                       final String metricScope,
+                       final String metricsScope,
                        final Time time,
                        final Serde<K> keySerde,
                        final Serde<V> valueSerde) {
         super(inner);
         this.windowSizeMs = windowSizeMs;
-        this.metricScope = metricScope;
+        this.metricsScope = metricsScope;
         this.time = time;
         this.keySerde = keySerde;
         this.valueSerde = valueSerde;
@@ -75,9 +78,9 @@ public class MeteredWindowStore<K, V>
         metrics = (StreamsMetricsImpl) context.metrics();
 
         taskName = context.taskId().toString();
-        final String metricsGroup = "stream-" + metricScope + "-metrics";
-        final Map<String, String> taskTags = metrics.tagMap("task-id", taskName, metricScope + "-id", "all");
-        final Map<String, String> storeTags = metrics.tagMap("task-id", taskName, metricScope + "-id", name());
+        final String metricsGroup = GROUP_PREFIX + metricsScope + STATE_LEVEL_GROUP_SUFFIX;
+        final Map<String, String> taskTags = metrics.storeLevelTagMap(taskName, metricsScope, ROLLUP_VALUE);
+        final Map<String, String> storeTags = metrics.storeLevelTagMap(taskName, metricsScope, name());
 
         putTime = createTaskAndStoreLatencyAndThroughputSensors(DEBUG, "put", metrics, metricsGroup, taskName, name(), taskTags, storeTags);
         fetchTime = createTaskAndStoreLatencyAndThroughputSensors(DEBUG, "fetch", metrics, metricsGroup, taskName, name(), taskTags, storeTags);

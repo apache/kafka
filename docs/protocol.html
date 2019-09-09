@@ -130,7 +130,7 @@
         this happens after SSL connection has been established.</li>
     <li>On receiving <code>ApiVersionsRequest</code>, a broker returns its full list of supported ApiKeys and
         versions regardless of current authentication state (e.g., before SASL authentication on an SASL listener, do note that no
-        Kafka protocol requests may take place on a SSL listener before the SSL handshake is finished). If this is considered to
+        Kafka protocol requests may take place on an SSL listener before the SSL handshake is finished). If this is considered to
         leak information about the broker version a workaround is to use SSL with client authentication which is performed at an
         earlier stage of the connection where the <code>ApiVersionRequest</code> is not available. Also, note that broker versions older
         than 0.10.0.0 do not support this API and will either ignore the request or close connection in response to the request.</li>

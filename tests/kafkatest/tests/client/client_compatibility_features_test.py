@@ -88,7 +88,13 @@ class ClientCompatibilityFeaturesTest(Test):
         for k, v in features.iteritems():
             cmd = cmd + ("--%s %s " % (k, v))
         results_dir = TestContext.results_dir(self.test_context, 0)
-        os.makedirs(results_dir)
+        try:
+            os.makedirs(results_dir)
+        except OSError as e:
+            if e.errno == errno.EEXIST and os.path.isdir(path):
+                pass
+            else:
+                raise
         ssh_log_file = "%s/%s" % (results_dir, "client_compatibility_test_output.txt")
         try:
           self.logger.info("Running %s" % cmd)

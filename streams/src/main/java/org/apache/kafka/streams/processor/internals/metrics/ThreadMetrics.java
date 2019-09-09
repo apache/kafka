@@ -21,7 +21,7 @@ import org.apache.kafka.common.metrics.Sensor.RecordingLevel;
 
 import java.util.Map;
 
-import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.ALL_TASKS;
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.ROLLUP_VALUE;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.LATENCY_SUFFIX;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.TASK_ID_TAG;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.TASK_LEVEL_GROUP;
@@ -162,7 +162,7 @@ public class ThreadMetrics {
 
     public static Sensor commitOverTasksSensor(final StreamsMetricsImpl streamsMetrics) {
         final Sensor commitOverTasksSensor = streamsMetrics.threadLevelSensor(COMMIT, Sensor.RecordingLevel.DEBUG);
-        final Map<String, String> tagMap = streamsMetrics.threadLevelTagMap(TASK_ID_TAG, ALL_TASKS);
+        final Map<String, String> tagMap = streamsMetrics.threadLevelTagMap(TASK_ID_TAG, ROLLUP_VALUE);
         addAvgAndMaxToSensor(commitOverTasksSensor,
                      TASK_LEVEL_GROUP,
                      tagMap,

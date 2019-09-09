@@ -16,15 +16,19 @@ import java.io.File
 import java.util
 import java.util.Properties
 
-import kafka.security.auth.{Allow, Alter, Authorizer, Cluster, ClusterAction, Describe, Group, Operation, PermissionType, Resource, SimpleAclAuthorizer, Topic, Acl => AuthAcl}
+import kafka.security.auth.{Cluster, Group, Resource, Topic, Acl => AuthAcl}
+import kafka.security.authorizer.AclAuthorizer
 import kafka.server.KafkaConfig
 import kafka.utils.{CoreUtils, JaasTestUtils, TestUtils}
 import org.apache.kafka.clients.admin._
 import org.apache.kafka.common.acl._
+import org.apache.kafka.common.acl.AclOperation.{ALTER, DESCRIBE, CLUSTER_ACTION}
+import org.apache.kafka.common.acl.AclPermissionType.ALLOW
 import org.apache.kafka.common.resource.{PatternType, ResourcePattern, ResourceType}
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.common.utils.Utils
-import org.junit.Assert.assertEquals
+import org.apache.kafka.server.authorizer.Authorizer
+import org.junit.Assert.{assertEquals, assertFalse}
 import org.junit.{After, Before, Test}
 
 import scala.collection.JavaConverters._
@@ -32,7 +36,7 @@ import scala.collection.JavaConverters._
 class DescribeAuthorizedOperationsTest extends IntegrationTestHarness with SaslSetup {
   override val brokerCount = 1
   this.serverConfig.setProperty(KafkaConfig.ZkEnableSecureAclsProp, "true")
-  this.serverConfig.setProperty(KafkaConfig.AuthorizerClassNameProp, classOf[SimpleAclAuthorizer].getName)
+  this.serverConfig.setProperty(KafkaConfig.AuthorizerClassNameProp, classOf[AclAuthorizer].getName)
 
   var client: Admin = _
   val group1 = "group1"
@@ -46,14 +50,18 @@ class DescribeAuthorizedOperationsTest extends IntegrationTestHarness with SaslS
   override protected lazy val trustStoreFile = Some(File.createTempFile("truststore", ".jks"))
 
   override def configureSecurityBeforeServersStart(): Unit = {
-    val authorizer = CoreUtils.createObject[Authorizer](classOf[SimpleAclAuthorizer].getName)
-    val topicResource = Resource(Topic, Resource.WildCardResource, PatternType.LITERAL)
+    val authorizer = CoreUtils.createObject[Authorizer](classOf[AclAuthorizer].getName)
+    val clusterResource = new ResourcePattern(ResourceType.CLUSTER, Resource.ClusterResource.name, PatternType.LITERAL)
+    val topicResource = new ResourcePattern(ResourceType.TOPIC, Resource.WildCardResource, PatternType.LITERAL)
 
     try {
       authorizer.configure(this.configs.head.originals())
-      authorizer.addAcls(Set(clusterAcl(JaasTestUtils.KafkaServerPrincipalUnqualifiedName, Allow, ClusterAction),
-        clusterAcl(JaasTestUtils.KafkaClientPrincipalUnqualifiedName2, Allow, Alter)), Resource.ClusterResource)
-      authorizer.addAcls(Set(clusterAcl(JaasTestUtils.KafkaClientPrincipalUnqualifiedName2, Allow, Describe)), topicResource)
+      val result = authorizer.createAcls(null, List(
+        new AclBinding(clusterResource, accessControlEntry(JaasTestUtils.KafkaServerPrincipalUnqualifiedName.toString, ALLOW, CLUSTER_ACTION)),
+        new AclBinding(clusterResource, accessControlEntry(JaasTestUtils.KafkaClientPrincipalUnqualifiedName2.toString, ALLOW, ALTER)),
+        new AclBinding(topicResource, accessControlEntry(JaasTestUtils.KafkaClientPrincipalUnqualifiedName2.toString, ALLOW, DESCRIBE))).asJava)
+      result.asScala.foreach { result => assertFalse(result.exception.isPresent) }
+
     } finally {
       authorizer.close()
     }
@@ -66,9 +74,9 @@ class DescribeAuthorizedOperationsTest extends IntegrationTestHarness with SaslS
     TestUtils.waitUntilBrokerMetadataIsPropagated(servers)
   }
 
-  private def clusterAcl(userName: String, permissionType: PermissionType, operation: Operation): AuthAcl = {
-    new AuthAcl(new KafkaPrincipal(KafkaPrincipal.USER_TYPE, userName), permissionType,
-      AuthAcl.WildCardHost, operation)
+  private def accessControlEntry(userName: String, permissionType: AclPermissionType, operation: AclOperation): AccessControlEntry = {
+    new AccessControlEntry(new KafkaPrincipal(KafkaPrincipal.USER_TYPE, userName).toString,
+      AuthAcl.WildCardHost, operation, permissionType)
   }
 
   @After

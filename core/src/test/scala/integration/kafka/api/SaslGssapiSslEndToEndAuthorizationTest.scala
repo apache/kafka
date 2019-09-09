@@ -16,6 +16,7 @@
   */
 package kafka.api
 
+import kafka.security.auth.SimpleAclAuthorizer
 import kafka.server.KafkaConfig
 import kafka.utils.JaasTestUtils
 
@@ -27,6 +28,7 @@ class SaslGssapiSslEndToEndAuthorizationTest extends SaslEndToEndAuthorizationTe
 
   override protected def kafkaClientSaslMechanism = "GSSAPI"
   override protected def kafkaServerSaslMechanisms = List("GSSAPI")
+  override protected def authorizerClass = classOf[SimpleAclAuthorizer]
 
   // Configure brokers to require SSL client authentication in order to verify that SASL_SSL works correctly even if the
   // client doesn't have a keystore. We want to cover the scenario where a broker requires either SSL client
