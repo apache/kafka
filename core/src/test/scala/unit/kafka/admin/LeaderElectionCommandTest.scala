@@ -47,6 +47,7 @@ final class LeaderElectionCommandTest extends ZooKeeperTestHarness {
   val broker1 = 0
   val broker2 = 1
   val broker3 = 2
+  val electionCommandTimeout = 60.second
 
   @Before
   override def setUp(): Unit = {
@@ -88,12 +89,13 @@ final class LeaderElectionCommandTest extends ZooKeeperTestHarness {
       TestUtils.waitForLeaderToBecome(client, topicPartition, None)
       servers(broker3).startup()
 
-      LeaderElectionCommand.main(
+      LeaderElectionCommand.run(
         Array(
           "--bootstrap-server", bootstrapServers(servers),
           "--election-type", "unclean",
           "--all-topic-partitions"
-        )
+        ),
+        electionCommandTimeout
       )
 
       assertEquals(Option(broker3), TestUtils.currentLeader(client, topicPartition))
@@ -119,13 +121,14 @@ final class LeaderElectionCommandTest extends ZooKeeperTestHarness {
       TestUtils.waitForLeaderToBecome(client, topicPartition, None)
       servers(broker3).startup()
 
-      LeaderElectionCommand.main(
+      LeaderElectionCommand.run(
         Array(
           "--bootstrap-server", bootstrapServers(servers),
           "--election-type", "unclean",
           "--topic", topic,
           "--partition", partition.toString
-        )
+        ),
+        electionCommandTimeout
       )
 
       assertEquals(Option(broker3), TestUtils.currentLeader(client, topicPartition))
@@ -153,12 +156,13 @@ final class LeaderElectionCommandTest extends ZooKeeperTestHarness {
 
       val topicPartitionPath = tempTopicPartitionFile(Set(topicPartition))
 
-      LeaderElectionCommand.main(
+      LeaderElectionCommand.run(
         Array(
           "--bootstrap-server", bootstrapServers(servers),
           "--election-type", "unclean",
           "--path-to-json-file", topicPartitionPath.toString
-        )
+        ),
+        electionCommandTimeout
       )
 
       assertEquals(Option(broker3), TestUtils.currentLeader(client, topicPartition))
@@ -183,12 +187,13 @@ final class LeaderElectionCommandTest extends ZooKeeperTestHarness {
       servers(broker2).startup()
       TestUtils.waitForBrokersInIsr(client, topicPartition, Set(broker2))
 
-      LeaderElectionCommand.main(
+      LeaderElectionCommand.run(
         Array(
           "--bootstrap-server", bootstrapServers(servers),
           "--election-type", "preferred",
           "--all-topic-partitions"
-        )
+        ),
+        electionCommandTimeout
       )
 
       assertEquals(Option(broker2), TestUtils.currentLeader(client, topicPartition))
@@ -198,12 +203,13 @@ final class LeaderElectionCommandTest extends ZooKeeperTestHarness {
   @Test
   def testTopicWithoutPartition(): Unit = {
     try {
-      LeaderElectionCommand.main(
+      LeaderElectionCommand.run(
         Array(
           "--bootstrap-server", bootstrapServers(servers),
           "--election-type", "unclean",
           "--topic", "some-topic"
-        )
+        ),
+        electionCommandTimeout
       )
       fail()
     } catch {
@@ -216,13 +222,14 @@ final class LeaderElectionCommandTest extends ZooKeeperTestHarness {
   @Test
   def testPartitionWithoutTopic(): Unit = {
     try {
-      LeaderElectionCommand.main(
+      LeaderElectionCommand.run(
         Array(
           "--bootstrap-server", bootstrapServers(servers),
           "--election-type", "unclean",
           "--all-topic-partitions",
           "--partition", "0"
-        )
+        ),
+        electionCommandTimeout
       )
       fail()
     } catch {
@@ -234,13 +241,14 @@ final class LeaderElectionCommandTest extends ZooKeeperTestHarness {
   @Test
   def testTopicDoesNotExist(): Unit = {
     try {
-      LeaderElectionCommand.main(
+      LeaderElectionCommand.run(
         Array(
           "--bootstrap-server", bootstrapServers(servers),
           "--election-type", "preferred",
           "--topic", "unknown-topic-name",
           "--partition", "0"
-        )
+        ),
+        electionCommandTimeout
       )
       fail()
     } catch {
@@ -252,12 +260,13 @@ final class LeaderElectionCommandTest extends ZooKeeperTestHarness {
   @Test
   def testMissingElectionType(): Unit = {
     try {
-      LeaderElectionCommand.main(
+      LeaderElectionCommand.run(
         Array(
           "--bootstrap-server", bootstrapServers(servers),
           "--topic", "some-topic",
           "--partition", "0"
-        )
+        ),
+        electionCommandTimeout
       )
       fail()
     } catch {
@@ -270,11 +279,12 @@ final class LeaderElectionCommandTest extends ZooKeeperTestHarness {
   @Test
   def testMissingTopicPartitionSelection(): Unit = {
     try {
-      LeaderElectionCommand.main(
+      LeaderElectionCommand.run(
         Array(
           "--bootstrap-server", bootstrapServers(servers),
           "--election-type", "preferrred"
-        )
+        ),
+        electionCommandTimeout
       )
       fail()
     } catch {
