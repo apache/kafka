@@ -329,10 +329,11 @@ public class InternalTopologyBuilderTest {
     }
 
     @Test
-    public void testAddStateStoreWithDuplicates() {
+    public void testAddStateStoreWithDifferentInstances() {
         builder.addStateStore(storeBuilder);
+        final StoreBuilder otherBuilder = new MockKeyValueStoreBuilder("store", false);
         try {
-            builder.addStateStore(storeBuilder);
+            builder.addStateStore(otherBuilder);
             fail("Should throw TopologyException with store name conflict");
         } catch (final TopologyException expected) { /* ok */ }
     }
