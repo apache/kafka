@@ -357,23 +357,34 @@ subprojects {
       //
       //this information allows us, at runtime, to determine what libraries/versions exist on a given classpath
 
-      MessageDigest md = MessageDigest.getInstance("MD5")
-      md.update(String.valueOf(project.group).getBytes("UTF-8"))
-      md.update(String.valueOf(project.name).getBytes("UTF-8"))
-      md.update(String.valueOf(project.version).getBytes("UTF-8"))
-      byte[] digest = md.digest()
-      String hash = DatatypeConverter.printHexBinary(digest).toUpperCase()
+      String moduleVersion = String.valueOf(project.version)
+      String projectVersion = String.valueOf(rootProject.version)
 
-      String versioningFileName = "__Versioning__" + hash
-      String versioningPayload = "{" +
-          "\"format\":\"v1\"," +
-          "\"project\":\"" + rootProject.group + ":" + rootProject.name + ":" + rootProject.version + "\"," +
-          "\"module\":\"" + project.group + ":" + project.name + ":" + project.version + "\"" +
-          "}"
+      if ("unspecified" != projectVersion && "unspecified" != moduleVersion) {
+        MessageDigest md = MessageDigest.getInstance("MD5")
+        md.update(String.valueOf(project.group).getBytes("UTF-8"))
+        md.update(String.valueOf(project.name).getBytes("UTF-8"))
+        md.update(moduleVersion.getBytes("UTF-8"))
+        byte[] digest = md.digest()
+        String hash = DatatypeConverter.printHexBinary(digest).toUpperCase()
 
-      String outFolder = "${project.buildDir}/resources/main/META-INF/"
-      mkdir outFolder
-      file("${outFolder}/${versioningFileName}").text = versioningPayload
+        String versioningFileName = "__Versioning__" + hash
+        String versioningPayload = "{" +
+            "\"format\":\"v1\"," +
+            "\"project\":\"" + rootProject.group + ":" + rootProject.name + ":" + projectVersion + "\"," +
+            "\"module\":\"" + project.group + ":" + project.name + ":" + moduleVersion + "\"" +
+            "}"
+
+        String outFolder = "${project.buildDir}/resources/main/META-INF/"
+        mkdir outFolder
+
+        fileTree(dir: outFolder, include:'__Versioning__*').each {
+          //remove any left-overs from previous builds
+          it.delete()
+        }
+
+        file("${outFolder}/${versioningFileName}").text = versioningPayload
+      }
     }
 
     from "$rootDir/LICENSE"
