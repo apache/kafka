@@ -1630,8 +1630,8 @@ public class RequestResponseTest {
     private EndTxnResponse createEndTxnResponse() {
         return new EndTxnResponse(
             new EndTxnResponseData()
-            .setErrorCode(Errors.NONE.code())
-            .setThrottleTimeMs(0)
+                .setErrorCode(Errors.NONE.code())
+                .setThrottleTimeMs(0)
         );
     }
 
