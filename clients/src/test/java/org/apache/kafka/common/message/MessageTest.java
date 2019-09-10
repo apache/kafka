@@ -31,6 +31,7 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.Message;
 import org.apache.kafka.common.protocol.ObjectSizeCache;
 import org.apache.kafka.common.protocol.types.BoundField;
+import org.apache.kafka.common.protocol.types.RawTaggedField;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.SchemaException;
 import org.apache.kafka.common.protocol.types.Struct;
@@ -377,7 +378,7 @@ public final class MessageTest {
         Message message2 = message.getClass().newInstance();
         buf.flip();
         message2.read(byteBufferAccessor, version);
-        assertEquals("The result of the size functino does not match the number of bytes " +
+        assertEquals("The result of the size function does not match the number of bytes " +
             "read back in for version " + version, size, buf.position());
         assertEquals("The message object created after a round trip did not match for " +
             "version " + version, expected, message2);
@@ -583,27 +584,71 @@ public final class MessageTest {
                 .setMemberId(memberId));
     }
 
-    private void verifyWriteRaisesUve(short version, String problemFieldName,
+    @Test
+    public void testWriteNullForNonNullableFieldRaisesException() throws Exception {
+        CreateTopicsRequestData createTopics = new CreateTopicsRequestData().setTopics(null);
+        for (short i = (short) 0; i <= createTopics.highestSupportedVersion(); i++) {
+            verifyWriteRaisesNpe(i, createTopics);
+        }
+        MetadataRequestData metadata = new MetadataRequestData().setTopics(null);
+        verifyWriteRaisesNpe((short) 0, metadata);
+    }
+
+    @Test
+    public void testUnknownTaggedFields() throws Exception {
+        CreateTopicsRequestData createTopics = new CreateTopicsRequestData();
+        verifyWriteSucceeds((short) 5, createTopics);
+        RawTaggedField field1000 = new RawTaggedField(1000, new byte[] {0x1, 0x2, 0x3});
+        createTopics.unknownTaggedFields().add(field1000);
+        verifyWriteRaisesUve((short) 0, "Tagged fields were set", createTopics);
+        verifyWriteSucceeds((short) 5, createTopics);
+    }
+
+    private void verifyWriteRaisesNpe(short version, Message message) throws Exception {
+        ObjectSizeCache sizeCache = new ObjectSizeCache();
+        try {
+            int size = message.size(sizeCache, version);
+            ByteBuffer buf = ByteBuffer.allocate(size);
+            ByteBufferAccessor byteBufferAccessor = new ByteBufferAccessor(buf);
+            message.write(byteBufferAccessor, sizeCache, version);
+            fail("Expected to see a NullPointerException when writing " +
+                message + " at version " + version);
+        } catch (NullPointerException e) {
+        }
+    }
+
+    private void verifyWriteRaisesUve(short version,
+                                      String problemText,
                                      Message message) throws Exception {
         ObjectSizeCache sizeCache = new ObjectSizeCache();
-        int size = message.size(sizeCache, version);
-        ByteBuffer buf = ByteBuffer.allocate(size);
-        ByteBufferAccessor byteBufferAccessor = new ByteBufferAccessor(buf);
         try {
+            int size = message.size(sizeCache, version);
+            ByteBuffer buf = ByteBuffer.allocate(size);
+            ByteBufferAccessor byteBufferAccessor = new ByteBufferAccessor(buf);
             message.write(byteBufferAccessor, sizeCache, version);
             fail("Expected to see an UnsupportedVersionException when writing " +
                 message + " at version " + version);
         } catch (UnsupportedVersionException e) {
-            assertTrue("Expected to get an error message about " + problemFieldName,
-                e.getMessage().contains(problemFieldName));
+            assertTrue("Expected to get an error message about " + problemText +
+                    ", but got: " + e.getMessage(),
+                    e.getMessage().contains(problemText));
         }
     }
 
     private void verifyWriteSucceeds(short version, Message message) throws Exception {
         ObjectSizeCache sizeCache = new ObjectSizeCache();
         int size = message.size(sizeCache, version);
-        ByteBuffer buf = ByteBuffer.allocate(size);
+        ByteBuffer buf = ByteBuffer.allocate(size * 2);
         ByteBufferAccessor byteBufferAccessor = new ByteBufferAccessor(buf);
         message.write(byteBufferAccessor, sizeCache, version);
+        ByteBuffer alt = buf.duplicate();
+        alt.flip();
+        StringBuilder bld = new StringBuilder();
+        while (alt.hasRemaining()) {
+            bld.append(String.format(" %02x", alt.get()));
+        }
+        System.out.println("WATERMELON: buffer is " + bld.toString());
+        assertEquals("Expected the serialized size to be " + size +
+            ", but it was " + buf.position(), size, buf.position());
     }
 }

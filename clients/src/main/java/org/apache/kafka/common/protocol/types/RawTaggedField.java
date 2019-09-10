@@ -36,6 +36,10 @@ public class RawTaggedField {
         return data;
     }
 
+    public int size() {
+        return data.length;
+    }
+
     @Override
     public boolean equals(Object o) {
         if ((o == null) || (!o.getClass().equals(RawTaggedField.class))) {

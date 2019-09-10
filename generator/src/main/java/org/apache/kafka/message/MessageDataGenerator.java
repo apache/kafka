@@ -906,6 +906,7 @@ public final class MessageDataGenerator {
                 generateCheckForUnsupportedNumTaggedFields("_numTaggedFields > 0");
             }).
             ifMember(__ -> {
+                buffer.printf("writable.writeUnsignedVarint(_numTaggedFields);%n");
                 int prevTag = -1;
                 for (FieldSpec field : taggedFields.values()) {
                     if (prevTag + 1 != field.tag().get()) {
@@ -1299,6 +1300,14 @@ public final class MessageDataGenerator {
         buffer.printf("if (_unknownTaggedFields != null) {%n");
         buffer.incrementIndent();
         buffer.printf("_numTaggedFields += _unknownTaggedFields.size();%n");
+        buffer.printf("for (RawTaggedField _field : _unknownTaggedFields) {%n");
+        buffer.incrementIndent();
+        headerGenerator.addImport(MessageGenerator.BYTE_UTILS_CLASS);
+        buffer.printf("_size += ByteUtils.sizeOfUnsignedVarint(_field.tag());%n");
+        buffer.printf("_size += ByteUtils.sizeOfUnsignedVarint(_field.size());%n");
+        buffer.printf("_size += _field.size();%n");
+        buffer.decrementIndent();
+        buffer.printf("}%n");
         buffer.decrementIndent();
         buffer.printf("}%n");
         VersionConditional.forVersions(messageFlexibleVersions, curVersions).
