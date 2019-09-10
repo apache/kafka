@@ -1347,7 +1347,6 @@ public final class MessageDataGenerator {
             ifNotNull(ifNotNullVersions -> {
                 if (field.type().isString()) {
                     generateStringToBytes(field.camelCaseName());
-                    buffer.printf("_size += _stringBytes.length;%n");
                     VersionConditional.forVersions(fieldFlexibleVersions(field), ifNotNullVersions).
                         ifMember(__ -> {
                             headerGenerator.addImport(MessageGenerator.BYTE_UTILS_CLASS);
