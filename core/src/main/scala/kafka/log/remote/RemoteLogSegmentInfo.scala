@@ -27,6 +27,6 @@ import org.apache.kafka.common.TopicPartition
  * @param props          any custom props to be stored by RemoteStorageManager, which can be used later when it
  *                       is passed through different methods in RemoteStorageManager.
  */
-case class RemoteLogSegmentInfo(baseOffset: Long, endOffset: Long, topicPartition: TopicPartition,
+case class RemoteLogSegmentInfo(baseOffset: Long, endOffset: Long, topicPartition: TopicPartition, leaderEpoch:Int,
                                 props: java.util.Map[String, _]) {
 }

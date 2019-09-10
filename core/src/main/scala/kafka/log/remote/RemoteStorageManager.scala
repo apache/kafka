@@ -45,7 +45,7 @@ trait RemoteStorageManager extends Configurable with AutoCloseable {
    * @return
    */
   @throws(classOf[IOException])
-  def copyLogSegment(topicPartition: TopicPartition, logSegment: LogSegment): util.List[RemoteLogIndexEntry]
+  def copyLogSegment(topicPartition: TopicPartition, logSegment: LogSegment, leaderEpoch: Int): util.List[RemoteLogIndexEntry]
 
   /**
    * Cancels the unfinished LogSegment copying of this given topic-partition

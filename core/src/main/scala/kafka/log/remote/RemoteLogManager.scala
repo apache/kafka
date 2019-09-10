@@ -23,6 +23,7 @@ import java.util.concurrent.atomic.AtomicInteger
 import java.util.function.{BiConsumer, Consumer, Function}
 
 import kafka.cluster.Partition
+import kafka.common.KafkaException
 import kafka.log.Log
 import kafka.server.{Defaults, FetchDataInfo, KafkaConfig, LogOffsetMetadata, RemoteStorageFetchInfo}
 import kafka.utils.Logging
@@ -55,6 +56,8 @@ class RLMScheduledThreadPool(poolSize: Int) extends Logging {
   def resizePool(size: Int): Unit = {
     scheduledThreadPool.setCorePoolSize(size)
   }
+
+  def poolSize(): Int = scheduledThreadPool.getMaximumPoolSize
 
   def scheduleWithFixedDelay(runnable: Runnable, initialDelay: Long, delay: Long,
                              timeUnit: TimeUnit): ScheduledFuture[_] = {
@@ -92,7 +95,7 @@ class RemoteLogManager(fetchLog: TopicPartition => Option[Log],
 
   private val leaderOrFollowerTasks: ConcurrentMap[TopicPartition, RLMTaskWithFuture] =
     new ConcurrentHashMap[TopicPartition, RLMTaskWithFuture]()
-  val remoteStorageFetcherThreadPool = new RemoteStorageReaderThreadPool(rlmConfig.remoteLogReaderThreads,
+  private val remoteStorageFetcherThreadPool = new RemoteStorageReaderThreadPool(rlmConfig.remoteLogReaderThreads,
     rlmConfig.remoteLogReaderMaxPendingTasks, time)
 
   private val delayInMs = rlmConfig.remoteLogManagerTaskIntervalMs
@@ -115,25 +118,11 @@ class RemoteLogManager(fetchLog: TopicPartition => Option[Log],
   private val remoteStorageManager: RemoteStorageManager = createRemoteStorageManager()
   private val rlmIndexer: RLMIndexer = new RLMIndexer(remoteStorageManager, fetchLog)
 
-  /**
-   * Ask RLM to monitor the given TopicPartitions, and copy inactive Log
-   * Segments to remote storage. RLM updates local index files once a
-   * Log Segment in a TopicPartition is copied to Remote Storage
-   */
-  def handleLeaderPartitions(topicPartitions: Set[TopicPartition]): Unit = {
-    doHandleLeaderOrFollowerPartitions(topicPartitions, task => task.convertToLeader())
-  }
+  private[remote] def rlmScheduledThreadPoolSize:Int = rlmScheduledThreadPool.poolSize()
+  private[remote] def leaderOrFollowerTasksSize:Int = leaderOrFollowerTasks.size()
 
-  /**
-   * Stops copy of LogSegment if TopicPartition ownership is moved from a broker.
-   */
-  def handleFollowerPartitions(topicPartitions: Set[TopicPartition]): Unit = {
-    doHandleLeaderOrFollowerPartitions(topicPartitions, task => task.convertToFollower())
-  }
-
-  private def doHandleLeaderOrFollowerPartitions(topicPartitions: Set[TopicPartition],
+  private def doHandleLeaderOrFollowerPartitions(topicPartition: TopicPartition,
                                                  convertToLeaderOrFollower: RLMTask => Unit): Unit = {
-    topicPartitions.foreach { topicPartition =>
       val rlmTaskWithFuture = leaderOrFollowerTasks.computeIfAbsent(topicPartition,
         new Function[TopicPartition, RLMTaskWithFuture] {
           override def apply(tp: TopicPartition): RLMTaskWithFuture = {
@@ -143,12 +132,17 @@ class RemoteLogManager(fetchLog: TopicPartition => Option[Log],
           }
         })
       convertToLeaderOrFollower(rlmTaskWithFuture.rlmTask)
-    }
   }
 
   def onLeadershipChange(partitionsBecomeLeader: Set[Partition], partitionsBecomeFollower: Set[Partition]): Unit = {
-    handleFollowerPartitions(partitionsBecomeFollower.map(x => x.topicPartition))
-    handleLeaderPartitions(partitionsBecomeLeader.map(x => x.topicPartition))
+    partitionsBecomeFollower.foreach { partition =>
+      doHandleLeaderOrFollowerPartitions(partition.topicPartition, task => task.convertToFollower())
+    }
+
+    partitionsBecomeLeader.foreach { partition =>
+      doHandleLeaderOrFollowerPartitions(partition.topicPartition,
+        task => task.convertToLeader(partition.getLeaderEpoch))
+    }
   }
 
   /**
@@ -172,16 +166,18 @@ class RemoteLogManager(fetchLog: TopicPartition => Option[Log],
 
   class RLMTask(tp: TopicPartition) extends CancellableRunnable with Logging {
     this.logIdent = s"[RLMTask partition:$tp ] "
-    @volatile var isLeader: Boolean = false
+    @volatile var leaderEpoch: Int = -1
+    @volatile def isLeader: Boolean = leaderEpoch >= 0
 
     private var readOffset: Long = rlmIndexer.getOrLoadIndexOffset(tp).getOrElse(0L)
 
-    def convertToLeader(): Unit = {
-      isLeader = true
+    def convertToLeader(leaderEpochVal:Int): Unit = {
+      if (leaderEpochVal < 0) throw new KafkaException(s"leaderEpoch value for topic partition $tp can not be negative")
+      leaderEpoch = leaderEpochVal
     }
 
     def convertToFollower(): Unit = {
-      isLeader = false
+      leaderEpoch = -1
     }
 
     def copyLogSegmentsToRemote(): Unit = {
@@ -208,13 +204,17 @@ class RemoteLogManager(fetchLog: TopicPartition => Option[Log],
           }
 
           val segments = log.logSegments(readOffset + 1, fetchOffset)
+
           segments.foreach { segment =>
+            // store locally here as this may get updated after the below if condition is computed as false.
+            val leaderEpochVal = leaderEpoch
             if (isCancelled() || !isLeader) {
               info(s"Skipping copying log segments as the current task state is changed, cancelled:$isCancelled() " +
                 s"leader:$isLeader")
               return
             }
-            val entries = remoteStorageManager.copyLogSegment(tp, segment)
+
+            val entries = remoteStorageManager.copyLogSegment(tp, segment, leaderEpochVal)
             val file = segment.log.file()
             val fileName = file.getName
             val baseOffsetStr = fileName.substring(0, fileName.indexOf("."))

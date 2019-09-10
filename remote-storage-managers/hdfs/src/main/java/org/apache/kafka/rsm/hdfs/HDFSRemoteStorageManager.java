@@ -36,8 +36,6 @@ import org.apache.kafka.common.record.Records;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import static kafka.log.remote.RemoteLogManager.REMOTE_STORAGE_MANAGER_CONFIG_PREFIX;
-
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
@@ -55,7 +53,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import scala.collection.JavaConverters;
+import static kafka.log.remote.RemoteLogManager.REMOTE_STORAGE_MANAGER_CONFIG_PREFIX;
+import static scala.collection.JavaConverters.seqAsJavaListConverter;
 
 public class HDFSRemoteStorageManager implements RemoteStorageManager {
 
@@ -92,7 +91,7 @@ public class HDFSRemoteStorageManager implements RemoteStorageManager {
     }
 
     @Override
-    public List<RemoteLogIndexEntry> copyLogSegment(TopicPartition topicPartition, LogSegment logSegment)
+    public List<RemoteLogIndexEntry> copyLogSegment(TopicPartition topicPartition, LogSegment logSegment, int leaderEpoch)
             throws IOException {
         long baseOffset = logSegment.baseOffset();
         long lastOffset = logSegment.readNextOffset() - 1;
@@ -177,8 +176,10 @@ public class HDFSRemoteStorageManager implements RemoteStorageManager {
                     long baseOffset = Long.parseLong(m.group(1));
                     if (baseOffset >= minBaseOffset) {
                         long endOffset = Long.parseLong(m.group(2));
+                        //todo set the right leaderEpoch
+                        int leaderEpoch = 0;
                         RemoteLogSegmentInfo segment = new RemoteLogSegmentInfo(baseOffset, endOffset, topicPartition,
-                                Collections.singletonMap(FILE_PATH, file.getPath()));
+                                leaderEpoch, Collections.singletonMap(FILE_PATH, file.getPath()));
                         segments.add(segment);
                     }
                 } catch (NumberFormatException e) {
@@ -203,7 +204,7 @@ public class HDFSRemoteStorageManager implements RemoteStorageManager {
 
             Path remoteIndexPath = getPath(hdfsPath.toString(), REMOTE_INDEX_FILE_NAME);
             try (InputStream is = fs.open(remoteIndexPath)) {
-                return JavaConverters.seqAsJavaList(RemoteLogIndexEntry.readAll(is));
+                return seqAsJavaListConverter(RemoteLogIndexEntry.readAll(is)).asJava();
             }
         } finally {
             if (tmpFile != null && tmpFile.exists()) {

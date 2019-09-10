@@ -55,7 +55,7 @@ class RemoteLogManagerTest {
   var tmpDir: File = _
   var replicaManager: ReplicaManager = _
   var logManager: LogManager = _
-  var rlmMock:RemoteLogManager = EasyMock.createMock(classOf[RemoteLogManager])
+  var rlmMock: RemoteLogManager = EasyMock.createMock(classOf[RemoteLogManager])
 
   @Before
   def setup(): Unit = {
@@ -111,8 +111,11 @@ class RemoteLogManagerTest {
 
   @Test
   def testRSMConfigInvocation() {
-    def logFetcher(tp:TopicPartition):Option[Log] = logManager.getLog(tp)
-    def lsoUpdater(tp:TopicPartition, los:Long):Unit = {}
+
+    def logFetcher(tp: TopicPartition): Option[Log] = logManager.getLog(tp)
+
+    def lsoUpdater(tp: TopicPartition, los: Long): Unit = {}
+
     // this should initialize RSM
     val remoteLogManager = new RemoteLogManager(logFetcher, lsoUpdater, rlmConfig, time)
 
@@ -188,12 +191,13 @@ object MockRemoteStorageManager {
 
 class MockRemoteStorageManager extends RemoteStorageManager {
 
-  override def copyLogSegment(topicPartition: TopicPartition,
-                              logSegment: LogSegment): util.List[RemoteLogIndexEntry] = Collections.emptyList()
+  override def copyLogSegment(topicPartition: TopicPartition, logSegment: LogSegment,
+                              leaderEpoch: Int): util.List[RemoteLogIndexEntry] = Collections.emptyList()
 
   override def cancelCopyingLogSegment(topicPartition: TopicPartition): Unit = {}
 
-  override def listRemoteSegments(topicPartition: TopicPartition, minBaseOffset: Long): util.List[RemoteLogSegmentInfo] = Collections.emptyList()
+  override def listRemoteSegments(topicPartition: TopicPartition,
+                                  minBaseOffset: Long): util.List[RemoteLogSegmentInfo] = Collections.emptyList()
 
   override def getRemoteLogIndexEntries(remoteLogSegment: RemoteLogSegmentInfo): util.List[RemoteLogIndexEntry] = Collections.emptyList()
 
