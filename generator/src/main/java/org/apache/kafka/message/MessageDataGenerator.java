@@ -453,14 +453,31 @@ public final class MessageDataGenerator {
                 }).
                 ifMember(presentAndUntaggedVersions -> {
                     if (field.type().isVariableLength()) {
-                        generateVariableLengthReader(fieldFlexibleVersions(field),
-                            field.camelCaseName(),
-                            field.type(),
-                            presentAndUntaggedVersions,
-                            field.nullableVersions(),
-                            String.format("this.%s = ", field.camelCaseName()),
-                            String.format(";%n"),
-                            structRegistry.isStructArrayWithKeys(field));
+                        ClauseGenerator callGenerateVariableLengthReader = versions -> {
+                            generateVariableLengthReader(fieldFlexibleVersions(field),
+                                field.camelCaseName(),
+                                field.type(),
+                                versions,
+                                field.nullableVersions(),
+                                String.format("this.%s = ", field.camelCaseName()),
+                                String.format(";%n"),
+                                structRegistry.isStructArrayWithKeys(field));
+                        };
+                        // For arrays where the field type needs to be serialized differently in flexible
+                        // versions, lift the flexible version check outside of the array.
+                        // This may mean generating two separate 'for' loops-- one for flexible
+                        // versions, and one for regular versions.
+                        if (field.type().isArray() &&
+                            ((FieldType.ArrayType) field.type()).elementType().
+                                serializationIsDifferentInFlexibleVersions()) {
+                            VersionConditional.forVersions(fieldFlexibleVersions(field),
+                                    presentAndUntaggedVersions).
+                                ifMember(callGenerateVariableLengthReader).
+                                ifNotMember(callGenerateVariableLengthReader).
+                                generate(buffer);
+                        } else {
+                            callGenerateVariableLengthReader.generate(presentAndUntaggedVersions);
+                        }
                     } else {
                         buffer.printf("this.%s = %s;%n", field.camelCaseName(),
                             primitiveReadExpression(field.type()));
@@ -489,6 +506,8 @@ public final class MessageDataGenerator {
                         VersionConditional.forVersions(validTaggedVersions, curFlexibleVersions).
                             ifMember(presentAndTaggedVersions -> {
                                 if (field.type().isVariableLength()) {
+                                    // All tagged fields are serialized using the new-style
+                                    // flexible versions serialization.
                                     generateVariableLengthReader(fieldFlexibleVersions(field),
                                         field.camelCaseName(),
                                         field.type(),
@@ -548,14 +567,14 @@ public final class MessageDataGenerator {
     private void generateVariableLengthReader(Versions fieldFlexibleVersions,
                                               String name,
                                               FieldType type,
-                                              Versions versions,
+                                              Versions possibleVersions,
                                               Versions nullableVersions,
                                               String assignmentPrefix,
                                               String assignmentSuffix,
                                               boolean isStructArrayWithKeys) {
         String lengthVar = type.isArray() ? "arrayLength" : "length";
         buffer.printf("int %s;%n", lengthVar);
-        VersionConditional.forVersions(fieldFlexibleVersions, versions).
+        VersionConditional.forVersions(fieldFlexibleVersions, possibleVersions).
             ifMember(__ -> {
                 buffer.printf("%s = readable.readUnsignedVarint() - 1;%n", lengthVar);
             }).
@@ -571,7 +590,7 @@ public final class MessageDataGenerator {
             generate(buffer);
         buffer.printf("if (%s < 0) {%n", lengthVar);
         buffer.incrementIndent();
-        VersionConditional.forVersions(nullableVersions, versions).
+        VersionConditional.forVersions(nullableVersions, possibleVersions).
             ifNotMember(__ -> {
                 buffer.printf("throw new RuntimeException(\"non-nullable field %s " +
                     "was serialized as null\");%n", name);
@@ -619,7 +638,7 @@ public final class MessageDataGenerator {
                 generateVariableLengthReader(fieldFlexibleVersions,
                     name + " element",
                     arrayType.elementType(),
-                    versions,
+                    possibleVersions,
                     Versions.NONE,
                     "newCollection.add(",
                     String.format(");%n"),
@@ -735,10 +754,10 @@ public final class MessageDataGenerator {
         IsNullConditional.forField("_nestedObjects").
             possibleVersions(versions).
             nullableVersions(field.nullableVersions()).
-            ifNull(__ -> {
+            ifNull(() -> {
                 buffer.printf("this.%s = null;%n", field.camelCaseName());
             }).
-            ifNotNull(__ -> {
+            ifNotNull(() -> {
                 FieldType.ArrayType arrayType = (FieldType.ArrayType) field.type();
                 FieldType elementType = arrayType.elementType();
                 buffer.printf("this.%s = new %s(_nestedObjects.length);%n",
@@ -825,11 +844,28 @@ public final class MessageDataGenerator {
                     VersionConditional.forVersions(field.taggedVersions(), presentVersions).
                         ifNotMember(presentAndUntaggedVersions -> {
                             if (field.type().isVariableLength()) {
-                                generateVariableLengthWriter(fieldFlexibleVersions(field),
-                                    field.camelCaseName(),
-                                    field.type(),
-                                    presentAndUntaggedVersions,
-                                    field.nullableVersions());
+                                ClauseGenerator callGenerateVariableLengthWriter = versions -> {
+                                    generateVariableLengthWriter(fieldFlexibleVersions(field),
+                                        field.camelCaseName(),
+                                        field.type(),
+                                        versions,
+                                        field.nullableVersions());
+                                };
+                                // For arrays where the field type needs to be serialized differently in flexible
+                                // versions, lift the flexible version check outside of the array.
+                                // This may mean generating two separate 'for' loops-- one for flexible
+                                // versions, and one for regular versions.
+                                if (field.type().isArray() &&
+                                    ((FieldType.ArrayType) field.type()).elementType().
+                                        serializationIsDifferentInFlexibleVersions()) {
+                                    VersionConditional.forVersions(fieldFlexibleVersions(field),
+                                            presentAndUntaggedVersions).
+                                        ifMember(callGenerateVariableLengthWriter).
+                                        ifNotMember(callGenerateVariableLengthWriter).
+                                        generate(buffer);
+                                } else {
+                                    callGenerateVariableLengthWriter.generate(presentAndUntaggedVersions);
+                                }
                             } else {
                                 buffer.printf("%s;%n",
                                     primitiveWriteExpression(field.type(), field.camelCaseName()));
@@ -886,10 +922,10 @@ public final class MessageDataGenerator {
                                 IsNullConditional.forField(field.camelCaseName()).
                                     nullableVersions(field.nullableVersions()).
                                     possibleVersions(presentAndTaggedVersions).
-                                    ifNull(___ -> {
+                                    ifNull(() -> {
                                         buffer.printf("writable.writeUnsignedVarint(0);%n");
                                     }).
-                                    ifNotNull(___ -> {
+                                    ifNotNull(() -> {
                                         buffer.printf("byte[] _stringBytes = sizeCache.getSerializedValue(this.%s);%n",
                                             field.camelCaseName());
                                         buffer.printf("writable.writeUnsignedVarint(_stringBytes.length);%n");
@@ -898,10 +934,10 @@ public final class MessageDataGenerator {
                                     generate(buffer);
                             } else if (field.type().isVariableLength()) {
                                 if (field.type().isArray()) {
-                                    buffer.printf("writable.writeUnsignedVarint(sizeCache.get(this.%s));%n",
+                                    buffer.printf("writable.writeUnsignedVarint(sizeCache.get(this.%s) + 1);%n",
                                         field.camelCaseName());
                                 } else if (field.type().isBytes()) {
-                                    buffer.printf("writable.writeUnsignedVarint(this.%s.length);%n",
+                                    buffer.printf("writable.writeUnsignedVarint(this.%s.length + 1);%n",
                                         field.camelCaseName());
                                 } else {
                                     throw new RuntimeException("Unable to handle type " + field.type());
@@ -963,27 +999,34 @@ public final class MessageDataGenerator {
     private void generateVariableLengthWriter(Versions fieldFlexibleVersions,
                                               String name,
                                               FieldType type,
-                                              Versions versions,
+                                              Versions possibleVersions,
                                               Versions nullableVersions) {
         IsNullConditional.forField(name).
-            possibleVersions(versions).
+            possibleVersions(possibleVersions).
             nullableVersions(nullableVersions).
             alwaysEmitBlockScope(type.isString()).
-            ifNull(ifNullVersions -> {
-                VersionConditional.forVersions(fieldFlexibleVersions, ifNullVersions).
+            ifNull(() -> {
+                VersionConditional.forVersions(nullableVersions, possibleVersions).
                     ifMember(__ -> {
-                        buffer.printf("writable.writeUnsignedVarint(0);%n");
+                        VersionConditional.forVersions(fieldFlexibleVersions, possibleVersions).
+                            ifMember(___ -> {
+                                buffer.printf("writable.writeUnsignedVarint(0);%n");
+                            }).
+                            ifNotMember(___ -> {
+                                if (type.isString()) {
+                                    buffer.printf("writable.writeShort((short) -1);%n");
+                                } else {
+                                    buffer.printf("writable.writeInt(-1);%n");
+                                }
+                            }).
+                            generate(buffer);
                     }).
                     ifNotMember(__ -> {
-                        if (type.isString()) {
-                            buffer.printf("writable.writeShort((short) -1);%n");
-                        } else {
-                            buffer.printf("writable.writeInt(-1);%n");
-                        }
+                        buffer.printf("throw new NullPointerException();%n");
                     }).
                     generate(buffer);
             }).
-            ifNotNull(ifNotNullVersions -> {
+            ifNotNull(() -> {
                 final String lengthExpression;
                 if (type.isString()) {
                     buffer.printf("byte[] _stringBytes = sizeCache.getSerializedValue(%s);%n",
@@ -996,11 +1039,18 @@ public final class MessageDataGenerator {
                 } else {
                     throw new RuntimeException("Unhandled type " + type);
                 }
-                VersionConditional.forVersions(fieldFlexibleVersions, ifNotNullVersions).
-                    ifMember(__ -> {
+                // Check whether we're dealing with a flexible version or not.  In a flexible
+                // version, the length is serialized differently.
+                //
+                // Note: for arrays, each branch of the if contains the loop for writing out
+                // the elements.  This allows us to lift the version check out of the loop.
+                // This is helpful for things like arrays of strings, where each element
+                // will be serialized differently based on whether the version is flexible.
+                VersionConditional.forVersions(fieldFlexibleVersions, possibleVersions).
+                    ifMember(ifMemberVersions -> {
                         buffer.printf("writable.writeUnsignedVarint(%s + 1);%n", lengthExpression);
                     }).
-                    ifNotMember(__ -> {
+                    ifNotMember(ifNotMemberVersions -> {
                         if (type.isString()) {
                             buffer.printf("writable.writeShort((short) %s);%n", lengthExpression);
                         } else {
@@ -1028,15 +1078,13 @@ public final class MessageDataGenerator {
                         generateVariableLengthWriter(fieldFlexibleVersions,
                             elementName,
                             elementType,
-                            versions,
+                            possibleVersions,
                             Versions.NONE);
                     } else {
                         buffer.printf("%s;%n", primitiveWriteExpression(elementType, elementName));
                     }
                     buffer.decrementIndent();
                     buffer.printf("}%n");
-                } else {
-                    throw new RuntimeException("Can't handle variable length type " + type);
                 }
             }).
             generate(buffer);
@@ -1142,10 +1190,10 @@ public final class MessageDataGenerator {
         } else if (field.type().isArray()) {
             IsNullConditional.forField(field).
                 possibleVersions(versions).
-                ifNull(__ -> {
+                ifNull(() -> {
                     buffer.printf("struct.set(\"%s\", null);%n", field.snakeCaseName());
                 }).
-                ifNotNull(__ -> {
+                ifNotNull(() -> {
                     generateFieldToObjectArray(field);
                     buffer.printf("struct.set(\"%s\", (Object[]) _nestedObjects);%n",
                         field.snakeCaseName());
@@ -1181,10 +1229,10 @@ public final class MessageDataGenerator {
         } else if (field.type().isArray()) {
             IsNullConditional.forField(field).
                 possibleVersions(versions).
-                ifNull(__ -> {
+                ifNull(() -> {
                     buffer.printf("_taggedFields.put(%d, null);%n", field.tag().get());
                 }).
-                ifNotNull(__ -> {
+                ifNotNull(() -> {
                     generateFieldToObjectArray(field);
                     buffer.printf("_taggedFields.put(%d, _nestedObjects);%n", field.tag().get());
                 }).generate(buffer);
@@ -1321,8 +1369,8 @@ public final class MessageDataGenerator {
         IsNullConditional.forField(field).
             alwaysEmitBlockScope(true).
             possibleVersions(possibleVersions).
-            ifNull(ifNullVersions -> {
-                VersionConditional.forVersions(fieldFlexibleVersions(field), ifNullVersions).
+            ifNull(() -> {
+                VersionConditional.forVersions(fieldFlexibleVersions(field), possibleVersions).
                     ifMember(__ -> {
                         if (tagged) {
                             // Account for the tagged field prefix.
@@ -1344,10 +1392,10 @@ public final class MessageDataGenerator {
                     }).
                     generate(buffer);
             }).
-            ifNotNull(ifNotNullVersions -> {
+            ifNotNull(() -> {
                 if (field.type().isString()) {
                     generateStringToBytes(field.camelCaseName());
-                    VersionConditional.forVersions(fieldFlexibleVersions(field), ifNotNullVersions).
+                    VersionConditional.forVersions(fieldFlexibleVersions(field), possibleVersions).
                         ifMember(__ -> {
                             headerGenerator.addImport(MessageGenerator.BYTE_UTILS_CLASS);
                             if (tagged) {
@@ -1370,7 +1418,7 @@ public final class MessageDataGenerator {
                         generate(buffer);
                 } else if (field.type().isArray()) {
                     buffer.printf("int _arraySize = 0;%n");
-                    VersionConditional.forVersions(fieldFlexibleVersions(field), ifNotNullVersions).
+                    VersionConditional.forVersions(fieldFlexibleVersions(field), possibleVersions).
                         ifMember(__ -> {
                             headerGenerator.addImport(MessageGenerator.BYTE_UTILS_CLASS);
                             buffer.printf("_arraySize += ByteUtils.sizeOfUnsignedVarint(%s.size() + 1);%n",
@@ -1396,7 +1444,7 @@ public final class MessageDataGenerator {
                         generateVariableLengthArrayElementSize(fieldFlexibleVersions(field),
                             String.format("%sElement", field.camelCaseName()),
                             elementType,
-                            ifNotNullVersions);
+                            possibleVersions);
                         buffer.decrementIndent();
                         buffer.printf("}%n");
                     }
@@ -1410,7 +1458,7 @@ public final class MessageDataGenerator {
                     }
                 } else if (field.type().isBytes()) {
                     buffer.printf("int _bytesSize = %s.length;%n", field.camelCaseName());
-                    VersionConditional.forVersions(fieldFlexibleVersions(field), ifNotNullVersions).
+                    VersionConditional.forVersions(fieldFlexibleVersions(field), possibleVersions).
                         ifMember(__ -> {
                             headerGenerator.addImport(MessageGenerator.BYTE_UTILS_CLASS);
                             headerGenerator.addImport(MessageGenerator.BYTE_UTILS_CLASS);

@@ -57,6 +57,22 @@ public class VersionConditionalTest {
     }
 
     @Test
+    public void testAnotherAlwaysFalseConditional() throws Exception {
+        CodeBuffer buffer = new CodeBuffer();
+        VersionConditional.
+            forVersions(Versions.parse("3+", null), Versions.parse("1-2", null)).
+            ifMember(__ -> {
+                buffer.printf("System.out.println(\"hello world\");%n");
+            }).
+            ifNotMember(__ -> {
+                buffer.printf("System.out.println(\"foobar\");%n");
+            }).
+            generate(buffer);
+        assertEquals(buffer,
+            "System.out.println(\"foobar\");%n");
+    }
+
+    @Test
     public void testAllowMembershipCheckAlwaysFalseFails() throws Exception {
         try {
             CodeBuffer buffer = new CodeBuffer();

@@ -34,8 +34,8 @@ public final class IsNullConditional {
     private final String name;
     private Versions nullableVersions = Versions.ALL;
     private Versions possibleVersions = Versions.ALL;
-    private ClauseGenerator ifNull = null;
-    private ClauseGenerator ifNotNull = null;
+    private Runnable ifNull = null;
+    private Runnable ifNotNull = null;
     private boolean alwaysEmitBlockScope = false;
 
     private IsNullConditional(String name) {
@@ -52,12 +52,12 @@ public final class IsNullConditional {
         return this;
     }
 
-    IsNullConditional ifNull(ClauseGenerator ifNull) {
+    IsNullConditional ifNull(Runnable ifNull) {
         this.ifNull = ifNull;
         return this;
     }
 
-    IsNullConditional ifNotNull(ClauseGenerator ifNotNull) {
+    IsNullConditional ifNotNull(Runnable ifNotNull) {
         this.ifNotNull = ifNotNull;
         return this;
     }
@@ -68,43 +68,38 @@ public final class IsNullConditional {
     }
 
     void generate(CodeBuffer buffer) {
-        // check if the current version is a nullable version
-        VersionConditional cond =
-            VersionConditional.forVersions(nullableVersions, possibleVersions).
-            ifMember(versions -> {
-                if (ifNull != null) {
-                    buffer.printf("if (%s == null) {%n", name);
-                    buffer.incrementIndent();
-                    ifNull.generate(versions);
-                    buffer.decrementIndent();
-                    if (ifNotNull != null) {
-                        buffer.printf("} else {%n");
-                        buffer.incrementIndent();
-                        ifNotNull.generate(versions);
-                        buffer.decrementIndent();
-                    }
-                    buffer.printf("}%n");
-                } else if (ifNotNull != null) {
-                    buffer.printf("if (%s != null) {%n", name);
-                    buffer.incrementIndent();
-                    ifNotNull.generate(versions);
-                    buffer.decrementIndent();
-                    buffer.printf("}%n");
-                }
-            });
-        if (ifNotNull != null) {
-            cond.ifNotMember(versions -> {
+        if (nullableVersions.intersect(possibleVersions).empty()) {
+            if (ifNotNull != null) {
                 if (alwaysEmitBlockScope) {
                     buffer.printf("{%n");
                     buffer.incrementIndent();
                 }
-                ifNotNull.generate(versions);
+                ifNotNull.run();
                 if (alwaysEmitBlockScope) {
                     buffer.decrementIndent();
                     buffer.printf("}%n");
                 }
-            });
+            }
+        } else {
+            if (ifNull != null) {
+                buffer.printf("if (%s == null) {%n", name);
+                buffer.incrementIndent();
+                ifNull.run();
+                buffer.decrementIndent();
+                if (ifNotNull != null) {
+                    buffer.printf("} else {%n");
+                    buffer.incrementIndent();
+                    ifNotNull.run();
+                    buffer.decrementIndent();
+                }
+                buffer.printf("}%n");
+            } else if (ifNotNull != null) {
+                buffer.printf("if (%s != null) {%n", name);
+                buffer.incrementIndent();
+                ifNotNull.run();
+                buffer.decrementIndent();
+                buffer.printf("}%n");
+            }
         }
-        cond.generate(buffer);
     }
 }

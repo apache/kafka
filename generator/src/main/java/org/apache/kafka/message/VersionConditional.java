@@ -192,8 +192,10 @@ public final class VersionConditional {
         if (possibleVersions.lowest() < containingVersions.lowest()) {
             if (possibleVersions.highest() > containingVersions.highest()) {
                 generateFullRangeCheck(ifVersions, ifNotVersions, buffer);
-            } else {
+            } else if (possibleVersions.highest() >= containingVersions.lowest()) {
                 generateLowerRangeCheck(ifVersions, ifNotVersions, buffer);
+            } else {
+                generateAlwaysFalseCheck(ifNotVersions, buffer);
             }
         } else if (possibleVersions.highest() >= containingVersions.lowest() &&
                     (possibleVersions.lowest() <= containingVersions.highest())) {

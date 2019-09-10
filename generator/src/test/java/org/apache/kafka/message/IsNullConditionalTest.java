@@ -26,35 +26,33 @@ public class IsNullConditionalTest {
     final public Timeout globalTimeout = Timeout.millis(120000);
 
     @Test
-    public void testLowerRangeNullCheck() throws Exception {
+    public void testNullCheck() throws Exception {
         CodeBuffer buffer = new CodeBuffer();
         IsNullConditional.
             forField("foobar").
             nullableVersions(Versions.parse("2+", null)).
             possibleVersions(Versions.parse("0+", null)).
-            ifNull(__ -> {
+            ifNull(() -> {
                 buffer.printf("System.out.println(\"null\");%n");
             }).
             generate(buffer);
         VersionConditionalTest.assertEquals(buffer,
-            "if (version >= 2) {%n",
-            "    if (foobar == null) {%n",
-            "        System.out.println(\"null\");%n",
-            "    }%n",
+            "if (foobar == null) {%n",
+            "    System.out.println(\"null\");%n",
             "}%n");
     }
 
     @Test
-    public void testUnconditionalNullCheck() throws Exception {
+    public void testAnotherNullCheck() throws Exception {
         CodeBuffer buffer = new CodeBuffer();
         IsNullConditional.
             forField("foobar").
             nullableVersions(Versions.parse("0+", null)).
             possibleVersions(Versions.parse("2+", null)).
-            ifNull(__ -> {
+            ifNull(() -> {
                 buffer.printf("System.out.println(\"null\");%n");
             }).
-            ifNotNull(__ -> {
+            ifNotNull(() -> {
                 buffer.printf("System.out.println(\"not null\");%n");
             }).
             generate(buffer);
@@ -67,13 +65,13 @@ public class IsNullConditionalTest {
     }
 
     @Test
-    public void testUnconditionalNotNullCheck() throws Exception {
+    public void testNotNullCheck() throws Exception {
         CodeBuffer buffer = new CodeBuffer();
         IsNullConditional.
             forField("foobar").
             nullableVersions(Versions.parse("0+", null)).
             possibleVersions(Versions.parse("2+", null)).
-            ifNotNull(__ -> {
+            ifNotNull(() -> {
                 buffer.printf("System.out.println(\"not null\");%n");
             }).
             generate(buffer);
@@ -90,10 +88,10 @@ public class IsNullConditionalTest {
             forField("baz").
             nullableVersions(Versions.parse("0-2", null)).
             possibleVersions(Versions.parse("3+", null)).
-            ifNull(__ -> {
+            ifNull(() -> {
                 buffer.printf("System.out.println(\"null\");%n");
             }).
-            ifNotNull(__ -> {
+            ifNotNull(() -> {
                 buffer.printf("System.out.println(\"not null\");%n");
             }).
             generate(buffer);
@@ -108,10 +106,10 @@ public class IsNullConditionalTest {
             forField("baz").
             nullableVersions(Versions.parse("0-2", null)).
             possibleVersions(Versions.parse("3+", null)).
-            ifNull(__ -> {
+            ifNull(() -> {
                 buffer.printf("System.out.println(\"null\");%n");
             }).
-            ifNotNull(__ -> {
+            ifNotNull(() -> {
                 buffer.printf("System.out.println(\"not null\");%n");
             }).
             alwaysEmitBlockScope(true).

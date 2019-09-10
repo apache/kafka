@@ -102,6 +102,11 @@ public interface FieldType {
         private static final String NAME = "string";
 
         @Override
+        public boolean serializationIsDifferentInFlexibleVersions() {
+            return true;
+        }
+
+        @Override
         public boolean isString() {
             return true;
         }
@@ -120,6 +125,11 @@ public interface FieldType {
     final class BytesFieldType implements FieldType {
         static final BytesFieldType INSTANCE = new BytesFieldType();
         private static final String NAME = "bytes";
+
+        @Override
+        public boolean serializationIsDifferentInFlexibleVersions() {
+            return true;
+        }
 
         @Override
         public boolean isBytes() {
@@ -145,6 +155,11 @@ public interface FieldType {
         }
 
         @Override
+        public boolean serializationIsDifferentInFlexibleVersions() {
+            return true;
+        }
+
+        @Override
         public boolean isStruct() {
             return true;
         }
@@ -160,6 +175,11 @@ public interface FieldType {
 
         ArrayType(FieldType elementType) {
             this.elementType = elementType;
+        }
+
+        @Override
+        public boolean serializationIsDifferentInFlexibleVersions() {
+            return true;
         }
 
         @Override
@@ -240,6 +260,13 @@ public interface FieldType {
      * Returns true if this is an array of structures.
      */
     default boolean isStructArray() {
+        return false;
+    }
+
+    /**
+     * Returns true if the serialization of this type is different in flexible versions.
+     */
+    default boolean serializationIsDifferentInFlexibleVersions() {
         return false;
     }
 
