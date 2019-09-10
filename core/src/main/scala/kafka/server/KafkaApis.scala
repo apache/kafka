@@ -2673,27 +2673,31 @@ class KafkaApis(val requestChannel: RequestChannel,
         }
       }.toSeq
 
-      val offsetDeletionResult = groupCoordinator.handleDeleteOffsets(groupId, topicPartitions)
+      val (groupError, topicErrors) = groupCoordinator.handleDeleteOffsets(groupId, topicPartitions)
 
       sendResponseMaybeThrottle(request, requestThrottleMs => {
-        val topics = new OffsetDeleteResponseData.OffsetDeleteResponseTopicCollection
-        offsetDeletionResult.groupBy(_._1.topic()).map { case (topic, topicPartitions) =>
-          val partitions = new OffsetDeleteResponseData.OffsetDeleteResponsePartitionCollection
-          topicPartitions.map { case (topicPartition, error) =>
-            partitions.add(
-              new OffsetDeleteResponseData.OffsetDeleteResponsePartition()
-                .setPartitionIndex(topicPartition.partition())
-                .setErrorCode(error.code())
-            )
-            topics.add(new OffsetDeleteResponseData.OffsetDeleteResponseTopic()
-              .setName(topic)
-              .setPartitions(partitions))
+        if (groupError != Errors.NONE)
+          offsetDeleteRequest.getErrorResponse(requestThrottleMs, groupError)
+        else {
+          val topics = new OffsetDeleteResponseData.OffsetDeleteResponseTopicCollection
+          topicErrors.groupBy(_._1.topic()).map { case (topic, topicPartitions) =>
+            val partitions = new OffsetDeleteResponseData.OffsetDeleteResponsePartitionCollection
+            topicPartitions.map { case (topicPartition, error) =>
+              partitions.add(
+                new OffsetDeleteResponseData.OffsetDeleteResponsePartition()
+                  .setPartitionIndex(topicPartition.partition())
+                  .setErrorCode(error.code())
+              )
+              topics.add(new OffsetDeleteResponseData.OffsetDeleteResponseTopic()
+                .setName(topic)
+                .setPartitions(partitions))
+            }
           }
-        }
 
-        new OffsetDeleteResponse(new OffsetDeleteResponseData()
-          .setTopics(topics)
-          .setThrottleTimeMs(requestThrottleMs))
+          new OffsetDeleteResponse(new OffsetDeleteResponseData()
+            .setTopics(topics)
+            .setThrottleTimeMs(requestThrottleMs))
+        }
       })
     } else {
       sendResponseMaybeThrottle(request, requestThrottleMs =>

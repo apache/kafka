@@ -3124,6 +3124,11 @@ public class KafkaAdminClient extends AdminClient {
                     return;
                 }
 
+                // If the error is an error at the group level, the future is failed with it
+                final Errors groupError = Errors.forCode(response.data.errorCode());
+                if (handleGroupRequestError(groupError, context.getFuture()))
+                    return;
+
                 final Map<TopicPartition, Errors> partitions = new HashMap<>();
                 response.data.topics().forEach(topic -> {
                     topic.partitions().forEach(partition -> {
@@ -3132,17 +3137,6 @@ public class KafkaAdminClient extends AdminClient {
                             Errors.forCode(partition.errorCode()));
                     });
                 });
-
-                // If the error is an error at the group level, the future is failed with it
-                if (!partitions.isEmpty()) {
-                    final Errors error = partitions.values().iterator().next();
-                    if (error == Errors.COORDINATOR_LOAD_IN_PROGRESS || error == Errors.COORDINATOR_NOT_AVAILABLE) {
-                        throw error.exception();
-                    } else if (error == Errors.INVALID_GROUP_ID || error == Errors.GROUP_ID_NOT_FOUND || error == Errors.GROUP_AUTHORIZATION_FAILED) {
-                        context.getFuture().completeExceptionally(error.exception());
-                        return;
-                    }
-                }
 
                 context.getFuture().complete(partitions);
             }

@@ -251,9 +251,18 @@ public class KafkaAdminClientTest {
         }
     }
 
+    private static OffsetDeleteResponse prepareOffsetDeleteResponse(Errors error) {
+        return new OffsetDeleteResponse(
+            new OffsetDeleteResponseData()
+                .setErrorCode(error.code())
+                .setTopics(new OffsetDeleteResponseTopicCollection())
+        );
+    }
+
     private static OffsetDeleteResponse prepareOffsetDeleteResponse(String topic, int partition, Errors error) {
         return new OffsetDeleteResponse(
             new OffsetDeleteResponseData()
+                .setErrorCode(Errors.NONE.code())
                 .setTopics(new OffsetDeleteResponseTopicCollection(Stream.of(
                     new OffsetDeleteResponseTopic()
                         .setName(topic)
@@ -1628,10 +1637,10 @@ public class KafkaAdminClientTest {
                 FindCoordinatorResponse.prepareResponse(Errors.NONE, env.cluster().controller()));
 
             env.kafkaClient().prepareResponse(
-                prepareOffsetDeleteResponse("foo", 0, Errors.COORDINATOR_NOT_AVAILABLE));
+                prepareOffsetDeleteResponse(Errors.COORDINATOR_NOT_AVAILABLE));
 
             env.kafkaClient().prepareResponse(
-                prepareOffsetDeleteResponse("foo", 0, Errors.COORDINATOR_LOAD_IN_PROGRESS));
+                prepareOffsetDeleteResponse(Errors.COORDINATOR_LOAD_IN_PROGRESS));
 
             /*
              * We need to return two responses here, one for NOT_COORDINATOR call when calling delete a consumer group
@@ -1639,7 +1648,7 @@ public class KafkaAdminClientTest {
              * FindCoordinatorResponse.
              */
             env.kafkaClient().prepareResponse(
-                prepareOffsetDeleteResponse("foo", 0, Errors.NOT_COORDINATOR));
+                prepareOffsetDeleteResponse(Errors.NOT_COORDINATOR));
 
             env.kafkaClient().prepareResponse(
                 prepareFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
@@ -1675,7 +1684,6 @@ public class KafkaAdminClientTest {
         final List<Errors> retriableErrors = Arrays.asList(
             Errors.GROUP_AUTHORIZATION_FAILED, Errors.INVALID_GROUP_ID, Errors.GROUP_ID_NOT_FOUND);
 
-
         try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(cluster)) {
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
 
@@ -1684,7 +1692,7 @@ public class KafkaAdminClientTest {
                     .prepareResponse(Errors.NONE, env.cluster().controller()));
 
                 env.kafkaClient().prepareResponse(
-                    prepareOffsetDeleteResponse("foo", 0, error));
+                    prepareOffsetDeleteResponse(error));
 
                 DeleteConsumerGroupOffsetsResult errorResult = env.adminClient()
                     .deleteConsumerGroupOffsets(groupId, Stream.of(tp1).collect(Collectors.toSet()));

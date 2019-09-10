@@ -1769,6 +1769,7 @@ public class RequestResponseTest {
         );
 
         OffsetDeleteResponseData data = new OffsetDeleteResponseData();
+        data.setErrorCode(Errors.NONE.code());
         data.setTopics(topics);
 
         return new OffsetDeleteResponse(data);

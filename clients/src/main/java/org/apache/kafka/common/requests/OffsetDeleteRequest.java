@@ -86,6 +86,7 @@ public class OffsetDeleteRequest extends AbstractRequest {
             new OffsetDeleteResponseData()
                 .setTopics(topics)
                 .setThrottleTimeMs(throttleTimeMs)
+                .setErrorCode(error.code())
         );
     }
 

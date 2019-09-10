@@ -51,13 +51,9 @@ import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData.{Alter
 import org.apache.kafka.common.message.JoinGroupRequestData
 import org.apache.kafka.common.message.ListPartitionReassignmentsRequestData
 import org.apache.kafka.common.message.OffsetCommitRequestData
-import org.apache.kafka.common.message.OffsetDeleteRequestData
 import org.apache.kafka.common.message.SyncGroupRequestData
 import org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocolCollection
 import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity
-import org.apache.kafka.common.message.OffsetDeleteRequestData.OffsetDeleteRequestPartition
-import org.apache.kafka.common.message.OffsetDeleteRequestData.OffsetDeleteRequestTopic
-import org.apache.kafka.common.message.OffsetDeleteRequestData.OffsetDeleteRequestTopicCollection
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record.{CompressionType, MemoryRecords, RecordBatch, Records, SimpleRecord}
@@ -443,17 +439,6 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
       .setGroupsNames(Collections.singletonList(group))
   ).build()
 
-  private def deleteGroupOffsetsRequest = new OffsetDeleteRequest.Builder(
-    new OffsetDeleteRequestData()
-      .setGroupId(group)
-      .setTopics(new OffsetDeleteRequestTopicCollection(Collections.singleton(
-          new OffsetDeleteRequestTopic()
-            .setName(topic)
-            .setPartitions(Collections.singletonList(
-              new OffsetDeleteRequestPartition().setPartitionIndex(part)))).iterator())
-      )
-  )
-
   private def leaderAndIsrRequest = {
     new requests.LeaderAndIsrRequest.Builder(ApiKeys.LEADER_AND_ISR.latestVersion, brokerId, Int.MaxValue, Long.MaxValue,
       Map(tp -> new LeaderAndIsrRequest.PartitionState(Int.MaxValue, brokerId, Int.MaxValue, List(brokerId).asJava, 2, Seq(brokerId).asJava, false)).asJava,
@@ -549,17 +534,6 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
           List(new Integer(tp.partition)).asJava
         )).asJava
     )
-  ).build()
-
-  private def offsetDeleteRequest = new OffsetDeleteRequest.Builder(
-    new OffsetDeleteRequestData()
-      .setGroupId(group)
-      .setTopics(new OffsetDeleteRequestData.OffsetDeleteRequestTopicCollection(
-        Collections.singletonList(new OffsetDeleteRequestData.OffsetDeleteRequestTopic()
-          .setName(topic)
-          .setPartitions(Collections.singletonList(
-            new OffsetDeleteRequestData.OffsetDeleteRequestPartition()
-              .setPartitionIndex(part)))).iterator()))
   ).build()
 
   @Test

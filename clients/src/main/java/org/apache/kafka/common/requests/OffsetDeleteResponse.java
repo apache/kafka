@@ -67,6 +67,7 @@ public class OffsetDeleteResponse extends AbstractResponse {
     @Override
     public Map<Errors, Integer> errorCounts() {
         Map<Errors, Integer> counts = new HashMap<>();
+        counts.put(Errors.forCode(data.errorCode()), 1);
         for (OffsetDeleteResponseTopic topic : data.topics()) {
             for (OffsetDeleteResponsePartition partition : topic.partitions()) {
                 Errors error = Errors.forCode(partition.errorCode());

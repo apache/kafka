@@ -542,32 +542,27 @@ class GroupCoordinator(val brokerId: Int,
     groupErrors
   }
 
-  def handleDeleteOffsets(groupId: String, partitions: Seq[TopicPartition]): Map[TopicPartition, Errors] = {
-    def errorResponse(error: Errors): Map[TopicPartition, Errors] = {
-      partitions.map { partition =>
-        (partition, error)
-      }.toMap
-    }
-
+  def handleDeleteOffsets(groupId: String, partitions: Seq[TopicPartition]): (Errors, Map[TopicPartition, Errors]) = {
+    var groupError: Errors = Errors.NONE
     var partitionErrors: Map[TopicPartition, Errors] = Map()
     var partitionEligibleForDeletion: Seq[TopicPartition] = Seq()
 
     validateGroupStatus(groupId, ApiKeys.OFFSET_DELETE) match {
       case Some(error) =>
-        partitionErrors = errorResponse(error)
+        groupError = error
 
       case None =>
         groupManager.getGroup(groupId) match {
           case None =>
-            partitionErrors = errorResponse(if (groupManager.groupNotExists(groupId))
-              Errors.GROUP_ID_NOT_FOUND else Errors.NOT_COORDINATOR)
+            groupError = if (groupManager.groupNotExists(groupId))
+              Errors.GROUP_ID_NOT_FOUND else Errors.NOT_COORDINATOR
 
           case Some(group) =>
             group.inLock {
               group.currentState match {
                 case Dead =>
-                  partitionErrors = errorResponse(if (groupManager.groupNotExists(groupId))
-                    Errors.GROUP_ID_NOT_FOUND else Errors.NOT_COORDINATOR)
+                  groupError = if (groupManager.groupNotExists(groupId))
+                    Errors.GROUP_ID_NOT_FOUND else Errors.NOT_COORDINATOR
 
                 case Empty =>
                   partitionEligibleForDeletion = partitions
@@ -580,7 +575,7 @@ class GroupCoordinator(val brokerId: Int,
                   partitionErrors = consumed.map(_ -> Errors.GROUP_SUBSCRIBED_TO_TOPIC).toMap
 
                 case _ =>
-                  partitionErrors = errorResponse(Errors.NON_EMPTY_GROUP)
+                  groupError = Errors.NON_EMPTY_GROUP
               }
             }
 
@@ -599,7 +594,8 @@ class GroupCoordinator(val brokerId: Int,
         }
     }
 
-    partitionErrors
+    // If there is a group error, the partition errors is empty
+    groupError -> partitionErrors
   }
 
   def handleHeartbeat(groupId: String,

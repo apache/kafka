@@ -33,6 +33,7 @@ import kafka.utils.TestUtils._
 import kafka.utils.{Log4jController, Logging, TestUtils}
 import kafka.zk.KafkaZkClient
 import org.apache.kafka.clients.admin._
+import org.apache.kafka.clients.consumer.ConsumerRecords
 import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer}
 import org.apache.kafka.clients.producer.KafkaProducer
 import org.apache.kafka.clients.producer.ProducerRecord
@@ -1056,6 +1057,14 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
     TestUtils.pollUntilTrue(consumer, () => !consumer.assignment.isEmpty, "Expected non-empty assignment")
   }
 
+  private def subscribeAndWaitForRecords(topic: String, consumer: KafkaConsumer[Array[Byte], Array[Byte]]): Unit = {
+    consumer.subscribe(Collections.singletonList(topic))
+    TestUtils.pollRecordsUntilTrue(
+      consumer,
+      (records: ConsumerRecords[Array[Byte], Array[Byte]]) => records.isEmpty,
+      "Expected records" )
+  }
+
   private def sendRecords(producer: KafkaProducer[Array[Byte], Array[Byte]],
                           numRecords: Int,
                           topicPartition: TopicPartition): Unit = {
@@ -1264,7 +1273,7 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
             val part = new TopicPartition(testTopicName, 0)
             parts.containsKey(part) && (parts.get(part).offset() == 1)
           }, s"Expected the offset for partition 0 to eventually become 1.")
-
+          
           // Test delete non-exist consumer instance
           val invalidInstanceId = "invalid-instance-id"
           var removeMemberResult = client.removeMemberFromConsumerGroup(testGroupId, new RemoveMemberFromConsumerGroupOptions(
@@ -1286,15 +1295,6 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
                 fail("Should have caught exception in getting member future")
             }
           }
-
-          // Test offset deletion while consuming
-          val tp1 = new TopicPartition(testTopicName, 0)
-          val tp2 = new TopicPartition("foo", 0)
-          val offsetDeleteResult = client.deleteConsumerGroupOffsets(testGroupId, Set(tp1, tp2).asJava)
-
-          assertFutureExceptionTypeEquals(offsetDeleteResult.partitionResult(tp1),
-            classOf[GroupSubscribedToTopicException])
-          assertNull(offsetDeleteResult.partitionResult(tp2).get())
 
           // Test consumer group deletion
           var deleteResult = client.deleteConsumerGroups(Seq(testGroupId, fakeGroupId).asJava)
@@ -1355,12 +1355,70 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
       } finally {
         Utils.closeQuietly(consumer, "consumer")
       }
+    } finally {
+      Utils.closeQuietly(client, "adminClient")
+    }
+  }
+
+  @Test
+  def testDeleteConsumerGroupOffsets(): Unit = {
+    val config = createConfig()
+    client = AdminClient.create(config)
+    try {
+      val testTopicName = "test_topic"
+      val testGroupId = "test_group_id"
+      val testClientId = "test_client_id"
+      val fakeGroupId = "fake_group_id"
+
+      val tp1 = new TopicPartition(testTopicName, 0)
+      val tp2 = new TopicPartition("foo", 0)
+
+      client.createTopics(Collections.singleton(
+        new NewTopic(testTopicName, 2, 1.toShort))).all().get()
+      waitForTopics(client, List(testTopicName), List())
+
+      val producer = createProducer()
+      try {
+        producer.send(new ProducerRecord(testTopicName, 0, null, null)).get()
+      } finally {
+        Utils.closeQuietly(producer, "producer")
+      }
+
+      val newConsumerConfig = new Properties(consumerConfig)
+      newConsumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, testGroupId)
+      newConsumerConfig.setProperty(ConsumerConfig.CLIENT_ID_CONFIG, testClientId)
+      val consumer = createConsumer(configOverrides = newConsumerConfig)
+
+      try {
+        subscribeAndWaitForRecords(testTopicName, consumer)
+        consumer.commitSync()
+
+        // Test offset deletion while consuming
+        val offsetDeleteResult = client.deleteConsumerGroupOffsets(testGroupId, Set(tp1, tp2).asJava)
+
+        assertNull(offsetDeleteResult.all().get())
+        assertFutureExceptionTypeEquals(offsetDeleteResult.partitionResult(tp1),
+          classOf[GroupSubscribedToTopicException])
+        assertNull(offsetDeleteResult.partitionResult(tp2).get())
+
+        // Test the fake group ID
+        val fakeDeleteResult = client.deleteConsumerGroupOffsets(fakeGroupId, Set(tp1, tp2).asJava)
+
+        assertFutureExceptionTypeEquals(fakeDeleteResult.all(), classOf[GroupIdNotFoundException])
+        assertFutureExceptionTypeEquals(fakeDeleteResult.partitionResult(tp1),
+          classOf[GroupIdNotFoundException])
+        assertFutureExceptionTypeEquals(fakeDeleteResult.partitionResult(tp2),
+          classOf[GroupIdNotFoundException])
+
+      } finally {
+        Utils.closeQuietly(consumer, "consumer")
+      }
 
       // Test offset deletion when group is empty
-      val tp = new TopicPartition(testTopicName, 0)
-      val offsetDeleteResult = client.deleteConsumerGroupOffsets(testGroupId, Set(tp).asJava)
+      val offsetDeleteResult = client.deleteConsumerGroupOffsets(testGroupId, Set(tp1).asJava)
 
-      assertNull(offsetDeleteResult.partitionResult(tp).get())
+      assertNull(offsetDeleteResult.all().get())
+      assertNull(offsetDeleteResult.partitionResult(tp1).get())
 
     } finally {
       Utils.closeQuietly(client, "adminClient")
