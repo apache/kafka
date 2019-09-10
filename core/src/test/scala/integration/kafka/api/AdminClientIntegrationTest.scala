@@ -226,15 +226,13 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
   }
 
   @Test
-  def testCreateExistedTopicsThrowTopicExistsException(): Unit = {
+  def testCreateExistingTopicsThrowTopicExistsException(): Unit = {
     client = AdminClient.create(createConfig())
     val topic = "mytopic"
     val topics = Seq(topic)
     val newTopics = Seq(
       new NewTopic(topic, 1, 1.toShort),
     )
-    client.createTopics(newTopics.asJava, new CreateTopicsOptions().validateOnly(true)).all.get()
-    waitForTopics(client, List(), topics)
 
     client.createTopics(newTopics.asJava).all.get()
     waitForTopics(client, topics, List())
