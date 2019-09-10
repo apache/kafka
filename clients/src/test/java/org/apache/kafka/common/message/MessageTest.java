@@ -372,12 +372,15 @@ public final class MessageTest {
         ByteBuffer buf = ByteBuffer.allocate(size);
         ByteBufferAccessor byteBufferAccessor = new ByteBufferAccessor(buf);
         message.write(byteBufferAccessor, sizeCache, version);
-        assertEquals(size, buf.position());
+        assertEquals("The result of the size function does not match the number of bytes " +
+            "written for version " + version, size, buf.position());
         Message message2 = message.getClass().newInstance();
         buf.flip();
         message2.read(byteBufferAccessor, version);
-        assertEquals(size, buf.position());
-        assertEquals(expected, message2);
+        assertEquals("The result of the size functino does not match the number of bytes " +
+            "read back in for version " + version, size, buf.position());
+        assertEquals("The message object created after a round trip did not match for " +
+            "version " + version, expected, message2);
         assertEquals(expected.hashCode(), message2.hashCode());
         assertEquals(expected.toString(), message2.toString());
     }
