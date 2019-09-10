@@ -54,21 +54,21 @@ public class ProduceResponse extends AbstractResponse {
     /**
      * Possible error code:
      *
-     * CORRUPT_MESSAGE (2)
-     * UNKNOWN_TOPIC_OR_PARTITION (3)
-     * NOT_LEADER_FOR_PARTITION (6)
-     * MESSAGE_TOO_LARGE (10)
-     * INVALID_TOPIC (17)
-     * RECORD_LIST_TOO_LARGE (18)
-     * NOT_ENOUGH_REPLICAS (19)
-     * NOT_ENOUGH_REPLICAS_AFTER_APPEND (20)
-     * INVALID_REQUIRED_ACKS (21)
-     * TOPIC_AUTHORIZATION_FAILED (29)
-     * UNSUPPORTED_FOR_MESSAGE_FORMAT (43)
-     * INVALID_PRODUCER_EPOCH (47)
-     * CLUSTER_AUTHORIZATION_FAILED (31)
-     * TRANSACTIONAL_ID_AUTHORIZATION_FAILED (53)
-     * INVALID_RECORD (86)
+     * {@link Errors#CORRUPT_MESSAGE} (2)
+     * {@link Errors#UNKNOWN_TOPIC_OR_PARTITION} (3)
+     * {@link Errors#NOT_LEADER_FOR_PARTITION} (6)
+     * {@link Errors#MESSAGE_TOO_LARGE} (10)
+     * {@link Errors#INVALID_TOPIC} (17)
+     * {@link Errors#RECORD_LIST_TOO_LARGE} (18)
+     * {@link Errors#NOT_ENOUGH_REPLICAS} (19)
+     * {@link Errors#NOT_ENOUGH_REPLICAS_AFTER_APPEND} (20)
+     * {@link Errors#INVALID_REQUIRED_ACKS} (21)
+     * {@link Errors#TOPIC_AUTHORIZATION_FAILED} (29)
+     * {@link Errors#UNSUPPORTED_FOR_MESSAGE_FORMAT} (43)
+     * {@link Errors#INVALID_PRODUCER_EPOCH} (47)
+     * {@link Errors#CLUSTER_AUTHORIZATION_FAILED} (31)
+     * {@link Errors#TRANSACTIONAL_ID_AUTHORIZATION_FAILED} (53)
+     * {@link Errors#INVALID_RECORD} (86)
      */
 
     private static final String BASE_OFFSET_KEY_NAME = "base_offset";
@@ -80,7 +80,7 @@ public class ProduceResponse extends AbstractResponse {
     private static final Field.Int64 LOG_START_OFFSET_FIELD = new Field.Int64(LOG_START_OFFSET_KEY_NAME,
             "The start offset of the log at the time this produce response was created", INVALID_OFFSET);
     private static final Field.Str ERROR_MESSAGE_FIELD = new Field.Str(ERROR_MESSAGE_KEY_NAME,
-            "The error message of the records that cause the batch to be dropped");
+            "The error message of the records that caused the batch to be dropped");
 
     private static final Schema PRODUCE_RESPONSE_V0 = new Schema(
             new Field(RESPONSES_KEY_NAME, new ArrayOf(new Schema(
@@ -170,8 +170,8 @@ public class ProduceResponse extends AbstractResponse {
                                     "If LogAppendTime is used for the topic, the timestamp will be the broker local " +
                                     "time when the messages are appended."),
                             LOG_START_OFFSET_FIELD,
-                            new Field(ERROR_RECORDS_KEY_NAME, new ArrayOf(INT32), "The relative offset of records" +
-                                    "that cause the batch to be dropped"),
+                            new Field(ERROR_RECORDS_KEY_NAME, new ArrayOf(INT32), "The relative offset of records " +
+                                    "that caused the batch to be dropped"),
                             ERROR_MESSAGE_FIELD)))))),
             THROTTLE_TIME_MS);
 
