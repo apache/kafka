@@ -24,7 +24,6 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.annotation.InterfaceStability;
 
 import java.util.Map;
-import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.protocol.Errors;
 
@@ -53,7 +52,7 @@ public class DeleteConsumerGroupOffsetsResult {
                 if (throwable != null) {
                     result.completeExceptionally(throwable);
                 } else if (!topicPartitions.containsKey(partition)) {
-                    result.completeExceptionally(new UnknownTopicOrPartitionException(
+                    result.completeExceptionally(new IllegalArgumentException(
                         "Group offset deletion for partition \"" + partition +
                         "\" was not attempted"));
                 } else {

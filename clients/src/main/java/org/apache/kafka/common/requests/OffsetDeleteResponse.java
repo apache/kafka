@@ -29,15 +29,18 @@ import java.util.Map;
 
 /**
  * Possible error codes:
- * <p>
- * COORDINATOR_LOAD_IN_PROGRESS (14)
- * COORDINATOR_NOT_AVAILABLE (15)
- * NOT_COORDINATOR (16)
- * INVALID_GROUP_ID (24)
- * GROUP_AUTHORIZATION_FAILED (30)
- * GROUP_ID_NOT_FOUND (69)
- * NON_EMPTY_GROUP (68)
- * GROUP_SUBSCRIBED_TO_TOPIC (86)
+ *
+ * - Partition errors:
+ *   - {@link Errors#GROUP_SUBSCRIBED_TO_TOPIC}
+ *
+ * - Group or coordinator errors:
+ *   - {@link Errors#COORDINATOR_LOAD_IN_PROGRESS}
+ *   - {@link Errors#COORDINATOR_NOT_AVAILABLE}
+ *   - {@link Errors#NOT_COORDINATOR}
+ *   - {@link Errors#GROUP_AUTHORIZATION_FAILED}
+ *   - {@link Errors#INVALID_GROUP_ID}
+ *   - {@link Errors#GROUP_ID_NOT_FOUND}
+ *   - {@link Errors#NON_EMPTY_GROUP}
  */
 public class OffsetDeleteResponse extends AbstractResponse {
 
@@ -84,6 +87,6 @@ public class OffsetDeleteResponse extends AbstractResponse {
 
     @Override
     public boolean shouldClientThrottle(short version) {
-        return version >= 1;
+        return version >= 0;
     }
 }

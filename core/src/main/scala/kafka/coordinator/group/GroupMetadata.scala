@@ -460,7 +460,7 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
           Some(
             members.map { case (_, member) =>
               val buffer = ByteBuffer.wrap(member.metadata(protocol.get))
-              ConsumerProtocol.deserializeHeader(buffer)
+              ConsumerProtocol.deserializeVersion(buffer)
               ConsumerProtocol.deserializeSubscriptionV0(buffer).topics().asScala.toSet
             }.reduceLeft(_ ++ _)
           )

@@ -120,7 +120,7 @@ public class ConsumerProtocol {
         new Field(TOPIC_PARTITIONS_KEY_NAME, new ArrayOf(TOPIC_ASSIGNMENT_V0)),
         new Field(USER_DATA_KEY_NAME, Type.NULLABLE_BYTES));
 
-    public static Short deserializeHeader(ByteBuffer buffer) {
+    public static Short deserializeVersion(ByteBuffer buffer) {
         Struct header = CONSUMER_PROTOCOL_HEADER_SCHEMA.read(buffer);
         return header.getShort(VERSION_KEY_NAME);
     }
@@ -206,7 +206,7 @@ public class ConsumerProtocol {
     }
 
     public static Subscription deserializeSubscription(ByteBuffer buffer) {
-        Short version = deserializeHeader(buffer);
+        Short version = deserializeVersion(buffer);
 
         if (version < CONSUMER_PROTOCOL_V0)
             throw new SchemaException("Unsupported subscription version: " + version);
@@ -301,7 +301,7 @@ public class ConsumerProtocol {
     }
 
     public static Assignment deserializeAssignment(ByteBuffer buffer) {
-        Short version = deserializeHeader(buffer);
+        Short version = deserializeVersion(buffer);
 
         if (version < CONSUMER_PROTOCOL_V0)
             throw new SchemaException("Unsupported assignment version: " + version);

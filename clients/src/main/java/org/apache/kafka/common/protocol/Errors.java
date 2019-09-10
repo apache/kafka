@@ -314,7 +314,7 @@ public enum Errors {
     ELECTION_NOT_NEEDED(84, "Leader election not needed for topic partition", ElectionNotNeededException::new),
     NO_REASSIGNMENT_IN_PROGRESS(85, "No partition reassignment is in progress.",
             NoReassignmentInProgressException::new),
-    GROUP_SUBSCRIBED_TO_TOPIC(86, "The consumer group is actively subscribed to the topic",
+    GROUP_SUBSCRIBED_TO_TOPIC(86, "Deleting offsets of a topic is forbidden while the consumer group is actively subscribed to it.",
         GroupSubscribedToTopicException::new);
 
     private static final Logger log = LoggerFactory.getLogger(Errors.class);

@@ -66,34 +66,27 @@ public class OffsetDeleteRequest extends AbstractRequest {
     }
 
     public AbstractResponse getErrorResponse(int throttleTimeMs, Errors error) {
-        switch (version()) {
-            case 0:
-                OffsetDeleteResponseTopicCollection topics = new OffsetDeleteResponseTopicCollection();
-                for (OffsetDeleteRequestTopic topic : data.topics()) {
-                    OffsetDeleteResponsePartitionCollection partitions = new OffsetDeleteResponsePartitionCollection();
-                    for (OffsetDeleteRequestPartition partition : topic.partitions()) {
-                        partitions.add(new OffsetDeleteResponsePartition()
-                            .setPartitionIndex(partition.partitionIndex())
-                            .setErrorCode(error.code())
-                        );
-                    }
-                    topics.add(new OffsetDeleteResponseTopic()
-                        .setName(topic.name())
-                        .setPartitions(partitions)
-                    );
-                }
+        OffsetDeleteResponseTopicCollection topics = new OffsetDeleteResponseTopicCollection();
 
-                return new OffsetDeleteResponse(
-                    new OffsetDeleteResponseData()
-                        .setTopics(topics)
-                        .setThrottleTimeMs(throttleTimeMs)
+        for (OffsetDeleteRequestTopic topic : data.topics()) {
+            OffsetDeleteResponsePartitionCollection partitions = new OffsetDeleteResponsePartitionCollection();
+            for (OffsetDeleteRequestPartition partition : topic.partitions()) {
+                partitions.add(new OffsetDeleteResponsePartition()
+                    .setPartitionIndex(partition.partitionIndex())
+                    .setErrorCode(error.code())
                 );
-            default:
-                throw new IllegalArgumentException(
-                    String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
-                        version(), ApiKeys.OFFSET_DELETE.name,
-                        ApiKeys.OFFSET_DELETE.latestVersion()));
+            }
+            topics.add(new OffsetDeleteResponseTopic()
+                .setName(topic.name())
+                .setPartitions(partitions)
+            );
         }
+
+        return new OffsetDeleteResponse(
+            new OffsetDeleteResponseData()
+                .setTopics(topics)
+                .setThrottleTimeMs(throttleTimeMs)
+        );
     }
 
     @Override

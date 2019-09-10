@@ -251,6 +251,21 @@ public class KafkaAdminClientTest {
         }
     }
 
+    private static OffsetDeleteResponse prepareOffsetDeleteResponse(String topic, int partition, Errors error) {
+        return new OffsetDeleteResponse(
+            new OffsetDeleteResponseData()
+                .setTopics(new OffsetDeleteResponseTopicCollection(Stream.of(
+                    new OffsetDeleteResponseTopic()
+                        .setName(topic)
+                        .setPartitions(new OffsetDeleteResponsePartitionCollection(Collections.singletonList(
+                            new OffsetDeleteResponsePartition()
+                                .setPartitionIndex(partition)
+                                .setErrorCode(error.code())
+                        ).iterator()))
+                ).collect(Collectors.toList()).iterator()))
+        );
+    }
+
     private static CreateTopicsResponse prepareCreateTopicsResponse(String topicName, Errors error) {
         CreateTopicsResponseData data = new CreateTopicsResponseData();
         data.topics().add(new CreatableTopicResult().
@@ -1533,6 +1548,8 @@ public class KafkaAdminClientTest {
 
     @Test
     public void testDeleteConsumerGroupOffsets() throws Exception {
+        // Happy path
+
         final Map<Integer, Node> nodes = new HashMap<>();
         nodes.put(0, new Node(0, "localhost", 8121));
 
@@ -1547,105 +1564,13 @@ public class KafkaAdminClientTest {
         final String groupId = "group-0";
         final TopicPartition tp1 = new TopicPartition("foo", 0);
         final TopicPartition tp2 = new TopicPartition("bar", 0);
+        final TopicPartition tp3 = new TopicPartition("foobar", 0);
 
         try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(cluster)) {
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
 
-            //Retriable FindCoordinatorResponse errors should be retried
-            env.kafkaClient().prepareResponse(prepareFindCoordinatorResponse(Errors.COORDINATOR_NOT_AVAILABLE,  Node.noNode()));
-            env.kafkaClient().prepareResponse(prepareFindCoordinatorResponse(Errors.COORDINATOR_LOAD_IN_PROGRESS, Node.noNode()));
-
-            env.kafkaClient().prepareResponse(prepareFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
-
-            env.kafkaClient().prepareResponse(new OffsetDeleteResponse(
-                new OffsetDeleteResponseData()
-                    .setTopics(new OffsetDeleteResponseTopicCollection(Stream.of(
-                        new OffsetDeleteResponseTopic()
-                            .setName("foo")
-                            .setPartitions(new OffsetDeleteResponsePartitionCollection(Collections.singletonList(
-                                new OffsetDeleteResponsePartition()
-                                    .setPartitionIndex(0)
-                                    .setErrorCode(Errors.NONE.code())
-                            ).iterator())),
-                        new OffsetDeleteResponseTopic()
-                            .setName("bar")
-                            .setPartitions(new OffsetDeleteResponsePartitionCollection(Collections.singletonList(
-                                new OffsetDeleteResponsePartition()
-                                    .setPartitionIndex(0)
-                                    .setErrorCode(Errors.NONE.code())
-                            ).iterator()))
-                    ).collect(Collectors.toList()).iterator()))
-                )
-            );
-
-            final DeleteConsumerGroupOffsetsResult result = env.adminClient().deleteConsumerGroupOffsets(
-                groupId, Stream.of(tp1, tp2).collect(Collectors.toSet()));
-
-            assertNull(result.all().get());
-            assertNull(result.partitionResult(tp1).get());
-            assertNull(result.partitionResult(tp2).get());
-
-            //should throw error for non-retriable errors
-            env.kafkaClient().prepareResponse(prepareFindCoordinatorResponse(Errors.GROUP_AUTHORIZATION_FAILED,  Node.noNode()));
-
-            final DeleteConsumerGroupOffsetsResult errorResult = env.adminClient().deleteConsumerGroupOffsets(
-                groupId, Stream.of(tp1, tp2).collect(Collectors.toSet()));
-
-            TestUtils.assertFutureError(errorResult.all(), GroupAuthorizationException.class);
-            TestUtils.assertFutureError(errorResult.partitionResult(tp1), GroupAuthorizationException.class);
-            TestUtils.assertFutureError(errorResult.partitionResult(tp2), GroupAuthorizationException.class);
-
-            //Retriable errors should be retried
-            env.kafkaClient().prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, env.cluster().controller()));
-
-            env.kafkaClient().prepareResponse(new OffsetDeleteResponse(
-                new OffsetDeleteResponseData()
-                    .setTopics(new OffsetDeleteResponseTopicCollection(Stream.of(
-                        new OffsetDeleteResponseTopic()
-                            .setName("foo")
-                            .setPartitions(new OffsetDeleteResponsePartitionCollection(Collections.singletonList(
-                                new OffsetDeleteResponsePartition()
-                                    .setPartitionIndex(0)
-                                    .setErrorCode(Errors.COORDINATOR_NOT_AVAILABLE.code())
-                            ).iterator()))
-                    ).collect(Collectors.toList()).iterator()))
-                )
-            );
-
-            env.kafkaClient().prepareResponse(new OffsetDeleteResponse(
-                new OffsetDeleteResponseData()
-                    .setTopics(new OffsetDeleteResponseTopicCollection(Stream.of(
-                        new OffsetDeleteResponseTopic()
-                            .setName("foo")
-                            .setPartitions(new OffsetDeleteResponsePartitionCollection(Collections.singletonList(
-                                new OffsetDeleteResponsePartition()
-                                    .setPartitionIndex(0)
-                                    .setErrorCode(Errors.COORDINATOR_LOAD_IN_PROGRESS.code())
-                            ).iterator()))
-                    ).collect(Collectors.toList()).iterator()))
-                )
-            );
-
-            /*
-             * We need to return two responses here, one for NOT_COORDINATOR call when calling delete a consumer group
-             * api using coordinator that has moved. This will retry whole operation. So we need to again respond with a
-             * FindCoordinatorResponse.
-             */
-            env.kafkaClient().prepareResponse(new OffsetDeleteResponse(
-                new OffsetDeleteResponseData()
-                    .setTopics(new OffsetDeleteResponseTopicCollection(Stream.of(
-                        new OffsetDeleteResponseTopic()
-                            .setName("foo")
-                            .setPartitions(new OffsetDeleteResponsePartitionCollection(Collections.singletonList(
-                                new OffsetDeleteResponsePartition()
-                                    .setPartitionIndex(0)
-                                    .setErrorCode(Errors.NOT_COORDINATOR.code())
-                            ).iterator()))
-                    ).collect(Collectors.toList()).iterator()))
-                )
-            );
-
-            env.kafkaClient().prepareResponse(prepareFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
+            env.kafkaClient().prepareResponse(
+                prepareFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
 
             env.kafkaClient().prepareResponse(new OffsetDeleteResponse(
                 new OffsetDeleteResponseData()
@@ -1668,12 +1593,177 @@ public class KafkaAdminClientTest {
                 )
             );
 
-            final DeleteConsumerGroupOffsetsResult errorResult1 = env.adminClient().deleteConsumerGroupOffsets(
+            final DeleteConsumerGroupOffsetsResult errorResult = env.adminClient().deleteConsumerGroupOffsets(
                 groupId, Stream.of(tp1, tp2).collect(Collectors.toSet()));
+
+            assertNull(errorResult.all().get());
+            assertNull(errorResult.partitionResult(tp1).get());
+            TestUtils.assertFutureError(errorResult.partitionResult(tp2), GroupSubscribedToTopicException.class);
+            TestUtils.assertFutureError(errorResult.partitionResult(tp3), IllegalArgumentException.class);
+        }
+    }
+
+    @Test
+    public void testDeleteConsumerGroupOffsetsRetriableErrors() throws Exception {
+        // Retriable errors should be retried
+
+        final Map<Integer, Node> nodes = new HashMap<>();
+        nodes.put(0, new Node(0, "localhost", 8121));
+
+        final Cluster cluster =
+            new Cluster(
+                "mockClusterId",
+                nodes.values(),
+                Collections.<PartitionInfo>emptyList(),
+                Collections.<String>emptySet(),
+                Collections.<String>emptySet(), nodes.get(0));
+
+        final String groupId = "group-0";
+        final TopicPartition tp1 = new TopicPartition("foo", 0);
+
+        try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(cluster)) {
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+
+            env.kafkaClient().prepareResponse(
+                FindCoordinatorResponse.prepareResponse(Errors.NONE, env.cluster().controller()));
+
+            env.kafkaClient().prepareResponse(
+                prepareOffsetDeleteResponse("foo", 0, Errors.COORDINATOR_NOT_AVAILABLE));
+
+            env.kafkaClient().prepareResponse(
+                prepareOffsetDeleteResponse("foo", 0, Errors.COORDINATOR_LOAD_IN_PROGRESS));
+
+            /*
+             * We need to return two responses here, one for NOT_COORDINATOR call when calling delete a consumer group
+             * api using coordinator that has moved. This will retry whole operation. So we need to again respond with a
+             * FindCoordinatorResponse.
+             */
+            env.kafkaClient().prepareResponse(
+                prepareOffsetDeleteResponse("foo", 0, Errors.NOT_COORDINATOR));
+
+            env.kafkaClient().prepareResponse(
+                prepareFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
+
+            env.kafkaClient().prepareResponse(
+                prepareOffsetDeleteResponse("foo", 0, Errors.NONE));
+
+            final DeleteConsumerGroupOffsetsResult errorResult1 = env.adminClient()
+                .deleteConsumerGroupOffsets(groupId, Stream.of(tp1).collect(Collectors.toSet()));
 
             assertNull(errorResult1.all().get());
             assertNull(errorResult1.partitionResult(tp1).get());
-            TestUtils.assertFutureError(errorResult1.partitionResult(tp2), GroupSubscribedToTopicException.class);
+        }
+    }
+
+    @Test
+    public void testDeleteConsumerGroupOffsetsNonRetriableErrors() throws Exception {
+        // Non-retriable errors throw an exception
+
+        final Map<Integer, Node> nodes = new HashMap<>();
+        nodes.put(0, new Node(0, "localhost", 8121));
+
+        final Cluster cluster =
+            new Cluster(
+                "mockClusterId",
+                nodes.values(),
+                Collections.<PartitionInfo>emptyList(),
+                Collections.<String>emptySet(),
+                Collections.<String>emptySet(), nodes.get(0));
+
+        final String groupId = "group-0";
+        final TopicPartition tp1 = new TopicPartition("foo", 0);
+        final List<Errors> retriableErrors = Arrays.asList(
+            Errors.GROUP_AUTHORIZATION_FAILED, Errors.INVALID_GROUP_ID, Errors.GROUP_ID_NOT_FOUND);
+
+
+        try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(cluster)) {
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+
+            for (Errors error : retriableErrors) {
+                env.kafkaClient().prepareResponse(FindCoordinatorResponse
+                    .prepareResponse(Errors.NONE, env.cluster().controller()));
+
+                env.kafkaClient().prepareResponse(
+                    prepareOffsetDeleteResponse("foo", 0, error));
+
+                DeleteConsumerGroupOffsetsResult errorResult = env.adminClient()
+                    .deleteConsumerGroupOffsets(groupId, Stream.of(tp1).collect(Collectors.toSet()));
+
+                TestUtils.assertFutureError(errorResult.all(), error.exception().getClass());
+                TestUtils.assertFutureError(errorResult.partitionResult(tp1), error.exception().getClass());
+            }
+        }
+    }
+
+    @Test
+    public void testDeleteConsumerGroupOffsetsFindCoordinatorRetriableErrors() throws Exception {
+        // Retriable FindCoordinatorResponse errors should be retried
+
+        final Map<Integer, Node> nodes = new HashMap<>();
+        nodes.put(0, new Node(0, "localhost", 8121));
+
+        final Cluster cluster =
+            new Cluster(
+                "mockClusterId",
+                nodes.values(),
+                Collections.<PartitionInfo>emptyList(),
+                Collections.<String>emptySet(),
+                Collections.<String>emptySet(), nodes.get(0));
+
+        final String groupId = "group-0";
+        final TopicPartition tp1 = new TopicPartition("foo", 0);
+
+        try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(cluster)) {
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+
+            env.kafkaClient().prepareResponse(
+                prepareFindCoordinatorResponse(Errors.COORDINATOR_NOT_AVAILABLE,  Node.noNode()));
+            env.kafkaClient().prepareResponse(
+                prepareFindCoordinatorResponse(Errors.COORDINATOR_LOAD_IN_PROGRESS, Node.noNode()));
+
+            env.kafkaClient().prepareResponse(
+                prepareFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
+
+            env.kafkaClient().prepareResponse(
+                prepareOffsetDeleteResponse("foo", 0, Errors.NONE));
+
+            final DeleteConsumerGroupOffsetsResult result = env.adminClient()
+                .deleteConsumerGroupOffsets(groupId, Stream.of(tp1).collect(Collectors.toSet()));
+
+            assertNull(result.all().get());
+            assertNull(result.partitionResult(tp1).get());
+        }
+    }
+
+    @Test
+    public void testDeleteConsumerGroupOffsetsFindCoordinatorNonRetriableErrors() throws Exception {
+        // Non-retriable FindCoordinatorResponse errors throw an exception
+
+        final Map<Integer, Node> nodes = new HashMap<>();
+        nodes.put(0, new Node(0, "localhost", 8121));
+
+        final Cluster cluster =
+            new Cluster(
+                "mockClusterId",
+                nodes.values(),
+                Collections.<PartitionInfo>emptyList(),
+                Collections.<String>emptySet(),
+                Collections.<String>emptySet(), nodes.get(0));
+
+        final String groupId = "group-0";
+        final TopicPartition tp1 = new TopicPartition("foo", 0);
+
+        try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(cluster)) {
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+
+            env.kafkaClient().prepareResponse(
+                prepareFindCoordinatorResponse(Errors.GROUP_AUTHORIZATION_FAILED,  Node.noNode()));
+
+            final DeleteConsumerGroupOffsetsResult errorResult = env.adminClient()
+                .deleteConsumerGroupOffsets(groupId, Stream.of(tp1).collect(Collectors.toSet()));
+
+            TestUtils.assertFutureError(errorResult.all(), GroupAuthorizationException.class);
+            TestUtils.assertFutureError(errorResult.partitionResult(tp1), GroupAuthorizationException.class);
         }
     }
 

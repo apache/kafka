@@ -3138,7 +3138,7 @@ public class KafkaAdminClient extends AdminClient {
                     final Errors error = partitions.values().iterator().next();
                     if (error == Errors.COORDINATOR_LOAD_IN_PROGRESS || error == Errors.COORDINATOR_NOT_AVAILABLE) {
                         throw error.exception();
-                    } else if (error == Errors.INVALID_GROUP_ID || error == Errors.GROUP_ID_NOT_FOUND) {
+                    } else if (error == Errors.INVALID_GROUP_ID || error == Errors.GROUP_ID_NOT_FOUND || error == Errors.GROUP_AUTHORIZATION_FAILED) {
                         context.getFuture().completeExceptionally(error.exception());
                         return;
                     }
