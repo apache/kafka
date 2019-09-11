@@ -108,10 +108,9 @@ public abstract class AbstractStream<K, V> {
         final ValueTransformerSupplier<V, VR> valueTransformerSupplier) {
         Objects.requireNonNull(valueTransformerSupplier, "valueTransformerSupplier can't be null");
         return new ValueTransformerWithKeySupplier<K, V, VR>() {
-            final ValueTransformer<V, VR> valueTransformer = valueTransformerSupplier.get();
-
             @Override
             public ValueTransformerWithKey<K, V, VR> get() {
+                final ValueTransformer<V, VR> valueTransformer = valueTransformerSupplier.get();
                 return new ValueTransformerWithKey<K, V, VR>() {
                     @Override
                     public void init(final ProcessorContext context) {
