@@ -191,18 +191,18 @@ public class RocksDBMetricsRecorderTest {
         reset(statisticsToAdd1);
         reset(statisticsToAdd2);
 
-        expect(statisticsToAdd1.getTickerCount(TickerType.BYTES_WRITTEN)).andReturn(1L);
-        expect(statisticsToAdd2.getTickerCount(TickerType.BYTES_WRITTEN)).andReturn(2L);
+        expect(statisticsToAdd1.getAndResetTickerCount(TickerType.BYTES_WRITTEN)).andReturn(1L);
+        expect(statisticsToAdd2.getAndResetTickerCount(TickerType.BYTES_WRITTEN)).andReturn(2L);
         bytesWrittenToDatabaseSensor.record(1 + 2);
         replay(bytesWrittenToDatabaseSensor);
 
-        expect(statisticsToAdd1.getTickerCount(TickerType.BYTES_READ)).andReturn(2L);
-        expect(statisticsToAdd2.getTickerCount(TickerType.BYTES_READ)).andReturn(3L);
+        expect(statisticsToAdd1.getAndResetTickerCount(TickerType.BYTES_READ)).andReturn(2L);
+        expect(statisticsToAdd2.getAndResetTickerCount(TickerType.BYTES_READ)).andReturn(3L);
         bytesReadFromDatabaseSensor.record(2 + 3);
         replay(bytesReadFromDatabaseSensor);
 
-        expect(statisticsToAdd1.getTickerCount(TickerType.FLUSH_WRITE_BYTES)).andReturn(3L);
-        expect(statisticsToAdd2.getTickerCount(TickerType.FLUSH_WRITE_BYTES)).andReturn(4L);
+        expect(statisticsToAdd1.getAndResetTickerCount(TickerType.FLUSH_WRITE_BYTES)).andReturn(3L);
+        expect(statisticsToAdd2.getAndResetTickerCount(TickerType.FLUSH_WRITE_BYTES)).andReturn(4L);
         memtableBytesFlushedSensor.record(3 + 4);
         replay(memtableBytesFlushedSensor);
 
@@ -213,8 +213,8 @@ public class RocksDBMetricsRecorderTest {
         memtableHitRatioSensor.record((double) 4 / (4 + 6));
         replay(memtableHitRatioSensor);
 
-        expect(statisticsToAdd1.getTickerCount(TickerType.STALL_MICROS)).andReturn(4L);
-        expect(statisticsToAdd2.getTickerCount(TickerType.STALL_MICROS)).andReturn(5L);
+        expect(statisticsToAdd1.getAndResetTickerCount(TickerType.STALL_MICROS)).andReturn(4L);
+        expect(statisticsToAdd2.getAndResetTickerCount(TickerType.STALL_MICROS)).andReturn(5L);
         writeStallDurationSensor.record(4 + 5);
         replay(writeStallDurationSensor);
 
@@ -239,13 +239,13 @@ public class RocksDBMetricsRecorderTest {
         blockCacheFilterHitRatioSensor.record((double) 5 / (5 + 9));
         replay(blockCacheFilterHitRatioSensor);
 
-        expect(statisticsToAdd1.getTickerCount(TickerType.COMPACT_WRITE_BYTES)).andReturn(2L);
-        expect(statisticsToAdd2.getTickerCount(TickerType.COMPACT_WRITE_BYTES)).andReturn(4L);
+        expect(statisticsToAdd1.getAndResetTickerCount(TickerType.COMPACT_WRITE_BYTES)).andReturn(2L);
+        expect(statisticsToAdd2.getAndResetTickerCount(TickerType.COMPACT_WRITE_BYTES)).andReturn(4L);
         bytesWrittenDuringCompactionSensor.record(2 + 4);
         replay(bytesWrittenDuringCompactionSensor);
 
-        expect(statisticsToAdd1.getTickerCount(TickerType.COMPACT_READ_BYTES)).andReturn(5L);
-        expect(statisticsToAdd2.getTickerCount(TickerType.COMPACT_READ_BYTES)).andReturn(6L);
+        expect(statisticsToAdd1.getAndResetTickerCount(TickerType.COMPACT_READ_BYTES)).andReturn(5L);
+        expect(statisticsToAdd2.getAndResetTickerCount(TickerType.COMPACT_READ_BYTES)).andReturn(6L);
         bytesReadDuringCompactionSensor.record(5 + 6);
         replay(bytesReadDuringCompactionSensor);
 

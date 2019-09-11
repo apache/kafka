@@ -198,9 +198,9 @@ public class RocksDBMetricsRecorder {
         long numberOfOpenFiles = 0;
         long numberOfFileErrors = 0;
         for (final Statistics statistics : statisticsToRecord.values()) {
-            bytesWrittenToDatabase += statistics.getTickerCount(TickerType.BYTES_WRITTEN);
-            bytesReadFromDatabase += statistics.getTickerCount(TickerType.BYTES_READ);
-            memtableBytesFlushed += statistics.getTickerCount(TickerType.FLUSH_WRITE_BYTES);
+            bytesWrittenToDatabase += statistics.getAndResetTickerCount(TickerType.BYTES_WRITTEN);
+            bytesReadFromDatabase += statistics.getAndResetTickerCount(TickerType.BYTES_READ);
+            memtableBytesFlushed += statistics.getAndResetTickerCount(TickerType.FLUSH_WRITE_BYTES);
             memtableHits += statistics.getAndResetTickerCount(TickerType.MEMTABLE_HIT);
             memtableMisses += statistics.getAndResetTickerCount(TickerType.MEMTABLE_MISS);
             blockCacheDataHits += statistics.getAndResetTickerCount(TickerType.BLOCK_CACHE_DATA_HIT);
@@ -209,9 +209,9 @@ public class RocksDBMetricsRecorder {
             blockCacheIndexMisses += statistics.getAndResetTickerCount(TickerType.BLOCK_CACHE_INDEX_MISS);
             blockCacheFilterHits += statistics.getAndResetTickerCount(TickerType.BLOCK_CACHE_FILTER_HIT);
             blockCacheFilterMisses += statistics.getAndResetTickerCount(TickerType.BLOCK_CACHE_FILTER_MISS);
-            writeStallDuration += statistics.getTickerCount(TickerType.STALL_MICROS);
-            bytesWrittenDuringCompaction += statistics.getTickerCount(TickerType.COMPACT_WRITE_BYTES);
-            bytesReadDuringCompaction += statistics.getTickerCount(TickerType.COMPACT_READ_BYTES);
+            writeStallDuration += statistics.getAndResetTickerCount(TickerType.STALL_MICROS);
+            bytesWrittenDuringCompaction += statistics.getAndResetTickerCount(TickerType.COMPACT_WRITE_BYTES);
+            bytesReadDuringCompaction += statistics.getAndResetTickerCount(TickerType.COMPACT_READ_BYTES);
             numberOfOpenFiles += statistics.getTickerCount(TickerType.NO_FILE_OPENS)
                 - statistics.getTickerCount(TickerType.NO_FILE_CLOSES);
             numberOfFileErrors += statistics.getTickerCount(TickerType.NO_FILE_ERRORS);

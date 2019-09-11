@@ -212,7 +212,7 @@ public class RocksDBMetricsTest {
         final String metricNamePrefix = "number-file-errors";
         final String description = "Total number of file errors occurred";
         setupStreamsMetricsMock(metricNamePrefix);
-        StreamsMetricsImpl.addSumMetricToSensor(sensor, STATE_LEVEL_GROUP, tags, metricNamePrefix, description);
+        StreamsMetricsImpl.addValueMetricToSensor(sensor, STATE_LEVEL_GROUP, tags, metricNamePrefix, description);
 
         replayCallAndVerify(RocksDBMetrics::numberOfFileErrorsSensor);
     }
