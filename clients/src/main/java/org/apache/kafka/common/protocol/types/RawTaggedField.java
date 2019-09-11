@@ -42,7 +42,7 @@ public class RawTaggedField {
 
     @Override
     public boolean equals(Object o) {
-        if ((o == null) || (!o.getClass().equals(RawTaggedField.class))) {
+        if ((o == null) || (!o.getClass().equals(getClass()))) {
             return false;
         }
         RawTaggedField other = (RawTaggedField) o;
