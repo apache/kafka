@@ -404,8 +404,8 @@ class Partition(val topicPartition: TopicPartition,
       this.log = Some(log)
   }
 
-  def remoteReplicas: Set[Replica] =
-    remoteReplicasMap.values.toSet
+  def remoteReplicas: Iterable[Replica] =
+    remoteReplicasMap.values
 
   def futureReplicaDirChanged(newDestinationDir: String): Boolean = {
     inReadLock(leaderIsrUpdateLock) {
@@ -749,10 +749,16 @@ class Partition(val topicPartition: TopicPartition,
    * since all callers of this private API acquire that lock
    */
   private def maybeIncrementLeaderHW(leaderLog: Log, curTime: Long = time.milliseconds): Boolean = {
-    val replicaLogEndOffsets = remoteReplicas.filter { replica =>
-      curTime - replica.lastCaughtUpTimeMs <= replicaLagTimeMaxMs || inSyncReplicaIds.contains(replica.brokerId)
-    }.map(_.logEndOffsetMetadata)
-    val newHighWatermark = (replicaLogEndOffsets + leaderLog.logEndOffsetMetadata).min(new LogOffsetMetadata.OffsetOrdering)
+    // maybeIncrementLeaderHW is called repeatedly, the following code is written to
+    // minimize unnecessary collections and allocations
+    var newHighWatermark = leaderLog.logEndOffsetMetadata
+    remoteReplicasMap.values.foreach { replica =>
+      if (replica.logEndOffsetMetadata.messageOffset < newHighWatermark.messageOffset &&
+        (curTime - replica.lastCaughtUpTimeMs <= replicaLagTimeMaxMs || inSyncReplicaIds.contains(replica.brokerId))) {
+        newHighWatermark = replica.logEndOffsetMetadata
+      }
+    }
+
     leaderLog.maybeIncrementHighWatermark(newHighWatermark) match {
       case Some(oldHighWatermark) =>
         debug(s"High watermark updated from $oldHighWatermark to $newHighWatermark")
@@ -763,10 +769,12 @@ class Partition(val topicPartition: TopicPartition,
           case (brokerId, logEndOffsetMetadata) => s"replica $brokerId: $logEndOffsetMetadata"
         }
 
-        val replicaInfo = remoteReplicas.map(replica => (replica.brokerId, replica.logEndOffsetMetadata))
-        val localLogInfo = (localBrokerId, localLogOrException.logEndOffsetMetadata)
-        trace(s"Skipping update high watermark since new hw $newHighWatermark is not larger than old value. " +
-          s"All current LEOs are ${(replicaInfo + localLogInfo).map(logEndOffsetString)}")
+        if (isTraceEnabled) {
+          val replicaInfo = remoteReplicas.map(replica => (replica.brokerId, replica.logEndOffsetMetadata)).toSet
+          val localLogInfo = (localBrokerId, localLogOrException.logEndOffsetMetadata)
+          trace(s"Skipping update high watermark since new hw $newHighWatermark is not larger than old value. " +
+            s"All current LEOs are ${(replicaInfo + localLogInfo).map(logEndOffsetString)}")
+        }
         false
     }
   }
@@ -781,7 +789,7 @@ class Partition(val topicPartition: TopicPartition,
       throw new NotLeaderForPartitionException(s"Leader not local for partition $topicPartition on broker $localBrokerId")
     val logStartOffsets = remoteReplicas.collect {
       case replica if metadataCache.getAliveBroker(replica.brokerId).nonEmpty => replica.logStartOffset
-    } + localLogOrException.logStartOffset
+    }.toSet + localLogOrException.logStartOffset
 
     futureLog match {
       case Some(partitionFutureLog) =>
