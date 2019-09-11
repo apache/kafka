@@ -749,8 +749,8 @@ class Partition(val topicPartition: TopicPartition,
    * since all callers of this private API acquire that lock
    */
   private def maybeIncrementLeaderHW(leaderLog: Log, curTime: Long = time.milliseconds): Boolean = {
-    // maybeIncrementLeaderHW is called repeatedly, the following code is written to
-    // minimize unnecessary collections and allocations
+    // maybeIncrementLeaderHW is in the hot path, the following code is written to
+    // avoid unnecessary collection generation
     var newHighWatermark = leaderLog.logEndOffsetMetadata
     remoteReplicasMap.values.foreach { replica =>
       if (replica.logEndOffsetMetadata.messageOffset < newHighWatermark.messageOffset &&
