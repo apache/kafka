@@ -1700,6 +1700,22 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
   }
 
   @Test
+  def testListReassignmentsDoesNotShowNonReassigningPartitions(): Unit = {
+    client = AdminClient.create(createConfig())
+
+    // Create topics
+    val topic = "list-reassignments-no-reassignments"
+    createTopic(topic, numPartitions = 1, replicationFactor = 3)
+    val tp = new TopicPartition(topic, 0)
+
+    val reassignmentsMap = client.listPartitionReassignments(Set(tp).asJava).reassignments().get()
+    assertEquals(0, reassignmentsMap.size())
+
+    val allReassignmentsMap = client.listPartitionReassignments().reassignments().get()
+    assertEquals(0, allReassignmentsMap.size())
+  }
+
+  @Test
   def testValidIncrementalAlterConfigs(): Unit = {
     client = AdminClient.create(createConfig)
 
@@ -1875,6 +1891,42 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
 
     assertFutureExceptionTypeEquals(alterResult.values().get(topic1Resource), classOf[InvalidRequestException],
       Some("Invalid config value for resource"))
+  }
+
+  @Test
+  def testInvalidAlterPartitionReassignments(): Unit = {
+    client = AdminClient.create(createConfig)
+    val topic = "alter-reassignments-topic-1"
+    val tp1 = new TopicPartition(topic, 0)
+    val tp2 = new TopicPartition(topic, 1)
+    val tp3 = new TopicPartition(topic, 2)
+    createTopic(topic, numPartitions = 3)
+
+    val validAssignment = new NewPartitionReassignment((0 until brokerCount).map(_.asInstanceOf[Integer]).asJava)
+
+    val nonExistentTp1 = new TopicPartition("topicA", 0)
+    val nonExistentTp2 = new TopicPartition(topic, 3)
+    val nonExistentPartitionsResult = client.alterPartitionReassignments(Map(
+      tp1 -> java.util.Optional.of(validAssignment),
+      tp2 -> java.util.Optional.of(validAssignment),
+      tp3 -> java.util.Optional.of(validAssignment),
+      nonExistentTp1 -> java.util.Optional.of(validAssignment),
+      nonExistentTp2 -> java.util.Optional.of(validAssignment)
+    ).asJava).values()
+    assertFutureExceptionTypeEquals(nonExistentPartitionsResult.get(nonExistentTp1), classOf[UnknownTopicOrPartitionException])
+    assertFutureExceptionTypeEquals(nonExistentPartitionsResult.get(nonExistentTp2), classOf[UnknownTopicOrPartitionException])
+
+    val extraNonExistentReplica = new NewPartitionReassignment((0 until brokerCount + 1).map(_.asInstanceOf[Integer]).asJava)
+    val negativeIdReplica = new NewPartitionReassignment(Seq(-3, -2, -1).map(_.asInstanceOf[Integer]).asJava)
+    val duplicateReplica = new NewPartitionReassignment(Seq(0, 1, 1).map(_.asInstanceOf[Integer]).asJava)
+    val invalidReplicaResult = client.alterPartitionReassignments(Map(
+      tp1 -> java.util.Optional.of(extraNonExistentReplica),
+      tp2 -> java.util.Optional.of(negativeIdReplica),
+      tp3 -> java.util.Optional.of(duplicateReplica)
+    ).asJava).values()
+    assertFutureExceptionTypeEquals(invalidReplicaResult.get(tp1), classOf[InvalidReplicaAssignmentException])
+    assertFutureExceptionTypeEquals(invalidReplicaResult.get(tp2), classOf[InvalidReplicaAssignmentException])
+    assertFutureExceptionTypeEquals(invalidReplicaResult.get(tp3), classOf[InvalidReplicaAssignmentException])
   }
 
   @Test

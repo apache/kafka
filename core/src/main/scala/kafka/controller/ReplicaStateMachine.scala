@@ -175,7 +175,7 @@ class ZkReplicaStateMachine(config: KafkaConfig,
                 controllerBrokerRequestBatch.addLeaderAndIsrRequestForBrokers(Seq(replicaId),
                   replica.topicPartition,
                   leaderIsrAndControllerEpoch,
-                  controllerContext.partitionReplicaAssignment(replica.topicPartition),
+                  controllerContext.partitionFullReplicaAssignment(replica.topicPartition),
                   isNew = true)
                 logSuccessfulTransition(replicaId, partition, currentState, NewReplica)
                 controllerContext.putReplicaState(replica, NewReplica)
@@ -202,7 +202,7 @@ class ZkReplicaStateMachine(config: KafkaConfig,
                   controllerBrokerRequestBatch.addLeaderAndIsrRequestForBrokers(Seq(replicaId),
                     replica.topicPartition,
                     leaderIsrAndControllerEpoch,
-                    controllerContext.partitionReplicaAssignment(partition), isNew = false)
+                    controllerContext.partitionFullReplicaAssignment(partition), isNew = false)
                 case None =>
               }
           }
@@ -223,7 +223,7 @@ class ZkReplicaStateMachine(config: KafkaConfig,
             controllerBrokerRequestBatch.addLeaderAndIsrRequestForBrokers(recipients,
               partition,
               leaderIsrAndControllerEpoch,
-              controllerContext.partitionReplicaAssignment(partition), isNew = false)
+              controllerContext.partitionFullReplicaAssignment(partition), isNew = false)
           }
           val replica = PartitionAndReplica(partition, replicaId)
           val currentState = controllerContext.replicaState(replica)

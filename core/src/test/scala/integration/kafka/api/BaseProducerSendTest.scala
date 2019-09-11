@@ -381,8 +381,8 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
       }
     }
 
-    val existingAssignment = zkClient.getReplicaAssignmentForTopics(Set(topic)).map {
-      case (topicPartition, replicas) => topicPartition.partition -> replicas
+    val existingAssignment = zkClient.getFullReplicaAssignmentForTopics(Set(topic)).map {
+      case (topicPartition, assignment) => topicPartition.partition -> assignment
     }
     adminZkClient.addPartitions(topic, existingAssignment, adminZkClient.getBrokerMetadatas(), 2)
     // read metadata from a broker and verify the new topic partitions exist
