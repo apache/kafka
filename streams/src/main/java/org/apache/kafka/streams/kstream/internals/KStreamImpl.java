@@ -716,7 +716,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
      * {@link ConnectedStoreProvider#stores()}.  The {@link StoreBuilder}s will also be added to the topology.
      */
     private String[] getStoreNamesAndMaybeAddStores(final ConnectedStoreProvider storeProvider, final String[] varargsStoreNames) {
-        final List<String> allStoreNames = new ArrayList<>(Arrays.asList(varargsStoreNames));
+        final List<String> allStoreNames = new ArrayList<>(Arrays.asList(varargsStoreNames == null ? new String[]{} : varargsStoreNames));
         final Set<StoreBuilder> stores = storeProvider.stores();
         if (stores != null) {
             stores.forEach(builder::addStateStore);
