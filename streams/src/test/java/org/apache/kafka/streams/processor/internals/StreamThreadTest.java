@@ -255,7 +255,8 @@ public class StreamThreadTest {
             0,
             stateDirectory,
             new MockStateRestoreListener(),
-            threadIdx);
+            threadIdx
+        );
     }
 
     @Test

@@ -32,6 +32,7 @@ import org.apache.kafka.common.metrics.stats.WindowedCount;
 import org.apache.kafka.common.metrics.stats.WindowedSum;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsMetrics;
+import org.apache.kafka.streams.state.internals.metrics.RocksDBMetricsRecordingTrigger;
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -60,6 +61,8 @@ public class StreamsMetricsImpl implements StreamsMetrics {
     private final Map<String, Deque<String>> nodeLevelSensors = new HashMap<>();
     private final Map<String, Deque<String>> cacheLevelSensors = new HashMap<>();
     private final Map<String, Deque<String>> storeLevelSensors = new HashMap<>();
+
+    private RocksDBMetricsRecordingTrigger rocksDBMetricsRecordingTrigger;
 
     private static final String SENSOR_PREFIX_DELIMITER = ".";
     private static final String SENSOR_NAME_DELIMITER = ".s.";
@@ -120,6 +123,14 @@ public class StreamsMetricsImpl implements StreamsMetrics {
 
     public Version version() {
         return version;
+    }
+
+    public void setRocksDBMetricsRecordingTrigger(final RocksDBMetricsRecordingTrigger rocksDBMetricsRecordingTrigger) {
+        this.rocksDBMetricsRecordingTrigger = rocksDBMetricsRecordingTrigger;
+    }
+
+    public RocksDBMetricsRecordingTrigger rocksDBMetricsRecordingTrigger() {
+        return rocksDBMetricsRecordingTrigger;
     }
 
     public final Sensor threadLevelSensor(final String sensorName,

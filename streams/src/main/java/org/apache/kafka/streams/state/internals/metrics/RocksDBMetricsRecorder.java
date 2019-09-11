@@ -18,7 +18,6 @@ package org.apache.kafka.streams.state.internals.metrics;
 
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.utils.LogContext;
-import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.internals.metrics.RocksDBMetrics.RocksDBMetricContext;
@@ -27,14 +26,11 @@ import org.rocksdb.StatsLevel;
 import org.rocksdb.TickerType;
 import org.slf4j.Logger;
 
-import java.time.Duration;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 public class RocksDBMetricsRecorder {
-    private Logger log;
+    private final Logger logger;
 
     private Sensor bytesWrittenToDatabaseSensor;
     private Sensor bytesReadFromDatabaseSensor;
@@ -52,86 +48,54 @@ public class RocksDBMetricsRecorder {
     private final Map<String, Statistics> statisticsToRecord = new ConcurrentHashMap<>();
     private final String metricsScope;
     private final String storeName;
-
-    private enum State { NEW, RUNNING, NOT_RUNNING, ERROR, MANUAL }
-    private volatile State state = State.NEW;
-    private final Duration recordingInterval = Duration.ofMinutes(10);
-    private final boolean startRecordingThread;
-    private Thread thread;
+    private TaskId taskId;
+    private StreamsMetricsImpl streamsMetrics;
+    private boolean isInitialized = false;
 
     public RocksDBMetricsRecorder(final String metricsScope, final String storeName) {
-        this(metricsScope, storeName, true);
-    }
-
-    // visible for testing
-    RocksDBMetricsRecorder(final String metricsScope, final String storeName, final boolean startRecordingThread) {
         this.metricsScope = metricsScope;
         this.storeName = storeName;
-        this.startRecordingThread = startRecordingThread;
         final LogContext logContext = new LogContext(String.format("[RocksDB Metrics Recorder for %s] ", storeName));
-        log = logContext.logger(RocksDBMetricsRecorder.class);
+        logger = logContext.logger(RocksDBMetricsRecorder.class);
     }
 
-    public boolean isRunning() {
-        return state == State.RUNNING;
+    public String storeName() {
+        return storeName;
     }
 
-    public boolean error() {
-        return state == State.ERROR;
+    public TaskId taskId() {
+        return taskId;
     }
 
     public void addStatistics(final String storeName,
                               final Statistics statistics,
                               final StreamsMetricsImpl streamsMetrics,
                               final TaskId taskId) {
-        if (state == State.NEW) {
+        if (!isInitialized) {
             initSensors(streamsMetrics, taskId);
-            if (!startRecordingThread) {
-                state = State.MANUAL;
-            }
+            this.taskId = taskId;
+            this.streamsMetrics = streamsMetrics;
+            isInitialized = true;
         }
-        if (state == State.NEW || state == State.NOT_RUNNING) {
-            createThread();
-        } else {
-            if (statisticsToRecord.containsKey(storeName)) {
-                throw new IllegalStateException("Statistics for store \"" + storeName + "\" has been already added. "
-                    + "This is a bug in Kafka Streams.");
-            }
+        if (this.taskId != taskId) {
+            throw new IllegalStateException("Statistics of store \"" + storeName + "\" for task " + taskId
+                + " cannot be added to metrics recorder for task " + this.taskId + ". This is a bug in Kafka Streams.");
+        }
+        if (statisticsToRecord.isEmpty()) {
+            logger.debug(
+                "Adding metrics recorder of task {} to metrics recording trigger",
+                taskId
+            );
+            streamsMetrics.rocksDBMetricsRecordingTrigger().addMetricsRecorder(this);
+        } else if (statisticsToRecord.containsKey(storeName)) {
+            throw new IllegalStateException("Statistics for store \"" + storeName + "\" of task " + taskId +
+                " has been already added. This is a bug in Kafka Streams.");
         }
         statistics.setStatsLevel(StatsLevel.EXCEPT_DETAILED_TIMERS);
+        logger.debug("Adding statistics for store {} of task {}", storeName, taskId);
         statisticsToRecord.put(storeName, statistics);
-        log.debug("Added statistics for store {}", storeName);
-        if (state == State.NEW || state == State.NOT_RUNNING) {
-            state = State.RUNNING;
-            thread.start();
-        }
     }
 
-    private void waitForThreadToDie() {
-        if (thread == null) {
-            return;
-        }
-        boolean wait = true;
-        log.debug("Wait for recording thread to die");
-        while (wait) {
-            try {
-                thread.join();
-                wait = false;
-            } catch (final InterruptedException e) {
-                // go to next iteration
-            }
-        }
-    }
-
-    private void createThread() {
-        thread = new Thread(this::recordLoop);
-        thread.setName(storeName + "-RocksDB-metrics-recorder");
-        thread.setUncaughtExceptionHandler((thread, exception) -> {
-            state = State.ERROR;
-            log.info(Utils.stackTrace(exception));
-            close();
-        });
-    }
 
     private void initSensors(final StreamsMetricsImpl streamsMetrics, final TaskId taskId) {
         final RocksDBMetricContext metricContext = new RocksDBMetricContext(taskId.toString(), metricsScope, storeName);
@@ -151,36 +115,25 @@ public class RocksDBMetricsRecorder {
     }
 
     public void removeStatistics(final String storeName) {
+        logger.debug("Removing statistics for store {} of task {}", storeName, taskId);
         final Statistics removedStatistics = statisticsToRecord.remove(storeName);
-        if (removedStatistics != null) {
-            removedStatistics.close();
-            log.debug("Removed statistics for store {}", storeName);
-        } else {
-            throw new IllegalStateException("No statistics for store \"" + storeName
-                + "\" found. This is a bug in Kafka Streams.");
+        if (removedStatistics == null) {
+            throw new IllegalStateException("No statistics for store \"" + storeName + "\" of task " + taskId
+                + " could be found. This is a bug in Kafka Streams.");
         }
-        if (state == State.RUNNING && statisticsToRecord.isEmpty()) {
-            state = State.NOT_RUNNING;
-            thread.interrupt();
-            waitForThreadToDie();
+        removedStatistics.close();
+        if (statisticsToRecord.isEmpty()) {
+            logger.debug(
+                "Removing metrics recorder for store {} of task {} from metrics recording trigger",
+                this.storeName,
+                taskId
+            );
+            streamsMetrics.rocksDBMetricsRecordingTrigger().removeMetricsRecorder(this);
         }
     }
 
-    private void recordLoop() {
-        log.info("Started with recording interval {}", recordingInterval.toString());
-        while (state == State.RUNNING) {
-            recordOnce();
-            try {
-                Thread.sleep(recordingInterval.toMillis());
-            } catch (final InterruptedException exception) {
-                // do nothing and wait until next iteration
-            }
-        }
-        log.info("Stopped");
-    }
-
-    public void recordOnce() {
-        log.debug("Recording metrics for store {}", storeName);
+    public void record() {
+        logger.debug("Recording metrics for store {}", storeName);
         long bytesWrittenToDatabase = 0;
         long bytesReadFromDatabase = 0;
         long memtableBytesFlushed = 0;
@@ -235,13 +188,5 @@ public class RocksDBMetricsRecorder {
             return 0;
         }
         return (double) hits / (hits + misses);
-    }
-
-    public void close() {
-        final List<String> storeNames = new ArrayList<>(statisticsToRecord.keySet());
-        for (final String storeName : storeNames) {
-            removeStatistics(storeName);
-        }
-        log.debug("Closed");
     }
 }

@@ -20,7 +20,7 @@ import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.internals.metrics.RocksDBMetrics.RocksDBMetricContext;
-import org.junit.After;
+import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.powermock.core.classloader.annotations.PrepareForTest;
@@ -29,15 +29,13 @@ import org.rocksdb.Statistics;
 import org.rocksdb.StatsLevel;
 import org.rocksdb.TickerType;
 
-import static org.apache.kafka.test.TestUtils.waitForCondition;
 import static org.easymock.EasyMock.anyObject;
 import static org.easymock.EasyMock.eq;
 import static org.easymock.EasyMock.expect;
 import static org.easymock.EasyMock.mock;
+import static org.easymock.EasyMock.niceMock;
 import static org.easymock.EasyMock.resetToNice;
-import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.assertTrue;
 import static org.powermock.api.easymock.PowerMock.reset;
 import static org.powermock.api.easymock.PowerMock.createMock;
 import static org.powermock.api.easymock.PowerMock.mockStatic;
@@ -69,57 +67,17 @@ public class RocksDBMetricsRecorderTest {
     private final Sensor numberOfOpenFilesSensor = createMock(Sensor.class);
     private final Sensor numberOfFileErrorsSensor = createMock(Sensor.class);
 
-    private final StreamsMetricsImpl streamsMetrics = mock(StreamsMetricsImpl.class);
-    private final TaskId taskId = new TaskId(0, 0);
+    private final StreamsMetricsImpl streamsMetrics = niceMock(StreamsMetricsImpl.class);
+    private final RocksDBMetricsRecordingTrigger recordingTrigger = mock(RocksDBMetricsRecordingTrigger.class);
+    private final TaskId taskId1 = new TaskId(0, 0);
+    private final TaskId taskId2 = new TaskId(0, 2);
 
     private final RocksDBMetricsRecorder recorder = new RocksDBMetricsRecorder(METRICS_SCOPE, STORE_NAME);
-    private final RocksDBMetricsRecorder manualRecorder = new RocksDBMetricsRecorder(METRICS_SCOPE, STORE_NAME, false);
 
-    @After
-    public void tearDown() {
-        recorder.close();
-        manualRecorder.close();
-    }
-
-    @Test
-    public void shouldStartRecordingAfterFirstStatisticsIsAdded() throws InterruptedException {
-        setUpMetricsMock();
-        resetToNice(statisticsToAdd1);
-        expect(statisticsToAdd1.getTickerCount(anyObject())).andStubReturn(0L);
-        replay(statisticsToAdd1);
-
-        assertFalse(recorder.isRunning());
-
-        recorder.addStatistics(SEGMENT_STORE_NAME_1, statisticsToAdd1, streamsMetrics, taskId);
-
-        waitForCondition(recorder::isRunning, "Did not run until timeout");
-        recorder.close();
-    }
-
-    @Test
-    public void shouldStopRecordingAfterLastStatisticsIsRemoved() throws InterruptedException {
-        setUpMetricsMock();
-        resetToNice(statisticsToAdd1);
-        expect(statisticsToAdd1.getTickerCount(anyObject())).andStubReturn(0L);
-        replay(statisticsToAdd1);
-        resetToNice(statisticsToAdd2);
-        expect(statisticsToAdd2.getTickerCount(anyObject())).andStubReturn(0L);
-        replay(statisticsToAdd2);
-        recorder.addStatistics(SEGMENT_STORE_NAME_1, statisticsToAdd1, streamsMetrics, taskId);
-        recorder.addStatistics(SEGMENT_STORE_NAME_2, statisticsToAdd2, streamsMetrics, taskId);
-
-        waitForCondition(recorder::isRunning, "Did not run until timeout");
-
-        recorder.removeStatistics(SEGMENT_STORE_NAME_1);
-
-        Thread.sleep(1000);
-        assertTrue(recorder.isRunning());
-
-        recorder.removeStatistics(SEGMENT_STORE_NAME_2);
-
-        waitForCondition(() -> !recorder.isRunning(), "Did not stop until timeout");
-        assertFalse(recorder.error());
-        recorder.close();
+    @Before
+    public void setUp() {
+        expect(streamsMetrics.rocksDBMetricsRecordingTrigger()).andStubReturn(recordingTrigger);
+        replay(streamsMetrics);
     }
 
     @Test
@@ -129,65 +87,136 @@ public class RocksDBMetricsRecorderTest {
         statisticsToAdd1.setStatsLevel(StatsLevel.EXCEPT_DETAILED_TIMERS);
         replay(statisticsToAdd1);
 
-        manualRecorder.addStatistics(SEGMENT_STORE_NAME_1, statisticsToAdd1, streamsMetrics, taskId);
+        recorder.addStatistics(SEGMENT_STORE_NAME_1, statisticsToAdd1, streamsMetrics, taskId1);
 
         verify(statisticsToAdd1);
-
-        // reset of statistics mock needed for call to close() in teardown()
-        reset(statisticsToAdd1);
     }
 
     @Test
-    public void shouldThrowIfAddedStatisticsHasBeenAlreadyAdded() {
+    public void shouldThrowIfTaskIdOfStatisticsToAddDiffersFromInitialisedOne() {
         mockStaticNice(RocksDBMetrics.class);
         replay(RocksDBMetrics.class);
-        manualRecorder.addStatistics(SEGMENT_STORE_NAME_1, statisticsToAdd1, streamsMetrics, taskId);
-
+        recorder.addStatistics(SEGMENT_STORE_NAME_1, statisticsToAdd1, streamsMetrics, taskId1);
         assertThrows(
             IllegalStateException.class,
-            () -> manualRecorder.addStatistics(SEGMENT_STORE_NAME_1, statisticsToAdd1, streamsMetrics, taskId)
+            () -> recorder.addStatistics(SEGMENT_STORE_NAME_2, statisticsToAdd2, streamsMetrics, taskId2)
         );
     }
 
     @Test
-    public void shouldInitMetricsOnlyWhenFirstStatisticsIsAdded() {
+    public void shouldThrowIfStatisticsToAddHasBeenAlreadyAdded() {
+        mockStaticNice(RocksDBMetrics.class);
+        replay(RocksDBMetrics.class);
+        recorder.addStatistics(SEGMENT_STORE_NAME_1, statisticsToAdd1, streamsMetrics, taskId1);
+
+        assertThrows(
+            IllegalStateException.class,
+            () -> recorder.addStatistics(SEGMENT_STORE_NAME_1, statisticsToAdd1, streamsMetrics, taskId1)
+        );
+    }
+
+    @Test
+    public void shouldInitMetricsAndAddItselfToRecordingTriggerOnlyWhenFirstStatisticsIsAdded() {
         setUpMetricsMock();
-        manualRecorder.addStatistics(SEGMENT_STORE_NAME_1, statisticsToAdd1, streamsMetrics, taskId);
+        recordingTrigger.addMetricsRecorder(recorder);
+        replay(recordingTrigger);
+
+        recorder.addStatistics(SEGMENT_STORE_NAME_1, statisticsToAdd1, streamsMetrics, taskId1);
+
+        verify(recordingTrigger);
         verify(RocksDBMetrics.class);
 
         mockStatic(RocksDBMetrics.class);
         replay(RocksDBMetrics.class);
-        manualRecorder.addStatistics(SEGMENT_STORE_NAME_2, statisticsToAdd2, streamsMetrics, taskId);
+        reset(recordingTrigger);
+        replay(recordingTrigger);
+
+        recorder.addStatistics(SEGMENT_STORE_NAME_2, statisticsToAdd2, streamsMetrics, taskId1);
+
+        verify(recordingTrigger);
         verify(RocksDBMetrics.class);
+    }
+
+    @Test
+    public void shouldAddItselfToRecordingTriggerWhenEmptyButInitialised() {
+        mockStaticNice(RocksDBMetrics.class);
+        replay(RocksDBMetrics.class);
+        recorder.addStatistics(SEGMENT_STORE_NAME_1, statisticsToAdd1, streamsMetrics, taskId1);
+        recorder.removeStatistics(SEGMENT_STORE_NAME_1);
+        reset(recordingTrigger);
+        recordingTrigger.addMetricsRecorder(recorder);
+        replay(recordingTrigger);
+
+        recorder.addStatistics(SEGMENT_STORE_NAME_2, statisticsToAdd2, streamsMetrics, taskId1);
+
+        verify(recordingTrigger);
+    }
+
+    @Test
+    public void shouldNotAddItselfToRecordingTriggerWhenNotEmpty() {
+        mockStaticNice(RocksDBMetrics.class);
+        replay(RocksDBMetrics.class);
+        recorder.addStatistics(SEGMENT_STORE_NAME_1, statisticsToAdd1, streamsMetrics, taskId1);
+        reset(recordingTrigger);
+        replay(recordingTrigger);
+
+        recorder.addStatistics(SEGMENT_STORE_NAME_2, statisticsToAdd2, streamsMetrics, taskId1);
+
+        verify(recordingTrigger);
     }
 
     @Test
     public void shouldCloseStatisticsWhenStatisticsIsRemoved() {
         mockStaticNice(RocksDBMetrics.class);
         replay(RocksDBMetrics.class);
-        manualRecorder.addStatistics(SEGMENT_STORE_NAME_1, statisticsToAdd1, streamsMetrics, taskId);
+        recorder.addStatistics(SEGMENT_STORE_NAME_1, statisticsToAdd1, streamsMetrics, taskId1);
         reset(statisticsToAdd1);
         statisticsToAdd1.close();
         replay(statisticsToAdd1);
 
-        manualRecorder.removeStatistics(SEGMENT_STORE_NAME_1);
+        recorder.removeStatistics(SEGMENT_STORE_NAME_1);
 
         verify(statisticsToAdd1);
     }
 
     @Test
-    public void shouldThrowIfRemovedStatisticsWasNotFound() {
+    public void shouldRemoveItselfFromRecordingTriggerWhenLastStatisticsIsRemoved() {
+        mockStaticNice(RocksDBMetrics.class);
+        replay(RocksDBMetrics.class);
+        recorder.addStatistics(SEGMENT_STORE_NAME_1, statisticsToAdd1, streamsMetrics, taskId1);
+        recorder.addStatistics(SEGMENT_STORE_NAME_2, statisticsToAdd2, streamsMetrics, taskId1);
+        reset(recordingTrigger);
+        replay(recordingTrigger);
+
+        recorder.removeStatistics(SEGMENT_STORE_NAME_1);
+
+        verify(recordingTrigger);
+
+        reset(recordingTrigger);
+        recordingTrigger.removeMetricsRecorder(recorder);
+        replay(recordingTrigger);
+
+        recorder.removeStatistics(SEGMENT_STORE_NAME_2);
+
+        verify(recordingTrigger);
+    }
+
+    @Test
+    public void shouldThrowIfStatisticsToRemoveNotFound() {
+        mockStaticNice(RocksDBMetrics.class);
+        replay(RocksDBMetrics.class);
+        recorder.addStatistics(SEGMENT_STORE_NAME_1, statisticsToAdd1, streamsMetrics, taskId1);
         assertThrows(
             IllegalStateException.class,
-            () -> manualRecorder.removeStatistics(SEGMENT_STORE_NAME_1)
+            () -> recorder.removeStatistics(SEGMENT_STORE_NAME_2)
         );
     }
 
     @Test
     public void shouldRecordMetrics() {
         setUpMetricsMock();
-        manualRecorder.addStatistics(SEGMENT_STORE_NAME_1, statisticsToAdd1, streamsMetrics, taskId);
-        manualRecorder.addStatistics(SEGMENT_STORE_NAME_2, statisticsToAdd2, streamsMetrics, taskId);
+        recorder.addStatistics(SEGMENT_STORE_NAME_1, statisticsToAdd1, streamsMetrics, taskId1);
+        recorder.addStatistics(SEGMENT_STORE_NAME_2, statisticsToAdd2, streamsMetrics, taskId1);
         reset(statisticsToAdd1);
         reset(statisticsToAdd2);
 
@@ -264,22 +293,17 @@ public class RocksDBMetricsRecorderTest {
         replay(statisticsToAdd1);
         replay(statisticsToAdd2);
 
-        manualRecorder.recordOnce();
+        recorder.record();
 
         verify(statisticsToAdd1);
         verify(statisticsToAdd2);
         verify(bytesWrittenToDatabaseSensor);
-
-        // reset of statistics mocks needed for call to close() in teardown()
-        reset(statisticsToAdd1);
-        reset(statisticsToAdd2);
     }
 
     @Test
     public void shouldCorrectlyHandleHitRatioRecordingsWithZeroHitsAndMisses() {
-        final RocksDBMetricsRecorder manualRecorder = new RocksDBMetricsRecorder(METRICS_SCOPE, STORE_NAME, false);
         setUpMetricsMock();
-        manualRecorder.addStatistics(SEGMENT_STORE_NAME_1, statisticsToAdd1, streamsMetrics, taskId);
+        recorder.addStatistics(SEGMENT_STORE_NAME_1, statisticsToAdd1, streamsMetrics, taskId1);
         resetToNice(statisticsToAdd1);
         expect(statisticsToAdd1.getTickerCount(anyObject())).andReturn(0L).anyTimes();
         replay(statisticsToAdd1);
@@ -292,7 +316,7 @@ public class RocksDBMetricsRecorderTest {
         replay(blockCacheIndexHitRatioSensor);
         replay(blockCacheFilterHitRatioSensor);
 
-        manualRecorder.recordOnce();
+        recorder.record();
 
         verify(memtableHitRatioSensor);
         verify(blockCacheDataHitRatioSensor);
@@ -303,7 +327,7 @@ public class RocksDBMetricsRecorderTest {
     private void setUpMetricsMock() {
         mockStatic(RocksDBMetrics.class);
         final RocksDBMetricContext metricsContext =
-            new RocksDBMetricContext(taskId.toString(), METRICS_SCOPE, STORE_NAME);
+            new RocksDBMetricContext(taskId1.toString(), METRICS_SCOPE, STORE_NAME);
         expect(RocksDBMetrics.bytesWrittenToDatabaseSensor(eq(streamsMetrics), eq(metricsContext)))
             .andReturn(bytesWrittenToDatabaseSensor);
         expect(RocksDBMetrics.bytesReadFromDatabaseSensor(eq(streamsMetrics), eq(metricsContext)))

@@ -104,6 +104,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BulkLoadingSt
     private RocksDBConfigSetter configSetter;
 
     private final RocksDBMetricsRecorder metricsRecorder;
+    private boolean isRecordingLevelDebug = false;
 
     private volatile boolean prepareForBulkload = false;
     ProcessorContext internalProcessorContext;
@@ -197,15 +198,11 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BulkLoadingSt
         if (userSpecifiedOptions.statistics() == null &&
             RecordingLevel.forName((String) configs.get(METRICS_RECORDING_LEVEL_CONFIG)) == RecordingLevel.DEBUG) {
 
+            isRecordingLevelDebug = true;
             // metrics recorder will clean up statistics object
             final Statistics statistics = new Statistics();
             userSpecifiedOptions.setStatistics(statistics);
-            metricsRecorder.addStatistics(
-                name,
-                statistics,
-                (StreamsMetricsImpl) context.metrics(),
-                context.taskId()
-            );
+            metricsRecorder.addStatistics(name, statistics, (StreamsMetricsImpl) context.metrics(), context.taskId());
         }
     }
 
@@ -430,7 +427,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BulkLoadingSt
             configSetter = null;
         }
 
-        maybeCleanUpMetricsRecorder();
+        maybeRemoveStatisticsFromMetricsRecorder();
 
         // Important: do not rearrange the order in which the below objects are closed!
         // Order of closing must follow: ColumnFamilyHandle > RocksDB > DBOptions > ColumnFamilyOptions
@@ -451,9 +448,10 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BulkLoadingSt
         cache = null;
     }
 
-    private void maybeCleanUpMetricsRecorder() {
-        if (metricsRecorder.isRunning()) {
+    private void maybeRemoveStatisticsFromMetricsRecorder() {
+        if (isRecordingLevelDebug) {
             metricsRecorder.removeStatistics(name);
+            isRecordingLevelDebug = false;
         }
     }
 
