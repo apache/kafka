@@ -459,79 +459,23 @@ public class StreamsConfigTest {
     }
 
     @Test
-    public void shouldAcceptMetricsVersion0101() {
-        // don't use `StreamsConfig.METRICS_0101` to actually do a useful test
-        props.put(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG, "0.10.1");
+    public void shouldAcceptBuiltInMetricsVersion0100To23() {
+        // don't use `StreamsConfig.METRICS_0100_TO_23` to actually do a useful test
+        props.put(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG, "0.10.0-2.3");
         new StreamsConfig(props);
     }
 
     @Test
-    public void shouldAcceptMetricsVersion0102() {
-        // don't use `StreamsConfig.METRICS_0102` to actually do a useful test
-        props.put(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG, "0.10.2");
-        new StreamsConfig(props);
-    }
-
-    @Test
-    public void shouldAcceptMetricsVersion0110() {
-        // don't use `StreamsConfig.METRICS_0110` to actually do a useful test
-        props.put(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG, "0.11.0");
-        new StreamsConfig(props);
-    }
-
-    @Test
-    public void shouldAcceptMetricsVersion10() {
-        // don't use `StreamsConfig.METRICS_10` to actually do a useful test
-        props.put(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG, "1.0");
-        new StreamsConfig(props);
-    }
-
-    @Test
-    public void shouldAcceptMetricsVersion11() {
-        // don't use `StreamsConfig.METRICS_11` to actually do a useful test
-        props.put(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG, "1.1");
-        new StreamsConfig(props);
-    }
-
-    @Test
-    public void shouldAcceptMetricsVersion20() {
-        // don't use `StreamsConfig.METRICS_20` to actually do a useful test
-        props.put(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG, "2.0");
-        new StreamsConfig(props);
-    }
-
-    @Test
-    public void shouldAcceptMetricsVersion21() {
-        // don't use `StreamsConfig.METRICS_21` to actually do a useful test
-        props.put(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG, "2.1");
-        new StreamsConfig(props);
-    }
-
-    @Test
-    public void shouldAcceptMetricsVersion22() {
-        // don't use `StreamsConfig.METRICS_22` to actually do a useful test
-        props.put(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG, "2.2");
-        new StreamsConfig(props);
-    }
-
-    @Test
-    public void shouldAcceptMetricsVersion23() {
-        // don't use `StreamsConfig.METRICS_23` to actually do a useful test
-        props.put(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG, "2.3");
-        new StreamsConfig(props);
-    }
-
-    @Test
-    public void shouldAcceptMetricsVersion24() {
-        // don't use `StreamsConfig.METRICS_24` to actually do a useful test
-        props.put(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG, "2.4");
+    public void shouldAcceptBuiltInMetricsLatestVersion() {
+        // don't use `StreamsConfig.METRICS_LATEST` to actually do a useful test
+        props.put(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG, "latest");
         new StreamsConfig(props);
     }
 
     @Test
     public void shouldSetDefaultMetricsVersionIfNoneIsSpecified() {
         final StreamsConfig config = new StreamsConfig(props);
-        assertThat(config.getString(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG), is(StreamsConfig.METRICS_24));
+        assertThat(config.getString(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG), is(StreamsConfig.METRICS_LATEST));
     }
 
     @Test

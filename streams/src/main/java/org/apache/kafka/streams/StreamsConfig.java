@@ -135,18 +135,6 @@ public class StreamsConfig extends AbstractConfig {
 
     private static final ConfigDef CONFIG;
 
-    private static final String VERSION_0100 = "0.10.0";
-    private static final String VERSION_0101 = "0.10.1";
-    private static final String VERSION_0102 = "0.10.2";
-    private static final String VERSION_0110 = "0.11.0";
-    private static final String VERSION_10 = "1.0";
-    private static final String VERSION_11 = "1.1";
-    private static final String VERSION_20 = "2.0";
-    private static final String VERSION_21 = "2.1";
-    private static final String VERSION_22 = "2.2";
-    private static final String VERSION_23 = "2.3";
-    private static final String VERSION_24 = "2.4";
-
     private final boolean eosEnabled;
     private final static long DEFAULT_COMMIT_INTERVAL_MS = 30000L;
     private final static long EOS_DEFAULT_COMMIT_INTERVAL_MS = 100L;
@@ -237,31 +225,31 @@ public class StreamsConfig extends AbstractConfig {
      * Config value for parameter {@link #UPGRADE_FROM_CONFIG "upgrade.from"} for upgrading an application from version {@code 0.10.1.x}.
      */
     @SuppressWarnings("WeakerAccess")
-    public static final String UPGRADE_FROM_0101 = VERSION_0101;
+    public static final String UPGRADE_FROM_0101 = "0.10.1";
 
     /**
      * Config value for parameter {@link #UPGRADE_FROM_CONFIG "upgrade.from"} for upgrading an application from version {@code 0.10.2.x}.
      */
     @SuppressWarnings("WeakerAccess")
-    public static final String UPGRADE_FROM_0102 = VERSION_0102;
+    public static final String UPGRADE_FROM_0102 = "0.10.2";
 
     /**
      * Config value for parameter {@link #UPGRADE_FROM_CONFIG "upgrade.from"} for upgrading an application from version {@code 0.11.0.x}.
      */
     @SuppressWarnings("WeakerAccess")
-    public static final String UPGRADE_FROM_0110 = VERSION_0110;
+    public static final String UPGRADE_FROM_0110 = "0.11.0";
 
     /**
      * Config value for parameter {@link #UPGRADE_FROM_CONFIG "upgrade.from"} for upgrading an application from version {@code 1.0.x}.
      */
     @SuppressWarnings("WeakerAccess")
-    public static final String UPGRADE_FROM_10 = VERSION_10;
+    public static final String UPGRADE_FROM_10 = "1.0";
 
     /**
      * Config value for parameter {@link #UPGRADE_FROM_CONFIG "upgrade.from"} for upgrading an application from version {@code 1.1.x}.
      */
     @SuppressWarnings("WeakerAccess")
-    public static final String UPGRADE_FROM_11 = VERSION_11;
+    public static final String UPGRADE_FROM_11 = "1.1";
 
     /**
      * Config value for parameter {@link #PROCESSING_GUARANTEE_CONFIG "processing.guarantee"} for at-least-once processing guarantees.
@@ -276,59 +264,14 @@ public class StreamsConfig extends AbstractConfig {
     public static final String EXACTLY_ONCE = "exactly_once";
 
     /**
-     * Config value for parameter {@link #BUILT_IN_METRICS_VERSION_CONFIG "built.in.metrics.version"} for built-in metrics version 0.10.0.
+     * Config value for parameter {@link #BUILT_IN_METRICS_VERSION_CONFIG "built.in.metrics.version"} for built-in metrics from version 0.10.0. to 2.3
      */
-    public static final String METRICS_0100 = VERSION_0100;
+    public static final String METRICS_0100_TO_23 = "0.10.0-2.3";
 
     /**
-     * Config value for parameter {@link #BUILT_IN_METRICS_VERSION_CONFIG "built.in.metrics.version"} for built-in metrics version 0.10.1.
+     * Config value for parameter {@link #BUILT_IN_METRICS_VERSION_CONFIG "built.in.metrics.version"} for the latest built-in metrics version.
      */
-    public static final String METRICS_0101 = VERSION_0101;
-
-    /**
-     * Config value for parameter {@link #BUILT_IN_METRICS_VERSION_CONFIG "built.in.metrics.version"} for built-in metrics version 0.10.2.
-     */
-    public static final String METRICS_0102 = VERSION_0102;
-
-    /**
-     * Config value for parameter {@link #BUILT_IN_METRICS_VERSION_CONFIG "built.in.metrics.version"} for built-in metrics version 0.11.0.
-     */
-    public static final String METRICS_0110 = VERSION_0110;
-
-    /**
-     * Config value for parameter {@link #BUILT_IN_METRICS_VERSION_CONFIG "built.in.metrics.version"} for built-in metrics version 1.0.
-     */
-    public static final String METRICS_10 = VERSION_10;
-
-    /**
-     * Config value for parameter {@link #BUILT_IN_METRICS_VERSION_CONFIG "built.in.metrics.version"} for built-in metrics version 1.1.
-     */
-    public static final String METRICS_11 = VERSION_11;
-
-    /**
-     * Config value for parameter {@link #BUILT_IN_METRICS_VERSION_CONFIG "built.in.metrics.version"} for built-in metrics version 2.0.
-     */
-    public static final String METRICS_20 = VERSION_20;
-
-    /**
-     * Config value for parameter {@link #BUILT_IN_METRICS_VERSION_CONFIG "built.in.metrics.version"} for built-in metrics version 2.1.
-     */
-    public static final String METRICS_21 = VERSION_21;
-
-    /**
-     * Config value for parameter {@link #BUILT_IN_METRICS_VERSION_CONFIG "built.in.metrics.version"} for built-in metrics version 2.2.
-     */
-    public static final String METRICS_22 = VERSION_22;
-
-    /**
-     * Config value for parameter {@link #BUILT_IN_METRICS_VERSION_CONFIG "built.in.metrics.version"} for built-in metrics version 2.3.
-     */
-    public static final String METRICS_23 = VERSION_23;
-
-    /**
-     * Config value for parameter {@link #BUILT_IN_METRICS_VERSION_CONFIG "built.in.metrics.version"} for built-in metrics version 2.4.
-     */
-    public static final String METRICS_24 = VERSION_24;
+    public static final String METRICS_LATEST = "latest";
 
     /** {@code application.id} */
     @SuppressWarnings("WeakerAccess")
@@ -654,19 +597,10 @@ public class StreamsConfig extends AbstractConfig {
                     BUFFERED_RECORDS_PER_PARTITION_DOC)
             .define(BUILT_IN_METRICS_VERSION_CONFIG,
                     Type.STRING,
-                    METRICS_24,
+                    METRICS_LATEST,
                     in(
-                        METRICS_0100,
-                        METRICS_0101,
-                        METRICS_0102,
-                        METRICS_0110,
-                        METRICS_10,
-                        METRICS_11,
-                        METRICS_20,
-                        METRICS_21,
-                        METRICS_22,
-                        METRICS_23,
-                        METRICS_24
+                        METRICS_0100_TO_23,
+                        METRICS_LATEST
                     ),
                     Importance.LOW,
                     BUILT_IN_METRICS_VERSION_DOC)
