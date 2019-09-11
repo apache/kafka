@@ -1236,6 +1236,6 @@ public class StreamsConfig extends AbstractConfig {
     }
 
     public static void main(final String[] args) {
-        System.out.println(CONFIG.toHtmlList());
+        System.out.println(CONFIG.toHtml());
     }
 }

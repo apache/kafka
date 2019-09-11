@@ -34,6 +34,6 @@ public class SourceConnectorConfig extends ConnectorConfig {
     }
 
     public static void main(String[] args) {
-        System.out.println(config.toHtmlList());
+        System.out.println(config.toHtml());
     }
 }

@@ -74,7 +74,7 @@ public class TransformationDoc {
 
         out.println("<p/>");
 
-        out.println(docInfo.configDef.toHtmlList());
+        out.println(docInfo.configDef.toHtml());
 
         out.println("</div>");
     }

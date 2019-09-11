@@ -1409,8 +1409,8 @@ public class ConfigDef {
         };
     }
 
-    public String toHtmlList() {
-        return toHtmlList(Collections.<String, String>emptyMap());
+    public String toHtml() {
+        return toHtml(Collections.<String, String>emptyMap());
     }
 
     /**
@@ -1418,10 +1418,9 @@ public class ConfigDef {
      * If <code>dynamicUpdateModes</code> is non-empty, a "Dynamic Update Mode" label
      * will be included in the config details with the value of the update mode. Default
      * mode is "read-only".
-     * @param config The config to convert
      * @param dynamicUpdateModes Config name -&gt; update mode mapping
      */
-    public String toHtmlList(Map<String, String> dynamicUpdateModes) {
+    public String toHtml(Map<String, String> dynamicUpdateModes) {
         boolean hasUpdateModes = !dynamicUpdateModes.isEmpty();
         List<ConfigKey> configs = sortedConfigs();
         StringBuilder b = new StringBuilder();

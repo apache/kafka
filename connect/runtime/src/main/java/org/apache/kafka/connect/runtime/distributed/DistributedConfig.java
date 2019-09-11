@@ -317,6 +317,6 @@ public class DistributedConfig extends WorkerConfig {
     }
 
     public static void main(String[] args) {
-        System.out.println(CONFIG.toHtmlList());
+        System.out.println(CONFIG.toHtml());
     }
 }

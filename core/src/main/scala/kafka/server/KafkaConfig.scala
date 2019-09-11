@@ -258,7 +258,7 @@ object KafkaConfig {
   private val LogConfigPrefix = "log."
 
   def main(args: Array[String]): Unit = {
-    System.out.println(configDef.toHtmlList(DynamicBrokerConfig.dynamicConfigUpdateModes))
+    System.out.println(configDef.toHtml(DynamicBrokerConfig.dynamicConfigUpdateModes))
   }
 
   /** ********* Zookeeper Configuration ***********/

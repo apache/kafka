@@ -113,7 +113,7 @@ case class LogConfig(props: java.util.Map[_, _], overriddenConfigs: Set[String] 
 object LogConfig {
 
   def main(args: Array[String]): Unit = {
-    println(configDef.toHtmlList)
+    println(configDef.toHtml)
   }
 
   val SegmentBytesProp = TopicConfig.SEGMENT_BYTES_CONFIG
