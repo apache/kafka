@@ -28,6 +28,7 @@
   // Version 5 added LogStartOffset to filter out spurious
   // OutOfOrderSequenceExceptions on the client.
   "validVersions": "0-7",
+  "flexibleVersions": "none",
   "fields": [
     { "name": "Responses", "type": "[]TopicProduceResponse", "versions": "0+",
       "about": "Each produce response", "fields": [

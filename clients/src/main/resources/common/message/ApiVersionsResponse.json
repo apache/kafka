@@ -20,6 +20,7 @@
   // Version 1 adds throttle time to the response.
   // Starting in version 2, on quota violation, brokers send out responses before throttling.
   "validVersions": "0-2",
+  "flexibleVersions": "none",
   "fields": [
     { "name": "ErrorCode", "type": "int16", "versions": "0+",
       "about": "The top-level error code." },

@@ -18,9 +18,13 @@
   "type": "response",
   "name": "CreateTopicsResponse",
   // Version 1 adds a per-topic error message string.
+  //
   // Version 2 adds the throttle time.
+  //
   // Starting in version 3, on quota violation, brokers send out responses before throttling.
+  //
   // Version 4 makes partitions/replicationFactor optional even when assignments are not present (KIP-464).
+  //
   // Version 5 is the first flexible version.
   "validVersions": "0-5",
   "flexibleVersions": "5+",

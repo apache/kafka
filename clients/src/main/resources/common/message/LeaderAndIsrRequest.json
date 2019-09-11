@@ -23,6 +23,7 @@
   //
   // Version 3 adds AddingReplicas and RemovingReplicas
   "validVersions": "0-3",
+  "flexibleVersions": "none",
   "fields": [
     { "name": "ControllerId", "type": "int32", "versions": "0+", "entityType": "brokerId",
       "about": "The current controller ID." },

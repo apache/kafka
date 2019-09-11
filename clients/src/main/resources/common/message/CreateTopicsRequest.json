@@ -18,8 +18,10 @@
   "type": "request",
   "name": "CreateTopicsRequest",
   // Version 1 adds validateOnly.
+  //
   // Version 4 makes partitions/replicationFactor optional even when assignments are not present (KIP-464)
-  // Version 5 is the first flexible version
+  //
+  // Version 5 is the first flexible version.
   "validVersions": "0-5",
   "flexibleVersions": "5+",
   "fields": [

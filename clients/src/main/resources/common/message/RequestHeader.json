@@ -25,25 +25,16 @@
   // RequestApiVersion.  Every (apiKey, apiVersion) tuple maps to a unique
   // header version.
   //
-  // In the special case of an ApiVersionsRequest, the ==
-  // In order to know what version of the request and response headers to use
-  // for deserialization, we first read the 16-bit request API key and API version.
-  // The (API key, API version) tuple maps to a header version.
-  //
   // Version 0 of this header was used only by v0 of the controlled shutdown request.
   // No other requests ever used this version.
   //
   // Version 1 of the header is used by requests that do not have a flexible schema.
   //
-  // Version 2 is the first flexible version, which allows tagged fields.
+  // Version 2 is the first flexible version.
 
   "validVersions": "0-2",
   "flexibleVersions": "2+",
   "fields": [
-    // Note: the first two fields must not be changed.  When reading the header,
-    // we use these fields to determine what version to use to parse the rest.
-    // If the message version is a flexible version, we will use version 1;
-    // otherwise, we will use version 0.
     { "name": "RequestApiKey", "type": "int16", "versions": "0+",
       "about": "The API key of this request." },
     { "name": "RequestApiVersion", "type": "int16", "versions": "0+",

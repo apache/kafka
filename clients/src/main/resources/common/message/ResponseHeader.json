@@ -16,11 +16,9 @@
 {
   "type": "header",
   "name": "ResponseHeader",
-
   // Version 0 and version 1 are the same.
-
-  // Version 2 is the first flexible version which allows tagged fields.
-
+  //
+  // Version 2 is the first flexible version.
   "validVersions": "0-2",
   "flexibleVersions": "2+",
   "fields": [
