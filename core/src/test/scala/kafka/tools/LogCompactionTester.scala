@@ -269,17 +269,19 @@ object LogCompactionTester {
       val rand = new Random(1)
       val keyCount = (messages / dups).toInt
       val numMessages = messages * topics.length
-      val deleteThreshold = if (numMessages < 100) (numMessages * percentDeletes) / 100 else 100
+      var numDeleteMsgs = (numMessages * percentDeletes) / 100
       val producedFilePath = Files.createTempFile("kafka-log-cleaner-produced-", ".txt")
       println(s"Logging produce requests to $producedFilePath")
       val producedWriter: BufferedWriter = Files.newBufferedWriter(producedFilePath, UTF_8)
       for (i <- 0L until numMessages) {
         val topic = topics((i % topics.length).toInt)
         val key = rand.nextInt(keyCount)
-        val delete = (i % 100) < deleteThreshold
+        val delete = numDeleteMsgs != 0 && (numDeleteMsgs == numMessages - i || rand.nextBoolean())
         val msg =
-          if (delete)
+          if (delete) {
+            numDeleteMsgs -= 1
             new ProducerRecord[Array[Byte], Array[Byte]](topic, key.toString.getBytes(UTF_8), null)
+          }
           else
             new ProducerRecord(topic, key.toString.getBytes(UTF_8), i.toString.getBytes(UTF_8))
         producer.send(msg)
