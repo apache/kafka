@@ -1239,9 +1239,9 @@ public final class MessageDataGenerator {
                 return field.defaultString() + "L";
             }
         } else if (field.type() instanceof FieldType.UUIDFieldType) {
+            headerGenerator.addImport(MessageGenerator.UUID_CLASS);
             if (field.defaultString().isEmpty()) {
-                validateNullDefault(field);
-                return "null";
+                return "org.apache.kafka.common.protocol.MessageUtil.ZERO_UUID";
             } else {
                 try {
                     UUID.fromString(field.defaultString());
@@ -1249,7 +1249,6 @@ public final class MessageDataGenerator {
                     throw new RuntimeException("Invalid default for uuid field " +
                         field.name() + ": " + field.defaultString(), e);
                 }
-                headerGenerator.addImport(MessageGenerator.UUID_CLASS);
                 return "UUID.fromString(\"" + field.defaultString() + "\")";
             }
         } else if (field.type() instanceof FieldType.StringFieldType) {
