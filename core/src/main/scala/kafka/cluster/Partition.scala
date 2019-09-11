@@ -155,6 +155,21 @@ object Partition extends KafkaMetricsGroup {
   }
 }
 
+
+sealed abstract class AssignmentState {
+  def originalReplicas: Seq[Int]
+  def inSyncReplicas: Set[Int]
+
+  def isBrokerInIsr(brokerId: Int): Boolean = inSyncReplicas.contains(brokerId)
+}
+
+case class OngoingReassignmentState(addingReplicas: Seq[Int],
+                                    removingReplicas: Seq[Int],
+                                    originalReplicas: Seq[Int],
+                                    inSyncReplicas: Set[Int]) extends AssignmentState
+
+case class SimpleAssignmentState(originalReplicas: Seq[Int], inSyncReplicas: Set[Int]) extends AssignmentState
+
 /**
  * Data structure that represents a topic partition. The leader maintains the AR, ISR, CUR, RAR
  */
@@ -180,9 +195,8 @@ class Partition(val topicPartition: TopicPartition,
   // defined when this broker is leader for partition
   @volatile private var leaderEpochStartOffsetOpt: Option[Long] = None
   @volatile var leaderReplicaIdOpt: Option[Int] = None
-  @volatile var inSyncReplicaIds = Set.empty[Int]
-  // An ordered sequence of all the valid broker ids that were assigned to this topic partition
-  @volatile var allReplicaIds = Seq.empty[Int]
+
+  @volatile var assignmentState: AssignmentState = SimpleAssignmentState(Seq.empty, Set.empty)
 
   // Logs belonging to this partition. Majority of time it will be only one log, but if log directory
   // is getting changed (as a result of ReplicaAlterLogDirs command), we may have two logs until copy
@@ -214,7 +228,7 @@ class Partition(val topicPartition: TopicPartition,
   newGauge("InSyncReplicasCount",
     new Gauge[Int] {
       def value: Int = {
-        if (isLeader) inSyncReplicaIds.size else 0
+        if (isLeader) assignmentState.inSyncReplicas.size else 0
       }
     },
     tags
@@ -241,7 +255,7 @@ class Partition(val topicPartition: TopicPartition,
   newGauge("ReplicasCount",
     new Gauge[Int] {
       def value: Int = {
-        if (isLeader) allReplicaIds.size else 0
+        if (isLeader) assignmentState.originalReplicas.size else 0
       }
     },
     tags
@@ -256,16 +270,29 @@ class Partition(val topicPartition: TopicPartition,
     tags
   )
 
-  def isUnderReplicated: Boolean =
-    isLeader && inSyncReplicaIds.size < allReplicaIds.size
+  def isUnderReplicated: Boolean = (assignmentState.originalReplicas.size - assignmentState.inSyncReplicas.size) > 0
 
   def isUnderMinIsr: Boolean = {
-    leaderLogIfLocal.exists { inSyncReplicaIds.size < _.config.minInSyncReplicas }
+    leaderLogIfLocal.exists { assignmentState.inSyncReplicas.size < _.config.minInSyncReplicas }
   }
 
   def isAtMinIsr: Boolean = {
-    leaderLogIfLocal.exists { inSyncReplicaIds.size == _.config.minInSyncReplicas }
+    leaderLogIfLocal.exists { assignmentState.inSyncReplicas.size == _.config.minInSyncReplicas }
   }
+
+  def isReassigning: Boolean = assignmentState.isInstanceOf[OngoingReassignmentState]
+
+  def isAddingLocalReplica: Boolean = assignmentState match {
+    case state: OngoingReassignmentState => state.addingReplicas.contains(localBrokerId)
+    case _ => false
+  }
+
+  def isAddingReplica(replicaId: Int): Boolean = assignmentState match {
+    case state: OngoingReassignmentState => state.addingReplicas.contains(replicaId)
+    case _ => false
+  }
+
+  def inSyncReplicaIds: Set[Int] = assignmentState.inSyncReplicas
 
   /**
     * Create the future replica if 1) the current replica is not in the given log directory and 2) the future replica
@@ -469,10 +496,9 @@ class Partition(val topicPartition: TopicPartition,
     // need to hold the lock to prevent appendMessagesToLeader() from hitting I/O exceptions due to log being deleted
     inWriteLock(leaderIsrUpdateLock) {
       remoteReplicasMap.clear()
-      allReplicaIds = Seq.empty
+      assignmentState = SimpleAssignmentState(Seq.empty, Set.empty)
       log = None
       futureLog = None
-      inSyncReplicaIds = Set.empty
       leaderReplicaIdOpt = None
       leaderEpochStartOffsetOpt = None
       Partition.removeMetrics(topicPartition)
@@ -499,8 +525,10 @@ class Partition(val topicPartition: TopicPartition,
       controllerEpoch = partitionState.controllerEpoch
 
       updateAssignmentAndIsr(
-        assignment = partitionState.replicas.asScala.iterator.map(_.toInt).toSeq,
-        isr = partitionState.isr.asScala.iterator.map(_.toInt).toSet
+        assignment = partitionState.replicas.asScala.map(_.toInt),
+        isr = partitionState.isr.asScala.map(_.toInt).toSet,
+        addingReplicas = partitionState.addingReplicas.asScala.map(_.toInt),
+        removingReplicas = partitionState.removingReplicas.asScala.map(_.toInt)
       )
       createLogIfNotExists(localBrokerId, partitionState.isNew, isFutureReplica = false, highWatermarkCheckpoints)
 
@@ -526,7 +554,7 @@ class Partition(val topicPartition: TopicPartition,
       val curTimeMs = time.milliseconds
       // initialize lastCaughtUpTime of replicas as well as their lastFetchTimeMs and lastFetchLeaderLogEndOffset.
       remoteReplicas.foreach { replica =>
-        val lastCaughtUpTimeMs = if (inSyncReplicaIds.contains(replica.brokerId)) curTimeMs else 0L
+        val lastCaughtUpTimeMs = if (assignmentState.inSyncReplicas.contains(replica.brokerId)) curTimeMs else 0L
         replica.resetLastCaughtUpTime(curLeaderLogEndOffset, curTimeMs, lastCaughtUpTimeMs)
       }
 
@@ -572,7 +600,9 @@ class Partition(val topicPartition: TopicPartition,
 
       updateAssignmentAndIsr(
         assignment = partitionState.replicas.asScala.iterator.map(_.toInt).toSeq,
-        isr = Set.empty[Int]
+        isr = Set.empty[Int],
+        addingReplicas = partitionState.addingReplicas.asScala.map(_.toInt),
+        removingReplicas = partitionState.removingReplicas.asScala.map(_.toInt)
       )
       createLogIfNotExists(localBrokerId, partitionState.isNew, isFutureReplica = false, highWatermarkCheckpoints)
 
@@ -653,7 +683,10 @@ class Partition(val topicPartition: TopicPartition,
    *                   topic partition
    * @param isr The set of broker ids that are known to be insync with the leader
    */
-  def updateAssignmentAndIsr(assignment: Seq[Int], isr: Set[Int]): Unit = {
+  def updateAssignmentAndIsr(assignment: Seq[Int],
+                             isr: Set[Int],
+                             addingReplicas: Seq[Int] = Seq.empty,
+                             removingReplicas: Seq[Int] = Seq.empty): Unit = {
     val replicaSet = assignment.toSet
     val removedReplicas = remoteReplicasMap.keys -- replicaSet
 
@@ -661,9 +694,10 @@ class Partition(val topicPartition: TopicPartition,
       .filter(_ != localBrokerId)
       .foreach(id => remoteReplicasMap.getAndMaybePut(id, new Replica(id, topicPartition)))
     removedReplicas.foreach(remoteReplicasMap.remove)
-    allReplicaIds = assignment
-
-    inSyncReplicaIds = isr
+    if (addingReplicas.nonEmpty || removingReplicas.nonEmpty)
+      assignmentState = OngoingReassignmentState(addingReplicas, removingReplicas, assignment, isr)
+    else
+      assignmentState = SimpleAssignmentState(assignment, isr)
   }
 
   /**
@@ -685,9 +719,9 @@ class Partition(val topicPartition: TopicPartition,
       // check if this replica needs to be added to the ISR
       leaderLogIfLocal.foreach { leaderLog =>
         val leaderHighwatermark = leaderLog.highWatermark
-        if (!inSyncReplicaIds.contains(followerReplica.brokerId) && isFollowerInSync(followerReplica, leaderHighwatermark)) {
-          val newInSyncReplicaIds = inSyncReplicaIds + followerReplica.brokerId
-          info(s"Expanding ISR from ${inSyncReplicaIds.mkString(",")} " +
+        if (!assignmentState.isBrokerInIsr(followerReplica.brokerId) && isFollowerInSync(followerReplica, leaderHighwatermark)) {
+          val newInSyncReplicaIds = assignmentState.inSyncReplicas + followerReplica.brokerId
+          info(s"Expanding ISR from ${assignmentState.inSyncReplicas.mkString(",")} " +
             s"to ${newInSyncReplicaIds.mkString(",")}")
 
           // update ISR in ZK and cache
@@ -714,7 +748,7 @@ class Partition(val topicPartition: TopicPartition,
     leaderLogIfLocal match {
       case Some(leaderLog) =>
         // keep the current immutable replica list reference
-        val curInSyncReplicaIds = inSyncReplicaIds
+        val curInSyncReplicaIds = assignmentState.inSyncReplicas
 
         if (isTraceEnabled) {
           def logEndOffsetString: ((Int, Long)) => String = {
@@ -773,7 +807,7 @@ class Partition(val topicPartition: TopicPartition,
       var newHighWatermark = leaderLog.logEndOffsetMetadata
       remoteReplicasMap.values.foreach { replica =>
         if (replica.logEndOffsetMetadata.messageOffset < newHighWatermark.messageOffset &&
-          (curTime - replica.lastCaughtUpTimeMs <= replicaLagTimeMaxMs || inSyncReplicaIds.contains(replica.brokerId))) {
+          (curTime - replica.lastCaughtUpTimeMs <= replicaLagTimeMaxMs || assignmentState.isBrokerInIsr(replica.brokerId))) {
           newHighWatermark = replica.logEndOffsetMetadata
         }
       }
@@ -836,10 +870,10 @@ class Partition(val topicPartition: TopicPartition,
         case Some(leaderLog) =>
           val outOfSyncReplicaIds = getOutOfSyncReplicas(replicaMaxLagTimeMs)
           if (outOfSyncReplicaIds.nonEmpty) {
-            val newInSyncReplicaIds = inSyncReplicaIds -- outOfSyncReplicaIds
+            val newInSyncReplicaIds = assignmentState.inSyncReplicas -- outOfSyncReplicaIds
             assert(newInSyncReplicaIds.nonEmpty)
             info("Shrinking ISR from %s to %s. Leader: (highWatermark: %d, endOffset: %d). Out of sync replicas: %s."
-              .format(inSyncReplicaIds.mkString(","),
+              .format(assignmentState.inSyncReplicas.mkString(","),
                 newInSyncReplicaIds.mkString(","),
                 leaderLog.highWatermark,
                 leaderLog.logEndOffset,
@@ -889,7 +923,7 @@ class Partition(val topicPartition: TopicPartition,
      * is violated, that replica is considered to be out of sync
      *
      **/
-    val candidateReplicaIds = inSyncReplicaIds - localBrokerId
+    val candidateReplicaIds = assignmentState.inSyncReplicas - localBrokerId
     val currentTimeMs = time.milliseconds()
     val leaderEndOffset = localLogOrException.logEndOffset
     candidateReplicaIds.filter(replicaId => isFollowerOutOfSync(replicaId, leaderEndOffset, currentTimeMs, maxLagMs))
@@ -942,11 +976,11 @@ class Partition(val topicPartition: TopicPartition,
       leaderLogIfLocal match {
         case Some(leaderLog) =>
           val minIsr = leaderLog.config.minInSyncReplicas
-          val inSyncSize = inSyncReplicaIds.size
+          val inSyncSize = assignmentState.inSyncReplicas.size
 
           // Avoid writing to leader if there are not enough insync replicas to make it safe
           if (inSyncSize < minIsr && requiredAcks == -1) {
-            throw new NotEnoughReplicasException(s"The size of the current ISR $inSyncReplicaIds " +
+            throw new NotEnoughReplicasException(s"The size of the current ISR ${assignmentState.inSyncReplicas} " +
               s"is insufficient to satisfy the min.isr requirement of $minIsr for partition $topicPartition")
           }
 
@@ -1177,7 +1211,12 @@ class Partition(val topicPartition: TopicPartition,
   private def maybeUpdateIsrAndVersion(isr: Set[Int], zkVersionOpt: Option[Int]): Unit = {
     zkVersionOpt match {
       case Some(newVersion) =>
-        inSyncReplicaIds = isr
+        assignmentState match {
+          case SimpleAssignmentState(replicas, _) =>
+            assignmentState = SimpleAssignmentState(replicas, isr)
+          case OngoingReassignmentState(adding, removing, origRepl, _) =>
+            assignmentState = OngoingReassignmentState(adding, removing, origRepl, isr)
+        }
         zkVersion = newVersion
         info("ISR updated to [%s] and zkVersion updated to [%d]".format(isr.mkString(","), zkVersion))
 
@@ -1199,8 +1238,8 @@ class Partition(val topicPartition: TopicPartition,
     partitionString.append("Topic: " + topic)
     partitionString.append("; Partition: " + partitionId)
     partitionString.append("; Leader: " + leaderReplicaIdOpt)
-    partitionString.append("; AllReplicaIds: " + allReplicaIds.mkString(","))
-    partitionString.append("; InSyncReplicaIds: " + inSyncReplicaIds.mkString(","))
+    partitionString.append("; AllReplicaIds: " + assignmentState.originalReplicas.mkString(","))
+    partitionString.append("; InSyncReplicaIds: " + assignmentState.inSyncReplicas.mkString(","))
     partitionString.toString
   }
 }

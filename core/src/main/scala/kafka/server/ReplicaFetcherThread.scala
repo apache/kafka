@@ -52,7 +52,8 @@ class ReplicaFetcherThread(name: String,
                                 sourceBroker = sourceBroker,
                                 failedPartitions,
                                 fetchBackOffMs = brokerConfig.replicaFetchBackoffMs,
-                                isInterruptible = false) {
+                                isInterruptible = false,
+                                replicaManager = replicaMgr) {
 
   private val replicaId = brokerConfig.brokerId
   private val logContext = new LogContext(s"[ReplicaFetcher replicaId=$replicaId, leaderId=${sourceBroker.id}, " +
@@ -182,6 +183,9 @@ class ReplicaFetcherThread(name: String,
     if (quota.isThrottled(topicPartition))
       quota.record(records.sizeInBytes)
     replicaMgr.brokerTopicStats.updateReplicationBytesIn(records.sizeInBytes)
+
+    if (partition.isReassigning && partition.isAddingLocalReplica)
+      replicaMgr.brokerTopicStats.updateReassignmentBytesIn(records.sizeInBytes)
 
     logAppendInfo
   }

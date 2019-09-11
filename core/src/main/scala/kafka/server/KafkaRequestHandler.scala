@@ -24,6 +24,7 @@ import java.util.concurrent.{CountDownLatch, TimeUnit}
 import java.util.concurrent.atomic.AtomicInteger
 
 import com.yammer.metrics.core.Meter
+import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.internals.FatalExitError
 import org.apache.kafka.common.utils.{KafkaThread, Time}
 
@@ -192,11 +193,13 @@ class BrokerTopicMetrics(name: Option[String]) extends KafkaMetricsGroup {
     BrokerTopicStats.NoKeyCompactedTopicRecordsPerSec -> MeterWrapper(BrokerTopicStats.NoKeyCompactedTopicRecordsPerSec, "requests"),
     BrokerTopicStats.InvalidMagicNumberRecordsPerSec -> MeterWrapper(BrokerTopicStats.InvalidMagicNumberRecordsPerSec, "requests"),
     BrokerTopicStats.InvalidMessageCrcRecordsPerSec -> MeterWrapper(BrokerTopicStats.InvalidMessageCrcRecordsPerSec, "requests"),
-    BrokerTopicStats.InvalidOffsetOrSequenceRecordsPerSec -> MeterWrapper(BrokerTopicStats.InvalidOffsetOrSequenceRecordsPerSec, "requests")
+    BrokerTopicStats.InvalidOffsetOrSequenceRecordsPerSec -> MeterWrapper(BrokerTopicStats.InvalidOffsetOrSequenceRecordsPerSec, "requests"),
   ).asJava)
   if (name.isEmpty) {
     metricTypeMap.put(BrokerTopicStats.ReplicationBytesInPerSec, MeterWrapper(BrokerTopicStats.ReplicationBytesInPerSec, "bytes"))
     metricTypeMap.put(BrokerTopicStats.ReplicationBytesOutPerSec, MeterWrapper(BrokerTopicStats.ReplicationBytesOutPerSec, "bytes"))
+    metricTypeMap.put(BrokerTopicStats.ReassignmentBytesInPerSec, MeterWrapper(BrokerTopicStats.ReassignmentBytesInPerSec, "bytes"))
+    metricTypeMap.put(BrokerTopicStats.ReassignmentBytesOutPerSec, MeterWrapper(BrokerTopicStats.ReassignmentBytesOutPerSec, "bytes"))
   }
 
   // used for testing only
@@ -238,6 +241,14 @@ class BrokerTopicMetrics(name: Option[String]) extends KafkaMetricsGroup {
 
   def invalidOffsetOrSequenceRecordsPerSec = metricTypeMap.get(BrokerTopicStats.InvalidOffsetOrSequenceRecordsPerSec).meter()
 
+  private[server] def reassignmentBytesInPerSec =
+    if (name.isEmpty) Some(metricTypeMap.get(BrokerTopicStats.ReassignmentBytesInPerSec).meter())
+    else None
+
+  private[server] def reassignmentBytesOutPerSec =
+    if (name.isEmpty) Some(metricTypeMap.get(BrokerTopicStats.ReassignmentBytesOutPerSec).meter())
+    else None
+
   def closeMetric(metricType: String): Unit = {
     val meter = metricTypeMap.get(metricType)
     if (meter != null)
@@ -260,6 +271,8 @@ object BrokerTopicStats {
   val TotalFetchRequestsPerSec = "TotalFetchRequestsPerSec"
   val FetchMessageConversionsPerSec = "FetchMessageConversionsPerSec"
   val ProduceMessageConversionsPerSec = "ProduceMessageConversionsPerSec"
+  val ReassignmentBytesInPerSec = "ReassignmentBytesInPerSec"
+  val ReassignmentBytesOutPerSec = "ReassignmentBytesOutPerSec"
 
   // These following topics are for LogValidator for better debugging on failed records
   val NoKeyCompactedTopicRecordsPerSec = "NoKeyCompactedTopicRecordsPerSec"
@@ -288,6 +301,20 @@ class BrokerTopicStats {
   private def updateReplicationBytesOut(value: Long): Unit = {
     allTopicsStats.replicationBytesOutRate.foreach { metric =>
       metric.mark(value)
+    }
+  }
+
+  def updateReassignmentBytesIn(value: Long): Unit = {
+    allTopicsStats.reassignmentBytesInPerSec.foreach { metric =>
+      metric.mark(value)
+      println(s"Reassignment in rate count: ${metric.count()}")
+    }
+  }
+
+  def updateReassignmentBytesOut(value: Long, topicPartition: TopicPartition): Unit = {
+    allTopicsStats.reassignmentBytesOutPerSec.foreach { metric =>
+      metric.mark(value)
+      println(s"Reassignment out rate count: ${metric.count()}")
     }
   }
 

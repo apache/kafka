@@ -734,6 +734,13 @@ class KafkaApis(val requestChannel: RequestChannel,
         response.responseData.asScala.foreach { case (topicPartition, data) =>
           // record the bytes out metrics only when the response is being sent
           brokerTopicStats.updateBytesOut(topicPartition.topic, fetchRequest.isFromFollower, data.records.sizeInBytes)
+          // record any outgoing reassignment rate if the fetch request came from an addingReplica of the partition
+          if (fetchRequest.isFromFollower) {
+            val receiverPartition = replicaManager.getPartitionOrException(topicPartition, expectLeader = false)
+            println(s"Fetch from follower: $topicPartition; isAdding: ${receiverPartition.isAddingReplica(fetchRequest.replicaId)}; isReassigning: ${receiverPartition.isReassigning}")
+            if (receiverPartition.isAddingReplica(fetchRequest.replicaId))
+              brokerTopicStats.updateReassignmentBytesOut(data.records.sizeInBytes, topicPartition)
+          }
         }
         response
       }

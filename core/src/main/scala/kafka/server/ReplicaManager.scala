@@ -266,6 +266,12 @@ class ReplicaManager(val config: KafkaConfig,
       def value = leaderPartitionsIterator.count(_.isAtMinIsr)
     }
   )
+  val reassigningPartitions = newGauge(
+    "ReassigningPartitions",
+    new Gauge[Int] {
+      def value = leaderPartitionsIterator.count(p => p.isLeader && p.isReassigning)
+    }
+  )
 
   val isrExpandRate: Meter = newMeter("IsrExpandsPerSec", "expands", TimeUnit.SECONDS)
   val isrShrinkRate: Meter = newMeter("IsrShrinksPerSec", "shrinks", TimeUnit.SECONDS)
@@ -1133,7 +1139,7 @@ class ReplicaManager(val config: KafkaConfig,
    *  the quota is exceeded and the replica is not in sync.
    */
   def shouldLeaderThrottle(quota: ReplicaQuota, topicPartition: TopicPartition, replicaId: Int): Boolean = {
-    val isReplicaInSync = nonOfflinePartition(topicPartition).exists(_.inSyncReplicaIds.contains(replicaId))
+    val isReplicaInSync = nonOfflinePartition(topicPartition).exists(_.assignmentState.inSyncReplicas.contains(replicaId))
     !isReplicaInSync && quota.isThrottled(topicPartition) && quota.isQuotaExceeded
   }
 
@@ -1564,7 +1570,7 @@ class ReplicaManager(val config: KafkaConfig,
             } else {
               warn(s"Leader $localBrokerId failed to record follower $followerId's position " +
                 s"${readResult.info.fetchOffsetMetadata.messageOffset} since the replica is not recognized to be " +
-                s"one of the assigned replicas ${partition.allReplicaIds.mkString(",")} " +
+                s"one of the assigned replicas ${partition.assignmentState.originalReplicas.mkString(",")} " +
                 s"for partition $topicPartition. Empty records will be returned for this partition.")
               readResult.withEmptyFetchInfo
             }

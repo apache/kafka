@@ -49,7 +49,8 @@ class ReplicaAlterLogDirsThread(name: String,
                                 sourceBroker = sourceBroker,
                                 failedPartitions,
                                 fetchBackOffMs = brokerConfig.replicaFetchBackoffMs,
-                                isInterruptible = false) {
+                                isInterruptible = false,
+                                replicaManager = replicaMgr) {
 
   private val replicaId = brokerConfig.brokerId
   private val maxBytes = brokerConfig.replicaFetchResponseMaxBytes
