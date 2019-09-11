@@ -29,7 +29,7 @@ import org.apache.kafka.clients.admin.AlterConfigOp
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType
 import org.apache.kafka.common.config.ConfigDef.ConfigKey
 import org.apache.kafka.common.config.{AbstractConfig, ConfigDef, ConfigException, ConfigResource, LogLevelConfig}
-import org.apache.kafka.common.errors.{ApiException, InvalidConfigurationException, InvalidPartitionsException, InvalidReplicaAssignmentException, InvalidRequestException, ReassignmentInProgressException, UnknownTopicOrPartitionException}
+import org.apache.kafka.common.errors.{ApiException, InvalidConfigurationException, InvalidPartitionsException, InvalidReplicaAssignmentException, InvalidRequestException, ReassignmentInProgressException, TopicExistsException, UnknownTopicOrPartitionException}
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopic
 import org.apache.kafka.common.metrics.Metrics
@@ -88,6 +88,9 @@ class AdminManager(val config: KafkaConfig,
     val brokers = metadataCache.getAliveBrokers.map { b => kafka.admin.BrokerMetadata(b.id, b.rack) }
     val metadata = toCreate.values.map(topic =>
       try {
+        if (metadataCache.contains(topic.name))
+          throw new TopicExistsException(s"Topic '${topic.name}' already exists.")
+
         val configs = new Properties()
         topic.configs.asScala.foreach { entry =>
           configs.setProperty(entry.name, entry.value)
