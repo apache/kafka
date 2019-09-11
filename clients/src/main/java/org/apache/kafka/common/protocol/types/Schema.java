@@ -209,6 +209,9 @@ public class Schema extends Type {
             visitor.visit(schema);
             for (BoundField f : schema.fields())
                 handleNode(f.def.type, visitor);
+        } else if (node.isArray()) {
+            visitor.visit(node);
+            handleNode(node.arrayElementType().get(), visitor);
         } else {
             visitor.visit(node);
         }
