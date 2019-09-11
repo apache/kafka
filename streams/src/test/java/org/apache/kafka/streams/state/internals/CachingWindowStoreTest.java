@@ -126,12 +126,12 @@ public class CachingWindowStoreTest {
             .transform(() -> new Transformer<String, String, KeyValue<String, String>>() {
                 private WindowStore<String, String> store;
                 private int numRecordsProcessed;
-                private long timestamp;
+                private ProcessorContext context;
 
                 @SuppressWarnings("unchecked")
                 @Override
                 public void init(final ProcessorContext processorContext) {
-                    this.timestamp = processorContext.timestamp();
+                    this.context = processorContext;
                     this.store = (WindowStore<String, String>) processorContext.getStateStore("store-name");
                     int count = 0;
 
@@ -155,7 +155,7 @@ public class CachingWindowStoreTest {
                     }
                     assertThat(count, equalTo(numRecordsProcessed));
 
-                    store.put(value, value, timestamp);
+                    store.put(value, value, context.timestamp());
 
                     numRecordsProcessed++;
 
