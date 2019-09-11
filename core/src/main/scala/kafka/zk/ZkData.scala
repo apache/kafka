@@ -17,6 +17,7 @@
 package kafka.zk
 
 import java.nio.charset.StandardCharsets.UTF_8
+import java.util
 import java.util.Properties
 
 import com.fasterxml.jackson.annotation.JsonProperty
@@ -24,12 +25,13 @@ import com.fasterxml.jackson.core.JsonProcessingException
 import kafka.api.{ApiVersion, KAFKA_0_10_0_IV1, LeaderAndIsr}
 import kafka.cluster.{Broker, EndPoint}
 import kafka.common.{NotificationHandler, ZkNodeChangeNotificationListener}
-import kafka.controller.{IsrChangeNotificationHandler, LeaderIsrAndControllerEpoch}
+import kafka.controller.{IsrChangeNotificationHandler, LeaderIsrAndControllerEpoch, PartitionReplicaAssignment}
 import kafka.security.auth.Resource.Separator
 import kafka.security.authorizer.AclAuthorizer.VersionedAcls
 import kafka.security.auth.{Acl, Resource, ResourceType}
 import kafka.server.{ConfigType, DelegationTokenManager}
 import kafka.utils.Json
+import kafka.utils.json.JsonObject
 import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.apache.kafka.common.errors.UnsupportedVersionException
 import org.apache.kafka.common.network.ListenerName
@@ -43,7 +45,7 @@ import org.apache.zookeeper.data.{ACL, Stat}
 import scala.beans.BeanProperty
 import scala.collection.JavaConverters._
 import scala.collection.mutable.ArrayBuffer
-import scala.collection.{Map, Seq}
+import scala.collection.{Map, Seq, mutable}
 import scala.util.{Failure, Success, Try}
 
 // This file contains objects for encoding/decoding data stored in ZooKeeper nodes (znodes).
@@ -238,19 +240,49 @@ object TopicsZNode {
 
 object TopicZNode {
   def path(topic: String) = s"${TopicsZNode.path}/$topic"
-  def encode(assignment: collection.Map[TopicPartition, Seq[Int]]): Array[Byte] = {
-    val assignmentJson = assignment.map { case (partition, replicas) =>
-      partition.partition.toString -> replicas.asJava
+  def encode(assignment: collection.Map[TopicPartition, PartitionReplicaAssignment]): Array[Byte] = {
+    val replicaAssignmentJson = mutable.Map[String, util.List[Int]]()
+    val addingReplicasAssignmentJson = mutable.Map[String, util.List[Int]]()
+    val removingReplicasAssignmentJson = mutable.Map[String, util.List[Int]]()
+
+    for ((partition, replicaAssignment) <- assignment) {
+      replicaAssignmentJson += (partition.partition.toString -> replicaAssignment.replicas.asJava)
+      if (replicaAssignment.addingReplicas.nonEmpty)
+        addingReplicasAssignmentJson += (partition.partition.toString -> replicaAssignment.addingReplicas.asJava)
+      if (replicaAssignment.removingReplicas.nonEmpty)
+        removingReplicasAssignmentJson += (partition.partition.toString -> replicaAssignment.removingReplicas.asJava)
     }
-    Json.encodeAsBytes(Map("version" -> 1, "partitions" -> assignmentJson.asJava).asJava)
+
+    Json.encodeAsBytes(Map(
+      "version" -> 2,
+      "partitions" -> replicaAssignmentJson.asJava,
+      "addingReplicas" -> addingReplicasAssignmentJson.asJava,
+      "removingReplicas" -> removingReplicasAssignmentJson.asJava
+    ).asJava)
   }
-  def decode(topic: String, bytes: Array[Byte]): Map[TopicPartition, Seq[Int]] = {
+  def decode(topic: String, bytes: Array[Byte]): Map[TopicPartition, PartitionReplicaAssignment] = {
+    def getReplicas(replicasJsonOpt: Option[JsonObject], partition: String): Seq[Int] = {
+      replicasJsonOpt match {
+        case Some(replicasJson) => replicasJson.get(partition) match {
+          case Some(ar) => ar.to[Seq[Int]]
+          case None => Seq.empty[Int]
+        }
+        case None => Seq.empty[Int]
+      }
+    }
+
     Json.parseBytes(bytes).flatMap { js =>
       val assignmentJson = js.asJsonObject
       val partitionsJsonOpt = assignmentJson.get("partitions").map(_.asJsonObject)
+      val addingReplicasJsonOpt = assignmentJson.get("addingReplicas").map(_.asJsonObject)
+      val removingReplicasJsonOpt = assignmentJson.get("removingReplicas").map(_.asJsonObject)
       partitionsJsonOpt.map { partitionsJson =>
         partitionsJson.iterator.map { case (partition, replicas) =>
-          new TopicPartition(topic, partition.toInt) -> replicas.to[Seq[Int]]
+          new TopicPartition(topic, partition.toInt) -> PartitionReplicaAssignment(
+            replicas.to[Seq[Int]],
+            getReplicas(addingReplicasJsonOpt, partition),
+            getReplicas(addingReplicasJsonOpt, partition)
+          )
         }
       }
     }.map(_.toMap).getOrElse(Map.empty)
@@ -373,6 +405,10 @@ object DeleteTopicsTopicZNode {
   def path(topic: String) = s"${DeleteTopicsZNode.path}/$topic"
 }
 
+/**
+ * The znode for initiating a partition reassignment.
+ * @deprecated Since 2.4, use the PartitionReassignment Kafka API instead.
+ */
 object ReassignPartitionsZNode {
 
   /**
@@ -388,14 +424,16 @@ object ReassignPartitionsZNode {
   /**
     * An assignment consists of a `version` and a list of `partitions`, which represent the
     * assignment of topic-partitions to brokers.
+    * @deprecated Use the PartitionReassignment Kafka API instead
     */
-  case class PartitionAssignment(@BeanProperty @JsonProperty("version") version: Int,
-                                 @BeanProperty @JsonProperty("partitions") partitions: java.util.List[ReplicaAssignment])
+  @Deprecated
+  case class LegacyPartitionAssignment(@BeanProperty @JsonProperty("version") version: Int,
+                                       @BeanProperty @JsonProperty("partitions") partitions: java.util.List[ReplicaAssignment])
 
   def path = s"${AdminZNode.path}/reassign_partitions"
 
   def encode(reassignmentMap: collection.Map[TopicPartition, Seq[Int]]): Array[Byte] = {
-    val reassignment = PartitionAssignment(1,
+    val reassignment = LegacyPartitionAssignment(1,
       reassignmentMap.toSeq.map { case (tp, replicas) =>
         ReplicaAssignment(tp.topic, tp.partition, replicas.asJava)
       }.asJava
@@ -404,7 +442,7 @@ object ReassignPartitionsZNode {
   }
 
   def decode(bytes: Array[Byte]): Either[JsonProcessingException, collection.Map[TopicPartition, Seq[Int]]] =
-    Json.parseBytesAs[PartitionAssignment](bytes).right.map { partitionAssignment =>
+    Json.parseBytesAs[LegacyPartitionAssignment](bytes).right.map { partitionAssignment =>
       partitionAssignment.partitions.asScala.iterator.map { replicaAssignment =>
         new TopicPartition(replicaAssignment.topic, replicaAssignment.partition) -> replicaAssignment.replicas.asScala
       }.toMap
