@@ -60,11 +60,10 @@ object LogCompactionTester {
 
   def main(args: Array[String]): Unit = {
     val parser = new OptionParser(false)
-    val numMessagesOpt = parser.accepts("messages", "The number of messages to send or consume.")
+    val numMessagesOpt = parser.accepts("messages", "The number of messages to send or consume per topic.")
       .withRequiredArg
       .describedAs("count")
       .ofType(classOf[java.lang.Long])
-      .defaultsTo(Long.MaxValue)
     val messageCompressionOpt = parser.accepts("compression-type", "message compression type")
       .withOptionalArg
       .describedAs("compressionType")
@@ -89,9 +88,9 @@ object LogCompactionTester {
       .describedAs("percent")
       .ofType(classOf[java.lang.Integer])
       .defaultsTo(0)
-    val sleepSecsOpt = parser.accepts("sleep", "Time in milliseconds to sleep between production and consumption.")
+    val sleepSecsOpt = parser.accepts("sleep", "Time in seconds to sleep between production and consumption.")
       .withRequiredArg
-      .describedAs("ms")
+      .describedAs("secs")
       .ofType(classOf[java.lang.Integer])
       .defaultsTo(0)
 
@@ -115,7 +114,7 @@ object LogCompactionTester {
     val topics = (0 until topicCount).map("log-cleaner-test-" + testId + "-" + _).toArray
     createTopics(brokerUrl, topics.toSeq)
 
-    println(s"Producing $messages messages..to topics ${topics.mkString(",")}")
+    println(s"Producing ${messages * topicCount} messages..to topics ${topics.mkString(",")}")
     val producedDataFilePath = produceMessages(brokerUrl, topics, messages, compressionType, dups, percentDeletes)
     println(s"Sleeping for $sleepSecs seconds...")
     Thread.sleep(sleepSecs * 1000)
@@ -138,7 +137,7 @@ object LogCompactionTester {
   def createTopics(brokerUrl: String, topics: Seq[String]): Unit = {
     val adminConfig = new Properties
     adminConfig.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, brokerUrl)
-    val adminClient = admin.AdminClient.create(adminConfig)
+    val adminClient = admin.Admin.create(adminConfig)
 
     try {
       val topicConfigs = Map(TopicConfig.CLEANUP_POLICY_CONFIG -> TopicConfig.CLEANUP_POLICY_COMPACT)
@@ -269,13 +268,15 @@ object LogCompactionTester {
     try {
       val rand = new Random(1)
       val keyCount = (messages / dups).toInt
+      val numMessages = messages * topics.length
+      val deleteThreshold = if (numMessages < 100) (numMessages * percentDeletes) / 100 else 100
       val producedFilePath = Files.createTempFile("kafka-log-cleaner-produced-", ".txt")
       println(s"Logging produce requests to $producedFilePath")
       val producedWriter: BufferedWriter = Files.newBufferedWriter(producedFilePath, UTF_8)
-      for (i <- 0L until (messages * topics.length)) {
+      for (i <- 0L until numMessages) {
         val topic = topics((i % topics.length).toInt)
         val key = rand.nextInt(keyCount)
-        val delete = (i % 100) < percentDeletes
+        val delete = (i % 100) < deleteThreshold
         val msg =
           if (delete)
             new ProducerRecord[Array[Byte], Array[Byte]](topic, key.toString.getBytes(UTF_8), null)
