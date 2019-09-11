@@ -473,13 +473,13 @@ public class StreamsConfigTest {
     }
 
     @Test
-    public void shouldSetDefaultMetricsVersionIfNoneIsSpecified() {
+    public void shouldSetDefaultBuiltInMetricsVersionIfNoneIsSpecified() {
         final StreamsConfig config = new StreamsConfig(props);
         assertThat(config.getString(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG), is(StreamsConfig.METRICS_LATEST));
     }
 
     @Test
-    public void shouldThrowIfMetricsVersionInvalid() {
+    public void shouldThrowIfBuiltInMetricsVersionInvalid() {
         final String invalidVersion = "0.0.1";
         props.put(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG, invalidVersion);
         final Exception exception = assertThrows(ConfigException.class, () -> new StreamsConfig(props));
