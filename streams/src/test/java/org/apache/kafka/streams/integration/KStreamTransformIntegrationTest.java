@@ -137,7 +137,7 @@ public class KStreamTransformIntegrationTest {
             .transform(new TransformerSupplier<Integer, Integer, KeyValue<Integer, Integer>>() {
                 @Override
                 public Transformer<Integer, Integer, KeyValue<Integer, Integer>> get() {
-                    return null;
+                    return new TestTransformer();
                 }
 
                 @Override
