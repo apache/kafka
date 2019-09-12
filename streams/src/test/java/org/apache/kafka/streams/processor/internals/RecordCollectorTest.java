@@ -170,7 +170,7 @@ public class RecordCollectorTest {
         try {
             offsets.put(new TopicPartition(topic, 0), 50L);
             fail("Should have thrown UnsupportedOperationException");
-        } catch (final UnsupportedOperationException expected) {}
+        } catch (final UnsupportedOperationException expected) { }
 
         assertThat(collector.offsets().get(topicPartition), equalTo(2L));
     }
