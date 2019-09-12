@@ -1387,6 +1387,8 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
       val newConsumerConfig = new Properties(consumerConfig)
       newConsumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, testGroupId)
       newConsumerConfig.setProperty(ConsumerConfig.CLIENT_ID_CONFIG, testClientId)
+      // Increase the session timeout to avoid having a rebalance during the test
+      newConsumerConfig.setProperty(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, Defaults.GroupMaxSessionTimeoutMs.toString)
       val consumer = createConsumer(configOverrides = newConsumerConfig)
 
       try {
