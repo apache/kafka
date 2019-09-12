@@ -20,6 +20,8 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.junit.Test;
 
+import java.nio.ByteBuffer;
+
 import static org.junit.Assert.assertEquals;
 
 public class CombinedKeySchemaTest {
@@ -45,5 +47,27 @@ public class CombinedKeySchemaTest {
     public void nullForeignKeySerdeTest() {
         final CombinedKeySchema<String, Integer> cks = new CombinedKeySchema<>("someTopic", Serdes.String(), Serdes.Integer());
         cks.toBytes(null, 10);
+    }
+
+    @Test
+    public void prefixKeySerdeTest() {
+        final CombinedKeySchema<String, Integer> cks = new CombinedKeySchema<>("someTopic", Serdes.String(), Serdes.Integer());
+        final String foreignKey = "someForeignKey";
+        final byte[] foreignKeySerializedData = Serdes.String().serializer().serialize("someTopic", foreignKey);
+        final Bytes prefix = cks.prefixBytes(foreignKey);
+
+        final ByteBuffer buf = ByteBuffer.allocate(Integer.BYTES + foreignKeySerializedData.length);
+        buf.putInt(foreignKeySerializedData.length);
+        buf.put(foreignKeySerializedData);
+        final Bytes expectedPrefixBytes = Bytes.wrap(buf.array());
+
+        assertEquals(expectedPrefixBytes, prefix);
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void nullPrefixKeySerdeTest() {
+        final CombinedKeySchema<String, Integer> cks = new CombinedKeySchema<>("someTopic", Serdes.String(), Serdes.Integer());
+        final String foreignKey = null;
+        cks.prefixBytes(foreignKey);
     }
 }

@@ -111,8 +111,6 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
     private static final String TRANSFORMVALUES_NAME = "KTABLE-TRANSFORMVALUES-";
 
     private static final String FK_JOIN_STATE_STORE_NAME = "KTABLE-INTERNAL-SUBSCRIPTION-STATE-STORE-";
-    private static final String PREFIX_SCAN_PROCESSOR = "KTABLE-PREFIX-SCAN-PROCESSOR-";
-    private static final String JOIN_ON_FOREIGN_KEY_NAME = "KTABLE-JOIN-ON-FOREIGN-KEY-";
     private static final String SUBSCRIPTION_REGISTRATION = "KTABLE-SUBSCRIPTION-REGISTRATION-";
     private static final String SUBSCRIPTION_RESPONSE = "KTABLE-SUBSCRIPTION-RESPONSE-";
     private static final String SUBSCRIPTION_PROCESSOR = "KTABLE-SUBSCRIPTION-PROCESSOR-";

@@ -108,6 +108,7 @@ public class KTableKTableForeignKeyJoinIntegrationTest {
         streamsConfig.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
         streamsConfig.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0);
         streamsConfig.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100);
+        streamsConfig.put(StreamsConfig.TOPOLOGY_OPTIMIZATION, StreamsConfig.OPTIMIZE);
 
         CONSUMER_CONFIG.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         CONSUMER_CONFIG.put(ConsumerConfig.GROUP_ID_CONFIG, "ktable-ktable-consumer");
@@ -692,7 +693,6 @@ public class KTableKTableForeignKeyJoinIntegrationTest {
                 .to(OUTPUT, Produced.with(Serdes.Integer(), Serdes.String()));
 
         final Topology topology = builder.build();
-        System.out.println("Topology description " + topology.describe());
 
         return new KafkaStreams(topology, streamsConfig);
     }

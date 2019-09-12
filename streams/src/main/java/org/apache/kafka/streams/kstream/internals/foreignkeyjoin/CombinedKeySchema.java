@@ -83,8 +83,7 @@ public class CombinedKeySchema<KO, K> {
     }
 
     Bytes prefixBytes(final KO key) {
-        //The serialization format - note that primaryKeySerialized may be null, such as when a prefixScan
-        //key is being created.
+        //The serialization format. Note that primaryKeySerialized is not required/used in this function.
         //{Integer.BYTES foreignKeyLength}{foreignKeySerialized}{Optional-primaryKeySerialized}
 
         final byte[] foreignKeySerializedData = foreignKeySerializer.serialize(serdeTopic, key);
