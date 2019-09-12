@@ -569,7 +569,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
     // visible for testing
     void suspend(final boolean clean,
                  final boolean isZombie) {
-        final Map<TopicPartition, Long> partitionTimes = extractPartitionTimes();
         try {
             closeTopology(); // should we call this only on clean suspend?
         } catch (final RuntimeException fatal) {
