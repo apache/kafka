@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.jmh;
+package org.apache.kafka.jmh.partition;
 
 import kafka.api.ApiVersion$;
 import kafka.cluster.DelayedOperations;
@@ -31,6 +31,7 @@ import kafka.server.LogDirFailureChannel;
 import kafka.server.LogOffsetMetadata;
 import kafka.server.MetadataCache;
 import kafka.server.checkpoints.OffsetCheckpoints;
+import kafka.utils.KafkaScheduler;
 import kafka.utils.Scheduler;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.requests.LeaderAndIsrRequest;
@@ -62,14 +63,14 @@ import java.util.concurrent.TimeUnit;
 
 @State(Scope.Benchmark)
 @Fork(value = 1)
-@Warmup(iterations = 5)
-@Measurement(iterations = 15)
+@Warmup(iterations = 1)
+@Measurement(iterations = 1)
 @BenchmarkMode(Mode.AverageTime)
 @OutputTimeUnit(TimeUnit.NANOSECONDS)
-public class PartitionBenchmark {
+public class UpdateFollowerFetchStateBenchmark {
     private TopicPartition topicPartition = new TopicPartition(UUID.randomUUID().toString(), 0);
     private File logDir = new File(System.getProperty("java.io.tmpdir"), topicPartition.toString());
-    private Scheduler scheduler = Mockito.mock(Scheduler.class);
+    private Scheduler scheduler = new KafkaScheduler(1, "scheduler", true);
     private BrokerTopicStats brokerTopicStats = new BrokerTopicStats();
     private LogDirFailureChannel logDirFailureChannel = Mockito.mock(LogDirFailureChannel.class);
     private long nextOffset = 0;
@@ -78,6 +79,7 @@ public class PartitionBenchmark {
 
     @Setup(Level.Trial)
     public void setUp() {
+        scheduler.startup();
         LogConfig logConfig = createLogConfig();
         List<File> logDirs = Collections.singletonList(logDir);
         logManager = new LogManager(JavaConverters.asScalaIteratorConverter(logDirs.iterator()).asScala().toSeq(),
@@ -98,8 +100,9 @@ public class PartitionBenchmark {
                 Time.SYSTEM);
         OffsetCheckpoints offsetCheckpoints = Mockito.mock(OffsetCheckpoints.class);
         Mockito.when(offsetCheckpoints.fetch(logDir.getAbsolutePath(), topicPartition)).thenReturn(Option.apply(0L));
-        DelayedOperations delayedOperations = new DelayedOperationsOverride();
+        DelayedOperations delayedOperations = new DelayedOperationsMock();
 
+        // one leader, plus two followers
         List<Integer> replicas = new ArrayList<>();
         replicas.add(0);
         replicas.add(1);
@@ -116,8 +119,8 @@ public class PartitionBenchmark {
     }
 
     // avoid mocked DelayedOperations to avoid mocked class affecting benchmark results
-    private class DelayedOperationsOverride extends DelayedOperations {
-        DelayedOperationsOverride() {
+    private class DelayedOperationsMock extends DelayedOperations {
+        DelayedOperationsMock() {
             super(topicPartition, null, null, null);
         }
 
@@ -130,6 +133,7 @@ public class PartitionBenchmark {
     @TearDown(Level.Trial)
     public void tearDown() {
         logManager.shutdown();
+        scheduler.shutdown();
     }
 
     private LogConfig createLogConfig() {
@@ -151,6 +155,7 @@ public class PartitionBenchmark {
     @Benchmark
     @OutputTimeUnit(TimeUnit.NANOSECONDS)
     public void updateFollowerFetchStateBench() {
+        // measure the impact of two follower fetches on the leader
         partition.updateFollowerFetchState(1, new LogOffsetMetadata(nextOffset, nextOffset, 0),
                 0, 1, nextOffset);
         partition.updateFollowerFetchState(2, new LogOffsetMetadata(nextOffset, nextOffset, 0),
@@ -158,4 +163,3 @@ public class PartitionBenchmark {
         nextOffset++;
     }
 }
-
