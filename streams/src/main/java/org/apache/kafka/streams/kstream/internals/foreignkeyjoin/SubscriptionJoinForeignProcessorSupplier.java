@@ -30,6 +30,15 @@ import org.apache.kafka.streams.state.ValueAndTimestamp;
 
 import java.util.Objects;
 
+/**
+ * Receives {@code SubscriptionWrapper<K>} events and processes them according to their Instruction.
+ * Depending on the results, {@code SubscriptionResponseWrapper}s are created, which will be propagated to
+ * the {@code SubscriptionResolverJoinProcessorSupplier} instance.
+ *
+ * @param <K> Type of primary keys
+ * @param <KO> Type of foreign key
+ * @param <VO> Type of foreign value
+ */
 public class SubscriptionJoinForeignProcessorSupplier<K, KO, VO>
     implements ProcessorSupplier<CombinedKey<KO, K>, Change<ValueAndTimestamp<SubscriptionWrapper<K>>>> {
 

@@ -29,6 +29,16 @@ import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 
+/**
+ * Receives {@code SubscriptionResponseWrapper<VO>} events and filters out events which do not match the current hash
+ * of the primary key. This eliminates race-condition results for rapidly-changing foreign-keys for a given primary key.
+ * Applies the join and emits nulls according to LEFT/INNER rules.
+ *
+ * @param <K> Type of primary keys
+ * @param <V> Type of primary values
+ * @param <VO> Type of foreign values
+ * @param <VR> Type of joined result of primary and foreign values
+ */
 public class SubscriptionResolverJoinProcessorSupplier<K, V, VO, VR> implements ProcessorSupplier<K, SubscriptionResponseWrapper<VO>> {
     private final KTableValueGetterSupplier<K, V> valueGetterSupplier;
     private final Serializer<V> valueSerializer;
