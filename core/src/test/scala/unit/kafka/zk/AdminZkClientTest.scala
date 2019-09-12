@@ -19,6 +19,7 @@ package kafka.admin
 import java.util
 import java.util.Properties
 
+import kafka.controller.PartitionReplicaAssignment
 import kafka.log._
 import kafka.server.DynamicConfig.Broker._
 import kafka.server.KafkaConfig._
@@ -87,7 +88,7 @@ class AdminZkClientTest extends ZooKeeperTestHarness with Logging with RackAware
                          1 -> List(1, 2, 3))
     adminZkClient.createTopicWithAssignment("test", topicConfig, assignment)
     val found = zkClient.getPartitionAssignmentForTopics(Set("test"))
-    assertEquals(assignment, found("test"))
+    assertEquals(assignment.mapValues(PartitionReplicaAssignment(_, List(), List())).toMap, found("test"))
   }
 
   @Test
@@ -179,8 +180,9 @@ class AdminZkClientTest extends ZooKeeperTestHarness with Logging with RackAware
       catch { case _: TopicExistsException => () }
       val (_, partitionAssignment) = zkClient.getPartitionAssignmentForTopics(Set(topic)).head
       assertEquals(3, partitionAssignment.size)
-      partitionAssignment.foreach { case (partition, replicas) =>
-        assertEquals(s"Unexpected replication factor for $partition", 1, replicas.size)
+      partitionAssignment.foreach { case (partition, partitionReplicaAssignment) =>
+        assertEquals(s"Unexpected replication factor for $partition",
+          1, partitionReplicaAssignment.replicas.size)
       }
       val savedProps = zkClient.getEntityConfigs(ConfigType.Topic, topic)
       assertEquals(props, savedProps)

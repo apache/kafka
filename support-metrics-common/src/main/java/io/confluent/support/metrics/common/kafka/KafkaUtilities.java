@@ -36,6 +36,7 @@ import java.util.concurrent.TimeoutException;
 import kafka.admin.AdminOperationException;
 import kafka.admin.RackAwareMode.Disabled$;
 import kafka.cluster.Broker;
+import kafka.controller.PartitionReplicaAssignment;
 import kafka.log.LogConfig;
 import kafka.server.BrokerShuttingDown;
 import kafka.server.KafkaServer;
@@ -259,11 +260,12 @@ public class KafkaUtilities {
     try {
       Set<String> topics = new HashSet<>();
       topics.add(topic);
-      scala.Option<scala.collection.Map<Object, Seq<Object>>> partitionAssignmentOption =
+      scala.Option<scala.collection.Map<Object, PartitionReplicaAssignment>> partitionAssignmentOption =
           zkClient.getPartitionAssignmentForTopics(
               JavaConversions.asScalaSet(topics).<String>toSet()).get(topic);
       if (!partitionAssignmentOption.isEmpty()) {
-        scala.collection.Map partitionAssignment = partitionAssignmentOption.get();
+        scala.collection.Map<Object, PartitionReplicaAssignment> partitionAssignment =
+            partitionAssignmentOption.get();
         int actualNumPartitions = partitionAssignment.size();
         if (actualNumPartitions != expPartitions) {
           log.warn(
@@ -275,10 +277,10 @@ public class KafkaUtilities {
           verifyTopicState = VerifyTopicState.Less;
         }
         int firstPartitionId = 0;
-        scala.Option<Seq<Object>> replicasOfFirstPartitionOption =
+        scala.Option<PartitionReplicaAssignment> replicasOfFirstPartitionOption =
             partitionAssignment.get(firstPartitionId);
         if (!replicasOfFirstPartitionOption.isEmpty()) {
-          int actualReplication = replicasOfFirstPartitionOption.get().size();
+          int actualReplication = replicasOfFirstPartitionOption.get().replicas().size();
           if (actualReplication < expReplication) {
             log.warn(
                 "The replication factor of topic {} is {}, which is less than "
