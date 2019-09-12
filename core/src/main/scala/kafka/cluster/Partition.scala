@@ -585,7 +585,6 @@ class Partition(val topicPartition: TopicPartition,
                                followerStartOffset: Long,
                                followerFetchTimeMs: Long,
                                leaderEndOffset: Long): Boolean = {
-
     getReplica(followerId) match {
       case Some(followerReplica) =>
         // No need to calculate low watermark if there is no delayed DeleteRecordsRequest

@@ -1408,9 +1408,11 @@ project(':jmh-benchmarks') {
   }
 
   dependencies {
+    compile project(':core')
     compile project(':clients')
     compile project(':streams')
     compile libs.jmhCore
+    compile libs.mockitoCore
     annotationProcessor libs.jmhGeneratorAnnProcess
     compile libs.jmhCoreBenchmarks
   }
