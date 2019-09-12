@@ -245,14 +245,14 @@ public class SubscriptionState {
             throw new IllegalArgumentException("Attempt to dynamically assign partitions while manual assignment in use");
 
 
-        Map<TopicPartition, TopicPartitionState> assignedPartitionStates = partitionToStateMap(assignments);
+        final Map<TopicPartition, TopicPartitionState> assignedPartitionStates = partitionToStateMap(assignments);
         assignmentId++;
         this.assignment.set(assignedPartitionStates);
     }
 
     private Map<TopicPartition, TopicPartitionState> partitionToStateMap(Collection<TopicPartition> assignments) {
         Map<TopicPartition, TopicPartitionState> map = new HashMap<>(assignments.size());
-        for (TopicPartition tp : assignments) {
+        for (final TopicPartition tp : assignments) {
             if (assignment.contains(tp))
                 map.put(tp, assignment.stateValue(tp));
             else
@@ -420,7 +420,7 @@ public class SubscriptionState {
                 .collect(Collectors.toList());
     }
 
-    synchronized boolean partitionsAutoAssigned() {
+    public synchronized boolean partitionsAutoAssigned() {
         return this.subscriptionType == SubscriptionType.AUTO_TOPICS || this.subscriptionType == SubscriptionType.AUTO_PATTERN;
     }
 

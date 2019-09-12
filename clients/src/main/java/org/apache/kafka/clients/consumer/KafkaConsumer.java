@@ -1234,13 +1234,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                         client.pollNoWakeup();
                     }
 
-                    // after the long poll, we should filter the returned data if their belonging
-                    // partitions are no longer owned by the consumer
-                    final Set<TopicPartition> assignedPartitions = subscriptions.assignedPartitions();
-                    return this.interceptors.onConsume(new ConsumerRecords<>(records.entrySet()
-                        .stream()
-                        .filter(entry -> assignedPartitions.contains(entry.getKey()))
-                        .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue))));
+                    return this.interceptors.onConsume(new ConsumerRecords<>(records));
                 }
             } while (timer.notExpired());
 
@@ -1383,7 +1377,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * This commits offsets to Kafka. The offsets committed using this API will be used on the first fetch after every
      * rebalance and also on startup. As such, if you need to store offsets in anything other than Kafka, this API
      * should not be used. The committed offset should be the next message your application will consume,
-     * i.e. lastProcessedMessageOffset + 1.
+     * i.e. lastProcessedMessageOffset + 1. If automatic group management with {@link #subscribe(Collection)} is used,
+     * then the committed offsets must belong to the currently auto-assigned partitions.
      * <p>
      * This is a synchronous commits and will block until either the commit succeeds or an unrecoverable error is
      * encountered (in which case it is thrown to the caller), or the timeout specified by {@code default.api.timeout.ms} expires
@@ -1421,7 +1416,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     * This commits offsets to Kafka. The offsets committed using this API will be used on the first fetch after every
     * rebalance and also on startup. As such, if you need to store offsets in anything other than Kafka, this API
     * should not be used. The committed offset should be the next message your application will consume,
-    * i.e. lastProcessedMessageOffset + 1.
+    * i.e. lastProcessedMessageOffset + 1. If automatic group management with {@link #subscribe(Collection)} is used,
+    * then the committed offsets must belong to the currently auto-assigned partitions.
     * <p>
     * This is a synchronous commits and will block until either the commit succeeds, an unrecoverable error is
     * encountered (in which case it is thrown to the caller), or the timeout expires.
@@ -1453,6 +1449,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         acquireAndEnsureOpen();
         try {
             maybeThrowInvalidGroupIdException();
+            maybeThrowIfCommitOffsetsNotOwned(offsets);
             offsets.forEach(this::updateLastSeenEpochIfNewer);
             if (!coordinator.commitOffsetsSync(new HashMap<>(offsets), time.timer(timeout))) {
                 throw new TimeoutException("Timeout of " + timeout.toMillis() + "ms expired before successfully " +
@@ -1502,7 +1499,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * This commits offsets to Kafka. The offsets committed using this API will be used on the first fetch after every
      * rebalance and also on startup. As such, if you need to store offsets in anything other than Kafka, this API
      * should not be used. The committed offset should be the next message your application will consume,
-     * i.e. lastProcessedMessageOffset + 1.
+     * i.e. lastProcessedMessageOffset + 1. If automatic group management with {@link #subscribe(Collection)} is used,
+     * then the committed offsets must belong to the currently auto-assigned partitions.
      * <p>
      * This is an asynchronous call and will not block. Any errors encountered are either passed to the callback
      * (if provided) or discarded.
@@ -1516,17 +1514,31 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      *                is safe to mutate the map after returning.
      * @param callback Callback to invoke when the commit completes
      * @throws org.apache.kafka.common.errors.FencedInstanceIdException if this consumer instance gets fenced by broker.
+     * @throws org.apache.kafka.clients.consumer.CommitFailedException If the commit failed because the offsets to commit do not belong
+     *        to the currently assigned partitions using automatic group management with {@link #subscribe(Collection)}.
      */
     @Override
     public void commitAsync(final Map<TopicPartition, OffsetAndMetadata> offsets, OffsetCommitCallback callback) {
         acquireAndEnsureOpen();
         try {
             maybeThrowInvalidGroupIdException();
+            maybeThrowIfCommitOffsetsNotOwned(offsets);
             log.debug("Committing offsets: {}", offsets);
             offsets.forEach(this::updateLastSeenEpochIfNewer);
             coordinator.commitOffsetsAsync(new HashMap<>(offsets), callback);
         } finally {
             release();
+        }
+    }
+
+    private void maybeThrowIfCommitOffsetsNotOwned(final Map<TopicPartition, OffsetAndMetadata> offsets) {
+        if (subscriptions.partitionsAutoAssigned()) {
+            final Set<TopicPartition> partitions = assignment();
+            for (final TopicPartition tp : offsets.keySet()) {
+                if (!partitions.contains(tp))
+                    throw new CommitFailedException("cannot commit offsets out of owned partitions with " +
+                        "dynamic partition assigned from subscription");
+            }
         }
     }
 
