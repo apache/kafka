@@ -97,7 +97,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Supplier;
 import java.util.regex.Pattern;
-import java.util.stream.Stream;
 
 /**
  * This class makes it easier to write tests to verify the behavior of topologies created with {@link Topology} or
