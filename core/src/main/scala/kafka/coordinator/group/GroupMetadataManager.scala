@@ -99,10 +99,10 @@ class GroupMetadataManager(brokerId: Int,
   val offsetCommitsSensor = metrics.sensor("OffsetCommits")
 
   offsetCommitsSensor.add(new Meter(
-    metrics.metricName("offset-commits-rate",
+    metrics.metricName("offset-commit-rate",
       "group-coordinator-metrics",
       "The rate of committed offsets"),
-    metrics.metricName("offset-commits-count",
+    metrics.metricName("offset-commit-count",
     "group-coordinator-metrics",
     "The total number of committed offsets")))
 

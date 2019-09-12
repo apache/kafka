@@ -1399,7 +1399,8 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
         assertNull(offsetDeleteResult.all().get())
         assertFutureExceptionTypeEquals(offsetDeleteResult.partitionResult(tp1),
           classOf[GroupSubscribedToTopicException])
-        assertNull(offsetDeleteResult.partitionResult(tp2).get())
+        assertFutureExceptionTypeEquals(offsetDeleteResult.partitionResult(tp2),
+          classOf[UnknownTopicOrPartitionException])
 
         // Test the fake group ID
         val fakeDeleteResult = client.deleteConsumerGroupOffsets(fakeGroupId, Set(tp1, tp2).asJava)
@@ -1415,10 +1416,12 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
       }
 
       // Test offset deletion when group is empty
-      val offsetDeleteResult = client.deleteConsumerGroupOffsets(testGroupId, Set(tp1).asJava)
+      val offsetDeleteResult = client.deleteConsumerGroupOffsets(testGroupId, Set(tp1, tp2).asJava)
 
       assertNull(offsetDeleteResult.all().get())
       assertNull(offsetDeleteResult.partitionResult(tp1).get())
+      assertFutureExceptionTypeEquals(offsetDeleteResult.partitionResult(tp2),
+        classOf[UnknownTopicOrPartitionException])
 
     } finally {
       Utils.closeQuietly(client, "adminClient")

@@ -32,6 +32,8 @@ import java.util.Map;
  *
  * - Partition errors:
  *   - {@link Errors#GROUP_SUBSCRIBED_TO_TOPIC}
+ *   - {@link Errors#TOPIC_AUTHORIZATION_FAILED}
+ *   - {@link Errors#UNKNOWN_TOPIC_OR_PARTITION}
  *
  * - Group or coordinator errors:
  *   - {@link Errors#COORDINATOR_LOAD_IN_PROGRESS}

@@ -2664,29 +2664,36 @@ class KafkaApis(val requestChannel: RequestChannel,
 
   def handleOffsetDeleteRequest(request: RequestChannel.Request): Unit = {
     val offsetDeleteRequest = request.body[OffsetDeleteRequest]
-    val groupId = offsetDeleteRequest.data.groupId()
+    val groupId = offsetDeleteRequest.data.groupId
 
-    if (authorize(request, READ, GROUP, groupId)) {
-      val topicPartitions = offsetDeleteRequest.data.topics().asScala.flatMap { topic =>
-        topic.partitions().asScala.map { partition =>
-          new TopicPartition(topic.name(), partition.partitionIndex())
+    if (authorize(request, DELETE, GROUP, groupId)) {
+      val topicPartitions = offsetDeleteRequest.data.topics.asScala.flatMap { topic =>
+        topic.partitions.asScala.map { partition =>
+          new TopicPartition(topic.name, partition.partitionIndex)
         }
       }.toSeq
 
-      val (groupError, topicErrors) = groupCoordinator.handleDeleteOffsets(groupId, topicPartitions)
+      val authorizedTopics = filterAuthorized(request, READ, TOPIC, topicPartitions.map(_.topic))
+      val (authorizedTopicPartitions, unauthorizedTopicPartitions) = topicPartitions.partition { topicPartition =>
+        authorizedTopics.contains(topicPartition.topic)
+      }
+
+      val unauthorizedTopicPartitionsErrors = unauthorizedTopicPartitions.map(_ -> Errors.TOPIC_AUTHORIZATION_FAILED)
+      val (groupError, authorizedTopicPartitionsErrors) = groupCoordinator.handleDeleteOffsets(groupId, authorizedTopicPartitions)
+      val topicPartitionsErrors = unauthorizedTopicPartitionsErrors ++ authorizedTopicPartitionsErrors
 
       sendResponseMaybeThrottle(request, requestThrottleMs => {
         if (groupError != Errors.NONE)
           offsetDeleteRequest.getErrorResponse(requestThrottleMs, groupError)
         else {
           val topics = new OffsetDeleteResponseData.OffsetDeleteResponseTopicCollection
-          topicErrors.groupBy(_._1.topic()).map { case (topic, topicPartitions) =>
+          topicPartitionsErrors.groupBy(_._1.topic).map { case (topic, topicPartitions) =>
             val partitions = new OffsetDeleteResponseData.OffsetDeleteResponsePartitionCollection
             topicPartitions.map { case (topicPartition, error) =>
               partitions.add(
                 new OffsetDeleteResponseData.OffsetDeleteResponsePartition()
-                  .setPartitionIndex(topicPartition.partition())
-                  .setErrorCode(error.code())
+                  .setPartitionIndex(topicPartition.partition)
+                  .setErrorCode(error.code)
               )
               topics.add(new OffsetDeleteResponseData.OffsetDeleteResponseTopic()
                 .setName(topic)

@@ -1334,6 +1334,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
 
   @Test
   def testDeleteGroupOffsetsWithAcl(): Unit = {
+    addAndVerifyAcls(Set(new AccessControlEntry(userPrincipalStr, WildcardHost, DELETE, ALLOW)), groupResource)
     addAndVerifyAcls(Set(new AccessControlEntry(userPrincipalStr, WildcardHost, READ, ALLOW)), groupResource)
     addAndVerifyAcls(Set(new AccessControlEntry(userPrincipalStr, WildcardHost, READ, ALLOW)), topicResource)
     val consumer = createConsumer()
@@ -1341,7 +1342,38 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     consumer.commitSync(Map(tp -> new OffsetAndMetadata(5, "")).asJava)
     consumer.close()
     val result = createAdminClient().deleteConsumerGroupOffsets(group, Set(tp).asJava)
-    result.partitionResult(tp).get()
+    assertNull(result.partitionResult(tp).get())
+  }
+
+  @Test
+  def testDeleteGroupOffsetsWithoutDeleteAcl(): Unit = {
+    addAndVerifyAcls(Set(new AccessControlEntry(userPrincipalStr, WildcardHost, READ, ALLOW)), groupResource)
+    addAndVerifyAcls(Set(new AccessControlEntry(userPrincipalStr, WildcardHost, READ, ALLOW)), topicResource)
+    val consumer = createConsumer()
+    consumer.assign(List(tp).asJava)
+    consumer.commitSync(Map(tp -> new OffsetAndMetadata(5, "")).asJava)
+    consumer.close()
+    val result = createAdminClient().deleteConsumerGroupOffsets(group, Set(tp).asJava)
+    TestUtils.assertFutureExceptionTypeEquals(result.all(), classOf[GroupAuthorizationException])
+  }
+
+  @Test
+  def testDeleteGroupOffsetsWithDeleteAclWithoutTopicAcl(): Unit = {
+    // Create the consumer group
+    addAndVerifyAcls(Set(new AccessControlEntry(userPrincipalStr, WildcardHost, READ, ALLOW)), groupResource)
+    addAndVerifyAcls(Set(new AccessControlEntry(userPrincipalStr, WildcardHost, READ, ALLOW)), topicResource)
+    val consumer = createConsumer()
+    consumer.assign(List(tp).asJava)
+    consumer.commitSync(Map(tp -> new OffsetAndMetadata(5, "")).asJava)
+    consumer.close()
+
+    // Remove the topic ACL & Check that it does not work without it
+    removeAllAcls()
+    addAndVerifyAcls(Set(new AccessControlEntry(userPrincipalStr, WildcardHost, DELETE, ALLOW)), groupResource)
+    addAndVerifyAcls(Set(new AccessControlEntry(userPrincipalStr, WildcardHost, READ, ALLOW)), groupResource)
+    val result = createAdminClient().deleteConsumerGroupOffsets(group, Set(tp).asJava)
+    assertNull(result.all().get())
+    TestUtils.assertFutureExceptionTypeEquals(result.partitionResult(tp), classOf[TopicAuthorizationException])
   }
 
   @Test
