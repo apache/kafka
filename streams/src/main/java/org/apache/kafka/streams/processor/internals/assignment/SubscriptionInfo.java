@@ -28,12 +28,11 @@ import java.util.HashSet;
 import java.util.Set;
 import java.util.UUID;
 
+import static org.apache.kafka.streams.processor.internals.assignment.StreamsAssignmentProtocolVersions.LATEST_SUPPORTED_VERSION;
+import static org.apache.kafka.streams.processor.internals.assignment.StreamsAssignmentProtocolVersions.UNKNOWN;
+
 public class SubscriptionInfo {
-
     private static final Logger log = LoggerFactory.getLogger(SubscriptionInfo.class);
-
-    public static final int LATEST_SUPPORTED_VERSION = 5;
-    static final int UNKNOWN = -1;
 
     private final int usedVersion;
     private final int latestSupportedVersion;

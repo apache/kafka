@@ -143,6 +143,8 @@ import org.apache.kafka.common.requests.FindCoordinatorRequest;
 import org.apache.kafka.common.requests.FindCoordinatorResponse;
 import org.apache.kafka.common.requests.IncrementalAlterConfigsRequest;
 import org.apache.kafka.common.requests.IncrementalAlterConfigsResponse;
+import org.apache.kafka.common.requests.LeaveGroupRequest;
+import org.apache.kafka.common.requests.LeaveGroupResponse;
 import org.apache.kafka.common.requests.ListGroupsRequest;
 import org.apache.kafka.common.requests.ListGroupsResponse;
 import org.apache.kafka.common.requests.ListPartitionReassignmentsRequest;
@@ -2043,9 +2045,9 @@ public class KafkaAdminClient extends AdminClient {
         return futures;
     }
 
-    private  IncrementalAlterConfigsRequestData toIncrementalAlterConfigsRequestData(final Collection<ConfigResource> resources,
-                                                                   final Map<ConfigResource, Collection<AlterConfigOp>> configs,
-                                                                   final boolean validateOnly) {
+    private IncrementalAlterConfigsRequestData toIncrementalAlterConfigsRequestData(final Collection<ConfigResource> resources,
+                                                                                    final Map<ConfigResource, Collection<AlterConfigOp>> configs,
+                                                                                    final boolean validateOnly) {
         IncrementalAlterConfigsRequestData requestData = new IncrementalAlterConfigsRequestData();
         requestData.setValidateOnly(validateOnly);
         for (ConfigResource resource : resources) {
@@ -3338,5 +3340,64 @@ public class KafkaAdminClient extends AdminClient {
     private boolean dependsOnSpecificNode(ConfigResource resource) {
         return (resource.type() == ConfigResource.Type.BROKER && !resource.isDefault())
                 || resource.type() == ConfigResource.Type.BROKER_LOGGER;
+    }
+
+    @Override
+    public MembershipChangeResult removeMemberFromConsumerGroup(String groupId,
+                                                                RemoveMemberFromConsumerGroupOptions options) {
+        final long startFindCoordinatorMs = time.milliseconds();
+        final long deadline = calcDeadlineMs(startFindCoordinatorMs, options.timeoutMs());
+
+        KafkaFutureImpl<RemoveMemberFromGroupResult> future = new KafkaFutureImpl<>();
+
+        ConsumerGroupOperationContext<RemoveMemberFromGroupResult, RemoveMemberFromConsumerGroupOptions> context =
+            new ConsumerGroupOperationContext<>(groupId, options, deadline, future);
+
+        Call findCoordinatorCall = getFindCoordinatorCall(context,
+            () -> KafkaAdminClient.this.getRemoveMembersFromGroupCall(context));
+        runnable.call(findCoordinatorCall, startFindCoordinatorMs);
+
+        return new MembershipChangeResult(future);
+    }
+
+
+    private Call getRemoveMembersFromGroupCall(ConsumerGroupOperationContext
+                                                   <RemoveMemberFromGroupResult, RemoveMemberFromConsumerGroupOptions> context) {
+        return new Call("leaveGroup",
+                        context.getDeadline(),
+                        new ConstantNodeIdProvider(context.getNode().get().id())) {
+            @Override
+            AbstractRequest.Builder createRequest(int timeoutMs) {
+                return new LeaveGroupRequest.Builder(context.getGroupId(),
+                                                     context.getOptions().getMembers());
+            }
+
+            @Override
+            void handleResponse(AbstractResponse abstractResponse) {
+                final LeaveGroupResponse response = (LeaveGroupResponse) abstractResponse;
+
+                // If coordinator changed since we fetched it, retry
+                if (context.hasCoordinatorMoved(response)) {
+                    rescheduleTask(context, () -> getRemoveMembersFromGroupCall(context));
+                    return;
+                }
+
+                // If error is transient coordinator error, retry
+                Errors error = response.error();
+                if (error == Errors.COORDINATOR_LOAD_IN_PROGRESS || error == Errors.COORDINATOR_NOT_AVAILABLE) {
+                    throw error.exception();
+                }
+
+                final RemoveMemberFromGroupResult membershipChangeResult =
+                    new RemoveMemberFromGroupResult(response, context.getOptions().getMembers());
+
+                context.getFuture().complete(membershipChangeResult);
+            }
+
+            @Override
+            void handleFailure(Throwable throwable) {
+                context.getFuture().completeExceptionally(throwable);
+            }
+        };
     }
 }

@@ -439,7 +439,7 @@ public class FetchSessionHandler {
      * @param t     The exception.
      */
     public void handleError(Throwable t) {
-        log.info("Error sending fetch request {} to node {}: {}.", nextMetadata, node, t.toString());
+        log.info("Error sending fetch request {} to node {}: {}.", nextMetadata, node, t);
         nextMetadata = nextMetadata.nextCloseExisting();
     }
 }
