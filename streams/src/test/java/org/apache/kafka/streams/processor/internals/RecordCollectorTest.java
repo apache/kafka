@@ -53,7 +53,6 @@ import java.util.concurrent.Future;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.equalTo;
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -168,7 +167,10 @@ public class RecordCollectorTest {
         final Map<TopicPartition, Long> offsets = collector.offsets();
 
         assertThat(offsets.get(topicPartition), equalTo(2L));
-        assertThrows(UnsupportedOperationException.class, () -> offsets.put(new TopicPartition(topic, 0), 50L));
+        try {
+            offsets.put(new TopicPartition(topic, 0), 50L);
+            fail("Should have thrown UnsupportedOperationException");
+        } catch (final UnsupportedOperationException expected) { }
 
         assertThat(collector.offsets().get(topicPartition), equalTo(2L));
     }
