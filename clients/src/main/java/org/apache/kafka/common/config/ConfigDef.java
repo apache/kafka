@@ -1409,4 +1409,54 @@ public class ConfigDef {
         };
     }
 
+    public String toHtml() {
+        return toHtml(Collections.<String, String>emptyMap());
+    }
+
+    /**
+     * Converts this config into an HTML list that can be embedded into docs.
+     * If <code>dynamicUpdateModes</code> is non-empty, a "Dynamic Update Mode" label
+     * will be included in the config details with the value of the update mode. Default
+     * mode is "read-only".
+     * @param dynamicUpdateModes Config name -&gt; update mode mapping
+     */
+    public String toHtml(Map<String, String> dynamicUpdateModes) {
+        boolean hasUpdateModes = !dynamicUpdateModes.isEmpty();
+        List<ConfigKey> configs = sortedConfigs();
+        StringBuilder b = new StringBuilder();
+        b.append("<ul class=\"config-list\">\n");
+
+        for (ConfigKey key : configs) {
+            if (key.internalConfig) {
+                continue;
+            }
+            b.append("<li>");
+            b.append("<b>");
+            b.append(key.name);
+            b.append("</b>: ");
+            b.append(key.documentation);
+            b.append("<br/>");
+            // details
+            b.append("<ul class=\"horizontal-list\">");
+            for (String detail : headers()) {
+                if (detail.equals("Name") || detail.equals("Description")) continue;
+                addConfigDetail(b, detail, getConfigValue(key, detail));
+            }
+            if (hasUpdateModes) {
+                String updateMode = dynamicUpdateModes.get(key.name);
+                if (updateMode == null)
+                    updateMode = "read-only";
+                addConfigDetail(b, "Update Mode", updateMode);
+            }
+            b.append("</ul>");
+            b.append("</li>\n");
+        }
+        b.append("</ul>\n");
+        return b.toString();
+    }
+
+    private static void addConfigDetail(StringBuilder builder, String name, String value) {
+        builder.append("<li><b>" + name + "</b>: " + value + "</li>");
+    }
+
 }
