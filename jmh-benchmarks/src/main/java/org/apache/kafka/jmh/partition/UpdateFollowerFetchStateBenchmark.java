@@ -83,7 +83,7 @@ public class UpdateFollowerFetchStateBenchmark {
         List<File> logDirs = Collections.singletonList(logDir);
         logManager = new LogManager(JavaConverters.asScalaIteratorConverter(logDirs.iterator()).asScala().toSeq(),
                 JavaConverters.asScalaIteratorConverter(new ArrayList<File>().iterator()).asScala().toSeq(),
-                JavaConverters.mapAsScalaMap(new HashMap<>()),
+                new scala.collection.mutable.HashMap<>(),
                 logConfig,
                 new CleanerConfig(0, 0, 0, 0, 0, 0.0, 0, false, "MD5"),
                 1,
