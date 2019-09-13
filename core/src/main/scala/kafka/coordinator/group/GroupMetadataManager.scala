@@ -103,8 +103,8 @@ class GroupMetadataManager(brokerId: Int,
       "group-coordinator-metrics",
       "The rate of committed offsets"),
     metrics.metricName("offset-commit-count",
-    "group-coordinator-metrics",
-    "The total number of committed offsets")))
+      "group-coordinator-metrics",
+      "The total number of committed offsets")))
 
   val offsetExpiredSensor = metrics.sensor("OffsetExpired")
 

@@ -16,15 +16,8 @@
  */
 package org.apache.kafka.common.requests;
 
-
 import org.apache.kafka.common.message.OffsetDeleteRequestData;
-import org.apache.kafka.common.message.OffsetDeleteRequestData.OffsetDeleteRequestPartition;
-import org.apache.kafka.common.message.OffsetDeleteRequestData.OffsetDeleteRequestTopic;
 import org.apache.kafka.common.message.OffsetDeleteResponseData;
-import org.apache.kafka.common.message.OffsetDeleteResponseData.OffsetDeleteResponsePartition;
-import org.apache.kafka.common.message.OffsetDeleteResponseData.OffsetDeleteResponsePartitionCollection;
-import org.apache.kafka.common.message.OffsetDeleteResponseData.OffsetDeleteResponseTopic;
-import org.apache.kafka.common.message.OffsetDeleteResponseData.OffsetDeleteResponseTopicCollection;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
@@ -66,25 +59,8 @@ public class OffsetDeleteRequest extends AbstractRequest {
     }
 
     public AbstractResponse getErrorResponse(int throttleTimeMs, Errors error) {
-        OffsetDeleteResponseTopicCollection topics = new OffsetDeleteResponseTopicCollection();
-
-        for (OffsetDeleteRequestTopic topic : data.topics()) {
-            OffsetDeleteResponsePartitionCollection partitions = new OffsetDeleteResponsePartitionCollection();
-            for (OffsetDeleteRequestPartition partition : topic.partitions()) {
-                partitions.add(new OffsetDeleteResponsePartition()
-                    .setPartitionIndex(partition.partitionIndex())
-                    .setErrorCode(error.code())
-                );
-            }
-            topics.add(new OffsetDeleteResponseTopic()
-                .setName(topic.name())
-                .setPartitions(partitions)
-            );
-        }
-
         return new OffsetDeleteResponse(
             new OffsetDeleteResponseData()
-                .setTopics(topics)
                 .setThrottleTimeMs(throttleTimeMs)
                 .setErrorCode(error.code())
         );
