@@ -441,7 +441,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
      */
     @Override
     public void commit() {
-        commit(true);
+        commit(true, extractPartitionTimes());
     }
 
     /**
@@ -449,9 +449,8 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
      *                               or if the task producer got fenced (EOS)
      */
     // visible for testing
-    void commit(final boolean startNewTransaction) {
+    void commit(final boolean startNewTransaction, final Map<TopicPartition, Long> partitionTimes) {
         final long startNs = time.nanoseconds();
-        final Map<TopicPartition, Long> partitionTimes = extractPartitionTimes();
         log.debug("Committing");
 
         flushState();
@@ -569,6 +568,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
     // visible for testing
     void suspend(final boolean clean,
                  final boolean isZombie) {
+        final Map<TopicPartition, Long> partitionTimes = extractPartitionTimes();
         try {
             closeTopology(); // should we call this only on clean suspend?
         } catch (final RuntimeException fatal) {
@@ -580,7 +580,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         if (clean) {
             TaskMigratedException taskMigratedException = null;
             try {
-                commit(false);
+                commit(false, partitionTimes);
             } finally {
                 if (eosEnabled) {
                     stateMgr.checkpoint(activeTaskCheckpointableOffsets());
