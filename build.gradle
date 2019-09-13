@@ -1423,6 +1423,9 @@ project(':jmh-benchmarks') {
     }
   }
 
+  checkstyle {
+    configProperties = checkstyleConfigProperties("import-control-jmh-benchmarks.xml")
+  }
 
   task jmh(type: JavaExec, dependsOn: [':jmh-benchmarks:clean', ':jmh-benchmarks:shadowJar']) {
 

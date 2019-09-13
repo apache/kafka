@@ -32,7 +32,6 @@ import kafka.server.LogOffsetMetadata;
 import kafka.server.MetadataCache;
 import kafka.server.checkpoints.OffsetCheckpoints;
 import kafka.utils.KafkaScheduler;
-import kafka.utils.Scheduler;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.requests.LeaderAndIsrRequest;
 import org.apache.kafka.common.utils.Time;
@@ -70,7 +69,7 @@ import java.util.concurrent.TimeUnit;
 public class UpdateFollowerFetchStateBenchmark {
     private TopicPartition topicPartition = new TopicPartition(UUID.randomUUID().toString(), 0);
     private File logDir = new File(System.getProperty("java.io.tmpdir"), topicPartition.toString());
-    private Scheduler scheduler = new KafkaScheduler(1, "scheduler", true);
+    private KafkaScheduler scheduler = new KafkaScheduler(1, "scheduler", true);
     private BrokerTopicStats brokerTopicStats = new BrokerTopicStats();
     private LogDirFailureChannel logDirFailureChannel = Mockito.mock(LogDirFailureChannel.class);
     private long nextOffset = 0;
