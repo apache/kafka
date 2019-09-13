@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.connect.runtime;
 
-import java.util.Arrays;
+import javax.crypto.SecretKey;
 import java.util.Objects;
 
 /**
@@ -24,7 +24,7 @@ import java.util.Objects;
  */
 public class SessionKey {
 
-    private final byte[] key;
+    private final SecretKey key;
     private final long creationTimestamp;
 
     /**
@@ -32,7 +32,7 @@ public class SessionKey {
      * @param key the actual cryptographic key to use for request validation; may not be null
      * @param creationTimestamp the time at which the key was generated
      */
-    public SessionKey(byte[] key, long creationTimestamp) {
+    public SessionKey(SecretKey key, long creationTimestamp) {
         this.key = Objects.requireNonNull(key, "Key may not be null");
         this.creationTimestamp = creationTimestamp;
     }
@@ -40,7 +40,7 @@ public class SessionKey {
     /**
      * @return the actual cryptographic key to use for request validation; may not be null
      */
-    public byte[] key() {
+    public SecretKey key() {
         return key;
     }
 
@@ -59,13 +59,11 @@ public class SessionKey {
             return false;
         SessionKey that = (SessionKey) o;
         return creationTimestamp == that.creationTimestamp
-            && Arrays.equals(key, that.key);
+            && key.equals(that.key);
     }
 
     @Override
     public int hashCode() {
-        int result = Objects.hash(creationTimestamp);
-        result = 31 * result + Arrays.hashCode(key);
-        return result;
+        return Objects.hash(key, creationTimestamp);
     }
 }

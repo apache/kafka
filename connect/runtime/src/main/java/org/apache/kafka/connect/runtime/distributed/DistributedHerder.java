@@ -62,6 +62,7 @@ import org.apache.kafka.connect.util.SinkUtils;
 import org.slf4j.Logger;
 
 import javax.crypto.KeyGenerator;
+import javax.crypto.SecretKey;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -170,7 +171,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
     private boolean needsReconfigRebalance;
     private volatile int generation;
     private volatile long scheduledRebalance;
-    private byte[] sessionKey;
+    private SecretKey sessionKey;
     private volatile long keyExpiration;
 
     private final DistributedConfig config;
@@ -300,7 +301,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         if (checkAndMaybeRotateSessionKey(now)) {
             keyExpiration = Long.MAX_VALUE;
             configBackingStore.putSessionKey(new SessionKey(
-                keyGenerator.generateKey().getEncoded(),
+                keyGenerator.generateKey(),
                 time.milliseconds()
             ));
         }
@@ -394,18 +395,19 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
     private synchronized boolean checkAndMaybeRotateSessionKey(long now) {
         if (internalRequestValidationEnabled()) {
             if (isLeader()) {
-                boolean distributeNewKey = false;
-
                 if (sessionKey == null) {
                     log.debug("Internal request signing is enabled but no session key has been distributed yet. "
                         + "Distributing new key now.");
-                    distributeNewKey = true;
+                    return true;
                 } else if (keyExpiration <= now) {
-                    log.debug("Distributing new session key as existing key has expired");
-                    distributeNewKey = true;
+                    log.debug("Existing key has expired. Distributing new key now.");
+                    return true;
+                } else if (!sessionKey.getAlgorithm().equals(keyGenerator.getAlgorithm())
+                        || sessionKey.getEncoded().length != keyGenerator.generateKey().getEncoded().length) {
+                    log.debug("Previously-distributed key uses different algorithm/key size "
+                        + "than required by current worker configuration. Distributing new key now.");
+                    return true;
                 }
-
-                return distributeNewKey;
             } else if (sessionKey == null) {
                 // This happens on startup for follower workers; the snapshot contains the session key,
                 // but no callback in the config update listener has been fired for it yet.

@@ -24,6 +24,8 @@ import org.eclipse.jetty.client.api.Request;
 import org.junit.Test;
 
 import javax.crypto.Mac;
+import javax.crypto.SecretKey;
+import javax.crypto.spec.SecretKeySpec;
 import javax.ws.rs.core.HttpHeaders;
 
 import java.util.Base64;
@@ -45,10 +47,12 @@ public class InternalRequestSignatureTest {
     private static final byte[] REQUEST_BODY =
             "[{\"config\":\"value\"},{\"config\":\"other_value\"}]".getBytes();
     private static final String SIGNATURE_ALGORITHM = "HmacSHA256";
-    private static final byte[] KEY = new byte[] {
-        109, 116, -111, 49, -94, 25, -103, 44, -99, -118, 53, -69, 87, -124, 5, 48,
-        89, -105, -2, 58, -92, 87, 67, 49, -125, -79, -39, -126, -51, -53, -85, 57
-    };
+    private static final SecretKey KEY = new SecretKeySpec(
+        new byte[] {
+            109, 116, -111, 49, -94, 25, -103, 44, -99, -118, 53, -69, 87, -124, 5, 48,
+            89, -105, -2, 58, -92, 87, 67, 49, -125, -79, -39, -126, -51, -53, -85, 57
+        }, "HmacSHA256"
+    );
     private static final byte[] SIGNATURE = new byte[] {
         42, -3, 127, 57, 43, 49, -51, -43, 72, -62, -10, 120, 123, 125, 26, -65,
         36, 72, 86, -71, -32, 13, -8, 115, 85, 73, -65, -112, 6, 68, 41, -50

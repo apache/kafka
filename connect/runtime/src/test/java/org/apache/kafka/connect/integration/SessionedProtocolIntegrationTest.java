@@ -16,9 +16,7 @@
  */
 package org.apache.kafka.connect.integration;
 
-import com.google.common.collect.ImmutableMap;
 import org.apache.kafka.connect.runtime.distributed.ConnectProtocolCompatibility;
-import org.apache.kafka.connect.runtime.rest.InternalRequestSignature;
 import org.apache.kafka.connect.storage.StringConverter;
 import org.apache.kafka.connect.util.clusters.EmbeddedConnectCluster;
 import org.junit.After;
@@ -87,10 +85,9 @@ public class SessionedProtocolIntegrationTest {
             CONNECTOR_NAME
         ));
         final Map<String, String> emptyHeaders = new HashMap<>();
-        final Map<String, String> invalidSignatureHeaders = ImmutableMap.of(
-            SIGNATURE_HEADER, "S2Fma2Flc3F1ZQ==",
-            SIGNATURE_ALGORITHM_HEADER, "HmacSHA256"   
-        );
+        final Map<String, String> invalidSignatureHeaders = new HashMap<>();
+        invalidSignatureHeaders.put(SIGNATURE_HEADER, "S2Fma2Flc3F1ZQ==");
+        invalidSignatureHeaders.put(SIGNATURE_ALGORITHM_HEADER, "HmacSHA256");
 
         // We haven't created the connector yet, but this should still return a 400 instead of a 404
         // if the endpoint is secured

@@ -20,6 +20,7 @@ package org.apache.kafka.connect.runtime.rest;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import javax.crypto.SecretKey;
 import javax.ws.rs.core.HttpHeaders;
 
 import org.apache.kafka.connect.runtime.WorkerConfig;
@@ -81,7 +82,7 @@ public class RestClient {
      */
     public static <T> HttpResponse<T> httpRequest(String url, String method, HttpHeaders headers, Object requestBodyData,
                                                   TypeReference<T> responseFormat, WorkerConfig config,
-                                                  byte[] sessionKey, String requestSignatureAlgorithm) {
+                                                  SecretKey sessionKey, String requestSignatureAlgorithm) {
         HttpClient client;
 
         if (url.startsWith("https://")) {

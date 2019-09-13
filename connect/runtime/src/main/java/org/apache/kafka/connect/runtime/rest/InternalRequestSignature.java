@@ -21,7 +21,7 @@ import org.apache.kafka.connect.runtime.rest.errors.BadRequestException;
 import org.eclipse.jetty.client.api.Request;
 
 import javax.crypto.Mac;
-import javax.crypto.spec.SecretKeySpec;
+import javax.crypto.SecretKey;
 import javax.ws.rs.core.HttpHeaders;
 import java.security.InvalidKeyException;
 import java.security.NoSuchAlgorithmException;
@@ -38,7 +38,7 @@ public class InternalRequestSignature {
     private final Mac mac;
     private final byte[] requestSignature;
 
-    public static void addToRequest(byte[] key, byte[] requestBody, String signatureAlgorithm, Request request) {
+    public static void addToRequest(SecretKey key, byte[] requestBody, String signatureAlgorithm, Request request) {
         Mac mac;
         try {
             mac = mac(signatureAlgorithm);
@@ -93,7 +93,7 @@ public class InternalRequestSignature {
         return mac.getAlgorithm();
     }
 
-    public boolean isValid(byte[] key) {
+    public boolean isValid(SecretKey key) {
         return Arrays.equals(sign(mac, key, requestBody), requestSignature);
     }
 
@@ -101,9 +101,9 @@ public class InternalRequestSignature {
         return Mac.getInstance(signatureAlgorithm);
     }
 
-    private static byte[] sign(Mac mac, byte[] key, byte[] requestBody) {
+    private static byte[] sign(Mac mac, SecretKey key, byte[] requestBody) {
         try {
-            mac.init(new SecretKeySpec(key, mac.getAlgorithm()));
+            mac.init(key);
         } catch (InvalidKeyException e) {
             throw new ConnectException(e);
         }

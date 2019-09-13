@@ -46,6 +46,7 @@ import org.apache.kafka.connect.util.TopicAdmin;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.crypto.spec.SecretKeySpec;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Base64;
@@ -198,6 +199,7 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
     // So instead, we base 64-encode it before serializing and decode it after deserializing.
     public static final Schema SESSION_KEY_V0 = SchemaBuilder.struct()
             .field("key", Schema.STRING_SCHEMA)
+            .field("algorithm", Schema.STRING_SCHEMA)
             .field("creation-timestamp", Schema.INT64_SCHEMA)
             .build();
 
@@ -426,7 +428,8 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
     public void putSessionKey(SessionKey sessionKey) {
         log.debug("Distributing new session key");
         Struct sessionKeyStruct = new Struct(SESSION_KEY_V0);
-        sessionKeyStruct.put("key", Base64.getEncoder().encodeToString(sessionKey.key()));
+        sessionKeyStruct.put("key", Base64.getEncoder().encodeToString(sessionKey.key().getEncoded()));
+        sessionKeyStruct.put("algorithm", sessionKey.key().getAlgorithm());
         sessionKeyStruct.put("creation-timestamp", sessionKey.creationTimestamp());
         byte[] serializedSessionKey = converter.fromConnectData(topic, SESSION_KEY_V0, sessionKeyStruct);
         try {
@@ -675,19 +678,30 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
                         return;
                     }
 
-                    Object sessionKey = ((Map<String, Object>) value.value()).get("key");
+                    Map<String, Object> valueAsMap = (Map<String, Object>) value.value();
+
+                    Object sessionKey = valueAsMap.get("key");
                     if (!(sessionKey instanceof String)) {
                         log.error("Invalid data for session key 'key' field should be a String but is {}", sessionKey.getClass());
                         return;
                     }
                     byte[] key = Base64.getDecoder().decode((String) sessionKey);
 
-                    Object creationTimestamp = ((Map<String, Object>) value.value()).get("creation-timestamp");
+                    Object keyAlgorithm = valueAsMap.get("algorithm");
+                    if (!(keyAlgorithm instanceof String)) {
+                        log.error("Invalid data for session key 'algorithm' field should be a String but it is {}", keyAlgorithm.getClass());
+                        return;
+                    }
+
+                    Object creationTimestamp = valueAsMap.get("creation-timestamp");
                     if (!(creationTimestamp instanceof Long)) {
                         log.error("Invalid data for session key 'creation-timestamp' field should be a long but it is {}", creationTimestamp.getClass());
                         return;
                     }
-                    KafkaConfigBackingStore.this.sessionKey = new SessionKey(key, (long) creationTimestamp);
+                    KafkaConfigBackingStore.this.sessionKey = new SessionKey(
+                        new SecretKeySpec(key, (String) keyAlgorithm),
+                        (long) creationTimestamp
+                    );
 
                     if (started)
                         updateListener.onSessionKeyUpdate(KafkaConfigBackingStore.this.sessionKey);

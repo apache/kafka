@@ -374,6 +374,7 @@
     <subpackage name="storage">
       <allow pkg="org.apache.kafka.connect" />
       <allow pkg="org.apache.kafka.common.serialization" />
+      <allow pkg="javax.crypto.spec"/>
     </subpackage>
 
     <subpackage name="util">
