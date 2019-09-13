@@ -79,7 +79,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Pattern;
-import java.util.stream.Collectors;
 
 /**
  * A client that consumes records from a Kafka cluster.
@@ -1321,6 +1320,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * @throws org.apache.kafka.common.errors.TimeoutException if the timeout specified by {@code default.api.timeout.ms} expires
      *            before successful completion of the offset commit
      * @throws org.apache.kafka.common.errors.FencedInstanceIdException if this consumer instance gets fenced by broker.
+     * @throws org.apache.kafka.common.errors.RebalanceInProgressException if this consumer instance is in the middle of a rebalance;
+     *            Commit could be retried after the rebalance is completed with the {@link #poll(Duration)} call.
      */
     @Override
     public void commitSync() {
@@ -1356,6 +1357,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * @throws org.apache.kafka.common.errors.TimeoutException if the timeout expires before successful completion
      *            of the offset commit
      * @throws org.apache.kafka.common.errors.FencedInstanceIdException if this consumer instance gets fenced by broker.
+     * @throws org.apache.kafka.common.errors.RebalanceInProgressException if this consumer instance is in the middle of a rebalance;
+     *            Commit could be retried after the rebalance is completed with the {@link #poll(Duration)} call.
      */
     @Override
     public void commitSync(Duration timeout) {
@@ -1404,6 +1407,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * @throws org.apache.kafka.common.errors.TimeoutException if the timeout expires before successful completion
      *            of the offset commit
      * @throws org.apache.kafka.common.errors.FencedInstanceIdException if this consumer instance gets fenced by broker.
+     * @throws org.apache.kafka.common.errors.RebalanceInProgressException if this consumer instance is in the middle of a rebalance;
+     *            Commit could be retried after the rebalance is completed with the {@link #poll(Duration)} call.
      */
     @Override
     public void commitSync(final Map<TopicPartition, OffsetAndMetadata> offsets) {
@@ -1443,6 +1448,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     * @throws org.apache.kafka.common.errors.TimeoutException if the timeout expires before successful completion
     *            of the offset commit
     * @throws org.apache.kafka.common.errors.FencedInstanceIdException if this consumer instance gets fenced by broker.
+    * @throws org.apache.kafka.common.errors.RebalanceInProgressException if this consumer instance is in the middle of a rebalance;
+    *            Commit could be retried after the rebalance is completed with the {@link #poll(Duration)} call.
     */
     @Override
     public void commitSync(final Map<TopicPartition, OffsetAndMetadata> offsets, final Duration timeout) {
@@ -1514,8 +1521,6 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      *                is safe to mutate the map after returning.
      * @param callback Callback to invoke when the commit completes
      * @throws org.apache.kafka.common.errors.FencedInstanceIdException if this consumer instance gets fenced by broker.
-     * @throws org.apache.kafka.clients.consumer.CommitFailedException If the commit failed because the offsets to commit do not belong
-     *        to the currently assigned partitions using automatic group management with {@link #subscribe(Collection)}.
      */
     @Override
     public void commitAsync(final Map<TopicPartition, OffsetAndMetadata> offsets, OffsetCommitCallback callback) {
@@ -1526,6 +1531,9 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             log.debug("Committing offsets: {}", offsets);
             offsets.forEach(this::updateLastSeenEpochIfNewer);
             coordinator.commitOffsetsAsync(new HashMap<>(offsets), callback);
+        } catch (CommitFailedException e) {
+            log.error("Failed to commit offsets asynchronously because they do not belong to dynamically assigned partitions");
+            callback.onComplete(offsets, e);
         } finally {
             release();
         }

@@ -20,6 +20,7 @@ package kafka.api
 import com.yammer.metrics.Metrics
 import com.yammer.metrics.core.Gauge
 import java.io.File
+import java.util.Collections
 import java.util.concurrent.ExecutionException
 
 import kafka.admin.AclCommand
@@ -214,7 +215,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     val consumer = createConsumer()
     consumer.assign(List(tp).asJava)
     consumeRecords(consumer, numRecords)
-    confirmReauthenticationMetrics
+    confirmReauthenticationMetrics()
   }
 
   protected def confirmReauthenticationMetrics(): Unit = {
@@ -243,7 +244,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     val consumer = createConsumer()
     consumer.subscribe(List(topic).asJava)
     consumeRecords(consumer, numRecords)
-    confirmReauthenticationMetrics
+    confirmReauthenticationMetrics()
   }
 
   @Test
@@ -254,7 +255,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     val consumer = createConsumer()
     consumer.subscribe(List(topic).asJava)
     consumeRecords(consumer, numRecords)
-    confirmReauthenticationMetrics
+    confirmReauthenticationMetrics()
   }
 
   @Test
@@ -265,7 +266,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     val consumer = createConsumer()
     consumer.subscribe(List(topic).asJava)
     consumeRecords(consumer, numRecords)
-    confirmReauthenticationMetrics
+    confirmReauthenticationMetrics()
   }
 
   @Test
@@ -276,7 +277,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     val consumer = createConsumer()
     consumer.assign(List(tp2).asJava)
     consumeRecords(consumer, numRecords, topic = tp2.topic)
-    confirmReauthenticationMetrics
+    confirmReauthenticationMetrics()
   }
 
   private def setWildcardResourceAcls(): Unit = {
@@ -350,12 +351,13 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     val e2 = intercept[ExecutionException] { adminClient.describeTopics(Set(topic).asJava).all().get() }
     assertTrue("Unexpected exception " + e2.getCause, e2.getCause.isInstanceOf[TopicAuthorizationException])
 
-    // Verify that consumer manually assigning both authorized and unauthorized topic doesn't consume from either
+    // Verify that consumer manually assigning both authorized and unauthorized topic doesn't consume from
+    // the unauthorized topic and throw
     consumer.assign(List(tp, tp2).asJava)
     sendRecords(producer, numRecords, tp2)
     def verifyNoRecords(records: ConsumerRecords[Array[Byte], Array[Byte]]): Boolean = {
-      //assertTrue("Consumed records: " + records, records.isEmpty)
-      !records.isEmpty
+      assertEquals("Consumed records with unexpected partitions: " + records, Collections.singleton(tp2), records.partitions())
+      false
     }
     assertThrows[TopicAuthorizationException] {
       TestUtils.pollRecordsUntilTrue(consumer, verifyNoRecords, "Consumer didn't fail with authorization exception within timeout")
@@ -363,9 +365,8 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
 
     // Add ACLs and verify successful produce/consume/describe on first topic
     setReadAndWriteAcls(tp)
-    consumeRecordsIgnoreOneAuthorizationException(consumer, numRecords, startingOffset = numRecords, topic2)
     sendRecords(producer, numRecords, tp)
-    consumeRecords(consumer, numRecords, topic = topic)
+    consumeRecordsIgnoreOneAuthorizationException(consumer, numRecords, startingOffset = 0, topic)
     val describeResults2 = adminClient.describeTopics(Set(topic, topic2).asJava).values
     assertEquals(1, describeResults2.get(topic).get().partitions().size())
     assertEquals(1, describeResults2.get(topic2).get().partitions().size())
@@ -385,7 +386,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
       case e: TopicAuthorizationException =>
         assertEquals(Set(topic).asJava, e.unauthorizedTopics())
     }
-    confirmReauthenticationMetrics
+    confirmReauthenticationMetrics()
   }
 
    /**
@@ -399,7 +400,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     consumer.assign(List(tp).asJava)
     // the exception is expected when the consumer attempts to lookup offsets
     consumeRecords(consumer)
-    confirmReauthenticationMetrics
+    confirmReauthenticationMetrics()
   }
 
   @Test
@@ -451,7 +452,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
       case e: TopicAuthorizationException =>
         assertEquals(Set(topic).asJava, e.unauthorizedTopics())
     }
-    confirmReauthenticationMetrics
+    confirmReauthenticationMetrics()
   }
 
   @Test
@@ -467,7 +468,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
       case e: TopicAuthorizationException =>
         assertEquals(Set(topic).asJava, e.unauthorizedTopics())
     }
-    confirmReauthenticationMetrics
+    confirmReauthenticationMetrics()
   }
 
   private def noConsumeWithDescribeAclSetup(): Unit = {
@@ -503,7 +504,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
       case e: GroupAuthorizationException =>
         assertEquals(group, e.groupId())
     }
-    confirmReauthenticationMetrics
+    confirmReauthenticationMetrics()
   }
 
   protected final def sendRecords(producer: KafkaProducer[Array[Byte], Array[Byte]],

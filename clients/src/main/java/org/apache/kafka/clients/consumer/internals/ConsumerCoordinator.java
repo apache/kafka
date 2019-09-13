@@ -36,6 +36,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.FencedInstanceIdException;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.InterruptException;
+import org.apache.kafka.common.errors.RebalanceInProgressException;
 import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
@@ -1127,18 +1128,33 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                             /* Consumer never tries to commit offset in between join-group and sync-group,
                              * and hence on broker-side it is not expected to see a commit offset request
                              * during CompletingRebalance phase; if it ever happens then broker would return
-                             * this error. In this case we should just treat as a fatal CommitFailed exception.
-                             * However, we do not need to reset generations and just request re-join, such that
-                             * if the caller decides to proceed and poll, it would still try to proceed and re-join normally.
+                             * this error. In this case we would just throw a retriable exception and request
+                             * re-join, but we do not need to reset generations.
+                             * If the caller decides to proceed and poll, it would still try to proceed and re-join normally.
                              */
                             requestRejoin();
-                            future.raise(new CommitFailedException());
+                            future.raise(new RebalanceInProgressException());
                             return;
-                        } else if (error == Errors.UNKNOWN_MEMBER_ID
-                                || error == Errors.ILLEGAL_GENERATION) {
+                        } else if (error == Errors.UNKNOWN_MEMBER_ID) {
                             // need to reset generation and re-join group
                             resetGenerationOnResponseError(ApiKeys.OFFSET_COMMIT, error);
                             future.raise(new CommitFailedException());
+                            return;
+                        } else if (error == Errors.ILLEGAL_GENERATION) {
+                            if (state == MemberState.REBALANCING) {
+                                /* The group is already in CompletingRebalance phase and therefore the generation id
+                                 * has already incremented. The commit request would fail with a fatal ILLEGAL_GENERATION
+                                 * immediately. In this case, we could throw a retriable RebalanceInProgressException
+                                 * and let users to decide if they want to retry -- in that case, they would need to
+                                 * first complete the rebalance with the poll call, and then retry committing offsets.
+                                 */
+                                requestRejoin();
+                                future.raise(new RebalanceInProgressException());
+                            } else {
+                                // need to reset generation and re-join group
+                                resetGenerationOnResponseError(ApiKeys.OFFSET_COMMIT, error);
+                                future.raise(new CommitFailedException());
+                            }
                             return;
                         } else {
                             future.raise(new KafkaException("Unexpected error in commit: " + error.message()));

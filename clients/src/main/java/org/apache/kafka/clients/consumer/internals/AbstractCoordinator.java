@@ -109,7 +109,7 @@ import java.util.concurrent.atomic.AtomicReference;
 public abstract class AbstractCoordinator implements Closeable {
     public static final String HEARTBEAT_THREAD_PREFIX = "kafka-coordinator-heartbeat-thread";
 
-    private enum MemberState {
+    protected enum MemberState {
         UNJOINED,    // the client is not part of a group
         REBALANCING, // the client has begun rebalancing
         STABLE,      // the client has joined and is sending heartbeats
@@ -125,12 +125,11 @@ public abstract class AbstractCoordinator implements Closeable {
     private HeartbeatThread heartbeatThread = null;
     private boolean rejoinNeeded = true;
     private boolean needsJoinPrepare = true;
-    private MemberState state = MemberState.UNJOINED;
     private RequestFuture<ByteBuffer> joinFuture = null;
     private Node coordinator = null;
     private Generation generation = Generation.NO_GENERATION;
-
     private RequestFuture<Void> findCoordinatorFuture = null;
+    protected MemberState state = MemberState.UNJOINED;
 
     /**
      * Initialize the coordination manager.

@@ -18,6 +18,7 @@ package org.apache.kafka.clients.consumer;
 
 import org.apache.kafka.common.TopicPartition;
 
+import java.time.Duration;
 import java.util.Collection;
 import java.util.Map;
 
@@ -45,6 +46,8 @@ public interface OffsetCommitCallback {
      *             configured groupId. See the exception for more details
      * @throws org.apache.kafka.common.KafkaException for any other unrecoverable errors (e.g. if offset metadata
      *             is too large or if the committed offset is invalid).
+     * @throws org.apache.kafka.common.errors.RebalanceInProgressException if this consumer instance is in the middle of a rebalance;
+     *             Commit could be retried after the rebalance is completed with the {@link KafkaConsumer#poll(Duration)} call.
      */
     void onComplete(Map<TopicPartition, OffsetAndMetadata> offsets, Exception exception);
 }
