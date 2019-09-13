@@ -171,26 +171,6 @@ public abstract class AbstractTask implements Task {
         return sb.toString();
     }
 
-    protected void updateOffsetLimits() {
-        for (final TopicPartition partition : partitions) {
-            try {
-                final OffsetAndMetadata metadata = consumer.committed(partition); // TODO: batch API?
-                final long offset = metadata != null ? metadata.offset() : 0L;
-                stateMgr.putOffsetLimit(partition, offset);
-
-                if (log.isTraceEnabled()) {
-                    log.trace("Updating store offset limits {} for changelog {}", offset, partition);
-                }
-            } catch (final AuthorizationException e) {
-                throw new ProcessorStateException(String.format("task [%s] AuthorizationException when initializing offsets for %s", id, partition), e);
-            } catch (final WakeupException e) {
-                throw e;
-            } catch (final KafkaException e) {
-                throw new ProcessorStateException(String.format("task [%s] Failed to initialize offsets for %s", id, partition), e);
-            }
-        }
-    }
-
     /**
      * Flush all state stores owned by this task
      */
@@ -218,9 +198,6 @@ public abstract class AbstractTask implements Task {
                 logPrefix, id));
         }
         log.trace("Initializing state stores");
-
-        // set initial offset limits
-        updateOffsetLimits();
 
         for (final StateStore store : topology.stateStores()) {
             log.trace("Initializing store {}", store.name());
@@ -272,4 +249,18 @@ public abstract class AbstractTask implements Task {
     public Collection<TopicPartition> changelogPartitions() {
         return stateMgr.changelogPartitions();
     }
+
+    long committedOffsetForPartition(final TopicPartition partition) {
+        try {
+            final OffsetAndMetadata metadata = consumer.committed(partition);
+            return metadata != null ? metadata.offset() : 0L;
+        } catch (final AuthorizationException e) {
+            throw new ProcessorStateException(String.format("task [%s] AuthorizationException when initializing offsets for %s", id, partition), e);
+        } catch (final WakeupException e) {
+            throw e;
+        } catch (final KafkaException e) {
+            throw new ProcessorStateException(String.format("task [%s] Failed to initialize offsets for %s", id, partition), e);
+        }
+    }
+
 }

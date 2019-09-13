@@ -29,7 +29,6 @@ import static org.junit.Assert.fail;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Set;
-import kafka.utils.LogCaptureAppender;
 import org.apache.kafka.clients.consumer.MockConsumer;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.clients.producer.MockProducer;
@@ -47,8 +46,6 @@ import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.test.MockSourceNode;
-import org.apache.log4j.Level;
-import org.apache.log4j.spi.LoggingEvent;
 import org.easymock.EasyMock;
 import org.junit.Before;
 import org.junit.Test;
@@ -525,35 +522,7 @@ public class AssignedStreamsTasksTest {
         assignedTasks.initializeNewTasks();
         assertNull(assignedTasks.suspend());
 
-        // We have to test for close failure by looking at the logs because the current close
-        // logic suppresses the raised exception in AssignedTasks.close. It's not clear if this
-        // is the intended behavior.
-        //
-        // Also note that capturing the failure through this side effect is very brittle.
-        final LogCaptureAppender appender = LogCaptureAppender.createAndRegister();
-        final Level previousLevel =
-            LogCaptureAppender.setClassLoggerLevel(AssignedStreamsTasks.class, Level.ERROR);
-        try {
-            assignedTasks.close(true);
-        } finally {
-            LogCaptureAppender.setClassLoggerLevel(AssignedStreamsTasks.class, previousLevel);
-            LogCaptureAppender.unregister(appender);
-        }
-        if (!appender.getMessages().isEmpty()) {
-            final LoggingEvent firstError = appender.getMessages().head();
-            final String firstErrorCause =
-                firstError.getThrowableStrRep() != null
-                    ? String.join("\n", firstError.getThrowableStrRep())
-                    : "N/A";
-
-            final String failMsg =
-                String.format("Expected no ERROR message while closing assignedTasks, but got %d. " +
-                    "First error: %s. Cause: %s",
-                    appender.getMessages().size(),
-                    firstError.getMessage(),
-                    firstErrorCause);
-            fail(failMsg);
-        }
+        assignedTasks.close(true);
     }
 
     private void addAndInitTask() {

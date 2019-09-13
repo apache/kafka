@@ -73,6 +73,10 @@ public final class ApiMessageTypeGenerator {
         this.buffer = new CodeBuffer();
     }
 
+    public boolean hasRegisteredTypes() {
+        return !apis.isEmpty();
+    }
+
     public void registerMessageType(MessageSpec spec) {
         switch (spec.type()) {
             case REQUEST: {

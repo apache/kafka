@@ -349,12 +349,9 @@ abstract class AssignedTasks<T extends Task> {
                     task.id(),
                     t);
                 if (clean) {
-                    if (!closeUnclean(task)) {
-                        firstException.compareAndSet(null, t);
-                    }
-                } else {
-                    firstException.compareAndSet(null, t);
+                    closeUnclean(task);
                 }
+                firstException.compareAndSet(null, t);
             }
         }
 

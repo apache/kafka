@@ -17,7 +17,7 @@
 package kafka.security.authorizer
 
 import java.{lang, util}
-import java.util.concurrent.CompletableFuture
+import java.util.concurrent.{CompletableFuture, CompletionStage}
 import java.util.concurrent.locks.ReentrantReadWriteLock
 
 import com.typesafe.scalalogging.Logger
@@ -118,7 +118,7 @@ class AclAuthorizer extends Authorizer with Logging {
     loadCache()
   }
 
-  override def start(serverInfo: AuthorizerServerInfo): util.Map[Endpoint, CompletableFuture[Void]] = {
+  override def start(serverInfo: AuthorizerServerInfo): util.Map[Endpoint, _ <: CompletionStage[Void]] = {
     serverInfo.endpoints.asScala.map { endpoint =>
       endpoint -> CompletableFuture.completedFuture[Void](null) }.toMap.asJava
   }
@@ -127,7 +127,8 @@ class AclAuthorizer extends Authorizer with Logging {
     actions.asScala.map { action => authorizeAction(requestContext, action) }.asJava
   }
 
-  override def createAcls(requestContext: AuthorizableRequestContext, aclBindings: util.List[AclBinding]): util.List[AclCreateResult] = {
+  override def createAcls(requestContext: AuthorizableRequestContext,
+                          aclBindings: util.List[AclBinding]): util.List[_ <: CompletionStage[AclCreateResult]] = {
     val results = new Array[AclCreateResult](aclBindings.size)
     val aclsToCreate = aclBindings.asScala.zipWithIndex
       .filter { case (aclBinding, i) =>
@@ -139,11 +140,8 @@ class AclAuthorizer extends Authorizer with Logging {
           AuthorizerUtils.validateAclBinding(aclBinding)
           true
         } catch {
-          case e: ApiException =>
-            results(i) = new AclCreateResult(e)
-            false
           case e: Throwable =>
-            results(i) = new AclCreateResult(new InvalidRequestException("Failed to create ACL", e))
+            results(i) = new AclCreateResult(new InvalidRequestException("Failed to create ACL", apiException(e)))
             false
         }
       }.groupBy(_._1.pattern)
@@ -151,19 +149,26 @@ class AclAuthorizer extends Authorizer with Logging {
     if (aclsToCreate.nonEmpty) {
       inWriteLock(lock) {
         aclsToCreate.foreach { case (resource, aclsWithIndex) =>
-          updateResourceAcls(AuthorizerUtils.convertToResource(resource)) { currentAcls =>
-            val newAcls = aclsWithIndex.map { case (acl, index) => AuthorizerUtils.convertToAcl(acl.entry) }
-            currentAcls ++ newAcls
+          try {
+            updateResourceAcls(AuthorizerUtils.convertToResource(resource)) { currentAcls =>
+              val newAcls = aclsWithIndex.map { case (acl, index) => AuthorizerUtils.convertToAcl(acl.entry) }
+              currentAcls ++ newAcls
+            }
+            aclsWithIndex.foreach { case (_, index) => results(index) = AclCreateResult.SUCCESS }
+          } catch {
+            case e: Throwable =>
+              aclsWithIndex.foreach { case (_, index) => results(index) = new AclCreateResult(apiException(e)) }
           }
-          aclsWithIndex.foreach { case (_, index) => results(index) = AclCreateResult.SUCCESS }
         }
       }
     }
-    results.toList.asJava
+    results.toList.map(CompletableFuture.completedFuture[AclCreateResult]).asJava
   }
 
-  override def deleteAcls(requestContext: AuthorizableRequestContext, aclBindingFilters: util.List[AclBindingFilter]): util.List[AclDeleteResult] = {
+  override def deleteAcls(requestContext: AuthorizableRequestContext,
+                          aclBindingFilters: util.List[AclBindingFilter]): util.List[_ <: CompletionStage[AclDeleteResult]] = {
     val deletedBindings = new mutable.HashMap[AclBinding, Int]()
+    val deleteExceptions = new mutable.HashMap[AclBinding, ApiException]()
     val filters = aclBindingFilters.asScala.zipWithIndex
     inWriteLock(lock) {
       val resourcesToUpdate = aclCache.keys.map { resource =>
@@ -174,24 +179,35 @@ class AclAuthorizer extends Authorizer with Logging {
       }.toMap.filter(_._2.nonEmpty)
 
       resourcesToUpdate.foreach { case (resource, matchingFilters) =>
-        updateResourceAcls(resource) { currentAcls =>
-          val aclsToRemove = currentAcls.filter { acl =>
-            matchingFilters.exists { case (filter, index) =>
-              val matches = filter.entryFilter.matches(AuthorizerUtils.convertToAccessControlEntry(acl))
-              if (matches)
-                deletedBindings.getOrElseUpdate(AuthorizerUtils.convertToAclBinding(resource, acl), index)
-              matches
+        val resourceBindingsBeingDeleted = new mutable.HashMap[AclBinding, Int]()
+        try {
+          updateResourceAcls(resource) { currentAcls =>
+            val aclsToRemove = currentAcls.filter { acl =>
+              matchingFilters.exists { case (filter, index) =>
+                val matches = filter.entryFilter.matches(AuthorizerUtils.convertToAccessControlEntry(acl))
+                if (matches) {
+                  val binding = AuthorizerUtils.convertToAclBinding(resource, acl)
+                  deletedBindings.getOrElseUpdate(binding, index)
+                  resourceBindingsBeingDeleted.getOrElseUpdate(binding, index)
+                }
+                matches
+              }
             }
+            currentAcls -- aclsToRemove
           }
-          currentAcls -- aclsToRemove
+        } catch {
+          case e: Exception =>
+            resourceBindingsBeingDeleted.foreach { case (binding, index) =>
+                deleteExceptions.getOrElseUpdate(binding, apiException(e))
+            }
         }
       }
     }
     val deletedResult = deletedBindings.groupBy(_._2)
-      .mapValues(_.map{ case (binding, _) => new AclBindingDeleteResult(binding) })
+      .mapValues(_.map{ case (binding, _) => new AclBindingDeleteResult(binding, deleteExceptions.getOrElse(binding, null)) })
     (0 until aclBindingFilters.size).map { i =>
       new AclDeleteResult(deletedResult.getOrElse(i, Set.empty[AclBindingDeleteResult]).toSet.asJava)
-    }.asJava
+    }.map(CompletableFuture.completedFuture[AclDeleteResult]).asJava
   }
 
   override def acls(filter: AclBindingFilter): lang.Iterable[AclBinding] = {
@@ -446,6 +462,13 @@ class AclAuthorizer extends Authorizer with Logging {
 
   private def backoffTime = {
     retryBackoffMs + Random.nextInt(retryBackoffJitterMs)
+  }
+
+  private def apiException(e: Throwable): ApiException = {
+    e match {
+      case e1: ApiException => e1
+      case e1 => new ApiException(e1)
+    }
   }
 
   object AclChangedNotificationHandler extends AclChangeNotificationHandler {

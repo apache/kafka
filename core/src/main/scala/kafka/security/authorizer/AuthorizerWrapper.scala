@@ -17,7 +17,7 @@
 
 package kafka.security.authorizer
 
-import java.util.concurrent.CompletableFuture
+import java.util.concurrent.{CompletableFuture, CompletionStage}
 import java.{lang, util}
 
 import kafka.network.RequestChannel.Session
@@ -40,7 +40,7 @@ class AuthorizerWrapper(private[kafka] val baseAuthorizer: kafka.security.auth.A
     baseAuthorizer.configure(configs)
   }
 
-  override def start(serverInfo: AuthorizerServerInfo): util.Map[Endpoint, CompletableFuture[Void]] = {
+  override def start(serverInfo: AuthorizerServerInfo): util.Map[Endpoint, _ <: CompletionStage[Void]] = {
     serverInfo.endpoints.asScala.map { endpoint =>
       endpoint -> CompletableFuture.completedFuture[Void](null) }.toMap.asJava
   }
@@ -57,7 +57,7 @@ class AuthorizerWrapper(private[kafka] val baseAuthorizer: kafka.security.auth.A
   }
 
   override def createAcls(requestContext: AuthorizableRequestContext,
-                          aclBindings: util.List[AclBinding]): util.List[AclCreateResult] = {
+                          aclBindings: util.List[AclBinding]): util.List[_ <: CompletionStage[AclCreateResult]] = {
     aclBindings.asScala
       .map { aclBinding =>
         AuthorizerUtils.convertToResourceAndAcl(aclBinding.toFilter) match {
@@ -71,11 +71,11 @@ class AuthorizerWrapper(private[kafka] val baseAuthorizer: kafka.security.auth.A
               case e: Throwable => new AclCreateResult(new InvalidRequestException("Failed to create ACL", e))
             }
         }
-      }.toList.asJava
+      }.toList.map(CompletableFuture.completedFuture[AclCreateResult]).asJava
   }
 
   override def deleteAcls(requestContext: AuthorizableRequestContext,
-                          aclBindingFilters: util.List[AclBindingFilter]): util.List[AclDeleteResult] = {
+                          aclBindingFilters: util.List[AclBindingFilter]): util.List[_ <: CompletionStage[AclDeleteResult]] = {
     val filters = aclBindingFilters.asScala
     val results = mutable.Map[Int, AclDeleteResult]()
     val toDelete = mutable.Map[Int, ArrayBuffer[(Resource, Acl)]]()
@@ -121,7 +121,7 @@ class AuthorizerWrapper(private[kafka] val baseAuthorizer: kafka.security.auth.A
 
     filters.indices.map { i =>
       results.getOrElse(i, new AclDeleteResult(Seq.empty[AclBindingDeleteResult].asJava))
-    }.asJava
+    }.map(CompletableFuture.completedFuture[AclDeleteResult]).asJava
   }
 
   override def acls(filter: AclBindingFilter): lang.Iterable[AclBinding] = {

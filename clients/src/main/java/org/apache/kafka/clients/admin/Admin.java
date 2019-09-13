@@ -34,6 +34,7 @@ import org.apache.kafka.common.acl.AclBinding;
 import org.apache.kafka.common.acl.AclBindingFilter;
 import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.config.ConfigResource;
+import org.apache.kafka.common.requests.LeaveGroupResponse;
 
 /**
  * The administrative client for Kafka, which supports managing and inspecting topics, brokers, configurations and ACLs.
@@ -1044,6 +1045,17 @@ public interface Admin extends AutoCloseable {
      */
     ListPartitionReassignmentsResult listPartitionReassignments(Optional<Set<TopicPartition>> partitions,
                                                                 ListPartitionReassignmentsOptions options);
+
+    /**
+     * Remove members from the consumer group by given member identities.
+     * <p>
+     * For possible error codes, refer to {@link LeaveGroupResponse}.
+     *
+     * @param groupId The ID of the group to remove member from.
+     * @param options The options to carry removing members' information.
+     * @return The MembershipChangeResult.
+     */
+    MembershipChangeResult removeMemberFromConsumerGroup(String groupId, RemoveMemberFromConsumerGroupOptions options);
 
     /**
      * Get the metrics kept by the adminClient

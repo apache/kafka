@@ -13,28 +13,61 @@
 package kafka.api
 
 import java.io.File
+import java.util
 import java.util.Collections
+import java.util.concurrent.{CompletionStage, Semaphore}
 
 import kafka.security.authorizer.AclAuthorizer
 import kafka.security.authorizer.AuthorizerUtils.{WildcardHost, WildcardPrincipal}
 import kafka.security.auth.{Operation, PermissionType}
 import kafka.server.KafkaConfig
 import kafka.utils.{CoreUtils, TestUtils}
+import org.apache.kafka.clients.admin.AdminClient
 import org.apache.kafka.common.acl._
 import org.apache.kafka.common.acl.AclOperation._
 import org.apache.kafka.common.acl.AclPermissionType._
+import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.resource.ResourcePattern
 import org.apache.kafka.common.resource.PatternType._
 import org.apache.kafka.common.resource.ResourceType._
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.server.authorizer._
-import org.junit.Assert
+import org.junit.Assert.{assertEquals, assertFalse, assertTrue}
+import org.junit.{Assert, Test}
 
 import scala.collection.JavaConverters._
 
+object SslAdminClientIntegrationTest {
+  @volatile var semaphore: Option[Semaphore] = None
+  @volatile var lastUpdateRequestContext: Option[AuthorizableRequestContext] = None
+  class TestableAclAuthorizer extends AclAuthorizer {
+    override def createAcls(requestContext: AuthorizableRequestContext,
+                            aclBindings: util.List[AclBinding]): util.List[_ <: CompletionStage[AclCreateResult]] = {
+      lastUpdateRequestContext = Some(requestContext)
+      semaphore.foreach(_.acquire())
+      try {
+        super.createAcls(requestContext, aclBindings)
+      } finally {
+        semaphore.foreach(_.release())
+      }
+    }
+
+    override def deleteAcls(requestContext: AuthorizableRequestContext,
+                            aclBindingFilters: util.List[AclBindingFilter]): util.List[_ <: CompletionStage[AclDeleteResult]] = {
+      lastUpdateRequestContext = Some(requestContext)
+      semaphore.foreach(_.acquire())
+      try {
+        super.deleteAcls(requestContext, aclBindingFilters)
+      } finally {
+        semaphore.foreach(_.release())
+      }
+    }
+  }
+}
+
 class SslAdminClientIntegrationTest extends SaslSslAdminClientIntegrationTest {
   this.serverConfig.setProperty(KafkaConfig.ZkEnableSecureAclsProp, "true")
-  this.serverConfig.setProperty(KafkaConfig.AuthorizerClassNameProp, classOf[AclAuthorizer].getName)
+  this.serverConfig.setProperty(KafkaConfig.AuthorizerClassNameProp, classOf[SslAdminClientIntegrationTest.TestableAclAuthorizer].getName)
 
   override protected def securityProtocol = SecurityProtocol.SSL
   override protected lazy val trustStoreFile = Some(File.createTempFile("truststore", ".jks"))
@@ -79,12 +112,50 @@ class SslAdminClientIntegrationTest extends SaslSslAdminClientIntegrationTest {
     val prevAcls = authorizer.acls(clusterFilter).asScala.map(_.entry).toSet
     val deleteFilter = new AclBindingFilter(clusterResourcePattern.toFilter, ace.toFilter)
     Assert.assertFalse(authorizer.deleteAcls(null, Collections.singletonList(deleteFilter))
-      .get(0).aclBindingDeleteResults().asScala.head.exception.isPresent)
+      .get(0).toCompletableFuture.get.aclBindingDeleteResults().asScala.head.exception.isPresent)
     TestUtils.waitAndVerifyAcls(prevAcls -- Set(ace), authorizer, clusterResourcePattern)
   }
 
   private def clusterAcl(permissionType: AclPermissionType, operation: AclOperation): AccessControlEntry = {
     new AccessControlEntry(new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "*").toString,
       WildcardHost, operation, permissionType)
+  }
+
+  @Test
+  def testAsyncAclUpdates(): Unit = {
+    client = AdminClient.create(createConfig())
+
+    def validateRequestContext(context: AuthorizableRequestContext, apiKey: ApiKeys): Unit = {
+      assertEquals(SecurityProtocol.SSL, context.securityProtocol)
+      assertEquals("SSL", context.listener)
+      assertEquals(KafkaPrincipal.ANONYMOUS, context.principal)
+      assertEquals(apiKey.id.toInt, context.requestType)
+      assertEquals(apiKey.latestVersion.toInt, context.requestVersion)
+      assertTrue(s"Invalid correlation id: ${context.correlationId}", context.correlationId > 0)
+      assertTrue(s"Invalid client id: ${context.clientId}", context.clientId.startsWith("adminclient"))
+      assertTrue(s"Invalid host address: ${context.clientAddress}", context.clientAddress.isLoopbackAddress)
+    }
+
+    val testSemaphore = new Semaphore(0)
+    SslAdminClientIntegrationTest.semaphore = Some(testSemaphore)
+    val results = client.createAcls(List(acl2, acl3).asJava).values
+    assertEquals(Set(acl2, acl3), results.keySet().asScala)
+    assertFalse(results.values().asScala.exists(_.isDone))
+    TestUtils.waitUntilTrue(() => testSemaphore.hasQueuedThreads, "Authorizer not blocked in createAcls")
+    testSemaphore.release()
+    results.values().asScala.foreach(_.get)
+    validateRequestContext(SslAdminClientIntegrationTest.lastUpdateRequestContext.get, ApiKeys.CREATE_ACLS)
+
+    testSemaphore.acquire()
+    val results2 = client.deleteAcls(List(ACL1.toFilter, acl2.toFilter, acl3.toFilter).asJava).values
+    assertEquals(Set(ACL1.toFilter, acl2.toFilter, acl3.toFilter), results2.keySet.asScala)
+    assertFalse(results2.values().asScala.exists(_.isDone))
+    TestUtils.waitUntilTrue(() => testSemaphore.hasQueuedThreads, "Authorizer not blocked in deleteAcls")
+    testSemaphore.release()
+    results.values().asScala.foreach(_.get)
+    assertEquals(0, results2.get(ACL1.toFilter).get.values.size())
+    assertEquals(Set(acl2), results2.get(acl2.toFilter).get.values.asScala.map(_.binding).toSet)
+    assertEquals(Set(acl3), results2.get(acl3.toFilter).get.values.asScala.map(_.binding).toSet)
+    validateRequestContext(SslAdminClientIntegrationTest.lastUpdateRequestContext.get, ApiKeys.DELETE_ACLS)
   }
 }

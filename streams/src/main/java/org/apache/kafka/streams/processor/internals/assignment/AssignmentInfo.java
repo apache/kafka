@@ -37,12 +37,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import static org.apache.kafka.streams.processor.internals.assignment.StreamsAssignmentProtocolVersions.LATEST_SUPPORTED_VERSION;
+import static org.apache.kafka.streams.processor.internals.assignment.StreamsAssignmentProtocolVersions.UNKNOWN;
+
 public class AssignmentInfo {
-
     private static final Logger log = LoggerFactory.getLogger(AssignmentInfo.class);
-
-    public static final int LATEST_SUPPORTED_VERSION = 5;
-    static final int UNKNOWN = -1;
 
     private final int usedVersion;
     private final int latestSupportedVersion;
