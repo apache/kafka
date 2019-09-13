@@ -18,6 +18,7 @@ package org.apache.kafka.common.serialization;
 
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.utils.Utils;
 
 import java.io.ByteArrayInputStream;
@@ -100,7 +101,9 @@ public class ListDeserializer<T> implements Deserializer<List<T>> {
             for (int i = 0; i < size; i++) {
                 byte[] payload;
                 payload = new byte[primitiveSize == null ? dis.readInt() : primitiveSize];
-                dis.read(payload);
+                if (dis.read(payload) == -1) {
+                    throw new SerializationException("End of the stream was reached prematurely");
+                }
                 deserializedList.add(inner.deserialize(topic, payload));
             }
             return deserializedList;
