@@ -787,6 +787,8 @@ class Partition(val topicPartition: TopicPartition,
     if (!isLeader)
       throw new NotLeaderForPartitionException(s"Leader not local for partition $topicPartition on broker $localBrokerId")
 
+    // lowWatermarkIfLeader may be called many times when a DeleteRecordsRequest is outstanding,
+    // care has been taken to avoid generating unnecessary collections in this code
     var lowWaterMark = localLogOrException.logStartOffset
     remoteReplicas.foreach { replica =>
       if (metadataCache.getAliveBroker(replica.brokerId).nonEmpty && replica.logStartOffset < lowWaterMark) {
