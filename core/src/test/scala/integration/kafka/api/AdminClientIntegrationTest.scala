@@ -1061,7 +1061,7 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
     consumer.subscribe(Collections.singletonList(topic))
     TestUtils.pollRecordsUntilTrue(
       consumer,
-      (records: ConsumerRecords[Array[Byte], Array[Byte]]) => records.isEmpty,
+      (records: ConsumerRecords[Array[Byte], Array[Byte]]) => !records.isEmpty,
       "Expected records" )
   }
 
@@ -1374,7 +1374,7 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
       val tp2 = new TopicPartition("foo", 0)
 
       client.createTopics(Collections.singleton(
-        new NewTopic(testTopicName, 2, 1.toShort))).all().get()
+        new NewTopic(testTopicName, 1, 1.toShort))).all().get()
       waitForTopics(client, List(testTopicName), List())
 
       val producer = createProducer()
@@ -1387,7 +1387,8 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
       val newConsumerConfig = new Properties(consumerConfig)
       newConsumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, testGroupId)
       newConsumerConfig.setProperty(ConsumerConfig.CLIENT_ID_CONFIG, testClientId)
-      // Increase the session timeout to avoid having a rebalance during the test
+      // Increase timeouts to avoid having a rebalance during the test
+      newConsumerConfig.setProperty(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, Integer.MAX_VALUE.toString)
       newConsumerConfig.setProperty(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, Defaults.GroupMaxSessionTimeoutMs.toString)
       val consumer = createConsumer(configOverrides = newConsumerConfig)
 
