@@ -23,6 +23,7 @@ import org.apache.kafka.common.utils.ByteUtils;
 import org.apache.kafka.common.utils.Utils;
 
 import java.nio.ByteBuffer;
+import java.util.UUID;
 
 /**
  * A serializable type
@@ -310,6 +311,44 @@ public abstract class Type {
         public String documentation() {
             return "Represents an integer between -2<sup>63</sup> and 2<sup>63</sup>-1 inclusive. " +
                     "The values are encoded using eight bytes in network byte order (big-endian).";
+        }
+    };
+
+    public static final DocumentedType UUID = new DocumentedType() {
+        @Override
+        public void write(ByteBuffer buffer, Object o) {
+            final java.util.UUID uuid = (java.util.UUID) o;
+            buffer.putLong(uuid.getMostSignificantBits());
+            buffer.putLong(uuid.getLeastSignificantBits());
+        }
+
+        @Override
+        public Object read(ByteBuffer buffer) {
+            return new java.util.UUID(buffer.getLong(), buffer.getLong());
+        }
+
+        @Override
+        public int sizeOf(Object o) {
+            return 16;
+        }
+
+        @Override
+        public String typeName() {
+            return "UUID";
+        }
+
+        @Override
+        public UUID validate(Object item) {
+            if (item instanceof UUID)
+                return (UUID) item;
+            else
+                throw new SchemaException(item + " is not a UUID.");
+        }
+
+        @Override
+        public String documentation() {
+            return "Represents a java.util.UUID. " +
+                    "The values are encoded using sixteen bytes in network byte order (big-endian).";
         }
     };
 
