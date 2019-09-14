@@ -2888,6 +2888,20 @@ class GroupCoordinatorTest {
     assertEquals(Errors.NONE, thirdResult.error)
   }
 
+  @Test
+  def testUploadAndOffloadGroup(): Unit = {
+    val rebalanceResult = staticMembersJoinAndRebalance(leaderInstanceId, followerInstanceId)
+
+    groupCoordinator.handleGroupEmigration(groupPartitionId)
+    timer.advanceClock(1)
+    while (groupCoordinator.groupManager.getGroup(groupId).isDefined) {
+
+    }
+//    assertTrue(groupCoordinator.groupManager.getGroup(groupId).isEmpty)
+
+    groupCoordinator.handleGroupImmigration(groupPartitionId)
+  }
+
   private def getGroup(groupId: String): GroupMetadata = {
     val groupOpt = groupCoordinator.groupManager.getGroup(groupId)
     assertTrue(groupOpt.isDefined)
