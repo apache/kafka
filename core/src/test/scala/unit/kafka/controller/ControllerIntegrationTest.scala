@@ -71,7 +71,7 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
     waitUntilControllerEpoch(firstControllerEpoch, "broker failed to set controller epoch")
     servers.head.shutdown()
     servers.head.awaitShutdown()
-    TestUtils.waitUntilTrue(() => !zkClient.getControllerId.isDefined, "failed to kill controller")
+    TestUtils.waitUntilTrue(() => zkClient.getControllerId.isEmpty, "failed to kill controller")
     waitUntilControllerEpoch(firstControllerEpoch, "controller epoch was not persisted after broker failure")
   }
 
@@ -122,7 +122,7 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
     TestUtils.waitUntilBrokerMetadataIsPropagated(servers)
     val controllerId = TestUtils.waitUntilControllerElected(zkClient)
     // Need to make sure the broker we shutdown and startup are not the controller. Otherwise we will send out
-    // full UpdateMetadataReuqest to all brokers during controller failover.
+    // full UpdateMetadataRequest to all brokers during controller failover.
     val testBroker = servers.filter(e => e.config.brokerId != controllerId).head
     val remainingBrokers = servers.filter(_.config.brokerId != testBroker.config.brokerId)
     val topic = "topic1"

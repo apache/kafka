@@ -34,6 +34,8 @@ import com.yammer.metrics.core.Gauge
 import java.util
 import java.util.concurrent.{BlockingQueue, ConcurrentHashMap, LinkedBlockingQueue}
 
+import kafka.api.ApiVersion
+
 import collection.JavaConverters._
 import scala.collection.{concurrent, immutable}
 
@@ -81,7 +83,7 @@ object TransactionMarkerChannelManager {
       config.requestTimeoutMs,
       ClientDnsLookup.DEFAULT,
       time,
-      false,
+      config.interBrokerProtocolVersion >= ApiVersion.minVersionForApiDiscovery,
       new ApiVersions,
       logContext
     )

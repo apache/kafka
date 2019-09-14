@@ -28,7 +28,7 @@ import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrParti
 import org.apache.kafka.common.message.UpdateMetadataRequestData.{UpdateMetadataBroker, UpdateMetadataEndpoint, UpdateMetadataPartitionState}
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.ListenerName
-import org.apache.kafka.common.protocol.{ApiKeys, Errors}
+import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.Time
@@ -145,9 +145,7 @@ class BrokerEpochIntegrationTest extends ZooKeeperTestHarness {
             .setReplicas(Seq(0, 1).map(Integer.valueOf).asJava)
             .setIsNew(false)
         )
-        val requestBuilder = new LeaderAndIsrRequest.Builder(
-          ApiKeys.LEADER_AND_ISR.latestVersion, controllerId, controllerEpoch,
-          epochInRequest,
+        val requestBuilder = new LeaderAndIsrRequest.Builder(controllerId, controllerEpoch, epochInRequest,
           partitionStates.asJava, nodes.toSet.asJava)
 
         if (isEpochInRequestStale) {
@@ -186,7 +184,8 @@ class BrokerEpochIntegrationTest extends ZooKeeperTestHarness {
             .setRack(broker.rack.orNull)
         }.toBuffer
         val requestBuilder = new UpdateMetadataRequest.Builder(
-          ApiKeys.UPDATE_METADATA.latestVersion, controllerId, controllerEpoch,
+          controllerId,
+          controllerEpoch,
           epochInRequest,
           partitionStates.asJava, liveBrokers.asJava)
 
@@ -203,8 +202,7 @@ class BrokerEpochIntegrationTest extends ZooKeeperTestHarness {
 
       // Send StopReplica request with correct broker epoch
       {
-        val requestBuilder = new StopReplicaRequest.Builder(
-          ApiKeys.STOP_REPLICA.latestVersion, controllerId, controllerEpoch,
+        val requestBuilder = new StopReplicaRequest.Builder(controllerId, controllerEpoch,
           epochInRequest, // Correct broker epoch
           true, Set(tp).asJava)
 

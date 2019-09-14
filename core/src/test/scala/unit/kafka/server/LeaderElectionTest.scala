@@ -17,24 +17,24 @@
 
 package kafka.server
 
-import org.apache.kafka.common.TopicPartition
-
-import scala.collection.JavaConverters._
 import kafka.api.LeaderAndIsr
-import org.apache.kafka.common.requests._
-import org.junit.Assert._
-import kafka.utils.TestUtils
 import kafka.cluster.Broker
 import kafka.controller.{ControllerChannelManager, ControllerContext, StateChangeLogger}
+import kafka.utils.TestUtils
 import kafka.utils.TestUtils._
 import kafka.zk.ZooKeeperTestHarness
+import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.ListenerName
-import org.apache.kafka.common.protocol.{ApiKeys, Errors}
+import org.apache.kafka.common.protocol.Errors
+import org.apache.kafka.common.requests._
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.Time
+import org.junit.Assert._
 import org.junit.{After, Before, Test}
+
+import scala.collection.JavaConverters._
 
 class LeaderElectionTest extends ZooKeeperTestHarness {
   val brokerId1 = 0
@@ -153,8 +153,7 @@ class LeaderElectionTest extends ZooKeeperTestHarness {
           .setReplicas(Seq(0, 1).map(Integer.valueOf).asJava)
           .setIsNew(false)
       )
-      val requestBuilder = new LeaderAndIsrRequest.Builder(
-        ApiKeys.LEADER_AND_ISR.latestVersion, controllerId, staleControllerEpoch,
+      val requestBuilder = new LeaderAndIsrRequest.Builder(controllerId, staleControllerEpoch,
         servers(brokerId2).kafkaController.brokerEpoch, partitionStates.asJava, nodes.toSet.asJava)
 
       controllerChannelManager.sendRequest(brokerId2, requestBuilder, staleControllerEpochCallback)

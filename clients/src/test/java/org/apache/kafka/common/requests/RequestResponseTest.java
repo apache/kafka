@@ -1244,7 +1244,8 @@ public class RequestResponseTest {
 
     private StopReplicaRequest createStopReplicaRequest(int version, boolean deletePartitions) {
         Set<TopicPartition> partitions = Utils.mkSet(new TopicPartition("test", 0));
-        return new StopReplicaRequest.Builder((short) version, 0, 1, 0, deletePartitions, partitions).build();
+        return new StopReplicaRequest.Builder(0, 1, 0, deletePartitions, partitions)
+                .build((short) version);
     }
 
     private StopReplicaResponse createStopReplicaResponse() {
@@ -1262,18 +1263,14 @@ public class RequestResponseTest {
         ControlledShutdownRequestData data = new ControlledShutdownRequestData()
                 .setBrokerId(10)
                 .setBrokerEpoch(0L);
-        return new ControlledShutdownRequest.Builder(
-                data,
-                ApiKeys.CONTROLLED_SHUTDOWN.latestVersion()).build();
+        return new ControlledShutdownRequest.Builder(data).build();
     }
 
     private ControlledShutdownRequest createControlledShutdownRequest(int version) {
         ControlledShutdownRequestData data = new ControlledShutdownRequestData()
                 .setBrokerId(10)
                 .setBrokerEpoch(0L);
-        return new ControlledShutdownRequest.Builder(
-                data,
-                ApiKeys.CONTROLLED_SHUTDOWN.latestVersion()).build((short) version);
+        return new ControlledShutdownRequest.Builder(data).build((short) version);
     }
 
     private ControlledShutdownResponse createControlledShutdownResponse() {
@@ -1331,7 +1328,8 @@ public class RequestResponseTest {
                 new Node(0, "test0", 1223),
                 new Node(1, "test1", 1223)
         );
-        return new LeaderAndIsrRequest.Builder((short) version, 1, 10, 0, partitionStates, leaders).build();
+        return new LeaderAndIsrRequest.Builder(1, 10, 0, partitionStates, leaders)
+                .build((short) version);
     }
 
     private LeaderAndIsrResponse createLeaderAndIsrResponse() {
@@ -1420,8 +1418,8 @@ public class RequestResponseTest {
                 .setEndpoints(endpoints2)
                 .setRack(rack)
         );
-        return new UpdateMetadataRequest.Builder((short) version, 1, 10, 0, partitionStates,
-            liveBrokers).build();
+        return new UpdateMetadataRequest.Builder(1, 10, 0, partitionStates,
+            liveBrokers).build((short) version);
     }
 
     private UpdateMetadataResponse createUpdateMetadataResponse() {
@@ -1560,7 +1558,7 @@ public class RequestResponseTest {
 
     private OffsetsForLeaderEpochRequest createLeaderEpochRequestForReplica(int version, int replicaId) {
         Map<TopicPartition, OffsetsForLeaderEpochRequest.PartitionData> epochs = createOffsetForLeaderEpochPartitionData();
-        return OffsetsForLeaderEpochRequest.Builder.forFollower((short) version, epochs, replicaId).build();
+        return OffsetsForLeaderEpochRequest.Builder.forReplica(epochs, replicaId).build((short) version);
     }
 
     private OffsetsForLeaderEpochResponse createLeaderEpochResponse() {

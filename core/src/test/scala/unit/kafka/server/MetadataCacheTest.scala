@@ -22,7 +22,7 @@ import util.Arrays.asList
 
 import org.apache.kafka.common.message.UpdateMetadataRequestData.{UpdateMetadataBroker, UpdateMetadataEndpoint, UpdateMetadataPartitionState}
 import org.apache.kafka.common.network.ListenerName
-import org.apache.kafka.common.protocol.{ApiKeys, Errors}
+import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.UpdateMetadataRequest
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.junit.Test
@@ -105,8 +105,7 @@ class MetadataCacheTest {
         .setZkVersion(zkVersion)
         .setReplicas(asList(2, 1, 3)))
 
-    val version = ApiKeys.UPDATE_METADATA.latestVersion
-    val updateMetadataRequest = new UpdateMetadataRequest.Builder(version, controllerId, controllerEpoch, brokerEpoch,
+    val updateMetadataRequest = new UpdateMetadataRequest.Builder(controllerId, controllerEpoch, brokerEpoch,
       partitionStates.asJava, brokers.asJava).build()
     cache.updateMetadata(15, updateMetadataRequest)
 
@@ -250,8 +249,7 @@ class MetadataCacheTest {
       .setZkVersion(zkVersion)
       .setReplicas(asList(0)))
 
-    val version = ApiKeys.UPDATE_METADATA.latestVersion
-    val updateMetadataRequest = new UpdateMetadataRequest.Builder(version, controllerId, controllerEpoch, brokerEpoch,
+    val updateMetadataRequest = new UpdateMetadataRequest.Builder(controllerId, controllerEpoch, brokerEpoch,
       partitionStates.asJava, brokers.asJava).build()
     cache.updateMetadata(15, updateMetadataRequest)
 
@@ -308,8 +306,7 @@ class MetadataCacheTest {
         .setZkVersion(zkVersion)
         .setReplicas(replicas))
 
-    val version = ApiKeys.UPDATE_METADATA.latestVersion
-    val updateMetadataRequest = new UpdateMetadataRequest.Builder(version, controllerId, controllerEpoch, brokerEpoch,
+    val updateMetadataRequest = new UpdateMetadataRequest.Builder(controllerId, controllerEpoch, brokerEpoch,
       partitionStates.asJava, brokers.asJava).build()
     cache.updateMetadata(15, updateMetadataRequest)
 
@@ -382,8 +379,7 @@ class MetadataCacheTest {
       .setZkVersion(zkVersion)
       .setReplicas(replicas))
 
-    val version = ApiKeys.UPDATE_METADATA.latestVersion
-    val updateMetadataRequest = new UpdateMetadataRequest.Builder(version, controllerId, controllerEpoch, brokerEpoch,
+    val updateMetadataRequest = new UpdateMetadataRequest.Builder(controllerId, controllerEpoch, brokerEpoch,
       partitionStates.asJava, brokers.asJava).build()
     cache.updateMetadata(15, updateMetadataRequest)
 
@@ -447,8 +443,7 @@ class MetadataCacheTest {
       .setIsr(isr)
       .setZkVersion(3)
       .setReplicas(replicas))
-    val version = ApiKeys.UPDATE_METADATA.latestVersion
-    val updateMetadataRequest = new UpdateMetadataRequest.Builder(version, 2, controllerEpoch, brokerEpoch, partitionStates.asJava,
+    val updateMetadataRequest = new UpdateMetadataRequest.Builder(2, controllerEpoch, brokerEpoch, partitionStates.asJava,
       brokers.asJava).build()
     cache.updateMetadata(15, updateMetadataRequest)
 
@@ -489,8 +484,7 @@ class MetadataCacheTest {
         .setIsr(isr)
         .setZkVersion(3)
         .setReplicas(replicas))
-      val version = ApiKeys.UPDATE_METADATA.latestVersion
-      val updateMetadataRequest = new UpdateMetadataRequest.Builder(version, 2, controllerEpoch, brokerEpoch, partitionStates.asJava,
+      val updateMetadataRequest = new UpdateMetadataRequest.Builder(2, controllerEpoch, brokerEpoch, partitionStates.asJava,
         brokers.asJava).build()
       cache.updateMetadata(15, updateMetadataRequest)
     }

@@ -125,6 +125,12 @@ object ApiVersion {
       case _ => throw new IllegalArgumentException(s"Invalid message format version $recordVersion")
     }
   }
+
+  /**
+   * Get the minimum inter broker version which supports the ApiVersion API.
+   */
+  def minVersionForApiDiscovery: ApiVersion = KAFKA_0_10_0_IV0
+
 }
 
 sealed trait ApiVersion extends Ordered[ApiVersion] {

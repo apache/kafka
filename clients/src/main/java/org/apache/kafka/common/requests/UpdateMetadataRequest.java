@@ -45,15 +45,20 @@ public class UpdateMetadataRequest extends AbstractControlRequest {
         private final List<UpdateMetadataPartitionState> partitionStates;
         private final List<UpdateMetadataBroker> liveBrokers;
 
-        public Builder(short version, int controllerId, int controllerEpoch, long brokerEpoch,
-                       List<UpdateMetadataPartitionState> partitionStates, List<UpdateMetadataBroker> liveBrokers) {
-            super(ApiKeys.UPDATE_METADATA, version, controllerId, controllerEpoch, brokerEpoch);
+        public Builder(int controllerId,
+                       int controllerEpoch,
+                       long brokerEpoch,
+                       List<UpdateMetadataPartitionState> partitionStates,
+                       List<UpdateMetadataBroker> liveBrokers) {
+            super(ApiKeys.UPDATE_METADATA, controllerId, controllerEpoch, brokerEpoch);
             this.partitionStates = partitionStates;
             this.liveBrokers = liveBrokers;
         }
 
         @Override
         public UpdateMetadataRequest build(short version) {
+            ensureSupportedVersion(version);
+
             if (version < 3) {
                 for (UpdateMetadataBroker broker : liveBrokers) {
                     if (version == 0) {
