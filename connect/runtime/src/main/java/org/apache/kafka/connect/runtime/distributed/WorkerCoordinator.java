@@ -196,8 +196,8 @@ public class WorkerCoordinator extends AbstractCoordinator implements Closeable 
     @Override
     protected Map<String, ByteBuffer> performAssignment(String leaderId, String protocol, List<JoinGroupResponseMember> allMemberMetadata) {
         return ConnectProtocolCompatibility.fromProtocol(protocol) == EAGER
-            ? eagerAssignor.performAssignment(leaderId, protocol, allMemberMetadata, this)
-            : incrementalAssignor.performAssignment(leaderId, protocol, allMemberMetadata, this);
+               ? eagerAssignor.performAssignment(leaderId, protocol, allMemberMetadata, this)
+               : incrementalAssignor.performAssignment(leaderId, protocol, allMemberMetadata, this);
     }
 
     @Override

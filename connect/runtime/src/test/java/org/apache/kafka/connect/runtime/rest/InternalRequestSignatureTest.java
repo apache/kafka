@@ -19,9 +19,9 @@ package org.apache.kafka.connect.runtime.rest;
 
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.runtime.rest.errors.BadRequestException;
-import org.easymock.Capture;
 import org.eclipse.jetty.client.api.Request;
 import org.junit.Test;
+import org.mockito.ArgumentCaptor;
 
 import javax.crypto.Mac;
 import javax.crypto.SecretKey;
@@ -30,17 +30,14 @@ import javax.ws.rs.core.HttpHeaders;
 
 import java.util.Base64;
 
-import static org.easymock.EasyMock.capture;
-import static org.easymock.EasyMock.eq;
-import static org.easymock.EasyMock.expect;
-import static org.easymock.EasyMock.mock;
-import static org.easymock.EasyMock.newCapture;
-import static org.easymock.EasyMock.replay;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 public class InternalRequestSignatureTest {
 
@@ -95,23 +92,23 @@ public class InternalRequestSignatureTest {
     @Test(expected = ConnectException.class)
     public void addToRequestShouldThrowExceptionOnInvalidSignatureAlgorithm() {
         Request request = mock(Request.class);
-        replay(request);
         InternalRequestSignature.addToRequest(KEY, REQUEST_BODY, "doesn'texist", request);
     }
 
     @Test
     public void addToRequestShouldAddHeadersOnValidSignatureAlgorithm() {
         Request request = mock(Request.class);
-        Capture<String> signatureCapture = newCapture();
-        Capture<String> signatureAlgorithmCapture = newCapture();
-        expect(request.header(eq(InternalRequestSignature.SIGNATURE_HEADER), capture(signatureCapture)))
-            .andReturn(request)
-            .once();
-        expect(request.header(eq(InternalRequestSignature.SIGNATURE_ALGORITHM_HEADER), capture(signatureAlgorithmCapture)))
-            .andReturn(request)
-            .once();
+        ArgumentCaptor<String> signatureCapture = ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<String> signatureAlgorithmCapture = ArgumentCaptor.forClass(String.class);
+        when(request.header(
+                eq(InternalRequestSignature.SIGNATURE_HEADER),
+                signatureCapture.capture()
+            )).thenReturn(request);
+        when(request.header(
+                eq(InternalRequestSignature.SIGNATURE_ALGORITHM_HEADER),
+                signatureAlgorithmCapture.capture()
+            )).thenReturn(request);
 
-        replay(request);
         InternalRequestSignature.addToRequest(KEY, REQUEST_BODY, SIGNATURE_ALGORITHM, request);
 
         assertEquals(
@@ -145,11 +142,10 @@ public class InternalRequestSignatureTest {
 
     private static HttpHeaders internalRequestHeaders(String signature, String signatureAlgorithm) {
         HttpHeaders result = mock(HttpHeaders.class);
-        expect(result.getHeaderString(eq(InternalRequestSignature.SIGNATURE_HEADER)))
-            .andReturn(signature);
-        expect(result.getHeaderString(eq(InternalRequestSignature.SIGNATURE_ALGORITHM_HEADER)))
-            .andReturn(signatureAlgorithm);
-        replay(result);
+        when(result.getHeaderString(eq(InternalRequestSignature.SIGNATURE_HEADER)))
+            .thenReturn(signature);
+        when(result.getHeaderString(eq(InternalRequestSignature.SIGNATURE_ALGORITHM_HEADER)))
+            .thenReturn(signatureAlgorithm);
         return result;
     }
 }

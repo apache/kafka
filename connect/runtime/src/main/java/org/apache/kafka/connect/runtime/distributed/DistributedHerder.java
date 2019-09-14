@@ -302,7 +302,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
             keyExpiration = Long.MAX_VALUE;
             configBackingStore.putSessionKey(new SessionKey(
                 keyGenerator.generateKey(),
-                time.milliseconds()
+                now
             ));
         }
 
