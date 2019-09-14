@@ -707,9 +707,16 @@ public class ConfigDef {
                 case CLASS:
                     if (value instanceof Class)
                         return value;
-                    else if (value instanceof String)
-                        return Class.forName(trimmed, true, Utils.getContextOrKafkaClassLoader());
-                    else
+                    else if (value instanceof String) {
+                        ClassLoader contextOrKafkaClassLoader = Utils.getContextOrKafkaClassLoader();
+                        // Use loadClass here instead of Class.forName because the name we use here may be an alias
+                        // and not match the name of the class that gets loaded. If that happens, Class.forName can
+                        // throw an exception.
+                        Class<?> klass = contextOrKafkaClassLoader.loadClass(trimmed);
+                        // Invoke forName here with the true name of the requested class to cause class
+                        // initialization to take place.
+                        return Class.forName(klass.getName(), true, contextOrKafkaClassLoader);
+                    } else
                         throw new ConfigException(name, value, "Expected a Class instance or class name.");
                 default:
                     throw new IllegalStateException("Unknown type.");
@@ -1400,6 +1407,56 @@ public class ConfigDef {
                 return base.visible(unprefixed(name), unprefixed(parsedConfig));
             }
         };
+    }
+
+    public String toHtml() {
+        return toHtml(Collections.<String, String>emptyMap());
+    }
+
+    /**
+     * Converts this config into an HTML list that can be embedded into docs.
+     * If <code>dynamicUpdateModes</code> is non-empty, a "Dynamic Update Mode" label
+     * will be included in the config details with the value of the update mode. Default
+     * mode is "read-only".
+     * @param dynamicUpdateModes Config name -&gt; update mode mapping
+     */
+    public String toHtml(Map<String, String> dynamicUpdateModes) {
+        boolean hasUpdateModes = !dynamicUpdateModes.isEmpty();
+        List<ConfigKey> configs = sortedConfigs();
+        StringBuilder b = new StringBuilder();
+        b.append("<ul class=\"config-list\">\n");
+
+        for (ConfigKey key : configs) {
+            if (key.internalConfig) {
+                continue;
+            }
+            b.append("<li>");
+            b.append("<b>");
+            b.append(key.name);
+            b.append("</b>: ");
+            b.append(key.documentation);
+            b.append("<br/>");
+            // details
+            b.append("<ul class=\"horizontal-list\">");
+            for (String detail : headers()) {
+                if (detail.equals("Name") || detail.equals("Description")) continue;
+                addConfigDetail(b, detail, getConfigValue(key, detail));
+            }
+            if (hasUpdateModes) {
+                String updateMode = dynamicUpdateModes.get(key.name);
+                if (updateMode == null)
+                    updateMode = "read-only";
+                addConfigDetail(b, "Update Mode", updateMode);
+            }
+            b.append("</ul>");
+            b.append("</li>\n");
+        }
+        b.append("</ul>\n");
+        return b.toString();
+    }
+
+    private static void addConfigDetail(StringBuilder builder, String name, String value) {
+        builder.append("<li><b>" + name + "</b>: " + value + "</li>");
     }
 
 }

@@ -55,7 +55,7 @@ public class BrokerSecurityConfigs {
             " see <a href=\"#security_authz\"> security authorization and acls</a>. Note that this configuration is ignored" +
             " if an extension of KafkaPrincipalBuilder is provided by the <code>" + PRINCIPAL_BUILDER_CLASS_CONFIG + "</code>" +
            " configuration.";
-    public static final List<String> DEFAULT_SSL_PRINCIPAL_MAPPING_RULES = Collections.singletonList("DEFAULT");
+    public static final String DEFAULT_SSL_PRINCIPAL_MAPPING_RULES = "DEFAULT";
 
     public static final String SASL_KERBEROS_PRINCIPAL_TO_LOCAL_RULES_DOC = "A list of rules for mapping from principal " +
             "names to short names (typically operating system usernames). The rules are evaluated in order and the " +
@@ -73,7 +73,8 @@ public class BrokerSecurityConfigs {
             + " client authentication is required."
             + " <li><code>ssl.client.auth=requested</code> This means client authentication is optional."
             + " unlike requested , if this option is set client can choose not to provide authentication information about itself"
-            + " <li><code>ssl.client.auth=none</code> This means client authentication is not needed.";
+            + " <li><code>ssl.client.auth=none</code> This means client authentication is not needed."
+            + "</ul>";
 
     public static final String SASL_ENABLED_MECHANISMS_DOC = "The list of SASL mechanisms enabled in the Kafka server. "
             + "The list may contain any mechanism for which a security provider is available. "

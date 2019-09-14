@@ -17,7 +17,7 @@
 
 package kafka.cluster
 
-import org.apache.kafka.common.KafkaException
+import org.apache.kafka.common.{Endpoint => JEndpoint, KafkaException}
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.Utils
@@ -62,7 +62,8 @@ object EndPoint {
 /**
  * Part of the broker definition - matching host/port pair to a protocol
  */
-case class EndPoint(host: String, port: Int, listenerName: ListenerName, securityProtocol: SecurityProtocol) {
+case class EndPoint(override val host: String, override val port: Int, listenerName: ListenerName, override val securityProtocol: SecurityProtocol)
+    extends JEndpoint(Option(listenerName).map(_.value).orNull, securityProtocol, host, port) {
   def connectionString: String = {
     val hostport =
       if (host == null)
@@ -71,4 +72,8 @@ case class EndPoint(host: String, port: Int, listenerName: ListenerName, securit
         Utils.formatAddress(host, port)
     listenerName.value + "://" + hostport
   }
+
+  // to keep spotbugs happy
+  override def equals(o: scala.Any): Boolean = super.equals(o)
+  override def hashCode(): Int = super.hashCode()
 }

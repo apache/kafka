@@ -39,7 +39,7 @@ abstract class BaseRequestTest extends IntegrationTestHarness {
   override def brokerCount: Int = 3
 
   // If required, override properties by mutating the passed Properties object
-  protected def brokerPropertyOverrides(properties: Properties) {}
+  protected def brokerPropertyOverrides(properties: Properties): Unit = {}
 
   override def modifyConfigs(props: Seq[Properties]): Unit = {
     props.foreach { p =>
@@ -77,7 +77,7 @@ abstract class BaseRequestTest extends IntegrationTestHarness {
     new Socket("localhost", s.boundPort(ListenerName.forSecurityProtocol(protocol)))
   }
 
-  private def sendRequest(socket: Socket, request: Array[Byte]) {
+  private def sendRequest(socket: Socket, request: Array[Byte]): Unit = {
     val outgoing = new DataOutputStream(socket.getOutputStream)
     outgoing.writeInt(request.length)
     outgoing.write(request)

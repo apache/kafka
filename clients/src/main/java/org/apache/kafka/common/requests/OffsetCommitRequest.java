@@ -19,7 +19,10 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.OffsetCommitRequestData;
+import org.apache.kafka.common.message.OffsetCommitRequestData.OffsetCommitRequestTopic;
 import org.apache.kafka.common.message.OffsetCommitResponseData;
+import org.apache.kafka.common.message.OffsetCommitResponseData.OffsetCommitResponsePartition;
+import org.apache.kafka.common.message.OffsetCommitResponseData.OffsetCommitResponseTopic;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
@@ -88,7 +91,7 @@ public class OffsetCommitRequest extends AbstractRequest {
 
     public Map<TopicPartition, Long> offsets() {
         Map<TopicPartition, Long> offsets = new HashMap<>();
-        for (OffsetCommitRequestData.OffsetCommitRequestTopic topic : data.topics()) {
+        for (OffsetCommitRequestTopic topic : data.topics()) {
             for (OffsetCommitRequestData.OffsetCommitRequestPartition partition : topic.partitions()) {
                 offsets.put(new TopicPartition(topic.name(), partition.partitionIndex()),
                         partition.committedOffset());
@@ -97,20 +100,19 @@ public class OffsetCommitRequest extends AbstractRequest {
         return offsets;
     }
 
-    public static List<OffsetCommitResponseData.OffsetCommitResponseTopic> getErrorResponseTopics(
-            List<OffsetCommitRequestData.OffsetCommitRequestTopic> requestTopics,
+    public static List<OffsetCommitResponseTopic> getErrorResponseTopics(
+            List<OffsetCommitRequestTopic> requestTopics,
             Errors e) {
-        List<OffsetCommitResponseData.OffsetCommitResponseTopic>
-                responseTopicData = new ArrayList<>();
-        for (OffsetCommitRequestData.OffsetCommitRequestTopic entry : requestTopics) {
-            List<OffsetCommitResponseData.OffsetCommitResponsePartition> responsePartitions =
+        List<OffsetCommitResponseTopic> responseTopicData = new ArrayList<>();
+        for (OffsetCommitRequestTopic entry : requestTopics) {
+            List<OffsetCommitResponsePartition> responsePartitions =
                     new ArrayList<>();
             for (OffsetCommitRequestData.OffsetCommitRequestPartition requestPartition : entry.partitions()) {
-                responsePartitions.add(new OffsetCommitResponseData.OffsetCommitResponsePartition()
-                        .setPartitionIndex(requestPartition.partitionIndex())
-                        .setErrorCode(e.code()));
+                responsePartitions.add(new OffsetCommitResponsePartition()
+                                           .setPartitionIndex(requestPartition.partitionIndex())
+                                           .setErrorCode(e.code()));
             }
-            responseTopicData.add(new OffsetCommitResponseData.OffsetCommitResponseTopic()
+            responseTopicData.add(new OffsetCommitResponseTopic()
                     .setName(entry.name())
                     .setPartitions(responsePartitions)
             );
@@ -119,8 +121,8 @@ public class OffsetCommitRequest extends AbstractRequest {
     }
 
     @Override
-    public AbstractResponse getErrorResponse(int throttleTimeMs, Throwable e) {
-        List<OffsetCommitResponseData.OffsetCommitResponseTopic>
+    public OffsetCommitResponse getErrorResponse(int throttleTimeMs, Throwable e) {
+        List<OffsetCommitResponseTopic>
                 responseTopicData = getErrorResponseTopics(data.topics(), Errors.forException(e));
 
         short versionId = version();

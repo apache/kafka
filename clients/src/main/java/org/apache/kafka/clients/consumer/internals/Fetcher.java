@@ -47,11 +47,11 @@ import org.apache.kafka.common.metrics.Gauge;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Avg;
-import org.apache.kafka.common.metrics.stats.Count;
 import org.apache.kafka.common.metrics.stats.Max;
 import org.apache.kafka.common.metrics.stats.Meter;
 import org.apache.kafka.common.metrics.stats.Min;
 import org.apache.kafka.common.metrics.stats.Value;
+import org.apache.kafka.common.metrics.stats.WindowedCount;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.BufferSupplier;
@@ -81,6 +81,7 @@ import org.slf4j.helpers.MessageFormatter;
 
 import java.io.Closeable;
 import java.nio.ByteBuffer;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -93,6 +94,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.PriorityQueue;
+import java.util.Queue;
 import java.util.Set;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -152,7 +154,7 @@ public class Fetcher<K, V> implements Closeable {
     private final Set<Integer> nodesWithPendingFetchRequests;
     private final ApiVersions apiVersions;
 
-    private PartitionRecords nextInLineRecords = null;
+    private CompletedFetch nextInLineFetch = null;
 
     public Fetcher(LogContext logContext,
                    ConsumerNetworkClient client,
@@ -216,11 +218,20 @@ public class Fetcher<K, V> implements Closeable {
     }
 
     /**
-     * Return whether we have any completed fetches pending return to the user. This method is thread-safe.
+     * Return whether we have any completed fetches pending return to the user. This method is thread-safe. Has
+     * visibility for testing.
      * @return true if there are completed fetches, false otherwise
      */
-    public boolean hasCompletedFetches() {
+    protected boolean hasCompletedFetches() {
         return !completedFetches.isEmpty();
+    }
+
+    /**
+     * Return whether we have any completed fetches that are fetchable. This method is thread-safe.
+     * @return true if there are completed fetches that can be returned, false otherwise
+     */
+    public boolean hasAvailableFetches() {
+        return completedFetches.stream().anyMatch(fetch -> subscriptions.isFetchable(fetch.partition));
     }
 
     /**
@@ -287,12 +298,16 @@ public class Fetcher<K, V> implements Closeable {
                                             throw new IllegalStateException(message);
                                         } else {
                                             long fetchOffset = requestData.fetchOffset;
-                                            FetchResponse.PartitionData<Records> fetchData = entry.getValue();
+                                            FetchResponse.PartitionData<Records> partitionData = entry.getValue();
 
                                             log.debug("Fetch {} at offset {} for partition {} returned fetch data {}",
-                                                    isolationLevel, fetchOffset, partition, fetchData);
-                                            completedFetches.add(new CompletedFetch(partition, fetchOffset, fetchData, metricAggregator,
-                                                    resp.requestHeader().apiVersion()));
+                                                    isolationLevel, fetchOffset, partition, partitionData);
+
+                                            Iterator<? extends RecordBatch> batches = partitionData.records.batches().iterator();
+                                            short responseVersion = resp.requestHeader().apiVersion();
+
+                                            completedFetches.add(new CompletedFetch(partition, partitionData,
+                                                    metricAggregator, batches, fetchOffset, responseVersion));
                                         }
                                     }
 
@@ -577,33 +592,45 @@ public class Fetcher<K, V> implements Closeable {
      */
     public Map<TopicPartition, List<ConsumerRecord<K, V>>> fetchedRecords() {
         Map<TopicPartition, List<ConsumerRecord<K, V>>> fetched = new HashMap<>();
+        Queue<CompletedFetch> pausedCompletedFetches = new ArrayDeque<>();
         int recordsRemaining = maxPollRecords;
 
         try {
             while (recordsRemaining > 0) {
-                if (nextInLineRecords == null || nextInLineRecords.isFetched) {
-                    CompletedFetch completedFetch = completedFetches.peek();
-                    if (completedFetch == null) break;
+                if (nextInLineFetch == null || nextInLineFetch.isConsumed) {
+                    CompletedFetch records = completedFetches.peek();
+                    if (records == null) break;
 
-                    try {
-                        nextInLineRecords = parseCompletedFetch(completedFetch);
-                    } catch (Exception e) {
-                        // Remove a completedFetch upon a parse with exception if (1) it contains no records, and
-                        // (2) there are no fetched records with actual content preceding this exception.
-                        // The first condition ensures that the completedFetches is not stuck with the same completedFetch
-                        // in cases such as the TopicAuthorizationException, and the second condition ensures that no
-                        // potential data loss due to an exception in a following record.
-                        FetchResponse.PartitionData partition = completedFetch.partitionData;
-                        if (fetched.isEmpty() && (partition.records == null || partition.records.sizeInBytes() == 0)) {
-                            completedFetches.poll();
+                    if (records.notInitialized()) {
+                        try {
+                            nextInLineFetch = initializeCompletedFetch(records);
+                        } catch (Exception e) {
+                            // Remove a completedFetch upon a parse with exception if (1) it contains no records, and
+                            // (2) there are no fetched records with actual content preceding this exception.
+                            // The first condition ensures that the completedFetches is not stuck with the same completedFetch
+                            // in cases such as the TopicAuthorizationException, and the second condition ensures that no
+                            // potential data loss due to an exception in a following record.
+                            FetchResponse.PartitionData partition = records.partitionData;
+                            if (fetched.isEmpty() && (partition.records == null || partition.records.sizeInBytes() == 0)) {
+                                completedFetches.poll();
+                            }
+                            throw e;
                         }
-                        throw e;
+                    } else {
+                        nextInLineFetch = records;
                     }
                     completedFetches.poll();
+                } else if (subscriptions.isPaused(nextInLineFetch.partition)) {
+                    // when the partition is paused we add the records back to the completedFetches queue instead of draining
+                    // them so that they can be returned on a subsequent poll if the partition is resumed at that time
+                    log.debug("Skipping fetching records for assigned partition {} because it is paused", nextInLineFetch.partition);
+                    pausedCompletedFetches.add(nextInLineFetch);
+                    nextInLineFetch = null;
                 } else {
-                    List<ConsumerRecord<K, V>> records = fetchRecords(nextInLineRecords, recordsRemaining);
-                    TopicPartition partition = nextInLineRecords.partition;
+                    List<ConsumerRecord<K, V>> records = fetchRecords(nextInLineFetch, recordsRemaining);
+
                     if (!records.isEmpty()) {
+                        TopicPartition partition = nextInLineFetch.partition;
                         List<ConsumerRecord<K, V>> currentRecords = fetched.get(partition);
                         if (currentRecords == null) {
                             fetched.put(partition, records);
@@ -623,42 +650,47 @@ public class Fetcher<K, V> implements Closeable {
         } catch (KafkaException e) {
             if (fetched.isEmpty())
                 throw e;
+        } finally {
+            // add any polled completed fetches for paused partitions back to the completed fetches queue to be
+            // re-evaluated in the next poll
+            completedFetches.addAll(pausedCompletedFetches);
         }
+
         return fetched;
     }
 
-    private List<ConsumerRecord<K, V>> fetchRecords(PartitionRecords partitionRecords, int maxRecords) {
-        if (!subscriptions.isAssigned(partitionRecords.partition)) {
+    private List<ConsumerRecord<K, V>> fetchRecords(CompletedFetch completedFetch, int maxRecords) {
+        if (!subscriptions.isAssigned(completedFetch.partition)) {
             // this can happen when a rebalance happened before fetched records are returned to the consumer's poll call
             log.debug("Not returning fetched records for partition {} since it is no longer assigned",
-                    partitionRecords.partition);
-        } else if (!subscriptions.isFetchable(partitionRecords.partition)) {
+                    completedFetch.partition);
+        } else if (!subscriptions.isFetchable(completedFetch.partition)) {
             // this can happen when a partition is paused before fetched records are returned to the consumer's
             // poll call or if the offset is being reset
             log.debug("Not returning fetched records for assigned partition {} since it is no longer fetchable",
-                    partitionRecords.partition);
+                    completedFetch.partition);
         } else {
-            SubscriptionState.FetchPosition position = subscriptions.position(partitionRecords.partition);
-            if (partitionRecords.nextFetchOffset == position.offset) {
-                List<ConsumerRecord<K, V>> partRecords = partitionRecords.fetchRecords(maxRecords);
+            SubscriptionState.FetchPosition position = subscriptions.position(completedFetch.partition);
+            if (completedFetch.nextFetchOffset == position.offset) {
+                List<ConsumerRecord<K, V>> partRecords = completedFetch.fetchRecords(maxRecords);
 
-                if (partitionRecords.nextFetchOffset > position.offset) {
+                if (completedFetch.nextFetchOffset > position.offset) {
                     SubscriptionState.FetchPosition nextPosition = new SubscriptionState.FetchPosition(
-                            partitionRecords.nextFetchOffset,
-                            partitionRecords.lastEpoch,
+                            completedFetch.nextFetchOffset,
+                            completedFetch.lastEpoch,
                             position.currentLeader);
                     log.trace("Returning fetched records at offset {} for assigned partition {} and update " +
-                            "position to {}", position, partitionRecords.partition, nextPosition);
-                    subscriptions.position(partitionRecords.partition, nextPosition);
+                            "position to {}", position, completedFetch.partition, nextPosition);
+                    subscriptions.position(completedFetch.partition, nextPosition);
                 }
 
-                Long partitionLag = subscriptions.partitionLag(partitionRecords.partition, isolationLevel);
+                Long partitionLag = subscriptions.partitionLag(completedFetch.partition, isolationLevel);
                 if (partitionLag != null)
-                    this.sensors.recordPartitionLag(partitionRecords.partition, partitionLag);
+                    this.sensors.recordPartitionLag(completedFetch.partition, partitionLag);
 
-                Long lead = subscriptions.partitionLead(partitionRecords.partition);
+                Long lead = subscriptions.partitionLead(completedFetch.partition);
                 if (lead != null) {
-                    this.sensors.recordPartitionLead(partitionRecords.partition, lead);
+                    this.sensors.recordPartitionLead(completedFetch.partition, lead);
                 }
 
                 return partRecords;
@@ -666,11 +698,13 @@ public class Fetcher<K, V> implements Closeable {
                 // these records aren't next in line based on the last consumed position, ignore them
                 // they must be from an obsolete request
                 log.debug("Ignoring fetched records for {} at offset {} since the current position is {}",
-                        partitionRecords.partition, partitionRecords.nextFetchOffset, position);
+                        completedFetch.partition, completedFetch.nextFetchOffset, position);
             }
         }
 
-        partitionRecords.drain();
+        log.trace("Draining fetched records for partition {}", completedFetch.partition);
+        completedFetch.drain();
+
         return emptyList();
     }
 
@@ -1022,8 +1056,8 @@ public class Fetcher<K, V> implements Closeable {
 
     private List<TopicPartition> fetchablePartitions() {
         Set<TopicPartition> exclude = new HashSet<>();
-        if (nextInLineRecords != null && !nextInLineRecords.isFetched) {
-            exclude.add(nextInLineRecords.partition);
+        if (nextInLineFetch != null && !nextInLineFetch.isConsumed) {
+            exclude.add(nextInLineFetch.partition);
         }
         for (CompletedFetch completedFetch : completedFetches) {
             exclude.add(completedFetch.partition);
@@ -1125,20 +1159,19 @@ public class Fetcher<K, V> implements Closeable {
     }
 
     /**
-     * The callback for fetch completion
+     * Initialize a CompletedFetch object.
      */
-    private PartitionRecords parseCompletedFetch(CompletedFetch completedFetch) {
-        TopicPartition tp = completedFetch.partition;
-        FetchResponse.PartitionData<Records> partition = completedFetch.partitionData;
-        long fetchOffset = completedFetch.fetchedOffset;
-        PartitionRecords partitionRecords = null;
+    private CompletedFetch initializeCompletedFetch(CompletedFetch nextCompletedFetch) {
+        TopicPartition tp = nextCompletedFetch.partition;
+        FetchResponse.PartitionData<Records> partition = nextCompletedFetch.partitionData;
+        long fetchOffset = nextCompletedFetch.nextFetchOffset;
+        CompletedFetch completedFetch = null;
         Errors error = partition.error;
 
         try {
-            if (!subscriptions.isFetchable(tp)) {
-                // this can happen when a rebalance happened or a partition consumption paused
-                // while fetch is still in-flight
-                log.debug("Ignoring fetched records for partition {} since it is no longer fetchable", tp);
+            if (!subscriptions.hasValidPosition(tp)) {
+                // this can happen when a rebalance happened while fetch is still in-flight
+                log.debug("Ignoring fetched records for partition {} since it no longer has valid position", tp);
             } else if (error == Errors.NONE) {
                 // we are interested in this fetch only if the beginning offset matches the
                 // current consumed position
@@ -1152,7 +1185,7 @@ public class Fetcher<K, V> implements Closeable {
                 log.trace("Preparing to read {} bytes of data for partition {} with offset {}",
                         partition.records.sizeInBytes(), tp, position);
                 Iterator<? extends RecordBatch> batches = partition.records.batches().iterator();
-                partitionRecords = new PartitionRecords(tp, completedFetch, batches);
+                completedFetch = nextCompletedFetch;
 
                 if (!batches.hasNext() && partition.records.sizeInBytes() > 0) {
                     if (completedFetch.responseVersion < 3) {
@@ -1188,7 +1221,7 @@ public class Fetcher<K, V> implements Closeable {
                 }
 
                 if (partition.preferredReadReplica.isPresent()) {
-                    subscriptions.updatePreferredReadReplica(partitionRecords.partition, partition.preferredReadReplica.get(), () -> {
+                    subscriptions.updatePreferredReadReplica(completedFetch.partition, partition.preferredReadReplica.get(), () -> {
                         long expireTimeMs = time.milliseconds() + metadata.metadataExpireMs();
                         log.debug("Updating preferred read replica for partition {} to {}, set to expire at {}",
                                 tp, partition.preferredReadReplica.get(), expireTimeMs);
@@ -1196,6 +1229,8 @@ public class Fetcher<K, V> implements Closeable {
                     });
                 }
 
+
+                nextCompletedFetch.initialized = true;
             } else if (error == Errors.NOT_LEADER_FOR_PARTITION ||
                        error == Errors.REPLICA_NOT_AVAILABLE ||
                        error == Errors.KAFKA_STORAGE_ERROR ||
@@ -1235,8 +1270,8 @@ public class Fetcher<K, V> implements Closeable {
                 throw new IllegalStateException("Unexpected error code " + error.code() + " while fetching from partition " + tp);
             }
         } finally {
-            if (partitionRecords == null)
-                completedFetch.metricAggregator.record(tp, 0, 0);
+            if (completedFetch == null)
+                nextCompletedFetch.metricAggregator.record(tp, 0, 0);
 
             if (error != Errors.NONE)
                 // we move the partition to the end if there was an error. This way, it's more likely that partitions for
@@ -1244,7 +1279,7 @@ public class Fetcher<K, V> implements Closeable {
                 subscriptions.movePartitionToEnd(tp);
         }
 
-        return partitionRecords;
+        return completedFetch;
     }
 
     /**
@@ -1286,16 +1321,19 @@ public class Fetcher<K, V> implements Closeable {
      * @param assignedPartitions  newly assigned {@link TopicPartition}
      */
     public void clearBufferedDataForUnassignedPartitions(Collection<TopicPartition> assignedPartitions) {
-        Iterator<CompletedFetch> itr = completedFetches.iterator();
-        while (itr.hasNext()) {
-            TopicPartition tp = itr.next().partition;
+        Iterator<CompletedFetch> completedFetchesItr = completedFetches.iterator();
+        while (completedFetchesItr.hasNext()) {
+            CompletedFetch records = completedFetchesItr.next();
+            TopicPartition tp = records.partition;
             if (!assignedPartitions.contains(tp)) {
-                itr.remove();
+                records.drain();
+                completedFetchesItr.remove();
             }
         }
-        if (nextInLineRecords != null && !assignedPartitions.contains(nextInLineRecords.partition)) {
-            nextInLineRecords.drain();
-            nextInLineRecords = null;
+
+        if (nextInLineFetch != null && !assignedPartitions.contains(nextInLineFetch.partition)) {
+            nextInLineFetch.drain();
+            nextInLineFetch = null;
         }
     }
 
@@ -1328,12 +1366,14 @@ public class Fetcher<K, V> implements Closeable {
         return fetchThrottleTimeSensor;
     }
 
-    private class PartitionRecords {
+    private class CompletedFetch {
         private final TopicPartition partition;
-        private final CompletedFetch completedFetch;
         private final Iterator<? extends RecordBatch> batches;
         private final Set<Long> abortedProducerIds;
         private final PriorityQueue<FetchResponse.AbortedTransaction> abortedTransactions;
+        private final FetchResponse.PartitionData<Records> partitionData;
+        private final FetchResponseMetricAggregator metricAggregator;
+        private final short responseVersion;
 
         private int recordsRead;
         private int bytesRead;
@@ -1342,38 +1382,40 @@ public class Fetcher<K, V> implements Closeable {
         private CloseableIterator<Record> records;
         private long nextFetchOffset;
         private Optional<Integer> lastEpoch;
-        private boolean isFetched = false;
+        private boolean isConsumed = false;
         private Exception cachedRecordException = null;
         private boolean corruptLastRecord = false;
+        private boolean initialized = false;
 
-        private PartitionRecords(TopicPartition partition,
-                                 CompletedFetch completedFetch,
-                                 Iterator<? extends RecordBatch> batches) {
+        private CompletedFetch(TopicPartition partition,
+                               FetchResponse.PartitionData<Records> partitionData,
+                               FetchResponseMetricAggregator metricAggregator,
+                               Iterator<? extends RecordBatch> batches,
+                               Long fetchOffset,
+                               short responseVersion) {
             this.partition = partition;
-            this.completedFetch = completedFetch;
+            this.partitionData = partitionData;
+            this.metricAggregator = metricAggregator;
             this.batches = batches;
-            this.nextFetchOffset = completedFetch.fetchedOffset;
+            this.nextFetchOffset = fetchOffset;
+            this.responseVersion = responseVersion;
             this.lastEpoch = Optional.empty();
             this.abortedProducerIds = new HashSet<>();
-            this.abortedTransactions = abortedTransactions(completedFetch.partitionData);
+            this.abortedTransactions = abortedTransactions(partitionData);
         }
 
         private void drain() {
-            if (!isFetched) {
+            if (!isConsumed) {
                 maybeCloseRecordStream();
                 cachedRecordException = null;
-                this.isFetched = true;
-                this.completedFetch.metricAggregator.record(partition, bytesRead, recordsRead);
+                this.isConsumed = true;
+                this.metricAggregator.record(partition, bytesRead, recordsRead);
 
                 // we move the partition to the end if we received some bytes. This way, it's more likely that partitions
                 // for the same topic can remain together (allowing for more efficient serialization).
                 if (bytesRead > 0)
                     subscriptions.movePartitionToEnd(partition);
             }
-        }
-
-        private Optional<Integer> preferredReadReplica() {
-            return completedFetch.partitionData.preferredReadReplica;
         }
 
         private void maybeEnsureValid(RecordBatch batch) {
@@ -1473,7 +1515,7 @@ public class Fetcher<K, V> implements Closeable {
                                              + ". If needed, please seek past the record to "
                                              + "continue consumption.", cachedRecordException);
 
-            if (isFetched)
+            if (isConsumed)
                 return Collections.emptyList();
 
             List<ConsumerRecord<K, V>> records = new ArrayList<>();
@@ -1546,25 +1588,9 @@ public class Fetcher<K, V> implements Closeable {
             Record firstRecord = batchIterator.next();
             return ControlRecordType.ABORT == ControlRecordType.parse(firstRecord.key());
         }
-    }
 
-    private static class CompletedFetch {
-        private final TopicPartition partition;
-        private final long fetchedOffset;
-        private final FetchResponse.PartitionData<Records> partitionData;
-        private final FetchResponseMetricAggregator metricAggregator;
-        private final short responseVersion;
-
-        private CompletedFetch(TopicPartition partition,
-                               long fetchedOffset,
-                               FetchResponse.PartitionData<Records> partitionData,
-                               FetchResponseMetricAggregator metricAggregator,
-                               short responseVersion) {
-            this.partition = partition;
-            this.fetchedOffset = fetchedOffset;
-            this.partitionData = partitionData;
-            this.metricAggregator = metricAggregator;
-            this.responseVersion = responseVersion;
+        private boolean notInitialized() {
+            return !this.initialized;
         }
     }
 
@@ -1657,7 +1683,7 @@ public class Fetcher<K, V> implements Closeable {
             this.fetchLatency = metrics.sensor("fetch-latency");
             this.fetchLatency.add(metrics.metricInstance(metricsRegistry.fetchLatencyAvg), new Avg());
             this.fetchLatency.add(metrics.metricInstance(metricsRegistry.fetchLatencyMax), new Max());
-            this.fetchLatency.add(new Meter(new Count(), metrics.metricInstance(metricsRegistry.fetchRequestRate),
+            this.fetchLatency.add(new Meter(new WindowedCount(), metrics.metricInstance(metricsRegistry.fetchRequestRate),
                     metrics.metricInstance(metricsRegistry.fetchRequestTotal)));
 
             this.recordsFetchLag = metrics.sensor("records-lag");
@@ -1783,8 +1809,8 @@ public class Fetcher<K, V> implements Closeable {
 
     @Override
     public void close() {
-        if (nextInLineRecords != null)
-            nextInLineRecords.drain();
+        if (nextInLineFetch != null)
+            nextInLineFetch.drain();
         decompressionBufferSupplier.close();
     }
 

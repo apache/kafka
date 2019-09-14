@@ -21,6 +21,9 @@
 
 <h5><a id="upgrade_240_notable" href="#upgrade_240_notable">Notable changes in 2.4.0</a></h5>
 <ul>
+    <li>A new Admin API has been added for partition reassignments. Due to changing the way Kafka propagates reassignment information,
+        it is possible to lose reassignment state in failure edge cases while upgrading to the new version. It is not recommended to start reassignments while upgrading.</li>
+    <li>ZooKeeper has been upgraded from 3.4.14 to 3.5.5. TLS and dynamic reconfiguration are supported by the new version.</li>
     <li>The <code>bin/kafka-preferred-replica-election.sh</code> command line tool has been deprecated. It has been replaced by <code>bin/kafka-leader-election.sh</code>.</li>
     <li>The methods <code>electPreferredLeaders</code> in the Java <code>AdminClient</code> class have been deprecated in favor of the methods <code>electLeaders</code>.</li>
     <li>Scala code leveraging the <code>NewTopic(String, int, short)</code> constructor with literal values will need to explicitly call <code>toShort</code> on the second literal.</li>
@@ -28,6 +31,14 @@
         Previously it referred to the group that failed authorization. This was done for consistency with other exception types and to
         avoid potential misuse. The constructor <code>TopicAuthorizationException(String)</code> which was previously used for a single
         unauthorized topic was changed similarly.
+    </li>
+    <li>The internal <code>PartitionAssignor</code> interface has been deprecated and replaced with a new <code>ConsumerPartitionAssignor</code> in the public API. Some
+        methods/signatures are slightly different between the two interfaces. Users implementing a custom PartitionAssignor should migrate to the new interface as soon as possible.
+    </li>
+    <li>The <code>DefaultPartitioner</code> now uses a sticky partitioning strategy. This means that records for specific topic with null keys and no assigned partition 
+        will be sent to the same partition until the batch is ready to be sent. When a new batch is created, a new partition is chosen. This decreases latency to produce, but
+        it may result in uneven distribution of records across partitions in edge cases. Generally users will not be impacted, but this difference may be noticeable in tests and
+        other situations producing records for a very short amount of time.
     </li>
 </ul>
 

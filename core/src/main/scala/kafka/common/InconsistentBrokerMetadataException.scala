@@ -1,7 +1,3 @@
-package kafka.common
-
-import org.apache.kafka.common.TopicPartition
-
 /**
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -19,12 +15,13 @@ import org.apache.kafka.common.TopicPartition
  * limitations under the License.
  */
 
+package kafka.common
+
 /**
- * Convenience case class since (topic, partition) pairs are ubiquitous.
+ * Indicates the BrokerMetadata stored in logDirs is not consistent across logDirs.
  */
-case class TopicAndPartition(topic: String, partition: Int) {
-
-  def this(topicPartition: TopicPartition) = this(topicPartition.topic, topicPartition.partition)
-
-  override def toString: String = s"$topic-$partition"
+class InconsistentBrokerMetadataException(message: String, cause: Throwable) extends RuntimeException(message, cause) {
+  def this(message: String) = this(message, null)
+  def this(cause: Throwable) = this(null, cause)
+  def this() = this(null, null)
 }

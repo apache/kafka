@@ -24,14 +24,16 @@ import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger}
 import java.util.concurrent.{CountDownLatch, ExecutionException, TimeUnit}
 import java.util.{Collections, Properties}
 import java.{time, util}
+
 import kafka.log.LogConfig
 import kafka.security.auth.{Cluster, Group, Topic}
 import kafka.server.{Defaults, KafkaConfig, KafkaServer}
 import kafka.utils.Implicits._
 import kafka.utils.TestUtils._
-import kafka.utils.{Logging, TestUtils}
+import kafka.utils.{Log4jController, Logging, TestUtils}
 import kafka.zk.KafkaZkClient
 import org.apache.kafka.clients.admin._
+import org.apache.kafka.clients.consumer.ConsumerRecords
 import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer}
 import org.apache.kafka.clients.producer.KafkaProducer
 import org.apache.kafka.clients.producer.ProducerRecord
@@ -40,15 +42,20 @@ import org.apache.kafka.common.ElectionType
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.TopicPartitionReplica
 import org.apache.kafka.common.acl._
-import org.apache.kafka.common.config.ConfigResource
+import org.apache.kafka.common.config.{ConfigResource, LogLevelConfig}
 import org.apache.kafka.common.errors._
-import org.apache.kafka.common.requests.{DeleteRecordsRequest, MetadataResponse}
-import org.apache.kafka.common.resource.{PatternType, ResourcePattern, ResourceType}
+import org.apache.kafka.common.internals.KafkaFutureImpl
+import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity
+import org.apache.kafka.common.message.LeaveGroupResponseData.MemberResponse
+import org.apache.kafka.common.protocol.Errors
+import org.apache.kafka.common.requests.{DeleteRecordsRequest, JoinGroupRequest, MetadataResponse}
+import org.apache.kafka.common.resource.{PatternType, Resource, ResourcePattern, ResourceType}
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.junit.Assert._
 import org.junit.rules.Timeout
-import org.junit.{After, Before, Rule, Test}
+import org.junit.{After, Before, Ignore, Rule, Test}
 import org.scalatest.Assertions.intercept
+
 import scala.collection.JavaConverters._
 import scala.collection.Seq
 import scala.compat.java8.OptionConverters._
@@ -67,20 +74,26 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
   @Rule
   def globalTimeout = Timeout.millis(120000)
 
-  var client: AdminClient = null
+  var client: Admin = null
+  var brokerLoggerConfigResource: ConfigResource = null
+  var changedBrokerLoggers = scala.collection.mutable.Set[String]()
 
   val topic = "topic"
   val partition = 0
   val topicPartition = new TopicPartition(topic, partition)
+  val clusterResourcePattern = new ResourcePattern(ResourceType.CLUSTER, Resource.CLUSTER_NAME, PatternType.LITERAL)
+
 
   @Before
   override def setUp(): Unit = {
     super.setUp
     TestUtils.waitUntilBrokerMetadataIsPropagated(servers)
+    brokerLoggerConfigResource = new ConfigResource(ConfigResource.Type.BROKER_LOGGER, servers.head.config.brokerId.toString)
   }
 
   @After
   override def tearDown(): Unit = {
+    teardownBrokerLoggers()
     if (client != null)
       Utils.closeQuietly(client, "AdminClient")
     super.tearDown()
@@ -121,7 +134,7 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
     config
   }
 
-  def waitForTopics(client: AdminClient, expectedPresent: Seq[String], expectedMissing: Seq[String]): Unit = {
+  def waitForTopics(client: Admin, expectedPresent: Seq[String], expectedMissing: Seq[String]): Unit = {
     TestUtils.waitUntilTrue(() => {
         val topics = client.listTopics.names.get()
         expectedPresent.forall(topicName => topics.contains(topicName)) &&
@@ -215,6 +228,23 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
 
     client.deleteTopics(topics.asJava).all.get()
     waitForTopics(client, List(), topics)
+  }
+
+  @Test
+  def testCreateExistingTopicsThrowTopicExistsException(): Unit = {
+    client = AdminClient.create(createConfig())
+    val topic = "mytopic"
+    val topics = Seq(topic)
+    val newTopics = Seq(new NewTopic(topic, 1, 1.toShort))
+
+    client.createTopics(newTopics.asJava).all.get()
+    waitForTopics(client, topics, List())
+
+    val newTopicsWithInvalidRF = Seq(new NewTopic(topic, 1, (servers.size + 1).toShort))
+    val e = intercept[ExecutionException] {
+      client.createTopics(newTopicsWithInvalidRF.asJava, new CreateTopicsOptions().validateOnly(true)).all.get()
+    }
+    assertTrue(e.getCause.isInstanceOf[TopicExistsException])
   }
 
   @Test
@@ -1027,6 +1057,14 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
     TestUtils.pollUntilTrue(consumer, () => !consumer.assignment.isEmpty, "Expected non-empty assignment")
   }
 
+  private def subscribeAndWaitForRecords(topic: String, consumer: KafkaConsumer[Array[Byte], Array[Byte]]): Unit = {
+    consumer.subscribe(Collections.singletonList(topic))
+    TestUtils.pollRecordsUntilTrue(
+      consumer,
+      (records: ConsumerRecords[Array[Byte], Array[Byte]]) => !records.isEmpty,
+      "Expected records" )
+  }
+
   private def sendRecords(producer: KafkaProducer[Array[Byte], Array[Byte]],
                           numRecords: Int,
                           topicPartition: TopicPartition): Unit = {
@@ -1160,16 +1198,18 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
       }
       val testGroupId = "test_group_id"
       val testClientId = "test_client_id"
+      val testInstanceId = "test_instance_id"
       val fakeGroupId = "fake_group_id"
       val newConsumerConfig = new Properties(consumerConfig)
       newConsumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, testGroupId)
       newConsumerConfig.setProperty(ConsumerConfig.CLIENT_ID_CONFIG, testClientId)
+      newConsumerConfig.setProperty(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG, testInstanceId)
       val consumer = createConsumer(configOverrides = newConsumerConfig)
       val latch = new CountDownLatch(1)
       try {
         // Start a consumer in a thread that will subscribe to a new group.
         val consumerThread = new Thread {
-          override def run {
+          override def run : Unit = {
             consumer.subscribe(Collections.singleton(testTopicName))
 
             try {
@@ -1193,13 +1233,13 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
             !matching.isEmpty
           }, s"Expected to be able to list $testGroupId")
 
-          val result = client.describeConsumerGroups(Seq(testGroupId, fakeGroupId).asJava,
+          val describeWithFakeGroupResult = client.describeConsumerGroups(Seq(testGroupId, fakeGroupId).asJava,
             new DescribeConsumerGroupsOptions().includeAuthorizedOperations(true))
-          assertEquals(2, result.describedGroups().size())
+          assertEquals(2, describeWithFakeGroupResult.describedGroups().size())
 
           // Test that we can get information about the test consumer group.
-          assertTrue(result.describedGroups().containsKey(testGroupId))
-          val testGroupDescription = result.describedGroups().get(testGroupId).get()
+          assertTrue(describeWithFakeGroupResult.describedGroups().containsKey(testGroupId))
+          var testGroupDescription = describeWithFakeGroupResult.describedGroups().get(testGroupId).get()
 
           assertEquals(testGroupId, testGroupDescription.groupId())
           assertFalse(testGroupDescription.isSimpleConsumerGroup())
@@ -1215,8 +1255,8 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
           assertEquals(expectedOperations, testGroupDescription.authorizedOperations())
 
           // Test that the fake group is listed as dead.
-          assertTrue(result.describedGroups().containsKey(fakeGroupId))
-          val fakeGroupDescription = result.describedGroups().get(fakeGroupId).get()
+          assertTrue(describeWithFakeGroupResult.describedGroups().containsKey(fakeGroupId))
+          val fakeGroupDescription = describeWithFakeGroupResult.describedGroups().get(fakeGroupId).get()
 
           assertEquals(fakeGroupId, fakeGroupDescription.groupId())
           assertEquals(0, fakeGroupDescription.members().size())
@@ -1225,7 +1265,7 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
           assertEquals(expectedOperations, fakeGroupDescription.authorizedOperations())
 
           // Test that all() returns 2 results
-          assertEquals(2, result.all().get().size())
+          assertEquals(2, describeWithFakeGroupResult.all().get().size())
 
           // Test listConsumerGroupOffsets
           TestUtils.waitUntilTrue(() => {
@@ -1233,9 +1273,31 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
             val part = new TopicPartition(testTopicName, 0)
             parts.containsKey(part) && (parts.get(part).offset() == 1)
           }, s"Expected the offset for partition 0 to eventually become 1.")
+          
+          // Test delete non-exist consumer instance
+          val invalidInstanceId = "invalid-instance-id"
+          var removeMemberResult = client.removeMemberFromConsumerGroup(testGroupId, new RemoveMemberFromConsumerGroupOptions(
+            Collections.singletonList(invalidInstanceId)
+          )).all()
+
+          assertTrue(removeMemberResult.hasError)
+          assertEquals(Errors.NONE, removeMemberResult.topLevelError)
+
+          val firstMemberFutures = removeMemberResult.memberFutures()
+          assertEquals(1, firstMemberFutures.size)
+          firstMemberFutures.values.asScala foreach { case value =>
+            try {
+              value.get()
+            } catch {
+              case e: ExecutionException =>
+                assertTrue(e.getCause.isInstanceOf[UnknownMemberIdException])
+              case _ =>
+                fail("Should have caught exception in getting member future")
+            }
+          }
 
           // Test consumer group deletion
-          val deleteResult = client.deleteConsumerGroups(Seq(testGroupId, fakeGroupId).asJava)
+          var deleteResult = client.deleteConsumerGroups(Seq(testGroupId, fakeGroupId).asJava)
           assertEquals(2, deleteResult.deletedGroups().size())
 
           // Deleting the fake group ID should get GroupIdNotFoundException.
@@ -1247,6 +1309,45 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
           assertTrue(deleteResult.deletedGroups().containsKey(testGroupId))
           assertFutureExceptionTypeEquals(deleteResult.deletedGroups().get(testGroupId),
             classOf[GroupNotEmptyException])
+
+          // Test delete correct member
+          removeMemberResult = client.removeMemberFromConsumerGroup(testGroupId, new RemoveMemberFromConsumerGroupOptions(
+            Collections.singletonList(testInstanceId)
+          )).all()
+
+          assertFalse(removeMemberResult.hasError)
+          assertEquals(Errors.NONE, removeMemberResult.topLevelError)
+
+          val deletedMemberFutures = removeMemberResult.memberFutures()
+          assertEquals(1, firstMemberFutures.size)
+          deletedMemberFutures.values.asScala foreach { case value =>
+            try {
+              value.get()
+            } catch {
+              case e: ExecutionException =>
+                assertTrue(e.getCause.isInstanceOf[UnknownMemberIdException])
+              case _ =>
+                fail("Should have caught exception in getting member future")
+            }
+          }
+
+          // The group should contain no member now.
+          val describeTestGroupResult = client.describeConsumerGroups(Seq(testGroupId).asJava,
+            new DescribeConsumerGroupsOptions().includeAuthorizedOperations(true))
+          assertEquals(1, describeTestGroupResult.describedGroups().size())
+
+          testGroupDescription = describeTestGroupResult.describedGroups().get(testGroupId).get()
+
+          assertEquals(testGroupId, testGroupDescription.groupId)
+          assertFalse(testGroupDescription.isSimpleConsumerGroup)
+          assertTrue(testGroupDescription.members().isEmpty)
+
+          // Consumer group deletion on empty group should succeed
+          deleteResult = client.deleteConsumerGroups(Seq(testGroupId).asJava)
+          assertEquals(1, deleteResult.deletedGroups().size())
+
+          assertTrue(deleteResult.deletedGroups().containsKey(testGroupId))
+          assertNull(deleteResult.deletedGroups().get(testGroupId).get())
         } finally {
           consumerThread.interrupt()
           consumerThread.join()
@@ -1254,6 +1355,77 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
       } finally {
         Utils.closeQuietly(consumer, "consumer")
       }
+    } finally {
+      Utils.closeQuietly(client, "adminClient")
+    }
+  }
+
+  @Test
+  def testDeleteConsumerGroupOffsets(): Unit = {
+    val config = createConfig()
+    client = AdminClient.create(config)
+    try {
+      val testTopicName = "test_topic"
+      val testGroupId = "test_group_id"
+      val testClientId = "test_client_id"
+      val fakeGroupId = "fake_group_id"
+
+      val tp1 = new TopicPartition(testTopicName, 0)
+      val tp2 = new TopicPartition("foo", 0)
+
+      client.createTopics(Collections.singleton(
+        new NewTopic(testTopicName, 1, 1.toShort))).all().get()
+      waitForTopics(client, List(testTopicName), List())
+
+      val producer = createProducer()
+      try {
+        producer.send(new ProducerRecord(testTopicName, 0, null, null)).get()
+      } finally {
+        Utils.closeQuietly(producer, "producer")
+      }
+
+      val newConsumerConfig = new Properties(consumerConfig)
+      newConsumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, testGroupId)
+      newConsumerConfig.setProperty(ConsumerConfig.CLIENT_ID_CONFIG, testClientId)
+      // Increase timeouts to avoid having a rebalance during the test
+      newConsumerConfig.setProperty(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, Integer.MAX_VALUE.toString)
+      newConsumerConfig.setProperty(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, Defaults.GroupMaxSessionTimeoutMs.toString)
+      val consumer = createConsumer(configOverrides = newConsumerConfig)
+
+      try {
+        subscribeAndWaitForRecords(testTopicName, consumer)
+        consumer.commitSync()
+
+        // Test offset deletion while consuming
+        val offsetDeleteResult = client.deleteConsumerGroupOffsets(testGroupId, Set(tp1, tp2).asJava)
+
+        assertNull(offsetDeleteResult.all().get())
+        assertFutureExceptionTypeEquals(offsetDeleteResult.partitionResult(tp1),
+          classOf[GroupSubscribedToTopicException])
+        assertFutureExceptionTypeEquals(offsetDeleteResult.partitionResult(tp2),
+          classOf[UnknownTopicOrPartitionException])
+
+        // Test the fake group ID
+        val fakeDeleteResult = client.deleteConsumerGroupOffsets(fakeGroupId, Set(tp1, tp2).asJava)
+
+        assertFutureExceptionTypeEquals(fakeDeleteResult.all(), classOf[GroupIdNotFoundException])
+        assertFutureExceptionTypeEquals(fakeDeleteResult.partitionResult(tp1),
+          classOf[GroupIdNotFoundException])
+        assertFutureExceptionTypeEquals(fakeDeleteResult.partitionResult(tp2),
+          classOf[GroupIdNotFoundException])
+
+      } finally {
+        Utils.closeQuietly(consumer, "consumer")
+      }
+
+      // Test offset deletion when group is empty
+      val offsetDeleteResult = client.deleteConsumerGroupOffsets(testGroupId, Set(tp1, tp2).asJava)
+
+      assertNull(offsetDeleteResult.all().get())
+      assertNull(offsetDeleteResult.partitionResult(tp1).get())
+      assertFutureExceptionTypeEquals(offsetDeleteResult.partitionResult(tp2),
+        classOf[UnknownTopicOrPartitionException])
+
     } finally {
       Utils.closeQuietly(client, "adminClient")
     }
@@ -1625,6 +1797,22 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
   }
 
   @Test
+  def testListReassignmentsDoesNotShowNonReassigningPartitions(): Unit = {
+    client = AdminClient.create(createConfig())
+
+    // Create topics
+    val topic = "list-reassignments-no-reassignments"
+    createTopic(topic, numPartitions = 1, replicationFactor = 3)
+    val tp = new TopicPartition(topic, 0)
+
+    val reassignmentsMap = client.listPartitionReassignments(Set(tp).asJava).reassignments().get()
+    assertEquals(0, reassignmentsMap.size())
+
+    val allReassignmentsMap = client.listPartitionReassignments().reassignments().get()
+    assertEquals(0, allReassignmentsMap.size())
+  }
+
+  @Test
   def testValidIncrementalAlterConfigs(): Unit = {
     client = AdminClient.create(createConfig)
 
@@ -1803,6 +1991,42 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
   }
 
   @Test
+  def testInvalidAlterPartitionReassignments(): Unit = {
+    client = AdminClient.create(createConfig)
+    val topic = "alter-reassignments-topic-1"
+    val tp1 = new TopicPartition(topic, 0)
+    val tp2 = new TopicPartition(topic, 1)
+    val tp3 = new TopicPartition(topic, 2)
+    createTopic(topic, numPartitions = 3)
+
+    val validAssignment = new NewPartitionReassignment((0 until brokerCount).map(_.asInstanceOf[Integer]).asJava)
+
+    val nonExistentTp1 = new TopicPartition("topicA", 0)
+    val nonExistentTp2 = new TopicPartition(topic, 3)
+    val nonExistentPartitionsResult = client.alterPartitionReassignments(Map(
+      tp1 -> java.util.Optional.of(validAssignment),
+      tp2 -> java.util.Optional.of(validAssignment),
+      tp3 -> java.util.Optional.of(validAssignment),
+      nonExistentTp1 -> java.util.Optional.of(validAssignment),
+      nonExistentTp2 -> java.util.Optional.of(validAssignment)
+    ).asJava).values()
+    assertFutureExceptionTypeEquals(nonExistentPartitionsResult.get(nonExistentTp1), classOf[UnknownTopicOrPartitionException])
+    assertFutureExceptionTypeEquals(nonExistentPartitionsResult.get(nonExistentTp2), classOf[UnknownTopicOrPartitionException])
+
+    val extraNonExistentReplica = new NewPartitionReassignment((0 until brokerCount + 1).map(_.asInstanceOf[Integer]).asJava)
+    val negativeIdReplica = new NewPartitionReassignment(Seq(-3, -2, -1).map(_.asInstanceOf[Integer]).asJava)
+    val duplicateReplica = new NewPartitionReassignment(Seq(0, 1, 1).map(_.asInstanceOf[Integer]).asJava)
+    val invalidReplicaResult = client.alterPartitionReassignments(Map(
+      tp1 -> java.util.Optional.of(extraNonExistentReplica),
+      tp2 -> java.util.Optional.of(negativeIdReplica),
+      tp3 -> java.util.Optional.of(duplicateReplica)
+    ).asJava).values()
+    assertFutureExceptionTypeEquals(invalidReplicaResult.get(tp1), classOf[InvalidReplicaAssignmentException])
+    assertFutureExceptionTypeEquals(invalidReplicaResult.get(tp2), classOf[InvalidReplicaAssignmentException])
+    assertFutureExceptionTypeEquals(invalidReplicaResult.get(tp3), classOf[InvalidReplicaAssignmentException])
+  }
+
+  @Test
   def testLongTopicNames(): Unit = {
     val client = AdminClient.create(createConfig)
     val longTopicName = String.join("", Collections.nCopies(249, "x"));
@@ -1819,11 +2043,235 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
       classOf[InvalidTopicException])
     client.close()
   }
+
+  @Test
+  def testDescribeConfigsForLog4jLogLevels(): Unit = {
+    client = AdminClient.create(createConfig())
+
+    val loggerConfig = describeBrokerLoggers()
+    val rootLogLevel = loggerConfig.get(Log4jController.ROOT_LOGGER).value()
+    val logCleanerLogLevelConfig = loggerConfig.get("kafka.cluster.Replica")
+    assertEquals(rootLogLevel, logCleanerLogLevelConfig.value()) // we expect an undefined log level to be the same as the root logger
+    assertEquals("kafka.cluster.Replica", logCleanerLogLevelConfig.name())
+    assertEquals(ConfigEntry.ConfigSource.DYNAMIC_BROKER_LOGGER_CONFIG, logCleanerLogLevelConfig.source())
+    assertEquals(false, logCleanerLogLevelConfig.isReadOnly)
+    assertEquals(false, logCleanerLogLevelConfig.isSensitive)
+    assertTrue(logCleanerLogLevelConfig.synonyms().isEmpty)
+  }
+
+  @Test
+  @Ignore // To be re-enabled once KAFKA-8779 is resolved
+  def testIncrementalAlterConfigsForLog4jLogLevels(): Unit = {
+    client = AdminClient.create(createConfig())
+
+    val initialLoggerConfig = describeBrokerLoggers()
+    val initialRootLogLevel = initialLoggerConfig.get(Log4jController.ROOT_LOGGER).value()
+    assertEquals(initialRootLogLevel, initialLoggerConfig.get("kafka.controller.KafkaController").value())
+    assertEquals(initialRootLogLevel, initialLoggerConfig.get("kafka.log.LogCleaner").value())
+    assertEquals(initialRootLogLevel, initialLoggerConfig.get("kafka.server.ReplicaManager").value())
+
+    val newRootLogLevel = LogLevelConfig.DEBUG_LOG_LEVEL
+    val alterRootLoggerEntry = Seq(
+      new AlterConfigOp(new ConfigEntry(Log4jController.ROOT_LOGGER, newRootLogLevel), AlterConfigOp.OpType.SET)
+    ).asJavaCollection
+    // Test validateOnly does not change anything
+    alterBrokerLoggers(alterRootLoggerEntry, validateOnly = true)
+    val validatedLoggerConfig = describeBrokerLoggers()
+    assertEquals(initialRootLogLevel, validatedLoggerConfig.get(Log4jController.ROOT_LOGGER).value())
+    assertEquals(initialRootLogLevel, validatedLoggerConfig.get("kafka.controller.KafkaController").value())
+    assertEquals(initialRootLogLevel, validatedLoggerConfig.get("kafka.log.LogCleaner").value())
+    assertEquals(initialRootLogLevel, validatedLoggerConfig.get("kafka.server.ReplicaManager").value())
+    assertEquals(initialRootLogLevel, validatedLoggerConfig.get("kafka.zookeeper.ZooKeeperClient").value())
+
+    // test that we can change them and unset loggers still use the root's log level
+    alterBrokerLoggers(alterRootLoggerEntry)
+    val changedRootLoggerConfig = describeBrokerLoggers()
+    assertEquals(newRootLogLevel, changedRootLoggerConfig.get(Log4jController.ROOT_LOGGER).value())
+    assertEquals(newRootLogLevel, changedRootLoggerConfig.get("kafka.controller.KafkaController").value())
+    assertEquals(newRootLogLevel, changedRootLoggerConfig.get("kafka.log.LogCleaner").value())
+    assertEquals(newRootLogLevel, changedRootLoggerConfig.get("kafka.server.ReplicaManager").value())
+    assertEquals(newRootLogLevel, changedRootLoggerConfig.get("kafka.zookeeper.ZooKeeperClient").value())
+
+    // alter the ZK client's logger so we can later test resetting it
+    val alterZKLoggerEntry = Seq(
+      new AlterConfigOp(new ConfigEntry("kafka.zookeeper.ZooKeeperClient", LogLevelConfig.ERROR_LOG_LEVEL), AlterConfigOp.OpType.SET)
+    ).asJavaCollection
+    alterBrokerLoggers(alterZKLoggerEntry)
+    val changedZKLoggerConfig = describeBrokerLoggers()
+    assertEquals(LogLevelConfig.ERROR_LOG_LEVEL, changedZKLoggerConfig.get("kafka.zookeeper.ZooKeeperClient").value())
+
+    // properly test various set operations and one delete
+    val alterLogLevelsEntries = Seq(
+      new AlterConfigOp(new ConfigEntry("kafka.controller.KafkaController", LogLevelConfig.INFO_LOG_LEVEL), AlterConfigOp.OpType.SET),
+      new AlterConfigOp(new ConfigEntry("kafka.log.LogCleaner", LogLevelConfig.ERROR_LOG_LEVEL), AlterConfigOp.OpType.SET),
+      new AlterConfigOp(new ConfigEntry("kafka.server.ReplicaManager", LogLevelConfig.TRACE_LOG_LEVEL), AlterConfigOp.OpType.SET),
+      new AlterConfigOp(new ConfigEntry("kafka.zookeeper.ZooKeeperClient", ""), AlterConfigOp.OpType.DELETE) // should reset to the root logger level
+    ).asJavaCollection
+    alterBrokerLoggers(alterLogLevelsEntries)
+    val alteredLoggerConfig = describeBrokerLoggers()
+    assertEquals(newRootLogLevel, alteredLoggerConfig.get(Log4jController.ROOT_LOGGER).value())
+    assertEquals(LogLevelConfig.INFO_LOG_LEVEL, alteredLoggerConfig.get("kafka.controller.KafkaController").value())
+    assertEquals(LogLevelConfig.ERROR_LOG_LEVEL, alteredLoggerConfig.get("kafka.log.LogCleaner").value())
+    assertEquals(LogLevelConfig.TRACE_LOG_LEVEL, alteredLoggerConfig.get("kafka.server.ReplicaManager").value())
+    assertEquals(newRootLogLevel, alteredLoggerConfig.get("kafka.zookeeper.ZooKeeperClient").value())
+  }
+
+  /**
+    * 1. Assume ROOT logger == TRACE
+    * 2. Change kafka.controller.KafkaController logger to INFO
+    * 3. Unset kafka.controller.KafkaController via AlterConfigOp.OpType.DELETE (resets it to the root logger - TRACE)
+    * 4. Change ROOT logger to ERROR
+    * 5. Ensure the kafka.controller.KafkaController logger's level is ERROR (the curent root logger level)
+    */
+  @Test
+  @Ignore // To be re-enabled once KAFKA-8779 is resolved
+  def testIncrementalAlterConfigsForLog4jLogLevelsCanResetLoggerToCurrentRoot(): Unit = {
+    client = AdminClient.create(createConfig())
+    // step 1 - configure root logger
+    val initialRootLogLevel = LogLevelConfig.TRACE_LOG_LEVEL
+    val alterRootLoggerEntry = Seq(
+      new AlterConfigOp(new ConfigEntry(Log4jController.ROOT_LOGGER, initialRootLogLevel), AlterConfigOp.OpType.SET)
+    ).asJavaCollection
+    alterBrokerLoggers(alterRootLoggerEntry)
+    val initialLoggerConfig = describeBrokerLoggers()
+    assertEquals(initialRootLogLevel, initialLoggerConfig.get(Log4jController.ROOT_LOGGER).value())
+    assertEquals(initialRootLogLevel, initialLoggerConfig.get("kafka.controller.KafkaController").value())
+
+    // step 2 - change KafkaController logger to INFO
+    val alterControllerLoggerEntry = Seq(
+      new AlterConfigOp(new ConfigEntry("kafka.controller.KafkaController", LogLevelConfig.INFO_LOG_LEVEL), AlterConfigOp.OpType.SET)
+    ).asJavaCollection
+    alterBrokerLoggers(alterControllerLoggerEntry)
+    val changedControllerLoggerConfig = describeBrokerLoggers()
+    assertEquals(initialRootLogLevel, changedControllerLoggerConfig.get(Log4jController.ROOT_LOGGER).value())
+    assertEquals(LogLevelConfig.INFO_LOG_LEVEL, changedControllerLoggerConfig.get("kafka.controller.KafkaController").value())
+
+    // step 3 - unset KafkaController logger
+    val deleteControllerLoggerEntry = Seq(
+      new AlterConfigOp(new ConfigEntry("kafka.controller.KafkaController", ""), AlterConfigOp.OpType.DELETE)
+    ).asJavaCollection
+    alterBrokerLoggers(deleteControllerLoggerEntry)
+    val deletedControllerLoggerConfig = describeBrokerLoggers()
+    assertEquals(initialRootLogLevel, deletedControllerLoggerConfig.get(Log4jController.ROOT_LOGGER).value())
+    assertEquals(initialRootLogLevel, deletedControllerLoggerConfig.get("kafka.controller.KafkaController").value())
+
+    val newRootLogLevel = LogLevelConfig.ERROR_LOG_LEVEL
+    val newAlterRootLoggerEntry = Seq(
+      new AlterConfigOp(new ConfigEntry(Log4jController.ROOT_LOGGER, newRootLogLevel), AlterConfigOp.OpType.SET)
+    ).asJavaCollection
+    alterBrokerLoggers(newAlterRootLoggerEntry)
+    val newRootLoggerConfig = describeBrokerLoggers()
+    assertEquals(newRootLogLevel, newRootLoggerConfig.get(Log4jController.ROOT_LOGGER).value())
+    assertEquals(newRootLogLevel, newRootLoggerConfig.get("kafka.controller.KafkaController").value())
+  }
+
+  @Test
+  @Ignore // To be re-enabled once KAFKA-8779 is resolved
+  def testIncrementalAlterConfigsForLog4jLogLevelsCannotResetRootLogger(): Unit = {
+    client = AdminClient.create(createConfig())
+    val deleteRootLoggerEntry = Seq(
+      new AlterConfigOp(new ConfigEntry(Log4jController.ROOT_LOGGER, ""), AlterConfigOp.OpType.DELETE)
+    ).asJavaCollection
+
+    assertTrue(intercept[ExecutionException](alterBrokerLoggers(deleteRootLoggerEntry)).getCause.isInstanceOf[InvalidRequestException])
+  }
+
+  @Test
+  @Ignore // To be re-enabled once KAFKA-8779 is resolved
+  def testIncrementalAlterConfigsForLog4jLogLevelsDoesNotWorkWithInvalidConfigs(): Unit = {
+    client = AdminClient.create(createConfig())
+    val validLoggerName = "kafka.server.KafkaRequestHandler"
+    val expectedValidLoggerLogLevel = describeBrokerLoggers().get(validLoggerName)
+    def assertLogLevelDidNotChange(): Unit = {
+      assertEquals(
+        expectedValidLoggerLogLevel,
+        describeBrokerLoggers().get(validLoggerName)
+      )
+    }
+
+    val appendLogLevelEntries = Seq(
+      new AlterConfigOp(new ConfigEntry("kafka.server.KafkaRequestHandler", LogLevelConfig.INFO_LOG_LEVEL), AlterConfigOp.OpType.SET), // valid
+      new AlterConfigOp(new ConfigEntry("kafka.network.SocketServer", LogLevelConfig.ERROR_LOG_LEVEL), AlterConfigOp.OpType.APPEND) // append is not supported
+    ).asJavaCollection
+    assertTrue(intercept[ExecutionException](alterBrokerLoggers(appendLogLevelEntries)).getCause.isInstanceOf[InvalidRequestException])
+    assertLogLevelDidNotChange()
+
+    val subtractLogLevelEntries = Seq(
+      new AlterConfigOp(new ConfigEntry("kafka.server.KafkaRequestHandler", LogLevelConfig.INFO_LOG_LEVEL), AlterConfigOp.OpType.SET), // valid
+      new AlterConfigOp(new ConfigEntry("kafka.network.SocketServer", LogLevelConfig.ERROR_LOG_LEVEL), AlterConfigOp.OpType.SUBTRACT) // subtract is not supported
+    ).asJavaCollection
+    assertTrue(intercept[ExecutionException](alterBrokerLoggers(subtractLogLevelEntries)).getCause.isInstanceOf[InvalidRequestException])
+    assertLogLevelDidNotChange()
+
+    val invalidLogLevelLogLevelEntries = Seq(
+      new AlterConfigOp(new ConfigEntry("kafka.server.KafkaRequestHandler", LogLevelConfig.INFO_LOG_LEVEL), AlterConfigOp.OpType.SET), // valid
+      new AlterConfigOp(new ConfigEntry("kafka.network.SocketServer", "OFF"), AlterConfigOp.OpType.SET) // OFF is not a valid log level
+    ).asJavaCollection
+    assertTrue(intercept[ExecutionException](alterBrokerLoggers(invalidLogLevelLogLevelEntries)).getCause.isInstanceOf[InvalidRequestException])
+    assertLogLevelDidNotChange()
+
+    val invalidLoggerNameLogLevelEntries = Seq(
+      new AlterConfigOp(new ConfigEntry("kafka.server.KafkaRequestHandler", LogLevelConfig.INFO_LOG_LEVEL), AlterConfigOp.OpType.SET), // valid
+      new AlterConfigOp(new ConfigEntry("Some Other LogCleaner", LogLevelConfig.ERROR_LOG_LEVEL), AlterConfigOp.OpType.SET) // invalid logger name is not supported
+    ).asJavaCollection
+    assertTrue(intercept[ExecutionException](alterBrokerLoggers(invalidLoggerNameLogLevelEntries)).getCause.isInstanceOf[InvalidRequestException])
+    assertLogLevelDidNotChange()
+  }
+
+  /**
+    * The AlterConfigs API is deprecated and should not support altering log levels
+    */
+  @Test
+  @Ignore // To be re-enabled once KAFKA-8779 is resolved
+  def testAlterConfigsForLog4jLogLevelsDoesNotWork(): Unit = {
+    client = AdminClient.create(createConfig())
+
+    val alterLogLevelsEntries = Seq(
+      new ConfigEntry("kafka.controller.KafkaController", LogLevelConfig.INFO_LOG_LEVEL)
+    ).asJavaCollection
+    val alterResult = client.alterConfigs(Map(brokerLoggerConfigResource -> new Config(alterLogLevelsEntries)).asJava)
+    assertTrue(intercept[ExecutionException](alterResult.values.get(brokerLoggerConfigResource).get).getCause.isInstanceOf[InvalidRequestException])
+  }
+
+  def alterBrokerLoggers(entries: util.Collection[AlterConfigOp], validateOnly: Boolean = false): Unit = {
+    if (!validateOnly) {
+      for (entry <- entries.asScala)
+        changedBrokerLoggers.add(entry.configEntry().name())
+    }
+
+    client.incrementalAlterConfigs(Map(brokerLoggerConfigResource -> entries).asJava, new AlterConfigsOptions().validateOnly(validateOnly))
+      .values.get(brokerLoggerConfigResource).get()
+  }
+
+  def describeBrokerLoggers(): Config =
+    client.describeConfigs(Collections.singletonList(brokerLoggerConfigResource)).values.get(brokerLoggerConfigResource).get()
+
+  /**
+    * Due to the fact that log4j is not re-initialized across tests, changing a logger's log level persists across test classes.
+    * We need to clean up the changes done while testing.
+    */
+  def teardownBrokerLoggers(): Unit = {
+    if (changedBrokerLoggers.nonEmpty) {
+      val validLoggers = describeBrokerLoggers().entries().asScala.filterNot(_.name().equals(Log4jController.ROOT_LOGGER)).map(_.name).toSet
+      val unsetBrokerLoggersEntries = changedBrokerLoggers
+        .intersect(validLoggers)
+        .map { logger => new AlterConfigOp(new ConfigEntry(logger, ""), AlterConfigOp.OpType.DELETE) }
+        .asJavaCollection
+
+      // ensure that we first reset the root logger to an arbitrary log level. Note that we cannot reset it to its original value
+      alterBrokerLoggers(List(
+        new AlterConfigOp(new ConfigEntry(Log4jController.ROOT_LOGGER, LogLevelConfig.FATAL_LOG_LEVEL), AlterConfigOp.OpType.SET)
+      ).asJavaCollection)
+      alterBrokerLoggers(unsetBrokerLoggersEntries)
+
+      changedBrokerLoggers.clear()
+    }
+  }
 }
 
 object AdminClientIntegrationTest {
 
-  def checkValidAlterConfigs(client: AdminClient, topicResource1: ConfigResource, topicResource2: ConfigResource): Unit = {
+  def checkValidAlterConfigs(client: Admin, topicResource1: ConfigResource, topicResource2: ConfigResource): Unit = {
     // Alter topics
     var topicConfigEntries1 = Seq(
       new ConfigEntry(LogConfig.FlushMsProp, "1000")
@@ -1885,7 +2333,7 @@ object AdminClientIntegrationTest {
     assertEquals("0.9", configs.get(topicResource2).get(LogConfig.MinCleanableDirtyRatioProp).value)
   }
 
-  def checkInvalidAlterConfigs(zkClient: KafkaZkClient, servers: Seq[KafkaServer], client: AdminClient): Unit = {
+  def checkInvalidAlterConfigs(zkClient: KafkaZkClient, servers: Seq[KafkaServer], client: Admin): Unit = {
     // Create topics
     val topic1 = "invalid-alter-configs-topic-1"
     val topicResource1 = new ConfigResource(ConfigResource.Type.TOPIC, topic1)

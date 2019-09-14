@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import org.apache.kafka.clients.admin.AdminClient;
+import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
@@ -42,6 +42,7 @@ import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.TaskMetadata;
 import org.apache.kafka.streams.processor.ThreadMetadata;
+import org.apache.kafka.streams.processor.internals.assignment.AssignorError;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.processor.internals.metrics.ThreadMetrics;
 import org.apache.kafka.streams.state.internals.ThreadCache;
@@ -127,7 +128,10 @@ public class StreamThread extends Thread {
      * </ul>
      */
     public enum State implements ThreadStateTransitionValidator {
-        CREATED(1, 5), STARTING(2, 5), PARTITIONS_REVOKED(3, 5), PARTITIONS_ASSIGNED(2, 4, 5), RUNNING(2, 5), PENDING_SHUTDOWN(6), DEAD;
+        // TODO: the current transitions from other states directly to PARTITIONS_REVOKED is due to
+        //       the fact that onPartitionsRevoked may not be triggered. we need to refactor the
+        //       state diagram more thoroughly after we refactor StreamsPartitionAssignor to support COOPERATIVE
+        CREATED(1, 5), STARTING(2, 3, 5), PARTITIONS_REVOKED(3, 5), PARTITIONS_ASSIGNED(2, 3, 4, 5), RUNNING(2, 3, 5), PENDING_SHUTDOWN(6), DEAD;
 
         private final Set<Integer> validTransitions = new HashSet<>();
 
@@ -266,7 +270,7 @@ public class StreamThread extends Thread {
                 taskManager.suspendedActiveTaskIds(),
                 taskManager.suspendedStandbyTaskIds());
 
-            if (streamThread.assignmentErrorCode.get() == StreamsPartitionAssignor.Error.INCOMPLETE_SOURCE_TOPIC_METADATA.code()) {
+            if (streamThread.assignmentErrorCode.get() == AssignorError.INCOMPLETE_SOURCE_TOPIC_METADATA.code()) {
                 log.error("Received error code {} - shutdown", streamThread.assignmentErrorCode.get());
                 streamThread.shutdown();
                 return;
@@ -278,7 +282,7 @@ public class StreamThread extends Thread {
                         "Skipping task creation in rebalance because we are already in {} state.",
                         streamThread.state()
                     );
-                } else if (streamThread.assignmentErrorCode.get() != StreamsPartitionAssignor.Error.NONE.code()) {
+                } else if (streamThread.assignmentErrorCode.get() != AssignorError.NONE.code()) {
                     log.debug(
                         "Encountered assignment error during partition assignment: {}. Skipping task initialization",
                         streamThread.assignmentErrorCode
@@ -318,11 +322,7 @@ public class StreamThread extends Thread {
                 final long start = time.milliseconds();
                 try {
                     // suspend active tasks
-                    if (streamThread.assignmentErrorCode.get() == StreamsPartitionAssignor.Error.VERSION_PROBING.code()) {
-                        streamThread.assignmentErrorCode.set(StreamsPartitionAssignor.Error.NONE.code());
-                    } else {
-                        taskManager.suspendTasksAndState();
-                    }
+                    taskManager.suspendTasksAndState();
                 } catch (final Throwable t) {
                     log.error(
                         "Error caught during partition revocation, " +
@@ -566,7 +566,7 @@ public class StreamThread extends Thread {
     public static StreamThread create(final InternalTopologyBuilder builder,
                                       final StreamsConfig config,
                                       final KafkaClientSupplier clientSupplier,
-                                      final AdminClient adminClient,
+                                      final Admin adminClient,
                                       final UUID processId,
                                       final String clientId,
                                       final Metrics metrics,
@@ -791,8 +791,9 @@ public class StreamThread extends Thread {
         while (isRunning()) {
             try {
                 runOnce();
-                if (assignmentErrorCode.get() == StreamsPartitionAssignor.Error.VERSION_PROBING.code()) {
+                if (assignmentErrorCode.get() == AssignorError.VERSION_PROBING.code()) {
                     log.info("Version probing detected. Triggering new rebalance.");
+                    assignmentErrorCode.set(AssignorError.NONE.code());
                     enforceRebalance();
                 }
             } catch (final TaskMigratedException ignoreAndRejoinGroup) {
@@ -1042,7 +1043,7 @@ public class StreamThread extends Thread {
      *                               or if the task producer got fenced (EOS)
      */
     boolean maybeCommit() {
-        int committed = 0;
+        final int committed;
 
         if (now - lastCommitMs > commitTimeMs) {
             if (log.isTraceEnabled()) {
@@ -1050,7 +1051,7 @@ public class StreamThread extends Thread {
                     taskManager.activeTaskIds(), taskManager.standbyTaskIds(), now - lastCommitMs, commitTimeMs);
             }
 
-            committed += taskManager.commitAll();
+            committed = taskManager.commitAll();
             if (committed > 0) {
                 final long intervalCommitLatency = advanceNowAndComputeLatency();
                 commitSensor.record(intervalCommitLatency / (double) committed, now);
@@ -1067,11 +1068,10 @@ public class StreamThread extends Thread {
             lastCommitMs = now;
             processStandbyRecords = true;
         } else {
-            final int commitPerRequested = taskManager.maybeCommitActiveTasksPerUserRequested();
-            if (commitPerRequested > 0) {
+            committed = taskManager.maybeCommitActiveTasksPerUserRequested();
+            if (committed > 0) {
                 final long requestCommitLatency = advanceNowAndComputeLatency();
                 commitSensor.record(requestCommitLatency / (double) committed, now);
-                committed += commitPerRequested;
             }
         }
 

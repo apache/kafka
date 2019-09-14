@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.connect.util;
 
-import org.apache.kafka.clients.admin.AdminClient;
+import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.record.InvalidRecordException;
 import org.apache.kafka.common.record.RecordBatch;
@@ -41,12 +41,12 @@ public final class ConnectUtils {
 
     public static String lookupKafkaClusterId(WorkerConfig config) {
         log.info("Creating Kafka admin client");
-        try (AdminClient adminClient = AdminClient.create(config.originals())) {
+        try (Admin adminClient = Admin.create(config.originals())) {
             return lookupKafkaClusterId(adminClient);
         }
     }
 
-    static String lookupKafkaClusterId(AdminClient adminClient) {
+    static String lookupKafkaClusterId(Admin adminClient) {
         log.debug("Looking up Kafka cluster ID");
         try {
             KafkaFuture<String> clusterIdFuture = adminClient.describeCluster().clusterId();

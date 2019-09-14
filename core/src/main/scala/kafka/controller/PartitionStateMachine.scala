@@ -34,7 +34,7 @@ abstract class PartitionStateMachine(controllerContext: ControllerContext) exten
   /**
    * Invoked on successful controller election.
    */
-  def startup() {
+  def startup(): Unit = {
     info("Initializing partition state")
     initializePartitionState()
     info("Triggering online partition state changes")
@@ -45,7 +45,7 @@ abstract class PartitionStateMachine(controllerContext: ControllerContext) exten
   /**
    * Invoked on controller shutdown.
    */
-  def shutdown() {
+  def shutdown(): Unit = {
     info("Stopped partition state machine")
   }
 
@@ -79,7 +79,7 @@ abstract class PartitionStateMachine(controllerContext: ControllerContext) exten
    * Invoked on startup of the partition's state machine to set the initial state for all existing partitions in
    * zookeeper
    */
-  private def initializePartitionState() {
+  private def initializePartitionState(): Unit = {
     for (topicPartition <- controllerContext.allPartitions) {
       // check if leader and isr path exists for partition. If not, then it is in NEW state
       controllerContext.partitionLeadershipInfo.get(topicPartition) match {
@@ -308,7 +308,7 @@ class ZkPartitionStateMachine(config: KafkaConfig,
       if (code == Code.OK) {
         controllerContext.partitionLeadershipInfo.put(partition, leaderIsrAndControllerEpoch)
         controllerBrokerRequestBatch.addLeaderAndIsrRequestForBrokers(leaderIsrAndControllerEpoch.leaderAndIsr.isr,
-          partition, leaderIsrAndControllerEpoch, controllerContext.partitionReplicaAssignment(partition), isNew = true)
+          partition, leaderIsrAndControllerEpoch, controllerContext.partitionFullReplicaAssignment(partition), isNew = true)
         successfulInitializations += partition
       } else {
         logFailedStateChange(partition, NewPartition, OnlinePartition, code)
@@ -342,6 +342,9 @@ class ZkPartitionStateMachine(config: KafkaConfig,
       }
 
       finishedElections ++= finished
+
+      if (remaining.nonEmpty)
+        logger.info(s"Retrying leader election with strategy $partitionLeaderElectionStrategy for partitions $remaining")
     }
 
     finishedElections.toMap
@@ -429,11 +432,11 @@ class ZkPartitionStateMachine(config: KafkaConfig,
       adjustedLeaderAndIsrs, controllerContext.epoch, controllerContext.epochZkVersion)
     finishedUpdates.foreach { case (partition, result) =>
       result.right.foreach { leaderAndIsr =>
-        val replicas = controllerContext.partitionReplicaAssignment(partition)
+        val replicaAssignment = controllerContext.partitionFullReplicaAssignment(partition)
         val leaderIsrAndControllerEpoch = LeaderIsrAndControllerEpoch(leaderAndIsr, controllerContext.epoch)
         controllerContext.partitionLeadershipInfo.put(partition, leaderIsrAndControllerEpoch)
         controllerBrokerRequestBatch.addLeaderAndIsrRequestForBrokers(recipientsPerPartition(partition), partition,
-          leaderIsrAndControllerEpoch, replicas, isNew = false)
+          leaderIsrAndControllerEpoch, replicaAssignment, isNew = false)
       }
     }
 

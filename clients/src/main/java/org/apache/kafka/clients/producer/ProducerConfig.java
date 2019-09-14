@@ -23,6 +23,7 @@ import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.common.config.ConfigDef.Type;
+import org.apache.kafka.common.config.SecurityConfig;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.Serializer;
 
@@ -82,13 +83,14 @@ public class ProducerConfig extends AbstractConfig {
                                            + " server at all. The record will be immediately added to the socket buffer and considered sent. No guarantee can be"
                                            + " made that the server has received the record in this case, and the <code>retries</code> configuration will not"
                                            + " take effect (as the client won't generally know of any failures). The offset given back for each record will"
-                                           + " always be set to -1."
+                                           + " always be set to <code>-1</code>."
                                            + " <li><code>acks=1</code> This will mean the leader will write the record to its local log but will respond"
                                            + " without awaiting full acknowledgement from all followers. In this case should the leader fail immediately after"
                                            + " acknowledging the record but before the followers have replicated it then the record will be lost."
                                            + " <li><code>acks=all</code> This means the leader will wait for the full set of in-sync replicas to"
                                            + " acknowledge the record. This guarantees that the record will not be lost as long as at least one in-sync replica"
-                                           + " remains alive. This is the strongest available guarantee. This is equivalent to the acks=-1 setting.";
+                                           + " remains alive. This is the strongest available guarantee. This is equivalent to the acks=-1 setting."
+                                           + "</ul>";
 
     /** <code>linger.ms</code> */
     public static final String LINGER_MS_CONFIG = "linger.ms";
@@ -240,6 +242,12 @@ public class ProducerConfig extends AbstractConfig {
             "The default is <code>null</code>, which means transactions cannot be used. " +
             "Note that, by default, transactions require a cluster of at least three brokers which is the recommended setting for production; for development you can change this, by adjusting broker setting <code>transaction.state.log.replication.factor</code>.";
 
+    /**
+     * <code>security.providers</code>
+     */
+    public static final String SECURITY_PROVIDERS_CONFIG = SecurityConfig.SECURITY_PROVIDERS_CONFIG;
+    private static final String SECURITY_PROVIDERS_DOC = SecurityConfig.SECURITY_PROVIDERS_DOC;
+
     static {
         CONFIG = new ConfigDef().define(BOOTSTRAP_SERVERS_CONFIG, Type.LIST, Collections.emptyList(), new ConfigDef.NonNullValidator(), Importance.HIGH, CommonClientConfigs.BOOTSTRAP_SERVERS_DOC)
                                 .define(CLIENT_DNS_LOOKUP_CONFIG,
@@ -341,6 +349,11 @@ public class ProducerConfig extends AbstractConfig {
                                         CommonClientConfigs.DEFAULT_SECURITY_PROTOCOL,
                                         Importance.MEDIUM,
                                         CommonClientConfigs.SECURITY_PROTOCOL_DOC)
+                                .define(SECURITY_PROVIDERS_CONFIG,
+                                        Type.STRING,
+                                        null,
+                                        Importance.LOW,
+                                        SECURITY_PROVIDERS_DOC)
                                 .withClientSslSupport()
                                 .withClientSaslSupport()
                                 .define(ENABLE_IDEMPOTENCE_CONFIG,
@@ -405,11 +418,11 @@ public class ProducerConfig extends AbstractConfig {
     }
 
     public static ConfigDef configDef() {
-        return  new ConfigDef(CONFIG);
+        return new ConfigDef(CONFIG);
     }
 
     public static void main(String[] args) {
-        System.out.println(CONFIG.toHtmlTable());
+        System.out.println(CONFIG.toHtml());
     }
 
 }

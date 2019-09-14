@@ -87,6 +87,36 @@ The task specification is usually written as JSON.  For example, this task speci
         "durationMs": 30000,
         "partitions": [["node1", "node2"], ["node3"]]
     }
+    
+This task runs a simple ProduceBench test on a cluster with one producer node, 5 topics, and 10,000 messages per second. 
+The keys are generated sequentially and the configured partitioner (DefaultPartitioner) is used. 
+
+    {
+        "class": "org.apache.kafka.trogdor.workload.ProduceBenchSpec",
+        "durationMs": 10000000,
+        "producerNode": "node0",
+        "bootstrapServers": "localhost:9092",
+        "targetMessagesPerSec": 10000,
+        "maxMessages": 50000,
+        "activeTopics": {
+            "foo[1-3]": {
+                "numPartitions": 10,
+                "replicationFactor": 1
+            }
+        },
+        "inactiveTopics": {
+             "foo[4-5]": {
+                 "numPartitions": 10,
+                 "replicationFactor": 1
+             }
+        },
+        "keyGenerator": {
+             "type": "sequential",
+             "size": 8,
+             "offset": 1
+        },
+        "useConfiguredPartitioner": true
+     }
 
 Tasks are submitted to the coordinator.  Once the coordinator determines that it is time for the task to start, it creates workers on agent processes.  The workers run until the task is done.
 

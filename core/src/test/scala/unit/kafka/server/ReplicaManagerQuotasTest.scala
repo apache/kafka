@@ -212,9 +212,8 @@ class ReplicaManagerQuotasTest {
     //if we ask for len 1 return a message
     expect(log.read(anyObject(),
       maxLength = geq(1),
-      maxOffset = anyObject(),
-      minOneMessage = anyBoolean(),
-      includeAbortedTxns = EasyMock.eq(false))).andReturn(
+      isolation = anyObject(),
+      minOneMessage = anyBoolean())).andReturn(
       FetchDataInfo(
         LogOffsetMetadata(0L, 0L, 0),
         MemoryRecords.withRecords(CompressionType.NONE, record)
@@ -223,9 +222,8 @@ class ReplicaManagerQuotasTest {
     //if we ask for len = 0, return 0 messages
     expect(log.read(anyObject(),
       maxLength = EasyMock.eq(0),
-      maxOffset = anyObject(),
-      minOneMessage = anyBoolean(),
-      includeAbortedTxns = EasyMock.eq(false))).andReturn(
+      isolation = anyObject(),
+      minOneMessage = anyBoolean())).andReturn(
       FetchDataInfo(
         LogOffsetMetadata(0L, 0L, 0),
         MemoryRecords.EMPTY

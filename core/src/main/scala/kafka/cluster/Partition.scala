@@ -413,7 +413,7 @@ class Partition(val topicPartition: TopicPartition,
     }
   }
 
-  def removeFutureLocalReplica(deleteFromLogDir: Boolean = true) {
+  def removeFutureLocalReplica(deleteFromLogDir: Boolean = true): Unit = {
     inWriteLock(leaderIsrUpdateLock) {
       futureLog = None
       if (deleteFromLogDir)
@@ -450,7 +450,7 @@ class Partition(val topicPartition: TopicPartition,
     } else false
   }
 
-  def delete() {
+  def delete(): Unit = {
     // need to hold the lock to prevent appendMessagesToLeader() from hitting I/O exceptions due to log being deleted
     inWriteLock(leaderIsrUpdateLock) {
       remoteReplicasMap.clear()
@@ -948,25 +948,13 @@ class Partition(val topicPartition: TopicPartition,
     // decide whether to only fetch from leader
     val localLog = localLogWithEpochOrException(currentLeaderEpoch, fetchOnlyFromLeader)
 
-    /* Read the LogOffsetMetadata prior to performing the read from the log.
-     * We use the LogOffsetMetadata to determine if a particular replica is in-sync or not.
-     * Using the log end offset after performing the read can lead to a race condition
-     * where data gets appended to the log immediately after the replica has consumed from it
-     * This can cause a replica to always be out of sync.
-     */
+    // Note we use the log end offset prior to the read. This ensures that any appends following
+    // the fetch do not prevent a follower from coming into sync.
     val initialHighWatermark = localLog.highWatermark
     val initialLogStartOffset = localLog.logStartOffset
     val initialLogEndOffset = localLog.logEndOffset
     val initialLastStableOffset = localLog.lastStableOffset
-
-    val maxOffsetOpt = fetchIsolation match {
-      case FetchLogEnd => None
-      case FetchHighWatermark => Some(initialHighWatermark)
-      case FetchTxnCommitted => Some(initialLastStableOffset)
-    }
-
-    val fetchedData = localLog.read(fetchOffset, maxBytes, maxOffsetOpt, minOneMessage,
-          includeAbortedTxns = fetchIsolation == FetchTxnCommitted)
+    val fetchedData = localLog.read(fetchOffset, maxBytes, fetchIsolation, minOneMessage)
 
     LogReadInfo(
       fetchedData = fetchedData,
@@ -1088,7 +1076,7 @@ class Partition(val topicPartition: TopicPartition,
     * @param offset offset to be used for truncation
     * @param isFuture True iff the truncation should be performed on the future log of this partition
     */
-  def truncateTo(offset: Long, isFuture: Boolean) {
+  def truncateTo(offset: Long, isFuture: Boolean): Unit = {
     // The read lock is needed to prevent the follower replica from being truncated while ReplicaAlterDirThread
     // is executing maybeDeleteAndSwapFutureReplica() to replace follower replica with the future replica.
     inReadLock(leaderIsrUpdateLock) {
@@ -1102,7 +1090,7 @@ class Partition(val topicPartition: TopicPartition,
     * @param newOffset The new offset to start the log with
     * @param isFuture True iff the truncation should be performed on the future log of this partition
     */
-  def truncateFullyAndStartAt(newOffset: Long, isFuture: Boolean) {
+  def truncateFullyAndStartAt(newOffset: Long, isFuture: Boolean): Unit = {
     // The read lock is needed to prevent the follower replica from being truncated while ReplicaAlterDirThread
     // is executing maybeDeleteAndSwapFutureReplica() to replace follower replica with the future replica.
     inReadLock(leaderIsrUpdateLock) {

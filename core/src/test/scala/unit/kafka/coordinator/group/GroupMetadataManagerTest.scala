@@ -19,22 +19,24 @@ package kafka.coordinator.group
 
 import com.yammer.metrics.Metrics
 import com.yammer.metrics.core.Gauge
+import java.lang.management.ManagementFactory
 import java.nio.ByteBuffer
 import java.util.Collections
 import java.util.Optional
 import java.util.concurrent.locks.ReentrantLock
+import javax.management.ObjectName
 import kafka.api._
 import kafka.cluster.Partition
 import kafka.common.OffsetAndMetadata
 import kafka.log.{Log, LogAppendInfo}
-import kafka.server.{FetchDataInfo, KafkaConfig, LogOffsetMetadata, ReplicaManager}
-import kafka.server.HostedPartition
+import kafka.server.{FetchDataInfo, FetchLogEnd, HostedPartition, KafkaConfig, LogOffsetMetadata, ReplicaManager}
 import kafka.utils.{KafkaScheduler, MockTime, TestUtils}
 import kafka.zk.KafkaZkClient
+import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.Subscription
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol
-import org.apache.kafka.clients.consumer.internals.PartitionAssignor.Subscription
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.internals.Topic
+import org.apache.kafka.common.metrics.{JmxReporter, Metrics => kMetrics}
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.requests.OffsetFetchResponse
@@ -43,6 +45,7 @@ import org.easymock.{Capture, EasyMock, IAnswer}
 import org.junit.Assert.{assertEquals, assertFalse, assertNull, assertTrue}
 import org.junit.{Before, Test}
 import org.scalatest.Assertions.fail
+
 import scala.collection.JavaConverters._
 import scala.collection._
 
@@ -55,6 +58,7 @@ class GroupMetadataManagerTest {
   var zkClient: KafkaZkClient = null
   var partition: Partition = null
   var defaultOffsetRetentionMs = Long.MaxValue
+  var metrics: kMetrics = null
 
   val groupId = "foo"
   val groupInstanceId = Some("bar")
@@ -65,7 +69,7 @@ class GroupMetadataManagerTest {
   val sessionTimeout = 10000
 
   @Before
-  def setUp() {
+  def setUp(): Unit = {
     val config = KafkaConfig.fromProps(TestUtils.createBrokerConfig(nodeId = 0, zkConnect = ""))
 
     val offsetConfig = OffsetConfig(maxMetadataSize = config.offsetMetadataMaxSize,
@@ -86,14 +90,15 @@ class GroupMetadataManagerTest {
     EasyMock.expect(zkClient.getTopicPartitionCount(Topic.GROUP_METADATA_TOPIC_NAME)).andReturn(Some(2))
     EasyMock.replay(zkClient)
 
+    metrics = new kMetrics()
     time = new MockTime
     replicaManager = EasyMock.createNiceMock(classOf[ReplicaManager])
-    groupMetadataManager = new GroupMetadataManager(0, ApiVersion.latestVersion, offsetConfig, replicaManager, zkClient, time)
+    groupMetadataManager = new GroupMetadataManager(0, ApiVersion.latestVersion, offsetConfig, replicaManager, zkClient, time, metrics)
     partition = EasyMock.niceMock(classOf[Partition])
   }
 
   @Test
-  def testLoadOffsetsWithoutGroup() {
+  def testLoadOffsetsWithoutGroup(): Unit = {
     val groupMetadataTopicPartition = groupTopicPartition
     val startOffset = 15L
 
@@ -121,7 +126,7 @@ class GroupMetadataManagerTest {
   }
 
   @Test
-  def testLoadEmptyGroupWithOffsets() {
+  def testLoadEmptyGroupWithOffsets(): Unit = {
     val groupMetadataTopicPartition = groupTopicPartition
     val generation = 15
     val protocolType = "consumer"
@@ -156,7 +161,7 @@ class GroupMetadataManagerTest {
   }
 
   @Test
-  def testLoadTransactionalOffsetsWithoutGroup() {
+  def testLoadTransactionalOffsetsWithoutGroup(): Unit = {
     val groupMetadataTopicPartition = groupTopicPartition
     val producerId = 1000L
     val producerEpoch: Short = 2
@@ -190,7 +195,7 @@ class GroupMetadataManagerTest {
   }
 
   @Test
-  def testDoNotLoadAbortedTransactionalOffsetCommits() {
+  def testDoNotLoadAbortedTransactionalOffsetCommits(): Unit = {
     val groupMetadataTopicPartition = groupTopicPartition
     val producerId = 1000L
     val producerEpoch: Short = 2
@@ -254,7 +259,7 @@ class GroupMetadataManagerTest {
   }
 
   @Test
-  def testLoadWithCommittedAndAbortedTransactionalOffsetCommits() {
+  def testLoadWithCommittedAndAbortedTransactionalOffsetCommits(): Unit = {
     // A test which loads a log with a mix of committed and aborted transactional offset committed messages.
     val groupMetadataTopicPartition = groupTopicPartition
     val producerId = 1000L
@@ -300,7 +305,7 @@ class GroupMetadataManagerTest {
   }
 
   @Test
-  def testLoadWithCommittedAndAbortedAndPendingTransactionalOffsetCommits() {
+  def testLoadWithCommittedAndAbortedAndPendingTransactionalOffsetCommits(): Unit = {
     val groupMetadataTopicPartition = groupTopicPartition
     val producerId = 1000L
     val producerEpoch: Short = 2
@@ -504,7 +509,7 @@ class GroupMetadataManagerTest {
   }
 
   @Test
-  def testGroupNotExists() {
+  def testGroupNotExists(): Unit = {
     // group is not owned
     assertFalse(groupMetadataManager.groupNotExists(groupId))
 
@@ -552,7 +557,7 @@ class GroupMetadataManagerTest {
   }
 
   @Test
-  def testLoadOffsetsWithTombstones() {
+  def testLoadOffsetsWithTombstones(): Unit = {
     val groupMetadataTopicPartition = groupTopicPartition
     val startOffset = 15L
 
@@ -587,7 +592,7 @@ class GroupMetadataManagerTest {
   }
 
   @Test
-  def testLoadOffsetsAndGroup() {
+  def testLoadOffsetsAndGroup(): Unit = {
     val groupMetadataTopicPartition = groupTopicPartition
     val generation = 935
     val protocolType = "consumer"
@@ -627,7 +632,7 @@ class GroupMetadataManagerTest {
   }
 
   @Test
-  def testLoadGroupWithTombstone() {
+  def testLoadGroupWithTombstone(): Unit = {
     val groupMetadataTopicPartition = groupTopicPartition
     val startOffset = 15L
     val memberId = "98098230493"
@@ -647,7 +652,7 @@ class GroupMetadataManagerTest {
   }
 
   @Test
-  def testLoadGroupWithLargeGroupMetadataRecord() {
+  def testLoadGroupWithLargeGroupMetadataRecord(): Unit = {
     val groupMetadataTopicPartition = groupTopicPartition
     val startOffset = 15L
     val committedOffsets = Map(
@@ -767,14 +772,14 @@ class GroupMetadataManagerTest {
   }
 
   @Test
-  def testAddGroup() {
+  def testAddGroup(): Unit = {
     val group = new GroupMetadata("foo", Empty, time)
     assertEquals(group, groupMetadataManager.addGroup(group))
     assertEquals(group, groupMetadataManager.addGroup(new GroupMetadata("foo", Empty, time)))
   }
 
   @Test
-  def testloadGroupWithStaticMember() {
+  def testloadGroupWithStaticMember(): Unit = {
     val generation = 27
     val protocolType = "consumer"
     val staticMemberId = "staticMemberId"
@@ -800,7 +805,75 @@ class GroupMetadataManagerTest {
   }
 
   @Test
-  def testReadFromOldGroupMetadata() {
+  def testLoadConsumerGroup(): Unit = {
+    val generation = 27
+    val protocolType = "consumer"
+    val protocol = "protocol"
+    val memberId = "member1"
+    val topic = "foo"
+
+    val subscriptions = List(
+      ("protocol", ConsumerProtocol.serializeSubscription(new Subscription(List(topic).asJava)).array())
+    )
+
+    val member = new MemberMetadata(memberId, groupId, groupInstanceId, "", "", rebalanceTimeout,
+      sessionTimeout, protocolType, subscriptions)
+
+    val members = Seq(member)
+
+    val group = GroupMetadata.loadGroup(groupId, Stable, generation, protocolType, protocol, null, None,
+      members, time)
+
+    assertTrue(group.is(Stable))
+    assertEquals(generation, group.generationId)
+    assertEquals(Some(protocolType), group.protocolType)
+    assertEquals(protocol, group.protocolOrNull)
+    assertEquals(Some(Set(topic)), group.getSubscribedTopics)
+    assertTrue(group.has(memberId))
+  }
+
+  @Test
+  def testLoadEmptyConsumerGroup(): Unit = {
+    val generation = 27
+    val protocolType = "consumer"
+
+    val group = GroupMetadata.loadGroup(groupId, Empty, generation, protocolType, null, null, None,
+      Seq(), time)
+
+    assertTrue(group.is(Empty))
+    assertEquals(generation, group.generationId)
+    assertEquals(Some(protocolType), group.protocolType)
+    assertNull(group.protocolOrNull)
+    assertEquals(Some(Set.empty), group.getSubscribedTopics)
+  }
+
+  @Test
+  def testLoadConsumerGroupWithFaultyConsumerProtocol(): Unit = {
+    val generation = 27
+    val protocolType = "consumer"
+    val protocol = "protocol"
+    val memberId = "member1"
+
+    val subscriptions = List(("protocol", Array[Byte]()))
+
+    val member = new MemberMetadata(memberId, groupId, groupInstanceId, "", "", rebalanceTimeout,
+      sessionTimeout, protocolType, subscriptions)
+
+    val members = Seq(member)
+
+    val group = GroupMetadata.loadGroup(groupId, Stable, generation, protocolType, protocol, null, None,
+      members, time)
+
+    assertTrue(group.is(Stable))
+    assertEquals(generation, group.generationId)
+    assertEquals(Some(protocolType), group.protocolType)
+    assertEquals(protocol, group.protocolOrNull)
+    assertEquals(None, group.getSubscribedTopics)
+    assertTrue(group.has(memberId))
+  }
+
+  @Test
+  def testReadFromOldGroupMetadata(): Unit = {
     val generation = 1
     val protocol = "range"
     val memberId = "memberId"
@@ -821,7 +894,7 @@ class GroupMetadataManagerTest {
   }
 
   @Test
-  def testStoreEmptyGroup() {
+  def testStoreEmptyGroup(): Unit = {
     val generation = 27
     val protocolType = "consumer"
 
@@ -832,7 +905,7 @@ class GroupMetadataManagerTest {
     EasyMock.replay(replicaManager)
 
     var maybeError: Option[Errors] = None
-    def callback(error: Errors) {
+    def callback(error: Errors): Unit = {
       maybeError = Some(error)
     }
 
@@ -851,7 +924,7 @@ class GroupMetadataManagerTest {
   }
 
   @Test
-  def testStoreEmptySimpleGroup() {
+  def testStoreEmptySimpleGroup(): Unit = {
     val group = new GroupMetadata(groupId, Empty, time)
     groupMetadataManager.addGroup(group)
 
@@ -859,7 +932,7 @@ class GroupMetadataManagerTest {
     EasyMock.replay(replicaManager)
 
     var maybeError: Option[Errors] = None
-    def callback(error: Errors) {
+    def callback(error: Errors): Unit = {
       maybeError = Some(error)
     }
 
@@ -880,7 +953,7 @@ class GroupMetadataManagerTest {
   }
 
   @Test
-  def testStoreGroupErrorMapping() {
+  def testStoreGroupErrorMapping(): Unit = {
     assertStoreGroupErrorMapping(Errors.NONE, Errors.NONE)
     assertStoreGroupErrorMapping(Errors.UNKNOWN_TOPIC_OR_PARTITION, Errors.COORDINATOR_NOT_AVAILABLE)
     assertStoreGroupErrorMapping(Errors.NOT_ENOUGH_REPLICAS, Errors.COORDINATOR_NOT_AVAILABLE)
@@ -892,7 +965,7 @@ class GroupMetadataManagerTest {
     assertStoreGroupErrorMapping(Errors.CORRUPT_MESSAGE, Errors.CORRUPT_MESSAGE)
   }
 
-  private def assertStoreGroupErrorMapping(appendError: Errors, expectedError: Errors) {
+  private def assertStoreGroupErrorMapping(appendError: Errors, expectedError: Errors): Unit = {
     EasyMock.reset(replicaManager)
 
     val group = new GroupMetadata(groupId, Empty, time)
@@ -902,7 +975,7 @@ class GroupMetadataManagerTest {
     EasyMock.replay(replicaManager)
 
     var maybeError: Option[Errors] = None
-    def callback(error: Errors) {
+    def callback(error: Errors): Unit = {
       maybeError = Some(error)
     }
 
@@ -913,7 +986,7 @@ class GroupMetadataManagerTest {
   }
 
   @Test
-  def testStoreNonEmptyGroup() {
+  def testStoreNonEmptyGroup(): Unit = {
     val memberId = "memberId"
     val clientId = "clientId"
     val clientHost = "localhost"
@@ -931,7 +1004,7 @@ class GroupMetadataManagerTest {
     EasyMock.replay(replicaManager)
 
     var maybeError: Option[Errors] = None
-    def callback(error: Errors) {
+    def callback(error: Errors): Unit = {
       maybeError = Some(error)
     }
 
@@ -942,7 +1015,7 @@ class GroupMetadataManagerTest {
   }
 
   @Test
-  def testStoreNonEmptyGroupWhenCoordinatorHasMoved() {
+  def testStoreNonEmptyGroupWhenCoordinatorHasMoved(): Unit = {
     EasyMock.expect(replicaManager.getMagic(EasyMock.anyObject())).andReturn(None)
     val memberId = "memberId"
     val clientId = "clientId"
@@ -959,7 +1032,7 @@ class GroupMetadataManagerTest {
     EasyMock.replay(replicaManager)
 
     var maybeError: Option[Errors] = None
-    def callback(error: Errors) {
+    def callback(error: Errors): Unit = {
       maybeError = Some(error)
     }
 
@@ -970,7 +1043,7 @@ class GroupMetadataManagerTest {
   }
 
   @Test
-  def testCommitOffset() {
+  def testCommitOffset(): Unit = {
     val memberId = ""
     val topicPartition = new TopicPartition("foo", 0)
     val offset = 37
@@ -986,7 +1059,7 @@ class GroupMetadataManagerTest {
     EasyMock.replay(replicaManager)
 
     var commitErrors: Option[immutable.Map[TopicPartition, Errors]] = None
-    def callback(errors: immutable.Map[TopicPartition, Errors]) {
+    def callback(errors: immutable.Map[TopicPartition, Errors]): Unit = {
       commitErrors = Some(errors)
     }
 
@@ -1010,7 +1083,7 @@ class GroupMetadataManagerTest {
   }
 
   @Test
-  def testTransactionalCommitOffsetCommitted() {
+  def testTransactionalCommitOffsetCommitted(): Unit = {
     val memberId = ""
     val topicPartition = new TopicPartition("foo", 0)
     val offset = 37
@@ -1029,7 +1102,7 @@ class GroupMetadataManagerTest {
     EasyMock.replay(replicaManager)
 
     var commitErrors: Option[immutable.Map[TopicPartition, Errors]] = None
-    def callback(errors: immutable.Map[TopicPartition, Errors]) {
+    def callback(errors: immutable.Map[TopicPartition, Errors]): Unit = {
       commitErrors = Some(errors)
     }
 
@@ -1051,7 +1124,7 @@ class GroupMetadataManagerTest {
   }
 
   @Test
-  def testTransactionalCommitOffsetAppendFailure() {
+  def testTransactionalCommitOffsetAppendFailure(): Unit = {
     val memberId = ""
     val topicPartition = new TopicPartition("foo", 0)
     val offset = 37
@@ -1069,7 +1142,7 @@ class GroupMetadataManagerTest {
     EasyMock.replay(replicaManager)
 
     var commitErrors: Option[immutable.Map[TopicPartition, Errors]] = None
-    def callback(errors: immutable.Map[TopicPartition, Errors]) {
+    def callback(errors: immutable.Map[TopicPartition, Errors]): Unit = {
       commitErrors = Some(errors)
     }
 
@@ -1090,7 +1163,7 @@ class GroupMetadataManagerTest {
   }
 
   @Test
-  def testTransactionalCommitOffsetAborted() {
+  def testTransactionalCommitOffsetAborted(): Unit = {
     val memberId = ""
     val topicPartition = new TopicPartition("foo", 0)
     val offset = 37
@@ -1108,7 +1181,7 @@ class GroupMetadataManagerTest {
     EasyMock.replay(replicaManager)
 
     var commitErrors: Option[immutable.Map[TopicPartition, Errors]] = None
-    def callback(errors: immutable.Map[TopicPartition, Errors]) {
+    def callback(errors: immutable.Map[TopicPartition, Errors]): Unit = {
       commitErrors = Some(errors)
     }
 
@@ -1129,7 +1202,7 @@ class GroupMetadataManagerTest {
   }
 
   @Test
-  def testCommitOffsetWhenCoordinatorHasMoved() {
+  def testCommitOffsetWhenCoordinatorHasMoved(): Unit = {
     EasyMock.expect(replicaManager.getMagic(EasyMock.anyObject())).andReturn(None)
     val memberId = ""
     val topicPartition = new TopicPartition("foo", 0)
@@ -1145,7 +1218,7 @@ class GroupMetadataManagerTest {
     EasyMock.replay(replicaManager)
 
     var commitErrors: Option[immutable.Map[TopicPartition, Errors]] = None
-    def callback(errors: immutable.Map[TopicPartition, Errors]) {
+    def callback(errors: immutable.Map[TopicPartition, Errors]): Unit = {
       commitErrors = Some(errors)
     }
 
@@ -1159,7 +1232,7 @@ class GroupMetadataManagerTest {
   }
 
   @Test
-  def testCommitOffsetFailure() {
+  def testCommitOffsetFailure(): Unit = {
     assertCommitOffsetErrorMapping(Errors.UNKNOWN_TOPIC_OR_PARTITION, Errors.COORDINATOR_NOT_AVAILABLE)
     assertCommitOffsetErrorMapping(Errors.NOT_ENOUGH_REPLICAS, Errors.COORDINATOR_NOT_AVAILABLE)
     assertCommitOffsetErrorMapping(Errors.NOT_ENOUGH_REPLICAS_AFTER_APPEND, Errors.COORDINATOR_NOT_AVAILABLE)
@@ -1188,7 +1261,7 @@ class GroupMetadataManagerTest {
     EasyMock.replay(replicaManager)
 
     var commitErrors: Option[immutable.Map[TopicPartition, Errors]] = None
-    def callback(errors: immutable.Map[TopicPartition, Errors]) {
+    def callback(errors: immutable.Map[TopicPartition, Errors]): Unit = {
       commitErrors = Some(errors)
     }
 
@@ -1209,7 +1282,7 @@ class GroupMetadataManagerTest {
   }
 
   @Test
-  def testExpireOffset() {
+  def testExpireOffset(): Unit = {
     val memberId = ""
     val topicPartition1 = new TopicPartition("foo", 0)
     val topicPartition2 = new TopicPartition("foo", 1)
@@ -1231,7 +1304,7 @@ class GroupMetadataManagerTest {
     EasyMock.replay(replicaManager)
 
     var commitErrors: Option[immutable.Map[TopicPartition, Errors]] = None
-    def callback(errors: immutable.Map[TopicPartition, Errors]) {
+    def callback(errors: immutable.Map[TopicPartition, Errors]): Unit = {
       commitErrors = Some(errors)
     }
 
@@ -1264,7 +1337,7 @@ class GroupMetadataManagerTest {
   }
 
   @Test
-  def testGroupMetadataRemoval() {
+  def testGroupMetadataRemoval(): Unit = {
     val topicPartition1 = new TopicPartition("foo", 0)
     val topicPartition2 = new TopicPartition("foo", 1)
 
@@ -1312,7 +1385,7 @@ class GroupMetadataManagerTest {
   }
 
   @Test
-  def testGroupMetadataRemovalWithLogAppendTime() {
+  def testGroupMetadataRemovalWithLogAppendTime(): Unit = {
     val topicPartition1 = new TopicPartition("foo", 0)
     val topicPartition2 = new TopicPartition("foo", 1)
 
@@ -1361,7 +1434,7 @@ class GroupMetadataManagerTest {
   }
 
   @Test
-  def testExpireGroupWithOffsetsOnly() {
+  def testExpireGroupWithOffsetsOnly(): Unit = {
     // verify that the group is removed properly, but no tombstone is written if
     // this is a group which is only using kafka for offset storage
 
@@ -1386,7 +1459,7 @@ class GroupMetadataManagerTest {
     EasyMock.replay(replicaManager)
 
     var commitErrors: Option[immutable.Map[TopicPartition, Errors]] = None
-    def callback(errors: immutable.Map[TopicPartition, Errors]) {
+    def callback(errors: immutable.Map[TopicPartition, Errors]): Unit = {
       commitErrors = Some(errors)
     }
 
@@ -1433,7 +1506,7 @@ class GroupMetadataManagerTest {
   }
 
   @Test
-  def testOffsetExpirationSemantics() {
+  def testOffsetExpirationSemantics(): Unit = {
     val memberId = "memberId"
     val clientId = "clientId"
     val clientHost = "localhost"
@@ -1471,7 +1544,7 @@ class GroupMetadataManagerTest {
     EasyMock.replay(replicaManager)
 
     var commitErrors: Option[immutable.Map[TopicPartition, Errors]] = None
-    def callback(errors: immutable.Map[TopicPartition, Errors]) {
+    def callback(errors: immutable.Map[TopicPartition, Errors]): Unit = {
       commitErrors = Some(errors)
     }
 
@@ -1595,7 +1668,7 @@ class GroupMetadataManagerTest {
   }
 
   @Test
-  def testOffsetExpirationOfSimpleConsumer() {
+  def testOffsetExpirationOfSimpleConsumer(): Unit = {
     val memberId = "memberId"
     val topic = "foo"
     val topicPartition1 = new TopicPartition(topic, 0)
@@ -1619,7 +1692,7 @@ class GroupMetadataManagerTest {
     EasyMock.replay(replicaManager)
 
     var commitErrors: Option[immutable.Map[TopicPartition, Errors]] = None
-    def callback(errors: immutable.Map[TopicPartition, Errors]) {
+    def callback(errors: immutable.Map[TopicPartition, Errors]): Unit = {
       commitErrors = Some(errors)
     }
 
@@ -1666,6 +1739,144 @@ class GroupMetadataManagerTest {
     EasyMock.verify(replicaManager)
 
     assert(group.is(Dead))
+  }
+
+  @Test
+  def testOffsetExpirationOfActiveGroupSemantics(): Unit = {
+    val memberId = "memberId"
+    val clientId = "clientId"
+    val clientHost = "localhost"
+
+    val topic1 = "foo"
+    val topic1Partition0 = new TopicPartition(topic1, 0)
+    val topic1Partition1 = new TopicPartition(topic1, 1)
+
+    val topic2 = "bar"
+    val topic2Partition0 = new TopicPartition(topic2, 0)
+    val topic2Partition1 = new TopicPartition(topic2, 1)
+
+    val offset = 37
+
+    groupMetadataManager.addPartitionOwnership(groupPartitionId)
+
+    val group = new GroupMetadata(groupId, Empty, time)
+    groupMetadataManager.addGroup(group)
+
+    // Subscribe to topic1 and topic2
+    val subscriptionTopic1AndTopic2 = new Subscription(List(topic1, topic2).asJava)
+
+    val member = new MemberMetadata(
+      memberId,
+      groupId,
+      groupInstanceId,
+      clientId,
+      clientHost,
+      rebalanceTimeout,
+      sessionTimeout,
+      ConsumerProtocol.PROTOCOL_TYPE,
+      List(("protocol", ConsumerProtocol.serializeSubscription(subscriptionTopic1AndTopic2).array()))
+    )
+
+    group.add(member, _ => ())
+    group.transitionTo(PreparingRebalance)
+    group.initNextGeneration()
+    group.transitionTo(Stable)
+
+    val startMs = time.milliseconds
+
+    val t1p0OffsetAndMetadata = OffsetAndMetadata(offset, "", startMs)
+    val t1p1OffsetAndMetadata = OffsetAndMetadata(offset, "", startMs)
+
+    val t2p0OffsetAndMetadata = OffsetAndMetadata(offset, "", startMs)
+    val t2p1OffsetAndMetadata = OffsetAndMetadata(offset, "", startMs)
+
+    val offsets = immutable.Map(
+      topic1Partition0 -> t1p0OffsetAndMetadata,
+      topic1Partition1 -> t1p1OffsetAndMetadata,
+      topic2Partition0 -> t2p0OffsetAndMetadata,
+      topic2Partition1 -> t2p1OffsetAndMetadata)
+
+    mockGetPartition()
+    expectAppendMessage(Errors.NONE)
+    EasyMock.replay(replicaManager)
+
+    var commitErrors: Option[immutable.Map[TopicPartition, Errors]] = None
+    def callback(errors: immutable.Map[TopicPartition, Errors]): Unit = {
+      commitErrors = Some(errors)
+    }
+
+    groupMetadataManager.storeOffsets(group, memberId, offsets, callback)
+    assertTrue(group.hasOffsets)
+
+    assertFalse(commitErrors.isEmpty)
+    assertEquals(Some(Errors.NONE), commitErrors.get.get(topic1Partition0))
+
+    // advance time to just after the offset of last partition is to be expired
+    time.sleep(defaultOffsetRetentionMs + 2)
+
+    // no offset should expire because all topics are actively consumed
+    groupMetadataManager.cleanupGroupMetadata()
+
+    assertEquals(Some(group), groupMetadataManager.getGroup(groupId))
+    assert(group.is(Stable))
+
+    assertEquals(Some(t1p0OffsetAndMetadata), group.offset(topic1Partition0))
+    assertEquals(Some(t1p1OffsetAndMetadata), group.offset(topic1Partition1))
+    assertEquals(Some(t2p0OffsetAndMetadata), group.offset(topic2Partition0))
+    assertEquals(Some(t2p1OffsetAndMetadata), group.offset(topic2Partition1))
+
+    var cachedOffsets = groupMetadataManager.getOffsets(groupId,
+      Some(Seq(topic1Partition0, topic1Partition1, topic2Partition0, topic2Partition1)))
+
+    assertEquals(Some(offset), cachedOffsets.get(topic1Partition0).map(_.offset))
+    assertEquals(Some(offset), cachedOffsets.get(topic1Partition1).map(_.offset))
+    assertEquals(Some(offset), cachedOffsets.get(topic2Partition0).map(_.offset))
+    assertEquals(Some(offset), cachedOffsets.get(topic2Partition1).map(_.offset))
+
+    EasyMock.verify(replicaManager)
+
+    group.transitionTo(PreparingRebalance)
+
+    // Subscribe to topic1, offsets of topic2 should be removed
+    val subscriptionTopic1 = new Subscription(List(topic1).asJava)
+
+    group.updateMember(
+      member,
+      List(("protocol", ConsumerProtocol.serializeSubscription(subscriptionTopic1).array())),
+      null
+    )
+
+    group.initNextGeneration()
+    group.transitionTo(Stable)
+
+    // expect the offset tombstone
+    EasyMock.expect(partition.appendRecordsToLeader(EasyMock.anyObject(classOf[MemoryRecords]),
+      isFromClient = EasyMock.eq(false), requiredAcks = EasyMock.anyInt()))
+      .andReturn(LogAppendInfo.UnknownLogAppendInfo)
+    EasyMock.expectLastCall().times(1)
+
+    EasyMock.replay(partition)
+
+    groupMetadataManager.cleanupGroupMetadata()
+
+    EasyMock.verify(partition)
+    EasyMock.verify(replicaManager)
+
+    assertEquals(Some(group), groupMetadataManager.getGroup(groupId))
+    assert(group.is(Stable))
+
+    assertEquals(Some(t1p0OffsetAndMetadata), group.offset(topic1Partition0))
+    assertEquals(Some(t1p1OffsetAndMetadata), group.offset(topic1Partition1))
+    assertEquals(None, group.offset(topic2Partition0))
+    assertEquals(None, group.offset(topic2Partition1))
+
+    cachedOffsets = groupMetadataManager.getOffsets(groupId,
+      Some(Seq(topic1Partition0, topic1Partition1, topic2Partition0, topic2Partition1)))
+
+    assertEquals(Some(offset), cachedOffsets.get(topic1Partition0).map(_.offset))
+    assertEquals(Some(offset), cachedOffsets.get(topic1Partition1).map(_.offset))
+    assertEquals(Some(OffsetFetchResponse.INVALID_OFFSET), cachedOffsets.get(topic2Partition0).map(_.offset))
+    assertEquals(Some(OffsetFetchResponse.INVALID_OFFSET), cachedOffsets.get(topic2Partition1).map(_.offset))
   }
 
   @Test
@@ -1842,7 +2053,7 @@ class GroupMetadataManagerTest {
   }
 
   @Test
-  def testLoadOffsetsWithEmptyControlBatch() {
+  def testLoadOffsetsWithEmptyControlBatch(): Unit = {
     val groupMetadataTopicPartition = groupTopicPartition
     val startOffset = 15L
     val generation = 15
@@ -1875,9 +2086,8 @@ class GroupMetadataManagerTest {
     EasyMock.expect(logMock.logStartOffset).andReturn(startOffset).anyTimes()
     EasyMock.expect(logMock.read(EasyMock.eq(startOffset),
       maxLength = EasyMock.anyInt(),
-      maxOffset = EasyMock.eq(None),
-      minOneMessage = EasyMock.eq(true),
-      includeAbortedTxns = EasyMock.eq(false)))
+      isolation = EasyMock.eq(FetchLogEnd),
+      minOneMessage = EasyMock.eq(true)))
       .andReturn(FetchDataInfo(LogOffsetMetadata(startOffset), mockRecords))
     EasyMock.expect(replicaManager.getLog(groupMetadataTopicPartition)).andStubReturn(Some(logMock))
     EasyMock.expect(replicaManager.getLogEndOffset(groupMetadataTopicPartition)).andStubReturn(Some(18))
@@ -1981,9 +2191,8 @@ class GroupMetadataManagerTest {
     EasyMock.expect(logMock.logStartOffset).andStubReturn(startOffset)
     EasyMock.expect(logMock.read(EasyMock.eq(startOffset),
       maxLength = EasyMock.anyInt(),
-      maxOffset = EasyMock.eq(None),
-      minOneMessage = EasyMock.eq(true),
-      includeAbortedTxns = EasyMock.eq(false)))
+      isolation = EasyMock.eq(FetchLogEnd),
+      minOneMessage = EasyMock.eq(true)))
       .andReturn(FetchDataInfo(LogOffsetMetadata(startOffset), fileRecordsMock))
 
     EasyMock.expect(fileRecordsMock.sizeInBytes()).andStubReturn(records.sizeInBytes)
@@ -2041,7 +2250,7 @@ class GroupMetadataManagerTest {
   }
 
   @Test
-  def testMetrics() {
+  def testMetrics(): Unit = {
     groupMetadataManager.cleanupGroupMetadata()
     expectMetrics(groupMetadataManager, 0, 0, 0)
     val group = new GroupMetadata("foo2", Stable, time)
@@ -2051,5 +2260,44 @@ class GroupMetadataManagerTest {
     expectMetrics(groupMetadataManager, 1, 1, 0)
     group.transitionTo(CompletingRebalance)
     expectMetrics(groupMetadataManager, 1, 0, 1)
+  }
+
+  @Test
+  def testPartitionLoadMetric(): Unit = {
+    val server = ManagementFactory.getPlatformMBeanServer
+    val mBeanName = "kafka.server:type=group-coordinator-metrics"
+    val reporter = new JmxReporter("kafka.server")
+    metrics.addReporter(reporter)
+
+    def partitionLoadTime(attribute: String): Double = {
+      server.getAttribute(new ObjectName(mBeanName), attribute).asInstanceOf[Double]
+    }
+
+    assertTrue(server.isRegistered(new ObjectName(mBeanName)))
+    assertEquals(Double.NaN, partitionLoadTime( "partition-load-time-max"), 0)
+    assertEquals(Double.NaN, partitionLoadTime("partition-load-time-avg"), 0)
+    assertTrue(reporter.containsMbean(mBeanName))
+
+    val groupMetadataTopicPartition = groupTopicPartition
+    val startOffset = 15L
+    val memberId = "98098230493"
+    val committedOffsets = Map(
+      new TopicPartition("foo", 0) -> 23L,
+      new TopicPartition("foo", 1) -> 455L,
+      new TopicPartition("bar", 0) -> 8992L
+    )
+
+    val offsetCommitRecords = createCommittedOffsetRecords(committedOffsets)
+    val groupMetadataRecord = buildStableGroupRecordWithMember(generation = 15,
+      protocolType = "consumer", protocol = "range", memberId)
+    val records = MemoryRecords.withRecords(startOffset, CompressionType.NONE,
+      (offsetCommitRecords ++ Seq(groupMetadataRecord)).toArray: _*)
+
+    expectGroupMetadataLoad(groupMetadataTopicPartition, startOffset, records)
+    EasyMock.replay(replicaManager)
+    groupMetadataManager.loadGroupsAndOffsets(groupMetadataTopicPartition, _ => ())
+
+    assertTrue(partitionLoadTime("partition-load-time-max") >= 0.0)
+    assertTrue(partitionLoadTime( "partition-load-time-avg") >= 0.0)
   }
 }

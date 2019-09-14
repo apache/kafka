@@ -33,7 +33,7 @@ import org.apache.kafka.common.header.internals.RecordHeader;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
-import org.apache.kafka.common.metrics.stats.Sum;
+import org.apache.kafka.common.metrics.stats.WindowedSum;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.LogContext;
@@ -50,7 +50,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Future;
 
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.equalTo;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -145,6 +148,31 @@ public class RecordCollectorTest {
         assertEquals((Long) 0L, offsets.get(new TopicPartition("topic1", 2)));
     }
 
+    @Test
+    public void shouldNotAllowOffsetsToBeUpdatedExternally() {
+        final String topic = "topic1";
+        final TopicPartition topicPartition = new TopicPartition(topic, 0);
+
+        final RecordCollectorImpl collector = new RecordCollectorImpl(
+            "RecordCollectorTest-TestSpecificPartition",
+            new LogContext("RecordCollectorTest-TestSpecificPartition "),
+            new DefaultProductionExceptionHandler(),
+            new Metrics().sensor("skipped-records")
+        );
+        collector.init(new MockProducer<>(cluster, true, new DefaultPartitioner(), byteArraySerializer, byteArraySerializer));
+
+        collector.send(topic, "999", "0", null, 0, null, stringSerializer, stringSerializer);
+        collector.send(topic, "999", "0", null, 0, null, stringSerializer, stringSerializer);
+        collector.send(topic, "999", "0", null, 0, null, stringSerializer, stringSerializer);
+
+        final Map<TopicPartition, Long> offsets = collector.offsets();
+
+        assertThat(offsets.get(topicPartition), equalTo(2L));
+        assertThrows(UnsupportedOperationException.class, () -> offsets.put(new TopicPartition(topic, 0), 50L));
+
+        assertThat(collector.offsets().get(topicPartition), equalTo(2L));
+    }
+
     @SuppressWarnings("unchecked")
     @Test(expected = StreamsException.class)
     public void shouldThrowStreamsExceptionOnAnyExceptionButProducerFencedException() {
@@ -215,7 +243,7 @@ public class RecordCollectorTest {
         final Sensor sensor = metrics.sensor("skipped-records");
         final LogCaptureAppender logCaptureAppender = LogCaptureAppender.createAndRegister();
         final MetricName metricName = new MetricName("name", "group", "description", Collections.emptyMap());
-        sensor.add(metricName, new Sum());
+        sensor.add(metricName, new WindowedSum());
         final RecordCollector collector = new RecordCollectorImpl(
             "test",
             logContext,

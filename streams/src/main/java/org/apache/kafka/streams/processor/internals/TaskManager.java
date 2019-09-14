@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import org.apache.kafka.clients.admin.AdminClient;
+import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.DeleteRecordsResult;
 import org.apache.kafka.clients.admin.RecordsToDelete;
 import org.apache.kafka.clients.consumer.Consumer;
@@ -57,7 +57,7 @@ public class TaskManager {
     private final StreamThread.AbstractTaskCreator<StandbyTask> standbyTaskCreator;
     private final StreamsMetadataState streamsMetadataState;
 
-    final AdminClient adminClient;
+    private final Admin adminClient;
     private DeleteRecordsResult deleteRecordsResult;
 
     // following information is updated during rebalance phase by the partition assignor
@@ -74,7 +74,7 @@ public class TaskManager {
                 final StreamsMetadataState streamsMetadataState,
                 final StreamThread.AbstractTaskCreator<StreamTask> taskCreator,
                 final StreamThread.AbstractTaskCreator<StandbyTask> standbyTaskCreator,
-                final AdminClient adminClient,
+                final Admin adminClient,
                 final AssignedStreamsTasks active,
                 final AssignedStandbyTasks standby) {
         this.changelogReader = changelogReader;
@@ -92,6 +92,10 @@ public class TaskManager {
         this.log = logContext.logger(getClass());
 
         this.adminClient = adminClient;
+    }
+
+    public Admin adminClient() {
+        return adminClient;
     }
 
     void createTasks(final Collection<TopicPartition> assignment) {
@@ -112,7 +116,7 @@ public class TaskManager {
     }
 
     private void addStreamTasks(final Collection<TopicPartition> assignment) {
-        if (assignedActiveTasks.isEmpty()) {
+        if (assignedActiveTasks == null || assignedActiveTasks.isEmpty()) {
             return;
         }
         final Map<TaskId, Set<TopicPartition>> newTasks = new HashMap<>();
@@ -151,8 +155,7 @@ public class TaskManager {
     }
 
     private void addStandbyTasks() {
-        final Map<TaskId, Set<TopicPartition>> assignedStandbyTasks = this.assignedStandbyTasks;
-        if (assignedStandbyTasks.isEmpty()) {
+        if (assignedStandbyTasks == null || assignedStandbyTasks.isEmpty()) {
             return;
         }
         log.debug("Adding assigned standby tasks {}", assignedStandbyTasks);
@@ -285,7 +288,7 @@ public class TaskManager {
         }
     }
 
-    AdminClient getAdminClient() {
+    Admin getAdminClient() {
         return adminClient;
     }
 
@@ -449,9 +452,10 @@ public class TaskManager {
             for (final Map.Entry<TopicPartition, Long> entry : active.recordsToDelete().entrySet()) {
                 recordsToDelete.put(entry.getKey(), RecordsToDelete.beforeOffset(entry.getValue()));
             }
-            deleteRecordsResult = adminClient.deleteRecords(recordsToDelete);
-
-            log.trace("Sent delete-records request: {}", recordsToDelete);
+            if (!recordsToDelete.isEmpty()) {
+                deleteRecordsResult = adminClient.deleteRecords(recordsToDelete);
+                log.trace("Sent delete-records request: {}", recordsToDelete);
+            }
         }
     }
 

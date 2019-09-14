@@ -18,8 +18,9 @@ package org.apache.kafka.streams.tests;
 
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
+import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
-import org.apache.kafka.clients.consumer.internals.PartitionAssignor;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
@@ -48,11 +49,14 @@ import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
 import java.util.UUID;
+
+import static org.apache.kafka.streams.processor.internals.assignment.StreamsAssignmentProtocolVersions.LATEST_SUPPORTED_VERSION;
 
 public class StreamsUpgradeTest {
 
@@ -109,11 +113,11 @@ public class StreamsUpgradeTest {
     public static class FutureStreamsPartitionAssignor extends StreamsPartitionAssignor {
 
         public FutureStreamsPartitionAssignor() {
-            usedSubscriptionMetadataVersion = SubscriptionInfo.LATEST_SUPPORTED_VERSION + 1;
+            usedSubscriptionMetadataVersion = LATEST_SUPPORTED_VERSION + 1;
         }
 
         @Override
-        public Subscription subscription(final Set<String> topics) {
+        public ByteBuffer subscriptionUserData(final Set<String> topics) {
             // Adds the following information to subscription
             // 1. Client UUID (a unique id assigned to an instance of KafkaStreams)
             // 2. Task ids of previously running tasks
@@ -125,7 +129,7 @@ public class StreamsUpgradeTest {
             standbyTasks.removeAll(previousActiveTasks);
             final FutureSubscriptionInfo data = new FutureSubscriptionInfo(
                 usedSubscriptionMetadataVersion,
-                SubscriptionInfo.LATEST_SUPPORTED_VERSION + 1,
+                LATEST_SUPPORTED_VERSION + 1,
                 taskManager.processId(),
                 previousActiveTasks,
                 standbyTasks,
@@ -133,13 +137,13 @@ public class StreamsUpgradeTest {
 
             taskManager.updateSubscriptionsFromMetadata(topics);
 
-            return new Subscription(new ArrayList<>(topics), data.encode());
+            return data.encode();
         }
 
         @Override
-        public void onAssignment(final PartitionAssignor.Assignment assignment) {
+        public void onAssignment(final ConsumerPartitionAssignor.Assignment assignment, final ConsumerGroupMetadata metadata) {
             try {
-                super.onAssignment(assignment);
+                super.onAssignment(assignment, metadata);
                 return;
             } catch (final TaskAssignmentException cannotProcessFutureVersion) {
                 // continue
@@ -155,13 +159,13 @@ public class StreamsUpgradeTest {
                 throw new TaskAssignmentException("Failed to decode AssignmentInfo", ex);
             }
 
-            if (usedVersion > AssignmentInfo.LATEST_SUPPORTED_VERSION + 1) {
+            if (usedVersion > LATEST_SUPPORTED_VERSION + 1) {
                 throw new IllegalStateException("Unknown metadata version: " + usedVersion
-                    + "; latest supported version: " + AssignmentInfo.LATEST_SUPPORTED_VERSION + 1);
+                                                    + "; latest supported version: " + LATEST_SUPPORTED_VERSION + 1);
             }
 
             final AssignmentInfo info = AssignmentInfo.decode(
-                assignment.userData().putInt(0, AssignmentInfo.LATEST_SUPPORTED_VERSION));
+                assignment.userData().putInt(0, LATEST_SUPPORTED_VERSION));
 
             final List<TopicPartition> partitions = new ArrayList<>(assignment.partitions());
             partitions.sort(PARTITION_COMPARATOR);
@@ -172,7 +176,7 @@ public class StreamsUpgradeTest {
             final Map<TopicPartition, PartitionInfo> topicToPartitionInfo = new HashMap<>();
             final Map<HostInfo, Set<TopicPartition>> partitionsByHost;
 
-            processLatestVersionAssignment(info, partitions, activeTasks, topicToPartitionInfo);
+            processVersionTwoAssignment("test ", info, partitions, activeTasks, topicToPartitionInfo);
             partitionsByHost = info.partitionsByHost();
 
             final TaskManager taskManager = taskManger();
@@ -183,15 +187,21 @@ public class StreamsUpgradeTest {
         }
 
         @Override
-        public Map<String, Assignment> assign(final Cluster metadata,
-                                              final Map<String, Subscription> subscriptions) {
+        public GroupAssignment assign(final Cluster metadata, final GroupSubscription groupSubscription) {
+            final Map<String, Subscription> subscriptions = groupSubscription.groupSubscription();
+            final Set<Integer> supportedVersions = new HashSet<>();
+            for (final Map.Entry<String, Subscription> entry : subscriptions.entrySet()) {
+                final Subscription subscription = entry.getValue();
+                final SubscriptionInfo info = SubscriptionInfo.decode(subscription.userData());
+                supportedVersions.add(info.latestSupportedVersion());
+            }
             Map<String, Assignment> assignment = null;
 
             final Map<String, Subscription> downgradedSubscriptions = new HashMap<>();
             for (final Subscription subscription : subscriptions.values()) {
                 final SubscriptionInfo info = SubscriptionInfo.decode(subscription.userData());
-                if (info.version() < SubscriptionInfo.LATEST_SUPPORTED_VERSION + 1) {
-                    assignment = super.assign(metadata, subscriptions);
+                if (info.version() < LATEST_SUPPORTED_VERSION + 1) {
+                    assignment = super.assign(metadata, new GroupSubscription(subscriptions)).groupAssignment();
                     break;
                 }
             }
@@ -199,14 +209,14 @@ public class StreamsUpgradeTest {
             boolean bumpUsedVersion = false;
             final boolean bumpSupportedVersion;
             if (assignment != null) {
-                bumpSupportedVersion = supportedVersions.size() == 1 && supportedVersions.iterator().next() == SubscriptionInfo.LATEST_SUPPORTED_VERSION + 1;
+                bumpSupportedVersion = supportedVersions.size() == 1 && supportedVersions.iterator().next() == LATEST_SUPPORTED_VERSION + 1;
             } else {
                 for (final Map.Entry<String, Subscription> entry : subscriptions.entrySet()) {
                     final Subscription subscription = entry.getValue();
 
                     final SubscriptionInfo info = SubscriptionInfo.decode(subscription.userData()
-                        .putInt(0, SubscriptionInfo.LATEST_SUPPORTED_VERSION)
-                        .putInt(4, SubscriptionInfo.LATEST_SUPPORTED_VERSION));
+                        .putInt(0, LATEST_SUPPORTED_VERSION)
+                        .putInt(4, LATEST_SUPPORTED_VERSION));
 
                     downgradedSubscriptions.put(
                         entry.getKey(),
@@ -219,7 +229,7 @@ public class StreamsUpgradeTest {
                                 info.userEndPoint())
                                 .encode()));
                 }
-                assignment = super.assign(metadata, downgradedSubscriptions);
+                assignment = super.assign(metadata, new GroupSubscription(downgradedSubscriptions)).groupAssignment();
                 bumpUsedVersion = true;
                 bumpSupportedVersion = true;
             }
@@ -238,7 +248,7 @@ public class StreamsUpgradeTest {
                             .encode()));
             }
 
-            return newAssignment;
+            return new GroupAssignment(newAssignment);
         }
     }
 
@@ -254,7 +264,7 @@ public class StreamsUpgradeTest {
         }
 
         public ByteBuffer encode() {
-            if (version() <= SubscriptionInfo.LATEST_SUPPORTED_VERSION) {
+            if (version() <= LATEST_SUPPORTED_VERSION) {
                 final ByteBuffer buf = super.encode();
                 // super.encode() always encodes `LATEST_SUPPORTED_VERSION` as "latest supported version"
                 // need to update to future version
@@ -270,7 +280,7 @@ public class StreamsUpgradeTest {
         private ByteBuffer encodeFutureVersion() {
             final byte[] endPointBytes = prepareUserEndPoint();
 
-            final ByteBuffer buf = ByteBuffer.allocate(getVersionThreeAndFourByteLength(endPointBytes));
+            final ByteBuffer buf = ByteBuffer.allocate(getVersionThreeFourAndFiveByteLength(endPointBytes));
 
             buf.putInt(LATEST_SUPPORTED_VERSION + 1); // used version
             buf.putInt(LATEST_SUPPORTED_VERSION + 1); // supported version
@@ -306,13 +316,13 @@ public class StreamsUpgradeTest {
             try (final DataOutputStream out = new DataOutputStream(baos)) {
                 if (bumpUsedVersion) {
                     originalUserMetadata.getInt(); // discard original used version
-                    out.writeInt(AssignmentInfo.LATEST_SUPPORTED_VERSION + 1);
+                    out.writeInt(LATEST_SUPPORTED_VERSION + 1);
                 } else {
                     out.writeInt(originalUserMetadata.getInt());
                 }
                 if (bumpSupportedVersion) {
                     originalUserMetadata.getInt(); // discard original supported version
-                    out.writeInt(AssignmentInfo.LATEST_SUPPORTED_VERSION + 1);
+                    out.writeInt(LATEST_SUPPORTED_VERSION + 1);
                 }
 
                 try {
