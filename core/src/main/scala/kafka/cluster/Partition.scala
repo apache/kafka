@@ -596,8 +596,6 @@ class Partition(val topicPartition: TopicPartition,
           followerFetchTimeMs,
           leaderEndOffset)
 
-        // when updateFetchState does not result in any changes, we do not need to
-        // check for ISR expansion or delayed request completions
         val newLeaderLW = if (delayedOperations.numDelayedDelete > 0) lowWatermarkIfLeader else -1L
         // check if the LW of the partition has incremented
         // since the replica's logStartOffset may have incremented
