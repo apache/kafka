@@ -161,4 +161,15 @@ public class UpdateFollowerFetchStateBenchmark {
                 0, 1, nextOffset);
         nextOffset++;
     }
+
+    @Benchmark
+    @OutputTimeUnit(TimeUnit.NANOSECONDS)
+    public void updateFollowerFetchStateBenchNoChange() {
+        // measure the impact of two follower fetches on the leader when the follower didn't
+        // end up fetching anything
+        partition.updateFollowerFetchState(1, new LogOffsetMetadata(nextOffset, nextOffset, 0),
+                0, 1, 100);
+        partition.updateFollowerFetchState(2, new LogOffsetMetadata(nextOffset, nextOffset, 0),
+                0, 1, 100);
+    }
 }
