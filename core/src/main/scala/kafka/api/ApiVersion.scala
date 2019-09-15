@@ -129,7 +129,7 @@ object ApiVersion {
   /**
    * Get the minimum inter broker version which supports the ApiVersion API.
    */
-  def minVersionForApiDiscovery: ApiVersion = KAFKA_0_10_0_IV0
+  def minVersionForApiDiscovery: ApiVersion = KAFKA_0_10_0_IV1
 
 }
 
