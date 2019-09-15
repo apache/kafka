@@ -29,6 +29,8 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
+
 import org.apache.kafka.clients.consumer.CommitFailedException;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -245,13 +247,10 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         // partitions of topics that are both sources and changelogs and set the consumer committed
         // offset via stateMgr as there is not a more direct route.
         final Set<String> changelogTopicNames = new HashSet<>(topology.storeToChangelogTopic().values());
-        partitions.stream()
-            .filter(tp -> changelogTopicNames.contains(tp.topic()))
-            .forEach(tp -> {
-                final long offset = committedOffsetForPartition(tp);
-                stateMgr.putOffsetLimit(tp, offset);
-                log.trace("Updating store offset limits {} for changelog {}", offset, tp);
-            });
+        final Set<TopicPartition> sourcePartitionsAsChangelog = new HashSet<>(partitions)
+            .stream().filter(tp -> changelogTopicNames.contains(tp.topic())).collect(Collectors.toSet());
+        final Map<TopicPartition, Long> committedOffsets = committedOffsetForPartition(sourcePartitionsAsChangelog);
+        stateMgr.putOffsetLimit(committedOffsets);
 
         registerStateStores();
 

@@ -1432,11 +1432,12 @@ object TestUtils extends Logging {
     offsetsToCommit.toMap
   }
 
-  def resetToCommittedPositions(consumer: KafkaConsumer[Array[Byte], Array[Byte]]) = {
+  def resetToCommittedPositions(consumer: KafkaConsumer[Array[Byte], Array[Byte]]) {
+    val committed = consumer.committed(consumer.assignment).asScala.mapValues(_.offset)
+
     consumer.assignment.asScala.foreach { topicPartition =>
-      val offset = consumer.committed(topicPartition)
-      if (offset != null)
-        consumer.seek(topicPartition, offset.offset)
+      if (committed.contains(topicPartition))
+        consumer.seek(topicPartition, committed(topicPartition))
       else
         consumer.seekToBeginning(Collections.singletonList(topicPartition))
     }

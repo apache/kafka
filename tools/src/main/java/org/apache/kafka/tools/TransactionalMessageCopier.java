@@ -18,6 +18,7 @@ package org.apache.kafka.tools;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.sun.scenario.effect.Offset;
 import net.sourceforge.argparse4j.ArgumentParsers;
 import net.sourceforge.argparse4j.inf.ArgumentParser;
 import net.sourceforge.argparse4j.inf.Namespace;
@@ -195,13 +196,13 @@ public class TransactionalMessageCopier {
     }
 
     private static void resetToLastCommittedPositions(KafkaConsumer<String, String> consumer) {
-        for (TopicPartition topicPartition : consumer.assignment()) {
-            OffsetAndMetadata offsetAndMetadata = consumer.committed(topicPartition);
+        final Map<TopicPartition, OffsetAndMetadata> committed = consumer.committed(consumer.assignment());
+        committed.forEach((tp, offsetAndMetadata) -> {
             if (offsetAndMetadata != null)
-                consumer.seek(topicPartition, offsetAndMetadata.offset());
+                consumer.seek(tp, offsetAndMetadata.offset());
             else
-                consumer.seekToBeginning(singleton(topicPartition));
-        }
+                consumer.seekToBeginning(singleton(tp));
+        });
     }
 
     private static long messagesRemaining(KafkaConsumer<String, String> consumer, TopicPartition partition) {

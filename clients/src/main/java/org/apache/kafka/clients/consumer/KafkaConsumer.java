@@ -1776,6 +1776,10 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * Get the last committed offsets for the given partitions (whether the commit happened by this process or
      * another). The returned offsets will be used as the position for the consumer in the event of a failure.
      * <p>
+     * For partitions that do not have a committed offset, they would not be included in the returned map.
+     * <p>
+     * If any of the partitions requested do not exist, an exception would be thrown.
+     * <p>
      * This call will do a remote call to get the latest committed offset from the server, and will block until the
      * committed offset is gotten successfully, an unrecoverable error is encountered (in which case it is thrown to
      * the caller), or the timeout specified by {@code default.api.timeout.ms} expires (in which case a
@@ -1795,13 +1799,17 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      *             the timeout specified by {@code default.api.timeout.ms} expires.
      */
     @Override
-    public Map<TopicPartition, OffsetAndMetadata> committed(Set<TopicPartition> partitions) {
+    public Map<TopicPartition, OffsetAndMetadata> committed(final Set<TopicPartition> partitions) {
         return committed(partitions, Duration.ofMillis(defaultApiTimeoutMs));
     }
 
     /**
      * Get the last committed offsets for the given partitions (whether the commit happened by this process or
      * another). The returned offsets will be used as the position for the consumer in the event of a failure.
+     * <p>
+     * For partitions that do not have a committed offset, they would not be included in the returned map.
+     * <p>
+     * If any of the partitions requested do not exist, an exception would be thrown.
      * <p>
      * This call will block to do a remote call to get the latest committed offsets from the server.
      *
@@ -1820,7 +1828,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      *             expiration of the timeout
      */
     @Override
-    public Map<TopicPartition, OffsetAndMetadata> committed(Set<TopicPartition> partitions, final Duration timeout) {
+    public Map<TopicPartition, OffsetAndMetadata> committed(final Set<TopicPartition> partitions, final Duration timeout) {
         acquireAndEnsureOpen();
         try {
             maybeThrowInvalidGroupIdException();

@@ -217,14 +217,18 @@ public class StandbyTask extends AbstractTask {
             throw new IllegalArgumentException("Topic is not both a source and a changelog: " + partition);
         }
 
-        updateableOffsetLimits.remove(partition);
+        final Map<TopicPartition, Long> newLimits = committedOffsetForPartition(updateableOffsetLimits);
+        final Long previousLimit = offsetLimits.get(partition);
+        final Long newLimit = newLimits.get(partition);
 
-        final long newLimit = committedOffsetForPartition(partition);
-        final long previousLimit = offsetLimits.put(partition, newLimit);
-        if (previousLimit > newLimit) {
+        if (previousLimit != null && previousLimit > newLimit) {
             throw new IllegalStateException("Offset limit should monotonically increase, but was reduced. " +
                 "New limit: " + newLimit + ". Previous limit: " + previousLimit);
         }
+
+        offsetLimits.putAll(newLimits);
+        updateableOffsetLimits.clear();
+
         return newLimit;
     }
 
