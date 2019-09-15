@@ -1748,7 +1748,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * Get the last committed offset for the given partition (whether the commit happened by this process or
      * another). This offset will be used as the position for the consumer in the event of a failure.
      * <p>
-     * This call will block to do a remote call to get the latest committed offsets from the server.
+     * This call will block until the position can be determined, an unrecoverable error is
+     * encountered (in which case it is thrown to the caller), or the timeout expires.
      *
      * @param partition The partition to check
      * @param timeout  The maximum amount of time to await the current committed offset
@@ -1776,17 +1777,18 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * Get the last committed offsets for the given partitions (whether the commit happened by this process or
      * another). The returned offsets will be used as the position for the consumer in the event of a failure.
      * <p>
-     * For partitions that do not have a committed offset, they would not be included in the returned map.
+     * Partitions that do not have a committed offset would not be included in the returned map.
      * <p>
      * If any of the partitions requested do not exist, an exception would be thrown.
      * <p>
-     * This call will do a remote call to get the latest committed offset from the server, and will block until the
+     * This call will do a remote call to get the latest committed offsets from the server, and will block until the
      * committed offset is gotten successfully, an unrecoverable error is encountered (in which case it is thrown to
      * the caller), or the timeout specified by {@code default.api.timeout.ms} expires (in which case a
      * {@link org.apache.kafka.common.errors.TimeoutException} is thrown to the caller).
      *
-     * @param partitions The partition to check
-     * @return The last committed offset and metadata or null if there was no prior commit
+     * @param partitions The partitions to check
+     * @return The latest committed offsets for the given partitions; partitions that do not have any committed offsets
+     *         would not be included in the returned result
      * @throws org.apache.kafka.common.errors.WakeupException if {@link #wakeup()} is called before or while this
      *             function is called
      * @throws org.apache.kafka.common.errors.InterruptException if the calling thread is interrupted before or while
@@ -1807,15 +1809,16 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * Get the last committed offsets for the given partitions (whether the commit happened by this process or
      * another). The returned offsets will be used as the position for the consumer in the event of a failure.
      * <p>
-     * For partitions that do not have a committed offset, they would not be included in the returned map.
+     * Partitions that do not have a committed offset would not be included in the returned map.
      * <p>
      * If any of the partitions requested do not exist, an exception would be thrown.
      * <p>
      * This call will block to do a remote call to get the latest committed offsets from the server.
      *
      * @param partitions The partitions to check
-     * @param timeout  The maximum amount of time to await the current committed offset
-     * @return The last committed offset and metadata or null if there was no prior commit
+     * @param timeout  The maximum amount of time to await the latest committed offsets
+     * @return The latest committed offsets for the given partitions; partitions that do not have any committed offsets
+     *         would not be included in the returned result
      * @throws org.apache.kafka.common.errors.WakeupException if {@link #wakeup()} is called before or while this
      *             function is called
      * @throws org.apache.kafka.common.errors.InterruptException if the calling thread is interrupted before or while
@@ -1835,7 +1838,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             Map<TopicPartition, OffsetAndMetadata> offsets = coordinator.fetchCommittedOffsets(partitions, time.timer(timeout));
             if (offsets == null) {
                 throw new TimeoutException("Timeout of " + timeout.toMillis() + "ms expired before the last " +
-                    "committed offset for partition " + partitions + " could be determined. Try tuning default.api.timeout.ms " +
+                    "committed offset for partitions " + partitions + " could be determined. Try tuning default.api.timeout.ms " +
                     "larger to relax the threshold.");
             } else {
                 offsets.forEach(this::updateLastSeenEpochIfNewer);
