@@ -83,14 +83,11 @@ class LogManager(logDirs: Seq[File],
   @volatile private var numRecoveryThreadsPerDataDir = recoveryThreadsPerDataDir
 
   /**
-   * Lock object to protect modification to partitionsInitializing variable. Also serializes calls to
-   * topicConfigUpdated/brokerConfigUpdated and finishedInitializingLog, which makes sure that log's
-   * config variable isn't modified until finishedInitializingLog is done (which involves reading
-   * configuration from ZK).
+   * Lock object to protect modification to partitionsInitializing variable.
    */
   private val configUpdateLock = new Object
   // Visible for testing
-  private[log] val partitionsInitializing = mutable.Map[TopicPartition, Boolean]()
+  private[log] val partitionsInitializing = new ConcurrentHashMap[TopicPartition, Boolean]().asScala
 
   def reconfigureDefaultLogConfig(logConfig: LogConfig): Unit = {
     this._currentDefaultConfig = logConfig
@@ -702,12 +699,21 @@ class LogManager(logDirs: Seq[File],
    * finished. This method should follow a call to [[kafka.log.LogManager#initializingLog]]
    */
   def finishedInitializingLog(topicPartition: TopicPartition,
-                              log: Option[Log],
-                              config: => LogConfig): Unit = configUpdateLock synchronized {
-    if (partitionsInitializing(topicPartition)) {
-      log.foreach(_.config = config)
+                              maybeLog: Option[Log],
+                              config: => LogConfig): Unit = {
+    /*
+     * Keep on reloading config as long as it keeps changing. A topic or broker config change
+     * event (in ConfigHandler::processConfigChanges or DynamicLogConfig::reconfigure) can
+     * arrive while we are loading config. If that happens reload the configuration.
+     */
+    while (partitionsInitializing(topicPartition)) {
+      partitionsInitializing(topicPartition) = false;
+      maybeLog.foreach(_.config = config)
     }
-    partitionsInitializing -= topicPartition
+
+    configUpdateLock synchronized {
+      partitionsInitializing -= topicPartition
+    }
   }
 
   /**
