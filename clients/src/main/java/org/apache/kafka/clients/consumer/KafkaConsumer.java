@@ -1782,7 +1782,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * If any of the partitions requested do not exist, an exception would be thrown.
      * <p>
      * This call will do a remote call to get the latest committed offsets from the server, and will block until the
-     * committed offset is gotten successfully, an unrecoverable error is encountered (in which case it is thrown to
+     * committed offsets are gotten successfully, an unrecoverable error is encountered (in which case it is thrown to
      * the caller), or the timeout specified by {@code default.api.timeout.ms} expires (in which case a
      * {@link org.apache.kafka.common.errors.TimeoutException} is thrown to the caller).
      *

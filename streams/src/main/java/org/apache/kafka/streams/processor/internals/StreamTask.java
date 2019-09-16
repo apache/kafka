@@ -249,8 +249,8 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         final Set<String> changelogTopicNames = new HashSet<>(topology.storeToChangelogTopic().values());
         final Set<TopicPartition> sourcePartitionsAsChangelog = new HashSet<>(partitions)
             .stream().filter(tp -> changelogTopicNames.contains(tp.topic())).collect(Collectors.toSet());
-        final Map<TopicPartition, Long> committedOffsets = committedOffsetForPartition(sourcePartitionsAsChangelog);
-        stateMgr.putOffsetLimit(committedOffsets);
+        final Map<TopicPartition, Long> committedOffsets = committedOffsetForPartitions(sourcePartitionsAsChangelog);
+        stateMgr.putOffsetLimits(committedOffsets);
 
         registerStateStores();
 

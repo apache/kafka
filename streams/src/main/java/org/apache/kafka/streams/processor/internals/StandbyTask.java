@@ -37,10 +37,10 @@ import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
  * A StandbyTask
  */
 public class StandbyTask extends AbstractTask {
-    private Map<TopicPartition, Long> checkpointedOffsets = new HashMap<>();
+    private boolean updateOffsetLimits;
     private final Sensor closeTaskSensor;
     private final Map<TopicPartition, Long> offsetLimits = new HashMap<>();
-    private final Set<TopicPartition> updateableOffsetLimits = new HashSet<>();
+    private Map<TopicPartition, Long> checkpointedOffsets = new HashMap<>();
 
     /**
      * Create {@link StandbyTask} with its assigned partitions
@@ -69,10 +69,8 @@ public class StandbyTask extends AbstractTask {
         final Set<String> changelogTopicNames = new HashSet<>(topology.storeToChangelogTopic().values());
         partitions.stream()
             .filter(tp -> changelogTopicNames.contains(tp.topic()))
-            .forEach(tp -> {
-                offsetLimits.put(tp, 0L);
-                updateableOffsetLimits.add(tp);
-            });
+            .forEach(tp -> offsetLimits.put(tp, 0L));
+        updateOffsetLimits = true;
     }
 
     @Override
@@ -188,7 +186,7 @@ public class StandbyTask extends AbstractTask {
             // Check if we're unable to process records due to an offset limit (e.g. when our
             // partition is both a source and a changelog). If we're limited then try to refresh
             // the offset limit if possible.
-            if (record.offset() >= limit && updateableOffsetLimits.contains(partition)) {
+            if (record.offset() >= limit && updateOffsetLimits) {
                 limit = updateOffsetLimits(partition);
             }
 
@@ -217,7 +215,7 @@ public class StandbyTask extends AbstractTask {
             throw new IllegalArgumentException("Topic is not both a source and a changelog: " + partition);
         }
 
-        final Map<TopicPartition, Long> newLimits = committedOffsetForPartition(updateableOffsetLimits);
+        final Map<TopicPartition, Long> newLimits = committedOffsetForPartitions(offsetLimits.keySet());
         final Long previousLimit = offsetLimits.get(partition);
         final Long newLimit = newLimits.get(partition);
 
@@ -227,12 +225,12 @@ public class StandbyTask extends AbstractTask {
         }
 
         offsetLimits.putAll(newLimits);
-        updateableOffsetLimits.clear();
+        updateOffsetLimits = false;
 
         return newLimit;
     }
 
     void allowUpdateOfOffsetLimit() {
-        updateableOffsetLimits.addAll(offsetLimits.keySet());
+        updateOffsetLimits = true;
     }
 }
