@@ -21,9 +21,11 @@ import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.Timeout;
 
+import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 
+import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 
 public final class MessageUtilTest {
@@ -55,5 +57,13 @@ public final class MessageUtilTest {
             MessageUtil.deepToString(Arrays.asList(1, 2, 3).iterator()));
         assertEquals("[foo]",
             MessageUtil.deepToString(Arrays.asList("foo").iterator()));
+    }
+
+    @Test
+    public void testByteBufferToArray() {
+        assertArrayEquals(new byte[] {1, 2, 3},
+                MessageUtil.byteBufferToArray(ByteBuffer.wrap(new byte[] {1, 2, 3})));
+        assertArrayEquals(new byte[] {},
+                MessageUtil.byteBufferToArray(ByteBuffer.wrap(new byte[] {})));
     }
 }

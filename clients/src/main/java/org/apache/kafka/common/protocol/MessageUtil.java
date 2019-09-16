@@ -19,6 +19,7 @@ package org.apache.kafka.common.protocol;
 
 import org.apache.kafka.common.utils.Utils;
 
+import java.nio.ByteBuffer;
 import java.util.Iterator;
 import java.util.UUID;
 
@@ -35,6 +36,14 @@ public final class MessageUtil {
             throw new RuntimeException("String " + input + " is too long to serialize.");
         }
         return (short) count;
+    }
+
+    public static byte[] byteBufferToArray(ByteBuffer buf) {
+        byte[] arr = new byte[buf.remaining()];
+        int prevPosition = buf.position();
+        buf.get(arr);
+        buf.position(prevPosition);
+        return arr;
     }
 
     public static String deepToString(Iterator<?> iter) {

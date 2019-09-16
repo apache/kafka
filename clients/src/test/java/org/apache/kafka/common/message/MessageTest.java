@@ -37,7 +37,6 @@ import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.Message;
-import org.apache.kafka.common.protocol.types.ArrayOf;
 import org.apache.kafka.common.protocol.types.BoundField;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.SchemaException;
@@ -699,9 +698,9 @@ public final class MessageTest {
                     entryA, entryA.type.isNullable() ? "nullable" : "non-nullable",
                     entryB, entryB.type.isNullable() ? "nullable" : "non-nullable"));
             }
-            if (entryA.type instanceof ArrayOf) {
-                compareTypes(new NamedType(entryA.name, ((ArrayOf) entryA.type).type()),
-                             new NamedType(entryB.name, ((ArrayOf) entryB.type).type()));
+            if (entryA.type.isArray()) {
+                compareTypes(new NamedType(entryA.name, entryA.type.arrayElementType().get()),
+                             new NamedType(entryB.name, entryB.type.arrayElementType().get()));
             }
         }
     }
