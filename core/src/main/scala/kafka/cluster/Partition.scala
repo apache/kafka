@@ -665,24 +665,20 @@ class Partition(val topicPartition: TopicPartition,
    * whether a replica is in-sync, we only check HW.
    *
    * This function can be triggered when a replica's LEO has incremented.
-   *
-   * @return true if the high watermark has been updated
    */
   private def maybeExpandIsr(followerReplica: Replica, followerFetchTimeMs: Long): Unit = {
     inWriteLock(leaderIsrUpdateLock) {
       // check if this replica needs to be added to the ISR
-      leaderLogIfLocal match {
-        case Some(leaderLog) =>
-          val leaderHighwatermark = leaderLog.highWatermark
-          if (!inSyncReplicaIds.contains(followerReplica.brokerId) && isFollowerInSync(followerReplica, leaderHighwatermark)) {
-            val newInSyncReplicaIds = inSyncReplicaIds + followerReplica.brokerId
-            info(s"Expanding ISR from ${inSyncReplicaIds.mkString(",")} " +
-              s"to ${newInSyncReplicaIds.mkString(",")}")
+      leaderLogIfLocal.foreach { leaderLog =>
+        val leaderHighwatermark = leaderLog.highWatermark
+        if (!inSyncReplicaIds.contains(followerReplica.brokerId) && isFollowerInSync(followerReplica, leaderHighwatermark)) {
+          val newInSyncReplicaIds = inSyncReplicaIds + followerReplica.brokerId
+          info(s"Expanding ISR from ${inSyncReplicaIds.mkString(",")} " +
+            s"to ${newInSyncReplicaIds.mkString(",")}")
 
-            // update ISR in ZK and cache
-            expandIsr(newInSyncReplicaIds)
-          }
-        case None =>
+          // update ISR in ZK and cache
+          expandIsr(newInSyncReplicaIds)
+        }
       }
     }
   }
