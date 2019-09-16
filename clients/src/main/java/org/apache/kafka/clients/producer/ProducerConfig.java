@@ -83,13 +83,14 @@ public class ProducerConfig extends AbstractConfig {
                                            + " server at all. The record will be immediately added to the socket buffer and considered sent. No guarantee can be"
                                            + " made that the server has received the record in this case, and the <code>retries</code> configuration will not"
                                            + " take effect (as the client won't generally know of any failures). The offset given back for each record will"
-                                           + " always be set to -1."
+                                           + " always be set to <code>-1</code>."
                                            + " <li><code>acks=1</code> This will mean the leader will write the record to its local log but will respond"
                                            + " without awaiting full acknowledgement from all followers. In this case should the leader fail immediately after"
                                            + " acknowledging the record but before the followers have replicated it then the record will be lost."
                                            + " <li><code>acks=all</code> This means the leader will wait for the full set of in-sync replicas to"
                                            + " acknowledge the record. This guarantees that the record will not be lost as long as at least one in-sync replica"
-                                           + " remains alive. This is the strongest available guarantee. This is equivalent to the acks=-1 setting.";
+                                           + " remains alive. This is the strongest available guarantee. This is equivalent to the acks=-1 setting."
+                                           + "</ul>";
 
     /** <code>linger.ms</code> */
     public static final String LINGER_MS_CONFIG = "linger.ms";
@@ -421,7 +422,7 @@ public class ProducerConfig extends AbstractConfig {
     }
 
     public static void main(String[] args) {
-        System.out.println(CONFIG.toHtmlTable());
+        System.out.println(CONFIG.toHtml());
     }
 
 }

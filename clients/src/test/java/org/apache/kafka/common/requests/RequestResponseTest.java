@@ -82,12 +82,22 @@ import org.apache.kafka.common.message.ListGroupsRequestData;
 import org.apache.kafka.common.message.ListGroupsResponseData;
 import org.apache.kafka.common.message.OffsetCommitRequestData;
 import org.apache.kafka.common.message.OffsetCommitResponseData;
+import org.apache.kafka.common.message.OffsetDeleteRequestData;
+import org.apache.kafka.common.message.OffsetDeleteRequestData.OffsetDeleteRequestPartition;
+import org.apache.kafka.common.message.OffsetDeleteRequestData.OffsetDeleteRequestTopic;
+import org.apache.kafka.common.message.OffsetDeleteRequestData.OffsetDeleteRequestTopicCollection;
+import org.apache.kafka.common.message.OffsetDeleteResponseData;
+import org.apache.kafka.common.message.OffsetDeleteResponseData.OffsetDeleteResponsePartition;
+import org.apache.kafka.common.message.OffsetDeleteResponseData.OffsetDeleteResponsePartitionCollection;
+import org.apache.kafka.common.message.OffsetDeleteResponseData.OffsetDeleteResponseTopic;
+import org.apache.kafka.common.message.OffsetDeleteResponseData.OffsetDeleteResponseTopicCollection;
 import org.apache.kafka.common.message.RenewDelegationTokenRequestData;
 import org.apache.kafka.common.message.RenewDelegationTokenResponseData;
 import org.apache.kafka.common.message.SaslAuthenticateRequestData;
 import org.apache.kafka.common.message.SaslAuthenticateResponseData;
 import org.apache.kafka.common.message.SaslHandshakeRequestData;
 import org.apache.kafka.common.message.SaslHandshakeResponseData;
+import org.apache.kafka.common.message.TxnOffsetCommitRequestData;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.network.Send;
 import org.apache.kafka.common.protocol.ApiKeys;
@@ -376,6 +386,9 @@ public class RequestResponseTest {
         checkRequest(createListPartitionReassignmentsRequest(), true);
         checkErrorResponse(createListPartitionReassignmentsRequest(), new UnknownServerException(), true);
         checkResponse(createListPartitionReassignmentsResponse(), 0, true);
+        checkRequest(createOffsetDeleteRequest(), true);
+        checkErrorResponse(createOffsetDeleteRequest(), new UnknownServerException(), true);
+        checkResponse(createOffsetDeleteResponse(), 0, true);
     }
 
     @Test
@@ -1384,7 +1397,14 @@ public class RequestResponseTest {
                     new TxnOffsetCommitRequest.CommittedOffset(100, null, Optional.empty()));
         offsets.put(new TopicPartition("topic", 74),
                 new TxnOffsetCommitRequest.CommittedOffset(100, "blah", Optional.of(27)));
-        return new TxnOffsetCommitRequest.Builder("transactionalId", "groupId", 21L, (short) 42, offsets).build();
+        return new TxnOffsetCommitRequest.Builder(
+            new TxnOffsetCommitRequestData()
+                .setTransactionalId("transactionalId")
+                .setGroupId("groupId")
+                .setProducerId(21L)
+                .setProducerEpoch((short) 42)
+                .setTopics(TxnOffsetCommitRequest.getTopics(offsets))
+            ).build();
     }
 
     private TxnOffsetCommitResponse createTxnOffsetCommitResponse() {
@@ -1716,4 +1736,43 @@ public class RequestResponseTest {
         ));
         return new ListPartitionReassignmentsResponse(data);
     }
+
+    private OffsetDeleteRequest createOffsetDeleteRequest() {
+        OffsetDeleteRequestTopicCollection topics = new OffsetDeleteRequestTopicCollection();
+        topics.add(new OffsetDeleteRequestTopic()
+            .setName("topic1")
+            .setPartitions(Collections.singletonList(
+                new OffsetDeleteRequestPartition()
+                    .setPartitionIndex(0)
+                )
+            )
+        );
+
+        OffsetDeleteRequestData data = new OffsetDeleteRequestData();
+        data.setGroupId("group1");
+        data.setTopics(topics);
+
+        return new OffsetDeleteRequest.Builder(data).build((short) 0);
+    }
+
+    private OffsetDeleteResponse createOffsetDeleteResponse() {
+        OffsetDeleteResponsePartitionCollection partitions = new OffsetDeleteResponsePartitionCollection();
+        partitions.add(new OffsetDeleteResponsePartition()
+            .setPartitionIndex(0)
+            .setErrorCode(Errors.NONE.code())
+        );
+
+        OffsetDeleteResponseTopicCollection topics = new OffsetDeleteResponseTopicCollection();
+        topics.add(new OffsetDeleteResponseTopic()
+            .setName("topic1")
+            .setPartitions(partitions)
+        );
+
+        OffsetDeleteResponseData data = new OffsetDeleteResponseData();
+        data.setErrorCode(Errors.NONE.code());
+        data.setTopics(topics);
+
+        return new OffsetDeleteResponse(data);
+    }
+
 }

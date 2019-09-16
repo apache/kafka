@@ -31,7 +31,7 @@ import kafka.zookeeper.{GetChildrenRequest, GetDataRequest, ZooKeeperClient}
 import org.apache.kafka.common.acl._
 import org.apache.kafka.common.acl.AclOperation._
 import org.apache.kafka.common.acl.AclPermissionType.{ALLOW, DENY}
-import org.apache.kafka.common.errors.UnsupportedVersionException
+import org.apache.kafka.common.errors.{ApiException, UnsupportedVersionException}
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.requests.{RequestContext, RequestHeader}
@@ -41,11 +41,13 @@ import org.apache.kafka.common.resource.ResourceType._
 import org.apache.kafka.common.resource.PatternType.{LITERAL, MATCH, PREFIXED}
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.server.authorizer._
-import org.apache.kafka.common.utils.{SecurityUtils => JSecurityUtils, Time}
+import org.apache.kafka.common.utils.{Time, SecurityUtils => JSecurityUtils}
 import org.junit.Assert._
 import org.junit.{After, Before, Test}
+import org.scalatest.Assertions.intercept
 
 import scala.collection.JavaConverters._
+import scala.compat.java8.OptionConverters._
 
 class AclAuthorizerTest extends ZooKeeperTestHarness {
 
@@ -113,9 +115,12 @@ class AclAuthorizerTest extends ZooKeeperTestHarness {
   }
 
   // Authorizing the empty resource is not supported because we create a znode with the resource name.
-  @Test(expected = classOf[IllegalArgumentException])
+  @Test
   def testEmptyAclThrowsException(): Unit = {
-    addAcls(aclAuthorizer, Set(allowReadAcl), new ResourcePattern(GROUP, "", LITERAL))
+    val e = intercept[ApiException] {
+      addAcls(aclAuthorizer, Set(allowReadAcl), new ResourcePattern(GROUP, "", LITERAL))
+    }
+    assertTrue(s"Unexpected exception $e", e.getCause.isInstanceOf[IllegalArgumentException])
   }
 
   @Test
@@ -703,10 +708,10 @@ class AclAuthorizerTest extends ZooKeeperTestHarness {
       acl1.toFilter,
       new AclBindingFilter(resource2.toFilter, AccessControlEntryFilter.ANY),
       new AclBindingFilter(new ResourcePatternFilter(TOPIC, "baz", PatternType.ANY), AccessControlEntryFilter.ANY))
-    val deleteResults = aclAuthorizer.deleteAcls(requestContext, filters.asJava).asScala
-    assertEquals(List.empty, deleteResults.filter(_.exception != null))
+    val deleteResults = aclAuthorizer.deleteAcls(requestContext, filters.asJava).asScala.map(_.toCompletableFuture.get)
+    assertEquals(List.empty, deleteResults.filter(_.exception.isPresent))
     filters.indices.foreach { i =>
-      assertEquals(Set.empty, deleteResults(i).aclBindingDeleteResults.asScala.toSet.filter(_.exception != null))
+      assertEquals(Set.empty, deleteResults(i).aclBindingDeleteResults.asScala.toSet.filter(_.exception.isPresent))
     }
     assertEquals(Set(acl3, acl4), deleteResults(0).aclBindingDeleteResults.asScala.map(_.aclBinding).toSet)
     assertEquals(Set(acl1), deleteResults(1).aclBindingDeleteResults.asScala.map(_.aclBinding).toSet)
@@ -714,10 +719,13 @@ class AclAuthorizerTest extends ZooKeeperTestHarness {
     assertEquals(Set.empty, deleteResults(3).aclBindingDeleteResults.asScala.map(_.aclBinding).toSet)
   }
 
-  @Test(expected = classOf[UnsupportedVersionException])
+  @Test
   def testThrowsOnAddPrefixedAclIfInterBrokerProtocolVersionTooLow(): Unit = {
     givenAuthorizerWithProtocolVersion(Option(KAFKA_2_0_IV0))
-    addAcls(aclAuthorizer, Set(denyReadAcl), new ResourcePattern(TOPIC, "z_other", PREFIXED))
+    val e = intercept[ApiException] {
+      addAcls(aclAuthorizer, Set(denyReadAcl), new ResourcePattern(TOPIC, "z_other", PREFIXED))
+    }
+    assertTrue(s"Unexpected exception $e", e.getCause.isInstanceOf[UnsupportedVersionException])
   }
 
   @Test
@@ -834,10 +842,9 @@ class AclAuthorizerTest extends ZooKeeperTestHarness {
 
   private def addAcls(authorizer: AclAuthorizer, aces: Set[AccessControlEntry], resourcePattern: ResourcePattern): Unit = {
     val bindings = aces.map { ace => new AclBinding(resourcePattern, ace) }
-    authorizer.createAcls(requestContext, bindings.toList.asJava).asScala.foreach { result =>
-      if (result.exception != null)
-        throw result.exception
-    }
+    authorizer.createAcls(requestContext, bindings.toList.asJava).asScala
+      .map(_.toCompletableFuture.get)
+      .foreach { result => result.exception.asScala.foreach { e => throw e } }
   }
 
   private def removeAcls(authorizer: AclAuthorizer, aces: Set[AccessControlEntry], resourcePattern: ResourcePattern): Boolean = {
@@ -845,15 +852,15 @@ class AclAuthorizerTest extends ZooKeeperTestHarness {
       Set(new AclBindingFilter(resourcePattern.toFilter, AccessControlEntryFilter.ANY) )
     else
       aces.map { ace => new AclBinding(resourcePattern, ace).toFilter }
-    authorizer.deleteAcls(requestContext, bindings.toList.asJava).asScala.forall { result =>
-      if (result.exception != null)
-        throw result.exception
-      result.aclBindingDeleteResults.asScala.foreach { r =>
-        if (r.exception != null)
-          throw r.exception
+    authorizer.deleteAcls(requestContext, bindings.toList.asJava).asScala
+      .map(_.toCompletableFuture.get)
+      .forall { result =>
+        result.exception.asScala.foreach { e => throw e }
+        result.aclBindingDeleteResults.asScala.foreach { r =>
+          r.exception.asScala.foreach { e => throw e }
+        }
+        result.aclBindingDeleteResults.asScala.exists(_.exception.asScala.isEmpty)
       }
-      result.aclBindingDeleteResults.asScala.exists(_.deleted)
-    }
   }
 
   private def getAcls(authorizer: AclAuthorizer, resourcePattern: ResourcePattern): Set[AccessControlEntry] = {

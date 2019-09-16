@@ -379,8 +379,16 @@ class RequestQuotaTest extends BaseRequestTest {
           new WriteTxnMarkersRequest.Builder(List.empty.asJava)
 
         case ApiKeys.TXN_OFFSET_COMMIT =>
-          new TxnOffsetCommitRequest.Builder("test-transactional-id", "test-txn-group", 2, 0,
-            Map.empty[TopicPartition, TxnOffsetCommitRequest.CommittedOffset].asJava)
+          new TxnOffsetCommitRequest.Builder(
+            new TxnOffsetCommitRequestData()
+              .setTransactionalId("test-transactional-id")
+              .setGroupId("test-txn-group")
+              .setProducerId(2)
+              .setProducerEpoch(0)
+              .setTopics(TxnOffsetCommitRequest.getTopics(
+                Map.empty[TopicPartition, TxnOffsetCommitRequest.CommittedOffset].asJava
+              ))
+          )
 
         case ApiKeys.DESCRIBE_ACLS =>
           new DescribeAclsRequest.Builder(AclBindingFilter.ANY)
@@ -464,6 +472,17 @@ class RequestQuotaTest extends BaseRequestTest {
           new ListPartitionReassignmentsRequest.Builder(
             new ListPartitionReassignmentsRequestData()
           )
+
+        case ApiKeys.OFFSET_DELETE =>
+          new OffsetDeleteRequest.Builder(
+            new OffsetDeleteRequestData()
+              .setGroupId("test-group")
+              .setTopics(new OffsetDeleteRequestData.OffsetDeleteRequestTopicCollection(
+                Collections.singletonList(new OffsetDeleteRequestData.OffsetDeleteRequestTopic()
+                  .setName("test-topic")
+                  .setPartitions(Collections.singletonList(
+                    new OffsetDeleteRequestData.OffsetDeleteRequestPartition()
+                      .setPartitionIndex(0)))).iterator())))
 
         case _ =>
           throw new IllegalArgumentException("Unsupported API key " + apiKey)
@@ -550,7 +569,7 @@ class RequestQuotaTest extends BaseRequestTest {
       case ApiKeys.ADD_PARTITIONS_TO_TXN => new AddPartitionsToTxnResponse(response).throttleTimeMs
       case ApiKeys.ADD_OFFSETS_TO_TXN => new AddOffsetsToTxnResponse(response).throttleTimeMs
       case ApiKeys.END_TXN => new EndTxnResponse(response).throttleTimeMs
-      case ApiKeys.TXN_OFFSET_COMMIT => new TxnOffsetCommitResponse(response).throttleTimeMs
+      case ApiKeys.TXN_OFFSET_COMMIT => new TxnOffsetCommitResponse(response, ApiKeys.TXN_OFFSET_COMMIT.latestVersion).throttleTimeMs
       case ApiKeys.DESCRIBE_ACLS => new DescribeAclsResponse(response).throttleTimeMs
       case ApiKeys.CREATE_ACLS => new CreateAclsResponse(response).throttleTimeMs
       case ApiKeys.DELETE_ACLS => new DeleteAclsResponse(response).throttleTimeMs
@@ -570,6 +589,7 @@ class RequestQuotaTest extends BaseRequestTest {
         new IncrementalAlterConfigsResponse(response, ApiKeys.INCREMENTAL_ALTER_CONFIGS.latestVersion()).throttleTimeMs
       case ApiKeys.ALTER_PARTITION_REASSIGNMENTS => new AlterPartitionReassignmentsResponse(response).throttleTimeMs
       case ApiKeys.LIST_PARTITION_REASSIGNMENTS => new ListPartitionReassignmentsResponse(response).throttleTimeMs
+      case ApiKeys.OFFSET_DELETE => new OffsetDeleteResponse(response).throttleTimeMs()
       case requestId => throw new IllegalArgumentException(s"No throttle time for $requestId")
     }
   }

@@ -40,7 +40,7 @@ import scala.collection.JavaConverters._
 import scala.collection.mutable.ArrayBuffer
 import scala.collection.{Seq, mutable}
 import scala.util.Random
-import kafka.controller.LeaderIsrAndControllerEpoch
+import kafka.controller.{LeaderIsrAndControllerEpoch, PartitionReplicaAssignment}
 import kafka.zk.KafkaZkClient.UpdateLeaderAndIsrResult
 import kafka.zookeeper._
 import org.apache.kafka.common.errors.ControllerMovedException
@@ -169,7 +169,7 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
     val expectedAssignment = assignment map { topicAssignment =>
       val partition = topicAssignment._1.partition
       val assignment = topicAssignment._2
-      partition -> assignment
+      partition -> PartitionReplicaAssignment(assignment, List(), List())
     }
 
     assertEquals(assignment.size, zkClient.getTopicPartitionCount(topic1).get)
@@ -179,7 +179,7 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
 
     val updatedAssignment = assignment - new TopicPartition(topic1, 2)
 
-    zkClient.setTopicAssignment(topic1, updatedAssignment)
+    zkClient.setTopicAssignment(topic1, updatedAssignment.mapValues { case v => PartitionReplicaAssignment(v, List(), List()) }.toMap)
     assertEquals(updatedAssignment.size, zkClient.getTopicPartitionCount(topic1).get)
 
     // add second topic

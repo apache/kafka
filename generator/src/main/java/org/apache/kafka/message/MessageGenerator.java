@@ -79,6 +79,8 @@ public final class MessageGenerator {
 
     static final String BYTES_CLASS = "org.apache.kafka.common.utils.Bytes";
 
+    static final String UUID_CLASS = "java.util.UUID";
+
     static final String REQUEST_SUFFIX = "Request";
 
     static final String RESPONSE_SUFFIX = "Response";
@@ -122,13 +124,15 @@ public final class MessageGenerator {
                 }
             }
         }
-        Path factoryOutputPath = Paths.get(outputDir, API_MESSAGE_TYPE_JAVA);
-        outputFileNames.add(API_MESSAGE_TYPE_JAVA);
-        try (BufferedWriter writer = Files.newBufferedWriter(factoryOutputPath)) {
-            messageTypeGenerator.generate();
-            messageTypeGenerator.write(writer);
+        if (messageTypeGenerator.hasRegisteredTypes()) {
+            Path factoryOutputPath = Paths.get(outputDir, API_MESSAGE_TYPE_JAVA);
+            outputFileNames.add(API_MESSAGE_TYPE_JAVA);
+            try (BufferedWriter writer = Files.newBufferedWriter(factoryOutputPath)) {
+                messageTypeGenerator.generate();
+                messageTypeGenerator.write(writer);
+            }
+            numProcessed++;
         }
-        numProcessed++;
         try (DirectoryStream<Path> directoryStream = Files.
                 newDirectoryStream(Paths.get(outputDir))) {
             for (Path outputPath : directoryStream) {

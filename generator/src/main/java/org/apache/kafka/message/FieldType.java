@@ -42,6 +42,11 @@ public interface FieldType {
         private static final String NAME = "int8";
 
         @Override
+        public boolean isInteger() {
+            return true;
+        }
+
+        @Override
         public Optional<Integer> fixedLength() {
             return Optional.of(1);
         }
@@ -55,6 +60,11 @@ public interface FieldType {
     final class Int16FieldType implements FieldType {
         static final Int16FieldType INSTANCE = new Int16FieldType();
         private static final String NAME = "int16";
+
+        @Override
+        public boolean isInteger() {
+            return true;
+        }
 
         @Override
         public Optional<Integer> fixedLength() {
@@ -72,6 +82,11 @@ public interface FieldType {
         private static final String NAME = "int32";
 
         @Override
+        public boolean isInteger() {
+            return true;
+        }
+
+        @Override
         public Optional<Integer> fixedLength() {
             return Optional.of(4);
         }
@@ -87,8 +102,28 @@ public interface FieldType {
         private static final String NAME = "int64";
 
         @Override
+        public boolean isInteger() {
+            return true;
+        }
+
+        @Override
         public Optional<Integer> fixedLength() {
             return Optional.of(8);
+        }
+
+        @Override
+        public String toString() {
+            return NAME;
+        }
+    }
+
+    final class UUIDFieldType implements FieldType {
+        static final UUIDFieldType INSTANCE = new UUIDFieldType();
+        private static final String NAME = "uuid";
+
+        @Override
+        public Optional<Integer> fixedLength() {
+            return Optional.of(16);
         }
 
         @Override
@@ -204,6 +239,8 @@ public interface FieldType {
                 return Int32FieldType.INSTANCE;
             case Int64FieldType.NAME:
                 return Int64FieldType.INSTANCE;
+            case UUIDFieldType.NAME:
+                return UUIDFieldType.INSTANCE;
             case StringFieldType.NAME:
                 return StringFieldType.INSTANCE;
             case BytesFieldType.NAME:
@@ -227,6 +264,10 @@ public interface FieldType {
                     throw new RuntimeException("Can't parse type " + string);
                 }
         }
+    }
+
+    default boolean isInteger() {
+        return false;
     }
 
     /**

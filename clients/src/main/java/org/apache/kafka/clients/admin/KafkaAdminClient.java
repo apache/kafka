@@ -85,6 +85,10 @@ import org.apache.kafka.common.message.ListGroupsRequestData;
 import org.apache.kafka.common.message.ListGroupsResponseData;
 import org.apache.kafka.common.message.ListPartitionReassignmentsRequestData;
 import org.apache.kafka.common.message.MetadataRequestData;
+import org.apache.kafka.common.message.OffsetDeleteRequestData;
+import org.apache.kafka.common.message.OffsetDeleteRequestData.OffsetDeleteRequestPartition;
+import org.apache.kafka.common.message.OffsetDeleteRequestData.OffsetDeleteRequestTopic;
+import org.apache.kafka.common.message.OffsetDeleteRequestData.OffsetDeleteRequestTopicCollection;
 import org.apache.kafka.common.message.RenewDelegationTokenRequestData;
 import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.MetricConfig;
@@ -143,12 +147,17 @@ import org.apache.kafka.common.requests.FindCoordinatorRequest;
 import org.apache.kafka.common.requests.FindCoordinatorResponse;
 import org.apache.kafka.common.requests.IncrementalAlterConfigsRequest;
 import org.apache.kafka.common.requests.IncrementalAlterConfigsResponse;
+import org.apache.kafka.common.requests.LeaveGroupRequest;
+import org.apache.kafka.common.requests.LeaveGroupResponse;
 import org.apache.kafka.common.requests.ListGroupsRequest;
 import org.apache.kafka.common.requests.ListGroupsResponse;
 import org.apache.kafka.common.requests.ListPartitionReassignmentsRequest;
 import org.apache.kafka.common.requests.ListPartitionReassignmentsResponse;
 import org.apache.kafka.common.requests.MetadataRequest;
 import org.apache.kafka.common.requests.MetadataResponse;
+import org.apache.kafka.common.requests.OffsetDeleteRequest;
+import org.apache.kafka.common.requests.OffsetDeleteRequest.Builder;
+import org.apache.kafka.common.requests.OffsetDeleteResponse;
 import org.apache.kafka.common.requests.OffsetFetchRequest;
 import org.apache.kafka.common.requests.OffsetFetchResponse;
 import org.apache.kafka.common.requests.RenewDelegationTokenRequest;
@@ -2043,9 +2052,9 @@ public class KafkaAdminClient extends AdminClient {
         return futures;
     }
 
-    private  IncrementalAlterConfigsRequestData toIncrementalAlterConfigsRequestData(final Collection<ConfigResource> resources,
-                                                                   final Map<ConfigResource, Collection<AlterConfigOp>> configs,
-                                                                   final boolean validateOnly) {
+    private IncrementalAlterConfigsRequestData toIncrementalAlterConfigsRequestData(final Collection<ConfigResource> resources,
+                                                                                    final Map<ConfigResource, Collection<AlterConfigOp>> configs,
+                                                                                    final boolean validateOnly) {
         IncrementalAlterConfigsRequestData requestData = new IncrementalAlterConfigsRequestData();
         requestData.setValidateOnly(validateOnly);
         for (ConfigResource resource : resources) {
@@ -3054,6 +3063,92 @@ public class KafkaAdminClient extends AdminClient {
     }
 
     @Override
+    public DeleteConsumerGroupOffsetsResult deleteConsumerGroupOffsets(
+            String groupId,
+            Set<TopicPartition> partitions,
+            DeleteConsumerGroupOffsetsOptions options) {
+        final KafkaFutureImpl<Map<TopicPartition, Errors>> future = new KafkaFutureImpl<>();
+
+        if (groupIdIsUnrepresentable(groupId)) {
+            future.completeExceptionally(new InvalidGroupIdException("The given group id '" +
+                groupId + "' cannot be represented in a request."));
+            return new DeleteConsumerGroupOffsetsResult(future);
+        }
+
+        final long startFindCoordinatorMs = time.milliseconds();
+        final long deadline = calcDeadlineMs(startFindCoordinatorMs, options.timeoutMs());
+        ConsumerGroupOperationContext<Map<TopicPartition, Errors>, DeleteConsumerGroupOffsetsOptions> context =
+            new ConsumerGroupOperationContext<>(groupId, options, deadline, future);
+
+        Call findCoordinatorCall = getFindCoordinatorCall(context,
+            () -> KafkaAdminClient.this.getDeleteConsumerGroupOffsetsCall(context, partitions));
+        runnable.call(findCoordinatorCall, startFindCoordinatorMs);
+
+        return new DeleteConsumerGroupOffsetsResult(future);
+    }
+
+    private Call getDeleteConsumerGroupOffsetsCall(
+            ConsumerGroupOperationContext<Map<TopicPartition, Errors>, DeleteConsumerGroupOffsetsOptions> context,
+            Set<TopicPartition> partitions) {
+        return new Call("deleteConsumerGroupOffsets", context.getDeadline(), new ConstantNodeIdProvider(context.getNode().get().id())) {
+
+            @Override
+            AbstractRequest.Builder createRequest(int timeoutMs) {
+                final OffsetDeleteRequestTopicCollection topics = new OffsetDeleteRequestTopicCollection();
+
+                partitions.stream().collect(Collectors.groupingBy(TopicPartition::topic)).forEach((topic, topicPartitions) -> {
+                    topics.add(
+                        new OffsetDeleteRequestTopic()
+                        .setName(topic)
+                        .setPartitions(topicPartitions.stream()
+                            .map(tp -> new OffsetDeleteRequestPartition().setPartitionIndex(tp.partition()))
+                            .collect(Collectors.toList())
+                        )
+                    );
+                });
+
+                return new OffsetDeleteRequest.Builder(
+                    new OffsetDeleteRequestData()
+                        .setGroupId(context.groupId)
+                        .setTopics(topics)
+                );
+            }
+
+            @Override
+            void handleResponse(AbstractResponse abstractResponse) {
+                final OffsetDeleteResponse response = (OffsetDeleteResponse) abstractResponse;
+
+                // If coordinator changed since we fetched it, retry
+                if (context.hasCoordinatorMoved(response)) {
+                    rescheduleTask(context, () -> getDeleteConsumerGroupOffsetsCall(context, partitions));
+                    return;
+                }
+
+                // If the error is an error at the group level, the future is failed with it
+                final Errors groupError = Errors.forCode(response.data.errorCode());
+                if (handleGroupRequestError(groupError, context.getFuture()))
+                    return;
+
+                final Map<TopicPartition, Errors> partitions = new HashMap<>();
+                response.data.topics().forEach(topic -> {
+                    topic.partitions().forEach(partition -> {
+                        partitions.put(
+                            new TopicPartition(topic.name(), partition.partitionIndex()),
+                            Errors.forCode(partition.errorCode()));
+                    });
+                });
+
+                context.getFuture().complete(partitions);
+            }
+
+            @Override
+            void handleFailure(Throwable throwable) {
+                context.getFuture().completeExceptionally(throwable);
+            }
+        };
+    }
+
+    @Override
     public Map<MetricName, ? extends Metric> metrics() {
         return Collections.unmodifiableMap(this.metrics.metrics());
     }
@@ -3338,5 +3433,64 @@ public class KafkaAdminClient extends AdminClient {
     private boolean dependsOnSpecificNode(ConfigResource resource) {
         return (resource.type() == ConfigResource.Type.BROKER && !resource.isDefault())
                 || resource.type() == ConfigResource.Type.BROKER_LOGGER;
+    }
+
+    @Override
+    public MembershipChangeResult removeMemberFromConsumerGroup(String groupId,
+                                                                RemoveMemberFromConsumerGroupOptions options) {
+        final long startFindCoordinatorMs = time.milliseconds();
+        final long deadline = calcDeadlineMs(startFindCoordinatorMs, options.timeoutMs());
+
+        KafkaFutureImpl<RemoveMemberFromGroupResult> future = new KafkaFutureImpl<>();
+
+        ConsumerGroupOperationContext<RemoveMemberFromGroupResult, RemoveMemberFromConsumerGroupOptions> context =
+            new ConsumerGroupOperationContext<>(groupId, options, deadline, future);
+
+        Call findCoordinatorCall = getFindCoordinatorCall(context,
+            () -> KafkaAdminClient.this.getRemoveMembersFromGroupCall(context));
+        runnable.call(findCoordinatorCall, startFindCoordinatorMs);
+
+        return new MembershipChangeResult(future);
+    }
+
+
+    private Call getRemoveMembersFromGroupCall(ConsumerGroupOperationContext
+                                                   <RemoveMemberFromGroupResult, RemoveMemberFromConsumerGroupOptions> context) {
+        return new Call("leaveGroup",
+                        context.getDeadline(),
+                        new ConstantNodeIdProvider(context.getNode().get().id())) {
+            @Override
+            AbstractRequest.Builder createRequest(int timeoutMs) {
+                return new LeaveGroupRequest.Builder(context.getGroupId(),
+                                                     context.getOptions().getMembers());
+            }
+
+            @Override
+            void handleResponse(AbstractResponse abstractResponse) {
+                final LeaveGroupResponse response = (LeaveGroupResponse) abstractResponse;
+
+                // If coordinator changed since we fetched it, retry
+                if (context.hasCoordinatorMoved(response)) {
+                    rescheduleTask(context, () -> getRemoveMembersFromGroupCall(context));
+                    return;
+                }
+
+                // If error is transient coordinator error, retry
+                Errors error = response.error();
+                if (error == Errors.COORDINATOR_LOAD_IN_PROGRESS || error == Errors.COORDINATOR_NOT_AVAILABLE) {
+                    throw error.exception();
+                }
+
+                final RemoveMemberFromGroupResult membershipChangeResult =
+                    new RemoveMemberFromGroupResult(response, context.getOptions().getMembers());
+
+                context.getFuture().complete(membershipChangeResult);
+            }
+
+            @Override
+            void handleFailure(Throwable throwable) {
+                context.getFuture().completeExceptionally(throwable);
+            }
+        };
     }
 }

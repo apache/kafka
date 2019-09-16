@@ -1017,6 +1017,14 @@ project(':clients') {
     outputs.dir("src/generated/java/org/apache/kafka/common/message")
   }
 
+  task processTestMessages(type:JavaExec) {
+    main = "org.apache.kafka.message.MessageGenerator"
+    classpath = project(':generator').sourceSets.main.runtimeClasspath
+    args = [ "src/generated-test/java/org/apache/kafka/common/message", "src/test/resources/common/message" ]
+    inputs.dir("src/test/resources/common/message")
+    outputs.dir("src/generated-test/java/org/apache/kafka/common/message")
+  }
+
   sourceSets {
     main {
       java {
@@ -1025,12 +1033,14 @@ project(':clients') {
     }
     test {
       java {
-        srcDirs = ["src/generated/java", "src/test/java"]
+        srcDirs = ["src/generated/java", "src/generated-test/java", "src/test/java"]
       }
     }
   }
 
   compileJava.dependsOn 'processMessages'
+
+  compileTestJava.dependsOn 'processTestMessages'
 
   javadoc {
     include "**/org/apache/kafka/clients/admin/*"
