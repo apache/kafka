@@ -44,11 +44,8 @@ import org.apache.kafka.common.TopicPartitionReplica
 import org.apache.kafka.common.acl._
 import org.apache.kafka.common.config.{ConfigResource, LogLevelConfig}
 import org.apache.kafka.common.errors._
-import org.apache.kafka.common.internals.KafkaFutureImpl
-import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity
-import org.apache.kafka.common.message.LeaveGroupResponseData.MemberResponse
 import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.requests.{DeleteRecordsRequest, JoinGroupRequest, MetadataResponse}
+import org.apache.kafka.common.requests.{DeleteRecordsRequest, MetadataResponse}
 import org.apache.kafka.common.resource.{PatternType, Resource, ResourcePattern, ResourceType}
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.junit.Assert._
@@ -1291,7 +1288,7 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
             } catch {
               case e: ExecutionException =>
                 assertTrue(e.getCause.isInstanceOf[UnknownMemberIdException])
-              case _ =>
+              case _: Throwable =>
                 fail("Should have caught exception in getting member future")
             }
           }
@@ -1326,7 +1323,7 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
             } catch {
               case e: ExecutionException =>
                 assertTrue(e.getCause.isInstanceOf[UnknownMemberIdException])
-              case _ =>
+              case _: Throwable =>
                 fail("Should have caught exception in getting member future")
             }
           }
