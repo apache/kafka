@@ -1284,7 +1284,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             this.loseLatency.add(metrics.metricName("partition-lost-latency-avg",
                 this.metricGrpName,
                 "The average time taken for a partition-lost rebalance listener callback"), new Avg());
-            this.loseLatency.add(metrics.metricName("commit-latency-max",
+            this.loseLatency.add(metrics.metricName("partition-lost-latency-max",
                 this.metricGrpName,
                 "The max time taken for a partition-lost rebalance listener callback"), new Max());
 
