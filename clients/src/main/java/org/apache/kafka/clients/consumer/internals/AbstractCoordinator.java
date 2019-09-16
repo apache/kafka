@@ -1070,26 +1070,20 @@ public abstract class AbstractCoordinator implements Closeable {
                 new Rate(TimeUnit.HOURS, new WindowedCount())
             );
 
-            Measurable lastRebalance =
-                new Measurable() {
-                    public double measure(MetricConfig config, long now) {
-                        if (lastRebalanceEndMs == -1L)
-                            return -1d;
-                        else
-                            return TimeUnit.SECONDS.convert(now - lastRebalanceEndMs, TimeUnit.MILLISECONDS);
-                    }
-                };
+            Measurable lastRebalance = (config, now) -> {
+                if (lastRebalanceEndMs == -1L)
+                    // if no rebalance is ever triggered, we just return -1.
+                    return -1d;
+                else
+                    return TimeUnit.SECONDS.convert(now - lastRebalanceEndMs, TimeUnit.MILLISECONDS);
+            };
             metrics.addMetric(metrics.metricName("last-rebalance-seconds-ago",
                 this.metricGrpName,
                 "The number of seconds since the last successful rebalance event"),
                 lastRebalance);
 
-            Measurable lastHeartbeat =
-                new Measurable() {
-                    public double measure(MetricConfig config, long now) {
-                        return TimeUnit.SECONDS.convert(now - heartbeat.lastHeartbeatSend(), TimeUnit.MILLISECONDS);
-                    }
-                };
+            Measurable lastHeartbeat = (config, now) ->
+                TimeUnit.SECONDS.convert(now - heartbeat.lastHeartbeatSend(), TimeUnit.MILLISECONDS);
             metrics.addMetric(metrics.metricName("last-heartbeat-seconds-ago",
                 this.metricGrpName,
                 "The number of seconds since the last coordinator heartbeat was sent"),
