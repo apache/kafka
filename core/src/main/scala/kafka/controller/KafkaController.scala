@@ -315,7 +315,7 @@ class KafkaController(val config: KafkaConfig,
       scheduleAutoLeaderRebalanceTask(delay = 5, unit = TimeUnit.SECONDS)
     }
 
-    if (config.tokenAuthEnabled) {
+    if (config.tokenCleanSchedulerEnable) {
       info("starting the token expiry check scheduler")
       tokenCleanScheduler.startup()
       tokenCleanScheduler.schedule(name = "delete-expired-tokens",
