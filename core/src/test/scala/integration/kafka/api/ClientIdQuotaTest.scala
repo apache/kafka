@@ -16,7 +16,8 @@ package kafka.api
 
 import java.util.Properties
 
-import kafka.server.{DynamicConfig, KafkaConfig, KafkaServer}
+import kafka.server.{ConfigType, DynamicConfig, KafkaConfig, KafkaServer}
+import kafka.utils.TestUtils
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.utils.Sanitizer
 import org.junit.Before
@@ -59,6 +60,10 @@ class ClientIdQuotaTest extends BaseQuotaTest {
         val emptyProps = new Properties
         updateQuotaOverride(producerClientId, emptyProps)
         updateQuotaOverride(consumerClientId, emptyProps)
+        TestUtils.waitUntilTrue(
+          () => adminZkClient.fetchEntityConfig(ConfigType.Client, Sanitizer.sanitize(producerClientId)).isEmpty &&
+            adminZkClient.fetchEntityConfig(ConfigType.Client, Sanitizer.sanitize(consumerClientId)).isEmpty,
+          s"Quota for either $producerClientId or $consumerClientId was not removed.")
       }
 
       private def updateQuotaOverride(clientId: String, properties: Properties): Unit = {
