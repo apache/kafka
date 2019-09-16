@@ -32,7 +32,7 @@ class ReplicationQuotaManagerTest {
   private val metrics = new Metrics(new MetricConfig(), Collections.emptyList(), time)
 
   @After
-  def tearDown: Unit = {
+  def tearDown(): Unit = {
     metrics.close()
   }
 
