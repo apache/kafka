@@ -314,7 +314,7 @@ public enum Errors {
     ELECTION_NOT_NEEDED(84, "Leader election not needed for topic partition", ElectionNotNeededException::new),
     NO_REASSIGNMENT_IN_PROGRESS(85, "No partition reassignment is in progress.",
             NoReassignmentInProgressException::new),
-    INVALID_RECORD(86, "This record has failed the validation on broker and hence be rejected.", InvalidRecordException::new);
+    INVALID_RECORD(87, "This record has failed the validation on broker and hence be rejected.", InvalidRecordException::new);
 
     private static final Logger log = LoggerFactory.getLogger(Errors.class);
 
