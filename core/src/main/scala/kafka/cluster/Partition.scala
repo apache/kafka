@@ -404,6 +404,7 @@ class Partition(val topicPartition: TopicPartition,
       this.log = Some(log)
   }
 
+  // remoteReplicas will be called in the hot path, and must be inexpensive
   def remoteReplicas: Iterable[Replica] =
     remoteReplicasMap.values
 
