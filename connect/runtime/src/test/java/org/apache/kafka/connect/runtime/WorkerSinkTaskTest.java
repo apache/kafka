@@ -35,11 +35,8 @@ import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaAndValue;
-import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.errors.RetriableException;
 import org.apache.kafka.connect.runtime.ConnectMetrics.MetricGroup;
-import org.apache.kafka.connect.runtime.TestConverterWithHeaders.MessageTypeA;
-import org.apache.kafka.connect.runtime.TestConverterWithHeaders.MessageTypeB;
 import org.apache.kafka.connect.runtime.distributed.ClusterConfigState;
 import org.apache.kafka.connect.runtime.WorkerSinkTask.SinkTaskMetricsGroup;
 import org.apache.kafka.connect.runtime.errors.RetryWithToleranceOperatorTest;
@@ -1313,18 +1310,22 @@ public class WorkerSinkTaskTest {
         expectPollInitialAssignment();
 
         String keyA = "a";
-        MessageTypeA valueA = new MessageTypeA(100, "test");
+        String valueA = "Árvíztűrő tükörfúrógép";
         Headers headersA = new RecordHeaders();
-        headersA.add("message.type", "MessageTypeA".getBytes());
+        String encodingA = "latin2";
+        headersA.add("encoding", encodingA.getBytes());
 
         String keyB = "b";
-        MessageTypeB valueB = new MessageTypeB(true, 2000L);
+        String valueB = "Тестовое сообщение";
         Headers headersB = new RecordHeaders();
-        headersB.add("message.type", "MessageTypeB".getBytes());
+        String encodingB = "koi8_r";
+        headersB.add("encoding", encodingB.getBytes());
 
         expectConsumerPoll(Arrays.asList(
-            new ConsumerRecord<>(TOPIC, PARTITION, FIRST_OFFSET + recordsReturnedTp1 + 1, RecordBatch.NO_TIMESTAMP, TimestampType.NO_TIMESTAMP_TYPE, 0L, 0, 0, keyA.getBytes(), TestConverterWithHeaders.serialize(valueA), headersA),
-            new ConsumerRecord<>(TOPIC, PARTITION, FIRST_OFFSET + recordsReturnedTp1 + 2, RecordBatch.NO_TIMESTAMP, TimestampType.NO_TIMESTAMP_TYPE, 0L, 0, 0, keyB.getBytes(), TestConverterWithHeaders.serialize(valueB), headersB)
+            new ConsumerRecord<>(TOPIC, PARTITION, FIRST_OFFSET + recordsReturnedTp1 + 1, RecordBatch.NO_TIMESTAMP, TimestampType.NO_TIMESTAMP_TYPE,
+                0L, 0, 0, keyA.getBytes(), valueA.getBytes(encodingA), headersA),
+            new ConsumerRecord<>(TOPIC, PARTITION, FIRST_OFFSET + recordsReturnedTp1 + 2, RecordBatch.NO_TIMESTAMP, TimestampType.NO_TIMESTAMP_TYPE,
+                0L, 0, 0, keyB.getBytes(), valueB.getBytes(encodingB), headersB)
         ));
 
         expectTransformation(2, null);
@@ -1343,13 +1344,11 @@ public class WorkerSinkTaskTest {
 
         SinkRecord recordA = iterator.next();
         assertEquals(keyA, recordA.key());
-        assertEquals(valueA.value1, ((Struct) recordA.value()).getInt32("value1"));
-        assertEquals(valueA.value2, ((Struct) recordA.value()).getString("value2"));
+        assertEquals(valueA, (String) recordA.value());
 
         SinkRecord recordB = iterator.next();
         assertEquals(keyB, recordB.key());
-        assertEquals(valueB.value1, ((Struct) recordB.value()).getBoolean("value1"));
-        assertEquals(valueB.value2, ((Struct) recordB.value()).getInt64("value2"));
+        assertEquals(valueB, (String) recordB.value());
 
         PowerMock.verifyAll();
     }

@@ -29,12 +29,8 @@ import org.apache.kafka.common.record.InvalidRecordException;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaAndValue;
-import org.apache.kafka.connect.data.SchemaBuilder;
-import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.header.ConnectHeaders;
 import org.apache.kafka.connect.runtime.ConnectMetrics.MetricGroup;
-import org.apache.kafka.connect.runtime.TestConverterWithHeaders.MessageTypeA;
-import org.apache.kafka.connect.runtime.TestConverterWithHeaders.MessageTypeB;
 import org.apache.kafka.connect.runtime.WorkerSourceTask.SourceTaskMetricsGroup;
 import org.apache.kafka.connect.runtime.distributed.ClusterConfigState;
 import org.apache.kafka.connect.runtime.errors.RetryWithToleranceOperatorTest;
@@ -715,33 +711,19 @@ public class WorkerSourceTaskTest extends ThreadedTest {
 
         List<SourceRecord> records = new ArrayList<>();
 
-        Schema schemaA =  SchemaBuilder.struct()
-            .field("value1", Schema.INT32_SCHEMA)
-            .field("value2", Schema.STRING_SCHEMA)
-            .build();
-
-        Struct objectA = new Struct(schemaA);
-        objectA.put("value1", 100);
-        objectA.put("value2", "test");
-
+        String stringA = "Árvíztűrő tükörfúrógép";
         org.apache.kafka.connect.header.Headers headersA = new ConnectHeaders();
-        headersA.addString("message.type", "MessageTypeA");
+        String encodingA = "latin2";
+        headersA.addString("encoding", encodingA);
 
-        records.add(new SourceRecord(PARTITION, OFFSET, "topic", null, Schema.STRING_SCHEMA, "a", schemaA, objectA, null, headersA));
+        records.add(new SourceRecord(PARTITION, OFFSET, "topic", null, Schema.STRING_SCHEMA, "a", Schema.STRING_SCHEMA, stringA, null, headersA));
 
-        Schema schemaB =  SchemaBuilder.struct()
-            .field("value1", Schema.BOOLEAN_SCHEMA)
-            .field("value2", Schema.INT64_SCHEMA)
-            .build();
-
-        Struct objectB = new Struct(schemaB);
-        objectB.put("value1", true);
-        objectB.put("value2", 2000L);
-
+        String stringB = "Тестовое сообщение";
         org.apache.kafka.connect.header.Headers headersB = new ConnectHeaders();
-        headersB.addString("message.type", "MessageTypeB");
+        String encodingB = "koi8_r";
+        headersB.addString("encoding", encodingB);
 
-        records.add(new SourceRecord(PARTITION, OFFSET, "topic", null, Schema.STRING_SCHEMA, "b", schemaB, objectB, null, headersB));
+        records.add(new SourceRecord(PARTITION, OFFSET, "topic", null, Schema.STRING_SCHEMA, "b", Schema.STRING_SCHEMA, stringB, null, headersB));
 
         Capture<ProducerRecord<byte[], byte[]>> sentRecordA = expectSendRecord(false, false, true, false, null);
         Capture<ProducerRecord<byte[], byte[]>> sentRecordB = expectSendRecord(false, false, true, false, null);
@@ -753,18 +735,17 @@ public class WorkerSourceTaskTest extends ThreadedTest {
 
         assertEquals(ByteBuffer.wrap("a".getBytes()), ByteBuffer.wrap(sentRecordA.getValue().key()));
         assertEquals(
-            ByteBuffer.wrap(TestConverterWithHeaders.serialize(new MessageTypeA(100, "test"))),
+            ByteBuffer.wrap(stringA.getBytes(encodingA)),
             ByteBuffer.wrap(sentRecordA.getValue().value())
         );
-        assertEquals("MessageTypeA", new String(sentRecordA.getValue().headers().lastHeader("message.type").value()));
+        assertEquals(encodingA, new String(sentRecordA.getValue().headers().lastHeader("encoding").value()));
 
         assertEquals(ByteBuffer.wrap("b".getBytes()), ByteBuffer.wrap(sentRecordB.getValue().key()));
         assertEquals(
-            ByteBuffer.wrap(TestConverterWithHeaders.serialize(new MessageTypeB(true, 2000L))),
+            ByteBuffer.wrap(stringB.getBytes(encodingB)),
             ByteBuffer.wrap(sentRecordB.getValue().value())
         );
-        assertEquals("MessageTypeB", new String(sentRecordB.getValue().headers().lastHeader("message.type").value()));
-
+        assertEquals(encodingB, new String(sentRecordB.getValue().headers().lastHeader("encoding").value()));
 
         PowerMock.verifyAll();
     }
