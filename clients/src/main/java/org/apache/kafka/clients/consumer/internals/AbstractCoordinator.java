@@ -19,6 +19,7 @@ package org.apache.kafka.clients.consumer.internals;
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.GroupRebalanceConfig;
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.DisconnectException;
@@ -43,8 +44,10 @@ import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Avg;
+import org.apache.kafka.common.metrics.stats.CumulativeCount;
 import org.apache.kafka.common.metrics.stats.Max;
 import org.apache.kafka.common.metrics.stats.Meter;
+import org.apache.kafka.common.metrics.stats.Rate;
 import org.apache.kafka.common.metrics.stats.WindowedCount;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
@@ -122,13 +125,15 @@ public abstract class AbstractCoordinator implements Closeable {
     protected final ConsumerNetworkClient client;
     protected final Time time;
 
-    private HeartbeatThread heartbeatThread = null;
+    private Node coordinator = null;
     private boolean rejoinNeeded = true;
     private boolean needsJoinPrepare = true;
     private MemberState state = MemberState.UNJOINED;
+    private HeartbeatThread heartbeatThread = null;
     private RequestFuture<ByteBuffer> joinFuture = null;
-    private Node coordinator = null;
     private Generation generation = Generation.NO_GENERATION;
+    private long lastRebalanceStartMs = -1L;
+    private long lastRebalanceEndMs = -1L;
 
     private RequestFuture<Void> findCoordinatorFuture = null;
 
@@ -440,6 +445,10 @@ public abstract class AbstractCoordinator implements Closeable {
             disableHeartbeatThread();
 
             state = MemberState.REBALANCING;
+            // a rebalance can be triggered consecutively if the previous one failed,
+            // in this case we would not update the start time.
+            if (lastRebalanceStartMs == -1L)
+                lastRebalanceStartMs = time.milliseconds();
             joinFuture = sendJoinGroupRequest();
             joinFuture.addListener(new RequestFutureListener<ByteBuffer>() {
                 @Override
@@ -450,6 +459,10 @@ public abstract class AbstractCoordinator implements Closeable {
                         log.info("Successfully joined group with generation {}", generation.generationId);
                         state = MemberState.STABLE;
                         rejoinNeeded = false;
+                        // record rebalance latency
+                        lastRebalanceEndMs = time.milliseconds();
+                        sensors.rebalanceLatency.record(lastRebalanceEndMs - lastRebalanceStartMs);
+                        lastRebalanceStartMs = -1L;
 
                         if (heartbeatThread != null)
                             heartbeatThread.enable();
@@ -1008,6 +1021,7 @@ public abstract class AbstractCoordinator implements Closeable {
         public final Sensor heartbeatLatency;
         public final Sensor joinLatency;
         public final Sensor syncLatency;
+        public final Sensor rebalanceLatency;
 
         public GroupCoordinatorMetrics(Metrics metrics, String metricGrpPrefix) {
             this.metricGrpName = metricGrpPrefix + "-coordinator-metrics";
@@ -1027,7 +1041,6 @@ public abstract class AbstractCoordinator implements Closeable {
                     "The max time taken for a group rejoin"), new Max());
             this.joinLatency.add(createMeter(metrics, metricGrpName, "join", "group joins"));
 
-
             this.syncLatency = metrics.sensor("sync-latency");
             this.syncLatency.add(metrics.metricName("sync-time-avg",
                     this.metricGrpName,
@@ -1036,6 +1049,41 @@ public abstract class AbstractCoordinator implements Closeable {
                     this.metricGrpName,
                     "The max time taken for a group sync"), new Max());
             this.syncLatency.add(createMeter(metrics, metricGrpName, "sync", "group syncs"));
+
+            this.rebalanceLatency = metrics.sensor("rebalance-latency");
+            this.rebalanceLatency.add(metrics.metricName("rebalance-latency-avg",
+                this.metricGrpName,
+                "The average time taken for a group to complete a successful rebalance"), new Avg());
+            this.rebalanceLatency.add(metrics.metricName("rebalance-latency-max",
+                this.metricGrpName,
+                "The max time taken for a group to complete a successful rebalance"), new Max());
+            this.rebalanceLatency.add(
+                metrics.metricName("rebalance-total",
+                    this.metricGrpName,
+                    "The total number of rebalance events"),
+                new CumulativeCount()
+            );
+            this.rebalanceLatency.add(
+                metrics.metricName(
+                    "rebalance-rate-per-hour",
+                    this.metricGrpName,
+                    "The number of rebalance events per hour"),
+                new Rate(TimeUnit.HOURS, new WindowedCount())
+            );
+
+            Measurable lastRebalance =
+                new Measurable() {
+                    public double measure(MetricConfig config, long now) {
+                        if (lastRebalanceEndMs == -1L)
+                            return -1d;
+                        else
+                            return TimeUnit.SECONDS.convert(now - lastRebalanceEndMs, TimeUnit.MILLISECONDS);
+                    }
+                };
+            metrics.addMetric(metrics.metricName("last-rebalance-seconds-ago",
+                this.metricGrpName,
+                "The number of seconds since the last successful rebalance event"),
+                lastRebalance);
 
             Measurable lastHeartbeat =
                 new Measurable() {

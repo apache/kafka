@@ -268,7 +268,9 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
         ConsumerRebalanceListener listener = subscriptions.rebalanceListener();
         try {
+            final long startMs = time.milliseconds();
             listener.onPartitionsAssigned(assignedPartitions);
+            sensors.assignLatency.record(time.milliseconds() - startMs);
         } catch (WakeupException | InterruptException e) {
             throw e;
         } catch (Exception e) {
@@ -285,7 +287,9 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
         ConsumerRebalanceListener listener = subscriptions.rebalanceListener();
         try {
+            final long startMs = time.milliseconds();
             listener.onPartitionsRevoked(revokedPartitions);
+            sensors.revokeLatency.record(time.milliseconds() - startMs);
         } catch (WakeupException | InterruptException e) {
             throw e;
         } catch (Exception e) {
@@ -302,7 +306,9 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
         ConsumerRebalanceListener listener = subscriptions.rebalanceListener();
         try {
+            final long startMs = time.milliseconds();
             listener.onPartitionsLost(lostPartitions);
+            sensors.loseLatency.record(time.milliseconds() - startMs);
         } catch (WakeupException | InterruptException e) {
             throw e;
         } catch (Exception e) {
@@ -1242,6 +1248,9 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     private class ConsumerCoordinatorMetrics {
         private final String metricGrpName;
         private final Sensor commitLatency;
+        private final Sensor revokeLatency;
+        private final Sensor assignLatency;
+        private final Sensor loseLatency;
 
         private ConsumerCoordinatorMetrics(Metrics metrics, String metricGrpPrefix) {
             this.metricGrpName = metricGrpPrefix + "-coordinator-metrics";
@@ -1254,6 +1263,30 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                 this.metricGrpName,
                 "The max time taken for a commit request"), new Max());
             this.commitLatency.add(createMeter(metrics, metricGrpName, "commit", "commit calls"));
+
+            this.revokeLatency = metrics.sensor("partition-revoked-latency");
+            this.revokeLatency.add(metrics.metricName("partition-revoked-latency-avg",
+                this.metricGrpName,
+                "The average time taken for a partition-revoked rebalance listener callback"), new Avg());
+            this.revokeLatency.add(metrics.metricName("partition-revoked-latency-max",
+                this.metricGrpName,
+                "The max time taken for a partition-revoked rebalance listener callback"), new Max());
+
+            this.assignLatency = metrics.sensor("partition-assigned-latency");
+            this.assignLatency.add(metrics.metricName("partition-assigned-latency-avg",
+                this.metricGrpName,
+                "The average time taken for a partition-assigned rebalance listener callback"), new Avg());
+            this.assignLatency.add(metrics.metricName("partition-assigned-latency-max",
+                this.metricGrpName,
+                "The max time taken for a partition-assigned rebalance listener callback"), new Max());
+
+            this.loseLatency = metrics.sensor("partition-lost-latency");
+            this.loseLatency.add(metrics.metricName("partition-lost-latency-avg",
+                this.metricGrpName,
+                "The average time taken for a partition-lost rebalance listener callback"), new Avg());
+            this.loseLatency.add(metrics.metricName("commit-latency-max",
+                this.metricGrpName,
+                "The max time taken for a partition-lost rebalance listener callback"), new Max());
 
             Measurable numParts = (config, now) -> subscriptions.numAssignedPartitions();
             metrics.addMetric(metrics.metricName("assigned-partitions",
