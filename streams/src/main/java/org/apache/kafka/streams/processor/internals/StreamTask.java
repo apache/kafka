@@ -583,6 +583,8 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
     // visible for testing
     void suspend(final boolean clean,
                  final boolean isZombie) {
+        // this is necessary because all partition times are reset to -1 during close
+        // we need to preserve the original partitions times before calling commit
         final Map<TopicPartition, Long> partitionTimes = extractPartitionTimes();
         try {
             closeTopology(); // should we call this only on clean suspend?
