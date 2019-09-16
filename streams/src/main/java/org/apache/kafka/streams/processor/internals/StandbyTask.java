@@ -216,18 +216,20 @@ public class StandbyTask extends AbstractTask {
         }
 
         final Map<TopicPartition, Long> newLimits = committedOffsetForPartitions(offsetLimits.keySet());
-        final Long previousLimit = offsetLimits.get(partition);
-        final Long newLimit = newLimits.get(partition);
 
-        if (previousLimit != null && previousLimit > newLimit) {
-            throw new IllegalStateException("Offset limit should monotonically increase, but was reduced. " +
-                "New limit: " + newLimit + ". Previous limit: " + previousLimit);
+        for (final Map.Entry<TopicPartition, Long> newlimit : newLimits.entrySet()) {
+            final Long previousLimit = offsetLimits.get(newlimit.getKey());
+            if (previousLimit != null && previousLimit > newlimit.getValue()) {
+                throw new IllegalStateException("Offset limit should monotonically increase, but was reduced. " +
+                    "New limit: " + newlimit.getValue() + ". Previous limit: " + previousLimit);
+            }
+
         }
 
         offsetLimits.putAll(newLimits);
         updateOffsetLimits = false;
 
-        return newLimit;
+        return offsetLimits.get(partition);
     }
 
     void allowUpdateOfOffsetLimit() {
