@@ -473,6 +473,17 @@ class RequestQuotaTest extends BaseRequestTest {
             new ListPartitionReassignmentsRequestData()
           )
 
+        case ApiKeys.OFFSET_DELETE =>
+          new OffsetDeleteRequest.Builder(
+            new OffsetDeleteRequestData()
+              .setGroupId("test-group")
+              .setTopics(new OffsetDeleteRequestData.OffsetDeleteRequestTopicCollection(
+                Collections.singletonList(new OffsetDeleteRequestData.OffsetDeleteRequestTopic()
+                  .setName("test-topic")
+                  .setPartitions(Collections.singletonList(
+                    new OffsetDeleteRequestData.OffsetDeleteRequestPartition()
+                      .setPartitionIndex(0)))).iterator())))
+
         case _ =>
           throw new IllegalArgumentException("Unsupported API key " + apiKey)
     }
@@ -578,6 +589,7 @@ class RequestQuotaTest extends BaseRequestTest {
         new IncrementalAlterConfigsResponse(response, ApiKeys.INCREMENTAL_ALTER_CONFIGS.latestVersion()).throttleTimeMs
       case ApiKeys.ALTER_PARTITION_REASSIGNMENTS => new AlterPartitionReassignmentsResponse(response).throttleTimeMs
       case ApiKeys.LIST_PARTITION_REASSIGNMENTS => new ListPartitionReassignmentsResponse(response).throttleTimeMs
+      case ApiKeys.OFFSET_DELETE => new OffsetDeleteResponse(response).throttleTimeMs()
       case requestId => throw new IllegalArgumentException(s"No throttle time for $requestId")
     }
   }

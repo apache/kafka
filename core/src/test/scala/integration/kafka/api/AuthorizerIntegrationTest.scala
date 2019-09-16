@@ -37,6 +37,7 @@ import org.apache.kafka.common.acl.AclPermissionType.{ALLOW, DENY}
 import org.apache.kafka.common.config.{ConfigResource, LogLevelConfig}
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.internals.Topic.GROUP_METADATA_TOPIC_NAME
+import org.apache.kafka.common.message.AlterPartitionReassignmentsRequestData
 import org.apache.kafka.common.message.ControlledShutdownRequestData
 import org.apache.kafka.common.message.CreateTopicsRequestData
 import org.apache.kafka.common.message.CreateTopicsRequestData.{CreatableTopic, CreatableTopicCollection}
@@ -47,13 +48,12 @@ import org.apache.kafka.common.message.FindCoordinatorRequestData
 import org.apache.kafka.common.message.HeartbeatRequestData
 import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData
 import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData.{AlterConfigsResource, AlterableConfig, AlterableConfigCollection}
-import org.apache.kafka.common.message.AlterPartitionReassignmentsRequestData
-import org.apache.kafka.common.message.ListPartitionReassignmentsRequestData
 import org.apache.kafka.common.message.JoinGroupRequestData
-import org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocolCollection
-import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity
+import org.apache.kafka.common.message.ListPartitionReassignmentsRequestData
 import org.apache.kafka.common.message.OffsetCommitRequestData
 import org.apache.kafka.common.message.SyncGroupRequestData
+import org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocolCollection
+import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record.{CompressionType, MemoryRecords, RecordBatch, Records, SimpleRecord}
@@ -176,7 +176,8 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
       ApiKeys.ELECT_LEADERS -> classOf[ElectLeadersResponse],
       ApiKeys.INCREMENTAL_ALTER_CONFIGS -> classOf[IncrementalAlterConfigsResponse],
       ApiKeys.ALTER_PARTITION_REASSIGNMENTS -> classOf[AlterPartitionReassignmentsResponse],
-      ApiKeys.LIST_PARTITION_REASSIGNMENTS -> classOf[ListPartitionReassignmentsResponse]
+      ApiKeys.LIST_PARTITION_REASSIGNMENTS -> classOf[ListPartitionReassignmentsResponse],
+      ApiKeys.OFFSET_DELETE -> classOf[OffsetDeleteResponse]
     )
 
   val requestKeyToError = Map[ApiKeys, Nothing => Errors](
@@ -231,7 +232,15 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
         topicResourceError.error()
     }),
     ApiKeys.ALTER_PARTITION_REASSIGNMENTS -> ((resp: AlterPartitionReassignmentsResponse) => Errors.forCode(resp.data().errorCode())),
-    ApiKeys.LIST_PARTITION_REASSIGNMENTS -> ((resp: ListPartitionReassignmentsResponse) => Errors.forCode(resp.data().errorCode()))
+    ApiKeys.LIST_PARTITION_REASSIGNMENTS -> ((resp: ListPartitionReassignmentsResponse) => Errors.forCode(resp.data().errorCode())),
+    ApiKeys.OFFSET_DELETE -> ((resp: OffsetDeleteResponse) => {
+      Errors.forCode(
+        resp.data
+          .topics().asScala.find(_.name() == topic).get
+          .partitions().asScala.find(_.partitionIndex() == part).get
+          .errorCode()
+      )
+    })
   )
 
   val requestKeysToAcls = Map[ApiKeys, Map[ResourcePattern, Set[AccessControlEntry]]](
@@ -273,7 +282,8 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     ApiKeys.ELECT_LEADERS -> clusterAlterAcl,
     ApiKeys.INCREMENTAL_ALTER_CONFIGS -> topicAlterConfigsAcl,
     ApiKeys.ALTER_PARTITION_REASSIGNMENTS -> clusterAlterAcl,
-    ApiKeys.LIST_PARTITION_REASSIGNMENTS -> clusterDescribeAcl
+    ApiKeys.LIST_PARTITION_REASSIGNMENTS -> clusterDescribeAcl,
+    ApiKeys.OFFSET_DELETE -> groupReadAcl
   )
 
   @Before
@@ -1320,6 +1330,56 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   def testDeleteGroupApiWithNoDeleteGroupAcl2(): Unit = {
     val result = createAdminClient().deleteConsumerGroups(Seq(group).asJava)
     TestUtils.assertFutureExceptionTypeEquals(result.deletedGroups().get(group), classOf[GroupAuthorizationException])
+  }
+
+  @Test
+  def testDeleteGroupOffsetsWithAcl(): Unit = {
+    addAndVerifyAcls(Set(new AccessControlEntry(userPrincipalStr, WildcardHost, DELETE, ALLOW)), groupResource)
+    addAndVerifyAcls(Set(new AccessControlEntry(userPrincipalStr, WildcardHost, READ, ALLOW)), groupResource)
+    addAndVerifyAcls(Set(new AccessControlEntry(userPrincipalStr, WildcardHost, READ, ALLOW)), topicResource)
+    val consumer = createConsumer()
+    consumer.assign(List(tp).asJava)
+    consumer.commitSync(Map(tp -> new OffsetAndMetadata(5, "")).asJava)
+    consumer.close()
+    val result = createAdminClient().deleteConsumerGroupOffsets(group, Set(tp).asJava)
+    assertNull(result.partitionResult(tp).get())
+  }
+
+  @Test
+  def testDeleteGroupOffsetsWithoutDeleteAcl(): Unit = {
+    addAndVerifyAcls(Set(new AccessControlEntry(userPrincipalStr, WildcardHost, READ, ALLOW)), groupResource)
+    addAndVerifyAcls(Set(new AccessControlEntry(userPrincipalStr, WildcardHost, READ, ALLOW)), topicResource)
+    val consumer = createConsumer()
+    consumer.assign(List(tp).asJava)
+    consumer.commitSync(Map(tp -> new OffsetAndMetadata(5, "")).asJava)
+    consumer.close()
+    val result = createAdminClient().deleteConsumerGroupOffsets(group, Set(tp).asJava)
+    TestUtils.assertFutureExceptionTypeEquals(result.all(), classOf[GroupAuthorizationException])
+  }
+
+  @Test
+  def testDeleteGroupOffsetsWithDeleteAclWithoutTopicAcl(): Unit = {
+    // Create the consumer group
+    addAndVerifyAcls(Set(new AccessControlEntry(userPrincipalStr, WildcardHost, READ, ALLOW)), groupResource)
+    addAndVerifyAcls(Set(new AccessControlEntry(userPrincipalStr, WildcardHost, READ, ALLOW)), topicResource)
+    val consumer = createConsumer()
+    consumer.assign(List(tp).asJava)
+    consumer.commitSync(Map(tp -> new OffsetAndMetadata(5, "")).asJava)
+    consumer.close()
+
+    // Remove the topic ACL & Check that it does not work without it
+    removeAllAcls()
+    addAndVerifyAcls(Set(new AccessControlEntry(userPrincipalStr, WildcardHost, DELETE, ALLOW)), groupResource)
+    addAndVerifyAcls(Set(new AccessControlEntry(userPrincipalStr, WildcardHost, READ, ALLOW)), groupResource)
+    val result = createAdminClient().deleteConsumerGroupOffsets(group, Set(tp).asJava)
+    assertNull(result.all().get())
+    TestUtils.assertFutureExceptionTypeEquals(result.partitionResult(tp), classOf[TopicAuthorizationException])
+  }
+
+  @Test
+  def testDeleteGroupOffsetsWithNoAcl(): Unit = {
+    val result = createAdminClient().deleteConsumerGroupOffsets(group, Set(tp).asJava)
+    TestUtils.assertFutureExceptionTypeEquals(result.all(), classOf[GroupAuthorizationException])
   }
 
   @Test

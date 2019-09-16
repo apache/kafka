@@ -82,6 +82,15 @@ import org.apache.kafka.common.message.ListGroupsRequestData;
 import org.apache.kafka.common.message.ListGroupsResponseData;
 import org.apache.kafka.common.message.OffsetCommitRequestData;
 import org.apache.kafka.common.message.OffsetCommitResponseData;
+import org.apache.kafka.common.message.OffsetDeleteRequestData;
+import org.apache.kafka.common.message.OffsetDeleteRequestData.OffsetDeleteRequestPartition;
+import org.apache.kafka.common.message.OffsetDeleteRequestData.OffsetDeleteRequestTopic;
+import org.apache.kafka.common.message.OffsetDeleteRequestData.OffsetDeleteRequestTopicCollection;
+import org.apache.kafka.common.message.OffsetDeleteResponseData;
+import org.apache.kafka.common.message.OffsetDeleteResponseData.OffsetDeleteResponsePartition;
+import org.apache.kafka.common.message.OffsetDeleteResponseData.OffsetDeleteResponsePartitionCollection;
+import org.apache.kafka.common.message.OffsetDeleteResponseData.OffsetDeleteResponseTopic;
+import org.apache.kafka.common.message.OffsetDeleteResponseData.OffsetDeleteResponseTopicCollection;
 import org.apache.kafka.common.message.RenewDelegationTokenRequestData;
 import org.apache.kafka.common.message.RenewDelegationTokenResponseData;
 import org.apache.kafka.common.message.SaslAuthenticateRequestData;
@@ -377,6 +386,9 @@ public class RequestResponseTest {
         checkRequest(createListPartitionReassignmentsRequest(), true);
         checkErrorResponse(createListPartitionReassignmentsRequest(), new UnknownServerException(), true);
         checkResponse(createListPartitionReassignmentsResponse(), 0, true);
+        checkRequest(createOffsetDeleteRequest(), true);
+        checkErrorResponse(createOffsetDeleteRequest(), new UnknownServerException(), true);
+        checkResponse(createOffsetDeleteResponse(), 0, true);
     }
 
     @Test
@@ -1724,4 +1736,43 @@ public class RequestResponseTest {
         ));
         return new ListPartitionReassignmentsResponse(data);
     }
+
+    private OffsetDeleteRequest createOffsetDeleteRequest() {
+        OffsetDeleteRequestTopicCollection topics = new OffsetDeleteRequestTopicCollection();
+        topics.add(new OffsetDeleteRequestTopic()
+            .setName("topic1")
+            .setPartitions(Collections.singletonList(
+                new OffsetDeleteRequestPartition()
+                    .setPartitionIndex(0)
+                )
+            )
+        );
+
+        OffsetDeleteRequestData data = new OffsetDeleteRequestData();
+        data.setGroupId("group1");
+        data.setTopics(topics);
+
+        return new OffsetDeleteRequest.Builder(data).build((short) 0);
+    }
+
+    private OffsetDeleteResponse createOffsetDeleteResponse() {
+        OffsetDeleteResponsePartitionCollection partitions = new OffsetDeleteResponsePartitionCollection();
+        partitions.add(new OffsetDeleteResponsePartition()
+            .setPartitionIndex(0)
+            .setErrorCode(Errors.NONE.code())
+        );
+
+        OffsetDeleteResponseTopicCollection topics = new OffsetDeleteResponseTopicCollection();
+        topics.add(new OffsetDeleteResponseTopic()
+            .setName("topic1")
+            .setPartitions(partitions)
+        );
+
+        OffsetDeleteResponseData data = new OffsetDeleteResponseData();
+        data.setErrorCode(Errors.NONE.code());
+        data.setTopics(topics);
+
+        return new OffsetDeleteResponse(data);
+    }
+
 }
