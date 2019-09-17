@@ -56,6 +56,7 @@ import java.util.TreeSet;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.stream.Collectors;
 
 /**
  * <p>
@@ -633,8 +634,11 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
                     connectorTaskCounts.put(connectorName, newTaskCount);
                 }
 
-                if (started)
+                if (started) {
+                    // just restart current reconfigurated connectorTask, not all cached updateTasks
+                    updatedTasks = updatedTasks.stream().filter(tasksId -> tasksId.connector().equals(connectorName)).collect(Collectors.toList());
                     updateListener.onTaskConfigUpdate(updatedTasks);
+                } 
             } else {
                 log.error("Discarding config update record with invalid key: {}", record.key());
             }
