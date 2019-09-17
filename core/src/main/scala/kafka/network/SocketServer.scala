@@ -208,12 +208,13 @@ class SocketServer(val config: KafkaConfig,
     val orderedAcceptors = List(dataPlaneAcceptors.get(interBrokerListener)) ++
       dataPlaneAcceptors.asScala.filterKeys(_ != interBrokerListener).values
     orderedAcceptors.foreach { acceptor =>
-      val endpoint = acceptor.endPoint
-      debug(s"Wait for authorizer to complete start up on listener ${endpoint.listener}")
-      authorizerFutures.get(endpoint).foreach { future =>
-        future.join()
+      val acceptorEndpoint = acceptor.endPoint
+      debug(s"Wait for authorizer to complete start up on listener ${acceptorEndpoint.listener}")
+      authorizerFutures.foreach { case (endpoint, future) =>
+        if (endpoint.listener().equals(acceptorEndpoint.listener()))
+          future.join()
       }
-      debug(s"Start processors on listener ${endpoint.listener}")
+      debug(s"Start processors on listener ${acceptorEndpoint.listener}")
       acceptor.startProcessors(DataPlaneThreadPrefix)
     }
     info(s"Started data-plane processors for ${dataPlaneAcceptors.size} acceptors")
@@ -226,7 +227,10 @@ class SocketServer(val config: KafkaConfig,
    */
   def startControlPlaneProcessor(authorizerFutures: Map[Endpoint, CompletableFuture[Void]] = Map.empty): Unit = synchronized {
     controlPlaneAcceptorOpt.foreach { controlPlaneAcceptor =>
-      authorizerFutures.get(controlPlaneAcceptor.endPoint).foreach(_.get)
+      authorizerFutures.foreach { case (endpoint, future) =>
+        if (endpoint.listener().equals(controlPlaneAcceptor.endPoint.listener()))
+          future.get()
+      }
       controlPlaneAcceptor.startProcessors(ControlPlaneThreadPrefix)
       info(s"Started control-plane processor for the control-plane acceptor")
     }
