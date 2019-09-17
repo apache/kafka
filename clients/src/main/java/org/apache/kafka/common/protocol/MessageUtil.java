@@ -41,8 +41,11 @@ public final class MessageUtil {
     public static byte[] byteBufferToArray(ByteBuffer buf) {
         byte[] arr = new byte[buf.remaining()];
         int prevPosition = buf.position();
-        buf.get(arr);
-        buf.position(prevPosition);
+        try {
+            buf.get(arr);
+        } finally {
+            buf.position(prevPosition);
+        }
         return arr;
     }
 
