@@ -26,7 +26,7 @@ import org.apache.kafka.streams.TopologyWrapper;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.JoinWindows;
 import org.apache.kafka.streams.kstream.KStream;
-import org.apache.kafka.streams.kstream.StreamJoined;
+import org.apache.kafka.streams.kstream.StreamJoin;
 import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
@@ -73,7 +73,7 @@ public class KStreamKStreamJoinTest {
             right,
             (value1, value2) -> value1 + value2,
             JoinWindows.of(ofMillis(100)),
-            StreamJoined.with(Serdes.String(), Serdes.Integer(), Serdes.Integer())
+            StreamJoin.with(Serdes.String(), Serdes.Integer(), Serdes.Integer())
         );
 
         final LogCaptureAppender appender = LogCaptureAppender.createAndRegister();
@@ -112,7 +112,7 @@ public class KStreamKStreamJoinTest {
             right,
             (value1, value2) -> value1 + value2,
             joinWindows,
-            StreamJoined.<String, Integer, Integer>as(thisStoreSupplier, otherStoreSupplier)
+            StreamJoin.<String, Integer, Integer>with(thisStoreSupplier, otherStoreSupplier)
                 .withKeySerde(Serdes.String())
                 .withValueSerde(Serdes.Integer())
                 .withOtherValueSerde(Serdes.Integer())
@@ -150,7 +150,7 @@ public class KStreamKStreamJoinTest {
             stream2,
             MockValueJoiner.TOSTRING_JOINER,
             JoinWindows.of(ofMillis(100)),
-            StreamJoined.with(Serdes.Integer(), Serdes.String(), Serdes.String()));
+            StreamJoin.with(Serdes.Integer(), Serdes.String(), Serdes.String()));
         joined.process(supplier);
 
         final Collection<Set<String>> copartitionGroups =
@@ -258,7 +258,7 @@ public class KStreamKStreamJoinTest {
             stream2,
             MockValueJoiner.TOSTRING_JOINER,
             JoinWindows.of(ofMillis(100)),
-            StreamJoined.with(Serdes.Integer(), Serdes.String(), Serdes.String()));
+            StreamJoin.with(Serdes.Integer(), Serdes.String(), Serdes.String()));
         joined.process(supplier);
         final Collection<Set<String>> copartitionGroups =
             TopologyWrapper.getInternalTopologyBuilder(builder.build()).copartitionGroups();
@@ -368,7 +368,7 @@ public class KStreamKStreamJoinTest {
             stream2,
             MockValueJoiner.TOSTRING_JOINER,
             JoinWindows.of(ofMillis(100)),
-            StreamJoined.with(Serdes.Integer(), Serdes.String(), Serdes.String()));
+            StreamJoin.with(Serdes.Integer(), Serdes.String(), Serdes.String()));
         joined.process(supplier);
 
         final Collection<Set<String>> copartitionGroups =
@@ -892,7 +892,7 @@ public class KStreamKStreamJoinTest {
             stream2,
             MockValueJoiner.TOSTRING_JOINER,
             JoinWindows.of(ofMillis(0)).after(ofMillis(100)),
-            StreamJoined.with(Serdes.Integer(),
+            StreamJoin.with(Serdes.Integer(),
                 Serdes.String(),
                 Serdes.String()));
         joined.process(supplier);
@@ -1140,7 +1140,7 @@ public class KStreamKStreamJoinTest {
             stream2,
             MockValueJoiner.TOSTRING_JOINER,
             JoinWindows.of(ofMillis(0)).before(ofMillis(100)),
-            StreamJoined.with(Serdes.Integer(), Serdes.String(), Serdes.String()));
+            StreamJoin.with(Serdes.Integer(), Serdes.String(), Serdes.String()));
         joined.process(supplier);
 
         final Collection<Set<String>> copartitionGroups =

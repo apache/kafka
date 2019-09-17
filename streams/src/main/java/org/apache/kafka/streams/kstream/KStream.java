@@ -2434,7 +2434,7 @@ public interface KStream<K, V> {
      * @param otherStream the {@code KStream} to be joined with this stream
      * @param joiner      a {@link org.apache.kafka.streams.kstream.ValueJoiner} that computes the join result for a pair of matching records
      * @param windows     the specification of the {@link org.apache.kafka.streams.kstream.JoinWindows}
-     * @param storeStreamJoined
+     * @param streamJoin
      * @return a {@code KStream} that contains join-records for each key and values computed by the given
      * {@link ValueJoiner}, one for each matched record-pair with the same key and within the joining window intervals
      * @see #leftJoin(KStream, ValueJoiner, JoinWindows, Joined)
@@ -2443,7 +2443,7 @@ public interface KStream<K, V> {
     <VO, VR> KStream<K, VR> join(final KStream<K, VO> otherStream,
                                  final ValueJoiner<? super V, ? super VO, ? extends VR> joiner,
                                  final JoinWindows windows,
-                                 final StreamJoined<K, V, VO> storeStreamJoined);
+                                 final StreamJoin<K, V, VO> streamJoin);
 
 
 
@@ -2684,7 +2684,7 @@ public interface KStream<K, V> {
      * @param otherStream the {@code KStream} to be joined with this stream
      * @param joiner      a {@link ValueJoiner} that computes the join result for a pair of matching records
      * @param windows     the specification of the {@link JoinWindows}
-     * @param storeStreamJoined
+     * @param streamJoin
      * @return a {@code KStream} that contains join-records for each key and values computed by the given
      * {@link ValueJoiner}, one for each matched record-pair with the same key plus one for each non-matching record of
      * this {@code KStream} and within the joining window intervals
@@ -2694,7 +2694,7 @@ public interface KStream<K, V> {
     <VO, VR> KStream<K, VR> leftJoin(final KStream<K, VO> otherStream,
                                      final ValueJoiner<? super V, ? super VO, ? extends VR> joiner,
                                      final JoinWindows windows,
-                                     final StreamJoined<K, V, VO> storeStreamJoined);
+                                     final StreamJoin<K, V, VO> streamJoin);
 
     /**
      * Join records of this stream with another {@code KStream}'s records using windowed outer equi join with default
@@ -2936,7 +2936,7 @@ public interface KStream<K, V> {
      * @param otherStream the {@code KStream} to be joined with this stream
      * @param joiner      a {@link ValueJoiner} that computes the join result for a pair of matching records
      * @param windows     the specification of the {@link JoinWindows}
-     * @param storeStreamJoined
+     * @param streamJoin
      * @return a {@code KStream} that contains join-records for each key and values computed by the given
      * {@link ValueJoiner}, one for each matched record-pair with the same key plus one for each non-matching record of
      * both {@code KStream} and within the joining window intervals
@@ -2946,7 +2946,7 @@ public interface KStream<K, V> {
     <VO, VR> KStream<K, VR> outerJoin(final KStream<K, VO> otherStream,
                                       final ValueJoiner<? super V, ? super VO, ? extends VR> joiner,
                                       final JoinWindows windows,
-                                      final StreamJoined<K, V, VO> storeStreamJoined);
+                                      final StreamJoin<K, V, VO> streamJoin);
 
     /**
      * Join records of this stream with {@link KTable}'s records using non-windowed inner equi join with default

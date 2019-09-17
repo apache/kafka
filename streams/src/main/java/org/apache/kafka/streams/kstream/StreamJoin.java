@@ -20,8 +20,8 @@ package org.apache.kafka.streams.kstream;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
 
-public class StreamJoined<K, V1, V2>
-    implements NamedOperation<StreamJoined<K, V1, V2>> {
+public class StreamJoin<K, V1, V2>
+    implements NamedOperation<StreamJoin<K, V1, V2>> {
 
     protected final Serde<K> keySerde;
     protected final Serde<V1> valueSerde;
@@ -31,23 +31,23 @@ public class StreamJoined<K, V1, V2>
     protected final String name;
     protected final String storeName;
 
-    protected StreamJoined(final StreamJoined<K, V1, V2> streamJoined) {
-        this(streamJoined.keySerde,
-            streamJoined.valueSerde,
-            streamJoined.otherValueSerde,
-            streamJoined.thisStoreSupplier,
-            streamJoined.otherStoreSupplier,
-            streamJoined.name,
-            streamJoined.storeName);
+    protected StreamJoin(final StreamJoin<K, V1, V2> streamJoin) {
+        this(streamJoin.keySerde,
+            streamJoin.valueSerde,
+            streamJoin.otherValueSerde,
+            streamJoin.thisStoreSupplier,
+            streamJoin.otherStoreSupplier,
+            streamJoin.name,
+            streamJoin.storeName);
     }
 
-    private StreamJoined(final Serde<K> keySerde,
-                         final Serde<V1> valueSerde,
-                         final Serde<V2> otherValueSerde,
-                         final WindowBytesStoreSupplier thisStoreSupplier,
-                         final WindowBytesStoreSupplier otherStoreSupplier,
-                         final String name,
-                         final String storeName) {
+    private StreamJoin(final Serde<K> keySerde,
+                       final Serde<V1> valueSerde,
+                       final Serde<V2> otherValueSerde,
+                       final WindowBytesStoreSupplier thisStoreSupplier,
+                       final WindowBytesStoreSupplier otherStoreSupplier,
+                       final String name,
+                       final String storeName) {
         this.keySerde = keySerde;
         this.valueSerde = valueSerde;
         this.otherValueSerde = otherValueSerde;
@@ -58,9 +58,9 @@ public class StreamJoined<K, V1, V2>
     }
 
 
-    public static <K, V1, V2> StreamJoined<K, V1, V2> as(final WindowBytesStoreSupplier storeSupplier,
+    public static <K, V1, V2> StreamJoin<K, V1, V2> with(final WindowBytesStoreSupplier storeSupplier,
                                                          final WindowBytesStoreSupplier otherStoreSupplier) {
-        return new StreamJoined<>(
+        return new StreamJoin<>(
             null,
             null,
             null,
@@ -71,8 +71,8 @@ public class StreamJoined<K, V1, V2>
         );
     }
 
-    public static <K, V1, V2> StreamJoined<K, V1, V2> as(final String storeName) {
-        return new StreamJoined<>(
+    public static <K, V1, V2> StreamJoin<K, V1, V2> as(final String storeName) {
+        return new StreamJoin<>(
             null,
             null,
             null,
@@ -84,11 +84,11 @@ public class StreamJoined<K, V1, V2>
     }
 
 
-    public static <K, V1, V2> StreamJoined<K, V1, V2> with(final Serde<K> keySerde,
-                                                           final Serde<V1> valueSerde,
-                                                           final Serde<V2> otherValueSerde
+    public static <K, V1, V2> StreamJoin<K, V1, V2> with(final Serde<K> keySerde,
+                                                         final Serde<V1> valueSerde,
+                                                         final Serde<V2> otherValueSerde
     ) {
-        return new StreamJoined<>(
+        return new StreamJoin<>(
             keySerde,
             valueSerde,
             otherValueSerde,
@@ -100,8 +100,8 @@ public class StreamJoined<K, V1, V2>
     }
 
     @Override
-    public StreamJoined<K, V1, V2> withName(final String name) {
-        return new StreamJoined<>(
+    public StreamJoin<K, V1, V2> withName(final String name) {
+        return new StreamJoin<>(
             keySerde,
             valueSerde,
             otherValueSerde,
@@ -113,8 +113,8 @@ public class StreamJoined<K, V1, V2>
     }
 
 
-    public StreamJoined<K, V1, V2> withStoreName(final String storeName) {
-        return new StreamJoined<>(
+    public StreamJoin<K, V1, V2> withStoreName(final String storeName) {
+        return new StreamJoin<>(
             keySerde,
             valueSerde,
             otherValueSerde,
@@ -125,8 +125,8 @@ public class StreamJoined<K, V1, V2>
         );
     }
 
-    public StreamJoined<K, V1, V2> withKeySerde(final Serde<K> keySerde) {
-        return new StreamJoined<>(
+    public StreamJoin<K, V1, V2> withKeySerde(final Serde<K> keySerde) {
+        return new StreamJoin<>(
             keySerde,
             valueSerde,
             otherValueSerde,
@@ -137,8 +137,8 @@ public class StreamJoined<K, V1, V2>
         );
     }
 
-    public StreamJoined<K, V1, V2> withValueSerde(final Serde<V1> valueSerde) {
-        return new StreamJoined<>(
+    public StreamJoin<K, V1, V2> withValueSerde(final Serde<V1> valueSerde) {
+        return new StreamJoin<>(
             keySerde,
             valueSerde,
             otherValueSerde,
@@ -149,8 +149,8 @@ public class StreamJoined<K, V1, V2>
         );
     }
 
-    public StreamJoined<K, V1, V2> withOtherValueSerde(final Serde<V2> otherValueSerde) {
-        return new StreamJoined<>(
+    public StreamJoin<K, V1, V2> withOtherValueSerde(final Serde<V2> otherValueSerde) {
+        return new StreamJoin<>(
             keySerde,
             valueSerde,
             otherValueSerde,
@@ -161,8 +161,8 @@ public class StreamJoined<K, V1, V2>
         );
     }
 
-    public StreamJoined<K, V1, V2> withStoreSupplier(final WindowBytesStoreSupplier thisStoreSupplier) {
-        return new StreamJoined<>(
+    public StreamJoin<K, V1, V2> withStoreSupplier(final WindowBytesStoreSupplier thisStoreSupplier) {
+        return new StreamJoin<>(
             keySerde,
             valueSerde,
             otherValueSerde,
@@ -173,8 +173,8 @@ public class StreamJoined<K, V1, V2>
         );
     }
 
-    public StreamJoined<K, V1, V2> withOtherStoreSupplier(final WindowBytesStoreSupplier otherStoreSupplier) {
-        return new StreamJoined<>(
+    public StreamJoin<K, V1, V2> withOtherStoreSupplier(final WindowBytesStoreSupplier otherStoreSupplier) {
+        return new StreamJoin<>(
             keySerde,
             valueSerde,
             otherValueSerde,

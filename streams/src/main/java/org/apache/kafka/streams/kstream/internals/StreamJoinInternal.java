@@ -18,13 +18,13 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.serialization.Serde;
-import org.apache.kafka.streams.kstream.StreamJoined;
+import org.apache.kafka.streams.kstream.StreamJoin;
 import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
 
-public class StreamJoinedInternal<K, V1, V2> extends StreamJoined<K, V1, V2> {
+public class StreamJoinInternal<K, V1, V2> extends StreamJoin<K, V1, V2> {
 
-    StreamJoinedInternal(final StreamJoined<K, V1, V2> streamJoined) {
-        super(streamJoined);
+    StreamJoinInternal(final StreamJoin<K, V1, V2> streamJoin) {
+        super(streamJoin);
     }
 
     public Serde<K> keySerde() {

@@ -33,7 +33,7 @@ import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.streams.kstream.Reducer;
-import org.apache.kafka.streams.kstream.StreamJoined;
+import org.apache.kafka.streams.kstream.StreamJoin;
 
 import java.time.Duration;
 import java.util.ArrayList;
@@ -101,7 +101,7 @@ public class StreamsOptimizedTest {
 
         mappedStream.join(countStream, (v1, v2) -> v1 + ":" + v2.toString(),
             JoinWindows.of(ofMillis(500)),
-            StreamJoined.with(Serdes.String(), Serdes.String(), Serdes.Long()))
+            StreamJoin.with(Serdes.String(), Serdes.String(), Serdes.Long()))
             .peek((k, v) -> System.out.println(String.format("JOINED key=%s value=%s", k, v)))
             .to(joinTopic, Produced.with(Serdes.String(), Serdes.String()));
 
