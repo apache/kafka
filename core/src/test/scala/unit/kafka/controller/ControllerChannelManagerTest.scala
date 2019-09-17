@@ -149,7 +149,7 @@ class ControllerChannelManagerTest {
 
     for (apiVersion <- ApiVersion.allVersions) {
       val leaderAndIsrRequestVersion: Short =
-        if (config.interBrokerProtocolVersion >= KAFKA_2_2_IV0) 2
+        if (config.interBrokerProtocolVersion >= KAFKA_2_2_IV0) 3
         else if (config.interBrokerProtocolVersion >= KAFKA_1_0_IV0) 1
         else 0
 
