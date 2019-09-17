@@ -80,10 +80,8 @@ public final class VersionConditional {
                 buffer.incrementIndent();
                 ifNotMember.generate(ifNotVersions);
                 buffer.decrementIndent();
-                buffer.printf("}%n");
-            } else {
-                buffer.printf("}%n");
             }
+            buffer.printf("}%n");
         } else if (ifNotMember != null) {
             buffer.printf("if ((version < %d) || (version > %d)) {%n",
                     containingVersions.lowest(), containingVersions.highest());
@@ -107,10 +105,8 @@ public final class VersionConditional {
                 buffer.incrementIndent();
                 ifNotMember.generate(ifNotVersions);
                 buffer.decrementIndent();
-                buffer.printf("}%n");
-            } else {
-                buffer.printf("}%n");
             }
+            buffer.printf("}%n");
         } else if (ifNotMember != null) {
             buffer.printf("if (version < %d) {%n", containingVersions.lowest());
             buffer.incrementIndent();
@@ -133,10 +129,8 @@ public final class VersionConditional {
                 buffer.incrementIndent();
                 ifNotMember.generate(ifNotVersions);
                 buffer.decrementIndent();
-                buffer.printf("}%n");
-            } else {
-                buffer.printf("}%n");
             }
+            buffer.printf("}%n");
         } else if (ifNotMember != null) {
             buffer.printf("if (version > %d) {%n", containingVersions.highest());
             buffer.incrementIndent();

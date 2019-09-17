@@ -134,9 +134,6 @@ public final class Versions {
      * 4+.trim(3+) = none
      * 1-5.trim(2-4) = null
      *
-     * This is similar to subtracting the other version range, except that if two
-     * version ranges would be
-     *
      * @param other                 The other version range.
      * @return                      A new version range.
      */
