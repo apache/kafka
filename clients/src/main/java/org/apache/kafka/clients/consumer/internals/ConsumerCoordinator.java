@@ -1046,10 +1046,14 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         if (subscriptions.partitionsAutoAssigned()) {
             generation = generation();
             // if the generation is null, we are not part of an active group (and we expect to be).
-            // the only thing we can do is fail the commit and let the user rejoin the group in poll()
+            // the only thing we can do is fail the commit and let the user rejoin the group in poll();
+            // we use RebalanceInProgressException to indicate this may not be a fatal error, and leave
+            // it to users whether they want to handle differently than CommitFailed
             if (generation == null) {
                 log.info("Failing OffsetCommit request since the consumer is not part of an active group");
-                return RequestFuture.failure(new CommitFailedException());
+                return RequestFuture.failure(new RebalanceInProgressException("Offset commit cannot be completed since the " +
+                    "consumer group is not part of an active group yet. You can try completing the rebalance " +
+                    "by calling poll() and then retry the operation"));
             }
         } else
             generation = Generation.NO_GENERATION;
@@ -1128,8 +1132,8 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                             /* Consumer never tries to commit offset in between join-group and sync-group,
                              * and hence on broker-side it is not expected to see a commit offset request
                              * during CompletingRebalance phase; if it ever happens then broker would return
-                             * this error. In this case we would just throw a retriable exception and request
-                             * re-join, but we do not need to reset generations.
+                             * this error. In this case we would just throw a RebalanceInProgressException
+                             * and request re-join, but we do not need to reset generations.
                              * If the caller decides to proceed and poll, it would still try to proceed and re-join normally.
                              */
                             requestRejoin();
@@ -1141,20 +1145,9 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                             future.raise(new CommitFailedException());
                             return;
                         } else if (error == Errors.ILLEGAL_GENERATION) {
-                            if (state == MemberState.REBALANCING) {
-                                /* The group is already in CompletingRebalance phase and therefore the generation id
-                                 * has already incremented. The commit request would fail with a fatal ILLEGAL_GENERATION
-                                 * immediately. In this case, we could throw a retriable RebalanceInProgressException
-                                 * and let users to decide if they want to retry -- in that case, they would need to
-                                 * first complete the rebalance with the poll call, and then retry committing offsets.
-                                 */
-                                requestRejoin();
-                                future.raise(new RebalanceInProgressException());
-                            } else {
-                                // need to reset generation and re-join group
-                                resetGenerationOnResponseError(ApiKeys.OFFSET_COMMIT, error);
-                                future.raise(new CommitFailedException());
-                            }
+                            // need to reset generation and re-join group
+                            resetGenerationOnResponseError(ApiKeys.OFFSET_COMMIT, error);
+                            future.raise(new CommitFailedException());
                             return;
                         } else {
                             future.raise(new KafkaException("Unexpected error in commit: " + error.message()));

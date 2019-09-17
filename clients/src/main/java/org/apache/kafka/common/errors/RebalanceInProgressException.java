@@ -20,7 +20,7 @@ public class RebalanceInProgressException extends ApiException {
     private static final long serialVersionUID = 1L;
 
     public RebalanceInProgressException() {
-        super("Request cannot be completed since he consumer group is rebalancing. This can happen when a group has started, " +
+        super("Request cannot be completed since the consumer group is rebalancing. This can happen when a group has started, " +
             "but not finished rebalancing before the request is sent. You can try completing the rebalance " +
             "by calling poll() and then retry the operation");
     }
