@@ -208,13 +208,10 @@ class SocketServer(val config: KafkaConfig,
     val orderedAcceptors = List(dataPlaneAcceptors.get(interBrokerListener)) ++
       dataPlaneAcceptors.asScala.filterKeys(_ != interBrokerListener).values
     orderedAcceptors.foreach { acceptor =>
-      val acceptorEndpoint = acceptor.endPoint
-      debug(s"Wait for authorizer to complete start up on listener ${acceptorEndpoint.listener}")
-      authorizerFutures.foreach { case (endpoint, future) =>
-        if (endpoint.listener().equals(acceptorEndpoint.listener()))
-          future.join()
-      }
-      debug(s"Start processors on listener ${acceptorEndpoint.listener}")
+      val endpoint = acceptor.endPoint
+      debug(s"Wait for authorizer to complete start up on listener ${endpoint.listener}")
+      waitForAuthorizerFuture(acceptor, authorizerFutures)
+      debug(s"Start processors on listener ${endpoint.listener}")
       acceptor.startProcessors(DataPlaneThreadPrefix)
     }
     info(s"Started data-plane processors for ${dataPlaneAcceptors.size} acceptors")
@@ -227,10 +224,7 @@ class SocketServer(val config: KafkaConfig,
    */
   def startControlPlaneProcessor(authorizerFutures: Map[Endpoint, CompletableFuture[Void]] = Map.empty): Unit = synchronized {
     controlPlaneAcceptorOpt.foreach { controlPlaneAcceptor =>
-      authorizerFutures.foreach { case (endpoint, future) =>
-        if (endpoint.listener().equals(controlPlaneAcceptor.endPoint.listener()))
-          future.get()
-      }
+      waitForAuthorizerFuture(controlPlaneAcceptor, authorizerFutures)
       controlPlaneAcceptor.startProcessors(ControlPlaneThreadPrefix)
       info(s"Started control-plane processor for the control-plane acceptor")
     }
@@ -381,6 +375,15 @@ class SocketServer(val config: KafkaConfig,
     if (maxConnections != oldConfig.maxConnections) {
       info(s"Updating broker-wide maxConnections: $maxConnections")
       connectionQuotas.updateBrokerMaxConnections(maxConnections)
+    }
+  }
+
+  private def waitForAuthorizerFuture(acceptor: Acceptor,
+                                      authorizerFutures: Map[Endpoint, CompletableFuture[Void]]): Unit = {
+    //we can't rely on authorizerFutures.get() due to ephemeral ports. Get the future using listener name
+    authorizerFutures.foreach { case (endpoint, future) =>
+      if (endpoint.listener() == acceptor.endPoint.listener())
+        future.join()
     }
   }
 
