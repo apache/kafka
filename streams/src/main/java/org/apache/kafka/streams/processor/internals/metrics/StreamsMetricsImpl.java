@@ -29,6 +29,7 @@ import org.apache.kafka.common.metrics.stats.Rate;
 import org.apache.kafka.common.metrics.stats.Value;
 import org.apache.kafka.common.metrics.stats.WindowedCount;
 import org.apache.kafka.common.metrics.stats.WindowedSum;
+import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsMetrics;
 
 import java.util.Arrays;
@@ -42,10 +43,17 @@ import java.util.Objects;
 import java.util.concurrent.TimeUnit;
 
 public class StreamsMetricsImpl implements StreamsMetrics {
+
+    public enum Version {
+        LATEST,
+        FROM_100_TO_23
+    }
+
     private final Metrics metrics;
     private final Map<Sensor, Sensor> parentSensors;
     private final String threadName;
 
+    private final Version version;
     private final Deque<String> threadLevelSensors = new LinkedList<>();
     private final Map<String, Deque<String>> taskLevelSensors = new HashMap<>();
     private final Map<String, Deque<String>> nodeLevelSensors = new HashMap<>();
@@ -83,12 +91,26 @@ public class StreamsMetricsImpl implements StreamsMetrics {
     public static final String EXPIRED_WINDOW_RECORD_DROP = "expired-window-record-drop";
     public static final String LATE_RECORD_DROP = "late-record-drop";
 
-    public StreamsMetricsImpl(final Metrics metrics, final String threadName) {
+    public StreamsMetricsImpl(final Metrics metrics, final String threadName, final String builtInMetricsVersion) {
         Objects.requireNonNull(metrics, "Metrics cannot be null");
+        Objects.requireNonNull(builtInMetricsVersion, "Built-in metrics version cannot be null");
         this.metrics = metrics;
         this.threadName = threadName;
+        this.version = parseBuiltInMetricsVersion(builtInMetricsVersion);
 
         this.parentSensors = new HashMap<>();
+    }
+
+    private static Version parseBuiltInMetricsVersion(final String builtInMetricsVersion) {
+        if (builtInMetricsVersion.equals(StreamsConfig.METRICS_LATEST)) {
+            return Version.LATEST;
+        } else {
+            return Version.FROM_100_TO_23;
+        }
+    }
+
+    public Version version() {
+        return version;
     }
 
     public final Sensor threadLevelSensor(final String sensorName,
