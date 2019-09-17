@@ -29,6 +29,7 @@ import java.security.NoSuchAlgorithmException;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 
 import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
@@ -159,8 +160,9 @@ public class DistributedConfig extends WorkerConfig {
     public static final String INTERNAL_REQUEST_KEY_GENERATION_ALGORITHM_DEFAULT = "HmacSHA256";
 
     public static final String INTERNAL_REQUEST_KEY_SIZE_CONFIG = "internal.request.key.size";
-    public static final String INTERNAL_REQUEST_KEY_SIZE_DOC = "The size of the key to use for signing internal requests, in bits";
-    public static final int INTERNAL_REQUEST_KEY_SIZE_DEFAULT = 256;
+    public static final String INTERNAL_REQUEST_KEY_SIZE_DOC = "The size of the key to use for signing internal requests, in bits. " 
+        + "If null, the default key size for the key generation algorithm will be used.";
+    public static final Long INTERNAL_REQUEST_KEY_SIZE_DEFAULT = null;
 
     public static final String INTERNAL_REQUEST_KEY_ROTATION_INTERVAL_MS_CONFIG = "internal.request.key.rotation.interval.ms";
     public static final String INTERNAL_REQUEST_KEY_ROTATION_INTERVAL_MS_DOC = "How often to force rotation of session keys used for internal request validation";
@@ -390,7 +392,7 @@ public class DistributedConfig extends WorkerConfig {
     public KeyGenerator getInternalRequestKeyGenerator() {
         try {
             KeyGenerator result = KeyGenerator.getInstance(getString(INTERNAL_REQUEST_KEY_GENERATION_ALGORITHM_CONFIG));
-            result.init(getInt(INTERNAL_REQUEST_KEY_SIZE_CONFIG));
+            Optional.ofNullable(getInt(INTERNAL_REQUEST_KEY_SIZE_CONFIG)).ifPresent(result::init);
             return result;
         } catch (NoSuchAlgorithmException | InvalidParameterException e) {
             throw new ConfigException(String.format(
