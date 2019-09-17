@@ -53,6 +53,7 @@ import org.apache.kafka.connect.runtime.rest.RestServer;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorInfo;
 import org.apache.kafka.connect.runtime.rest.entities.TaskInfo;
 import org.apache.kafka.connect.runtime.rest.errors.BadRequestException;
+import org.apache.kafka.connect.runtime.rest.errors.ConnectRestException;
 import org.apache.kafka.connect.sink.SinkConnector;
 import org.apache.kafka.connect.storage.ConfigBackingStore;
 import org.apache.kafka.connect.storage.StatusBackingStore;
@@ -63,6 +64,7 @@ import org.slf4j.Logger;
 
 import javax.crypto.KeyGenerator;
 import javax.crypto.SecretKey;
+import javax.ws.rs.core.Response;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -173,6 +175,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
     private volatile long scheduledRebalance;
     private SecretKey sessionKey;
     private volatile long keyExpiration;
+    private short currentProtocolVersion;
 
     private final DistributedConfig config;
 
@@ -243,6 +246,22 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         scheduledRebalance = Long.MAX_VALUE;
         keyExpiration = Long.MAX_VALUE;
         sessionKey = null;
+
+        currentProtocolVersion = ConnectProtocolCompatibility.compatibility(
+            config.getString(DistributedConfig.CONNECT_PROTOCOL_CONFIG)
+        ).protocolVersion();
+        if (!internalRequestValidationEnabled(currentProtocolVersion)) {
+            log.warn(
+                "Internal request verification will be disabled for this cluster as this worker's {} configuration has been set to '{}'. "
+                    + "If this is not intentional, either remove the {} configuration from the worker config file or change its value "
+                    + "to '{}'. If this configuration is left as-is, the cluster will be insecure; for more information, see KIP-507: "
+                    + "https://cwiki.apache.org/confluence/display/KAFKA/KIP-507%3A+Securing+Internal+Connect+REST+Endpoints",
+                DistributedConfig.CONNECT_PROTOCOL_CONFIG,
+                config.getString(DistributedConfig.CONNECT_PROTOCOL_CONFIG),
+                DistributedConfig.CONNECT_PROTOCOL_CONFIG,
+                ConnectProtocolCompatibility.SESSIONED.name()
+            );
+        }
     }
 
     @Override
@@ -538,7 +557,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
             // additionally, if the worker is running the connector itself, then we need to
             // request reconfiguration to ensure that config changes while paused take effect
             if (targetState == TargetState.STARTED)
-                reconfigureConnectorTasksWithRetry(connector);
+                reconfigureConnectorTasksWithRetry(time.milliseconds(), connector);
         }
     }
 
@@ -763,7 +782,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                 new Callable<Void>() {
                     @Override
                     public Void call() throws Exception {
-                        reconfigureConnectorTasksWithRetry(connName);
+                        reconfigureConnectorTasksWithRetry(time.milliseconds(), connName);
                         return null;
                     }
                 },
@@ -811,24 +830,28 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
     public void putTaskConfigs(final String connName, final List<Map<String, String>> configs, final Callback<Void> callback, InternalRequestSignature requestSignature) {
         log.trace("Submitting put task configuration request {}", connName);
         if (internalRequestValidationEnabled()) {
-            String requestValidationError = null;
+            ConnectRestException requestValidationError = null;
             if (requestSignature == null) {
-                requestValidationError = "Internal request missing required signature";
+                requestValidationError = new BadRequestException("Internal request missing required signature");
             } else if (!keySignatureVerificationAlgorithms.contains(requestSignature.keyAlgorithm())) {
-                requestValidationError = String.format(
-                    "The key signing algorithm '%s' is not allowed for this worker; the permitted algorithms are: %s",
+                requestValidationError = new BadRequestException(String.format(
+                    "The key signing algorithm '%s' is not allowed for this worker; the permitted algorithms are: %s. "
+                        + "The worker should be reconfigured to use a permitted signature algorithm and then restarted.",
                     requestSignature.keyAlgorithm(),
                     keySignatureVerificationAlgorithms
-                );
+                ));
             } else {
                 synchronized (this) {
                     if (!requestSignature.isValid(sessionKey)) {
-                        requestValidationError = "Internal request contained invalid signature";
+                        requestValidationError = new ConnectRestException(
+                            Response.Status.FORBIDDEN,
+                            "Internal request contained invalid signature."
+                        );
                     }
                 }
             }
             if (requestValidationError != null) {
-                callback.onCompletion(new BadRequestException(requestValidationError), null);
+                callback.onCompletion(requestValidationError, null);
                 return;
             }
         }
@@ -1161,7 +1184,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         // task configs if they are actually different from the existing ones to avoid unnecessary updates when this is
         // just restoring an existing connector.
         if (started && initialState == TargetState.STARTED)
-            reconfigureConnectorTasksWithRetry(connectorName);
+            reconfigureConnectorTasksWithRetry(time.milliseconds(), connectorName);
 
         return started;
     }
@@ -1196,7 +1219,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         };
     }
 
-    private void reconfigureConnectorTasksWithRetry(final String connName) {
+    private void reconfigureConnectorTasksWithRetry(long initialRequestTime, final String connName) {
         reconfigureConnector(connName, new Callback<Void>() {
             @Override
             public void onCompletion(Throwable error, Void result) {
@@ -1205,12 +1228,18 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                 // never makes progress. The retry has to run through a DistributedHerderRequest since this callback could be happening
                 // from the HTTP request forwarding thread.
                 if (error != null) {
-                    log.error("Failed to reconfigure connector's tasks, retrying after backoff:", error);
+                    if (error instanceof ConnectRestException
+                        && ((ConnectRestException) error).statusCode() == Response.Status.FORBIDDEN.getStatusCode()
+                        && initialRequestTime <= time.milliseconds() + TimeUnit.MINUTES.toMillis(1)) {
+                        log.debug("Failed to reconfigure connector's tasks, possibly due to expired session key. Retrying after backoff");
+                    } else {
+                        log.error("Failed to reconfigure connector's tasks, retrying after backoff:", error);
+                    }
                     addRequest(RECONFIGURE_CONNECTOR_TASKS_BACKOFF_MS,
                             new Callable<Void>() {
                                 @Override
                                 public Void call() throws Exception {
-                                    reconfigureConnectorTasksWithRetry(connName);
+                                    reconfigureConnectorTasksWithRetry(initialRequestTime, connName);
                                     return null;
                                 }
                             }, new Callback<Void>() {
@@ -1320,7 +1349,11 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
     }
 
     private boolean internalRequestValidationEnabled() {
-        return member.currentProtocolVersion() >= CONNECT_PROTOCOL_V2;
+        return internalRequestValidationEnabled(member.currentProtocolVersion());
+    }
+
+    private static boolean internalRequestValidationEnabled(short protocolVersion) {
+        return protocolVersion >= CONNECT_PROTOCOL_V2;
     }
 
     private DistributedHerderRequest peekWithoutException() {
@@ -1490,10 +1523,12 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
             // catch up (or backoff if we fail) not executed in a callback, and so we'll be able to invoke other
             // group membership actions (e.g., we may need to explicitly leave the group if we cannot handle the
             // assigned tasks).
+            short priorProtocolVersion = currentProtocolVersion;
+            DistributedHerder.this.currentProtocolVersion = member.currentProtocolVersion();
             log.info(
                 "Joined group at generation {} with protocol version {} and got assignment: {}",
                 generation,
-                member.currentProtocolVersion(),
+                DistributedHerder.this.currentProtocolVersion,
                 assignment
             );
             synchronized (DistributedHerder.this) {
@@ -1503,11 +1538,30 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                 DistributedHerder.this.scheduledRebalance = delay > 0
                     ? time.milliseconds() + delay
                     : Long.MAX_VALUE;
-                if (!internalRequestValidationEnabled() && DistributedHerder.this.keyExpiration < Long.MAX_VALUE) {
-                    // In the event of a version downgrade, let the user know that key expiration is now disabled
-                    // However, we retain any existing key expiration time in case an upgrade occurs
-                    log.info("Cancelling scheduled key expiration due to downgrade in protocol");
+
+                boolean requestValidationWasEnabled = internalRequestValidationEnabled(priorProtocolVersion);
+                boolean requestValidationNowEnabled = internalRequestValidationEnabled(currentProtocolVersion);
+                if (requestValidationNowEnabled != requestValidationWasEnabled) {
+                    // Internal request verification has been switched on or off; let the user know
+                    if (requestValidationNowEnabled) {
+                        log.info("Internal request validation has been re-enabled");
+                    } else {
+                        log.warn(
+                            "The protocol used by this Connect cluster has been downgraded from '{}' to '{}' and internal request "
+                                + "validation is now disabled. This is most likely caused by a new worker joining the cluster with an "
+                                + "older protocol specified for the {} configuration; if this is not intentional, either remove the {} "
+                                + "configuration from that worker's config file, or change its value to '{}'. If this configuration is "
+                                + "left as-is, the cluster will be insecure; for more information, see KIP-507: "
+                                + "https://cwiki.apache.org/confluence/display/KAFKA/KIP-507%3A+Securing+Internal+Connect+REST+Endpoints",
+                            ConnectProtocolCompatibility.fromProtocolVersion(priorProtocolVersion),
+                            ConnectProtocolCompatibility.fromProtocolVersion(DistributedHerder.this.currentProtocolVersion),
+                            DistributedConfig.CONNECT_PROTOCOL_CONFIG,
+                            DistributedConfig.CONNECT_PROTOCOL_CONFIG,
+                            ConnectProtocolCompatibility.SESSIONED.name()
+                        );
+                    }
                 }
+
                 rebalanceResolved = false;
                 herderMetrics.rebalanceStarted(time.milliseconds());
             }

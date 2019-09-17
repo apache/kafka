@@ -31,6 +31,7 @@ import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
 import static javax.ws.rs.core.Response.Status.BAD_REQUEST;
+import static javax.ws.rs.core.Response.Status.FORBIDDEN;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.CONNECTOR_CLASS_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.KEY_CONVERTER_CLASS_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.TASKS_MAX_CONFIG;
@@ -104,11 +105,11 @@ public class SessionedProtocolIntegrationTest {
         // Try again, but with an invalid signature
         log.info(
             "Making a POST request to the {} endpoint with no connector started and an invalid signature header; "
-                + "expecting 400 error response",
+                + "expecting 403 error response",
             connectorTasksEndpoint
         );
         assertEquals(
-            BAD_REQUEST.getStatusCode(),
+            FORBIDDEN.getStatusCode(),
             connect.executePost(connectorTasksEndpoint, "[]", invalidSignatureHeaders)
         );
 
@@ -144,11 +145,11 @@ public class SessionedProtocolIntegrationTest {
         // Try again, but with an invalid signature
         log.info(
             "Making a POST request to the {} endpoint with the connector started and an invalid signature header; "
-                + "expecting 400 error response",
+                + "expecting 403 error response",
             connectorTasksEndpoint
         );
         assertEquals(
-            BAD_REQUEST.getStatusCode(),
+            FORBIDDEN.getStatusCode(),
             connect.executePost(connectorTasksEndpoint, "[]", invalidSignatureHeaders)
         );
     }

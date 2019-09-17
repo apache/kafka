@@ -44,6 +44,11 @@ public enum ConnectProtocolCompatibility {
         public String protocol() {
             return "default";
         }
+
+        @Override
+        public short protocolVersion() {
+            return CONNECT_PROTOCOL_V0;
+        }
     },
 
     COMPATIBLE {
@@ -51,12 +56,22 @@ public enum ConnectProtocolCompatibility {
         public String protocol() {
             return "compatible";
         }
+
+        @Override
+        public short protocolVersion() {
+            return CONNECT_PROTOCOL_V1;
+        }
     },
 
     SESSIONED {
         @Override
         public String protocol() {
             return "sessioned";
+        }
+
+        @Override
+        public short protocolVersion() {
+            return CONNECT_PROTOCOL_V2;
         }
     };
 
@@ -100,6 +115,13 @@ public enum ConnectProtocolCompatibility {
     public String toString() {
         return name().toLowerCase(Locale.ROOT);
     }
+
+    /**
+     * Return the version of the protocol for this mode.
+     *
+     * @return the protocol version
+     */
+    public abstract short protocolVersion();
 
     /**
      * Return the name of the protocol that this mode will use in {@code ProtocolMetadata}.

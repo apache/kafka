@@ -383,6 +383,7 @@ public class DistributedConfig extends WorkerConfig {
     public DistributedConfig(Map<String, String> props) {
         super(CONFIG, props);
         getInternalRequestKeyGenerator(); // Check here for a valid key size + key algorithm to fail fast if either are invalid
+        validateKeyAlgorithmAndVerificationAlgorithms();
     }
 
     public static void main(String[] args) {
@@ -401,6 +402,18 @@ public class DistributedConfig extends WorkerConfig {
                 getInt(INTERNAL_REQUEST_KEY_SIZE_CONFIG),
                 e.getMessage()
             ));
+        }
+    }
+
+    private void validateKeyAlgorithmAndVerificationAlgorithms() {
+        String keyAlgorithm = getString(INTERNAL_REQUEST_KEY_GENERATION_ALGORITHM_CONFIG);
+        List<String> verificationAlgorithms = getList(INTERNAL_REQUEST_VERIFICATION_ALGORITHMS_CONFIG);
+        if (!verificationAlgorithms.contains(keyAlgorithm)) {
+            throw new ConfigException(
+                INTERNAL_REQUEST_KEY_GENERATION_ALGORITHM_CONFIG,
+                keyAlgorithm,
+                String.format("Key generation algorithm must be present in %s list", INTERNAL_REQUEST_VERIFICATION_ALGORITHMS_CONFIG)
+            );
         }
     }
 

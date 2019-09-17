@@ -294,15 +294,7 @@ public class WorkerCoordinator extends AbstractCoordinator implements Closeable 
      * @return the current connect protocol version
      */
     public short currentProtocolVersion() {
-        switch (currentConnectProtocol) {
-            case EAGER:
-                return 0;
-            case COMPATIBLE:
-                return 1;
-            case SESSIONED:
-            default:
-                return 2;
-        }
+        return currentConnectProtocol.protocolVersion();
     }
 
     private class WorkerCoordinatorMetrics {
