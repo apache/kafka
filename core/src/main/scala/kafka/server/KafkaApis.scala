@@ -48,33 +48,14 @@ import org.apache.kafka.common.errors._
 import org.apache.kafka.common.internals.FatalExitError
 import org.apache.kafka.common.internals.Topic.{GROUP_METADATA_TOPIC_NAME, TRANSACTION_STATE_TOPIC_NAME, isInternal}
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopic
-import org.apache.kafka.common.message.CreateTopicsResponseData
+import org.apache.kafka.common.message.{AlterPartitionReassignmentsResponseData, CreateTopicsResponseData, DeleteGroupsResponseData, DeleteTopicsResponseData, DescribeGroupsResponseData, ExpireDelegationTokenResponseData, FindCoordinatorResponseData, HeartbeatResponseData, InitProducerIdResponseData, JoinGroupResponseData, LeaveGroupResponseData, ListGroupsResponseData, ListPartitionReassignmentsResponseData, OffsetCommitRequestData, OffsetCommitResponseData, OffsetDeleteResponseData, RenewDelegationTokenResponseData, SaslAuthenticateResponseData, SaslHandshakeResponseData, StopReplicaResponseData, SyncGroupResponseData}
 import org.apache.kafka.common.message.CreateTopicsResponseData.{CreatableTopicResult, CreatableTopicResultCollection}
-import org.apache.kafka.common.message.DeleteGroupsResponseData
 import org.apache.kafka.common.message.DeleteGroupsResponseData.{DeletableGroupResult, DeletableGroupResultCollection}
-import org.apache.kafka.common.message.AlterPartitionReassignmentsResponseData
 import org.apache.kafka.common.message.AlterPartitionReassignmentsResponseData.{ReassignablePartitionResponse, ReassignableTopicResponse}
-import org.apache.kafka.common.message.ListPartitionReassignmentsResponseData
-import org.apache.kafka.common.message.DeleteTopicsResponseData
 import org.apache.kafka.common.message.DeleteTopicsResponseData.{DeletableTopicResult, DeletableTopicResultCollection}
-import org.apache.kafka.common.message.DescribeGroupsResponseData
 import org.apache.kafka.common.message.ElectLeadersResponseData.PartitionResult
 import org.apache.kafka.common.message.ElectLeadersResponseData.ReplicaElectionResult
-import org.apache.kafka.common.message.ExpireDelegationTokenResponseData
-import org.apache.kafka.common.message.FindCoordinatorResponseData
-import org.apache.kafka.common.message.HeartbeatResponseData
-import org.apache.kafka.common.message.InitProducerIdResponseData
-import org.apache.kafka.common.message.JoinGroupResponseData
-import org.apache.kafka.common.message.LeaveGroupResponseData
 import org.apache.kafka.common.message.LeaveGroupResponseData.MemberResponse
-import org.apache.kafka.common.message.ListGroupsResponseData
-import org.apache.kafka.common.message.OffsetCommitRequestData
-import org.apache.kafka.common.message.OffsetCommitResponseData
-import org.apache.kafka.common.message.OffsetDeleteResponseData
-import org.apache.kafka.common.message.RenewDelegationTokenResponseData
-import org.apache.kafka.common.message.SaslAuthenticateResponseData
-import org.apache.kafka.common.message.SaslHandshakeResponseData
-import org.apache.kafka.common.message.SyncGroupResponseData
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.{ListenerName, Send}
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
@@ -247,7 +228,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       // for its previous generation so the broker should skip the stale request.
       info("Received stop replica request with broker epoch " +
         s"${stopReplicaRequest.brokerEpoch()} smaller than the current broker epoch ${controller.brokerEpoch}")
-      sendResponseExemptThrottle(request, new StopReplicaResponse(Errors.STALE_BROKER_EPOCH, Map.empty[TopicPartition, Errors].asJava))
+      sendResponseExemptThrottle(request, new StopReplicaResponse(new StopReplicaResponseData().setErrorCode(Errors.STALE_BROKER_EPOCH.code)))
     } else {
       val (result, error) = replicaManager.stopReplicas(stopReplicaRequest)
       // Clearing out the cache for groups that belong to an offsets topic partition for which this broker was the leader,
@@ -261,7 +242,16 @@ class KafkaApis(val requestChannel: RequestChannel,
           groupCoordinator.handleGroupEmigration(topicPartition.partition)
         }
       }
-      sendResponseExemptThrottle(request, new StopReplicaResponse(error, result.asJava))
+
+      def toStopReplicaPartition(tp: TopicPartition, error: Errors) =
+        new StopReplicaResponseData.StopReplicaResponsePartition()
+          .setTopicName(tp.topic)
+          .setPartitionIndex(tp.partition)
+          .setErrorCode(error.code)
+
+      sendResponseExemptThrottle(request, new StopReplicaResponse(new StopReplicaResponseData()
+        .setErrorCode(error.code)
+        .setPartitions(result.map { case (tp, error) => toStopReplicaPartition(tp, error) }.toIndexedSeq.asJava)))
     }
 
     CoreUtils.swallow(replicaManager.replicaFetcherManager.shutdownIdleFetcherThreads(), this)

@@ -26,6 +26,7 @@ import kafka.metrics.KafkaMetricsGroup
 import kafka.server.KafkaConfig
 import kafka.utils._
 import org.apache.kafka.clients._
+import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrRequestPartition
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network._
 import org.apache.kafka.common.protocol.ApiKeys
@@ -341,7 +342,7 @@ abstract class AbstractControllerBrokerRequestBatch(config: KafkaConfig,
                                                     controllerContext: ControllerContext,
                                                     stateChangeLogger: StateChangeLogger) extends  Logging {
   val controllerId: Int = config.brokerId
-  val leaderAndIsrRequestMap = mutable.Map.empty[Int, mutable.Map[TopicPartition, LeaderAndIsrRequest.PartitionState]]
+  val leaderAndIsrRequestMap = mutable.Map.empty[Int, mutable.Map[TopicPartition, LeaderAndIsrRequestPartition]]
   val stopReplicaRequestMap = mutable.Map.empty[Int, ListBuffer[StopReplicaRequestInfo]]
   val updateMetadataRequestBrokerSet = mutable.Set.empty[Int]
   val updateMetadataRequestPartitionInfoMap = mutable.Map.empty[TopicPartition, UpdateMetadataRequest.PartitionState]
@@ -382,15 +383,17 @@ abstract class AbstractControllerBrokerRequestBatch(config: KafkaConfig,
     brokerIds.filter(_ >= 0).foreach { brokerId =>
       val result = leaderAndIsrRequestMap.getOrElseUpdate(brokerId, mutable.Map.empty)
       val alreadyNew = result.get(topicPartition).exists(_.isNew)
-      result.put(topicPartition, new LeaderAndIsrRequest.PartitionState(leaderIsrAndControllerEpoch.controllerEpoch,
-        leaderIsrAndControllerEpoch.leaderAndIsr.leader,
-        leaderIsrAndControllerEpoch.leaderAndIsr.leaderEpoch,
-        leaderIsrAndControllerEpoch.leaderAndIsr.isr.map(Integer.valueOf).asJava,
-        leaderIsrAndControllerEpoch.leaderAndIsr.zkVersion,
-        replicaAssignment.replicas.map(Integer.valueOf).asJava,
-        replicaAssignment.addingReplicas.map(Integer.valueOf).asJava,
-        replicaAssignment.removingReplicas.map(Integer.valueOf).asJava,
-        isNew || alreadyNew))
+      val leaderAndIsr = leaderIsrAndControllerEpoch.leaderAndIsr
+      result.put(topicPartition, new LeaderAndIsrRequestPartition()
+        .setControllerEpoch(leaderIsrAndControllerEpoch.controllerEpoch)
+        .setLeaderKey(leaderAndIsr.leader)
+        .setLeaderEpoch(leaderAndIsr.leaderEpoch)
+        .setIsrReplicas(leaderAndIsr.isr.map(Integer.valueOf).asJava)
+        .setZkVersion(leaderAndIsr.zkVersion)
+        .setReplicas(replicaAssignment.replicas.map(Integer.valueOf).asJava)
+        .setAddingReplicas(replicaAssignment.addingReplicas.map(Integer.valueOf).asJava)
+        .setRemovingReplicas(replicaAssignment.removingReplicas.map(Integer.valueOf).asJava)
+        .setIsNew(isNew || alreadyNew))
     }
 
     addUpdateMetadataRequestForBrokers(controllerContext.liveOrShuttingDownBrokerIds.toSeq, Set(topicPartition))
@@ -412,21 +415,18 @@ abstract class AbstractControllerBrokerRequestBatch(config: KafkaConfig,
     def updateMetadataRequestPartitionInfo(partition: TopicPartition, beingDeleted: Boolean): Unit = {
       val leaderIsrAndControllerEpochOpt = controllerContext.partitionLeadershipInfo.get(partition)
       leaderIsrAndControllerEpochOpt match {
-        case Some(l @ LeaderIsrAndControllerEpoch(leaderAndIsr, controllerEpoch)) =>
+        case Some(LeaderIsrAndControllerEpoch(leaderAndIsr, controllerEpoch)) =>
           val replicas = controllerContext.partitionReplicaAssignment(partition)
           val offlineReplicas = replicas.filter(!controllerContext.isReplicaOnline(_, partition))
-          val leaderIsrAndControllerEpoch = if (beingDeleted) {
-            val leaderDuringDelete = LeaderAndIsr.duringDelete(leaderAndIsr.isr)
-            LeaderIsrAndControllerEpoch(leaderDuringDelete, controllerEpoch)
-          } else {
-            l
-          }
+          val updatedLeaderAndIsr =
+            if (beingDeleted) LeaderAndIsr.duringDelete(leaderAndIsr.isr)
+            else leaderAndIsr
 
-          val partitionStateInfo = new UpdateMetadataRequest.PartitionState(leaderIsrAndControllerEpoch.controllerEpoch,
-            leaderIsrAndControllerEpoch.leaderAndIsr.leader,
-            leaderIsrAndControllerEpoch.leaderAndIsr.leaderEpoch,
-            leaderIsrAndControllerEpoch.leaderAndIsr.isr.map(Integer.valueOf).asJava,
-            leaderIsrAndControllerEpoch.leaderAndIsr.zkVersion,
+          val partitionStateInfo = new UpdateMetadataRequest.PartitionState(controllerEpoch,
+            updatedLeaderAndIsr.leader,
+            updatedLeaderAndIsr.leaderEpoch,
+            updatedLeaderAndIsr.isr.map(Integer.valueOf).asJava,
+            updatedLeaderAndIsr.zkVersion,
             replicas.map(Integer.valueOf).asJava,
             offlineReplicas.map(Integer.valueOf).asJava)
           updateMetadataRequestPartitionInfoMap.put(partition, partitionStateInfo)
@@ -450,14 +450,13 @@ abstract class AbstractControllerBrokerRequestBatch(config: KafkaConfig,
 
     leaderAndIsrRequestMap.filterKeys(controllerContext.liveOrShuttingDownBrokerIds.contains).foreach {
       case (broker, leaderAndIsrPartitionStates) =>
-        leaderAndIsrPartitionStates.foreach {
-          case (topicPartition, state) =>
-            val typeOfRequest =
-              if (broker == state.basePartitionState.leader) "become-leader"
-              else "become-follower"
-            stateChangeLog.trace(s"Sending $typeOfRequest LeaderAndIsr request $state to broker $broker for partition $topicPartition")
+        leaderAndIsrPartitionStates.foreach { case (topicPartition, state) =>
+          val typeOfRequest =
+            if (broker == state.leaderKey) "become-leader"
+            else "become-follower"
+          stateChangeLog.trace(s"Sending $typeOfRequest LeaderAndIsr request $state to broker $broker for partition $topicPartition")
         }
-        val leaderIds = leaderAndIsrPartitionStates.map(_._2.basePartitionState.leader).toSet
+        val leaderIds = leaderAndIsrPartitionStates.map(_._2.leaderKey).toSet
         val leaders = controllerContext.liveOrShuttingDownBrokers.filter(b => leaderIds.contains(b.id)).map {
           _.node(config.interBrokerListenerName)
         }

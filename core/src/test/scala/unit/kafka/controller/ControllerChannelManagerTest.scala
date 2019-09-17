@@ -23,6 +23,8 @@ import kafka.cluster.{Broker, EndPoint}
 import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.message.LeaderAndIsrResponseData
+import org.apache.kafka.common.message.LeaderAndIsrResponseData.LeaderAndIsrResponsePartition
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.{AbstractControlRequest, AbstractResponse, LeaderAndIsrRequest, LeaderAndIsrResponse, StopReplicaRequest, StopReplicaResponse, UpdateMetadataRequest}
@@ -80,8 +82,10 @@ class ControllerChannelManagerTest {
     assertEquals(1, batch.sentEvents.size)
 
     val LeaderAndIsrResponseReceived(response, brokerId) = batch.sentEvents.head
+    val leaderAndIsrResponse = response.asInstanceOf[LeaderAndIsrResponse]
     assertEquals(2, brokerId)
-    assertEquals(partitions.keySet, response.asInstanceOf[LeaderAndIsrResponse].responses.keySet.asScala)
+    assertEquals(partitions.keySet,
+      leaderAndIsrResponse.partitions.asScala.map(p => new TopicPartition(p.topicName, p.partitionIndex)))
   }
 
   @Test
@@ -620,8 +624,7 @@ class ControllerChannelManagerTest {
   private def applyStopReplicaResponseCallbacks(error: Errors, sentRequests: List[SentRequest]): Unit = {
     sentRequests.filter(_.responseCallback != null).foreach { sentRequest =>
       val stopReplicaRequest = sentRequest.request.build().asInstanceOf[StopReplicaRequest]
-      val partitionErrorMap = stopReplicaRequest.partitions.asScala.map(_ -> error).toMap.asJava
-      val stopReplicaResponse = new StopReplicaResponse(error, partitionErrorMap)
+      val stopReplicaResponse = stopReplicaRequest.getErrorResponse(error.exception)
       sentRequest.responseCallback.apply(stopReplicaResponse)
     }
   }
@@ -629,9 +632,16 @@ class ControllerChannelManagerTest {
   private def applyLeaderAndIsrResponseCallbacks(error: Errors, sentRequests: List[SentRequest]): Unit = {
     sentRequests.filter(_.request.apiKey == ApiKeys.LEADER_AND_ISR).filter(_.responseCallback != null).foreach { sentRequest =>
       val leaderAndIsrRequest = sentRequest.request.build().asInstanceOf[LeaderAndIsrRequest]
-      val partitionErrorMap = leaderAndIsrRequest.partitionStates.asScala.keySet.map(_ -> error).toMap.asJava
-      val leaderAndIsrResponse = new LeaderAndIsrResponse(error, partitionErrorMap)
-      sentRequest.responseCallback.apply(leaderAndIsrResponse)
+      val partitionErrors = leaderAndIsrRequest.partitionStates.asScala.keySet.map(tp =>
+        new LeaderAndIsrResponsePartition()
+          .setTopicName(tp.topic)
+          .setPartitionIndex(tp.partition)
+          .setErrorCode(error.code)).toSeq
+      val leaderAndIsrResponse = new LeaderAndIsrResponse(
+        new LeaderAndIsrResponseData()
+          .setErrorCode(error.code)
+          .setPartitions(partitionErrors.asJava))
+      sentRequest.responseCallback(leaderAndIsrResponse)
     }
   }
 

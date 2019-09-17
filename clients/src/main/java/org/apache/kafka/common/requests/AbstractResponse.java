@@ -102,13 +102,13 @@ public abstract class AbstractResponse extends AbstractRequestResponse {
             case SYNC_GROUP:
                 return new SyncGroupResponse(struct, version);
             case STOP_REPLICA:
-                return new StopReplicaResponse(struct);
+                return new StopReplicaResponse(struct, version);
             case CONTROLLED_SHUTDOWN:
                 return new ControlledShutdownResponse(struct, version);
             case UPDATE_METADATA:
                 return new UpdateMetadataResponse(struct);
             case LEADER_AND_ISR:
-                return new LeaderAndIsrResponse(struct);
+                return new LeaderAndIsrResponse(struct, version);
             case DESCRIBE_GROUPS:
                 return new DescribeGroupsResponse(struct, version);
             case LIST_GROUPS:

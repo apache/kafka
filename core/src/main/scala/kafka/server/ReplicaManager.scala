@@ -37,6 +37,8 @@ import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.Node
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.internals.Topic
+import org.apache.kafka.common.message.LeaderAndIsrResponseData
+import org.apache.kafka.common.message.LeaderAndIsrResponseData.LeaderAndIsrResponsePartition
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.Errors
@@ -1284,7 +1286,15 @@ class ReplicaManager(val config: KafkaConfig,
         replicaFetcherManager.shutdownIdleFetcherThreads()
         replicaAlterLogDirsManager.shutdownIdleFetcherThreads()
         onLeadershipChange(partitionsBecomeLeader, partitionsBecomeFollower)
-        new LeaderAndIsrResponse(Errors.NONE, responseMap.asJava)
+        val responsePartitions = responseMap.iterator.map { case (tp, error) =>
+          new LeaderAndIsrResponsePartition()
+            .setTopicName(tp.topic)
+            .setPartitionIndex(tp.partition)
+            .setErrorCode(error.code)
+        }.toBuffer
+        new LeaderAndIsrResponse(new LeaderAndIsrResponseData()
+          .setErrorCode(Errors.NONE.code)
+          .setPartitions(responsePartitions.asJava))
       }
     }
   }

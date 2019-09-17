@@ -17,7 +17,7 @@
 package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.TopicPartition;
-import org.junit.Assert;
+import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrRequestPartition;
 import org.junit.Test;
 
 import java.util.Collections;
@@ -27,20 +27,21 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Random;
 
+import static org.junit.Assert.assertTrue;
+
 
 public class ControlRequestTest {
     @Test
     public void testLeaderAndIsrRequestNormalization() {
         Set<TopicPartition> tps = generateRandomTopicPartitions(10, 10);
-        Map<TopicPartition, LeaderAndIsrRequest.PartitionState> partitionStates = new HashMap<>();
+        Map<TopicPartition, LeaderAndIsrRequestPartition> partitionStates = new HashMap<>();
         for (TopicPartition tp: tps) {
-            partitionStates.put(tp, new LeaderAndIsrRequest.PartitionState(0, 0, 0,
-                    Collections.emptyList(), 0, Collections.emptyList(), false));
+            partitionStates.put(tp, new LeaderAndIsrRequestPartition());
         }
         LeaderAndIsrRequest.Builder builder = new LeaderAndIsrRequest.Builder((short) 2, 0, 0, 0,
                 partitionStates, Collections.emptySet());
 
-        Assert.assertTrue(builder.build((short) 2).size() <  builder.build((short) 1).size());
+        assertTrue(builder.build((short) 2).size() <  builder.build((short) 1).size());
     }
 
     @Test
@@ -54,7 +55,7 @@ public class ControlRequestTest {
         UpdateMetadataRequest.Builder builder = new UpdateMetadataRequest.Builder((short) 5, 0, 0, 0,
                 partitionStates, Collections.emptySet());
 
-        Assert.assertTrue(builder.build((short) 5).size() <  builder.build((short) 4).size());
+        assertTrue(builder.build((short) 5).size() <  builder.build((short) 4).size());
     }
 
     @Test
@@ -67,7 +68,7 @@ public class ControlRequestTest {
         }
         StopReplicaRequest.Builder builder = new StopReplicaRequest.Builder((short) 5, 0, 0, 0, false, tps);
 
-        Assert.assertTrue(builder.build((short) 1).size() <  builder.build((short) 0).size());
+        assertTrue(builder.build((short) 1).size() <  builder.build((short) 0).size());
     }
 
     private Set<TopicPartition> generateRandomTopicPartitions(int numTopic, int numPartitionPerTopic) {

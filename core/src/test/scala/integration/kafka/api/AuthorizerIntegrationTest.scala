@@ -22,7 +22,7 @@ import java.time.Duration
 import kafka.admin.ConsumerGroupCommand.{ConsumerGroupCommandOptions, ConsumerGroupService}
 import kafka.log.LogConfig
 import kafka.network.SocketServer
-import kafka.security.auth.{ResourceType => AuthResourceType, SimpleAclAuthorizer, Topic}
+import kafka.security.auth.{SimpleAclAuthorizer, Topic, ResourceType => AuthResourceType}
 import kafka.security.authorizer.AuthorizerUtils.WildcardHost
 import kafka.server.{BaseRequestTest, KafkaConfig}
 import kafka.utils.TestUtils
@@ -53,6 +53,7 @@ import org.apache.kafka.common.message.ListPartitionReassignmentsRequestData
 import org.apache.kafka.common.message.OffsetCommitRequestData
 import org.apache.kafka.common.message.SyncGroupRequestData
 import org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocolCollection
+import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrRequestPartition
 import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
@@ -200,7 +201,8 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     ApiKeys.HEARTBEAT -> ((resp: HeartbeatResponse) => resp.error),
     ApiKeys.LEAVE_GROUP -> ((resp: LeaveGroupResponse) => resp.error),
     ApiKeys.DELETE_GROUPS -> ((resp: DeleteGroupsResponse) => resp.get(group)),
-    ApiKeys.LEADER_AND_ISR -> ((resp: requests.LeaderAndIsrResponse) => resp.responses.asScala.find(_._1 == tp).get._2),
+    ApiKeys.LEADER_AND_ISR -> ((resp: requests.LeaderAndIsrResponse) => Errors.forCode(
+      resp.partitions.asScala.find(p => p.topicName == tp.topic && p.partitionIndex == tp.partition).get.errorCode)),
     ApiKeys.STOP_REPLICA -> ((resp: requests.StopReplicaResponse) => resp.responses.asScala.find(_._1 == tp).get._2),
     ApiKeys.CONTROLLED_SHUTDOWN -> ((resp: requests.ControlledShutdownResponse) => resp.error),
     ApiKeys.CREATE_TOPICS -> ((resp: CreateTopicsResponse) => Errors.forCode(resp.data.topics.find(createTopic).errorCode())),
@@ -442,7 +444,16 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
 
   private def leaderAndIsrRequest = {
     new requests.LeaderAndIsrRequest.Builder(ApiKeys.LEADER_AND_ISR.latestVersion, brokerId, Int.MaxValue, Long.MaxValue,
-      Map(tp -> new LeaderAndIsrRequest.PartitionState(Int.MaxValue, brokerId, Int.MaxValue, List(brokerId).asJava, 2, Seq(brokerId).asJava, false)).asJava,
+      Seq(new LeaderAndIsrRequestPartition()
+        .setTopicName(tp.topic)
+        .setPartitionIndex(tp.partition)
+        .setControllerEpoch(Int.MaxValue)
+        .setLeaderKey(brokerId)
+        .setLeaderEpoch(Int.MaxValue)
+        .setIsrReplicas(List(brokerId).asJava)
+        .setZkVersion(2)
+        .setReplicas(Seq(brokerId).asJava)
+        .setIsNew(false)).asJava,
       Set(new Node(brokerId, "localhost", 0)).asJava).build()
   }
 

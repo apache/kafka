@@ -42,6 +42,7 @@ import org.apache.zookeeper.KeeperException.Code
 
 import scala.collection.JavaConverters._
 import scala.collection.{Map, Seq, Set, immutable, mutable}
+import scala.collection.mutable.ArrayBuffer
 import scala.util.{Failure, Try}
 
 sealed trait ElectionTrigger
@@ -1312,12 +1313,17 @@ class KafkaController(val config: KafkaConfig,
       return
     }
 
-    val offlineReplicas = leaderAndIsrResponse.responses.asScala.collect {
-      case (tp, error) if error == Errors.KAFKA_STORAGE_ERROR => tp
+    val offlineReplicas = new ArrayBuffer[TopicPartition]()
+    val onlineReplicas = new ArrayBuffer[TopicPartition]()
+
+    leaderAndIsrResponse.partitions.asScala.foreach { partition =>
+      val tp = new TopicPartition(partition.topicName, partition.partitionIndex)
+      if (partition.errorCode == Errors.KAFKA_STORAGE_ERROR.code)
+        offlineReplicas += tp
+      else if (partition.errorCode == Errors.NONE.code)
+        onlineReplicas += tp
     }
-    val onlineReplicas = leaderAndIsrResponse.responses.asScala.collect {
-      case (tp, error) if error == Errors.NONE => tp
-    }
+
     val previousOfflineReplicas = controllerContext.replicasOnOfflineDirs.getOrElse(brokerId, Set.empty[TopicPartition])
     val currentOfflineReplicas = previousOfflineReplicas -- onlineReplicas ++ offlineReplicas
     controllerContext.replicasOnOfflineDirs.put(brokerId, currentOfflineReplicas)

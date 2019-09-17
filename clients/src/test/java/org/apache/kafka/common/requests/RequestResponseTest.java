@@ -76,6 +76,8 @@ import org.apache.kafka.common.message.InitProducerIdRequestData;
 import org.apache.kafka.common.message.InitProducerIdResponseData;
 import org.apache.kafka.common.message.JoinGroupRequestData;
 import org.apache.kafka.common.message.JoinGroupResponseData;
+import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrRequestPartition;
+import org.apache.kafka.common.message.LeaderAndIsrResponseData;
 import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity;
 import org.apache.kafka.common.message.LeaveGroupResponseData;
 import org.apache.kafka.common.message.ListGroupsRequestData;
@@ -97,6 +99,7 @@ import org.apache.kafka.common.message.SaslAuthenticateRequestData;
 import org.apache.kafka.common.message.SaslAuthenticateResponseData;
 import org.apache.kafka.common.message.SaslHandshakeRequestData;
 import org.apache.kafka.common.message.SaslHandshakeResponseData;
+import org.apache.kafka.common.message.StopReplicaResponseData;
 import org.apache.kafka.common.message.TxnOffsetCommitRequestData;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.network.Send;
@@ -237,6 +240,8 @@ public class RequestResponseTest {
         checkErrorResponse(createLeaderAndIsrRequest(0), new UnknownServerException(), false);
         checkRequest(createLeaderAndIsrRequest(1), true);
         checkErrorResponse(createLeaderAndIsrRequest(1), new UnknownServerException(), false);
+        checkRequest(createLeaderAndIsrRequest(2), true);
+        checkErrorResponse(createLeaderAndIsrRequest(2), new UnknownServerException(), false);
         checkResponse(createLeaderAndIsrResponse(), 0, true);
         checkRequest(createSaslHandshakeRequest(), true);
         checkErrorResponse(createSaslHandshakeRequest(), new UnknownServerException(), true);
@@ -1115,9 +1120,14 @@ public class RequestResponseTest {
     }
 
     private StopReplicaResponse createStopReplicaResponse() {
-        Map<TopicPartition, Errors> responses = new HashMap<>();
-        responses.put(new TopicPartition("test", 0), Errors.NONE);
-        return new StopReplicaResponse(Errors.NONE, responses);
+        List<StopReplicaResponseData.StopReplicaResponsePartition> partitions = new ArrayList<>();
+        partitions.add(new StopReplicaResponseData.StopReplicaResponsePartition()
+            .setTopicName("test")
+            .setPartitionIndex(0)
+            .setErrorCode(Errors.NONE.code()));
+        return new StopReplicaResponse(new StopReplicaResponseData()
+            .setErrorCode(Errors.NONE.code())
+            .setPartitions(partitions));
     }
 
     private ControlledShutdownRequest createControlledShutdownRequest() {
@@ -1155,15 +1165,36 @@ public class RequestResponseTest {
     }
 
     private LeaderAndIsrRequest createLeaderAndIsrRequest(int version) {
-        Map<TopicPartition, LeaderAndIsrRequest.PartitionState> partitionStates = new HashMap<>();
+        Map<TopicPartition, LeaderAndIsrRequestPartition> partitionStates = new HashMap<>();
         List<Integer> isr = asList(1, 2);
         List<Integer> replicas = asList(1, 2, 3, 4);
         partitionStates.put(new TopicPartition("topic5", 105),
-                new LeaderAndIsrRequest.PartitionState(0, 2, 1, new ArrayList<>(isr), 2, replicas, false));
+                new LeaderAndIsrRequestPartition()
+                    .setControllerEpoch(0)
+                    .setLeaderKey(2)
+                    .setLeaderEpoch(1)
+                    .setIsrReplicas(isr)
+                    .setZkVersion(2)
+                    .setReplicas(replicas)
+                    .setIsNew(false));
         partitionStates.put(new TopicPartition("topic5", 1),
-                new LeaderAndIsrRequest.PartitionState(1, 1, 1, new ArrayList<>(isr), 2, replicas, false));
+                new LeaderAndIsrRequestPartition()
+                    .setControllerEpoch(1)
+                    .setLeaderKey(1)
+                    .setLeaderEpoch(1)
+                    .setIsrReplicas(isr)
+                    .setZkVersion(2)
+                    .setReplicas(replicas)
+                    .setIsNew(false));
         partitionStates.put(new TopicPartition("topic20", 1),
-                new LeaderAndIsrRequest.PartitionState(1, 0, 1, new ArrayList<>(isr), 2, replicas, false));
+                new LeaderAndIsrRequestPartition()
+                    .setControllerEpoch(1)
+                    .setLeaderKey(0)
+                    .setLeaderEpoch(1)
+                    .setIsrReplicas(isr)
+                    .setZkVersion(2)
+                    .setReplicas(replicas)
+                    .setIsNew(false));
 
         Set<Node> leaders = Utils.mkSet(
                 new Node(0, "test0", 1223),
@@ -1173,9 +1204,14 @@ public class RequestResponseTest {
     }
 
     private LeaderAndIsrResponse createLeaderAndIsrResponse() {
-        Map<TopicPartition, Errors> responses = new HashMap<>();
-        responses.put(new TopicPartition("test", 0), Errors.NONE);
-        return new LeaderAndIsrResponse(Errors.NONE, responses);
+        List<LeaderAndIsrResponseData.LeaderAndIsrResponsePartition> partitions = new ArrayList<>();
+        partitions.add(new LeaderAndIsrResponseData.LeaderAndIsrResponsePartition()
+            .setTopicName("test")
+            .setPartitionIndex(0)
+            .setErrorCode(Errors.NONE.code()));
+        return new LeaderAndIsrResponse(new LeaderAndIsrResponseData()
+            .setErrorCode(Errors.NONE.code())
+            .setPartitions(partitions));
     }
 
     private UpdateMetadataRequest createUpdateMetadataRequest(int version, String rack) {

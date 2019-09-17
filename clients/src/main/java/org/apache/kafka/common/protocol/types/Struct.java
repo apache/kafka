@@ -471,6 +471,7 @@ public class Struct {
      * @throws SchemaException If validation fails
      */
     private void validateField(BoundField field) {
+        Objects.requireNonNull(field, "`field` must be non-null");
         if (this.schema != field.schema)
             throw new SchemaException("Attempt to access field '" + field.def.name + "' from a different schema instance.");
         if (field.index > values.length)
