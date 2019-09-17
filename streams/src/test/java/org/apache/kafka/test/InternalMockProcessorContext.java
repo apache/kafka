@@ -69,7 +69,7 @@ public class InternalMockProcessorContext extends AbstractProcessorContext imple
         this(null,
             null,
             null,
-            new StreamsMetricsImpl(new Metrics(), "mock"),
+            new StreamsMetricsImpl(new Metrics(), "mock", StreamsConfig.METRICS_LATEST),
             new StreamsConfig(StreamsTestUtils.getStreamsConfig()),
             null,
             null
@@ -78,14 +78,30 @@ public class InternalMockProcessorContext extends AbstractProcessorContext imple
 
     public InternalMockProcessorContext(final File stateDir,
                                         final StreamsConfig config) {
-        this(stateDir, null, null, new StreamsMetricsImpl(new Metrics(), "mock"), config, null, null);
+        this(
+            stateDir,
+            null,
+            null,
+            new StreamsMetricsImpl(new Metrics(), "mock", StreamsConfig.METRICS_LATEST),
+            config,
+            null,
+            null
+        );
     }
 
     public InternalMockProcessorContext(final File stateDir,
                                         final Serde<?> keySerde,
                                         final Serde<?> valSerde,
                                         final StreamsConfig config) {
-        this(stateDir, keySerde, valSerde, new StreamsMetricsImpl(new Metrics(), "mock"), config, null, null);
+        this(
+            stateDir,
+            keySerde,
+            valSerde,
+            new StreamsMetricsImpl(new Metrics(), "mock", StreamsConfig.METRICS_LATEST),
+            config,
+            null,
+            null
+        );
     }
 
     public InternalMockProcessorContext(final StateSerdes<?, ?> serdes,
@@ -100,7 +116,7 @@ public class InternalMockProcessorContext extends AbstractProcessorContext imple
             null,
             serdes.keySerde(),
             serdes.valueSerde(),
-            new StreamsMetricsImpl(metrics, "mock"),
+            new StreamsMetricsImpl(metrics, "mock", StreamsConfig.METRICS_LATEST),
             new StreamsConfig(StreamsTestUtils.getStreamsConfig()),
             () -> collector,
             null
@@ -115,7 +131,7 @@ public class InternalMockProcessorContext extends AbstractProcessorContext imple
         this(stateDir,
             keySerde,
             valSerde,
-            new StreamsMetricsImpl(new Metrics(), "mock"),
+            new StreamsMetricsImpl(new Metrics(), "mock", StreamsConfig.METRICS_LATEST),
             new StreamsConfig(StreamsTestUtils.getStreamsConfig()),
             () -> collector,
             cache
