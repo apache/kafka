@@ -812,6 +812,25 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
   }
 
   @Test
+  def testTopicAssignments(): Unit = {
+    assertEquals(0, zkClient.getPartitionAssignmentForTopics(Set(topicPartition.topic())).size)
+
+    val expectedAssignment = PartitionReplicaAssignment(Seq(1,2,3), Seq(1), Seq(3))
+    val response = zkClient.setTopicAssignmentRaw(topicPartition.topic(),
+      Map(topicPartition -> expectedAssignment), controllerEpochZkVersion)
+    assertEquals(Code.OK, response.resultCode)
+
+    val topicPartitionAssignments = zkClient.getPartitionAssignmentForTopics(Set(topicPartition.topic()))
+    assertEquals(1, topicPartitionAssignments.size)
+    assertTrue(topicPartitionAssignments.contains(topicPartition.topic()))
+    val partitionAssignments = topicPartitionAssignments(topicPartition.topic())
+    assertEquals(1, partitionAssignments.size)
+    assertTrue(partitionAssignments.contains(topicPartition.partition()))
+    val assignment = partitionAssignments(topicPartition.partition())
+    assertEquals(expectedAssignment, assignment)
+  }
+
+  @Test
   def testUpdateLeaderAndIsr(): Unit = {
     zkClient.createRecursive(TopicZNode.path(topic1))
 
