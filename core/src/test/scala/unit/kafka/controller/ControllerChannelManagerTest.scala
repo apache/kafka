@@ -18,7 +18,7 @@ package kafka.controller
 
 import java.util.Properties
 
-import kafka.api.{ApiVersion, KAFKA_0_10_0_IV1, KAFKA_0_10_2_IV0, KAFKA_0_9_0, KAFKA_1_0_IV0, KAFKA_2_2_IV0, LeaderAndIsr}
+import kafka.api.{ApiVersion, KAFKA_0_10_0_IV1, KAFKA_0_10_2_IV0, KAFKA_0_9_0, KAFKA_1_0_IV0, KAFKA_2_2_IV0, KAFKA_2_4_IV0, LeaderAndIsr}
 import kafka.cluster.{Broker, EndPoint}
 import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
@@ -111,6 +111,34 @@ class ControllerChannelManagerTest {
   }
 
   @Test
+  def testLeaderAndIsrRequestReassignmentFields(): Unit = {
+    val context = initContext(Seq(1), Set("foo", "bar"), 2, 3)
+    val config = createConfig(KAFKA_2_4_IV0)
+    val batch = new MockControllerBrokerRequestBatch(context, config)
+
+    val partition = new TopicPartition("foo", 0)
+    val partitionAssignment = PartitionReplicaAssignment(Seq(1, 2, 3), Seq(1), Seq(3))
+    val leaderAndIsr = LeaderAndIsr(1, List(1, 2))
+
+    val leaderIsrAndControllerEpoch = LeaderIsrAndControllerEpoch(leaderAndIsr, controllerEpoch)
+    context.partitionLeadershipInfo.put(partition, leaderIsrAndControllerEpoch)
+
+    batch.newBatch()
+    batch.addLeaderAndIsrRequestForBrokers(Seq(1), partition, leaderIsrAndControllerEpoch,
+      partitionAssignment, isNew = true)
+    batch.sendRequestsToBrokers(controllerEpoch)
+
+    val leaderAndIsrRequests = batch.collectLeaderAndIsrRequestsFor(1)
+    assertEquals(1, leaderAndIsrRequests.size)
+    val leaderAndIsrRequest = leaderAndIsrRequests.head
+    assertEquals(Set(partition), leaderAndIsrRequest.partitionStates.keySet.asScala)
+    assertTrue(leaderAndIsrRequest.partitionStates.get(partition).isNew)
+    assertEquals(partitionAssignment.addingReplicas, leaderAndIsrRequest.partitionStates.get(partition).addingReplicas.asScala)
+    assertEquals(partitionAssignment.replicas, leaderAndIsrRequest.partitionStates.get(partition).basePartitionState.replicas.asScala)
+    assertEquals(partitionAssignment.removingReplicas, leaderAndIsrRequest.partitionStates.get(partition).removingReplicas.asScala)
+  }
+
+  @Test
   def testLeaderAndIsrRequestSentToLiveOrShuttingDownBrokers(): Unit = {
     val context = initContext(Seq(1, 2, 3), Set("foo", "bar"), 2, 3)
     val batch = new MockControllerBrokerRequestBatch(context)
@@ -149,7 +177,8 @@ class ControllerChannelManagerTest {
 
     for (apiVersion <- ApiVersion.allVersions) {
       val leaderAndIsrRequestVersion: Short =
-        if (config.interBrokerProtocolVersion >= KAFKA_2_2_IV0) 3
+        if (config.interBrokerProtocolVersion >= KAFKA_2_4_IV0) 3
+        else if (config.interBrokerProtocolVersion >= KAFKA_2_2_IV0) 2
         else if (config.interBrokerProtocolVersion >= KAFKA_1_0_IV0) 1
         else 0
 
