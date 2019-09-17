@@ -18,7 +18,6 @@ package org.apache.kafka.streams.kstream;
 
 import org.apache.kafka.clients.producer.internals.DefaultPartitioner;
 import org.apache.kafka.common.serialization.Serde;
-import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
@@ -28,7 +27,6 @@ import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.TopicNameExtractor;
-import org.apache.kafka.streams.state.WindowStore;
 
 /**
  * {@code KStream} is an abstraction of a <i>record stream</i> of {@link KeyValue} pairs, i.e., each record is an
@@ -2430,15 +2428,12 @@ public interface KStream<K, V> {
      * <p>
      * You can retrieve all generated internal topic names via {@link Topology#describe()}.
      *
-     * @param otherStream the {@code KStream} to be joined with this stream
-     * @param joiner      a {@link ValueJoiner} that computes the join result for a pair of matching records
-     * @param windows     the specification of the {@link JoinWindows}
-     * @param joined      a {@link Joined} instance that defines the serdes to
-     *                    be used to serialize/deserialize inputs and outputs of the joined streams
-     * @param materialized a {@link org.apache.kafka.streams.kstream.Materialized} used to supply a portion of the store
-     *                     name and optionally provide a different type of store for the join.
      * @param <VO>        the value type of the other stream
      * @param <VR>        the value type of the result stream
+     * @param otherStream the {@code KStream} to be joined with this stream
+     * @param joiner      a {@link org.apache.kafka.streams.kstream.ValueJoiner} that computes the join result for a pair of matching records
+     * @param windows     the specification of the {@link org.apache.kafka.streams.kstream.JoinWindows}
+     * @param storeStreamJoined
      * @return a {@code KStream} that contains join-records for each key and values computed by the given
      * {@link ValueJoiner}, one for each matched record-pair with the same key and within the joining window intervals
      * @see #leftJoin(KStream, ValueJoiner, JoinWindows, Joined)
@@ -2447,8 +2442,7 @@ public interface KStream<K, V> {
     <VO, VR> KStream<K, VR> join(final KStream<K, VO> otherStream,
                                  final ValueJoiner<? super V, ? super VO, ? extends VR> joiner,
                                  final JoinWindows windows,
-                                 final Joined<K, V, VO> joined,
-                                 final Materialized<K, ?, WindowStore<Bytes, byte[]>> materialized);
+                                 final StreamJoined<K, V, VO> storeStreamJoined);
 
 
 
@@ -2683,15 +2677,12 @@ public interface KStream<K, V> {
      * <p>
      * You can retrieve all generated internal topic names via {@link Topology#describe()}.
      *
+     * @param <VO>        the value type of the other stream
+     * @param <VR>        the value type of the result stream
      * @param otherStream the {@code KStream} to be joined with this stream
      * @param joiner      a {@link ValueJoiner} that computes the join result for a pair of matching records
      * @param windows     the specification of the {@link JoinWindows}
-     * @param joined      a {@link Joined} instance that defines the serdes to
-     *                    be used to serialize/deserialize inputs and outputs of the joined streams
-     * @param materialized a {@link org.apache.kafka.streams.kstream.Materialized} used to supply a portion of the store
-     *                     name and optionally provide a different type of store for the join.
-     * @param <VO>        the value type of the other stream
-     * @param <VR>        the value type of the result stream
+     * @param storeStreamJoined
      * @return a {@code KStream} that contains join-records for each key and values computed by the given
      * {@link ValueJoiner}, one for each matched record-pair with the same key plus one for each non-matching record of
      * this {@code KStream} and within the joining window intervals
@@ -2701,8 +2692,7 @@ public interface KStream<K, V> {
     <VO, VR> KStream<K, VR> leftJoin(final KStream<K, VO> otherStream,
                                      final ValueJoiner<? super V, ? super VO, ? extends VR> joiner,
                                      final JoinWindows windows,
-                                     final Joined<K, V, VO> joined,
-                                     final Materialized<K, ?, WindowStore<Bytes, byte[]>> materialized);
+                                     final StreamJoined<K, V, VO> storeStreamJoined);
 
     /**
      * Join records of this stream with another {@code KStream}'s records using windowed outer equi join with default
@@ -2938,15 +2928,12 @@ public interface KStream<K, V> {
      * <p>
      * You can retrieve all generated internal topic names via {@link Topology#describe()}.
      *
+     * @param <VO>        the value type of the other stream
+     * @param <VR>        the value type of the result stream
      * @param otherStream the {@code KStream} to be joined with this stream
      * @param joiner      a {@link ValueJoiner} that computes the join result for a pair of matching records
      * @param windows     the specification of the {@link JoinWindows}
-     * @param joined      a {@link Joined} instance that defines the serdes to
-     *                    be used to serialize/deserialize inputs and outputs of the joined streams
-     * @param materialized a {@link org.apache.kafka.streams.kstream.Materialized} used to supply a portion of the store
-     *                     name and optionally provide a different type of store for the join.
-     * @param <VO>        the value type of the other stream
-     * @param <VR>        the value type of the result stream
+     * @param storeStreamJoined
      * @return a {@code KStream} that contains join-records for each key and values computed by the given
      * {@link ValueJoiner}, one for each matched record-pair with the same key plus one for each non-matching record of
      * both {@code KStream} and within the joining window intervals
@@ -2956,8 +2943,7 @@ public interface KStream<K, V> {
     <VO, VR> KStream<K, VR> outerJoin(final KStream<K, VO> otherStream,
                                       final ValueJoiner<? super V, ? super VO, ? extends VR> joiner,
                                       final JoinWindows windows,
-                                      final Joined<K, V, VO> joined,
-                                      final Materialized<K, ?, WindowStore<Bytes, byte[]>> materialized);
+                                      final StreamJoined<K, V, VO> storeStreamJoined);
 
     /**
      * Join records of this stream with {@link KTable}'s records using non-windowed inner equi join with default

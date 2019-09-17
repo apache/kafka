@@ -27,9 +27,10 @@ import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.JoinWindows;
 import org.apache.kafka.streams.kstream.Joined;
 import org.apache.kafka.streams.kstream.KStream;
-import org.apache.kafka.streams.kstream.Materialized;
+import org.apache.kafka.streams.kstream.StreamJoined;
 import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.apache.kafka.streams.state.Stores;
+import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
 import org.apache.kafka.streams.test.ConsumerRecordFactory;
 import org.apache.kafka.test.MockProcessor;
 import org.apache.kafka.test.MockProcessorSupplier;
@@ -99,15 +100,23 @@ public class KStreamKStreamJoinTest {
         final KStream<String, Integer> joinedStream;
 
         final JoinWindows joinWindows = JoinWindows.of(ofMillis(100));
+
+        final WindowBytesStoreSupplier thisStoreSupplier = Stores.inMemoryWindowStore("in-memory-join-store",
+            Duration.ofMillis(joinWindows.size() + joinWindows.gracePeriodMs()),
+            Duration.ofMillis(joinWindows.size()), false);
+
+        final WindowBytesStoreSupplier otherStoreSupplier = Stores.inMemoryWindowStore("in-memory-join-store-other",
+            Duration.ofMillis(joinWindows.size() + joinWindows.gracePeriodMs()),
+            Duration.ofMillis(joinWindows.size()), false);
+
         joinedStream = left.join(
             right,
             (value1, value2) -> value1 + value2,
             joinWindows,
-            Joined.with(Serdes.String(), Serdes.Integer(), Serdes.Integer()),
-            Materialized.<String, Integer>as(Stores.inMemoryWindowStore("in-memory-join-store",
-                                                                        Duration.ofMillis(joinWindows.size() + joinWindows.gracePeriodMs()),
-                                                                        Duration.ofMillis(joinWindows.size()), true))
-                .withKeySerde(Serdes.String()).withValueSerde(Serdes.Integer())
+            StreamJoined.<String, Integer, Integer>as(thisStoreSupplier, otherStoreSupplier)
+                .withKeySerde(Serdes.String())
+                .withValueSerde(Serdes.Integer())
+                .withOtherValueSerde(Serdes.Integer())
         );
 
         joinedStream.process(supplier);

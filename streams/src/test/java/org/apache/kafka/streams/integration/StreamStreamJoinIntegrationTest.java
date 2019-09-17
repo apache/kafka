@@ -25,9 +25,8 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.JoinWindows;
-import org.apache.kafka.streams.kstream.Joined;
 import org.apache.kafka.streams.kstream.KStream;
-import org.apache.kafka.streams.kstream.Materialized;
+import org.apache.kafka.streams.kstream.StreamJoined;
 import org.apache.kafka.streams.state.QueryableStoreTypes;
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.MockMapper;
@@ -83,8 +82,7 @@ public class StreamStreamJoinIntegrationTest extends AbstractJoinIntegrationTest
             right,
             (value1, value2) -> value1 + value2,
             JoinWindows.of(ofMillis(100)),
-            Joined.with(Serdes.String(), Serdes.Integer(), Serdes.Integer()),
-            Materialized.as("join-store"));
+            StreamJoined.with(Serdes.String(), Serdes.Integer(), Serdes.Integer()).withStoreName("join-store"));
 
         try (final KafkaStreams kafkaStreams = new KafkaStreams(builder.build(), STREAMS_CONFIG)) {
             kafkaStreams.setStateListener((newState, oldState) -> {
