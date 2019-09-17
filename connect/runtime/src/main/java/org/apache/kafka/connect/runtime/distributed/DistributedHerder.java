@@ -1569,6 +1569,12 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
             ConnectMetricsRegistry registry = connectMetrics.registry();
             metricGroup = connectMetrics.group(registry.workerRebalanceGroupName());
 
+            metricGroup.addValueMetric(registry.connectProtocol, new LiteralSupplier<String>() {
+                @Override
+                public String metricValue(long now) {
+                    return ConnectProtocolCompatibility.fromProtocolVersion(member.currentProtocolVersion()).name();
+                }
+            });
             metricGroup.addValueMetric(registry.leaderName, new LiteralSupplier<String>() {
                 @Override
                 public String metricValue(long now) {
