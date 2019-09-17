@@ -85,6 +85,10 @@ import org.apache.kafka.common.message.ListGroupsRequestData;
 import org.apache.kafka.common.message.ListGroupsResponseData;
 import org.apache.kafka.common.message.ListPartitionReassignmentsRequestData;
 import org.apache.kafka.common.message.MetadataRequestData;
+import org.apache.kafka.common.message.OffsetDeleteRequestData;
+import org.apache.kafka.common.message.OffsetDeleteRequestData.OffsetDeleteRequestPartition;
+import org.apache.kafka.common.message.OffsetDeleteRequestData.OffsetDeleteRequestTopic;
+import org.apache.kafka.common.message.OffsetDeleteRequestData.OffsetDeleteRequestTopicCollection;
 import org.apache.kafka.common.message.RenewDelegationTokenRequestData;
 import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.MetricConfig;
@@ -151,6 +155,9 @@ import org.apache.kafka.common.requests.ListPartitionReassignmentsRequest;
 import org.apache.kafka.common.requests.ListPartitionReassignmentsResponse;
 import org.apache.kafka.common.requests.MetadataRequest;
 import org.apache.kafka.common.requests.MetadataResponse;
+import org.apache.kafka.common.requests.OffsetDeleteRequest;
+import org.apache.kafka.common.requests.OffsetDeleteRequest.Builder;
+import org.apache.kafka.common.requests.OffsetDeleteResponse;
 import org.apache.kafka.common.requests.OffsetFetchRequest;
 import org.apache.kafka.common.requests.OffsetFetchResponse;
 import org.apache.kafka.common.requests.RenewDelegationTokenRequest;
@@ -3046,6 +3053,92 @@ public class KafkaAdminClient extends AdminClient {
                     return;
 
                 context.getFuture().complete(null);
+            }
+
+            @Override
+            void handleFailure(Throwable throwable) {
+                context.getFuture().completeExceptionally(throwable);
+            }
+        };
+    }
+
+    @Override
+    public DeleteConsumerGroupOffsetsResult deleteConsumerGroupOffsets(
+            String groupId,
+            Set<TopicPartition> partitions,
+            DeleteConsumerGroupOffsetsOptions options) {
+        final KafkaFutureImpl<Map<TopicPartition, Errors>> future = new KafkaFutureImpl<>();
+
+        if (groupIdIsUnrepresentable(groupId)) {
+            future.completeExceptionally(new InvalidGroupIdException("The given group id '" +
+                groupId + "' cannot be represented in a request."));
+            return new DeleteConsumerGroupOffsetsResult(future);
+        }
+
+        final long startFindCoordinatorMs = time.milliseconds();
+        final long deadline = calcDeadlineMs(startFindCoordinatorMs, options.timeoutMs());
+        ConsumerGroupOperationContext<Map<TopicPartition, Errors>, DeleteConsumerGroupOffsetsOptions> context =
+            new ConsumerGroupOperationContext<>(groupId, options, deadline, future);
+
+        Call findCoordinatorCall = getFindCoordinatorCall(context,
+            () -> KafkaAdminClient.this.getDeleteConsumerGroupOffsetsCall(context, partitions));
+        runnable.call(findCoordinatorCall, startFindCoordinatorMs);
+
+        return new DeleteConsumerGroupOffsetsResult(future);
+    }
+
+    private Call getDeleteConsumerGroupOffsetsCall(
+            ConsumerGroupOperationContext<Map<TopicPartition, Errors>, DeleteConsumerGroupOffsetsOptions> context,
+            Set<TopicPartition> partitions) {
+        return new Call("deleteConsumerGroupOffsets", context.getDeadline(), new ConstantNodeIdProvider(context.getNode().get().id())) {
+
+            @Override
+            AbstractRequest.Builder createRequest(int timeoutMs) {
+                final OffsetDeleteRequestTopicCollection topics = new OffsetDeleteRequestTopicCollection();
+
+                partitions.stream().collect(Collectors.groupingBy(TopicPartition::topic)).forEach((topic, topicPartitions) -> {
+                    topics.add(
+                        new OffsetDeleteRequestTopic()
+                        .setName(topic)
+                        .setPartitions(topicPartitions.stream()
+                            .map(tp -> new OffsetDeleteRequestPartition().setPartitionIndex(tp.partition()))
+                            .collect(Collectors.toList())
+                        )
+                    );
+                });
+
+                return new OffsetDeleteRequest.Builder(
+                    new OffsetDeleteRequestData()
+                        .setGroupId(context.groupId)
+                        .setTopics(topics)
+                );
+            }
+
+            @Override
+            void handleResponse(AbstractResponse abstractResponse) {
+                final OffsetDeleteResponse response = (OffsetDeleteResponse) abstractResponse;
+
+                // If coordinator changed since we fetched it, retry
+                if (context.hasCoordinatorMoved(response)) {
+                    rescheduleTask(context, () -> getDeleteConsumerGroupOffsetsCall(context, partitions));
+                    return;
+                }
+
+                // If the error is an error at the group level, the future is failed with it
+                final Errors groupError = Errors.forCode(response.data.errorCode());
+                if (handleGroupRequestError(groupError, context.getFuture()))
+                    return;
+
+                final Map<TopicPartition, Errors> partitions = new HashMap<>();
+                response.data.topics().forEach(topic -> {
+                    topic.partitions().forEach(partition -> {
+                        partitions.put(
+                            new TopicPartition(topic.name(), partition.partitionIndex()),
+                            Errors.forCode(partition.errorCode()));
+                    });
+                });
+
+                context.getFuture().complete(partitions);
             }
 
             @Override

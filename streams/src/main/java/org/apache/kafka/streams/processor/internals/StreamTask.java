@@ -16,6 +16,19 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import static java.lang.String.format;
+import static java.util.Collections.singleton;
+import static org.apache.kafka.streams.kstream.internals.metrics.Sensors.recordLatenessSensor;
+
+import java.io.IOException;
+import java.io.PrintWriter;
+import java.io.StringWriter;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.TimeUnit;
 import org.apache.kafka.clients.consumer.CommitFailedException;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -47,18 +60,6 @@ import org.apache.kafka.streams.processor.TimestampExtractor;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.processor.internals.metrics.ThreadMetrics;
 import org.apache.kafka.streams.state.internals.ThreadCache;
-
-import java.io.IOException;
-import java.io.PrintWriter;
-import java.io.StringWriter;
-import java.util.Collection;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.concurrent.TimeUnit;
-
-import static java.lang.String.format;
-import static java.util.Collections.singleton;
-import static org.apache.kafka.streams.kstream.internals.metrics.Sensors.recordLatenessSensor;
 
 /**
  * A StreamTask is associated with a {@link PartitionGroup}, and is assigned to a StreamThread for processing.
@@ -236,6 +237,22 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
     @Override
     public boolean initializeStateStores() {
         log.trace("Initializing state stores");
+
+        // Currently there is no easy way to tell the ProcessorStateManager to only restore up to
+        // a specific offset. In most cases this is fine. However, in optimized topologies we can
+        // have a source topic that also serves as a changelog, and in this case we want our active
+        // stream task to only play records up to the last consumer committed offset. Here we find
+        // partitions of topics that are both sources and changelogs and set the consumer committed
+        // offset via stateMgr as there is not a more direct route.
+        final Set<String> changelogTopicNames = new HashSet<>(topology.storeToChangelogTopic().values());
+        partitions.stream()
+            .filter(tp -> changelogTopicNames.contains(tp.topic()))
+            .forEach(tp -> {
+                final long offset = committedOffsetForPartition(tp);
+                stateMgr.putOffsetLimit(tp, offset);
+                log.trace("Updating store offset limits {} for changelog {}", offset, tp);
+            });
+
         registerStateStores();
 
         return changelogPartitions().isEmpty();
@@ -460,7 +477,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
             final TopicPartition partition = entry.getKey();
             final long offset = entry.getValue() + 1;
             consumedOffsetsAndMetadata.put(partition, new OffsetAndMetadata(offset));
-            stateMgr.putOffsetLimit(partition, offset);
         }
 
         try {

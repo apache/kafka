@@ -14,26 +14,17 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.connect.runtime;
+package org.apache.kafka.clients.admin;
 
-import org.apache.kafka.common.config.ConfigDef;
-import org.apache.kafka.connect.runtime.isolation.Plugins;
+import java.util.Set;
+import org.apache.kafka.common.annotation.InterfaceStability;
 
-import java.util.Map;
+/**
+ * Options for the {@link Admin#deleteConsumerGroupOffsets(String, Set)} call.
+ *
+ * The API of this class is evolving, see {@link Admin} for details.
+ */
+@InterfaceStability.Evolving
+public class DeleteConsumerGroupOffsetsOptions extends AbstractOptions<DeleteConsumerGroupOffsetsOptions> {
 
-public class SourceConnectorConfig extends ConnectorConfig {
-
-    private static ConfigDef config = ConnectorConfig.configDef();
-
-    public static ConfigDef configDef() {
-        return config;
-    }
-
-    public SourceConnectorConfig(Plugins plugins, Map<String, String> props) {
-        super(plugins, config, props);
-    }
-
-    public static void main(String[] args) {
-        System.out.println(config.toHtml());
-    }
 }

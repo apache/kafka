@@ -14,26 +14,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.connect.runtime;
+package org.apache.kafka.common.errors;
 
-import org.apache.kafka.common.config.ConfigDef;
-import org.apache.kafka.connect.runtime.isolation.Plugins;
-
-import java.util.Map;
-
-public class SourceConnectorConfig extends ConnectorConfig {
-
-    private static ConfigDef config = ConnectorConfig.configDef();
-
-    public static ConfigDef configDef() {
-        return config;
-    }
-
-    public SourceConnectorConfig(Plugins plugins, Map<String, String> props) {
-        super(plugins, config, props);
-    }
-
-    public static void main(String[] args) {
-        System.out.println(config.toHtml());
+public class GroupSubscribedToTopicException extends ApiException {
+    public GroupSubscribedToTopicException(String message) {
+        super(message);
     }
 }
