@@ -18,14 +18,7 @@
 package org.apache.kafka.streams.kstream;
 
 import org.apache.kafka.common.serialization.Serde;
-import org.apache.kafka.streams.internals.ApiUtils;
 import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
-
-import java.time.Duration;
-import java.util.HashMap;
-import java.util.Map;
-
-import static org.apache.kafka.streams.internals.ApiUtils.prepareMillisCheckFailMsgPrefix;
 
 public class StreamJoined<K, V1, V2>
     implements NamedOperation<StreamJoined<K, V1, V2>> {
@@ -38,11 +31,6 @@ public class StreamJoined<K, V1, V2>
     protected final String name;
     protected final String storeName;
 
-    protected boolean loggingEnabled;
-    protected boolean cachingEnabled;
-    protected Map<String, String> topicConfig;
-    protected Duration retention;
-
     protected StreamJoined(final StreamJoined<K, V1, V2> streamJoined) {
         this(streamJoined.keySerde,
             streamJoined.valueSerde,
@@ -50,11 +38,7 @@ public class StreamJoined<K, V1, V2>
             streamJoined.thisStoreSupplier,
             streamJoined.otherStoreSupplier,
             streamJoined.name,
-            streamJoined.storeName,
-            streamJoined.loggingEnabled,
-            streamJoined.cachingEnabled,
-            streamJoined.topicConfig,
-            streamJoined.retention);
+            streamJoined.storeName);
     }
 
     private StreamJoined(final Serde<K> keySerde,
@@ -63,11 +47,7 @@ public class StreamJoined<K, V1, V2>
                          final WindowBytesStoreSupplier thisStoreSupplier,
                          final WindowBytesStoreSupplier otherStoreSupplier,
                          final String name,
-                         final String storeName,
-                         final boolean loggingEnabled,
-                         final boolean cachingEnabled,
-                         final Map<String, String> topicConfig,
-                         final Duration retention) {
+                         final String storeName) {
         this.keySerde = keySerde;
         this.valueSerde = valueSerde;
         this.otherValueSerde = otherValueSerde;
@@ -75,10 +55,6 @@ public class StreamJoined<K, V1, V2>
         this.otherStoreSupplier = otherStoreSupplier;
         this.name = name;
         this.storeName = storeName;
-        this.loggingEnabled = loggingEnabled;
-        this.cachingEnabled = cachingEnabled;
-        this.topicConfig = topicConfig;
-        this.retention = retention;
     }
 
 
@@ -91,10 +67,6 @@ public class StreamJoined<K, V1, V2>
             storeSupplier,
             otherStoreSupplier,
             null,
-            null,
-            true,
-            true,
-            new HashMap<>(),
             null
         );
     }
@@ -107,11 +79,7 @@ public class StreamJoined<K, V1, V2>
             null,
             null,
             null,
-            storeName,
-            true,
-            true,
-            new HashMap<>(),
-            null
+            storeName
         );
     }
 
@@ -127,10 +95,6 @@ public class StreamJoined<K, V1, V2>
             null,
             null,
             null,
-            null,
-            true,
-            true,
-            new HashMap<>(),
             null
         );
     }
@@ -144,11 +108,7 @@ public class StreamJoined<K, V1, V2>
             thisStoreSupplier,
             otherStoreSupplier,
             name,
-            storeName,
-            loggingEnabled,
-            cachingEnabled,
-            topicConfig,
-            retention
+            storeName
         );
     }
 
@@ -161,11 +121,7 @@ public class StreamJoined<K, V1, V2>
             thisStoreSupplier,
             otherStoreSupplier,
             name,
-            storeName,
-            loggingEnabled,
-            cachingEnabled,
-            topicConfig,
-            retention
+            storeName
         );
     }
 
@@ -177,11 +133,7 @@ public class StreamJoined<K, V1, V2>
             thisStoreSupplier,
             otherStoreSupplier,
             name,
-            storeName,
-            loggingEnabled,
-            cachingEnabled,
-            topicConfig,
-            retention
+            storeName
         );
     }
 
@@ -193,11 +145,7 @@ public class StreamJoined<K, V1, V2>
             thisStoreSupplier,
             otherStoreSupplier,
             name,
-            storeName,
-            loggingEnabled,
-            cachingEnabled,
-            topicConfig,
-            retention
+            storeName
         );
     }
 
@@ -209,11 +157,7 @@ public class StreamJoined<K, V1, V2>
             thisStoreSupplier,
             otherStoreSupplier,
             name,
-            storeName,
-            loggingEnabled,
-            cachingEnabled,
-            topicConfig,
-            retention
+            storeName
         );
     }
 
@@ -225,11 +169,7 @@ public class StreamJoined<K, V1, V2>
             thisStoreSupplier,
             otherStoreSupplier,
             name,
-            storeName,
-            loggingEnabled,
-            cachingEnabled,
-            topicConfig,
-            retention
+            storeName
         );
     }
 
@@ -241,81 +181,7 @@ public class StreamJoined<K, V1, V2>
             thisStoreSupplier,
             otherStoreSupplier,
             name,
-            storeName,
-            loggingEnabled,
-            cachingEnabled,
-            topicConfig,
-            retention
-        );
-    }
-
-    public StreamJoined<K, V1, V2> withLogging(final boolean loggingEnabled) {
-        return new StreamJoined<>(
-            keySerde,
-            valueSerde,
-            otherValueSerde,
-            thisStoreSupplier,
-            otherStoreSupplier,
-            name,
-            storeName,
-            loggingEnabled,
-            cachingEnabled,
-            topicConfig,
-            retention
-        );
-    }
-
-    public StreamJoined<K, V1, V2> withCaching(final boolean cachingEnabled) {
-        return new StreamJoined<>(
-            keySerde,
-            valueSerde,
-            otherValueSerde,
-            thisStoreSupplier,
-            otherStoreSupplier,
-            name,
-            storeName,
-            loggingEnabled,
-            cachingEnabled,
-            topicConfig,
-            retention
-        );
-    }
-
-    public StreamJoined<K, V1, V2> withTopicConfig(final Map<String, String> topicConfig) {
-        return new StreamJoined<>(
-            keySerde,
-            valueSerde,
-            otherValueSerde,
-            thisStoreSupplier,
-            otherStoreSupplier,
-            name,
-            storeName,
-            loggingEnabled,
-            cachingEnabled,
-            topicConfig,
-            retention
-        );
-    }
-
-    public StreamJoined<K, V1, V2> withRetention(final Duration retention) throws IllegalArgumentException {
-        final String msgPrefix = prepareMillisCheckFailMsgPrefix(retention, "retention");
-        final long retenationMs = ApiUtils.validateMillisecondDuration(retention, msgPrefix);
-
-        if (retenationMs < 0) {
-            throw new IllegalArgumentException("Retention must not be negative.");
-        }
-        return new StreamJoined<>(
-            keySerde,
-            valueSerde,
-            otherValueSerde,
-            thisStoreSupplier,
-            otherStoreSupplier,
-            name,
-            storeName,
-            loggingEnabled,
-            cachingEnabled,
-            topicConfig,
-            retention
+            storeName
         );
     }
 

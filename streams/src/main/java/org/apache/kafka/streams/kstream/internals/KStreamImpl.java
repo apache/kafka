@@ -716,14 +716,14 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
     }
 
     @Override
-    @Deprecated
     public <VO, VR> KStream<K, VR> join(final KStream<K, VO> otherStream,
                                         final ValueJoiner<? super V, ? super VO, ? extends VR> joiner,
                                         final JoinWindows windows,
                                         final Joined<K, V, VO> joined) {
 
+        final JoinedInternal<K, V, VO> joinedInternal = new JoinedInternal<>(joined);
         final StreamJoined<K, V, VO> streamJoined =
-            StreamJoined.with(joined.keySerde(), joined.valueSerde(), joined.otherValueSerde()).withName(joined.name());
+            StreamJoined.with(joinedInternal.keySerde(), joinedInternal.valueSerde(), joinedInternal.otherValueSerde()).withName(joinedInternal.name());
 
         return join(otherStream, joiner, windows, streamJoined);
 
@@ -751,13 +751,13 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
     }
 
     @Override
-    @Deprecated
     public <VO, VR> KStream<K, VR> outerJoin(final KStream<K, VO> other,
                                              final ValueJoiner<? super V, ? super VO, ? extends VR> joiner,
                                              final JoinWindows windows,
                                              final Joined<K, V, VO> joined) {
+        final JoinedInternal<K, V, VO> joinedInternal = new JoinedInternal<>(joined);
         final StreamJoined<K, V, VO> streamJoined =
-            StreamJoined.with(joined.keySerde(), joined.valueSerde(), joined.otherValueSerde()).withName(joined.name());
+            StreamJoined.with(joinedInternal.keySerde(), joinedInternal.valueSerde(), joinedInternal.otherValueSerde()).withName(joinedInternal.name());
         return outerJoin(other, joiner, windows, streamJoined);
     }
 
@@ -870,13 +870,13 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
     }
 
     @Override
-    @Deprecated
     public <VO, VR> KStream<K, VR> leftJoin(final KStream<K, VO> other,
                                             final ValueJoiner<? super V, ? super VO, ? extends VR> joiner,
                                             final JoinWindows windows,
                                             final Joined<K, V, VO> joined) {
+        final JoinedInternal<K, V, VO> joinedInternal = new JoinedInternal<>(joined);
         final StreamJoined<K, V, VO> streamJoined =
-            StreamJoined.with(joined.keySerde(), joined.valueSerde(), joined.otherValueSerde()).withName(joined.name());
+            StreamJoined.with(joinedInternal.keySerde(), joinedInternal.valueSerde(), joinedInternal.otherValueSerde()).withName(joinedInternal.name());
 
         return leftJoin(other, joiner, windows, streamJoined);
 
