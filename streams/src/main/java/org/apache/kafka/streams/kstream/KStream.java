@@ -2360,6 +2360,7 @@ public interface KStream<K, V> {
      * @see #leftJoin(KStream, ValueJoiner, JoinWindows, Joined)
      * @see #outerJoin(KStream, ValueJoiner, JoinWindows, Joined)
      */
+    @Deprecated
     <VO, VR> KStream<K, VR> join(final KStream<K, VO> otherStream,
                                  final ValueJoiner<? super V, ? super VO, ? extends VR> joiner,
                                  final JoinWindows windows,
@@ -2605,6 +2606,7 @@ public interface KStream<K, V> {
      * @see #join(KStream, ValueJoiner, JoinWindows, Joined)
      * @see #outerJoin(KStream, ValueJoiner, JoinWindows, Joined)
      */
+    @Deprecated
     <VO, VR> KStream<K, VR> leftJoin(final KStream<K, VO> otherStream,
                                      final ValueJoiner<? super V, ? super VO, ? extends VR> joiner,
                                      final JoinWindows windows,
@@ -2855,6 +2857,7 @@ public interface KStream<K, V> {
      * @see #join(KStream, ValueJoiner, JoinWindows, Joined)
      * @see #leftJoin(KStream, ValueJoiner, JoinWindows, Joined)
      */
+    @Deprecated
     <VO, VR> KStream<K, VR> outerJoin(final KStream<K, VO> otherStream,
                                       final ValueJoiner<? super V, ? super VO, ? extends VR> joiner,
                                       final JoinWindows windows,
