@@ -32,6 +32,8 @@ import org.apache.kafka.common.message.JoinGroupResponseData;
 import org.apache.kafka.common.message.LeaveGroupResponseData;
 import org.apache.kafka.common.message.LeaveGroupResponseData.MemberResponse;
 import org.apache.kafka.common.message.SyncGroupResponseData;
+import org.apache.kafka.common.metrics.JmxReporter;
+import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
@@ -88,12 +90,13 @@ public class AbstractCoordinatorTest {
     private static final String GROUP_ID = "dummy-group";
     private static final String METRIC_GROUP_PREFIX = "consumer";
 
-    private MockClient mockClient;
-    private MockTime mockTime;
     private Node node;
+    private Metrics metrics;
+    private MockTime mockTime;
     private Node coordinatorNode;
-    private ConsumerNetworkClient consumerClient;
+    private MockClient mockClient;
     private DummyCoordinator coordinator;
+    private ConsumerNetworkClient consumerClient;
 
     private final String memberId = "memberId";
     private final String leaderId = "leaderId";
@@ -124,7 +127,7 @@ public class AbstractCoordinatorTest {
                                                         retryBackoffMs,
                                                         REQUEST_TIMEOUT_MS,
                                                         HEARTBEAT_INTERVAL_MS);
-        Metrics metrics = new Metrics();
+        metrics = new Metrics();
 
         mockClient.updateMetadata(TestUtils.metadataUpdateWith(1, emptyMap()));
         this.node = metadata.fetch().nodes().get(0);
@@ -141,6 +144,39 @@ public class AbstractCoordinatorTest {
                                                 consumerClient,
                                                 metrics,
                                                 mockTime);
+    }
+
+    @Test
+    public void testMetrics() {
+        setupCoordinator();
+
+        assertNotNull(getMetric("heartbeat-response-time-max"));
+        assertNotNull(getMetric("heartbeat-rate"));
+        assertNotNull(getMetric("heartbeat-total"));
+        assertNotNull(getMetric("last-heartbeat-seconds-ago"));
+        assertNotNull(getMetric("join-time-avg"));
+        assertNotNull(getMetric("join-time-max"));
+        assertNotNull(getMetric("join-rate"));
+        assertNotNull(getMetric("join-total"));
+        assertNotNull(getMetric("sync-time-avg"));
+        assertNotNull(getMetric("sync-time-max"));
+        assertNotNull(getMetric("sync-rate"));
+        assertNotNull(getMetric("sync-total"));
+        assertNotNull(getMetric("rebalance-latency-avg"));
+        assertNotNull(getMetric("rebalance-latency-max"));
+        assertNotNull(getMetric("rebalance-rate-per-hour"));
+        assertNotNull(getMetric("rebalance-total"));
+        assertNotNull(getMetric("failed-rebalance-rate-per-hour"));
+        assertNotNull(getMetric("failed-rebalance-total"));
+        assertNotNull(getMetric("last-rebalance-seconds-ago"));
+
+        final JmxReporter reporter = new JmxReporter("kafka.streams");
+        metrics.addReporter(reporter);
+        assertTrue(reporter.containsMbean("kafka.streams:type=consumer-coordinator-metrics"));
+    }
+
+    private KafkaMetric getMetric(final String name) {
+        return metrics.metrics().get(metrics.metricName(name,"consumer-coordinator-metrics"));
     }
 
     @Test

@@ -473,6 +473,8 @@ public abstract class AbstractCoordinator implements Closeable {
                     // after having been woken up, the exception is ignored and we will rejoin
                     synchronized (AbstractCoordinator.this) {
                         state = MemberState.UNJOINED;
+                        // record failed rebalance rate
+                        sensors.failedRebalanceRate.record();
                     }
                 }
             });
@@ -1020,6 +1022,7 @@ public abstract class AbstractCoordinator implements Closeable {
         public final Sensor joinLatency;
         public final Sensor syncLatency;
         public final Sensor rebalanceLatency;
+        public final Sensor failedRebalanceRate;
 
         public GroupCoordinatorMetrics(Metrics metrics, String metricGrpPrefix) {
             this.metricGrpName = metricGrpPrefix + "-coordinator-metrics";
@@ -1051,21 +1054,40 @@ public abstract class AbstractCoordinator implements Closeable {
             this.rebalanceLatency = metrics.sensor("rebalance-latency");
             this.rebalanceLatency.add(metrics.metricName("rebalance-latency-avg",
                 this.metricGrpName,
-                "The average time taken for a group to complete a successful rebalance"), new Avg());
+                "The average time taken for a group to complete a successful rebalance, which may be composed of " +
+                    "several failed re-trials until it succeeded"), new Avg());
             this.rebalanceLatency.add(metrics.metricName("rebalance-latency-max",
                 this.metricGrpName,
-                "The max time taken for a group to complete a successful rebalance"), new Max());
+                "The max time taken for a group to complete a successful rebalance, which may be composed of " +
+                    "several failed re-trials until it succeeded"), new Max());
             this.rebalanceLatency.add(
                 metrics.metricName("rebalance-total",
                     this.metricGrpName,
-                    "The total number of rebalance events"),
+                    "The total number of successful rebalance events, each event is composed of " +
+                        "several failed re-trials until it succeeded"),
                 new CumulativeCount()
             );
             this.rebalanceLatency.add(
                 metrics.metricName(
                     "rebalance-rate-per-hour",
                     this.metricGrpName,
-                    "The number of rebalance events per hour"),
+                    "The number of successful rebalance events per hour, each event is composed of " +
+                        "several failed re-trials until it succeeded"),
+                new Rate(TimeUnit.HOURS, new WindowedCount())
+            );
+
+            this.failedRebalanceRate = metrics.sensor("failed-rebalance");
+            this.failedRebalanceRate.add(
+                metrics.metricName("failed-rebalance-total",
+                    this.metricGrpName,
+                    "The total number of failed rebalance"),
+                new CumulativeCount()
+            );
+            this.failedRebalanceRate.add(
+                metrics.metricName(
+                    "failed-rebalance-rate-per-hour",
+                    this.metricGrpName,
+                    "The number of failed rebalance events per hour"),
                 new Rate(TimeUnit.HOURS, new WindowedCount())
             );
 
