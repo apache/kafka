@@ -77,8 +77,9 @@ abstract class AssignedTasks<T extends Task> {
                 }
                 it.remove();
             } catch (final LockException e) {
-                // made this trace as it will spam the logs in the poll loop.
-                log.trace("Could not create {} {} due to {}; will retry", taskTypeName, entry.getKey(), e.toString());
+                // If this is a permanent error, then we could spam the log since this is in the run loop. But, other related
+                // messages show up anyway. So keeping in debug for sake of faster discoverability of problem
+                log.debug("Could not create {} {} due to {}; will retry", taskTypeName, entry.getKey(), e.toString());
             }
         }
     }

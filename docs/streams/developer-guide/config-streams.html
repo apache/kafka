@@ -474,7 +474,9 @@
           <blockquote>
             <div>The state directory. Kafka Streams persists local states under the state directory. Each application has a subdirectory on its hosting
               machine that is located under the state directory. The name of the subdirectory is the application ID. The state stores associated
-              with the application are created under this subdirectory.</div></blockquote>
+              with the application are created under this subdirectory. When running multiple instances of the same application on a single machine,
+              this path must be unique for each such instance.</div>
+          </blockquote>
         </div>
         <div class="section" id="timestamp-extractor">
           <span id="streams-developer-guide-timestamp-extractor"></span><h4><a class="toc-backref" href="#id15">timestamp.extractor</a><a class="headerlink" href="#timestamp-extractor" title="Permalink to this headline"></a></h4>

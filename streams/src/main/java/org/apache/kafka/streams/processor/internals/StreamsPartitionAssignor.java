@@ -26,6 +26,7 @@ import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskAssignmentException;
 import org.apache.kafka.streams.processor.PartitionGrouper;
@@ -52,6 +53,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.stream.Collectors;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -525,7 +527,8 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         final StickyTaskAssignor<UUID> taskAssignor = new StickyTaskAssignor<>(states, partitionsForTask.keySet());
         taskAssignor.assign(numStandbyReplicas);
 
-        log.info("Assigned tasks to clients as {}.", states);
+        log.info("Assigned tasks to clients as {}{}.", Utils.NL, states.entrySet().stream()
+            .map(Map.Entry::toString).collect(Collectors.joining(Utils.NL)));
 
         // ---------------- Step Three ---------------- //
 
