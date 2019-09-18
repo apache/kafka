@@ -1687,7 +1687,7 @@ public class KafkaConsumerTest {
 
     @Test
     public void testReturnRecordsDuringRebalance() {
-        Time time = new MockTime();
+        Time time = new MockTime(1L);
         SubscriptionState subscription = new SubscriptionState(new LogContext(), OffsetResetStrategy.EARLIEST);
         ConsumerMetadata metadata = createMetadata(subscription);
         MockClient client = new MockClient(time, metadata);
@@ -1739,7 +1739,7 @@ public class KafkaConsumerTest {
         AtomicBoolean commitReceived = prepareOffsetCommitResponse(client, coordinator, partitionOffsets1);
 
         // poll once which would not complete the rebalance
-        records = consumer.poll(Duration.ofMillis(1));
+        records = consumer.poll(Duration.ZERO);
 
         // clear out the prefetch so it doesn't interfere with the rest of the test
         fetches1.clear();
