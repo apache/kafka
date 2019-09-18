@@ -75,7 +75,8 @@ import org.apache.kafka.common.message.RenewDelegationTokenResponseData
 import org.apache.kafka.common.message.SaslAuthenticateResponseData
 import org.apache.kafka.common.message.SaslHandshakeResponseData
 import org.apache.kafka.common.message.SyncGroupResponseData
-import org.apache.kafka.common.metrics.Metrics
+import org.apache.kafka.common.metrics.{Metrics, Sensor}
+import org.apache.kafka.common.metrics.stats.Avg
 import org.apache.kafka.common.network.{ListenerName, Send}
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record._
@@ -127,6 +128,18 @@ class KafkaApis(val requestChannel: RequestChannel,
   type FetchResponseStats = Map[TopicPartition, RecordConversionStats]
   this.logIdent = "[KafkaApi-%d] ".format(brokerId)
   val adminZkClient = new AdminZkClient(zkClient)
+
+  val aclTxnSensor: Sensor = metrics.sensor("acl-txn")
+  aclTxnSensor.add(metrics.metricName("p1-acl-txn-time", "time used to authenticate txn.id") , new Avg())
+
+  val tpAuthSensor: Sensor = metrics.sensor("tp-auth")
+  tpAuthSensor.add(metrics.metricName("p2-tp-auth-time", "time used to authenticate partitions") , new Avg())
+
+  val appendRecordSensor: Sensor = metrics.sensor("append-record")
+  appendRecordSensor.add(metrics.metricName("p3-append-record", "time used to append record") , new Avg())
+
+  val callbackSensor: Sensor = metrics.sensor("response-callback")
+  callbackSensor.add(metrics.metricName("p4-callback-time", "the time to process callback") , new Avg())
 
   def close(): Unit = {
     info("Shutdown complete.")
@@ -459,10 +472,20 @@ class KafkaApis(val requestChannel: RequestChannel,
     }
   }
 
+  class ProduceTimeRecorder(var lastRecordedTime: Long) {
+    def record(sensor : Sensor): Unit = {
+      val newTime = time.milliseconds()
+      sensor.record(newTime - lastRecordedTime)
+      lastRecordedTime = newTime
+    }
+  }
+
   /**
    * Handle a produce request
    */
   def handleProduceRequest(request: RequestChannel.Request): Unit = {
+    val produceTimeRecorder = new ProduceTimeRecorder(time.milliseconds())
+
     val produceRequest = request.body[ProduceRequest]
     val numBytesAppended = request.header.toStruct.sizeOf + request.sizeOfBodyInBytes
 
@@ -479,6 +502,8 @@ class KafkaApis(val requestChannel: RequestChannel,
       sendErrorResponseMaybeThrottle(request, Errors.CLUSTER_AUTHORIZATION_FAILED.exception)
       return
     }
+
+    produceTimeRecorder.record(aclTxnSensor)
 
     val unauthorizedTopicResponses = mutable.Map[TopicPartition, PartitionResponse]()
     val nonExistingTopicResponses = mutable.Map[TopicPartition, PartitionResponse]()
@@ -501,6 +526,8 @@ class KafkaApis(val requestChannel: RequestChannel,
             invalidRequestResponses += topicPartition -> new PartitionResponse(Errors.forException(e))
         }
     }
+
+    produceTimeRecorder.record(tpAuthSensor)
 
     // the callback for sending a produce response
     def sendResponseCallback(responseStatus: Map[TopicPartition, PartitionResponse]): Unit = {
@@ -558,6 +585,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       } else {
         sendResponse(request, Some(new ProduceResponse(mergedResponseStatus.asJava, maxThrottleTimeMs)), None)
       }
+      produceTimeRecorder.record(callbackSensor)
     }
 
     def processingStatsCallback(processingStats: FetchResponseStats): Unit = {
@@ -584,6 +612,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       // if the request is put into the purgatory, it will have a held reference and hence cannot be garbage collected;
       // hence we clear its data here in order to let GC reclaim its memory since it is already appended to log
       produceRequest.clearPartitionRecords()
+      produceTimeRecorder.record(appendRecordSensor)
     }
   }
 
