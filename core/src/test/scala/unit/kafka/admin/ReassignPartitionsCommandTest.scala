@@ -571,7 +571,7 @@ class ReassignPartitionsCommandTest extends ZooKeeperTestHarness with Logging {
                    brokers: Seq[Int] = Seq[Int]()): KafkaZkClient = {
     val zkClient: KafkaZkClient = createMock(classOf[KafkaZkClient])
     expect(zkClient.getReplicaAssignmentForTopics(anyObject().asInstanceOf[Set[String]])).andStubReturn(existingAssignment)
-    expect(zkClient.getAllBrokersInCluster).andStubReturn(brokers.map(TestUtils.createBroker(_, "", 1)))
+    expect(zkClient.getSortedBrokerList).andStubReturn(brokers.sorted)
     replay(zkClient)
     zkClient
   }

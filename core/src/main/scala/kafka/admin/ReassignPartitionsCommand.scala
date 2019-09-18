@@ -133,17 +133,16 @@ object ReassignPartitionsCommand extends Logging {
 
       //Remove the throttle limit from all brokers in the cluster
       //(as we no longer know which specific brokers were involved in the move)
-      for (brokerId <- zkClient.getAllBrokersInCluster.map(_.id)) {
+      for (brokerId <- zkClient.getSortedBrokerList) {
         val configs = adminZkClient.fetchEntityConfig(ConfigType.Broker, brokerId.toString)
         // bitwise OR as we don't want to short-circuit
         if (configs.remove(DynamicConfig.Broker.LeaderReplicationThrottledRateProp) != null
           | configs.remove(DynamicConfig.Broker.FollowerReplicationThrottledRateProp) != null
-          | configs.remove(DynamicConfig.Broker.ReplicaAlterLogDirsIoMaxBytesPerSecondProp) != null){
+          | configs.remove(DynamicConfig.Broker.ReplicaAlterLogDirsIoMaxBytesPerSecondProp) != null) {
           adminZkClient.changeBrokerConfig(Seq(brokerId), configs)
           changed = true
         }
       }
-
       //Remove the list of throttled replicas from all topics with partitions being moved
       val topics = (reassignedPartitionsStatus.keySet.map(tp => tp.topic) ++ replicasReassignmentStatus.keySet.map(replica => replica.topic)).toSeq.distinct
       for (topic <- topics) {
