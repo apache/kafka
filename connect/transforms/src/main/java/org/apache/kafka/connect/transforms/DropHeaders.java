@@ -28,7 +28,7 @@ import java.util.Map;
 public class DropHeaders<R extends ConnectRecord<R>> implements Transformation<R> {
 
     public static final String OVERVIEW_DOC =
-        "Drop header(s) specified in a comma-separated list containing the list of the headers(s) name(s) to remove.";
+        "Drop all header(s) whose names are specified in a comma-separated list.";
 
     private static final String HEADERS_CONFIG = "names";
 
