@@ -1054,14 +1054,6 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
     TestUtils.pollUntilTrue(consumer, () => !consumer.assignment.isEmpty, "Expected non-empty assignment")
   }
 
-  private def subscribeAndWaitForRecords(topic: String, consumer: KafkaConsumer[Array[Byte], Array[Byte]]): Unit = {
-    consumer.subscribe(Collections.singletonList(topic))
-    TestUtils.pollRecordsUntilTrue(
-      consumer,
-      (records: ConsumerRecords[Array[Byte], Array[Byte]]) => !records.isEmpty,
-      "Expected records" )
-  }
-
   private def sendRecords(producer: KafkaProducer[Array[Byte], Array[Byte]],
                           numRecords: Int,
                           topicPartition: TopicPartition): Unit = {
@@ -1390,7 +1382,7 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
       val consumer = createConsumer(configOverrides = newConsumerConfig)
 
       try {
-        subscribeAndWaitForRecords(testTopicName, consumer)
+        TestUtils.subscribeAndWaitForRecords(testTopicName, consumer)
         consumer.commitSync()
 
         // Test offset deletion while consuming

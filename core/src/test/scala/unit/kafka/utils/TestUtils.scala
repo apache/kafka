@@ -795,6 +795,14 @@ object TestUtils extends Logging {
     }, msg = msg, pause = 0L, waitTimeMs = waitTimeMs)
   }
 
+  def subscribeAndWaitForRecords(topic: String, consumer: KafkaConsumer[Array[Byte], Array[Byte]]): Unit = {
+    consumer.subscribe(Collections.singletonList(topic))
+    pollRecordsUntilTrue(
+      consumer,
+      (records: ConsumerRecords[Array[Byte], Array[Byte]]) => !records.isEmpty,
+      "Expected records" )
+  }
+
   /**
    * Wait for the presence of an optional value.
    *
