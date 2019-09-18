@@ -185,4 +185,16 @@ public class StreamJoin<K, V1, V2>
         );
     }
 
+    @Override
+    public String toString() {
+        return "StreamJoin{" +
+            "keySerde=" + keySerde +
+            ", valueSerde=" + valueSerde +
+            ", otherValueSerde=" + otherValueSerde +
+            ", thisStoreSupplier=" + thisStoreSupplier +
+            ", otherStoreSupplier=" + otherStoreSupplier +
+            ", name='" + name + '\'' +
+            ", storeName='" + storeName + '\'' +
+            '}';
+    }
 }

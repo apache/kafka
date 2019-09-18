@@ -18,6 +18,7 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.kstream.ForeachAction;
 import org.apache.kafka.streams.kstream.GlobalKTable;
 import org.apache.kafka.streams.kstream.Grouped;
@@ -1190,15 +1191,19 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
             final WindowBytesStoreSupplier  thisStoreSupplier =  streamJoinedInternal.thisStoreSupplier();
             final WindowBytesStoreSupplier otherStoreSupplier =  streamJoinedInternal.otherStoreSupplier();
 
+            assertUniqueStoreNames(thisStoreSupplier, otherStoreSupplier);
+
             if (thisStoreSupplier == null) {
                 thisWindowStore = joinWindowStoreBuilder(thisJoinStoreName, windows, streamJoinedInternal.keySerde(), streamJoinedInternal.valueSerde());
             } else {
+                assertWindowSettings(thisStoreSupplier, windows);
                 thisWindowStore = joinWindowStoreBuilderFromSupplier(thisStoreSupplier, streamJoinedInternal.keySerde(), streamJoinedInternal.valueSerde());
             }
 
             if (otherStoreSupplier == null) {
                 otherWindowStore = joinWindowStoreBuilder(otherJoinStoreName, windows, streamJoinedInternal.keySerde(), streamJoinedInternal.otherValueSerde());
             } else {
+                assertWindowSettings(otherStoreSupplier, windows);
                 otherWindowStore = joinWindowStoreBuilderFromSupplier(otherStoreSupplier, streamJoinedInternal.keySerde(), streamJoinedInternal.otherValueSerde());
             }
 
@@ -1258,6 +1263,25 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
             // do not have serde for joined result;
             // also for key serde we do not inherit from either since we cannot tell if these two serdes are different
             return new KStreamImpl<>(joinMergeName, streamJoinedInternal.keySerde(), null, allSourceNodes, false, joinGraphNode, builder);
+        }
+
+        private void assertWindowSettings(final WindowBytesStoreSupplier supplier, final JoinWindows joinWindows) {
+            final long joinGrace = joinWindows.gracePeriodMs() < 0 ? 0 : joinWindows.gracePeriodMs();
+            final boolean allMatch = supplier.retentionPeriod() == (joinWindows.size() + joinGrace) &&
+                supplier.windowSize() == joinWindows.size() && supplier.retainDuplicates();
+            if (!allMatch) {
+                throw new StreamsException(String.format("Window settings mismatch. WindowBytesStoreSupplier settings %s must match JoinWindows settings %s", supplier, joinWindows));
+            }
+        }
+
+        private void assertUniqueStoreNames(final WindowBytesStoreSupplier supplier,
+                                            final WindowBytesStoreSupplier otherSupplier) {
+
+            if (supplier != null
+                && otherSupplier != null
+                && supplier.name().equals(otherSupplier.name())) {
+                throw new StreamsException("Both StoreSuppliers have the same name.  StoreSuppliers must provide unique names");
+            }
         }
     }
 
