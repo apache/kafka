@@ -1214,7 +1214,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                     // since even if we are 1) in the middle of a rebalance or 2) have partitions
                     // with unknown starting positions we may still want to return some data
                     // as long as there are some partitions fetchable
-                    updateAssignmentMetadataIfNeeded(time.timer(0L));
+                    updateAssignmentMetadataIfNeeded(time.timer(1L));
                 } else {
                     while (!updateAssignmentMetadataIfNeeded(time.timer(Long.MAX_VALUE))) {
                         log.warn("Still waiting for metadata");
