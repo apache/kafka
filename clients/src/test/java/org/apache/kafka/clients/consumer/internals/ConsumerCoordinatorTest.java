@@ -222,7 +222,7 @@ public class ConsumerCoordinatorTest {
     }
 
     private KafkaMetric getMetric(final String name) {
-        return metrics.metrics().get(metrics.metricName(name,"consumer" + groupId + "-coordinator-metrics"));
+        return metrics.metrics().get(metrics.metricName(name, "consumer" + groupId + "-coordinator-metrics"));
     }
 
     @Test

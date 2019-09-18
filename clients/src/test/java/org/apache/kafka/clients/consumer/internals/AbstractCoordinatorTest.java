@@ -176,7 +176,7 @@ public class AbstractCoordinatorTest {
     }
 
     private KafkaMetric getMetric(final String name) {
-        return metrics.metrics().get(metrics.metricName(name,"consumer-coordinator-metrics"));
+        return metrics.metrics().get(metrics.metricName(name, "consumer-coordinator-metrics"));
     }
 
     @Test

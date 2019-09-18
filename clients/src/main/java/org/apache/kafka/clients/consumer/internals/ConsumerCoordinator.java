@@ -270,7 +270,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         try {
             final long startMs = time.milliseconds();
             listener.onPartitionsAssigned(assignedPartitions);
-            sensors.assignLatency.record(time.milliseconds() - startMs);
+            sensors.assignCallbackSensor.record(time.milliseconds() - startMs);
         } catch (WakeupException | InterruptException e) {
             throw e;
         } catch (Exception e) {
@@ -289,7 +289,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         try {
             final long startMs = time.milliseconds();
             listener.onPartitionsRevoked(revokedPartitions);
-            sensors.revokeLatency.record(time.milliseconds() - startMs);
+            sensors.revokeCallbackSensor.record(time.milliseconds() - startMs);
         } catch (WakeupException | InterruptException e) {
             throw e;
         } catch (Exception e) {
@@ -308,7 +308,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         try {
             final long startMs = time.milliseconds();
             listener.onPartitionsLost(lostPartitions);
-            sensors.loseLatency.record(time.milliseconds() - startMs);
+            sensors.loseCallbackSensor.record(time.milliseconds() - startMs);
         } catch (WakeupException | InterruptException e) {
             throw e;
         } catch (Exception e) {
@@ -1084,7 +1084,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
         @Override
         public void handle(OffsetCommitResponse commitResponse, RequestFuture<Void> future) {
-            sensors.commitLatency.record(response.requestLatencyMs());
+            sensors.commitSensor.record(response.requestLatencyMs());
             Set<String> unauthorizedTopics = new HashSet<>();
 
             for (OffsetCommitResponseData.OffsetCommitResponseTopic topic : commitResponse.data().topics()) {
@@ -1247,44 +1247,44 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
     private class ConsumerCoordinatorMetrics {
         private final String metricGrpName;
-        private final Sensor commitLatency;
-        private final Sensor revokeLatency;
-        private final Sensor assignLatency;
-        private final Sensor loseLatency;
+        private final Sensor commitSensor;
+        private final Sensor revokeCallbackSensor;
+        private final Sensor assignCallbackSensor;
+        private final Sensor loseCallbackSensor;
 
         private ConsumerCoordinatorMetrics(Metrics metrics, String metricGrpPrefix) {
             this.metricGrpName = metricGrpPrefix + "-coordinator-metrics";
 
-            this.commitLatency = metrics.sensor("commit-latency");
-            this.commitLatency.add(metrics.metricName("commit-latency-avg",
+            this.commitSensor = metrics.sensor("commit-latency");
+            this.commitSensor.add(metrics.metricName("commit-latency-avg",
                 this.metricGrpName,
                 "The average time taken for a commit request"), new Avg());
-            this.commitLatency.add(metrics.metricName("commit-latency-max",
+            this.commitSensor.add(metrics.metricName("commit-latency-max",
                 this.metricGrpName,
                 "The max time taken for a commit request"), new Max());
-            this.commitLatency.add(createMeter(metrics, metricGrpName, "commit", "commit calls"));
+            this.commitSensor.add(createMeter(metrics, metricGrpName, "commit", "commit calls"));
 
-            this.revokeLatency = metrics.sensor("partition-revoked-latency");
-            this.revokeLatency.add(metrics.metricName("partition-revoked-latency-avg",
+            this.revokeCallbackSensor = metrics.sensor("partition-revoked-latency");
+            this.revokeCallbackSensor.add(metrics.metricName("partition-revoked-latency-avg",
                 this.metricGrpName,
                 "The average time taken for a partition-revoked rebalance listener callback"), new Avg());
-            this.revokeLatency.add(metrics.metricName("partition-revoked-latency-max",
+            this.revokeCallbackSensor.add(metrics.metricName("partition-revoked-latency-max",
                 this.metricGrpName,
                 "The max time taken for a partition-revoked rebalance listener callback"), new Max());
 
-            this.assignLatency = metrics.sensor("partition-assigned-latency");
-            this.assignLatency.add(metrics.metricName("partition-assigned-latency-avg",
+            this.assignCallbackSensor = metrics.sensor("partition-assigned-latency");
+            this.assignCallbackSensor.add(metrics.metricName("partition-assigned-latency-avg",
                 this.metricGrpName,
                 "The average time taken for a partition-assigned rebalance listener callback"), new Avg());
-            this.assignLatency.add(metrics.metricName("partition-assigned-latency-max",
+            this.assignCallbackSensor.add(metrics.metricName("partition-assigned-latency-max",
                 this.metricGrpName,
                 "The max time taken for a partition-assigned rebalance listener callback"), new Max());
 
-            this.loseLatency = metrics.sensor("partition-lost-latency");
-            this.loseLatency.add(metrics.metricName("partition-lost-latency-avg",
+            this.loseCallbackSensor = metrics.sensor("partition-lost-latency");
+            this.loseCallbackSensor.add(metrics.metricName("partition-lost-latency-avg",
                 this.metricGrpName,
                 "The average time taken for a partition-lost rebalance listener callback"), new Avg());
-            this.loseLatency.add(metrics.metricName("partition-lost-latency-max",
+            this.loseCallbackSensor.add(metrics.metricName("partition-lost-latency-max",
                 this.metricGrpName,
                 "The max time taken for a partition-lost rebalance listener callback"), new Max());
 

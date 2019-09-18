@@ -459,7 +459,7 @@ public abstract class AbstractCoordinator implements Closeable {
                         rejoinNeeded = false;
                         // record rebalance latency
                         lastRebalanceEndMs = time.milliseconds();
-                        sensors.rebalanceLatency.record(lastRebalanceEndMs - lastRebalanceStartMs);
+                        sensors.successfulRebalanceSensor.record(lastRebalanceEndMs - lastRebalanceStartMs);
                         lastRebalanceStartMs = -1L;
 
                         if (heartbeatThread != null)
@@ -473,8 +473,7 @@ public abstract class AbstractCoordinator implements Closeable {
                     // after having been woken up, the exception is ignored and we will rejoin
                     synchronized (AbstractCoordinator.this) {
                         state = MemberState.UNJOINED;
-                        // record failed rebalance rate
-                        sensors.failedRebalanceRate.record();
+                        sensors.failedRebalanceSensor.record();
                     }
                 }
             });
@@ -524,7 +523,7 @@ public abstract class AbstractCoordinator implements Closeable {
             Errors error = joinResponse.error();
             if (error == Errors.NONE) {
                 log.debug("Received successful JoinGroup response: {}", joinResponse);
-                sensors.joinLatency.record(response.requestLatencyMs());
+                sensors.joinSensor.record(response.requestLatencyMs());
 
                 synchronized (AbstractCoordinator.this) {
                     if (state != MemberState.REBALANCING) {
@@ -654,7 +653,7 @@ public abstract class AbstractCoordinator implements Closeable {
                            RequestFuture<ByteBuffer> future) {
             Errors error = syncResponse.error();
             if (error == Errors.NONE) {
-                sensors.syncLatency.record(response.requestLatencyMs());
+                sensors.syncSensor.record(response.requestLatencyMs());
                 future.complete(ByteBuffer.wrap(syncResponse.data.assignment()));
             } else {
                 requestRejoin();
@@ -944,7 +943,7 @@ public abstract class AbstractCoordinator implements Closeable {
     private class HeartbeatResponseHandler extends CoordinatorResponseHandler<HeartbeatResponse, Void> {
         @Override
         public void handle(HeartbeatResponse heartbeatResponse, RequestFuture<Void> future) {
-            sensors.heartbeatLatency.record(response.requestLatencyMs());
+            sensors.heartbeatSensor.record(response.requestLatencyMs());
             Errors error = heartbeatResponse.error();
             if (error == Errors.NONE) {
                 log.debug("Received successful Heartbeat response");
@@ -1018,56 +1017,56 @@ public abstract class AbstractCoordinator implements Closeable {
     private class GroupCoordinatorMetrics {
         public final String metricGrpName;
 
-        public final Sensor heartbeatLatency;
-        public final Sensor joinLatency;
-        public final Sensor syncLatency;
-        public final Sensor rebalanceLatency;
-        public final Sensor failedRebalanceRate;
+        public final Sensor heartbeatSensor;
+        public final Sensor joinSensor;
+        public final Sensor syncSensor;
+        public final Sensor successfulRebalanceSensor;
+        public final Sensor failedRebalanceSensor;
 
         public GroupCoordinatorMetrics(Metrics metrics, String metricGrpPrefix) {
             this.metricGrpName = metricGrpPrefix + "-coordinator-metrics";
 
-            this.heartbeatLatency = metrics.sensor("heartbeat-latency");
-            this.heartbeatLatency.add(metrics.metricName("heartbeat-response-time-max",
+            this.heartbeatSensor = metrics.sensor("heartbeat-latency");
+            this.heartbeatSensor.add(metrics.metricName("heartbeat-response-time-max",
                     this.metricGrpName,
                     "The max time taken to receive a response to a heartbeat request"), new Max());
-            this.heartbeatLatency.add(createMeter(metrics, metricGrpName, "heartbeat", "heartbeats"));
+            this.heartbeatSensor.add(createMeter(metrics, metricGrpName, "heartbeat", "heartbeats"));
 
-            this.joinLatency = metrics.sensor("join-latency");
-            this.joinLatency.add(metrics.metricName("join-time-avg",
+            this.joinSensor = metrics.sensor("join-latency");
+            this.joinSensor.add(metrics.metricName("join-time-avg",
                     this.metricGrpName,
                     "The average time taken for a group rejoin"), new Avg());
-            this.joinLatency.add(metrics.metricName("join-time-max",
+            this.joinSensor.add(metrics.metricName("join-time-max",
                     this.metricGrpName,
                     "The max time taken for a group rejoin"), new Max());
-            this.joinLatency.add(createMeter(metrics, metricGrpName, "join", "group joins"));
+            this.joinSensor.add(createMeter(metrics, metricGrpName, "join", "group joins"));
 
-            this.syncLatency = metrics.sensor("sync-latency");
-            this.syncLatency.add(metrics.metricName("sync-time-avg",
+            this.syncSensor = metrics.sensor("sync-latency");
+            this.syncSensor.add(metrics.metricName("sync-time-avg",
                     this.metricGrpName,
                     "The average time taken for a group sync"), new Avg());
-            this.syncLatency.add(metrics.metricName("sync-time-max",
+            this.syncSensor.add(metrics.metricName("sync-time-max",
                     this.metricGrpName,
                     "The max time taken for a group sync"), new Max());
-            this.syncLatency.add(createMeter(metrics, metricGrpName, "sync", "group syncs"));
+            this.syncSensor.add(createMeter(metrics, metricGrpName, "sync", "group syncs"));
 
-            this.rebalanceLatency = metrics.sensor("rebalance-latency");
-            this.rebalanceLatency.add(metrics.metricName("rebalance-latency-avg",
+            this.successfulRebalanceSensor = metrics.sensor("rebalance-latency");
+            this.successfulRebalanceSensor.add(metrics.metricName("rebalance-latency-avg",
                 this.metricGrpName,
                 "The average time taken for a group to complete a successful rebalance, which may be composed of " +
                     "several failed re-trials until it succeeded"), new Avg());
-            this.rebalanceLatency.add(metrics.metricName("rebalance-latency-max",
+            this.successfulRebalanceSensor.add(metrics.metricName("rebalance-latency-max",
                 this.metricGrpName,
                 "The max time taken for a group to complete a successful rebalance, which may be composed of " +
                     "several failed re-trials until it succeeded"), new Max());
-            this.rebalanceLatency.add(
+            this.successfulRebalanceSensor.add(
                 metrics.metricName("rebalance-total",
                     this.metricGrpName,
                     "The total number of successful rebalance events, each event is composed of " +
                         "several failed re-trials until it succeeded"),
                 new CumulativeCount()
             );
-            this.rebalanceLatency.add(
+            this.successfulRebalanceSensor.add(
                 metrics.metricName(
                     "rebalance-rate-per-hour",
                     this.metricGrpName,
@@ -1076,14 +1075,14 @@ public abstract class AbstractCoordinator implements Closeable {
                 new Rate(TimeUnit.HOURS, new WindowedCount())
             );
 
-            this.failedRebalanceRate = metrics.sensor("failed-rebalance");
-            this.failedRebalanceRate.add(
+            this.failedRebalanceSensor = metrics.sensor("failed-rebalance");
+            this.failedRebalanceSensor.add(
                 metrics.metricName("failed-rebalance-total",
                     this.metricGrpName,
-                    "The total number of failed rebalance"),
+                    "The total number of failed rebalance events"),
                 new CumulativeCount()
             );
-            this.failedRebalanceRate.add(
+            this.failedRebalanceSensor.add(
                 metrics.metricName(
                     "failed-rebalance-rate-per-hour",
                     this.metricGrpName,
