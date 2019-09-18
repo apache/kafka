@@ -30,7 +30,7 @@ public class DropHeaders<R extends ConnectRecord<R>> implements Transformation<R
     public static final String OVERVIEW_DOC =
         "Drop all header(s) whose names are specified in a comma-separated list.";
 
-    private static final String HEADERS_CONFIG = "names";
+    public static final String HEADER_NAMES_CONFIG = "names";
 
     public static final ConfigDef CONFIG_DEF = new ConfigDef()
         .define(HEADERS_CONFIG, ConfigDef.Type.LIST, ConfigDef.NO_DEFAULT_VALUE,
