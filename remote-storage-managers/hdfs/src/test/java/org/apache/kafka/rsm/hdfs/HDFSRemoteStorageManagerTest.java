@@ -363,10 +363,10 @@ public class HDFSRemoteStorageManagerTest {
         for (int i = 0; i < 20; i++) {
             if (i % 2 == 0) {
                 assertEquals((i / 2) * 20, remoteSegments.get(i).baseOffset());
-                assertEquals((i / 2) * 20 + 19, remoteSegments.get(i).endOffset());
+                assertEquals((i / 2) * 20 + 19, remoteSegments.get(i).lastOffset());
             } else {
                 assertEquals((i / 2) * 20 + 5, remoteSegments.get(i).baseOffset());
-                assertEquals((i / 2) * 20 + 5 + 9, remoteSegments.get(i).endOffset());
+                assertEquals((i / 2) * 20 + 5 + 9, remoteSegments.get(i).lastOffset());
             }
         }
     }
@@ -431,7 +431,7 @@ public class HDFSRemoteStorageManagerTest {
         for (int i = numSegments; i < 10; i++) {
             RemoteLogSegmentInfo segment = remoteSegments.get(i - numSegments);
             assertEquals(segmentSize * i, segment.baseOffset());
-            assertEquals(segmentSize * (i + 1) - 1, segment.endOffset());
+            assertEquals(segmentSize * (i + 1) - 1, segment.lastOffset());
         }
     }
 
