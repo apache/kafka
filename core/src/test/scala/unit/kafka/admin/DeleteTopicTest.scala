@@ -133,7 +133,7 @@ class DeleteTopicTest extends ZooKeeperTestHarness {
     val oldAssignedReplicas = zkClient.getReplicasForPartition(new TopicPartition(topic, 0))
     val newReplicas = Seq(1, 2, 3)
     val reassignPartitionsCommand = ReassignPartitionsCommand(zkClient, None,
-      Map(topicPartition -> newReplicas),  adminZkClient = adminZkClient)
+      Map(topicPartition -> newReplicas),  adminZkClientOpt = Some(adminZkClient))
     assertTrue("Partition reassignment should fail for [test,0]", reassignPartitionsCommand.reassignPartitions())
     // wait until reassignment is completed
     TestUtils.waitUntilTrue(() => {

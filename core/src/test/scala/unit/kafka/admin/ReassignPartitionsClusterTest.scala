@@ -512,7 +512,7 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
     )
 
     //When we run a throttled reassignment
-    ReassignPartitionsCommand(zkClient, None, move, adminZkClient = adminZkClient).reassignPartitions(throttle)
+    ReassignPartitionsCommand(zkClient, None, move, adminZkClientOpt = Some(adminZkClient)).reassignPartitions(throttle)
 
     waitForZkReassignmentToComplete()
 
@@ -552,7 +552,7 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
       new TopicPartition("deliveries", 0) -> Seq(1, 2) //increase replication factor
     )
 
-    ReassignPartitionsCommand(zkClient, None, firstMove, adminZkClient = adminZkClient).reassignPartitions()
+    ReassignPartitionsCommand(zkClient, None, firstMove, adminZkClientOpt = Some(adminZkClient)).reassignPartitions()
     // Low pause to detect deletion of the reassign_partitions znode before the reassignment is complete
     waitForZkReassignmentToComplete(pause = 1L)
 
@@ -577,7 +577,7 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
       new TopicPartition("deliveries", 0) -> Seq(1, 2, 3) //increase replication factor
     )
 
-    ReassignPartitionsCommand(zkClient, None, secondMove, adminZkClient = adminZkClient).reassignPartitions()
+    ReassignPartitionsCommand(zkClient, None, secondMove, adminZkClientOpt = Some(adminZkClient)).reassignPartitions()
     // Low pause to detect deletion of the reassign_partitions znode before the reassignment is complete
     waitForZkReassignmentToComplete(pause = 1L)
 
@@ -599,14 +599,14 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
 
     val thirdMove = Map(new TopicPartition("orders", 0) -> Seq(1, 2, 3))
 
-    ReassignPartitionsCommand(zkClient, None, thirdMove, adminZkClient = adminZkClient).reassignPartitions()
+    ReassignPartitionsCommand(zkClient, None, thirdMove, adminZkClientOpt = Some(adminZkClient)).reassignPartitions()
 
     val fourthMove = Map(new TopicPartition("payments", 1) -> Seq(2, 3))
 
     // Continuously attempt to set the reassignment znode with `fourthMove` until it succeeds. It will only succeed
     // after `thirdMove` completes.
     Iterator.continually {
-      try ReassignPartitionsCommand(zkClient, None, fourthMove, adminZkClient = adminZkClient).reassignPartitions()
+      try ReassignPartitionsCommand(zkClient, None, fourthMove, adminZkClientOpt = Some(adminZkClient)).reassignPartitions()
       catch {
         case _: AdminCommandFailedException => false
       }
