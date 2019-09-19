@@ -200,6 +200,7 @@ abstract class AssignedTasks<T extends Task> {
     void transitionToRunning(final T task) {
         log.debug("Transitioning {} {} to running", taskTypeName, task.id());
         running.put(task.id(), task);
+        task.initializeTaskTime();
         task.initializeTopology();
         for (final TopicPartition topicPartition : task.partitions()) {
             runningByPartition.put(topicPartition, task);
