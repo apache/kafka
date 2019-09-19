@@ -23,6 +23,7 @@ import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.StringWriter;
 import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -80,7 +81,7 @@ public class TestPlugins {
         try {
             pluginJars.put(ALWAYS_THROW_EXCEPTION, createPluginJar("always-throw-exception"));
             pluginJars.put(SAMPLING, createPluginJar("sampling"));
-        } catch (IOException e) {
+        } catch (Throwable e) {
             log.error("Could not set up plugin test jars", e);
             err = e;
         }
@@ -186,15 +187,20 @@ public class TestPlugins {
             .filter(path -> path.toFile().getName().endsWith(".java"))
             .map(Path::toFile)
             .collect(Collectors.toList());
+        StringWriter writer = new StringWriter();
         try (StandardJavaFileManager fileManager = compiler.getStandardFileManager(null, null, null)) {
             compiler.getTask(
-                null,
+                writer,
                 fileManager,
                 null,
                 null,
                 null,
                 fileManager.getJavaFileObjectsFromFiles(sourceFiles)
             ).call();
+            String errors = writer.toString();
+            if (errors.length() > 0) {
+                throw new RuntimeException("Failed to compile test plugin:\n" + errors);
+            }
         }
     }
 
