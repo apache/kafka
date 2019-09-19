@@ -375,6 +375,7 @@ public class DelegatingClassLoader extends URLClassLoader {
         if (pluginLoader != null) {
             log.trace("Retrieving loaded class '{}' from '{}'", fullName, pluginLoader);
             ClassLoader oldClassloader = Plugins.compareAndSwapLoaders(pluginLoader);
+            // This doesn't use a finally block for performance reasons
             try {
                 Class<?> clazz = pluginLoader.loadClass(fullName, resolve);
                 Plugins.compareAndSwapLoaders(oldClassloader);
