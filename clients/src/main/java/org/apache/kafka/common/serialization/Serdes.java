@@ -59,6 +59,12 @@ public class Serdes {
         }
     }
 
+    static public final class NothingSerde extends WrapperSerde<Void> {
+        public NothingSerde() {
+            super(new NothingSerializer(), new NothingDeserializer());
+        }
+    }
+
     static public final class LongSerde extends WrapperSerde<Long> {
         public LongSerde() {
             super(new LongSerializer(), new LongDeserializer());
