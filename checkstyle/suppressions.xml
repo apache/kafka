@@ -210,7 +210,8 @@
 
     <suppress checks="CyclomaticComplexity"
               files="(StreamsResetter|ProducerPerformance|Agent).java"/>
-
+    <suppress checks="BooleanExpressionComplexity"
+              files="StreamsResetter.java"/>
     <suppress checks="NPathComplexity"
               files="(ProducerPerformance|StreamsResetter|Agent).java"/>
     <suppress checks="ImportControl"

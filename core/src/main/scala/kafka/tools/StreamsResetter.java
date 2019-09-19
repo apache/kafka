@@ -675,7 +675,8 @@ public class StreamsResetter {
         return !isInputTopic(topicName) && !isIntermediateTopic(topicName)
             && topicName.startsWith(options.valueOf(applicationIdOption) + "-")
             && (topicName.endsWith("-changelog") || topicName.endsWith("-repartition")
-                || topicName.endsWith("-subscription-registration-topic") || topicName.endsWith("-subscription-response-topic")) ;
+                || topicName.endsWith("-subscription-registration-topic")
+                || topicName.endsWith("-subscription-response-topic"));
     }
 
     private void printHelp(final OptionParser parser) throws IOException {

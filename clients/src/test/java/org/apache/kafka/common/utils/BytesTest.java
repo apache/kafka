@@ -22,7 +22,9 @@ import java.util.Comparator;
 import java.util.NavigableMap;
 import java.util.TreeMap;
 
-import static org.junit.Assert.*;
+import static org.junit.Assert.assertArrayEquals;
+import static org.junit.Assert.assertThrows;
+import static org.junit.Assert.assertEquals;
 
 public class BytesTest {
 
