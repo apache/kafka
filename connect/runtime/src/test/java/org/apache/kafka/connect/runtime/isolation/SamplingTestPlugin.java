@@ -15,30 +15,15 @@
  * limitations under the License.
  */
 
-package test.plugins;
-
-import java.util.Map;
-import org.apache.kafka.connect.data.Schema;
-import org.apache.kafka.connect.data.SchemaAndValue;
-import org.apache.kafka.connect.storage.Converter;
+package org.apache.kafka.connect.runtime.isolation;
 
 /**
- * Always successfully initialize
+ * Mix-in interface for plugins so we can sample information about their initialization
  */
-public class AlwaysSucceed implements Converter {
+public interface SamplingTestPlugin {
 
-    @Override
-    public void configure(final Map<String, ?> configs, final boolean isKey) {
+    ClassLoader staticClassloader();
+    ClassLoader classloader();
+    int dynamicInitializations();
 
-    }
-
-    @Override
-    public byte[] fromConnectData(final String topic, final Schema schema, final Object value) {
-        return new byte[0];
-    }
-
-    @Override
-    public SchemaAndValue toConnectData(final String topic, final byte[] value) {
-        return null;
-    }
 }

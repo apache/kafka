@@ -44,11 +44,9 @@ import java.util.List;
 import java.util.Map;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
 
 public class PluginsTest {
 
@@ -193,57 +191,51 @@ public class PluginsTest {
         );
     }
 
-    @Test(expected = ConnectException.class)
-    public void shouldCacheExceptionalClassInitialization() throws ClassNotFoundException {
+    @Test
+    public void shouldShareStaticValuesBetweenSamePlugin() {
+        // Plugins are not isolated from other instances of their own class.
         TestPlugins.assertInitialized();
-        // Attempt to load the class with the wrong classloader first
-        try {
-            ClassLoader classLoader = Thread.currentThread().getContextClassLoader();
-            assertFalse(classLoader instanceof PluginClassLoader);
-            Class<?> clazz = plugins.delegatingLoader().loadClass(TestPlugins.EXPECT_PLUGIN_CLASS_LOADER);
-            Plugins.newPlugin(classLoader, clazz);
-            fail("Should have thrown exception with wrong classloader");
-        } catch (ConnectException e) {
-            // Should always throw an exception during successful test
-        }
-        // Attempt to load it with the correct classloader after the failure
-        // This will throw an exception because the classloader caches the first initialization
-        // Even though this call appears that it would work, the background cache makes it throw
-        plugins.newPlugin(
-            TestPlugins.EXPECT_PLUGIN_CLASS_LOADER,
+        Converter firstPlugin = plugins.newPlugin(
+            TestPlugins.SAMPLING,
             new AbstractConfig(new ConfigDef(), Collections.emptyMap()),
             Converter.class
         );
-        fail("Should have thrown exception because of negative cache result");
-    }
 
-    @Test
-    public void shouldLoadPlugin() {
-        TestPlugins.assertInitialized();
-        assertNotNull(plugins.newPlugin(
-            TestPlugins.ALWAYS_SUCCEED,
+        assertTrue(firstPlugin instanceof SamplingTestPlugin);
+        SamplingTestPlugin samplingPlugin = (SamplingTestPlugin) firstPlugin;
+
+        assertEquals(1, ((SamplingTestPlugin) firstPlugin).dynamicInitializations());
+
+        Converter secondPlugin = plugins.newPlugin(
+            TestPlugins.SAMPLING,
             new AbstractConfig(new ConfigDef(), Collections.emptyMap()),
             Converter.class
-        ));
+        );
+
+        assertTrue(secondPlugin instanceof SamplingTestPlugin);
+
+        assertEquals(2, ((SamplingTestPlugin) secondPlugin).dynamicInitializations());
+
+        // This value changes because secondPlugin's instantiation incremented it.
+        assertEquals(2, ((SamplingTestPlugin) firstPlugin).dynamicInitializations());
     }
 
     @Test
     public void shouldLoadPluginWithPluginClassloader() {
         TestPlugins.assertInitialized();
-        assertNotNull(plugins.newPlugin(
-            TestPlugins.EXPECT_PLUGIN_CLASS_LOADER,
+        Converter plugin = plugins.newPlugin(
+            TestPlugins.SAMPLING,
             new AbstractConfig(new ConfigDef(), Collections.emptyMap()),
             Converter.class
-        ));
-    }
+        );
 
-    @Test(expected = ConnectException.class)
-    public void shouldThrowIfLoadedWithThreadClassloader() throws ClassNotFoundException {
-        TestPlugins.assertInitialized();
-        ClassLoader classLoader = Thread.currentThread().getContextClassLoader();
-        assertFalse(classLoader instanceof PluginClassLoader);
-        Class<?> clazz = plugins.delegatingLoader().loadClass(TestPlugins.EXPECT_PLUGIN_CLASS_LOADER);
-        Plugins.newPlugin(classLoader, clazz);
+        assertTrue(plugin instanceof SamplingTestPlugin);
+        SamplingTestPlugin samplingPlugin = (SamplingTestPlugin) plugin;
+
+        assertTrue(samplingPlugin.staticClassloader() instanceof PluginClassLoader);
+        assertTrue(samplingPlugin.classloader() instanceof PluginClassLoader);
+        assertEquals(samplingPlugin.staticClassloader(), samplingPlugin.classloader());
+        assertEquals(samplingPlugin.staticClassloader(), samplingPlugin.getClass().getClassLoader());
     }
 
     protected void instantiateAndConfigureConverter(String configPropName, ClassLoaderUsage classLoaderUsage) {

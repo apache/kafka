@@ -63,17 +63,13 @@ import org.slf4j.LoggerFactory;
 public class TestPlugins {
 
     /**
-     * Class name of a plugin which will always successfully load
-     */
-    public static final String ALWAYS_SUCCEED = "test.plugins.AlwaysSucceed";
-    /**
      * Class name of a plugin which will always throw an exception during loading
      */
     public static final String ALWAYS_THROW_EXCEPTION = "test.plugins.AlwaysThrowException";
     /**
-     * Class name of a plugin which expects a PluginClassLoader to be active during loading
+     * Class name of a plugin which samples information about it's initialization.
      */
-    public static final String EXPECT_PLUGIN_CLASS_LOADER = "test.plugins.ExpectPluginClassLoader";
+    public static final String SAMPLING = "test.plugins.Sampling";
     private static final Logger log = LoggerFactory.getLogger(TestPlugins.class);
     private static final Map<String, File> PLUGIN_JARS;
     private static final Throwable INITIALIZATION_EXCEPTION;
@@ -82,9 +78,8 @@ public class TestPlugins {
         Throwable err = null;
         HashMap<String, File> pluginJars = new HashMap<>();
         try {
-            pluginJars.put(ALWAYS_SUCCEED, createPluginJar("always-succeed"));
             pluginJars.put(ALWAYS_THROW_EXCEPTION, createPluginJar("always-throw-exception"));
-            pluginJars.put(EXPECT_PLUGIN_CLASS_LOADER, createPluginJar("expect-plugin-class-loader"));
+            pluginJars.put(SAMPLING, createPluginJar("sampling"));
         } catch (IOException e) {
             log.error("Could not set up plugin test jars", e);
             err = e;
