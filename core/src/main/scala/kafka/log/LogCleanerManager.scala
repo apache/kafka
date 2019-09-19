@@ -174,6 +174,7 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
       val lastClean = allCleanerCheckpoints
       val dirtyLogs = logs.filter {
         case (_, log) => log.config.compact  // match logs that are marked as compacted
+        log.config.compactionPolicy.equals()
       }.filterNot {
         case (topicPartition, log) =>
           // skip any logs already in-progress and uncleanable partitions

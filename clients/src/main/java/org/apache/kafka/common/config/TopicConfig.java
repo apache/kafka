@@ -130,6 +130,14 @@ public class TopicConfig {
         "time or size limit has been reached. The \"compact\" setting will enable <a href=\"#compaction\">log " +
         "compaction</a> on the topic.";
 
+    public static final String COMPACTION_POLICY_CONFIG = "compaction.policy";
+    public static final String COMPACTION_POLICY_OFFSET = "useoffset";
+    public static final String COMPACTION_POLICY_SEQUENCE = "usesequence";
+    public static final String COMPACTION_POLICY_TIMESTAMP = "usetimestamp";
+    public static final String COMPACTION_POLICY_DOC = "This configuration enables the advanced log compaction" +
+            "The default compaction strategy should be useoffset, one additional compaction strategy is supported: " +
+            "usesequence ";
+
     public static final String UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG = "unclean.leader.election.enable";
     public static final String UNCLEAN_LEADER_ELECTION_ENABLE_DOC = "Indicates whether to enable replicas " +
         "not in the ISR set to be elected as leader as a last resort, even though doing so may result in data " +

@@ -48,6 +48,7 @@ object Defaults {
   val MinCompactionLagMs = kafka.server.Defaults.LogCleanerMinCompactionLagMs
   val MaxCompactionLagMs = kafka.server.Defaults.LogCleanerMaxCompactionLagMs
   val MinCleanableDirtyRatio = kafka.server.Defaults.LogCleanerMinCleanRatio
+  val CompactionPolicy = kafka.server.Defaults.CompactionPolicy
 
   @deprecated(message = "This is a misleading variable name as it actually refers to the 'delete' cleanup policy. Use " +
                         "`CleanupPolicy` instead.", since = "1.0.0")
@@ -91,6 +92,7 @@ case class LogConfig(props: java.util.Map[_, _], overriddenConfigs: Set[String] 
   val compact = getList(LogConfig.CleanupPolicyProp).asScala.map(_.toLowerCase(Locale.ROOT)).contains(LogConfig.Compact)
   val delete = getList(LogConfig.CleanupPolicyProp).asScala.map(_.toLowerCase(Locale.ROOT)).contains(LogConfig.Delete)
   val uncleanLeaderElectionEnable = getBoolean(LogConfig.UncleanLeaderElectionEnableProp)
+  val compactionPolicy = getString(LogConfig.CompactionPolicyProp).toLowerCase(Locale.ROOT)
   val minInSyncReplicas = getInt(LogConfig.MinInSyncReplicasProp)
   val compressionType = getString(LogConfig.CompressionTypeProp).toLowerCase(Locale.ROOT)
   val preallocate = getBoolean(LogConfig.PreAllocateEnableProp)
@@ -134,6 +136,7 @@ object LogConfig {
   val CleanupPolicyProp = TopicConfig.CLEANUP_POLICY_CONFIG
   val Delete = TopicConfig.CLEANUP_POLICY_DELETE
   val Compact = TopicConfig.CLEANUP_POLICY_COMPACT
+  val CompactionPolicyProp = TopicConfig.COMPACTION_POLICY_CONFIG
   val UncleanLeaderElectionEnableProp = TopicConfig.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG
   val MinInSyncReplicasProp = TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG
   val CompressionTypeProp = TopicConfig.COMPRESSION_TYPE_CONFIG
@@ -163,6 +166,7 @@ object LogConfig {
   val MaxCompactionLagMsDoc = TopicConfig.MAX_COMPACTION_LAG_MS_DOC
   val MinCleanableRatioDoc = TopicConfig.MIN_CLEANABLE_DIRTY_RATIO_DOC
   val CompactDoc = TopicConfig.CLEANUP_POLICY_DOC
+  val CompactionPolicyDoc = TopicConfig.COMPACTION_POLICY_DOC
   val UncleanLeaderElectionEnableDoc = TopicConfig.UNCLEAN_LEADER_ELECTION_ENABLE_DOC
   val MinInSyncReplicasDoc = TopicConfig.MIN_IN_SYNC_REPLICAS_DOC
   val CompressionTypeDoc = TopicConfig.COMPRESSION_TYPE_DOC
@@ -235,6 +239,7 @@ object LogConfig {
     import org.apache.kafka.common.config.ConfigDef.Range._
     import org.apache.kafka.common.config.ConfigDef.Type._
     import org.apache.kafka.common.config.ConfigDef.ValidString._
+    import org.apache.kafka.common.config.ConfigDef.NonEmptyString._
 
     new LogConfigDef()
       .define(SegmentBytesProp, INT, Defaults.SegmentSize, atLeast(LegacyRecord.RECORD_OVERHEAD_V0), MEDIUM,
@@ -271,6 +276,8 @@ object LogConfig {
         MinCleanableRatioDoc, KafkaConfig.LogCleanerMinCleanRatioProp)
       .define(CleanupPolicyProp, LIST, Defaults.CleanupPolicy, ValidList.in(LogConfig.Compact, LogConfig.Delete), MEDIUM, CompactDoc,
         KafkaConfig.LogCleanupPolicyProp)
+      .define(CompactionPolicyProp, STRING, Defaults.CompactionPolicy, nonEmptyString(), MEDIUM, CompactionPolicyDoc,
+        KafkaConfig.LogCleanerCompactionPolicy)
       .define(UncleanLeaderElectionEnableProp, BOOLEAN, Defaults.UncleanLeaderElectionEnable,
         MEDIUM, UncleanLeaderElectionEnableDoc, KafkaConfig.UncleanLeaderElectionEnableProp)
       .define(MinInSyncReplicasProp, INT, Defaults.MinInSyncReplicas, atLeast(1), MEDIUM, MinInSyncReplicasDoc,
