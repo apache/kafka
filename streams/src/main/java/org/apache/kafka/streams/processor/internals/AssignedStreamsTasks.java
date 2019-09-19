@@ -261,6 +261,13 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
         return revokedChangelogs;
     }
 
+    void closeZombieTasks() {
+        for (StreamTask task : allTasks()) {
+            closeZombieTask(task);
+        }
+        clear();
+    }
+
     void updateRestored(final Collection<TopicPartition> restored) {
         if (restored.isEmpty()) {
             return;

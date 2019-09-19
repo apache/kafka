@@ -281,12 +281,16 @@ public class TaskManager {
     }
 
     /**
-     * Similar to suspendActiveTasksAndState, however does not attempt to commit offset for active
-     * tasks as these partitions have been lost and are no longer owned.
+     * Closes active tasks as zombies, as these partitions have been lost and are no longer owned.
      * @return list of lost tasks
      */
-    Set<TaskId> suspendLostTasks(final Collection<TopicPartition> lostPartitions) {
-        return suspendActiveTasksAndState(lostPartitions);
+    Set<TaskId> closeLostTasks(final Collection<TopicPartition> lostPartitions) {
+        final Set<TaskId> zombieTasks = partitionsToTaskSet(lostPartitions);
+        log.debug("Closing lost tasks as zombies: {}", zombieTasks);
+
+        active.closeZombieTasks();
+        assignedActiveTasks.clear();
+        return zombieTasks;
     }
 
     void shutdown(final boolean clean) {
