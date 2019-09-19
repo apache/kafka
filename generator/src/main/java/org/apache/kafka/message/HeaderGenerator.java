@@ -50,7 +50,7 @@ public final class HeaderGenerator {
     private final CodeBuffer buffer;
 
     private final TreeSet<String> imports;
-    private String packageName;
+    private final String packageName;
 
     public HeaderGenerator(String packageName) {
         this.buffer = new CodeBuffer();
