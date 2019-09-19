@@ -688,11 +688,11 @@ public class KTableKTableForeignKeyJoinIntegrationTest {
                 .toStream()
                 .to(OUTPUT, Produced.with(Serdes.Integer(), Serdes.String()));
         else
-            left.join(right, tableOneKeyExtractor, joiner/*, Named.as("customName")*/, materialized)
+            left.join(right, tableOneKeyExtractor, joiner, materialized)
                 .toStream()
                 .to(OUTPUT, Produced.with(Serdes.Integer(), Serdes.String()));
 
-        final Topology topology = builder.build();
+        final Topology topology = builder.build(streamsConfig);
 
         return new KafkaStreams(topology, streamsConfig);
     }

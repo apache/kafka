@@ -249,6 +249,6 @@ public class KTableKTableForeignKeyInnerJoinMultiIntegrationTest {
             .toStream()
             .to(OUTPUT, Produced.with(Serdes.Integer(), Serdes.String()));
 
-        return new KafkaStreams(builder.build(), streamsConfig);
+        return new KafkaStreams(builder.build(streamsConfig), streamsConfig);
     }
 }
