@@ -60,9 +60,6 @@
     <suppress checks="(JavaNCSS|CyclomaticComplexity|MethodLength)"
               files="CoordinatorClient.java"/>
 
-    <suppress checks="(UnnecessaryParentheses|BooleanExpressionComplexity|CyclomaticComplexity|WhitespaceAfter|LocalVariableName)"
-              files="Murmur3.java"/>
-
     <!-- clients tests -->
     <suppress checks="ClassDataAbstractionCoupling"
               files="(Sender|Fetcher|KafkaConsumer|Metrics|RequestResponse|TransactionManager|KafkaAdminClient|Message)Test.java"/>
@@ -78,9 +75,6 @@
 
     <suppress checks="NPathComplexity"
               files="MemoryRecordsTest|MetricsTest"/>
-
-    <suppress checks="(WhitespaceAround|LocalVariableName|ImportControl|AvoidStarImport)"
-              files="Murmur3Test.java"/>
 
     <!-- Connect -->
     <suppress checks="ClassFanOutComplexity"
@@ -161,6 +155,9 @@
     <suppress checks="NPathComplexity"
               files="(ProcessorStateManager|InternalTopologyBuilder|StreamsPartitionAssignor|StreamThread).java"/>
 
+    <suppress checks="(FinalLocalVariable|UnnecessaryParentheses|BooleanExpressionComplexity|CyclomaticComplexity|WhitespaceAfter|LocalVariableName)"
+              files="Murmur3.java"/>
+
     <!-- suppress FinalLocalVariable outside of the streams package. -->
     <suppress checks="FinalLocalVariable"
               files="^(?!.*[\\/]org[\\/]apache[\\/]kafka[\\/]streams[\\/].*$)"/>
@@ -198,6 +195,10 @@
               files="EosTestDriver|KStreamKStreamJoinTest.java|SmokeTestDriver.java"/>
     <suppress checks="NPathComplexity"
               files="KStreamKStreamLeftJoinTest.java"/>
+
+    <suppress checks="(FinalLocalVariable|WhitespaceAround|LocalVariableName|ImportControl|AvoidStarImport)"
+              files="Murmur3Test.java"/>
+
 
     <!-- Streams Test-Utils -->
     <suppress checks="ClassFanOutComplexity"
