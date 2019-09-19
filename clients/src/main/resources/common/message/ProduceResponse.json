@@ -56,7 +56,7 @@
             "about":  "The error message of the record that caused the batch to be dropped"}
         ]},
         { "name":  "ErrorMessage", "type":  "string", "versions": "8+", "default": "", "ignorable":  true,
-          "about":  "The error message of records that caused the batch to be dropped"}
+          "about":  "The global error message summarizing the common root cause of the records that caused the batch to be dropped"}
       ]}
     ]},
     { "name": "ThrottleTimeMs", "type": "int32", "versions": "1+", "ignorable": true,

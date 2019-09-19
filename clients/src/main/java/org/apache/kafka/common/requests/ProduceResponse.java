@@ -83,7 +83,7 @@ public class ProduceResponse extends AbstractResponse {
     private static final Field.Str RELATIVE_OFFSET_ERROR_MESSAGE_FIELD = new Field.Str(RELATIVE_OFFSET_ERROR_MESSAGE_KEY_NAME,
             "The error message of the record that caused the batch to be dropped");
     private static final Field.Str ERROR_MESSAGE_FIELD = new Field.Str(ERROR_MESSAGE_KEY_NAME,
-            "The error message of records that caused the batch to be dropped");
+            "The global error message summarizing the common root cause of the records that caused the batch to be dropped");
 
     private static final Schema PRODUCE_RESPONSE_V0 = new Schema(
             new Field(RESPONSES_KEY_NAME, new ArrayOf(new Schema(
