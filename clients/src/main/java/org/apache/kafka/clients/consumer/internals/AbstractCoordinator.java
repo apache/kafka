@@ -1028,26 +1028,26 @@ public abstract class AbstractCoordinator implements Closeable {
 
             this.heartbeatSensor = metrics.sensor("heartbeat-latency");
             this.heartbeatSensor.add(metrics.metricName("heartbeat-response-time-max",
-                    this.metricGrpName,
-                    "The max time taken to receive a response to a heartbeat request"), new Max());
+                this.metricGrpName,
+                "The max time taken to receive a response to a heartbeat request"), new Max());
             this.heartbeatSensor.add(createMeter(metrics, metricGrpName, "heartbeat", "heartbeats"));
 
             this.joinSensor = metrics.sensor("join-latency");
             this.joinSensor.add(metrics.metricName("join-time-avg",
-                    this.metricGrpName,
-                    "The average time taken for a group rejoin"), new Avg());
+                this.metricGrpName,
+                "The average time taken for a group rejoin"), new Avg());
             this.joinSensor.add(metrics.metricName("join-time-max",
-                    this.metricGrpName,
-                    "The max time taken for a group rejoin"), new Max());
+                this.metricGrpName,
+                "The max time taken for a group rejoin"), new Max());
             this.joinSensor.add(createMeter(metrics, metricGrpName, "join", "group joins"));
 
             this.syncSensor = metrics.sensor("sync-latency");
             this.syncSensor.add(metrics.metricName("sync-time-avg",
-                    this.metricGrpName,
-                    "The average time taken for a group sync"), new Avg());
+                this.metricGrpName,
+                "The average time taken for a group sync"), new Avg());
             this.syncSensor.add(metrics.metricName("sync-time-max",
-                    this.metricGrpName,
-                    "The max time taken for a group sync"), new Max());
+                this.metricGrpName,
+                "The max time taken for a group sync"), new Max());
             this.syncSensor.add(createMeter(metrics, metricGrpName, "sync", "group syncs"));
 
             this.successfulRebalanceSensor = metrics.sensor("rebalance-latency");
@@ -1102,8 +1102,13 @@ public abstract class AbstractCoordinator implements Closeable {
                 "The number of seconds since the last successful rebalance event"),
                 lastRebalance);
 
-            Measurable lastHeartbeat = (config, now) ->
-                TimeUnit.SECONDS.convert(now - heartbeat.lastHeartbeatSend(), TimeUnit.MILLISECONDS);
+            Measurable lastHeartbeat = (config, now) -> {
+                if (heartbeat.lastHeartbeatSend() == 0L)
+                    // if no heartbeat is ever triggered, just return -1.
+                    return -1d;
+                else
+                    return TimeUnit.SECONDS.convert(now - heartbeat.lastHeartbeatSend(), TimeUnit.MILLISECONDS);
+            };
             metrics.addMetric(metrics.metricName("last-heartbeat-seconds-ago",
                 this.metricGrpName,
                 "The number of seconds since the last coordinator heartbeat was sent"),
@@ -1311,5 +1316,9 @@ public abstract class AbstractCoordinator implements Closeable {
     // For testing only
     public Heartbeat heartbeat() {
         return heartbeat;
+    }
+
+    public void setLastRebalanceTime(final long timestamp) {
+        lastRebalanceEndMs = timestamp;
     }
 }
