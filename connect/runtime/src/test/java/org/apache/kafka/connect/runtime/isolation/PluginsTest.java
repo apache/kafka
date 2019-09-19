@@ -53,7 +53,6 @@ import static org.junit.Assert.fail;
 
 public class PluginsTest {
 
-    private static Map<String, String> pluginProps;
     private static Plugins plugins;
     private Map<String, String> props;
     private AbstractConfig config;
@@ -61,18 +60,13 @@ public class PluginsTest {
     private TestHeaderConverter headerConverter;
     private TestInternalConverter internalConverter;
 
-    @BeforeClass
-    public static void beforeAll() {
-        pluginProps = new HashMap<>();
-
-        // Set up the plugins to have no additional plugin directories.
-        // This won't allow us to test classpath isolation, but it will allow us to test some of the utility methods.
-        pluginProps.put(WorkerConfig.PLUGIN_PATH_CONFIG, String.join(",", TestPlugins.pluginPath()));
-    }
-
     @SuppressWarnings("deprecation")
     @Before
     public void setup() {
+        Map<String, String> pluginProps = new HashMap<>();
+
+        // Set up the plugins with some test plugins to test isolation
+        pluginProps.put(WorkerConfig.PLUGIN_PATH_CONFIG, String.join(",", TestPlugins.pluginPath()));
         plugins = new Plugins(pluginProps);
         props = new HashMap<>(pluginProps);
         props.put(WorkerConfig.KEY_CONVERTER_CLASS_CONFIG, TestConverter.class.getName());
@@ -193,11 +187,11 @@ public class PluginsTest {
     public void shouldThrowIfPluginThrows() {
         TestPlugins.assertInitialized();
 
-        assertNotNull(plugins.newPlugin(
+        plugins.newPlugin(
             TestPlugins.ALWAYS_THROW_EXCEPTION,
             new AbstractConfig(new ConfigDef(), Collections.emptyMap()),
             Converter.class
-        ));
+        );
     }
 
     @Test(expected = ConnectException.class)
@@ -210,7 +204,9 @@ public class PluginsTest {
             Class<?> clazz = plugins.delegatingLoader().loadClass(TestPlugins.EXPECT_PLUGIN_CLASS_LOADER);
             Plugins.newPlugin(classLoader, clazz);
             fail("Should have thrown exception with wrong classloader");
-        } catch (ConnectException | ClassNotFoundException e) { }
+        } catch (ConnectException | ClassNotFoundException e) {
+            // Should always throw an exception during successful test
+        }
         // Attempt to load it with the correct classloader after the failure
         // This will throw an exception because the classloader caches the first initialization
         // Even though this call appears that it would work, the background cache makes it throw

@@ -34,21 +34,21 @@ public class ExpectPluginClassLoader implements Converter {
 
     private static final Logger log = LoggerFactory.getLogger(ExpectPluginClassLoader.class);
 
-    private static final ClassLoader staticClassloader;
+    private static final ClassLoader STATIC_CLASS_LOADER;
 
     static {
         log.info("Starting static initialization");
-        staticClassloader = Thread.currentThread().getContextClassLoader();
+        STATIC_CLASS_LOADER = Thread.currentThread().getContextClassLoader();
         log.info("Finished static initialization");
     }
 
     {
         log.info("Started initialization");
-        log.debug("Classloader: {}", staticClassloader);
-        Assert.assertFalse(staticClassloader instanceof DelegatingClassLoader);
-        Assert.assertTrue(staticClassloader instanceof PluginClassLoader);
-        Assert.assertEquals(staticClassloader, Thread.currentThread().getContextClassLoader());
-        Assert.assertEquals(staticClassloader, ExpectPluginClassLoader.class.getClassLoader());
+        log.debug("Classloader: {}", STATIC_CLASS_LOADER);
+        Assert.assertFalse(STATIC_CLASS_LOADER instanceof DelegatingClassLoader);
+        Assert.assertTrue(STATIC_CLASS_LOADER instanceof PluginClassLoader);
+        Assert.assertEquals(STATIC_CLASS_LOADER, Thread.currentThread().getContextClassLoader());
+        Assert.assertEquals(STATIC_CLASS_LOADER, ExpectPluginClassLoader.class.getClassLoader());
         log.info("Finished initialization");
     }
 

@@ -133,16 +133,18 @@ public class DelegatingClassLoader extends URLClassLoader {
     }
 
     public PluginClassLoader pluginClassLoader(String name) {
-        if (PluginUtils.shouldLoadInIsolation(name)) {
-            SortedMap<PluginDesc<?>, ClassLoader> inner = pluginLoaders.get(name);
-            if (inner != null) {
-                ClassLoader pluginLoader = inner.get(inner.lastKey());
-                if (pluginLoader instanceof PluginClassLoader)  {
-                    return (PluginClassLoader) pluginLoader;
-                }
-            }
+        if (!PluginUtils.shouldLoadInIsolation(name)) {
+            return null;
         }
-        return null;
+        SortedMap<PluginDesc<?>, ClassLoader> inner = pluginLoaders.get(name);
+        if (inner == null) {
+            return null;
+        }
+        ClassLoader pluginLoader = inner.get(inner.lastKey());
+        if (!(pluginLoader instanceof PluginClassLoader)) {
+            return null;
+        }
+        return (PluginClassLoader) pluginLoader;
     }
 
     public ClassLoader connectorLoader(Connector connector) {

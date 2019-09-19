@@ -27,6 +27,7 @@ import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -74,19 +75,21 @@ public class TestPlugins {
      */
     public static final String EXPECT_PLUGIN_CLASS_LOADER = "test.plugins.ExpectPluginClassLoader";
     private static final Logger log = LoggerFactory.getLogger(TestPlugins.class);
-    private static final Map<String, File> PLUGIN_JARS = new HashMap<>();
+    private static final Map<String, File> PLUGIN_JARS;
     private static final Throwable INITIALIZATION_EXCEPTION;
 
     static {
         Throwable err = null;
+        HashMap<String, File> pluginJars = new HashMap<>();
         try {
-            PLUGIN_JARS.put(ALWAYS_SUCCEED, createPluginJar("always-succeed"));
-            PLUGIN_JARS.put(ALWAYS_THROW_EXCEPTION, createPluginJar("always-throw-exception"));
-            PLUGIN_JARS.put(EXPECT_PLUGIN_CLASS_LOADER, createPluginJar("expect-plugin-class-loader"));
+            pluginJars.put(ALWAYS_SUCCEED, createPluginJar("always-succeed"));
+            pluginJars.put(ALWAYS_THROW_EXCEPTION, createPluginJar("always-throw-exception"));
+            pluginJars.put(EXPECT_PLUGIN_CLASS_LOADER, createPluginJar("expect-plugin-class-loader"));
         } catch (IOException e) {
             log.error("Could not set up plugin test jars", e);
             err = e;
         }
+        PLUGIN_JARS = Collections.unmodifiableMap(pluginJars);
         INITIALIZATION_EXCEPTION = err;
     }
 
@@ -126,7 +129,7 @@ public class TestPlugins {
     private static File createPluginJar(String resourceDir) throws IOException {
         Path inputDir = resourceDirectoryPath("test-plugins/" + resourceDir);
         File jarFile = File.createTempFile(resourceDir + ".", ".jar");
-        removeJavaClasses(inputDir);
+        removeCompiledClassFiles(inputDir);
         compileJavaSources(inputDir);
         try (JarOutputStream jar = openJarFile(jarFile)) {
             writeJar(jar, inputDir);
@@ -158,7 +161,7 @@ public class TestPlugins {
         return new JarOutputStream(new FileOutputStream(jarFile), manifest);
     }
 
-    private static void removeJavaClasses(Path sourceDir) throws IOException {
+    private static void removeCompiledClassFiles(Path sourceDir) throws IOException {
         List<File> classFiles = Files.walk(sourceDir)
             .filter(Files::isRegularFile)
             .filter(path -> path.toFile().getName().endsWith(".class"))
@@ -166,11 +169,21 @@ public class TestPlugins {
             .collect(Collectors.toList());
         for (File classFile : classFiles) {
             if (!classFile.delete()) {
-                throw new IOException("Could not delete old class file!");
+                throw new IOException("Could not delete old class file: " + classFile);
             }
         }
     }
 
+    /**
+     * Compile a directory of .java source files into .class files
+     * .class files are placed into the same directory as their sources.
+     *
+     * <p>Dependencies between source files in this directory are resolved against one another
+     * and the classes present in the test environment.
+     * See https://stackoverflow.com/questions/1563909/ for more information.
+     * @param sourceDir Directory containing java source files
+     * @throws IOException if the files cannot be compiled
+     */
     private static void compileJavaSources(Path sourceDir) throws IOException {
         JavaCompiler compiler = ToolProvider.getSystemJavaCompiler();
         List<File> sourceFiles = Files.walk(sourceDir)
