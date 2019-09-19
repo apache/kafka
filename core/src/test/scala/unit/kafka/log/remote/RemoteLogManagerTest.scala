@@ -49,7 +49,8 @@ class RemoteLogManagerTest {
 
   val rsmConfig: Map[String, Any] = Map(REMOTE_STORAGE_MANAGER_CONFIG_PREFIX + "url" -> "foo.url",
     REMOTE_STORAGE_MANAGER_CONFIG_PREFIX + "timout.ms" -> 1000L)
-  val rlmConfig = RemoteLogManagerConfig(true, "kafka.log.remote.MockRemoteStorageManager", 1024L, 60000L, rsmConfig)
+  val rlmConfig = RemoteLogManagerConfig(remoteLogStorageEnable = true, "kafka.log.remote.MockRemoteStorageManager",
+    1024, 60000, 2, 10, rsmConfig, 10, 30000)
 
   var logConfig: LogConfig = _
   var tmpDir: File = _
@@ -135,7 +136,7 @@ class RemoteLogManagerTest {
     EasyMock.replay(rlmMock)
 
     val leaderEpoch = 1
-    val partition = replicaManager.getPartitionOrException(topicPartition, true)
+    val partition = replicaManager.createPartition(topicPartition)
     partition.makeLeader(1, new PartitionState(1, brokerId, leaderEpoch,
       Collections.singletonList(brokerId), 1, Collections.singletonList(brokerId), true),
       1, new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints))

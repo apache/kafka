@@ -30,7 +30,6 @@ import kafka.utils.Logging
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.OffsetOutOfRangeException
 import org.apache.kafka.common.requests.FetchRequest.PartitionData
-import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.utils.{KafkaThread, Time, Utils}
 
 import scala.collection.JavaConverters._
@@ -92,7 +91,6 @@ class RemoteLogManager(fetchLog: TopicPartition => Option[Log],
                        updateRemoteLogStartOffset: (TopicPartition, Long) => Unit,
                        rlmConfig: RemoteLogManagerConfig,
                        time: Time = Time.SYSTEM) extends Logging with Closeable {
-
   private val leaderOrFollowerTasks: ConcurrentMap[TopicPartition, RLMTaskWithFuture] =
     new ConcurrentHashMap[TopicPartition, RLMTaskWithFuture]()
   private val remoteStorageFetcherThreadPool = new RemoteStorageReaderThreadPool(rlmConfig.remoteLogReaderThreads,
@@ -186,15 +184,12 @@ class RemoteLogManager(fetchLog: TopicPartition => Option[Log],
           info(s"Skipping copying log segments as the current task is cancelled")
           return
         }
-
-        if (log.replicaHighWatermark.isEmpty) {
-          info(s"Skipping copy of log for: $tp has no high-watermark.")
-        } else {
-          val highWatermark = log.replicaHighWatermark.get
+        val highWatermark = log.highWatermark
+        if (highWatermark >= 0) {
           // copy segments only till the min of highWatermark or stable-offset
           // remote storage should contain only committed/acked messages
           val fetchOffset = log.firstUnstableOffset match {
-            case Some(offsetMetadata) if offsetMetadata.messageOffset < highWatermark => offsetMetadata.messageOffset
+            case Some(offsetMetadata) if offsetMetadata < highWatermark => offsetMetadata
             case _ => highWatermark
           }
           if (readOffset >= fetchOffset) {
@@ -218,7 +213,7 @@ class RemoteLogManager(fetchLog: TopicPartition => Option[Log],
             val file = segment.log.file()
             val fileName = file.getName
             val baseOffsetStr = fileName.substring(0, fileName.indexOf("."))
-            rlmIndexer.maybeBuildIndexes(tp, entries.asScala, file.getParentFile, baseOffsetStr)
+            rlmIndexer.maybeBuildIndexes(tp, entries.asScala.toSeq, file.getParentFile, baseOffsetStr)
             readOffset = entries.get(entries.size() - 1).lastOffset
           }
         }
@@ -238,7 +233,7 @@ class RemoteLogManager(fetchLog: TopicPartition => Option[Log],
               }
               val baseOffset = Log.filenamePrefixFromOffset(entries.get(0).firstOffset)
               val logDir = log.activeSegment.log.file().getParentFile
-              rlmIndexer.maybeBuildIndexes(tp, entries.asScala, logDir, baseOffset)
+              rlmIndexer.maybeBuildIndexes(tp, entries.asScala.toSeq, logDir, baseOffset)
               readOffset = entries.get(entries.size() - 1).lastOffset
             }
           }
@@ -366,26 +361,19 @@ class RemoteLogManager(fetchLog: TopicPartition => Option[Log],
     }
   }
 
-}
-
-case class RemoteLogManagerConfig(remoteLogStorageEnable: Boolean,
-                                  remoteLogStorageManagerClass: String,
-                                  remoteLogRetentionBytes: Long,
-                                  remoteLogRetentionMillis: Long,
-                                  remoteStorageConfig: scala.collection.immutable.Map[String, Any])
-
-private case class LogSegmentEntry(topicPartition: TopicPartition,
-                                   baseOffset: Long,
-                                   logSegment: LogSegment) {
-  override def hashCode(): Int = {
-    val fields = Seq(topicPartition, baseOffset)
-    fields.map(_.hashCode()).foldLeft(0)((a, b) => 31 * a + b)
+  case class RLMTaskWithFuture(rlmTask: RLMTask, future: Future[_]) {
+    def cancel(): Unit = {
+      rlmTask.cancel()
+      future.cancel(true)
+    }
   }
 
 }
 
 case class RemoteLogManagerConfig(remoteLogStorageEnable: Boolean, remoteLogStorageManagerClass: String,
                                   remoteLogRetentionBytes: Long, remoteLogRetentionMillis: Long,
+                                  remoteLogReaderThreads: Int,
+                                  remoteLogReaderMaxPendingTasks: Int,
                                   remoteStorageConfig: Map[String, Any], remoteLogManagerThreadPoolSize: Int,
                                   remoteLogManagerTaskIntervalMs: Long)
 
@@ -398,7 +386,7 @@ object RemoteLogManager {
     Defaults.RemoteLogManagerThreadPoolSize, Defaults.RemoteLogManagerTaskIntervalMs)
 
   def createRemoteLogManagerConfig(config: KafkaConfig): RemoteLogManagerConfig = {
-    var rsmProps = collection.mutable.Map[String, Any]()
+    var rsmProps = Map[String, Any]()
     config.props.forEach(new BiConsumer[Any, Any] {
       override def accept(key: Any, value: Any): Unit = {
         key match {
@@ -409,7 +397,8 @@ object RemoteLogManager {
       }
     })
     RemoteLogManagerConfig(config.remoteLogStorageEnable, config.remoteLogStorageManager,
-      config.remoteLogRetentionBytes, config.remoteLogRetentionMillis, config.remoteLogReaderThreads, config.remoteLogReaderMaxPendingTasks, rsmProps.toMap,
+      config.remoteLogRetentionBytes, config.remoteLogRetentionMillis,
+      config.remoteLogReaderThreads, config.remoteLogReaderMaxPendingTasks, rsmProps.toMap,
       config.remoteLogManagerThreadPoolSize, config.remoteLogManagerTaskIntervalMs)
   }
 }

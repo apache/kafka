@@ -128,7 +128,7 @@ class DelayedRemoteFetchTest extends EasyMockSupport {
     EasyMock.replay(replicaManager)
 
     val remoteFetchPurgatory = DelayedOperationPurgatory[DelayedRemoteFetch](purgatoryName = "RemoteFetch", brokerId = 1, purgeInterval = 50)
-    val key = new TopicPartitionOperationKey(tp)
+    val key = new TopicPartitionOperationKey(tp.topic(), tp.partition())
     val remoteFetchResult = new CompletableFuture[RemoteLogReadResult]
     var remoteFetchTask: RemoteLogManager#AsyncReadTask = null
 

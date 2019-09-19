@@ -23,8 +23,7 @@ import java.util.concurrent.locks.ReentrantReadWriteLock
 import java.util.concurrent.{CompletableFuture, RejectedExecutionException}
 
 import kafka.log.remote.RemoteLogManager.REMOTE_STORAGE_MANAGER_CONFIG_PREFIX
-import kafka.log.remote.{RemoteLogManager, RemoteLogManagerConfig, RemoteLogReadResult}
-import kafka.server.{FetchDataInfo, LogOffsetMetadata, RemoteStorageFetchInfo}
+import kafka.server.{Defaults, FetchDataInfo, LogOffsetMetadata, RemoteStorageFetchInfo}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.OffsetOutOfRangeException
 import org.apache.kafka.common.record.{CompressionType, MemoryRecords, SimpleRecord}
@@ -38,6 +37,7 @@ import org.scalatest.Assertions.assertThrows
 import scala.collection.JavaConverters._
 
 class RemoteLogReaderTest {
+
   @Test
   def testReadRemoteLog: Unit = {
     val rlm = new MockRemoteLogManager(2, 10)
@@ -155,6 +155,6 @@ object MockRemoteLogManager {
 
   def rlmConfig(threads: Int, taskQueueSize: Int) = {
     RemoteLogManagerConfig(true, "kafka.log.remote.MockRemoteStorageManager",
-      1024, 60000, threads, taskQueueSize, rsmConfig)
+      1024, 60000, threads, taskQueueSize, rsmConfig, Defaults.RemoteLogManagerThreadPoolSize, Defaults.RemoteLogManagerTaskIntervalMs)
   }
 }

@@ -308,9 +308,9 @@ public class HDFSRemoteStorageManager implements RemoteStorageManager {
 
     @Override
     public void close() {
-        if (fs != null) {
+        if (fs.get() != null) {
             try {
-                fs.close();
+                fs.get().close();
             } catch (IOException e) {
             }
         }

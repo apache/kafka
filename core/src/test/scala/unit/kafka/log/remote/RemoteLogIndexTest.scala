@@ -93,7 +93,7 @@ object RemoteLogIndexTest {
       entries += entry
     }
 
-    entries
+    entries.toSeq
   }
 
 }

@@ -165,7 +165,8 @@ public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
             LAST_STABLE_OFFSET,
             LOG_START_OFFSET,
             NEXT_LOCAL_OFFSET,
-            new Field(ABORTED_TRANSACTIONS_KEY_NAME, ArrayOf.nullable(FETCH_RESPONSE_ABORTED_TRANSACTION_V4)));
+            new Field(ABORTED_TRANSACTIONS_KEY_NAME, ArrayOf.nullable(FETCH_RESPONSE_ABORTED_TRANSACTION_V4)),
+            PREFERRED_READ_REPLICA);
 
     private static final Schema FETCH_RESPONSE_PARTITION_V4 = new Schema(
             new Field(PARTITION_HEADER_KEY_NAME, FETCH_RESPONSE_PARTITION_HEADER_V4),

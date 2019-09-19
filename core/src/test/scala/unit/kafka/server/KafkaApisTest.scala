@@ -480,7 +480,7 @@ class KafkaApisTest {
         val callback = getCurrentArguments.apply(7).asInstanceOf[Seq[(TopicPartition, FetchPartitionData)] => Unit]
         val records = MemoryRecords.withRecords(CompressionType.NONE,
           new SimpleRecord(timestamp, "foo".getBytes(StandardCharsets.UTF_8)))
-        callback(Seq(tp -> FetchPartitionData(Errors.NONE, hw, 0, records, None, abortedTransactions = None, Option.empty)))
+        callback(Seq(tp -> FetchPartitionData(Errors.NONE, hw, 0, records, None, abortedTransactions = None, preferredReadReplica = Option.empty)))
       }
     })
 

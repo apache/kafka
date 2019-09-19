@@ -209,10 +209,13 @@ public class FetchRequest extends AbstractRequest {
             FORGOTTEN_TOPIC_DATA_V7,
             RACK_ID);
 
+    // V12 bumpedup to support next local offset in fetch protocol
+    private static final Schema FETCH_REQUEST_V12 = FETCH_REQUEST_V11;
+
     public static Schema[] schemaVersions() {
         return new Schema[]{FETCH_REQUEST_V0, FETCH_REQUEST_V1, FETCH_REQUEST_V2, FETCH_REQUEST_V3, FETCH_REQUEST_V4,
             FETCH_REQUEST_V5, FETCH_REQUEST_V6, FETCH_REQUEST_V7, FETCH_REQUEST_V8, FETCH_REQUEST_V9,
-            FETCH_REQUEST_V10, FETCH_REQUEST_V11};
+            FETCH_REQUEST_V10, FETCH_REQUEST_V11, FETCH_REQUEST_V12};
     }
 
     // default values for older versions where a request level limit did not exist
