@@ -114,10 +114,8 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
             final TaskId id = it.next();
             final StreamTask task = running.get(id);
 
-            // if the task is already suspended just log a message and move on
-            if (suspended.containsKey(id)) {
-                log.error("Found already suspended task {} while suspending tasks", task);
-            } else {
+            // skip over tasks that are already suspended, as can happen if a task is no longer part of the subscription
+            if (!suspended.containsKey(id)) {
                 try {
                     task.suspend();
                     suspended.put(id, task);
@@ -273,10 +271,15 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
     }
 
     void closeZombieTasks() {
+        final AtomicReference<RuntimeException> firstException = new AtomicReference<>(null);
         for (final StreamTask task : allTasks()) {
-            closeZombieTask(task);
+            firstException.compareAndSet(null, closeZombieTask(task));
         }
         clear();
+
+        if (firstException.get() != null) {
+            throw firstException.get();
+        }
     }
 
     void updateRestored(final Collection<TopicPartition> restored) {

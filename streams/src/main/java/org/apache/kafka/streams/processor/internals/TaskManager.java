@@ -286,12 +286,13 @@ public class TaskManager {
         final Set<TaskId> zombieTasks = partitionsToTaskSet(lostPartitions);
         log.debug("Closing lost tasks as zombies: {}", zombieTasks);
 
-        active.closeZombieTasks();
         assignedActiveTasks.clear();
         changelogReader.clear();
         if (!restoreConsumerAssignedStandbys) {
             restoreConsumer.unsubscribe();
         }
+
+        active.closeZombieTasks();
 
         return zombieTasks;
     }
