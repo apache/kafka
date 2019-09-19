@@ -82,26 +82,42 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
         return suspended.keySet();
     }
 
-    RuntimeException revokeTasks(final Set<TaskId> tasksToRevoke, final List<TopicPartition> revokedChangelogs) {
+    RuntimeException revokeTasks(final Set<TaskId> revokedTasks, final List<TopicPartition> revokedChangelogs) {
         final AtomicReference<RuntimeException> firstException = new AtomicReference<>(null);
+        final Set<TaskId> revokedRunningTasks = new HashSet<>();
+        final Set<TaskId> revokedNonRunningTasks = new HashSet<>();
+        final Set<TaskId> revokedRestoringTasks = new HashSet<>();
 
-        firstException.compareAndSet(null, suspendRunningTasks(tasksToRevoke, revokedChangelogs));
-        firstException.compareAndSet(null, closeNonRunningTasks(tasksToRevoke, revokedChangelogs));
-        firstException.compareAndSet(null, closeRestoringTasks(tasksToRevoke, revokedChangelogs));
+        for (final TaskId task : revokedTasks) {
+            if (running.containsKey(task)) {
+                revokedRunningTasks.add(task);
+            } else if (created.containsKey(task)) {
+                revokedNonRunningTasks.add(task);
+            } else if (restoring.containsKey(task)) {
+                revokedRestoringTasks.add(task);
+            } else {
+                log.error("Task {} was revoked but cannot be found in the assignment", task);
+                firstException.set(new IllegalStateException("Revoked a task that was not in the assignment"));
+            }
+        }
+
+        firstException.compareAndSet(null, suspendRunningTasks(revokedRunningTasks, revokedChangelogs));
+        firstException.compareAndSet(null, closeNonRunningTasks(revokedNonRunningTasks, revokedChangelogs));
+        firstException.compareAndSet(null, closeRestoringTasks(revokedRestoringTasks, revokedChangelogs));
 
         return firstException.get();
     }
 
-    private RuntimeException suspendRunningTasks(final Set<TaskId> tasks, final List<TopicPartition> revokedChangelogs) {
+    private RuntimeException suspendRunningTasks(final Set<TaskId> revokedRunningTasks, final List<TopicPartition> revokedChangelogs) {
         final AtomicReference<RuntimeException> firstException = new AtomicReference<>(null);
-        for (final Iterator<TaskId> it = tasks.iterator(); it.hasNext(); ) {
+        for (final Iterator<TaskId> it = revokedRunningTasks.iterator(); it.hasNext(); ) {
             final TaskId id = it.next();
             final StreamTask task = running.get(id);
 
+            // if the task is already suspended just log a message and move on
             if (suspended.containsKey(id)) {
-                // if the task is already suspended just remove it and move on
-                it.remove();
-            } else if (task != null) {
+                log.error("Found already suspended task {} while suspending tasks", task);
+            } else {
                 try {
                     task.suspend();
                     suspended.put(id, task);
@@ -137,28 +153,26 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
         return firstException.get();
     }
 
-    private RuntimeException closeNonRunningTasks(final Set<TaskId> revokedTasks, final List<TopicPartition> revokedChangelogs) {
+    private RuntimeException closeNonRunningTasks(final Set<TaskId> revokedNonRunningTasks, final List<TopicPartition> revokedChangelogs) {
         final Set<TaskId> closedNonRunningTasks = new HashSet<>();
         RuntimeException exception = null;
 
-        for (final Iterator<TaskId> it = revokedTasks.iterator(); it.hasNext(); ) {
+        for (final Iterator<TaskId> it = revokedNonRunningTasks.iterator(); it.hasNext(); ) {
             final TaskId id = it.next();
             final StreamTask task = created.get(id);
 
-            if (task != null) {
-                try {
-                    task.close(false, false);
-                } catch (final RuntimeException e) {
-                    log.error("Failed to close {}, {}", taskTypeName, task.id(), e);
-                    if (exception == null) {
-                        exception = e;
-                    }
-                } finally {
-                    it.remove();
-                    created.remove(id);
-                    revokedChangelogs.addAll(task.changelogPartitions());
-                    closedNonRunningTasks.add(task.id);
+            try {
+                task.close(false, false);
+            } catch (final RuntimeException e) {
+                log.error("Failed to close {}, {}", taskTypeName, task.id(), e);
+                if (exception == null) {
+                    exception = e;
                 }
+            } finally {
+                it.remove();
+                created.remove(id);
+                revokedChangelogs.addAll(task.changelogPartitions());
+                closedNonRunningTasks.add(task.id);
             }
         }
         log.trace("Closed created {} {}", taskTypeName, closedNonRunningTasks);
@@ -174,29 +188,22 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
             final TaskId id = revokedTaskIterator.next();
             final StreamTask task = restoring.get(id);
 
-            if (task != null) {
-                log.debug("Closing restoring task {}", id);
-                try {
-                    task.closeStateManager(true);
-                } catch (final RuntimeException e) {
-                    log.error("Failed to close restoring task {} due to the following error:", id, e);
-                    if (exception == null) {
-                        exception = e;
-                    }
-                } finally {
-                    revokedTaskIterator.remove();
-                    restoring.remove(id);
-                    for (final TopicPartition tp : task.partitions()) {
-                        restoredPartitions.remove(tp);
-                        restoringByPartition.remove(tp);
-                    }
-                    revokedChangelogs.addAll(task.changelogPartitions());
+            log.debug("Closing restoring task {}", id);
+            try {
+                task.closeStateManager(true);
+            } catch (final RuntimeException e) {
+                log.error("Failed to close restoring task {} due to the following error:", id, e);
+                if (exception == null) {
+                    exception = e;
                 }
-            } else {
-                // All non-restoring tasks should have been removed from revokedRestoringTasks, so log an error if it's not in restoring
-                log.error("Task was revoked but cannot be found in the assignment");
-                exception = new IllegalStateException("Revoked a task that was not in the assignment");
+            } finally {
                 revokedTaskIterator.remove();
+                restoring.remove(id);
+                for (final TopicPartition tp : task.partitions()) {
+                    restoredPartitions.remove(tp);
+                    restoringByPartition.remove(tp);
+                }
+                revokedChangelogs.addAll(task.changelogPartitions());
             }
         }
 
@@ -224,6 +231,7 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
                     final RuntimeException fatalException = closeZombieTask(task);
                     running.remove(taskId);
                     runningByPartition.keySet().removeAll(task.partitions());
+                    changelogs.addAll(task.changelogPartitions());
                     if (fatalException != null) {
                         throw fatalException;
                     }

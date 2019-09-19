@@ -65,7 +65,7 @@ public class StreamsRebalanceListener implements ConsumerRebalanceListener {
         List<TopicPartition> revokedStandbyPartitions = null;
 
         // save these before they are updated with new assignment
-        final Set<TaskId> previousActiveTaskIds = taskManager.previousActiveTaskIds();
+        final Set<TaskId> previousActiveTaskIds = new HashSet<>(taskManager.previousActiveTaskIds());
         try {
             if (streamThread.setState(State.PARTITIONS_ASSIGNED) == null) {
                 log.debug(
