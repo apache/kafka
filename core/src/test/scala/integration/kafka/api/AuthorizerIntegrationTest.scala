@@ -49,11 +49,13 @@ import org.apache.kafka.common.message.HeartbeatRequestData
 import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData
 import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData.{AlterConfigsResource, AlterableConfig, AlterableConfigCollection}
 import org.apache.kafka.common.message.JoinGroupRequestData
+import org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocolCollection
+import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState
+import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity
 import org.apache.kafka.common.message.ListPartitionReassignmentsRequestData
 import org.apache.kafka.common.message.OffsetCommitRequestData
 import org.apache.kafka.common.message.SyncGroupRequestData
 import org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocolCollection
-import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrRequestPartition
 import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
@@ -444,7 +446,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
 
   private def leaderAndIsrRequest = {
     new requests.LeaderAndIsrRequest.Builder(ApiKeys.LEADER_AND_ISR.latestVersion, brokerId, Int.MaxValue, Long.MaxValue,
-      Seq(new LeaderAndIsrRequestPartition()
+      Seq(new LeaderAndIsrPartitionState()
         .setTopicName(tp.topic)
         .setPartitionIndex(tp.partition)
         .setControllerEpoch(Int.MaxValue)
@@ -543,7 +545,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
       List(new ListPartitionReassignmentsRequestData.ListPartitionReassignmentsTopics()
         .setName(topic)
         .setPartitionIndexes(
-          List(new Integer(tp.partition)).asJava
+          List(Integer.valueOf(tp.partition)).asJava
         )).asJava
     )
   ).build()

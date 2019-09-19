@@ -27,6 +27,7 @@ import org.apache.kafka.common.acl._
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.message.CreateTopicsRequestData.{CreatableTopic, CreatableTopicCollection}
 import org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocolCollection
+import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState
 import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity
 import org.apache.kafka.common.message._
 import org.apache.kafka.common.metrics.{KafkaMetric, Quota, Sensor}
@@ -227,8 +228,16 @@ class RequestQuotaTest extends BaseRequestTest {
 
         case ApiKeys.LEADER_AND_ISR =>
           new LeaderAndIsrRequest.Builder(ApiKeys.LEADER_AND_ISR.latestVersion, brokerId, Int.MaxValue, Long.MaxValue,
-            Map(tp -> new LeaderAndIsrRequest.PartitionState(Int.MaxValue, brokerId, Int.MaxValue, List(brokerId).asJava,
-              2, Seq(brokerId).asJava, true)).asJava,
+            Seq(new LeaderAndIsrPartitionState()
+              .setTopicName(tp.topic)
+              .setPartitionIndex(tp.partition)
+              .setControllerEpoch(Int.MaxValue)
+              .setLeaderKey(brokerId)
+              .setLeaderEpoch(Int.MaxValue)
+              .setIsrReplicas(List(brokerId).asJava)
+              .setZkVersion(2)
+              .setReplicas(Seq(brokerId).asJava)
+              .setIsNew(true)).asJava,
             Set(new Node(brokerId, "localhost", 0)).asJava)
 
         case ApiKeys.STOP_REPLICA =>

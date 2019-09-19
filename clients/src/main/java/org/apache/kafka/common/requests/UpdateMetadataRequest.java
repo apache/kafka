@@ -489,6 +489,11 @@ public class UpdateMetadataRequest extends AbstractControlRequest {
         return liveBrokers;
     }
 
+    @Override
+    protected long size() {
+        return toStruct().sizeOf();
+    }
+
     public static UpdateMetadataRequest parse(ByteBuffer buffer, short version) {
         return new UpdateMetadataRequest(ApiKeys.UPDATE_METADATA.parseRequest(version, buffer), version);
     }

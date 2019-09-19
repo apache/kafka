@@ -24,6 +24,7 @@ import kafka.utils.TestUtils
 import kafka.utils.TestUtils.createTopic
 import kafka.zk.ZooKeeperTestHarness
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
@@ -132,10 +133,17 @@ class BrokerEpochIntegrationTest extends ZooKeeperTestHarness {
     try {
       // Send LeaderAndIsr request with correct broker epoch
       {
-        val partitionStates = Map(
-          tp -> new LeaderAndIsrRequest.PartitionState(controllerEpoch, brokerId2, LeaderAndIsr.initialLeaderEpoch + 1,
-            Seq(brokerId1, brokerId2).map(Integer.valueOf).asJava, LeaderAndIsr.initialZKVersion,
-            Seq(0, 1).map(Integer.valueOf).asJava, false)
+        val partitionStates = Seq(
+          new LeaderAndIsrPartitionState()
+            .setTopicName(tp.topic)
+            .setPartitionIndex(tp.partition)
+            .setControllerEpoch(controllerEpoch)
+            .setLeaderKey(brokerId2)
+            .setLeaderEpoch(LeaderAndIsr.initialLeaderEpoch + 1)
+            .setIsrReplicas(Seq(brokerId1, brokerId2).map(Integer.valueOf).asJava)
+            .setZkVersion(LeaderAndIsr.initialZKVersion)
+            .setReplicas(Seq(0, 1).map(Integer.valueOf).asJava)
+            .setIsNew(false)
         )
         val requestBuilder = new LeaderAndIsrRequest.Builder(
           ApiKeys.LEADER_AND_ISR.latestVersion, controllerId, controllerEpoch,

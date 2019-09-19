@@ -73,8 +73,6 @@ public abstract class AbstractControlRequest extends AbstractRequest {
     }
 
     // Used for test
-    long size() {
-        return toStruct().sizeOf();
-    }
+    protected abstract long size();
 
 }

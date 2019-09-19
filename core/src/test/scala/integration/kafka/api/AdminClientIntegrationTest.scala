@@ -1306,8 +1306,8 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
             } catch {
               case e: ExecutionException =>
                 assertTrue(e.getCause.isInstanceOf[UnknownMemberIdException])
-              case _: Throwable =>
-                fail("Should have caught exception in getting member future")
+              case t: Throwable =>
+                fail(s"Should have caught exception in getting member future: $t")
             }
           }
 
@@ -1341,8 +1341,8 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
             } catch {
               case e: ExecutionException =>
                 assertTrue(e.getCause.isInstanceOf[UnknownMemberIdException])
-              case _: Throwable =>
-                fail("Should have caught exception in getting member future")
+              case t: Throwable =>
+                fail(s"Should have caught exception in getting member future: $t")
             }
           }
 

@@ -244,14 +244,14 @@ class KafkaApis(val requestChannel: RequestChannel,
       }
 
       def toStopReplicaPartition(tp: TopicPartition, error: Errors) =
-        new StopReplicaResponseData.StopReplicaResponsePartition()
+        new StopReplicaResponseData.StopReplicaPartitionError()
           .setTopicName(tp.topic)
           .setPartitionIndex(tp.partition)
           .setErrorCode(error.code)
 
       sendResponseExemptThrottle(request, new StopReplicaResponse(new StopReplicaResponseData()
         .setErrorCode(error.code)
-        .setPartitions(result.map { case (tp, error) => toStopReplicaPartition(tp, error) }.toIndexedSeq.asJava)))
+        .setPartitionErrors(result.map { case (tp, error) => toStopReplicaPartition(tp, error) }.toIndexedSeq.asJava)))
     }
 
     CoreUtils.swallow(replicaManager.replicaFetcherManager.shutdownIdleFetcherThreads(), this)

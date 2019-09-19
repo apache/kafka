@@ -17,10 +17,12 @@
 package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrRequestPartition;
+import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState;
 import org.junit.Test;
 
+import java.util.ArrayList;
 import java.util.Collections;
+import java.util.List;
 import java.util.Set;
 import java.util.Map;
 import java.util.HashMap;
@@ -34,14 +36,18 @@ public class ControlRequestTest {
     @Test
     public void testLeaderAndIsrRequestNormalization() {
         Set<TopicPartition> tps = generateRandomTopicPartitions(10, 10);
-        Map<TopicPartition, LeaderAndIsrRequestPartition> partitionStates = new HashMap<>();
-        for (TopicPartition tp: tps) {
-            partitionStates.put(tp, new LeaderAndIsrRequestPartition());
+        List<LeaderAndIsrPartitionState> partitionStates = new ArrayList<>();
+        for (TopicPartition tp : tps) {
+            partitionStates.add(new LeaderAndIsrPartitionState()
+                .setTopicName(tp.topic())
+                .setPartitionIndex(tp.partition()));
         }
         LeaderAndIsrRequest.Builder builder = new LeaderAndIsrRequest.Builder((short) 2, 0, 0, 0,
                 partitionStates, Collections.emptySet());
 
-        assertTrue(builder.build((short) 2).size() <  builder.build((short) 1).size());
+        LeaderAndIsrRequest v2 = builder.build((short) 2);
+        LeaderAndIsrRequest v1 = builder.build((short) 1);
+        assertTrue("Expected v2 < v1: v2=" + v2.size() + ", v1=" + v1.size(), v2.size() < v1.size());
     }
 
     @Test
@@ -61,13 +67,7 @@ public class ControlRequestTest {
     @Test
     public void testStopReplicaRequestNormalization() {
         Set<TopicPartition> tps = generateRandomTopicPartitions(10, 10);
-        Map<TopicPartition, UpdateMetadataRequest.PartitionState> partitionStates = new HashMap<>();
-        for (TopicPartition tp: tps) {
-            partitionStates.put(tp, new UpdateMetadataRequest.PartitionState(0, 0, 0,
-                    Collections.emptyList(), 0, Collections.emptyList(), Collections.emptyList()));
-        }
         StopReplicaRequest.Builder builder = new StopReplicaRequest.Builder((short) 5, 0, 0, 0, false, tps);
-
         assertTrue(builder.build((short) 1).size() <  builder.build((short) 0).size());
     }
 

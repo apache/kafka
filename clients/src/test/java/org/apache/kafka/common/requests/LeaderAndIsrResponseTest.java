@@ -16,16 +16,15 @@
  */
 package org.apache.kafka.common.requests;
 
-import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrRequestPartition;
+import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState;
 import org.apache.kafka.common.message.LeaderAndIsrResponseData;
+import org.apache.kafka.common.message.LeaderAndIsrResponseData.LeaderAndIsrPartitionError;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.junit.Test;
 
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -37,8 +36,10 @@ public class LeaderAndIsrResponseTest {
 
     @Test
     public void testErrorCountsFromGetErrorResponse() {
-        HashMap<TopicPartition, LeaderAndIsrRequestPartition> partitionStates = new HashMap<>();
-        partitionStates.put(new TopicPartition("foo", 0), new LeaderAndIsrRequestPartition()
+        List<LeaderAndIsrPartitionState> partitionStates = new ArrayList<>();
+        partitionStates.add(new LeaderAndIsrPartitionState()
+            .setTopicName("foo")
+            .setPartitionIndex(0)
             .setControllerEpoch(15)
             .setLeaderKey(1)
             .setLeaderEpoch(10)
@@ -46,7 +47,9 @@ public class LeaderAndIsrResponseTest {
             .setZkVersion(20)
             .setReplicas(Collections.singletonList(10))
             .setIsNew(false));
-        partitionStates.put(new TopicPartition("foo", 1), new LeaderAndIsrRequestPartition()
+        partitionStates.add(new LeaderAndIsrPartitionState()
+            .setTopicName("foo")
+            .setPartitionIndex(1)
             .setControllerEpoch(15)
             .setLeaderKey(1)
             .setLeaderEpoch(10)
@@ -62,21 +65,21 @@ public class LeaderAndIsrResponseTest {
 
     @Test
     public void testErrorCountsWithTopLevelError() {
-        List<LeaderAndIsrResponseData.LeaderAndIsrResponsePartition> partitions = createPartitions("foo",
+        List<LeaderAndIsrPartitionError> partitions = createPartitions("foo",
             asList(Errors.NONE, Errors.NOT_LEADER_FOR_PARTITION));
         LeaderAndIsrResponse response = new LeaderAndIsrResponse(new LeaderAndIsrResponseData()
             .setErrorCode(Errors.UNKNOWN_SERVER_ERROR.code())
-            .setPartitions(partitions));
+            .setPartitionErrors(partitions));
         assertEquals(Collections.singletonMap(Errors.UNKNOWN_SERVER_ERROR, 2), response.errorCounts());
     }
 
     @Test
     public void testErrorCountsNoTopLevelError() {
-        List<LeaderAndIsrResponseData.LeaderAndIsrResponsePartition> partitions = createPartitions("foo",
+        List<LeaderAndIsrPartitionError> partitions = createPartitions("foo",
             asList(Errors.NONE, Errors.CLUSTER_AUTHORIZATION_FAILED));
         LeaderAndIsrResponse response = new LeaderAndIsrResponse(new LeaderAndIsrResponseData()
-                .setErrorCode(Errors.NONE.code())
-                .setPartitions(partitions));
+            .setErrorCode(Errors.NONE.code())
+            .setPartitionErrors(partitions));
         Map<Errors, Integer> errorCounts = response.errorCounts();
         assertEquals(2, errorCounts.size());
         assertEquals(1, errorCounts.get(Errors.NONE).intValue());
@@ -85,25 +88,25 @@ public class LeaderAndIsrResponseTest {
 
     @Test
     public void testToString() {
-        List<LeaderAndIsrResponseData.LeaderAndIsrResponsePartition> partitions = createPartitions("foo",
-                asList(Errors.NONE, Errors.CLUSTER_AUTHORIZATION_FAILED));
+        List<LeaderAndIsrPartitionError> partitions = createPartitions("foo",
+            asList(Errors.NONE, Errors.CLUSTER_AUTHORIZATION_FAILED));
         LeaderAndIsrResponse response = new LeaderAndIsrResponse(new LeaderAndIsrResponseData()
-                .setErrorCode(Errors.NONE.code())
-                .setPartitions(partitions));
+            .setErrorCode(Errors.NONE.code())
+            .setPartitionErrors(partitions));
         String responseStr = response.toString();
         assertTrue(responseStr.contains(LeaderAndIsrResponse.class.getSimpleName()));
         assertTrue(responseStr.contains(partitions.toString()));
         assertTrue(responseStr.contains("errorCode=" + Errors.NONE.code()));
     }
 
-    private List<LeaderAndIsrResponseData.LeaderAndIsrResponsePartition> createPartitions(String topicName, List<Errors> errors) {
-        List<LeaderAndIsrResponseData.LeaderAndIsrResponsePartition> partitions = new ArrayList<>();
+    private List<LeaderAndIsrPartitionError> createPartitions(String topicName, List<Errors> errors) {
+        List<LeaderAndIsrPartitionError> partitions = new ArrayList<>();
         int partitionIndex = 0;
         for (Errors error : errors) {
-            partitions.add(new LeaderAndIsrResponseData.LeaderAndIsrResponsePartition()
-                    .setTopicName(topicName)
-                    .setPartitionIndex(partitionIndex++)
-                    .setErrorCode(error.code()));
+            partitions.add(new LeaderAndIsrPartitionError()
+                .setTopicName(topicName)
+                .setPartitionIndex(partitionIndex++)
+                .setErrorCode(error.code()));
         }
         return partitions;
     }

@@ -24,10 +24,10 @@ import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.message.LeaderAndIsrResponseData
-import org.apache.kafka.common.message.LeaderAndIsrResponseData.LeaderAndIsrResponsePartition
+import org.apache.kafka.common.message.LeaderAndIsrResponseData.LeaderAndIsrPartitionError
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
-import org.apache.kafka.common.requests.{AbstractControlRequest, AbstractResponse, LeaderAndIsrRequest, LeaderAndIsrResponse, StopReplicaRequest, StopReplicaResponse, UpdateMetadataRequest}
+import org.apache.kafka.common.requests.{AbstractControlRequest, AbstractResponse, LeaderAndIsrRequest, LeaderAndIsrResponse, StopReplicaRequest, UpdateMetadataRequest}
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.junit.Assert._
 import org.junit.Test
@@ -72,11 +72,12 @@ class ControllerChannelManagerTest {
     val leaderAndIsrRequest = leaderAndIsrRequests.head
     assertEquals(controllerId, leaderAndIsrRequest.controllerId)
     assertEquals(controllerEpoch, leaderAndIsrRequest.controllerEpoch)
-    assertEquals(partitions.keySet, leaderAndIsrRequest.partitionStates.keySet.asScala)
+    assertEquals(partitions.keySet,
+      leaderAndIsrRequest.partitionStates.asScala.map(p => new TopicPartition(p.topicName, p.partitionIndex)))
     assertEquals(partitions.map { case (k, v) => (k, v.leader) },
-      leaderAndIsrRequest.partitionStates.asScala.mapValues(_.basePartitionState.leader).toMap)
+      leaderAndIsrRequest.partitionStates.asScala.map(p => new TopicPartition(p.topicName, p.partitionIndex) -> p.leaderKey).toMap)
     assertEquals(partitions.map { case (k, v) => (k, v.isr) },
-      leaderAndIsrRequest.partitionStates.asScala.mapValues(_.basePartitionState.isr.asScala).toMap)
+      leaderAndIsrRequest.partitionStates.asScala.map(p => new TopicPartition(p.topicName, p.partitionIndex) -> p.isrReplicas.asScala).toMap)
 
     applyLeaderAndIsrResponseCallbacks(Errors.NONE, batch.sentRequests(2).toList)
     assertEquals(1, batch.sentEvents.size)
@@ -110,8 +111,10 @@ class ControllerChannelManagerTest {
     assertEquals(1, updateMetadataRequests.size)
 
     val leaderAndIsrRequest = leaderAndIsrRequests.head
-    assertEquals(Set(partition), leaderAndIsrRequest.partitionStates.keySet.asScala)
-    assertTrue(leaderAndIsrRequest.partitionStates.get(partition).isNew)
+    val partitionStates = leaderAndIsrRequest.partitionStates.asScala
+    assertEquals(Set(partition), partitionStates.map(p => new TopicPartition(p.topicName, p.partitionIndex)))
+    val partitionState = partitionStates.find(p => p.topicName == partition.topic && p.partitionIndex == partition.partition)
+    assertEquals(Some(true), partitionState.map(_.isNew))
   }
 
   @Test
@@ -143,7 +146,7 @@ class ControllerChannelManagerTest {
       assertEquals(1, leaderAndIsrRequests.size)
       assertEquals(1, updateMetadataRequests.size)
       val leaderAndIsrRequest = leaderAndIsrRequests.head
-      assertEquals(Set(partition), leaderAndIsrRequest.partitionStates.keySet.asScala)
+      assertEquals(Set(partition), leaderAndIsrRequest.partitionStates.asScala.map(p => new TopicPartition(p.topicName, p.partitionIndex)))
     }
   }
 
@@ -632,15 +635,15 @@ class ControllerChannelManagerTest {
   private def applyLeaderAndIsrResponseCallbacks(error: Errors, sentRequests: List[SentRequest]): Unit = {
     sentRequests.filter(_.request.apiKey == ApiKeys.LEADER_AND_ISR).filter(_.responseCallback != null).foreach { sentRequest =>
       val leaderAndIsrRequest = sentRequest.request.build().asInstanceOf[LeaderAndIsrRequest]
-      val partitionErrors = leaderAndIsrRequest.partitionStates.asScala.keySet.map(tp =>
-        new LeaderAndIsrResponsePartition()
-          .setTopicName(tp.topic)
-          .setPartitionIndex(tp.partition)
-          .setErrorCode(error.code)).toSeq
+      val partitionErrors = leaderAndIsrRequest.partitionStates.asScala.map(p =>
+        new LeaderAndIsrPartitionError()
+          .setTopicName(p.topicName)
+          .setPartitionIndex(p.partitionIndex)
+          .setErrorCode(error.code))
       val leaderAndIsrResponse = new LeaderAndIsrResponse(
         new LeaderAndIsrResponseData()
           .setErrorCode(error.code)
-          .setPartitions(partitionErrors.asJava))
+          .setPartitionErrors(partitionErrors.asJava))
       sentRequest.responseCallback(leaderAndIsrResponse)
     }
   }

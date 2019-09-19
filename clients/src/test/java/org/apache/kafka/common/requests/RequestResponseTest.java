@@ -76,7 +76,7 @@ import org.apache.kafka.common.message.InitProducerIdRequestData;
 import org.apache.kafka.common.message.InitProducerIdResponseData;
 import org.apache.kafka.common.message.JoinGroupRequestData;
 import org.apache.kafka.common.message.JoinGroupResponseData;
-import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrRequestPartition;
+import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState;
 import org.apache.kafka.common.message.LeaderAndIsrResponseData;
 import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity;
 import org.apache.kafka.common.message.LeaveGroupResponseData;
@@ -1120,14 +1120,14 @@ public class RequestResponseTest {
     }
 
     private StopReplicaResponse createStopReplicaResponse() {
-        List<StopReplicaResponseData.StopReplicaResponsePartition> partitions = new ArrayList<>();
-        partitions.add(new StopReplicaResponseData.StopReplicaResponsePartition()
+        List<StopReplicaResponseData.StopReplicaPartitionError> partitions = new ArrayList<>();
+        partitions.add(new StopReplicaResponseData.StopReplicaPartitionError()
             .setTopicName("test")
             .setPartitionIndex(0)
             .setErrorCode(Errors.NONE.code()));
         return new StopReplicaResponse(new StopReplicaResponseData()
             .setErrorCode(Errors.NONE.code())
-            .setPartitions(partitions));
+            .setPartitionErrors(partitions));
     }
 
     private ControlledShutdownRequest createControlledShutdownRequest() {
@@ -1165,36 +1165,39 @@ public class RequestResponseTest {
     }
 
     private LeaderAndIsrRequest createLeaderAndIsrRequest(int version) {
-        Map<TopicPartition, LeaderAndIsrRequestPartition> partitionStates = new HashMap<>();
+        List<LeaderAndIsrPartitionState> partitionStates = new ArrayList<>();
         List<Integer> isr = asList(1, 2);
         List<Integer> replicas = asList(1, 2, 3, 4);
-        partitionStates.put(new TopicPartition("topic5", 105),
-                new LeaderAndIsrRequestPartition()
-                    .setControllerEpoch(0)
-                    .setLeaderKey(2)
-                    .setLeaderEpoch(1)
-                    .setIsrReplicas(isr)
-                    .setZkVersion(2)
-                    .setReplicas(replicas)
-                    .setIsNew(false));
-        partitionStates.put(new TopicPartition("topic5", 1),
-                new LeaderAndIsrRequestPartition()
-                    .setControllerEpoch(1)
-                    .setLeaderKey(1)
-                    .setLeaderEpoch(1)
-                    .setIsrReplicas(isr)
-                    .setZkVersion(2)
-                    .setReplicas(replicas)
-                    .setIsNew(false));
-        partitionStates.put(new TopicPartition("topic20", 1),
-                new LeaderAndIsrRequestPartition()
-                    .setControllerEpoch(1)
-                    .setLeaderKey(0)
-                    .setLeaderEpoch(1)
-                    .setIsrReplicas(isr)
-                    .setZkVersion(2)
-                    .setReplicas(replicas)
-                    .setIsNew(false));
+        partitionStates.add(new LeaderAndIsrPartitionState()
+            .setTopicName("topic5")
+            .setPartitionIndex(105)
+            .setControllerEpoch(0)
+            .setLeaderKey(2)
+            .setLeaderEpoch(1)
+            .setIsrReplicas(isr)
+            .setZkVersion(2)
+            .setReplicas(replicas)
+            .setIsNew(false));
+        partitionStates.add(new LeaderAndIsrPartitionState()
+            .setTopicName("topic5")
+            .setPartitionIndex(1)
+            .setControllerEpoch(1)
+            .setLeaderKey(1)
+            .setLeaderEpoch(1)
+            .setIsrReplicas(isr)
+            .setZkVersion(2)
+            .setReplicas(replicas)
+            .setIsNew(false));
+        partitionStates.add(new LeaderAndIsrPartitionState()
+            .setTopicName("topic20")
+            .setPartitionIndex(1)
+            .setControllerEpoch(1)
+            .setLeaderKey(0)
+            .setLeaderEpoch(1)
+            .setIsrReplicas(isr)
+            .setZkVersion(2)
+            .setReplicas(replicas)
+            .setIsNew(false));
 
         Set<Node> leaders = Utils.mkSet(
                 new Node(0, "test0", 1223),
@@ -1204,14 +1207,14 @@ public class RequestResponseTest {
     }
 
     private LeaderAndIsrResponse createLeaderAndIsrResponse() {
-        List<LeaderAndIsrResponseData.LeaderAndIsrResponsePartition> partitions = new ArrayList<>();
-        partitions.add(new LeaderAndIsrResponseData.LeaderAndIsrResponsePartition()
+        List<LeaderAndIsrResponseData.LeaderAndIsrPartitionError> partitions = new ArrayList<>();
+        partitions.add(new LeaderAndIsrResponseData.LeaderAndIsrPartitionError()
             .setTopicName("test")
             .setPartitionIndex(0)
             .setErrorCode(Errors.NONE.code()));
         return new LeaderAndIsrResponse(new LeaderAndIsrResponseData()
             .setErrorCode(Errors.NONE.code())
-            .setPartitions(partitions));
+            .setPartitionErrors(partitions));
     }
 
     private UpdateMetadataRequest createUpdateMetadataRequest(int version, String rack) {

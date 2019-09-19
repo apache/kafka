@@ -26,7 +26,7 @@ import kafka.metrics.KafkaMetricsGroup
 import kafka.server.KafkaConfig
 import kafka.utils._
 import org.apache.kafka.clients._
-import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrRequestPartition
+import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network._
 import org.apache.kafka.common.protocol.ApiKeys
@@ -342,7 +342,7 @@ abstract class AbstractControllerBrokerRequestBatch(config: KafkaConfig,
                                                     controllerContext: ControllerContext,
                                                     stateChangeLogger: StateChangeLogger) extends  Logging {
   val controllerId: Int = config.brokerId
-  val leaderAndIsrRequestMap = mutable.Map.empty[Int, mutable.Map[TopicPartition, LeaderAndIsrRequestPartition]]
+  val leaderAndIsrRequestMap = mutable.Map.empty[Int, mutable.Map[TopicPartition, LeaderAndIsrPartitionState]]
   val stopReplicaRequestMap = mutable.Map.empty[Int, ListBuffer[StopReplicaRequestInfo]]
   val updateMetadataRequestBrokerSet = mutable.Set.empty[Int]
   val updateMetadataRequestPartitionInfoMap = mutable.Map.empty[TopicPartition, UpdateMetadataRequest.PartitionState]
@@ -384,7 +384,7 @@ abstract class AbstractControllerBrokerRequestBatch(config: KafkaConfig,
       val result = leaderAndIsrRequestMap.getOrElseUpdate(brokerId, mutable.Map.empty)
       val alreadyNew = result.get(topicPartition).exists(_.isNew)
       val leaderAndIsr = leaderIsrAndControllerEpoch.leaderAndIsr
-      result.put(topicPartition, new LeaderAndIsrRequestPartition()
+      result.put(topicPartition, new LeaderAndIsrPartitionState()
         .setControllerEpoch(leaderIsrAndControllerEpoch.controllerEpoch)
         .setLeaderKey(leaderAndIsr.leader)
         .setLeaderEpoch(leaderAndIsr.leaderEpoch)
@@ -462,7 +462,7 @@ abstract class AbstractControllerBrokerRequestBatch(config: KafkaConfig,
         }
         val brokerEpoch = controllerContext.liveBrokerIdAndEpochs(broker)
         val leaderAndIsrRequestBuilder = new LeaderAndIsrRequest.Builder(leaderAndIsrRequestVersion, controllerId, controllerEpoch,
-          brokerEpoch, leaderAndIsrPartitionStates.asJava, leaders.asJava)
+          brokerEpoch, leaderAndIsrPartitionStates.values.toIndexedSeq.asJava, leaders.asJava)
         sendRequest(broker, leaderAndIsrRequestBuilder, (r: AbstractResponse) => sendEvent(LeaderAndIsrResponseReceived(r, broker)))
 
     }

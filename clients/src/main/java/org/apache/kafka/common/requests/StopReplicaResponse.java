@@ -46,7 +46,7 @@ public class StopReplicaResponse extends AbstractResponse {
     }
 
     public Map<TopicPartition, Errors> responses() {
-        return data.partitions().stream().collect(Collectors.toMap(
+        return data.partitionErrors().stream().collect(Collectors.toMap(
             p -> new TopicPartition(p.topicName(), p.partitionIndex()),
             p -> Errors.forCode(p.errorCode())));
     }
@@ -59,8 +59,8 @@ public class StopReplicaResponse extends AbstractResponse {
     public Map<Errors, Integer> errorCounts() {
         if (data.errorCode() != Errors.NONE.code())
             // Minor optimization since the top-level error applies to all partitions
-            return Collections.singletonMap(error(), data.partitions().size());
-        return errorCounts(data.partitions().stream().map(p -> Errors.forCode(p.errorCode())).collect(Collectors.toList()));
+            return Collections.singletonMap(error(), data.partitionErrors().size());
+        return errorCounts(data.partitionErrors().stream().map(p -> Errors.forCode(p.errorCode())).collect(Collectors.toList()));
     }
 
     public static StopReplicaResponse parse(ByteBuffer buffer, short version) {

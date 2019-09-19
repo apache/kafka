@@ -17,6 +17,7 @@
 package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.message.LeaderAndIsrResponseData;
+import org.apache.kafka.common.message.LeaderAndIsrResponseData.LeaderAndIsrPartitionError;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
@@ -45,8 +46,8 @@ public class LeaderAndIsrResponse extends AbstractResponse {
         this.data = new LeaderAndIsrResponseData(struct, version);
     }
 
-    public List<LeaderAndIsrResponseData.LeaderAndIsrResponsePartition> partitions() {
-        return data.partitions();
+    public List<LeaderAndIsrPartitionError> partitions() {
+        return data.partitionErrors();
     }
 
     public Errors error() {
@@ -58,8 +59,8 @@ public class LeaderAndIsrResponse extends AbstractResponse {
         Errors error = error();
         if (error != Errors.NONE)
             // Minor optimization since the top-level error applies to all partitions
-            return Collections.singletonMap(error, data.partitions().size());
-        return errorCounts(data.partitions().stream().map(l -> Errors.forCode(l.errorCode())).collect(Collectors.toList()));
+            return Collections.singletonMap(error, data.partitionErrors().size());
+        return errorCounts(data.partitionErrors().stream().map(l -> Errors.forCode(l.errorCode())).collect(Collectors.toList()));
     }
 
     public static LeaderAndIsrResponse parse(ByteBuffer buffer, short version) {
