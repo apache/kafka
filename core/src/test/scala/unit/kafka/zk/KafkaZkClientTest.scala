@@ -814,6 +814,8 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
   @Test
   def testTopicAssignments(): Unit = {
     assertEquals(0, zkClient.getPartitionAssignmentForTopics(Set(topicPartition.topic())).size)
+    zkClient.createTopicAssignment(topicPartition.topic(),
+      Map(topicPartition -> Seq()))
 
     val expectedAssignment = PartitionReplicaAssignment(Seq(1,2,3), Seq(1), Seq(3))
     val response = zkClient.setTopicAssignmentRaw(topicPartition.topic(),
