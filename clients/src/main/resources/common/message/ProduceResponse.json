@@ -48,10 +48,15 @@
           "about": "The timestamp returned by broker after appending the messages. If CreateTime is used for the topic, the timestamp will be -1.  If LogAppendTime is used for the topic, the timestamp will be the broker local time when the messages are appended." },
         { "name": "LogStartOffset", "type": "int64", "versions": "5+", "default": "-1", "ignorable": true,
           "about": "The log start offset." },
-        { "name":  "ErrorRecords", "type":  "[]int32", "versions": "8+", "default": "", "ignorable":  true,
-          "about":  "The relative offset of records that cause the batch to be dropped"},
+        { "name": "ErrorRecords", "type": "[]RelativeOffsetAndErrorMessage", "versions":  "8+", "default": "", "ignorable": true,
+          "about": "The relative offsets of records that caused the batch to be dropped", "fields": [
+          { "name":  "RelativeOffset", "type": "int32", "versions":  "8+",
+            "about":  "The relative offset of the record that cause the batch to be dropped" },
+          { "name": "RelativeOffsetErrorMessage", "type": "string", "versions":  "8+",
+            "about":  "The error message of the record that caused the batch to be dropped"}
+        ]},
         { "name":  "ErrorMessage", "type":  "string", "versions": "8+", "default": "", "ignorable":  true,
-          "about":  "The error message of the records that cause the batch to be dropped"}
+          "about":  "The error message of records that caused the batch to be dropped"}
       ]}
     ]},
     { "name": "ThrottleTimeMs", "type": "int32", "versions": "1+", "ignorable": true,
