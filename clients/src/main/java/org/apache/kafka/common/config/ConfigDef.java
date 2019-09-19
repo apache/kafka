@@ -1033,6 +1033,10 @@ public class ConfigDef {
         public String toString() {
             return "non-empty string";
         }
+
+        public static NonEmptyString nonEmptyString() {
+            return new NonEmptyString();
+        }
     }
 
     public static class NonEmptyStringWithoutControlChars implements Validator {

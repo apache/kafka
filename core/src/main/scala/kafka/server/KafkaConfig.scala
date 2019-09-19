@@ -95,6 +95,7 @@ object Defaults {
   val LogCleanupIntervalMs = 5 * 60 * 1000L
   val Delete = "delete"
   val Compact = "compact"
+  val CompactionPolicy = "useoffset"
   val LogCleanupPolicy = Delete
   val LogCleanerThreads = 1
   val LogCleanerIoMaxBytesPerSecond = Double.MaxValue
@@ -331,6 +332,7 @@ object KafkaConfig {
   val LogCleanerDeleteRetentionMsProp = "log.cleaner.delete.retention.ms"
   val LogCleanerMinCompactionLagMsProp = "log.cleaner.min.compaction.lag.ms"
   val LogCleanerMaxCompactionLagMsProp = "log.cleaner.max.compaction.lag.ms"
+  val LogCleanerCompactionPolicy = "log.cleaner.compaction.policy"
   val LogIndexSizeMaxBytesProp = "log.index.size.max.bytes"
   val LogIndexIntervalBytesProp = "log.index.interval.bytes"
   val LogFlushIntervalMessagesProp = "log.flush.interval.messages"
