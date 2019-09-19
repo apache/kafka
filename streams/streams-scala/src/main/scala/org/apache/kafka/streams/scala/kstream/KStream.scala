@@ -25,7 +25,7 @@ import org.apache.kafka.streams.kstream.{
   GlobalKTable,
   JoinWindows,
   Printed,
-  StreamJoin,
+  StreamJoined,
   TransformerSupplier,
   ValueTransformerSupplier,
   ValueTransformerWithKeySupplier,
@@ -451,7 +451,7 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
   def join[VO, VR](otherStream: KStream[K, VO])(
     joiner: (V, VO) => VR,
     windows: JoinWindows
-  )(implicit streamJoin: StreamJoin[K, V, VO]): KStream[K, VR] =
+  )(implicit streamJoin: StreamJoined[K, V, VO]): KStream[K, VR] =
     inner.join[VO, VR](otherStream.inner, joiner.asValueJoiner, windows, streamJoin)
 
   /**
@@ -512,7 +512,7 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
   def leftJoin[VO, VR](otherStream: KStream[K, VO])(
     joiner: (V, VO) => VR,
     windows: JoinWindows
-  )(implicit streamJoin: StreamJoin[K, V, VO]): KStream[K, VR] =
+  )(implicit streamJoin: StreamJoined[K, V, VO]): KStream[K, VR] =
     inner.leftJoin[VO, VR](otherStream.inner, joiner.asValueJoiner, windows, streamJoin)
 
   /**
@@ -569,7 +569,7 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
   def outerJoin[VO, VR](otherStream: KStream[K, VO])(
     joiner: (V, VO) => VR,
     windows: JoinWindows
-  )(implicit streamJoin: StreamJoin[K, V, VO]): KStream[K, VR] =
+  )(implicit streamJoin: StreamJoined[K, V, VO]): KStream[K, VR] =
     inner.outerJoin[VO, VR](otherStream.inner, joiner.asValueJoiner, windows, streamJoin)
 
   /**

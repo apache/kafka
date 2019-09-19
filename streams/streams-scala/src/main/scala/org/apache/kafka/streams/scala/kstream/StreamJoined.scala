@@ -18,13 +18,13 @@
 package org.apache.kafka.streams.scala.kstream
 
 import org.apache.kafka.common.serialization.Serde
-import org.apache.kafka.streams.kstream.{StreamJoin => StreamJoinJ}
+import org.apache.kafka.streams.kstream.{StreamJoined => StreamJoinedJ}
 import org.apache.kafka.streams.state.WindowBytesStoreSupplier
 
-object StreamJoin {
+object StreamJoined {
 
   /**
-   * Create an instance of [[org.apache.kafka.streams.kstream.StreamJoin]] with key, value, and otherValue [[Serde]]
+   * Create an instance of [[StreamJoined]] with key, value, and otherValue [[Serde]]
    * instances.
    * `null` values are accepted and will be replaced by the default serdes as defined in config.
    *
@@ -34,18 +34,19 @@ object StreamJoin {
    * @param keySerde        the key serde to use.
    * @param valueSerde      the value serde to use.
    * @param otherValueSerde the otherValue serde to use. If `null` the default value serde from config will be used
-   * @return new [[org.apache.kafka.streams.kstream.StreamJoin]] instance with the provided serdes
+   * @return new [[StreamJoined]] instance with the provided serdes
    */
   def `with`[K, V, VO](implicit keySerde: Serde[K],
                        valueSerde: Serde[V],
-                       otherValueSerde: Serde[VO]): StreamJoinJ[K, V, VO] =
-    StreamJoinJ.`with`(keySerde, valueSerde, otherValueSerde)
+                       otherValueSerde: Serde[VO]): StreamJoinedJ[K, V, VO] =
+    StreamJoinedJ.`with`(keySerde, valueSerde, otherValueSerde)
 
   /**
-   * Create an instance of [[org.apache.kafka.streams.kstream.StreamJoin]] with store suppliers for the calling stream
+   * Create an instance of [[StreamJoinJ]] with store suppliers for the calling stream
    * and the other stream.  Also adds the key, value, and otherValue [[Serde]]
    * instances.
    * `null` values are accepted and will be replaced by the default serdes as defined in config.
+   *
    * @tparam K key type
    * @tparam V value type
    * @tparam VO other value type
@@ -54,23 +55,24 @@ object StreamJoin {
    * @param keySerde        the key serde to use.
    * @param valueSerde      the value serde to use.
    * @param otherValueSerde the otherValue serde to use. If `null` the default value serde from config will be used
-   * @return new [[org.apache.kafka.streams.kstream.StreamJoin]] instance with the provided store suppliers and serdes
+   * @return new [[StreamJoinJ]] instance with the provided store suppliers and serdes
    */
   def `with`[K, V, VO](
     supplier: WindowBytesStoreSupplier,
     otherSupplier: WindowBytesStoreSupplier
-  )(implicit keySerde: Serde[K], valueSerde: Serde[V], otherValueSerde: Serde[VO]): StreamJoinJ[K, V, VO] =
-    StreamJoinJ
+  )(implicit keySerde: Serde[K], valueSerde: Serde[V], otherValueSerde: Serde[VO]): StreamJoinedJ[K, V, VO] =
+    StreamJoinedJ
       .`with`(supplier, otherSupplier)
       .withKeySerde(keySerde)
       .withValueSerde(valueSerde)
       .withOtherValueSerde(otherValueSerde)
 
   /**
-   * Create an instance of [[org.apache.kafka.streams.kstream.StreamJoin]] with the name used for naming
+   * Create an instance of [[StreamJoinJ]] with the name used for naming
    * the state stores involved in the join.  Also adds the key, value, and otherValue [[Serde]]
    * instances.
    * `null` values are accepted and will be replaced by the default serdes as defined in config.
+   *
    * @tparam K key type
    * @tparam V value type
    * @tparam VO other value type
@@ -78,11 +80,11 @@ object StreamJoin {
    * @param keySerde        the key serde to use.
    * @param valueSerde      the value serde to use.
    * @param otherValueSerde the otherValue serde to use. If `null` the default value serde from config will be used
-   * @return new [[org.apache.kafka.streams.kstream.StreamJoin]] instance with the provided store suppliers and serdes
+   * @return new [[StreamJoinJ]] instance with the provided store suppliers and serdes
    */
   def as[K, V, VO](
     storeName: String
-  )(implicit keySerde: Serde[K], valueSerde: Serde[V], otherValueSerde: Serde[VO]): StreamJoinJ[K, V, VO] =
-    StreamJoinJ.as(storeName).withKeySerde(keySerde).withValueSerde(valueSerde).withOtherValueSerde(otherValueSerde)
+  )(implicit keySerde: Serde[K], valueSerde: Serde[V], otherValueSerde: Serde[VO]): StreamJoinedJ[K, V, VO] =
+    StreamJoinedJ.as(storeName).withKeySerde(keySerde).withValueSerde(valueSerde).withOtherValueSerde(otherValueSerde)
 
 }

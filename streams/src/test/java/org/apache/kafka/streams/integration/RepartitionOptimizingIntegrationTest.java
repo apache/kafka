@@ -39,7 +39,7 @@ import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.streams.kstream.Reducer;
-import org.apache.kafka.streams.kstream.StreamJoin;
+import org.apache.kafka.streams.kstream.StreamJoined;
 import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.StreamsTestUtils;
@@ -162,7 +162,7 @@ public class RepartitionOptimizingIntegrationTest {
         mappedStream.filter((k, v) -> k.equals("A"))
             .join(countStream, (v1, v2) -> v1 + ":" + v2.toString(),
                   JoinWindows.of(ofMillis(5000)),
-                  StreamJoin.with(Serdes.String(), Serdes.String(), Serdes.Long()))
+                  StreamJoined.with(Serdes.String(), Serdes.String(), Serdes.Long()))
             .to(JOINED_TOPIC);
 
         streamsConfiguration.setProperty(StreamsConfig.TOPOLOGY_OPTIMIZATION, optimizationConfig);

@@ -83,6 +83,6 @@ object ImplicitConversions {
 
   implicit def streamJoinFromKeyValueOtherSerde[K, V, VO](implicit keySerde: Serde[K],
                                                           valueSerde: Serde[V],
-                                                          otherValueSerde: Serde[VO]): StreamJoin[K, V, VO] =
-    StreamJoin.`with`[K, V, VO]
+                                                          otherValueSerde: Serde[VO]): StreamJoined[K, V, VO] =
+    StreamJoined.`with`[K, V, VO]
 }
