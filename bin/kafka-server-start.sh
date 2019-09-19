@@ -45,16 +45,13 @@ case $COMMAND in
     shift
     shift
     ;;
-  server.properties)
+  *)
     if [ -f $1 ];then
         CONFPATH=$1
     else
         CONFPATH=$CONFDIR"/"$1
     fi
-    
     shift
-    ;;
-  *)
     ;;
 esac
 
