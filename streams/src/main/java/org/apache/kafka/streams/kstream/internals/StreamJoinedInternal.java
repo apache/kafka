@@ -23,7 +23,8 @@ import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
 
 public class StreamJoinedInternal<K, V1, V2> extends StreamJoined<K, V1, V2> {
 
-    StreamJoinedInternal(final StreamJoined<K, V1, V2> streamJoined) {
+    //Needs to be public for testing
+    public StreamJoinedInternal(final StreamJoined<K, V1, V2> streamJoined) {
         super(streamJoined);
     }
 
