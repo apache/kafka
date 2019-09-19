@@ -118,10 +118,8 @@ public class OffsetFetchRequest extends AbstractRequest {
     }
 
     public OffsetFetchResponse getErrorResponse(int throttleTimeMs, Errors error) {
-        short versionId = version();
-
         Map<TopicPartition, OffsetFetchResponse.PartitionData> responsePartitions = new HashMap<>();
-        if (versionId < 2) {
+        if (version() < 2) {
             OffsetFetchResponse.PartitionData partitionError = new OffsetFetchResponse.PartitionData(
                     OffsetFetchResponse.INVALID_OFFSET,
                     Optional.empty(),
@@ -136,18 +134,10 @@ public class OffsetFetchRequest extends AbstractRequest {
             }
         }
 
-        switch (versionId) {
-            case 0:
-            case 1:
-            case 2:
-                return new OffsetFetchResponse(error, responsePartitions);
-            case 3:
-            case 4:
-            case 5:
-                return new OffsetFetchResponse(throttleTimeMs, error, responsePartitions);
-            default:
-                throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
-                        versionId, this.getClass().getSimpleName(), ApiKeys.OFFSET_FETCH.latestVersion()));
+        if (version() >= 3) {
+            return new OffsetFetchResponse(throttleTimeMs, error, responsePartitions);
+        } else {
+            return new OffsetFetchResponse(error, responsePartitions);
         }
     }
 
