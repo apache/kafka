@@ -260,10 +260,8 @@ public class TaskManager {
         final List<TopicPartition> revokedChangelogs = new ArrayList<>();
 
         // suspend revoked active tasks and collect changelogs of any tasks that failed to suspend
-        firstException.compareAndSet(null, active.suspend(revokedTasks, revokedChangelogs));
+        firstException.compareAndSet(null, active.revokeTasks(revokedTasks, revokedChangelogs));
 
-        // close any still restoring tasks and remove their changelog partitions from the changelog reader
-        firstException.compareAndSet(null, active.closeRestoringTasks(revokedTasks, revokedChangelogs));
         changelogReader.remove(revokedChangelogs);
 
         // If the restore consumer is assigned still-restoring partitions, remove these from its assignment

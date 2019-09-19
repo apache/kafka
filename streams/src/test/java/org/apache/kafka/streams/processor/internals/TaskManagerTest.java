@@ -331,7 +331,7 @@ public class TaskManagerTest {
 
     @Test
     public void shouldSuspendActiveTasks() {
-        expect(active.suspend(revokedTasks, revokedChangelogs)).andReturn(null);
+        expect(active.revokeTasks(revokedTasks, revokedChangelogs)).andReturn(null);
         expect(restoreConsumer.assignment()).andReturn(Collections.emptySet());
         replay();
 
@@ -341,7 +341,7 @@ public class TaskManagerTest {
 
     @Test
     public void shouldThrowStreamsExceptionAtEndIfExceptionDuringSuspend() {
-        expect(active.suspend(revokedTasks, revokedChangelogs)).andReturn(new RuntimeException(""));
+        expect(active.revokeTasks(revokedTasks, revokedChangelogs)).andReturn(new RuntimeException(""));
         expect(restoreConsumer.assignment()).andReturn(Collections.emptySet());
 
         replay();

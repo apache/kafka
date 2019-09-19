@@ -82,19 +82,17 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
         return suspended.keySet();
     }
 
-    RuntimeException suspend(final Set<TaskId> revokedTasks, final List<TopicPartition> revokedChangelogs) {
+    RuntimeException revokeTasks(final Set<TaskId> tasksToRevoke, final List<TopicPartition> revokedChangelogs) {
         final AtomicReference<RuntimeException> firstException = new AtomicReference<>(null);
 
-        log.trace("Suspending running {} {}", taskTypeName, runningTaskIds());
-        firstException.compareAndSet(null, suspendTasks(revokedTasks, revokedChangelogs));
-
-        log.trace("Close created {} {}", taskTypeName, created.keySet());
-        firstException.compareAndSet(null, closeNonRunningTasks(revokedTasks, revokedChangelogs));
+        firstException.compareAndSet(null, suspendRunningTasks(tasksToRevoke, revokedChangelogs));
+        firstException.compareAndSet(null, closeNonRunningTasks(tasksToRevoke, revokedChangelogs));
+        firstException.compareAndSet(null, closeRestoringTasks(tasksToRevoke, revokedChangelogs));
 
         return firstException.get();
     }
 
-    private RuntimeException suspendTasks(final Set<TaskId> tasks, final List<TopicPartition> revokedChangelogs) {
+    private RuntimeException suspendRunningTasks(final Set<TaskId> tasks, final List<TopicPartition> revokedChangelogs) {
         final AtomicReference<RuntimeException> firstException = new AtomicReference<>(null);
         for (final Iterator<TaskId> it = tasks.iterator(); it.hasNext(); ) {
             final TaskId id = it.next();
@@ -135,11 +133,14 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
                 }
             }
         }
+        log.trace("Suspended running {} {}", taskTypeName, suspended.keySet());
         return firstException.get();
     }
 
     private RuntimeException closeNonRunningTasks(final Set<TaskId> revokedTasks, final List<TopicPartition> revokedChangelogs) {
+        final Set<TaskId> closedNonRunningTasks = new HashSet<>();
         RuntimeException exception = null;
+
         for (final Iterator<TaskId> it = revokedTasks.iterator(); it.hasNext(); ) {
             final TaskId id = it.next();
             final StreamTask task = created.get(id);
@@ -156,9 +157,11 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
                     it.remove();
                     created.remove(id);
                     revokedChangelogs.addAll(task.changelogPartitions());
+                    closedNonRunningTasks.add(task.id);
                 }
             }
         }
+        log.trace("Closed created {} {}", taskTypeName, closedNonRunningTasks);
         return exception;
     }
 

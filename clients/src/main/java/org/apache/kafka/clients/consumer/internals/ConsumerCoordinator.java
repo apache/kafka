@@ -361,15 +361,14 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                 Utils.join(addedPartitions, ", "),
                 Utils.join(revokedPartitions, ", "));
 
-            // revoke partitions that was previously owned but no longer assigned;
-            // note that we should only change the assignment AFTER we've triggered
-            // the revoke callback
-            if (!revokedPartitions.isEmpty()) {
-                firstException.compareAndSet(null, invokePartitionsRevoked(revokedPartitions));
-            }
 
-            // if revoked any partitions, need to re-join the group afterwards
             if (!revokedPartitions.isEmpty()) {
+                // revoke partitions that was previously owned but no longer assigned;
+                // note that we should only change the assignment AFTER we've triggered
+                // the revoke callback
+                firstException.compareAndSet(null, invokePartitionsRevoked(revokedPartitions));
+
+                // if revoked any partitions, need to re-join the group afterwards
                 requestRejoin();
             }
         }
