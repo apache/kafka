@@ -24,4 +24,5 @@ package object kstream {
   type Consumed[K, V] = org.apache.kafka.streams.kstream.Consumed[K, V]
   type Produced[K, V] = org.apache.kafka.streams.kstream.Produced[K, V]
   type Joined[K, V, VO] = org.apache.kafka.streams.kstream.Joined[K, V, VO]
+  type StreamJoin[K, V, VO] = org.apache.kafka.streams.kstream.StreamJoin[K, V, VO]
 }
