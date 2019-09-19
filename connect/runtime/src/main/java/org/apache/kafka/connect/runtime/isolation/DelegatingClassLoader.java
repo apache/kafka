@@ -374,7 +374,15 @@ public class DelegatingClassLoader extends URLClassLoader {
         PluginClassLoader pluginLoader = pluginClassLoader(fullName);
         if (pluginLoader != null) {
             log.trace("Retrieving loaded class '{}' from '{}'", fullName, pluginLoader);
-            return pluginLoader.loadClass(fullName, resolve);
+            ClassLoader oldClassloader = Plugins.compareAndSwapLoaders(pluginLoader);
+            try {
+                Class<?> clazz = pluginLoader.loadClass(fullName, resolve);
+                Plugins.compareAndSwapLoaders(oldClassloader);
+                return clazz;
+            } catch (Throwable t) {
+                Plugins.compareAndSwapLoaders(oldClassloader);
+                throw t;
+            }
         }
 
         return super.loadClass(fullName, resolve);

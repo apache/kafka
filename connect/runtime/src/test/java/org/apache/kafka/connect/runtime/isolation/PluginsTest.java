@@ -36,7 +36,6 @@ import org.apache.kafka.connect.storage.ConverterType;
 import org.apache.kafka.connect.storage.HeaderConverter;
 import org.apache.kafka.connect.storage.SimpleHeaderConverter;
 import org.junit.Before;
-import org.junit.BeforeClass;
 import org.junit.Test;
 
 import java.io.IOException;
@@ -195,7 +194,7 @@ public class PluginsTest {
     }
 
     @Test(expected = ConnectException.class)
-    public void shouldCacheExceptionalClassInitialization() {
+    public void shouldCacheExceptionalClassInitialization() throws ClassNotFoundException {
         TestPlugins.assertInitialized();
         // Attempt to load the class with the wrong classloader first
         try {
@@ -204,7 +203,7 @@ public class PluginsTest {
             Class<?> clazz = plugins.delegatingLoader().loadClass(TestPlugins.EXPECT_PLUGIN_CLASS_LOADER);
             Plugins.newPlugin(classLoader, clazz);
             fail("Should have thrown exception with wrong classloader");
-        } catch (ConnectException | ClassNotFoundException e) {
+        } catch (ConnectException e) {
             // Should always throw an exception during successful test
         }
         // Attempt to load it with the correct classloader after the failure

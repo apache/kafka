@@ -28,6 +28,10 @@ import org.apache.kafka.connect.storage.Converter;
 public class AlwaysThrowException implements Converter {
 
     static {
+        setup();
+    }
+
+    public static void setup() {
         throw new RuntimeException("I always throw an exception");
     }
 

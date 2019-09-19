@@ -89,7 +89,6 @@ public class PluginClassLoader extends URLClassLoader {
     protected synchronized Class<?> loadClass(String name, boolean resolve)
             throws ClassNotFoundException {
         synchronized (getClassLoadingLock(name)) {
-            ClassLoader oldClassloader = Plugins.compareAndSwapLoaders(this);
             Class<?> klass = findLoadedClass(name);
             if (klass == null) {
                 try {
@@ -107,7 +106,6 @@ public class PluginClassLoader extends URLClassLoader {
             if (resolve) {
                 resolveClass(klass);
             }
-            Plugins.compareAndSwapLoaders(oldClassloader);
             return klass;
         }
     }
