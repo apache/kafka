@@ -290,6 +290,11 @@ public class TaskManager {
 
         active.closeZombieTasks();
         assignedActiveTasks.clear();
+        changelogReader.clear();
+        if (!restoreConsumerAssignedStandbys) {
+            restoreConsumer.unsubscribe();
+        }
+
         return zombieTasks;
     }
 

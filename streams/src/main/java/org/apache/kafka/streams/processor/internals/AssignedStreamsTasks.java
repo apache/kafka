@@ -262,7 +262,7 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
     }
 
     void closeZombieTasks() {
-        for (StreamTask task : allTasks()) {
+        for (final StreamTask task : allTasks()) {
             closeZombieTask(task);
         }
         clear();
