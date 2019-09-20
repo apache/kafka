@@ -28,7 +28,9 @@ import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -129,12 +131,14 @@ public class TestPlugins {
 
     private static File createPluginJar(String resourceDir) throws IOException {
         Path inputDir = resourceDirectoryPath("test-plugins/" + resourceDir);
-        File jarFile = File.createTempFile(resourceDir + ".", ".jar");
-        removeCompiledClassFiles(inputDir);
-        compileJavaSources(inputDir);
+        Path binDir = Files.createTempDirectory(resourceDir + ".bin.");
+        compileJavaSources(inputDir, binDir);
+        File jarFile = Files.createTempFile(resourceDir + ".", ".jar").toFile();
         try (JarOutputStream jar = openJarFile(jarFile)) {
             writeJar(jar, inputDir);
+            writeJar(jar, binDir);
         }
+        removeDirectory(binDir);
         jarFile.deleteOnExit();
         return jarFile;
     }
@@ -162,15 +166,14 @@ public class TestPlugins {
         return new JarOutputStream(new FileOutputStream(jarFile), manifest);
     }
 
-    private static void removeCompiledClassFiles(Path sourceDir) throws IOException {
-        List<File> classFiles = Files.walk(sourceDir)
-            .filter(Files::isRegularFile)
-            .filter(path -> path.toFile().getName().endsWith(".class"))
+    private static void removeDirectory(Path binDir) throws IOException {
+        List<File> classFiles = Files.walk(binDir)
+            .sorted(Comparator.reverseOrder())
             .map(Path::toFile)
             .collect(Collectors.toList());
         for (File classFile : classFiles) {
             if (!classFile.delete()) {
-                throw new IOException("Could not delete old class file: " + classFile);
+                throw new IOException("Could not delete: " + classFile);
             }
         }
     }
@@ -186,7 +189,7 @@ public class TestPlugins {
      * @param sourceDir Directory containing java source files
      * @throws IOException if the files cannot be compiled
      */
-    private static void compileJavaSources(Path sourceDir) throws IOException {
+    private static void compileJavaSources(Path sourceDir, Path binDir) throws IOException {
         JavaCompiler compiler = ToolProvider.getSystemJavaCompiler();
         List<File> sourceFiles = Files.walk(sourceDir)
             .filter(Files::isRegularFile)
@@ -194,18 +197,21 @@ public class TestPlugins {
             .map(Path::toFile)
             .collect(Collectors.toList());
         StringWriter writer = new StringWriter();
+        List<String> options = Arrays.asList(
+            "-d", binDir.toString() // Write class output to a different directory.
+        );
+
         try (StandardJavaFileManager fileManager = compiler.getStandardFileManager(null, null, null)) {
-            compiler.getTask(
+            boolean success = compiler.getTask(
                 writer,
                 fileManager,
                 null,
-                null,
+                options,
                 null,
                 fileManager.getJavaFileObjectsFromFiles(sourceFiles)
             ).call();
-            String errors = writer.toString();
-            if (errors.length() > 0) {
-                throw new RuntimeException("Failed to compile test plugin:\n" + errors);
+            if (!success) {
+                throw new RuntimeException("Failed to compile test plugin:\n" + writer);
             }
         }
     }
