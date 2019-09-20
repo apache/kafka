@@ -81,7 +81,7 @@ public class Protocol {
     private static void populateSchemaFields(Schema schema, Set<BoundField> fields) {
         for (BoundField field: schema.fields()) {
             fields.add(field);
-            if (field.def.type.arrayElementType().isPresent()) {
+            if (field.def.type.isArray()) {
                 Type innerType = field.def.type.arrayElementType().get();
                 if (innerType instanceof Schema)
                     populateSchemaFields((Schema) innerType, fields);
