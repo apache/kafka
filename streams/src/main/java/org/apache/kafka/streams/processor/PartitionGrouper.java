@@ -29,7 +29,11 @@ import java.util.Set;
  * such that each generated partition group is assigned with a distinct {@link TaskId};
  * the created task ids will then be assigned to Kafka Streams instances that host the stream
  * processing application.
+ *
+ * @deprecated since 2.4 release; will be removed in 3.0.0 via KAFKA-7785
  */
+// TODO: move this class into an internal package instead of deleting it (cf KAFKA-7785)
+@Deprecated
 public interface PartitionGrouper {
 
     /**
