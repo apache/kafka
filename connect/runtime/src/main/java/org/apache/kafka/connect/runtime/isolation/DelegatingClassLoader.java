@@ -377,9 +377,12 @@ public class DelegatingClassLoader extends URLClassLoader {
             ClassLoader oldClassloader = Plugins.compareAndSwapLoaders(pluginLoader);
             // This doesn't use a finally block for performance reasons
             try {
-                return pluginLoader.loadClass(fullName, resolve);
-            } finally {
+                Class<?> clazz = pluginLoader.loadClass(fullName, resolve);
                 Plugins.compareAndSwapLoaders(oldClassloader);
+                return clazz;
+            } catch (Throwable t) {
+                Plugins.compareAndSwapLoaders(oldClassloader);
+                throw t;
             }
         }
 
