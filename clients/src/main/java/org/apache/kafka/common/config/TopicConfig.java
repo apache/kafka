@@ -124,6 +124,7 @@ public class TopicConfig {
     public static final String CLEANUP_POLICY_CONFIG = "cleanup.policy";
     public static final String CLEANUP_POLICY_COMPACT = "compact";
     public static final String CLEANUP_POLICY_DELETE = "delete";
+
     public static final String CLEANUP_POLICY_DOC = "A string that is either \"" + CLEANUP_POLICY_DELETE +
         "\" or \"" + CLEANUP_POLICY_COMPACT + "\" or both. This string designates the retention policy to use on " +
         "old log segments. The default policy (\"delete\") will discard old segments when their retention " +
@@ -131,9 +132,9 @@ public class TopicConfig {
         "compaction</a> on the topic.";
 
     public static final String COMPACTION_POLICY_CONFIG = "compaction.policy";
-    public static final String COMPACTION_POLICY_OFFSET = "useoffset";
-    public static final String COMPACTION_POLICY_SEQUENCE = "usesequence";
-    public static final String COMPACTION_POLICY_TIMESTAMP = "usetimestamp";
+    public static final String COMPACTION_POLICY_OFFSET = "offset";
+    public static final String COMPACTION_POLICY_SEQUENCE = "sequence";
+    public static final String COMPACTION_POLICY_TIMESTAMP = "timestamp";
     public static final String COMPACTION_POLICY_DOC = "This configuration enables the advanced log compaction" +
             "The default compaction strategy should be useoffset, one additional compaction strategy is supported: " +
             "usesequence ";
