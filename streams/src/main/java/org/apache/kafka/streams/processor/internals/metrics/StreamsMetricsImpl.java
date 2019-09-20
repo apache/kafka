@@ -444,7 +444,7 @@ public class StreamsMetricsImpl implements StreamsMetrics {
     }
 
 
-    public static void addAvgAndMaxToSensor(final Sensor sensor,
+    private static void addAvgAndMaxToSensor(final Sensor sensor,
                                             final String group,
                                             final Map<String, String> tags,
                                             final String operation,

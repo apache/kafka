@@ -56,6 +56,7 @@ public class ThreadMetricsTest {
         final String operation = "task-created";
         final String totalDescription = "The total number of newly created tasks";
         final String rateDescription = "The average per-second number of newly created tasks";
+        mockStatic(StreamsMetricsImpl.class);
         expect(streamsMetrics.threadLevelSensor(operation, RecordingLevel.INFO)).andReturn(dummySensor);
         expect(streamsMetrics.threadLevelTagMap()).andReturn(dummyTagMap);
         StreamsMetricsImpl.addInvocationRateAndCountToSensor(
