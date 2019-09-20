@@ -56,14 +56,17 @@ public class Sampling implements Converter, SamplingTestPlugin {
     return null;
   }
 
+  @Override
   public ClassLoader staticClassloader() {
     return STATIC_CLASS_LOADER;
   }
 
+  @Override
   public ClassLoader classloader() {
     return classloader;
   }
 
+  @Override
   public int dynamicInitializations() {
     return dynamicInitializations;
   }

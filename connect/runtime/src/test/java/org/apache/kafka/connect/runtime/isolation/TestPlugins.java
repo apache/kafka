@@ -182,6 +182,7 @@ public class TestPlugins {
      * <p>Dependencies between source files in this directory are resolved against one another
      * and the classes present in the test environment.
      * See https://stackoverflow.com/questions/1563909/ for more information.
+     * Additional dependencies in your plugins should be added as test scope to :connect:runtime.
      * @param sourceDir Directory containing java source files
      * @throws IOException if the files cannot be compiled
      */

@@ -203,7 +203,6 @@ public class PluginsTest {
         );
 
         assertTrue(firstPlugin instanceof SamplingTestPlugin);
-        SamplingTestPlugin samplingPlugin = (SamplingTestPlugin) firstPlugin;
 
         assertEquals(1, ((SamplingTestPlugin) firstPlugin).dynamicInitializations());
 
