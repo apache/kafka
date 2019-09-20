@@ -15,23 +15,41 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.connect.runtime.isolation;
+package test.plugins;
 
-import java.util.Collections;
-import java.util.Map;
+import org.apache.kafka.connect.runtime.isolation.SamplingTestPlugin;
 
 /**
- * Mix-in interface for plugins so we can sample information about their initialization
+ * Superclass for service loaded classes
  */
-public interface SamplingTestPlugin {
+public class ServiceLoadedClass implements SamplingTestPlugin {
 
-    ClassLoader staticClassloader();
+  private static final ClassLoader STATIC_CLASS_LOADER;
+  private static int dynamicInitializations;
+  private final ClassLoader classloader;
 
-    ClassLoader classloader();
+  static {
+    STATIC_CLASS_LOADER = Thread.currentThread().getContextClassLoader();
+  }
 
-    int dynamicInitializations();
+  {
+    dynamicInitializations++;
+    classloader = Thread.currentThread().getContextClassLoader();
+  }
 
-    default Map<String, SamplingTestPlugin> otherSamples() {
-        return Collections.emptyMap();
-    }
+  @Override
+  public ClassLoader staticClassloader() {
+    return STATIC_CLASS_LOADER;
+  }
+
+  @Override
+  public ClassLoader classloader() {
+    return classloader;
+  }
+
+  @Override
+  public int dynamicInitializations() {
+    return dynamicInitializations;
+  }
+
 }

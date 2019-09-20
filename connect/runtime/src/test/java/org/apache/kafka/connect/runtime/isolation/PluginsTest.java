@@ -18,6 +18,7 @@
 package org.apache.kafka.connect.runtime.isolation;
 
 import java.util.Collections;
+import java.util.Map.Entry;
 import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
@@ -218,6 +219,45 @@ public class PluginsTest {
 
         // This value changes because secondPlugin's instantiation incremented it.
         assertEquals(2, ((SamplingTestPlugin) firstPlugin).dynamicInitializations());
+    }
+
+    @Test
+    public void shouldPerformServiceLoadingWithPluginClassloader() {
+        TestPlugins.assertInitialized();
+        Converter plugin = plugins.newPlugin(
+            TestPlugins.SERVICE_LOADER,
+            new AbstractConfig(new ConfigDef(), Collections.emptyMap()),
+            Converter.class
+        );
+
+        assertTrue(plugin instanceof SamplingTestPlugin);
+        SamplingTestPlugin samplingPlugin = (SamplingTestPlugin) plugin;
+        for (Entry<String, SamplingTestPlugin> e : samplingPlugin.otherSamples().entrySet()) {
+            String message = e.getKey() + "was not initialized properly";
+            SamplingTestPlugin sample = e.getValue();
+            assertTrue(message, sample.staticClassloader() instanceof PluginClassLoader);
+            assertTrue(message, sample.classloader() instanceof PluginClassLoader);
+            assertEquals(message, sample.staticClassloader(), sample.classloader());
+        }
+        Map<String, SamplingTestPlugin> samples = samplingPlugin.otherSamples();
+        // Initialized once per (static, dynamic, static subclass, dynamic subclass)
+        assertEquals(
+            4,
+            samples.get("static:test.plugins.ServiceLoadedClass").dynamicInitializations()
+        );
+        assertEquals(
+            4,
+            samples.get("dynamic:test.plugins.ServiceLoadedClass").dynamicInitializations()
+        );
+        // Initialized once per (static subclass, dynamic subclass)
+        assertEquals(
+            2,
+            samples.get("static:test.plugins.ServiceLoadedSubclass").dynamicInitializations()
+        );
+        assertEquals(
+            2,
+            samples.get("dynamic:test.plugins.ServiceLoadedSubclass").dynamicInitializations()
+        );
     }
 
     @Test

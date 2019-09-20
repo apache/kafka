@@ -71,6 +71,10 @@ public class TestPlugins {
      * Class name of a plugin which samples information about it's initialization.
      */
     public static final String SAMPLING = "test.plugins.Sampling";
+    /**
+     * Class name of a plugin which samples information during service loading
+     */
+    public static final String SERVICE_LOADER = "test.plugins.ServiceLoaderPlugin";
     private static final Logger log = LoggerFactory.getLogger(TestPlugins.class);
     private static final Map<String, File> PLUGIN_JARS;
     private static final Throwable INITIALIZATION_EXCEPTION;
@@ -81,6 +85,7 @@ public class TestPlugins {
         try {
             pluginJars.put(ALWAYS_THROW_EXCEPTION, createPluginJar("always-throw-exception"));
             pluginJars.put(SAMPLING, createPluginJar("sampling"));
+            pluginJars.put(SERVICE_LOADER, createPluginJar("service-loader"));
         } catch (Throwable e) {
             log.error("Could not set up plugin test jars", e);
             err = e;
