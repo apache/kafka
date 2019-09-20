@@ -104,7 +104,6 @@ public class SuppressionDurabilityIntegrationTest {
         final String storeName = "counts";
         final String outputSuppressed = "output-suppressed" + testId;
         final String outputRaw = "output-raw" + testId;
-        final String changelog = appId + "-KTABLE-SUPPRESS-STATE-STORE-0000000003-changelog";
 
         // create multiple partitions as a trap, in case the buffer doesn't properly set the
         // partition on the records, but instead relies on the default key partitioner
