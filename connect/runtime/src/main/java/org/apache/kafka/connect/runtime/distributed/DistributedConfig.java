@@ -155,26 +155,27 @@ public class DistributedConfig extends WorkerConfig {
             + "period the connectors and tasks of the departed workers remain unassigned";
     public static final int SCHEDULED_REBALANCE_MAX_DELAY_MS_DEFAULT = Math.toIntExact(TimeUnit.SECONDS.toMillis(300));
 
-    public static final String INTERNAL_REQUEST_KEY_GENERATION_ALGORITHM_CONFIG = "internal.request.key.generation.algorithm";
-    public static final String INTERNAL_REQUEST_KEY_GENERATION_ALGORITHM_DOC = "The algorithm to use for generating internal request keys";
-    public static final String INTERNAL_REQUEST_KEY_GENERATION_ALGORITHM_DEFAULT = "HmacSHA256";
+    public static final String INTER_WORKER_KEY_GENERATION_ALGORITHM_CONFIG = "inter.worker.key.generation.algorithm";
+    public static final String INTER_WORKER_KEY_GENERATION_ALGORITHM_DOC = "The algorithm to use for generating internal request keys";
+    public static final String INTER_WORKER_KEY_GENERATION_ALGORITHM_DEFAULT = "HmacSHA256";
 
-    public static final String INTERNAL_REQUEST_KEY_SIZE_CONFIG = "internal.request.key.size";
-    public static final String INTERNAL_REQUEST_KEY_SIZE_DOC = "The size of the key to use for signing internal requests, in bits. " 
+    public static final String INTER_WORKER_KEY_SIZE_CONFIG = "inter.worker.key.size";
+    public static final String INTER_WORKER_KEY_SIZE_DOC = "The size of the key to use for signing internal requests, in bits. "
         + "If null, the default key size for the key generation algorithm will be used.";
-    public static final Long INTERNAL_REQUEST_KEY_SIZE_DEFAULT = null;
+    public static final Long INTER_WORKER_KEY_SIZE_DEFAULT = null;
 
-    public static final String INTERNAL_REQUEST_KEY_ROTATION_INTERVAL_MS_CONFIG = "internal.request.key.rotation.interval.ms";
-    public static final String INTERNAL_REQUEST_KEY_ROTATION_INTERVAL_MS_DOC = "How often to force rotation of session keys used for internal request validation";
-    public static final int INTERNAL_REQUEST_KEY_ROTATION_INTERVAL_MS_DEFAULT = Math.toIntExact(TimeUnit.HOURS.toMillis(1));
+    public static final String INTER_WORKER_KEY_TTL_MS_CONFIG = "inter.worker.key.ttl.ms";
+    public static final String INTER_WORKER_KEY_TTL_MS_MS_DOC = "The TTL of generated session keys used for "
+        + "internal request validation (in milliseconds)";
+    public static final int INTER_WORKER_KEY_TTL_MS_MS_DEFAULT = Math.toIntExact(TimeUnit.HOURS.toMillis(1));
 
-    public static final String INTERNAL_REQUEST_SIGNATURE_ALGORITHM_CONFIG = "internal.request.signature.algorithm";
-    public static final String INTERNAL_REQUEST_SIGNATURE_ALGORITHM_DOC = "The algorithm used to sign internal requests";
-    public static final String INTERNAL_REQUEST_SIGNATURE_ALGORITHM_DEFAULT = "HmacSHA256";
+    public static final String INTER_WORKER_SIGNATURE_ALGORITHM_CONFIG = "inter.worker.signature.algorithm";
+    public static final String INTER_WORKER_SIGNATURE_ALGORITHM_DOC = "The algorithm used to sign internal requests";
+    public static final String INTER_WORKER_SIGNATURE_ALGORITHM_DEFAULT = "HmacSHA256";
 
-    public static final String INTERNAL_REQUEST_VERIFICATION_ALGORITHMS_CONFIG = "internal.request.verification.algorithms";
-    public static final String INTERNAL_REQUEST_VERIFICATION_ALGORITHMS_DOC = "A list of permitted algorithms for verifying internal requests";
-    public static final List<String> INTERNAL_REQUEST_VERIFICATION_ALGORITHMS_DEFAULT = Collections.singletonList(INTERNAL_REQUEST_SIGNATURE_ALGORITHM_DEFAULT);
+    public static final String INTER_WORKER_VERIFICATION_ALGORITHMS_CONFIG = "inter.worker.verification.algorithms";
+    public static final String INTER_WORKER_VERIFICATION_ALGORITHMS_DOC = "A list of permitted algorithms for verifying internal requests";
+    public static final List<String> INTER_WORKER_VERIFICATION_ALGORITHMS_DEFAULT = Collections.singletonList(INTER_WORKER_SIGNATURE_ALGORITHM_DEFAULT);
 
     @SuppressWarnings("unchecked")
     private static final ConfigDef CONFIG = baseConfigDef()
@@ -331,37 +332,37 @@ public class DistributedConfig extends WorkerConfig {
                     between(0, Integer.MAX_VALUE),
                     ConfigDef.Importance.LOW,
                     SCHEDULED_REBALANCE_MAX_DELAY_MS_DOC)
-            .define(INTERNAL_REQUEST_KEY_ROTATION_INTERVAL_MS_CONFIG,
+            .define(INTER_WORKER_KEY_TTL_MS_CONFIG,
                     ConfigDef.Type.INT,
-                    INTERNAL_REQUEST_KEY_ROTATION_INTERVAL_MS_DEFAULT,
+                INTER_WORKER_KEY_TTL_MS_MS_DEFAULT,
                     between(0, Integer.MAX_VALUE),
                     ConfigDef.Importance.LOW,
-                    INTERNAL_REQUEST_KEY_ROTATION_INTERVAL_MS_DOC)
-            .define(INTERNAL_REQUEST_KEY_GENERATION_ALGORITHM_CONFIG,
+                INTER_WORKER_KEY_TTL_MS_MS_DOC)
+            .define(INTER_WORKER_KEY_GENERATION_ALGORITHM_CONFIG,
                     ConfigDef.Type.STRING,
-                    INTERNAL_REQUEST_KEY_GENERATION_ALGORITHM_DEFAULT,
+                INTER_WORKER_KEY_GENERATION_ALGORITHM_DEFAULT,
                     ConfigDef.LambdaValidator.with(
                         (name, value) -> validateKeyAlgorithm(name, (String) value),
                         () -> "Any KeyGenerator algorithm supported by the worker JVM"
                     ),
                     ConfigDef.Importance.LOW,
-                    INTERNAL_REQUEST_KEY_GENERATION_ALGORITHM_DOC)
-            .define(INTERNAL_REQUEST_KEY_SIZE_CONFIG,
+                INTER_WORKER_KEY_GENERATION_ALGORITHM_DOC)
+            .define(INTER_WORKER_KEY_SIZE_CONFIG,
                     ConfigDef.Type.INT,
-                    INTERNAL_REQUEST_KEY_SIZE_DEFAULT,
+                INTER_WORKER_KEY_SIZE_DEFAULT,
                     ConfigDef.Importance.LOW,
-                    INTERNAL_REQUEST_KEY_SIZE_DOC)
-            .define(INTERNAL_REQUEST_SIGNATURE_ALGORITHM_CONFIG,
+                INTER_WORKER_KEY_SIZE_DOC)
+            .define(INTER_WORKER_SIGNATURE_ALGORITHM_CONFIG,
                     ConfigDef.Type.STRING,
-                    INTERNAL_REQUEST_SIGNATURE_ALGORITHM_DEFAULT,
+                INTER_WORKER_SIGNATURE_ALGORITHM_DEFAULT,
                     ConfigDef.LambdaValidator.with(
                         (name, value) -> validateSignatureAlgorithm(name, (String) value),
                         () -> "Any MAC algorithm supported by the worker JVM"),
                     ConfigDef.Importance.LOW,
-                    INTERNAL_REQUEST_SIGNATURE_ALGORITHM_DOC)
-            .define(INTERNAL_REQUEST_VERIFICATION_ALGORITHMS_CONFIG,
+                INTER_WORKER_SIGNATURE_ALGORITHM_DOC)
+            .define(INTER_WORKER_VERIFICATION_ALGORITHMS_CONFIG,
                     ConfigDef.Type.LIST,
-                    INTERNAL_REQUEST_VERIFICATION_ALGORITHMS_DEFAULT,
+                INTER_WORKER_VERIFICATION_ALGORITHMS_DEFAULT,
                     ConfigDef.LambdaValidator.with(
                         (name, value) -> {
                             List<String> algorithms = (List<String>) value;
@@ -373,7 +374,7 @@ public class DistributedConfig extends WorkerConfig {
                         () -> "A list of one or more MAC algorithms, each supported by the worker JVM"
                     ),
                     ConfigDef.Importance.LOW,
-                    INTERNAL_REQUEST_VERIFICATION_ALGORITHMS_DOC);
+                INTER_WORKER_VERIFICATION_ALGORITHMS_DOC);
 
     @Override
     public Integer getRebalanceTimeout() {
@@ -392,27 +393,27 @@ public class DistributedConfig extends WorkerConfig {
 
     public KeyGenerator getInternalRequestKeyGenerator() {
         try {
-            KeyGenerator result = KeyGenerator.getInstance(getString(INTERNAL_REQUEST_KEY_GENERATION_ALGORITHM_CONFIG));
-            Optional.ofNullable(getInt(INTERNAL_REQUEST_KEY_SIZE_CONFIG)).ifPresent(result::init);
+            KeyGenerator result = KeyGenerator.getInstance(getString(INTER_WORKER_KEY_GENERATION_ALGORITHM_CONFIG));
+            Optional.ofNullable(getInt(INTER_WORKER_KEY_SIZE_CONFIG)).ifPresent(result::init);
             return result;
         } catch (NoSuchAlgorithmException | InvalidParameterException e) {
             throw new ConfigException(String.format(
                 "Unable to create key generator with algorithm %s and key size %d: %s",
-                getString(INTERNAL_REQUEST_KEY_GENERATION_ALGORITHM_CONFIG),
-                getInt(INTERNAL_REQUEST_KEY_SIZE_CONFIG),
+                getString(INTER_WORKER_KEY_GENERATION_ALGORITHM_CONFIG),
+                getInt(INTER_WORKER_KEY_SIZE_CONFIG),
                 e.getMessage()
             ));
         }
     }
 
     private void validateKeyAlgorithmAndVerificationAlgorithms() {
-        String keyAlgorithm = getString(INTERNAL_REQUEST_KEY_GENERATION_ALGORITHM_CONFIG);
-        List<String> verificationAlgorithms = getList(INTERNAL_REQUEST_VERIFICATION_ALGORITHMS_CONFIG);
+        String keyAlgorithm = getString(INTER_WORKER_KEY_GENERATION_ALGORITHM_CONFIG);
+        List<String> verificationAlgorithms = getList(INTER_WORKER_VERIFICATION_ALGORITHMS_CONFIG);
         if (!verificationAlgorithms.contains(keyAlgorithm)) {
             throw new ConfigException(
-                INTERNAL_REQUEST_KEY_GENERATION_ALGORITHM_CONFIG,
+                INTER_WORKER_KEY_GENERATION_ALGORITHM_CONFIG,
                 keyAlgorithm,
-                String.format("Key generation algorithm must be present in %s list", INTERNAL_REQUEST_VERIFICATION_ALGORITHMS_CONFIG)
+                String.format("Key generation algorithm must be present in %s list", INTER_WORKER_VERIFICATION_ALGORITHMS_CONFIG)
             );
         }
     }

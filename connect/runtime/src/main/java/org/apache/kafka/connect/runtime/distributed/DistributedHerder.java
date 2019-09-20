@@ -212,9 +212,9 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         this.workerSyncTimeoutMs = config.getInt(DistributedConfig.WORKER_SYNC_TIMEOUT_MS_CONFIG);
         this.workerTasksShutdownTimeoutMs = config.getLong(DistributedConfig.TASK_SHUTDOWN_GRACEFUL_TIMEOUT_MS_CONFIG);
         this.workerUnsyncBackoffMs = config.getInt(DistributedConfig.WORKER_UNSYNC_BACKOFF_MS_CONFIG);
-        this.requestSignatureAlgorithm = config.getString(DistributedConfig.INTERNAL_REQUEST_SIGNATURE_ALGORITHM_CONFIG);
-        this.keyRotationIntervalMs = config.getInt(DistributedConfig.INTERNAL_REQUEST_KEY_ROTATION_INTERVAL_MS_CONFIG);
-        this.keySignatureVerificationAlgorithms = config.getList(DistributedConfig.INTERNAL_REQUEST_VERIFICATION_ALGORITHMS_CONFIG);
+        this.requestSignatureAlgorithm = config.getString(DistributedConfig.INTER_WORKER_SIGNATURE_ALGORITHM_CONFIG);
+        this.keyRotationIntervalMs = config.getInt(DistributedConfig.INTER_WORKER_KEY_TTL_MS_CONFIG);
+        this.keySignatureVerificationAlgorithms = config.getList(DistributedConfig.INTER_WORKER_VERIFICATION_ALGORITHMS_CONFIG);
         this.keyGenerator = config.getInternalRequestKeyGenerator();
 
         String clientIdConfig = config.getString(CommonClientConfigs.CLIENT_ID_CONFIG);
