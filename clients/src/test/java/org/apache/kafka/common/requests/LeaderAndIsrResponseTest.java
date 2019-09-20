@@ -41,9 +41,9 @@ public class LeaderAndIsrResponseTest {
             .setTopicName("foo")
             .setPartitionIndex(0)
             .setControllerEpoch(15)
-            .setLeaderKey(1)
+            .setLeader(1)
             .setLeaderEpoch(10)
-            .setIsrReplicas(Collections.singletonList(10))
+            .setIsr(Collections.singletonList(10))
             .setZkVersion(20)
             .setReplicas(Collections.singletonList(10))
             .setIsNew(false));
@@ -51,9 +51,9 @@ public class LeaderAndIsrResponseTest {
             .setTopicName("foo")
             .setPartitionIndex(1)
             .setControllerEpoch(15)
-            .setLeaderKey(1)
+            .setLeader(1)
             .setLeaderEpoch(10)
-            .setIsrReplicas(Collections.singletonList(10))
+            .setIsr(Collections.singletonList(10))
             .setZkVersion(20)
             .setReplicas(Collections.singletonList(10))
             .setIsNew(false));

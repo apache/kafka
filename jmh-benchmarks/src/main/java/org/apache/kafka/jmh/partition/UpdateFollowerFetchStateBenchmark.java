@@ -54,7 +54,6 @@ import scala.collection.JavaConverters;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Properties;
 import java.util.UUID;
@@ -108,9 +107,9 @@ public class UpdateFollowerFetchStateBenchmark {
         replicas.add(2);
         LeaderAndIsrPartitionState partitionState = new LeaderAndIsrPartitionState()
             .setControllerEpoch(0)
-            .setLeaderKey(0)
+            .setLeader(0)
             .setLeaderEpoch(0)
-            .setIsrReplicas(replicas)
+            .setIsr(replicas)
             .setZkVersion(1)
             .setReplicas(replicas)
             .setIsNew(true);

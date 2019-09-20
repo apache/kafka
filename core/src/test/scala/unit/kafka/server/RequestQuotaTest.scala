@@ -232,9 +232,9 @@ class RequestQuotaTest extends BaseRequestTest {
               .setTopicName(tp.topic)
               .setPartitionIndex(tp.partition)
               .setControllerEpoch(Int.MaxValue)
-              .setLeaderKey(brokerId)
+              .setLeader(brokerId)
               .setLeaderEpoch(Int.MaxValue)
-              .setIsrReplicas(List(brokerId).asJava)
+              .setIsr(List(brokerId).asJava)
               .setZkVersion(2)
               .setReplicas(Seq(brokerId).asJava)
               .setIsNew(true)).asJava,

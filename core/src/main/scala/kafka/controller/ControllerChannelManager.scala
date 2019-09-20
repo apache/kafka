@@ -386,9 +386,9 @@ abstract class AbstractControllerBrokerRequestBatch(config: KafkaConfig,
       val leaderAndIsr = leaderIsrAndControllerEpoch.leaderAndIsr
       result.put(topicPartition, new LeaderAndIsrPartitionState()
         .setControllerEpoch(leaderIsrAndControllerEpoch.controllerEpoch)
-        .setLeaderKey(leaderAndIsr.leader)
+        .setLeader(leaderAndIsr.leader)
         .setLeaderEpoch(leaderAndIsr.leaderEpoch)
-        .setIsrReplicas(leaderAndIsr.isr.map(Integer.valueOf).asJava)
+        .setIsr(leaderAndIsr.isr.map(Integer.valueOf).asJava)
         .setZkVersion(leaderAndIsr.zkVersion)
         .setReplicas(replicaAssignment.replicas.map(Integer.valueOf).asJava)
         .setAddingReplicas(replicaAssignment.addingReplicas.map(Integer.valueOf).asJava)
@@ -452,11 +452,11 @@ abstract class AbstractControllerBrokerRequestBatch(config: KafkaConfig,
       case (broker, leaderAndIsrPartitionStates) =>
         leaderAndIsrPartitionStates.foreach { case (topicPartition, state) =>
           val typeOfRequest =
-            if (broker == state.leaderKey) "become-leader"
+            if (broker == state.leader) "become-leader"
             else "become-follower"
           stateChangeLog.trace(s"Sending $typeOfRequest LeaderAndIsr request $state to broker $broker for partition $topicPartition")
         }
-        val leaderIds = leaderAndIsrPartitionStates.map(_._2.leaderKey).toSet
+        val leaderIds = leaderAndIsrPartitionStates.map(_._2.leader).toSet
         val leaders = controllerContext.liveOrShuttingDownBrokers.filter(b => leaderIds.contains(b.id)).map {
           _.node(config.interBrokerListenerName)
         }

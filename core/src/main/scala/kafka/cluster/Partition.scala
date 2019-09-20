@@ -489,7 +489,7 @@ class Partition(val topicPartition: TopicPartition,
 
       updateAssignmentAndIsr(
         assignment = partitionState.replicas.asScala.iterator.map(_.toInt).toSeq,
-        isr = partitionState.isrReplicas.asScala.iterator.map(_.toInt).toSet
+        isr = partitionState.isr.asScala.iterator.map(_.toInt).toSet
       )
       createLogIfNotExists(localBrokerId, partitionState.isNew, isFutureReplica = false, highWatermarkCheckpoints)
 
@@ -553,7 +553,7 @@ class Partition(val topicPartition: TopicPartition,
                    correlationId: Int,
                    highWatermarkCheckpoints: OffsetCheckpoints): Boolean = {
     inWriteLock(leaderIsrUpdateLock) {
-      val newLeaderBrokerId = partitionState.leaderKey
+      val newLeaderBrokerId = partitionState.leader
       val oldLeaderEpoch = leaderEpoch
       // record the epoch of the controller that made the leadership decision. This is useful while updating the isr
       // to maintain the decision maker controller's epoch in the zookeeper path
