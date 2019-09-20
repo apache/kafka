@@ -83,12 +83,11 @@ public class Plugins {
         ClassLoader oldClassLoader = compareAndSwapLoaders(classLoader);
         // This doesn't use a finally block for performance reasons
         try {
-            T ret = Utils.newInstance(klass);
-            compareAndSwapLoaders(oldClassLoader);
-            return ret;
+            return Utils.newInstance(klass);
         } catch (Throwable t) {
-            compareAndSwapLoaders(oldClassLoader);
             throw new ConnectException("Instantiation error", t);
+        } finally {
+            compareAndSwapLoaders(oldClassLoader);
         }
     }
 
