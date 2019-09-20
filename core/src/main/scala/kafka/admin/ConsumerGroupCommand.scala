@@ -129,7 +129,7 @@ object ConsumerGroupCommand extends Logging {
       println("%-30s %-15s %-15s".format(
         tp.topic,
         if (tp.partition >= 0) tp.partition else "Not Provided",
-        if (error != null) s"Failed: ${error.getCause.getMessage}" else "Successful"
+        if (error != null) s"Error: ${error.getCause.getMessage}" else "Successful"
       ))
     }
   }
