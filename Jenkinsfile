@@ -49,7 +49,7 @@ def job = {
                     echo "Building cp-downstream-builds"
                     if (config.isPrJob) {
                         def muckrakeBranch = kafkaMuckrakeVersionMap[env.CHANGE_TARGET]
-                        def forkRepo = "${env.CHANGE_FORK}/kafka.git"
+                        def forkRepo = "${env.CHANGE_FORK ?: "confluentinc"}/kafka.git"
                         def forkBranch = env.CHANGE_BRANCH
                         echo "Schedule test-cp-downstream-builds with :"
                         echo "Muckrake branch : ${muckrakeBranch}"
