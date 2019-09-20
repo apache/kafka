@@ -27,7 +27,6 @@ import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KafkaStreams;
-import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.KeyValueTimestamp;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
@@ -38,9 +37,6 @@ import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Produced;
-import org.apache.kafka.streams.kstream.Transformer;
-import org.apache.kafka.streams.kstream.TransformerSupplier;
-import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.test.IntegrationTest;
 import org.junit.ClassRule;
@@ -49,8 +45,6 @@ import org.junit.experimental.categories.Category;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 import org.junit.runners.Parameterized.Parameters;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.Collection;
 import java.util.HashSet;
@@ -60,7 +54,6 @@ import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicReference;
 
 import static java.lang.Long.MAX_VALUE;
 import static java.time.Duration.ofMillis;
@@ -77,7 +70,6 @@ import static org.apache.kafka.streams.kstream.Suppressed.BufferConfig.maxRecord
 import static org.apache.kafka.streams.kstream.Suppressed.untilTimeLimit;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.equalTo;
 
 @RunWith(Parameterized.class)
 @Category(IntegrationTest.class)
@@ -112,6 +104,7 @@ public class SuppressionDurabilityIntegrationTest {
         final String storeName = "counts";
         final String outputSuppressed = "output-suppressed" + testId;
         final String outputRaw = "output-raw" + testId;
+        final String changelog = appId + "-KTABLE-SUPPRESS-STATE-STORE-0000000003-changelog";
 
         // create multiple partitions as a trap, in case the buffer doesn't properly set the
         // partition on the records, but instead relies on the default key partitioner
@@ -132,16 +125,11 @@ public class SuppressionDurabilityIntegrationTest {
         final AtomicInteger eventCount = new AtomicInteger(0);
         suppressedCounts.foreach((key, value) -> eventCount.incrementAndGet());
 
-        // expect all post-suppress records to keep the right input topic
-        final MetadataValidator metadataValidator = new MetadataValidator(input);
-
         suppressedCounts
-            .transform(metadataValidator)
             .to(outputSuppressed, Produced.with(STRING_SERDE, Serdes.Long()));
 
         valueCounts
             .toStream()
-            .transform(metadataValidator)
             .to(outputRaw, Produced.with(STRING_SERDE, Serdes.Long()));
 
         final Properties streamsConfig = mkProperties(mkMap(
@@ -237,56 +225,9 @@ public class SuppressionDurabilityIntegrationTest {
                 )
             );
 
-            metadataValidator.raiseExceptionIfAny();
-
         } finally {
             driver.close();
             cleanStateAfterTest(CLUSTER, driver);
-        }
-    }
-
-    private static final class MetadataValidator implements TransformerSupplier<String, Long, KeyValue<String, Long>> {
-        private static final Logger LOG = LoggerFactory.getLogger(MetadataValidator.class);
-        private final AtomicReference<Throwable> firstException = new AtomicReference<>();
-        private final String topic;
-
-        MetadataValidator(final String topic) {
-            this.topic = topic;
-        }
-
-        @Override
-        public Transformer<String, Long, KeyValue<String, Long>> get() {
-            return new Transformer<String, Long, KeyValue<String, Long>>() {
-                private ProcessorContext context;
-
-                @Override
-                public void init(final ProcessorContext context) {
-                    this.context = context;
-                }
-
-                @Override
-                public KeyValue<String, Long> transform(final String key, final Long value) {
-                    try {
-                        assertThat(context.topic(), equalTo(topic));
-                    } catch (final Throwable e) {
-                        firstException.compareAndSet(null, e);
-                        LOG.error("Validation Failed", e);
-                    }
-                    return new KeyValue<>(key, value);
-                }
-
-                @Override
-                public void close() {
-
-                }
-            };
-        }
-
-        void raiseExceptionIfAny() {
-            final Throwable exception = firstException.get();
-            if (exception != null) {
-                throw new AssertionError("Got an exception during run", exception);
-            }
         }
     }
 

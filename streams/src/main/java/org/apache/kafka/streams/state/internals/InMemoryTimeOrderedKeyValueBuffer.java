@@ -17,9 +17,6 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
-import org.apache.kafka.common.header.Header;
-import org.apache.kafka.common.header.internals.RecordHeader;
-import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.BytesSerializer;
 import org.apache.kafka.common.serialization.Serde;
@@ -50,8 +47,6 @@ import static java.util.Objects.requireNonNull;
 public final class InMemoryTimeOrderedKeyValueBuffer<K, V> implements TimeOrderedKeyValueBuffer<K, V> {
     private static final BytesSerializer KEY_SERIALIZER = new BytesSerializer();
     private static final ByteArraySerializer VALUE_SERIALIZER = new ByteArraySerializer();
-    private static final RecordHeaders V_1_CHANGELOG_HEADERS =
-        new RecordHeaders(new Header[] {new RecordHeader("v", new byte[] {(byte) 1})});
 
     private final Map<Bytes, BufferKey> index = new HashMap<>();
     private final TreeMap<BufferKey, ContextualRecord> sortedMap = new TreeMap<>();
@@ -89,7 +84,7 @@ public final class InMemoryTimeOrderedKeyValueBuffer<K, V> implements TimeOrdere
          * As of 2.1, there's no way for users to directly interact with the buffer,
          * so this method is implemented solely to be called by Streams (which
          * it will do based on the {@code cache.max.bytes.buffering} config.
-         *
+         * <p>
          * It's currently a no-op.
          */
         @Override
@@ -101,7 +96,7 @@ public final class InMemoryTimeOrderedKeyValueBuffer<K, V> implements TimeOrdere
          * As of 2.1, there's no way for users to directly interact with the buffer,
          * so this method is implemented solely to be called by Streams (which
          * it will do based on the {@code cache.max.bytes.buffering} config.
-         *
+         * <p>
          * It's currently a no-op.
          */
         @Override
@@ -259,23 +254,23 @@ public final class InMemoryTimeOrderedKeyValueBuffer<K, V> implements TimeOrdere
     }
 
     private void logValue(final Bytes key, final BufferKey bufferKey, final ContextualRecord value) {
-        final byte[] serializedContextualRecord = value.serialize();
+        final byte[] innerValue = value.value();
 
         final int sizeOfBufferTime = Long.BYTES;
-        final int sizeOfContextualRecord = serializedContextualRecord.length;
+        final int sizeOfContextualRecord = innerValue.length;
 
         final byte[] timeAndContextualRecord = ByteBuffer.wrap(new byte[sizeOfBufferTime + sizeOfContextualRecord])
                                                          .putLong(bufferKey.time)
-                                                         .put(serializedContextualRecord)
+                                                         .put(innerValue)
                                                          .array();
 
         collector.send(
             changelogTopic,
             key,
             timeAndContextualRecord,
-            V_1_CHANGELOG_HEADERS,
-            partition,
             null,
+            partition,
+            value.recordContext().timestamp(),
             KEY_SERIALIZER,
             VALUE_SERIALIZER
         );
@@ -323,32 +318,20 @@ public final class InMemoryTimeOrderedKeyValueBuffer<K, V> implements TimeOrdere
                 final long time = timeAndValue.getLong();
                 final byte[] value = new byte[record.value().length - 8];
                 timeAndValue.get(value);
-                if (record.headers().lastHeader("v") == null) {
-                    cleanPut(
-                        time,
-                        key,
-                        new ContextualRecord(
-                            value,
-                            new ProcessorRecordContext(
-                                record.timestamp(),
-                                record.offset(),
-                                record.partition(),
-                                record.topic(),
-                                record.headers()
-                            )
+                cleanPut(
+                    time,
+                    key,
+                    new ContextualRecord(
+                        value,
+                        new ProcessorRecordContext(
+                            record.timestamp(),
+                            record.offset(),
+                            record.partition(),
+                            record.topic(),
+                            null
                         )
-                    );
-                } else if (V_1_CHANGELOG_HEADERS.lastHeader("v").equals(record.headers().lastHeader("v"))) {
-                    final ContextualRecord contextualRecord = ContextualRecord.deserialize(ByteBuffer.wrap(value));
-
-                    cleanPut(
-                        time,
-                        key,
-                        contextualRecord
-                    );
-                } else {
-                    throw new IllegalArgumentException("Restoring apparently invalid changelog record: " + record);
-                }
+                    )
+                );
             }
             if (record.partition() != partition) {
                 throw new IllegalStateException(
