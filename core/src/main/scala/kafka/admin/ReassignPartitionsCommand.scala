@@ -48,6 +48,14 @@ object ReassignPartitionsCommand extends Logging {
 
   val helpText = "This tool helps to moves topic partitions between replicas."
 
+  def apply(zkClient: KafkaZkClient,
+            adminClientOpt: Option[Admin],
+            proposedPartitionAssignment: Map[TopicPartition, Seq[Int]],
+            proposedReplicaAssignment: Map[TopicPartitionReplica, String] = Map.empty,
+            adminZkClient: AdminZkClient) : ReassignPartitionsCommand = {
+    new ReassignPartitionsCommand(zkClient, adminClientOpt, proposedPartitionAssignment, proposedReplicaAssignment, adminZkClient)
+  }
+
   def main(args: Array[String]): Unit = {
     val opts = validateAndParseArgs(args)
     val zkConnect = opts.options.valueOf(opts.zkConnectOpt)
@@ -207,7 +215,7 @@ object ReassignPartitionsCommand extends Logging {
   def executeAssignment(zkClient: KafkaZkClient, adminClientOpt: Option[Admin], reassignmentJsonString: String, throttle: Throttle, timeoutMs: Long = 10000L): Unit = {
     val (partitionAssignment, replicaAssignment) = parseAndValidate(zkClient, reassignmentJsonString)
     val adminZkClient = new AdminZkClient(zkClient)
-    val reassignPartitionsCommand = new ReassignPartitionsCommand(zkClient, adminClientOpt, partitionAssignment.toMap, replicaAssignment, adminZkClient)
+    val reassignPartitionsCommand = ReassignPartitionsCommand(zkClient, adminClientOpt, partitionAssignment.toMap, replicaAssignment, adminZkClient)
 
     // If there is an existing rebalance running, attempt to change its throttle
     if (zkClient.reassignPartitionsInProgress()) {
@@ -500,11 +508,11 @@ object ReassignPartitionsCommand extends Logging {
   }
 }
 
-class ReassignPartitionsCommand(zkClient: KafkaZkClient,
-                                adminClientOpt: Option[Admin],
-                                proposedPartitionAssignment: Map[TopicPartition, Seq[Int]],
-                                proposedReplicaAssignment: Map[TopicPartitionReplica, String] = Map.empty,
-                                adminZkClient: AdminZkClient)
+class ReassignPartitionsCommand private (zkClient: KafkaZkClient,
+                                         adminClientOpt: Option[Admin],
+                                         proposedPartitionAssignment: Map[TopicPartition, Seq[Int]],
+                                         proposedReplicaAssignment: Map[TopicPartitionReplica, String] = Map.empty,
+                                         adminZkClient: AdminZkClient)
   extends Logging {
 
   import ReassignPartitionsCommand._
