@@ -80,6 +80,11 @@ public class StreamsMetricsImpl implements StreamsMetrics {
     public static final String TOTAL_SUFFIX = "-total";
     public static final String RATIO_SUFFIX = "-ratio";
 
+    public static final String AVG_VALUE_DOC = "The average value of ";
+    public static final String MAX_VALUE_DOC = "The maximum value of ";
+    public static final String AVG_LATENCY_DOC = "The average latency of ";
+    public static final String MAX_LATENCY_DOC = "The maximum latency of ";
+
     public static final String GROUP_PREFIX_WO_DELIMITER = "stream";
     public static final String GROUP_PREFIX = GROUP_PREFIX_WO_DELIMITER + "-";
     public static final String GROUP_SUFFIX = "-metrics";
@@ -472,8 +477,8 @@ public class StreamsMetricsImpl implements StreamsMetrics {
             group,
             tags,
             operation,
-            "The average value of " + operation + ".",
-            "The maximum value of " + operation + "."
+            AVG_VALUE_DOC + operation + ".",
+            MAX_VALUE_DOC + operation + "."
         );
     }
 
@@ -485,7 +490,7 @@ public class StreamsMetricsImpl implements StreamsMetrics {
             new MetricName(
                 operation + "-latency-avg",
                 group,
-                "The average latency of " + operation + " operation.",
+                AVG_LATENCY_DOC + operation + " operation.",
                 tags),
             new Avg()
         );
@@ -493,7 +498,7 @@ public class StreamsMetricsImpl implements StreamsMetrics {
             new MetricName(
                 operation + "-latency-max",
                 group,
-                "The max latency of " + operation + " operation.",
+                MAX_LATENCY_DOC + operation + " operation.",
                 tags),
             new Max()
         );
