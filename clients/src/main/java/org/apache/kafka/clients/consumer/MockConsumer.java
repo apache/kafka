@@ -307,8 +307,10 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
     public synchronized Map<TopicPartition, OffsetAndMetadata> committed(final Set<TopicPartition> partitions) {
         ensureNotClosed();
 
-        return partitions.stream().collect(
-            Collectors.toMap(tp -> tp, tp -> subscriptions.isAssigned(tp) ? committed.get(tp) : new OffsetAndMetadata(0)));
+        return partitions.stream()
+            .filter(committed::containsKey)
+            .collect(Collectors.toMap(tp -> tp, tp -> subscriptions.isAssigned(tp) ?
+                committed.get(tp) : new OffsetAndMetadata(0)));
     }
 
     @Override
