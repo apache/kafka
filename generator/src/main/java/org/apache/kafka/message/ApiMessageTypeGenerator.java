@@ -67,8 +67,8 @@ public final class ApiMessageTypeGenerator {
         }
     }
 
-    public ApiMessageTypeGenerator() {
-        this.headerGenerator = new HeaderGenerator();
+    public ApiMessageTypeGenerator(String packageName) {
+        this.headerGenerator = new HeaderGenerator(packageName);
         this.apis = new TreeMap<>();
         this.buffer = new CodeBuffer();
     }
