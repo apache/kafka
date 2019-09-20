@@ -34,9 +34,9 @@ public final class MessageDataGenerator {
     private final SchemaGenerator schemaGenerator;
     private final CodeBuffer buffer;
 
-    MessageDataGenerator() {
+    MessageDataGenerator(String packageName) {
         this.structRegistry = new StructRegistry();
-        this.headerGenerator = new HeaderGenerator();
+        this.headerGenerator = new HeaderGenerator(packageName);
         this.schemaGenerator = new SchemaGenerator(headerGenerator, structRegistry);
         this.buffer = new CodeBuffer();
     }

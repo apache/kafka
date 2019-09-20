@@ -218,6 +218,9 @@ public class AbstractTaskTest {
                                 config) {
 
             @Override
+            public void initializeTaskTime() {}
+
+            @Override
             public void resume() {}
 
             @Override

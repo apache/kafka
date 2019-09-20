@@ -147,7 +147,7 @@ public class TaskManager {
         // CANNOT FIND RETRY AND BACKOFF LOGIC
         // create all newly assigned tasks (guard against race condition with other thread via backoff and retry)
         // -> other thread will call removeSuspendedTasks(); eventually
-        log.trace("New active tasks to be created: {}", newTasks);
+        log.debug("New active tasks to be created: {}", newTasks);
 
         for (final StreamTask task : taskCreator.createTasks(consumer, newTasks)) {
             active.addNewTask(task);

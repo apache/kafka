@@ -1012,7 +1012,9 @@ project(':clients') {
   task processMessages(type:JavaExec) {
     main = "org.apache.kafka.message.MessageGenerator"
     classpath = project(':generator').sourceSets.main.runtimeClasspath
-    args = [ "src/generated/java/org/apache/kafka/common/message", "src/main/resources/common/message" ]
+    args = [ "org.apache.kafka.common.message",
+             "src/generated/java/org/apache/kafka/common/message",
+             "src/main/resources/common/message" ]
     inputs.dir("src/main/resources/common/message")
     outputs.dir("src/generated/java/org/apache/kafka/common/message")
   }
@@ -1020,7 +1022,9 @@ project(':clients') {
   task processTestMessages(type:JavaExec) {
     main = "org.apache.kafka.message.MessageGenerator"
     classpath = project(':generator').sourceSets.main.runtimeClasspath
-    args = [ "src/generated-test/java/org/apache/kafka/common/message", "src/test/resources/common/message" ]
+    args = [ "org.apache.kafka.common.message",
+             "src/generated-test/java/org/apache/kafka/common/message",
+             "src/test/resources/common/message" ]
     inputs.dir("src/test/resources/common/message")
     outputs.dir("src/generated-test/java/org/apache/kafka/common/message")
   }
@@ -1418,9 +1422,11 @@ project(':jmh-benchmarks') {
   }
 
   dependencies {
+    compile project(':core')
     compile project(':clients')
     compile project(':streams')
     compile libs.jmhCore
+    compile libs.mockitoCore
     annotationProcessor libs.jmhGeneratorAnnProcess
     compile libs.jmhCoreBenchmarks
   }
@@ -1431,6 +1437,9 @@ project(':jmh-benchmarks') {
     }
   }
 
+  checkstyle {
+    configProperties = checkstyleConfigProperties("import-control-jmh-benchmarks.xml")
+  }
 
   task jmh(type: JavaExec, dependsOn: [':jmh-benchmarks:clean', ':jmh-benchmarks:shadowJar']) {
 

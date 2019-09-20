@@ -88,6 +88,11 @@ public class StandbyTask extends AbstractTask {
         //no-op
     }
 
+    @Override
+    public void initializeTaskTime() {
+        //no-op
+    }
+
     /**
      * <pre>
      * - update offset limits
