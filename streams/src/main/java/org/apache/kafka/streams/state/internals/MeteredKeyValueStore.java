@@ -35,6 +35,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.apache.kafka.common.metrics.Sensor.RecordingLevel.DEBUG;
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.ROLLUP_VALUE;
 import static org.apache.kafka.streams.state.internals.metrics.Sensors.createTaskAndStoreLatencyAndThroughputSensors;
 
 /**
@@ -53,7 +54,7 @@ public class MeteredKeyValueStore<K, V>
     final Serde<V> valueSerde;
     StateSerdes<K, V> serdes;
 
-    private final String metricScope;
+    private final String metricsScope;
     protected final Time time;
     private Sensor putTime;
     private Sensor putIfAbsentTime;
@@ -67,12 +68,12 @@ public class MeteredKeyValueStore<K, V>
     private String taskName;
 
     MeteredKeyValueStore(final KeyValueStore<Bytes, byte[]> inner,
-                         final String metricScope,
+                         final String metricsScope,
                          final Time time,
                          final Serde<K> keySerde,
                          final Serde<V> valueSerde) {
         super(inner);
-        this.metricScope = metricScope;
+        this.metricsScope = metricsScope;
         this.time = time != null ? time : Time.SYSTEM;
         this.keySerde = keySerde;
         this.valueSerde = valueSerde;
@@ -84,9 +85,9 @@ public class MeteredKeyValueStore<K, V>
         metrics = (StreamsMetricsImpl) context.metrics();
 
         taskName = context.taskId().toString();
-        final String metricsGroup = "stream-" + metricScope + "-metrics";
-        final Map<String, String> taskTags = metrics.tagMap("task-id", taskName, metricScope + "-id", "all");
-        final Map<String, String> storeTags = metrics.tagMap("task-id", taskName, metricScope + "-id", name());
+        final String metricsGroup = "stream-" + metricsScope + "-state-metrics";
+        final Map<String, String> taskTags = metrics.storeLevelTagMap(taskName, metricsScope, ROLLUP_VALUE);
+        final Map<String, String> storeTags = metrics.storeLevelTagMap(taskName, metricsScope, name());
 
         initStoreSerde(context);
 

@@ -19,6 +19,7 @@ package kafka.server
 
 import java.util.Properties
 
+import com.yammer.metrics.Metrics
 import kafka.log.LogConfig
 import kafka.message.ZStdCompressionCodec
 import kafka.utils.TestUtils
@@ -37,6 +38,8 @@ import scala.collection.JavaConverters._
   * complements those classes with tests that require lower-level access to the protocol.
   */
 class ProduceRequestTest extends BaseRequestTest {
+
+  val metricsKeySet = Metrics.defaultRegistry.allMetrics.keySet.asScala
 
   @Test
   def testSimpleProduceRequest(): Unit = {
@@ -114,6 +117,8 @@ class ProduceRequestTest extends BaseRequestTest {
     assertEquals(Errors.CORRUPT_MESSAGE, partitionResponse.error)
     assertEquals(-1, partitionResponse.baseOffset)
     assertEquals(-1, partitionResponse.logAppendTime)
+    assertEquals(metricsKeySet.count(_.getMBeanName.endsWith(s"${BrokerTopicStats.InvalidMessageCrcRecordsPerSec}")), 1)
+    assertTrue(TestUtils.meterCount(s"${BrokerTopicStats.InvalidMessageCrcRecordsPerSec}") > 0)
   }
 
   @Test

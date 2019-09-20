@@ -1012,9 +1012,21 @@ project(':clients') {
   task processMessages(type:JavaExec) {
     main = "org.apache.kafka.message.MessageGenerator"
     classpath = project(':generator').sourceSets.main.runtimeClasspath
-    args = [ "src/generated/java/org/apache/kafka/common/message", "src/main/resources/common/message" ]
+    args = [ "org.apache.kafka.common.message",
+             "src/generated/java/org/apache/kafka/common/message",
+             "src/main/resources/common/message" ]
     inputs.dir("src/main/resources/common/message")
     outputs.dir("src/generated/java/org/apache/kafka/common/message")
+  }
+
+  task processTestMessages(type:JavaExec) {
+    main = "org.apache.kafka.message.MessageGenerator"
+    classpath = project(':generator').sourceSets.main.runtimeClasspath
+    args = [ "org.apache.kafka.common.message",
+             "src/generated-test/java/org/apache/kafka/common/message",
+             "src/test/resources/common/message" ]
+    inputs.dir("src/test/resources/common/message")
+    outputs.dir("src/generated-test/java/org/apache/kafka/common/message")
   }
 
   sourceSets {
@@ -1025,12 +1037,14 @@ project(':clients') {
     }
     test {
       java {
-        srcDirs = ["src/generated/java", "src/test/java"]
+        srcDirs = ["src/generated/java", "src/generated-test/java", "src/test/java"]
       }
     }
   }
 
   compileJava.dependsOn 'processMessages'
+
+  compileTestJava.dependsOn 'processTestMessages'
 
   javadoc {
     include "**/org/apache/kafka/clients/admin/*"
@@ -1050,6 +1064,7 @@ project(':clients') {
     include "**/org/apache/kafka/common/security/scram/*"
     include "**/org/apache/kafka/common/security/token/delegation/*"
     include "**/org/apache/kafka/common/security/oauthbearer/*"
+    include "**/org/apache/kafka/server/authorizer/*"
     include "**/org/apache/kafka/server/policy/*"
     include "**/org/apache/kafka/server/quota/*"
   }
@@ -1407,9 +1422,11 @@ project(':jmh-benchmarks') {
   }
 
   dependencies {
+    compile project(':core')
     compile project(':clients')
     compile project(':streams')
     compile libs.jmhCore
+    compile libs.mockitoCore
     annotationProcessor libs.jmhGeneratorAnnProcess
     compile libs.jmhCoreBenchmarks
   }
@@ -1420,6 +1437,9 @@ project(':jmh-benchmarks') {
     }
   }
 
+  checkstyle {
+    configProperties = checkstyleConfigProperties("import-control-jmh-benchmarks.xml")
+  }
 
   task jmh(type: JavaExec, dependsOn: [':jmh-benchmarks:clean', ':jmh-benchmarks:shadowJar']) {
 

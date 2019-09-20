@@ -28,8 +28,8 @@ import java.util.Arrays
 import java.util.Collections
 import java.util.Properties
 import java.util.concurrent.{Callable, ExecutionException, Executors, TimeUnit}
-
 import javax.net.ssl.X509TrustManager
+
 import kafka.api._
 import kafka.cluster.{Broker, EndPoint}
 import kafka.log._
@@ -38,6 +38,7 @@ import kafka.server._
 import kafka.server.checkpoints.OffsetCheckpointFile
 import Implicits._
 import com.yammer.metrics.Metrics
+import com.yammer.metrics.core.Meter
 import kafka.controller.LeaderIsrAndControllerEpoch
 import kafka.zk._
 import org.apache.kafka.clients.CommonClientConfigs
@@ -45,17 +46,19 @@ import org.apache.kafka.clients.admin.AlterConfigOp.OpType
 import org.apache.kafka.clients.admin._
 import org.apache.kafka.clients.consumer._
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
+import org.apache.kafka.common.acl.{AccessControlEntry, AccessControlEntryFilter, AclBindingFilter}
 import org.apache.kafka.common.{KafkaFuture, TopicPartition}
 import org.apache.kafka.common.config.ConfigResource
-import org.apache.kafka.common.errors.RetriableException
 import org.apache.kafka.common.header.Header
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.network.{ListenerName, Mode}
 import org.apache.kafka.common.record._
+import org.apache.kafka.common.resource.ResourcePattern
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.serialization.{ByteArrayDeserializer, ByteArraySerializer, Deserializer, IntegerSerializer, Serializer}
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.common.utils.Utils._
+import org.apache.kafka.server.authorizer.{Authorizer => JAuthorizer}
 import org.apache.kafka.test.{TestSslUtils, TestUtils => JTestUtils}
 import org.apache.zookeeper.KeeperException.SessionExpiredException
 import org.apache.zookeeper.ZooDefs._
@@ -143,7 +146,15 @@ object TestUtils extends Logging {
    * @param config The configuration of the server
    */
   def createServer(config: KafkaConfig, time: Time = Time.SYSTEM): KafkaServer = {
-    val server = new KafkaServer(config, time)
+    createServer(config, time, None)
+  }
+
+  def createServer(config: KafkaConfig, threadNamePrefix: Option[String]): KafkaServer = {
+    createServer(config, Time.SYSTEM, threadNamePrefix)
+  }
+
+  def createServer(config: KafkaConfig, time: Time, threadNamePrefix: Option[String]): KafkaServer = {
+    val server = new KafkaServer(config, time, threadNamePrefix = threadNamePrefix)
     server.startup()
     server
   }
@@ -998,7 +1009,9 @@ object TestUtils extends Logging {
       "Reassigned partition [%s,%d] is under-replicated as reported by the leader %d".format(topic, partitionToBeReassigned, leader.get))
   }
 
-  def verifyNonDaemonThreadsStatus(threadNamePrefix: String): Unit = {
+  // Note: Call this method in the test itself, rather than the @After method.
+  // Because of the assert, if assertNoNonDaemonThreads fails, nothing after would be executed.
+  def assertNoNonDaemonThreads(threadNamePrefix: String): Unit = {
     val threadCount = Thread.getAllStackTraces.keySet.asScala.count { t =>
       !t.isDaemon && t.isAlive && t.getName.startsWith(threadNamePrefix)
     }
@@ -1159,6 +1172,15 @@ object TestUtils extends Logging {
       }
     }
     trustManager
+  }
+
+  def waitAndVerifyAcls(expected: Set[AccessControlEntry], authorizer: JAuthorizer, resource: ResourcePattern) = {
+    val newLine = scala.util.Properties.lineSeparator
+
+    val filter = new AclBindingFilter(resource.toFilter, AccessControlEntryFilter.ANY)
+    waitUntilTrue(() => authorizer.acls(filter).asScala.map(_.entry).toSet == expected,
+      s"expected acls:${expected.mkString(newLine + "\t", newLine + "\t", newLine)}" +
+        s"but got:${authorizer.acls(filter).asScala.map(_.entry).mkString(newLine + "\t", newLine + "\t", newLine)}", waitTimeMs = JTestUtils.DEFAULT_MAX_WAIT_MS)
   }
 
   def waitAndVerifyAcls(expected: Set[Acl], authorizer: Authorizer, resource: Resource) = {
@@ -1562,6 +1584,16 @@ object TestUtils extends Logging {
     val total = allMetrics.values().asScala.filter(_.metricName().name() == metricName)
       .foldLeft(0.0)((total, metric) => total + metric.metricValue.asInstanceOf[Double])
     total.toLong
+  }
+
+  def meterCount(metricName: String): Long = {
+    Metrics.defaultRegistry.allMetrics.asScala
+      .filterKeys(_.getMBeanName.endsWith(metricName))
+      .values
+      .headOption
+      .getOrElse(fail(s"Unable to find metric $metricName"))
+      .asInstanceOf[Meter]
+      .count
   }
 
   def clearYammerMetrics(): Unit = {

@@ -237,6 +237,8 @@ public abstract class AbstractRequest extends AbstractRequestResponse {
                 return new AlterPartitionReassignmentsRequest(struct, apiVersion);
             case LIST_PARTITION_REASSIGNMENTS:
                 return new ListPartitionReassignmentsRequest(struct, apiVersion);
+            case OFFSET_DELETE:
+                return new OffsetDeleteRequest(struct, apiVersion);
             default:
                 throw new AssertionError(String.format("ApiKey %s is not currently handled in `parseRequest`, the " +
                         "code should be updated to do so.", apiKey));

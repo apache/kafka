@@ -29,6 +29,7 @@ import org.apache.kafka.common.metrics.stats.Rate;
 import org.apache.kafka.common.metrics.stats.Value;
 import org.apache.kafka.common.metrics.stats.WindowedCount;
 import org.apache.kafka.common.metrics.stats.WindowedSum;
+import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsMetrics;
 
 import java.util.Arrays;
@@ -42,10 +43,17 @@ import java.util.Objects;
 import java.util.concurrent.TimeUnit;
 
 public class StreamsMetricsImpl implements StreamsMetrics {
+
+    public enum Version {
+        LATEST,
+        FROM_100_TO_23
+    }
+
     private final Metrics metrics;
     private final Map<Sensor, Sensor> parentSensors;
     private final String threadName;
 
+    private final Version version;
     private final Deque<String> threadLevelSensors = new LinkedList<>();
     private final Map<String, Deque<String>> taskLevelSensors = new HashMap<>();
     private final Map<String, Deque<String>> nodeLevelSensors = new HashMap<>();
@@ -59,7 +67,7 @@ public class StreamsMetricsImpl implements StreamsMetrics {
     public static final String TASK_ID_TAG = "task-id";
     public static final String STORE_ID_TAG = "state-id";
 
-    public static final String ALL_TASKS = "all";
+    public static final String ROLLUP_VALUE = "all";
 
     public static final String LATENCY_SUFFIX = "-latency";
     public static final String AVG_SUFFIX = "-avg";
@@ -69,9 +77,13 @@ public class StreamsMetricsImpl implements StreamsMetrics {
     public static final String TOTAL_SUFFIX = "-total";
     public static final String RATIO_SUFFIX = "-ratio";
 
-    public static final String THREAD_LEVEL_GROUP = "stream-metrics";
-    public static final String TASK_LEVEL_GROUP = "stream-task-metrics";
-    public static final String STATE_LEVEL_GROUP = "stream-state-metrics";
+    public static final String GROUP_PREFIX_WO_DELIMITER = "stream";
+    public static final String GROUP_PREFIX = GROUP_PREFIX_WO_DELIMITER + "-";
+    public static final String GROUP_SUFFIX = "-metrics";
+    public static final String STATE_LEVEL_GROUP_SUFFIX = "-state" + GROUP_SUFFIX;
+    public static final String THREAD_LEVEL_GROUP = GROUP_PREFIX_WO_DELIMITER + GROUP_SUFFIX;
+    public static final String TASK_LEVEL_GROUP = GROUP_PREFIX + "task" + GROUP_SUFFIX;
+    public static final String STATE_LEVEL_GROUP = GROUP_PREFIX + "state" + GROUP_SUFFIX;
 
     public static final String PROCESSOR_NODE_METRICS_GROUP = "stream-processor-node-metrics";
     public static final String PROCESSOR_NODE_ID_TAG = "processor-node-id";
@@ -79,12 +91,26 @@ public class StreamsMetricsImpl implements StreamsMetrics {
     public static final String EXPIRED_WINDOW_RECORD_DROP = "expired-window-record-drop";
     public static final String LATE_RECORD_DROP = "late-record-drop";
 
-    public StreamsMetricsImpl(final Metrics metrics, final String threadName) {
+    public StreamsMetricsImpl(final Metrics metrics, final String threadName, final String builtInMetricsVersion) {
         Objects.requireNonNull(metrics, "Metrics cannot be null");
+        Objects.requireNonNull(builtInMetricsVersion, "Built-in metrics version cannot be null");
         this.metrics = metrics;
         this.threadName = threadName;
+        this.version = parseBuiltInMetricsVersion(builtInMetricsVersion);
 
         this.parentSensors = new HashMap<>();
+    }
+
+    private static Version parseBuiltInMetricsVersion(final String builtInMetricsVersion) {
+        if (builtInMetricsVersion.equals(StreamsConfig.METRICS_LATEST)) {
+            return Version.LATEST;
+        } else {
+            return Version.FROM_100_TO_23;
+        }
+    }
+
+    public Version version() {
+        return version;
     }
 
     public final Sensor threadLevelSensor(final String sensorName,

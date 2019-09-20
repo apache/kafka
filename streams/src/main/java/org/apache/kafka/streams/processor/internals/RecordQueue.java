@@ -71,6 +71,10 @@ public class RecordQueue {
         );
         this.log = logContext.logger(RecordQueue.class);
     }
+ 
+    void setPartitionTime(final long partitionTime) {
+        this.partitionTime = partitionTime;
+    }
 
     /**
      * Returns the corresponding source node in the topology
@@ -149,15 +153,6 @@ public class RecordQueue {
     }
 
     /**
-     * Returns the tracked partition time
-     *
-     * @return partition time
-     */
-    long partitionTime() {
-        return partitionTime;
-    }
-
-    /**
      * Clear the fifo queue of its elements, also clear the time tracker's kept stamped elements
      */
     public void clear() {
@@ -198,10 +193,16 @@ public class RecordQueue {
                 skipRecordsSensor.record();
                 continue;
             }
-
             headRecord = new StampedRecord(deserialized, timestamp);
 
             partitionTime = Math.max(partitionTime, timestamp);
         }
+    }
+
+    /**
+     * @return the local partitionTime for this particular RecordQueue
+     */
+    long partitionTime() {
+        return partitionTime;
     }
 }

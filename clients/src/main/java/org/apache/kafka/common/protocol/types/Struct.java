@@ -21,6 +21,7 @@ import org.apache.kafka.common.record.BaseRecords;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.Objects;
+import java.util.UUID;
 
 /**
  * A record that can be serialized and deserialized according to a pre-defined schema
@@ -88,6 +89,10 @@ public class Struct {
         return getLong(field.name);
     }
 
+    public UUID get(Field.UUID field) {
+        return getUUID(field.name);
+    }
+
     public Short get(Field.Int16 field) {
         return getShort(field.name);
     }
@@ -115,6 +120,12 @@ public class Struct {
     public Long getOrElse(Field.Int64 field, long alternative) {
         if (hasField(field.name))
             return getLong(field.name);
+        return alternative;
+    }
+
+    public UUID getOrElse(Field.UUID field, UUID alternative) {
+        if (hasField(field.name))
+            return getUUID(field.name);
         return alternative;
     }
 
@@ -245,6 +256,14 @@ public class Struct {
         return (Long) get(name);
     }
 
+    public UUID getUUID(BoundField field) {
+        return (UUID) get(field);
+    }
+
+    public UUID getUUID(String name) {
+        return (UUID) get(name);
+    }
+
     public Object[] getArray(BoundField field) {
         return (Object[]) get(field);
     }
@@ -339,6 +358,10 @@ public class Struct {
     }
 
     public Struct set(Field.Int64 def, long value) {
+        return set(def.name, value);
+    }
+
+    public Struct set(Field.UUID def, UUID value) {
         return set(def.name, value);
     }
 
