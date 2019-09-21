@@ -142,6 +142,7 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
                     if (!suspended.containsKey(id)) {
                         running.remove(id);
                         runningByPartition.keySet().removeAll(task.partitions());
+                        runningByPartition.keySet().removeAll(task.changelogPartitions());
                         revokedChangelogs.addAll(task.changelogPartitions());
                     }
                 }
@@ -229,6 +230,7 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
                     final RuntimeException fatalException = closeZombieTask(task);
                     running.remove(taskId);
                     runningByPartition.keySet().removeAll(task.partitions());
+                    runningByPartition.keySet().removeAll(task.changelogPartitions());
                     changelogs.addAll(task.changelogPartitions());
                     if (fatalException != null) {
                         throw fatalException;
@@ -242,6 +244,7 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
                 suspended.remove(task.id());
                 running.remove(task.id());
                 runningByPartition.keySet().removeAll(task.partitions());
+                runningByPartition.keySet().removeAll(task.changelogPartitions());
                 changelogs.addAll(task.changelogPartitions());
             }
         }
@@ -263,6 +266,7 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
                     suspended.remove(suspendedTask.id());
                     running.remove(suspendedTask.id());
                     runningByPartition.keySet().removeAll(suspendedTask.partitions());
+                    runningByPartition.keySet().removeAll(suspendedTask.changelogPartitions());
                     revokedChangelogs.addAll(suspendedTask.changelogPartitions());
                 }
             }
@@ -456,7 +460,7 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
         return builder.toString();
     }
 
-    // for testing only
+    // the following are for testing only
     Collection<StreamTask> restoringTasks() {
         return Collections.unmodifiableCollection(restoring.values());
     }

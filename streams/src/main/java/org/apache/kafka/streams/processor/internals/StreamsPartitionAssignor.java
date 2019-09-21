@@ -69,8 +69,6 @@ import static org.apache.kafka.streams.processor.internals.assignment.StreamsAss
 import static org.apache.kafka.streams.processor.internals.assignment.StreamsAssignmentProtocolVersions.VERSION_TWO;
 
 public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Configurable {
-    public static final RebalanceProtocol DEFAULT_REBALANCE_PROTOCOL = RebalanceProtocol.EAGER;
-
     private Logger log;
     private String logPrefix;
 

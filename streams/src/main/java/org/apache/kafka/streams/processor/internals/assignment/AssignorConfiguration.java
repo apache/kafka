@@ -25,7 +25,6 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.internals.QuietStreamsConfig;
 import org.apache.kafka.streams.processor.PartitionGrouper;
 import org.apache.kafka.streams.processor.internals.InternalTopicManager;
-import org.apache.kafka.streams.processor.internals.StreamsPartitionAssignor;
 import org.apache.kafka.streams.processor.internals.TaskManager;
 import org.slf4j.Logger;
 
@@ -153,7 +152,7 @@ public final class AssignorConfiguration {
                     throw new IllegalArgumentException("Unknown configuration value for parameter 'upgrade.from': " + upgradeFrom);
             }
         }
-        return StreamsPartitionAssignor.DEFAULT_REBALANCE_PROTOCOL;
+        return RebalanceProtocol.COOPERATIVE;
     }
 
     public String logPrefix() {
