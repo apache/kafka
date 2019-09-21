@@ -120,8 +120,8 @@ public final class MessageDataGenerator {
             headerGenerator.addImport(MessageGenerator.MESSAGE_CLASS);
         }
         if (isSetElement) {
-            headerGenerator.addImport(MessageGenerator.IMPLICIT_LINKED_HASH_MULTI_SET_CLASS);
-            implementedInterfaces.add("ImplicitLinkedHashMultiSet.Element");
+            headerGenerator.addImport(MessageGenerator.IMPLICIT_LINKED_HASH_MULTI_COLLECTION_CLASS);
+            implementedInterfaces.add("ImplicitLinkedHashMultiCollection.Element");
         }
         Set<String> classModifiers = new HashSet<>();
         classModifiers.add("public");
@@ -152,9 +152,9 @@ public final class MessageDataGenerator {
 
     private void generateHashSet(String className, StructSpec struct) {
         buffer.printf("%n");
-        headerGenerator.addImport(MessageGenerator.IMPLICIT_LINKED_HASH_MULTI_SET_CLASS);
-        buffer.printf("public static class %s extends ImplicitLinkedHashMultiSet<%s> {%n",
-            hashSetType(className), className);
+        headerGenerator.addImport(MessageGenerator.IMPLICIT_LINKED_HASH_MULTI_COLLECTION_CLASS);
+        buffer.printf("public static class %s extends ImplicitLinkedHashMultiCollection<%s> {%n",
+            collectionType(className), className);
         buffer.incrementIndent();
         generateHashSetZeroArgConstructor(className);
         generateHashSetSizeArgConstructor(className);
@@ -166,7 +166,7 @@ public final class MessageDataGenerator {
     }
 
     private void generateHashSetZeroArgConstructor(String className) {
-        buffer.printf("public %s() {%n", hashSetType(className));
+        buffer.printf("public %s() {%n", collectionType(className));
         buffer.incrementIndent();
         buffer.printf("super();%n");
         buffer.decrementIndent();
@@ -175,7 +175,7 @@ public final class MessageDataGenerator {
     }
 
     private void generateHashSetSizeArgConstructor(String className) {
-        buffer.printf("public %s(int expectedNumElements) {%n", hashSetType(className));
+        buffer.printf("public %s(int expectedNumElements) {%n", collectionType(className));
         buffer.incrementIndent();
         buffer.printf("super(expectedNumElements);%n");
         buffer.decrementIndent();
@@ -185,7 +185,7 @@ public final class MessageDataGenerator {
 
     private void generateHashSetIteratorConstructor(String className) {
         headerGenerator.addImport(MessageGenerator.ITERATOR_CLASS);
-        buffer.printf("public %s(Iterator<%s> iterator) {%n", hashSetType(className), className);
+        buffer.printf("public %s(Iterator<%s> iterator) {%n", collectionType(className), className);
         buffer.incrementIndent();
         buffer.printf("super(iterator);%n");
         buffer.decrementIndent();
@@ -199,7 +199,7 @@ public final class MessageDataGenerator {
             commaSeparatedHashSetFieldAndTypes(struct));
         buffer.incrementIndent();
         generateKeyElement(className, struct);
-        headerGenerator.addImport(MessageGenerator.IMPLICIT_LINKED_HASH_MULTI_SET_CLASS);
+        headerGenerator.addImport(MessageGenerator.IMPLICIT_LINKED_HASH_MULTI_COLLECTION_CLASS);
         buffer.printf("return find(key);%n");
         buffer.decrementIndent();
         buffer.printf("}%n");
@@ -212,7 +212,7 @@ public final class MessageDataGenerator {
             commaSeparatedHashSetFieldAndTypes(struct));
         buffer.incrementIndent();
         generateKeyElement(className, struct);
-        headerGenerator.addImport(MessageGenerator.IMPLICIT_LINKED_HASH_MULTI_SET_CLASS);
+        headerGenerator.addImport(MessageGenerator.IMPLICIT_LINKED_HASH_MULTI_COLLECTION_CLASS);
         buffer.printf("return findAll(key);%n");
         buffer.decrementIndent();
         buffer.printf("}%n");
@@ -283,8 +283,8 @@ public final class MessageDataGenerator {
         }
     }
 
-    private static String hashSetType(String baseType) {
-        return baseType + "Set";
+    private static String collectionType(String baseType) {
+        return baseType + "Collection";
     }
 
     private String fieldAbstractJavaType(FieldSpec field) {
@@ -307,8 +307,8 @@ public final class MessageDataGenerator {
         } else if (field.type().isArray()) {
             FieldType.ArrayType arrayType = (FieldType.ArrayType) field.type();
             if (field.toStruct().hasKeys()) {
-                headerGenerator.addImport(MessageGenerator.IMPLICIT_LINKED_HASH_MULTI_SET_CLASS);
-                return hashSetType(arrayType.elementType().toString());
+                headerGenerator.addImport(MessageGenerator.IMPLICIT_LINKED_HASH_MULTI_COLLECTION_CLASS);
+                return collectionType(arrayType.elementType().toString());
             } else {
                 headerGenerator.addImport(MessageGenerator.LIST_CLASS);
                 return "List<" + getBoxedJavaType(arrayType.elementType()) + ">";
@@ -322,8 +322,8 @@ public final class MessageDataGenerator {
         if (field.type().isArray()) {
             FieldType.ArrayType arrayType = (FieldType.ArrayType) field.type();
             if (field.toStruct().hasKeys()) {
-                headerGenerator.addImport(MessageGenerator.IMPLICIT_LINKED_HASH_MULTI_SET_CLASS);
-                return hashSetType(arrayType.elementType().toString());
+                headerGenerator.addImport(MessageGenerator.IMPLICIT_LINKED_HASH_MULTI_COLLECTION_CLASS);
+                return collectionType(arrayType.elementType().toString());
             } else {
                 headerGenerator.addImport(MessageGenerator.ARRAYLIST_CLASS);
                 return "ArrayList<" + getBoxedJavaType(arrayType.elementType()) + ">";
@@ -1233,7 +1233,7 @@ public final class MessageDataGenerator {
             }
             FieldType.ArrayType arrayType = (FieldType.ArrayType) field.type();
             if (field.toStruct().hasKeys()) {
-                return "new " + hashSetType(arrayType.elementType().toString()) + "(0)";
+                return "new " + collectionType(arrayType.elementType().toString()) + "(0)";
             } else {
                 headerGenerator.addImport(MessageGenerator.ARRAYLIST_CLASS);
                 return "new ArrayList<" + getBoxedJavaType(arrayType.elementType()) + ">()";

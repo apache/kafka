@@ -27,6 +27,7 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.util.Iterator;
+import java.util.Objects;
 
 import static org.apache.kafka.common.record.Records.LOG_OVERHEAD;
 import static org.apache.kafka.common.record.Records.HEADER_SIZE_UP_TO_MAGIC;
@@ -233,14 +234,14 @@ public class FileLogInputStream implements LogInputStream<FileLogInputStream.Fil
             return offset == that.offset &&
                     position == that.position &&
                     batchSize == that.batchSize &&
-                    (channel == null ? thatChannel == null : channel.equals(thatChannel));
+                    Objects.equals(channel, thatChannel);
         }
 
         @Override
         public int hashCode() {
             FileChannel channel = fileRecords == null ? null : fileRecords.channel();
 
-            int result = (int) (offset ^ (offset >>> 32));
+            int result = Long.hashCode(offset);
             result = 31 * result + (channel != null ? channel.hashCode() : 0);
             result = 31 * result + position;
             result = 31 * result + batchSize;

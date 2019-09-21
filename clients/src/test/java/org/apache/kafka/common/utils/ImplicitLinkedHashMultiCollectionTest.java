@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.common.utils;
 
-import org.apache.kafka.common.utils.ImplicitLinkedHashSetTest.TestElement;
+import org.apache.kafka.common.utils.ImplicitLinkedHashCollectionTest.TestElement;
 import org.junit.Assert;
 import org.junit.Rule;
 import org.junit.Test;
@@ -32,21 +32,21 @@ import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 /**
- * A unit test for ImplicitLinkedHashMultiSet.
+ * A unit test for ImplicitLinkedHashMultiCollection.
  */
-public class ImplicitLinkedHashMultiSetTest {
+public class ImplicitLinkedHashMultiCollectionTest {
     @Rule
     final public Timeout globalTimeout = Timeout.millis(120000);
 
     @Test
     public void testNullForbidden() {
-        ImplicitLinkedHashMultiSet<TestElement> multiSet = new ImplicitLinkedHashMultiSet<>();
+        ImplicitLinkedHashMultiCollection<TestElement> multiSet = new ImplicitLinkedHashMultiCollection<>();
         assertFalse(multiSet.add(null));
     }
 
     @Test
     public void testInsertDelete() {
-        ImplicitLinkedHashMultiSet<TestElement> multiSet = new ImplicitLinkedHashMultiSet<>(100);
+        ImplicitLinkedHashMultiCollection<TestElement> multiSet = new ImplicitLinkedHashMultiCollection<>(100);
         TestElement e1 = new TestElement(1);
         TestElement e2 = new TestElement(1);
         TestElement e3 = new TestElement(2);
@@ -64,7 +64,7 @@ public class ImplicitLinkedHashMultiSetTest {
 
     @Test
     public void testTraversal() {
-        ImplicitLinkedHashMultiSet<TestElement> multiSet = new ImplicitLinkedHashMultiSet<>();
+        ImplicitLinkedHashMultiCollection<TestElement> multiSet = new ImplicitLinkedHashMultiCollection<>();
         expectExactTraversal(multiSet.iterator());
         TestElement e1 = new TestElement(1);
         TestElement e2 = new TestElement(1);
@@ -96,7 +96,7 @@ public class ImplicitLinkedHashMultiSetTest {
 
     @Test
     public void testEnlargement() {
-        ImplicitLinkedHashMultiSet<TestElement> multiSet = new ImplicitLinkedHashMultiSet<>(5);
+        ImplicitLinkedHashMultiCollection<TestElement> multiSet = new ImplicitLinkedHashMultiCollection<>(5);
         assertEquals(11, multiSet.numSlots());
         TestElement[] testElements = {
             new TestElement(100),
@@ -126,7 +126,7 @@ public class ImplicitLinkedHashMultiSetTest {
     public void testManyInsertsAndDeletes() {
         Random random = new Random(123);
         LinkedList<TestElement> existing = new LinkedList<>();
-        ImplicitLinkedHashMultiSet<TestElement> multiSet = new ImplicitLinkedHashMultiSet<>();
+        ImplicitLinkedHashMultiCollection<TestElement> multiSet = new ImplicitLinkedHashMultiCollection<>();
         for (int i = 0; i < 100; i++) {
             for (int j = 0; j < 4; j++) {
                 TestElement testElement = new TestElement(random.nextInt());

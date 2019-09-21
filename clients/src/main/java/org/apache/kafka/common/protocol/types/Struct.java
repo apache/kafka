@@ -20,6 +20,7 @@ import org.apache.kafka.common.record.BaseRecords;
 
 import java.nio.ByteBuffer;
 import java.util.Arrays;
+import java.util.Objects;
 
 /**
  * A record that can be serialized and deserialized according to a pre-defined schema
@@ -529,7 +530,7 @@ public class Struct {
             } else {
                 Object thisField = this.get(f);
                 Object otherField = other.get(f);
-                return (thisField == null) ? (otherField == null) : thisField.equals(otherField);
+                result = Objects.equals(thisField, otherField);
             }
             if (!result)
                 return false;

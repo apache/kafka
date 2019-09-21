@@ -146,11 +146,11 @@ public final class WorkerCoordinator extends AbstractCoordinator implements Clos
     }
 
     @Override
-    public JoinGroupRequestData.JoinGroupRequestProtocolSet metadata() {
+    public JoinGroupRequestData.JoinGroupRequestProtocolCollection metadata() {
         configSnapshot = configStorage.snapshot();
         ConnectProtocol.WorkerState workerState = new ConnectProtocol.WorkerState(restUrl, configSnapshot.offset());
         ByteBuffer metadata = ConnectProtocol.serializeMetadata(workerState);
-        return new JoinGroupRequestData.JoinGroupRequestProtocolSet(
+        return new JoinGroupRequestData.JoinGroupRequestProtocolCollection(
                 Collections.singleton(new JoinGroupRequestData.JoinGroupRequestProtocol()
                         .setName(DEFAULT_SUBPROTOCOL)
                         .setMetadata(metadata.array()))

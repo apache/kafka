@@ -246,8 +246,8 @@ public class Plugins {
         // Configure the Converter using only the old configuration mechanism ...
         String configPrefix = classPropertyName + ".";
         Map<String, Object> converterConfig = config.originalsWithPrefix(configPrefix);
-        log.debug("Configuring the {} converter with configuration:{}{}",
-                  isKeyConverter ? "key" : "value", System.lineSeparator(), converterConfig);
+        log.debug("Configuring the {} converter with configuration keys:{}{}",
+                  isKeyConverter ? "key" : "value", System.lineSeparator(), converterConfig.keySet());
 
         // Have to override schemas.enable from true to false for internal JSON converters
         // Don't have to warn the user about anything since all deprecation warnings take place in the
@@ -315,7 +315,7 @@ public class Plugins {
         String configPrefix = classPropertyName + ".";
         Map<String, Object> converterConfig = config.originalsWithPrefix(configPrefix);
         converterConfig.put(ConverterConfig.TYPE_CONFIG, ConverterType.HEADER.getName());
-        log.debug("Configuring the header converter with configuration:{}{}", System.lineSeparator(), converterConfig);
+        log.debug("Configuring the header converter with configuration keys:{}{}", System.lineSeparator(), converterConfig.keySet());
         plugin.configure(converterConfig);
         return plugin;
     }

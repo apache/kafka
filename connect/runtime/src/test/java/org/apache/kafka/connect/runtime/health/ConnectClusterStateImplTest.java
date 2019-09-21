@@ -30,6 +30,8 @@ import org.powermock.modules.junit4.PowerMockRunner;
 
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
+import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
@@ -38,17 +40,22 @@ import static org.junit.Assert.assertThrows;
 
 @RunWith(PowerMockRunner.class)
 public class ConnectClusterStateImplTest {
-  
+    protected static final String KAFKA_CLUSTER_ID = "franzwashere";
+
     @Mock
     protected Herder herder;
     protected ConnectClusterStateImpl connectClusterState;
-    protected Collection<String> expectedConnectors;
     protected long herderRequestTimeoutMs = TimeUnit.SECONDS.toMillis(10);
+    protected Collection<String> expectedConnectors;
     
     @Before
     public void setUp() {
-        connectClusterState = new ConnectClusterStateImpl(herderRequestTimeoutMs, herder);
         expectedConnectors = Arrays.asList("sink1", "source1", "source2");
+        connectClusterState = new ConnectClusterStateImpl(
+            herderRequestTimeoutMs,
+            new ConnectClusterDetailsImpl(KAFKA_CLUSTER_ID),
+            herder
+        );
     }
     
     @Test
@@ -64,6 +71,28 @@ public class ConnectClusterStateImplTest {
         });
         EasyMock.replay(herder);
         assertEquals(expectedConnectors, connectClusterState.connectors());
+    }
+
+    @Test
+    public void connectorConfig() {
+        final String connName = "sink6";
+        final Map<String, String> expectedConfig = Collections.singletonMap("key", "value");
+        Capture<Callback<Map<String, String>>> callback = EasyMock.newCapture();
+        herder.connectorConfig(EasyMock.eq(connName), EasyMock.capture(callback));
+        EasyMock.expectLastCall().andAnswer(new IAnswer<Void>() {
+            @Override
+            public Void answer() {
+                callback.getValue().onCompletion(null, expectedConfig);
+                return null;
+            }
+        });
+        EasyMock.replay(herder);
+        assertEquals(expectedConfig, connectClusterState.connectorConfig(connName));
+    }
+
+    @Test
+    public void kafkaClusterId() {
+        assertEquals(KAFKA_CLUSTER_ID, connectClusterState.clusterDetails().kafkaClusterId());
     }
 
     @Test

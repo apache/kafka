@@ -18,6 +18,7 @@
 package org.apache.kafka.connect.runtime.health;
 
 import org.apache.kafka.connect.errors.ConnectException;
+import org.apache.kafka.connect.health.ConnectClusterDetails;
 import org.apache.kafka.connect.health.ConnectClusterState;
 import org.apache.kafka.connect.health.ConnectorHealth;
 import org.apache.kafka.connect.health.ConnectorState;
@@ -38,10 +39,16 @@ import java.util.concurrent.TimeoutException;
 public class ConnectClusterStateImpl implements ConnectClusterState {
     
     private final long herderRequestTimeoutMs;
+    private final ConnectClusterDetails clusterDetails;
     private final Herder herder;
 
-    public ConnectClusterStateImpl(long connectorsTimeoutMs, Herder herder) {
+    public ConnectClusterStateImpl(
+        long connectorsTimeoutMs,
+        ConnectClusterDetails clusterDetails,
+        Herder herder
+    ) {
         this.herderRequestTimeoutMs = connectorsTimeoutMs;
+        this.clusterDetails = clusterDetails;
         this.herder = herder;
     }
 
@@ -58,7 +65,6 @@ public class ConnectClusterStateImpl implements ConnectClusterState {
 
     @Override
     public ConnectorHealth connectorHealth(String connName) {
-
         ConnectorStateInfo state = herder.connectorStatus(connName);
         ConnectorState connectorState = new ConnectorState(
             state.connector().state(),
@@ -73,6 +79,25 @@ public class ConnectClusterStateImpl implements ConnectClusterState {
             ConnectorType.valueOf(state.type().name())
         );
         return connectorHealth;
+    }
+
+    @Override
+    public Map<String, String> connectorConfig(String connName) {
+        FutureCallback<Map<String, String>> connectorConfigCallback = new FutureCallback<>();
+        herder.connectorConfig(connName, connectorConfigCallback);
+        try {
+            return connectorConfigCallback.get(herderRequestTimeoutMs, TimeUnit.MILLISECONDS);
+        } catch (InterruptedException | ExecutionException | TimeoutException e) {
+            throw new ConnectException(
+                String.format("Failed to retrieve configuration for connector '%s'", connName),
+                e
+            );
+        }
+    }
+
+    @Override
+    public ConnectClusterDetails clusterDetails() {
+        return clusterDetails;
     }
 
     private Map<Integer, TaskState> taskStates(List<ConnectorStateInfo.TaskState> states) {

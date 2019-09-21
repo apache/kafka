@@ -190,7 +190,7 @@ public class WorkerCoordinatorTest {
 
         PowerMock.replayAll();
 
-        JoinGroupRequestData.JoinGroupRequestProtocolSet serialized = coordinator.metadata();
+        JoinGroupRequestData.JoinGroupRequestProtocolCollection serialized = coordinator.metadata();
         assertEquals(1, serialized.size());
 
         Iterator<JoinGroupRequestData.JoinGroupRequestProtocol> protocolIterator = serialized.iterator();
