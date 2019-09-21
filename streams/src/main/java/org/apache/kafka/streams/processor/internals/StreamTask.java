@@ -23,6 +23,8 @@ import static org.apache.kafka.streams.kstream.internals.metrics.Sensors.recordL
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.io.StringWriter;
+import java.nio.ByteBuffer;
+import java.util.Base64;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -67,6 +69,8 @@ import org.apache.kafka.streams.state.internals.ThreadCache;
 public class StreamTask extends AbstractTask implements ProcessorNodePunctuator {
 
     private static final ConsumerRecord<Object, Object> DUMMY_RECORD = new ConsumerRecord<>(ProcessorContextImpl.NONEXIST_TOPIC, -1, -1L, null, null);
+    // visible for testing
+    static final byte LATEST_MAGIC_BYTE = 1;
 
     private final Time time;
     private final long maxTaskIdleMs;
@@ -453,7 +457,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
      */
     @Override
     public void commit() {
-        commit(true);
+        commit(true, extractPartitionTimes());
     }
 
     /**
@@ -461,7 +465,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
      *                               or if the task producer got fenced (EOS)
      */
     // visible for testing
-    void commit(final boolean startNewTransaction) {
+    void commit(final boolean startNewTransaction, final Map<TopicPartition, Long> partitionTimes) {
         final long startNs = time.nanoseconds();
         log.debug("Committing");
 
@@ -475,7 +479,9 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         for (final Map.Entry<TopicPartition, Long> entry : consumedOffsets.entrySet()) {
             final TopicPartition partition = entry.getKey();
             final long offset = entry.getValue() + 1;
-            consumedOffsetsAndMetadata.put(partition, new OffsetAndMetadata(offset));
+            final long partitionTime = partitionTimes.get(partition);
+            consumedOffsetsAndMetadata.put(partition, new OffsetAndMetadata(offset, encodeTimestamp(partitionTime)));
+            stateMgr.putOffsetLimit(partition, offset);
         }
 
         try {
@@ -576,6 +582,9 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
     // visible for testing
     void suspend(final boolean clean,
                  final boolean isZombie) {
+        // this is necessary because all partition times are reset to -1 during close
+        // we need to preserve the original partitions times before calling commit
+        final Map<TopicPartition, Long> partitionTimes = extractPartitionTimes();
         try {
             closeTopology(); // should we call this only on clean suspend?
         } catch (final RuntimeException fatal) {
@@ -587,10 +596,9 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         if (clean) {
             TaskMigratedException taskMigratedException = null;
             try {
-                commit(false);
+                commit(false, partitionTimes);
             } finally {
                 if (eosEnabled) {
-
                     stateMgr.checkpoint(activeTaskCheckpointableOffsets());
 
                     try {
@@ -725,6 +733,28 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         closeSuspended(clean, isZombie, firstException);
 
         taskClosed = true;
+    }
+
+    private void initializeCommittedTimestamp(final TopicPartition partition) {
+        final OffsetAndMetadata metadata = consumer.committed(partition);
+
+        if (metadata != null) {
+            final long committedTimestamp = decodeTimestamp(metadata.metadata());
+            partitionGroup.setPartitionTime(partition, committedTimestamp);
+            log.debug("A committed timestamp was detected: setting the partition time of partition {}"
+                      + " to {} in stream task {}", partition, committedTimestamp, this);
+        } else {
+            log.debug("No committed timestamp was found in metadata for partition {}", partition);
+        }
+    }
+
+    /**
+     * Retrieves formerly committed timestamps and updates the local queue's partition time.
+     */
+    public void initializeTaskTime() {
+        for (final TopicPartition partition : partitionGroup.partitions()) {
+            initializeCommittedTimestamp(partition);
+        }
     }
 
     /**
@@ -866,6 +896,16 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         return recordCollector;
     }
 
+    // used for testing
+    long streamTime() {
+        return partitionGroup.streamTime();
+    }
+
+    // used for testing
+    long partitionTime(final TopicPartition partition) {
+        return partitionGroup.partitionTimestamp(partition);
+    }
+
     Producer<byte[], byte[]> getProducer() {
         return producer;
     }
@@ -887,5 +927,38 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
                 retriable
             );
         }
+    }
+
+    // visible for testing
+    String encodeTimestamp(final long partitionTime) {
+        final ByteBuffer buffer = ByteBuffer.allocate(9);
+        buffer.put(LATEST_MAGIC_BYTE);
+        buffer.putLong(partitionTime);
+        return Base64.getEncoder().encodeToString(buffer.array());
+    }
+
+    // visible for testing
+    long decodeTimestamp(final String encryptedString) {
+        if (encryptedString.length() == 0) {
+            return RecordQueue.UNKNOWN;
+        }
+        final ByteBuffer buffer = ByteBuffer.wrap(Base64.getDecoder().decode(encryptedString));
+        final byte version = buffer.get();
+        switch (version) {
+            case LATEST_MAGIC_BYTE:
+                return buffer.getLong();
+            default: 
+                log.warn("Unsupported offset metadata version found. Supported version {}. Found version {}.", 
+                         LATEST_MAGIC_BYTE, version);
+                return RecordQueue.UNKNOWN;
+        }
+    }
+
+    private Map<TopicPartition, Long> extractPartitionTimes() {
+        final Map<TopicPartition, Long> partitionTimes = new HashMap<>();
+        for (final TopicPartition partition : partitionGroup.partitions()) {
+            partitionTimes.put(partition, partitionTime(partition));
+        }
+        return partitionTimes;
     }
 }

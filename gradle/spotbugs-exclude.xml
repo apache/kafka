@@ -222,6 +222,25 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
     </Match>
 
     <Match>
+        <!-- Suppress a warning about intentional missing default cases and fallthroughs. -->
+        <Class name="org.apache.kafka.streams.state.internals.Murmur3"/>
+        <Or>
+            <Bug pattern="SF_SWITCH_NO_DEFAULT"/>
+            <Bug pattern="SF_SWITCH_FALLTHROUGH"/>
+        </Or>
+    </Match>
+
+
+    <Match>
+        <!-- Suppress a warning about intentional missing default cases and fallthroughs. -->
+        <Class name="org.apache.kafka.streams.state.internals.Murmur3$IncrementalHash32"/>
+        <Or>
+            <Bug pattern="SF_SWITCH_NO_DEFAULT"/>
+            <Bug pattern="SF_SWITCH_FALLTHROUGH"/>
+        </Or>
+    </Match>
+
+    <Match>
         <!-- Suppress a spurious warning about locks not being released on all paths.
              This happens because there is an 'if' statement that checks if we have the lock before
              releasing it. -->

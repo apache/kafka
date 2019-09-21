@@ -17,6 +17,7 @@
 
 package org.apache.kafka.message;
 
+import java.util.Objects;
 import java.util.TreeSet;
 
 /**
@@ -45,15 +46,16 @@ public final class HeaderGenerator {
         ""
     };
 
-    static final String PACKAGE = "org.apache.kafka.common.message";
 
     private final CodeBuffer buffer;
 
     private final TreeSet<String> imports;
+    private final String packageName;
 
-    public HeaderGenerator() {
+    public HeaderGenerator(String packageName) {
         this.buffer = new CodeBuffer();
         this.imports = new TreeSet<>();
+        this.packageName = packageName;
     }
 
     public void addImport(String newImport) {
@@ -61,10 +63,11 @@ public final class HeaderGenerator {
     }
 
     public void generate() {
+        Objects.requireNonNull(packageName);
         for (int i = 0; i < HEADER.length; i++) {
             buffer.printf("%s%n", HEADER[i]);
         }
-        buffer.printf("package %s;%n", PACKAGE);
+        buffer.printf("package %s;%n", packageName);
         buffer.printf("%n");
         for (String newImport : imports) {
             buffer.printf("import %s;%n", newImport);
