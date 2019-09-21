@@ -204,14 +204,22 @@ public class ConsumerCoordinatorTest {
 
     @Test
     public void testMetrics() {
-        metrics.sensor("commit-latency").record(1.0d);
-        metrics.sensor("commit-latency").record(2.0d);
-        metrics.sensor("commit-latency").record(6.0d);
-
         assertNotNull(getMetric("commit-latency-avg"));
         assertNotNull(getMetric("commit-latency-max"));
         assertNotNull(getMetric("commit-rate"));
         assertNotNull(getMetric("commit-total"));
+        assertNotNull(getMetric("partition-revoked-latency-avg"));
+        assertNotNull(getMetric("partition-revoked-latency-max"));
+        assertNotNull(getMetric("partition-assigned-latency-avg"));
+        assertNotNull(getMetric("partition-assigned-latency-max"));
+        assertNotNull(getMetric("partition-lost-latency-avg"));
+        assertNotNull(getMetric("partition-lost-latency-max"));
+        assertNotNull(getMetric("assigned-partitions"));
+
+        metrics.sensor("commit-latency").record(1.0d);
+        metrics.sensor("commit-latency").record(6.0d);
+        metrics.sensor("commit-latency").record(2.0d);
+
         assertEquals(3.0d, getMetric("commit-latency-avg").metricValue());
         assertEquals(6.0d, getMetric("commit-latency-max").metricValue());
         assertEquals(0.1d, getMetric("commit-rate").metricValue());
@@ -224,12 +232,6 @@ public class ConsumerCoordinatorTest {
         metrics.sensor("partition-lost-latency").record(1.0d);
         metrics.sensor("partition-lost-latency").record(2.0d);
 
-        assertNotNull(getMetric("partition-revoked-latency-avg"));
-        assertNotNull(getMetric("partition-revoked-latency-max"));
-        assertNotNull(getMetric("partition-assigned-latency-avg"));
-        assertNotNull(getMetric("partition-assigned-latency-max"));
-        assertNotNull(getMetric("partition-lost-latency-avg"));
-        assertNotNull(getMetric("partition-lost-latency-max"));
         assertEquals(1.5d, getMetric("partition-revoked-latency-avg").metricValue());
         assertEquals(2.0d, getMetric("partition-revoked-latency-max").metricValue());
         assertEquals(1.5d, getMetric("partition-assigned-latency-avg").metricValue());
@@ -237,7 +239,6 @@ public class ConsumerCoordinatorTest {
         assertEquals(1.5d, getMetric("partition-lost-latency-avg").metricValue());
         assertEquals(2.0d, getMetric("partition-lost-latency-max").metricValue());
 
-        assertNotNull(getMetric("assigned-partitions"));
         assertEquals(0.0d, getMetric("assigned-partitions").metricValue());
         subscriptions.assignFromUser(Collections.singleton(t1p));
         assertEquals(1.0d, getMetric("assigned-partitions").metricValue());

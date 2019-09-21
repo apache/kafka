@@ -149,18 +149,34 @@ public class AbstractCoordinatorTest {
     public void testMetrics() {
         setupCoordinator();
 
-        metrics.sensor("heartbeat-latency").record(1.0d);
-        metrics.sensor("heartbeat-latency").record(2.0d);
-        metrics.sensor("heartbeat-latency").record(6.0d);
-
         assertNotNull(getMetric("heartbeat-response-time-max"));
         assertNotNull(getMetric("heartbeat-rate"));
         assertNotNull(getMetric("heartbeat-total"));
+        assertNotNull(getMetric("last-heartbeat-seconds-ago"));
+        assertNotNull(getMetric("join-time-avg"));
+        assertNotNull(getMetric("join-time-max"));
+        assertNotNull(getMetric("join-rate"));
+        assertNotNull(getMetric("join-total"));
+        assertNotNull(getMetric("sync-time-avg"));
+        assertNotNull(getMetric("sync-time-max"));
+        assertNotNull(getMetric("sync-rate"));
+        assertNotNull(getMetric("sync-total"));
+        assertNotNull(getMetric("rebalance-latency-avg"));
+        assertNotNull(getMetric("rebalance-latency-max"));
+        assertNotNull(getMetric("rebalance-rate-per-hour"));
+        assertNotNull(getMetric("rebalance-total"));
+        assertNotNull(getMetric("last-rebalance-seconds-ago"));
+        assertNotNull(getMetric("failed-rebalance-rate-per-hour"));
+        assertNotNull(getMetric("failed-rebalance-total"));
+
+        metrics.sensor("heartbeat-latency").record(1.0d);
+        metrics.sensor("heartbeat-latency").record(6.0d);
+        metrics.sensor("heartbeat-latency").record(2.0d);
+
         assertEquals(6.0d, getMetric("heartbeat-response-time-max").metricValue());
         assertEquals(0.1d, getMetric("heartbeat-rate").metricValue());
         assertEquals(3.0d, getMetric("heartbeat-total").metricValue());
 
-        assertNotNull(getMetric("last-heartbeat-seconds-ago"));
         assertEquals(-1.0d, getMetric("last-heartbeat-seconds-ago").metricValue());
         coordinator.heartbeat().sentHeartbeat(mockTime.milliseconds());
         assertEquals(0.0d, getMetric("last-heartbeat-seconds-ago").metricValue());
@@ -168,54 +184,39 @@ public class AbstractCoordinatorTest {
         assertEquals(10.0d, getMetric("last-heartbeat-seconds-ago").metricValue());
 
         metrics.sensor("join-latency").record(1.0d);
-        metrics.sensor("join-latency").record(2.0d);
         metrics.sensor("join-latency").record(6.0d);
+        metrics.sensor("join-latency").record(2.0d);
 
-        assertNotNull(getMetric("join-time-avg"));
-        assertNotNull(getMetric("join-time-max"));
-        assertNotNull(getMetric("join-rate"));
-        assertNotNull(getMetric("join-total"));
         assertEquals(3.0d, getMetric("join-time-avg").metricValue());
         assertEquals(6.0d, getMetric("join-time-max").metricValue());
         assertEquals(0.1d, getMetric("join-rate").metricValue());
         assertEquals(3.0d, getMetric("join-total").metricValue());
 
         metrics.sensor("sync-latency").record(1.0d);
-        metrics.sensor("sync-latency").record(2.0d);
         metrics.sensor("sync-latency").record(6.0d);
+        metrics.sensor("sync-latency").record(2.0d);
 
-        assertNotNull(getMetric("sync-time-avg"));
-        assertNotNull(getMetric("sync-time-max"));
-        assertNotNull(getMetric("sync-rate"));
-        assertNotNull(getMetric("sync-total"));
         assertEquals(3.0d, getMetric("sync-time-avg").metricValue());
         assertEquals(6.0d, getMetric("sync-time-max").metricValue());
         assertEquals(0.1d, getMetric("sync-rate").metricValue());
         assertEquals(3.0d, getMetric("sync-total").metricValue());
 
         metrics.sensor("rebalance-latency").record(1.0d);
-        metrics.sensor("rebalance-latency").record(2.0d);
         metrics.sensor("rebalance-latency").record(6.0d);
+        metrics.sensor("rebalance-latency").record(2.0d);
 
-        assertNotNull(getMetric("rebalance-latency-avg"));
-        assertNotNull(getMetric("rebalance-latency-max"));
-        assertNotNull(getMetric("rebalance-rate-per-hour"));
-        assertNotNull(getMetric("rebalance-total"));
         assertEquals(3.0d, getMetric("rebalance-latency-avg").metricValue());
         assertEquals(6.0d, getMetric("rebalance-latency-max").metricValue());
         assertEquals(360.0d, getMetric("rebalance-rate-per-hour").metricValue());
         assertEquals(3.0d, getMetric("rebalance-total").metricValue());
 
         metrics.sensor("failed-rebalance").record(1.0d);
-        metrics.sensor("failed-rebalance").record(2.0d);
         metrics.sensor("failed-rebalance").record(6.0d);
+        metrics.sensor("failed-rebalance").record(2.0d);
 
-        assertNotNull(getMetric("failed-rebalance-rate-per-hour"));
-        assertNotNull(getMetric("failed-rebalance-total"));
         assertEquals(360.0d, getMetric("failed-rebalance-rate-per-hour").metricValue());
         assertEquals(3.0d, getMetric("failed-rebalance-total").metricValue());
 
-        assertNotNull(getMetric("last-rebalance-seconds-ago"));
         assertEquals(-1.0d, getMetric("last-rebalance-seconds-ago").metricValue());
         coordinator.setLastRebalanceTime(mockTime.milliseconds());
         assertEquals(0.0d, getMetric("last-rebalance-seconds-ago").metricValue());
