@@ -17,7 +17,6 @@
 package org.apache.kafka.streams;
 
 import org.apache.kafka.common.serialization.Deserializer;
-import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.test.TestRecord;
 
 import java.util.HashMap;
@@ -28,7 +27,7 @@ import java.util.Objects;
 
 /**
  * TestOutputTopic is used to read records from topic in {@link TopologyTestDriver}.
- * To use {@code TestOutputTopic} create new class {@link TopologyTestDriver#createOutputTopic(String, Serde, Serde)}
+ * To use {@code TestOutputTopic} create new class {@link TopologyTestDriver#createOutputTopic(String, Deserializer, Deserializer)}
  * In actual test code, you can read message values, keys, {@link KeyValue} or {@link TestRecord}
  * You need to have own TestOutputTopic for each topic.
  * <p>
@@ -54,21 +53,6 @@ public class TestOutputTopic<K, V> {
     private final String topic;
     private final Deserializer<K> keyDeserializer;
     private final Deserializer<V> valueDeserializer;
-
-    /**
-     * Create a test output topic to read messages from
-     *
-     * @param driver     TopologyTestDriver to use
-     * @param topicName  the topic name used
-     * @param keySerde   the key deserializer
-     * @param valueSerde the value deserializer
-     */
-    TestOutputTopic(final TopologyTestDriver driver,
-                           final String topicName,
-                           final Serde<K> keySerde,
-                           final Serde<V> valueSerde) {
-        this(driver, topicName, keySerde.deserializer(), valueSerde.deserializer());
-    }
 
     /**
      * Create a test output topic to read messages from
@@ -195,8 +179,8 @@ public class TestOutputTopic<K, V> {
     }
 
     public final boolean isEmpty() {
-        return getQueueSize() == 0;
-    };
+        return driver.isEmpty(topic);
+    }
 
     @Override
     public String toString() {

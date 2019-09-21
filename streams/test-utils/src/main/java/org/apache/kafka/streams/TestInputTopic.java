@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams;
 
-import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.test.TestRecord;
 
@@ -27,7 +26,7 @@ import java.util.Objects;
 
 /**
  * TestInputTopic is used to pipe records to topic in {@link TopologyTestDriver}.
- * To use {@code TestInputTopic} create new class {@link TopologyTestDriver#createInputTopic(String, Serde, Serde)}
+ * To use {@code TestInputTopic} create new class {@link TopologyTestDriver#createInputTopic(String, Serializer, Serializer)}
  * In actual test code, you can pipe new message values, keys and values or list of {@link KeyValue}
  * You need to have own TestInputTopic object for each topic.
  *
@@ -63,34 +62,14 @@ public class TestInputTopic<K, V> {
      *
      * @param driver     TopologyTestDriver to use
      * @param topicName  the topic name used
-     * @param keySerde   the key serializer
-     * @param valueSerde the value serializer
+     * @param keySerializer   the key serializer
+     * @param valueSerializer the value serializer
      */
     TestInputTopic(final TopologyTestDriver driver,
                           final String topicName,
-                          final Serde<K> keySerde,
-                          final Serde<V> valueSerde) {
-        this(driver, topicName, keySerde, valueSerde, Instant.now(), Duration.ZERO);
-    }
-
-    /**
-     * Create a test input topic to pipe messages in.
-     * Uses provided startTimestamp and autoAdvance duration for timestamp generation
-     *
-     * @param driver     TopologyTestDriver to use
-     * @param topicName  the topic name used
-     * @param keySerde   the key serializer
-     * @param valueSerde the value serializer
-     * @param startTimestamp the initial timestamp for records
-     * @param autoAdvance the time increment per record
-     */
-    TestInputTopic(final TopologyTestDriver driver,
-                          final String topicName,
-                          final Serde<K> keySerde,
-                          final Serde<V> valueSerde,
-                          final Instant startTimestamp,
-                          final Duration autoAdvance) {
-        this(driver, topicName, keySerde.serializer(), valueSerde.serializer(), startTimestamp, autoAdvance);
+                           final Serializer<K> keySerializer,
+                           final Serializer<V> valueSerializer) {
+        this(driver, topicName, keySerializer, valueSerializer, Instant.now(), Duration.ZERO);
     }
 
     /**

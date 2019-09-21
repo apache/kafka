@@ -105,9 +105,9 @@ import java.util.regex.Pattern;
  * Best of all, the class works without a real Kafka broker, so the tests execute very quickly with very little overhead.
  * <p>
  * Using the {@code TopologyTestDriver} in tests is easy: simply instantiate the driver and provide a {@link Topology}
- * (cf. {@link StreamsBuilder#build()}) and {@link Properties configs}, create {@link #createInputTopic(String, Serde, Serde)}
+ * (cf. {@link StreamsBuilder#build()}) and {@link Properties configs}, create {@link #createInputTopic(String, Serializer, Serializer)}
  * and use the {@link TestInputTopic} to supply an input message to the topology,
- * and then create {@link #createOutputTopic(String, Serde, Serde)} and use the {@link TestOutputTopic} to read and
+ * and then create {@link #createOutputTopic(String, Deserializer, Deserializer)} and use the {@link TestOutputTopic} to read and
  * verify any messages output by the topology.
  * <p>
  * Although the driver doesn't use a real Kafka broker, it does simulate Kafka {@link Consumer consumers} and
@@ -612,16 +612,16 @@ public class TopologyTestDriver implements Closeable {
      * Auto-advance is disabled.
      *
      * @param topicName             the name of the topic
-     * @param keySerde   the serde for the key type
-     * @param valueSerde the serde for the value type
+     * @param keySerializer   the Serializer for the key type
+     * @param valueSerializer the Serializer for the value type
      * @param <K> the key type
      * @param <V> the value type
      * @return {@link TestInputTopic} object
      */
     public final <K, V> TestInputTopic<K, V> createInputTopic(final String topicName,
-                                                              final Serde<K> keySerde,
-                                                              final Serde<V> valueSerde) {
-        return new TestInputTopic<K, V>(this, topicName, keySerde, valueSerde);
+                                                              final Serializer<K> keySerializer,
+                                                              final Serializer<V> valueSerializer) {
+        return new TestInputTopic<K, V>(this, topicName, keySerializer, valueSerializer);
     }
 
     /**
@@ -629,8 +629,8 @@ public class TopologyTestDriver implements Closeable {
      * Uses provided start timestamp and autoAdvance parameter for records
      *
      * @param topicName             the name of the topic
-     * @param keySerde   the serde for the key type
-     * @param valueSerde the serde for the value type
+     * @param keySerializer   the Serializer for the key type
+     * @param valueSerializer the Serializer for the value type
      * @param startTimestamp Start timestamp for auto-generated record time
      * @param autoAdvance autoAdvance duration for auto-generated record time
      * @param <K> the key type
@@ -638,27 +638,27 @@ public class TopologyTestDriver implements Closeable {
      * @return {@link TestInputTopic} object
      */
     public final <K, V> TestInputTopic<K, V> createInputTopic(final String topicName,
-                                                              final Serde<K> keySerde,
-                                                              final Serde<V> valueSerde,
+                                                              final Serializer<K> keySerializer,
+                                                              final Serializer<V> valueSerializer,
                                                               final Instant startTimestamp,
                                                               final Duration autoAdvance) {
-        return new TestInputTopic<K, V>(this, topicName, keySerde, valueSerde, startTimestamp, autoAdvance);
+        return new TestInputTopic<K, V>(this, topicName, keySerializer, valueSerializer, startTimestamp, autoAdvance);
     }
 
     /**
      * Create {@link TestOutputTopic} to be used for reading records from topic
      *
      * @param topicName             the name of the topic
-     * @param keySerde   the serde for the key type
-     * @param valueSerde the serde for the value type
+     * @param keyDeserializer   the Deserializer for the key type
+     * @param valueDeserializer the Deserializer for the value type
      * @param <K> the key type
      * @param <V> the value type
      * @return {@link TestOutputTopic} object
      */
     public final <K, V> TestOutputTopic<K, V> createOutputTopic(final String topicName,
-                                                                final Serde<K> keySerde,
-                                                                final Serde<V> valueSerde) {
-        return new TestOutputTopic<K, V>(this, topicName, keySerde, valueSerde);
+                                                                final Deserializer<K> keyDeserializer,
+                                                                final Deserializer<V> valueDeserializer) {
+        return new TestOutputTopic<K, V>(this, topicName, keyDeserializer, valueDeserializer);
     }
 
     /**
@@ -725,7 +725,13 @@ public class TopologyTestDriver implements Closeable {
                            final Instant time) {
         final byte[] serializedKey = keySerializer.serialize(topic, record.headers(), record.key());
         final byte[] serializedValue = valueSerializer.serialize(topic, record.headers(), record.value());
-        final long timestamp = (time != null) ? time.toEpochMilli() : record.timestamp();
+        //final Long timestamp = (time != null) ? time.toEpochMilli() : record.timestamp();
+        long timestamp = 0;
+        if (time != null)
+            timestamp = time.toEpochMilli();
+        else if (record.timestamp() != null)
+            timestamp = record.timestamp();
+
         pipeRecord(topic, timestamp, serializedKey, serializedValue, record.headers());
     }
 
@@ -736,6 +742,10 @@ public class TopologyTestDriver implements Closeable {
             return 0;
         }
         return queue.size();
+    }
+
+    final boolean isEmpty(final String topic) {
+        return getQueueSize(topic) == 0;
     }
 
 
