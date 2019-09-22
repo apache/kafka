@@ -72,43 +72,46 @@ public class StreamThread extends Thread {
      * The expected state transitions with the following defined states is:
      *
      * <pre>
-     *                +-------------+
-     *          +<--- | Created (0) |
-     *          |     +-----+-------+
-     *          |           |
-     *          |           v
-     *          |     +-----+-------+
-     *          +<--- | Starting (1)|
-     *          |     +-----+-------+
-     *          |           |
-     *          |           |
-     *          |           v
-     *          |     +-----+-------+
-     *          +<--- | Partitions  |
-     *          |     | Revoked (2) | <----+
-     *          |     +-----+-------+      |
-     *          |           |              |
-     *          |           v              |
-     *          |     +-----+-------+      |
-     *          |     | Partitions  |      |
-     *          +<--- | Assigned (3)| ---->+
-     *          |     +-----+-------+      |
-     *          |           |              |
-     *          |           v              |
-     *          |     +-----+-------+      |
-     *          |     | Running (4) | ---->+
-     *          |     +-----+-------+
-     *          |           |
-     *          |           v
-     *          |     +-----+-------+
-     *          +---> | Pending     |
-     *                | Shutdown (5)|
-     *                +-----+-------+
-     *                      |
-     *                      v
-     *                +-----+-------+
-     *                | Dead (6)    |
-     *                +-------------+
+     *                 +-------------+
+     *          +<---- | Created (0) |
+     *          |      +-----+-------+
+     *          |            |
+     *          |            v
+     *          |      +-----+-------+
+     *          +<---- | Starting (1)|----->+
+     *          |      +-----+-------+      |
+     *          |            |              |
+     *          |            |              |
+     *          |            v              |
+     *          |      +-----+-------+      |
+     *          +<---- | Partitions  |      |
+     *          |      | Revoked (2) | <----+
+     *          |      +-----+-------+      |
+     *          |            |              |
+     *          |            |              |
+     *          |            v              |
+     *          |      +-----+-------+      |
+     *          +<---- | Partitions  |      |
+     *          |      | Assigned (3)| <----+
+     *          |      +-----+-------+      |
+     *          |            |              |
+     *          |            |              |
+     *          |            v              |
+     *          |      +-----+-------+      |
+     *          |      | Running (4) | ---->+
+     *          |      +-----+-------+
+     *          |            |
+     *          |            |
+     *          |            v
+     *          |      +-----+-------+
+     *          +----> | Pending     |
+     *                 | Shutdown (5)|
+     *                 +-----+-------+
+     *                       |
+     *                       v
+     *                 +-----+-------+
+     *                 | Dead (6)    |
+     *                 +-------------+
      * </pre>
      *
      * Note the following:
@@ -129,9 +132,7 @@ public class StreamThread extends Thread {
      * </ul>
      */
     public enum State implements ThreadStateTransitionValidator {
-        // TODO: the current transitions from other states directly to PARTITIONS_ASSIGNED is due to
-        //       the fact that onPartitionsRevoked may not be triggered. we need to refactor the
-        //       state diagram more thoroughly after we refactor StreamsPartitionAssignor to support COOPERATIVE
+
         CREATED(1, 5), STARTING(2, 3, 5), PARTITIONS_REVOKED(3, 5), PARTITIONS_ASSIGNED(2, 3, 4, 5), RUNNING(2, 3, 5), PENDING_SHUTDOWN(6), DEAD;
 
         private final Set<Integer> validTransitions = new HashSet<>();
