@@ -107,7 +107,7 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
             } else if (restoring.containsKey(task)) {
                 revokedRestoringTasks.add(task);
             } else if (!suspended.containsKey(task)) {
-                log.error("Task {} was revoked but cannot be found in the assignment", task);
+                log.warn("Task {} was revoked but cannot be found in the assignment", task);
             }
         }
 
