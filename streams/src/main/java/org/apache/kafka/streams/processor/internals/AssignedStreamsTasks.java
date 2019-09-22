@@ -67,7 +67,9 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
 
     @Override
     boolean allTasksRunning() {
-        return super.allTasksRunning() && restoring.isEmpty() && suspended.isEmpty();
+        // If we have some tasks that are suspended but others are running, count this as all tasks are running
+        // since they will be closed soon anyway (eg if partitions are revoked at beginning of cooperative rebalance)
+        return super.allTasksRunning() && restoring.isEmpty() && (suspended.isEmpty() || !running.isEmpty());
     }
 
     @Override
@@ -104,9 +106,8 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
                 revokedNonRunningTasks.add(task);
             } else if (restoring.containsKey(task)) {
                 revokedRestoringTasks.add(task);
-            } else {
+            } else if (!suspended.containsKey(task)){
                 log.error("Task {} was revoked but cannot be found in the assignment", task);
-                firstException.set(new IllegalStateException("Revoked a task that was not in the assignment"));
             }
         }
 

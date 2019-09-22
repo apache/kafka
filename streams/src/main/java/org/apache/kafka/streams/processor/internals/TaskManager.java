@@ -382,9 +382,14 @@ public class TaskManager {
 
         final Collection<TopicPartition> restored = changelogReader.restore(active);
         active.updateRestored(restored);
-        restoreConsumer.pause(restored);
+        if (!restoreConsumerAssignedStandbys && !restored.isEmpty()) {
+            final Set<TopicPartition> needsRestoring = new HashSet<>(restoreConsumer.assignment());
+            needsRestoring.removeAll(restored);
+            restoreConsumer.assign(needsRestoring);
+        }
 
         if (active.allTasksRunning()) {
+            restoreConsumer.unsubscribe();
             final Set<TopicPartition> assignment = consumer.assignment();
             log.trace("Resuming partitions {}", assignment);
             consumer.resume(assignment);
