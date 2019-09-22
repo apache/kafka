@@ -389,7 +389,6 @@ public class TaskManager {
         }
 
         if (active.allTasksRunning()) {
-            restoreConsumer.unsubscribe();
             final Set<TopicPartition> assignment = consumer.assignment();
             log.trace("Resuming partitions {}", assignment);
             consumer.resume(assignment);

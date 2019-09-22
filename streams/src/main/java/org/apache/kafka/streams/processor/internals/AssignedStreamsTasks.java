@@ -124,32 +124,31 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
         for (final TaskId id : revokedRunningTasks) {
             final StreamTask task = running.get(id);
 
-            // skip over tasks that are already suspended, as can happen if a task is no longer part of the subscription
-            if (!suspended.containsKey(id)) {
+            try {
+                task.suspend();
+                suspended.put(id, task);
+            } catch (final TaskMigratedException closeAsZombieAndSwallow) {
+                // as we suspend a task, we are either shutting down or rebalancing, thus, we swallow and move on
+                log.info("Failed to suspend {} {} since it got migrated to another thread already. " +
+                    "Closing it as zombie and move on.", taskTypeName, id);
+                firstException.compareAndSet(null, closeZombieTask(task));
+                prevActiveTasks.remove(id);
+            } catch (final RuntimeException e) {
+                log.error("Suspending {} {} failed due to the following error:", taskTypeName, id, e);
+                firstException.compareAndSet(null, e);
                 try {
-                    task.suspend();
-                    suspended.put(id, task);
-                } catch (final TaskMigratedException closeAsZombieAndSwallow) {
-                    // as we suspend a task, we are either shutting down or rebalancing, thus, we swallow and move on
-                    log.info("Failed to suspend {} {} since it got migrated to another thread already. " +
-                        "Closing it as zombie and move on.", taskTypeName, id);
-                    firstException.compareAndSet(null, closeZombieTask(task));
-                } catch (final RuntimeException e) {
-                    log.error("Suspending {} {} failed due to the following error:", taskTypeName, id, e);
-                    firstException.compareAndSet(null, e);
-                    try {
-                        task.close(false, false);
-                    } catch (final RuntimeException f) {
-                        log.error(
-                            "After suspending failed, closing the same {} {} failed again due to the following error:",
-                            taskTypeName, id, f);
-                    }
-                } finally {
-                    running.remove(id);
-                    runningByPartition.keySet().removeAll(task.partitions());
-                    runningByPartition.keySet().removeAll(task.changelogPartitions());
-                    revokedChangelogs.addAll(task.changelogPartitions());
+                    prevActiveTasks.remove(id);
+                    task.close(false, false);
+                } catch (final RuntimeException f) {
+                    log.error(
+                        "After suspending failed, closing the same {} {} failed again due to the following error:",
+                        taskTypeName, id, f);
                 }
+            } finally {
+                running.remove(id);
+                runningByPartition.keySet().removeAll(task.partitions());
+                runningByPartition.keySet().removeAll(task.changelogPartitions());
+                revokedChangelogs.addAll(task.changelogPartitions());
             }
         }
         log.trace("Suspended running {} {}", taskTypeName, suspended.keySet());
