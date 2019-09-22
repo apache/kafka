@@ -38,6 +38,7 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
     private final Map<TaskId, StreamTask> restoring = new HashMap<>();
     private final Set<TopicPartition> restoredPartitions = new HashSet<>();
     private final Map<TopicPartition, StreamTask> restoringByPartition = new HashMap<>();
+    private final Set<TaskId> prevActiveTasks = new HashSet<>();
 
     AssignedStreamsTasks(final LogContext logContext) {
         super(logContext, "stream task");
@@ -82,11 +83,19 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
         return suspended.keySet();
     }
 
+    Set<TaskId> previousRunningTaskIds() {
+        return prevActiveTasks;
+    }
+
     RuntimeException revokeTasks(final Set<TaskId> revokedTasks, final List<TopicPartition> revokedChangelogs) {
         final AtomicReference<RuntimeException> firstException = new AtomicReference<>(null);
         final Set<TaskId> revokedRunningTasks = new HashSet<>();
         final Set<TaskId> revokedNonRunningTasks = new HashSet<>();
         final Set<TaskId> revokedRestoringTasks = new HashSet<>();
+
+        // This is used only for eager rebalancing, so we can just clear it and add any/all tasks that were running
+        prevActiveTasks.clear();
+        prevActiveTasks.addAll(runningTaskIds());
 
         for (final TaskId task : revokedTasks) {
             if (running.containsKey(task)) {
@@ -110,8 +119,8 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
 
     private RuntimeException suspendRunningTasks(final Set<TaskId> revokedRunningTasks, final List<TopicPartition> revokedChangelogs) {
         final AtomicReference<RuntimeException> firstException = new AtomicReference<>(null);
-        for (final Iterator<TaskId> it = revokedRunningTasks.iterator(); it.hasNext(); ) {
-            final TaskId id = it.next();
+
+        for (final TaskId id : revokedRunningTasks) {
             final StreamTask task = running.get(id);
 
             // skip over tasks that are already suspended, as can happen if a task is no longer part of the subscription
@@ -135,16 +144,10 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
                             taskTypeName, id, f);
                     }
                 } finally {
-                    it.remove();
-
-                    // Wait to reset changelog partitions and remove from running/runningByPartition until the task is
-                    // actually closed as it may be reassigned again, unless an error occurred while suspending
-                    if (!suspended.containsKey(id)) {
-                        running.remove(id);
-                        runningByPartition.keySet().removeAll(task.partitions());
-                        runningByPartition.keySet().removeAll(task.changelogPartitions());
-                        revokedChangelogs.addAll(task.changelogPartitions());
-                    }
+                    running.remove(id);
+                    runningByPartition.keySet().removeAll(task.partitions());
+                    runningByPartition.keySet().removeAll(task.changelogPartitions());
+                    revokedChangelogs.addAll(task.changelogPartitions());
                 }
             }
         }
@@ -156,8 +159,7 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
         final Set<TaskId> closedNonRunningTasks = new HashSet<>();
         RuntimeException exception = null;
 
-        for (final Iterator<TaskId> it = revokedNonRunningTasks.iterator(); it.hasNext(); ) {
-            final TaskId id = it.next();
+        for (final TaskId id : revokedNonRunningTasks) {
             final StreamTask task = created.get(id);
 
             try {
@@ -168,13 +170,12 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
                     exception = e;
                 }
             } finally {
-                it.remove();
                 created.remove(id);
                 revokedChangelogs.addAll(task.changelogPartitions());
                 closedNonRunningTasks.add(task.id);
             }
         }
-        log.trace("Closed created {} {}", taskTypeName, closedNonRunningTasks);
+        log.trace("Closed the created but not initialized {} {}", taskTypeName, closedNonRunningTasks);
         return exception;
     }
 
@@ -182,12 +183,9 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
         log.trace("Closing restoring stream tasks {}", revokedRestoringTasks);
         RuntimeException exception = null;
 
-        final Iterator<TaskId> revokedTaskIterator = revokedRestoringTasks.iterator();
-        while (revokedTaskIterator.hasNext()) {
-            final TaskId id = revokedTaskIterator.next();
+        for (final TaskId id : revokedRestoringTasks) {
             final StreamTask task = restoring.get(id);
 
-            log.debug("Closing restoring task {}", id);
             try {
                 task.closeStateManager(true);
             } catch (final RuntimeException e) {
@@ -196,7 +194,6 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
                     exception = e;
                 }
             } finally {
-                revokedTaskIterator.remove();
                 restoring.remove(id);
                 for (final TopicPartition tp : task.partitions()) {
                     restoredPartitions.remove(tp);
@@ -212,7 +209,9 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
     /**
      * @throws TaskMigratedException if the task producer got fenced (EOS only)
      */
-    boolean maybeResumeSuspendedTask(final TaskId taskId, final Set<TopicPartition> partitions, final List<TopicPartition> changelogs) {
+    boolean maybeResumeSuspendedTask(final TaskId taskId,
+                                     final Set<TopicPartition> partitions,
+                                     final List<TopicPartition> changelogsToBeRemovedDueToFailure) {
         if (suspended.containsKey(taskId)) {
             final StreamTask task = suspended.get(taskId);
             log.trace("Found suspended {} {}", taskTypeName, taskId);
@@ -229,9 +228,7 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
                         "Closing it as zombie before triggering a new rebalance.", taskTypeName, task.id());
                     final RuntimeException fatalException = closeZombieTask(task);
                     running.remove(taskId);
-                    runningByPartition.keySet().removeAll(task.partitions());
-                    runningByPartition.keySet().removeAll(task.changelogPartitions());
-                    changelogs.addAll(task.changelogPartitions());
+
                     if (fatalException != null) {
                         throw fatalException;
                     }
@@ -241,11 +238,8 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
                 return true;
             } else {
                 log.warn("Couldn't resume task {} assigned partitions {}, task partitions {}", taskId, partitions, task.partitions());
-                suspended.remove(task.id());
-                running.remove(task.id());
-                runningByPartition.keySet().removeAll(task.partitions());
-                runningByPartition.keySet().removeAll(task.changelogPartitions());
-                changelogs.addAll(task.changelogPartitions());
+                task.closeSuspended(true, false, null);
+                changelogsToBeRemovedDueToFailure.addAll(task.changelogPartitions());
             }
         }
         return false;
@@ -264,9 +258,6 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
                         suspendedTask.id(), e);
                 } finally {
                     suspended.remove(suspendedTask.id());
-                    running.remove(suspendedTask.id());
-                    runningByPartition.keySet().removeAll(suspendedTask.partitions());
-                    runningByPartition.keySet().removeAll(suspendedTask.changelogPartitions());
                     revokedChangelogs.addAll(suspendedTask.changelogPartitions());
                 }
             }

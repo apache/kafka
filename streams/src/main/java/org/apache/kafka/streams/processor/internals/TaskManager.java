@@ -60,6 +60,8 @@ public class TaskManager {
 
     private final Admin adminClient;
     private DeleteRecordsResult deleteRecordsResult;
+
+    // the restore consumer is only ever assigned changelogs from restoring tasks or standbys (but not both)
     private boolean restoreConsumerAssignedStandbys = false;
 
     // following information is updated during rebalance phase by the partition assignor
@@ -338,10 +340,8 @@ public class TaskManager {
         return revokedStandbyTasks.keySet();
     }
 
-    // The list of running tasks is not updated until the reassigned tasks are closed, so this reflects the "previous"
-    // task ids when called before closeRevokedTasks
     public Set<TaskId> previousActiveTaskIds() {
-        return active.runningTaskIds();
+        return active.previousRunningTaskIds();
     }
 
     StreamTask activeTask(final TopicPartition partition) {
@@ -381,12 +381,8 @@ public class TaskManager {
         standby.initializeNewTasks();
 
         final Collection<TopicPartition> restored = changelogReader.restore(active);
-        if (!restored.isEmpty()) {
-            active.updateRestored(restored);
-            final Set<TopicPartition> needsRestoring = new HashSet<>(restoreConsumer.assignment());
-            needsRestoring.removeAll(restored);
-            restoreConsumer.assign(needsRestoring);
-        }
+        active.updateRestored(restored);
+        restoreConsumer.pause(restored);
 
         if (active.allTasksRunning()) {
             final Set<TopicPartition> assignment = consumer.assignment();

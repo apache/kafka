@@ -81,7 +81,7 @@ public class StoreChangelogReader implements ChangelogReader {
 
         if (needsRestoring.isEmpty()) {
             restoreConsumer.unsubscribe();
-            return completed();
+            return completedRestorers;
         }
 
         try {
@@ -120,7 +120,7 @@ public class StoreChangelogReader implements ChangelogReader {
             restoreConsumer.unsubscribe();
         }
 
-        return completed();
+        return completedRestorers;
     }
 
     private void initialize(final RestoringTasks active) {
@@ -253,10 +253,6 @@ public class StoreChangelogReader implements ChangelogReader {
                   partition,
                   startingOffset,
                   endOffset);
-    }
-
-    private Collection<TopicPartition> completed() {
-        return completedRestorers;
     }
 
     private void refreshChangelogInfo() {
