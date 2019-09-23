@@ -401,7 +401,6 @@ subprojects {
       "-language:postfixOps",
       "-language:implicitConversions",
       "-language:existentials",
-      "-Xlint:by-name-right-associative",
       "-Xlint:delayedinit-select",
       "-Xlint:doc-detached",
       "-Xlint:missing-interpolator",
@@ -412,14 +411,22 @@ subprojects {
       "-Xlint:poly-implicit-overload",
       "-Xlint:private-shadow",
       "-Xlint:stars-align",
-      "-Xlint:type-parameter-shadow",
-      "-Xlint:unsound-match"
+      "-Xlint:type-parameter-shadow"
     ]
 
     if (versions.baseScala != '2.11') {
       scalaCompileOptions.additionalParameters += [
         "-Xlint:constant",
         "-Xlint:unused"
+      ]
+    }
+    
+  // these options are valid for Scala versions < 2.13 only
+  // Scala 2.13 removes them, see https://github.com/scala/scala/pull/6502 and https://github.com/scala/scala/pull/5969
+    if (versions.baseScala in ['2.11','2.12']) {
+      scalaCompileOptions.additionalParameters += [
+        "-Xlint:by-name-right-associative",
+        "-Xlint:unsound-match"
       ]
     }
 
@@ -660,19 +667,20 @@ project(':core') {
     compile libs.jacksonJDK8Datatypes
     compile libs.joptSimple
     compile libs.metrics
+    compile libs.scalaCollectionCompat
+    compile libs.scalaJava8Compat
     compile libs.scalaLibrary
     // only needed transitively, but set it explicitly to ensure it has the same version as scala-library
     compile libs.scalaReflect
     compile libs.scalaLogging
     compile libs.slf4jApi
-    compile(libs.zkclient) {
-      exclude module: 'zookeeper'
-    }
     compile(libs.zookeeper) {
       exclude module: 'slf4j-log4j12'
       exclude module: 'log4j'
       exclude module: 'netty'
     }
+    // ZooKeeperMain depends on commons-cli but declares the dependency as `provided`
+    compile libs.commonsCli
 
     compileOnly libs.log4j
 
@@ -939,6 +947,7 @@ project(':clients') {
     compile libs.lz4
     compile libs.snappy
     compile libs.slf4jApi
+
     compileOnly libs.jacksonDatabind // for SASL/OAUTHBEARER bearer token parsing
     compileOnly libs.jacksonJDK8Datatypes
 
@@ -1003,9 +1012,21 @@ project(':clients') {
   task processMessages(type:JavaExec) {
     main = "org.apache.kafka.message.MessageGenerator"
     classpath = project(':generator').sourceSets.main.runtimeClasspath
-    args = [ "src/generated/java/org/apache/kafka/common/message", "src/main/resources/common/message" ]
+    args = [ "org.apache.kafka.common.message",
+             "src/generated/java/org/apache/kafka/common/message",
+             "src/main/resources/common/message" ]
     inputs.dir("src/main/resources/common/message")
     outputs.dir("src/generated/java/org/apache/kafka/common/message")
+  }
+
+  task processTestMessages(type:JavaExec) {
+    main = "org.apache.kafka.message.MessageGenerator"
+    classpath = project(':generator').sourceSets.main.runtimeClasspath
+    args = [ "org.apache.kafka.common.message",
+             "src/generated-test/java/org/apache/kafka/common/message",
+             "src/test/resources/common/message" ]
+    inputs.dir("src/test/resources/common/message")
+    outputs.dir("src/generated-test/java/org/apache/kafka/common/message")
   }
 
   sourceSets {
@@ -1016,12 +1037,14 @@ project(':clients') {
     }
     test {
       java {
-        srcDirs = ["src/generated/java", "src/test/java"]
+        srcDirs = ["src/generated/java", "src/generated-test/java", "src/test/java"]
       }
     }
   }
 
   compileJava.dependsOn 'processMessages'
+
+  compileTestJava.dependsOn 'processTestMessages'
 
   javadoc {
     include "**/org/apache/kafka/clients/admin/*"
@@ -1041,6 +1064,7 @@ project(':clients') {
     include "**/org/apache/kafka/common/security/scram/*"
     include "**/org/apache/kafka/common/security/token/delegation/*"
     include "**/org/apache/kafka/common/security/oauthbearer/*"
+    include "**/org/apache/kafka/server/authorizer/*"
     include "**/org/apache/kafka/server/policy/*"
     include "**/org/apache/kafka/server/quota/*"
   }
@@ -1120,6 +1144,8 @@ project(':streams') {
     testCompile libs.log4j
     testCompile libs.junit
     testCompile libs.easymock
+    testCompile libs.powermockJunit4
+    testCompile libs.powermockEasymock
     testCompile libs.bcpkix
     testCompile libs.hamcrest
 
@@ -1362,6 +1388,30 @@ project(':streams:upgrade-system-tests-21') {
   }
 }
 
+project(':streams:upgrade-system-tests-22') {
+  archivesBaseName = "kafka-streams-upgrade-system-tests-22"
+
+  dependencies {
+    testCompile libs.kafkaStreams_22
+  }
+
+  systemTestLibs {
+    dependsOn testJar
+  }
+}
+
+project(':streams:upgrade-system-tests-23') {
+  archivesBaseName = "kafka-streams-upgrade-system-tests-23"
+
+  dependencies {
+    testCompile libs.kafkaStreams_23
+  }
+
+  systemTestLibs {
+    dependsOn testJar
+  }
+}
+
 project(':jmh-benchmarks') {
 
   apply plugin: 'com.github.johnrengelman.shadow'
@@ -1373,9 +1423,11 @@ project(':jmh-benchmarks') {
   }
 
   dependencies {
+    compile project(':core')
     compile project(':clients')
     compile project(':streams')
     compile libs.jmhCore
+    compile libs.mockitoCore
     annotationProcessor libs.jmhGeneratorAnnProcess
     compile libs.jmhCoreBenchmarks
   }
@@ -1386,6 +1438,9 @@ project(':jmh-benchmarks') {
     }
   }
 
+  checkstyle {
+    configProperties = checkstyleConfigProperties("import-control-jmh-benchmarks.xml")
+  }
 
   task jmh(type: JavaExec, dependsOn: [':jmh-benchmarks:clean', ':jmh-benchmarks:shadowJar']) {
 
@@ -1438,7 +1493,11 @@ project(':connect:api') {
 
   javadoc {
     include "**/org/apache/kafka/connect/**" // needed for the `javadocAll` task
-    options.links "https://docs.oracle.com/javase/8/docs/api/"
+    // The URL structure was changed to include the locale after Java 8
+    if (JavaVersion.current().isJava11Compatible())
+      options.links "https://docs.oracle.com/en/java/javase/${JavaVersion.current().majorVersion}/docs/api/"
+    else
+      options.links "https://docs.oracle.com/javase/8/docs/api/"
   }
 
   tasks.create(name: "copyDependantLibs", type: Copy) {
@@ -1566,6 +1625,7 @@ project(':connect:runtime') {
     testCompile libs.junit
     testCompile libs.powermockJunit4
     testCompile libs.powermockEasymock
+    testCompile libs.mockitoCore
     testCompile libs.httpclient
 
     testCompile project(':clients').sourceSets.test.output
@@ -1717,5 +1777,9 @@ task aggregatedJavadoc(type: Javadoc) {
   classpath = files(projectsWithJavadoc.collect { it.sourceSets.main.compileClasspath })
   includes = projectsWithJavadoc.collectMany { it.javadoc.getIncludes() }
   excludes = projectsWithJavadoc.collectMany { it.javadoc.getExcludes() }
-  options.links "https://docs.oracle.com/javase/8/docs/api/"
+  // The URL structure was changed to include the locale after Java 8
+  if (JavaVersion.current().isJava11Compatible())
+    options.links "https://docs.oracle.com/en/java/javase/${JavaVersion.current().majorVersion}/docs/api/"
+  else
+    options.links "https://docs.oracle.com/javase/8/docs/api/"
 }

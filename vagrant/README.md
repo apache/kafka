@@ -56,8 +56,8 @@ You can access the brokers and zookeeper by their IP or hostname, e.g.
     # Specify brokers by their hostnames: broker1, broker2, broker3
     bin/kafka-console-producer.sh --broker-list broker1:9092,broker2:9092,broker3:9092 --topic sandbox
 
-    # Specify ZooKeeper node by its hostname: zk1
-    bin/kafka-console-consumer.sh --zookeeper zk1:2181 --topic sandbox --from-beginning
+    # Specify brokers by their IP: 192.168.50.51, 192.168.50.52, 192.168.50.53
+    bin/kafka-console-consumer.sh --bootstrap-server 192.168.50.51:9092,192.168.50.52:9092,192.168.50.53:9092 --topic sandbox --from-beginning
 
 If you need to update the running cluster, you can re-run the provisioner (the
 step that installs software and configures services):

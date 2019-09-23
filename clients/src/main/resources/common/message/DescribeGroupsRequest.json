@@ -19,7 +19,8 @@
   "name": "DescribeGroupsRequest",
   // Versions 1 and 2 are the same as version 0.
   // Starting in version 3, authorized operations can be requested.
-  "validVersions": "0-3",
+  // Starting in version 4, the response will include group.instance.id info for members.
+  "validVersions": "0-4",
   "fields": [
     { "name": "Groups", "type": "[]string", "versions": "0+", "entityType": "groupId",
       "about": "The names of the groups to describe" },

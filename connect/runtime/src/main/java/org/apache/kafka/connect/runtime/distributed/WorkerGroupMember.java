@@ -23,6 +23,7 @@ import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.NetworkClient;
 import org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient;
+import org.apache.kafka.clients.GroupRebalanceConfig;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.metrics.JmxReporter;
@@ -45,7 +46,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
@@ -55,8 +55,6 @@ import java.util.concurrent.atomic.AtomicReference;
  * higher level operations in response to group membership events being handled by the herder.
  */
 public class WorkerGroupMember {
-
-    private static final AtomicInteger CONNECT_CLIENT_ID_SEQUENCE = new AtomicInteger(1);
     private static final String JMX_PREFIX = "kafka.connect";
 
     private final Logger log;
@@ -74,15 +72,12 @@ public class WorkerGroupMember {
                              String restUrl,
                              ConfigBackingStore configStorage,
                              WorkerRebalanceListener listener,
-                             Time time) {
+                             Time time,
+                             String clientId,
+                             LogContext logContext) {
         try {
             this.time = time;
-
-            String clientIdConfig = config.getString(CommonClientConfigs.CLIENT_ID_CONFIG);
-            clientId = clientIdConfig.length() <= 0 ? "connect-" + CONNECT_CLIENT_ID_SEQUENCE.getAndIncrement() : clientIdConfig;
-            String groupId = config.getString(DistributedConfig.GROUP_ID_CONFIG);
-
-            LogContext logContext = new LogContext("[Worker clientId=" + clientId + ", groupId=" + groupId + "] ");
+            this.clientId = clientId;
             this.log = logContext.logger(WorkerGroupMember.class);
 
             Map<String, String> metricsTags = new LinkedHashMap<>();
@@ -128,19 +123,17 @@ public class WorkerGroupMember {
                     config.getInt(CommonClientConfigs.REQUEST_TIMEOUT_MS_CONFIG),
                     Integer.MAX_VALUE);
             this.coordinator = new WorkerCoordinator(
+                    new GroupRebalanceConfig(config, GroupRebalanceConfig.ProtocolType.CONNECT),
                     logContext,
                     this.client,
-                    groupId,
-                    config.getInt(DistributedConfig.REBALANCE_TIMEOUT_MS_CONFIG),
-                    config.getInt(DistributedConfig.SESSION_TIMEOUT_MS_CONFIG),
-                    config.getInt(DistributedConfig.HEARTBEAT_INTERVAL_MS_CONFIG),
                     metrics,
                     metricGrpPrefix,
                     this.time,
-                    retryBackoffMs,
                     restUrl,
                     configStorage,
-                    listener);
+                    listener,
+                    ConnectProtocolCompatibility.compatibility(config.getString(DistributedConfig.CONNECT_PROTOCOL_CONFIG)),
+                    config.getInt(DistributedConfig.SCHEDULED_REBALANCE_MAX_DELAY_MS_CONFIG));
 
             AppInfoParser.registerAppInfo(JMX_PREFIX, clientId, metrics, time.milliseconds());
             log.debug("Connect group member created");
@@ -190,8 +183,8 @@ public class WorkerGroupMember {
         coordinator.requestRejoin();
     }
 
-    public void maybeLeaveGroup() {
-        coordinator.maybeLeaveGroup();
+    public void maybeLeaveGroup(String leaveReason) {
+        coordinator.maybeLeaveGroup(leaveReason);
     }
 
     public String ownerUrl(String connector) {
@@ -200,6 +193,15 @@ public class WorkerGroupMember {
 
     public String ownerUrl(ConnectorTaskId task) {
         return coordinator.ownerUrl(task);
+    }
+
+    /**
+     * Get the version of the connect protocol that is currently active in the group of workers.
+     *
+     * @return the current connect protocol version
+     */
+    public short currentProtocolVersion() {
+        return coordinator.currentProtocolVersion();
     }
 
     private void stop(boolean swallowException) {

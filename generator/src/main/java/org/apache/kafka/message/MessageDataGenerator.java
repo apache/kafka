@@ -19,21 +19,25 @@ package org.apache.kafka.message;
 
 import java.io.Writer;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.Optional;
 import java.util.Set;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 /**
  * Generates Kafka MessageData classes.
  */
 public final class MessageDataGenerator {
+    private final StructRegistry structRegistry;
     private final HeaderGenerator headerGenerator;
     private final SchemaGenerator schemaGenerator;
     private final CodeBuffer buffer;
 
-    MessageDataGenerator() {
-        this.headerGenerator = new HeaderGenerator();
-        this.schemaGenerator = new SchemaGenerator(headerGenerator);
+    MessageDataGenerator(String packageName) {
+        this.structRegistry = new StructRegistry();
+        this.headerGenerator = new HeaderGenerator(packageName);
+        this.schemaGenerator = new SchemaGenerator(headerGenerator, structRegistry);
         this.buffer = new CodeBuffer();
     }
 
@@ -42,6 +46,7 @@ public final class MessageDataGenerator {
             throw new RuntimeException("Message " + message.name() + " does " +
                 "not specify a maximum version.");
         }
+        structRegistry.register(message);
         schemaGenerator.generateSchemas(message);
         generateClass(Optional.of(message),
             message.name() + "Data",
@@ -104,6 +109,13 @@ public final class MessageDataGenerator {
         }
         generateSubclasses(className, struct, parentVersions, isSetElement);
         if (isTopLevel) {
+            for (Iterator<StructSpec> iter = structRegistry.commonStructs(); iter.hasNext(); ) {
+                StructSpec commonStruct = iter.next();
+                generateClass(Optional.empty(),
+                        commonStruct.name(),
+                        commonStruct,
+                        commonStruct.versions());
+            }
             buffer.decrementIndent();
             buffer.printf("}%n");
         }
@@ -139,10 +151,12 @@ public final class MessageDataGenerator {
         for (FieldSpec field : struct.fields()) {
             if (field.type().isStructArray()) {
                 FieldType.ArrayType arrayType = (FieldType.ArrayType) field.type();
-                generateClass(Optional.empty(),
-                    arrayType.elementType().toString(),
-                    field.toStruct(),
-                    parentVersions.intersect(struct.versions()));
+                if (!structRegistry.commonStructNames().contains(arrayType.elementName())) {
+                    generateClass(Optional.empty(),
+                            arrayType.elementType().toString(),
+                            structRegistry.findStruct(field),
+                            parentVersions.intersect(struct.versions()));
+                }
             }
         }
         if (isSetElement) {
@@ -298,6 +312,8 @@ public final class MessageDataGenerator {
             return "int";
         } else if (field.type() instanceof FieldType.Int64FieldType) {
             return "long";
+        } else if (field.type() instanceof FieldType.UUIDFieldType) {
+            return "UUID";
         } else if (field.type().isString()) {
             return "String";
         } else if (field.type().isBytes()) {
@@ -306,7 +322,7 @@ public final class MessageDataGenerator {
             return MessageGenerator.capitalizeFirst(field.typeString());
         } else if (field.type().isArray()) {
             FieldType.ArrayType arrayType = (FieldType.ArrayType) field.type();
-            if (field.toStruct().hasKeys()) {
+            if (structRegistry.isStructArrayWithKeys(field)) {
                 headerGenerator.addImport(MessageGenerator.IMPLICIT_LINKED_HASH_MULTI_COLLECTION_CLASS);
                 return collectionType(arrayType.elementType().toString());
             } else {
@@ -321,7 +337,7 @@ public final class MessageDataGenerator {
     private String fieldConcreteJavaType(FieldSpec field) {
         if (field.type().isArray()) {
             FieldType.ArrayType arrayType = (FieldType.ArrayType) field.type();
-            if (field.toStruct().hasKeys()) {
+            if (structRegistry.isStructArrayWithKeys(field)) {
                 headerGenerator.addImport(MessageGenerator.IMPLICIT_LINKED_HASH_MULTI_COLLECTION_CLASS);
                 return collectionType(arrayType.elementType().toString());
             } else {
@@ -412,7 +428,7 @@ public final class MessageDataGenerator {
                 buffer.printf("{%n");
                 buffer.incrementIndent();
             }
-            boolean hasKeys = field.toStruct().hasKeys();
+            boolean hasKeys = structRegistry.isStructArrayWithKeys(field);
             buffer.printf("int arrayLength = readable.readInt();%n");
             buffer.printf("if (arrayLength < 0) {%n");
             buffer.incrementIndent();
@@ -462,6 +478,8 @@ public final class MessageDataGenerator {
             return "readable.readInt()";
         } else if (type instanceof FieldType.Int64FieldType) {
             return "readable.readLong()";
+        } else if (type instanceof FieldType.UUIDFieldType) {
+            return "readable.readUUID()";
         } else if (type.isString()) {
             return "readable.readNullableString()";
         } else if (type.isBytes()) {
@@ -568,6 +586,8 @@ public final class MessageDataGenerator {
             return "Integer";
         } else if (type instanceof FieldType.Int64FieldType) {
             return "Long";
+        } else if (type instanceof FieldType.UUIDFieldType) {
+            return "UUID";
         } else if (type.isString()) {
             return "String";
         } else if (type.isStruct()) {
@@ -588,6 +608,8 @@ public final class MessageDataGenerator {
             return String.format("struct.getInt(\"%s\")", name);
         } else if (type instanceof FieldType.Int64FieldType) {
             return String.format("struct.getLong(\"%s\")", name);
+        } else if (type instanceof FieldType.UUIDFieldType) {
+            return String.format("struct.getUUID(\"%s\")", name);
         } else if (type.isString()) {
             return String.format("struct.getString(\"%s\")", name);
         } else if (type.isBytes()) {
@@ -636,6 +658,8 @@ public final class MessageDataGenerator {
             return String.format("writable.writeInt(%s)", name);
         } else if (type instanceof FieldType.Int64FieldType) {
             return String.format("writable.writeLong(%s)", name);
+        } else if (type instanceof FieldType.UUIDFieldType) {
+            return String.format("writable.writeUUID(%s)", name);
         } else if (type instanceof FieldType.StringFieldType) {
             if (nullable) {
                 return String.format("writable.writeNullableString(%s)", name);
@@ -733,10 +757,8 @@ public final class MessageDataGenerator {
                 " cannot be nullable.");
         }
         if ((field.type() instanceof FieldType.BoolFieldType) ||
-                (field.type() instanceof FieldType.Int8FieldType) ||
-                (field.type() instanceof FieldType.Int16FieldType) ||
-                (field.type() instanceof FieldType.Int32FieldType) ||
-                (field.type() instanceof FieldType.Int64FieldType) ||
+                (field.type().isInteger()) ||
+                (field.type() instanceof FieldType.UUIDFieldType) ||
                 (field.type() instanceof FieldType.StringFieldType)) {
             boolean maybeAbsent =
                 generateVersionCheck(curVersions, field.versions());
@@ -924,11 +946,23 @@ public final class MessageDataGenerator {
         buffer.incrementIndent();
         headerGenerator.addImport(MessageGenerator.UNSUPPORTED_VERSION_EXCEPTION_CLASS);
         if (field.type().isArray()) {
-            buffer.printf("if (!%s.isEmpty()) {%n", field.camelCaseName());
+            if (fieldDefault(field).equals("null")) {
+                buffer.printf("if (%s != null) {%n", field.camelCaseName());
+            } else {
+                buffer.printf("if (!%s.isEmpty()) {%n", field.camelCaseName());
+            }
         } else if (field.type().isBytes()) {
-            buffer.printf("if (%s.length != 0) {%n", field.camelCaseName());
+            if (fieldDefault(field).equals("null")) {
+                buffer.printf("if (%s != null) {%n", field.camelCaseName());
+            } else {
+                buffer.printf("if (%s.length != 0) {%n", field.camelCaseName());
+            }
         } else if (field.type().isString()) {
-            buffer.printf("if (%s.equals(%s)) {%n", field.camelCaseName(), fieldDefault(field));
+            if (fieldDefault(field).equals("null")) {
+                buffer.printf("if (%s != null) {%n", field.camelCaseName());
+            } else {
+                buffer.printf("if (!%s.equals(%s)) {%n", field.camelCaseName(), fieldDefault(field));
+            }
         } else if (field.type() instanceof FieldType.BoolFieldType) {
             buffer.printf("if (%s%s) {%n",
                 fieldDefault(field).equals("true") ? "!" : "",
@@ -1014,16 +1048,17 @@ public final class MessageDataGenerator {
         } else if (field.type() instanceof FieldType.Int64FieldType) {
             buffer.printf("hashCode = 31 * hashCode + ((int) (%s >> 32) ^ (int) %s);%n",
                 field.camelCaseName(), field.camelCaseName());
-        } else if (field.type().isString()) {
-            buffer.printf("hashCode = 31 * hashCode + (%s == null ? 0 : %s.hashCode());%n",
-                field.camelCaseName(), field.camelCaseName());
         } else if (field.type().isBytes()) {
             headerGenerator.addImport(MessageGenerator.ARRAYS_CLASS);
             buffer.printf("hashCode = 31 * hashCode + Arrays.hashCode(%s);%n",
                 field.camelCaseName());
-        } else if (field.type().isStruct() || field.type().isArray()) {
+        } else if (field.type().isStruct()
+                   || field.type().isArray()
+                   || field.type().isString()
+                   || field.type() instanceof  FieldType.UUIDFieldType
+        ) {
             buffer.printf("hashCode = 31 * hashCode + (%s == null ? 0 : %s.hashCode());%n",
-                field.camelCaseName(), field.camelCaseName());
+                          field.camelCaseName(), field.camelCaseName());
         } else {
             throw new RuntimeException("Unsupported field type " + field.type());
         }
@@ -1053,7 +1088,8 @@ public final class MessageDataGenerator {
         } else if ((field.type() instanceof FieldType.Int8FieldType) ||
                 (field.type() instanceof FieldType.Int16FieldType) ||
                 (field.type() instanceof FieldType.Int32FieldType) ||
-                (field.type() instanceof FieldType.Int64FieldType)) {
+                (field.type() instanceof FieldType.Int64FieldType) ||
+                (field.type() instanceof FieldType.UUIDFieldType)) {
             buffer.printf("+ \"%s%s=\" + %s%n",
                 prefix, field.camelCaseName(), field.camelCaseName());
         } else if (field.type().isString()) {
@@ -1202,21 +1238,34 @@ public final class MessageDataGenerator {
                 }
                 return field.defaultString() + "L";
             }
+        } else if (field.type() instanceof FieldType.UUIDFieldType) {
+            headerGenerator.addImport(MessageGenerator.UUID_CLASS);
+            if (field.defaultString().isEmpty()) {
+                return "org.apache.kafka.common.protocol.MessageUtil.ZERO_UUID";
+            } else {
+                try {
+                    UUID.fromString(field.defaultString());
+                } catch (IllegalArgumentException e) {
+                    throw new RuntimeException("Invalid default for uuid field " +
+                        field.name() + ": " + field.defaultString(), e);
+                }
+                return "UUID.fromString(\"" + field.defaultString() + "\")";
+            }
         } else if (field.type() instanceof FieldType.StringFieldType) {
             if (field.defaultString().equals("null")) {
-                if (!(field.nullableVersions().contains(field.versions()))) {
-                    throw new RuntimeException("null cannot be the default for field " +
-                        field.name() + ", because not all versions of this field are " +
-                        "nullable.");
-                }
+                validateNullDefault(field);
                 return "null";
             } else {
                 return "\"" + field.defaultString() + "\"";
             }
         } else if (field.type().isBytes()) {
-            if (!field.defaultString().isEmpty()) {
+            if (field.defaultString().equals("null")) {
+                validateNullDefault(field);
+                return "null";
+            } else if (!field.defaultString().isEmpty()) {
                 throw new RuntimeException("Invalid default for bytes field " +
-                    field.name() + ": custom defaults are not supported for bytes fields.");
+                        field.name() + ".  The only valid default for a bytes field " +
+                        "is empty or null.");
             }
             headerGenerator.addImport(MessageGenerator.BYTES_CLASS);
             return "Bytes.EMPTY";
@@ -1227,12 +1276,16 @@ public final class MessageDataGenerator {
             }
             return "new " + field.type().toString() + "()";
         } else if (field.type().isArray()) {
-            if (!field.defaultString().isEmpty()) {
+            if (field.defaultString().equals("null")) {
+                validateNullDefault(field);
+                return "null";
+            } else if (!field.defaultString().isEmpty()) {
                 throw new RuntimeException("Invalid default for array field " +
-                    field.name() + ": custom defaults are not supported for array fields.");
+                    field.name() + ".  The only valid default for an array field " +
+                        "is the empty array or null.");
             }
             FieldType.ArrayType arrayType = (FieldType.ArrayType) field.type();
-            if (field.toStruct().hasKeys()) {
+            if (structRegistry.isStructArrayWithKeys(field)) {
                 return "new " + collectionType(arrayType.elementType().toString()) + "(0)";
             } else {
                 headerGenerator.addImport(MessageGenerator.ARRAYLIST_CLASS);
@@ -1240,6 +1293,14 @@ public final class MessageDataGenerator {
             }
         } else {
             throw new RuntimeException("Unsupported field type " + field.type());
+        }
+    }
+
+    private void validateNullDefault(FieldSpec field) {
+        if (!(field.nullableVersions().contains(field.versions()))) {
+            throw new RuntimeException("null cannot be the default for field " +
+                    field.name() + ", because not all versions of this field are " +
+                    "nullable.");
         }
     }
 

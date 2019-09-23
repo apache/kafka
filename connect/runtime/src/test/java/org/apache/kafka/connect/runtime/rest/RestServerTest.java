@@ -30,8 +30,6 @@ import org.apache.kafka.connect.runtime.WorkerConfig;
 import org.apache.kafka.connect.runtime.distributed.DistributedConfig;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.runtime.standalone.StandaloneConfig;
-import org.apache.kafka.connect.util.Callback;
-import org.easymock.Capture;
 import org.easymock.EasyMock;
 import org.junit.After;
 import org.junit.Assert;
@@ -47,7 +45,6 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
@@ -81,6 +78,7 @@ public class RestServerTest {
         workerProps.put(WorkerConfig.INTERNAL_KEY_CONVERTER_CLASS_CONFIG, "org.apache.kafka.connect.json.JsonConverter");
         workerProps.put(WorkerConfig.INTERNAL_VALUE_CONVERTER_CLASS_CONFIG, "org.apache.kafka.connect.json.JsonConverter");
         workerProps.put(DistributedConfig.OFFSET_STORAGE_TOPIC_CONFIG, "connect-offsets");
+        workerProps.put(WorkerConfig.LISTENERS_CONFIG, "HTTP://localhost:0");
 
         return workerProps;
     }
@@ -108,6 +106,7 @@ public class RestServerTest {
 
         // Build listener from hostname and port
         configMap = new HashMap<>(baseWorkerProps());
+        configMap.remove(WorkerConfig.LISTENERS_CONFIG);
         configMap.put(WorkerConfig.REST_HOST_NAME_CONFIG, "my-hostname");
         configMap.put(WorkerConfig.REST_PORT_CONFIG, "8080");
         config = new DistributedConfig(configMap);
@@ -118,7 +117,7 @@ public class RestServerTest {
     @SuppressWarnings("deprecation")
     @Test
     public void testAdvertisedUri() {
-        // Advertised URI from listeenrs without protocol
+        // Advertised URI from listeners without protocol
         Map<String, String> configMap = new HashMap<>(baseWorkerProps());
         configMap.put(WorkerConfig.LISTENERS_CONFIG, "http://localhost:8080,https://localhost:8443");
         DistributedConfig config = new DistributedConfig(configMap);
@@ -156,6 +155,7 @@ public class RestServerTest {
 
         // listener from hostname and port
         configMap = new HashMap<>(baseWorkerProps());
+        configMap.remove(WorkerConfig.LISTENERS_CONFIG);
         configMap.put(WorkerConfig.REST_HOST_NAME_CONFIG, "my-hostname");
         configMap.put(WorkerConfig.REST_PORT_CONFIG, "8080");
         config = new DistributedConfig(configMap);
@@ -212,12 +212,7 @@ public class RestServerTest {
                                            ConnectRestExtension.class))
             .andStubReturn(Collections.emptyList());
 
-        final Capture<Callback<Collection<String>>> connectorsCallback = EasyMock.newCapture();
-        herder.connectors(EasyMock.capture(connectorsCallback));
-        PowerMock.expectLastCall().andAnswer(() -> {
-            connectorsCallback.getValue().onCompletion(null, Arrays.asList("a", "b"));
-            return null;
-        });
+        EasyMock.expect(herder.connectors()).andReturn(Arrays.asList("a", "b"));
 
         PowerMock.replayAll();
 
@@ -270,12 +265,7 @@ public class RestServerTest {
             workerConfig,
             ConnectRestExtension.class)).andStubReturn(Collections.emptyList());
 
-        final Capture<Callback<Collection<String>>> connectorsCallback = EasyMock.newCapture();
-        herder.connectors(EasyMock.capture(connectorsCallback));
-        PowerMock.expectLastCall().andAnswer(() -> {
-            connectorsCallback.getValue().onCompletion(null, Arrays.asList("a", "b"));
-            return null;
-        });
+        EasyMock.expect(herder.connectors()).andReturn(Arrays.asList("a", "b"));
 
         PowerMock.replayAll();
 

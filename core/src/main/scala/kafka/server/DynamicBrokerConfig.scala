@@ -28,7 +28,7 @@ import kafka.server.DynamicBrokerConfig._
 import kafka.utils.{CoreUtils, Logging, PasswordEncoder}
 import kafka.zk.{AdminZkClient, KafkaZkClient}
 import org.apache.kafka.common.Reconfigurable
-import org.apache.kafka.common.config.{ConfigDef, ConfigException, SslConfigs}
+import org.apache.kafka.common.config.{ConfigDef, ConfigException, SslConfigs, AbstractConfig}
 import org.apache.kafka.common.metrics.MetricsReporter
 import org.apache.kafka.common.config.types.Password
 import org.apache.kafka.common.network.{ListenerName, ListenerReconfigurable}
@@ -120,7 +120,7 @@ object DynamicBrokerConfig {
     }
   }
 
-  def validateConfigs(props: Properties, perBrokerConfig: Boolean): Unit =  {
+  def validateConfigs(props: Properties, perBrokerConfig: Boolean): Unit = {
     def checkInvalidProps(invalidPropNames: Set[String], errorMessage: String): Unit = {
       if (invalidPropNames.nonEmpty)
         throw new ConfigException(s"$errorMessage: $invalidPropNames")
@@ -177,6 +177,15 @@ object DynamicBrokerConfig {
       (name -> mode)
     }.toMap.asJava
   }
+
+  private[server] def resolveVariableConfigs(propsOriginal: Properties): Properties = {
+    val props = new Properties
+    val config = new AbstractConfig(new ConfigDef(), propsOriginal, false)
+    config.originals.asScala.filter(!_._1.startsWith(AbstractConfig.CONFIG_PROVIDERS_CONFIG)).foreach {case (key: String, value: Object) => {
+      props.put(key, value)
+    }}
+    props
+  }
 }
 
 class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging {
@@ -224,6 +233,10 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
    * directly. They are provided both old and new configs.
    */
   def addReconfigurables(kafkaServer: KafkaServer): Unit = {
+    kafkaServer.authorizer match {
+      case Some(authz: Reconfigurable) => addReconfigurable(authz)
+      case _ =>
+    }
     addReconfigurable(new DynamicMetricsReporters(kafkaConfig.brokerId, kafkaServer))
     addReconfigurable(new DynamicClientQuotaCallback(kafkaConfig.brokerId, kafkaServer))
 
@@ -405,14 +418,15 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
    * Note: The caller must acquire the read or write lock before invoking this method.
    */
   private def validatedKafkaProps(propsOverride: Properties, perBrokerConfig: Boolean): Map[String, String] = {
-    validateConfigs(propsOverride, perBrokerConfig)
+    val propsResolved = DynamicBrokerConfig.resolveVariableConfigs(propsOverride)
+    validateConfigs(propsResolved, perBrokerConfig)
     val newProps = mutable.Map[String, String]()
     newProps ++= staticBrokerConfigs
     if (perBrokerConfig) {
       overrideProps(newProps, dynamicDefaultConfigs)
-      overrideProps(newProps, propsOverride.asScala)
+      overrideProps(newProps, propsResolved.asScala)
     } else {
-      overrideProps(newProps, propsOverride.asScala)
+      overrideProps(newProps, propsResolved.asScala)
       overrideProps(newProps, dynamicBrokerConfigs)
     }
     newProps
@@ -732,7 +746,7 @@ class DynamicMetricsReporters(brokerId: Int, server: KafkaServer) extends Reconf
       case reporter: Reconfigurable => dynamicConfig.maybeReconfigure(reporter, dynamicConfig.currentKafkaConfig, configs)
       case _ =>
     }
-    val added = updatedMetricsReporters -- currentReporters.keySet
+    val added = updatedMetricsReporters.filterNot(currentReporters.keySet)
     createReporters(added.asJava, configs)
   }
 
@@ -844,9 +858,9 @@ class DynamicListenerConfig(server: KafkaServer) extends BrokerReconfigurable wi
   def validateReconfiguration(newConfig: KafkaConfig): Unit = {
 
     def immutableListenerConfigs(kafkaConfig: KafkaConfig, prefix: String): Map[String, AnyRef] = {
-      newConfig.originals.asScala
-        .filterKeys(_.startsWith(prefix))
-        .filterKeys(k => !DynamicSecurityConfigs.contains(k))
+      newConfig.originals.asScala.filter { case (key, _) =>
+        key.startsWith(prefix) && !DynamicSecurityConfigs.contains(key)
+      }
     }
 
     val oldConfig = server.config

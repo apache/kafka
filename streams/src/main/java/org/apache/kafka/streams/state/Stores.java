@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.state;
 
-import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Time;
@@ -76,7 +75,6 @@ import static org.apache.kafka.streams.internals.ApiUtils.prepareMillisCheckFail
  * topology.addStateStore(storeBuilder, "processorName");
  * }</pre>
  */
-@InterfaceStability.Evolving
 public final class Stores {
 
     /**
@@ -137,7 +135,7 @@ public final class Stores {
 
             @Override
             public String metricsScope() {
-                return "in-memory-state";
+                return "in-memory";
             }
         };
     }
@@ -171,7 +169,7 @@ public final class Stores {
 
             @Override
             public String metricsScope() {
-                return "in-memory-lru-state";
+                return "in-memory-lru";
             }
         };
     }
@@ -354,26 +352,6 @@ public final class Stores {
     }
 
     /**
-     * Create an in-memory {@link SessionBytesStoreSupplier}.
-     * @param name              name of the store (cannot be {@code null})
-     * @param retentionPeriod   length ot time to retain data in the store (cannot be negative)
-     *                          Note that the retention period must be at least long enough to contain the
-     *                          windowed data's entire life cycle, from window-start through window-end,
-     *                          and for the entire grace period.
-     * @return an instance of a {@link  SessionBytesStoreSupplier}
-     */
-    public static SessionBytesStoreSupplier inMemorySessionStore(final String name, final Duration retentionPeriod) {
-        Objects.requireNonNull(name, "name cannot be null");
-
-        final String msgPrefix = prepareMillisCheckFailMsgPrefix(retentionPeriod, "retentionPeriod");
-        final long retentionPeriodMs = ApiUtils.validateMillisecondDuration(retentionPeriod, msgPrefix);
-        if (retentionPeriodMs < 0) {
-            throw new IllegalArgumentException("retentionPeriod cannot be negative");
-        }
-        return new InMemorySessionBytesStoreSupplier(name, retentionPeriodMs);
-    }
-
-    /**
      * Create a persistent {@link SessionBytesStoreSupplier}.
      *
      * @param name              name of the store (cannot be {@code null})
@@ -409,6 +387,27 @@ public final class Stores {
                                                                    final Duration retentionPeriod) {
         final String msgPrefix = prepareMillisCheckFailMsgPrefix(retentionPeriod, "retentionPeriod");
         return persistentSessionStore(name, ApiUtils.validateMillisecondDuration(retentionPeriod, msgPrefix));
+    }
+
+    /**
+     * Create an in-memory {@link SessionBytesStoreSupplier}.
+     *
+     * @param name              name of the store (cannot be {@code null})
+     * @param retentionPeriod   length ot time to retain data in the store (cannot be negative)
+     *                          Note that the retention period must be at least long enough to contain the
+     *                          windowed data's entire life cycle, from window-start through window-end,
+     *                          and for the entire grace period.
+     * @return an instance of a {@link  SessionBytesStoreSupplier}
+     */
+    public static SessionBytesStoreSupplier inMemorySessionStore(final String name, final Duration retentionPeriod) {
+        Objects.requireNonNull(name, "name cannot be null");
+
+        final String msgPrefix = prepareMillisCheckFailMsgPrefix(retentionPeriod, "retentionPeriod");
+        final long retentionPeriodMs = ApiUtils.validateMillisecondDuration(retentionPeriod, msgPrefix);
+        if (retentionPeriodMs < 0) {
+            throw new IllegalArgumentException("retentionPeriod cannot be negative");
+        }
+        return new InMemorySessionBytesStoreSupplier(name, retentionPeriodMs);
     }
 
     /**

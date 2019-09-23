@@ -152,7 +152,7 @@ public class SslTransportLayer implements TransportLayer {
 
 
     /**
-    * Sends a SSL close message and closes socketChannel.
+    * Sends an SSL close message and closes socketChannel.
     */
     @Override
     public void close() throws IOException {
@@ -737,7 +737,7 @@ public class SslTransportLayer implements TransportLayer {
     }
 
     /**
-     * returns a SSL Session after the handshake is established
+     * returns an SSL Session after the handshake is established
      * throws IllegalStateException if the handshake is not established
      */
     public SSLSession sslSession() throws IllegalStateException {
@@ -863,7 +863,8 @@ public class SslTransportLayer implements TransportLayer {
     private void maybeProcessHandshakeFailure(SSLException sslException, boolean flush, IOException ioException) throws IOException {
         if (sslException instanceof SSLHandshakeException || sslException instanceof SSLProtocolException ||
                 sslException instanceof SSLPeerUnverifiedException || sslException instanceof SSLKeyException ||
-                sslException.getMessage().contains("Unrecognized SSL message"))
+                sslException.getMessage().contains("Unrecognized SSL message") ||
+                sslException.getMessage().contains("Received fatal alert: "))
             handshakeFailure(sslException, flush);
         else if (ioException == null)
             throw sslException;

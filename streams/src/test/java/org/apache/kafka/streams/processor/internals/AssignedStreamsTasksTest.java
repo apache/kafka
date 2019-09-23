@@ -17,26 +17,38 @@
 
 package org.apache.kafka.streams.processor.internals;
 
-import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.utils.LogContext;
-import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.streams.errors.TaskMigratedException;
-import org.apache.kafka.streams.processor.TaskId;
-import org.easymock.EasyMock;
-import org.junit.Before;
-import org.junit.Test;
-
-import java.util.Collection;
-import java.util.Collections;
-import java.util.Set;
-
 import static org.hamcrest.CoreMatchers.not;
 import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.IsEqual.equalTo;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
+
+import java.util.Collection;
+import java.util.Collections;
+import java.util.Set;
+import org.apache.kafka.clients.consumer.MockConsumer;
+import org.apache.kafka.clients.consumer.OffsetResetStrategy;
+import org.apache.kafka.clients.producer.MockProducer;
+import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.metrics.MetricConfig;
+import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.metrics.Sensor.RecordingLevel;
+import org.apache.kafka.common.serialization.Deserializer;
+import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.streams.errors.TaskMigratedException;
+import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
+import org.apache.kafka.test.MockSourceNode;
+import org.easymock.EasyMock;
+import org.junit.Before;
+import org.junit.Test;
 
 public class AssignedStreamsTasksTest {
 
@@ -72,16 +84,20 @@ public class AssignedStreamsTasksTest {
     @Test
     public void shouldMoveInitializedTasksNeedingRestoreToRestoring() {
         EasyMock.expect(t1.initializeStateStores()).andReturn(false);
+        t1.initializeTaskTime();
         t1.initializeTopology();
         EasyMock.expectLastCall().once();
         EasyMock.expect(t1.partitions()).andReturn(Collections.singleton(tp1));
         EasyMock.expect(t1.changelogPartitions()).andReturn(Collections.emptySet());
         EasyMock.expect(t2.initializeStateStores()).andReturn(true);
+        t1.initializeTaskTime();
         t2.initializeTopology();
         EasyMock.expectLastCall().once();
         final Set<TopicPartition> t2partitions = Collections.singleton(tp2);
         EasyMock.expect(t2.partitions()).andReturn(t2partitions);
         EasyMock.expect(t2.changelogPartitions()).andReturn(Collections.emptyList());
+        t1.initializeTaskTime();
+        t2.initializeTaskTime();
 
         EasyMock.replay(t1, t2);
 
@@ -98,6 +114,7 @@ public class AssignedStreamsTasksTest {
     @Test
     public void shouldMoveInitializedTasksThatDontNeedRestoringToRunning() {
         EasyMock.expect(t2.initializeStateStores()).andReturn(true);
+        t2.initializeTaskTime();
         t2.initializeTopology();
         EasyMock.expectLastCall().once();
         EasyMock.expect(t2.partitions()).andReturn(Collections.singleton(tp2));
@@ -118,6 +135,7 @@ public class AssignedStreamsTasksTest {
         EasyMock.expect(t1.partitions()).andReturn(task1Partitions).anyTimes();
         EasyMock.expect(t1.changelogPartitions()).andReturn(Utils.mkSet(changeLog1, changeLog2)).anyTimes();
         EasyMock.expect(t1.hasStateStores()).andReturn(true).anyTimes();
+        t1.initializeTaskTime();
         t1.initializeTopology();
         EasyMock.expectLastCall().once();
         EasyMock.replay(t1);
@@ -212,6 +230,7 @@ public class AssignedStreamsTasksTest {
         mockRunningTaskSuspension();
         t1.resume();
         EasyMock.expectLastCall();
+        t1.initializeTaskTime();
         t1.initializeTopology();
         EasyMock.expectLastCall().once();
         EasyMock.replay(t1);
@@ -227,6 +246,7 @@ public class AssignedStreamsTasksTest {
     public void shouldCloseTaskOnResumeSuspendedIfTaskMigratedException() {
         mockRunningTaskSuspension();
         t1.resume();
+        t1.initializeTaskTime();
         t1.initializeTopology();
         EasyMock.expectLastCall().andThrow(new TaskMigratedException());
         t1.close(false, true);
@@ -246,6 +266,7 @@ public class AssignedStreamsTasksTest {
 
     private void mockTaskInitialization() {
         EasyMock.expect(t1.initializeStateStores()).andReturn(true);
+        t1.initializeTaskTime();
         t1.initializeTopology();
         EasyMock.expectLastCall().once();
         EasyMock.expect(t1.partitions()).andReturn(Collections.singleton(tp1));
@@ -451,6 +472,68 @@ public class AssignedStreamsTasksTest {
         EasyMock.verify(t1);
     }
 
+    @Test
+    public void shouldCloseCleanlyWithSuspendedTaskAndEOS() {
+        final String topic = "topic";
+
+        final Deserializer<byte[]> deserializer = Serdes.ByteArray().deserializer();
+        final Serializer<byte[]> serializer = Serdes.ByteArray().serializer();
+
+        final MockConsumer<byte[], byte[]> consumer =
+            new MockConsumer<>(OffsetResetStrategy.EARLIEST);
+        final MockProducer<byte[], byte[]> producer =
+            new MockProducer<>(false, serializer, serializer);
+
+        final MockSourceNode<byte[], byte[]> source = new MockSourceNode<>(
+            new String[] {"topic"},
+            deserializer,
+            deserializer);
+
+        final ChangelogReader changelogReader = new MockChangelogReader();
+
+        final ProcessorTopology topology = new ProcessorTopology(
+            Collections.singletonList(source),
+            Collections.singletonMap(topic, source),
+            Collections.emptyMap(),
+            Collections.emptyList(),
+            Collections.emptyList(),
+            Collections.emptyMap(),
+            Collections.emptySet());
+
+        final Set<TopicPartition> partitions = Collections.singleton(
+            new TopicPartition(topic, 1));
+
+        final Metrics metrics = new Metrics(new MetricConfig().recordLevel(RecordingLevel.DEBUG));
+
+        final StreamsMetricsImpl streamsMetrics = new MockStreamsMetrics(metrics);
+
+        final MockTime time = new MockTime();
+
+        final StateDirectory stateDirectory = new StateDirectory(
+            StreamTaskTest.createConfig(true),
+            time,
+            true);
+
+        final StreamTask task = new StreamTask(
+            new TaskId(0, 0),
+            partitions,
+            topology,
+            consumer,
+            changelogReader,
+            StreamTaskTest.createConfig(true),
+            streamsMetrics,
+            stateDirectory,
+            null,
+            time,
+            () -> producer);
+
+        assignedTasks.addNewTask(task);
+        assignedTasks.initializeNewTasks();
+        assertNull(assignedTasks.suspend());
+
+        assignedTasks.close(true);
+    }
+
     private void addAndInitTask() {
         assignedTasks.addNewTask(t1);
         assignedTasks.initializeNewTasks();
@@ -463,6 +546,7 @@ public class AssignedStreamsTasksTest {
 
     private void mockRunningTaskSuspension() {
         EasyMock.expect(t1.initializeStateStores()).andReturn(true);
+        t1.initializeTaskTime();
         t1.initializeTopology();
         EasyMock.expectLastCall().once();
         EasyMock.expect(t1.hasStateStores()).andReturn(false).anyTimes();

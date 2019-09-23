@@ -20,7 +20,7 @@ import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.metrics.stats.Avg;
 import org.apache.kafka.common.metrics.stats.Meter;
 import org.apache.kafka.common.metrics.stats.Rate;
-import org.apache.kafka.common.metrics.stats.Sum;
+import org.apache.kafka.common.metrics.stats.WindowedSum;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
@@ -86,25 +86,23 @@ public class SensorTest {
     public void testExpiredSensor() {
         MetricConfig config = new MetricConfig();
         Time mockTime = new MockTime();
-        Metrics metrics =  new Metrics(config, Arrays.asList((MetricsReporter) new JmxReporter()), mockTime, true);
+        try (Metrics metrics = new Metrics(config, Arrays.asList(new JmxReporter()), mockTime, true)) {
+            long inactiveSensorExpirationTimeSeconds = 60L;
+            Sensor sensor = new Sensor(metrics, "sensor", null, config, mockTime,
+                    inactiveSensorExpirationTimeSeconds, Sensor.RecordingLevel.INFO);
 
-        long inactiveSensorExpirationTimeSeconds = 60L;
-        Sensor sensor = new Sensor(metrics, "sensor", null, config, mockTime,
-            inactiveSensorExpirationTimeSeconds, Sensor.RecordingLevel.INFO);
+            assertTrue(sensor.add(metrics.metricName("test1", "grp1"), new Avg()));
 
-        assertTrue(sensor.add(metrics.metricName("test1", "grp1"), new Avg()));
+            Map<String, String> emptyTags = Collections.emptyMap();
+            MetricName rateMetricName = new MetricName("rate", "test", "", emptyTags);
+            MetricName totalMetricName = new MetricName("total", "test", "", emptyTags);
+            Meter meter = new Meter(rateMetricName, totalMetricName);
+            assertTrue(sensor.add(meter));
 
-        Map<String, String> emptyTags = Collections.emptyMap();
-        MetricName rateMetricName = new MetricName("rate", "test", "", emptyTags);
-        MetricName totalMetricName = new MetricName("total", "test", "", emptyTags);
-        Meter meter = new Meter(rateMetricName, totalMetricName);
-        assertTrue(sensor.add(meter));
-
-        mockTime.sleep(TimeUnit.SECONDS.toMillis(inactiveSensorExpirationTimeSeconds + 1));
-        assertFalse(sensor.add(metrics.metricName("test3", "grp1"), new Avg()));
-        assertFalse(sensor.add(meter));
-
-        metrics.close();
+            mockTime.sleep(TimeUnit.SECONDS.toMillis(inactiveSensorExpirationTimeSeconds + 1));
+            assertFalse(sensor.add(metrics.metricName("test3", "grp1"), new Avg()));
+            assertFalse(sensor.add(meter));
+        }
     }
 
     @Test
@@ -128,7 +126,7 @@ public class SensorTest {
         }
 
         // note that adding a different metric with the same name is also a no-op
-        assertTrue(sensor.add(metrics.metricName("test-metric", "test-group"), new Sum()));
+        assertTrue(sensor.add(metrics.metricName("test-metric", "test-group"), new WindowedSum()));
 
         // so after all this, we still just have the original metric registered
         assertEquals(1, sensor.metrics().size());

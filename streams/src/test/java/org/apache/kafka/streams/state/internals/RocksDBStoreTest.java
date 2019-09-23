@@ -26,9 +26,13 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.ProcessorStateException;
+import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateRestoreListener;
+import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.RocksDBConfigSetter;
+import org.apache.kafka.streams.state.internals.metrics.RocksDBMetricsRecorder;
 import org.apache.kafka.test.InternalMockProcessorContext;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
@@ -37,7 +41,11 @@ import org.junit.Before;
 import org.junit.Test;
 import org.rocksdb.BlockBasedTableConfig;
 import org.rocksdb.BloomFilter;
+import org.rocksdb.Filter;
+import org.rocksdb.Cache;
+import org.rocksdb.LRUCache;
 import org.rocksdb.Options;
+import org.rocksdb.Statistics;
 
 import java.io.File;
 import java.io.IOException;
@@ -49,6 +57,15 @@ import java.util.Properties;
 import java.util.Set;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
+import static org.apache.kafka.streams.StreamsConfig.METRICS_RECORDING_LEVEL_CONFIG;
+import static org.apache.kafka.streams.StreamsConfig.ROCKSDB_CONFIG_SETTER_CLASS_CONFIG;
+import static org.easymock.EasyMock.expect;
+import static org.easymock.EasyMock.mock;
+import static org.easymock.EasyMock.replay;
+import static org.easymock.EasyMock.reset;
+import static org.easymock.EasyMock.verify;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -60,6 +77,7 @@ import static org.junit.Assert.fail;
 public class RocksDBStoreTest {
     private static boolean enableBloomFilters = false;
     final static String DB_NAME = "db-name";
+    final static String METRICS_SCOPE = "metrics-scope";
 
     private File dir;
     private final Serializer<String> stringSerializer = new StringSerializer();
@@ -67,7 +85,6 @@ public class RocksDBStoreTest {
 
     InternalMockProcessorContext context;
     RocksDBStore rocksDBStore;
-    private static BloomFilter filter;
 
     @Before
     public void setUp() {
@@ -79,17 +96,87 @@ public class RocksDBStoreTest {
             Serdes.String(),
             Serdes.String(),
             new StreamsConfig(props));
-        filter = new BloomFilter();
     }
 
     RocksDBStore getRocksDBStore() {
-        return new RocksDBStore(DB_NAME);
+        return new RocksDBStore(DB_NAME, METRICS_SCOPE);
     }
 
     @After
     public void tearDown() {
-        filter.close();
         rocksDBStore.close();
+    }
+
+    @Test
+    public void shouldRemoveStatisticsFromInjectedMetricsRecorderOnClose() {
+        final RocksDBMetricsRecorder metricsRecorder = mock(RocksDBMetricsRecorder.class);
+        final RocksDBStore store = new RocksDBStore(DB_NAME, METRICS_SCOPE, metricsRecorder);
+        final ProcessorContext mockContext = mock(ProcessorContext.class);
+        expect(mockContext.appConfigs()).andReturn(mkMap(mkEntry(METRICS_RECORDING_LEVEL_CONFIG, "DEBUG")));
+        final String directoryPath = TestUtils.tempDirectory().getAbsolutePath();
+        final File directory = new File(directoryPath);
+        expect(mockContext.stateDir()).andReturn(directory);
+        expect(mockContext.metrics()).andReturn(mock(StreamsMetricsImpl.class));
+        expect(mockContext.taskId()).andReturn(new TaskId(0, 0));
+        replay(mockContext);
+        store.openDB(mockContext);
+        reset(metricsRecorder);
+        metricsRecorder.removeStatistics(DB_NAME);
+        replay(metricsRecorder);
+
+        store.close();
+
+        verify(metricsRecorder);
+    }
+
+    @Test
+    public void shouldNotRemoveStatisticsFromInjectedMetricsRecorderOnCloseWhenRecordingLevelIsInfo() {
+        final RocksDBMetricsRecorder metricsRecorder = mock(RocksDBMetricsRecorder.class);
+        replay(metricsRecorder);
+        final RocksDBStore store = new RocksDBStore(DB_NAME, METRICS_SCOPE, metricsRecorder);
+        final ProcessorContext mockContext = mock(ProcessorContext.class);
+        expect(mockContext.appConfigs()).andReturn(mkMap(mkEntry(METRICS_RECORDING_LEVEL_CONFIG, "INFO")));
+        final String directoryPath = TestUtils.tempDirectory().getAbsolutePath();
+        final File directory = new File(directoryPath);
+        expect(mockContext.stateDir()).andReturn(directory);
+        replay(mockContext);
+        store.openDB(mockContext);
+
+        store.close();
+
+        verify(metricsRecorder);
+    }
+
+    public static class TestRocksDBConfigSetter implements RocksDBConfigSetter {
+        public TestRocksDBConfigSetter(){}
+
+        public void setConfig(final String storeName, final Options options, final Map<String, Object> configs) {
+            options.setStatistics(new Statistics());
+        }
+
+        public void close(final String storeName, final Options options) {
+            options.statistics().close();
+        }
+    }
+
+    @Test
+    public void shouldNotRemoveStatisticsFromInjectedMetricsRecorderOnCloseWhenUserProvidsStatistics() {
+        final RocksDBMetricsRecorder metricsRecorder = mock(RocksDBMetricsRecorder.class);
+        replay(metricsRecorder);
+        final RocksDBStore store = new RocksDBStore(DB_NAME, METRICS_SCOPE, metricsRecorder);
+        final ProcessorContext mockContext = mock(ProcessorContext.class);
+        expect(mockContext.appConfigs()).andReturn(mkMap(
+            mkEntry(METRICS_RECORDING_LEVEL_CONFIG, "DEBUG"),
+            mkEntry(ROCKSDB_CONFIG_SETTER_CLASS_CONFIG, TestRocksDBConfigSetter.class)));
+        final String directoryPath = TestUtils.tempDirectory().getAbsolutePath();
+        final File directory = new File(directoryPath);
+        expect(mockContext.stateDir()).andReturn(directory);
+        replay(mockContext);
+        store.openDB(mockContext);
+
+        store.close();
+
+        verify(metricsRecorder);
     }
 
     @Test
@@ -490,14 +577,17 @@ public class RocksDBStoreTest {
     public static class TestingBloomFilterRocksDBConfigSetter implements RocksDBConfigSetter {
 
         static boolean bloomFiltersSet;
+        static Filter filter;
+        static Cache cache;
 
         @Override
         public void setConfig(final String storeName, final Options options, final Map<String, Object> configs) {
-
             final BlockBasedTableConfig tableConfig = new BlockBasedTableConfig();
-            tableConfig.setBlockCacheSize(50 * 1024 * 1024L);
+            cache = new LRUCache(50 * 1024 * 1024L);
+            tableConfig.setBlockCache(cache);
             tableConfig.setBlockSize(4096L);
             if (enableBloomFilters) {
+                filter = new BloomFilter();
                 tableConfig.setFilter(filter);
                 options.optimizeFiltersForHits();
                 bloomFiltersSet = true;
@@ -507,6 +597,14 @@ public class RocksDBStoreTest {
             }
 
             options.setTableFormatConfig(tableConfig);
+        }
+
+        @Override
+        public void close(final String storeName, final Options options) {
+            if (filter != null) {
+                filter.close();
+            }
+            cache.close();
         }
     }
 

@@ -35,7 +35,6 @@ import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.SocketChannel;
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.Supplier;
@@ -51,7 +50,7 @@ public class SslChannelBuilder implements ChannelBuilder, ListenerReconfigurable
     private SslPrincipalMapper sslPrincipalMapper;
 
     /**
-     * Constructs a SSL channel builder. ListenerName is provided only
+     * Constructs an SSL channel builder. ListenerName is provided only
      * for server channel builder and will be null for client channel builder.
      */
     public SslChannelBuilder(Mode mode, ListenerName listenerName, boolean isInterBrokerListener) {
@@ -63,8 +62,7 @@ public class SslChannelBuilder implements ChannelBuilder, ListenerReconfigurable
     public void configure(Map<String, ?> configs) throws KafkaException {
         try {
             this.configs = configs;
-            @SuppressWarnings("unchecked")
-            List<String> sslPrincipalMappingRules = (List<String>) configs.get(BrokerSecurityConfigs.SSL_PRINCIPAL_MAPPING_RULES_CONFIG);
+            String sslPrincipalMappingRules = (String) configs.get(BrokerSecurityConfigs.SSL_PRINCIPAL_MAPPING_RULES_CONFIG);
             if (sslPrincipalMappingRules != null)
                 sslPrincipalMapper = SslPrincipalMapper.fromRules(sslPrincipalMappingRules);
             this.sslFactory = new SslFactory(mode, null, isInterBrokerListener);

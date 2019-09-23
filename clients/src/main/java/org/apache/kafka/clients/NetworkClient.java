@@ -650,7 +650,10 @@ public class NetworkClient implements KafkaClient {
         if (nodes.isEmpty())
             throw new IllegalStateException("There are no nodes in the Kafka cluster");
         int inflight = Integer.MAX_VALUE;
-        Node found = null;
+
+        Node foundConnecting = null;
+        Node foundCanConnect = null;
+        Node foundReady = null;
 
         int offset = this.randOffset.nextInt(nodes.size());
         for (int i = 0; i < nodes.size(); i++) {
@@ -665,22 +668,33 @@ public class NetworkClient implements KafkaClient {
                 } else if (currInflight < inflight) {
                     // otherwise if this is the best we have found so far, record that
                     inflight = currInflight;
-                    found = node;
+                    foundReady = node;
                 }
-            } else if (canConnect(node, now) && inflight == Integer.MAX_VALUE) {
-                found = node;
+            } else if (connectionStates.isPreparingConnection(node.idString())) {
+                foundConnecting = node;
+            } else if (canConnect(node, now)) {
+                foundCanConnect = node;
             } else {
                 log.trace("Removing node {} from least loaded node selection since it is neither ready " +
                         "for sending or connecting", node);
             }
         }
 
-        if (found != null)
-            log.trace("Found least loaded node {}", found);
-        else
+        // We prefer established connections if possible. Otherwise, we will wait for connections
+        // which are being established before connecting to new nodes.
+        if (foundReady != null) {
+            log.trace("Found least loaded node {} with {} inflight requests", foundReady, inflight);
+            return foundReady;
+        } else if (foundConnecting != null) {
+            log.trace("Found least loaded connecting node {}", foundConnecting);
+            return foundConnecting;
+        } else if (foundCanConnect != null) {
+            log.trace("Found least loaded node {} with no active connection", foundCanConnect);
+            return foundCanConnect;
+        } else {
             log.trace("Least loaded node selection failed to find an available node");
-
-        return found;
+            return null;
+        }
     }
 
     public static AbstractResponse parseResponse(ByteBuffer responseBuffer, RequestHeader requestHeader) {

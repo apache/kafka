@@ -88,7 +88,11 @@ object ApiVersion {
     // New error code for ListOffsets when a new leader is lagging behind former HW (KIP-207)
     KAFKA_2_2_IV1,
     // Introduced static membership.
-    KAFKA_2_3_IV0
+    KAFKA_2_3_IV0,
+    // Add rack_id to FetchRequest, preferred_read_replica to FetchResponse, and replica_id to OffsetsForLeaderRequest
+    KAFKA_2_3_IV1,
+    // Add adding_replicas and removing_replicas fields to LeaderAndIsrRequest
+    KAFKA_2_4_IV0
   )
 
   // Map keys are the union of the short and full versions
@@ -305,6 +309,20 @@ case object KAFKA_2_3_IV0 extends DefaultApiVersion {
   val subVersion = "IV0"
   val recordVersion = RecordVersion.V2
   val id: Int = 22
+}
+
+case object KAFKA_2_3_IV1 extends DefaultApiVersion {
+  val shortVersion: String = "2.3"
+  val subVersion = "IV1"
+  val recordVersion = RecordVersion.V2
+  val id: Int = 23
+}
+
+case object KAFKA_2_4_IV0 extends DefaultApiVersion {
+  val shortVersion: String = "2.4"
+  val subVersion = "IV0"
+  val recordVersion = RecordVersion.V2
+  val id: Int = 24
 }
 
 object ApiVersionValidator extends Validator {

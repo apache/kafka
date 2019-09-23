@@ -21,6 +21,7 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.KeyValueTimestamp;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.TopologyDescription;
@@ -103,17 +104,39 @@ public class KTableImplTest {
         table4.toStream().process(supplier);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
-            driver.pipeInput(recordFactory.create(topic1, "A", "01"));
-            driver.pipeInput(recordFactory.create(topic1, "B", "02"));
-            driver.pipeInput(recordFactory.create(topic1, "C", "03"));
-            driver.pipeInput(recordFactory.create(topic1, "D", "04"));
+            driver.pipeInput(recordFactory.create(topic1, "A", "01", 5L));
+            driver.pipeInput(recordFactory.create(topic1, "B", "02", 100L));
+            driver.pipeInput(recordFactory.create(topic1, "C", "03", 0L));
+            driver.pipeInput(recordFactory.create(topic1, "D", "04", 0L));
+            driver.pipeInput(recordFactory.create(topic1, "A", "05", 10L));
+            driver.pipeInput(recordFactory.create(topic1, "A", "06", 8L));
         }
 
         final List<MockProcessor<String, Object>> processors = supplier.capturedProcessors(4);
-        assertEquals(asList("A:01 (ts: 0)", "B:02 (ts: 0)", "C:03 (ts: 0)", "D:04 (ts: 0)"), processors.get(0).processed);
-        assertEquals(asList("A:1 (ts: 0)", "B:2 (ts: 0)", "C:3 (ts: 0)", "D:4 (ts: 0)"), processors.get(1).processed);
-        assertEquals(asList("A:null (ts: 0)", "B:2 (ts: 0)", "C:null (ts: 0)", "D:4 (ts: 0)"), processors.get(2).processed);
-        assertEquals(asList("A:01 (ts: 0)", "B:02 (ts: 0)", "C:03 (ts: 0)", "D:04 (ts: 0)"), processors.get(3).processed);
+        assertEquals(asList(new KeyValueTimestamp<>("A", "01", 5),
+                new KeyValueTimestamp<>("B", "02", 100),
+                new KeyValueTimestamp<>("C", "03", 0),
+                new KeyValueTimestamp<>("D", "04", 0),
+                new KeyValueTimestamp<>("A", "05", 10),
+                new KeyValueTimestamp<>("A", "06", 8)), processors.get(0).processed);
+        assertEquals(asList(new KeyValueTimestamp<>("A", 1, 5),
+                new KeyValueTimestamp<>("B", 2, 100),
+                new KeyValueTimestamp<>("C", 3, 0),
+                new KeyValueTimestamp<>("D", 4, 0),
+                new KeyValueTimestamp<>("A", 5, 10),
+                new KeyValueTimestamp<>("A", 6, 8)), processors.get(1).processed);
+        assertEquals(asList(new KeyValueTimestamp<>("A", null, 5),
+                new KeyValueTimestamp<>("B", 2, 100),
+                new KeyValueTimestamp<>("C", null, 0),
+                new KeyValueTimestamp<>("D", 4, 0),
+                new KeyValueTimestamp<>("A", null, 10),
+                new KeyValueTimestamp<>("A", 6, 8)), processors.get(2).processed);
+        assertEquals(asList(new KeyValueTimestamp<>("A", "01", 5),
+                new KeyValueTimestamp<>("B", "02", 100),
+                new KeyValueTimestamp<>("C", "03", 0),
+                new KeyValueTimestamp<>("D", "04", 0),
+                new KeyValueTimestamp<>("A", "05", 10),
+                new KeyValueTimestamp<>("A", "06", 8)), processors.get(3).processed);
     }
 
     @Test
@@ -349,7 +372,7 @@ public class KTableImplTest {
 
     @Test(expected = NullPointerException.class)
     public void shouldNotAllowNullSelectorOnToStream() {
-        table.toStream(null);
+        table.toStream((KeyValueMapper) null);
     }
 
     @Test(expected = NullPointerException.class)

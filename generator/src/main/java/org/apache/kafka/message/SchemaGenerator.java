@@ -18,6 +18,7 @@
 package org.apache.kafka.message;
 
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.Map;
 import java.util.TreeMap;
 
@@ -58,18 +59,31 @@ final class SchemaGenerator {
     private final HeaderGenerator headerGenerator;
 
     /**
+     * A registry with the structures we're generating.
+     */
+    private final StructRegistry structRegistry;
+
+    /**
      * Maps message names to message information.
      */
     private final Map<String, MessageInfo> messages;
 
-    SchemaGenerator(HeaderGenerator headerGenerator) {
+    SchemaGenerator(HeaderGenerator headerGenerator, StructRegistry structRegistry) {
         this.headerGenerator = headerGenerator;
+        this.structRegistry = structRegistry;
         this.messages = new HashMap<>();
     }
 
     void generateSchemas(MessageSpec message) throws Exception {
+        // Generate schemas for inline structures
         generateSchemas(message.generatedClassName(), message.struct(),
             message.struct().versions());
+
+        // Generate schemas for common structures
+        for (Iterator<StructSpec> iter = structRegistry.commonStructs(); iter.hasNext(); ) {
+            StructSpec struct = iter.next();
+            generateSchemas(struct.name(), struct, struct.versions());
+        }
     }
 
     void generateSchemas(String className, StructSpec struct,
@@ -85,9 +99,9 @@ final class SchemaGenerator {
         for (FieldSpec field : struct.fields()) {
             if (field.type().isStructArray()) {
                 FieldType.ArrayType arrayType = (FieldType.ArrayType) field.type();
-                generateSchemas(arrayType.elementType().toString(), field.toStruct(), versions);
+                generateSchemas(arrayType.elementType().toString(), structRegistry.findStruct(field), versions);
             } else if (field.type().isStruct()) {
-                generateSchemas(field.type().toString(), field.toStruct(), versions);
+                generateSchemas(field.type().toString(), structRegistry.findStruct(field), versions);
             }
         }
         CodeBuffer prev = null;
@@ -174,6 +188,12 @@ final class SchemaGenerator {
                 throw new RuntimeException("Type " + type + " cannot be nullable.");
             }
             return "Type.INT64";
+        } else if (type instanceof FieldType.UUIDFieldType) {
+            headerGenerator.addImport(MessageGenerator.TYPE_CLASS);
+            if (nullable) {
+                throw new RuntimeException("Type " + type + " cannot be nullable.");
+            }
+            return "Type.UUID";
         } else if (type instanceof FieldType.StringFieldType) {
             headerGenerator.addImport(MessageGenerator.TYPE_CLASS);
             return nullable ? "Type.NULLABLE_STRING" : "Type.STRING";

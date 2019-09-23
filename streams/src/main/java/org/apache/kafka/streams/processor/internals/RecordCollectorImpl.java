@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import java.util.Collections;
 import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerRecord;
@@ -58,8 +59,10 @@ public class RecordCollectorImpl implements RecordCollector {
     private final static String LOG_MESSAGE = "Error sending record to topic {} due to {}; " +
         "No more records will be sent and no more offsets will be recorded for this task. " +
         "Enable TRACE logging to view failed record key and value.";
-    private final static String EXCEPTION_MESSAGE = "%sAbort sending since %s with a previous record (key %s value %s timestamp %d) to topic %s due to %s";
-    private final static String PARAMETER_HINT = "\nYou can increase producer parameter `retries` and `retry.backoff.ms` to avoid this error.";
+    private final static String EXCEPTION_MESSAGE = "%sAbort sending since %s with a previous record (timestamp %d) to topic %s due to %s";
+    private final static String PARAMETER_HINT = "\nYou can increase the producer configs `delivery.timeout.ms` and/or " +
+        "`retries` to avoid this error. Note that `retries` is set to infinite by default.";
+
     private volatile KafkaException sendException;
 
     public RecordCollectorImpl(final String streamTaskId,
@@ -125,6 +128,8 @@ public class RecordCollectorImpl implements RecordCollector {
     ) {
         String errorLogMessage = LOG_MESSAGE;
         String errorMessage = EXCEPTION_MESSAGE;
+        // There is no documented API for detecting retriable errors, so we rely on `RetriableException`
+        // even though it's an implementation detail (i.e. we do the best we can given what's available)
         if (exception instanceof RetriableException) {
             errorLogMessage += PARAMETER_HINT;
             errorMessage += PARAMETER_HINT;
@@ -139,8 +144,6 @@ public class RecordCollectorImpl implements RecordCollector {
                 errorMessage,
                 logPrefix,
                 "an error caught",
-                key,
-                value,
                 timestamp,
                 topic,
                 exception.toString()
@@ -187,8 +190,6 @@ public class RecordCollectorImpl implements RecordCollector {
                                         EXCEPTION_MESSAGE,
                                         logPrefix,
                                         "producer got fenced",
-                                        key,
-                                        value,
                                         timestamp,
                                         topic,
                                         exception.toString()
@@ -245,8 +246,6 @@ public class RecordCollectorImpl implements RecordCollector {
                         EXCEPTION_MESSAGE,
                         logPrefix,
                         "an error caught",
-                        key,
-                        value,
                         timestamp,
                         topic,
                         uncaughtException.toString()
@@ -281,7 +280,7 @@ public class RecordCollectorImpl implements RecordCollector {
 
     @Override
     public Map<TopicPartition, Long> offsets() {
-        return offsets;
+        return Collections.unmodifiableMap(offsets);
     }
 
     // for testing only

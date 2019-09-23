@@ -19,11 +19,16 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.streams.kstream.Windowed;
+import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.TimestampedBytesStore;
 import org.apache.kafka.streams.state.TimestampedWindowStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
 import org.apache.kafka.streams.state.WindowStore;
+import org.apache.kafka.streams.state.WindowStoreIterator;
 
 import java.util.Objects;
 
@@ -36,7 +41,7 @@ public class TimestampedWindowStoreBuilder<K, V>
                                          final Serde<K> keySerde,
                                          final Serde<V> valueSerde,
                                          final Time time) {
-        super(storeSupplier.name(), keySerde, new ValueAndTimestampSerde<>(valueSerde), time);
+        super(storeSupplier.name(), keySerde, valueSerde == null ? null : new ValueAndTimestampSerde<>(valueSerde), time);
         Objects.requireNonNull(storeSupplier, "bytesStoreSupplier can't be null");
         this.storeSupplier = storeSupplier;
     }
@@ -44,8 +49,12 @@ public class TimestampedWindowStoreBuilder<K, V>
     @Override
     public TimestampedWindowStore<K, V> build() {
         WindowStore<Bytes, byte[]> store = storeSupplier.get();
-        if (!(store instanceof TimestampedBytesStore) && store.persistent()) {
-            store = new WindowToTimestampedWindowByteStoreAdapter(store);
+        if (!(store instanceof TimestampedBytesStore)) {
+            if (store.persistent()) {
+                store = new WindowToTimestampedWindowByteStoreAdapter(store);
+            } else {
+                store = new InMemoryTimestampedWindowStoreMarker(store);
+            }
         }
         return new MeteredTimestampedWindowStore<>(
             maybeWrapCaching(maybeWrapLogging(store)),
@@ -75,5 +84,97 @@ public class TimestampedWindowStoreBuilder<K, V>
 
     public long retentionPeriod() {
         return storeSupplier.retentionPeriod();
+    }
+
+
+    private final static class InMemoryTimestampedWindowStoreMarker
+        implements WindowStore<Bytes, byte[]>, TimestampedBytesStore {
+
+        private final WindowStore<Bytes, byte[]> wrapped;
+
+        private InMemoryTimestampedWindowStoreMarker(final WindowStore<Bytes, byte[]> wrapped) {
+            if (wrapped.persistent()) {
+                throw new IllegalArgumentException("Provided store must not be a persistent store, but it is.");
+            }
+            this.wrapped = wrapped;
+        }
+
+        @Override
+        public void init(final ProcessorContext context,
+                         final StateStore root) {
+            wrapped.init(context, root);
+        }
+
+        @Override
+        public void put(final Bytes key,
+                        final byte[] value) {
+            wrapped.put(key, value);
+        }
+
+        @Override
+        public void put(final Bytes key,
+                        final byte[] value,
+                        final long windowStartTimestamp) {
+            wrapped.put(key, value, windowStartTimestamp);
+        }
+
+        @Override
+        public byte[] fetch(final Bytes key,
+                            final long time) {
+            return wrapped.fetch(key, time);
+        }
+
+        @SuppressWarnings("deprecation")
+        @Override
+        public WindowStoreIterator<byte[]> fetch(final Bytes key,
+                                                 final long timeFrom,
+                                                 final long timeTo) {
+            return wrapped.fetch(key, timeFrom, timeTo);
+        }
+
+        @SuppressWarnings("deprecation")
+        @Override
+        public KeyValueIterator<Windowed<Bytes>, byte[]> fetch(final Bytes from,
+                                                               final Bytes to,
+                                                               final long timeFrom,
+                                                               final long timeTo) {
+            return wrapped.fetch(from, to, timeFrom, timeTo);
+        }
+
+        @SuppressWarnings("deprecation")
+        @Override
+        public KeyValueIterator<Windowed<Bytes>, byte[]> fetchAll(final long timeFrom,
+                                                                  final long timeTo) {
+            return wrapped.fetchAll(timeFrom, timeTo);
+        }
+
+        @Override
+        public KeyValueIterator<Windowed<Bytes>, byte[]> all() {
+            return wrapped.all();
+        }
+
+        @Override
+        public void flush() {
+            wrapped.flush();
+        }
+
+        @Override
+        public void close() {
+            wrapped.close();
+        }
+        @Override
+        public boolean isOpen() {
+            return wrapped.isOpen();
+        }
+
+        @Override
+        public String name() {
+            return wrapped.name();
+        }
+
+        @Override
+        public boolean persistent() {
+            return false;
+        }
     }
 }

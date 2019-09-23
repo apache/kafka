@@ -19,12 +19,17 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
+import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.TimestampedBytesStore;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 
+import java.util.List;
 import java.util.Objects;
 
 public class TimestampedKeyValueStoreBuilder<K, V>
@@ -48,8 +53,12 @@ public class TimestampedKeyValueStoreBuilder<K, V>
     @Override
     public TimestampedKeyValueStore<K, V> build() {
         KeyValueStore<Bytes, byte[]> store = storeSupplier.get();
-        if (!(store instanceof TimestampedBytesStore) && store.persistent()) {
-            store = new KeyValueToTimestampedKeyValueByteStoreAdapter(store);
+        if (!(store instanceof TimestampedBytesStore)) {
+            if (store.persistent()) {
+                store = new KeyValueToTimestampedKeyValueByteStoreAdapter(store);
+            } else {
+                store = new InMemoryTimestampedKeyValueStoreMarker(store);
+            }
         }
         return new MeteredTimestampedKeyValueStore<>(
             maybeWrapCaching(maybeWrapLogging(store)),
@@ -71,5 +80,92 @@ public class TimestampedKeyValueStoreBuilder<K, V>
             return inner;
         }
         return new ChangeLoggingTimestampedKeyValueBytesStore(inner);
+    }
+
+    private final static class InMemoryTimestampedKeyValueStoreMarker
+        implements KeyValueStore<Bytes, byte[]>, TimestampedBytesStore {
+
+        final KeyValueStore<Bytes, byte[]> wrapped;
+
+        private InMemoryTimestampedKeyValueStoreMarker(final KeyValueStore<Bytes, byte[]> wrapped) {
+            if (wrapped.persistent()) {
+                throw new IllegalArgumentException("Provided store must not be a persistent store, but it is.");
+            }
+            this.wrapped = wrapped;
+        }
+
+        @Override
+        public void init(final ProcessorContext context,
+                         final StateStore root) {
+            wrapped.init(context, root);
+        }
+
+        @Override
+        public void put(final Bytes key,
+                        final byte[] value) {
+            wrapped.put(key, value);
+        }
+
+        @Override
+        public byte[] putIfAbsent(final Bytes key,
+                                  final byte[] value) {
+            return wrapped.putIfAbsent(key, value);
+        }
+
+        @Override
+        public void putAll(final List<KeyValue<Bytes, byte[]>> entries) {
+            wrapped.putAll(entries);
+        }
+
+        @Override
+        public byte[] delete(final Bytes key) {
+            return wrapped.delete(key);
+        }
+
+        @Override
+        public byte[] get(final Bytes key) {
+            return wrapped.get(key);
+        }
+
+        @Override
+        public KeyValueIterator<Bytes, byte[]> range(final Bytes from,
+                                                     final Bytes to) {
+            return wrapped.range(from, to);
+        }
+
+        @Override
+        public KeyValueIterator<Bytes, byte[]> all() {
+            return wrapped.all();
+        }
+
+        @Override
+        public long approximateNumEntries() {
+            return wrapped.approximateNumEntries();
+        }
+
+        @Override
+        public void flush() {
+            wrapped.flush();
+        }
+
+        @Override
+        public void close() {
+            wrapped.close();
+        }
+
+        @Override
+        public boolean isOpen() {
+            return wrapped.isOpen();
+        }
+
+        @Override
+        public String name() {
+            return wrapped.name();
+        }
+
+        @Override
+        public boolean persistent() {
+            return false;
+        }
     }
 }

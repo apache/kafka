@@ -31,7 +31,7 @@ import kafka.utils.CoreUtils.inLock
 import org.apache.kafka.common.protocol.Errors
 import AbstractFetcherThread._
 
-import scala.collection.{Map, Set, mutable}
+import scala.collection.{Map, Seq, Set, mutable}
 import scala.collection.JavaConverters._
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicLong
@@ -39,7 +39,7 @@ import java.util.function.Consumer
 
 import com.yammer.metrics.core.Gauge
 import kafka.log.LogAppendInfo
-import org.apache.kafka.common.{KafkaException, TopicPartition}
+import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.internals.PartitionStates
 import org.apache.kafka.common.record.{FileRecords, MemoryRecords, Records}
 import org.apache.kafka.common.requests._
@@ -52,6 +52,7 @@ import scala.math._
 abstract class AbstractFetcherThread(name: String,
                                      clientId: String,
                                      val sourceBroker: BrokerEndPoint,
+                                     failedPartitions: FailedPartitions,
                                      fetchBackOffMs: Int = 0,
                                      isInterruptible: Boolean = true)
   extends ShutdownableThread(name, isInterruptible) {
@@ -96,7 +97,7 @@ abstract class AbstractFetcherThread(name: String,
 
   protected def isOffsetForLeaderEpochSupported: Boolean
 
-  override def shutdown() {
+  override def shutdown(): Unit = {
     initiateShutdown()
     inLock(partitionMapLock) {
       partitionMapCond.signalAll()
@@ -108,7 +109,7 @@ abstract class AbstractFetcherThread(name: String,
     fetcherLagStats.unregister()
   }
 
-  override def doWork() {
+  override def doWork(): Unit = {
     maybeTruncate()
     maybeFetch()
   }
@@ -134,10 +135,11 @@ abstract class AbstractFetcherThread(name: String,
   }
 
   // deal with partitions with errors, potentially due to leadership changes
-  private def handlePartitionsWithErrors(partitions: Iterable[TopicPartition], methodName: String) {
-    if (partitions.nonEmpty)
+  private def handlePartitionsWithErrors(partitions: Iterable[TopicPartition], methodName: String): Unit = {
+    if (partitions.nonEmpty) {
       debug(s"Handling errors in $methodName for partitions $partitions")
       delayPartitions(partitions, fetchBackOffMs)
+    }
   }
 
   /**
@@ -175,6 +177,24 @@ abstract class AbstractFetcherThread(name: String,
     }
   }
 
+  private def doTruncate(topicPartition: TopicPartition, truncationState: OffsetTruncationState): Boolean = {
+    try {
+      truncate(topicPartition, truncationState)
+      true
+    }
+    catch {
+      case e: KafkaStorageException =>
+        error(s"Failed to truncate $topicPartition at offset ${truncationState.offset}", e)
+        markPartitionFailed(topicPartition)
+        false
+      case t: Throwable =>
+        error(s"Unexpected error occurred during truncation for $topicPartition "
+          + s"at offset ${truncationState.offset}", t)
+        markPartitionFailed(topicPartition)
+        false
+    }
+  }
+
   /**
     * - Build a leader epoch fetch based on partitions that are in the Truncating phase
     * - Send OffsetsForLeaderEpochRequest, retrieving the latest offset for each partition's
@@ -208,28 +228,19 @@ abstract class AbstractFetcherThread(name: String,
   // Visible for testing
   private[server] def truncateToHighWatermark(partitions: Set[TopicPartition]): Unit = inLock(partitionMapLock) {
     val fetchOffsets = mutable.HashMap.empty[TopicPartition, OffsetTruncationState]
-    val partitionsWithError = mutable.HashSet.empty[TopicPartition]
 
     for (tp <- partitions) {
       val partitionState = partitionStates.stateValue(tp)
       if (partitionState != null) {
-        try {
-          val highWatermark = partitionState.fetchOffset
-          val truncationState = OffsetTruncationState(highWatermark, truncationCompleted = true)
+        val highWatermark = partitionState.fetchOffset
+        val truncationState = OffsetTruncationState(highWatermark, truncationCompleted = true)
 
-          info(s"Truncating partition $tp to local high watermark $highWatermark")
-          truncate(tp, truncationState)
-
+        info(s"Truncating partition $tp to local high watermark $highWatermark")
+        if (doTruncate(tp, truncationState))
           fetchOffsets.put(tp, truncationState)
-        } catch {
-          case e: KafkaStorageException =>
-            info(s"Failed to truncate $tp", e)
-            partitionsWithError += tp
-        }
       }
     }
 
-    handlePartitionsWithErrors(partitionsWithError, "truncateToHighWatermark")
     updateFetchOffsetAndMaybeMarkTruncationComplete(fetchOffsets)
   }
 
@@ -238,23 +249,17 @@ abstract class AbstractFetcherThread(name: String,
     val partitionsWithError = mutable.HashSet.empty[TopicPartition]
 
     fetchedEpochs.foreach { case (tp, leaderEpochOffset) =>
-      try {
-        leaderEpochOffset.error match {
-          case Errors.NONE =>
-            val offsetTruncationState = getOffsetTruncationState(tp, leaderEpochOffset)
-            truncate(tp, offsetTruncationState)
+      leaderEpochOffset.error match {
+        case Errors.NONE =>
+          val offsetTruncationState = getOffsetTruncationState(tp, leaderEpochOffset)
+          if(doTruncate(tp, offsetTruncationState))
             fetchOffsets.put(tp, offsetTruncationState)
 
-          case Errors.FENCED_LEADER_EPOCH =>
-            onPartitionFenced(tp)
+        case Errors.FENCED_LEADER_EPOCH =>
+          onPartitionFenced(tp)
 
-          case error =>
-            info(s"Retrying leaderEpoch request for partition $tp as the leader reported an error: $error")
-            partitionsWithError += tp
-        }
-      } catch {
-        case e: KafkaStorageException =>
-          info(s"Failed to truncate $tp", e)
+        case error =>
+          info(s"Retrying leaderEpoch request for partition $tp as the leader reported an error: $error")
           partitionsWithError += tp
       }
     }
@@ -267,7 +272,7 @@ abstract class AbstractFetcherThread(name: String,
       val currentLeaderEpoch = currentFetchState.currentLeaderEpoch
       info(s"Partition $tp has an older epoch ($currentLeaderEpoch) than the current leader. Will await " +
         s"the new LeaderAndIsr state before resuming fetching.")
-      partitionStates.remove(tp)
+      markPartitionFailed(tp)
     }
   }
 
@@ -336,11 +341,14 @@ abstract class AbstractFetcherThread(name: String,
                         s"offset ${currentFetchState.fetchOffset}", ime)
                       partitionsWithError += topicPartition
                     case e: KafkaStorageException =>
-                      error(s"Error while processing data for partition $topicPartition", e)
-                      partitionsWithError += topicPartition
-                    case e: Throwable =>
-                      throw new KafkaException(s"Error processing data for partition $topicPartition " +
-                        s"offset ${currentFetchState.fetchOffset}", e)
+                      error(s"Error while processing data for partition $topicPartition " +
+                        s"at offset ${currentFetchState.fetchOffset}", e)
+                      markPartitionFailed(topicPartition)
+                    case t: Throwable =>
+                      // stop monitoring this partition and add it to the set of failed partitions
+                      error(s"Unexpected error occurred while processing data for partition $topicPartition " +
+                        s"at offset ${currentFetchState.fetchOffset}", t)
+                      markPartitionFailed(topicPartition)
                   }
                 case Errors.OFFSET_OUT_OF_RANGE =>
                   if (!handleOutOfRangeError(topicPartition, currentFetchState))
@@ -375,7 +383,7 @@ abstract class AbstractFetcherThread(name: String,
     }
   }
 
-  def markPartitionsForTruncation(topicPartition: TopicPartition, truncationOffset: Long) {
+  def markPartitionsForTruncation(topicPartition: TopicPartition, truncationOffset: Long): Unit = {
     partitionMapLock.lockInterruptibly()
     try {
       Option(partitionStates.stateValue(topicPartition)).foreach { state =>
@@ -387,7 +395,17 @@ abstract class AbstractFetcherThread(name: String,
     } finally partitionMapLock.unlock()
   }
 
-  def addPartitions(initialFetchStates: Map[TopicPartition, OffsetAndEpoch]) {
+  private def markPartitionFailed(topicPartition: TopicPartition): Unit = {
+    partitionMapLock.lock()
+    try {
+      failedPartitions.add(topicPartition)
+      removePartitions(Set(topicPartition))
+    } finally partitionMapLock.unlock()
+    warn(s"Partition $topicPartition marked as failed")
+  }
+
+
+  def addPartitions(initialFetchStates: Map[TopicPartition, OffsetAndEpoch]): Unit = {
     partitionMapLock.lockInterruptibly()
     try {
       initialFetchStates.foreach { case (tp, initialFetchState) =>
@@ -415,7 +433,7 @@ abstract class AbstractFetcherThread(name: String,
     *
     * @param fetchOffsets the partitions to update fetch offset and maybe mark truncation complete
     */
-  private def updateFetchOffsetAndMaybeMarkTruncationComplete(fetchOffsets: Map[TopicPartition, OffsetTruncationState]) {
+  private def updateFetchOffsetAndMaybeMarkTruncationComplete(fetchOffsets: Map[TopicPartition, OffsetTruncationState]): Unit = {
     val newStates: Map[TopicPartition, PartitionFetchState] = partitionStates.partitionStates.asScala
       .map { state =>
         val currentFetchState = state.value
@@ -588,7 +606,7 @@ abstract class AbstractFetcherThread(name: String,
     }
   }
 
-  def delayPartitions(partitions: Iterable[TopicPartition], delay: Long) {
+  def delayPartitions(partitions: Iterable[TopicPartition], delay: Long): Unit = {
     partitionMapLock.lockInterruptibly()
     try {
       for (partition <- partitions) {
@@ -603,7 +621,7 @@ abstract class AbstractFetcherThread(name: String,
     } finally partitionMapLock.unlock()
   }
 
-  def removePartitions(topicPartitions: Set[TopicPartition]) {
+  def removePartitions(topicPartitions: Set[TopicPartition]): Unit = {
     partitionMapLock.lockInterruptibly()
     try {
       topicPartitions.foreach { topicPartition =>
@@ -613,7 +631,7 @@ abstract class AbstractFetcherThread(name: String,
     } finally partitionMapLock.unlock()
   }
 
-  def partitionCount() = {
+  def partitionCount(): Int = {
     partitionMapLock.lockInterruptibly()
     try partitionStates.size
     finally partitionMapLock.unlock()
@@ -672,13 +690,13 @@ class FetcherLagMetrics(metricId: ClientIdTopicPartition) extends KafkaMetricsGr
     tags
   )
 
-  def lag_=(newLag: Long) {
+  def lag_=(newLag: Long): Unit = {
     lagVal.set(newLag)
   }
 
   def lag = lagVal.get
 
-  def unregister() {
+  def unregister(): Unit = {
     removeMetric(FetcherMetrics.ConsumerLag, tags)
   }
 }
@@ -699,12 +717,12 @@ class FetcherLagStats(metricId: ClientIdAndBroker) {
       false
   }
 
-  def unregister(topicPartition: TopicPartition) {
+  def unregister(topicPartition: TopicPartition): Unit = {
     val lagMetrics = stats.remove(ClientIdTopicPartition(metricId.clientId, topicPartition))
     if (lagMetrics != null) lagMetrics.unregister()
   }
 
-  def unregister() {
+  def unregister(): Unit = {
     stats.keys.toBuffer.foreach { key: ClientIdTopicPartition =>
       unregister(key.topicPartition)
     }
@@ -720,7 +738,7 @@ class FetcherStats(metricId: ClientIdAndBroker) extends KafkaMetricsGroup {
 
   val byteRate = newMeter(FetcherMetrics.BytesPerSec, "bytes", TimeUnit.SECONDS, tags)
 
-  def unregister() {
+  def unregister(): Unit = {
     removeMetric(FetcherMetrics.RequestsPerSec, tags)
     removeMetric(FetcherMetrics.BytesPerSec, tags)
   }

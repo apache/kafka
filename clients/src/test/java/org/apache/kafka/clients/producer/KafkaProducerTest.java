@@ -809,7 +809,7 @@ public class KafkaProducerTest {
         assertThrows(IllegalStateException.class, producer::initTransactions);
     }
 
-    @Test(timeout = 5000)
+    @Test
     public void testCloseIsForcedOnPendingFindCoordinator() throws InterruptedException {
         Map<String, Object> configs = new HashMap<>();
         configs.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9000");
@@ -834,10 +834,10 @@ public class KafkaProducerTest {
 
         client.waitForRequests(1, 2000);
         producer.close(Duration.ofMillis(1000));
-        assertionDoneLatch.await();
+        assertionDoneLatch.await(5000, TimeUnit.MILLISECONDS);
     }
 
-    @Test(timeout = 5000)
+    @Test
     public void testCloseIsForcedOnPendingInitProducerId() throws InterruptedException {
         Map<String, Object> configs = new HashMap<>();
         configs.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9000");
@@ -863,10 +863,10 @@ public class KafkaProducerTest {
 
         client.waitForRequests(1, 2000);
         producer.close(Duration.ofMillis(1000));
-        assertionDoneLatch.await();
+        assertionDoneLatch.await(5000, TimeUnit.MILLISECONDS);
     }
 
-    @Test(timeout = 5000)
+    @Test
     public void testCloseIsForcedOnPendingAddOffsetRequest() throws InterruptedException {
         Map<String, Object> configs = new HashMap<>();
         configs.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9000");
@@ -892,7 +892,7 @@ public class KafkaProducerTest {
 
         client.waitForRequests(1, 2000);
         producer.close(Duration.ofMillis(1000));
-        assertionDoneLatch.await();
+        assertionDoneLatch.await(5000, TimeUnit.MILLISECONDS);
     }
 
     private ProducerMetadata newMetadata(long refreshBackoffMs, long expirationMs) {

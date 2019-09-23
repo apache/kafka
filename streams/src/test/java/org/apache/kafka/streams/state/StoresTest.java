@@ -218,6 +218,17 @@ public class StoresTest {
     }
 
     @Test
+    public void shouldBuildTimestampedKeyValueStoreThatWrapsInMemoryKeyValueStore() {
+        final TimestampedKeyValueStore<String, String> store = Stores.timestampedKeyValueStoreBuilder(
+            Stores.inMemoryKeyValueStore("name"),
+            Serdes.String(),
+            Serdes.String()
+        ).withLoggingDisabled().withCachingDisabled().build();
+        assertThat(store, not(nullValue()));
+        assertThat(((WrappedStateStore) store).wrapped(), instanceOf(TimestampedBytesStore.class));
+    }
+
+    @Test
     public void shouldBuildWindowStore() {
         final WindowStore<String, String> store = Stores.windowStoreBuilder(
             Stores.persistentWindowStore("store", ofMillis(3L), ofMillis(3L), true),
@@ -235,6 +246,27 @@ public class StoresTest {
             Serdes.String()
         ).build();
         assertThat(store, not(nullValue()));
+    }
+
+    @Test
+    public void shouldBuildTimestampedWindowStoreThatWrapsWindowStore() {
+        final TimestampedWindowStore<String, String> store = Stores.timestampedWindowStoreBuilder(
+            Stores.persistentWindowStore("store", ofMillis(3L), ofMillis(3L), true),
+            Serdes.String(),
+            Serdes.String()
+        ).build();
+        assertThat(store, not(nullValue()));
+    }
+
+    @Test
+    public void shouldBuildTimestampedWindowStoreThatWrapsInMemroyWindowStore() {
+        final TimestampedWindowStore<String, String> store = Stores.timestampedWindowStoreBuilder(
+            Stores.inMemoryWindowStore("store", ofMillis(3L), ofMillis(3L), true),
+            Serdes.String(),
+            Serdes.String()
+        ).withLoggingDisabled().withCachingDisabled().build();
+        assertThat(store, not(nullValue()));
+        assertThat(((WrappedStateStore) store).wrapped(), instanceOf(TimestampedBytesStore.class));
     }
 
     @Test
