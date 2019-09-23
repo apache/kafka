@@ -1785,6 +1785,10 @@ project(':remote-storage-managers:hdfs') {
     testRuntime libs.slf4jlog4j
   }
 
+  checkstyle {
+    configProperties = checkstyleConfigProperties("import-control-remote-storage-managers.xml")
+  }
+
   tasks.create(name: "copyDependantLibs", type: Copy) {
     from(configurations.runtime) {
       exclude('kafka-rsm-hdfs*')
