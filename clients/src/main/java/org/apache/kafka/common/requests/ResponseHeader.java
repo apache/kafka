@@ -30,13 +30,11 @@ public class ResponseHeader extends AbstractRequestResponse {
     private final short headerVersion;
 
     public ResponseHeader(Struct struct, short headerVersion) {
-        this.data = new ResponseHeaderData(struct, headerVersion);
-        this.headerVersion = headerVersion;
+        this(new ResponseHeaderData(struct, headerVersion), headerVersion);
     }
 
     public ResponseHeader(int correlationId, short headerVersion) {
-        this.data = new ResponseHeaderData().setCorrelationId(correlationId);
-        this.headerVersion = headerVersion;
+        this(new ResponseHeaderData().setCorrelationId(correlationId), headerVersion);
     }
 
     public ResponseHeader(ResponseHeaderData data, short headerVersion) {

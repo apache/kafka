@@ -21,8 +21,6 @@ import org.apache.kafka.common.message.ResponseHeaderData;
 import org.apache.kafka.common.protocol.types.BoundField;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Type;
-import org.apache.kafka.common.requests.RequestHeader;
-import org.apache.kafka.common.requests.ResponseHeader;
 
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;

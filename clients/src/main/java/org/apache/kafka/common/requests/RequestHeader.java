@@ -18,7 +18,6 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
-import org.apache.kafka.common.message.ApiMessageType;
 import org.apache.kafka.common.message.RequestHeaderData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
@@ -34,17 +33,16 @@ public class RequestHeader extends AbstractRequestResponse {
     private final short headerVersion;
 
     public RequestHeader(Struct struct, short headerVersion) {
-        this.data = new RequestHeaderData(struct, headerVersion);
-        this.headerVersion = headerVersion;
+        this(new RequestHeaderData(struct, headerVersion), headerVersion);
     }
 
     public RequestHeader(ApiKeys requestApiKey, short requestVersion, String clientId, int correlationId) {
-        this.data = new RequestHeaderData().
-            setRequestApiKey(requestApiKey.id).
-            setRequestApiVersion(requestVersion).
-            setClientId(clientId).
-            setCorrelationId(correlationId);
-        this.headerVersion = ApiKeys.forId(requestApiKey.id).headerVersion(requestVersion);
+        this(new RequestHeaderData().
+                setRequestApiKey(requestApiKey.id).
+                setRequestApiVersion(requestVersion).
+                setClientId(clientId).
+                setCorrelationId(correlationId),
+            ApiKeys.forId(requestApiKey.id).headerVersion(requestVersion));
     }
 
     public RequestHeader(RequestHeaderData data, short headerVersion) {
@@ -94,7 +92,7 @@ public class RequestHeader extends AbstractRequestResponse {
             return new RequestHeader(new RequestHeaderData(
                 new ByteBufferAccessor(buffer), headerVersion), headerVersion);
         } catch (UnsupportedVersionException e) {
-            throw new InvalidRequestException("Unknown API key " + apiKey);
+            throw new InvalidRequestException("Unknown API key " + apiKey, e);
         } catch (Throwable ex) {
             throw new InvalidRequestException("Error parsing request header. Our best guess of the apiKey is: " +
                     apiKey, ex);

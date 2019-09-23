@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.common.protocol;
 
-import org.apache.kafka.common.message.ApiMessageType;
 import org.apache.kafka.common.message.ControlledShutdownRequestData;
 import org.apache.kafka.common.message.ControlledShutdownResponseData;
 import org.apache.kafka.common.message.CreateDelegationTokenRequestData;
