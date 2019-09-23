@@ -16,7 +16,10 @@
  */
 package org.apache.kafka.streams.examples.wordcount;
 
+import org.apache.kafka.common.serialization.LongDeserializer;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.serialization.StringDeserializer;
+import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.TopologyTestDriver;
@@ -51,8 +54,8 @@ public class WordCountDemoTest {
         //Create Actual Stream Processing pipeline
         WordCountDemo.createWordCountStream(builder);
         testDriver = new TopologyTestDriver(builder.build(), WordCountDemo.getStreamsConfig());
-        inputTopic = testDriver.createInputTopic(WordCountDemo.INPUT_TOPIC, new Serdes.StringSerde(), new Serdes.StringSerde());
-        outputTopic = testDriver.createOutputTopic(WordCountDemo.OUTPUT_TOPIC, new Serdes.StringSerde(), new Serdes.LongSerde());
+        inputTopic = testDriver.createInputTopic(WordCountDemo.INPUT_TOPIC, new StringSerializer(), new StringSerializer());
+        outputTopic = testDriver.createOutputTopic(WordCountDemo.OUTPUT_TOPIC, new StringDeserializer(), new LongDeserializer());
     }
 
     @After

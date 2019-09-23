@@ -86,8 +86,8 @@ public class DeveloperGuideTesting {
         testDriver = new TopologyTestDriver(topology, props);
 
         // setup test topics
-        inputTopic = testDriver.createInputTopic("input-topic", stringSerde, longSerde);
-        outputTopic = testDriver.createOutputTopic("result-topic", stringSerde, longSerde);
+        inputTopic = testDriver.createInputTopic("input-topic", stringSerde.serializer(), longSerde.serializer());
+        outputTopic = testDriver.createOutputTopic("result-topic", stringSerde.deserializer(), longSerde.deserializer());
 
         // pre-populate store
         store = testDriver.getKeyValueStore("aggStore");
