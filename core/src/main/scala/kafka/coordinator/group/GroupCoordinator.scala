@@ -1027,6 +1027,7 @@ class GroupCoordinator(val brokerId: Int,
       if (group.is(Dead)) {
         forceComplete()
       } else if (isPending) {
+        // complete the heartbeat if the member has joined the group
         if (group.has(memberId)) {
           forceComplete()
         } else false
@@ -1051,7 +1052,9 @@ class GroupCoordinator(val brokerId: Int,
 
   def onExpireHeartbeat(group: GroupMetadata, memberId: String, isPending: Boolean, heartbeatDeadline: Long): Unit = {
     group.inLock {
-      if (isPending) {
+      if (group.is(Dead)) {
+        debug(s"Group ${group.groupId} has already been unloaded")
+      } else if (isPending) {
         info(s"Pending member $memberId in group ${group.groupId} has been removed after session timeout expiration.")
         removePendingMemberAndUpdateGroup(group, memberId)
       } else if (!group.has(memberId)) {

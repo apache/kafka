@@ -1185,15 +1185,15 @@ class GroupCoordinatorTest {
 
     EasyMock.reset(replicaManager)
     val followerId = followerJoinGroupResult.memberId
-    val follwerSyncGroupResult = syncGroupFollower(groupId, leaderJoinGroupResult.generationId, followerId)
-    assertEquals(Errors.NONE, follwerSyncGroupResult._2)
+    val followerSyncGroupResult = syncGroupFollower(groupId, leaderJoinGroupResult.generationId, followerId)
+    assertEquals(Errors.NONE, followerSyncGroupResult._2)
     assertTrue(getGroup(groupId).is(Stable))
 
     new RebalanceResult(newGeneration,
       leaderId,
       leaderSyncGroupResult._1,
       followerId,
-      follwerSyncGroupResult._1)
+      followerSyncGroupResult._1)
   }
 
   private def checkJoinGroupResult(joinGroupResult: JoinGroupResult,
@@ -2889,17 +2889,16 @@ class GroupCoordinatorTest {
   }
 
   @Test
-  def testUploadAndOffloadGroup(): Unit = {
+  def testCompleteHeartbeatWithGroupDead(): Unit = {
     val rebalanceResult = staticMembersJoinAndRebalance(leaderInstanceId, followerInstanceId)
-
-    groupCoordinator.handleGroupEmigration(groupPartitionId)
-    timer.advanceClock(1)
-    while (groupCoordinator.groupManager.getGroup(groupId).isDefined) {
-
-    }
-//    assertTrue(groupCoordinator.groupManager.getGroup(groupId).isEmpty)
-
-    groupCoordinator.handleGroupImmigration(groupPartitionId)
+    EasyMock.reset(replicaManager)
+    heartbeat(groupId, rebalanceResult.leaderId, rebalanceResult.generation)
+    val group = getGroup(groupId)
+    group.transitionTo(Dead)
+    val leaderMemberId = rebalanceResult.leaderId
+    assertTrue(groupCoordinator.tryCompleteHeartbeat(group, leaderMemberId, false, DefaultSessionTimeout, () => true))
+    groupCoordinator.onExpireHeartbeat(group, leaderMemberId, false, DefaultSessionTimeout)
+    assertTrue(group.has(leaderMemberId))
   }
 
   private def getGroup(groupId: String): GroupMetadata = {
