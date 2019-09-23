@@ -132,6 +132,11 @@ public class DelegatingClassLoader extends URLClassLoader {
         return connectorClientConfigPolicies;
     }
 
+    /**
+     * Retrieve the PluginClassLoader associated with a plugin class
+     * @param name The fully qualified class name of the plugin
+     * @return the PluginClassLoader that should be used to load this, or null if the plugin is not isolated.
+     */
     public PluginClassLoader pluginClassLoader(String name) {
         if (!PluginUtils.shouldLoadInIsolation(name)) {
             return null;
@@ -153,7 +158,9 @@ public class DelegatingClassLoader extends URLClassLoader {
 
     public ClassLoader connectorLoader(String connectorClassOrAlias) {
         log.debug("Getting plugin class loader for connector: '{}'", connectorClassOrAlias);
-        String fullName = aliases.getOrDefault(connectorClassOrAlias, connectorClassOrAlias);
+        String fullName = aliases.containsKey(connectorClassOrAlias)
+                          ? aliases.get(connectorClassOrAlias)
+                          : connectorClassOrAlias;
         PluginClassLoader classLoader = pluginClassLoader(fullName);
         if (classLoader == null) {
             log.error(
@@ -370,16 +377,15 @@ public class DelegatingClassLoader extends URLClassLoader {
 
     @Override
     protected Class<?> loadClass(String name, boolean resolve) throws ClassNotFoundException {
-        String fullName = aliases.getOrDefault(name, name);
+        String fullName = aliases.containsKey(name) ? aliases.get(name) : name;
         PluginClassLoader pluginLoader = pluginClassLoader(fullName);
         if (pluginLoader != null) {
             log.trace("Retrieving loaded class '{}' from '{}'", fullName, pluginLoader);
-            ClassLoader oldClassloader = Plugins.compareAndSwapLoaders(pluginLoader);
-            // This doesn't use a finally block for performance reasons
+            ClassLoader savedLoader = Plugins.compareAndSwapLoaders(pluginLoader);
             try {
                 return pluginLoader.loadClass(fullName, resolve);
             } finally {
-                Plugins.compareAndSwapLoaders(oldClassloader);
+                Plugins.compareAndSwapLoaders(savedLoader);
             }
         }
 

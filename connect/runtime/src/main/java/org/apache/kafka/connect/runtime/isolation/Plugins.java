@@ -80,14 +80,13 @@ public class Plugins {
     }
 
     protected static <T> T newPlugin(ClassLoader classLoader, Class<T> klass) {
-        ClassLoader oldClassLoader = compareAndSwapLoaders(classLoader);
-        // This doesn't use a finally block for performance reasons
+        ClassLoader savedLoader = compareAndSwapLoaders(classLoader);
         try {
             return Utils.newInstance(klass);
         } catch (Throwable t) {
             throw new ConnectException("Instantiation error", t);
         } finally {
-            compareAndSwapLoaders(oldClassLoader);
+            compareAndSwapLoaders(savedLoader);
         }
     }
 
