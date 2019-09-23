@@ -151,9 +151,12 @@ public class MetricsIntegrationTest {
     private static final String SKIPPED_RECORDS_TOTAL = "skipped-records-total";
     private static final String RECORD_LATENESS_AVG = "record-lateness-avg";
     private static final String RECORD_LATENESS_MAX = "record-lateness-max";
-    private static final String HIT_RATIO_AVG = "hitRatio-avg";
-    private static final String HIT_RATIO_MIN = "hitRatio-min";
-    private static final String HIT_RATIO_MAX = "hitRatio-max";
+    private static final String HIT_RATIO_AVG_BEFORE_24 = "hitRatio-avg";
+    private static final String HIT_RATIO_MIN_BEFORE_24 = "hitRatio-min";
+    private static final String HIT_RATIO_MAX_BEFORE_24 = "hitRatio-max";
+    private static final String HIT_RATIO_AVG = "hit-ratio-avg";
+    private static final String HIT_RATIO_MIN = "hit-ratio-min";
+    private static final String HIT_RATIO_MAX = "hit-ratio-max";
 
     // RocksDB metrics
     private static final String BYTES_WRITTEN_RATE = "bytes-written-rate";
@@ -275,7 +278,18 @@ public class MetricsIntegrationTest {
     }
 
     @Test
-    public void shouldAddMetricsOnAllLevels() throws Exception {
+    public void shouldAddMetricsOnAllLevelsWithBuiltInMetricsLatestVersion() throws Exception {
+        shouldAddMetricsOnAllLevels(StreamsConfig.METRICS_LATEST);
+    }
+
+    @Test
+    public void shouldAddMetricsOnAllLevelsWithBuiltInMetricsVersion0100To23() throws Exception {
+        shouldAddMetricsOnAllLevels(StreamsConfig.METRICS_0100_TO_23);
+    }
+
+    private void shouldAddMetricsOnAllLevels(final String builtInMetricsVersion) throws Exception {
+        streamsConfiguration.put(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG, builtInMetricsVersion);
+
         builder.stream(STREAM_INPUT, Consumed.with(Serdes.Integer(), Serdes.String()))
             .to(STREAM_OUTPUT_1, Produced.with(Serdes.Integer(), Serdes.String()));
         builder.table(STREAM_OUTPUT_1,
@@ -299,7 +313,7 @@ public class MetricsIntegrationTest {
         checkKeyValueStoreMetricsByGroup(STREAM_STORE_ROCKSDB_STATE_METRICS);
         checkKeyValueStoreMetricsByGroup(STREAM_STORE_IN_MEMORY_LRU_STATE_METRICS);
         checkRocksDBMetricsByTag("rocksdb-state-id");
-        checkCacheMetrics();
+        checkCacheMetrics(builtInMetricsVersion);
 
         closeApplication();
 
@@ -526,13 +540,25 @@ public class MetricsIntegrationTest {
         assertThat(listMetricAfterClosingApp.size(), is(0));
     }
 
-    private void checkCacheMetrics() {
+    private void checkCacheMetrics(final String builtInMetricsVersion) {
         final List<Metric> listMetricCache = new ArrayList<Metric>(kafkaStreams.metrics().values()).stream()
             .filter(m -> m.metricName().group().equals(STREAM_CACHE_NODE_METRICS))
             .collect(Collectors.toList());
-        checkMetricByName(listMetricCache, HIT_RATIO_AVG, 6);
-        checkMetricByName(listMetricCache, HIT_RATIO_MIN, 6);
-        checkMetricByName(listMetricCache, HIT_RATIO_MAX, 6);
+        checkMetricByName(
+            listMetricCache,
+            builtInMetricsVersion.equals(StreamsConfig.METRICS_LATEST) ? HIT_RATIO_AVG : HIT_RATIO_AVG_BEFORE_24,
+            builtInMetricsVersion.equals(StreamsConfig.METRICS_LATEST) ? 3 : 6 /* includes parent sensors */
+        );
+        checkMetricByName(
+            listMetricCache,
+            builtInMetricsVersion.equals(StreamsConfig.METRICS_LATEST) ? HIT_RATIO_MIN : HIT_RATIO_MIN_BEFORE_24,
+            builtInMetricsVersion.equals(StreamsConfig.METRICS_LATEST) ? 3 : 6 /* includes parent sensors */
+        );
+        checkMetricByName(
+            listMetricCache,
+            builtInMetricsVersion.equals(StreamsConfig.METRICS_LATEST) ? HIT_RATIO_MAX : HIT_RATIO_MAX_BEFORE_24,
+            builtInMetricsVersion.equals(StreamsConfig.METRICS_LATEST) ? 3 : 6 /* includes parent sensors */
+        );
     }
 
     private void checkWindowStoreMetrics() {

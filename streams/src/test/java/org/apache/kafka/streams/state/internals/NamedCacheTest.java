@@ -20,7 +20,6 @@ import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeader;
 import org.apache.kafka.common.header.internals.RecordHeaders;
-import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
@@ -29,20 +28,15 @@ import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.junit.Before;
 import org.junit.Test;
 
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 
-import static org.apache.kafka.test.StreamsTestUtils.getMetricByNameFilterByTags;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
-import static org.junit.Assert.assertTrue;
 
 public class NamedCacheTest {
 
@@ -61,7 +55,7 @@ public class NamedCacheTest {
     }
 
     @Test
-    public void shouldKeepTrackOfMostRecentlyAndLeastRecentlyUsed() throws IOException {
+    public void shouldKeepTrackOfMostRecentlyAndLeastRecentlyUsed() {
         final List<KeyValue<String, String>> toInsert = Arrays.asList(
                 new KeyValue<>("K1", "V1"),
                 new KeyValue<>("K2", "V2"),
@@ -81,31 +75,6 @@ public class NamedCacheTest {
             assertEquals(cache.misses(), 0);
             assertEquals(cache.overwrites(), 0);
         }
-    }
-
-    @Test
-    public void testMetrics() {
-        final Map<String, String> metricTags = new LinkedHashMap<>();
-        metricTags.put("record-cache-id", underlyingStoreName);
-        metricTags.put("task-id", taskIDString);
-        metricTags.put("client-id", "test");
-
-        getMetricByNameFilterByTags(metrics.metrics(), "hitRatio-avg", "stream-record-cache-metrics", metricTags);
-        getMetricByNameFilterByTags(metrics.metrics(), "hitRatio-min", "stream-record-cache-metrics", metricTags);
-        getMetricByNameFilterByTags(metrics.metrics(), "hitRatio-max", "stream-record-cache-metrics", metricTags);
-
-        // test "all"
-        metricTags.put("record-cache-id", "all");
-        getMetricByNameFilterByTags(metrics.metrics(), "hitRatio-avg", "stream-record-cache-metrics", metricTags);
-        getMetricByNameFilterByTags(metrics.metrics(), "hitRatio-min", "stream-record-cache-metrics", metricTags);
-        getMetricByNameFilterByTags(metrics.metrics(), "hitRatio-max", "stream-record-cache-metrics", metricTags);
-
-        final JmxReporter reporter = new JmxReporter("kafka.streams");
-        innerMetrics.addReporter(reporter);
-        assertTrue(reporter.containsMbean(String.format("kafka.streams:type=stream-record-cache-metrics,client-id=test,task-id=%s,record-cache-id=%s",
-                taskIDString, underlyingStoreName)));
-        assertTrue(reporter.containsMbean(String.format("kafka.streams:type=stream-record-cache-metrics,client-id=test,task-id=%s,record-cache-id=%s",
-                taskIDString, "all")));
     }
 
     @Test
