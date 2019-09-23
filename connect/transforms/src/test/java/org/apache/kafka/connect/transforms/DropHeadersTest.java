@@ -28,6 +28,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
 
 public class DropHeadersTest {
     private DropHeaders<SourceRecord> xform = new DropHeaders<>();
@@ -68,9 +69,8 @@ public class DropHeadersTest {
             0, null, null, null, null, null, headers);
         final SourceRecord transformedRecord = xform.apply(record);
 
-        assertEquals(1, transformedRecord.headers().size());
-
         Headers expected = new ConnectHeaders().addString("AAA", "dummy value");
+        assertEquals(1, transformedRecord.headers().size());
         assertEquals(expected, transformedRecord.headers());
     }
 
@@ -84,6 +84,8 @@ public class DropHeadersTest {
         final SourceRecord record = new SourceRecord(null, null, "test",
             0, null, null, null, null, null, null);
         final SourceRecord transformedRecord = xform.apply(record);
+
+        assertEquals(0, transformedRecord.headers().size());
     }
 
     @Test
@@ -95,7 +97,7 @@ public class DropHeadersTest {
 
         final SourceRecord transformedRecord = xform.apply(null);
 
-        assertEquals(null, transformedRecord);
+        assertNull(transformedRecord);
     }
 
     @Test
@@ -113,10 +115,10 @@ public class DropHeadersTest {
             0, null, null, null, null, null, headers);
         final SourceRecord transformedRecord = xform.apply(record);
 
-        assertEquals(2, transformedRecord.headers().size());
-
         Headers expected = new ConnectHeaders().addString("BBB", "dummy value")
             .addString("CCC", "dummy value");
+
+        assertEquals(2, transformedRecord.headers().size());
         assertEquals(expected, transformedRecord.headers());
     }
 
@@ -138,12 +140,11 @@ public class DropHeadersTest {
             0, null, null, null, null, null, headers);
         final SourceRecord transformedRecord = xform.apply(record);
 
-        assertEquals(3, transformedRecord.headers().size());
-
         Headers expected = new ConnectHeaders().addString("CCC", "dummy value")
             .addString("DDD", "dummy value")
             .addString("DDD", "dummy value");
 
+        assertEquals(3, transformedRecord.headers().size());
         assertEquals(expected, transformedRecord.headers());
     }
 }

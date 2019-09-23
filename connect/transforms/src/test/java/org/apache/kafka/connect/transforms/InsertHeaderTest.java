@@ -32,6 +32,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
 
 public class InsertHeaderTest {
     private InsertHeader<SourceRecord> xform = new InsertHeader<>();
@@ -87,7 +88,7 @@ public class InsertHeaderTest {
 
         final SourceRecord transformedRecord = xform.apply(null);
 
-        assertEquals(null, transformedRecord);
+        assertNull(transformedRecord);
     }
 
     @Test
