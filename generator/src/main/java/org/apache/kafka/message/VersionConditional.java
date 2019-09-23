@@ -56,11 +56,26 @@ public final class VersionConditional {
         return this;
     }
 
+    /**
+     * If this is set, we will always create a new block scope, even if there
+     * are no 'if' statements.  This is useful for cases where we want to
+     * declare variables in the clauses without worrying if they conflict with
+     * other variables of the same name.
+     */
     VersionConditional alwaysEmitBlockScope(boolean alwaysEmitBlockScope) {
         this.alwaysEmitBlockScope = alwaysEmitBlockScope;
         return this;
     }
 
+    /**
+     * If this is set, VersionConditional#generate will throw an exception if
+     * the 'ifMember' clause is never used.  This is useful as a sanity check
+     * in some cases where it doesn't make sense for the condition to always be
+     * false.  For example, when generating a Message#write function, 
+     * we might check that the version we're writing is supported.  It wouldn't
+     * make sense for this check to always be false, since that would mean that
+     * no versions at all were supported.
+     */
     VersionConditional allowMembershipCheckAlwaysFalse(boolean allowMembershipCheckAlwaysFalse) {
         this.allowMembershipCheckAlwaysFalse = allowMembershipCheckAlwaysFalse;
         return this;
