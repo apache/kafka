@@ -182,17 +182,19 @@ public class KafkaStreams implements AutoCloseable {
      *
      * </pre>
      * Note the following:
-     * - RUNNING state will transit to REBALANCING if any of its threads is in PARTITION_REVOKED state
+     * - RUNNING state will transit to REBALANCING if any of its threads is in PARTITION_REVOKED or PARTITIONS_ASSIGNED state
      * - REBALANCING state will transit to RUNNING if all of its threads are in RUNNING state
      * - Any state except NOT_RUNNING can go to PENDING_SHUTDOWN (whenever close is called)
      * - Of special importance: If the global stream thread dies, or all stream threads die (or both) then
      *   the instance will be in the ERROR state. The user will need to close it.
      */
-    // TODO: the current transitions from other states directly to RUNNING is due to
-    //       the fact that onPartitionsRevoked may not be triggered. we need to refactor the
-    //       state diagram more thoroughly after we refactor StreamsPartitionAssignor to support COOPERATIVE
     public enum State {
-        CREATED(1, 2, 3), REBALANCING(2, 3, 5), RUNNING(1, 2, 3, 5), PENDING_SHUTDOWN(4), NOT_RUNNING, ERROR(3);
+        CREATED(1, 3),          // 0
+        REBALANCING(2, 3, 5),   // 1
+        RUNNING(1, 2, 3, 5),    // 2
+        PENDING_SHUTDOWN(4),    // 3
+        NOT_RUNNING,            // 4
+        ERROR(3);               // 5
 
         private final Set<Integer> validTransitions = new HashSet<>();
 

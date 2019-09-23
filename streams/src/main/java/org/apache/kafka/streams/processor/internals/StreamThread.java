@@ -133,7 +133,13 @@ public class StreamThread extends Thread {
      */
     public enum State implements ThreadStateTransitionValidator {
 
-        CREATED(1, 5), STARTING(2, 3, 5), PARTITIONS_REVOKED(3, 5), PARTITIONS_ASSIGNED(2, 3, 4, 5), RUNNING(2, 3, 5), PENDING_SHUTDOWN(6), DEAD;
+        CREATED(1, 5),                   // 0
+        STARTING(2, 3, 5),               // 1
+        PARTITIONS_REVOKED(3, 5),        // 2
+        PARTITIONS_ASSIGNED(2, 3, 4, 5), // 3
+        RUNNING(2, 3, 5),                // 4
+        PENDING_SHUTDOWN(6),             // 5
+        DEAD;                            // 6
 
         private final Set<Integer> validTransitions = new HashSet<>();
 
