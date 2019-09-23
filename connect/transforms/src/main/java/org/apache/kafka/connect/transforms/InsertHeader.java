@@ -60,7 +60,7 @@ public class InsertHeader<R extends ConnectRecord<R>> implements Transformation<
                 }
             }, ConfigDef.Importance.MEDIUM,
             "Name of the header to add.")
-        .define(ConfigName.HEADER_VALUE_CONFIG, ConfigDef.Type.STRING, ConfigDef.NO_DEFAULT_VALUE, ConfigDef.Importance.MEDIUM,
+        .define(ConfigName.HEADER_VALUE_CONFIG, ConfigDef.Type.STRING, null, ConfigDef.Importance.MEDIUM,
             "Value of the header to add.");
 
     private String headerName;
