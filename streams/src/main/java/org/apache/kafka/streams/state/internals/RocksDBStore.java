@@ -104,7 +104,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BulkLoadingSt
     private RocksDBConfigSetter configSetter;
 
     private final RocksDBMetricsRecorder metricsRecorder;
-    private boolean isRecordingLevelDebug = false;
+    private boolean isStatisticsRegistered = false;
 
     private volatile boolean prepareForBulkload = false;
     ProcessorContext internalProcessorContext;
@@ -198,7 +198,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BulkLoadingSt
         if (userSpecifiedOptions.statistics() == null &&
             RecordingLevel.forName((String) configs.get(METRICS_RECORDING_LEVEL_CONFIG)) == RecordingLevel.DEBUG) {
 
-            isRecordingLevelDebug = true;
+            isStatisticsRegistered = true;
             // metrics recorder will clean up statistics object
             final Statistics statistics = new Statistics();
             userSpecifiedOptions.setStatistics(statistics);
@@ -449,9 +449,9 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BulkLoadingSt
     }
 
     private void maybeRemoveStatisticsFromMetricsRecorder() {
-        if (isRecordingLevelDebug) {
+        if (isStatisticsRegistered) {
             metricsRecorder.removeStatistics(name);
-            isRecordingLevelDebug = false;
+            isStatisticsRegistered = false;
         }
     }
 

@@ -30,6 +30,7 @@ import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetric
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addRateOfSumMetricToSensor;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addRateOfSumAndSumMetricsToSensor;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addAvgAndSumMetricsToSensor;
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addSumMetricToSensor;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addValueMetricToSensor;
 
 public class RocksDBMetrics {
@@ -365,12 +366,13 @@ public class RocksDBMetrics {
     public static Sensor numberOfOpenFilesSensor(final StreamsMetricsImpl streamsMetrics,
                                                  final RocksDBMetricContext metricContext) {
         final Sensor sensor = createSensor(streamsMetrics, metricContext, NUMBER_OF_OPEN_FILES);
-        addValueMetricToSensor(
+        addSumMetricToSensor(
             sensor,
             STATE_LEVEL_GROUP,
             streamsMetrics
                 .storeLevelTagMap(metricContext.taskName(), metricContext.metricsScope(), metricContext.storeName()),
             NUMBER_OF_OPEN_FILES,
+            false,
             NUMBER_OF_OPEN_FILES_DESCRIPTION
         );
         return sensor;
@@ -379,7 +381,7 @@ public class RocksDBMetrics {
     public static Sensor numberOfFileErrorsSensor(final StreamsMetricsImpl streamsMetrics,
                                                   final RocksDBMetricContext metricContext) {
         final Sensor sensor = createSensor(streamsMetrics, metricContext, NUMBER_OF_FILE_ERRORS);
-        addValueMetricToSensor(
+        addSumMetricToSensor(
             sensor,
             STATE_LEVEL_GROUP,
             streamsMetrics

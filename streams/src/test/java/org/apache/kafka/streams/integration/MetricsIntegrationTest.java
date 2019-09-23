@@ -180,7 +180,7 @@ public class MetricsIntegrationTest {
     private static final String COMPACTION_TIME_MIN = "compaction-time-min";
     private static final String COMPACTION_TIME_MAX = "compaction-time-max";
     private static final String NUMBER_OF_OPEN_FILES = "number-open-files";
-    private static final String NUMBER_OF_FILE_ERRORS = "number-file-errors";
+    private static final String NUMBER_OF_FILE_ERRORS = "number-file-errors-total";
 
     // stores name
     private static final String TIME_WINDOWED_AGGREGATED_STREAM_STORE = "time-windowed-aggregated-stream-store";

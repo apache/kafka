@@ -671,7 +671,6 @@ public class KafkaStreams implements AutoCloseable {
         reporters.add(new JmxReporter(JMX_PREFIX));
         metrics = new Metrics(metricConfig, reporters, time);
 
-
         // re-write the physical topology according to the config
         internalTopologyBuilder.rewriteTopology(config);
 
@@ -822,11 +821,13 @@ public class KafkaStreams implements AutoCloseable {
                 }
             }, cleanupDelay, cleanupDelay, TimeUnit.MILLISECONDS);
 
+            final long recordingDelay = 0;
+            final long recordingInterval = 1;
             if (RecordingLevel.forName(config.getString(METRICS_RECORDING_LEVEL_CONFIG)) == RecordingLevel.DEBUG) {
                 rocksDBMetricsRecordingTriggerThread.scheduleAtFixedRate(
                     rocksDBMetricsRecordingTrigger,
-                    Duration.ZERO.toMinutes(),
-                    Duration.ofMinutes(1).toMinutes(),
+                    recordingDelay,
+                    recordingInterval,
                     TimeUnit.MINUTES
                 );
             }

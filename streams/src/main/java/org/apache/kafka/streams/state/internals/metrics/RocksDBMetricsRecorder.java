@@ -67,7 +67,7 @@ public class RocksDBMetricsRecorder {
         return taskId;
     }
 
-    public void addStatistics(final String storeName,
+    public void addStatistics(final String segmentName,
                               final Statistics statistics,
                               final StreamsMetricsImpl streamsMetrics,
                               final TaskId taskId) {
@@ -78,7 +78,7 @@ public class RocksDBMetricsRecorder {
             isInitialized = true;
         }
         if (this.taskId != taskId) {
-            throw new IllegalStateException("Statistics of store \"" + storeName + "\" for task " + taskId
+            throw new IllegalStateException("Statistics of store \"" + segmentName + "\" for task " + taskId
                 + " cannot be added to metrics recorder for task " + this.taskId + ". This is a bug in Kafka Streams.");
         }
         if (statisticsToRecord.isEmpty()) {
@@ -87,15 +87,14 @@ public class RocksDBMetricsRecorder {
                 taskId
             );
             streamsMetrics.rocksDBMetricsRecordingTrigger().addMetricsRecorder(this);
-        } else if (statisticsToRecord.containsKey(storeName)) {
-            throw new IllegalStateException("Statistics for store \"" + storeName + "\" of task " + taskId +
+        } else if (statisticsToRecord.containsKey(segmentName)) {
+            throw new IllegalStateException("Statistics for store \"" + segmentName + "\" of task " + taskId +
                 " has been already added. This is a bug in Kafka Streams.");
         }
         statistics.setStatsLevel(StatsLevel.EXCEPT_DETAILED_TIMERS);
-        logger.debug("Adding statistics for store {} of task {}", storeName, taskId);
-        statisticsToRecord.put(storeName, statistics);
+        logger.debug("Adding statistics for store {} of task {}", segmentName, taskId);
+        statisticsToRecord.put(segmentName, statistics);
     }
-
 
     private void initSensors(final StreamsMetricsImpl streamsMetrics, final TaskId taskId) {
         final RocksDBMetricContext metricContext = new RocksDBMetricContext(taskId.toString(), metricsScope, storeName);
@@ -114,18 +113,18 @@ public class RocksDBMetricsRecorder {
         numberOfFileErrorsSensor = RocksDBMetrics.numberOfFileErrorsSensor(streamsMetrics, metricContext);
     }
 
-    public void removeStatistics(final String storeName) {
-        logger.debug("Removing statistics for store {} of task {}", storeName, taskId);
-        final Statistics removedStatistics = statisticsToRecord.remove(storeName);
+    public void removeStatistics(final String segmentName) {
+        logger.debug("Removing statistics for store {} of task {}", segmentName, taskId);
+        final Statistics removedStatistics = statisticsToRecord.remove(segmentName);
         if (removedStatistics == null) {
-            throw new IllegalStateException("No statistics for store \"" + storeName + "\" of task " + taskId
+            throw new IllegalStateException("No statistics for store \"" + segmentName + "\" of task " + taskId
                 + " could be found. This is a bug in Kafka Streams.");
         }
         removedStatistics.close();
         if (statisticsToRecord.isEmpty()) {
             logger.debug(
                 "Removing metrics recorder for store {} of task {} from metrics recording trigger",
-                this.storeName,
+                storeName,
                 taskId
             );
             streamsMetrics.rocksDBMetricsRecordingTrigger().removeMetricsRecorder(this);
@@ -165,9 +164,9 @@ public class RocksDBMetricsRecorder {
             writeStallDuration += statistics.getAndResetTickerCount(TickerType.STALL_MICROS);
             bytesWrittenDuringCompaction += statistics.getAndResetTickerCount(TickerType.COMPACT_WRITE_BYTES);
             bytesReadDuringCompaction += statistics.getAndResetTickerCount(TickerType.COMPACT_READ_BYTES);
-            numberOfOpenFiles += statistics.getTickerCount(TickerType.NO_FILE_OPENS)
-                - statistics.getTickerCount(TickerType.NO_FILE_CLOSES);
-            numberOfFileErrors += statistics.getTickerCount(TickerType.NO_FILE_ERRORS);
+            numberOfOpenFiles += statistics.getAndResetTickerCount(TickerType.NO_FILE_OPENS)
+                - statistics.getAndResetTickerCount(TickerType.NO_FILE_CLOSES);
+            numberOfFileErrors += statistics.getAndResetTickerCount(TickerType.NO_FILE_ERRORS);
         }
         bytesWrittenToDatabaseSensor.record(bytesWrittenToDatabase);
         bytesReadFromDatabaseSensor.record(bytesReadFromDatabase);

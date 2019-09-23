@@ -278,15 +278,15 @@ public class RocksDBMetricsRecorderTest {
         bytesReadDuringCompactionSensor.record(5 + 6);
         replay(bytesReadDuringCompactionSensor);
 
-        expect(statisticsToAdd1.getTickerCount(TickerType.NO_FILE_OPENS)).andReturn(5L);
-        expect(statisticsToAdd1.getTickerCount(TickerType.NO_FILE_CLOSES)).andReturn(3L);
-        expect(statisticsToAdd2.getTickerCount(TickerType.NO_FILE_OPENS)).andReturn(7L);
-        expect(statisticsToAdd2.getTickerCount(TickerType.NO_FILE_CLOSES)).andReturn(4L);
+        expect(statisticsToAdd1.getAndResetTickerCount(TickerType.NO_FILE_OPENS)).andReturn(5L);
+        expect(statisticsToAdd1.getAndResetTickerCount(TickerType.NO_FILE_CLOSES)).andReturn(3L);
+        expect(statisticsToAdd2.getAndResetTickerCount(TickerType.NO_FILE_OPENS)).andReturn(7L);
+        expect(statisticsToAdd2.getAndResetTickerCount(TickerType.NO_FILE_CLOSES)).andReturn(4L);
         numberOfOpenFilesSensor.record((5 + 7) - (3 + 4));
         replay(numberOfOpenFilesSensor);
 
-        expect(statisticsToAdd1.getTickerCount(TickerType.NO_FILE_ERRORS)).andReturn(34L);
-        expect(statisticsToAdd2.getTickerCount(TickerType.NO_FILE_ERRORS)).andReturn(11L);
+        expect(statisticsToAdd1.getAndResetTickerCount(TickerType.NO_FILE_ERRORS)).andReturn(34L);
+        expect(statisticsToAdd2.getAndResetTickerCount(TickerType.NO_FILE_ERRORS)).andReturn(11L);
         numberOfFileErrorsSensor.record(11 + 34);
         replay(numberOfFileErrorsSensor);
 

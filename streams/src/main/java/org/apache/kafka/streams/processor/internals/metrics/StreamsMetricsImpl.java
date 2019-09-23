@@ -597,7 +597,24 @@ public class StreamsMetricsImpl implements StreamsMetrics {
                                             final Map<String, String> tags,
                                             final String operation,
                                             final String description) {
-        sensor.add(new MetricName(operation + TOTAL_SUFFIX, group, description, tags), new CumulativeSum());
+        addSumMetricToSensor(sensor, group, tags, operation, true, description);
+    }
+
+    public static void addSumMetricToSensor(final Sensor sensor,
+                                            final String group,
+                                            final Map<String, String> tags,
+                                            final String operation,
+                                            final boolean withSuffix,
+                                            final String description) {
+        sensor.add(
+            new MetricName(
+                withSuffix ? operation + TOTAL_SUFFIX : operation,
+                group,
+                description,
+                tags
+            ),
+            new CumulativeSum()
+        );
     }
 
     public static void addValueMetricToSensor(final Sensor sensor,
