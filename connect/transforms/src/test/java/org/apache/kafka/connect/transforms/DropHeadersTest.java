@@ -16,13 +16,13 @@
  */
 package org.apache.kafka.connect.transforms;
 
-import org.apache.kafka.connect.errors.DataException;
 import org.apache.kafka.connect.header.ConnectHeaders;
 import org.apache.kafka.connect.header.Headers;
 import org.apache.kafka.connect.source.SourceRecord;
 import org.junit.After;
 import org.junit.Test;
 
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
@@ -40,12 +40,12 @@ public class DropHeadersTest {
     @Test
     public void dropAllHeaders() {
         final Map<String, Object> props = new HashMap<>();
-        props.put("names", Collections.singletonList("dummy header"));
+        props.put("names", Collections.singletonList("AAA"));
 
         xform.configure(props);
 
         Headers headers = new ConnectHeaders();
-        headers.addString("dummy header", "dummy value");
+        headers.addString("AAA", "dummy value");
         final SourceRecord record = new SourceRecord(null, null, "test",
             0, null, null, null, null, null, headers);
         final SourceRecord transformedRecord = xform.apply(record);
@@ -56,13 +56,13 @@ public class DropHeadersTest {
     @Test
     public void dropOneHeaderOutOfTwo() {
         final Map<String, Object> props = new HashMap<>();
-        props.put("names", Collections.singletonList("dummy header 2"));
+        props.put("names", Collections.singletonList("BBB"));
 
         xform.configure(props);
 
         Headers headers = new ConnectHeaders();
-        headers.addString("dummy header", "dummy value");
-        headers.addString("dummy header 2", "dummy value 2");
+        headers.addString("AAA", "dummy value");
+        headers.addString("BBB", "dummy value");
 
         final SourceRecord record = new SourceRecord(null, null, "test",
             0, null, null, null, null, null, headers);
@@ -70,14 +70,14 @@ public class DropHeadersTest {
 
         assertEquals(1, transformedRecord.headers().size());
 
-        Headers expected = new ConnectHeaders().addString("dummy header", "dummy value");
+        Headers expected = new ConnectHeaders().addString("AAA", "dummy value");
         assertEquals(expected, transformedRecord.headers());
     }
 
-    @Test(expected = DataException.class)
+    @Test
     public void dropOneHeaderOutOfZero() {
         final Map<String, Object> props = new HashMap<>();
-        props.put("names", Collections.singletonList("dummy header 2"));
+        props.put("names", Collections.singletonList("BBB"));
 
         xform.configure(props);
 
@@ -86,4 +86,64 @@ public class DropHeadersTest {
         final SourceRecord transformedRecord = xform.apply(record);
     }
 
+    @Test
+    public void dropHeadersOnNullRecord() {
+        final Map<String, Object> props = new HashMap<>();
+        props.put("names", Collections.singletonList("AAA"));
+
+        xform.configure(props);
+
+        final SourceRecord transformedRecord = xform.apply(null);
+
+        assertEquals(null, transformedRecord);
+    }
+
+    @Test
+    public void dropOneHeaderHasNoMatch() {
+        final Map<String, Object> props = new HashMap<>();
+        props.put("names", Collections.singletonList("AAA"));
+
+        xform.configure(props);
+
+        Headers headers = new ConnectHeaders();
+        headers.addString("BBB", "dummy value");
+        headers.addString("CCC", "dummy value");
+
+        final SourceRecord record = new SourceRecord(null, null, "test",
+            0, null, null, null, null, null, headers);
+        final SourceRecord transformedRecord = xform.apply(record);
+
+        assertEquals(2, transformedRecord.headers().size());
+
+        Headers expected = new ConnectHeaders().addString("BBB", "dummy value")
+            .addString("CCC", "dummy value");
+        assertEquals(expected, transformedRecord.headers());
+    }
+
+    @Test
+    public void dropSeveralHeaders() {
+        final Map<String, Object> props = new HashMap<>();
+        props.put("names", Arrays.asList("AAA", "BBB"));
+
+        xform.configure(props);
+
+        Headers headers = new ConnectHeaders();
+        headers.addString("AAA", "dummy value")
+            .addString("BBB", "dummy value")
+            .addString("AAA", "dummy value")
+            .addString("CCC", "dummy value")
+            .addString("DDD", "dummy value")
+            .addString("DDD", "dummy value");
+        final SourceRecord record = new SourceRecord(null, null, "test",
+            0, null, null, null, null, null, headers);
+        final SourceRecord transformedRecord = xform.apply(record);
+
+        assertEquals(3, transformedRecord.headers().size());
+
+        Headers expected = new ConnectHeaders().addString("CCC", "dummy value")
+            .addString("DDD", "dummy value")
+            .addString("DDD", "dummy value");
+
+        assertEquals(expected, transformedRecord.headers());
+    }
 }

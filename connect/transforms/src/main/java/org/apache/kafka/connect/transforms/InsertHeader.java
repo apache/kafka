@@ -17,9 +17,12 @@
 package org.apache.kafka.connect.transforms;
 
 import org.apache.kafka.common.config.ConfigDef;
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.connect.connector.ConnectRecord;
 import org.apache.kafka.connect.data.SchemaAndValue;
 import org.apache.kafka.connect.data.Values;
+import org.apache.kafka.connect.header.ConnectHeaders;
+import org.apache.kafka.connect.header.Headers;
 import org.apache.kafka.connect.transforms.util.SimpleConfig;
 
 import java.util.HashMap;
@@ -32,7 +35,7 @@ public class InsertHeader<R extends ConnectRecord<R>> implements Transformation<
         "Insert header as a literal value.";
 
     private interface ConfigName {
-        String HEADER_CONFIG = "header";
+        String HEADER_NAME_CONFIG = "header";
         String HEADER_VALUE_CONFIG = "literal.value";
     }
 
@@ -42,27 +45,46 @@ public class InsertHeader<R extends ConnectRecord<R>> implements Transformation<
     private static final Map<String, List<Class>> LOGICAL_TYPE_CLASSES = new HashMap<>();
 
     public static final ConfigDef CONFIG_DEF = new ConfigDef()
-        .define(ConfigName.HEADER_CONFIG, ConfigDef.Type.STRING, ConfigDef.NO_DEFAULT_VALUE, ConfigDef.Importance.MEDIUM,
+        .define(ConfigName.HEADER_NAME_CONFIG, ConfigDef.Type.STRING, ConfigDef.NO_DEFAULT_VALUE, new ConfigDef.Validator() {
+                @SuppressWarnings("unchecked")
+                @Override
+                public void ensureValid(String name, Object valueObject) {
+                    String value = (String) valueObject;
+                    if (value == null || value.isEmpty()) {
+                        throw new ConfigException("Must specify a header name.");
+                    }
+                }
+                @Override
+                public String toString() {
+                    return "value not null and not empty";
+                }
+            }, ConfigDef.Importance.MEDIUM,
             "Name of the header to add.")
         .define(ConfigName.HEADER_VALUE_CONFIG, ConfigDef.Type.STRING, ConfigDef.NO_DEFAULT_VALUE, ConfigDef.Importance.MEDIUM,
             "Value of the header to add.");
 
     private String headerName;
     private String headerValue;
+    private SchemaAndValue schemaAndValue;
 
     @Override
     public void configure(Map<String, ?> props) {
         final SimpleConfig config = new SimpleConfig(CONFIG_DEF, props);
-        headerName = config.getString(ConfigName.HEADER_CONFIG);
+        headerName = config.getString(ConfigName.HEADER_NAME_CONFIG);
         headerValue = config.getString(ConfigName.HEADER_VALUE_CONFIG);
+        schemaAndValue = Values.parseString(headerValue);
     }
 
     @Override
     public R apply(R record) {
-        if (headerValue == null) return null;
-        SchemaAndValue schemaAndValue = Values.parseString(headerValue);
-        record.headers().add(headerName, schemaAndValue);
-        return record;
+        if (record == null) {
+            return record;
+        }
+
+        Headers newHeaders = new ConnectHeaders(record.headers());
+        newHeaders.add(headerName, schemaAndValue);
+        return record.newRecord(record.topic(), record.kafkaPartition(), record.keySchema(),
+            record.key(), record.valueSchema(), record.value(), record.timestamp(), newHeaders);
     }
 
     @Override

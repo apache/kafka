@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.transforms;
 
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.connect.data.SchemaAndValue;
 import org.apache.kafka.connect.data.Time;
 import org.apache.kafka.connect.data.Timestamp;
@@ -40,8 +41,57 @@ public class InsertHeaderTest {
         xform.close();
     }
 
+    @Test(expected = ConfigException.class)
+    public void insertHeaderWithNullName() {
+        final Map<String, Object> props = new HashMap<>();
+        props.put("header", null);
+        props.put("literal.value", "dummy value");
+
+        xform.configure(props);
+    }
+
+    @Test(expected = ConfigException.class)
+    public void insertHeaderWithBlankName() {
+        final Map<String, Object> props = new HashMap<>();
+        props.put("header", "");
+        props.put("literal.value", "dummy value");
+
+        xform.configure(props);
+    }
+
     @Test
-    public void insertConfiguredHeaderWithStringValue() {
+    public void insertHeaderWithNullValue() {
+        final Map<String, Object> props = new HashMap<>();
+        props.put("header", "AAA");
+        props.put("literal.value", null);
+
+        xform.configure(props);
+
+        final SourceRecord record = new SourceRecord(null, null, "test",
+            0, null, null, null, null, null, null);
+        final SourceRecord transformedRecord = xform.apply(record);
+
+        Headers expected = new ConnectHeaders().add("AAA", null);
+
+        assertEquals(1, transformedRecord.headers().size());
+        assertEquals(expected, transformedRecord.headers());
+    }
+
+    @Test
+    public void insertHeaderOnNullRecord() {
+        final Map<String, Object> props = new HashMap<>();
+        props.put("header", "dummy header");
+        props.put("literal.value", "dummy value");
+
+        xform.configure(props);
+
+        final SourceRecord transformedRecord = xform.apply(null);
+
+        assertEquals(null, transformedRecord);
+    }
+
+    @Test
+    public void insertHeaderWithStringValue() {
         final Map<String, Object> props = new HashMap<>();
         props.put("header", "dummy header");
         props.put("literal.value", "dummy value");
@@ -59,30 +109,55 @@ public class InsertHeaderTest {
     }
 
     @Test
-    public void insertConfiguredHeaderWithStringValueWhenOneExists() {
+    public void insertHeaderWithStringValueWhenOneExists() {
         final Map<String, Object> props = new HashMap<>();
-        props.put("header", "dummy header");
+        props.put("header", "AAA");
         props.put("literal.value", "dummy value");
 
         xform.configure(props);
 
-        Headers existentHeaders = new ConnectHeaders().addString("existent key", "existent value");
+        Headers existentHeaders = new ConnectHeaders().addString("BBB", "existent value");
 
         final SourceRecord record = new SourceRecord(null, null, "test",
             0, null, null, null, null, null, existentHeaders);
         final SourceRecord transformedRecord = xform.apply(record);
 
-        Headers expected = new ConnectHeaders().addString("existent key", "existent value")
-            .addString("dummy header", "dummy value");
+        Headers expected = new ConnectHeaders().addString("BBB", "existent value")
+            .addString("AAA", "dummy value");
 
         assertEquals(2, transformedRecord.headers().size());
         assertEquals(expected, transformedRecord.headers());
     }
 
+
     @Test
-    public void insertConfiguredHeaderWithInt8Value() {
+    public void insertHeaderWithStringValueWithSameKey() {
         final Map<String, Object> props = new HashMap<>();
-        props.put("header", "dummy header");
+        props.put("header", "AAA");
+        props.put("literal.value", "dummy value");
+
+        xform.configure(props);
+
+        Headers existentHeaders = new ConnectHeaders().addString("AAA", "existent value")
+            .addString("BBB", "existent value");
+
+        final SourceRecord record = new SourceRecord(null, null, "test",
+            0, null, null, null, null, null, existentHeaders);
+        final SourceRecord transformedRecord = xform.apply(record);
+
+        Headers expected = new ConnectHeaders().addString("AAA", "existent value")
+            .addString("BBB", "existent value")
+            .addString("AAA", "dummy value");
+
+
+        assertEquals(3, transformedRecord.headers().size());
+        assertEquals(expected, transformedRecord.headers());
+    }
+
+    @Test
+    public void insertHeaderWithInt8Value() {
+        final Map<String, Object> props = new HashMap<>();
+        props.put("header", "AAA");
         props.put("literal.value", "2");
 
         xform.configure(props);
@@ -91,16 +166,16 @@ public class InsertHeaderTest {
             0, null, null, null, null, null, null);
         final SourceRecord transformedRecord = xform.apply(record);
 
-        Headers expected = new ConnectHeaders().addByte("dummy header", (byte) 2);
+        Headers expected = new ConnectHeaders().addByte("AAA", (byte) 2);
 
         assertEquals(1, transformedRecord.headers().size());
         assertEquals(expected, transformedRecord.headers());
     }
 
     @Test
-    public void insertConfiguredHeaderWithInt16Value() {
+    public void insertHeaderWithInt16Value() {
         final Map<String, Object> props = new HashMap<>();
-        props.put("header", "dummy header");
+        props.put("header", "AAA");
         props.put("literal.value", "18000");
 
         xform.configure(props);
@@ -109,16 +184,16 @@ public class InsertHeaderTest {
             0, null, null, null, null, null, null);
         final SourceRecord transformedRecord = xform.apply(record);
 
-        Headers expected = new ConnectHeaders().addShort("dummy header", (short) 18000);
+        Headers expected = new ConnectHeaders().addShort("AAA", (short) 18000);
 
         assertEquals(1, transformedRecord.headers().size());
         assertEquals(expected, transformedRecord.headers());
     }
 
     @Test
-    public void insertConfiguredHeaderWithInt32Value() {
+    public void insertHeaderWithInt32Value() {
         final Map<String, Object> props = new HashMap<>();
-        props.put("header", "dummy header");
+        props.put("header", "AAA");
         props.put("literal.value", "50000");
 
         xform.configure(props);
@@ -127,16 +202,16 @@ public class InsertHeaderTest {
             0, null, null, null, null, null, null);
         final SourceRecord transformedRecord = xform.apply(record);
 
-        Headers expected = new ConnectHeaders().addInt("dummy header", 50000);
+        Headers expected = new ConnectHeaders().addInt("AAA", 50000);
 
         assertEquals(1, transformedRecord.headers().size());
         assertEquals(expected, transformedRecord.headers());
     }
 
     @Test
-    public void insertConfiguredHeaderWithInt64Value() {
+    public void insertHeaderWithInt64Value() {
         final Map<String, Object> props = new HashMap<>();
-        props.put("header", "dummy header");
+        props.put("header", "AAA");
         props.put("literal.value", "87474836647");
 
         xform.configure(props);
@@ -145,16 +220,16 @@ public class InsertHeaderTest {
             0, null, null, null, null, null, null);
         final SourceRecord transformedRecord = xform.apply(record);
 
-        Headers expected = new ConnectHeaders().addLong("dummy header", 87474836647L);
+        Headers expected = new ConnectHeaders().addLong("AAA", 87474836647L);
 
         assertEquals(1, transformedRecord.headers().size());
         assertEquals(expected, transformedRecord.headers());
     }
 
     @Test
-    public void insertConfiguredHeaderWithFloatValue() {
+    public void insertHeaderWithFloatValue() {
         final Map<String, Object> props = new HashMap<>();
-        props.put("header", "dummy header");
+        props.put("header", "AAA");
         props.put("literal.value", "2353245343456.435435");
 
         xform.configure(props);
@@ -163,16 +238,16 @@ public class InsertHeaderTest {
             0, null, null, null, null, null, null);
         final SourceRecord transformedRecord = xform.apply(record);
 
-        Headers expected = new ConnectHeaders().addDouble("dummy header", 2353245343456.435435);
+        Headers expected = new ConnectHeaders().addDouble("AAA", 2353245343456.435435);
 
         assertEquals(1, transformedRecord.headers().size());
         assertEquals(expected, transformedRecord.headers());
     }
 
     @Test
-    public void insertConfiguredHeaderWithDateValue() throws ParseException {
+    public void insertHeaderWithDateValue() throws ParseException {
         final Map<String, Object> props = new HashMap<>();
-        props.put("header", "dummy header");
+        props.put("header", "AAA");
         props.put("literal.value", "2019-08-23");
 
         xform.configure(props);
@@ -184,16 +259,16 @@ public class InsertHeaderTest {
         SchemaAndValue schemaAndValue = new SchemaAndValue(org.apache.kafka.connect.data.Date.SCHEMA,
             new SimpleDateFormat("yyyy-MM-dd").parse("2019-08-23"));
 
-        Headers expected = new ConnectHeaders().add("dummy header", schemaAndValue);
+        Headers expected = new ConnectHeaders().add("AAA", schemaAndValue);
 
         assertEquals(1, transformedRecord.headers().size());
         assertEquals(expected, transformedRecord.headers());
     }
 
     @Test
-    public void insertConfiguredHeaderWithTimeValue() throws ParseException {
+    public void insertHeaderWithTimeValue() throws ParseException {
         final Map<String, Object> props = new HashMap<>();
-        props.put("header", "dummy header");
+        props.put("header", "AAA");
         props.put("literal.value", "14\\:34\\:54.346Z");
         xform.configure(props);
 
@@ -204,16 +279,16 @@ public class InsertHeaderTest {
         SchemaAndValue schemaAndValue = new SchemaAndValue(Time.SCHEMA,
             new SimpleDateFormat("HH:mm:ss.SSS'Z'").parse("14:34:54.346Z"));
 
-        Headers expected = new ConnectHeaders().add("dummy header", schemaAndValue);
+        Headers expected = new ConnectHeaders().add("AAA", schemaAndValue);
 
         assertEquals(1, transformedRecord.headers().size());
         assertEquals(expected, transformedRecord.headers());
     }
 
     @Test
-    public void insertConfiguredHeaderWithTimestampValue() throws ParseException {
+    public void insertHeaderWithTimestampValue() throws ParseException {
         final Map<String, Object> props = new HashMap<>();
-        props.put("header", "dummy header");
+        props.put("header", "AAA");
         props.put("literal.value", "2019-08-23T14\\:34\\:54.346Z");
 
         xform.configure(props);
@@ -225,7 +300,7 @@ public class InsertHeaderTest {
         SchemaAndValue schemaAndValue = new SchemaAndValue(Timestamp.SCHEMA,
             new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'").parse("2019-08-23T14:34:54.346Z"));
 
-        Headers expected = new ConnectHeaders().add("dummy header", schemaAndValue);
+        Headers expected = new ConnectHeaders().add("AAA", schemaAndValue);
 
         assertEquals(1, transformedRecord.headers().size());
         assertEquals(expected, transformedRecord.headers());

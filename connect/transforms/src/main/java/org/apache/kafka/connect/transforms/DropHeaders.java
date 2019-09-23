@@ -18,7 +18,8 @@ package org.apache.kafka.connect.transforms;
 
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.connect.connector.ConnectRecord;
-import org.apache.kafka.connect.errors.DataException;
+import org.apache.kafka.connect.header.ConnectHeaders;
+import org.apache.kafka.connect.header.Headers;
 import org.apache.kafka.connect.transforms.util.NonEmptyListValidator;
 import org.apache.kafka.connect.transforms.util.SimpleConfig;
 
@@ -33,7 +34,7 @@ public class DropHeaders<R extends ConnectRecord<R>> implements Transformation<R
     public static final String HEADER_NAMES_CONFIG = "names";
 
     public static final ConfigDef CONFIG_DEF = new ConfigDef()
-        .define(HEADERS_CONFIG, ConfigDef.Type.LIST, ConfigDef.NO_DEFAULT_VALUE,
+        .define(HEADER_NAMES_CONFIG, ConfigDef.Type.LIST, ConfigDef.NO_DEFAULT_VALUE,
             new NonEmptyListValidator(), ConfigDef.Importance.MEDIUM,
             "Header name(s) to remove.");
 
@@ -42,16 +43,28 @@ public class DropHeaders<R extends ConnectRecord<R>> implements Transformation<R
     @Override
     public void configure(Map<String, ?> props) {
         final SimpleConfig config = new SimpleConfig(CONFIG_DEF, props);
-        headers = config.getList(HEADERS_CONFIG);
+        headers = config.getList(HEADER_NAMES_CONFIG);
     }
 
     @Override
     public R apply(R record) {
-        if (record.headers().isEmpty()) {
-            throw new DataException("The message does not contain headers.");
+        if (record == null) {
+            return null;
         }
-        headers.forEach(record.headers()::remove);
-        return record;
+
+        Headers recordHeaders = record.headers();
+        Headers newHeaders = new ConnectHeaders();
+
+        recordHeaders.forEach(header -> {
+                if (!headers.contains(header.key())) {
+                    newHeaders.add(header);
+                }
+            }
+        );
+
+        return record.newRecord(record.topic(), record.kafkaPartition(), record.keySchema(),
+            record.key(), record.valueSchema(), record.value(), record.timestamp(), newHeaders);
+
     }
 
     @Override
