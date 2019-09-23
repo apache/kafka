@@ -33,6 +33,7 @@ import org.apache.kafka.common.requests.FetchRequest.PartitionData
 import org.apache.kafka.common.utils.{KafkaThread, Time, Utils}
 
 import scala.collection.JavaConverters._
+import scala.collection.Searching._
 import scala.collection.Set
 
 class RLMScheduledThreadPool(poolSize: Int) extends Logging {
@@ -179,75 +180,87 @@ class RemoteLogManager(fetchLog: TopicPartition => Option[Log],
     }
 
     def copyLogSegmentsToRemote(): Unit = {
-      fetchLog(tp).foreach { log => {
-        if (isCancelled()) {
-          info(s"Skipping copying log segments as the current task is cancelled")
-          return
-        }
-        val highWatermark = log.highWatermark
-        if (highWatermark >= 0) {
-          // copy segments only till the min of highWatermark or stable-offset
-          // remote storage should contain only committed/acked messages
-          val fetchOffset = log.firstUnstableOffset match {
-            case Some(offsetMetadata) if offsetMetadata < highWatermark => offsetMetadata
-            case _ => highWatermark
-          }
-          if (readOffset >= fetchOffset) {
-            info(s"Skipping building indexes, current read offset:$readOffset is more than committed/acked " +
-              s"message offset:$fetchOffset ")
+      try {
+        fetchLog(tp).foreach { log => {
+          if (isCancelled()) {
+            info(s"Skipping copying log segments as the current task is cancelled")
             return
           }
-
-          val segments = log.logSegments(readOffset + 1, fetchOffset)
-
-          segments.foreach { segment =>
-            // store locally here as this may get updated after the below if condition is computed as false.
-            val leaderEpochVal = leaderEpoch
-            if (isCancelled() || !isLeader) {
-              info(s"Skipping copying log segments as the current task state is changed, cancelled:$isCancelled() " +
-                s"leader:$isLeader")
+          val highWatermark = log.highWatermark
+          if (highWatermark >= 0) {
+            // copy segments only till the min of highWatermark or stable-offset
+            // remote storage should contain only committed/acked messages
+            val fetchOffset = log.firstUnstableOffset match {
+              case Some(offsetMetadata) if offsetMetadata < highWatermark => offsetMetadata
+              case _ => highWatermark
+            }
+            if (readOffset >= fetchOffset) {
+              info(s"Skipping building indexes, current read offset:$readOffset is more than committed/acked " +
+                s"message offset:$fetchOffset ")
               return
             }
 
-            val entries = remoteStorageManager.copyLogSegment(tp, segment, leaderEpochVal)
-            val file = segment.log.file()
-            val fileName = file.getName
-            val baseOffsetStr = fileName.substring(0, fileName.indexOf("."))
-            rlmIndexer.maybeBuildIndexes(tp, entries.asScala.toSeq, file.getParentFile, baseOffsetStr)
-            readOffset = entries.get(entries.size() - 1).lastOffset
+            val activeSegBaseOffset = log.activeSegment.baseOffset
+            val sortedSegments = log.logSegments(readOffset + 1, fetchOffset).toSeq.sortBy(_.baseOffset)
+            val index:Int = sortedSegments.map(x => x.baseOffset).search(activeSegBaseOffset) match {
+              case Found(x) => x
+              case InsertionPoint(y) => y - 1
+            }
+            if(index <= 0) {
+              debug(s"No segments found to be copied for partition $tp with read offset: $readOffset and active baseoffset: $activeSegBaseOffset")
+            } else {
+              sortedSegments.slice(0, index+1).foreach { segment =>
+                // store locally here as this may get updated after the below if condition is computed as false.
+                val leaderEpochVal = leaderEpoch
+                if (isCancelled() || !isLeader) {
+                  info(
+                    s"Skipping copying log segments as the current task state is changed, cancelled:$isCancelled() " +
+                      s"leader:$isLeader")
+                  return
+                }
+
+                val entries = remoteStorageManager.copyLogSegment(tp, segment, leaderEpochVal)
+                val file = segment.log.file()
+                val fileName = file.getName
+                val baseOffsetStr = fileName.substring(0, fileName.indexOf("."))
+                rlmIndexer.maybeBuildIndexes(tp, entries.asScala.toSeq, file.getParentFile, baseOffsetStr)
+                readOffset = entries.get(entries.size() - 1).lastOffset
+              }
+            }
           }
         }
-      }
+        }
+      } catch {
+        case ex:Exception => error(s"Error occured while copying log segments of partition: $tp", ex)
       }
     }
 
     def updateRemoteLogIndexes(): Unit = {
-      remoteStorageManager.listRemoteSegments(tp, readOffset).forEach(new Consumer[RemoteLogSegmentInfo] {
-        override def accept(rlsInfo: RemoteLogSegmentInfo): Unit = {
-          val entries = remoteStorageManager.getRemoteLogIndexEntries(rlsInfo)
-          if (!entries.isEmpty) {
-            fetchLog(tp).foreach { log: Log =>
-              if (isCancelled()) {
-                info(s"Skipping building indexes as the current task is cancelled")
-                return
+      try {
+        remoteStorageManager.listRemoteSegments(tp, readOffset).forEach(new Consumer[RemoteLogSegmentInfo] {
+          override def accept(rlsInfo: RemoteLogSegmentInfo): Unit = {
+            val entries = remoteStorageManager.getRemoteLogIndexEntries(rlsInfo)
+            if (!entries.isEmpty) {
+              fetchLog(tp).foreach { log: Log =>
+                if (isCancelled()) {
+                  info(s"Skipping building indexes as the current task is cancelled")
+                  return
+                }
+                val baseOffset = Log.filenamePrefixFromOffset(entries.get(0).firstOffset)
+                val logDir = log.activeSegment.log.file().getParentFile
+                rlmIndexer.maybeBuildIndexes(tp, entries.asScala.toSeq, logDir, baseOffset)
+                readOffset = entries.get(entries.size() - 1).lastOffset
               }
-              val baseOffset = Log.filenamePrefixFromOffset(entries.get(0).firstOffset)
-              val logDir = log.activeSegment.log.file().getParentFile
-              rlmIndexer.maybeBuildIndexes(tp, entries.asScala.toSeq, logDir, baseOffset)
-              readOffset = entries.get(entries.size() - 1).lastOffset
             }
+
           }
-        }
-      })
+        })
+      } catch {
+        case ex: Exception => error(s"Error occurred while updating remote log indexes for partition:$tp ", ex)
+      }
     }
 
     def handleExpiredRemoteLogSegments(): Unit = {
-      val remoteLso:Long =
-        if (isLeader) {
-          remoteStorageManager.cleanupLogUntil(tp, time.milliseconds() - rlmConfig.remoteLogRetentionMillis)
-        } else {
-          remoteStorageManager.earliestLogOffset(tp)
-        }
 
       def handleLogStartOffsetUpdate(topicPartition: TopicPartition, logStartOffset: Long): Unit = {
         updateRemoteLogStartOffset(topicPartition, logStartOffset)
@@ -265,7 +278,18 @@ class RemoteLogManager(fetchLog: TopicPartition => Option[Log],
         }
       }
 
-      if(remoteLso >= 0) handleLogStartOffsetUpdate(tp, remoteLso)
+      try {
+        val remoteLso: Long =
+          if (isLeader) {
+            remoteStorageManager.cleanupLogUntil(tp, time.milliseconds() - rlmConfig.remoteLogRetentionMillis)
+          } else {
+            remoteStorageManager.earliestLogOffset(tp)
+          }
+
+        if (remoteLso >= 0) handleLogStartOffsetUpdate(tp, remoteLso)
+      } catch {
+        case ex:Exception => error(s"Error while cleaningup log segments for partition: $tp", ex)
+      }
     }
 
     override def run(): Unit = {

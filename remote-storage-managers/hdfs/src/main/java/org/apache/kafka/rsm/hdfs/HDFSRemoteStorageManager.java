@@ -37,6 +37,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.File;
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URI;
@@ -160,12 +161,15 @@ public class HDFSRemoteStorageManager implements RemoteStorageManager {
 
     @Override
     public List<RemoteLogSegmentInfo> listRemoteSegments(TopicPartition topicPartition, long minBaseOffset) throws IOException {
-        ArrayList<RemoteLogSegmentInfo> segments = new ArrayList<>();
 
         FileSystem fs = getFS();
         Path path = new Path(getTPRemoteDir(topicPartition));
-        if (!fs.exists(path))
-            return segments;
+        if (!fs.exists(path)) {
+            // if the path does not exist return an empty list.
+            return Collections.emptyList();
+        }
+
+        ArrayList<RemoteLogSegmentInfo> segments = new ArrayList<>();
         FileStatus[] files = fs.listStatus(path);
 
         for (FileStatus file : files) {
@@ -232,6 +236,11 @@ public class HDFSRemoteStorageManager implements RemoteStorageManager {
     public long cleanupLogUntil(TopicPartition topicPartition, long cleanUpTillMs) throws IOException {
         FileSystem fs = getFS();
         Path path = new Path(getTPRemoteDir(topicPartition));
+        if (!fs.exists(path)) {
+            // if there are no log segments available yet then return -1L
+            return -1L;
+        }
+
         FileStatus[] files = fs.listStatus(path);
 
         long minStartOffset = Long.MAX_VALUE;
@@ -249,7 +258,7 @@ public class HDFSRemoteStorageManager implements RemoteStorageManager {
             }
         }
 
-        return minStartOffset;
+        return minStartOffset == Long.MAX_VALUE ? -1L : minStartOffset;
     }
 
     /**

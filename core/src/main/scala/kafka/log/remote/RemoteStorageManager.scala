@@ -27,7 +27,8 @@ import org.apache.kafka.common.{Configurable, TopicPartition}
 trait RemoteStorageManager extends Configurable with AutoCloseable {
 
   /**
-   * Earliest log offset that exists for a topic partition in remote storage.
+   * Earliest log offset exists for a topic partition in remote storage. Return -1 if there are no segments in
+   * the remote storage.
    *
    * @param tp
    * @return
@@ -104,7 +105,8 @@ trait RemoteStorageManager extends Configurable with AutoCloseable {
   def deleteTopicPartition(topicPartition: TopicPartition): Boolean
 
   /**
-   * Remove the log segments which are older than the given cleanUpTillMs
+   * Remove the log segments which are older than the given cleanUpTillMs. Return the log start offset of the
+   * earliest remote log segment if exists or -1 if there are no log segments in the remote tier storage.
    *
    * @param topicPartition
    * @param cleanUpTillMs
