@@ -211,7 +211,7 @@ public class RestServer {
         log.info("Initializing REST resources");
 
         ResourceConfig resourceConfig = new ResourceConfig();
-//        resourceConfig.register(new JacksonJsonProvider());
+        resourceConfig.register(new JacksonJsonProvider());
 
         resourceConfig.register(new RootResource(herder));
         resourceConfig.register(new ConnectorsResource(herder, config));
@@ -280,10 +280,12 @@ public class RestServer {
             throw new ConnectException("Unable to initialize REST resources", e);
         }
 
-        try {
-            adminContext.start();
-        } catch (Exception e) {
-            throw new ConnectException("Unable to initialize Admin REST resources", e);
+        if (adminResourceConfig != resourceConfig) {
+            try {
+                adminContext.start();
+            } catch (Exception e) {
+                throw new ConnectException("Unable to initialize Admin REST resources", e);
+            }
         }
 
         log.info("REST resources initialized; server is started and ready to handle requests");
