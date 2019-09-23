@@ -63,9 +63,6 @@ public class RocksDBWindowStore
     @Override
     public byte[] fetch(final Bytes key, final long timestamp) {
         final byte[] bytesValue = wrapped().get(WindowKeySchema.toStoreKeyBinary(key, timestamp, seqnum));
-        if (bytesValue == null) {
-            return null;
-        }
         return bytesValue;
     }
 

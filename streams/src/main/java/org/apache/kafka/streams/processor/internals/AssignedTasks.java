@@ -77,8 +77,9 @@ abstract class AssignedTasks<T extends Task> {
                 }
                 it.remove();
             } catch (final LockException e) {
-                // made this trace as it will spam the logs in the poll loop.
-                log.trace("Could not create {} {} due to {}; will retry", taskTypeName, entry.getKey(), e.toString());
+                // If this is a permanent error, then we could spam the log since this is in the run loop. But, other related
+                // messages show up anyway. So keeping in debug for sake of faster discoverability of problem
+                log.debug("Could not create {} {} due to {}; will retry", taskTypeName, entry.getKey(), e.toString());
             }
         }
     }
@@ -199,6 +200,7 @@ abstract class AssignedTasks<T extends Task> {
     void transitionToRunning(final T task) {
         log.debug("Transitioning {} {} to running", taskTypeName, task.id());
         running.put(task.id(), task);
+        task.initializeTaskTime();
         task.initializeTopology();
         for (final TopicPartition topicPartition : task.partitions()) {
             runningByPartition.put(topicPartition, task);
@@ -349,12 +351,9 @@ abstract class AssignedTasks<T extends Task> {
                     task.id(),
                     t);
                 if (clean) {
-                    if (!closeUnclean(task)) {
-                        firstException.compareAndSet(null, t);
-                    }
-                } else {
-                    firstException.compareAndSet(null, t);
+                    closeUnclean(task);
                 }
+                firstException.compareAndSet(null, t);
             }
         }
 

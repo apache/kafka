@@ -30,8 +30,8 @@ ext {
 
 // Add Scala version
 def defaultScala211Version = '2.11.12'
-def defaultScala212Version = '2.12.9'
-def defaultScala213Version = '2.13.0'
+def defaultScala212Version = '2.12.10'
+def defaultScala213Version = '2.13.1'
 if (hasProperty('scalaVersion')) {
   if (scalaVersion == '2.11') {
     versions["scala"] = defaultScala211Version
@@ -63,10 +63,10 @@ versions += [
   apacheda: "1.0.2",
   apacheds: "2.0.0-M24",
   argparse4j: "0.7.0",
-  bcpkix: "1.62",
+  bcpkix: "1.63",
   checkstyle: "8.20",
   commonsCli: "1.4",
-  gradle: "5.4.1",
+  gradle: "5.6.2",
   gradleVersionsPlugin: "0.21.0",
   grgit: "3.1.1",
   httpclient: "4.5.9",
@@ -74,7 +74,7 @@ versions += [
   jackson: "2.9.9",
   jacksonDatabind: "2.9.9.3",
   jacoco: "0.8.3",
-  jetty: "9.4.19.v20190610",
+  jetty: "9.4.20.v20190813",
   jersey: "2.28",
   jmh: "1.21",
   hamcrest: "2.1",
@@ -110,13 +110,13 @@ versions += [
   scoverage: "1.4.0",
   scoveragePlugin: "2.5.0",
   shadowPlugin: "4.0.4",
-  slf4j: "1.7.27",
+  slf4j: "1.7.28",
   snappy: "1.1.7.3",
   spotbugs: "3.1.12",
   spotbugsPlugin: "1.6.9",
   spotlessPlugin: "3.23.1",
   zookeeper: "3.5.5",
-  zstd: "1.4.2-1"
+  zstd: "1.4.3-1"
 ]
 
 libs += [

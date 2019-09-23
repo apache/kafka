@@ -620,7 +620,7 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
                     } else {
                         if (deferred != null) {
                             taskConfigs.putAll(deferred);
-                            updatedTasks.addAll(taskConfigs.keySet());
+                            updatedTasks.addAll(deferred.keySet());
                         }
                         inconsistent.remove(connectorName);
                     }

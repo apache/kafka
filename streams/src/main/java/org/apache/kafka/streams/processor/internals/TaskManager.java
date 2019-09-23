@@ -57,7 +57,7 @@ public class TaskManager {
     private final StreamThread.AbstractTaskCreator<StandbyTask> standbyTaskCreator;
     private final StreamsMetadataState streamsMetadataState;
 
-    final Admin adminClient;
+    private final Admin adminClient;
     private DeleteRecordsResult deleteRecordsResult;
 
     // following information is updated during rebalance phase by the partition assignor
@@ -92,6 +92,10 @@ public class TaskManager {
         this.log = logContext.logger(getClass());
 
         this.adminClient = adminClient;
+    }
+
+    public Admin adminClient() {
+        return adminClient;
     }
 
     void createTasks(final Collection<TopicPartition> assignment) {
@@ -143,7 +147,7 @@ public class TaskManager {
         // CANNOT FIND RETRY AND BACKOFF LOGIC
         // create all newly assigned tasks (guard against race condition with other thread via backoff and retry)
         // -> other thread will call removeSuspendedTasks(); eventually
-        log.trace("New active tasks to be created: {}", newTasks);
+        log.debug("New active tasks to be created: {}", newTasks);
 
         for (final StreamTask task : taskCreator.createTasks(consumer, newTasks)) {
             active.addNewTask(task);

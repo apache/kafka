@@ -20,8 +20,11 @@ package org.apache.kafka.common.protocol;
 import org.apache.kafka.common.utils.Utils;
 
 import java.util.Iterator;
+import java.util.UUID;
 
 public final class MessageUtil {
+    public static final UUID ZERO_UUID = new UUID(0L, 0L);
+
     /**
      * Get the length of the UTF8 representation of a string, without allocating
      * a byte buffer for the string.

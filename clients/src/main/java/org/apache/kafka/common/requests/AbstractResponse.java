@@ -127,7 +127,7 @@ public abstract class AbstractResponse extends AbstractRequestResponse {
             case WRITE_TXN_MARKERS:
                 return new WriteTxnMarkersResponse(struct);
             case TXN_OFFSET_COMMIT:
-                return new TxnOffsetCommitResponse(struct);
+                return new TxnOffsetCommitResponse(struct, version);
             case DESCRIBE_ACLS:
                 return new DescribeAclsResponse(struct);
             case CREATE_ACLS:
@@ -164,6 +164,8 @@ public abstract class AbstractResponse extends AbstractRequestResponse {
                 return new AlterPartitionReassignmentsResponse(struct, version);
             case LIST_PARTITION_REASSIGNMENTS:
                 return new ListPartitionReassignmentsResponse(struct, version);
+            case OFFSET_DELETE:
+                return new OffsetDeleteResponse(struct, version);
             default:
                 throw new AssertionError(String.format("ApiKey %s is not currently handled in `parseResponse`, the " +
                         "code should be updated to do so.", apiKey));

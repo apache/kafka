@@ -75,7 +75,8 @@ public class MeteredWindowStoreTest {
 
     @Before
     public void setUp() {
-        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, "test");
+        final StreamsMetricsImpl streamsMetrics =
+            new StreamsMetricsImpl(metrics, "test", StreamsConfig.METRICS_LATEST);
 
         context = new InternalMockProcessorContext(
             TestUtils.tempDirectory(),

@@ -24,4 +24,14 @@ class AssignedStandbyTasks extends AssignedTasks<StandbyTask> {
         super(logContext, "standby task");
     }
 
+    @Override
+    int commit() {
+        final int committed = super.commit();
+        // TODO: this contortion would not be necessary if we got rid of the two-step
+        // task.commitNeeded and task.commit and instead just had task.commitIfNeeded. Currently
+        // we only call commit if commitNeeded is true, which means that we need a way to indicate
+        // that we are eligible for updating the offset limit outside of commit.
+        running.forEach((id, task) -> task.allowUpdateOfOffsetLimit());
+        return committed;
+    }
 }
