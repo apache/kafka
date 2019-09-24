@@ -95,12 +95,12 @@ public class LeaderAndIsrRequest extends AbstractControlRequest {
         public String toString() {
             StringBuilder bld = new StringBuilder();
             bld.append("(type=LeaderAndIsRequest")
-                    .append(", controllerId=").append(controllerId)
-                    .append(", controllerEpoch=").append(controllerEpoch)
-                    .append(", brokerEpoch=").append(brokerEpoch)
-                    .append(", partitionStates=").append(partitionStates)
-                    .append(", liveLeaders=(").append(Utils.join(liveLeaders, ", ")).append(")")
-                    .append(")");
+                .append(", controllerId=").append(controllerId)
+                .append(", controllerEpoch=").append(controllerEpoch)
+                .append(", brokerEpoch=").append(brokerEpoch)
+                .append(", partitionStates=").append(partitionStates)
+                .append(", liveLeaders=(").append(Utils.join(liveLeaders, ", ")).append(")")
+                .append(")");
             return bld.toString();
 
         }
