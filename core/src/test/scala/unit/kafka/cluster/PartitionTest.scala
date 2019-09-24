@@ -18,7 +18,7 @@ package kafka.cluster
 
 import java.io.File
 import java.nio.ByteBuffer
-import java.util.{Optional, Properties}
+import java.util.{Collections, Optional, Properties}
 import java.util.concurrent.{CountDownLatch, Executors, TimeUnit, TimeoutException}
 import java.util.concurrent.atomic.AtomicBoolean
 
@@ -1543,6 +1543,54 @@ class PartitionTest {
     Partition.removeMetrics(topicPartition)
 
     assertEquals(Set(), Metrics.defaultRegistry().allMetrics().asScala.keySet.filter(_.getType == "Partition"))
+  }
+
+  @Test
+  def testPartitionIsReassigningComputedCorrectly(): Unit = {
+    val controllerId = 0
+    val controllerEpoch = 3
+    val replicas = List[Integer](brokerId, brokerId + 1, brokerId + 2).asJava
+    val addingReplicas = List[Integer](brokerId + 3, brokerId + 4).asJava
+    val removingReplicas = List[Integer](brokerId + 1).asJava
+
+    // non-empty addingReplicas and removingReplicas
+    val leaderState1 = new LeaderAndIsrRequest.PartitionState(controllerEpoch, brokerId,
+      6, replicas, 1, replicas, addingReplicas, removingReplicas, false)
+    partition.makeLeader(controllerId, leaderState1, 0 ,offsetCheckpoints)
+    assertTrue(partition.isReassigning)
+    // non-empty addingReplicas and empty removingReplicas
+    val leaderState2 = new LeaderAndIsrRequest.PartitionState(controllerEpoch, brokerId,
+      6, replicas, 1, replicas, addingReplicas, Collections.emptyList(), false)
+    partition.makeLeader(controllerId, leaderState2, 0 ,offsetCheckpoints)
+    assertTrue(partition.isReassigning)
+    // empty addingReplicas and non-empty removingReplicas
+    val leaderState3 = new LeaderAndIsrRequest.PartitionState(controllerEpoch, brokerId,
+      6, replicas, 1, replicas, Collections.emptyList(), removingReplicas, false)
+    partition.makeLeader(controllerId, leaderState3, 0 ,offsetCheckpoints)
+    assertTrue(partition.isReassigning)
+    // empty addingReplicas and removingReplicas
+    val leaderState4 = new LeaderAndIsrRequest.PartitionState(controllerEpoch, brokerId,
+      6, replicas, 1, replicas, false)
+    partition.makeLeader(controllerId, leaderState4, 0 ,offsetCheckpoints)
+    assertFalse(partition.isReassigning)
+  }
+
+  @Test
+  def testUnderReplicatedPartitionsCorrectSemantics(): Unit = {
+    val controllerId = 0
+    val controllerEpoch = 3
+    val replicas = List[Integer](brokerId, brokerId + 1, brokerId + 2).asJava
+    val isr = List[Integer](brokerId, brokerId + 1).asJava
+
+    val leaderState1 = new LeaderAndIsrRequest.PartitionState(controllerEpoch, brokerId,
+      6, isr, 1, replicas, false)
+    partition.makeLeader(controllerId, leaderState1, 0 ,offsetCheckpoints)
+    assertTrue(partition.isUnderReplicated)
+
+    val leaderState2 = new LeaderAndIsrRequest.PartitionState(controllerEpoch, brokerId,
+      6, replicas, 1, replicas, false)
+    partition.makeLeader(controllerId, leaderState2, 0 ,offsetCheckpoints)
+    assertFalse(partition.isUnderReplicated)
   }
 
   /**
