@@ -48,6 +48,8 @@ class AssignedStandbyTasks extends AssignedTasks<StandbyTask> {
      * @return the changelogs of all standby tasks that were reassigned
      */
     List<TopicPartition> closeRevokedStandbyTasks(final Map<TaskId, Set<TopicPartition>> revokedTasks) {
+        log.debug("Closing revoked standby tasks {}", revokedTasks);
+
         final List<TopicPartition> revokedChangelogs = new ArrayList<>();
         for (final Map.Entry<TaskId, Set<TopicPartition>> entry : revokedTasks.entrySet()) {
             final TaskId taskId = entry.getKey();

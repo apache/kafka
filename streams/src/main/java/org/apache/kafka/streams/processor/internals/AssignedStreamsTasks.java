@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import java.util.ArrayList;
 import java.util.concurrent.atomic.AtomicReference;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
@@ -118,8 +117,11 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
         return firstException.get();
     }
 
-    private RuntimeException suspendRunningTasks(final Set<TaskId> revokedRunningTasks, final List<TopicPartition> revokedChangelogs) {
+    private RuntimeException suspendRunningTasks(final Set<TaskId> revokedRunningTasks,
+                                                 final List<TopicPartition> closedTaskChangelogs) {
+
         final AtomicReference<RuntimeException> firstException = new AtomicReference<>(null);
+        log.debug("Suspending running {} {}", taskTypeName, running.keySet());
 
         for (final TaskId id : revokedRunningTasks) {
             final StreamTask task = running.get(id);
@@ -148,70 +150,172 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
                 running.remove(id);
                 runningByPartition.keySet().removeAll(task.partitions());
                 runningByPartition.keySet().removeAll(task.changelogPartitions());
-                revokedChangelogs.addAll(task.changelogPartitions());
+
+                // If suspending failed and we had to close the task, we should remove its changelogs
+                if (!suspended.containsKey(id)) {
+                    closedTaskChangelogs.addAll(task.changelogPartitions());
+                }
             }
         }
-        log.trace("Suspended running {} {}", taskTypeName, suspended.keySet());
+
+        log.trace("Successfully suspended the running {} {}", taskTypeName, suspended.keySet());
+
         return firstException.get();
     }
 
-    private RuntimeException closeNonRunningTasks(final Set<TaskId> revokedNonRunningTasks, final List<TopicPartition> revokedChangelogs) {
-        final Set<TaskId> closedNonRunningTasks = new HashSet<>();
-        RuntimeException exception = null;
+    private RuntimeException closeNonRunningTasks(final Set<TaskId> revokedNonRunningTasks,
+                                                  final List<TopicPartition> revokedTaskChangelogs) {
+        log.debug("Closing the created but not initialized {} {}", taskTypeName, revokedNonRunningTasks);
+        final AtomicReference<RuntimeException> firstException = new AtomicReference<>();
 
         for (final TaskId id : revokedNonRunningTasks) {
             final StreamTask task = created.get(id);
-
-            try {
-                task.close(false, false);
-            } catch (final RuntimeException e) {
-                log.error("Failed to close {}, {}", taskTypeName, task.id(), e);
-                if (exception == null) {
-                    exception = e;
-                }
-            } finally {
-                created.remove(id);
-                revokedChangelogs.addAll(task.changelogPartitions());
-                closedNonRunningTasks.add(task.id);
-            }
+            firstException.compareAndSet(null, closeNonRunning(false, task, revokedTaskChangelogs));
         }
-        log.trace("Closed the created but not initialized {} {}", taskTypeName, closedNonRunningTasks);
-        return exception;
+
+        return firstException.get();
     }
 
-    RuntimeException closeRestoringTasks(final Set<TaskId> revokedRestoringTasks, final List<TopicPartition> revokedChangelogs) {
-        log.trace("Closing restoring stream tasks {}", revokedRestoringTasks);
-        RuntimeException exception = null;
+    RuntimeException closeRestoringTasks(final Set<TaskId> revokedRestoringTasks,
+                                         final List<TopicPartition> revokedChangelogs) {
+        log.debug("Closing restoring stream tasks {}", revokedRestoringTasks);
+        final AtomicReference<RuntimeException> firstException = new AtomicReference<>();
 
         for (final TaskId id : revokedRestoringTasks) {
             final StreamTask task = restoring.get(id);
+            firstException.compareAndSet(null, closeRestoring(false, task, revokedChangelogs));
+        }
 
-            try {
-                task.closeStateManager(true);
-            } catch (final RuntimeException e) {
-                log.error("Failed to close restoring task {} due to the following error:", id, e);
-                if (exception == null) {
-                    exception = e;
-                }
-            } finally {
-                restoring.remove(id);
-                for (final TopicPartition tp : task.partitions()) {
-                    restoredPartitions.remove(tp);
-                    restoringByPartition.remove(tp);
-                }
-                revokedChangelogs.addAll(task.changelogPartitions());
+        return firstException.get();
+    }
+
+    RuntimeException closeRevokedSuspendedTasks(final Set<TaskId> revokedTasks,
+                                                final List<TopicPartition> revokedTaskChangelogs) {
+        log.debug("Closing the revoked active tasks {} {}", taskTypeName, revokedTasks);
+        final AtomicReference<RuntimeException> firstException = new AtomicReference<>(null);
+
+        for (final TaskId revokedTask : revokedTasks) {
+            final StreamTask suspendedTask = suspended.get(revokedTask);
+
+            // task may not be in the suspended tasks if it was closed due to some error
+            if (suspendedTask != null) {
+                firstException.compareAndSet(null, closeSuspended(false, suspendedTask, revokedTaskChangelogs));
+            } else {
+                log.debug("Revoked task {} could not be found in suspended, may have already been closed", revokedTask);
+            }
+        }
+        return firstException.get();
+    }
+
+    private RuntimeException closeRunning(final boolean isZombie,
+                                          final StreamTask task,
+                                          final List<TopicPartition> closedTaskChangelogs) {
+        running.remove(task.id());
+        runningByPartition.keySet().removeAll(task.partitions());
+        runningByPartition.keySet().removeAll(task.changelogPartitions());
+        closedTaskChangelogs.addAll(task.changelogPartitions());
+
+        try {
+            final boolean clean = !isZombie;
+            task.close(clean, isZombie);
+        } catch (final RuntimeException e) {
+            log.error("Failed to close {}, {}", taskTypeName, task.id(), e);
+            return e;
+        }
+
+        return null;
+    }
+
+    private RuntimeException closeNonRunning(final boolean isZombie,
+                                             final StreamTask task,
+                                             final List<TopicPartition> closedTaskChangelogs) {
+        created.remove(task.id());
+        closedTaskChangelogs.addAll(task.changelogPartitions());
+
+        try {
+            task.close(false, isZombie);
+        } catch (final RuntimeException e) {
+            log.error("Failed to close {}, {}", taskTypeName, task.id(), e);
+            return e;
+        }
+
+        return null;
+    }
+
+    private RuntimeException closeRestoring(final boolean isZombie,
+                                            final StreamTask task,
+                                            final List<TopicPartition> closedTaskChangelogs) {
+        restoring.remove(task.id());
+        closedTaskChangelogs.addAll(task.changelogPartitions());
+        for (final TopicPartition tp : task.partitions()) {
+            restoredPartitions.remove(tp);
+            restoringByPartition.remove(tp);
+        }
+
+        try {
+            final boolean clean = !isZombie;
+            task.closeStateManager(clean);
+        } catch (final RuntimeException e) {
+            log.error("Failed to close restoring task {} due to the following error:", task.id(), e);
+            return e;
+        }
+
+        return null;
+    }
+
+    private RuntimeException closeSuspended(final boolean isZombie,
+                                            final StreamTask task,
+                                            final List<TopicPartition> closedTaskChangelogs) {
+        suspended.remove(task.id());
+        closedTaskChangelogs.addAll(task.changelogPartitions());
+
+        try {
+            final boolean clean = !isZombie;
+            task.closeSuspended(clean, isZombie, null);
+        } catch (final RuntimeException e) {
+            log.error("Failed to close suspended {} {} due to the following error:", taskTypeName, task.id(), e);
+            return e;
+        }
+
+        return null;
+    }
+
+    RuntimeException closeZombieTasks(final Set<TaskId> lostTasks, final List<TopicPartition> lostTaskChangelogs) {
+        final AtomicReference<RuntimeException> firstException = new AtomicReference<>(null);
+
+        for (final TaskId id : lostTasks) {
+            if (suspended.containsKey(id)) {
+                firstException.compareAndSet(null, closeSuspended(true, suspended.get(id), lostTaskChangelogs));
+            } else if (created.containsKey(id)) {
+                firstException.compareAndSet(null, closeNonRunning(true, created.get(id), lostTaskChangelogs));
+            } else if (restoring.containsKey(id)) {
+                firstException.compareAndSet(null, closeRestoring(true, created.get(id), lostTaskChangelogs));
+            } else if (running.containsKey(id)) {
+                firstException.compareAndSet(null, closeRunning(true, running.get(id), lostTaskChangelogs));
+            } else {
+                // task may have already been closed as a zombie and removed from all task maps
             }
         }
 
-        return exception;
+        // We always clear the prevActiveTasks and replace with current set of running tasks to encode in subscription
+        // We should exclude any tasks that were lost however, they will be counted as standbys for assignment purposes
+        prevActiveTasks.clear();
+        prevActiveTasks.addAll(running.keySet());
+
+        // With the current rebalance protocol, there should not be any running tasks left as they were all lost
+        if (!prevActiveTasks.isEmpty()) {
+            log.error("Found still running {} after closing all tasks lost as zombies", taskTypeName);
+            firstException.compareAndSet(null, new IllegalStateException("Not all lost tasks were closed as zombies"));
+        }
+        return firstException.get();
     }
 
     /**
      * @throws TaskMigratedException if the task producer got fenced (EOS only)
      */
     boolean maybeResumeSuspendedTask(final TaskId taskId,
-                                     final Set<TopicPartition> partitions,
-                                     final List<TopicPartition> changelogsToBeRemovedDueToFailure) {
+        final Set<TopicPartition> partitions,
+        final List<TopicPartition> changelogsToBeRemovedDueToFailure) {
         if (suspended.containsKey(taskId)) {
             final StreamTask task = suspended.get(taskId);
             log.trace("Found suspended {} {}", taskTypeName, taskId);
@@ -243,38 +347,6 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
             }
         }
         return false;
-    }
-
-    List<TopicPartition> closeRevokedSuspendedTasks(final Map<TaskId, Set<TopicPartition>> revokedTasks) {
-        final List<TopicPartition> revokedChangelogs = new ArrayList<>();
-        for (final Map.Entry<TaskId, Set<TopicPartition>> revokedTask : revokedTasks.entrySet()) {
-            final StreamTask suspendedTask = suspended.get(revokedTask.getKey());
-            if (suspendedTask != null) {
-                log.debug("Closing suspended and not re-assigned {} {}", taskTypeName, suspendedTask.id());
-                try {
-                    suspendedTask.closeSuspended(true, false, null);
-                } catch (final Exception e) {
-                    log.error("Failed to close suspended {} {} due to the following error:", taskTypeName,
-                        suspendedTask.id(), e);
-                } finally {
-                    suspended.remove(suspendedTask.id());
-                    revokedChangelogs.addAll(suspendedTask.changelogPartitions());
-                }
-            }
-        }
-        return revokedChangelogs;
-    }
-
-    void closeZombieTasks() {
-        final AtomicReference<RuntimeException> firstException = new AtomicReference<>(null);
-        for (final StreamTask task : allTasks()) {
-            firstException.compareAndSet(null, closeZombieTask(task));
-        }
-        clear();
-
-        if (firstException.get() != null) {
-            throw firstException.get();
-        }
     }
 
     void updateRestored(final Collection<TopicPartition> restored) {

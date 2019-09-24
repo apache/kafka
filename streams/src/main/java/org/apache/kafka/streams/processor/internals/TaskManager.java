@@ -150,15 +150,9 @@ public class TaskManager {
                 throw e;
             }
         }
-        if (!closedTaskChangelogs.isEmpty()) {
-            // remove any changelog partitions from tasks that failed to resume due to changed partitions
-            changelogReader.remove(closedTaskChangelogs);
-            if (!restoreConsumerAssignedStandbys) {
-                final Set<TopicPartition> updatedAssignment = new HashSet<>(restoreConsumer.assignment());
-                updatedAssignment.removeAll(closedTaskChangelogs);
-                restoreConsumer.assign(updatedAssignment);
-            }
-        }
+        // remove any changelog partitions from tasks that failed to resume due to changed partitions
+        changelogReader.remove(closedTaskChangelogs);
+        removeChangelogsFromRestoreConsumer(closedTaskChangelogs, false);
     }
 
     private void addNewActiveTasks(final Map<TaskId, Set<TopicPartition>> newActiveTasks) {
@@ -214,16 +208,10 @@ public class TaskManager {
      * @throws TaskMigratedException if the task producer got fenced (EOS only)
      */
     List<TopicPartition> closeRevokedStandbyTasks() {
-        log.debug("Closing revoked standby tasks {}", revokedStandbyTasks.keySet());
-
         final List<TopicPartition> revokedChangelogs = standby.closeRevokedStandbyTasks(revokedStandbyTasks);
 
         // If the restore consumer is assigned any standby partitions they must be removed
-        if (restoreConsumerAssignedStandbys) {
-            final Set<TopicPartition> updatedAssignment = new HashSet<>(restoreConsumer.assignment());
-            updatedAssignment.removeAll(revokedChangelogs);
-            restoreConsumer.assign(updatedAssignment);
-        }
+        removeChangelogsFromRestoreConsumer(revokedChangelogs, true);
 
         return revokedChangelogs;
     }
@@ -234,16 +222,16 @@ public class TaskManager {
      * @throws TaskMigratedException if the task producer got fenced (EOS only)
      */
     void closeRevokedSuspendedTasks() {
-        log.debug("Closing revoked active tasks {} ", revokedActiveTasks.keySet());
+        final List<TopicPartition> revokedChangelogs = new ArrayList<>();
+        final RuntimeException exception = active.closeRevokedSuspendedTasks(revokedActiveTasks.keySet(), revokedChangelogs);
 
-        final List<TopicPartition> revokedChangelogs = active.closeRevokedSuspendedTasks(revokedActiveTasks);
-
-        // remove any revoked partitions from the changelog reader, and restore consumer if necessary
+        // remove any revoked partitions from the changelog reader and restore consumer
         changelogReader.remove(revokedChangelogs);
-        if (!restoreConsumerAssignedStandbys) {
-            final Set<TopicPartition> updatedAssignment = new HashSet<>(restoreConsumer.assignment());
-            updatedAssignment.removeAll(revokedChangelogs);
-            restoreConsumer.assign(updatedAssignment);
+        removeChangelogsFromRestoreConsumer(revokedChangelogs, false);
+
+        // At this point all revoked tasks should have been closed, we can just throw the exception
+        if (exception != null) {
+            throw exception;
         }
     }
 
@@ -257,21 +245,13 @@ public class TaskManager {
         final AtomicReference<RuntimeException> firstException = new AtomicReference<>(null);
         final Set<TaskId> revokedTasks = partitionsToTaskSet(revokedPartitions);
 
-        log.debug("Suspending active tasks {}", revokedTasks);
-
         final List<TopicPartition> revokedChangelogs = new ArrayList<>();
 
-        // suspend revoked active tasks and collect changelogs of any tasks that failed to suspend
+        // suspend or close revoked active tasks and collect changelogs of any tasks that were closed
         firstException.compareAndSet(null, active.revokeTasks(revokedTasks, revokedChangelogs));
 
         changelogReader.remove(revokedChangelogs);
-
-        // If the restore consumer is assigned still-restoring partitions, remove these from its assignment
-        if (!restoreConsumerAssignedStandbys) {
-            final Set<TopicPartition> updatedAssignment = new HashSet<>(restoreConsumer.assignment());
-            updatedAssignment.removeAll(revokedChangelogs);
-            restoreConsumer.assign(updatedAssignment);
-        }
+        removeChangelogsFromRestoreConsumer(revokedChangelogs, false);
 
         final Exception exception = firstException.get();
         if (exception != null) {
@@ -288,13 +268,19 @@ public class TaskManager {
         final Set<TaskId> zombieTasks = partitionsToTaskSet(lostPartitions);
         log.debug("Closing lost tasks as zombies: {}", zombieTasks);
 
-        assignedActiveTasks.clear();
-        changelogReader.clear();
-        if (!restoreConsumerAssignedStandbys) {
-            restoreConsumer.unsubscribe();
-        }
+        final List<TopicPartition> lostTaskChangelogs = new ArrayList<>();
 
-        active.closeZombieTasks();
+        final RuntimeException exception = active.closeZombieTasks(zombieTasks, lostTaskChangelogs);
+
+        assignedActiveTasks.keySet().removeAll(zombieTasks);
+        changelogReader.remove(lostTaskChangelogs);
+        removeChangelogsFromRestoreConsumer(lostTaskChangelogs, false);
+
+        if (exception != null) {
+            throw exception;
+        } else if (!assignedActiveTasks.isEmpty()) {
+            throw new IllegalStateException("TaskManager had leftover tasks after removing all zombies");
+        }
 
         return zombieTasks;
     }
@@ -382,11 +368,7 @@ public class TaskManager {
 
         final Collection<TopicPartition> restored = changelogReader.restore(active);
         active.updateRestored(restored);
-        if (!restoreConsumerAssignedStandbys && !restored.isEmpty()) {
-            final Set<TopicPartition> needsRestoring = new HashSet<>(restoreConsumer.assignment());
-            needsRestoring.removeAll(restored);
-            restoreConsumer.assign(needsRestoring);
-        }
+        removeChangelogsFromRestoreConsumer(restored, true);
 
         if (active.allTasksRunning()) {
             final Set<TopicPartition> assignment = consumer.assignment();
@@ -571,13 +553,14 @@ public class TaskManager {
         return builder.toString();
     }
 
-    // the following functions are for testing only
-    Map<TaskId, Set<TopicPartition>> assignedActiveTasks() {
-        return assignedActiveTasks;
-    }
-
-    Map<TaskId, Set<TopicPartition>> assignedStandbyTasks() {
-        return assignedStandbyTasks;
+    // this should be safe to call whether the restore consumer is assigned standby or active restoring partitions
+    // as the removal will be a no-op
+    private void removeChangelogsFromRestoreConsumer(final Collection<TopicPartition> changelogs, final boolean areStandbyPartitions) {
+        if (!changelogs.isEmpty() && areStandbyPartitions == restoreConsumerAssignedStandbys) {
+            final Set<TopicPartition> updatedAssignment = new HashSet<>(restoreConsumer.assignment());
+            updatedAssignment.removeAll(changelogs);
+            restoreConsumer.assign(updatedAssignment);
+        }
     }
 
     private Set<TaskId> partitionsToTaskSet(final Collection<TopicPartition> partitions) {
@@ -592,5 +575,14 @@ public class TaskManager {
             }
         }
         return taskIds;
+    }
+
+    // the following functions are for testing only
+    Map<TaskId, Set<TopicPartition>> assignedActiveTasks() {
+        return assignedActiveTasks;
+    }
+
+    Map<TaskId, Set<TopicPartition>> assignedStandbyTasks() {
+        return assignedStandbyTasks;
     }
 }
