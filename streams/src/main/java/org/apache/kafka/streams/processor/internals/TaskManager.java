@@ -223,7 +223,7 @@ public class TaskManager {
      */
     void closeRevokedSuspendedTasks() {
         final List<TopicPartition> revokedChangelogs = new ArrayList<>();
-        final RuntimeException exception = active.closeRevokedSuspendedTasks(revokedActiveTasks.keySet(), revokedChangelogs);
+        final RuntimeException exception = active.closeNotAssignedSuspendedTasks(revokedActiveTasks.keySet(), revokedChangelogs);
 
         // remove any revoked partitions from the changelog reader and restore consumer
         changelogReader.remove(revokedChangelogs);
@@ -243,12 +243,11 @@ public class TaskManager {
      */
     Set<TaskId> suspendActiveTasksAndState(final Collection<TopicPartition> revokedPartitions)  {
         final AtomicReference<RuntimeException> firstException = new AtomicReference<>(null);
+        List<TopicPartition> revokedChangelogs = new ArrayList<>();
+
         final Set<TaskId> revokedTasks = partitionsToTaskSet(revokedPartitions);
 
-        final List<TopicPartition> revokedChangelogs = new ArrayList<>();
-
-        // suspend or close revoked active tasks and collect changelogs of any tasks that were closed
-        firstException.compareAndSet(null, active.revokeTasks(revokedTasks, revokedChangelogs));
+        firstException.compareAndSet(null, active.suspendOrCloseTasks(revokedTasks, revokedChangelogs));
 
         changelogReader.remove(revokedChangelogs);
         removeChangelogsFromRestoreConsumer(revokedChangelogs, false);

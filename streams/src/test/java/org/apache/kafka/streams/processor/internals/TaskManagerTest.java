@@ -245,7 +245,7 @@ public class TaskManagerTest {
     @Test
     public void shouldCloseActiveUnAssignedSuspendedTasksWhenClosingRevokedTasks() {
         mockSingleActiveTask();
-        EasyMock.expect(active.closeRevokedSuspendedTasks(taskId0Assignment.keySet(), Collections.emptyList())).andReturn(null).once();
+        EasyMock.expect(active.closeNotAssignedSuspendedTasks(taskId0Assignment.keySet(), Collections.emptyList())).andReturn(null).once();
         expect(restoreConsumer.assignment()).andReturn(Collections.emptySet());
 
         replay();
@@ -331,7 +331,7 @@ public class TaskManagerTest {
 
     @Test
     public void shouldSuspendActiveTasks() {
-        expect(active.revokeTasks(revokedTasks, revokedChangelogs)).andReturn(null);
+        expect(active.suspendOrCloseTasks(revokedTasks, revokedChangelogs)).andReturn(null);
         expect(restoreConsumer.assignment()).andReturn(Collections.emptySet());
         replay();
 
@@ -341,7 +341,7 @@ public class TaskManagerTest {
 
     @Test
     public void shouldThrowStreamsExceptionAtEndIfExceptionDuringSuspend() {
-        expect(active.revokeTasks(revokedTasks, revokedChangelogs)).andReturn(new RuntimeException(""));
+        expect(active.suspendOrCloseTasks(revokedTasks, revokedChangelogs)).andReturn(new RuntimeException(""));
 
         replay();
         try {

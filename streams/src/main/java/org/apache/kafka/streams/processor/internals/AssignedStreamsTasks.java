@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import java.util.ArrayList;
 import java.util.concurrent.atomic.AtomicReference;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
@@ -88,13 +89,14 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
         return prevActiveTasks;
     }
 
-    RuntimeException revokeTasks(final Set<TaskId> revokedTasks, final List<TopicPartition> revokedChangelogs) {
+    RuntimeException suspendOrCloseTasks(final Set<TaskId> revokedTasks,
+                                         final List<TopicPartition> revokedTaskChangelogs) {
         final AtomicReference<RuntimeException> firstException = new AtomicReference<>(null);
         final Set<TaskId> revokedRunningTasks = new HashSet<>();
         final Set<TaskId> revokedNonRunningTasks = new HashSet<>();
         final Set<TaskId> revokedRestoringTasks = new HashSet<>();
 
-        // This is used only for eager rebalancing, so we can just clear it and add any/all tasks that were running
+        // This set is used only for eager rebalancing, so we can just clear it and add any/all tasks that were running
         prevActiveTasks.clear();
         prevActiveTasks.addAll(runningTaskIds());
 
@@ -110,20 +112,20 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
             }
         }
 
-        firstException.compareAndSet(null, suspendRunningTasks(revokedRunningTasks, revokedChangelogs));
-        firstException.compareAndSet(null, closeNonRunningTasks(revokedNonRunningTasks, revokedChangelogs));
-        firstException.compareAndSet(null, closeRestoringTasks(revokedRestoringTasks, revokedChangelogs));
+        firstException.compareAndSet(null, suspendRunningTasks(revokedRunningTasks, revokedTaskChangelogs));
+        firstException.compareAndSet(null, closeNonRunningTasks(revokedNonRunningTasks, revokedTaskChangelogs));
+        firstException.compareAndSet(null, closeRestoringTasks(revokedRestoringTasks, revokedTaskChangelogs));
 
         return firstException.get();
     }
 
-    private RuntimeException suspendRunningTasks(final Set<TaskId> revokedRunningTasks,
-                                                 final List<TopicPartition> closedTaskChangelogs) {
+    private RuntimeException suspendRunningTasks(final Set<TaskId> runningTasksToSuspend,
+                                                 final List<TopicPartition> taskChangelogs) {
 
         final AtomicReference<RuntimeException> firstException = new AtomicReference<>(null);
         log.debug("Suspending running {} {}", taskTypeName, running.keySet());
 
-        for (final TaskId id : revokedRunningTasks) {
+        for (final TaskId id : runningTasksToSuspend) {
             final StreamTask task = running.get(id);
 
             try {
@@ -150,11 +152,7 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
                 running.remove(id);
                 runningByPartition.keySet().removeAll(task.partitions());
                 runningByPartition.keySet().removeAll(task.changelogPartitions());
-
-                // If suspending failed and we had to close the task, we should remove its changelogs
-                if (!suspended.containsKey(id)) {
-                    closedTaskChangelogs.addAll(task.changelogPartitions());
-                }
+                taskChangelogs.addAll(task.changelogPartitions());
             }
         }
 
@@ -163,47 +161,29 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
         return firstException.get();
     }
 
-    private RuntimeException closeNonRunningTasks(final Set<TaskId> revokedNonRunningTasks,
-                                                  final List<TopicPartition> revokedTaskChangelogs) {
-        log.debug("Closing the created but not initialized {} {}", taskTypeName, revokedNonRunningTasks);
+    private RuntimeException closeNonRunningTasks(final Set<TaskId> nonRunningTasksToClose,
+                                                  final List<TopicPartition> closedTaskChangelogs) {
+        log.debug("Closing the created but not initialized {} {}", taskTypeName, nonRunningTasksToClose);
         final AtomicReference<RuntimeException> firstException = new AtomicReference<>();
 
-        for (final TaskId id : revokedNonRunningTasks) {
+        for (final TaskId id : nonRunningTasksToClose) {
             final StreamTask task = created.get(id);
-            firstException.compareAndSet(null, closeNonRunning(false, task, revokedTaskChangelogs));
+            firstException.compareAndSet(null, closeNonRunning(false, task, closedTaskChangelogs));
         }
 
         return firstException.get();
     }
 
-    RuntimeException closeRestoringTasks(final Set<TaskId> revokedRestoringTasks,
-                                         final List<TopicPartition> revokedChangelogs) {
-        log.debug("Closing restoring stream tasks {}", revokedRestoringTasks);
+    RuntimeException closeRestoringTasks(final Set<TaskId> restoringTasksToClose,
+                                         final List<TopicPartition> closedTaskChangelogs) {
+        log.debug("Closing restoring stream tasks {}", restoringTasksToClose);
         final AtomicReference<RuntimeException> firstException = new AtomicReference<>();
 
-        for (final TaskId id : revokedRestoringTasks) {
+        for (final TaskId id : restoringTasksToClose) {
             final StreamTask task = restoring.get(id);
-            firstException.compareAndSet(null, closeRestoring(false, task, revokedChangelogs));
+            firstException.compareAndSet(null, closeRestoring(false, task, closedTaskChangelogs));
         }
 
-        return firstException.get();
-    }
-
-    RuntimeException closeRevokedSuspendedTasks(final Set<TaskId> revokedTasks,
-                                                final List<TopicPartition> revokedTaskChangelogs) {
-        log.debug("Closing the revoked active tasks {} {}", taskTypeName, revokedTasks);
-        final AtomicReference<RuntimeException> firstException = new AtomicReference<>(null);
-
-        for (final TaskId revokedTask : revokedTasks) {
-            final StreamTask suspendedTask = suspended.get(revokedTask);
-
-            // task may not be in the suspended tasks if it was closed due to some error
-            if (suspendedTask != null) {
-                firstException.compareAndSet(null, closeSuspended(false, suspendedTask, revokedTaskChangelogs));
-            } else {
-                log.debug("Revoked task {} could not be found in suspended, may have already been closed", revokedTask);
-            }
-        }
         return firstException.get();
     }
 
@@ -280,6 +260,24 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
         return null;
     }
 
+    RuntimeException closeNotAssignedSuspendedTasks(final Set<TaskId> revokedTasks,
+                                                    final List<TopicPartition> revokedTaskChangelogs) {
+        log.debug("Closing the revoked active tasks {} {}", taskTypeName, revokedTasks);
+        final AtomicReference<RuntimeException> firstException = new AtomicReference<>(null);
+
+        for (final TaskId revokedTask : revokedTasks) {
+            final StreamTask suspendedTask = suspended.get(revokedTask);
+
+            // task may not be in the suspended tasks if it was closed due to some error
+            if (suspendedTask != null) {
+                firstException.compareAndSet(null, closeSuspended(false, suspendedTask, revokedTaskChangelogs));
+            } else {
+                log.debug("Revoked task {} could not be found in suspended, may have already been closed", revokedTask);
+            }
+        }
+        return firstException.get();
+    }
+
     RuntimeException closeZombieTasks(final Set<TaskId> lostTasks, final List<TopicPartition> lostTaskChangelogs) {
         final AtomicReference<RuntimeException> firstException = new AtomicReference<>(null);
 
@@ -314,8 +312,8 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
      * @throws TaskMigratedException if the task producer got fenced (EOS only)
      */
     boolean maybeResumeSuspendedTask(final TaskId taskId,
-        final Set<TopicPartition> partitions,
-        final List<TopicPartition> changelogsToBeRemovedDueToFailure) {
+                                     final Set<TopicPartition> partitions,
+                                     final List<TopicPartition> changelogsToBeRemovedDueToFailure) {
         if (suspended.containsKey(taskId)) {
             final StreamTask task = suspended.get(taskId);
             log.trace("Found suspended {} {}", taskTypeName, taskId);

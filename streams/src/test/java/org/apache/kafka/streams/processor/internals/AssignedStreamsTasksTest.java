@@ -183,7 +183,7 @@ public class AssignedStreamsTasksTest {
         EasyMock.replay(t1);
 
         assignedTasks.addNewTask(t1);
-        assertThat(assignedTasks.revokeTasks(assignedTasks.allAssignedTaskIds(), revokedChangelogs), nullValue());
+        assertThat(assignedTasks.suspendOrCloseTasks(assignedTasks.allAssignedTaskIds(), revokedChangelogs), nullValue());
 
         EasyMock.verify(t1);
     }
@@ -194,7 +194,7 @@ public class AssignedStreamsTasksTest {
         EasyMock.replay(t1);
 
         assertThat(suspendTask(), nullValue());
-        assertThat(assignedTasks.revokeTasks(assignedTasks.allAssignedTaskIds(), revokedChangelogs), nullValue());
+        assertThat(assignedTasks.suspendOrCloseTasks(assignedTasks.allAssignedTaskIds(), revokedChangelogs), nullValue());
         EasyMock.verify(t1);
     }
 
@@ -536,7 +536,7 @@ public class AssignedStreamsTasksTest {
 
         assignedTasks.addNewTask(task);
         assignedTasks.initializeNewTasks();
-        assertNull(assignedTasks.revokeTasks(assignedTasks.allAssignedTaskIds(), revokedChangelogs));
+        assertNull(assignedTasks.suspendOrCloseTasks(assignedTasks.allAssignedTaskIds(), revokedChangelogs));
 
         assignedTasks.close(true);
     }
@@ -548,7 +548,7 @@ public class AssignedStreamsTasksTest {
 
     private RuntimeException suspendTask() {
         addAndInitTask();
-        return assignedTasks.revokeTasks(assignedTasks.allAssignedTaskIds(), revokedChangelogs);
+        return assignedTasks.suspendOrCloseTasks(assignedTasks.allAssignedTaskIds(), revokedChangelogs);
     }
 
     private void mockRunningTaskSuspension() {
