@@ -94,21 +94,11 @@ public class StopReplicaRequest extends AbstractControlRequest {
     }
 
     private final StopReplicaRequestData data;
-    private final Collection<TopicPartition> topicPartitions;
+    private volatile Collection<TopicPartition> partitions;
 
     private StopReplicaRequest(StopReplicaRequestData data, short version) {
         super(ApiKeys.STOP_REPLICA, version);
         this.data = data;
-        Stream<TopicPartition> partitionStream;
-        if (version == 0) {
-            partitionStream = data.partitionsV0().stream()
-                    .map(tp -> new TopicPartition(tp.topicName(), tp.partitionIndex()));
-        } else {
-            partitionStream = data.topics().stream().flatMap(topic ->
-                topic.partitionIndexes().stream().map(partitionIndex -> new TopicPartition(topic.name(), partitionIndex))
-            );
-        }
-        topicPartitions = Collections.unmodifiableList(partitionStream.collect(Collectors.toList()));
     }
 
     public StopReplicaRequest(Struct struct, short version) {
@@ -122,7 +112,7 @@ public class StopReplicaRequest extends AbstractControlRequest {
         StopReplicaResponseData data = new StopReplicaResponseData();
         data.setErrorCode(error.code());
         List<StopReplicaPartitionError> partitions = new ArrayList<>();
-        for (TopicPartition tp : topicPartitions) {
+        for (TopicPartition tp : partitions()) {
             partitions.add(new StopReplicaPartitionError()
                 .setTopicName(tp.topic())
                 .setPartitionIndex(tp.partition()));
@@ -145,7 +135,23 @@ public class StopReplicaRequest extends AbstractControlRequest {
     }
 
     public Collection<TopicPartition> partitions() {
-        return topicPartitions;
+        if (partitions == null) {
+            synchronized (data) {
+                if (partitions == null) {
+                    Stream<TopicPartition> partitionStream;
+                    if (version() == 0) {
+                        partitionStream = data.partitionsV0().stream().map(tp ->
+                            new TopicPartition(tp.topicName(), tp.partitionIndex()));
+                    } else {
+                        partitionStream = data.topics().stream().flatMap(topic ->
+                            topic.partitionIndexes().stream().map(partitionIndex -> new TopicPartition(topic.name(), partitionIndex))
+                        );
+                    }
+                    partitions = Collections.unmodifiableList(partitionStream.collect(Collectors.toList()));
+                }
+            }
+        }
+        return partitions;
     }
 
     @Override
