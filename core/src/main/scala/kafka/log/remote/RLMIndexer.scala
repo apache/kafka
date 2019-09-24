@@ -35,7 +35,7 @@ class RLMIndexer(rsm: RemoteStorageManager, logFetcher: TopicPartition => Option
 
   def lookupLastOffset(tp: TopicPartition): Option[Long] = {
     val remoteIndex = maybeLoadIndex(tp)
-    if (remoteIndex != null) remoteIndex.currentLastOffset else None
+    if (remoteIndex != null) remoteIndex.lastOffset else None
   }
 
   def lookupEntryForOffset(tp: TopicPartition, offset: Long): Option[RemoteLogIndexEntry] = {
@@ -49,7 +49,7 @@ class RLMIndexer(rsm: RemoteStorageManager, logFetcher: TopicPartition => Option
    * @return the offset of the topic-partition that is already indexed if it has done earlier, else it returns -1.
    */
   def getOrLoadIndexOffset(tp: TopicPartition): Option[Long] = {
-    maybeLoadIndex(tp).currentStartOffset
+    maybeLoadIndex(tp).startOffset
   }
 
   def maybeLoadIndex(tp: TopicPartition): TopicPartitionRemoteIndex = {

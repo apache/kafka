@@ -195,7 +195,7 @@ class RemoteLogManager(fetchLog: TopicPartition => Option[Log],
               case _ => highWatermark
             }
             if (readOffset >= fetchOffset) {
-              info(s"Skipping building indexes, current read offset:$readOffset is more than committed/acked " +
+              info(s"Skipping building indexes, current read offset:$readOffset is >= committed/acked " +
                 s"message offset:$fetchOffset ")
               return
             }
@@ -224,7 +224,7 @@ class RemoteLogManager(fetchLog: TopicPartition => Option[Log],
                 val fileName = file.getName
                 val baseOffsetStr = fileName.substring(0, fileName.indexOf("."))
                 rlmIndexer.maybeBuildIndexes(tp, entries.asScala.toSeq, file.getParentFile, baseOffsetStr)
-                readOffset = entries.get(entries.size() - 1).lastOffset
+                readOffset = entries.get(entries.size() - 1).lastOffset + 1
               }
             }
           }
@@ -237,7 +237,7 @@ class RemoteLogManager(fetchLog: TopicPartition => Option[Log],
 
     def updateRemoteLogIndexes(): Unit = {
       try {
-        remoteStorageManager.listRemoteSegments(tp, readOffset).forEach(new Consumer[RemoteLogSegmentInfo] {
+        remoteStorageManager.listRemoteSegments(tp, readOffset + 1).forEach(new Consumer[RemoteLogSegmentInfo] {
           override def accept(rlsInfo: RemoteLogSegmentInfo): Unit = {
             val entries = remoteStorageManager.getRemoteLogIndexEntries(rlsInfo)
             if (!entries.isEmpty) {

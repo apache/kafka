@@ -33,9 +33,6 @@ import org.apache.kafka.common.utils.Utils
  *
  * Each remote log entry is represented with [[RemoteLogIndexEntry]]
  *
- * todo-satish: currently it is using a channel to store the entries. We may go with memory mapped file later to
- * read/write the entries. Need to add methods to fetch remote log offset for a given offset/timestamp.
- *
  */
 class RemoteLogIndex(_file: File, val startOffset: Long) extends CleanableIndex(_file) with Logging {
 
@@ -56,6 +53,10 @@ class RemoteLogIndex(_file: File, val startOffset: Long) extends CleanableIndex(
       val lastEntryPos = buffer.getLong()
       lookupEntry(lastEntryPos).map(x => x.lastOffset)
     } else None
+  }
+
+  def lastOffset: Option[Long] = {
+    _lastOffset
   }
 
   private var _lastOffset: Option[Long] = {
@@ -179,12 +180,12 @@ class RemoteLogIndex(_file: File, val startOffset: Long) extends CleanableIndex(
 object RemoteLogIndex {
   val SUFFIX = ".remoteLogIndex"
 
-  def offsetFromFileName(fileName: String): Long = {
+  def fileNamePrefix(fileName: String): String = {
     if (!fileName.endsWith(SUFFIX)) throw new IllegalArgumentException("file name should end with " + SUFFIX)
-    fileName.substring(0, fileName.lastIndexOf('.')).toLong
+    fileName.substring(0, fileName.lastIndexOf('.'))
   }
 
   def open(file: File): RemoteLogIndex = {
-    new RemoteLogIndex(file, offsetFromFileName(file.getName))
+    new RemoteLogIndex(file, fileNamePrefix(file.getName).toLong)
   }
 }

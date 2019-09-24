@@ -55,25 +55,31 @@ class TopicPartitionRemoteIndex(val topicPartition: TopicPartition, logDir: File
 
   private val remoteSegmentIndexes: ConcurrentNavigableMap[Long, RemoteSegmentIndex] = new ConcurrentSkipListMap[Long, RemoteSegmentIndex]()
 
-  @volatile private var _currentStartOffset: Option[Long] = None
-  @volatile private var _currentLastOffset: Option[Long] = None
+  @volatile private var _startOffset: Option[Long] = None
+  @volatile private var _lastBatchStartOffset: Option[Long] = None
+  @volatile private var _lastOffset: Option[Long] = None
 
   private val lock = new ReentrantLock()
 
-  def currentStartOffset: Option[Long] = {
-    _currentStartOffset
+  def startOffset: Option[Long] = {
+    _startOffset
   }
 
-  def currentLastOffset: Option[Long] = {
-    _currentLastOffset
+  def lastBatchStartOffset: Option[Long] = {
+    _lastBatchStartOffset
+  }
+
+  def lastOffset: Option[Long] = {
+    _lastOffset
   }
 
   private def addIndex(offset: Long, remoteLogIndex: RemoteLogIndex, remoteOffsetIndex: OffsetIndex,
                        remoteTimestampIndex: TimeIndex): Unit = {
     CoreUtils.inLock(lock) {
       remoteSegmentIndexes.put(offset, RemoteSegmentIndex(remoteOffsetIndex, remoteTimestampIndex, remoteLogIndex))
-      _currentStartOffset = Some(offset)
-      _currentLastOffset = Some(remoteOffsetIndex.lastOffset)
+      if(_startOffset.isEmpty) _startOffset = Some(offset)
+      _lastBatchStartOffset = Some(offset)
+      _lastOffset = remoteLogIndex.lastOffset
     }
   }
 
@@ -116,25 +122,24 @@ class TopicPartitionRemoteIndex(val topicPartition: TopicPartition, logDir: File
     val baseOffset = baseOffsetStr.toLong
     require(baseOffset >= 0, "baseOffsetStr must not be a negative number")
 
-    val firstOffset = entries.head.firstOffset
-    val lastOffset = entries.last.lastOffset
-    if (baseOffset > firstOffset) throw new IllegalArgumentException(
+    val firstEntryOffset = entries.head.firstOffset
+    val lastEntryOffset = entries.last.lastOffset
+    if (baseOffset > firstEntryOffset) throw new IllegalArgumentException(
       s"base offset '$baseOffsetStr' can not be greater than start off set of the given entry $baseOffset'")
 
     CoreUtils.inLock(lock) {
       val resultantStartOffset: Long =
-        if (currentStartOffset.isDefined) {
-          if (lastOffset <= currentLastOffset.get) -1 // this means all the entries are already covered with the existing entries in index.
+        if (lastBatchStartOffset.isDefined) {
+          if (lastEntryOffset <= lastOffset.get) -1 // this means all the entries are already covered with the existing entries in index.
           else {
-            //
-            if (baseOffset > currentLastOffset.get) baseOffset else Math.max(firstOffset, currentLastOffset.get)
+            if (baseOffset > lastOffset.get) baseOffset else Math.max(firstEntryOffset, lastOffset.get)
           }
         } else {
           baseOffset
         }
 
-      logger.info(s"resultantStartOffset computed is '$resultantStartOffset' with firstOffset: '$firstOffset', " +
-        s"lastOffset : '$lastOffset', currentStartOffset: $currentStartOffset , currentStartOffset: '$currentStartOffset'")
+      logger.info(s"resultantStartOffset computed is '$resultantStartOffset' with firstEntryOffset: '$firstEntryOffset', " +
+        s"lastEntryOffset : '$lastEntryOffset', lastBatchStartOffset: $lastBatchStartOffset startOffset: $startOffset")
 
       if (resultantStartOffset >= 0) {
         val resultantStartOffsetStr = Log.filenamePrefixFromOffset(resultantStartOffset)
@@ -200,7 +205,9 @@ object TopicPartitionRemoteIndex {
     val entry: TopicPartitionRemoteIndex = new TopicPartitionRemoteIndex(tp, logDir)
 
     Files.list(logDir.toPath).filter(new Predicate[Path] {
-      override def test(filePath: Path): Boolean = filePath !=null && filePath.endsWith(RemoteLogIndex.SUFFIX)
+      // `endsWith` should be checked on `filePath.toString` instead of `filePath` as that would check
+      // Path#endsWith which has respective Path semantics instead of simple string comparision.
+      override def test(filePath: Path): Boolean = filePath !=null && filePath.toString.endsWith(RemoteLogIndex.SUFFIX)
     }).sorted(new Comparator[Path] {
       override def compare(path1: Path, path2: Path): Int = {
         val fileName1 = path1.getFileName
@@ -212,11 +219,11 @@ object TopicPartitionRemoteIndex {
     }).forEach(new Consumer[Path] {
       override def accept(remoteLogIndexPath: Path): Unit = {
         val file = remoteLogIndexPath.toFile
-        val prefix = RemoteLogIndex.offsetFromFileName(file.getName)
+        val prefix = RemoteLogIndex.fileNamePrefix(file.getName)
         val offset = prefix.toLong
         val remoteLogIndex = RemoteLogIndex.open(file)
         val offsetIndex = new OffsetIndex(new File(logDir, prefix + REMOTE_OFFSET_INDEX_SUFFIX), offset)
-        val timeIndex = new TimeIndex(new File(logDir, prefix + REMOTE_TIME_INDEX_SUFFIX), prefix.toLong)
+        val timeIndex = new TimeIndex(new File(logDir, prefix + REMOTE_TIME_INDEX_SUFFIX), offset)
 
         entry.addIndex(offset, remoteLogIndex, offsetIndex, timeIndex)
       }

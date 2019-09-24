@@ -32,41 +32,59 @@ import scala.collection.mutable.ListBuffer
 
 class TopicPartitionRemoteIndexTest extends JUnitSuite with Logging {
 
+  private val partition = new TopicPartition("topic", 0)
+
+  @Test
+  def testExistingIndexes() : Unit = {
+    val dir = new File("/tmp/kafka-logs/drivers-0")
+    val topicPartitionRemoteIndex = TopicPartitionRemoteIndex.open(partition, dir)
+    val lastOffset = topicPartitionRemoteIndex.lastOffset
+    assert(lastOffset.get > 0)
+  }
+
   @Test
   def testAppendLookupIndexWithBase(): Unit = {
     val entriesCt = 10
     val offsetStep = 100
-    val dir = TestUtils.tempDir()
-    val rlmIndex = TopicPartitionRemoteIndex.open(new TopicPartition("topic", 0), dir)
+//    val dir = TestUtils.tempDir()
+    val dir = new File("/tmp/kafka-logs/drivers-0")
+    val topicPartitionRemoteIndex = TopicPartitionRemoteIndex.open(partition, dir)
 
     // check for baseOffset with 0
-    doTestIndexes(entriesCt, offsetStep, 0L, dir, rlmIndex)
+    doTestIndexes(entriesCt, offsetStep, 0L, dir, topicPartitionRemoteIndex)
 
     // check for baseOffset with 10000
-    doTestIndexes(entriesCt, offsetStep, 10000L, dir, rlmIndex)
+    doTestIndexes(entriesCt, offsetStep, 10000L, dir, topicPartitionRemoteIndex)
+
+    // reopen the index and check whether offsets are defined.
+    val partitionRemoteIndex = TopicPartitionRemoteIndex.open(partition, dir)
+
+    assertEquals(0L, partitionRemoteIndex.startOffset.get)
+    assertEquals(10000L, partitionRemoteIndex.lastBatchStartOffset.get)
+    assertEquals(10900L, partitionRemoteIndex.lastOffset.get)
   }
 
   @Test
   def testNegativeOffset(): Unit = {
     val dir = TestUtils.tempDir()
-    val rlmIndex = TopicPartitionRemoteIndex.open(new TopicPartition("topic", 0), dir)
+    val topicPartitionRemoteIndex = TopicPartitionRemoteIndex.open(partition, dir)
 
-    assertThrows[IllegalArgumentException](doTestIndexes(10, 50, -1L, dir, rlmIndex))
+    assertThrows[IllegalArgumentException](doTestIndexes(10, 50, -1L, dir, topicPartitionRemoteIndex))
   }
 
   private def doTestIndexes(entriesCt: Int, offsetStep: Integer, baseOffset: Long, dir: File,
-                            rlmIndex: TopicPartitionRemoteIndex) = {
+                            partitionRemoteIndex: TopicPartitionRemoteIndex) = {
     val entries = generateEntries(entriesCt, offsetStep, baseOffset)
-    rlmIndex.appendEntries(entries, baseOffset.toString)
+    partitionRemoteIndex.appendEntries(entries, baseOffset.toString)
 
-    entries.foreach(entry => assertEquals(entry, rlmIndex.lookupEntryForOffset(entry.firstOffset).get))
+    entries.foreach(entry => assertEquals(entry, partitionRemoteIndex.lookupEntryForOffset(entry.firstOffset).get))
   }
 
   @Test
   def testConcurrentAppendLookupsInIndex(): Unit = {
     val threadCt = 64
     val dir = TestUtils.tempDir()
-    val rlmIndex = TopicPartitionRemoteIndex.open(new TopicPartition("topic", 0), dir)
+    val rlmIndex = TopicPartitionRemoteIndex.open(partition, dir)
     var lastOffset = 1000L
     val stepOffset = 100
     val entriesCt = 100000
@@ -110,7 +128,7 @@ class TopicPartitionRemoteIndexTest extends JUnitSuite with Logging {
   @Test
   def testCleanupIndexUntilOffset(): Unit = {
     val dir = TestUtils.tempDir()
-    val rlmIndex = TopicPartitionRemoteIndex.open(new TopicPartition("topic", 0), dir)
+    val rlmIndex = TopicPartitionRemoteIndex.open(partition, dir)
     List(100, 300, 500, 700, 900).foreach(x =>
       rlmIndex.appendEntries(generateEntries(100, 1, x), x.toString))
 

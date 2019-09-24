@@ -34,7 +34,7 @@ import scala.math.ceil
 /**
  * The abstract index class which holds entry format agnostic methods.
  *
- * @param file The index file
+ * @param _file The index file
  * @param baseOffset the base offset of the segment that this index is corresponding to.
  * @param maxIndexSize The maximum index size in bytes.
  */
