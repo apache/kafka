@@ -79,7 +79,7 @@ public class StopReplicaResponseTest {
         String responseStr = response.toString();
         assertTrue(responseStr.contains(StopReplicaResponse.class.getSimpleName()));
         assertTrue(responseStr.contains(errors.toString()));
-        assertTrue(responseStr.contains(Errors.NONE.name()));
+        assertTrue(responseStr.contains("errorCode=" + Errors.NONE.code()));
     }
 
 }
