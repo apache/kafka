@@ -159,8 +159,6 @@ object Partition extends KafkaMetricsGroup {
 sealed abstract class AssignmentState {
   def originalReplicas: Seq[Int]
   def inSyncReplicas: Set[Int]
-
-  def isBrokerInIsr(brokerId: Int): Boolean = inSyncReplicas.contains(brokerId)
 }
 
 case class OngoingReassignmentState(addingReplicas: Seq[Int],
@@ -648,7 +646,7 @@ class Partition(val topicPartition: TopicPartition,
 
         // check if we need to expand ISR to include this replica
         // if it is not in the ISR yet
-        if (!inSyncReplicaIds(followerId))
+        if (!assignmentState.inSyncReplicas(followerId))
           maybeExpandIsr(followerReplica, followerFetchTimeMs)
 
         // check if the HW of the partition can now be incremented
@@ -719,7 +717,7 @@ class Partition(val topicPartition: TopicPartition,
       // check if this replica needs to be added to the ISR
       leaderLogIfLocal.foreach { leaderLog =>
         val leaderHighwatermark = leaderLog.highWatermark
-        if (!assignmentState.isBrokerInIsr(followerReplica.brokerId) && isFollowerInSync(followerReplica, leaderHighwatermark)) {
+        if (!assignmentState.inSyncReplicas(followerReplica.brokerId) && isFollowerInSync(followerReplica, leaderHighwatermark)) {
           val newInSyncReplicaIds = assignmentState.inSyncReplicas + followerReplica.brokerId
           info(s"Expanding ISR from ${assignmentState.inSyncReplicas.mkString(",")} " +
             s"to ${newInSyncReplicaIds.mkString(",")}")
@@ -807,7 +805,7 @@ class Partition(val topicPartition: TopicPartition,
       var newHighWatermark = leaderLog.logEndOffsetMetadata
       remoteReplicasMap.values.foreach { replica =>
         if (replica.logEndOffsetMetadata.messageOffset < newHighWatermark.messageOffset &&
-          (curTime - replica.lastCaughtUpTimeMs <= replicaLagTimeMaxMs || assignmentState.isBrokerInIsr(replica.brokerId))) {
+          (curTime - replica.lastCaughtUpTimeMs <= replicaLagTimeMaxMs || assignmentState.inSyncReplicas(replica.brokerId))) {
           newHighWatermark = replica.logEndOffsetMetadata
         }
       }
@@ -1212,8 +1210,7 @@ class Partition(val topicPartition: TopicPartition,
     zkVersionOpt match {
       case Some(newVersion) =>
         assignmentState match {
-          case SimpleAssignmentState(replicas, _) =>
-            assignmentState = SimpleAssignmentState(replicas, isr)
+          case SimpleAssignmentState(replicas, _) => assignmentState = SimpleAssignmentState(replicas, isr)
           case OngoingReassignmentState(adding, removing, origRepl, _) =>
             assignmentState = OngoingReassignmentState(adding, removing, origRepl, isr)
         }

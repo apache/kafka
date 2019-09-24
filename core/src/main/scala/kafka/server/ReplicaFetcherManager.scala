@@ -36,13 +36,11 @@ class ReplicaFetcherManager(brokerConfig: KafkaConfig,
         numFetchers = brokerConfig.numReplicaFetchers) {
 
   newGauge(
-    "ReassignmentMaxLag",
+    "ReassignmentMaxLagOnFollower",
     new Gauge[Long] {
       // current max lag across all fetchers/topics/partitions
-      println("Calculating reassignmentMaxLag")
       def value: Long = fetcherThreadMap.foldLeft(0L)((curMaxAll, fetcherThreadMapEntry) => {
         val replicaMgr = fetcherThreadMapEntry._2.replicaManager
-        println(s"curMaxAll: $curMaxAll")
         fetcherThreadMapEntry._2.fetcherLagStats.stats.foldLeft(0L)((curMaxThread, fetcherLagStatsEntry) => {
           val partitionAndLagMetrics = replicaMgr.getPartition(fetcherLagStatsEntry._1.topicPartition) match {
             case HostedPartition.Online(p) => Some(p -> fetcherLagStatsEntry._2)

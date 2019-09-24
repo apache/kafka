@@ -18,7 +18,7 @@ package kafka.server
 
 import java.io.File
 import java.util.Optional
-import java.util.concurrent.TimeUnit
+import java.util.concurrent.{ConcurrentHashMap, TimeUnit}
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicLong}
 import java.util.concurrent.locks.Lock
 
@@ -272,6 +272,19 @@ class ReplicaManager(val config: KafkaConfig,
       def value = leaderPartitionsIterator.count(p => p.isLeader && p.isReassigning)
     }
   )
+
+  private val fetcherLagStats = new FollowerLagStats()
+  val reassignmentMaxLagOnLeader = newGauge(
+    "ReassignmentMaxLagOnLeader",
+    new Gauge[Long] {
+      def value = fetcherLagStats.maxLag()
+    }
+  )
+
+  // Visible for testing
+  def fetchersMaxLag(): Unit = {
+    fetcherLagStats.maxLag()
+  }
 
   val isrExpandRate: Meter = newMeter("IsrExpandsPerSec", "expands", TimeUnit.SECONDS)
   val isrShrinkRate: Meter = newMeter("IsrShrinksPerSec", "shrinks", TimeUnit.SECONDS)
@@ -1158,6 +1171,7 @@ class ReplicaManager(val config: KafkaConfig,
       } else {
         val deletedPartitions = metadataCache.updateMetadata(correlationId, updateMetadataRequest)
         controllerEpoch = updateMetadataRequest.controllerEpoch
+        fetcherLagStats.removeStats(deletedPartitions)
         deletedPartitions
       }
     }
@@ -1255,6 +1269,9 @@ class ReplicaManager(val config: KafkaConfig,
             highWatermarkCheckpoints)
         else
           Set.empty[Partition]
+
+        fetcherLagStats.removeStats((partitionsBecomeFollower ++ partitionsBecomeLeader).filter(!_.isReassigning)
+          .asInstanceOf[Traversable[TopicPartition]])
 
         /*
          * KAFKA-8392
@@ -1566,6 +1583,10 @@ class ReplicaManager(val config: KafkaConfig,
               followerStartOffset = readResult.followerLogStartOffset,
               followerFetchTimeMs = readResult.fetchTimeMs,
               leaderEndOffset = readResult.leaderLogEndOffset)) {
+              if (partition.isAddingReplica(followerId)) {
+                fetcherLagStats.updateLag(partition.topicPartition, Math.max(0L, readResult.highWatermark - readResult.info.fetchOffsetMetadata.messageOffset))
+                println(s"lag: ${fetcherLagStats.maxLag}; HW: ${readResult.highWatermark}; leaderLOE: ${readResult.leaderLogEndOffset}; fetchOffset: ${readResult.info.fetchOffsetMetadata.messageOffset}; diff: ${readResult.leaderLogEndOffset - readResult.info.fetchOffsetMetadata.messageOffset}")
+              }
               readResult
             } else {
               warn(s"Leader $localBrokerId failed to record follower $followerId's position " +
@@ -1765,4 +1786,25 @@ class ReplicaManager(val config: KafkaConfig,
 
     controller.electLeaders(partitions, electionType, electionCallback)
   }
+
+  class FollowerLagStats {
+    private val lagStats = new ConcurrentHashMap[TopicPartition, Long]()
+
+    def updateLag(partition: TopicPartition, lag: Long): Unit = {
+      lagStats.put(partition, lag)
+    }
+
+    def maxLag(): Long = {
+      lagStats.asScala.foldLeft(0L)((maxLagAll, entry) => entry._2.max(maxLagAll))
+    }
+
+    def resetLag(): Unit = {
+      lagStats.clear()
+    }
+
+    def removeStats(traversable: Traversable[TopicPartition]): Unit = {
+      traversable.foreach(tp => lagStats.remove(tp))
+    }
+  }
+
 }
