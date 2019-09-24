@@ -299,7 +299,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
           case Some(authZ) =>
             authZ.start(brokerInfo.broker.toServerInfo(clusterId, config)).asScala.mapValues(_.toCompletableFuture).toMap
           case None =>
-            brokerInfo.broker.endPoints.map{ ep => (ep.asInstanceOf[Endpoint], CompletableFuture.completedFuture[Void](null)) }.toMap
+            brokerInfo.broker.endPoints.map { ep => ep.toJava -> CompletableFuture.completedFuture[Void](null) }.toMap
         }
 
         val fetchManager = new FetchManager(Time.SYSTEM,

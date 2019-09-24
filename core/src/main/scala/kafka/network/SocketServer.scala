@@ -22,6 +22,7 @@ import java.net._
 import java.nio.channels._
 import java.nio.channels.{Selector => NSelector}
 import java.util
+import java.util.Optional
 import java.util.concurrent._
 import java.util.concurrent.atomic._
 import java.util.function.Supplier
@@ -209,9 +210,9 @@ class SocketServer(val config: KafkaConfig,
       dataPlaneAcceptors.asScala.filterKeys(_ != interBrokerListener).values
     orderedAcceptors.foreach { acceptor =>
       val endpoint = acceptor.endPoint
-      debug(s"Wait for authorizer to complete start up on listener ${endpoint.listener}")
+      debug(s"Wait for authorizer to complete start up on listener ${endpoint.listenerName}")
       waitForAuthorizerFuture(acceptor, authorizerFutures)
-      debug(s"Start processors on listener ${endpoint.listener}")
+      debug(s"Start processors on listener ${endpoint.listenerName}")
       acceptor.startProcessors(DataPlaneThreadPrefix)
     }
     info(s"Started data-plane processors for ${dataPlaneAcceptors.size} acceptors")
@@ -382,7 +383,7 @@ class SocketServer(val config: KafkaConfig,
                                       authorizerFutures: Map[Endpoint, CompletableFuture[Void]]): Unit = {
     //we can't rely on authorizerFutures.get() due to ephemeral ports. Get the future using listener name
     authorizerFutures.foreach { case (endpoint, future) =>
-      if (endpoint.listener() == acceptor.endPoint.listener())
+      if (endpoint.listenerName == Optional.of(acceptor.endPoint.listenerName.value))
         future.join()
     }
   }
