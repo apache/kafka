@@ -136,12 +136,11 @@ public class TaskManager {
     private void resumeSuspended(final Collection<TopicPartition> assignment) {
         final Set<TaskId> suspendedTasks = partitionsToTaskSet(assignment);
         suspendedTasks.removeAll(addedActiveTasks.keySet());
-        final List<TopicPartition> closedTaskChangelogs = new ArrayList<>();
 
         for (final TaskId taskId : suspendedTasks) {
             final Set<TopicPartition> partitions = assignedActiveTasks.get(taskId);
             try {
-                if (!active.maybeResumeSuspendedTask(taskId, partitions, closedTaskChangelogs)) {
+                if (!active.maybeResumeSuspendedTask(taskId, partitions)) {
                     // recreate if resuming the suspended task failed because the associated partitions changed
                     addedActiveTasks.put(taskId, partitions);
                 }
@@ -150,9 +149,6 @@ public class TaskManager {
                 throw e;
             }
         }
-        // remove any changelog partitions from tasks that failed to resume due to changed partitions
-        changelogReader.remove(closedTaskChangelogs);
-        removeChangelogsFromRestoreConsumer(closedTaskChangelogs, false);
     }
 
     private void addNewActiveTasks(final Map<TaskId, Set<TopicPartition>> newActiveTasks) {

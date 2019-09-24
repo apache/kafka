@@ -246,7 +246,7 @@ public class AssignedStreamsTasksTest {
 
         assertThat(suspendTask(), nullValue());
 
-        assertTrue(assignedTasks.maybeResumeSuspendedTask(taskId1, Collections.singleton(tp1), Collections.emptyList()));
+        assertTrue(assignedTasks.maybeResumeSuspendedTask(taskId1, Collections.singleton(tp1)));
         assertThat(assignedTasks.runningTaskIds(), equalTo(Collections.singleton(taskId1)));
         EasyMock.verify(t1);
     }
@@ -264,7 +264,7 @@ public class AssignedStreamsTasksTest {
         assertThat(suspendTask(), nullValue());
 
         try {
-            assignedTasks.maybeResumeSuspendedTask(taskId1, Collections.singleton(tp1), Collections.emptyList());
+            assignedTasks.maybeResumeSuspendedTask(taskId1, Collections.singleton(tp1));
             fail("Should have thrown TaskMigratedException.");
         } catch (final TaskMigratedException expected) { /* ignore */ }
 

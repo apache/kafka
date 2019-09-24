@@ -274,7 +274,7 @@ public class TaskManagerTest {
     @Test
     public void shouldAddNonResumedSuspendedTasks() {
         mockSingleActiveTask();
-        expect(active.maybeResumeSuspendedTask(taskId0, taskId0Partitions, Collections.emptyList())).andReturn(false);
+        expect(active.maybeResumeSuspendedTask(taskId0, taskId0Partitions)).andReturn(false);
         active.addNewTask(EasyMock.same(streamTask));
         replay();
 
@@ -303,7 +303,7 @@ public class TaskManagerTest {
     @Test
     public void shouldNotAddResumedActiveTasks() {
         checkOrder(active, true);
-        expect(active.maybeResumeSuspendedTask(taskId0, taskId0Partitions, Collections.emptyList())).andReturn(true);
+        expect(active.maybeResumeSuspendedTask(taskId0, taskId0Partitions)).andReturn(true);
         replay();
 
         // Need to call this twice so task manager doesn't consider all partitions "new"

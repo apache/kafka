@@ -308,8 +308,7 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
      * @throws TaskMigratedException if the task producer got fenced (EOS only)
      */
     boolean maybeResumeSuspendedTask(final TaskId taskId,
-                                     final Set<TopicPartition> partitions,
-                                     final List<TopicPartition> changelogsToBeRemovedDueToFailure) {
+                                     final Set<TopicPartition> partitions) {
         if (suspended.containsKey(taskId)) {
             final StreamTask task = suspended.get(taskId);
             log.trace("Found suspended {} {}", taskTypeName, taskId);
@@ -337,7 +336,6 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
             } else {
                 log.warn("Couldn't resume task {} assigned partitions {}, task partitions {}", taskId, partitions, task.partitions());
                 task.closeSuspended(true, false, null);
-                changelogsToBeRemovedDueToFailure.addAll(task.changelogPartitions());
             }
         }
         return false;
