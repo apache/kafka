@@ -57,7 +57,6 @@ class ProduceRequestTest extends BaseRequestTest {
       assertEquals(expectedOffset, partitionResponse.baseOffset)
       assertEquals(-1, partitionResponse.logAppendTime)
       assertTrue(partitionResponse.errorRecords.isEmpty)
-      assertTrue(partitionResponse.errorMessage.isEmpty)
       partitionResponse
     }
 
