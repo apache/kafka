@@ -52,8 +52,8 @@ public class StreamsRebalanceListener implements ConsumerRebalanceListener {
                 "\tpreviously assigned standby tasks: {}\n",
             streamThread.state(),
             assignedPartitions,
-            taskManager.activeTaskIds(),
-            taskManager.standbyTaskIds());
+            taskManager.previousActiveTaskIds(),
+            taskManager.previousStandbyTaskIds());
 
         if (streamThread.getAssignmentErrorCode() == AssignorError.INCOMPLETE_SOURCE_TOPIC_METADATA.code()) {
             log.error("Received error code {} - shutdown", streamThread.getAssignmentErrorCode());
@@ -64,8 +64,6 @@ public class StreamsRebalanceListener implements ConsumerRebalanceListener {
         final long start = time.milliseconds();
         List<TopicPartition> revokedStandbyPartitions = null;
 
-        // save these before they are updated with new assignment
-        final Set<TaskId> previousActiveTaskIds = new HashSet<>(taskManager.previousActiveTaskIds());
         try {
             if (streamThread.setState(State.PARTITIONS_ASSIGNED) == null) {
                 log.debug(
@@ -94,23 +92,23 @@ public class StreamsRebalanceListener implements ConsumerRebalanceListener {
                 streamThread.clearStandbyRecords(revokedStandbyPartitions);
             }
             log.info("partition assignment took {} ms.\n" +
-                    "\tcurrent active tasks: {}\n" +
-                    "\tcurrent standby tasks: {}\n" +
-                    "\tprevious active tasks: {}\n" +
+                    "\tcurrently assigned active tasks: {}\n" +
+                    "\tcurrently assigned standby tasks: {}\n" +
+                    "\trevoked active tasks: {}\n" +
                     "\trevoked standby tasks: {}\n",
                 time.milliseconds() - start,
                 taskManager.activeTaskIds(),
                 taskManager.standbyTaskIds(),
-                previousActiveTaskIds,
+                taskManager.revokedActiveTaskIds(),
                 taskManager.revokedStandbyTaskIds());
         }
     }
 
     @Override
     public void onPartitionsRevoked(final Collection<TopicPartition> revokedPartitions) {
-        log.debug("Current state {}: revoked partitions {} at the beginning of consumer rebalance.\n" +
-                "\tcurrent assigned active tasks: {}\n" +
-                "\tcurrent assigned standby tasks: {}\n",
+        log.debug("Current state {}: revoked partitions {} because of consumer rebalance.\n" +
+                "\tcurrently assigned active tasks: {}\n" +
+                "\tcurrently assigned standby tasks: {}\n",
             streamThread.state(),
             revokedPartitions,
             taskManager.activeTaskIds(),
@@ -131,7 +129,7 @@ public class StreamsRebalanceListener implements ConsumerRebalanceListener {
                 streamThread.setRebalanceException(t);
             } finally {
                 log.info("partition revocation took {} ms.\n" +
-                        "\tsuspended active tasks: {}\n",
+                        "\tcurrent suspended active tasks: {}\n",
                     time.milliseconds() - start,
                     suspendedTasks);
             }

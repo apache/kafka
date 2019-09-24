@@ -222,7 +222,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         // 2. Task ids of previously running tasks
         // 3. Task ids of valid local states on the client's state directory.
 
-        final Set<TaskId> previousActiveTasks = taskManager.previousActiveTaskIds();
+        final Set<TaskId> previousActiveTasks = taskManager.previousRunningTaskIds();
         final Set<TaskId> standbyTasks = taskManager.cachedTasksIds();
         standbyTasks.removeAll(previousActiveTasks);
         final SubscriptionInfo data = new SubscriptionInfo(

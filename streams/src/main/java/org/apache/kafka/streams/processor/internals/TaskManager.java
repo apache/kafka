@@ -312,13 +312,30 @@ public class TaskManager {
         return standby.allAssignedTaskIds();
     }
 
+    Set<TaskId> revokedActiveTaskIds() {
+        return revokedActiveTasks.keySet();
+    }
 
     Set<TaskId> revokedStandbyTaskIds() {
         return revokedStandbyTasks.keySet();
     }
 
-    public Set<TaskId> previousActiveTaskIds() {
+    public Set<TaskId> previousRunningTaskIds() {
         return active.previousRunningTaskIds();
+    }
+
+    Set<TaskId> previousActiveTaskIds() {
+        final HashSet<TaskId> previousActiveTasks = new HashSet<>(assignedActiveTasks.keySet());
+        previousActiveTasks.addAll(revokedActiveTasks.keySet());
+        previousActiveTasks.removeAll(addedActiveTasks.keySet());
+        return previousActiveTasks;
+    }
+
+    Set<TaskId> previousStandbyTaskIds() {
+        final HashSet<TaskId> previousStandbyTasks = new HashSet<>(assignedStandbyTasks.keySet());
+        previousStandbyTasks.addAll(revokedStandbyTasks.keySet());
+        previousStandbyTasks.removeAll(addedStandbyTasks.keySet());
+        return previousStandbyTasks;
     }
 
     StreamTask activeTask(final TopicPartition partition) {

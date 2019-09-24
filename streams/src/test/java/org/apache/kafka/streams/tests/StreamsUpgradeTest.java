@@ -124,7 +124,7 @@ public class StreamsUpgradeTest {
             // 3. Task ids of valid local states on the client's state directory.
 
             final TaskManager taskManager = taskManger();
-            final Set<TaskId> previousActiveTasks = taskManager.previousActiveTaskIds();
+            final Set<TaskId> previousActiveTasks = taskManager.previousRunningTaskIds();
             final Set<TaskId> standbyTasks = taskManager.cachedTasksIds();
             standbyTasks.removeAll(previousActiveTasks);
             final FutureSubscriptionInfo data = new FutureSubscriptionInfo(
