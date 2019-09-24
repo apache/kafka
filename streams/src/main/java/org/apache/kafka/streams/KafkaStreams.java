@@ -141,7 +141,7 @@ public class KafkaStreams implements AutoCloseable {
     private final QueryableStoreProvider queryableStoreProvider;
     private final Admin adminClient;
 
-    private GlobalStreamThread globalStreamThread;
+    protected GlobalStreamThread globalStreamThread;
     private KafkaStreams.StateListener stateListener;
     private StateRestoreListener globalStateRestoreListener;
 
