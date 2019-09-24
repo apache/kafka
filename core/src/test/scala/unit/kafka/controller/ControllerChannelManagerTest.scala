@@ -23,11 +23,12 @@ import kafka.cluster.{Broker, EndPoint}
 import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.message.LeaderAndIsrResponseData
+import org.apache.kafka.common.message.{LeaderAndIsrResponseData, StopReplicaResponseData}
 import org.apache.kafka.common.message.LeaderAndIsrResponseData.LeaderAndIsrPartitionError
+import org.apache.kafka.common.message.StopReplicaResponseData.StopReplicaPartitionError
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
-import org.apache.kafka.common.requests.{AbstractControlRequest, AbstractResponse, LeaderAndIsrRequest, LeaderAndIsrResponse, StopReplicaRequest, UpdateMetadataRequest}
+import org.apache.kafka.common.requests.{AbstractControlRequest, AbstractResponse, LeaderAndIsrRequest, LeaderAndIsrResponse, StopReplicaRequest, StopReplicaResponse, UpdateMetadataRequest}
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.junit.Assert._
 import org.junit.Test
@@ -73,7 +74,7 @@ class ControllerChannelManagerTest {
     assertEquals(controllerId, leaderAndIsrRequest.controllerId)
     assertEquals(controllerEpoch, leaderAndIsrRequest.controllerEpoch)
     assertEquals(partitions.keySet,
-      leaderAndIsrRequest.partitionStates.asScala.map(p => new TopicPartition(p.topicName, p.partitionIndex)))
+      leaderAndIsrRequest.partitionStates.asScala.map(p => new TopicPartition(p.topicName, p.partitionIndex)).toSet)
     assertEquals(partitions.map { case (k, v) => (k, v.leader) },
       leaderAndIsrRequest.partitionStates.asScala.map(p => new TopicPartition(p.topicName, p.partitionIndex) -> p.leader).toMap)
     assertEquals(partitions.map { case (k, v) => (k, v.isr) },
@@ -86,7 +87,7 @@ class ControllerChannelManagerTest {
     val leaderAndIsrResponse = response.asInstanceOf[LeaderAndIsrResponse]
     assertEquals(2, brokerId)
     assertEquals(partitions.keySet,
-      leaderAndIsrResponse.partitions.asScala.map(p => new TopicPartition(p.topicName, p.partitionIndex)))
+      leaderAndIsrResponse.partitions.asScala.map(p => new TopicPartition(p.topicName, p.partitionIndex)).toSet)
   }
 
   @Test
@@ -112,7 +113,7 @@ class ControllerChannelManagerTest {
 
     val leaderAndIsrRequest = leaderAndIsrRequests.head
     val partitionStates = leaderAndIsrRequest.partitionStates.asScala
-    assertEquals(Set(partition), partitionStates.map(p => new TopicPartition(p.topicName, p.partitionIndex)))
+    assertEquals(Seq(partition), partitionStates.map(p => new TopicPartition(p.topicName, p.partitionIndex)))
     val partitionState = partitionStates.find(p => p.topicName == partition.topic && p.partitionIndex == partition.partition)
     assertEquals(Some(true), partitionState.map(_.isNew))
   }
@@ -146,7 +147,7 @@ class ControllerChannelManagerTest {
       assertEquals(1, leaderAndIsrRequests.size)
       assertEquals(1, updateMetadataRequests.size)
       val leaderAndIsrRequest = leaderAndIsrRequests.head
-      assertEquals(Set(partition), leaderAndIsrRequest.partitionStates.asScala.map(p => new TopicPartition(p.topicName, p.partitionIndex)))
+      assertEquals(Seq(partition), leaderAndIsrRequest.partitionStates.asScala.map(p => new TopicPartition(p.topicName, p.partitionIndex)))
     }
   }
 
@@ -284,9 +285,9 @@ class ControllerChannelManagerTest {
 
     assertEquals(partitions.filter { case (k, _) => k.topic == "bar" }.map { case (k, v) => (k, v.leader) },
       updateMetadataRequest.partitionStates.asScala.filter(ps => ps.topicName == "bar").map { ps =>
-        (new TopicPartition(ps.topicName, ps.partitionIndex), ps.leader) })
+        (new TopicPartition(ps.topicName, ps.partitionIndex), ps.leader) }.toMap)
     assertEquals(partitions.map { case (k, v) => (k, v.isr) },
-      updateMetadataRequest.partitionStates.asScala.map(ps => (new TopicPartition(ps.topicName, ps.partitionIndex), ps.isr.asScala)))
+      updateMetadataRequest.partitionStates.asScala.map(ps => (new TopicPartition(ps.topicName, ps.partitionIndex), ps.isr.asScala)).toMap)
 
     assertEquals(3, updateMetadataRequest.liveBrokers.size)
     assertEquals(Set(1, 2, 3), updateMetadataRequest.liveBrokers.asScala.map(_.id).toSet)
@@ -421,7 +422,7 @@ class ControllerChannelManagerTest {
     val sentStopReplicaRequests = batch.collectStopReplicaRequestsFor(2)
     assertEquals(1, sentStopReplicaRequests.size)
     assertEquals(partitions, sentStopReplicaRequests.flatMap(_.partitions.asScala).toSet)
-    assertTrue(sentStopReplicaRequests.forall(_.deletePartitions()))
+    assertTrue(sentStopReplicaRequests.forall(_.deletePartitions))
 
     // No events will be sent after the response returns
     applyStopReplicaResponseCallbacks(Errors.NONE, batch.sentRequests(2).toList)
@@ -626,7 +627,18 @@ class ControllerChannelManagerTest {
   private def applyStopReplicaResponseCallbacks(error: Errors, sentRequests: List[SentRequest]): Unit = {
     sentRequests.filter(_.responseCallback != null).foreach { sentRequest =>
       val stopReplicaRequest = sentRequest.request.build().asInstanceOf[StopReplicaRequest]
-      val stopReplicaResponse = stopReplicaRequest.getErrorResponse(error.exception)
+      val stopReplicaResponse =
+        if (error == Errors.NONE) {
+          val partitionErrors = stopReplicaRequest.partitions.asScala.toIndexedSeq.map { tp =>
+            new StopReplicaPartitionError()
+              .setTopicName(tp.topic)
+              .setPartitionIndex(tp.partition)
+              .setErrorCode(error.code)
+          }.asJava
+          new StopReplicaResponse(new StopReplicaResponseData().setPartitionErrors(partitionErrors))
+        } else {
+          stopReplicaRequest.getErrorResponse(error.exception)
+        }
       sentRequest.responseCallback.apply(stopReplicaResponse)
     }
   }

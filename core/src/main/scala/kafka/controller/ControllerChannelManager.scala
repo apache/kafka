@@ -385,6 +385,8 @@ abstract class AbstractControllerBrokerRequestBatch(config: KafkaConfig,
       val alreadyNew = result.get(topicPartition).exists(_.isNew)
       val leaderAndIsr = leaderIsrAndControllerEpoch.leaderAndIsr
       result.put(topicPartition, new LeaderAndIsrPartitionState()
+        .setTopicName(topicPartition.topic)
+        .setPartitionIndex(topicPartition.partition)
         .setControllerEpoch(leaderIsrAndControllerEpoch.controllerEpoch)
         .setLeader(leaderAndIsr.leader)
         .setLeaderEpoch(leaderAndIsr.leaderEpoch)
@@ -413,8 +415,7 @@ abstract class AbstractControllerBrokerRequestBatch(config: KafkaConfig,
                                          partitions: collection.Set[TopicPartition]): Unit = {
 
     def updateMetadataRequestPartitionInfo(partition: TopicPartition, beingDeleted: Boolean): Unit = {
-      val leaderIsrAndControllerEpochOpt = controllerContext.partitionLeadershipInfo.get(partition)
-      leaderIsrAndControllerEpochOpt match {
+      controllerContext.partitionLeadershipInfo.get(partition) match {
         case Some(LeaderIsrAndControllerEpoch(leaderAndIsr, controllerEpoch)) =>
           val replicas = controllerContext.partitionReplicaAssignment(partition)
           val offlineReplicas = replicas.filter(!controllerContext.isReplicaOnline(_, partition))
@@ -423,6 +424,8 @@ abstract class AbstractControllerBrokerRequestBatch(config: KafkaConfig,
             else leaderAndIsr
 
           val partitionStateInfo = new UpdateMetadataPartitionState()
+            .setTopicName(partition.topic)
+            .setPartitionIndex(partition.partition)
             .setControllerEpoch(controllerEpoch)
             .setLeader(updatedLeaderAndIsr.leader)
             .setLeaderEpoch(updatedLeaderAndIsr.leaderEpoch)
