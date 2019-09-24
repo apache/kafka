@@ -21,7 +21,6 @@ import org.apache.kafka.connect.errors.NotFoundException;
 import org.apache.log4j.Level;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import javax.ws.rs.Consumes;
 import javax.ws.rs.GET;
@@ -41,7 +40,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.TreeMap;
 
-@Path("/loggers")
+@Path("/admin/loggers")
 @Produces(MediaType.APPLICATION_JSON)
 @Consumes(MediaType.APPLICATION_JSON)
 public class LoggingResource {
