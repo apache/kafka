@@ -18,6 +18,8 @@ package org.apache.kafka.streams.state.internals;
 
 import org.junit.Test;
 
+import java.util.Collections;
+
 public class InMemoryTimeOrderedKeyValueBufferTest {
 
     @Test
@@ -28,5 +30,15 @@ public class InMemoryTimeOrderedKeyValueBufferTest {
     @Test
     public void bufferShouldAllowCacheDisablement() {
         new InMemoryTimeOrderedKeyValueBuffer.Builder<>(null, null, null).withCachingDisabled();
+    }
+
+    @Test
+    public void bufferShouldAllowLoggingEnablement() {
+        new InMemoryTimeOrderedKeyValueBuffer.Builder<>(null, null, null).withLoggingEnabled(Collections.emptyMap());
+    }
+
+    @Test
+    public void bufferShouldAllowLoggingDisablement() {
+        new InMemoryTimeOrderedKeyValueBuffer.Builder<>(null, null, null).withLoggingDisabled();
     }
 }
