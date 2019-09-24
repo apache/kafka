@@ -38,6 +38,10 @@ public final class MessageUtil {
         return (short) count;
     }
 
+    /**
+     * Copy a byte buffer into an array.  This will not affect the buffer's
+     * position or mark.
+     */
     public static byte[] byteBufferToArray(ByteBuffer buf) {
         byte[] arr = new byte[buf.remaining()];
         int prevPosition = buf.position();
