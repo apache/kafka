@@ -342,7 +342,6 @@ public class TaskManagerTest {
     @Test
     public void shouldThrowStreamsExceptionAtEndIfExceptionDuringSuspend() {
         expect(active.revokeTasks(revokedTasks, revokedChangelogs)).andReturn(new RuntimeException(""));
-        expect(restoreConsumer.assignment()).andReturn(Collections.emptySet());
 
         replay();
         try {
