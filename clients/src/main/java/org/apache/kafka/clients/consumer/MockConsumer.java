@@ -42,6 +42,7 @@ import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 
 /**
@@ -290,18 +291,31 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
         subscriptions.seek(partition, offsetAndMetadata.offset());
     }
 
+    @Deprecated
     @Override
-    public synchronized OffsetAndMetadata committed(TopicPartition partition) {
-        ensureNotClosed();
-        if (subscriptions.isAssigned(partition)) {
-            return committed.get(partition);
-        }
-        return new OffsetAndMetadata(0);
+    public synchronized OffsetAndMetadata committed(final TopicPartition partition) {
+        return committed(Collections.singleton(partition)).get(partition);
+    }
+
+    @Deprecated
+    @Override
+    public OffsetAndMetadata committed(final TopicPartition partition, final Duration timeout) {
+        return committed(partition);
     }
 
     @Override
-    public OffsetAndMetadata committed(TopicPartition partition, final Duration timeout) {
-        return committed(partition);
+    public synchronized Map<TopicPartition, OffsetAndMetadata> committed(final Set<TopicPartition> partitions) {
+        ensureNotClosed();
+
+        return partitions.stream()
+            .filter(committed::containsKey)
+            .collect(Collectors.toMap(tp -> tp, tp -> subscriptions.isAssigned(tp) ?
+                committed.get(tp) : new OffsetAndMetadata(0)));
+    }
+
+    @Override
+    public synchronized Map<TopicPartition, OffsetAndMetadata> committed(final Set<TopicPartition> partitions, final Duration timeout) {
+        return committed(partitions);
     }
 
     @Override
