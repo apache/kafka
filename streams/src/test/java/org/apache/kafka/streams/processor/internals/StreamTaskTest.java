@@ -657,7 +657,7 @@ public class StreamTaskTest {
     public void shouldRestorePartitionTimeAfterRestartWithEosDisabled() {
         createTaskWithProcessAndCommit(false);
 
-        assertEquals(DEFAULT_TIMESTAMP, task.decodeTimestamp(consumer.committed(partition1).metadata()));
+        assertEquals(DEFAULT_TIMESTAMP, task.decodeTimestamp(consumer.committed(Collections.singleton(partition1)).get(partition1).metadata()));
         // reset times here by creating a new task
         task = createStatelessTask(createConfig(false));
 
@@ -1585,7 +1585,7 @@ public class StreamTaskTest {
     private Consumer<byte[], byte[]> mockConsumerWithCommittedException(final RuntimeException toThrow) {
         return new MockConsumer<byte[], byte[]>(OffsetResetStrategy.EARLIEST) {
             @Override
-            public OffsetAndMetadata committed(final TopicPartition partition) {
+            public Map<TopicPartition, OffsetAndMetadata> committed(final Set<TopicPartition> partitions) {
                 throw toThrow;
             }
         };

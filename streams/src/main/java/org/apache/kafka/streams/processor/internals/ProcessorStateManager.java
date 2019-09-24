@@ -247,13 +247,12 @@ public class ProcessorStateManager implements StateManager {
         standbyRestoredOffsets.put(storePartition, lastOffset + 1);
     }
 
-    void putOffsetLimit(final TopicPartition partition,
-                        final long limit) {
-        log.trace("Updating store offset limit for partition {} to {}", partition, limit);
-        offsetLimits.put(partition, limit);
+    void putOffsetLimits(final Map<TopicPartition, Long> offsets) {
+        log.trace("Updating store offset limit with {}", offsets);
+        offsetLimits.putAll(offsets);
     }
 
-    long offsetLimit(final TopicPartition partition) {
+    private long offsetLimit(final TopicPartition partition) {
         final Long limit = offsetLimits.get(partition);
         return limit != null ? limit : Long.MAX_VALUE;
     }
