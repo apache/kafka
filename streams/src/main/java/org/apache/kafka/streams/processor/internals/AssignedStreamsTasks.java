@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import java.util.ArrayList;
 import java.util.concurrent.atomic.AtomicReference;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;

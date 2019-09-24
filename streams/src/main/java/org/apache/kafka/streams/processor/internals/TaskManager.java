@@ -239,7 +239,7 @@ public class TaskManager {
      */
     Set<TaskId> suspendActiveTasksAndState(final Collection<TopicPartition> revokedPartitions)  {
         final AtomicReference<RuntimeException> firstException = new AtomicReference<>(null);
-        List<TopicPartition> revokedChangelogs = new ArrayList<>();
+        final List<TopicPartition> revokedChangelogs = new ArrayList<>();
 
         final Set<TaskId> revokedTasks = partitionsToTaskSet(revokedPartitions);
 

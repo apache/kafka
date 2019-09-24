@@ -340,12 +340,13 @@ public class TaskManagerTest {
     }
 
     @Test
+    @SuppressWarnings("unchecked")
     public void shouldUnassignChangelogPartitionsOnSuspend() {
         expect(active.suspendOrCloseTasks(revokedTasks, new ArrayList<>()))
                 .andAnswer(() -> {
-                        ((List) EasyMock.getCurrentArguments()[1]).add(t1p0);
-                        return null;
-                    });
+                    ((List) EasyMock.getCurrentArguments()[1]).add(t1p0);
+                    return null;
+                });
         expect(restoreConsumer.assignment()).andReturn(Collections.singleton(t1p0));
 
         restoreConsumer.assign(Collections.emptySet());
