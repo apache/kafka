@@ -351,6 +351,34 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             return;
         }
 
+        final AtomicReference<Exception> firstException = new AtomicReference<>(null);
+        Set<TopicPartition> addedPartitions = new HashSet<>(assignedPartitions);
+        addedPartitions.removeAll(ownedPartitions);
+
+        // Invoke user's revocation callback before changing assignment or updating state
+        if (protocol == RebalanceProtocol.COOPERATIVE) {
+            Set<TopicPartition> revokedPartitions = new HashSet<>(ownedPartitions);
+            revokedPartitions.removeAll(assignedPartitions);
+
+            log.info("Updating with newly assigned partitions: {}, compare with already owned partitions: {}, " +
+                    "newly added partitions: {}, revoking partitions: {}",
+                Utils.join(assignedPartitions, ", "),
+                Utils.join(ownedPartitions, ", "),
+                Utils.join(addedPartitions, ", "),
+                Utils.join(revokedPartitions, ", "));
+
+
+            if (!revokedPartitions.isEmpty()) {
+                // revoke partitions that was previously owned but no longer assigned;
+                // note that we should only change the assignment AFTER we've triggered
+                // the revoke callback
+                firstException.compareAndSet(null, invokePartitionsRevoked(revokedPartitions));
+
+                // if revoked any partitions, need to re-join the group afterwards
+                requestRejoin();
+            }
+        }
+
         // The leader may have assigned partitions which match our subscription pattern, but which
         // were not explicitly requested, so we update the joined subscription here.
         maybeUpdateJoinedSubscription(assignedPartitions);
@@ -363,50 +391,10 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         if (autoCommitEnabled)
             this.nextAutoCommitTimer.updateAndReset(autoCommitIntervalMs);
 
-        // execute the user's callback after rebalance
-        final AtomicReference<Exception> firstException = new AtomicReference<>(null);
-        Set<TopicPartition> addedPartitions = new HashSet<>(assignedPartitions);
-        addedPartitions.removeAll(ownedPartitions);
+        subscriptions.assignFromSubscribed(assignedPartitions);
 
-        switch (protocol) {
-            case EAGER:
-                // assign partitions that are not yet owned
-                subscriptions.assignFromSubscribed(assignedPartitions);
-
-                firstException.compareAndSet(null, invokePartitionsAssigned(addedPartitions));
-
-                break;
-
-            case COOPERATIVE:
-                Set<TopicPartition> revokedPartitions = new HashSet<>(ownedPartitions);
-                revokedPartitions.removeAll(assignedPartitions);
-
-                log.info("Updating with newly assigned partitions: {}, compare with already owned partitions: {}, " +
-                        "newly added partitions: {}, revoking partitions: {}",
-                    Utils.join(assignedPartitions, ", "),
-                    Utils.join(ownedPartitions, ", "),
-                    Utils.join(addedPartitions, ", "),
-                    Utils.join(revokedPartitions, ", "));
-
-                // revoke partitions that was previously owned but no longer assigned;
-                // note that we should only change the assignment AFTER we've triggered
-                // the revoke callback
-                if (!revokedPartitions.isEmpty()) {
-                    firstException.compareAndSet(null, invokePartitionsRevoked(revokedPartitions));
-                }
-
-                subscriptions.assignFromSubscribed(assignedPartitions);
-
-                // add partitions that were not previously owned but are now assigned
-                firstException.compareAndSet(null, invokePartitionsAssigned(addedPartitions));
-
-                // if revoked any partitions, need to re-join the group afterwards
-                if (!revokedPartitions.isEmpty()) {
-                    requestRejoin();
-                }
-
-                break;
-        }
+        // add partitions that were not previously owned but are now assigned
+        firstException.compareAndSet(null, invokePartitionsAssigned(addedPartitions));
 
         if (firstException.get() != null)
             throw new KafkaException("User rebalance callback throws an error", firstException.get());
@@ -566,7 +554,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         // when these topics gets updated from metadata refresh.
         //
         // TODO: this is a hack and not something we want to support long-term unless we push regex into the protocol
-        //       we may need to modify the PartitionAssignor API to better support this case.
+        //       we may need to modify the ConsumerPartitionAssignor API to better support this case.
         Set<String> assignedTopics = new HashSet<>();
         for (Assignment assigned : assignments.values()) {
             for (TopicPartition tp : assigned.partitions())
