@@ -24,7 +24,7 @@ import org.apache.kafka.streams.state.internals.metrics.RocksDBMetricsRecorder;
  */
 class KeyValueSegments extends AbstractSegments<KeyValueSegment> {
 
-    final private RocksDBMetricsRecorder metricsRecorder;
+    private final RocksDBMetricsRecorder metricsRecorder;
 
     KeyValueSegments(final String name,
                      final String metricsScope,
@@ -50,11 +50,5 @@ class KeyValueSegments extends AbstractSegments<KeyValueSegment> {
             newSegment.openDB(context);
             return newSegment;
         }
-    }
-
-    @Override
-    public void close() {
-        metricsRecorder.close();
-        super.close();
     }
 }

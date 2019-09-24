@@ -29,6 +29,7 @@ import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.common.metrics.Sensor.RecordingLevel;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
@@ -59,6 +60,7 @@ import org.apache.kafka.streams.state.internals.GlobalStateStoreProvider;
 import org.apache.kafka.streams.state.internals.QueryableStoreProvider;
 import org.apache.kafka.streams.state.internals.StateStoreProvider;
 import org.apache.kafka.streams.state.internals.StreamThreadStateStoreProvider;
+import org.apache.kafka.streams.state.internals.metrics.RocksDBMetricsRecordingTrigger;
 import org.slf4j.Logger;
 
 import java.time.Duration;
@@ -80,6 +82,7 @@ import java.util.concurrent.TimeUnit;
 
 import static org.apache.kafka.common.utils.Utils.getHost;
 import static org.apache.kafka.common.utils.Utils.getPort;
+import static org.apache.kafka.streams.StreamsConfig.METRICS_RECORDING_LEVEL_CONFIG;
 import static org.apache.kafka.streams.internals.ApiUtils.prepareMillisCheckFailMsgPrefix;
 
 /**
@@ -138,12 +141,15 @@ public class KafkaStreams implements AutoCloseable {
     private final StateDirectory stateDirectory;
     private final StreamsMetadataState streamsMetadataState;
     private final ScheduledExecutorService stateDirCleaner;
+    private final ScheduledExecutorService rocksDBMetricsRecordingTriggerThread;
     private final QueryableStoreProvider queryableStoreProvider;
     private final Admin adminClient;
 
     private GlobalStreamThread globalStreamThread;
     private KafkaStreams.StateListener stateListener;
     private StateRestoreListener globalStateRestoreListener;
+
+    private final RocksDBMetricsRecordingTrigger rocksDBMetricsRecordingTrigger = new RocksDBMetricsRecordingTrigger();
 
     // container states
     /**
@@ -698,15 +704,18 @@ public class KafkaStreams implements AutoCloseable {
         GlobalStreamThread.State globalThreadState = null;
         if (globalTaskTopology != null) {
             final String globalThreadId = clientId + "-GlobalStreamThread";
-            globalStreamThread = new GlobalStreamThread(globalTaskTopology,
-                                                        config,
-                                                        clientSupplier.getGlobalConsumer(config.getGlobalConsumerConfigs(clientId)),
-                                                        stateDirectory,
-                                                        cacheSizePerThread,
-                                                        metrics,
-                                                        time,
-                                                        globalThreadId,
-                                                        delegatingStateRestoreListener);
+            globalStreamThread = new GlobalStreamThread(
+                globalTaskTopology,
+                config,
+                clientSupplier.getGlobalConsumer(config.getGlobalConsumerConfigs(clientId)),
+                stateDirectory,
+                cacheSizePerThread,
+                metrics,
+                time,
+                globalThreadId,
+                delegatingStateRestoreListener,
+                rocksDBMetricsRecordingTrigger
+            );
             globalThreadState = globalStreamThread.state();
         }
 
@@ -716,19 +725,21 @@ public class KafkaStreams implements AutoCloseable {
         final Map<Long, StreamThread.State> threadState = new HashMap<>(threads.length);
         final ArrayList<StateStoreProvider> storeProviders = new ArrayList<>();
         for (int i = 0; i < threads.length; i++) {
-            threads[i] = StreamThread.create(internalTopologyBuilder,
-                                             config,
-                                             clientSupplier,
-                                             adminClient,
-                                             processId,
-                                             clientId,
-                                             metrics,
-                                             time,
-                                             streamsMetadataState,
-                                             cacheSizePerThread,
-                                             stateDirectory,
-                                             delegatingStateRestoreListener,
-                                             i + 1);
+            threads[i] = StreamThread.create(
+                internalTopologyBuilder,
+                config,
+                clientSupplier,
+                adminClient,
+                processId,
+                clientId,
+                metrics,
+                time,
+                streamsMetadataState,
+                cacheSizePerThread,
+                stateDirectory,
+                delegatingStateRestoreListener,
+                i + 1);
+            threads[i].setRocksDBMetricsRecordingTrigger(rocksDBMetricsRecordingTrigger);
             threadState.put(threads[i].getId(), threads[i].state());
             storeProviders.add(new StreamThreadStateStoreProvider(threads[i]));
         }
@@ -746,6 +757,12 @@ public class KafkaStreams implements AutoCloseable {
 
         stateDirCleaner = Executors.newSingleThreadScheduledExecutor(r -> {
             final Thread thread = new Thread(r, clientId + "-CleanupThread");
+            thread.setDaemon(true);
+            return thread;
+        });
+
+        rocksDBMetricsRecordingTriggerThread = Executors.newSingleThreadScheduledExecutor(r -> {
+            final Thread thread = new Thread(r, clientId + "-RocksDBMetricsRecordingTrigger");
             thread.setDaemon(true);
             return thread;
         });
@@ -803,6 +820,17 @@ public class KafkaStreams implements AutoCloseable {
                     stateDirectory.cleanRemovedTasks(cleanupDelay);
                 }
             }, cleanupDelay, cleanupDelay, TimeUnit.MILLISECONDS);
+
+            final long recordingDelay = 0;
+            final long recordingInterval = 1;
+            if (RecordingLevel.forName(config.getString(METRICS_RECORDING_LEVEL_CONFIG)) == RecordingLevel.DEBUG) {
+                rocksDBMetricsRecordingTriggerThread.scheduleAtFixedRate(
+                    rocksDBMetricsRecordingTrigger,
+                    recordingDelay,
+                    recordingInterval,
+                    TimeUnit.MINUTES
+                );
+            }
         } else {
             throw new IllegalStateException("The client is either already started or already stopped, cannot re-start");
         }

@@ -366,12 +366,13 @@ public class RocksDBMetrics {
     public static Sensor numberOfOpenFilesSensor(final StreamsMetricsImpl streamsMetrics,
                                                  final RocksDBMetricContext metricContext) {
         final Sensor sensor = createSensor(streamsMetrics, metricContext, NUMBER_OF_OPEN_FILES);
-        addValueMetricToSensor(
+        addSumMetricToSensor(
             sensor,
             STATE_LEVEL_GROUP,
             streamsMetrics
                 .storeLevelTagMap(metricContext.taskName(), metricContext.metricsScope(), metricContext.storeName()),
             NUMBER_OF_OPEN_FILES,
+            false,
             NUMBER_OF_OPEN_FILES_DESCRIPTION
         );
         return sensor;

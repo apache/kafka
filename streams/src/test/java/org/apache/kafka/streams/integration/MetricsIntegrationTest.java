@@ -475,9 +475,6 @@ public class MetricsIntegrationTest {
         checkMetricByName(listMetricStore, MEMTABLE_BYTES_FLUSHED_RATE, 1);
         checkMetricByName(listMetricStore, MEMTABLE_BYTES_FLUSHED_TOTAL, 1);
         checkMetricByName(listMetricStore, MEMTABLE_HIT_RATIO, 1);
-        checkMetricByName(listMetricStore, MEMTABLE_FLUSH_TIME_AVG, 1);
-        checkMetricByName(listMetricStore, MEMTABLE_FLUSH_TIME_MIN, 1);
-        checkMetricByName(listMetricStore, MEMTABLE_FLUSH_TIME_MAX, 1);
         checkMetricByName(listMetricStore, WRITE_STALL_DURATION_AVG, 1);
         checkMetricByName(listMetricStore, WRITE_STALL_DURATION_TOTAL, 1);
         checkMetricByName(listMetricStore, BLOCK_CACHE_DATA_HIT_RATIO, 1);
@@ -485,9 +482,6 @@ public class MetricsIntegrationTest {
         checkMetricByName(listMetricStore, BLOCK_CACHE_FILTER_HIT_RATIO, 1);
         checkMetricByName(listMetricStore, BYTES_READ_DURING_COMPACTION_RATE, 1);
         checkMetricByName(listMetricStore, BYTES_WRITTEN_DURING_COMPACTION_RATE, 1);
-        checkMetricByName(listMetricStore, COMPACTION_TIME_AVG, 1);
-        checkMetricByName(listMetricStore, COMPACTION_TIME_MIN, 1);
-        checkMetricByName(listMetricStore, COMPACTION_TIME_MAX, 1);
         checkMetricByName(listMetricStore, NUMBER_OF_OPEN_FILES, 1);
         checkMetricByName(listMetricStore, NUMBER_OF_FILE_ERRORS, 1);
     }
@@ -647,7 +641,7 @@ public class MetricsIntegrationTest {
         final List<Metric> metrics = listMetric.stream()
             .filter(m -> m.metricName().name().equals(metricName))
             .collect(Collectors.toList());
-        Assert.assertEquals("Size of metrics of type:'" + metricName + "' must be equal to:" + numMetric + " but it's equal to " + metrics.size(), numMetric, metrics.size());
+        Assert.assertEquals("Size of metrics of type:'" + metricName + "' must be equal to " + numMetric + " but it's equal to " + metrics.size(), numMetric, metrics.size());
         for (final Metric m : metrics) {
             Assert.assertNotNull("Metric:'" + m.metricName() + "' must be not null", m.metricValue());
         }

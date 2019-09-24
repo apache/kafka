@@ -41,10 +41,11 @@ import static org.junit.Assert.assertTrue;
 
 public class SegmentIteratorTest {
 
+    private final RocksDBMetricsRecorder rocksDBMetricsRecorder = new RocksDBMetricsRecorder("metrics-scope", "store-name");
     private final KeyValueSegment segmentOne =
-        new KeyValueSegment("one", "one", 0, new RocksDBMetricsRecorder("metrics-scope", "store-name"));
+        new KeyValueSegment("one", "one", 0, rocksDBMetricsRecorder);
     private final KeyValueSegment segmentTwo =
-        new KeyValueSegment("two", "window", 1, new RocksDBMetricsRecorder("metrics-scope", "store-name"));
+        new KeyValueSegment("two", "window", 1, rocksDBMetricsRecorder);
     private final HasNextCondition hasNextCondition = Iterator::hasNext;
 
     private SegmentIterator<KeyValueSegment> iterator = null;
