@@ -264,12 +264,9 @@ public class UtilsTest {
         this.subTest(buffer);
     }
 
-    /**
-     * Test to read a simple file as string.
-     */
     @Test
     public void testFileAsStringSimpleFile() throws IOException {
-        File tempFile = File.createTempFile("UtilsTestTempFlie", ".tmp");
+        File tempFile = TestUtils.tempFile();
         try {
             String testContent = "Test Content";
             Files.write(tempFile.toPath(), testContent.getBytes());
