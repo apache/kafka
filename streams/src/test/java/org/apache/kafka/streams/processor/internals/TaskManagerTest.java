@@ -340,6 +340,23 @@ public class TaskManagerTest {
     }
 
     @Test
+    public void shouldUnassignChangelogPartitionsOnSuspend() {
+        expect(active.suspendOrCloseTasks(revokedTasks, new ArrayList<>()))
+                .andAnswer(() -> {
+                        ((List) EasyMock.getCurrentArguments()[1]).add(t1p0);
+                        return null;
+                    });
+        expect(restoreConsumer.assignment()).andReturn(Collections.singleton(t1p0));
+
+        restoreConsumer.assign(Collections.emptySet());
+        expectLastCall();
+        replay();
+
+        taskManager.suspendActiveTasksAndState(Collections.emptySet());
+        verify(restoreConsumer);
+    }
+
+    @Test
     public void shouldThrowStreamsExceptionAtEndIfExceptionDuringSuspend() {
         expect(active.suspendOrCloseTasks(revokedTasks, revokedChangelogs)).andReturn(new RuntimeException(""));
 
