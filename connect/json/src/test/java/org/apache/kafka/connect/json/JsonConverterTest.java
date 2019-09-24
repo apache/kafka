@@ -58,6 +58,7 @@ import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -621,6 +622,14 @@ public class JsonConverterTest {
             converted.get(JsonSchema.ENVELOPE_SCHEMA_FIELD_NAME));
         assertTrue("expected node to be numeric", converted.get(JsonSchema.ENVELOPE_PAYLOAD_FIELD_NAME).isNumber());
         assertEquals(new BigDecimal("1.56"), converted.get(JsonSchema.ENVELOPE_PAYLOAD_FIELD_NAME).decimalValue());
+    }
+
+    @Test
+    public void decimalToJsonWithoutSchema() throws IOException {
+        assertThrows(
+            "expected data exception when serializing BigDecimal without schema",
+            DataException.class,
+            () -> converter.fromConnectData(TOPIC, null, new BigDecimal(new BigInteger("156"), 2)));
     }
 
     @Test
