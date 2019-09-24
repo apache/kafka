@@ -518,7 +518,7 @@ public final class MessageTest {
         long baseOffset = 12L;
         int throttleTimeMs = 1234;
         long logAppendTimeMs = 1234L;
-        long logStartOffset= 1234L;
+        long logStartOffset = 1234L;
         int relativeOffset = 0;
         String relativeOffsetErrorMessage = "error message";
         String errorMessage = "global error message";
