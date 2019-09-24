@@ -21,7 +21,7 @@ package org.apache.kafka.message;
  * Creates an if statement based on whether or not a particular field is null.
  */
 public final class IsNullConditional {
-    static IsNullConditional forField(String name) {
+    static IsNullConditional forName(String name) {
         return new IsNullConditional(name);
     }
 

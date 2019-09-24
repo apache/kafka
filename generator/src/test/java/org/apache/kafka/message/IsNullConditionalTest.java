@@ -29,7 +29,7 @@ public class IsNullConditionalTest {
     public void testNullCheck() throws Exception {
         CodeBuffer buffer = new CodeBuffer();
         IsNullConditional.
-            forField("foobar").
+            forName("foobar").
             nullableVersions(Versions.parse("2+", null)).
             possibleVersions(Versions.parse("0+", null)).
             ifNull(() -> {
@@ -46,7 +46,7 @@ public class IsNullConditionalTest {
     public void testAnotherNullCheck() throws Exception {
         CodeBuffer buffer = new CodeBuffer();
         IsNullConditional.
-            forField("foobar").
+            forName("foobar").
             nullableVersions(Versions.parse("0+", null)).
             possibleVersions(Versions.parse("2+", null)).
             ifNull(() -> {
@@ -68,7 +68,7 @@ public class IsNullConditionalTest {
     public void testNotNullCheck() throws Exception {
         CodeBuffer buffer = new CodeBuffer();
         IsNullConditional.
-            forField("foobar").
+            forName("foobar").
             nullableVersions(Versions.parse("0+", null)).
             possibleVersions(Versions.parse("2+", null)).
             ifNotNull(() -> {
@@ -85,7 +85,7 @@ public class IsNullConditionalTest {
     public void testNeverNull() throws Exception {
         CodeBuffer buffer = new CodeBuffer();
         IsNullConditional.
-            forField("baz").
+            forName("baz").
             nullableVersions(Versions.parse("0-2", null)).
             possibleVersions(Versions.parse("3+", null)).
             ifNull(() -> {
@@ -103,7 +103,7 @@ public class IsNullConditionalTest {
     public void testNeverNullWithBlockScope() throws Exception {
         CodeBuffer buffer = new CodeBuffer();
         IsNullConditional.
-            forField("baz").
+            forName("baz").
             nullableVersions(Versions.parse("0-2", null)).
             possibleVersions(Versions.parse("3+", null)).
             ifNull(() -> {
