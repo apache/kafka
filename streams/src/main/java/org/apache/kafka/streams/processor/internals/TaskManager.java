@@ -222,12 +222,8 @@ public class TaskManager {
      * @throws TaskMigratedException if the task producer got fenced (EOS only)
      */
     void closeRevokedSuspendedTasks() {
-        final List<TopicPartition> revokedChangelogs = new ArrayList<>();
-        final RuntimeException exception = active.closeNotAssignedSuspendedTasks(revokedActiveTasks.keySet(), revokedChangelogs);
-
-        // remove any revoked partitions from the changelog reader and restore consumer
-        changelogReader.remove(revokedChangelogs);
-        removeChangelogsFromRestoreConsumer(revokedChangelogs, false);
+        // changelogs should have already been removed during suspend
+        final RuntimeException exception = active.closeNotAssignedSuspendedTasks(revokedActiveTasks.keySet());
 
         // At this point all revoked tasks should have been closed, we can just throw the exception
         if (exception != null) {

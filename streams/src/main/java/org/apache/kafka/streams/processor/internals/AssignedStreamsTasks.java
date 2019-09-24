@@ -244,10 +244,8 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
     }
 
     private RuntimeException closeSuspended(final boolean isZombie,
-                                            final StreamTask task,
-                                            final List<TopicPartition> closedTaskChangelogs) {
+                                            final StreamTask task) {
         suspended.remove(task.id());
-        closedTaskChangelogs.addAll(task.changelogPartitions());
 
         try {
             final boolean clean = !isZombie;
@@ -260,8 +258,7 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
         return null;
     }
 
-    RuntimeException closeNotAssignedSuspendedTasks(final Set<TaskId> revokedTasks,
-                                                    final List<TopicPartition> revokedTaskChangelogs) {
+    RuntimeException closeNotAssignedSuspendedTasks(final Set<TaskId> revokedTasks) {
         log.debug("Closing the revoked active tasks {} {}", taskTypeName, revokedTasks);
         final AtomicReference<RuntimeException> firstException = new AtomicReference<>(null);
 
@@ -270,7 +267,7 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
 
             // task may not be in the suspended tasks if it was closed due to some error
             if (suspendedTask != null) {
-                firstException.compareAndSet(null, closeSuspended(false, suspendedTask, revokedTaskChangelogs));
+                firstException.compareAndSet(null, closeSuspended(false, suspendedTask));
             } else {
                 log.debug("Revoked task {} could not be found in suspended, may have already been closed", revokedTask);
             }
@@ -283,7 +280,7 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
 
         for (final TaskId id : lostTasks) {
             if (suspended.containsKey(id)) {
-                firstException.compareAndSet(null, closeSuspended(true, suspended.get(id), lostTaskChangelogs));
+                firstException.compareAndSet(null, closeSuspended(true, suspended.get(id)));
             } else if (created.containsKey(id)) {
                 firstException.compareAndSet(null, closeNonRunning(true, created.get(id), lostTaskChangelogs));
             } else if (restoring.containsKey(id)) {

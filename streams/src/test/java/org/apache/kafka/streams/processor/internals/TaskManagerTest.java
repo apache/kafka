@@ -245,7 +245,7 @@ public class TaskManagerTest {
     @Test
     public void shouldCloseActiveUnAssignedSuspendedTasksWhenClosingRevokedTasks() {
         mockSingleActiveTask();
-        EasyMock.expect(active.closeNotAssignedSuspendedTasks(taskId0Assignment.keySet(), Collections.emptyList())).andReturn(null).once();
+        EasyMock.expect(active.closeNotAssignedSuspendedTasks(taskId0Assignment.keySet())).andReturn(null).once();
         expect(restoreConsumer.assignment()).andReturn(Collections.emptySet());
 
         replay();
