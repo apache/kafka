@@ -274,8 +274,8 @@ class KafkaApis(val requestChannel: RequestChannel,
         groupCoordinator.handleDeletedPartitions(deletedPartitions)
 
       if (adminManager.hasDelayedTopicOperations) {
-        updateMetadataRequest.partitionStates.keySet.asScala.map(_.topic).foreach { topic =>
-          adminManager.tryCompleteDelayedTopicOperations(topic)
+        updateMetadataRequest.partitionStates.asScala.foreach { partitionState =>
+          adminManager.tryCompleteDelayedTopicOperations(partitionState.topicName)
         }
       }
       quotas.clientQuotaCallback.foreach { callback =>
@@ -286,7 +286,8 @@ class KafkaApis(val requestChannel: RequestChannel,
         }
       }
       if (replicaManager.hasDelayedElectionOperations) {
-        updateMetadataRequest.partitionStates.asScala.foreach { case (tp, _) =>
+        updateMetadataRequest.partitionStates.asScala.foreach { partitionState =>
+          val tp = new TopicPartition(partitionState.topicName, partitionState.partitionIndex)
           replicaManager.tryCompleteElection(TopicPartitionOperationKey(tp))
         }
       }

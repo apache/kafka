@@ -97,7 +97,7 @@ public class StopReplicaRequest extends AbstractControlRequest {
     private final Collection<TopicPartition> topicPartitions;
 
     private StopReplicaRequest(StopReplicaRequestData data, short version) {
-        super(ApiKeys.STOP_REPLICA, version, data.controllerId(), data.controllerEpoch(), data.brokerEpoch());
+        super(ApiKeys.STOP_REPLICA, version);
         this.data = data;
         Stream<TopicPartition> partitionStream;
         if (version == 0) {
@@ -148,6 +148,21 @@ public class StopReplicaRequest extends AbstractControlRequest {
         return topicPartitions;
     }
 
+    @Override
+    public int controllerId() {
+        return data.controllerId();
+    }
+
+    @Override
+    public int controllerEpoch() {
+        return data.controllerEpoch();
+    }
+
+    @Override
+    public long brokerEpoch() {
+        return data.brokerEpoch();
+    }
+
     public static StopReplicaRequest parse(ByteBuffer buffer, short version) {
         return new StopReplicaRequest(ApiKeys.STOP_REPLICA.parseRequest(version, buffer), version);
     }
@@ -157,7 +172,6 @@ public class StopReplicaRequest extends AbstractControlRequest {
         return data.toStruct(version());
     }
 
-    @Override
     protected long size() {
         return data.size(version());
     }

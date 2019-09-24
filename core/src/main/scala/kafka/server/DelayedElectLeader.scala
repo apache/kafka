@@ -69,16 +69,13 @@ class DelayedElectLeader(
     waitingPartitions.isEmpty && forceComplete()
   }
 
-  private def updateWaiting() = {
+  private def updateWaiting(): Unit = {
     waitingPartitions.foreach { case (tp, leader) =>
-      val ps = replicaManager.metadataCache.getPartitionInfo(tp.topic, tp.partition)
-      ps match {
-        case Some(ps) =>
-          if (leader == ps.basePartitionState.leader) {
-            waitingPartitions -= tp
-            fullResults += tp -> ApiError.NONE
-          }
-        case None =>
+      replicaManager.metadataCache.getPartitionInfo(tp.topic, tp.partition).foreach { partitionState =>
+        if (leader == partitionState.leader) {
+          waitingPartitions -= tp
+          fullResults += tp -> ApiError.NONE
+        }
       }
     }
   }

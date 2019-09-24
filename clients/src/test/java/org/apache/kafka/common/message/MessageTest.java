@@ -250,7 +250,7 @@ public final class MessageTest {
         // Version 3 adds two new fields - AddingReplicas and RemovingReplicas
         LeaderAndIsrRequestData.LeaderAndIsrTopicState partitionStateNoAddingRemovingReplicas =
             new LeaderAndIsrRequestData.LeaderAndIsrTopicState()
-                .setName("topic")
+                .setTopicName("topic")
                 .setPartitionStates(Collections.singletonList(
                     new LeaderAndIsrRequestData.LeaderAndIsrPartitionState()
                         .setPartitionIndex(0)
@@ -258,7 +258,7 @@ public final class MessageTest {
                 ));
         LeaderAndIsrRequestData.LeaderAndIsrTopicState partitionStateWithAddingRemovingReplicas =
             new LeaderAndIsrRequestData.LeaderAndIsrTopicState()
-                .setName("topic")
+                .setTopicName("topic")
                 .setPartitionStates(Collections.singletonList(
                     new LeaderAndIsrRequestData.LeaderAndIsrPartitionState()
                         .setPartitionIndex(0)

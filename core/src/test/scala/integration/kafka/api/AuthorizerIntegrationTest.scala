@@ -57,6 +57,7 @@ import org.apache.kafka.common.message.OffsetCommitRequestData
 import org.apache.kafka.common.message.SyncGroupRequestData
 import org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocolCollection
 import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity
+import org.apache.kafka.common.message.UpdateMetadataRequestData.{UpdateMetadataBroker, UpdateMetadataEndpoint, UpdateMetadataPartitionState}
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record.{CompressionType, MemoryRecords, RecordBatch, Records, SimpleRecord}
@@ -357,14 +358,26 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   }
 
   private def createUpdateMetadataRequest = {
-    val partitionState = Map(tp -> new UpdateMetadataRequest.PartitionState(
-      Int.MaxValue, brokerId, Int.MaxValue, List(brokerId).asJava, 2, Seq(brokerId).asJava, Seq.empty[Integer].asJava)).asJava
+    val partitionStates = Seq(new UpdateMetadataPartitionState()
+      .setTopicName(tp.topic)
+      .setPartitionIndex(tp.partition)
+      .setControllerEpoch(Int.MaxValue)
+      .setLeader(brokerId)
+      .setLeaderEpoch(Int.MaxValue)
+      .setIsr(List(brokerId).asJava)
+      .setZkVersion(2)
+      .setReplicas(Seq(brokerId).asJava)
+      .setOfflineReplicas(Seq.empty[Integer].asJava)).asJava
     val securityProtocol = SecurityProtocol.PLAINTEXT
-    val brokers = Set(new requests.UpdateMetadataRequest.Broker(brokerId,
-      Seq(new requests.UpdateMetadataRequest.EndPoint("localhost", 0, securityProtocol,
-        ListenerName.forSecurityProtocol(securityProtocol))).asJava, null)).asJava
+    val brokers = Seq(new UpdateMetadataBroker()
+      .setId(brokerId)
+      .setEndpoints(Seq(new UpdateMetadataEndpoint()
+        .setHost("localhost")
+        .setPort(0)
+        .setSecurityProtocol(securityProtocol.id)
+        .setListener(ListenerName.forSecurityProtocol(securityProtocol).value)).asJava)).asJava
     val version = ApiKeys.UPDATE_METADATA.latestVersion
-    new requests.UpdateMetadataRequest.Builder(version, brokerId, Int.MaxValue, Long.MaxValue, partitionState, brokers).build()
+    new requests.UpdateMetadataRequest.Builder(version, brokerId, Int.MaxValue, Long.MaxValue, partitionStates, brokers).build()
   }
 
   private def createJoinGroupRequest = {

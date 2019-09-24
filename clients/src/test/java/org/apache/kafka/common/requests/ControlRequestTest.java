@@ -18,14 +18,13 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState;
+import org.apache.kafka.common.message.UpdateMetadataRequestData.UpdateMetadataPartitionState;
 import org.junit.Test;
 
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Set;
-import java.util.Map;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Random;
 
@@ -53,13 +52,20 @@ public class ControlRequestTest {
     @Test
     public void testUpdateMetadataRequestNormalization() {
         Set<TopicPartition> tps = generateRandomTopicPartitions(10, 10);
-        Map<TopicPartition, UpdateMetadataRequest.PartitionState> partitionStates = new HashMap<>();
-        for (TopicPartition tp: tps) {
-            partitionStates.put(tp, new UpdateMetadataRequest.PartitionState(0, 0, 0,
-                    Collections.emptyList(), 0, Collections.emptyList(), Collections.emptyList()));
+        List<UpdateMetadataPartitionState> partitionStates = new ArrayList<>();
+        for (TopicPartition tp : tps) {
+            partitionStates.add(new UpdateMetadataPartitionState()
+                .setTopicName(tp.topic())
+                .setPartitionIndex(tp.partition())
+                .setControllerEpoch(0)
+                .setLeader(0)
+                .setLeaderEpoch(0)
+                .setIsr(Collections.emptyList())
+                .setReplicas(Collections.emptyList())
+                .setOfflineReplicas(Collections.emptyList()));
         }
         UpdateMetadataRequest.Builder builder = new UpdateMetadataRequest.Builder((short) 5, 0, 0, 0,
-                partitionStates, Collections.emptySet());
+                partitionStates, Collections.emptyList());
 
         assertTrue(builder.build((short) 5).size() <  builder.build((short) 4).size());
     }

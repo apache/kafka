@@ -58,8 +58,7 @@ public class LeaderAndIsrRequest extends AbstractControlRequest {
                 .setPort(n.port())
             ).collect(Collectors.toList());
 
-            LeaderAndIsrRequestData data = new LeaderAndIsrRequestData();
-            data
+            LeaderAndIsrRequestData data = new LeaderAndIsrRequestData()
                 .setControllerId(controllerId)
                 .setControllerEpoch(controllerEpoch)
                 .setBrokerEpoch(brokerEpoch)
@@ -71,7 +70,7 @@ public class LeaderAndIsrRequest extends AbstractControlRequest {
                 // the generated code if version >= 2
                 List<LeaderAndIsrTopicState> topicStates = groupedMap.entrySet().stream().map(entry ->
                     new LeaderAndIsrTopicState()
-                        .setName(entry.getKey())
+                        .setTopicName(entry.getKey())
                         .setPartitionStates(entry.getValue())
                 ).collect(Collectors.toList());
                 data.setTopicStates(topicStates);
@@ -111,7 +110,7 @@ public class LeaderAndIsrRequest extends AbstractControlRequest {
     private volatile List<LeaderAndIsrPartitionState> partitionStates;
 
     private LeaderAndIsrRequest(LeaderAndIsrRequestData data, short version) {
-        super(ApiKeys.LEADER_AND_ISR, version, data.controllerId(), data.controllerEpoch(), data.brokerEpoch());
+        super(ApiKeys.LEADER_AND_ISR, version);
         this.data = data;
     }
 
@@ -153,16 +152,16 @@ public class LeaderAndIsrRequest extends AbstractControlRequest {
     }
 
     public int controllerId() {
-        return controllerId;
+        return data.controllerId();
     }
 
     public int controllerEpoch() {
-        return controllerEpoch;
+        return data.controllerEpoch();
     }
 
     @Override
-    protected long size() {
-        return data.size(version());
+    public long brokerEpoch() {
+        return data.brokerEpoch();
     }
 
     public List<LeaderAndIsrPartitionState> partitionStates() {
@@ -174,7 +173,7 @@ public class LeaderAndIsrRequest extends AbstractControlRequest {
                         for (LeaderAndIsrTopicState topicState : data.topicStates()) {
                             for (LeaderAndIsrPartitionState partitionState : topicState.partitionStates()) {
                                 // Set the topic name so that we can always present the ungrouped view to callers
-                                partitionState.setTopicName(topicState.name());
+                                partitionState.setTopicName(topicState.topicName());
                                 partitionStates.add(partitionState);
                             }
                         }
@@ -186,6 +185,10 @@ public class LeaderAndIsrRequest extends AbstractControlRequest {
             }
         }
         return partitionStates;
+    }
+
+    protected int size() {
+        return data.size(version());
     }
 
     public static LeaderAndIsrRequest parse(ByteBuffer buffer, short version) {

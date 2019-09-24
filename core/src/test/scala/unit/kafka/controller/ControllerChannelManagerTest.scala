@@ -212,9 +212,9 @@ class ControllerChannelManagerTest {
     val updateMetadataRequest = updateMetadataRequests.head
     assertEquals(3, updateMetadataRequest.partitionStates.size)
     assertEquals(partitions.map { case (k, v) => (k, v.leader) },
-      updateMetadataRequest.partitionStates.asScala.map { case (k, v) => (k, v.basePartitionState.leader) })
+      updateMetadataRequest.partitionStates.asScala.map(ps => (new TopicPartition(ps.topicName, ps.partitionIndex), ps.leader)).toMap)
     assertEquals(partitions.map { case (k, v) => (k, v.isr) },
-      updateMetadataRequest.partitionStates.asScala.map { case (k, v) => (k, v.basePartitionState.isr.asScala) })
+      updateMetadataRequest.partitionStates.asScala.map(ps => (new TopicPartition(ps.topicName, ps.partitionIndex), ps.isr.asScala)).toMap)
 
     assertEquals(controllerId, updateMetadataRequest.controllerId)
     assertEquals(controllerEpoch, updateMetadataRequest.controllerEpoch)
@@ -278,16 +278,15 @@ class ControllerChannelManagerTest {
     assertEquals(3, updateMetadataRequest.partitionStates.size)
 
     assertTrue(updateMetadataRequest.partitionStates.asScala
-      .filterKeys(_.topic == "foo")
-      .values
-      .map(_.basePartitionState.leader)
+      .filter(_.topicName == "foo")
+      .map(_.leader)
       .forall(leaderId => leaderId == LeaderAndIsr.LeaderDuringDelete))
 
     assertEquals(partitions.filter { case (k, _) => k.topic == "bar" }.map { case (k, v) => (k, v.leader) },
-      updateMetadataRequest.partitionStates.asScala.filter { case (k, _) => k.topic == "bar" }.map { case (k, v) =>
-        (k, v.basePartitionState.leader) })
+      updateMetadataRequest.partitionStates.asScala.filter(ps => ps.topicName == "bar").map { ps =>
+        (new TopicPartition(ps.topicName, ps.partitionIndex), ps.leader) })
     assertEquals(partitions.map { case (k, v) => (k, v.isr) },
-      updateMetadataRequest.partitionStates.asScala.map { case (k, v) => (k, v.basePartitionState.isr.asScala) })
+      updateMetadataRequest.partitionStates.asScala.map(ps => (new TopicPartition(ps.topicName, ps.partitionIndex), ps.isr.asScala)))
 
     assertEquals(3, updateMetadataRequest.liveBrokers.size)
     assertEquals(Set(1, 2, 3), updateMetadataRequest.liveBrokers.asScala.map(_.id).toSet)

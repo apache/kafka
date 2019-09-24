@@ -94,12 +94,7 @@ class LeaderElectionTest extends ZooKeeperTestHarness {
     servers.head.startup()
     //make sure second server joins the ISR
     TestUtils.waitUntilTrue(() => {
-      val partitionInfoOpt = servers.last.metadataCache.getPartitionInfo(topic, partitionId)
-      if (partitionInfoOpt.isDefined) {
-        partitionInfoOpt.get.basePartitionState.isr.size() == 2
-      } else {
-        false
-      }
+      servers.last.metadataCache.getPartitionInfo(topic, partitionId).exists(_.isr.size == 2)
     }, "Inconsistent metadata after second broker startup")
 
     servers.last.shutdown()

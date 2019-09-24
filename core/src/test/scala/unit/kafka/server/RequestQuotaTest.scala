@@ -29,6 +29,7 @@ import org.apache.kafka.common.message.CreateTopicsRequestData.{CreatableTopic, 
 import org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocolCollection
 import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState
 import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity
+import org.apache.kafka.common.message.UpdateMetadataRequestData.{UpdateMetadataBroker, UpdateMetadataEndpoint, UpdateMetadataPartitionState}
 import org.apache.kafka.common.message._
 import org.apache.kafka.common.metrics.{KafkaMetric, Quota, Sensor}
 import org.apache.kafka.common.network.ListenerName
@@ -244,12 +245,24 @@ class RequestQuotaTest extends BaseRequestTest {
           new StopReplicaRequest.Builder(ApiKeys.STOP_REPLICA.latestVersion, brokerId, Int.MaxValue, Long.MaxValue, true, Set(tp).asJava)
 
         case ApiKeys.UPDATE_METADATA =>
-          val partitionState = Map(tp -> new UpdateMetadataRequest.PartitionState(
-            Int.MaxValue, brokerId, Int.MaxValue, List(brokerId).asJava, 2, Seq(brokerId).asJava, Seq.empty[Integer].asJava)).asJava
+          val partitionState = Seq(new UpdateMetadataPartitionState()
+            .setTopicName(tp.topic)
+            .setPartitionIndex(tp.partition)
+            .setControllerEpoch(Int.MaxValue)
+            .setLeader(brokerId)
+            .setLeaderEpoch(Int.MaxValue)
+            .setIsr(List(brokerId).asJava)
+            .setZkVersion(2)
+            .setReplicas(Seq(brokerId).asJava)
+            .setOfflineReplicas(Seq[Integer]().asJava)).asJava
           val securityProtocol = SecurityProtocol.PLAINTEXT
-          val brokers = Set(new UpdateMetadataRequest.Broker(brokerId,
-            Seq(new UpdateMetadataRequest.EndPoint("localhost", 0, securityProtocol,
-            ListenerName.forSecurityProtocol(securityProtocol))).asJava, null)).asJava
+          val brokers = Seq(new UpdateMetadataBroker()
+            .setId(brokerId)
+            .setEndpoints(Seq(new UpdateMetadataEndpoint()
+              .setHost("localhost")
+              .setPort(0)
+              .setSecurityProtocol(securityProtocol.id)
+              .setListener(ListenerName.forSecurityProtocol(securityProtocol).value)).asJava)).asJava
           new UpdateMetadataRequest.Builder(ApiKeys.UPDATE_METADATA.latestVersion, brokerId, Int.MaxValue, Long.MaxValue, partitionState, brokers)
 
         case ApiKeys.CONTROLLED_SHUTDOWN =>

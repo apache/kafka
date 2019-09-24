@@ -30,7 +30,7 @@ import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrParti
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network._
 import org.apache.kafka.common.protocol.ApiKeys
-import org.apache.kafka.common.requests.UpdateMetadataRequest.EndPoint
+import org.apache.kafka.common.message.UpdateMetadataRequestData.{UpdateMetadataBroker, UpdateMetadataEndpoint, UpdateMetadataPartitionState}
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.security.JaasContext
 import org.apache.kafka.common.security.auth.SecurityProtocol
@@ -345,7 +345,7 @@ abstract class AbstractControllerBrokerRequestBatch(config: KafkaConfig,
   val leaderAndIsrRequestMap = mutable.Map.empty[Int, mutable.Map[TopicPartition, LeaderAndIsrPartitionState]]
   val stopReplicaRequestMap = mutable.Map.empty[Int, ListBuffer[StopReplicaRequestInfo]]
   val updateMetadataRequestBrokerSet = mutable.Set.empty[Int]
-  val updateMetadataRequestPartitionInfoMap = mutable.Map.empty[TopicPartition, UpdateMetadataRequest.PartitionState]
+  val updateMetadataRequestPartitionInfoMap = mutable.Map.empty[TopicPartition, UpdateMetadataPartitionState]
 
   def sendEvent(event: ControllerEvent): Unit
 
@@ -422,13 +422,14 @@ abstract class AbstractControllerBrokerRequestBatch(config: KafkaConfig,
             if (beingDeleted) LeaderAndIsr.duringDelete(leaderAndIsr.isr)
             else leaderAndIsr
 
-          val partitionStateInfo = new UpdateMetadataRequest.PartitionState(controllerEpoch,
-            updatedLeaderAndIsr.leader,
-            updatedLeaderAndIsr.leaderEpoch,
-            updatedLeaderAndIsr.isr.map(Integer.valueOf).asJava,
-            updatedLeaderAndIsr.zkVersion,
-            replicas.map(Integer.valueOf).asJava,
-            offlineReplicas.map(Integer.valueOf).asJava)
+          val partitionStateInfo = new UpdateMetadataPartitionState()
+            .setControllerEpoch(controllerEpoch)
+            .setLeader(updatedLeaderAndIsr.leader)
+            .setLeaderEpoch(updatedLeaderAndIsr.leaderEpoch)
+            .setIsr(updatedLeaderAndIsr.isr.map(Integer.valueOf).asJava)
+            .setZkVersion(updatedLeaderAndIsr.zkVersion)
+            .setReplicas(replicas.map(Integer.valueOf).asJava)
+            .setOfflineReplicas(offlineReplicas.map(Integer.valueOf).asJava)
           updateMetadataRequestPartitionInfoMap.put(partition, partitionStateInfo)
 
         case None =>
@@ -475,7 +476,7 @@ abstract class AbstractControllerBrokerRequestBatch(config: KafkaConfig,
         s"for partition $tp")
     }
 
-    val partitionStates = Map.empty ++ updateMetadataRequestPartitionInfoMap
+    val partitionStates = updateMetadataRequestPartitionInfoMap.values.toIndexedSeq
     val updateMetadataRequestVersion: Short =
       if (config.interBrokerProtocolVersion >= KAFKA_2_2_IV0) 5
       else if (config.interBrokerProtocolVersion >= KAFKA_1_0_IV0) 4
@@ -484,23 +485,31 @@ abstract class AbstractControllerBrokerRequestBatch(config: KafkaConfig,
       else if (config.interBrokerProtocolVersion >= KAFKA_0_9_0) 1
       else 0
 
-    val liveBrokers = if (updateMetadataRequestVersion == 0) {
-      // Version 0 of UpdateMetadataRequest only supports PLAINTEXT.
-      controllerContext.liveOrShuttingDownBrokers.map { broker =>
+    val liveBrokers = controllerContext.liveOrShuttingDownBrokers.iterator.map { broker =>
+      val endpoints = if (updateMetadataRequestVersion == 0) {
+        // Version 0 of UpdateMetadataRequest only supports PLAINTEXT
         val securityProtocol = SecurityProtocol.PLAINTEXT
         val listenerName = ListenerName.forSecurityProtocol(securityProtocol)
         val node = broker.node(listenerName)
-        val endPoints = Seq(new EndPoint(node.host, node.port, securityProtocol, listenerName))
-        new UpdateMetadataRequest.Broker(broker.id, endPoints.asJava, broker.rack.orNull)
-      }
-    } else {
-      controllerContext.liveOrShuttingDownBrokers.map { broker =>
-        val endPoints = broker.endPoints.map { endPoint =>
-          new UpdateMetadataRequest.EndPoint(endPoint.host, endPoint.port, endPoint.securityProtocol, endPoint.listenerName)
+        Seq(new UpdateMetadataEndpoint()
+          .setHost(node.host)
+          .setPort(node.port)
+          .setSecurityProtocol(securityProtocol.id)
+          .setListener(listenerName.value))
+      } else {
+        broker.endPoints.map { endpoint =>
+          new UpdateMetadataEndpoint()
+            .setHost(endpoint.host)
+            .setPort(endpoint.port)
+            .setSecurityProtocol(endpoint.securityProtocol.id)
+            .setListener(endpoint.listenerName.value)
         }
-        new UpdateMetadataRequest.Broker(broker.id, endPoints.asJava, broker.rack.orNull)
       }
-    }
+      new UpdateMetadataBroker()
+        .setId(broker.id)
+        .setEndpoints(endpoints.asJava)
+        .setRack(broker.rack.orNull)
+    }.toIndexedSeq
 
     updateMetadataRequestBrokerSet.intersect(controllerContext.liveOrShuttingDownBrokerIds).foreach { broker =>
       val brokerEpoch = controllerContext.liveBrokerIdAndEpochs(broker)
