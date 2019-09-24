@@ -76,7 +76,6 @@ public interface KStream<K, V> {
      */
     KStream<K, V> filter(final Predicate<? super K, ? super V> predicate, final Named named);
 
-
     /**
      * Create a new {@code KStream} that consists all records of this stream which do <em>not</em> satisfy the given
      * predicate.
@@ -279,7 +278,6 @@ public interface KStream<K, V> {
      * @see #transformValues(ValueTransformerWithKeySupplier, String...)
      */
     <VR> KStream<K, VR> mapValues(final ValueMapper<? super V, ? extends VR> mapper);
-
 
     /**
      * Transform the value of each input record into a new value (with possible new type) of the output record.
@@ -2128,7 +2126,7 @@ public interface KStream<K, V> {
      * Because a new key is selected, an internal repartitioning topic may need to be created in Kafka if a
      * later operator depends on the newly selected key.
      * This topic will be named "${applicationId}-&lt;name&gt;-repartition", where "applicationId" is user-specified in
-     * {@link  StreamsConfig} via parameter {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG},
+     * {@link StreamsConfig} via parameter {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG},
      * "&lt;name&gt;" is an internally generated name, and "-repartition" is a fixed suffix.
      * <p>
      * You can retrieve all generated internal topic names via {@link Topology#describe()}.
@@ -2157,7 +2155,7 @@ public interface KStream<K, V> {
      * Because a new key is selected, an internal repartitioning topic may need to be created in Kafka if a
      * later operator depends on the newly selected key.
      * This topic will be as "${applicationId}-&lt;name&gt;-repartition", where "applicationId" is user-specified in
-     * {@link  StreamsConfig} via parameter {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG},
+     * {@link StreamsConfig} via parameter {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG},
      * "&lt;name&gt;" is an internally generated name, and "-repartition" is a fixed suffix.
      * <p>
      * You can retrieve all generated internal topic names via {@link Topology#describe()}.
@@ -2189,7 +2187,7 @@ public interface KStream<K, V> {
      * Because a new key is selected, an internal repartitioning topic may need to be created in Kafka if a later
      * operator depends on the newly selected key.
      * This topic will be named "${applicationId}-&lt;name&gt;-repartition", where "applicationId" is user-specified in
-     * {@link  StreamsConfig} via parameter {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG},
+     * {@link StreamsConfig} via parameter {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG},
      * "&lt;name&gt;" is either provided via {@link org.apache.kafka.streams.kstream.Grouped#as(String)} or an
      * internally generated name.
      * <p>
@@ -2253,7 +2251,7 @@ public interface KStream<K, V> {
      * If this requirement is not met, Kafka Streams will automatically repartition the data, i.e., it will create an
      * internal repartitioning topic in Kafka and write and re-read the data via this topic before the actual join.
      * The repartitioning topic will be named "${applicationId}-&lt;name&gt;-repartition", where "applicationId" is
-     * user-specified in {@link  StreamsConfig} via parameter
+     * user-specified in {@link StreamsConfig} via parameter
      * {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "&lt;name&gt;" is an internally generated
      * name, and "-repartition" is a fixed suffix.
      * <p>
@@ -2264,7 +2262,7 @@ public interface KStream<K, V> {
      * <p>
      * Both of the joining {@code KStream}s will be materialized in local state stores with auto-generated store names.
      * For failure and recovery each store will be backed by an internal changelog topic that will be created in Kafka.
-     * The changelog topic will be named "${applicationId}-storeName-changelog", where "applicationId" is user-specified
+     * The changelog topic will be named "${applicationId}-&lt;storename&gt;-changelog", where "applicationId" is user-specified
      * in {@link StreamsConfig} via parameter
      * {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "storeName" is an
      * internally generated name, and "-changelog" is a fixed suffix.
@@ -2330,7 +2328,7 @@ public interface KStream<K, V> {
      * If this requirement is not met, Kafka Streams will automatically repartition the data, i.e., it will create an
      * internal repartitioning topic in Kafka and write and re-read the data via this topic before the actual join.
      * The repartitioning topic will be named "${applicationId}-&lt;name&gt;-repartition", where "applicationId" is
-     * user-specified in {@link  StreamsConfig} via parameter
+     * user-specified in {@link StreamsConfig} via parameter
      * {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "&lt;name&gt;" is an internally generated
      * name, and "-repartition" is a fixed suffix.
      * <p>
@@ -2341,7 +2339,7 @@ public interface KStream<K, V> {
      * <p>
      * Both of the joining {@code KStream}s will be materialized in local state stores with auto-generated store names.
      * For failure and recovery each store will be backed by an internal changelog topic that will be created in Kafka.
-     * The changelog topic will be named "${applicationId}-storeName-changelog", where "applicationId" is user-specified
+     * The changelog topic will be named "${applicationId}-&lt;storename&gt;-changelog", where "applicationId" is user-specified
      * in {@link StreamsConfig} via parameter
      * {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "storeName" is an
      * internally generated name, and "-changelog" is a fixed suffix.
@@ -2365,6 +2363,7 @@ public interface KStream<K, V> {
                                  final ValueJoiner<? super V, ? super VO, ? extends VR> joiner,
                                  final JoinWindows windows,
                                  final Joined<K, V, VO> joined);
+
     /**
      * Join records of this stream with another {@code KStream}'s records using windowed inner equi join using the
      * {@link Joined} instance for configuration of the {@link Serde key serde}, {@link Serde this stream's value serde},
@@ -2410,7 +2409,7 @@ public interface KStream<K, V> {
      * If this requirement is not met, Kafka Streams will automatically repartition the data, i.e., it will create an
      * internal repartitioning topic in Kafka and write and re-read the data via this topic before the actual join.
      * The repartitioning topic will be named "${applicationId}-&lt;name&gt;-repartition", where "applicationId" is
-     * user-specified in {@link  StreamsConfig} via parameter
+     * user-specified in {@link StreamsConfig} via parameter
      * {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "&lt;name&gt;" is an internally generated
      * name, and "-repartition" is a fixed suffix.
      * <p>
@@ -2422,19 +2421,19 @@ public interface KStream<K, V> {
      * Both of the joining {@code KStream}s will be materialized in local state stores with auto-generated store names,
      * unless a name is provided via a {@code Materialized} instance.
      * For failure and recovery each store will be backed by an internal changelog topic that will be created in Kafka.
-     * The changelog topic will be named "${applicationId}-storeName-changelog", where "applicationId" is user-specified
+     * The changelog topic will be named "${applicationId}-&lt;storename&gt;-changelog", where "applicationId" is user-specified
      * in {@link StreamsConfig} via parameter
      * {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "storeName" is an
      * internally generated name, and "-changelog" is a fixed suffix.
      * <p>
      * You can retrieve all generated internal topic names via {@link Topology#describe()}.
      *
-     * @param <VO>        the value type of the other stream
-     * @param <VR>        the value type of the result stream
-     * @param otherStream the {@code KStream} to be joined with this stream
-     * @param joiner      a {@link org.apache.kafka.streams.kstream.ValueJoiner} that computes the join result for a pair of matching records
-     * @param windows     the specification of the {@link org.apache.kafka.streams.kstream.JoinWindows}
-     * @param streamJoined
+     * @param <VO>           the value type of the other stream
+     * @param <VR>           the value type of the result stream
+     * @param otherStream    the {@code KStream} to be joined with this stream
+     * @param joiner         a {@link ValueJoiner} that computes the join result for a pair of matching records
+     * @param windows        the specification of the {@link JoinWindows}
+     * @param streamJoined   a {@link StreamJoined} used to configure join stores
      * @return a {@code KStream} that contains join-records for each key and values computed by the given
      * {@link ValueJoiner}, one for each matched record-pair with the same key and within the joining window intervals
      * @see #leftJoin(KStream, ValueJoiner, JoinWindows, Joined)
@@ -2444,8 +2443,6 @@ public interface KStream<K, V> {
                                  final ValueJoiner<? super V, ? super VO, ? extends VR> joiner,
                                  final JoinWindows windows,
                                  final StreamJoined<K, V, VO> streamJoined);
-
-
 
     /**
      * Join records of this stream with another {@code KStream}'s records using windowed left equi join with default
@@ -2506,7 +2503,7 @@ public interface KStream<K, V> {
      * <p>
      * Both of the joining {@code KStream}s will be materialized in local state stores with auto-generated store names.
      * For failure and recovery each store will be backed by an internal changelog topic that will be created in Kafka.
-     * The changelog topic will be named "${applicationId}-storeName-changelog", where "applicationId" is user-specified
+     * The changelog topic will be named "${applicationId}-&lt;storename&gt;-changelog", where "applicationId" is user-specified
      * in {@link StreamsConfig} via parameter {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG},
      * "storeName" is an internally generated name, and "-changelog" is a fixed suffix.
      * <p>
@@ -2587,7 +2584,7 @@ public interface KStream<K, V> {
      * <p>
      * Both of the joining {@code KStream}s will be materialized in local state stores with auto-generated store names.
      * For failure and recovery each store will be backed by an internal changelog topic that will be created in Kafka.
-     * The changelog topic will be named "${applicationId}-storeName-changelog", where "applicationId" is user-specified
+     * The changelog topic will be named "${applicationId}-&lt;storename&gt;-changelog", where "applicationId" is user-specified
      * in {@link StreamsConfig} via parameter {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG},
      * "storeName" is an internally generated name, and "-changelog" is a fixed suffix.
      * <p>
@@ -2673,7 +2670,7 @@ public interface KStream<K, V> {
      * Both of the joining {@code KStream}s will be materialized in local state stores with auto-generated store names,
      * unless a name is provided via a {@code Materialized} instance.
      * For failure and recovery each store will be backed by an internal changelog topic that will be created in Kafka.
-     * The changelog topic will be named "${applicationId}-storeName-changelog", where "applicationId" is user-specified
+     * The changelog topic will be named "${applicationId}-&lt;storename&gt;-changelog", where "applicationId" is user-specified
      * in {@link StreamsConfig} via parameter {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG},
      * "storeName" is an internally generated name, and "-changelog" is a fixed suffix.
      * <p>
@@ -2756,7 +2753,7 @@ public interface KStream<K, V> {
      * <p>
      * Both of the joining {@code KStream}s will be materialized in local state stores with auto-generated store names.
      * For failure and recovery each store will be backed by an internal changelog topic that will be created in Kafka.
-     * The changelog topic will be named "${applicationId}-storeName-changelog", where "applicationId" is user-specified
+     * The changelog topic will be named "${applicationId}-&lt;storename&gt;-changelog", where "applicationId" is user-specified
      * in {@link StreamsConfig} via parameter {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG},
      * "storeName" is an internally generated name, and "-changelog" is a fixed suffix.
      * <p>
@@ -2838,7 +2835,7 @@ public interface KStream<K, V> {
      * <p>
      * Both of the joining {@code KStream}s will be materialized in local state stores with auto-generated store names.
      * For failure and recovery each store will be backed by an internal changelog topic that will be created in Kafka.
-     * The changelog topic will be named "${applicationId}-storeName-changelog", where "applicationId" is user-specified
+     * The changelog topic will be named "${applicationId}-&lt;storename&gt;-changelog", where "applicationId" is user-specified
      * in {@link StreamsConfig} via parameter {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG},
      * "storeName" is an internally generated name, and "-changelog" is a fixed suffix.
      * <p>
@@ -2925,7 +2922,7 @@ public interface KStream<K, V> {
      * Both of the joining {@code KStream}s will be materialized in local state stores with auto-generated store names,
      * unless a name is provided via a {@code Materialized} instance.
      * For failure and recovery each store will be backed by an internal changelog topic that will be created in Kafka.
-     * The changelog topic will be named "${applicationId}-storeName-changelog", where "applicationId" is user-specified
+     * The changelog topic will be named "${applicationId}-&lt;storename&gt;-changelog", where "applicationId" is user-specified
      * in {@link StreamsConfig} via parameter {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG},
      * "storeName" is an internally generated name, and "-changelog" is a fixed suffix.
      * <p>

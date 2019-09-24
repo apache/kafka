@@ -737,11 +737,13 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
                                         final JoinWindows windows,
                                         final StreamJoined<K, V, VO> streamJoined) {
 
-        return doJoin(otherStream,
-            joiner,
-            windows,
-            streamJoined,
-            new KStreamImplJoin(false, false));
+        return doJoin(
+                      otherStream,
+                      joiner,
+                      windows,
+                      streamJoined,
+                      new KStreamImplJoin(false, false)
+                    );
 
     }
 
@@ -1180,7 +1182,6 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
             final StreamsGraphNode thisStreamsGraphNode = ((AbstractStream) lhs).streamsGraphNode;
             final StreamsGraphNode otherStreamsGraphNode = ((AbstractStream) other).streamsGraphNode;
 
-
             final StoreBuilder<WindowStore<K1, V1>> thisWindowStore;
             final StoreBuilder<WindowStore<K1, V2>> otherWindowStore;
             final String userProvidedBaseStoreName = streamJoinedInternal.storeName();
@@ -1188,8 +1189,8 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
             final String thisJoinStoreName = userProvidedBaseStoreName == null ? joinThisGeneratedName : userProvidedBaseStoreName + joinThisSuffix;
             final String otherJoinStoreName = userProvidedBaseStoreName == null ? joinOtherGeneratedName : userProvidedBaseStoreName + joinOtherSuffix;
 
-            final WindowBytesStoreSupplier  thisStoreSupplier =  streamJoinedInternal.thisStoreSupplier();
-            final WindowBytesStoreSupplier otherStoreSupplier =  streamJoinedInternal.otherStoreSupplier();
+            final WindowBytesStoreSupplier  thisStoreSupplier = streamJoinedInternal.thisStoreSupplier();
+            final WindowBytesStoreSupplier otherStoreSupplier = streamJoinedInternal.otherStoreSupplier();
 
             assertUniqueStoreNames(thisStoreSupplier, otherStoreSupplier);
 
