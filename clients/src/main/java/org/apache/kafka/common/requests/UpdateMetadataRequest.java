@@ -72,15 +72,8 @@ public class UpdateMetadataRequest extends AbstractControlRequest {
                     .setLiveBrokers(liveBrokers);
 
             if (version >= 5) {
-                Map<String, List<UpdateMetadataPartitionState>> groupedMap = groupByTopic(partitionStates);
-                // We don't null out the topic name in UpdateMetadataTopicState since it's ignored by the generated
-                // code if version >= 5
-                List<UpdateMetadataTopicState> topicStates = groupedMap.entrySet().stream().map(entry ->
-                    new UpdateMetadataTopicState()
-                        .setTopicName(entry.getKey())
-                        .setPartitionStates(entry.getValue())
-                ).collect(Collectors.toList());
-                data.setTopicStates(topicStates);
+                Map<String, UpdateMetadataTopicState> topicStatesMap = groupByTopic(partitionStates);
+                data.setTopicStates(new ArrayList<>(topicStatesMap.values()));
             } else {
                 data.setUngroupedPartitionStates(partitionStates);
             }
@@ -88,14 +81,16 @@ public class UpdateMetadataRequest extends AbstractControlRequest {
             return new UpdateMetadataRequest(data, version);
         }
 
-        private static Map<String, List<UpdateMetadataPartitionState>> groupByTopic(List<UpdateMetadataPartitionState> partitionStates) {
-            Map<String, List<UpdateMetadataPartitionState>> dataByTopic = new HashMap<>();
+        private static Map<String, UpdateMetadataTopicState> groupByTopic(List<UpdateMetadataPartitionState> partitionStates) {
+            Map<String, UpdateMetadataTopicState> topicStates = new HashMap<>();
             for (UpdateMetadataPartitionState partition : partitionStates) {
-                List<UpdateMetadataPartitionState> topicData = dataByTopic.computeIfAbsent(partition.topicName(),
-                    t -> new ArrayList<>());
-                topicData.add(partition);
+                // We don't null out the topic name in UpdateMetadataTopicState since it's ignored by the generated
+                // code if version >= 5
+                UpdateMetadataTopicState topicState = topicStates.computeIfAbsent(partition.topicName(),
+                    t -> new UpdateMetadataTopicState().setTopicName(partition.topicName()));
+                topicState.partitionStates().add(partition);
             }
-            return dataByTopic;
+            return topicStates;
         }
 
         @Override

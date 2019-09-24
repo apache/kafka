@@ -65,15 +65,8 @@ public class LeaderAndIsrRequest extends AbstractControlRequest {
                 .setLiveLeaders(leaders);
 
             if (version >= 2) {
-                Map<String, List<LeaderAndIsrPartitionState>> groupedMap = groupByTopic(partitionStates);
-                // We don't null out the topic name in LeaderAndIsrRequestPartition since it's ignored by
-                // the generated code if version >= 2
-                List<LeaderAndIsrTopicState> topicStates = groupedMap.entrySet().stream().map(entry ->
-                    new LeaderAndIsrTopicState()
-                        .setTopicName(entry.getKey())
-                        .setPartitionStates(entry.getValue())
-                ).collect(Collectors.toList());
-                data.setTopicStates(topicStates);
+                Map<String, LeaderAndIsrTopicState> topicStatesMap = groupByTopic(partitionStates);
+                data.setTopicStates(new ArrayList<>(topicStatesMap.values()));
             } else {
                 data.setUngroupedPartitionStates(partitionStates);
             }
@@ -81,14 +74,16 @@ public class LeaderAndIsrRequest extends AbstractControlRequest {
             return new LeaderAndIsrRequest(data, version);
         }
 
-        private static Map<String, List<LeaderAndIsrPartitionState>> groupByTopic(List<LeaderAndIsrPartitionState> partitionStates) {
-            Map<String, List<LeaderAndIsrPartitionState>> dataByTopic = new HashMap<>();
+        private static Map<String, LeaderAndIsrTopicState> groupByTopic(List<LeaderAndIsrPartitionState> partitionStates) {
+            Map<String, LeaderAndIsrTopicState> topicStates = new HashMap<>();
+            // We don't null out the topic name in LeaderAndIsrRequestPartition since it's ignored by
+            // the generated code if version >= 2
             for (LeaderAndIsrPartitionState partition : partitionStates) {
-                List<LeaderAndIsrPartitionState> topicData = dataByTopic.computeIfAbsent(partition.topicName(),
-                    t -> new ArrayList<>());
-                topicData.add(partition);
+                LeaderAndIsrTopicState topicState = topicStates.computeIfAbsent(partition.topicName(),
+                    t -> new LeaderAndIsrTopicState().setTopicName(partition.topicName()));
+                topicState.partitionStates().add(partition);
             }
-            return dataByTopic;
+            return topicStates;
         }
 
         @Override
@@ -173,6 +168,7 @@ public class LeaderAndIsrRequest extends AbstractControlRequest {
                         for (LeaderAndIsrTopicState topicState : data.topicStates()) {
                             for (LeaderAndIsrPartitionState partitionState : topicState.partitionStates()) {
                                 // Set the topic name so that we can always present the ungrouped view to callers
+                                System.out.println("Topic name " + topicState.topicName());
                                 partitionState.setTopicName(topicState.topicName());
                                 partitionStates.add(partitionState);
                             }
