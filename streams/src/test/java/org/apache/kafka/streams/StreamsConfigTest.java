@@ -81,6 +81,12 @@ public class StreamsConfigTest {
         streamsConfig = new StreamsConfig(props);
     }
 
+    @Test(expected = ConfigException.class)
+    public void testIllegalMetricsRecordingLevel() {
+        props.put(StreamsConfig.METRICS_RECORDING_LEVEL_CONFIG, "illegalConfig");
+        new StreamsConfig(props);
+    }
+
     @Test
     public void testOsDefaultSocketBufferSizes() {
         props.put(StreamsConfig.SEND_BUFFER_CONFIG, CommonClientConfigs.RECEIVE_BUFFER_LOWER_BOUND);
