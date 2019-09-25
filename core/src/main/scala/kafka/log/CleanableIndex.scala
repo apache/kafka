@@ -18,9 +18,19 @@ package kafka.log
 
 import java.io.{Closeable, File}
 
+import org.apache.kafka.common.utils.Utils
+
 abstract class CleanableIndex(@volatile var file: File) extends Closeable {
 
-  def renameTo(f: File)
+  /**
+   * Rename the file that backs this offset index
+   *
+   * @throws IOException if rename fails
+   */
+  def renameTo(toBeRenamedFile: File): Unit = {
+    try Utils.atomicMoveWithFallback(file.toPath, toBeRenamedFile.toPath)
+    finally file = toBeRenamedFile
+  }
 
   def deleteIfExists(): Boolean
 }

@@ -158,11 +158,6 @@ class RemoteLogIndex(_file: File, val startOffset: Long) extends CleanableIndex(
     channel
   }
 
-  def renameTo(renamedFile: File) = {
-    try Utils.atomicMoveWithFallback(file.toPath, renamedFile.toPath)
-    finally file = renamedFile
-  }
-
   /**
    */
   def reset(): Unit = {

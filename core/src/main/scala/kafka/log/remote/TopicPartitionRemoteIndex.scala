@@ -83,38 +83,42 @@ class TopicPartitionRemoteIndex(val topicPartition: TopicPartition, logDir: File
     }
   }
 
-  def cleanupIndexesUntil(offset: Long): Seq[CleanableIndex] = {
+  def cleanupIndexesUntil(offset: Long): Iterable[CleanableIndex] = {
 
-    def removeIndexes(indexes: ConcurrentNavigableMap[Long, RemoteSegmentIndex],
-                      fn: CleanableIndex => Any): Seq[CleanableIndex] = {
-      val keys = indexes.headMap(offset, true).keySet().asScala
-      if(keys.isEmpty) {
-        Seq.empty
+    def removeIndexes(toOffset:Long, indexes: ConcurrentNavigableMap[Long, RemoteSegmentIndex]): Iterable[CleanableIndex] = {
+      if(offset < 0) {
+        val result = indexes.values().asScala.toList.flatMap(x => x.asList())
+        indexes.clear()
+        result
       } else {
-        val max = keys.max
-        // do not remove it as that would remove the entry from indexes map
-        // filter max key as that should not be removed
-        keys.filter(key => key != max).flatMap { key =>
-          val index = indexes.remove(key)
-          val internalIndexes = index.asList()
-          internalIndexes.foreach { x => fn(x) }
-          internalIndexes
-        }.toSeq
-      }
-    }
-
-    def closeAndRenameIndex(index: CleanableIndex): Unit = {
-      Utils.closeQuietly(index, index.getClass.getSimpleName)
-      try {
-        index.renameTo(new File(CoreUtils.replaceSuffix(index.file.getPath, "", Log.DeletedFileSuffix)))
-      } catch {
-        case ex: IOException => warn(s"remoteLogIndex with file: ${index.file} could not be renamed", ex)
+        val keys = indexes.headMap(toOffset, true).keySet().asScala
+        if (keys.isEmpty) {
+          Seq.empty
+        } else {
+          val max = keys.max
+          // do not remove it as that would remove the entry from indexes map
+          // filter max key as that should not be removed because that index entry will contain offsets >= they key.
+          keys.filter(key => key != max).flatMap { key =>
+            val index = indexes.remove(key)
+            index.asList()
+          }.toSeq
+        }
       }
     }
 
     CoreUtils.inLock(lock) {
       // get the entries which have key <= the given offset
-      removeIndexes(remoteSegmentIndexes, closeAndRenameIndex)
+      val removedIndexes = removeIndexes(offset, remoteSegmentIndexes)
+      removedIndexes.foreach { index => {
+        Utils.closeQuietly(index, index.getClass.getSimpleName)
+        try {
+          index.renameTo(new File(CoreUtils.replaceSuffix(index.file.getPath, "", Log.DeletedFileSuffix)))
+        } catch {
+          case ex: IOException => warn(s"remoteLogIndex with file: ${index.file} could not be renamed", ex)
+        }
+      }
+      }
+      removedIndexes
     }
   }
 
@@ -173,7 +177,7 @@ class TopicPartitionRemoteIndex(val topicPartition: TopicPartition, logDir: File
         remoteOffsetIndex.flush()
         remoteTimeIndex.flush()
 
-        addIndex(resultantStartOffset, remoteLogIndex, remoteOffsetIndex, remoteTimeIndex)
+        addIndex(baseOffset, remoteLogIndex, remoteOffsetIndex, remoteTimeIndex)
 
         Some(resultantStartOffset)
       } else None

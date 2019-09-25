@@ -201,16 +201,6 @@ abstract class AbstractIndex[K, V](_file: File, val baseOffset: Long,
   }
 
   /**
-   * Rename the file that backs this offset index
-   *
-   * @throws IOException if rename fails
-   */
-  def renameTo(f: File): Unit = {
-    try Utils.atomicMoveWithFallback(file.toPath, f.toPath)
-    finally file = f
-  }
-
-  /**
    * Flush the data in the index to disk
    */
   def flush(): Unit = {

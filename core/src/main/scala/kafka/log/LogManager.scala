@@ -625,7 +625,7 @@ class LogManager(logDirs: Seq[File],
     } {
       try {
         val logStartOffsets = partitionToLog.collect {
-          case (k, log) if log.logStartOffset > log.logSegments.head.baseOffset => k -> log.logStartOffset
+          case (k, log) if (remoteLogManagerConfig.remoteLogStorageEnable || log.logStartOffset > log.logSegments.head.baseOffset) => k -> log.logStartOffset
         }
         checkpoint.write(logStartOffsets)
       } catch {

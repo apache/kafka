@@ -309,8 +309,8 @@ class Log(@volatile var dir: File,
       s"log end offset $logEndOffset in ${time.milliseconds() - startMs} ms")
   }
 
-  def updateLogStartOffsetFromRemoteTier(lso: Long): Unit = {
-    logStartOffset = lso
+  def updateLogStartOffsetFromRemoteTier(remoteLso: Long): Unit = {
+    logStartOffset = if (remoteLso < 0) localLogStartOffset else remoteLso
   }
 
   def highWatermark: Long = highWatermarkMetadata.messageOffset

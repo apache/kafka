@@ -376,9 +376,9 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
         logManager.getLog(tp)
       }
 
-      def updateRemoteLogStartOffset(tp:TopicPartition, lso:Long) : Unit = {
+      def updateRemoteLogStartOffset(tp:TopicPartition, remoteLso:Long) : Unit = {
         logManager.getLog(tp).foreach(log => {
-          log.updateLogStartOffsetFromRemoteTier(lso)
+          log.updateLogStartOffsetFromRemoteTier(remoteLso)
         })
       }
       Some(new RemoteLogManager(fetchLog, updateRemoteLogStartOffset, remoteLogManagerConfig, time))

@@ -35,19 +35,10 @@ class TopicPartitionRemoteIndexTest extends JUnitSuite with Logging {
   private val partition = new TopicPartition("topic", 0)
 
   @Test
-  def testExistingIndexes() : Unit = {
-    val dir = new File("/tmp/kafka-logs/drivers-0")
-    val topicPartitionRemoteIndex = TopicPartitionRemoteIndex.open(partition, dir)
-    val lastOffset = topicPartitionRemoteIndex.lastOffset
-    assert(lastOffset.get > 0)
-  }
-
-  @Test
-  def testAppendLookupIndexWithBase(): Unit = {
+  def testAppendLookupIndexWithBaseAndReopenIndex(): Unit = {
     val entriesCt = 10
     val offsetStep = 100
-//    val dir = TestUtils.tempDir()
-    val dir = new File("/tmp/kafka-logs/drivers-0")
+    val dir = TestUtils.tempDir()
     val topicPartitionRemoteIndex = TopicPartitionRemoteIndex.open(partition, dir)
 
     // check for baseOffset with 0
@@ -57,11 +48,11 @@ class TopicPartitionRemoteIndexTest extends JUnitSuite with Logging {
     doTestIndexes(entriesCt, offsetStep, 10000L, dir, topicPartitionRemoteIndex)
 
     // reopen the index and check whether offsets are defined.
-    val partitionRemoteIndex = TopicPartitionRemoteIndex.open(partition, dir)
+    val reopenedPartitionIndex = TopicPartitionRemoteIndex.open(partition, dir)
 
-    assertEquals(0L, partitionRemoteIndex.startOffset.get)
-    assertEquals(10000L, partitionRemoteIndex.lastBatchStartOffset.get)
-    assertEquals(10900L, partitionRemoteIndex.lastOffset.get)
+    assertEquals(0L, reopenedPartitionIndex.startOffset.get)
+    assertEquals(10000L, reopenedPartitionIndex.lastBatchStartOffset.get)
+    assertEquals(10902L, reopenedPartitionIndex.lastOffset.get)
   }
 
   @Test
