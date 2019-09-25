@@ -192,7 +192,7 @@ public class UpdateMetadataRequest extends AbstractControlRequest {
         return new UpdateMetadataRequest(ApiKeys.UPDATE_METADATA.parseRequest(version, buffer), version);
     }
 
-    private static class PartitionStateIterator extends NestedIterator<UpdateMetadataTopicState, UpdateMetadataPartitionState> {
+    private static class PartitionStateIterator extends FlattenedIterator<UpdateMetadataTopicState, UpdateMetadataPartitionState> {
 
         PartitionStateIterator(List<UpdateMetadataTopicState> topicStates) {
             super(topicStates);

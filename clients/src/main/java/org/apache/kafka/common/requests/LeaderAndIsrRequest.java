@@ -187,7 +187,7 @@ public class LeaderAndIsrRequest extends AbstractControlRequest {
         return new LeaderAndIsrRequest(ApiKeys.LEADER_AND_ISR.parseRequest(version, buffer), version);
     }
 
-    private static class PartitionStateIterator extends NestedIterator<LeaderAndIsrTopicState, LeaderAndIsrPartitionState> {
+    private static class PartitionStateIterator extends FlattenedIterator<LeaderAndIsrTopicState, LeaderAndIsrPartitionState> {
 
         PartitionStateIterator(List<LeaderAndIsrTopicState> topicStates) {
             super(topicStates);

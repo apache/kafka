@@ -19,14 +19,16 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.utils.AbstractIterator;
 
 import java.util.Iterator;
-import java.util.List;
 
-abstract class NestedIterator<O, I> extends AbstractIterator<I> {
+/**
+ * Provides a flattened iterator over the inner elements of an outer iterable.
+ */
+abstract class FlattenedIterator<O, I> extends AbstractIterator<I> {
     private final Iterator<O> outerIterator;
     private Iterator<I> innerIterator;
 
-    NestedIterator(List<O> topicStates) {
-        outerIterator = topicStates.iterator();
+    FlattenedIterator(Iterable<O> outer) {
+        outerIterator = outer.iterator();
     }
 
     public abstract Iterable<I> innerIterable(O outer);
