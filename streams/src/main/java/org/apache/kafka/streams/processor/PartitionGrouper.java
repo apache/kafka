@@ -32,7 +32,6 @@ import java.util.Set;
  *
  * @deprecated since 2.4 release; will be removed in 3.0.0 via KAFKA-7785
  */
-// TODO: move this class into an internal package instead of deleting it (cf KAFKA-7785)
 @Deprecated
 public interface PartitionGrouper {
 
