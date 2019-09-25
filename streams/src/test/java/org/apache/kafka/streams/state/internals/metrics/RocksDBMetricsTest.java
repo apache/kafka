@@ -204,17 +204,14 @@ public class RocksDBMetricsTest {
     public void shouldGetNumberOfOpenFilesSensor() {
         final String metricNamePrefix = "number-open-files";
         final String description = "Number of currently open files";
-        verifyValueSensor(metricNamePrefix, description, RocksDBMetrics::numberOfOpenFilesSensor);
+        verifySumSensor(metricNamePrefix, false, description, RocksDBMetrics::numberOfOpenFilesSensor);
     }
 
     @Test
     public void shouldGetNumberOfFilesErrors() {
         final String metricNamePrefix = "number-file-errors";
         final String description = "Total number of file errors occurred";
-        setupStreamsMetricsMock(metricNamePrefix);
-        StreamsMetricsImpl.addSumMetricToSensor(sensor, STATE_LEVEL_GROUP, tags, metricNamePrefix, description);
-
-        replayCallAndVerify(RocksDBMetrics::numberOfFileErrorsSensor);
+        verifySumSensor(metricNamePrefix, true, description, RocksDBMetrics::numberOfFileErrorsSensor);
     }
 
     private void verifyRateAndTotalSensor(final String metricNamePrefix,
@@ -248,6 +245,21 @@ public class RocksDBMetricsTest {
                                    final SensorCreator sensorCreator) {
         setupStreamsMetricsMock(metricNamePrefix);
         StreamsMetricsImpl.addValueMetricToSensor(sensor, STATE_LEVEL_GROUP, tags, metricNamePrefix, description);
+
+        replayCallAndVerify(sensorCreator);
+    }
+
+    private void verifySumSensor(final String metricNamePrefix,
+                                 final boolean withSuffix,
+                                 final String description,
+                                 final SensorCreator sensorCreator) {
+        setupStreamsMetricsMock(metricNamePrefix);
+        if (withSuffix) {
+            StreamsMetricsImpl.addSumMetricToSensor(sensor, STATE_LEVEL_GROUP, tags, metricNamePrefix, description);
+        } else {
+            StreamsMetricsImpl
+                .addSumMetricToSensor(sensor, STATE_LEVEL_GROUP, tags, metricNamePrefix, withSuffix, description);
+        }
 
         replayCallAndVerify(sensorCreator);
     }

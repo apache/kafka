@@ -67,7 +67,9 @@ import org.apache.kafka.common.TopicPartition;
  * During a rebalance event, the {@link #onPartitionsAssigned(Collection) onPartitionsAssigned} function will always be triggered exactly once when
  * the rebalance completes. That is, even if there is no newly assigned partitions for a consumer member, its {@link #onPartitionsAssigned(Collection) onPartitionsAssigned}
  * will still be triggered with an empty collection of partitions. As a result this function can be used also to notify when a rebalance event has happened.
- * On the other hand, {@link #onPartitionsRevoked(Collection)} and {@link #onPartitionsLost(Collection)}
+ * With eager rebalancing, {@link #onPartitionsRevoked(Collection)} will always be called at the start of a rebalance. On the other hand, {@link #onPartitionsLost(Collection)}
+ * will only be called when there were non-empty partitions that were lost.
+ * With cooperative rebalancing, {@link #onPartitionsRevoked(Collection)} and {@link #onPartitionsLost(Collection)}
  * will only be triggered when there are non-empty partitions revoked or lost from this consumer member during a rebalance event.
  * <p>
  * It is possible
@@ -117,16 +119,16 @@ import org.apache.kafka.common.TopicPartition;
 public interface ConsumerRebalanceListener {
 
     /**
-     * A callback method the user can implement to provide handling of offset commits to a customized store on the start
-     * of a rebalance operation. This method will be called before a rebalance operation starts and after the consumer
-     * stops fetching data. It can also be called when consumer is being closed ({@link KafkaConsumer#close(Duration)})
+     * A callback method the user can implement to provide handling of offset commits to a customized store.
+     * This method will be called during a rebalance operation when the consumer has to give up some partitions.
+     * It can also be called when consumer is being closed ({@link KafkaConsumer#close(Duration)})
      * or is unsubscribing ({@link KafkaConsumer#unsubscribe()}).
      * It is recommended that offsets should be committed in this callback to either Kafka or a
      * custom offset store to prevent duplicate data.
      * <p>
-     * For examples on usage of this API, see Usage Examples section of {@link KafkaConsumer KafkaConsumer}
-     * <p>
-     * <b>NOTE:</b> This method is only called before rebalances. It is not called prior to {@link KafkaConsumer#close()}.
+     * In eager rebalancing, it will always be called at the start of a rebalance and after the consumer stops fetching data.
+     * In cooperative rebalancing, it will be called at the end of a rebalance on the set of partitions being revoked iff the set is non-empty.
+     * For examples on usage of this API, see Usage Examples section of {@link KafkaConsumer KafkaConsumer}.
      * <p>
      * It is common for the revocation callback to use the consumer instance in order to commit offsets. It is possible
      * for a {@link org.apache.kafka.common.errors.WakeupException} or {@link org.apache.kafka.common.errors.InterruptException}

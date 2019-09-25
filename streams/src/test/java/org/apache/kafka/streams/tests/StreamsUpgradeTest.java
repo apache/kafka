@@ -124,7 +124,7 @@ public class StreamsUpgradeTest {
             // 3. Task ids of valid local states on the client's state directory.
 
             final TaskManager taskManager = taskManger();
-            final Set<TaskId> previousActiveTasks = taskManager.prevActiveTaskIds();
+            final Set<TaskId> previousActiveTasks = taskManager.previousRunningTaskIds();
             final Set<TaskId> standbyTasks = taskManager.cachedTasksIds();
             standbyTasks.removeAll(previousActiveTasks);
             final FutureSubscriptionInfo data = new FutureSubscriptionInfo(
@@ -176,12 +176,15 @@ public class StreamsUpgradeTest {
             final Map<TopicPartition, PartitionInfo> topicToPartitionInfo = new HashMap<>();
             final Map<HostInfo, Set<TopicPartition>> partitionsByHost;
 
-            processVersionTwoAssignment("test ", info, partitions, activeTasks, topicToPartitionInfo);
+            final Map<TopicPartition, TaskId> partitionsToTaskId = new HashMap<>();
+
+            processVersionTwoAssignment("test ", info, partitions, activeTasks, topicToPartitionInfo, partitionsToTaskId);
             partitionsByHost = info.partitionsByHost();
 
             final TaskManager taskManager = taskManger();
             taskManager.setClusterMetadata(Cluster.empty().withPartitions(topicToPartitionInfo));
             taskManager.setPartitionsByHostState(partitionsByHost);
+            taskManager.setPartitionsToTaskId(partitionsToTaskId);
             taskManager.setAssignmentMetadata(activeTasks, info.standbyTasks());
             taskManager.updateSubscriptionsFromAssignment(partitions);
         }

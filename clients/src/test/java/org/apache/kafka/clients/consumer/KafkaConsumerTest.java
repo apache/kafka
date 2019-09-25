@@ -696,7 +696,7 @@ public class KafkaConsumerTest {
 
         // fetch offset for one topic
         client.prepareResponseFrom(offsetResponse(Collections.singletonMap(tp0, offset1), Errors.NONE), coordinator);
-        assertEquals(offset1, consumer.committed(tp0).offset());
+        assertEquals(offset1, consumer.committed(Collections.singleton(tp0)).get(tp0).offset());
 
         consumer.assign(Arrays.asList(tp0, tp1));
 
@@ -704,12 +704,12 @@ public class KafkaConsumerTest {
         Map<TopicPartition, Long> offsets = new HashMap<>();
         offsets.put(tp0, offset1);
         client.prepareResponseFrom(offsetResponse(offsets, Errors.NONE), coordinator);
-        assertEquals(offset1, consumer.committed(tp0).offset());
+        assertEquals(offset1, consumer.committed(Collections.singleton(tp0)).get(tp0).offset());
 
         offsets.remove(tp0);
         offsets.put(tp1, offset2);
         client.prepareResponseFrom(offsetResponse(offsets, Errors.NONE), coordinator);
-        assertEquals(offset2, consumer.committed(tp1).offset());
+        assertEquals(offset2, consumer.committed(Collections.singleton(tp1)).get(tp1).offset());
         consumer.close(Duration.ofMillis(0));
     }
 
@@ -1137,7 +1137,7 @@ public class KafkaConsumerTest {
 
         // fetch offset for one topic
         client.prepareResponseFrom(offsetResponse(Collections.singletonMap(tp0, 0L), Errors.NONE), coordinator);
-        assertEquals(0, consumer.committed(tp0).offset());
+        assertEquals(0, consumer.committed(Collections.singleton(tp0)).get(tp0).offset());
 
         // verify that assignment immediately changes
         assertTrue(consumer.assignment().equals(singleton(tp0)));
@@ -1195,7 +1195,7 @@ public class KafkaConsumerTest {
         client.prepareResponseFrom(
                 offsetResponse(Collections.singletonMap(tp0, 0L), Errors.NONE),
                 coordinator);
-        assertEquals(0, consumer.committed(tp0).offset());
+        assertEquals(0, consumer.committed(Collections.singleton(tp0)).get(tp0).offset());
 
         // verify that assignment immediately changes
         assertTrue(consumer.assignment().equals(singleton(tp0)));
@@ -1256,12 +1256,12 @@ public class KafkaConsumerTest {
         offsets.put(tp1, 0L);
 
         client.prepareResponseFrom(offsetResponse(offsets, Errors.NONE), coordinator);
-        assertEquals(0, consumer.committed(tp0).offset());
+        assertEquals(0, consumer.committed(Collections.singleton(tp0)).get(tp0).offset());
 
         offsets.remove(tp0);
         offsets.put(tp1, 0L);
         client.prepareResponseFrom(offsetResponse(offsets, Errors.NONE), coordinator);
-        assertEquals(0, consumer.committed(tp1).offset());
+        assertEquals(0, consumer.committed(Collections.singleton(tp1)).get(tp1).offset());
 
         // fetch and verify consumer's position in the two partitions
         final Map<TopicPartition, Long> offsetResponse = new HashMap<>();
@@ -1356,7 +1356,7 @@ public class KafkaConsumerTest {
         }
 
         try {
-            newConsumer((String) null).committed(tp0);
+            newConsumer((String) null).committed(Collections.singleton(tp0)).get(tp0);
             fail("Expected an InvalidGroupIdException");
         } catch (InvalidGroupIdException e) {
             // OK, expected
@@ -1383,7 +1383,7 @@ public class KafkaConsumerTest {
         consumer.assign(singleton(tp0));
 
         try {
-            consumer.committed(tp0);
+            consumer.committed(Collections.singleton(tp0)).get(tp0);
             fail("Expected an InvalidGroupIdException");
         } catch (InvalidGroupIdException e) {
             // OK, expected
@@ -1636,7 +1636,7 @@ public class KafkaConsumerTest {
     @Test(expected = AuthenticationException.class)
     public void testCommittedAuthenticationFaiure() {
         final KafkaConsumer<String, String> consumer = consumerWithPendingAuthenticationError();
-        consumer.committed(tp0);
+        consumer.committed(Collections.singleton(tp0)).get(tp0);
     }
 
     @Test

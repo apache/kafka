@@ -102,7 +102,7 @@ class ZooKeeperSecurityUpgradeTest(ProduceConsumeValidateTest):
 
         # set acls
         if self.is_secure:
-            self.kafka.authorizer_class_name = KafkaService.SIMPLE_AUTHORIZER
+            self.kafka.authorizer_class_name = KafkaService.ACL_AUTHORIZER
             self.acls.set_acls(security_protocol, self.kafka, self.topic, self.group)
 
         if self.no_sasl:

@@ -166,6 +166,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
 
     private InternalTopicManager internalTopicManager;
     private CopartitionedTopicsEnforcer copartitionedTopicsEnforcer;
+    private RebalanceProtocol rebalanceProtocol;
 
     protected String userEndPoint() {
         return userEndPoint;
@@ -196,12 +197,22 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         userEndPoint = assignorConfiguration.getUserEndPoint();
         internalTopicManager = assignorConfiguration.getInternalTopicManager();
         copartitionedTopicsEnforcer = assignorConfiguration.getCopartitionedTopicsEnforcer();
+        rebalanceProtocol = assignorConfiguration.rebalanceProtocol();
     }
-
 
     @Override
     public String name() {
         return "stream";
+    }
+
+    @Override
+    public List<RebalanceProtocol> supportedProtocols() {
+        final List<RebalanceProtocol> supportedProtocols = new ArrayList<>();
+        supportedProtocols.add(RebalanceProtocol.EAGER);
+        if (rebalanceProtocol == RebalanceProtocol.COOPERATIVE) {
+            supportedProtocols.add(rebalanceProtocol);
+        }
+        return supportedProtocols;
     }
 
     @Override
@@ -211,7 +222,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         // 2. Task ids of previously running tasks
         // 3. Task ids of valid local states on the client's state directory.
 
-        final Set<TaskId> previousActiveTasks = taskManager.prevActiveTaskIds();
+        final Set<TaskId> previousActiveTasks = taskManager.previousRunningTaskIds();
         final Set<TaskId> standbyTasks = taskManager.cachedTasksIds();
         standbyTasks.removeAll(previousActiveTasks);
         final SubscriptionInfo data = new SubscriptionInfo(
@@ -780,20 +791,22 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         final Map<TopicPartition, PartitionInfo> topicToPartitionInfo = new HashMap<>();
         final Map<HostInfo, Set<TopicPartition>> partitionsByHost;
 
+        final Map<TopicPartition, TaskId> partitionsToTaskId = new HashMap<>();
+
         switch (receivedAssignmentMetadataVersion) {
             case VERSION_ONE:
-                processVersionOneAssignment(logPrefix, info, partitions, activeTasks);
+                processVersionOneAssignment(logPrefix, info, partitions, activeTasks, partitionsToTaskId);
                 partitionsByHost = Collections.emptyMap();
                 break;
             case VERSION_TWO:
-                processVersionTwoAssignment(logPrefix, info, partitions, activeTasks, topicToPartitionInfo);
+                processVersionTwoAssignment(logPrefix, info, partitions, activeTasks, topicToPartitionInfo, partitionsToTaskId);
                 partitionsByHost = info.partitionsByHost();
                 break;
             case VERSION_THREE:
             case VERSION_FOUR:
             case VERSION_FIVE:
                 upgradeSubscriptionVersionIfNeeded(leaderSupportedVersion);
-                processVersionTwoAssignment(logPrefix, info, partitions, activeTasks, topicToPartitionInfo);
+                processVersionTwoAssignment(logPrefix, info, partitions, activeTasks, topicToPartitionInfo, partitionsToTaskId);
                 partitionsByHost = info.partitionsByHost();
                 break;
             default:
@@ -805,6 +818,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
 
         taskManager.setClusterMetadata(Cluster.empty().withPartitions(topicToPartitionInfo));
         taskManager.setPartitionsByHostState(partitionsByHost);
+        taskManager.setPartitionsToTaskId(partitionsToTaskId);
         taskManager.setAssignmentMetadata(activeTasks, info.standbyTasks());
         taskManager.updateSubscriptionsFromAssignment(partitions);
     }
@@ -812,7 +826,8 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
     private static void processVersionOneAssignment(final String logPrefix,
                                                     final AssignmentInfo info,
                                                     final List<TopicPartition> partitions,
-                                                    final Map<TaskId, Set<TopicPartition>> activeTasks) {
+                                                    final Map<TaskId, Set<TopicPartition>> activeTasks,
+                                                    final Map<TopicPartition, TaskId> partitionsToTaskId) {
         // the number of assigned partitions should be the same as number of active tasks, which
         // could be duplicated if one task has more than one assigned partitions
         if (partitions.size() != info.activeTasks().size()) {
@@ -830,15 +845,17 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             final TopicPartition partition = partitions.get(i);
             final TaskId id = info.activeTasks().get(i);
             activeTasks.computeIfAbsent(id, k -> new HashSet<>()).add(partition);
+            partitionsToTaskId.put(partition, id);
         }
     }
 
     public static void processVersionTwoAssignment(final String logPrefix,
-                                            final AssignmentInfo info,
-                                            final List<TopicPartition> partitions,
-                                            final Map<TaskId, Set<TopicPartition>> activeTasks,
-                                            final Map<TopicPartition, PartitionInfo> topicToPartitionInfo) {
-        processVersionOneAssignment(logPrefix, info, partitions, activeTasks);
+                                                   final AssignmentInfo info,
+                                                   final List<TopicPartition> partitions,
+                                                   final Map<TaskId, Set<TopicPartition>> activeTasks,
+                                                   final Map<TopicPartition, PartitionInfo> topicToPartitionInfo,
+                                                   final Map<TopicPartition, TaskId> partitionsToTaskId) {
+        processVersionOneAssignment(logPrefix, info, partitions, activeTasks, partitionsToTaskId);
 
         // process partitions by host
         final Map<HostInfo, Set<TopicPartition>> partitionsByHost = info.partitionsByHost();

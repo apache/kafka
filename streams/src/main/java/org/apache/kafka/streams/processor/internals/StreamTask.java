@@ -31,6 +31,8 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
+
 import org.apache.kafka.clients.consumer.CommitFailedException;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -249,13 +251,11 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         // partitions of topics that are both sources and changelogs and set the consumer committed
         // offset via stateMgr as there is not a more direct route.
         final Set<String> changelogTopicNames = new HashSet<>(topology.storeToChangelogTopic().values());
-        partitions.stream()
-            .filter(tp -> changelogTopicNames.contains(tp.topic()))
-            .forEach(tp -> {
-                final long offset = committedOffsetForPartition(tp);
-                stateMgr.putOffsetLimit(tp, offset);
-                log.trace("Updating store offset limits {} for changelog {}", offset, tp);
-            });
+        final Set<TopicPartition> sourcePartitionsAsChangelog = new HashSet<>(partitions)
+            .stream().filter(tp -> changelogTopicNames.contains(tp.topic())).collect(Collectors.toSet());
+        final Map<TopicPartition, Long> committedOffsets = committedOffsetForPartitions(sourcePartitionsAsChangelog);
+        stateMgr.putOffsetLimits(committedOffsets);
+
         registerStateStores();
 
         return changelogPartitions().isEmpty();
@@ -481,7 +481,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
             final long offset = entry.getValue() + 1;
             final long partitionTime = partitionTimes.get(partition);
             consumedOffsetsAndMetadata.put(partition, new OffsetAndMetadata(offset, encodeTimestamp(partitionTime)));
-            stateMgr.putOffsetLimit(partition, offset);
         }
 
         try {
@@ -735,25 +734,30 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         taskClosed = true;
     }
 
-    private void initializeCommittedTimestamp(final TopicPartition partition) {
-        final OffsetAndMetadata metadata = consumer.committed(partition);
-
-        if (metadata != null) {
-            final long committedTimestamp = decodeTimestamp(metadata.metadata());
-            partitionGroup.setPartitionTime(partition, committedTimestamp);
-            log.debug("A committed timestamp was detected: setting the partition time of partition {}"
-                      + " to {} in stream task {}", partition, committedTimestamp, this);
-        } else {
-            log.debug("No committed timestamp was found in metadata for partition {}", partition);
-        }
-    }
-
     /**
      * Retrieves formerly committed timestamps and updates the local queue's partition time.
      */
     public void initializeTaskTime() {
-        for (final TopicPartition partition : partitionGroup.partitions()) {
-            initializeCommittedTimestamp(partition);
+        final Map<TopicPartition, OffsetAndMetadata> committed = consumer.committed(partitionGroup.partitions());
+
+        for (final Map.Entry<TopicPartition, OffsetAndMetadata> entry : committed.entrySet()) {
+            final TopicPartition partition = entry.getKey();
+            final OffsetAndMetadata metadata = entry.getValue();
+
+            if (metadata != null) {
+                final long committedTimestamp = decodeTimestamp(metadata.metadata());
+                partitionGroup.setPartitionTime(partition, committedTimestamp);
+                log.debug("A committed timestamp was detected: setting the partition time of partition {}"
+                    + " to {} in stream task {}", partition, committedTimestamp, this);
+            } else {
+                log.debug("No committed timestamp was found in metadata for partition {}", partition);
+            }
+        }
+
+        final Set<TopicPartition> nonCommitted = new HashSet<>(partitionGroup.partitions());
+        nonCommitted.removeAll(committed.keySet());
+        for (final TopicPartition partition : nonCommitted) {
+            log.debug("No committed offset for partition {}, therefore no timestamp can be found for this partition", partition);
         }
     }
 

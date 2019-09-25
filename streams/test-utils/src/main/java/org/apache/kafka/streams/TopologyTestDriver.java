@@ -75,6 +75,7 @@ import org.apache.kafka.streams.state.TimestampedWindowStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.internals.ThreadCache;
+import org.apache.kafka.streams.state.internals.metrics.RocksDBMetricsRecordingTrigger;
 import org.apache.kafka.streams.test.TestRecord;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -304,6 +305,7 @@ public class TopologyTestDriver implements Closeable {
             threadName,
             StreamsConfig.METRICS_LATEST
         );
+        streamsMetrics.setRocksDBMetricsRecordingTrigger(new RocksDBMetricsRecordingTrigger());
         final Sensor skippedRecordsSensor = streamsMetrics.threadLevelSensor("skipped-records", Sensor.RecordingLevel.INFO);
         final String threadLevelGroup = "stream-metrics";
         skippedRecordsSensor.add(new MetricName("skipped-records-rate",
