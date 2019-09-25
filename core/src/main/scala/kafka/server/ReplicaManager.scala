@@ -269,7 +269,7 @@ class ReplicaManager(val config: KafkaConfig,
   val reassigningPartitions = newGauge(
     "ReassigningPartitions",
     new Gauge[Int] {
-      def value = leaderPartitionsIterator.count(p => p.isLeader && p.isReassigning)
+      def value = reassigningPartitionsCount()
     }
   )
 
@@ -282,8 +282,12 @@ class ReplicaManager(val config: KafkaConfig,
   )
 
   // Visible for testing
-  def fetchersMaxLag(): Unit = {
+  def fetchersMaxLag(): Long = {
     fetcherLagStats.maxLag()
+  }
+
+  def reassigningPartitionsCount(): Int = {
+    leaderPartitionsIterator.count(_.isReassigning)
   }
 
   val isrExpandRate: Meter = newMeter("IsrExpandsPerSec", "expands", TimeUnit.SECONDS)
@@ -1270,9 +1274,6 @@ class ReplicaManager(val config: KafkaConfig,
         else
           Set.empty[Partition]
 
-        fetcherLagStats.removeStats((partitionsBecomeFollower ++ partitionsBecomeLeader).filter(!_.isReassigning)
-          .asInstanceOf[Traversable[TopicPartition]])
-
         /*
          * KAFKA-8392
          * For topic partitions of which the broker is no longer a leader, delete metrics related to
@@ -1285,6 +1286,11 @@ class ReplicaManager(val config: KafkaConfig,
 
         // remove metrics for brokers which are not followers of a topic
         leaderTopicSet.diff(followerTopicSet).foreach(brokerTopicStats.removeOldFollowerMetrics)
+
+        // remove reassignment lag stats from old leaders and followers
+        fetcherLagStats.removeStats((partitionsBecomeFollower ++ partitionsBecomeLeader)
+          .filter(!_.isReassigning)
+          .map(_.topicPartition))
 
         leaderAndIsrRequest.partitionStates.asScala.foreach { partitionState =>
           val topicPartition = new TopicPartition(partitionState.topicName, partitionState.partitionIndex)
@@ -1585,13 +1591,13 @@ class ReplicaManager(val config: KafkaConfig,
               leaderEndOffset = readResult.leaderLogEndOffset)) {
               if (partition.isAddingReplica(followerId)) {
                 fetcherLagStats.updateLag(partition.topicPartition, Math.max(0L, readResult.highWatermark - readResult.info.fetchOffsetMetadata.messageOffset))
-                println(s"lag: ${fetcherLagStats.maxLag}; HW: ${readResult.highWatermark}; leaderLOE: ${readResult.leaderLogEndOffset}; fetchOffset: ${readResult.info.fetchOffsetMetadata.messageOffset}; diff: ${readResult.leaderLogEndOffset - readResult.info.fetchOffsetMetadata.messageOffset}")
+//                println(s"lag: ${fetcherLagStats.maxLag}; HW: ${readResult.highWatermark}; leaderLOE: ${readResult.leaderLogEndOffset}; fetchOffset: ${readResult.info.fetchOffsetMetadata.messageOffset}; diff: ${readResult.leaderLogEndOffset - readResult.info.fetchOffsetMetadata.messageOffset}")
               }
               readResult
             } else {
               warn(s"Leader $localBrokerId failed to record follower $followerId's position " +
                 s"${readResult.info.fetchOffsetMetadata.messageOffset} since the replica is not recognized to be " +
-                s"one of the assigned replicas ${partition.assignmentState.originalReplicas.mkString(",")} " +
+                s"one of the assigned replicas ${partition.assignmentState.replicas.mkString(",")} " +
                 s"for partition $topicPartition. Empty records will be returned for this partition.")
               readResult.withEmptyFetchInfo
             }

@@ -157,16 +157,17 @@ object Partition extends KafkaMetricsGroup {
 
 
 sealed abstract class AssignmentState {
-  def originalReplicas: Seq[Int]
+  def replicas: Seq[Int]
   def inSyncReplicas: Set[Int]
 }
 
 case class OngoingReassignmentState(addingReplicas: Seq[Int],
                                     removingReplicas: Seq[Int],
                                     originalReplicas: Seq[Int],
+                                    replicas: Seq[Int],
                                     inSyncReplicas: Set[Int]) extends AssignmentState
 
-case class SimpleAssignmentState(originalReplicas: Seq[Int], inSyncReplicas: Set[Int]) extends AssignmentState
+case class SimpleAssignmentState(replicas: Seq[Int], inSyncReplicas: Set[Int]) extends AssignmentState
 
 /**
  * Data structure that represents a topic partition. The leader maintains the AR, ISR, CUR, RAR
@@ -253,7 +254,7 @@ class Partition(val topicPartition: TopicPartition,
   newGauge("ReplicasCount",
     new Gauge[Int] {
       def value: Int = {
-        if (isLeader) assignmentState.originalReplicas.size else 0
+        if (isLeader) assignmentState.replicas.size else 0
       }
     },
     tags
@@ -268,7 +269,10 @@ class Partition(val topicPartition: TopicPartition,
     tags
   )
 
-  def isUnderReplicated: Boolean = (assignmentState.originalReplicas.size - assignmentState.inSyncReplicas.size) > 0
+  def isUnderReplicated: Boolean = assignmentState match {
+    case OngoingReassignmentState(_, _, originalReplicas, _, isr) => (originalReplicas.size - isr.size) > 0
+    case SimpleAssignmentState(replicas, isr) => (replicas.size - isr.size) > 0
+  }
 
   def isUnderMinIsr: Boolean = {
     leaderLogIfLocal.exists { assignmentState.inSyncReplicas.size < _.config.minInSyncReplicas }
@@ -290,6 +294,7 @@ class Partition(val topicPartition: TopicPartition,
     case _ => false
   }
 
+  // Visible for tests
   def inSyncReplicaIds: Set[Int] = assignmentState.inSyncReplicas
 
   /**
@@ -688,12 +693,17 @@ class Partition(val topicPartition: TopicPartition,
     val replicaSet = assignment.toSet
     val removedReplicas = remoteReplicasMap.keys -- replicaSet
 
+    // if we're already in a reassignment then let's carry the original replicas
+    val originalAssignment = assignmentState match {
+      case OngoingReassignmentState(_, _, originalReplicas, _, _) => originalReplicas
+      case SimpleAssignmentState(replicas, _) => replicas
+    }
     assignment
       .filter(_ != localBrokerId)
       .foreach(id => remoteReplicasMap.getAndMaybePut(id, new Replica(id, topicPartition)))
     removedReplicas.foreach(remoteReplicasMap.remove)
     if (addingReplicas.nonEmpty || removingReplicas.nonEmpty)
-      assignmentState = OngoingReassignmentState(addingReplicas, removingReplicas, assignment, isr)
+      assignmentState = OngoingReassignmentState(addingReplicas, removingReplicas, originalAssignment, assignment, isr)
     else
       assignmentState = SimpleAssignmentState(assignment, isr)
   }
@@ -1211,8 +1221,8 @@ class Partition(val topicPartition: TopicPartition,
       case Some(newVersion) =>
         assignmentState match {
           case SimpleAssignmentState(replicas, _) => assignmentState = SimpleAssignmentState(replicas, isr)
-          case OngoingReassignmentState(adding, removing, origRepl, _) =>
-            assignmentState = OngoingReassignmentState(adding, removing, origRepl, isr)
+          case OngoingReassignmentState(adding, removing, originalReplicas, replicas, _) =>
+            assignmentState = OngoingReassignmentState(adding, removing, originalReplicas, replicas, isr)
         }
         zkVersion = newVersion
         info("ISR updated to [%s] and zkVersion updated to [%d]".format(isr.mkString(","), zkVersion))
@@ -1235,7 +1245,7 @@ class Partition(val topicPartition: TopicPartition,
     partitionString.append("Topic: " + topic)
     partitionString.append("; Partition: " + partitionId)
     partitionString.append("; Leader: " + leaderReplicaIdOpt)
-    partitionString.append("; AllReplicaIds: " + assignmentState.originalReplicas.mkString(","))
+    partitionString.append("; AllReplicaIds: " + assignmentState.replicas.mkString(","))
     partitionString.append("; InSyncReplicaIds: " + assignmentState.inSyncReplicas.mkString(","))
     partitionString.toString
   }

@@ -16,7 +16,8 @@
   */
 package kafka.server
 
-import java.util.Optional
+import java.nio.charset.StandardCharsets
+import java.util.{Collections, Optional}
 
 import kafka.cluster.{BrokerEndPoint, Partition}
 import kafka.log.{Log, LogManager}
@@ -27,8 +28,9 @@ import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.Errors._
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
+import org.apache.kafka.common.record.{CompressionType, MemoryRecords, Records, SimpleRecord}
 import org.apache.kafka.common.requests.EpochEndOffset._
-import org.apache.kafka.common.requests.{EpochEndOffset, OffsetsForLeaderEpochRequest}
+import org.apache.kafka.common.requests.{EpochEndOffset, FetchResponse, OffsetsForLeaderEpochRequest}
 import org.apache.kafka.common.utils.SystemTime
 import org.easymock.EasyMock._
 import org.easymock.{Capture, CaptureType}
@@ -741,6 +743,52 @@ class ReplicaFetcherThreadTest {
     thread.initiateShutdown()
     thread.awaitShutdown()
     verify(mockBlockingSend)
+  }
+
+  @Test
+  def shouldReassignmentBytesInMetricsGetsUpdated(): Unit = {
+    val props = TestUtils.createBrokerConfig(1, "localhost:1234")
+    val config = KafkaConfig.fromProps(props)
+
+    val mockBlockingSend: BlockingSend = createNiceMock(classOf[BlockingSend])
+
+    val log: Log = createNiceMock(classOf[Log])
+
+    val partition: Partition = createNiceMock(classOf[Partition])
+    expect(partition.localLogOrException).andReturn(log)
+    expect(partition.isReassigning).andReturn(true)
+    expect(partition.isAddingLocalReplica).andReturn(true)
+
+    val replicaManager: ReplicaManager = createNiceMock(classOf[ReplicaManager])
+    expect(replicaManager.nonOfflinePartition(anyObject[TopicPartition])).andReturn(Some(partition))
+    val brokerTopicStats = new BrokerTopicStats
+    expect(replicaManager.brokerTopicStats).andReturn(brokerTopicStats)
+    expect(replicaManager.brokerTopicStats).andReturn(brokerTopicStats)
+
+    val replicaQuota: ReplicaQuota = createNiceMock(classOf[ReplicaQuota])
+
+    val thread = new ReplicaFetcherThread(
+      name = "bob",
+      fetcherId = 0,
+      sourceBroker = brokerEndPoint,
+      brokerConfig = config,
+      failedPartitions = failedPartitions,
+      replicaMgr = replicaManager,
+      metrics =  new Metrics(),
+      time = new SystemTime(),
+      quota = replicaQuota,
+      leaderEndpointBlockingSend = Some(mockBlockingSend))
+
+    replay(mockBlockingSend, replicaManager, partition, log, replicaQuota)
+
+    val records = MemoryRecords.withRecords(CompressionType.NONE,
+      new SimpleRecord(1000, "foo".getBytes(StandardCharsets.UTF_8)))
+
+    val partitionData: thread.FetchData = new FetchResponse.PartitionData[Records](
+      Errors.NONE, 0, 0, 0, Optional.empty(), Collections.emptyList(), records)
+    thread.processPartitionData(t1p0, 0, partitionData)
+
+    assertTrue("No reassignment bytes in recorded", brokerTopicStats.allTopicsStats.reassignmentBytesInPerSec.get.count() > 0)
   }
 
   def stub(partition: Partition, replicaManager: ReplicaManager, log: Log): Unit = {

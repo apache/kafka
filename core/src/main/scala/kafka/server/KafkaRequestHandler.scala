@@ -241,11 +241,11 @@ class BrokerTopicMetrics(name: Option[String]) extends KafkaMetricsGroup {
 
   def invalidOffsetOrSequenceRecordsPerSec = metricTypeMap.get(BrokerTopicStats.InvalidOffsetOrSequenceRecordsPerSec).meter()
 
-  private[server] def reassignmentBytesInPerSec =
+  def reassignmentBytesInPerSec =
     if (name.isEmpty) Some(metricTypeMap.get(BrokerTopicStats.ReassignmentBytesInPerSec).meter())
     else None
 
-  private[server] def reassignmentBytesOutPerSec =
+  def reassignmentBytesOutPerSec =
     if (name.isEmpty) Some(metricTypeMap.get(BrokerTopicStats.ReassignmentBytesOutPerSec).meter())
     else None
 
@@ -307,14 +307,12 @@ class BrokerTopicStats {
   def updateReassignmentBytesIn(value: Long): Unit = {
     allTopicsStats.reassignmentBytesInPerSec.foreach { metric =>
       metric.mark(value)
-      println(s"Reassignment in rate count: ${metric.count()}")
     }
   }
 
   def updateReassignmentBytesOut(value: Long, topicPartition: TopicPartition): Unit = {
     allTopicsStats.reassignmentBytesOutPerSec.foreach { metric =>
       metric.mark(value)
-      println(s"Reassignment out rate count: ${metric.count()}")
     }
   }
 
