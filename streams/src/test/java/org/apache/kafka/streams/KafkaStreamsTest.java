@@ -39,6 +39,7 @@ import org.apache.kafka.streams.processor.internals.StreamsMetadataState;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
+import org.apache.kafka.streams.state.internals.metrics.RocksDBMetricsRecordingTrigger;
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.MockClientSupplier;
 import org.apache.kafka.test.MockMetricsReporter;
@@ -209,7 +210,8 @@ public class KafkaStreamsTest {
             anyObject(Metrics.class),
             anyObject(Time.class),
             anyString(),
-            anyObject(StateRestoreListener.class)
+            anyObject(StateRestoreListener.class),
+            anyObject(RocksDBMetricsRecordingTrigger.class)
         ).andReturn(globalStreamThread).anyTimes();
         EasyMock.expect(globalStreamThread.state()).andAnswer(globalThreadState::get).anyTimes();
         globalStreamThread.setStateListener(EasyMock.capture(threadStatelistenerCapture));
@@ -250,6 +252,8 @@ public class KafkaStreamsTest {
         EasyMock.expect(thread.state()).andAnswer(state::get).anyTimes();
 
         thread.setStateListener(EasyMock.capture(threadStatelistenerCapture));
+        EasyMock.expectLastCall().anyTimes();
+        thread.setRocksDBMetricsRecordingTrigger(EasyMock.anyObject(RocksDBMetricsRecordingTrigger.class));
         EasyMock.expectLastCall().anyTimes();
 
         thread.start();
@@ -603,8 +607,8 @@ public class KafkaStreamsTest {
             streams.start();
         } finally {
             streams.close();
+            streams.cleanUp();
         }
-        streams.cleanUp();
     }
 
     @Test
@@ -659,7 +663,7 @@ public class KafkaStreamsTest {
         PowerMock.mockStatic(Executors.class);
         EasyMock.expect(Executors.newSingleThreadScheduledExecutor(
             anyObject(ThreadFactory.class)
-        )).andReturn(cleanupSchedule);
+        )).andReturn(cleanupSchedule).anyTimes();
 
         cleanupSchedule.scheduleAtFixedRate(
             EasyMock.anyObject(Runnable.class),
