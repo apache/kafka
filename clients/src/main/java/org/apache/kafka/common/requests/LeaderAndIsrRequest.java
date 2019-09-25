@@ -168,7 +168,6 @@ public class LeaderAndIsrRequest extends AbstractControlRequest {
                         for (LeaderAndIsrTopicState topicState : data.topicStates()) {
                             for (LeaderAndIsrPartitionState partitionState : topicState.partitionStates()) {
                                 // Set the topic name so that we can always present the ungrouped view to callers
-                                System.out.println("Topic name " + topicState.topicName());
                                 partitionState.setTopicName(topicState.topicName());
                                 partitionStates.add(partitionState);
                             }
