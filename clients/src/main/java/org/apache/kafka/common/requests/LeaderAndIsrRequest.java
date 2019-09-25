@@ -102,11 +102,23 @@ public class LeaderAndIsrRequest extends AbstractControlRequest {
     }
 
     private final LeaderAndIsrRequestData data;
-    private volatile List<LeaderAndIsrPartitionState> partitionStates;
 
     private LeaderAndIsrRequest(LeaderAndIsrRequestData data, short version) {
         super(ApiKeys.LEADER_AND_ISR, version);
         this.data = data;
+        // Do this from the constructor to make it thread-safe (even though it's only needed when some methods are called)
+        normalize();
+    }
+
+    private void normalize() {
+        if (version() >= 2) {
+            for (LeaderAndIsrTopicState topicState : data.topicStates()) {
+                for (LeaderAndIsrPartitionState partitionState : topicState.partitionStates()) {
+                    // Set the topic name so that we can always present the ungrouped view to callers
+                    partitionState.setTopicName(topicState.topicName());
+                }
+            }
+        }
     }
 
     public LeaderAndIsrRequest(Struct struct, short version) {
@@ -124,7 +136,7 @@ public class LeaderAndIsrRequest extends AbstractControlRequest {
         Errors error = Errors.forException(e);
         responseData.setErrorCode(error.code());
 
-        List<LeaderAndIsrPartitionError> partitions = new ArrayList<>(partitionStates().size());
+        List<LeaderAndIsrPartitionError> partitions = new ArrayList<>();
         for (LeaderAndIsrPartitionState partition : partitionStates()) {
             partitions.add(new LeaderAndIsrPartitionError()
                 .setTopicName(partition.topicName())
@@ -161,27 +173,10 @@ public class LeaderAndIsrRequest extends AbstractControlRequest {
         return data.brokerEpoch();
     }
 
-    public List<LeaderAndIsrPartitionState> partitionStates() {
-        if (partitionStates == null) {
-            synchronized (data) {
-                if (partitionStates == null) {
-                    if (version() >= 2) {
-                        List<LeaderAndIsrPartitionState> partitionStates = new ArrayList<>();
-                        for (LeaderAndIsrTopicState topicState : data.topicStates()) {
-                            for (LeaderAndIsrPartitionState partitionState : topicState.partitionStates()) {
-                                // Set the topic name so that we can always present the ungrouped view to callers
-                                partitionState.setTopicName(topicState.topicName());
-                                partitionStates.add(partitionState);
-                            }
-                        }
-                        this.partitionStates = partitionStates;
-                    } else {
-                        partitionStates = data.ungroupedPartitionStates();
-                    }
-                }
-            }
-        }
-        return partitionStates;
+    public Iterable<LeaderAndIsrPartitionState> partitionStates() {
+        if (version() >= 2)
+            return () -> new PartitionStateIterator(data.topicStates());
+        return data.ungroupedPartitionStates();
     }
 
     protected int size() {
@@ -190,5 +185,17 @@ public class LeaderAndIsrRequest extends AbstractControlRequest {
 
     public static LeaderAndIsrRequest parse(ByteBuffer buffer, short version) {
         return new LeaderAndIsrRequest(ApiKeys.LEADER_AND_ISR.parseRequest(version, buffer), version);
+    }
+
+    private static class PartitionStateIterator extends NestedIterator<LeaderAndIsrTopicState, LeaderAndIsrPartitionState> {
+
+        PartitionStateIterator(List<LeaderAndIsrTopicState> topicStates) {
+            super(topicStates);
+        }
+
+        @Override
+        public Iterable<LeaderAndIsrPartitionState> innerIterable(LeaderAndIsrTopicState outer) {
+            return outer.partitionStates();
+        }
     }
 }

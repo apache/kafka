@@ -108,11 +108,37 @@ public class UpdateMetadataRequest extends AbstractControlRequest {
     }
 
     private final UpdateMetadataRequestData data;
-    private volatile List<UpdateMetadataPartitionState> partitionStates;
 
     private UpdateMetadataRequest(UpdateMetadataRequestData data, short version) {
         super(ApiKeys.UPDATE_METADATA, version);
         this.data = data;
+        // Do this from the constructor to make it thread-safe (even though it's only needed when some methods are called)
+        normalize();
+    }
+
+    private void normalize() {
+        if (version() == 0) {
+            for (UpdateMetadataBroker liveBroker : data.liveBrokers()) {
+                // Set endpoints so that callers can rely on it always being present
+                if (liveBroker.endpoints().isEmpty()) {
+                    SecurityProtocol securityProtocol = SecurityProtocol.PLAINTEXT;
+                    liveBroker.setEndpoints(singletonList(new UpdateMetadataEndpoint()
+                            .setHost(liveBroker.v0Host())
+                            .setPort(liveBroker.v0Port())
+                            .setSecurityProtocol(securityProtocol.id)
+                            .setListener(ListenerName.forSecurityProtocol(securityProtocol).value())));
+                }
+            }
+        }
+
+        if (version() >= 5) {
+            for (UpdateMetadataTopicState topicState : data.topicStates()) {
+                for (UpdateMetadataPartitionState partitionState : topicState.partitionStates()) {
+                    // Set the topic name so that we can always present the ungrouped view to callers
+                    partitionState.setTopicName(topicState.topicName());
+                }
+            }
+        }
     }
 
     public UpdateMetadataRequest(Struct struct, short version) {
@@ -144,40 +170,10 @@ public class UpdateMetadataRequest extends AbstractControlRequest {
                 versionId, this.getClass().getSimpleName(), ApiKeys.UPDATE_METADATA.latestVersion()));
     }
 
-    public List<UpdateMetadataPartitionState> partitionStates() {
-        if (partitionStates == null) {
-            synchronized (data) {
-                if (partitionStates == null) {
-
-                    if (version() == 0) {
-                        for (UpdateMetadataBroker liveBroker : data.liveBrokers()) {
-                            SecurityProtocol securityProtocol = SecurityProtocol.PLAINTEXT;
-                            liveBroker.setEndpoints(singletonList(new UpdateMetadataEndpoint()
-                                .setHost(liveBroker.v0Host())
-                                .setPort(liveBroker.v0Port())
-                                .setSecurityProtocol(securityProtocol.id)
-                                .setListener(ListenerName.forSecurityProtocol(securityProtocol).value())));
-                        }
-                    }
-
-                    if (version() >= 5) {
-                        List<UpdateMetadataPartitionState> partitionStates = new ArrayList<>();
-                        for (UpdateMetadataTopicState topicState : data.topicStates()) {
-                            for (UpdateMetadataPartitionState partitionState : topicState.partitionStates()) {
-                                // Set the topic name so that we can always present the ungrouped view to callers
-                                partitionState.setTopicName(topicState.topicName());
-                                partitionStates.add(partitionState);
-                            }
-                        }
-                        this.partitionStates = partitionStates;
-                    } else {
-                        partitionStates = data.ungroupedPartitionStates();
-                    }
-
-                }
-            }
-        }
-        return partitionStates;
+    public Iterable<UpdateMetadataPartitionState> partitionStates() {
+        if (version() >= 5)
+            return () -> new PartitionStateIterator(data.topicStates());
+        return data.ungroupedPartitionStates();
     }
 
     public List<UpdateMetadataBroker> liveBrokers() {
@@ -195,6 +191,18 @@ public class UpdateMetadataRequest extends AbstractControlRequest {
 
     public static UpdateMetadataRequest parse(ByteBuffer buffer, short version) {
         return new UpdateMetadataRequest(ApiKeys.UPDATE_METADATA.parseRequest(version, buffer), version);
+    }
+
+    private static class PartitionStateIterator extends NestedIterator<UpdateMetadataTopicState, UpdateMetadataPartitionState> {
+
+        PartitionStateIterator(List<UpdateMetadataTopicState> topicStates) {
+            super(topicStates);
+        }
+
+        @Override
+        public Iterable<UpdateMetadataPartitionState> innerIterable(UpdateMetadataTopicState outer) {
+            return outer.partitionStates();
+        }
     }
 
 }

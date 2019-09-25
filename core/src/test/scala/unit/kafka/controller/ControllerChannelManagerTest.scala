@@ -211,11 +211,12 @@ class ControllerChannelManagerTest {
     assertEquals(1, updateMetadataRequests.size)
 
     val updateMetadataRequest = updateMetadataRequests.head
-    assertEquals(3, updateMetadataRequest.partitionStates.size)
+    val partitionStates = updateMetadataRequest.partitionStates.asScala.toBuffer
+    assertEquals(3, partitionStates.size)
     assertEquals(partitions.map { case (k, v) => (k, v.leader) },
-      updateMetadataRequest.partitionStates.asScala.map(ps => (new TopicPartition(ps.topicName, ps.partitionIndex), ps.leader)).toMap)
+      partitionStates.map(ps => (new TopicPartition(ps.topicName, ps.partitionIndex), ps.leader)).toMap)
     assertEquals(partitions.map { case (k, v) => (k, v.isr) },
-      updateMetadataRequest.partitionStates.asScala.map(ps => (new TopicPartition(ps.topicName, ps.partitionIndex), ps.isr.asScala)).toMap)
+      partitionStates.map(ps => (new TopicPartition(ps.topicName, ps.partitionIndex), ps.isr.asScala)).toMap)
 
     assertEquals(controllerId, updateMetadataRequest.controllerId)
     assertEquals(controllerEpoch, updateMetadataRequest.controllerEpoch)
@@ -246,7 +247,7 @@ class ControllerChannelManagerTest {
     assertEquals(1, updateMetadataRequests.size)
 
     val updateMetadataRequest = updateMetadataRequests.head
-    assertEquals(0, updateMetadataRequest.partitionStates.size)
+    assertEquals(0, updateMetadataRequest.partitionStates.asScala.size)
     assertEquals(3, updateMetadataRequest.liveBrokers.size)
     assertEquals(Set(1, 2, 3), updateMetadataRequest.liveBrokers.asScala.map(_.id).toSet)
   }
@@ -276,7 +277,7 @@ class ControllerChannelManagerTest {
     assertEquals(1, updateMetadataRequests.size)
 
     val updateMetadataRequest = updateMetadataRequests.head
-    assertEquals(3, updateMetadataRequest.partitionStates.size)
+    assertEquals(3, updateMetadataRequest.partitionStates.asScala.size)
 
     assertTrue(updateMetadataRequest.partitionStates.asScala
       .filter(_.topicName == "foo")
@@ -313,7 +314,7 @@ class ControllerChannelManagerTest {
       assertEquals(1, updateMetadataRequests.size)
 
       val updateMetadataRequest = updateMetadataRequests.head
-      assertEquals(0, updateMetadataRequest.partitionStates.size)
+      assertEquals(0, updateMetadataRequest.partitionStates.asScala.size)
       assertEquals(2, updateMetadataRequest.liveBrokers.size)
       assertEquals(Set(1, 2), updateMetadataRequest.liveBrokers.asScala.map(_.id).toSet)
     }
@@ -654,7 +655,7 @@ class ControllerChannelManagerTest {
       val leaderAndIsrResponse = new LeaderAndIsrResponse(
         new LeaderAndIsrResponseData()
           .setErrorCode(error.code)
-          .setPartitionErrors(partitionErrors.asJava))
+          .setPartitionErrors(partitionErrors.toBuffer.asJava))
       sentRequest.responseCallback(leaderAndIsrResponse)
     }
   }
