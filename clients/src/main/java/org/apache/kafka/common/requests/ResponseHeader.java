@@ -28,7 +28,7 @@ import static org.apache.kafka.common.protocol.types.Type.INT32;
 /**
  * A response header in the kafka protocol.
  */
-public class ResponseHeader extends AbstractRequestResponse {
+public class ResponseHeader implements AbstractRequestResponse {
     public static final Schema SCHEMA = new Schema(
             new Field("correlation_id", INT32, "The user-supplied value passed in with the request"));
     private static final BoundField CORRELATION_KEY_FIELD = SCHEMA.get("correlation_id");

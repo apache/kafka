@@ -27,7 +27,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
-public abstract class AbstractResponse extends AbstractRequestResponse {
+public abstract class AbstractResponse implements AbstractRequestResponse {
     public static final int DEFAULT_THROTTLE_TIME = 0;
 
     protected Send toSend(String destination, ResponseHeader header, short apiVersion) {
@@ -38,7 +38,7 @@ public abstract class AbstractResponse extends AbstractRequestResponse {
      * Visible for testing, typically {@link #toSend(String, ResponseHeader, short)} should be used instead.
      */
     public ByteBuffer serialize(short version, ResponseHeader responseHeader) {
-        return serialize(responseHeader.toStruct(), toStruct(version));
+        return RequestUtils.serialize(responseHeader.toStruct(), toStruct(version));
     }
 
     public abstract Map<Errors, Integer> errorCounts();

@@ -33,7 +33,7 @@ import static org.apache.kafka.common.protocol.types.Type.NULLABLE_STRING;
 /**
  * The header for a request in the Kafka protocol
  */
-public class RequestHeader extends AbstractRequestResponse {
+public class RequestHeader implements AbstractRequestResponse {
     private static final String API_KEY_FIELD_NAME = "api_key";
     private static final String API_VERSION_FIELD_NAME = "api_version";
     private static final String CLIENT_ID_FIELD_NAME = "client_id";
