@@ -115,7 +115,8 @@ public class StopReplicaRequest extends AbstractControlRequest {
         for (TopicPartition tp : partitions()) {
             partitions.add(new StopReplicaPartitionError()
                 .setTopicName(tp.topic())
-                .setPartitionIndex(tp.partition()));
+                .setPartitionIndex(tp.partition())
+                .setErrorCode(error.code()));
         }
         data.setPartitionErrors(partitions);
 
