@@ -757,7 +757,10 @@ public final class MessageDataGenerator {
                 " cannot be nullable.");
         }
         if ((field.type() instanceof FieldType.BoolFieldType) ||
-                (field.type().isInteger()) ||
+                (field.type() instanceof FieldType.Int8FieldType) ||
+                (field.type() instanceof FieldType.Int16FieldType) ||
+                (field.type() instanceof FieldType.Int32FieldType) ||
+                (field.type() instanceof FieldType.Int64FieldType) ||
                 (field.type() instanceof FieldType.UUIDFieldType) ||
                 (field.type() instanceof FieldType.StringFieldType)) {
             boolean maybeAbsent =

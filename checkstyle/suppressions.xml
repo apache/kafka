@@ -8,6 +8,14 @@
 
     <!-- Note that [/\\] must be used as the path separator for cross-platform support -->
 
+    <!-- Generator -->
+    <suppress checks="CyclomaticComplexity|BooleanExpressionComplexity"
+              files="(SchemaGenerator|MessageDataGenerator).java"/>
+    <suppress checks="NPathComplexity"
+              files="(FieldSpec).java"/>
+    <suppress checks="JavaNCSS"
+              files="(ApiMessageType).java"/>
+
     <!-- Clients -->
     <suppress checks="ClassFanOutComplexity"
               files="(Fetcher|Sender|SenderTest|ConsumerCoordinator|KafkaConsumer|KafkaProducer|Utils|TransactionManagerTest|KafkaAdminClient|NetworkClient|Admin).java"/>
@@ -49,7 +57,7 @@
               files="(Utils|Topic|KafkaLZ4BlockOutputStream|AclData|JoinGroupRequest).java"/>
 
     <suppress checks="CyclomaticComplexity"
-              files="(ConsumerCoordinator|Fetcher|Sender|KafkaProducer|BufferPool|ConfigDef|RecordAccumulator|KerberosLogin|AbstractRequest|AbstractResponse|Selector|SslFactory|SslTransportLayer|SaslClientAuthenticator|SaslClientCallbackHandler|SaslServerAuthenticator|SchemaGenerator|AbstractCoordinator).java"/>
+              files="(ConsumerCoordinator|Fetcher|Sender|KafkaProducer|BufferPool|ConfigDef|RecordAccumulator|KerberosLogin|AbstractRequest|AbstractResponse|Selector|SslFactory|SslTransportLayer|SaslClientAuthenticator|SaslClientCallbackHandler|SaslServerAuthenticator|AbstractCoordinator).java"/>
 
     <suppress checks="JavaNCSS"
               files="AbstractRequest.java|KerberosLogin.java|WorkerSinkTaskTest.java|TransactionManagerTest.java|SenderTest.java|KafkaAdminClient.java"/>
@@ -59,6 +67,12 @@
 
     <suppress checks="(JavaNCSS|CyclomaticComplexity|MethodLength)"
               files="CoordinatorClient.java"/>
+
+    <suppress checks="(NPathComplexity|ClassFanOutComplexity|CyclomaticComplexity|ClassDataAbstractionCoupling|LocalVariableName|MemberName|MethodLength|JavaNCSS)"
+            files="clients[\\/]src[\\/](generated|generated-test)[\\/].+.java$"/>
+
+    <suppress checks="NPathComplexity"
+            files="MessageTest.java"/>
 
     <!-- clients tests -->
     <suppress checks="ClassDataAbstractionCoupling"
@@ -232,12 +246,5 @@
               files="KafkaLog4jAppender.java"/>
     <suppress checks="JavaNCSS"
               files="RequestResponseTest.java"/>
-
-    <suppress checks="(NPathComplexity|ClassFanOutComplexity|CyclomaticComplexity|ClassDataAbstractionCoupling)"
-            files="clients[\\/]src[\\/]generated[\\/].+.java$"/>
-    <suppress checks="NPathComplexity"
-            files="MessageTest.java"/>
-
-    <suppress checks="CyclomaticComplexity" files="MessageDataGenerator.java"/>
 
 </suppressions>
