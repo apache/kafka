@@ -1724,7 +1724,7 @@ class ReplicaManager(val config: KafkaConfig,
       if (expectedLeaders.nonEmpty) {
         val watchKeys = expectedLeaders.iterator.map {
           case (tp, _) => TopicPartitionOperationKey(tp)
-        }.toIndexedSeq
+        }.toBuffer
 
         delayedElectLeaderPurgatory.tryCompleteElseWatch(
           new DelayedElectLeader(

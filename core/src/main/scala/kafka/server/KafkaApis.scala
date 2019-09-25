@@ -251,7 +251,7 @@ class KafkaApis(val requestChannel: RequestChannel,
 
       sendResponseExemptThrottle(request, new StopReplicaResponse(new StopReplicaResponseData()
         .setErrorCode(error.code)
-        .setPartitionErrors(result.map { case (tp, error) => toStopReplicaPartition(tp, error) }.toIndexedSeq.asJava)))
+        .setPartitionErrors(result.map { case (tp, error) => toStopReplicaPartition(tp, error) }.toBuffer.asJava)))
     }
 
     CoreUtils.swallow(replicaManager.replicaFetcherManager.shutdownIdleFetcherThreads(), this)

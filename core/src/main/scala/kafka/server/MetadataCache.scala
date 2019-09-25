@@ -231,8 +231,8 @@ class MetadataCache(brokerId: Int) extends Logging {
       }
     val unauthorizedTopics = Collections.emptySet[String]
     val internalTopics = getAllTopics(snapshot).filter(Topic.isInternal).asJava
-    new Cluster(clusterId, nodes.values.filter(_ != null).toIndexedSeq.asJava,
-      partitions.toIndexedSeq.asJava,
+    new Cluster(clusterId, nodes.values.filter(_ != null).toBuffer.asJava,
+      partitions.toBuffer.asJava,
       unauthorizedTopics, internalTopics,
       snapshot.controllerId.map(id => node(id)).orNull)
   }

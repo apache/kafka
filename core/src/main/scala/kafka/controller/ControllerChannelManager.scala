@@ -466,7 +466,7 @@ abstract class AbstractControllerBrokerRequestBatch(config: KafkaConfig,
         }
         val brokerEpoch = controllerContext.liveBrokerIdAndEpochs(broker)
         val leaderAndIsrRequestBuilder = new LeaderAndIsrRequest.Builder(leaderAndIsrRequestVersion, controllerId, controllerEpoch,
-          brokerEpoch, leaderAndIsrPartitionStates.values.toIndexedSeq.asJava, leaders.asJava)
+          brokerEpoch, leaderAndIsrPartitionStates.values.toBuffer.asJava, leaders.asJava)
         sendRequest(broker, leaderAndIsrRequestBuilder, (r: AbstractResponse) => sendEvent(LeaderAndIsrResponseReceived(r, broker)))
 
     }
@@ -479,7 +479,7 @@ abstract class AbstractControllerBrokerRequestBatch(config: KafkaConfig,
         s"for partition $tp")
     }
 
-    val partitionStates = updateMetadataRequestPartitionInfoMap.values.toIndexedSeq
+    val partitionStates = updateMetadataRequestPartitionInfoMap.values.toBuffer
     val updateMetadataRequestVersion: Short =
       if (config.interBrokerProtocolVersion >= KAFKA_2_2_IV0) 5
       else if (config.interBrokerProtocolVersion >= KAFKA_1_0_IV0) 4
@@ -512,7 +512,7 @@ abstract class AbstractControllerBrokerRequestBatch(config: KafkaConfig,
         .setId(broker.id)
         .setEndpoints(endpoints.asJava)
         .setRack(broker.rack.orNull)
-    }.toIndexedSeq
+    }.toBuffer
 
     updateMetadataRequestBrokerSet.intersect(controllerContext.liveOrShuttingDownBrokerIds).foreach { broker =>
       val brokerEpoch = controllerContext.liveBrokerIdAndEpochs(broker)

@@ -94,7 +94,7 @@ public class StopReplicaRequest extends AbstractControlRequest {
     }
 
     private final StopReplicaRequestData data;
-    private volatile Collection<TopicPartition> partitions;
+    private volatile List<TopicPartition> partitions;
 
     private StopReplicaRequest(StopReplicaRequestData data, short version) {
         super(ApiKeys.STOP_REPLICA, version);
@@ -135,7 +135,7 @@ public class StopReplicaRequest extends AbstractControlRequest {
         return data.deletePartitions();
     }
 
-    public Collection<TopicPartition> partitions() {
+    public List<TopicPartition> partitions() {
         if (partitions == null) {
             synchronized (data) {
                 if (partitions == null) {

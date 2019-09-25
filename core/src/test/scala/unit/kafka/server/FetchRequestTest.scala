@@ -556,7 +556,7 @@ class FetchRequestTest extends BaseRequestTest {
   }
 
   private def records(partitionData: FetchResponse.PartitionData[MemoryRecords]): Seq[Record] = {
-    partitionData.records.records.asScala.toIndexedSeq
+    partitionData.records.records.asScala.toBuffer
   }
 
   private def checkFetchResponse(expectedPartitions: Seq[TopicPartition], fetchResponse: FetchResponse[MemoryRecords],
@@ -574,7 +574,7 @@ class FetchRequestTest extends BaseRequestTest {
       val records = partitionData.records
       responseBufferSize += records.sizeInBytes
 
-      val batches = records.batches.asScala.toIndexedSeq
+      val batches = records.batches.asScala.toBuffer
       assertTrue(batches.size < numMessagesPerPartition)
       val batchesSize = batches.map(_.sizeInBytes).sum
       responseSize += batchesSize

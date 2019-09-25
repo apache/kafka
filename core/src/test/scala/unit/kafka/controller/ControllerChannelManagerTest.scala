@@ -629,7 +629,7 @@ class ControllerChannelManagerTest {
       val stopReplicaRequest = sentRequest.request.build().asInstanceOf[StopReplicaRequest]
       val stopReplicaResponse =
         if (error == Errors.NONE) {
-          val partitionErrors = stopReplicaRequest.partitions.asScala.toIndexedSeq.map { tp =>
+          val partitionErrors = stopReplicaRequest.partitions.asScala.map { tp =>
             new StopReplicaPartitionError()
               .setTopicName(tp.topic)
               .setPartitionIndex(tp.partition)
