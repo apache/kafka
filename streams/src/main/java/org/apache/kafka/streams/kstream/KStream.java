@@ -2357,6 +2357,7 @@ public interface KStream<K, V> {
      * {@link ValueJoiner}, one for each matched record-pair with the same key and within the joining window intervals
      * @see #leftJoin(KStream, ValueJoiner, JoinWindows, Joined)
      * @see #outerJoin(KStream, ValueJoiner, JoinWindows, Joined)
+     * @deprecated since 2.4. Use {@link KStream#join(KStream, ValueJoiner, JoinWindows, StreamJoined)} instead.
      */
     @Deprecated
     <VO, VR> KStream<K, VR> join(final KStream<K, VO> otherStream,
@@ -2602,12 +2603,15 @@ public interface KStream<K, V> {
      * this {@code KStream} and within the joining window intervals
      * @see #join(KStream, ValueJoiner, JoinWindows, Joined)
      * @see #outerJoin(KStream, ValueJoiner, JoinWindows, Joined)
+     * @deprecated since 2.4. Use {@link KStream#leftJoin(KStream, ValueJoiner, JoinWindows, StreamJoined)} instead.
      */
     @Deprecated
-    <VO, VR> KStream<K, VR> leftJoin(final KStream<K, VO> otherStream,
-                                     final ValueJoiner<? super V, ? super VO, ? extends VR> joiner,
-                                     final JoinWindows windows,
-                                     final Joined<K, V, VO> joined);
+    default <VO, VR> KStream<K, VR> leftJoin(final KStream<K, VO> otherStream,
+                                             final ValueJoiner<? super V, ? super VO, ? extends VR> joiner,
+                                             final JoinWindows windows,
+                                             final Joined<K, V, VO> joined) {
+        return null;
+    }
 
     /**
      * Join records of this stream with another {@code KStream}'s records using windowed left equi join using the
@@ -2853,6 +2857,7 @@ public interface KStream<K, V> {
      * both {@code KStream} and within the joining window intervals
      * @see #join(KStream, ValueJoiner, JoinWindows, Joined)
      * @see #leftJoin(KStream, ValueJoiner, JoinWindows, Joined)
+     * @deprecated since 2.4. Use {@link KStream#outerJoin(KStream, ValueJoiner, JoinWindows, StreamJoined)} instead.
      */
     @Deprecated
     <VO, VR> KStream<K, VR> outerJoin(final KStream<K, VO> otherStream,

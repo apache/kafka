@@ -17,6 +17,7 @@
 
 package org.apache.kafka.streams.kstream.internals;
 
+import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.kstream.JoinWindows;
 import org.apache.kafka.streams.kstream.KStream;
@@ -27,9 +28,11 @@ import org.apache.kafka.streams.kstream.internals.graph.ProcessorParameters;
 import org.apache.kafka.streams.kstream.internals.graph.StreamStreamJoinNode;
 import org.apache.kafka.streams.kstream.internals.graph.StreamsGraphNode;
 import org.apache.kafka.streams.state.StoreBuilder;
+import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
 import org.apache.kafka.streams.state.WindowStore;
 
+import java.time.Duration;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Set;
@@ -81,26 +84,25 @@ class KStreamImplJoin {
         final StoreBuilder<WindowStore<K1, V2>> otherWindowStore;
         final String userProvidedBaseStoreName = streamJoinedInternal.storeName();
 
-        final String thisJoinStoreName = userProvidedBaseStoreName == null ? joinThisGeneratedName : userProvidedBaseStoreName + joinThisSuffix;
-        final String otherJoinStoreName = userProvidedBaseStoreName == null ? joinOtherGeneratedName : userProvidedBaseStoreName + joinOtherSuffix;
-
         final WindowBytesStoreSupplier thisStoreSupplier = streamJoinedInternal.thisStoreSupplier();
         final WindowBytesStoreSupplier otherStoreSupplier = streamJoinedInternal.otherStoreSupplier();
 
         assertUniqueStoreNames(thisStoreSupplier, otherStoreSupplier);
 
         if (thisStoreSupplier == null) {
-            thisWindowStore = KStreamImpl.joinWindowStoreBuilder(thisJoinStoreName, windows, streamJoinedInternal.keySerde(), streamJoinedInternal.valueSerde());
+            final String thisJoinStoreName = userProvidedBaseStoreName == null ? joinThisGeneratedName : userProvidedBaseStoreName + joinThisSuffix;
+            thisWindowStore = joinWindowStoreBuilder(thisJoinStoreName, windows, streamJoinedInternal.keySerde(), streamJoinedInternal.valueSerde());
         } else {
             assertWindowSettings(thisStoreSupplier, windows);
-            thisWindowStore = KStreamImpl.joinWindowStoreBuilderFromSupplier(thisStoreSupplier, streamJoinedInternal.keySerde(), streamJoinedInternal.valueSerde());
+            thisWindowStore = joinWindowStoreBuilderFromSupplier(thisStoreSupplier, streamJoinedInternal.keySerde(), streamJoinedInternal.valueSerde());
         }
 
         if (otherStoreSupplier == null) {
-            otherWindowStore = KStreamImpl.joinWindowStoreBuilder(otherJoinStoreName, windows, streamJoinedInternal.keySerde(), streamJoinedInternal.otherValueSerde());
+            final String otherJoinStoreName = userProvidedBaseStoreName == null ? joinOtherGeneratedName : userProvidedBaseStoreName + joinOtherSuffix;
+            otherWindowStore = joinWindowStoreBuilder(otherJoinStoreName, windows, streamJoinedInternal.keySerde(), streamJoinedInternal.otherValueSerde());
         } else {
             assertWindowSettings(otherStoreSupplier, windows);
-            otherWindowStore = KStreamImpl.joinWindowStoreBuilderFromSupplier(otherStoreSupplier, streamJoinedInternal.keySerde(), streamJoinedInternal.otherValueSerde());
+            otherWindowStore = joinWindowStoreBuilderFromSupplier(otherStoreSupplier, streamJoinedInternal.keySerde(), streamJoinedInternal.otherValueSerde());
         }
 
         final KStreamJoinWindow<K1, V1> thisWindowedStream = new KStreamJoinWindow<>(thisWindowStore.name());
@@ -162,9 +164,11 @@ class KStreamImplJoin {
     }
 
     private void assertWindowSettings(final WindowBytesStoreSupplier supplier, final JoinWindows joinWindows) {
-        final long joinGrace = joinWindows.gracePeriodMs() < 0 ? 0 : joinWindows.gracePeriodMs();
-        final boolean allMatch = supplier.retentionPeriod() == (joinWindows.size() + joinGrace) &&
-            supplier.windowSize() == joinWindows.size() && supplier.retainDuplicates();
+        if (!supplier.retainDuplicates()) {
+            throw new StreamsException("The StoreSupplier must set retainDuplicates=true, found retainDuplicates=false");
+        }
+        final boolean allMatch = supplier.retentionPeriod() == (joinWindows.size() + joinWindows.gracePeriodMs()) &&
+            supplier.windowSize() == joinWindows.size();
         if (!allMatch) {
             throw new StreamsException(String.format("Window settings mismatch. WindowBytesStoreSupplier settings %s must match JoinWindows settings %s", supplier, joinWindows));
         }
@@ -178,5 +182,33 @@ class KStreamImplJoin {
             && supplier.name().equals(otherSupplier.name())) {
             throw new StreamsException("Both StoreSuppliers have the same name.  StoreSuppliers must provide unique names");
         }
+    }
+
+    @SuppressWarnings("deprecation") // continuing to support Windows#maintainMs/segmentInterval in fallback mode
+    private static <K, V> StoreBuilder<WindowStore<K, V>> joinWindowStoreBuilder(final String storeName,
+                                                                                 final JoinWindows windows,
+                                                                                 final Serde<K> keySerde,
+                                                                                 final Serde<V> valueSerde) {
+        return Stores.windowStoreBuilder(
+            Stores.persistentWindowStore(
+                storeName + "-store",
+                Duration.ofMillis(windows.size() + windows.gracePeriodMs()),
+                Duration.ofMillis(windows.size()),
+                true
+            ),
+            keySerde,
+            valueSerde
+        );
+    }
+
+    @SuppressWarnings("deprecation") // continuing to support Windows#maintainMs/segmentInterval in fallback mode
+    private static <K, V> StoreBuilder<WindowStore<K, V>> joinWindowStoreBuilderFromSupplier(final WindowBytesStoreSupplier storeSupplier,
+                                                                                             final Serde<K> keySerde,
+                                                                                             final Serde<V> valueSerde) {
+        return Stores.windowStoreBuilder(
+            storeSupplier,
+            keySerde,
+            valueSerde
+        );
     }
 }

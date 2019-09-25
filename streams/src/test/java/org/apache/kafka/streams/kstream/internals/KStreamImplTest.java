@@ -92,6 +92,7 @@ public class KStreamImplTest {
     private final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.String(), Serdes.String());
 
     private final Serde<String> mySerde = new Serdes.StringSerde();
+    private final StreamJoined nullStreamJoinedForTest = null;
 
     @Before
     public void before() {
@@ -653,14 +654,12 @@ public class KStreamImplTest {
 
     @Test(expected = NullPointerException.class)
     public void shouldThrowNullPointerOnJoinWithStreamWhenStreamJoinedIsNull() {
-        final StreamJoined joined = null;
-        testStream.join(testStream, MockValueJoiner.TOSTRING_JOINER, JoinWindows.of(ofMillis(10)), joined);
+        testStream.join(testStream, MockValueJoiner.TOSTRING_JOINER, JoinWindows.of(ofMillis(10)), nullStreamJoinedForTest);
     }
 
     @Test(expected = NullPointerException.class)
     public void shouldThrowNullPointerOnOuterJoinStreamJoinedIsNull() {
-        final StreamJoined joined = null;
-        testStream.outerJoin(testStream, MockValueJoiner.TOSTRING_JOINER, JoinWindows.of(ofMillis(10)), joined);
+        testStream.outerJoin(testStream, MockValueJoiner.TOSTRING_JOINER, JoinWindows.of(ofMillis(10)), nullStreamJoinedForTest);
     }
 
     @Test

@@ -101,7 +101,7 @@ public class KStreamKStreamJoinTest {
         WindowBytesStoreSupplier otherStoreSupplier = buildWindowBytesStoreSupplier("in-memory-join-store-other", 150, 100, true);
 
 
-        buildStreamsJoinThatShouldThrow(streamJoined.withStoreSupplier(thisStoreSupplier).withOtherStoreSupplier(otherStoreSupplier),
+        buildStreamsJoinThatShouldThrow(streamJoined.withThisStoreSupplier(thisStoreSupplier).withOtherStoreSupplier(otherStoreSupplier),
             joinWindows,
             errorMessagePrefix);
 
@@ -109,7 +109,7 @@ public class KStreamKStreamJoinTest {
         thisStoreSupplier = buildWindowBytesStoreSupplier("in-memory-join-store", 150, 150, true);
         otherStoreSupplier = buildWindowBytesStoreSupplier("in-memory-join-store-other", 150, 100, true);
 
-        buildStreamsJoinThatShouldThrow(streamJoined.withStoreSupplier(thisStoreSupplier).withOtherStoreSupplier(otherStoreSupplier),
+        buildStreamsJoinThatShouldThrow(streamJoined.withThisStoreSupplier(thisStoreSupplier).withOtherStoreSupplier(otherStoreSupplier),
             joinWindows,
             errorMessagePrefix);
 
@@ -117,15 +117,15 @@ public class KStreamKStreamJoinTest {
         thisStoreSupplier = buildWindowBytesStoreSupplier("in-memory-join-store", 150, 100, false);
         otherStoreSupplier = buildWindowBytesStoreSupplier("in-memory-join-store-other", 150, 100, true);
 
-        buildStreamsJoinThatShouldThrow(streamJoined.withStoreSupplier(thisStoreSupplier).withOtherStoreSupplier(otherStoreSupplier),
+        buildStreamsJoinThatShouldThrow(streamJoined.withThisStoreSupplier(thisStoreSupplier).withOtherStoreSupplier(otherStoreSupplier),
             joinWindows,
-            errorMessagePrefix);
+            "The StoreSupplier must set retainDuplicates=true, found retainDuplicates=false");
 
         //Case where retention size of otherJoinStore doesn't match JoinWindows
         thisStoreSupplier = buildWindowBytesStoreSupplier("in-memory-join-store", 150, 100, true);
         otherStoreSupplier = buildWindowBytesStoreSupplier("in-memory-join-store-other", 500, 100, true);
 
-        buildStreamsJoinThatShouldThrow(streamJoined.withStoreSupplier(thisStoreSupplier).withOtherStoreSupplier(otherStoreSupplier),
+        buildStreamsJoinThatShouldThrow(streamJoined.withThisStoreSupplier(thisStoreSupplier).withOtherStoreSupplier(otherStoreSupplier),
             joinWindows,
             errorMessagePrefix);
 
@@ -133,7 +133,7 @@ public class KStreamKStreamJoinTest {
         thisStoreSupplier = buildWindowBytesStoreSupplier("in-memory-join-store", 150, 100, true);
         otherStoreSupplier = buildWindowBytesStoreSupplier("in-memory-join-store-other", 150, 150, true);
 
-        buildStreamsJoinThatShouldThrow(streamJoined.withStoreSupplier(thisStoreSupplier).withOtherStoreSupplier(otherStoreSupplier),
+        buildStreamsJoinThatShouldThrow(streamJoined.withThisStoreSupplier(thisStoreSupplier).withOtherStoreSupplier(otherStoreSupplier),
             joinWindows,
             errorMessagePrefix);
 
@@ -141,7 +141,7 @@ public class KStreamKStreamJoinTest {
         thisStoreSupplier = buildWindowBytesStoreSupplier("in-memory-join-store", 150, 100, true);
         otherStoreSupplier = buildWindowBytesStoreSupplier("in-memory-join-store-other", 150, 100, false);
 
-        buildStreamsJoinThatShouldThrow(streamJoined.withStoreSupplier(thisStoreSupplier).withOtherStoreSupplier(otherStoreSupplier),
+        buildStreamsJoinThatShouldThrow(streamJoined.withThisStoreSupplier(thisStoreSupplier).withOtherStoreSupplier(otherStoreSupplier),
             joinWindows,
             errorMessagePrefix);
     }
@@ -153,7 +153,7 @@ public class KStreamKStreamJoinTest {
         final WindowBytesStoreSupplier thisStoreSupplier = buildWindowBytesStoreSupplier("in-memory-join-store", 150, 100, true);
         final WindowBytesStoreSupplier otherStoreSupplier = buildWindowBytesStoreSupplier("in-memory-join-store", 150, 100, true);
 
-        buildStreamsJoinThatShouldThrow(streamJoined.withStoreSupplier(thisStoreSupplier).withOtherStoreSupplier(otherStoreSupplier),
+        buildStreamsJoinThatShouldThrow(streamJoined.withThisStoreSupplier(thisStoreSupplier).withOtherStoreSupplier(otherStoreSupplier),
             joinWindows,
             "Both StoreSuppliers have the same name.  StoreSuppliers must provide unique names");
     }
@@ -174,10 +174,10 @@ public class KStreamKStreamJoinTest {
         final StreamJoined<String, Integer, Integer> streamJoined = StreamJoined.with(Serdes.String(), Serdes.Integer(), Serdes.Integer());
 
         //Case with 2 custom store suppliers
-        runJoin(streamJoined.withStoreSupplier(thisStoreSupplier).withOtherStoreSupplier(otherStoreSupplier), joinWindows);
+        runJoin(streamJoined.withThisStoreSupplier(thisStoreSupplier).withOtherStoreSupplier(otherStoreSupplier), joinWindows);
 
         //Case with this stream store supplier
-        runJoin(streamJoined.withStoreSupplier(thisStoreSupplier), joinWindows);
+        runJoin(streamJoined.withThisStoreSupplier(thisStoreSupplier), joinWindows);
 
         //Case with other stream store supplier
         runJoin(streamJoined.withOtherStoreSupplier(otherStoreSupplier), joinWindows);

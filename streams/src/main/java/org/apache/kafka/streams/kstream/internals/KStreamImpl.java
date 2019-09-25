@@ -50,13 +50,8 @@ import org.apache.kafka.streams.processor.FailOnInvalidTimestamp;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.TopicNameExtractor;
 import org.apache.kafka.streams.processor.internals.StaticTopicNameExtractor;
-import org.apache.kafka.streams.state.StoreBuilder;
-import org.apache.kafka.streams.state.Stores;
-import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
-import org.apache.kafka.streams.state.WindowStore;
 
 import java.lang.reflect.Array;
-import java.time.Duration;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
@@ -1111,34 +1106,6 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
             repartitionRequired,
             streamsGraphNode,
             builder);
-    }
-
-    @SuppressWarnings("deprecation") // continuing to support Windows#maintainMs/segmentInterval in fallback mode
-    static <K, V> StoreBuilder<WindowStore<K, V>> joinWindowStoreBuilder(final String storeName,
-                                                                         final JoinWindows windows,
-                                                                         final Serde<K> keySerde,
-                                                                         final Serde<V> valueSerde) {
-        return Stores.windowStoreBuilder(
-            Stores.persistentWindowStore(
-                storeName + "-store",
-                Duration.ofMillis(windows.size() + windows.gracePeriodMs()),
-                Duration.ofMillis(windows.size()),
-                true
-            ),
-            keySerde,
-            valueSerde
-        );
-    }
-
-    @SuppressWarnings("deprecation") // continuing to support Windows#maintainMs/segmentInterval in fallback mode
-    static <K, V> StoreBuilder<WindowStore<K, V>> joinWindowStoreBuilderFromSupplier(final WindowBytesStoreSupplier storeSupplier,
-                                                                                     final Serde<K> keySerde,
-                                                                                     final Serde<V> valueSerde) {
-        return Stores.windowStoreBuilder(
-            storeSupplier,
-            keySerde,
-            valueSerde
-        );
     }
 
 }
