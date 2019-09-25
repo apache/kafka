@@ -1351,7 +1351,7 @@ class ReplicaManagerTest {
             .setTopicName(tp1.topic)
             .setPartitionIndex(tp1.partition)
             .setControllerEpoch(controllerEpoch)
-            .setLeader(1)
+            .setLeader(0)
             .setLeaderEpoch(leaderEpoch + leaderEpochIncrement)
             .setIsr(partition1Replicas)
             .setZkVersion(0)
