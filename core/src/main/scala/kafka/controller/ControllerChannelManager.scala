@@ -45,6 +45,12 @@ object ControllerChannelManager {
   val RequestRateAndQueueTimeMetricName = "RequestRateAndQueueTimeMs"
 }
 
+case class BrokerIdAndEpoch(brokerId: Int, epoch: Long) {
+  override def toString: String = {
+    s"Broker(id=$brokerId, epoch=$epoch)"
+  }
+}
+
 class ControllerChannelManager(controllerContext: ControllerContext,
                                config: KafkaConfig,
                                time: Time,
@@ -80,15 +86,16 @@ class ControllerChannelManager(controllerContext: ControllerContext,
     }
   }
 
-  def sendRequest(brokerId: Int, request: AbstractControlRequest.Builder[_ <: AbstractControlRequest],
+  def sendRequest(brokerIdAndEpoch: BrokerIdAndEpoch,
+                  request: AbstractControlRequest.Builder[_ <: AbstractControlRequest],
                   callback: AbstractResponse => Unit = null): Unit = {
     brokerLock synchronized {
-      val stateInfoOpt = brokerStateInfo.get(brokerId)
+      val stateInfoOpt = brokerStateInfo.get(brokerIdAndEpoch.brokerId)
       stateInfoOpt match {
         case Some(stateInfo) =>
-          stateInfo.messageQueue.put(QueueItem(request.apiKey, request, callback, time.milliseconds()))
+          stateInfo.messageQueue.put(QueueItem(brokerIdAndEpoch, request, callback, time.milliseconds()))
         case None =>
-          warn(s"Not sending request $request to broker $brokerId, since it is offline.")
+          warn(s"Not sending request $request to $brokerIdAndEpoch, since it is offline.")
       }
     }
   }
@@ -213,8 +220,10 @@ class ControllerChannelManager(controllerContext: ControllerContext,
   }
 }
 
-case class QueueItem(apiKey: ApiKeys, request: AbstractControlRequest.Builder[_ <: AbstractControlRequest],
-                     callback: AbstractResponse => Unit, enqueueTimeMs: Long)
+case class QueueItem(brokerIdAndEpoch: BrokerIdAndEpoch,
+                     request: AbstractControlRequest.Builder[_ <: AbstractControlRequest],
+                     callback: AbstractResponse => Unit,
+                     enqueueTimeMs: Long)
 
 class RequestSendThread(val controllerId: Int,
                         val controllerContext: ControllerContext,
@@ -236,7 +245,8 @@ class RequestSendThread(val controllerId: Int,
 
     def backoff(): Unit = pause(100, TimeUnit.MILLISECONDS)
 
-    val QueueItem(apiKey, requestBuilder, callback, enqueueTimeMs) = queue.take()
+    val QueueItem(brokerIdAndEpoch, requestBuilder, callback, enqueueTimeMs) = queue.take()
+
     requestRateAndQueueTimeMetrics.update(time.milliseconds() - enqueueTimeMs, TimeUnit.MILLISECONDS)
 
     var clientResponse: ClientResponse = null
@@ -269,16 +279,23 @@ class RequestSendThread(val controllerId: Int,
         val requestHeader = clientResponse.requestHeader
         val api = requestHeader.apiKey
         if (api != ApiKeys.LEADER_AND_ISR && api != ApiKeys.STOP_REPLICA && api != ApiKeys.UPDATE_METADATA)
-          throw new KafkaException(s"Unexpected apiKey received: $apiKey")
+          throw new KafkaException(s"Unexpected apiKey received: $api")
 
         val response = clientResponse.responseBody
 
-        stateChangeLogger.withControllerEpoch(controllerContext.epoch).trace(s"Received response " +
+        stateChangeLogger.withControllerEpoch(controllerContext.epoch).trace("Received response " +
           s"${response.toString(requestHeader.apiVersion)} for request $api with correlation id " +
-          s"${requestHeader.correlationId} sent to broker $brokerNode")
+          s"${requestHeader.correlationId} sent to $brokerIdAndEpoch ($brokerNode)")
 
-        if (callback != null) {
-          callback(response)
+        controllerContext.liveBrokerIdAndEpochs.get(brokerIdAndEpoch.brokerId) match {
+          case Some(epoch) if epoch != brokerIdAndEpoch.epoch =>
+            stateChangeLogger.withControllerEpoch(controllerContext.epoch).trace(s"Ignoring stale $api response " +
+              s"with correlation id ${requestHeader.correlationId} from broker $brokerIdAndEpoch since the " +
+              s"current epoch is $epoch")
+
+          case _ =>
+            if (callback != null)
+              callback(response)
         }
       }
     } catch {
@@ -327,10 +344,10 @@ class ControllerBrokerRequestBatch(config: KafkaConfig,
     controllerEventManager.put(event)
   }
 
-  def sendRequest(brokerId: Int,
+  def sendRequest(brokerIdAndEpoch: BrokerIdAndEpoch,
                   request: AbstractControlRequest.Builder[_ <: AbstractControlRequest],
                   callback: AbstractResponse => Unit = null): Unit = {
-    controllerChannelManager.sendRequest(brokerId, request, callback)
+    controllerChannelManager.sendRequest(brokerIdAndEpoch, request, callback)
   }
 
 }
@@ -348,7 +365,7 @@ abstract class AbstractControllerBrokerRequestBatch(config: KafkaConfig,
 
   def sendEvent(event: ControllerEvent): Unit
 
-  def sendRequest(brokerId: Int,
+  def sendRequest(brokerIdAndEpoch: BrokerIdAndEpoch,
                   request: AbstractControlRequest.Builder[_ <: AbstractControlRequest],
                   callback: AbstractResponse => Unit = null): Unit
 
@@ -449,22 +466,26 @@ abstract class AbstractControllerBrokerRequestBatch(config: KafkaConfig,
       else 0
 
     leaderAndIsrRequestMap.filterKeys(controllerContext.liveOrShuttingDownBrokerIds.contains).foreach {
-      case (broker, leaderAndIsrPartitionStates) =>
-        leaderAndIsrPartitionStates.foreach {
-          case (topicPartition, state) =>
-            val typeOfRequest =
-              if (broker == state.basePartitionState.leader) "become-leader"
-              else "become-follower"
-            stateChangeLog.trace(s"Sending $typeOfRequest LeaderAndIsr request $state to broker $broker for partition $topicPartition")
-        }
+      case (brokerId, leaderAndIsrPartitionStates) =>
         val leaderIds = leaderAndIsrPartitionStates.map(_._2.basePartitionState.leader).toSet
         val leaders = controllerContext.liveOrShuttingDownBrokers.filter(b => leaderIds.contains(b.id)).map {
           _.node(config.interBrokerListenerName)
         }
-        val brokerEpoch = controllerContext.liveBrokerIdAndEpochs(broker)
+        val brokerEpoch = controllerContext.liveBrokerIdAndEpochs(brokerId)
+
+        leaderAndIsrPartitionStates.foreach {
+          case (topicPartition, state) =>
+            val typeOfRequest =
+              if (brokerId == state.basePartitionState.leader) "become-leader"
+              else "become-follower"
+            stateChangeLog.trace(s"Sending $typeOfRequest LeaderAndIsr request $state to " +
+              s"broker $brokerId (epoch $brokerEpoch) for partition $topicPartition")
+        }
+
         val leaderAndIsrRequestBuilder = new LeaderAndIsrRequest.Builder(leaderAndIsrRequestVersion, controllerId, controllerEpoch,
           brokerEpoch, leaderAndIsrPartitionStates.asJava, leaders.asJava)
-        sendRequest(broker, leaderAndIsrRequestBuilder, (r: AbstractResponse) => sendEvent(LeaderAndIsrResponseReceived(r, broker)))
+        sendRequest(BrokerIdAndEpoch(brokerId, brokerEpoch), leaderAndIsrRequestBuilder,
+          (r: AbstractResponse) => sendEvent(LeaderAndIsrResponseReceived(r, brokerId)))
 
     }
     leaderAndIsrRequestMap.clear()
@@ -503,11 +524,11 @@ abstract class AbstractControllerBrokerRequestBatch(config: KafkaConfig,
       }
     }
 
-    updateMetadataRequestBrokerSet.intersect(controllerContext.liveOrShuttingDownBrokerIds).foreach { broker =>
-      val brokerEpoch = controllerContext.liveBrokerIdAndEpochs(broker)
+    updateMetadataRequestBrokerSet.intersect(controllerContext.liveOrShuttingDownBrokerIds).foreach { brokerId =>
+      val brokerEpoch = controllerContext.liveBrokerIdAndEpochs(brokerId)
       val updateMetadataRequest = new UpdateMetadataRequest.Builder(updateMetadataRequestVersion, controllerId, controllerEpoch,
         brokerEpoch, partitionStates.asJava, liveBrokers.asJava)
-      sendRequest(broker, updateMetadataRequest)
+      sendRequest(BrokerIdAndEpoch(brokerId, brokerEpoch), updateMetadataRequest)
     }
     updateMetadataRequestBrokerSet.clear()
     updateMetadataRequestPartitionInfoMap.clear()
@@ -539,16 +560,18 @@ abstract class AbstractControllerBrokerRequestBatch(config: KafkaConfig,
       val brokerEpoch = controllerContext.liveBrokerIdAndEpochs(brokerId)
 
       if (stopReplicaWithDelete.nonEmpty) {
-        debug(s"The stop replica request (delete = true) sent to broker $brokerId is ${stopReplicaWithDelete.mkString(",")}")
+        debug(s"The stop replica request (delete = true) sent to broker $brokerId (epoch $brokerEpoch) " +
+          s"is ${stopReplicaWithDelete.mkString(",")}")
         val stopReplicaRequest = createStopReplicaRequest(brokerEpoch, stopReplicaWithDelete, deletePartitions = true)
         val callback = stopReplicaPartitionDeleteResponseCallback(brokerId) _
-        sendRequest(brokerId, stopReplicaRequest, callback)
+        sendRequest(BrokerIdAndEpoch(brokerId, brokerEpoch), stopReplicaRequest, callback)
       }
 
       if (stopReplicaWithoutDelete.nonEmpty) {
-        debug(s"The stop replica request (delete = false) sent to broker $brokerId is ${stopReplicaWithoutDelete.mkString(",")}")
+        debug(s"The stop replica request (delete = false) sent to broker $brokerId (epoch $brokerEpoch) " +
+          s"is ${stopReplicaWithoutDelete.mkString(",")}")
         val stopReplicaRequest = createStopReplicaRequest(brokerEpoch, stopReplicaWithoutDelete, deletePartitions = false)
-        sendRequest(brokerId, stopReplicaRequest)
+        sendRequest(BrokerIdAndEpoch(brokerId, brokerEpoch), stopReplicaRequest)
       }
     }
     stopReplicaRequestMap.clear()
