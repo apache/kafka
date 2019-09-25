@@ -25,7 +25,6 @@ import org.apache.kafka.streams.kstream.{
   GlobalKTable,
   JoinWindows,
   Printed,
-  StreamJoined,
   TransformerSupplier,
   ValueTransformerSupplier,
   ValueTransformerWithKeySupplier,
