@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.common.protocol;
 
-import org.apache.kafka.common.protocol.types.ArrayOf;
 import org.apache.kafka.common.protocol.types.BoundField;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Type;
@@ -43,18 +42,19 @@ public class Protocol {
 
         // Top level fields
         for (BoundField field: schema.fields()) {
-            if (field.def.type instanceof ArrayOf) {
+            Type type = field.def.type;
+            if (type.isArray()) {
                 b.append("[");
                 b.append(field.def.name);
                 b.append("] ");
-                Type innerType = ((ArrayOf) field.def.type).type();
-                if (!subTypes.containsKey(field.def.name))
-                    subTypes.put(field.def.name, innerType);
+                if (!subTypes.containsKey(field.def.name)) {
+                    subTypes.put(field.def.name, type.arrayElementType().get());
+                }
             } else {
                 b.append(field.def.name);
                 b.append(" ");
                 if (!subTypes.containsKey(field.def.name))
-                    subTypes.put(field.def.name, field.def.type);
+                    subTypes.put(field.def.name, type);
             }
         }
         b.append("\n");
@@ -81,8 +81,8 @@ public class Protocol {
     private static void populateSchemaFields(Schema schema, Set<BoundField> fields) {
         for (BoundField field: schema.fields()) {
             fields.add(field);
-            if (field.def.type instanceof ArrayOf) {
-                Type innerType = ((ArrayOf) field.def.type).type();
+            if (field.def.type.isArray()) {
+                Type innerType = field.def.type.arrayElementType().get();
                 if (innerType instanceof Schema)
                     populateSchemaFields((Schema) innerType, fields);
             } else if (field.def.type instanceof Schema)

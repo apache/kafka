@@ -16,11 +16,7 @@
   "name": "TestUUID",
   "validVersions": "1",
   "fields": [
-    {
-      "name": "processId",
-      "versions": "1",
-      "type": "uuid"
-    }
+    { "name": "processId", "versions": "1+", "type": "uuid" }
   ],
   "type": "header"
 }
