@@ -35,7 +35,7 @@ public class ConnectorHealth {
                            ConnectorState connectorState,
                            Map<Integer, TaskState> tasks,
                            ConnectorType type) {
-        if (name != null && !name.trim().isEmpty()) {
+        if (name == null || name.trim().isEmpty()) {
             throw new IllegalArgumentException("Connector name is required");
         }
         Objects.requireNonNull(connectorState, "connectorState can't be null");

@@ -34,10 +34,10 @@ public abstract class AbstractState {
      * @param traceMessage  any error trace message associated with the connector or the task; may be null or empty
      */
     public AbstractState(String state, String workerId, String traceMessage) {
-        if (state != null && !state.trim().isEmpty()) {
+        if (state == null || state.trim().isEmpty()) {
             throw new IllegalArgumentException("State must not be null or empty");
         }
-        if (workerId != null && !workerId.trim().isEmpty()) {
+        if (workerId == null || workerId.trim().isEmpty()) {
             throw new IllegalArgumentException("Worker ID must not be null or empty");
         }
         this.state = state;
