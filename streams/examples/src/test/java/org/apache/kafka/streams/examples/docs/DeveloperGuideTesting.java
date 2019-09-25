@@ -36,6 +36,7 @@ import org.junit.Before;
 import org.junit.Test;
 
 import java.time.Duration;
+import java.time.Instant;
 import java.util.Properties;
 
 import static org.hamcrest.CoreMatchers.equalTo;
@@ -93,14 +94,14 @@ public class DeveloperGuideTesting {
 
     @Test
     public void shouldFlushStoreForFirstInput() {
-        inputTopic.pipeInput("a", 1L, 9999L);
+        inputTopic.pipeInput("a", 1L);
         assertThat(outputTopic.readKeyValue(), equalTo(new KeyValue<>("a", 21L)));
         assertThat(outputTopic.isEmpty(), is(true));
     }
 
     @Test
     public void shouldNotUpdateStoreForSmallerValue() {
-        inputTopic.pipeInput("a", 1L, 9999L);
+        inputTopic.pipeInput("a", 1L);
         assertThat(store.get("a"), equalTo(21L));
         assertThat(outputTopic.readKeyValue(), equalTo(new KeyValue<>("a", 21L)));
         assertThat(outputTopic.isEmpty(), is(true));
@@ -108,7 +109,7 @@ public class DeveloperGuideTesting {
 
     @Test
     public void shouldNotUpdateStoreForLargerValue() {
-        inputTopic.pipeInput("a", 42L, 9999L);
+        inputTopic.pipeInput("a", 42L);
         assertThat(store.get("a"), equalTo(42L));
         assertThat(outputTopic.readKeyValue(), equalTo(new KeyValue<>("a", 42L)));
         assertThat(outputTopic.isEmpty(), is(true));
@@ -116,7 +117,7 @@ public class DeveloperGuideTesting {
 
     @Test
     public void shouldUpdateStoreForNewKey() {
-        inputTopic.pipeInput("b", 21L, 9999L);
+        inputTopic.pipeInput("b", 21L);
         assertThat(store.get("b"), equalTo(21L));
         assertThat(outputTopic.readKeyValue(), equalTo(new KeyValue<>("a", 21L)));
         assertThat(outputTopic.readKeyValue(), equalTo(new KeyValue<>("b", 21L)));
@@ -125,13 +126,14 @@ public class DeveloperGuideTesting {
 
     @Test
     public void shouldPunctuateIfEvenTimeAdvances() {
-        inputTopic.pipeInput("a", 1L, 9999L);
+        Instant recordTime = Instant.now();
+        inputTopic.pipeInput("a", 1L,  recordTime);
         assertThat(outputTopic.readKeyValue(), equalTo(new KeyValue<>("a", 21L)));
 
-        inputTopic.pipeInput("a", 1L, 9999L);
+        inputTopic.pipeInput("a", 1L,  recordTime);
         assertThat(outputTopic.isEmpty(), is(true));
 
-        inputTopic.pipeInput("a", 1L, 10000L);
+        inputTopic.pipeInput("a", 1L, recordTime.plusSeconds(10L));
         assertThat(outputTopic.readKeyValue(), equalTo(new KeyValue<>("a", 21L)));
         assertThat(outputTopic.isEmpty(), is(true));
     }
