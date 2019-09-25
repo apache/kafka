@@ -146,10 +146,12 @@ public class LeaderAndIsrRequest extends AbstractControlRequest {
         }
     }
 
+    @Override
     public int controllerId() {
         return data.controllerId();
     }
 
+    @Override
     public int controllerEpoch() {
         return data.controllerEpoch();
     }
