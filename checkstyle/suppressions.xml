@@ -141,6 +141,9 @@
     <suppress checks="ClassDataAbstractionCoupling"
               files="(DistributedHerder|KafkaBasedLog)Test.java"/>
 
+    <suppress checks="ClassFanOutComplexity"
+              files="(WorkerSinkTask|WorkerSourceTask)Test.java"/>
+
     <!-- Streams -->
     <suppress checks="ClassFanOutComplexity"
               files="(TopologyBuilder|KafkaStreams|KStreamImpl|KTableImpl|StreamThread|StreamTask).java"/>
