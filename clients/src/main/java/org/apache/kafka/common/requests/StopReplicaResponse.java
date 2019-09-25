@@ -16,14 +16,15 @@
  */
 package org.apache.kafka.common.requests;
 
-import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.message.StopReplicaResponseData;
+import org.apache.kafka.common.message.StopReplicaResponseData.StopReplicaPartitionError;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
 import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
@@ -45,10 +46,8 @@ public class StopReplicaResponse extends AbstractResponse {
         data = new StopReplicaResponseData(struct, version);
     }
 
-    public Map<TopicPartition, Errors> responses() {
-        return data.partitionErrors().stream().collect(Collectors.toMap(
-            p -> new TopicPartition(p.topicName(), p.partitionIndex()),
-            p -> Errors.forCode(p.errorCode())));
+    public List<StopReplicaPartitionError> partitionErrors() {
+        return data.partitionErrors();
     }
 
     public Errors error() {
