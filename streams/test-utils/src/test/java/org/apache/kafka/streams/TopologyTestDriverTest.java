@@ -426,15 +426,15 @@ public class TopologyTestDriverTest {
         assertThat(record, equalTo(expectedResult));
     }
 
-    private void pipeInput(TestRecord<byte[], byte[]> record) {
+    private void pipeInput(final TestRecord<byte[], byte[]> record) {
         pipeRecord(SOURCE_TOPIC_1, record);
     }
 
-    private void pipeInputTopic2(TestRecord<byte[], byte[]> record) {
+    private void pipeInputTopic2(final TestRecord<byte[], byte[]> record) {
         pipeRecord(SOURCE_TOPIC_2, record);
     }
 
-    private void pipeRecord(String topic, TestRecord<byte[], byte[]> record) {
+    private void pipeRecord(final String topic, final TestRecord<byte[], byte[]> record) {
         testDriver.pipeRecord(topic, record, new ByteArraySerializer(), new ByteArraySerializer(), null);
     }
 
@@ -453,7 +453,7 @@ public class TopologyTestDriverTest {
         assertEquals(0, processedRecords2.size());
 
         Record record = processedRecords1.get(0);
-        Record expectedResult = new Record(SOURCE_TOPIC_1, consumerRecord1,0L);
+        Record expectedResult = new Record(SOURCE_TOPIC_1, consumerRecord1, 0L);
         assertThat(record, equalTo(expectedResult));
 
         pipeInputTopic2(consumerRecord2);
@@ -509,7 +509,7 @@ public class TopologyTestDriverTest {
                 Serdes.Long().serializer(),
                 Serdes.String().serializer(),
                 null);
-        TestRecord<Long, String> result1 =
+        final TestRecord<Long, String> result1 =
             testDriver.readRecord(SINK_TOPIC_1, Serdes.Long().deserializer(), Serdes.String().deserializer());
         assertThat(result1.getKey(), equalTo(source1Key));
         assertThat(result1.getValue(), equalTo(source1Value));
@@ -519,7 +519,7 @@ public class TopologyTestDriverTest {
                 Serdes.Integer().serializer(),
                 Serdes.Double().serializer(),
                 null);
-        TestRecord<Integer, Double> result2 =
+        final TestRecord<Integer, Double> result2 =
             testDriver.readRecord(SINK_TOPIC_1, Serdes.Integer().deserializer(), Serdes.Double().deserializer());
         assertThat(result2.getKey(), equalTo(source2Key));
         assertThat(result2.getValue(), equalTo(source2Value));
@@ -552,7 +552,7 @@ public class TopologyTestDriverTest {
                 Serdes.Long().serializer(),
                 Serdes.String().serializer(),
                 null);
-        TestRecord<Long, String> result1 =
+        final TestRecord<Long, String> result1 =
                 testDriver.readRecord(SINK_TOPIC_1, Serdes.Long().deserializer(), Serdes.String().deserializer());
         assertThat(result1.getKey(), equalTo(source1Key));
         assertThat(result1.getValue(), equalTo(source1Value));
@@ -562,7 +562,7 @@ public class TopologyTestDriverTest {
                 Serdes.Integer().serializer(),
                 Serdes.Double().serializer(),
                 null);
-        TestRecord<Integer, Double> result2 =
+        final TestRecord<Integer, Double> result2 =
                 testDriver.readRecord(SINK_TOPIC_2, Serdes.Integer().deserializer(), Serdes.Double().deserializer());
         assertThat(result2.getKey(), equalTo(source2Key));
         assertThat(result2.getValue(), equalTo(source2Value));
@@ -1066,12 +1066,12 @@ public class TopologyTestDriverTest {
         store.put("a", 21L);
     }
 
-    private void pipeInput(String topic, String key, Long value, Long time) {
+    private void pipeInput(final String topic, final String key, final Long value, final Long time) {
         testDriver.pipeRecord(topic, new TestRecord<String, Long>(key, value, null, time),
                 new StringSerializer(), new LongSerializer(), null);
     }
     
-    private void compareKeyValue(TestRecord<String, Long> record, String key, Long value) {
+    private void compareKeyValue(final TestRecord<String, Long> record, final String key, final Long value) {
         assertThat(record.getKey(), equalTo(key));
         assertThat(record.getValue(), equalTo(value));
     }
