@@ -16,12 +16,8 @@
  */
 package org.apache.kafka.streams.examples.docs;
 
-import org.apache.kafka.common.serialization.LongDeserializer;
-import org.apache.kafka.common.serialization.LongSerializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
-import org.apache.kafka.common.serialization.StringDeserializer;
-import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.Topology;
@@ -33,8 +29,6 @@ import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.Stores;
-import org.apache.kafka.streams.test.ConsumerRecordFactory;
-import org.apache.kafka.streams.test.OutputVerifier;
 import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.TestOutputTopic;
 import org.junit.After;
@@ -46,7 +40,7 @@ import java.util.Properties;
 
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.Assert.assertNull;
+import static org.hamcrest.core.Is.is;
 
 /**
  * This is code sample in docs/streams/developer-guide/testing.html
@@ -58,9 +52,6 @@ public class DeveloperGuideTesting {
     private TestOutputTopic<String, Long> outputTopic;
     private KeyValueStore<String, Long> store;
 
-    private StringDeserializer stringDeserializer = new StringDeserializer();
-    private LongDeserializer longDeserializer = new LongDeserializer();
-    private ConsumerRecordFactory<String, Long> recordFactory = new ConsumerRecordFactory<>(new StringSerializer(), new LongSerializer());
     private Serde<String> stringSerde = new Serdes.StringSerde();
     private Serde<Long> longSerde = new Serdes.LongSerde();
 
@@ -99,18 +90,12 @@ public class DeveloperGuideTesting {
         testDriver.close();
     }
 
-    @Test
-    public void shouldFlushStoreForFirstInput() {
-        testDriver.pipeInput(recordFactory.create("input-topic", "a", 1L, 9999L));
-        OutputVerifier.compareKeyValue(testDriver.readOutput("result-topic", stringDeserializer, longDeserializer), "a", 21L);
-        assertNull(testDriver.readOutput("result-topic", stringDeserializer, longDeserializer));
-    }
 
     @Test
-    public void shouldFlushStoreForFirstInputWithTopic() {
+    public void shouldFlushStoreForFirstInput() {
         inputTopic.pipeInput("a", 1L, 9999L);
         assertThat(outputTopic.readKeyValue(), equalTo(new KeyValue<>("a", 21L)));
-        assertNull(outputTopic.readRecord());
+        assertThat(outputTopic.isEmpty(), is(true));
     }
 
     @Test
@@ -118,7 +103,7 @@ public class DeveloperGuideTesting {
         inputTopic.pipeInput("a", 1L, 9999L);
         assertThat(store.get("a"), equalTo(21L));
         assertThat(outputTopic.readKeyValue(), equalTo(new KeyValue<>("a", 21L)));
-        assertNull(outputTopic.readRecord());
+        assertThat(outputTopic.isEmpty(), is(true));
     }
 
     @Test
@@ -126,7 +111,7 @@ public class DeveloperGuideTesting {
         inputTopic.pipeInput("a", 42L, 9999L);
         assertThat(store.get("a"), equalTo(42L));
         assertThat(outputTopic.readKeyValue(), equalTo(new KeyValue<>("a", 42L)));
-        assertNull(outputTopic.readRecord());
+        assertThat(outputTopic.isEmpty(), is(true));
     }
 
     @Test
@@ -135,7 +120,7 @@ public class DeveloperGuideTesting {
         assertThat(store.get("b"), equalTo(21L));
         assertThat(outputTopic.readKeyValue(), equalTo(new KeyValue<>("a", 21L)));
         assertThat(outputTopic.readKeyValue(), equalTo(new KeyValue<>("b", 21L)));
-        assertNull(outputTopic.readRecord());
+        assertThat(outputTopic.isEmpty(), is(true));
     }
 
     @Test
@@ -144,18 +129,18 @@ public class DeveloperGuideTesting {
         assertThat(outputTopic.readKeyValue(), equalTo(new KeyValue<>("a", 21L)));
 
         inputTopic.pipeInput("a", 1L, 9999L);
-        assertNull(outputTopic.readRecord());
+        assertThat(outputTopic.isEmpty(), is(true));
 
         inputTopic.pipeInput("a", 1L, 10000L);
         assertThat(outputTopic.readKeyValue(), equalTo(new KeyValue<>("a", 21L)));
-        assertNull(outputTopic.readRecord());
+        assertThat(outputTopic.isEmpty(), is(true));
     }
 
     @Test
     public void shouldPunctuateIfWallClockTimeAdvances() {
-        testDriver.advanceWallClockTime(60000);
+        testDriver.advanceWallClockTime(Duration.ofSeconds(60));
         assertThat(outputTopic.readKeyValue(), equalTo(new KeyValue<>("a", 21L)));
-        assertNull(outputTopic.readRecord());
+        assertThat(outputTopic.isEmpty(), is(true));
     }
 
     public class CustomMaxAggregatorSupplier implements ProcessorSupplier<String, Long> {

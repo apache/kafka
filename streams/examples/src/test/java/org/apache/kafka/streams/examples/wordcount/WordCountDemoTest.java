@@ -17,7 +17,6 @@
 package org.apache.kafka.streams.examples.wordcount;
 
 import org.apache.kafka.common.serialization.LongDeserializer;
-import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.streams.KeyValue;
@@ -37,7 +36,6 @@ import java.util.Map;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.Assert.assertNull;
 
 /**
  * Unit test of {@link WordCountDemo} stream using TopologyTestDriver.
@@ -108,7 +106,7 @@ public class WordCountDemoTest {
 
         inputTopic.pipeValueList(inputValues);
         final Map<String, Long> actualWordCounts = outputTopic.readKeyValuesToMap();
-        assertThat(actualWordCounts, is(equalTo(expectedWordCounts)));
+        assertThat(actualWordCounts, equalTo(expectedWordCounts));
     }
 
 }
