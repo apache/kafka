@@ -204,6 +204,7 @@ public class PluginsTest {
 
         assertTrue(firstPlugin instanceof SamplingTestPlugin);
 
+        // The plugin should have only been initialized a single time (in the above call)
         assertEquals(1, ((SamplingTestPlugin) firstPlugin).dynamicInitializations());
 
         Converter secondPlugin = plugins.newPlugin(
@@ -214,6 +215,7 @@ public class PluginsTest {
 
         assertTrue(secondPlugin instanceof SamplingTestPlugin);
 
+        // The shared static value for all instances of the SAMPLING plugin should be incremented
         assertEquals(2, ((SamplingTestPlugin) secondPlugin).dynamicInitializations());
 
         // This value changes because secondPlugin's instantiation incremented it.

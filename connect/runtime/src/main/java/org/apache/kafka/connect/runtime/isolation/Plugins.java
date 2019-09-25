@@ -80,6 +80,8 @@ public class Plugins {
     }
 
     protected static <T> T newPlugin(ClassLoader classLoader, Class<T> klass) {
+        // KAFKA-8340: The thread classloader is used during static initialization and must be
+        // set to the plugin's classloader during instantiation
         ClassLoader savedLoader = compareAndSwapLoaders(classLoader);
         try {
             return Utils.newInstance(klass);

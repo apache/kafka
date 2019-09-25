@@ -25,12 +25,24 @@ import java.util.Map;
  */
 public interface SamplingTestPlugin {
 
+    /**
+     * @return the ClassLoader used to statically initialize this plugin class
+     */
     ClassLoader staticClassloader();
 
+    /**
+     * @return the ClassLoader used to initialize this plugin instance
+     */
     ClassLoader classloader();
 
+    /**
+     * @return number of instances of this plugin class that have been initialized
+     */
     int dynamicInitializations();
 
+    /**
+     * @return a group of other SamplingTestPlugin instances known by this plugin
+     */
     default Map<String, SamplingTestPlugin> otherSamples() {
         return Collections.emptyMap();
     }
