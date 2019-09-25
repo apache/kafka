@@ -98,7 +98,7 @@ public class TopologyTestDriverTest {
     private final byte[] key2 = new byte[0];
     private final byte[] value2 = new byte[0];
     private final long timestamp2 = 43L;
-    private final TestRecord<byte[], byte[]> consumerRecord2 = new TestRecord<>(key2, value2, timestamp2);
+    private final TestRecord<byte[], byte[]> consumerRecord2 = new TestRecord<>(key2, value2, null, timestamp2);
 
     private TopologyTestDriver testDriver;
     private final Properties config = mkProperties(mkMap(
@@ -1287,7 +1287,7 @@ public class TopologyTestDriverTest {
         final  Pattern pattern2Source2 = Pattern.compile("source-topic-[A-Z]");
         final  String consumerTopic2 = "source-topic-Z";
 
-        final TestRecord<byte[], byte[]> consumerRecord2 = new TestRecord<byte[], byte[]>(key2, value2, timestamp2);
+        final TestRecord<byte[], byte[]> consumerRecord2 = new TestRecord<byte[], byte[]>(key2, value2, null, timestamp2);
 
         testDriver = new TopologyTestDriver(setupMultipleSourcesPatternTopology(pattern2Source1, pattern2Source2), config);
 

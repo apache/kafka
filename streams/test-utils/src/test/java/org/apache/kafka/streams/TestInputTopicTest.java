@@ -146,18 +146,18 @@ public class TestInputTopicTest {
         final TestInputTopic<Long, String> inputTopic = testDriver.createInputTopic(INPUT_TOPIC, longSerde.serializer(), stringSerde.serializer());
         final TestOutputTopic<Long, String> outputTopic = testDriver.createOutputTopic(OUTPUT_TOPIC, longSerde.deserializer(), stringSerde.deserializer());
         inputTopic.pipeInput(null, "Hello", baseTime);
-        assertThat(outputTopic.readRecord(), is(equalTo(new TestRecord<Long, String>(null, "Hello", baseTime))));
+        assertThat(outputTopic.readRecord(), is(equalTo(new TestRecord<Long, String>(null, "Hello", null, baseTime))));
 
         inputTopic.pipeInput(2L, "Kafka", ++baseTime);
-        assertThat(outputTopic.readRecord(), is(equalTo(new TestRecord<Long, String>(2L, "Kafka", baseTime))));
+        assertThat(outputTopic.readRecord(), is(equalTo(new TestRecord<Long, String>(2L, "Kafka", null, baseTime))));
 
         final List<String> inputList = Arrays.asList("Advancing", "time");
         //Feed list of words to inputTopic and no kafka key, timestamp advancing from basetime
         final long advance = 2000;
         baseTime = testBaseTime.toEpochMilli();
         inputTopic.pipeValueList(inputList, testBaseTime, Duration.ofMillis(advance));
-        assertThat(outputTopic.readRecord(), is(equalTo(new TestRecord<Long, String>(null, "Advancing", baseTime))));
-        assertThat(outputTopic.readRecord(), is(equalTo(new TestRecord<Long, String>(null, "time", baseTime + advance))));
+        assertThat(outputTopic.readRecord(), is(equalTo(new TestRecord<Long, String>(null, "Advancing", null, baseTime))));
+        assertThat(outputTopic.readRecord(), is(equalTo(new TestRecord<Long, String>(null, "time", null, baseTime + advance))));
     }
 
     @Test
@@ -189,7 +189,7 @@ public class TestInputTopicTest {
         inputTopic.pipeInput(1L, "Hello");
         assertThat(outputTopic.readRecord(), is(equalTo(new TestRecord<Long, String>(1L, "Hello", testBaseTime))));
         inputTopic.pipeInput(2L, "World");
-        assertThat(outputTopic.readRecord(), is(equalTo(new TestRecord<Long, String>(2L, "World", testBaseTime.toEpochMilli()))));
+        assertThat(outputTopic.readRecord(), is(equalTo(new TestRecord<Long, String>(2L, "World", null, testBaseTime.toEpochMilli()))));
         inputTopic.advanceTime(advance);
         inputTopic.pipeInput(3L, "Kafka");
         assertThat(outputTopic.readRecord(), is(equalTo(new TestRecord<Long, String>(3L, "Kafka", testBaseTime.plus(advance)))));

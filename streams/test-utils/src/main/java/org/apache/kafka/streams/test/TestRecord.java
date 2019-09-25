@@ -87,18 +87,6 @@ public class TestRecord<K, V> {
     }
 
     /**
-     * Creates a record with a specified timestamp
-     *
-     * @param key The key that will be included in the record
-     * @param value The record contents
-     * @param timestamp The timestamp of the record, in milliseconds since epoch. If null,
-     *                  the timestamp is assigned using System.currentTimeMillis() or internally tracked time.
-     */
-    public TestRecord(final K key, final V value, final Long timestamp) {
-        this(key, value, null, timestamp);
-    }
-
-    /**
      * Creates a record
      *
      * @param key The key that will be included in the record
