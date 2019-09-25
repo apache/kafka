@@ -126,7 +126,7 @@ public class DeveloperGuideTesting {
 
     @Test
     public void shouldPunctuateIfEvenTimeAdvances() {
-        Instant recordTime = Instant.now();
+        final Instant recordTime = Instant.now();
         inputTopic.pipeInput("a", 1L,  recordTime);
         assertThat(outputTopic.readKeyValue(), equalTo(new KeyValue<>("a", 21L)));
 
