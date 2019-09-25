@@ -171,8 +171,8 @@ public class GlobalStateManagerImplTest {
         assertEquals(expected, offsets);
     }
 
-    @Test
-    public void shouldIgnoreOldTopicPartitions() throws IOException {
+    @Test(expected = StreamsException.class)
+    public void shouldThrowStreamsExceptionForOldTopicPartitions() throws IOException {
         final HashMap<TopicPartition, Long> expectedOffsets = new HashMap<>();
         expectedOffsets.put(t1, 1L);
         expectedOffsets.put(t2, 1L);
@@ -189,11 +189,8 @@ public class GlobalStateManagerImplTest {
         final OffsetCheckpoint checkpoint = new OffsetCheckpoint(checkpointFile);
         checkpoint.write(startOffsets);
 
+        // initialize will throw exception
         stateManager.initialize();
-        final Map<TopicPartition, Long> offsets = stateManager.checkpointed();
-
-        // checkpointed offsets only contain topic-partitions associated with state stores
-        assertEquals(expectedOffsets, offsets);
     }
 
     @Test
