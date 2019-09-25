@@ -18,6 +18,7 @@ package org.apache.kafka.clients.producer.internals;
 
 import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.MockClient;
+import org.apache.kafka.clients.NodeApiVersions;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.Cluster;
@@ -38,6 +39,7 @@ import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.message.InitProducerIdResponseData;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.MemoryRecords;
@@ -50,6 +52,7 @@ import org.apache.kafka.common.requests.AddOffsetsToTxnRequest;
 import org.apache.kafka.common.requests.AddOffsetsToTxnResponse;
 import org.apache.kafka.common.requests.AddPartitionsToTxnRequest;
 import org.apache.kafka.common.requests.AddPartitionsToTxnResponse;
+import org.apache.kafka.common.requests.ApiVersionsResponse;
 import org.apache.kafka.common.requests.EndTxnRequest;
 import org.apache.kafka.common.requests.EndTxnResponse;
 import org.apache.kafka.common.requests.FindCoordinatorRequest;
@@ -130,8 +133,11 @@ public class TransactionManagerTest {
         String metricGrpName = "producer-metrics";
         MetricConfig metricConfig = new MetricConfig().tags(metricTags);
         this.brokerNode = new Node(0, "localhost", 2211);
+        apiVersions.update("0", new NodeApiVersions(Arrays.asList(
+                new ApiVersionsResponse.ApiVersion(ApiKeys.INIT_PRODUCER_ID, (short)0, (short)1),
+                new ApiVersionsResponse.ApiVersion(ApiKeys.PRODUCE, (short)0, (short)7))));
         this.transactionManager = new TransactionManager(logContext, transactionalId, transactionTimeoutMs,
-                DEFAULT_RETRY_BACKOFF_MS);
+                DEFAULT_RETRY_BACKOFF_MS, apiVersions);
         Metrics metrics = new Metrics(metricConfig, time);
         SenderMetricsRegistry senderMetrics = new SenderMetricsRegistry(metrics);
 
@@ -634,12 +640,10 @@ public class TransactionManagerTest {
         // Retention caused log start offset to jump forward. We set sequence numbers back to 0
         ProduceResponse.PartitionResponse b2Response = new ProduceResponse.PartitionResponse(
                 Errors.UNKNOWN_PRODUCER_ID, -1, -1, 600L);
-        assertTrue(transactionManager.canRetry(b2Response, b2));
-        assertEquals(4, transactionManager.sequenceNumber(tp0).intValue());
-        assertEquals(0, b2.baseSequence());
-        assertEquals(1, b3.baseSequence());
-        assertEquals(2, b4.baseSequence());
-        assertEquals(3, b5.baseSequence());
+        assertFalse(transactionManager.canRetry(b2Response, b2));
+        transactionManager.handleFailedBatch(b2, b2Response.error.exception());
+        transactionManager.bumpEpochIfNeeded();
+        assertEquals(0, transactionManager.sequenceNumber(tp0).intValue());
     }
 
     @Test
@@ -672,7 +676,7 @@ public class TransactionManagerTest {
         assertFalse(transactionManager.canRetry(b2Response, b2));
 
         b2.done(-1L, -1L, Errors.MESSAGE_TOO_LARGE.exception());
-        transactionManager.handleFailedBatch(b2, Errors.MESSAGE_TOO_LARGE.exception(), true);
+        transactionManager.handleFailedBatch(b2, Errors.MESSAGE_TOO_LARGE.exception());
         assertEquals(4, transactionManager.sequenceNumber(tp0).intValue());
         assertEquals(1, b3.baseSequence());
         assertEquals(2, b4.baseSequence());
@@ -682,11 +686,10 @@ public class TransactionManagerTest {
         // sequence numbers should remain the same.
         ProduceResponse.PartitionResponse b3Response = new ProduceResponse.PartitionResponse(
                 Errors.OUT_OF_ORDER_SEQUENCE_NUMBER, -1, -1, 0L);
-        assertTrue(transactionManager.canRetry(b3Response, b3));
-        assertEquals(4, transactionManager.sequenceNumber(tp0).intValue());
-        assertEquals(1, b3.baseSequence());
-        assertEquals(2, b4.baseSequence());
-        assertEquals(3, b5.baseSequence());
+        assertFalse(transactionManager.canRetry(b3Response, b3));
+        transactionManager.handleFailedBatch(b3, b3Response.error.exception());
+        transactionManager.bumpEpochIfNeeded();
+        assertEquals(0, transactionManager.sequenceNumber(tp0).intValue());
     }
 
     @Test
@@ -712,7 +715,7 @@ public class TransactionManagerTest {
         ProduceResponse.PartitionResponse b1Response = new ProduceResponse.PartitionResponse(
                 Errors.UNKNOWN_PRODUCER_ID, -1, -1, 400L);
         assertFalse(transactionManager.canRetry(b1Response, b1));
-        transactionManager.handleFailedBatch(b1, Errors.UNKNOWN_PRODUCER_ID.exception(), true);
+        transactionManager.handleFailedBatch(b1, Errors.UNKNOWN_PRODUCER_ID.exception());
 
         assertEquals(1, transactionManager.sequenceNumber(tp0).intValue());
         assertEquals(b2, transactionManager.nextBatchBySequence(tp0));
@@ -2496,7 +2499,7 @@ public class TransactionManagerTest {
     @Test
     public void testResetProducerIdAfterWithoutPendingInflightRequests() {
         TransactionManager manager = new TransactionManager(logContext, null, transactionTimeoutMs,
-            DEFAULT_RETRY_BACKOFF_MS);
+            DEFAULT_RETRY_BACKOFF_MS, apiVersions);
         long producerId = 15L;
         short epoch = 5;
         ProducerIdAndEpoch producerIdAndEpoch = new ProducerIdAndEpoch(producerId, epoch);
@@ -2525,7 +2528,7 @@ public class TransactionManagerTest {
         ProducerBatch b2 = writeIdempotentBatchWithValue(manager, tp0, "2");
         assertEquals(Integer.valueOf(2), manager.sequenceNumber(tp0));
         manager.markSequenceUnresolved(tp0);
-        manager.handleFailedBatch(b2, new TimeoutException(), false);
+        manager.handleFailedBatch(b2, new TimeoutException());
         assertTrue(manager.hasUnresolvedSequences());
 
         // We only had one inflight batch, so we should be able to clear the unresolved status
@@ -2538,7 +2541,7 @@ public class TransactionManagerTest {
     @Test
     public void testNoProducerIdResetAfterLastInFlightBatchSucceeds() {
         TransactionManager manager = new TransactionManager(logContext, null, transactionTimeoutMs,
-                DEFAULT_RETRY_BACKOFF_MS);
+                DEFAULT_RETRY_BACKOFF_MS, apiVersions);
         long producerId = 15L;
         short epoch = 5;
         ProducerIdAndEpoch producerIdAndEpoch = new ProducerIdAndEpoch(producerId, epoch);
@@ -2552,7 +2555,7 @@ public class TransactionManagerTest {
 
         // The first batch fails with a timeout
         manager.markSequenceUnresolved(tp0);
-        manager.handleFailedBatch(b1, new TimeoutException(), false);
+        manager.handleFailedBatch(b1, new TimeoutException());
         assertTrue(manager.hasUnresolvedSequences());
 
         // The reset should not occur until sequence numbers have been resolved
@@ -2561,7 +2564,7 @@ public class TransactionManagerTest {
         assertTrue(manager.hasUnresolvedSequences());
 
         // The second batch fails as well with a timeout
-        manager.handleFailedBatch(b2, new TimeoutException(), false);
+        manager.handleFailedBatch(b2, new TimeoutException());
         manager.resetProducerIdIfNeeded();
         assertEquals(producerIdAndEpoch, manager.producerIdAndEpoch());
         assertTrue(manager.hasUnresolvedSequences());
@@ -2579,7 +2582,7 @@ public class TransactionManagerTest {
     @Test
     public void testProducerIdResetAfterLastInFlightBatchFails() {
         TransactionManager manager = new TransactionManager(logContext, null, transactionTimeoutMs,
-                DEFAULT_RETRY_BACKOFF_MS);
+                DEFAULT_RETRY_BACKOFF_MS, apiVersions);
         long producerId = 15L;
         short epoch = 5;
         ProducerIdAndEpoch producerIdAndEpoch = new ProducerIdAndEpoch(producerId, epoch);
@@ -2593,7 +2596,7 @@ public class TransactionManagerTest {
 
         // The first batch fails with a timeout
         manager.markSequenceUnresolved(tp0);
-        manager.handleFailedBatch(b1, new TimeoutException(), false);
+        manager.handleFailedBatch(b1, new TimeoutException());
         assertTrue(manager.hasUnresolvedSequences());
 
         // The second batch succeeds, but sequence numbers are still not resolved
@@ -2604,7 +2607,7 @@ public class TransactionManagerTest {
         assertTrue(manager.hasUnresolvedSequences());
 
         // When the last inflight batch fails, we have to reset the producerId
-        manager.handleFailedBatch(b3, new TimeoutException(), false);
+        manager.handleFailedBatch(b3, new TimeoutException());
         manager.resetProducerIdIfNeeded();
         assertFalse(manager.hasProducerId());
         assertFalse(manager.hasUnresolvedSequences());

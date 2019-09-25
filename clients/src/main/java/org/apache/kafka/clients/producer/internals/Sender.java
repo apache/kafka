@@ -295,14 +295,11 @@ public class Sender implements Runnable {
         if (transactionManager != null) {
             try {
                 transactionManager.resetProducerIdIfNeeded();
+                transactionManager.bumpEpochIfNeeded();
 
                 if (!transactionManager.isTransactional()) {
                     // this is an idempotent producer, so make sure we have a producer id
                     maybeWaitForProducerId();
-                } else if (transactionManager.hasUnresolvedSequences() && !transactionManager.hasFatalError()) {
-                    transactionManager.transitionToFatalError(
-                        new KafkaException("The client hasn't received acknowledgment for " +
-                            "some previously sent messages and can no longer retry them. It isn't safe to continue."));
                 } else if (maybeSendAndPollTransactionalRequest()) {
                     return;
                 }
@@ -320,7 +317,7 @@ public class Sender implements Runnable {
                 }
             } catch (AuthenticationException e) {
                 // This is already logged as error, but propagated here to perform any clean ups.
-                log.trace("Authentication exception while processing transactional request: {}", e);
+                log.trace("Authentication exception while processing transactional request", e);
                 transactionManager.authenticationFailed(e);
             }
         }
@@ -383,7 +380,7 @@ public class Sender implements Runnable {
         for (ProducerBatch expiredBatch : expiredBatches) {
             String errorMessage = "Expiring " + expiredBatch.recordCount + " record(s) for " + expiredBatch.topicPartition
                 + ":" + (now - expiredBatch.createdMs) + " ms has passed since batch creation";
-            failBatch(expiredBatch, -1, NO_TIMESTAMP, new TimeoutException(errorMessage), false);
+            failBatch(expiredBatch, -1, NO_TIMESTAMP, new TimeoutException(errorMessage));
             if (transactionManager != null && expiredBatch.inRetry()) {
                 // This ensures that no new batches are drained until the current in flight batches are fully resolved.
                 transactionManager.markSequenceUnresolved(expiredBatch.topicPartition);
@@ -646,7 +643,7 @@ public class Sender implements Runnable {
                 } else {
                     failBatch(batch, response, new OutOfOrderSequenceException("Attempted to retry sending a " +
                             "batch but the producer id changed from " + batch.producerId() + " to " +
-                            transactionManager.producerIdAndEpoch().producerId + " in the mean time. This batch will be dropped."), false);
+                            transactionManager.producerIdAndEpoch().producerId + " in the mean time. This batch will be dropped."));
                 }
             } else if (error == Errors.DUPLICATE_SEQUENCE_NUMBER) {
                 // If we have received a duplicate sequence error, it means that the sequence number has advanced beyond
@@ -666,7 +663,7 @@ public class Sender implements Runnable {
                 // tell the user the result of their request. We only adjust sequence numbers if the batch didn't exhaust
                 // its retries -- if it did, we don't know whether the sequence number was accepted or not, and
                 // thus it is not safe to reassign the sequence.
-                failBatch(batch, response, exception, batch.attempts() < this.retries);
+                failBatch(batch, response, exception);
             }
             if (error.exception() instanceof InvalidMetadataException) {
                 if (error.exception() instanceof UnknownTopicOrPartitionException) {
@@ -707,18 +704,16 @@ public class Sender implements Runnable {
 
     private void failBatch(ProducerBatch batch,
                            ProduceResponse.PartitionResponse response,
-                           RuntimeException exception,
-                           boolean adjustSequenceNumbers) {
-        failBatch(batch, response.baseOffset, response.logAppendTime, exception, adjustSequenceNumbers);
+                           RuntimeException exception) {
+        failBatch(batch, response.baseOffset, response.logAppendTime, exception);
     }
 
     private void failBatch(ProducerBatch batch,
                            long baseOffset,
                            long logAppendTime,
-                           RuntimeException exception,
-                           boolean adjustSequenceNumbers) {
+                           RuntimeException exception) {
         if (transactionManager != null) {
-            transactionManager.handleFailedBatch(batch, exception, adjustSequenceNumbers);
+            transactionManager.handleFailedBatch(batch, exception);
         }
 
         this.sensors.recordErrors(batch.topicPartition.topic(), batch.recordCount);

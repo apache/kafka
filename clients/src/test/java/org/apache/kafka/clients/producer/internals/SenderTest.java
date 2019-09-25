@@ -1191,7 +1191,7 @@ public class SenderTest {
         client.respond(produceResponse(responses));
         sender.runOnce();
         assertTrue(failedResponse.isDone());
-        assertFalse("Expected transaction state to be reset upon receiving an OutOfOrderSequenceException", transactionManager.hasProducerId());
+        assertEquals("Expected transaction state to be reset upon receiving an OutOfOrderSequenceException", 0, transactionManager.producerIdAndEpoch());
         prepareAndReceiveInitProducerId(producerId + 1, Errors.NONE); // also send request to tp1
         assertEquals(producerId + 1, transactionManager.producerIdAndEpoch().producerId);
 
@@ -1234,8 +1234,11 @@ public class SenderTest {
         sender.initiateClose(); // initiate close
         sender.runOnce();
         assertTrue(failedResponse.isDone());
-        assertFalse("Expected transaction state to be reset upon receiving an OutOfOrderSequenceException", transactionManager.hasProducerId());
-
+        sender.runOnce();
+        assertEquals("Expected epoch bump upon receiving an OutOfOrderSequenceException",
+                (short)1, transactionManager.producerIdAndEpoch().epoch);
+        assertEquals("Expected sequence number reset upon receiving an OutOfOrderSequenceException",
+                0, transactionManager.sequenceNumber(tp0).intValue());
         TestUtils.waitForCondition(new TestCondition() {
             @Override
             public boolean conditionMet() {
@@ -1272,7 +1275,11 @@ public class SenderTest {
         client.respond(produceResponse(responses));
         sender.runOnce();
         assertTrue(failedResponse.isDone());
-        assertFalse("Expected transaction state to be reset upon receiving an OutOfOrderSequenceException", transactionManager.hasProducerId());
+        sender.runOnce();
+        assertEquals("Expected epoch bump upon receiving an OutOfOrderSequenceException",
+                (short)1, transactionManager.producerIdAndEpoch().epoch);
+        assertEquals("Expected sequence number reset upon receiving an OutOfOrderSequenceException",
+                0, transactionManager.sequenceNumber(tp0).intValue());
         sender.forceClose(); // initiate force close
         sender.runOnce(); // this should not block
         sender.run(); // run main loop to test forceClose flag
@@ -1851,7 +1858,7 @@ public class SenderTest {
     }
 
     @Test
-    public void testResetWhenOutOfOrderSequenceReceived() throws InterruptedException {
+    public void testBumpEpochWhenOutOfOrderSequenceReceived() throws InterruptedException {
         final long producerId = 343434L;
         TransactionManager transactionManager = new TransactionManager();
         transactionManager.setProducerIdAndEpoch(new ProducerIdAndEpoch(producerId, (short) 0));
@@ -1876,7 +1883,11 @@ public class SenderTest {
         sender.runOnce();
         assertTrue(responseFuture.isDone());
         assertEquals(0, sender.inFlightBatches(tp0).size());
-        assertFalse("Expected transaction state to be reset upon receiving an OutOfOrderSequenceException", transactionManager.hasProducerId());
+        sender.runOnce();
+        assertEquals("Expected epoch bump upon receiving an OutOfOrderSequenceException",
+                (short)1, transactionManager.producerIdAndEpoch().epoch);
+        assertEquals("Expected sequence number reset upon receiving an OutOfOrderSequenceException",
+                0, transactionManager.sequenceNumber(tp0).intValue());
     }
 
     @Test
@@ -1892,7 +1903,7 @@ public class SenderTest {
     public void testTransactionalSplitBatchAndSend() throws Exception {
         ProducerIdAndEpoch producerIdAndEpoch = new ProducerIdAndEpoch(123456L, (short) 0);
         TopicPartition tp = new TopicPartition("testSplitBatchAndSend", 1);
-        TransactionManager txnManager = new TransactionManager(logContext, "testSplitBatchAndSend", 60000, 100);
+        TransactionManager txnManager = new TransactionManager(logContext, "testSplitBatchAndSend", 60000, 100, apiVersions);
 
         setupWithTransactionState(txnManager);
         doInitTransactions(txnManager, producerIdAndEpoch);
@@ -2207,7 +2218,7 @@ public class SenderTest {
         Metrics m = new Metrics();
         SenderMetricsRegistry senderMetrics = new SenderMetricsRegistry(m);
         try {
-            TransactionManager txnManager = new TransactionManager(logContext, "testTransactionalRequestsSentOnShutdown", 6000, 100);
+            TransactionManager txnManager = new TransactionManager(logContext, "testTransactionalRequestsSentOnShutdown", 6000, 100, apiVersions);
             Sender sender = new Sender(logContext, client, metadata, this.accumulator, false, MAX_REQUEST_SIZE, ACKS_ALL,
                     maxRetries, senderMetrics, time, REQUEST_TIMEOUT, RETRY_BACKOFF_MS, txnManager, apiVersions);
 
@@ -2240,7 +2251,7 @@ public class SenderTest {
         Metrics m = new Metrics();
         SenderMetricsRegistry senderMetrics = new SenderMetricsRegistry(m);
         try {
-            TransactionManager txnManager = new TransactionManager(logContext, "testIncompleteTransactionAbortOnShutdown", 6000, 100);
+            TransactionManager txnManager = new TransactionManager(logContext, "testIncompleteTransactionAbortOnShutdown", 6000, 100, apiVersions);
             Sender sender = new Sender(logContext, client, metadata, this.accumulator, false, MAX_REQUEST_SIZE, ACKS_ALL,
                     maxRetries, senderMetrics, time, REQUEST_TIMEOUT, RETRY_BACKOFF_MS, txnManager, apiVersions);
 
@@ -2272,7 +2283,7 @@ public class SenderTest {
         Metrics m = new Metrics();
         SenderMetricsRegistry senderMetrics = new SenderMetricsRegistry(m);
         try {
-            TransactionManager txnManager = new TransactionManager(logContext, "testForceShutdownWithIncompleteTransaction", 6000, 100);
+            TransactionManager txnManager = new TransactionManager(logContext, "testForceShutdownWithIncompleteTransaction", 6000, 100, apiVersions);
             Sender sender = new Sender(logContext, client, metadata, this.accumulator, false, MAX_REQUEST_SIZE, ACKS_ALL,
                     maxRetries, senderMetrics, time, REQUEST_TIMEOUT, RETRY_BACKOFF_MS, txnManager, apiVersions);
 
@@ -2304,7 +2315,7 @@ public class SenderTest {
     public void testDoNotPollWhenNoRequestSent() {
         client = spy(new MockClient(time, metadata));
 
-        TransactionManager txnManager = new TransactionManager(logContext, "testDoNotPollWhenNoRequestSent", 6000, 100);
+        TransactionManager txnManager = new TransactionManager(logContext, "testDoNotPollWhenNoRequestSent", 6000, 100, apiVersions);
         ProducerIdAndEpoch producerIdAndEpoch = new ProducerIdAndEpoch(123456L, (short) 0);
         setupWithTransactionState(txnManager);
         doInitTransactions(txnManager, producerIdAndEpoch);
