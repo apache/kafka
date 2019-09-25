@@ -18,7 +18,7 @@ package kafka.coordinator.transaction
 
 import java.nio.ByteBuffer
 
-import kafka.api.KAFKA_2_3_IV1
+import kafka.api.KAFKA_2_3_IV2
 import kafka.coordinator.AbstractCoordinatorConcurrencyTest
 import kafka.coordinator.AbstractCoordinatorConcurrencyTest._
 import kafka.coordinator.transaction.TransactionCoordinatorConcurrencyTest._
@@ -73,7 +73,7 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
     EasyMock.replay(zkClient)
 
     txnStateManager = new TransactionStateManager(0, zkClient, scheduler, replicaManager, txnConfig, time,
-      new Metrics(), KAFKA_2_3_IV1)
+      new Metrics(), KAFKA_2_3_IV2)
     for (i <- 0 until numPartitions)
       txnStateManager.addLoadedTransactionsToCache(i, coordinatorEpoch, new Pool[String, TransactionMetadata]())
 
@@ -437,10 +437,10 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
     addPartitionsOp.awaitAndVerify(txn)
 
     val txnMetadata = transactionMetadata(txn).getOrElse(throw new IllegalStateException(s"Transaction not found $txn"))
-    txnRecords += new SimpleRecord(txn.txnMessageKeyBytes, TransactionLog.valueToBytes(txnMetadata.prepareNoTransit(), KAFKA_2_3_IV1))
+    txnRecords += new SimpleRecord(txn.txnMessageKeyBytes, TransactionLog.valueToBytes(txnMetadata.prepareNoTransit(), KAFKA_2_3_IV2))
 
     txnMetadata.state = PrepareCommit
-    txnRecords += new SimpleRecord(txn.txnMessageKeyBytes, TransactionLog.valueToBytes(txnMetadata.prepareNoTransit(), KAFKA_2_3_IV1))
+    txnRecords += new SimpleRecord(txn.txnMessageKeyBytes, TransactionLog.valueToBytes(txnMetadata.prepareNoTransit(), KAFKA_2_3_IV2))
 
     prepareTxnLog(partitionId)
   }

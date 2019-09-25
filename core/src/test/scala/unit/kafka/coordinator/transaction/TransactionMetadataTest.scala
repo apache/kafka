@@ -95,7 +95,7 @@ class TransactionMetadataTest {
       txnLastUpdateTimestamp = time.milliseconds())
     assertTrue(txnMetadata.isProducerEpochExhausted)
 
-    txnMetadata.prepareIncrementProducerEpoch(30000, Some(RecordBatch.NO_PRODUCER_EPOCH), time.milliseconds())
+    txnMetadata.prepareIncrementProducerEpoch(30000, None, time.milliseconds())
   }
 
   @Test
@@ -167,7 +167,7 @@ class TransactionMetadataTest {
       txnLastUpdateTimestamp = time.milliseconds())
 
     val newProducerId = 9893L
-    val transitMetadata = txnMetadata.prepareProducerIdRotation(newProducerId, 30000, time.milliseconds(), true)
+    val transitMetadata = txnMetadata.prepareProducerIdRotation(newProducerId, 30000, time.milliseconds(), recordLastEpoch = true)
     txnMetadata.completeTransitionTo(transitMetadata)
     assertEquals(newProducerId, txnMetadata.producerId)
     assertEquals(producerId, txnMetadata.lastProducerId)
@@ -305,7 +305,7 @@ class TransactionMetadataTest {
       topicPartitions = mutable.Set.empty,
       txnLastUpdateTimestamp = time.milliseconds())
     val newProducerId = 9893L
-    txnMetadata.prepareProducerIdRotation(newProducerId, 30000, time.milliseconds(), false)
+    txnMetadata.prepareProducerIdRotation(newProducerId, 30000, time.milliseconds(), recordLastEpoch = false)
   }
 
 

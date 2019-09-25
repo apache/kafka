@@ -17,7 +17,7 @@
 package kafka.coordinator.transaction
 
 
-import kafka.api.{KAFKA_2_3_IV0, KAFKA_2_3_IV1}
+import kafka.api.{KAFKA_2_3_IV1, KAFKA_2_3_IV2}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.record.{CompressionType, MemoryRecords, SimpleRecord}
 import org.junit.Assert.assertEquals
@@ -47,7 +47,7 @@ class TransactionLogTest {
     txnMetadata.addPartitions(topicPartitions)
 
     intercept[IllegalStateException] {
-      TransactionLog.valueToBytes(txnMetadata.prepareNoTransit(), KAFKA_2_3_IV1)
+      TransactionLog.valueToBytes(txnMetadata.prepareNoTransit(), KAFKA_2_3_IV2)
     }
   }
 
@@ -68,7 +68,7 @@ class TransactionLogTest {
       5L -> CompleteAbort)
 
 
-    Seq(KAFKA_2_3_IV0, KAFKA_2_3_IV1).foreach { interBrokerProtocolVersion =>
+    Seq(KAFKA_2_3_IV1, KAFKA_2_3_IV2).foreach { interBrokerProtocolVersion =>
       // generate transaction log messages
       val txnRecords = pidMappings.map { case (transactionalId, producerId) =>
         val txnMetadata = TransactionMetadata(transactionalId, producerId, producerId, producerEpoch, lastProducerEpoch,
@@ -92,9 +92,9 @@ class TransactionLogTest {
         val txnMetadata = TransactionLog.readTxnRecordValue(transactionalId, record.value)
 
         assertEquals(pidMappings(transactionalId), txnMetadata.producerId)
-        assertEquals(if (interBrokerProtocolVersion >= KAFKA_2_3_IV1) pidMappings(transactionalId) else -1, txnMetadata.lastProducerId)
+        assertEquals(if (interBrokerProtocolVersion >= KAFKA_2_3_IV2) pidMappings(transactionalId) else -1, txnMetadata.lastProducerId)
         assertEquals(producerEpoch, txnMetadata.producerEpoch)
-        assertEquals(if (interBrokerProtocolVersion >= KAFKA_2_3_IV1) lastProducerEpoch else -1, txnMetadata.lastProducerEpoch)
+        assertEquals(if (interBrokerProtocolVersion >= KAFKA_2_3_IV2) lastProducerEpoch else -1, txnMetadata.lastProducerEpoch)
         assertEquals(transactionTimeoutMs, txnMetadata.txnTimeoutMs)
         assertEquals(transactionStates(txnMetadata.producerId), txnMetadata.state)
 

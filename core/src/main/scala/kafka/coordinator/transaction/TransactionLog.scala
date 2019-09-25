@@ -25,7 +25,7 @@ import java.io.PrintStream
 import java.nio.ByteBuffer
 import java.nio.charset.StandardCharsets
 
-import kafka.api.{ApiVersion, KAFKA_2_3_IV1}
+import kafka.api.{ApiVersion, KAFKA_2_3_IV2}
 import org.apache.kafka.common.record.{CompressionType, RecordBatch}
 
 import scala.collection.mutable
@@ -159,7 +159,7 @@ object TransactionLog {
     import ValueSchema._
 
     val version = interBrokerProtocolVersion match {
-      case v if v < KAFKA_2_3_IV1 => 0.toShort
+      case v if v < KAFKA_2_3_IV2 => 0.toShort
       case _                      => 1.toShort
     }
 
