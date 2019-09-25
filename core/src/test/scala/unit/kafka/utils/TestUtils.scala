@@ -913,7 +913,7 @@ object TestUtils extends Logging {
     waitUntilTrue(
       () => servers.forall { server =>
         server.dataPlaneRequestProcessor.metadataCache.getPartitionInfo(topic, partition) match {
-          case Some(partitionState) if Request.isValidBrokerId(leader) =>
+          case Some(partitionState) if Request.isValidBrokerId(partitionState.leader) =>
             leader = partitionState.leader
             true
           case _ => false
