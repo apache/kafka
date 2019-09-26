@@ -107,6 +107,7 @@ public class LoggingResource {
 
     @PUT
     @Path("/{logger}")
+    @SuppressWarnings("unchecked")
     public Response setLevel(final @PathParam("logger") String namedLogger,
                              final Map<String, String> levelMap) {
         String desiredLevelStr = levelMap.get("level");

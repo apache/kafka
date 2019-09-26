@@ -333,6 +333,16 @@ public class EmbeddedConnectCluster {
         }
     }
 
+    public String adminEndpoint(String resource) throws IOException {
+        String url = connectCluster.stream()
+                .map(WorkerHandle::adminUrl)
+                .filter(Objects::nonNull)
+                .findFirst()
+                .orElseThrow(() -> new IOException("Admin endpoint is disabled."))
+                .toString();
+        return url + resource;
+    }
+
     public String endpointForResource(String resource) throws IOException {
         String url = connectCluster.stream()
                 .map(WorkerHandle::url)

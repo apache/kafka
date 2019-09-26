@@ -349,6 +349,25 @@ public class RestServer {
         return builder.build();
     }
 
+    public URI advertisedAdminUrl() {
+        ServerConnector adminConnector = null;
+        for (Connector connector : jettyServer.getConnectors()) {
+            if (ADMIN_SERVER_CONNECTOR_NAME.equals(connector.getName()))
+                adminConnector = (ServerConnector) connector;
+        }
+
+        if (adminConnector == null) {
+            return null;
+        }
+
+        UriBuilder builder = UriBuilder.fromUri(jettyServer.getURI());
+        builder.port(adminConnector.getLocalPort());
+
+        log.info("Admin URI: {}", builder.build());
+
+        return builder.build();
+    }
+
     String determineAdvertisedProtocol() {
         String advertisedSecurityProtocol = config.getString(WorkerConfig.REST_ADVERTISED_LISTENER_CONFIG);
         if (advertisedSecurityProtocol == null) {
@@ -372,7 +391,8 @@ public class RestServer {
 
     ServerConnector findConnector(String protocol) {
         for (Connector connector : jettyServer.getConnectors()) {
-            if (connector.getName().startsWith(protocol))
+            String connectorName = connector.getName();
+            if (connectorName.startsWith(protocol) && !ADMIN_SERVER_CONNECTOR_NAME.equals(connectorName))
                 return (ServerConnector) connector;
         }
 
