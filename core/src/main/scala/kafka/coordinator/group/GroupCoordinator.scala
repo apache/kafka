@@ -1044,8 +1044,7 @@ class GroupCoordinator(val brokerId: Int,
       val member = group.get(memberId)
       member.shouldKeepAlive(heartbeatDeadline) || member.isLeaving
     } else {
-      error(s"Member id $memberId was not found in ${group.groupId} during heartbeat expiration, " +
-        s"this could be potentially related to KAFKA-8896")
+      info(s"Member id $memberId was not found in ${group.groupId} during heartbeat expiration.")
       false
     }
   }
@@ -1053,7 +1052,7 @@ class GroupCoordinator(val brokerId: Int,
   def onExpireHeartbeat(group: GroupMetadata, memberId: String, isPending: Boolean, heartbeatDeadline: Long): Unit = {
     group.inLock {
       if (group.is(Dead)) {
-        debug(s"Group ${group.groupId} has already been unloaded")
+        info(s"Received notification of heartbeat expiration for member $memberId after group ${group.groupId} had already been unloaded or deleted.")
       } else if (isPending) {
         info(s"Pending member $memberId in group ${group.groupId} has been removed after session timeout expiration.")
         removePendingMemberAndUpdateGroup(group, memberId)

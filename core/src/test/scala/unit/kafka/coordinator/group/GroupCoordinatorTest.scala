@@ -2901,6 +2901,18 @@ class GroupCoordinatorTest {
     assertTrue(group.has(leaderMemberId))
   }
 
+  @Test
+  def testCompleteHeartbeatWithMemberAlreadyRemoved(): Unit = {
+    val rebalanceResult = staticMembersJoinAndRebalance(leaderInstanceId, followerInstanceId)
+    EasyMock.reset(replicaManager)
+    heartbeat(groupId, rebalanceResult.leaderId, rebalanceResult.generation)
+    val group = getGroup(groupId)
+    val leaderMemberId = rebalanceResult.leaderId
+    group.remove(leaderMemberId)
+    assertFalse(groupCoordinator.tryCompleteHeartbeat(group, leaderMemberId, false, DefaultSessionTimeout, () => true))
+    groupCoordinator.onExpireHeartbeat(group, leaderMemberId, false, DefaultSessionTimeout)
+  }
+
   private def getGroup(groupId: String): GroupMetadata = {
     val groupOpt = groupCoordinator.groupManager.getGroup(groupId)
     assertTrue(groupOpt.isDefined)
