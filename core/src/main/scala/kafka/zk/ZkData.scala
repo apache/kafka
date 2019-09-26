@@ -281,7 +281,7 @@ object TopicZNode {
           new TopicPartition(topic, partition.toInt) -> PartitionReplicaAssignment(
             replicas.to[Seq[Int]],
             getReplicas(addingReplicasJsonOpt, partition),
-            getReplicas(addingReplicasJsonOpt, partition)
+            getReplicas(removingReplicasJsonOpt, partition)
           )
         }
       }

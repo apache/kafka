@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import java.util.Map.Entry;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
@@ -80,9 +79,9 @@ public class StoreChangelogReader implements ChangelogReader {
             initialize(active);
         }
 
-        if (needsRestoring.isEmpty()) {
+        if (needsRestoring.isEmpty() || restoreConsumer.assignment().isEmpty()) {
             restoreConsumer.unsubscribe();
-            return completed();
+            return completedRestorers;
         }
 
         try {
@@ -121,7 +120,7 @@ public class StoreChangelogReader implements ChangelogReader {
             restoreConsumer.unsubscribe();
         }
 
-        return completed();
+        return completedRestorers;
     }
 
     private void initialize(final RestoringTasks active) {
@@ -256,10 +255,6 @@ public class StoreChangelogReader implements ChangelogReader {
                   endOffset);
     }
 
-    private Collection<TopicPartition> completed() {
-        return completedRestorers;
-    }
-
     private void refreshChangelogInfo() {
         try {
             partitionInfo.putAll(restoreConsumer.listTopics());
@@ -281,7 +276,19 @@ public class StoreChangelogReader implements ChangelogReader {
     }
 
     @Override
-    public void reset() {
+    public void remove(final List<TopicPartition> revokedPartitions) {
+        for (final TopicPartition partition : revokedPartitions) {
+            partitionInfo.remove(partition.topic());
+            stateRestorers.remove(partition);
+            needsRestoring.remove(partition);
+            restoreToOffsets.remove(partition);
+            needsInitializing.remove(partition);
+            completedRestorers.remove(partition);
+        }
+    }
+
+    @Override
+    public void clear() {
         partitionInfo.clear();
         stateRestorers.clear();
         needsRestoring.clear();

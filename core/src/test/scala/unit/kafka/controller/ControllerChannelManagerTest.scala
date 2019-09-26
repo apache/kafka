@@ -18,7 +18,7 @@ package kafka.controller
 
 import java.util.Properties
 
-import kafka.api.{ApiVersion, KAFKA_0_10_0_IV1, KAFKA_0_10_2_IV0, KAFKA_0_9_0, KAFKA_1_0_IV0, KAFKA_2_2_IV0, LeaderAndIsr}
+import kafka.api.{ApiVersion, KAFKA_0_10_0_IV1, KAFKA_0_10_2_IV0, KAFKA_0_9_0, KAFKA_1_0_IV0, KAFKA_2_2_IV0, KAFKA_2_4_IV0, LeaderAndIsr}
 import kafka.cluster.{Broker, EndPoint}
 import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
@@ -149,8 +149,9 @@ class ControllerChannelManagerTest {
 
     for (apiVersion <- ApiVersion.allVersions) {
       val leaderAndIsrRequestVersion: Short =
-        if (config.interBrokerProtocolVersion >= KAFKA_2_2_IV0) 2
-        else if (config.interBrokerProtocolVersion >= KAFKA_1_0_IV0) 1
+        if (apiVersion >= KAFKA_2_4_IV0) 3
+        else if (apiVersion >= KAFKA_2_2_IV0) 2
+        else if (apiVersion >= KAFKA_1_0_IV0) 1
         else 0
 
       testLeaderAndIsrRequestFollowsInterBrokerProtocolVersion(apiVersion, leaderAndIsrRequestVersion)
@@ -173,9 +174,10 @@ class ControllerChannelManagerTest {
     batch.addLeaderAndIsrRequestForBrokers(Seq(2), partition, leaderIsrAndControllerEpoch, replicaAssignment(Seq(1, 2, 3)), isNew = false)
     batch.sendRequestsToBrokers(controllerEpoch)
 
-    val leaderAndIsrRequests = batch.collectLeaderAndIsrRequestsFor(2, expectedLeaderAndIsrVersion)
+    val leaderAndIsrRequests = batch.collectLeaderAndIsrRequestsFor(2)
     assertEquals(1, leaderAndIsrRequests.size)
-    assertEquals(expectedLeaderAndIsrVersion, leaderAndIsrRequests.head.version)
+    assertEquals(s"IBP $interBrokerProtocolVersion should use version $expectedLeaderAndIsrVersion",
+      expectedLeaderAndIsrVersion, leaderAndIsrRequests.head.version)
   }
 
   @Test
@@ -316,11 +318,11 @@ class ControllerChannelManagerTest {
 
     for (apiVersion <- ApiVersion.allVersions) {
       val updateMetadataRequestVersion: Short =
-        if (config.interBrokerProtocolVersion >= KAFKA_2_2_IV0) 5
-        else if (config.interBrokerProtocolVersion >= KAFKA_1_0_IV0) 4
-        else if (config.interBrokerProtocolVersion >= KAFKA_0_10_2_IV0) 3
-        else if (config.interBrokerProtocolVersion >= KAFKA_0_10_0_IV1) 2
-        else if (config.interBrokerProtocolVersion >= KAFKA_0_9_0) 1
+        if (apiVersion >= KAFKA_2_2_IV0) 5
+        else if (apiVersion >= KAFKA_1_0_IV0) 4
+        else if (apiVersion >= KAFKA_0_10_2_IV0) 3
+        else if (apiVersion >= KAFKA_0_10_0_IV1) 2
+        else if (apiVersion >= KAFKA_0_9_0) 1
         else 0
 
       testUpdateMetadataFollowsInterBrokerProtocolVersion(apiVersion, updateMetadataRequestVersion)
@@ -341,8 +343,11 @@ class ControllerChannelManagerTest {
     assertEquals(1, batch.sentRequests.size)
     assertTrue(batch.sentRequests.contains(2))
 
-    val requests = batch.collectUpdateMetadataRequestsFor(2, expectedUpdateMetadataVersion)
-    assertTrue(requests.forall(_.version == expectedUpdateMetadataVersion))
+    val requests = batch.collectUpdateMetadataRequestsFor(2)
+    val allVersions = requests.map(_.version)
+    assertTrue(s"IBP $interBrokerProtocolVersion should use version $expectedUpdateMetadataVersion, " +
+      s"but found versions $allVersions",
+      allVersions.forall(_ == expectedUpdateMetadataVersion))
   }
 
   @Test
@@ -369,7 +374,7 @@ class ControllerChannelManagerTest {
     val sentRequests = batch.sentRequests(2)
     assertEquals(1, sentRequests.size)
 
-    val sentStopReplicaRequests = batch.collectStopReplicRequestsFor(2)
+    val sentStopReplicaRequests = batch.collectStopReplicaRequestsFor(2)
     assertEquals(1, sentStopReplicaRequests.size)
 
     val stopReplicaRequest = sentStopReplicaRequests.head
@@ -407,7 +412,7 @@ class ControllerChannelManagerTest {
     val sentRequests = batch.sentRequests(2)
     assertEquals(1, sentRequests.size)
 
-    val sentStopReplicaRequests = batch.collectStopReplicRequestsFor(2)
+    val sentStopReplicaRequests = batch.collectStopReplicaRequestsFor(2)
     assertEquals(1, sentStopReplicaRequests.size)
     assertEquals(partitions, sentStopReplicaRequests.flatMap(_.partitions.asScala).toSet)
     assertTrue(sentStopReplicaRequests.forall(_.deletePartitions()))
@@ -444,7 +449,7 @@ class ControllerChannelManagerTest {
     val sentRequests = batch.sentRequests(2)
     assertEquals(1, sentRequests.size)
 
-    val sentStopReplicaRequests = batch.collectStopReplicRequestsFor(2)
+    val sentStopReplicaRequests = batch.collectStopReplicaRequestsFor(2)
     assertEquals(1, sentStopReplicaRequests.size)
     assertEquals(partitions, sentStopReplicaRequests.flatMap(_.partitions.asScala).toSet)
     assertTrue(sentStopReplicaRequests.forall(_.deletePartitions()))
@@ -493,7 +498,7 @@ class ControllerChannelManagerTest {
     val sentRequests = batch.sentRequests(2)
     assertEquals(2, sentRequests.size)
 
-    val sentStopReplicaRequests = batch.collectStopReplicRequestsFor(2)
+    val sentStopReplicaRequests = batch.collectStopReplicaRequestsFor(2)
     assertEquals(2, sentStopReplicaRequests.size)
 
     val (deleteRequests, nonDeleteRequests) = sentStopReplicaRequests.partition(_.deletePartitions())
@@ -529,7 +534,7 @@ class ControllerChannelManagerTest {
     assertEquals(1, sentRequests.size)
 
     for (brokerId <- Set(2, 3)) {
-      val sentStopReplicaRequests = batch.collectStopReplicRequestsFor(brokerId)
+      val sentStopReplicaRequests = batch.collectStopReplicaRequestsFor(brokerId)
       assertEquals(1, sentStopReplicaRequests.size)
 
       val stopReplicaRequest = sentStopReplicaRequests.head
@@ -569,7 +574,7 @@ class ControllerChannelManagerTest {
     val sentRequests = batch.sentRequests(2)
     assertEquals(1, sentRequests.size)
 
-    val sentStopReplicaRequests = batch.collectStopReplicRequestsFor(2)
+    val sentStopReplicaRequests = batch.collectStopReplicaRequestsFor(2)
     assertEquals(1, sentStopReplicaRequests.size)
 
     val stopReplicaRequest = sentStopReplicaRequests.head
@@ -583,14 +588,14 @@ class ControllerChannelManagerTest {
 
     for (apiVersion <- ApiVersion.allVersions) {
       if (apiVersion < KAFKA_2_2_IV0)
-        testStopReplicaFollowsInterBrokerProtocolVersion(ApiVersion.latestVersion, 0.toShort)
+        testStopReplicaFollowsInterBrokerProtocolVersion(apiVersion, 0.toShort)
       else
-        testStopReplicaFollowsInterBrokerProtocolVersion(ApiVersion.latestVersion, 1.toShort)
+        testStopReplicaFollowsInterBrokerProtocolVersion(apiVersion, 1.toShort)
     }
   }
 
   private def testStopReplicaFollowsInterBrokerProtocolVersion(interBrokerProtocolVersion: ApiVersion,
-                                                       expectedStopReplicaRequestVersion: Short): Unit = {
+                                                               expectedStopReplicaRequestVersion: Short): Unit = {
     val context = initContext(Seq(1, 2, 3), Set("foo"), 2, 3)
     val config = createConfig(interBrokerProtocolVersion)
     val batch = new MockControllerBrokerRequestBatch(context, config)
@@ -605,8 +610,11 @@ class ControllerChannelManagerTest {
     assertEquals(1, batch.sentRequests.size)
     assertTrue(batch.sentRequests.contains(2))
 
-    val requests = batch.collectStopReplicRequestsFor(2, expectedStopReplicaRequestVersion)
-    assertTrue(requests.forall(_.version() == expectedStopReplicaRequestVersion))
+    val requests = batch.collectStopReplicaRequestsFor(2)
+    val allVersions = requests.map(_.version)
+    assertTrue(s"IBP $interBrokerProtocolVersion should use version $expectedStopReplicaRequestVersion, " +
+      s"but found versions $allVersions",
+      allVersions.forall(_ == expectedStopReplicaRequestVersion))
   }
 
   private def applyStopReplicaResponseCallbacks(error: Errors, sentRequests: List[SentRequest]): Unit = {
@@ -631,7 +639,8 @@ class ControllerChannelManagerTest {
     val props = new Properties()
     props.put(KafkaConfig.BrokerIdProp, controllerId.toString)
     props.put(KafkaConfig.ZkConnectProp, "zkConnect")
-    props.put(KafkaConfig.InterBrokerProtocolVersionProp, ApiVersion.latestVersion.version)
+    props.put(KafkaConfig.InterBrokerProtocolVersionProp, interBrokerVersion.version)
+    props.put(KafkaConfig.LogMessageFormatVersionProp, interBrokerVersion.version)
     KafkaConfig.fromProps(props)
   }
 
@@ -680,32 +689,29 @@ class ControllerChannelManagerTest {
       sentRequests(brokerId).append(SentRequest(request, callback))
     }
 
-    def collectStopReplicRequestsFor(brokerId: Int,
-                                     version: Short = ApiKeys.STOP_REPLICA.latestVersion): List[StopReplicaRequest] = {
+    def collectStopReplicaRequestsFor(brokerId: Int): List[StopReplicaRequest] = {
       sentRequests.get(brokerId) match {
         case Some(requests) => requests
           .filter(_.request.apiKey == ApiKeys.STOP_REPLICA)
-          .map(_.request.build(version).asInstanceOf[StopReplicaRequest]).toList
+          .map(_.request.build().asInstanceOf[StopReplicaRequest]).toList
         case None => List.empty[StopReplicaRequest]
       }
     }
 
-    def collectUpdateMetadataRequestsFor(brokerId: Int,
-                                         version: Short = ApiKeys.UPDATE_METADATA.latestVersion): List[UpdateMetadataRequest] = {
+    def collectUpdateMetadataRequestsFor(brokerId: Int): List[UpdateMetadataRequest] = {
       sentRequests.get(brokerId) match {
         case Some(requests) => requests
           .filter(_.request.apiKey == ApiKeys.UPDATE_METADATA)
-          .map(_.request.build(version).asInstanceOf[UpdateMetadataRequest]).toList
+          .map(_.request.build().asInstanceOf[UpdateMetadataRequest]).toList
         case None => List.empty[UpdateMetadataRequest]
       }
     }
 
-    def collectLeaderAndIsrRequestsFor(brokerId: Int,
-                                       version: Short = ApiKeys.LEADER_AND_ISR.latestVersion): List[LeaderAndIsrRequest] = {
+    def collectLeaderAndIsrRequestsFor(brokerId: Int): List[LeaderAndIsrRequest] = {
       sentRequests.get(brokerId) match {
         case Some(requests) => requests
           .filter(_.request.apiKey == ApiKeys.LEADER_AND_ISR)
-          .map(_.request.build(version).asInstanceOf[LeaderAndIsrRequest]).toList
+          .map(_.request.build().asInstanceOf[LeaderAndIsrRequest]).toList
         case None => List.empty[LeaderAndIsrRequest]
       }
     }

@@ -160,7 +160,8 @@ public class StandbyTaskTest {
     private final byte[] recordKey = intSerializer.serialize(null, 1);
 
     private final String threadName = "threadName";
-    private final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(new Metrics(), threadName);
+    private final StreamsMetricsImpl streamsMetrics =
+        new StreamsMetricsImpl(new Metrics(), threadName, StreamsConfig.METRICS_LATEST);
 
     @Before
     public void setup() throws Exception {
@@ -562,9 +563,9 @@ public class StandbyTaskTest {
 
         final Consumer<byte[], byte[]> consumer = new MockConsumer<byte[], byte[]>(OffsetResetStrategy.EARLIEST) {
             @Override
-            public synchronized OffsetAndMetadata committed(final TopicPartition partition) {
+            public synchronized Map<TopicPartition, OffsetAndMetadata> committed(final Set<TopicPartition> partitions) {
                 committedCallCount.getAndIncrement();
-                return super.committed(partition);
+                return super.committed(partitions);
             }
         };
 
@@ -595,9 +596,9 @@ public class StandbyTaskTest {
 
         final Consumer<byte[], byte[]> consumer = new MockConsumer<byte[], byte[]>(OffsetResetStrategy.EARLIEST) {
             @Override
-            public synchronized OffsetAndMetadata committed(final TopicPartition partition) {
+            public synchronized Map<TopicPartition, OffsetAndMetadata> committed(final Set<TopicPartition> partitions) {
                 committedCallCount.getAndIncrement();
-                return super.committed(partition);
+                return super.committed(partitions);
             }
         };
 

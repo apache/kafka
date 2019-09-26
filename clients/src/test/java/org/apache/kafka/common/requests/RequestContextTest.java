@@ -64,7 +64,7 @@ public class RequestContextTest {
         responseBuffer.flip();
         responseBuffer.getInt(); // strip off the size
 
-        ResponseHeader responseHeader = ResponseHeader.parse(responseBuffer);
+        ResponseHeader responseHeader = ResponseHeader.parse(responseBuffer, header.headerVersion());
         assertEquals(correlationId, responseHeader.correlationId());
 
         Struct struct = ApiKeys.API_VERSIONS.parseResponse((short) 0, responseBuffer);

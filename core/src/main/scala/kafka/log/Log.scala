@@ -341,16 +341,18 @@ class Log(@volatile var dir: File,
       throw new IllegalArgumentException(s"High watermark $newHighWatermark update exceeds current " +
         s"log end offset $logEndOffsetMetadata")
 
-    val oldHighWatermark = fetchHighWatermarkMetadata
+    lock.synchronized {
+      val oldHighWatermark = fetchHighWatermarkMetadata
 
-    // Ensure that the high watermark increases monotonically. We also update the high watermark when the new
-    // offset metadata is on a newer segment, which occurs whenever the log is rolled to a new segment.
-    if (oldHighWatermark.messageOffset < newHighWatermark.messageOffset ||
-      (oldHighWatermark.messageOffset == newHighWatermark.messageOffset && oldHighWatermark.onOlderSegment(newHighWatermark))) {
-      updateHighWatermarkMetadata(newHighWatermark)
-      Some(oldHighWatermark)
-    } else {
-      None
+      // Ensure that the high watermark increases monotonically. We also update the high watermark when the new
+      // offset metadata is on a newer segment, which occurs whenever the log is rolled to a new segment.
+      if (oldHighWatermark.messageOffset < newHighWatermark.messageOffset ||
+        (oldHighWatermark.messageOffset == newHighWatermark.messageOffset && oldHighWatermark.onOlderSegment(newHighWatermark))) {
+        updateHighWatermarkMetadata(newHighWatermark)
+        Some(oldHighWatermark)
+      } else {
+        None
+      }
     }
   }
 

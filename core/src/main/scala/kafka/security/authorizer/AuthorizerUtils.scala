@@ -84,7 +84,7 @@ object AuthorizerUtils {
     new AuthorizableRequestContext {
       override def clientId(): String = ""
       override def requestType(): Int = -1
-      override def listener(): String = ""
+      override def listenerName(): String = ""
       override def clientAddress(): InetAddress = session.clientAddress
       override def principal(): KafkaPrincipal = session.principal
       override def securityProtocol(): SecurityProtocol = null

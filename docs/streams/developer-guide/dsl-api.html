@@ -335,7 +335,7 @@
             <p>Some KStream transformations may generate one or more KStream objects, for example:
                 - <code class="docutils literal"><span class="pre">filter</span></code> and <code class="docutils literal"><span class="pre">map</span></code> on a KStream will generate another KStream
                 - <code class="docutils literal"><span class="pre">branch</span></code> on KStream can generate multiple KStreams</p>
-            <p>Some others may generate a KTable object, for example an aggregation of a KStream also yields a KTable. This allows Kafka Streams to continuously update the computed value upon arrivals of <a class="reference internal" href="../core-concepts.html#streams_concepts_aggregations"><span class="std std-ref">late records</span></a> after it
+            <p>Some others may generate a KTable object, for example an aggregation of a KStream also yields a KTable. This allows Kafka Streams to continuously update the computed value upon arrivals of <a class="reference internal" href="../core-concepts.html#streams_concepts_aggregations"><span class="std std-ref">out-of-order records</span></a> after it
                 has already been produced to the downstream transformation operators.</p>
             <p>All KTable transformation operations can only generate another KTable. However, the Kafka Streams DSL does provide a special function
                 that converts a KTable representation into a KStream. All of these transformation methods can be chained together to compose
@@ -2961,14 +2961,14 @@ In this diagram the time numbers represent minutes; e.g.  t=5 means &#8220;at th
 of time in Kafka Streams is milliseconds, which means the time numbers would need to be multiplied with 60 * 1,000 to
 convert from minutes to milliseconds (e.g. t=5 would become t=300,000).</span></p>
                         </div>
-                        <p>If we then receive three additional records (including two late-arriving records), what would happen is that the two
+                        <p>If we then receive three additional records (including two out-of-order records), what would happen is that the two
                             existing sessions for the green record key will be merged into a single session starting at time 0 and ending at time 6,
                             consisting of a total of three records.  The existing session for the blue record key will be extended to end at time 5,
                             consisting of a total of two records.  And, finally, there will be a new session for the blue key starting and ending at
                             time 11.</p>
                         <div class="figure align-center" id="id6">
                             <img class="centered" src="/{{version}}/images/streams-session-windows-02.png">
-                            <p class="caption"><span class="caption-text">Detected sessions after having received six input records.  Note the two late-arriving data records at t=4 (green) and
+                            <p class="caption"><span class="caption-text">Detected sessions after having received six input records.  Note the two out-of-order data records at t=4 (green) and
 t=5 (blue), which lead to a merge of sessions and an extension of a session, respectively.</span></p>
                         </div>
                     </div>
@@ -3007,7 +3007,7 @@ grouped
 			    <dl>
 				    <dt><code>grace(ofMinutes(10))</code></dt>
 				    <dd>This allows us to bound the lateness of events the window will accept.
-				        For example, the 09:00 to 10:00 window will accept late-arriving records until 10:10, at which point, the window is <strong>closed</strong>.
+				        For example, the 09:00 to 10:00 window will accept out-of-order records until 10:10, at which point, the window is <strong>closed</strong>.
 				    </dd>
 				    <dt><code>.suppress(Suppressed.untilWindowCloses(...))</code></dt>
 				    <dd>This configures the suppression operator to emit nothing for a window until it closes, and then emit the final result.
