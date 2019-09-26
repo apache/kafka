@@ -45,10 +45,11 @@ import org.junit.Test;
 import org.junit.experimental.categories.Category;
 
 import java.time.Duration;
-import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Properties;
+import java.util.Set;
 
 import static org.junit.Assert.assertEquals;
 
@@ -74,7 +75,7 @@ public class GlobalThreadShutDownOrderTest {
     private KafkaStreams kafkaStreams;
     private String globalStoreTopic;
     private String streamTopic;
-    private final List<Long> retrievedValuesList = new ArrayList<>();
+    private final Set<Long> retrievedValuesList = new HashSet<>();
     private boolean firstRecordProcessed;
 
     @Before
@@ -134,7 +135,7 @@ public class GlobalThreadShutDownOrderTest {
 
         kafkaStreams.close(Duration.ofSeconds(30));
 
-        final List<Long> expectedRetrievedValues = Arrays.asList(1L, 2L, 3L, 4L);
+        final Set<Long> expectedRetrievedValues = new HashSet<>(Arrays.asList(1L, 2L, 3L, 4L));
         assertEquals(expectedRetrievedValues, retrievedValuesList);
     }
 
