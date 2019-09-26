@@ -381,14 +381,7 @@ public class DelegatingClassLoader extends URLClassLoader {
         PluginClassLoader pluginLoader = pluginClassLoader(fullName);
         if (pluginLoader != null) {
             log.trace("Retrieving loaded class '{}' from '{}'", fullName, pluginLoader);
-            // KAFKA-8340: The thread classloader is used during static initialization and must be
-            // set to the plugin's classloader during class loading
-            ClassLoader savedLoader = Plugins.compareAndSwapLoaders(pluginLoader);
-            try {
-                return pluginLoader.loadClass(fullName, resolve);
-            } finally {
-                Plugins.compareAndSwapLoaders(savedLoader);
-            }
+            return pluginLoader.loadClass(fullName, resolve);
         }
 
         return super.loadClass(fullName, resolve);
