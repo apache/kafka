@@ -127,7 +127,7 @@ class SslAdminClientIntegrationTest extends SaslSslAdminClientIntegrationTest {
 
     def validateRequestContext(context: AuthorizableRequestContext, apiKey: ApiKeys): Unit = {
       assertEquals(SecurityProtocol.SSL, context.securityProtocol)
-      assertEquals("SSL", context.listener)
+      assertEquals("SSL", context.listenerName)
       assertEquals(KafkaPrincipal.ANONYMOUS, context.principal)
       assertEquals(apiKey.id.toInt, context.requestType)
       assertEquals(apiKey.latestVersion.toInt, context.requestVersion)
