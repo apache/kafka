@@ -1123,6 +1123,7 @@ project(':tools') {
 
 project(':streams') {
   archivesBaseName = "kafka-streams"
+  ext.buildStreamsVersionFileName = "kafka-streams-version.properties"
 
   dependencies {
     compile project(':clients')
@@ -1170,7 +1171,17 @@ project(':streams') {
     duplicatesStrategy 'exclude'
   }
 
+  task createStreamsVersionFile(dependsOn: ':clients:createVersionFile', type: Copy) {
+    from "${project(':clients').buildDir}/kafka/${project(':clients').buildVersionFileName }"
+    into "$buildDir/kafka"
+    rename "${project(':clients').buildVersionFileName}", "$buildStreamsVersionFileName"
+  }
+
   jar {
+    dependsOn 'createStreamsVersionFile'
+    from("$buildDir") {
+      include "kafka/$buildStreamsVersionFileName"
+    }
     dependsOn 'copyDependantLibs'
   }
 
