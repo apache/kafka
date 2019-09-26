@@ -89,7 +89,7 @@ public class Connect {
     }
 
     public URI adminUrl() {
-        return rest.advertisedAdminUrl();
+        return rest.adminUrl();
     }
 
     private class ShutdownHook extends Thread {

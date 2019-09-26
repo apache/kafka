@@ -205,6 +205,7 @@ public class RestServer {
         }
 
         log.info("REST server listening at " + jettyServer.getURI() + ", advertising URL " + advertisedUrl());
+        log.info("REST admin endpoints at " + adminUrl());
     }
 
     public void initializeResources(Herder herder) {
@@ -349,7 +350,7 @@ public class RestServer {
         return builder.build();
     }
 
-    public URI advertisedAdminUrl() {
+    public URI adminUrl() {
         ServerConnector adminConnector = null;
         for (Connector connector : jettyServer.getConnectors()) {
             if (ADMIN_SERVER_CONNECTOR_NAME.equals(connector.getName()))
@@ -357,7 +358,15 @@ public class RestServer {
         }
 
         if (adminConnector == null) {
-            return null;
+            List<String> adminListeners = config.getList(WorkerConfig.ADMIN_LISTENERS_CONFIG);
+            if (adminListeners == null) {
+                return null;
+            } else if (adminListeners.isEmpty()) {
+                return advertisedUrl();
+            } else {
+                log.error("No admin connector found for listeners {}", adminListeners);
+                return null;
+            }
         }
 
         UriBuilder builder = UriBuilder.fromUri(jettyServer.getURI());
