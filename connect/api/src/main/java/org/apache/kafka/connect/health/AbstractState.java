@@ -17,6 +17,8 @@
 
 package org.apache.kafka.connect.health;
 
+import java.util.Objects;
+
 /**
  * Provides the current status along with identifier for Connect worker and tasks.
  */
@@ -70,5 +72,22 @@ public abstract class AbstractState {
      */
     public String traceMessage() {
         return traceMessage;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o)
+            return true;
+        if (o == null || getClass() != o.getClass())
+            return false;
+        AbstractState that = (AbstractState) o;
+        return state.equals(that.state)
+            && Objects.equals(traceMessage, that.traceMessage)
+            && workerId.equals(that.workerId);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(state, traceMessage, workerId);
     }
 }
