@@ -124,8 +124,9 @@ public class SessionedProtocolIntegrationTest {
 
         // start a sink connector
         log.info("Starting the {} connector", CONNECTOR_NAME);
+        StartAndStopLatch startLatch = connectorHandle.expectedStarts(1);
         connect.configureConnector(CONNECTOR_NAME, connectorProps);
-        connectorHandle.expectedStarts(1).await(CONNECTOR_SETUP_DURATION_MS, TimeUnit.MILLISECONDS);
+        startLatch.await(CONNECTOR_SETUP_DURATION_MS, TimeUnit.MILLISECONDS);
 
 
         // Verify the exact same behavior, after starting the connector
