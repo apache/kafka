@@ -16,11 +16,11 @@
  */
 package org.apache.kafka.common.protocol;
 
+import org.apache.kafka.common.message.RequestHeaderData;
+import org.apache.kafka.common.message.ResponseHeaderData;
 import org.apache.kafka.common.protocol.types.BoundField;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Type;
-import org.apache.kafka.common.requests.RequestHeader;
-import org.apache.kafka.common.requests.ResponseHeader;
 
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -116,18 +116,20 @@ public class Protocol {
         final StringBuilder b = new StringBuilder();
         b.append("<h5>Headers:</h5>\n");
 
-        b.append("<pre>");
-        b.append("Request Header => ");
-        schemaToBnfHtml(RequestHeader.SCHEMA, b, 2);
-        b.append("</pre>\n");
-        schemaToFieldTableHtml(RequestHeader.SCHEMA, b);
-
-        b.append("<pre>");
-        b.append("Response Header => ");
-        schemaToBnfHtml(ResponseHeader.SCHEMA, b, 2);
-        b.append("</pre>\n");
-        schemaToFieldTableHtml(ResponseHeader.SCHEMA, b);
-
+        for (int i = 0; i < RequestHeaderData.SCHEMAS.length; i++) {
+            b.append("<pre>");
+            b.append("Request Header v").append(i).append(" => ");
+            schemaToBnfHtml(RequestHeaderData.SCHEMAS[i], b, 2);
+            b.append("</pre>\n");
+            schemaToFieldTableHtml(RequestHeaderData.SCHEMAS[i], b);
+        }
+        for (int i = 0; i < ResponseHeaderData.SCHEMAS.length; i++) {
+            b.append("<pre>");
+            b.append("Response Header v").append(i).append(" => ");
+            schemaToBnfHtml(ResponseHeaderData.SCHEMAS[i], b, 2);
+            b.append("</pre>\n");
+            schemaToFieldTableHtml(ResponseHeaderData.SCHEMAS[i], b);
+        }
         for (ApiKeys key : ApiKeys.values()) {
             // Key
             b.append("<h5>");
