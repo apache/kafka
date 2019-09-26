@@ -16,9 +16,10 @@
  */
 package kafka.admin
 
-import java.util.Properties
-import java.util.concurrent.ExecutionException
+import java.util.{Collections, Properties}
+import java.util.concurrent.{ExecutionException, TimeUnit}
 
+import kafka.admin.ConfigCommand.ConfigEntity
 import kafka.common.AdminCommandFailedException
 import kafka.log.LogConfig
 import kafka.log.LogConfig._
@@ -27,14 +28,16 @@ import kafka.utils._
 import kafka.utils.json.JsonValue
 import kafka.zk.{AdminZkClient, KafkaZkClient}
 import org.apache.kafka.clients.admin.DescribeReplicaLogDirsResult.ReplicaLogDirInfo
-import org.apache.kafka.clients.admin.{Admin, AdminClientConfig, AlterReplicaLogDirsOptions}
+import org.apache.kafka.clients.admin.{Admin, AdminClientConfig, AlterConfigOp, AlterReplicaLogDirsOptions, ConfigEntry, DescribeConfigsOptions, NewPartitionReassignment}
+import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.errors.ReplicaNotAvailableException
 import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.utils.{Time, Utils}
-import org.apache.kafka.common.{TopicPartition, TopicPartitionReplica}
+import org.apache.kafka.common.{Node, TopicPartition, TopicPartitionReplica}
 import org.apache.zookeeper.KeeperException.NodeExistsException
 
 import scala.collection.JavaConverters._
+import scala.compat.java8.OptionConverters._
 import scala.collection._
 
 // Generalization of service APIs used by the ReassignPartitionCommand class; allows override
@@ -42,47 +45,130 @@ import scala.collection._
 trait ReassignCommandService extends AutoCloseable {
   def getBrokerIdsInCluster: Seq[Int]
   def getBrokerMetadatas(rackAwareMode: RackAwareMode, brokerList : Option[Seq[Int]]) : Seq[BrokerMetadata]
-  def getBrokerConfig(broker : String) : Properties
-  def getTopicConfig(topic : String) : Properties
-  def setBrokerConfig(brokers : Seq[Int], config : Properties) : Unit
-  def setTopicConfig(topic : String, config : Properties) : Unit
+  def UpdateBrokerConfigs(broker : Int, configs : Map[String, String]) : Boolean
+  def UpdateTopicConfigs(topic : String, configs: Map[String, String]) : Boolean
   def getPartitionsForTopics(topics : immutable.Set[String]) : Map[String, Seq[Int]]
-  def getReplicaLogDirsForTopics(topics : Map[TopicPartitionReplica, String]): Map[TopicPartitionReplica, ReplicaLogDirInfo]
+  def getReplicaLogDirsForTopics(topics : Set[TopicPartitionReplica]): Map[TopicPartitionReplica, ReplicaLogDirInfo]
   def alterPartitionAssignment(topics: Map[TopicPartition, Seq[Int]], timeoutMs : Long) : Unit // XXX: Maybe not unit?
-  def alterReplicaLogDirs(topics : Map[TopicPartitionReplica, String], timeoutMs : Long) : Unit // XXX: Not unit
+  def alterReplicaLogDirs(topics : Map[TopicPartitionReplica, String], timeoutMs : Long) : Set[TopicPartitionReplica]
   def getReplicaAssignmentForTopics(topics : immutable.Set[String]) : Map[TopicPartition, Seq[Int]]
   def reassignInProgress: Boolean
   def getOngoingReassignments: Map[TopicPartition, Seq[Int]]
 }
 
 case class AdminClientReassignCommandService  (adminClient : Admin) extends ReassignCommandService {
-  override def getBrokerIdsInCluster: Seq[Int] = ???
+  override def getBrokerIdsInCluster: Seq[Int] = adminClient.describeCluster().nodes().get().asScala.map(_.id()).toArray
 
-  override def getBrokerMetadatas(rackAwareMode: RackAwareMode, brokerList: Option[Seq[Int]]): Seq[BrokerMetadata] = ???
+  override def getBrokerMetadatas(rackAwareMode: RackAwareMode, brokerList: Option[Seq[Int]]): Seq[BrokerMetadata] = {
+    val clusterDescription = adminClient.describeCluster().nodes().get().asScala
+    // if brokerList is None *or* empty it is treated as "metadata for all brokers"
+    val relevantBrokers = brokerList.map(brokerIds => clusterDescription.filter(b => brokerIds.contains(b.id))).getOrElse(clusterDescription) match {
+      case Nil => clusterDescription
+      case lb => lb
+    }
 
-  override def getBrokerConfig(broker: String): Properties = ???
+    val rackAwareBrokers = relevantBrokers.filter(n => n.rack != null && n.rack.nonEmpty)
+    if (rackAwareMode == RackAwareMode.Enforced && rackAwareBrokers.size < relevantBrokers.size) {
+      throw new AdminOperationException("Not all brokers have rack information. Add --disable-rack-aware in command line" +
+        " to make replica assignment without rack information.")
+    }
+    val brokerMetadatas = rackAwareMode match {
+      case RackAwareMode.Disabled =>     relevantBrokers.map{ n => BrokerMetadata(n.id, None) }.toSeq
+      case RackAwareMode.Safe if rackAwareBrokers.size < relevantBrokers.size =>
+        relevantBrokers.map{ n => BrokerMetadata(n.id, None) }.toSeq
+      case _ =>     relevantBrokers.map{ n => BrokerMetadata(n.id, Some(n.rack)) }.toSeq
+    }
+  brokerMetadatas.sortBy(_.id)
+  }
 
-  override def getTopicConfig(topic: String): Properties = ???
+  override def UpdateBrokerConfigs(broker : Int, configs : Map[String, String]) : Boolean = {
+    val brokerResource = new ConfigResource(ConfigResource.Type.BROKER, broker.toString)
+    UpdateConfigsHelper(brokerResource, configs)
+  }
 
-  override def setBrokerConfig(brokers: Seq[Int], config: Properties): Unit = ???
+  override def UpdateTopicConfigs(topic : String, configs: Map[String, String]) : Boolean = {
+    val topicResource = new ConfigResource(ConfigResource.Type.TOPIC, topic)
+    UpdateConfigsHelper(topicResource, configs)
+  }
 
-  override def setTopicConfig(topic: String, config: Properties): Unit = ???
+  def UpdateConfigsHelper(configResource: ConfigResource, configChanges: Map[String, String]) : Boolean = {
+    val configUpdates = configChanges.map{
+    v => new AlterConfigOp(
+      new ConfigEntry(v._1, v._2),
+      v._2 match {
+        case "" => AlterConfigOp.OpType.DELETE
+        case _ => AlterConfigOp.OpType.SET
+    })
+  }.asJavaCollection
 
-  override def getPartitionsForTopics(topics: immutable.Set[String]): Map[String, Seq[Int]] = ???
+    val alterResult = adminClient.incrementalAlterConfigs(Map(
+    configResource -> configUpdates
+    ).asJava)
 
-  override def getReplicaLogDirsForTopics(topics : Map[TopicPartitionReplica, String]): Map[TopicPartitionReplica, ReplicaLogDirInfo] = ???
+    alterResult.all().get()
+    // XXX How to determine success??
+    true
+  }
 
-  override def alterPartitionAssignment(topics: Map[TopicPartition, Seq[Int]], timeoutMs: Long): Unit = ???
+  override def getPartitionsForTopics(topics: immutable.Set[String]): Map[String, Seq[Int]] = {
+    val topicDescriptions = adminClient.describeTopics(topics.asJavaCollection).all().get().asScala
+    topicDescriptions.map{ d => (d._1, d._2.partitions().asScala.map(_.partition : Int))}
+  }
 
-  override def alterReplicaLogDirs(topics: Map[TopicPartitionReplica, String], timeoutMs: Long): Unit = ???
+  override def getReplicaLogDirsForTopics(topics: Set[TopicPartitionReplica]): Map[TopicPartitionReplica, ReplicaLogDirInfo] =
+    adminClient.describeReplicaLogDirs(topics.asJavaCollection).all().get().asScala
 
-  override def getReplicaAssignmentForTopics(topics: immutable.Set[String]): Map[TopicPartition, Seq[Int]] = ???
+  override def alterPartitionAssignment(partitionReassignment: Map[TopicPartition, Seq[Int]], timeoutMs: Long): Unit = {
+    // XXX: This should return something more informative. But for now...
+    adminClient.alterPartitionReassignments(partitionReassignment.map{
+      entry  => (entry._1,
+        Some(new NewPartitionReassignment(seqAsJavaList(entry._2.map(brokerId => brokerId: java.lang.Integer)))).asJava)
+    }.asJava).all().get()
+  }
 
-  override def reassignInProgress: Boolean = ???
+  override def alterReplicaLogDirs(replicaAssignment: Map[TopicPartitionReplica, String], timeoutMs: Long): Set[TopicPartitionReplica] = {
+    val alterReplicaLogDirsResult = adminClient.alterReplicaLogDirs(replicaAssignment.asJava, new AlterReplicaLogDirsOptions().timeoutMs(timeoutMs.toInt))
+    val replicasAssignedToFutureDir = alterReplicaLogDirsResult.values().asScala.flatMap { case (replica, future) => {
+      try {
+        future.get()
+        Some(replica)
+      } catch {
+        case t: ExecutionException =>
+          t.getCause match {
+            case _: ReplicaNotAvailableException => None // It is OK if the replica is not available at this moment
+            case e: Throwable => throw new AdminCommandFailedException(s"Failed to alter dir for $replica", e)
+          }
+      }
+    }}
+    replicasAssignedToFutureDir.toSet
+  }
 
-  override def getOngoingReassignments: Map[TopicPartition, Seq[Int]] = ???
+  override def getReplicaAssignmentForTopics(topics: immutable.Set[String]): Map[TopicPartition, Seq[Int]] = {
+    val topicDescriptions = adminClient.describeTopics(topics.asJavaCollection).all().get.asScala
+    // For each topic t in topicDescriptions
+    //   for each partition p
+    //       (t,p) => {replica_list}
 
-  override def close() : Unit = adminClient.close()
+    val replicaList = mutable.Map[TopicPartition, Seq[Int]]()
+    for (topicData <- topicDescriptions) {
+      val topic = topicData._1
+      for (partition <- topicData._2.partitions.asScala) {
+        replicaList(new TopicPartition(topic, partition.partition())) = partition.replicas.asScala.map(_.id())
+      }
+    }
+    replicaList
+  }
+
+  override def reassignInProgress: Boolean = !adminClient.listPartitionReassignments().reassignments().get().isEmpty()
+
+  override def getOngoingReassignments: Map[TopicPartition, Seq[Int]] = {
+    val ongoingAssignments = adminClient.listPartitionReassignments().reassignments().get().asScala
+    ongoingAssignments.map {
+      case (tp, reassign) => (tp, reassign.replicas().asScala.map(i => i: Int))
+    }
+  }
+
+  override def close(): Unit = adminClient.close()
 }
 
 case class ZkClientReassignCommandService  (zkClient : KafkaZkClient, adminZkClientOpt: Option[AdminZkClient] = None) extends ReassignCommandService {
@@ -93,17 +179,52 @@ case class ZkClientReassignCommandService  (zkClient : KafkaZkClient, adminZkCli
   override def getBrokerMetadatas(rackAwareMode: RackAwareMode, brokerList: Option[Seq[Int]]): Seq[BrokerMetadata] =
     adminZkClient.getBrokerMetadatas(rackAwareMode, brokerList)
 
-  override def getBrokerConfig(broker: String): Properties = adminZkClient.fetchEntityConfig(ConfigType.Broker, broker)
+  override def UpdateBrokerConfigs(broker : Int, configs : Map[String, String]) : Boolean = {
+    var changed = false
+    val brokerConfigs = adminZkClient.fetchEntityConfig(ConfigType.Broker, broker.toString)
+    for ((config_name, config_val) <- configs) {
+      if (brokerConfigs.get(config_name) != config_val) {
+        if (config_val != "") {
+          changed = true
+          brokerConfigs.put(config_name, config_val)
+        } else {
+          if (brokerConfigs.remove(config_name) != null) {
+            changed = true
+          }
+        }
+      }
+    }
+    if (changed) {
+      adminZkClient.changeBrokerConfig(Seq(broker), brokerConfigs)
+    }
+    changed
+  }
 
-  override def getTopicConfig(topic: String): Properties = adminZkClient.fetchEntityConfig(ConfigType.Topic, topic)
+  override def UpdateTopicConfigs(topic : String, configs: Map[String, String]) : Boolean = {
+    var changed = false
+    val topicConfigs = adminZkClient.fetchEntityConfig(ConfigType.Topic, topic)
+    for ((config_name, config_val) <- configs) {
+      if (topicConfigs.get(config_name) != config_val) {
+        if (config_val != "") {
+          topicConfigs.put(config_name, config_val)
+          changed = true
+        } else {
+            if (topicConfigs.remove(config_name) != null) {
+              changed = true
+            }
+        }
+      }
+    }
+    if (changed) {
+      adminZkClient.changeTopicConfig(topic, topicConfigs)
+    }
+    changed
+  }
 
-  override def setBrokerConfig(brokers: Seq[Int], config: Properties): Unit = adminZkClient.changeBrokerConfig(brokers, config)
-
-  override def setTopicConfig(topic: String, config: Properties): Unit = adminZkClient.changeTopicConfig(topic, config)
 
   override def getPartitionsForTopics(topics: immutable.Set[String]): Map[String, Seq[Int]] = zkClient.getPartitionsForTopics(topics)
 
-  override def getReplicaLogDirsForTopics(topics : Map[TopicPartitionReplica, String]): Map[TopicPartitionReplica, ReplicaLogDirInfo] = {
+  override def getReplicaLogDirsForTopics(topics : Set[TopicPartitionReplica]): Map[TopicPartitionReplica, ReplicaLogDirInfo] = {
     throw new AdminCommandFailedException("bootstrap-server needs to be provided in order to reassign replica log directory")
   }
 
@@ -111,7 +232,7 @@ case class ZkClientReassignCommandService  (zkClient : KafkaZkClient, adminZkCli
     zkClient.createPartitionReassignment(topics)
   }
 
-  override def alterReplicaLogDirs(topics: Map[TopicPartitionReplica, String], timeoutMs: Long): Unit = {
+  override def alterReplicaLogDirs(topics: Map[TopicPartitionReplica, String], timeoutMs: Long): Set[TopicPartitionReplica]= {
     throw new AdminCommandFailedException("bootstrap-server needs to be provided in order to reassign replica log directory")
   }
 
@@ -242,25 +363,17 @@ object ReassignPartitionsCommand extends Logging {
       //Remove the throttle limit from all brokers in the cluster
       //(as we no longer know which specific brokers were involved in the move)
       for (brokerId <- serviceClient.getBrokerIdsInCluster) {
-        val configs = serviceClient.getBrokerConfig(brokerId.toString)
-        // bitwise OR as we don't want to short-circuit
-        if (configs.remove(DynamicConfig.Broker.LeaderReplicationThrottledRateProp) != null
-          | configs.remove(DynamicConfig.Broker.FollowerReplicationThrottledRateProp) != null
-          | configs.remove(DynamicConfig.Broker.ReplicaAlterLogDirsIoMaxBytesPerSecondProp) != null) {
-          serviceClient.setBrokerConfig(Seq(brokerId), configs)
-          changed = true
-        }
+        val brokerConfigUpdate = immutable.Map(DynamicConfig.Broker.LeaderReplicationThrottledRateProp -> "",
+          DynamicConfig.Broker.FollowerReplicationThrottledRateProp -> "",
+          DynamicConfig.Broker.ReplicaAlterLogDirsIoMaxBytesPerSecondProp -> "")
+        changed = serviceClient.UpdateBrokerConfigs(brokerId, brokerConfigUpdate)
       }
       //Remove the list of throttled replicas from all topics with partitions being moved
       val topics = (reassignedPartitionsStatus.keySet.map(tp => tp.topic) ++ replicasReassignmentStatus.keySet.map(replica => replica.topic)).toSeq.distinct
       for (topic <- topics) {
-        val configs = serviceClient.getTopicConfig(topic)
-        // bitwise OR as we don't want to short-circuit
-        if (configs.remove(LogConfig.LeaderReplicationThrottledReplicasProp) != null
-          | configs.remove(LogConfig.FollowerReplicationThrottledReplicasProp) != null) {
-          serviceClient.setTopicConfig(topic, configs)
-          changed = true
-        }
+        val topicConfigUpdate = immutable.Map(LogConfig.LeaderReplicationThrottledReplicasProp -> "",
+          LogConfig.FollowerReplicationThrottledReplicasProp -> "")
+        changed |= serviceClient.UpdateTopicConfigs(topic, topicConfigUpdate)
       }
       if (changed)
         println("Throttle was removed.")
@@ -671,16 +784,17 @@ class ReassignPartitionsCommand private (serviceClient : ReassignCommandService,
       val proposedBrokers = proposedPartitionAssignment.values.flatten.toSeq ++ proposedReplicaAssignment.keys.toSeq.map(_.brokerId())
       val brokers = (existingBrokers ++ proposedBrokers).distinct
 
-      for (id <- brokers) {
-        val configs = serviceClient.getBrokerConfig(id.toString)
-        if (throttle.interBrokerLimit >= 0) {
-          configs.put(DynamicConfig.Broker.LeaderReplicationThrottledRateProp, throttle.interBrokerLimit.toString)
-          configs.put(DynamicConfig.Broker.FollowerReplicationThrottledRateProp, throttle.interBrokerLimit.toString)
-        }
-        if (throttle.replicaAlterLogDirsLimit >= 0)
-          configs.put(DynamicConfig.Broker.ReplicaAlterLogDirsIoMaxBytesPerSecondProp, throttle.replicaAlterLogDirsLimit.toString)
+      val brokerConfigUpdate = mutable.Map[String, String]()
+      if (throttle.interBrokerLimit >= 0) {
+        brokerConfigUpdate += (DynamicConfig.Broker.LeaderReplicationThrottledRateProp -> throttle.interBrokerLimit.toString)
+        brokerConfigUpdate += (DynamicConfig.Broker.FollowerReplicationThrottledRateProp ->  throttle.interBrokerLimit.toString)
+      }
+      if (throttle.replicaAlterLogDirsLimit >= 0)
+        brokerConfigUpdate += (DynamicConfig.Broker.ReplicaAlterLogDirsIoMaxBytesPerSecondProp -> throttle.replicaAlterLogDirsLimit.toString)
 
-        serviceClient.setBrokerConfig(Seq(id), configs)
+      val brokerConfigChanges : Map[String, String] = brokerConfigUpdate
+      for (id <- brokers) {
+        serviceClient.UpdateBrokerConfigs(id, brokerConfigChanges)
       }
     }
   }
@@ -698,10 +812,9 @@ class ReassignPartitionsCommand private (serviceClient : ReassignCommandService,
       //Apply follower throttle to all "move destinations".
       val follower = format(postRebalanceReplicasThatMoved(existingPartitionAssignmentForTopic, proposedPartitionAssignmentForTopic))
 
-      val configs = serviceClient.getTopicConfig(topic)
-      configs.put(LeaderReplicationThrottledReplicasProp, leader)
-      configs.put(FollowerReplicationThrottledReplicasProp, follower)
-      serviceClient.setTopicConfig(topic, configs)
+      val topicConfigUpdate = Map(LeaderReplicationThrottledReplicasProp -> leader,
+        FollowerReplicationThrottledReplicasProp -> follower)
+      serviceClient.UpdateTopicConfigs(topic, topicConfigUpdate)
 
       debug(s"Updated leader-throttled replicas for topic $topic with: $leader")
       debug(s"Updated follower-throttled replicas for topic $topic with: $follower")
@@ -728,25 +841,6 @@ class ReassignPartitionsCommand private (serviceClient : ReassignCommandService,
       moves.map(replicaId => s"${tp.partition}:${replicaId}")
     }.mkString(",")
 
-  private def alterReplicaLogDirsIgnoreReplicaNotAvailable(replicaAssignment: Map[TopicPartitionReplica, String],
-                                                           adminClient: Admin,
-                                                           timeoutMs: Long): Set[TopicPartitionReplica] = {
-    val alterReplicaLogDirsResult = adminClient.alterReplicaLogDirs(replicaAssignment.asJava, new AlterReplicaLogDirsOptions().timeoutMs(timeoutMs.toInt))
-    val replicasAssignedToFutureDir = alterReplicaLogDirsResult.values().asScala.flatMap { case (replica, future) => {
-      try {
-        future.get()
-        Some(replica)
-      } catch {
-        case t: ExecutionException =>
-          t.getCause match {
-            case _: ReplicaNotAvailableException => None // It is OK if the replica is not available at this moment
-            case e: Throwable => throw new AdminCommandFailedException(s"Failed to alter dir for $replica", e)
-          }
-      }
-    }}
-    replicasAssignedToFutureDir.toSet
-  }
-
   def reassignPartitions(throttle: Throttle = NoThrottle, timeoutMs: Long = 10000L): Boolean = {
     maybeThrottle(throttle)
     try {
@@ -756,13 +850,12 @@ class ReassignPartitionsCommand private (serviceClient : ReassignCommandService,
         }
       if (validPartitions.isEmpty) false
       else {
-        if (proposedReplicaAssignment.nonEmpty && adminClientOpt.isEmpty)
-          throw new AdminCommandFailedException("bootstrap-server needs to be provided in order to reassign replica to the specified log directory")
         val startTimeMs = System.currentTimeMillis()
 
         // Send AlterReplicaLogDirsRequest to allow broker to create replica in the right log dir later if the replica has not been created yet.
+        // This will throw if the service client does not support alterReplicaLogDirs.
         if (proposedReplicaAssignment.nonEmpty)
-          alterReplicaLogDirsIgnoreReplicaNotAvailable(proposedReplicaAssignment, adminClientOpt.get, timeoutMs)
+          serviceClient.alterReplicaLogDirs(proposedReplicaAssignment, timeoutMs)
 
         // Create reassignment znode so that controller will send LeaderAndIsrRequest to create replica in the broker
         serviceClient.alterPartitionAssignment(validPartitions.map({case (key, value) => (new TopicPartition(key.topic, key.partition), value)}).toMap,
@@ -773,9 +866,9 @@ class ReassignPartitionsCommand private (serviceClient : ReassignCommandService,
         var remainingTimeMs = startTimeMs + timeoutMs - System.currentTimeMillis()
         val replicasAssignedToFutureDir = mutable.Set.empty[TopicPartitionReplica]
         while (remainingTimeMs > 0 && replicasAssignedToFutureDir.size < proposedReplicaAssignment.size) {
-          replicasAssignedToFutureDir ++= alterReplicaLogDirsIgnoreReplicaNotAvailable(
+          replicasAssignedToFutureDir ++= serviceClient.alterReplicaLogDirs(
             proposedReplicaAssignment.filter { case (replica, _) => !replicasAssignedToFutureDir.contains(replica) },
-            adminClientOpt.get, remainingTimeMs)
+            remainingTimeMs)
           Thread.sleep(100)
           remainingTimeMs = startTimeMs + timeoutMs - System.currentTimeMillis()
         }
