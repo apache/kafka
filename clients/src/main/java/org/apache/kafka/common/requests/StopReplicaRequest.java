@@ -26,16 +26,16 @@ import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.utils.CollectionUtils;
+import org.apache.kafka.common.utils.FlattenedIterator;
+import org.apache.kafka.common.utils.MappedIterator;
 import org.apache.kafka.common.utils.Utils;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 public class StopReplicaRequest extends AbstractControlRequest {
 
@@ -64,7 +64,7 @@ public class StopReplicaRequest extends AbstractControlRequest {
                         .setTopicName(tp.topic())
                         .setPartitionIndex(tp.partition())
                 ).collect(Collectors.toList());
-                data.setPartitionsV0(requestPartitions);
+                data.setUngroupedPartitions(requestPartitions);
             } else {
                 Map<String, List<Integer>> topicPartitionsMap = CollectionUtils.groupPartitionsByTopic(partitions);
                 List<StopReplicaTopic> topics = topicPartitionsMap.entrySet().stream().map(entry ->
@@ -94,7 +94,6 @@ public class StopReplicaRequest extends AbstractControlRequest {
     }
 
     private final StopReplicaRequestData data;
-    private volatile List<TopicPartition> partitions;
 
     private StopReplicaRequest(StopReplicaRequestData data, short version) {
         super(ApiKeys.STOP_REPLICA, version);
@@ -135,24 +134,21 @@ public class StopReplicaRequest extends AbstractControlRequest {
         return data.deletePartitions();
     }
 
-    public List<TopicPartition> partitions() {
-        if (partitions == null) {
-            synchronized (data) {
-                if (partitions == null) {
-                    Stream<TopicPartition> partitionStream;
-                    if (version() == 0) {
-                        partitionStream = data.partitionsV0().stream().map(tp ->
-                            new TopicPartition(tp.topicName(), tp.partitionIndex()));
-                    } else {
-                        partitionStream = data.topics().stream().flatMap(topic ->
-                            topic.partitionIndexes().stream().map(partitionIndex -> new TopicPartition(topic.name(), partitionIndex))
-                        );
-                    }
-                    partitions = Collections.unmodifiableList(partitionStream.collect(Collectors.toList()));
-                }
-            }
+    /**
+     * Note that this method has allocation overhead per iterated element, so callers should copy the result into
+     * another collection if they need to iterate more than once.
+     */
+    // Implementation note: we should strive to avoid allocation overhead per element, see
+    // UpdateMetadataRequest.partitionStates() for the preferred approach. That's not possible in this case and
+    // StopReplicaRequest should be relatively rare in comparison to other request types.
+    public Iterable<TopicPartition> partitions() {
+        if (version() >= 1) {
+            return () -> new FlattenedIterator<>(data.topics().iterator(), topic ->
+                new MappedIterator<>(topic.partitionIndexes().iterator(), partition ->
+                    new TopicPartition(topic.name(), partition)));
         }
-        return partitions;
+        return () -> new MappedIterator<>(data.ungroupedPartitions().iterator(),
+            partition -> new TopicPartition(partition.topicName(), partition.partitionIndex()));
     }
 
     @Override

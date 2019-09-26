@@ -29,7 +29,7 @@
       "about": "The broker epoch." },
     { "name": "DeletePartitions", "type": "bool", "versions": "0+",
       "about": "Whether these partitions should be deleted." },
-    { "name": "PartitionsV0", "type": "[]StopReplicaPartitionV0", "versions": "0",
+    { "name": "UngroupedPartitions", "type": "[]StopReplicaPartitionV0", "versions": "0",
       "about": "The partitions to stop.", "fields": [
       { "name": "TopicName", "type": "string", "versions": "0", "entityType": "topicName",
         "about": "The topic name." },

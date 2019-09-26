@@ -635,7 +635,7 @@ class ControllerChannelManagerTest {
               .setTopicName(tp.topic)
               .setPartitionIndex(tp.partition)
               .setErrorCode(error.code)
-          }.asJava
+          }.toBuffer.asJava
           new StopReplicaResponse(new StopReplicaResponseData().setPartitionErrors(partitionErrors))
         } else {
           stopReplicaRequest.getErrorResponse(error.exception)

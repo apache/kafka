@@ -27,6 +27,7 @@ import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
+import org.apache.kafka.common.utils.FlattenedIterator;
 import org.apache.kafka.common.utils.Utils;
 
 import java.nio.ByteBuffer;
@@ -170,8 +171,10 @@ public class UpdateMetadataRequest extends AbstractControlRequest {
     }
 
     public Iterable<UpdateMetadataPartitionState> partitionStates() {
-        if (version() >= 5)
-            return () -> new PartitionStateIterator(data.topicStates());
+        if (version() >= 5) {
+            return () -> new FlattenedIterator<>(data.topicStates().iterator(),
+                topicState -> topicState.partitionStates().iterator());
+        }
         return data.ungroupedPartitionStates();
     }
 
@@ -190,18 +193,6 @@ public class UpdateMetadataRequest extends AbstractControlRequest {
 
     public static UpdateMetadataRequest parse(ByteBuffer buffer, short version) {
         return new UpdateMetadataRequest(ApiKeys.UPDATE_METADATA.parseRequest(version, buffer), version);
-    }
-
-    private static class PartitionStateIterator extends FlattenedIterator<UpdateMetadataTopicState, UpdateMetadataPartitionState> {
-
-        PartitionStateIterator(List<UpdateMetadataTopicState> topicStates) {
-            super(topicStates);
-        }
-
-        @Override
-        public Iterable<UpdateMetadataPartitionState> innerIterable(UpdateMetadataTopicState outer) {
-            return outer.partitionStates();
-        }
     }
 
 }

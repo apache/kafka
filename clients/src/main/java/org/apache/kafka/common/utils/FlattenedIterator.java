@@ -14,30 +14,29 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common.requests;
-
-import org.apache.kafka.common.utils.AbstractIterator;
+package org.apache.kafka.common.utils;
 
 import java.util.Iterator;
+import java.util.function.Function;
 
 /**
- * Provides a flattened iterator over the inner elements of an outer iterable.
+ * Provides a flattened iterator over the inner elements of an outer iterator.
  */
-abstract class FlattenedIterator<O, I> extends AbstractIterator<I> {
+public final class FlattenedIterator<O, I> extends AbstractIterator<I> {
     private final Iterator<O> outerIterator;
+    private final Function<O, Iterator<I>> innerIteratorFunction;
     private Iterator<I> innerIterator;
 
-    FlattenedIterator(Iterable<O> outer) {
-        outerIterator = outer.iterator();
+    public FlattenedIterator(Iterator<O> outerIterator, Function<O, Iterator<I>> innerIteratorFunction) {
+        this.outerIterator = outerIterator;
+        this.innerIteratorFunction = innerIteratorFunction;
     }
-
-    public abstract Iterable<I> innerIterable(O outer);
 
     @Override
     public I makeNext() {
         while (innerIterator == null || !innerIterator.hasNext()) {
             if (outerIterator.hasNext())
-                innerIterator = innerIterable(outerIterator.next()).iterator();
+                innerIterator = innerIteratorFunction.apply(outerIterator.next());
             else
                 return allDone();
         }
