@@ -1213,7 +1213,6 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                 throw new IllegalStateException("Consumer is not subscribed to any topics or assigned any partitions");
             }
 
-            // TODO: Record poll time in this method?
             // Record poll start
             this.kafkaConsumerMetrics.recordPollStart(time.milliseconds());
 
