@@ -143,6 +143,10 @@ public class SaslServerAuthenticator implements Authenticator {
     // flag indicating if sasl tokens are sent as Kafka SaslAuthenticate request/responses
     private boolean enableKafkaSaslAuthenticateHeaders;
 
+    // Metadata extracted from the ApiVersionsRequest
+    private String clientSoftwareName = "";
+    private String clientSoftwareVersion = "";
+
     public SaslServerAuthenticator(Map<String, ?> configs,
                                    Map<String, AuthenticateCallbackHandler> callbackHandlers,
                                    String connectionId,
@@ -316,6 +320,16 @@ public class SaslServerAuthenticator implements Authenticator {
             principal.tokenAuthenticated(true);
         }
         return principal;
+    }
+
+    @Override
+    public String clientSoftwareName() {
+        return clientSoftwareName;
+    }
+
+    @Override
+    public String clientSoftwareVersion() {
+        return clientSoftwareVersion;
     }
 
     @Override
@@ -585,6 +599,8 @@ public class SaslServerAuthenticator implements Authenticator {
         else if (!apiVersionsRequest.isValid())
             sendKafkaResponse(context, apiVersionsRequest.getErrorResponse(0, Errors.INVALID_REQUEST.exception()));
         else {
+            clientSoftwareName = apiVersionsRequest.data.clientSoftwareName();
+            clientSoftwareVersion = apiVersionsRequest.data.clientSoftwareVersion();
             sendKafkaResponse(context, apiVersionsResponse());
             setSaslState(SaslState.HANDSHAKE_REQUEST);
         }

@@ -41,6 +41,7 @@ import org.apache.kafka.common.{Endpoint, KafkaException, Reconfigurable}
 import org.apache.kafka.common.memory.{MemoryPool, SimpleMemoryPool}
 import org.apache.kafka.common.metrics._
 import org.apache.kafka.common.metrics.stats.{CumulativeSum, Meter}
+import org.apache.kafka.common.network.ConnectionRegistry
 import org.apache.kafka.common.network.KafkaChannel.ChannelMuteEvent
 import org.apache.kafka.common.network.{ChannelBuilder, ChannelBuilders, KafkaChannel, ListenerName, ListenerReconfigurable, Selectable, Send, Selector => KSelector}
 import org.apache.kafka.common.protocol.ApiKeys
@@ -75,7 +76,8 @@ import scala.util.control.ControlThrowable
 class SocketServer(val config: KafkaConfig,
                    val metrics: Metrics,
                    val time: Time,
-                   val credentialProvider: CredentialProvider)
+                   val credentialProvider: CredentialProvider,
+                   val connectionRegistry: ConnectionRegistry)
   extends Logging with KafkaMetricsGroup with BrokerReconfigurable {
 
   private val maxQueuedRequests = config.queuedMaxRequests
@@ -250,7 +252,8 @@ class SocketServer(val config: KafkaConfig,
     endpointOpt.foreach { endpoint =>
       connectionQuotas.addListener(config, endpoint.listenerName)
       val controlPlaneAcceptor = createAcceptor(endpoint, ControlPlaneMetricPrefix)
-      val controlPlaneProcessor = newProcessor(nextProcessorId, controlPlaneRequestChannelOpt.get, connectionQuotas, endpoint.listenerName, endpoint.securityProtocol, memoryPool)
+      val controlPlaneProcessor = newProcessor(nextProcessorId, controlPlaneRequestChannelOpt.get, connectionQuotas,
+        endpoint.listenerName, endpoint.securityProtocol, memoryPool, connectionRegistry)
       controlPlaneAcceptorOpt = Some(controlPlaneAcceptor)
       controlPlaneProcessorOpt = Some(controlPlaneProcessor)
       val listenerProcessors = new ArrayBuffer[Processor]()
@@ -276,7 +279,8 @@ class SocketServer(val config: KafkaConfig,
     val securityProtocol = endpoint.securityProtocol
     val listenerProcessors = new ArrayBuffer[Processor]()
     for (_ <- 0 until newProcessorsPerListener) {
-      val processor = newProcessor(nextProcessorId, dataPlaneRequestChannel, connectionQuotas, listenerName, securityProtocol, memoryPool)
+      val processor = newProcessor(nextProcessorId, dataPlaneRequestChannel, connectionQuotas,
+        listenerName, securityProtocol, memoryPool, connectionRegistry)
       listenerProcessors += processor
       dataPlaneRequestChannel.addProcessor(processor)
       nextProcessorId += 1
@@ -390,7 +394,7 @@ class SocketServer(val config: KafkaConfig,
 
   // `protected` for test usage
   protected[network] def newProcessor(id: Int, requestChannel: RequestChannel, connectionQuotas: ConnectionQuotas, listenerName: ListenerName,
-                                      securityProtocol: SecurityProtocol, memoryPool: MemoryPool): Processor = {
+                                      securityProtocol: SecurityProtocol, memoryPool: MemoryPool, connectionRegistry: ConnectionRegistry): Processor = {
     new Processor(id,
       time,
       config.socketRequestMaxBytes,
@@ -404,7 +408,8 @@ class SocketServer(val config: KafkaConfig,
       metrics,
       credentialProvider,
       memoryPool,
-      logContext
+      logContext,
+      connectionRegistry
     )
   }
 
@@ -681,6 +686,7 @@ private[kafka] object Processor {
   val ListenerMetricTag = "listener"
 
   val ConnectionQueueSize = 20
+
 }
 
 /**
@@ -701,6 +707,7 @@ private[kafka] class Processor(val id: Int,
                                credentialProvider: CredentialProvider,
                                memoryPool: MemoryPool,
                                logContext: LogContext,
+                               connectionRegistry: ConnectionRegistry,
                                connectionQueueSize: Int = ConnectionQueueSize) extends AbstractServerThread(connectionQuotas) with KafkaMetricsGroup {
 
   private object ConnectionId {
@@ -901,7 +908,14 @@ private[kafka] class Processor(val id: Int,
       try {
         openOrClosingChannel(receive.source) match {
           case Some(channel) =>
+            val connectionId = receive.source
             val header = RequestHeader.parse(receive.payload)
+            var connection = connectionRegistry.get(connectionId)
+            if (connection == null) {
+              connection = connectionRegistry.register(connectionId, header.clientId(), channel.clientSoftwareName(),
+                channel.clientSoftwareVersion(), listenerName, securityProtocol, channel.socketAddress(), channel.principal())
+            }
+
             if (header.apiKey() == ApiKeys.SASL_HANDSHAKE && channel.maybeBeginServerReauthentication(receive, nowNanosSupplier))
               trace(s"Begin re-authentication: $channel")
             else {
@@ -911,9 +925,9 @@ private[kafka] class Processor(val id: Int,
                 debug(s"Disconnected expired channel: $channel : $header")
                 expiredConnectionsKilledCount.record(null, 1, 0)
               } else {
-                val connectionId = receive.source
                 val context = new RequestContext(header, connectionId, channel.socketAddress,
-                  channel.principal, listenerName, securityProtocol)
+                  channel.principal, listenerName, securityProtocol, connection.clientSoftwareName(),
+                  connection.clientSoftwareVersion())
                 val req = new RequestChannel.Request(processor = id, context = context,
                   startTimeNanos = nowNanos, memoryPool, receive.payload, requestChannel.metrics)
                 requestChannel.sendRequest(req)
@@ -970,6 +984,7 @@ private[kafka] class Processor(val id: Int,
           throw new IllegalStateException(s"connectionId has unexpected format: $connectionId")
         }.remoteHost
         inflightResponses.remove(connectionId).foreach(updateRequestMetrics)
+        connectionRegistry.remove(connectionId)
         // the channel has been closed by the selector but the quotas still need to be updated
         connectionQuotas.dec(listenerName, InetAddress.getByName(remoteHost))
       } catch {
@@ -996,11 +1011,11 @@ private[kafka] class Processor(val id: Int,
   private def close(connectionId: String): Unit = {
     openOrClosingChannel(connectionId).foreach { channel =>
       debug(s"Closing selector connection $connectionId")
+      connectionRegistry.remove(connectionId)
       val address = channel.socketAddress
       if (address != null)
         connectionQuotas.dec(listenerName, address)
       selector.close(connectionId)
-
       inflightResponses.remove(connectionId).foreach(response => updateRequestMetrics(response))
     }
   }

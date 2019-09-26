@@ -50,7 +50,10 @@ import org.apache.kafka.common.message.{HeartbeatRequestData, JoinGroupRequestDa
 import org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocol
 import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity
 import org.apache.kafka.common.message.UpdateMetadataRequestData.{UpdateMetadataBroker, UpdateMetadataEndpoint, UpdateMetadataPartitionState}
+import org.apache.kafka.common.network.ConnectionMetadata
+import org.apache.kafka.common.network.ConnectionRegistry
 import org.apache.kafka.common.replica.ClientMetadata
+import org.apache.kafka.common.utils.AppInfoParser
 import org.apache.kafka.server.authorizer.Authorizer
 import org.junit.Assert.{assertEquals, assertNull, assertTrue}
 import org.junit.{After, Test}
@@ -81,6 +84,7 @@ class KafkaApisTest {
   private val brokerTopicStats = new BrokerTopicStats
   private val clusterId = "clusterId"
   private val time = new MockTime
+  private val connectionRegistry: ConnectionRegistry = EasyMock.createNiceMock(classOf[ConnectionRegistry])
 
   @After
   def tearDown(): Unit = {
@@ -109,8 +113,53 @@ class KafkaApisTest {
       brokerTopicStats,
       clusterId,
       time,
-      null
+      null,
+      connectionRegistry
     )
+  }
+
+  @Test
+  def testApiVersionsRequestLatestUpdateConnectionMetadata(): Unit = {
+    EasyMock.reset(connectionRegistry, clientRequestQuotaManager, requestChannel)
+    val connection: ConnectionMetadata = EasyMock.mock(classOf[ConnectionMetadata])
+
+    val (apiVersionsRequest, request) = buildRequest(new ApiVersionsRequest.Builder())
+
+    val capturedResponse = expectNoThrottling()
+    EasyMock.expect(connectionRegistry.updateClientSoftwareNameAndVersion(
+      request.context.connectionId,
+      ApiVersionsRequest.Builder.DEFAULT_CLIENT_SOFTWARE_NAME,
+      AppInfoParser.getVersion
+    )).andReturn(connection)
+
+    EasyMock.replay(connectionRegistry, clientRequestQuotaManager, requestChannel)
+    createKafkaApis().handleApiVersionsRequest(request)
+
+    val response = readResponse(ApiKeys.API_VERSIONS, apiVersionsRequest, capturedResponse)
+      .asInstanceOf[ApiVersionsResponse]
+
+    assertEquals(Errors.NONE.code(), response.data.errorCode())
+  }
+
+  @Test
+  def testApiVersionsRequestV0UpdateConnectionMetadata(): Unit = {
+    EasyMock.reset(connectionRegistry, clientRequestQuotaManager, requestChannel)
+    val connection: ConnectionMetadata = EasyMock.mock(classOf[ConnectionMetadata])
+
+    val (apiVersionsRequest, request) = buildRequest(new ApiVersionsRequest.Builder(0.asInstanceOf[Short]))
+
+    val capturedResponse = expectNoThrottling()
+    EasyMock.expect(connectionRegistry.updateClientSoftwareNameAndVersion(
+      request.context.connectionId, "", ""
+    )).andReturn(connection)
+
+    EasyMock.replay(connectionRegistry, clientRequestQuotaManager, requestChannel)
+    createKafkaApis().handleApiVersionsRequest(request)
+
+    val response = readResponse(ApiKeys.API_VERSIONS, apiVersionsRequest, capturedResponse)
+      .asInstanceOf[ApiVersionsResponse]
+
+    assertEquals(Errors.NONE.code(), response.data.errorCode())
   }
 
   @Test

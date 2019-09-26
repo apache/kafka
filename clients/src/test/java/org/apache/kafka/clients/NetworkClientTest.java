@@ -385,7 +385,7 @@ public class NetworkClientTest {
 
         // ApiVersionsRequest has been sent
         assertEquals(1, selector.completedSends().size());
-        
+
         buffer = selector.completedSendBuffers().get(0).buffer();
         header = parseHeader(buffer);
         assertEquals(ApiKeys.API_VERSIONS, header.apiKey());

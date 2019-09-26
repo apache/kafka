@@ -159,6 +159,22 @@ public class KafkaChannel implements AutoCloseable {
     }
 
     /**
+     * Returns the ClientSoftwareName extracted from the ApiVersionsRequest which may
+     * have been received by the Authenticator or an empty String.
+     */
+    public String clientSoftwareName() {
+        return authenticator.clientSoftwareName();
+    }
+
+    /**
+     * Returns the ClientSoftwareVersion extracted from the ApiVersionsRequest which may
+     * have been received by the Authenticator or an empty String.
+     */
+    public String clientSoftwareVersion() {
+        return authenticator.clientSoftwareVersion();
+    }
+
+    /**
      * Does handshake of transportLayer and authentication using configured authenticator.
      * For SSL with client authentication enabled, {@link TransportLayer#handshake()} performs
      * authentication. For SASL, authentication is performed by {@link Authenticator#authenticate()}.

@@ -53,6 +53,22 @@ public interface Authenticator extends Closeable {
     KafkaPrincipal principal();
 
     /**
+     * Returns the ClientSoftwareName extracted from the ApiVersionsRequest which may
+     * have been received by the Authenticator or an empty String.
+     */
+    default String clientSoftwareName() {
+        return "";
+    }
+
+    /**
+     * Returns the ClientSoftwareVersion extracted from the ApiVersionsRequest which may
+     * have been received by the Authenticator or an empty String.
+     */
+    default String clientSoftwareVersion() {
+        return "";
+    }
+
+    /**
      * returns true if authentication is complete otherwise returns false;
      */
     boolean complete();

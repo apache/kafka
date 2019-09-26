@@ -18,6 +18,7 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.message.ApiVersionsRequestData;
+import org.apache.kafka.common.network.ConnectionMetadata;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.network.Send;
 import org.apache.kafka.common.protocol.ApiKeys;
@@ -38,19 +39,37 @@ public class RequestContext implements AuthorizableRequestContext {
     public final KafkaPrincipal principal;
     public final ListenerName listenerName;
     public final SecurityProtocol securityProtocol;
+    public final String clientSoftwareName;
+    public final String clientSoftwareVersion;
 
-    public RequestContext(RequestHeader header,
-                          String connectionId,
-                          InetAddress clientAddress,
-                          KafkaPrincipal principal,
-                          ListenerName listenerName,
-                          SecurityProtocol securityProtocol) {
+    public RequestContext(
+            RequestHeader header,
+            String connectionId,
+            InetAddress clientAddress,
+            KafkaPrincipal principal,
+            ListenerName listenerName,
+            SecurityProtocol securityProtocol,
+            String clientSoftwareName,
+            String clientSoftwareVersion) {
         this.header = header;
         this.connectionId = connectionId;
         this.clientAddress = clientAddress;
         this.principal = principal;
         this.listenerName = listenerName;
         this.securityProtocol = securityProtocol;
+        this.clientSoftwareName = clientSoftwareName;
+        this.clientSoftwareVersion = clientSoftwareVersion;
+    }
+
+    public RequestContext(
+            RequestHeader header,
+            String connectionId,
+            InetAddress clientAddress,
+            KafkaPrincipal principal,
+            ListenerName listenerName,
+            SecurityProtocol securityProtocol) {
+        this(header, connectionId, clientAddress, principal, listenerName, securityProtocol,
+            ConnectionMetadata.UNKNOWN_NAME_OR_VERSION, ConnectionMetadata.UNKNOWN_NAME_OR_VERSION);
     }
 
     public RequestAndSize parseRequest(ByteBuffer buffer) {
@@ -129,5 +148,13 @@ public class RequestContext implements AuthorizableRequestContext {
     @Override
     public int correlationId() {
         return header.correlationId();
+    }
+
+    public String clientSoftwareName() {
+        return clientSoftwareName;
+    }
+
+    public String getClientSoftwareVersion() {
+        return clientSoftwareVersion;
     }
 }
