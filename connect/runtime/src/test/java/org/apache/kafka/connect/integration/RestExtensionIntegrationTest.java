@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.integration;
 
+import org.apache.kafka.connect.errors.NotFoundException;
 import org.apache.kafka.connect.health.ConnectClusterState;
 import org.apache.kafka.connect.rest.ConnectRestExtension;
 import org.apache.kafka.connect.rest.ConnectRestExtensionContext;
@@ -38,7 +39,6 @@ import static org.apache.kafka.connect.runtime.ConnectorConfig.TASKS_MAX_CONFIG;
 import static org.apache.kafka.connect.runtime.SinkConnectorConfig.TOPICS_CONFIG;
 import static org.apache.kafka.connect.runtime.WorkerConfig.REST_EXTENSION_CLASSES_CONFIG;
 import static org.apache.kafka.test.TestUtils.waitForCondition;
-import static org.junit.Assert.assertNotNull;
 
 /**
  * A simple integration test to ensure that REST extensions are registered correctly.
@@ -48,7 +48,7 @@ public class RestExtensionIntegrationTest {
 
     private static final int NUM_WORKERS = 3;
     private static final long REST_EXTENSION_REGISTRATION_TIMEOUT_MS = TimeUnit.MINUTES.toMillis(1);
-    private static final long CONNECTOR_START_TIMEOUT_MS = TimeUnit.MINUTES.toMillis(1);
+    private static final long CONNECTOR_HEALTH_AND_CONFIG_TIMEOUT_MS = TimeUnit.MINUTES.toMillis(1);
 
     private EmbeddedConnectCluster connect;
 
@@ -108,29 +108,14 @@ public class RestExtensionIntegrationTest {
             connectorProps.put(TOPICS_CONFIG, "test-topic");
 
             // start a connector
-            StartAndStopLatch connectorStart = connectorHandle.expectedStarts(1);
             connect.configureConnector(connectorHandle.name(), connectorProps);
-            connectorStart.await(CONNECTOR_START_TIMEOUT_MS, TimeUnit.MILLISECONDS);
 
-            // Test the REST extension API, specifically, that the connector's health and configuration
+            // Test the REST extension API; specifically, that the connector's health and configuration
             // is available to the REST extension we registered
-            assertNotNull(
-                "REST extension should be registered",
-                IntegrationTestRestExtension.instance
-            );
-            ConnectClusterState clusterState =
-                IntegrationTestRestExtension.instance.restPluginContext.clusterState();
-            assertNotNull(
-                "REST extension should be given non-null cluster state",
-                clusterState
-            );
-            assertNotNull(
-                "Should be able to retrieve health for connector",
-                clusterState.connectorHealth(connectorHandle.name())
-            );
-            assertNotNull(
-                "Should be able to retrieve config for connector",
-                clusterState.connectorConfig(connectorHandle.name())
+            waitForCondition(
+                () -> connectorHealthAndConfigIsAvailable(connectorHandle.name()),
+                CONNECTOR_HEALTH_AND_CONFIG_TIMEOUT_MS,
+                "Connector health and/or config was never accessible by the REST extension"
             );
         } finally {
             RuntimeHandles.get().deleteConnector(connectorHandle.name());
@@ -153,6 +138,19 @@ public class RestExtensionIntegrationTest {
         }
     }
 
+    private boolean connectorHealthAndConfigIsAvailable(String connectorName) {
+        try {
+            ConnectClusterState clusterState =
+                IntegrationTestRestExtension.instance.restPluginContext.clusterState();
+            return clusterState.connectorHealth(connectorName) != null
+                && clusterState.connectorConfig(connectorName) != null;
+        } catch (NotFoundException e) {
+            // Connector start not yet propagated to the worker that hosts the REST extension we're
+            // testing against
+            return false;
+        }
+    }
+
     public static class IntegrationTestRestExtension implements ConnectRestExtension {
         private static IntegrationTestRestExtension instance;
 
@@ -165,15 +163,15 @@ public class RestExtensionIntegrationTest {
             restPluginContext.clusterState().connectors();
             restPluginContext.configurable().register(new IntegrationTestRestExtensionResource());
         }
-
+    
         @Override
         public void close() {
         }
-
+    
         @Override
         public void configure(Map<String, ?> configs) {
         }
-
+    
         @Override
         public String version() {
             return "test";
