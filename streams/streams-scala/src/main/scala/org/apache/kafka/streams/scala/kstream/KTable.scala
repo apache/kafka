@@ -21,7 +21,7 @@ package org.apache.kafka.streams.scala
 package kstream
 
 import org.apache.kafka.common.utils.Bytes
-import org.apache.kafka.streams.kstream.{Suppressed, ValueJoiner, ValueTransformerWithKeySupplier, KTable => KTableJ}
+import org.apache.kafka.streams.kstream.{ValueJoiner, ValueTransformerWithKeySupplier, KTable => KTableJ}
 import org.apache.kafka.streams.scala.FunctionsCompatConversions._
 import org.apache.kafka.streams.scala.ImplicitConversions._
 import org.apache.kafka.streams.state.KeyValueStore
@@ -168,7 +168,7 @@ class KTable[K, V](val inner: KTableJ[K, V]) {
    * @return A new KTable with the desired suppression characteristics.
    * @see `org.apache.kafka.streams.kstream.KTable#suppress`
    */
-  def suppress(suppressed: Suppressed[_ >: K]): KTable[K, V] =
+  def suppress(suppressed: org.apache.kafka.streams.kstream.Suppressed[_ >: K]): KTable[K, V] =
     inner.suppress(suppressed)
 
   /**
