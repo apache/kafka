@@ -82,6 +82,16 @@ public class KGroupedStreamImplTest {
     }
 
     @Test(expected = NullPointerException.class)
+    public void shouldNotHaveNullAggregatorOnCogroup() {
+        groupedStream.cogroup(null);
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldNotHaveNullMaterializedOnCogroup() {
+        groupedStream.cogroup(MockAggregator.TOSTRING_ADDER, null);
+    }
+
+    @Test(expected = NullPointerException.class)
     public void shouldNotHaveNullReducerOnReduce() {
         groupedStream.reduce(null);
     }
