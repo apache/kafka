@@ -177,6 +177,8 @@ class RemoteLogManager(fetchLog: TopicPartition => Option[Log],
 
     private var readOffset: Long = rlmIndexer.getOrLoadIndexOffset(tp).getOrElse(0L)
 
+    fetchLog(tp).foreach {log => log.updateRemoteIndexHighestOffset(readOffset)}
+
     def convertToLeader(leaderEpochVal:Int): Unit = {
       if (leaderEpochVal < 0) throw new KafkaException(s"leaderEpoch value for topic partition $tp can not be negative")
       leaderEpoch = leaderEpochVal
@@ -228,6 +230,8 @@ class RemoteLogManager(fetchLog: TopicPartition => Option[Log],
                 val baseOffsetStr = fileName.substring(0, fileName.indexOf("."))
                 rlmIndexer.maybeBuildIndexes(tp, entries.asScala.toSeq, file.getParentFile, baseOffsetStr)
                 readOffset = entries.get(entries.size() - 1).lastOffset
+                //update the highest remote offset in the log till which indexes exist locally.
+                log.updateRemoteIndexHighestOffset(readOffset)
               }
             }
           } else {
@@ -255,9 +259,10 @@ class RemoteLogManager(fetchLog: TopicPartition => Option[Log],
                 val logDir = log.activeSegment.log.file().getParentFile
                 rlmIndexer.maybeBuildIndexes(tp, entries.asScala.toSeq, logDir, baseOffset)
                 readOffset = entries.get(entries.size() - 1).lastOffset
+                //update the highest remote offset in the log till which indexes exist locally.
+                log.updateRemoteIndexHighestOffset(readOffset)
               }
             }
-
           }
         })
       } catch {
@@ -271,7 +276,7 @@ class RemoteLogManager(fetchLog: TopicPartition => Option[Log],
         updateRemoteLogStartOffset(topicPartition, remoteLogStartOffset)
         info(s"Cleaning remote log indexes of partition $topicPartition till remoteLogStartOffset:$remoteLogStartOffset")
 
-        // remove all indexes earlier to lso, may be rename now and they will GCed later.
+        // remove all indexes earlier to lso and rename them with a suffix of [Log.DeletedFileSuffix].
         val cleanedUpIndexes = rlmIndexer.maybeLoadIndex(topicPartition).cleanupIndexesUntil(remoteLogStartOffset)
 
         // deleting files in the current thread for now. These can be scheduled in a separate thread pool as it is more of

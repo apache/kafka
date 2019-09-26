@@ -276,7 +276,8 @@ class LogManager(logDirs: Seq[File],
       scheduler = scheduler,
       time = time,
       brokerTopicStats = brokerTopicStats,
-      logDirFailureChannel = logDirFailureChannel)
+      logDirFailureChannel = logDirFailureChannel,
+      remoteLogEnable = remoteLogManagerConfig.remoteLogStorageEnable)
 
     if (logDir.getName.endsWith(Log.DeleteDirSuffix)) {
       addLogToBeDeleted(log)
@@ -720,7 +721,8 @@ class LogManager(logDirs: Seq[File],
           scheduler = scheduler,
           time = time,
           brokerTopicStats = brokerTopicStats,
-          logDirFailureChannel = logDirFailureChannel)
+          logDirFailureChannel = logDirFailureChannel,
+          remoteLogEnable = remoteLogManagerConfig.remoteLogStorageEnable)
 
         if (isFuture)
           futureLogs.put(topicPartition, log)

@@ -277,6 +277,8 @@ class Log(@volatile var dir: File,
 
   @volatile private var localLogStartOffset:Long = logStartOffset
 
+  @volatile private var highestOffsetWithRemoteIndex:Long = logStartOffset
+
   locally {
     val startMs = time.milliseconds
 
@@ -310,7 +312,8 @@ class Log(@volatile var dir: File,
   }
 
   def updateLogStartOffsetFromRemoteTier(remoteLso: Long): Unit = {
-    logStartOffset = if (remoteLso < 0) localLogStartOffset else remoteLso
+    if(remoteLogEnabled) logStartOffset = if (remoteLso < 0) localLogStartOffset else remoteLso
+    else warn(s"updateLogStartOffsetFromRemoteTier call is ignored as remoteLogEnabled is set as false.")
   }
 
   def highWatermark: Long = highWatermarkMetadata.messageOffset
@@ -334,6 +337,12 @@ class Log(@volatile var dir: File,
       hw
     updateHighWatermarkMetadata(LogOffsetMetadata(newHighWatermark))
     newHighWatermark
+  }
+
+  def updateRemoteIndexHighestOffset(offset: Long): Unit = {
+    if (!remoteLogEnabled)
+      warn(s"Received update for highest offset with remote index as: $offset, the existing value: $highestOffsetWithRemoteIndex and remoteLogEnabled: $remoteLogEnabled")
+    else if(offset > highestOffsetWithRemoteIndex) highestOffsetWithRemoteIndex = offset
   }
 
   /**
@@ -1731,7 +1740,12 @@ class Log(@volatile var dir: File,
         else
           (null, logEndOffset, segment.size == 0)
 
-        if (highWatermark >= upperBoundOffset && predicate(segment, Option(nextSegment)) && !isLastSegmentAndEmpty) {
+        // check not to delete segments which do not have remote indexes locally.
+        val deleteOnlyWhenRemoteIndexExistsLocally =
+          if(remoteLogEnabled) upperBoundOffset > 0 && upperBoundOffset-1 <= highestOffsetWithRemoteIndex else true
+
+        if (deleteOnlyWhenRemoteIndexExistsLocally && highWatermark >= upperBoundOffset
+          && predicate(segment, Option(nextSegment)) && !isLastSegmentAndEmpty) {
           deletable += segment
           segmentEntry = nextSegmentEntry
         } else {
@@ -2454,11 +2468,12 @@ object Log {
             time: Time = Time.SYSTEM,
             maxProducerIdExpirationMs: Int,
             producerIdExpirationCheckIntervalMs: Int,
-            logDirFailureChannel: LogDirFailureChannel): Log = {
+            logDirFailureChannel: LogDirFailureChannel,
+            remoteLogEnable:Boolean = false): Log = {
     val topicPartition = Log.parseTopicPartitionName(dir)
     val producerStateManager = new ProducerStateManager(topicPartition, dir, maxProducerIdExpirationMs)
     new Log(dir, config, logStartOffset, recoveryPoint, scheduler, brokerTopicStats, time, maxProducerIdExpirationMs,
-      producerIdExpirationCheckIntervalMs, topicPartition, producerStateManager, logDirFailureChannel)
+      producerIdExpirationCheckIntervalMs, topicPartition, producerStateManager, logDirFailureChannel, remoteLogEnable)
   }
 
   /**
