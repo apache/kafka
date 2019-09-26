@@ -294,9 +294,6 @@ class Partition(val topicPartition: TopicPartition,
     case _ => false
   }
 
-  // Visible for tests
-  def inSyncReplicaIds: Set[Int] = assignmentState.inSyncReplicas
-
   /**
     * Create the future replica if 1) the current replica is not in the given log directory and 2) the future replica
     * does not exist. This method assumes that the current replica has already been created.
