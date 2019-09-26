@@ -45,25 +45,23 @@ import org.apache.kafka.streams.state.StoreSupplier;
 public class KCogroupedStreamImpl<K, V, T> extends AbstractStream<K, V> implements
     KCogroupedStream<K, V, T> {
 
-    static final String AGGREGATE_NAME = "KSTREAMCOGROUP-AGGREGATE-";
+    static final String AGGREGATE_NAME = "KCOGROUPSTREAM-AGGREGATE-";
 
     final private Map<KGroupedStreamImpl<K, V>, Aggregator<? super K, ? super V, T>> groupPatterns;
 
-
     KCogroupedStreamImpl(final String name,
-        final Serde<K> keySerde,
-        final Serde<V> valueSerde,
-        final Set<String> sourceNodes,
-        final StreamsGraphNode streamsGraphNode,
-        final InternalStreamsBuilder builder) {
+                         final Serde<K> keySerde,
+                         final Serde<V> valueSerde,
+                         final Set<String> sourceNodes,
+                         final StreamsGraphNode streamsGraphNode,
+                         final InternalStreamsBuilder builder) {
         super(name, keySerde, valueSerde, sourceNodes, streamsGraphNode, builder);
         this.groupPatterns = new HashMap<>();
-
     }
 
     @Override
     public KCogroupedStream<K, V, T> cogroup(final KGroupedStream<K, V> groupedStream,
-        final Aggregator<? super K, ? super V, T> aggregator) {
+                                             final Aggregator<? super K, ? super V, T> aggregator) {
         Objects.requireNonNull(groupedStream, "groupedStream can't be null");
         Objects.requireNonNull(aggregator, "aggregator can't be null");
         groupPatterns.put((KGroupedStreamImpl<K, V>) groupedStream, aggregator);
@@ -72,57 +70,61 @@ public class KCogroupedStreamImpl<K, V, T> extends AbstractStream<K, V> implemen
 
     @Override
     public KTable<K, T> aggregate(final Initializer<T> initializer,
-        final Materialized<K, T, KeyValueStore<Bytes, byte[]>> materialized) {
+                                  final Materialized<K, T, KeyValueStore<Bytes, byte[]>> materialized) {
         Objects.requireNonNull(initializer, "initializer can't be null");
         Objects.requireNonNull(materialized, "materialized can't be null");
         final NamedInternal named = NamedInternal.empty();
         return doAggregate(initializer, named,
-            new MaterializedInternal<K, T, KeyValueStore<Bytes, byte[]>>(materialized, builder,
-                AGGREGATE_NAME));
+                           new MaterializedInternal<K, T, KeyValueStore<Bytes, byte[]>>(
+                               materialized, builder,
+                               AGGREGATE_NAME));
     }
 
     @Override
     public KTable<K, T> aggregate(final Initializer<T> initializer,
-        final StoreSupplier<KeyValueStore> storeSupplier) {
+                                  final StoreSupplier<KeyValueStore> storeSupplier) {
         return aggregate(initializer, Materialized.as(storeSupplier.get().name()));
     }
 
     //TODO: implement windowed stores
     @Override
     public KTable<Windowed<K>, T> aggregate(final Initializer initializer,
-        final Merger sessionMerger,
-        final SessionWindows sessionWindows, final Materialized materialized) {
+                                            final Merger sessionMerger,
+                                            final SessionWindows sessionWindows,
+                                            final Materialized materialized) {
         return null;
     }
 
     //TODO: implement windowed stores
     @Override
     public KTable<Windowed<K>, T> aggregate(final Initializer initializer,
-        final Merger sessionMerger,
-        final SessionWindows sessionWindows, final StoreSupplier storeSupplier) {
+                                            final Merger sessionMerger,
+                                            final SessionWindows sessionWindows,
+                                            final StoreSupplier storeSupplier) {
         return null;
     }
 
     //TODO: implement windowed stores
     @Override
     public KTable<Windowed<K>, T> aggregate(final Initializer initializer, final Windows windows,
-        final Materialized materialized) {
+                                            final Materialized materialized) {
         return null;
     }
 
     //TODO: implement windowed stores
     @Override
     public KTable<Windowed<K>, T> aggregate(final Initializer initializer, final Windows windows,
-        final StoreSupplier storeSupplier) {
+                                            final StoreSupplier storeSupplier) {
         return null;
     }
 
     private KTable<K, T> doAggregate(final Initializer<T> initializer,
-        final NamedInternal named,
-        final MaterializedInternal<K, T, KeyValueStore<Bytes, byte[]>> materializedInternal) {
+                                     final NamedInternal named,
+                                     final MaterializedInternal<K, T, KeyValueStore<Bytes, byte[]>> materializedInternal) {
         final Collection<StreamsGraphNode> processors = new ArrayList<>();
-        int count = 0;
-        for (final Entry<KGroupedStreamImpl<K, V>, Aggregator<? super K, ? super V, T>> kGroupedStream : groupPatterns.entrySet()) {
+        boolean stateCreated = false;
+        for (final Entry<KGroupedStreamImpl<K, V>, Aggregator<? super K, ? super V, T>> kGroupedStream : groupPatterns
+            .entrySet()) {
 
             final String functionName = new NamedInternal(named)
                 .orElseGenerateWithPrefix(builder, AGGREGATE_NAME);
@@ -130,30 +132,33 @@ public class KCogroupedStreamImpl<K, V, T> extends AbstractStream<K, V> implemen
             final KStreamAggregate<K, V, T> kStreamAggregate = new KStreamAggregate<K, V, T>(
                 materializedInternal.storeName(), initializer, aggregator);
             final StatefulProcessorNode<K, V> statefulProcessorNode;
-            if (count < 1) {
+            //TODO: improve
+            if (!stateCreated) {
                 statefulProcessorNode =
-                    new StatefulProcessorNode<K, V>(
+                    new StatefulProcessorNode<>(
                         functionName,
-                        new ProcessorParameters<K, V>(kStreamAggregate, functionName),
+                        new ProcessorParameters<>(kStreamAggregate, functionName),
                         new TimestampedKeyValueStoreMaterializer<>(materializedInternal)
                             .materialize()
                     );
+                stateCreated = true;
             } else {
                 statefulProcessorNode =
-                    new StatefulProcessorNode<K, V>(
+                    new StatefulProcessorNode<>(
                         functionName,
-                        new ProcessorParameters<K, V>(kStreamAggregate, functionName),
+                        new ProcessorParameters<>(kStreamAggregate, functionName),
                         new String[]{materializedInternal.storeName()}
                     );
             }
             processors.add(statefulProcessorNode);
             builder.addGraphNode(kGroupedStream.getKey().streamsGraphNode, statefulProcessorNode);
-            count++;
         }
         final String functionName = new NamedInternal(named)
             .orElseGenerateWithPrefix(builder, AGGREGATE_NAME);
-        final KTableSource<K, V> tableSource = new KTableSource<>(materializedInternal.storeName(),
-            materializedInternal.queryableStoreName());
+        final KTableSource<K, V> tableSource = new KTableSource<>(
+            materializedInternal.storeName(),
+            materializedInternal
+                .queryableStoreName());
         final StatefulProcessorNode<K, V> tableSourceNode =
             new StatefulProcessorNode<>(
                 functionName,
@@ -163,7 +168,8 @@ public class KCogroupedStreamImpl<K, V, T> extends AbstractStream<K, V> implemen
 
         builder.addGraphNode(processors, tableSourceNode);
 
-        return new KTableImpl<K, V, T>(functionName,
+        return new KTableImpl<K, V, T>(
+            functionName,
             materializedInternal.keySerde(),
             materializedInternal.valueSerde(),
             Collections.singleton(tableSourceNode.nodeName()),

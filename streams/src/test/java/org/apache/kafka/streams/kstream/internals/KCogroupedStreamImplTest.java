@@ -25,6 +25,7 @@ import java.util.Collections;
 import java.util.Properties;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValueTimestamp;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.TopologyTestDriver;
@@ -38,6 +39,8 @@ import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Produced;
+import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.StoreSupplier;
 import org.apache.kafka.streams.test.ConsumerRecordFactory;
 import org.apache.kafka.test.MockAggregator;
 import org.apache.kafka.test.MockProcessorSupplier;
@@ -48,12 +51,10 @@ import org.junit.Test;
 @SuppressWarnings("unchecked")
 public class KCogroupedStreamImplTest {
 
-
     private final Consumed<String, String> stringConsumed = Consumed
         .with(Serdes.String(), Serdes.String());
     private final MockProcessorSupplier<String, String> processorSupplier = new MockProcessorSupplier<>();
     private static final String TOPIC = "topic";
-    private static final String INVALID_STORE_NAME = "~foo bar~";
     private final StreamsBuilder builder = new StreamsBuilder();
     private KGroupedStream<String, String> groupedStream;
     private KCogroupedStream<String, String, String> cogroupedStream;
@@ -92,6 +93,15 @@ public class KCogroupedStreamImplTest {
         cogroupedStream.aggregate(null, Materialized.as("store"));
     }
 
+    @Test(expected = NullPointerException.class)
+    public void shouldNotHaveNullMaterMaterializedOnAggregate() throws Exception {
+        cogroupedStream.aggregate(SUM_INITIALIZER, (Materialized<String, String, KeyValueStore<Bytes,byte[]>>) null);
+    }
+    @Test(expected = NullPointerException.class)
+    public void shouldNotHaveNullMaterStoreSupplierOnAggregate() throws Exception {
+        cogroupedStream.aggregate(SUM_INITIALIZER, (StoreSupplier<KeyValueStore>) null);
+    }
+
     private static final Aggregator SUM_AGGREGATOR = new Aggregator<String, String, String>() {
         @Override
         public String apply(final String key, final String value, final String aggregate) {
@@ -128,27 +138,14 @@ public class KCogroupedStreamImplTest {
             driver.pipeInput(recordFactory.create("one", "1", "A", 0));
         }
 
-        assertThat(processorSupplier.theCapturedProcessor().processed, equalTo(
-            Collections.singletonList(new KeyValueTimestamp<>("1", "A", 0))));
-    }
-
-    @Test
-    public void testBasic() {
-        final StreamsBuilder builder = new StreamsBuilder();
-        final String input = "topic";
-        final KStream<String, String> stream = builder.stream(input, stringConsumed);
-        stream.to("to-topic", Produced.with(Serdes.String(), Serdes.String()));
-        builder.stream("to-topic", stringConsumed).process(processorSupplier);
-
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
-            driver.pipeInput(recordFactory.create(input, "e", "f", 0));
-            driver.pipeInput(recordFactory.create(input, "f", "e", 10));
-        }
         assertThat(processorSupplier.theCapturedProcessor().processed, equalTo(Arrays.asList(
-            new KeyValueTimestamp<>("e", "f", 0),
-            new KeyValueTimestamp<>("f", "e", 10)
-            )));
+            new KeyValueTimestamp("1", "A", 0),
+            new KeyValueTimestamp("11", "A", 0),
+            new KeyValueTimestamp("11", "AA", 0),
+            new KeyValueTimestamp("1", "AA", 0)
+        )));
     }
+
 
     @Test
     public void testCogroupEachTopicUnique() {
@@ -228,18 +225,18 @@ public class KCogroupedStreamImplTest {
         }
 
         assertThat(processorSupplier.theCapturedProcessor().processed, equalTo(Arrays.asList(
-                new KeyValueTimestamp("1", "A", 0),
-                new KeyValueTimestamp("2", "A", 1),
-                new KeyValueTimestamp("1", "AA", 10),
-                new KeyValueTimestamp("2", "AA", 100),
-                new KeyValueTimestamp("2", "AAB", 100),
-                new KeyValueTimestamp("2", "AABB", 200),
-                new KeyValueTimestamp("1", "AAB", 10),
-                new KeyValueTimestamp("2", "AABBB", 500),
-                new KeyValueTimestamp("1", "AABB", 500),
-                new KeyValueTimestamp("2", "AABBBB", 500),
-                new KeyValueTimestamp("3", "B", 500),
-                new KeyValueTimestamp("2", "AABBBBB", 500)
-            )));
+            new KeyValueTimestamp("1", "A", 0),
+            new KeyValueTimestamp("2", "A", 1),
+            new KeyValueTimestamp("1", "AA", 10),
+            new KeyValueTimestamp("2", "AA", 100),
+            new KeyValueTimestamp("2", "AAB", 100),
+            new KeyValueTimestamp("2", "AABB", 200),
+            new KeyValueTimestamp("1", "AAB", 10),
+            new KeyValueTimestamp("2", "AABBB", 500),
+            new KeyValueTimestamp("1", "AABB", 500),
+            new KeyValueTimestamp("2", "AABBBB", 500),
+            new KeyValueTimestamp("3", "B", 500),
+            new KeyValueTimestamp("2", "AABBBBB", 500)
+        )));
     }
 }
