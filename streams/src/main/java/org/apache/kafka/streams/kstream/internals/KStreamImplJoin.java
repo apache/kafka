@@ -39,15 +39,15 @@ import java.util.Set;
 
 class KStreamImplJoin {
 
-    private KStreamImpl kStreamImpl;
+    private final InternalStreamsBuilder builder;
     private final boolean leftOuter;
     private final boolean rightOuter;
 
 
-    KStreamImplJoin(final KStreamImpl kStreamImpl,
+    KStreamImplJoin(final InternalStreamsBuilder builder,
                     final boolean leftOuter,
                     final boolean rightOuter) {
-        this.kStreamImpl = kStreamImpl;
+        this.builder = builder;
         this.leftOuter = leftOuter;
         this.rightOuter = rightOuter;
     }
@@ -63,19 +63,19 @@ class KStreamImplJoin {
         final String joinThisSuffix = rightOuter ? "-outer-this-join" : "-this-join";
         final String joinOtherSuffix = leftOuter ? "-outer-other-join" : "-other-join";
 
-        final String thisWindowStreamName = renamed.suffixWithOrElseGet(
-            "-this-windowed", kStreamImpl.builder, KStreamImpl.WINDOWED_NAME);
-        final String otherWindowStreamName = renamed.suffixWithOrElseGet(
-            "-other-windowed", kStreamImpl.builder, KStreamImpl.WINDOWED_NAME);
+        final String thisWindowStreamProcessorName = renamed.suffixWithOrElseGet(
+            "-this-windowed", builder, KStreamImpl.WINDOWED_NAME);
+        final String otherWindowStreamProcessorName = renamed.suffixWithOrElseGet(
+            "-other-windowed", builder, KStreamImpl.WINDOWED_NAME);
 
-        final String joinThisGeneratedName = rightOuter ? kStreamImpl.builder.newProcessorName(KStreamImpl.OUTERTHIS_NAME) : kStreamImpl.builder.newProcessorName(KStreamImpl.JOINTHIS_NAME);
-        final String joinOtherGeneratedName = leftOuter ? kStreamImpl.builder.newProcessorName(KStreamImpl.OUTEROTHER_NAME) : kStreamImpl.builder.newProcessorName(KStreamImpl.JOINOTHER_NAME);
+        final String joinThisGeneratedName = rightOuter ? builder.newProcessorName(KStreamImpl.OUTERTHIS_NAME) : builder.newProcessorName(KStreamImpl.JOINTHIS_NAME);
+        final String joinOtherGeneratedName = leftOuter ? builder.newProcessorName(KStreamImpl.OUTEROTHER_NAME) : builder.newProcessorName(KStreamImpl.JOINOTHER_NAME);
 
         final String joinThisName = renamed.suffixWithOrElseGet(joinThisSuffix, joinThisGeneratedName);
         final String joinOtherName = renamed.suffixWithOrElseGet(joinOtherSuffix, joinOtherGeneratedName);
 
         final String joinMergeName = renamed.suffixWithOrElseGet(
-            "-merge", kStreamImpl.builder, KStreamImpl.MERGE_NAME);
+            "-merge", builder, KStreamImpl.MERGE_NAME);
 
         final StreamsGraphNode thisStreamsGraphNode = ((AbstractStream) lhs).streamsGraphNode;
         final StreamsGraphNode otherStreamsGraphNode = ((AbstractStream) other).streamsGraphNode;
@@ -107,15 +107,15 @@ class KStreamImplJoin {
 
         final KStreamJoinWindow<K1, V1> thisWindowedStream = new KStreamJoinWindow<>(thisWindowStore.name());
 
-        final ProcessorParameters<K1, V1> thisWindowStreamProcessorParams = new ProcessorParameters<>(thisWindowedStream, thisWindowStreamName);
-        final ProcessorGraphNode<K1, V1> thisWindowedStreamsNode = new ProcessorGraphNode<>(thisWindowStreamName, thisWindowStreamProcessorParams);
-        kStreamImpl.builder.addGraphNode(thisStreamsGraphNode, thisWindowedStreamsNode);
+        final ProcessorParameters<K1, V1> thisWindowStreamProcessorParams = new ProcessorParameters<>(thisWindowedStream, thisWindowStreamProcessorName);
+        final ProcessorGraphNode<K1, V1> thisWindowedStreamsNode = new ProcessorGraphNode<>(thisWindowStreamProcessorName, thisWindowStreamProcessorParams);
+        builder.addGraphNode(thisStreamsGraphNode, thisWindowedStreamsNode);
 
         final KStreamJoinWindow<K1, V2> otherWindowedStream = new KStreamJoinWindow<>(otherWindowStore.name());
 
-        final ProcessorParameters<K1, V2> otherWindowStreamProcessorParams = new ProcessorParameters<>(otherWindowedStream, otherWindowStreamName);
-        final ProcessorGraphNode<K1, V2> otherWindowedStreamsNode = new ProcessorGraphNode<>(otherWindowStreamName, otherWindowStreamProcessorParams);
-        kStreamImpl.builder.addGraphNode(otherStreamsGraphNode, otherWindowedStreamsNode);
+        final ProcessorParameters<K1, V2> otherWindowStreamProcessorParams = new ProcessorParameters<>(otherWindowedStream, otherWindowStreamProcessorName);
+        final ProcessorGraphNode<K1, V2> otherWindowedStreamsNode = new ProcessorGraphNode<>(otherWindowStreamProcessorName, otherWindowStreamProcessorParams);
+        builder.addGraphNode(otherStreamsGraphNode, otherWindowedStreamsNode);
 
         final KStreamKStreamJoin<K1, R, V1, V2> joinThis = new KStreamKStreamJoin<>(
             otherWindowStore.name(),
@@ -153,14 +153,14 @@ class KStreamImplJoin {
 
         final StreamsGraphNode joinGraphNode = joinBuilder.build();
 
-        kStreamImpl.builder.addGraphNode(Arrays.asList(thisStreamsGraphNode, otherStreamsGraphNode), joinGraphNode);
+        builder.addGraphNode(Arrays.asList(thisStreamsGraphNode, otherStreamsGraphNode), joinGraphNode);
 
         final Set<String> allSourceNodes = new HashSet<>(((KStreamImpl<K1, V1>) lhs).sourceNodes);
         allSourceNodes.addAll(((KStreamImpl<K1, V2>) other).sourceNodes);
 
         // do not have serde for joined result;
         // also for key serde we do not inherit from either since we cannot tell if these two serdes are different
-        return new KStreamImpl<>(joinMergeName, streamJoinedInternal.keySerde(), null, allSourceNodes, false, joinGraphNode, kStreamImpl.builder);
+        return new KStreamImpl<>(joinMergeName, streamJoinedInternal.keySerde(), null, allSourceNodes, false, joinGraphNode, builder);
     }
 
     private void assertWindowSettings(final WindowBytesStoreSupplier supplier, final JoinWindows joinWindows) {

@@ -50,8 +50,8 @@ import static org.apache.kafka.test.StreamsTestUtils.getMetricByName;
 import static org.hamcrest.CoreMatchers.hasItem;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
 
 public class KStreamKStreamJoinTest {
     private final static KeyValueTimestamp[] EMPTY = new KeyValueTimestamp[0];
@@ -62,6 +62,10 @@ public class KStreamKStreamJoinTest {
     private final ConsumerRecordFactory<Integer, String> recordFactory =
         new ConsumerRecordFactory<>(new IntegerSerializer(), new StringSerializer(), 0L);
     private final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.String(), Serdes.String());
+
+    private final JoinWindows joinWindows = JoinWindows.of(ofMillis(50)).grace(Duration.ofMillis(50));
+    private final StreamJoined<String, Integer, Integer> streamJoined = StreamJoined.with(Serdes.String(), Serdes.Integer(), Serdes.Integer());
+    private final String errorMessagePrefix = "Window settings mismatch. WindowBytesStoreSupplier settings";
 
     @Test
     public void shouldLogAndMeterOnSkippedRecordsWithNullValue() {
@@ -92,58 +96,87 @@ public class KStreamKStreamJoinTest {
 
     @Test
     public void shouldThrowExceptionThisStoreSupplierRetentionDoNotMatchWindowsSizeAndGrace() {
-        final JoinWindows joinWindows = JoinWindows.of(ofMillis(100)).grace(Duration.ofMillis(50));
-        final StreamJoined<String, Integer, Integer> streamJoined = StreamJoined.with(Serdes.String(), Serdes.Integer(), Serdes.Integer());
-        final String errorMessagePrefix = "Window settings mismatch. WindowBytesStoreSupplier settings";
-
         // Case where retention of thisJoinStore doesn't match JoinWindows
-        WindowBytesStoreSupplier thisStoreSupplier = buildWindowBytesStoreSupplier("in-memory-join-store", 500, 100, true);
-        WindowBytesStoreSupplier otherStoreSupplier = buildWindowBytesStoreSupplier("in-memory-join-store-other", 150, 100, true);
+        final WindowBytesStoreSupplier thisStoreSupplier = buildWindowBytesStoreSupplier("in-memory-join-store", 500, 100, true);
+        final WindowBytesStoreSupplier otherStoreSupplier = buildWindowBytesStoreSupplier("in-memory-join-store-other", 150, 100, true);
 
 
         buildStreamsJoinThatShouldThrow(streamJoined.withThisStoreSupplier(thisStoreSupplier).withOtherStoreSupplier(otherStoreSupplier),
             joinWindows,
             errorMessagePrefix);
+    }
 
+    @Test
+    public void shouldThrowExceptionThisStoreSupplierWindowSizeDoesNotMatchJoinWindowsWindowSize() {
         //Case where window size of thisJoinStore doesn't match JoinWindows
-        thisStoreSupplier = buildWindowBytesStoreSupplier("in-memory-join-store", 150, 150, true);
-        otherStoreSupplier = buildWindowBytesStoreSupplier("in-memory-join-store-other", 150, 100, true);
+        final WindowBytesStoreSupplier thisStoreSupplier = buildWindowBytesStoreSupplier("in-memory-join-store", 150, 150, true);
+        final WindowBytesStoreSupplier otherStoreSupplier = buildWindowBytesStoreSupplier("in-memory-join-store-other", 150, 100, true);
 
         buildStreamsJoinThatShouldThrow(streamJoined.withThisStoreSupplier(thisStoreSupplier).withOtherStoreSupplier(otherStoreSupplier),
             joinWindows,
             errorMessagePrefix);
+    }
 
+    @Test
+    public void shouldThrowExceptionWhenThisJoinStoreSetsRetainDuplicatesFalse() {
         //Case where thisJoinStore retain duplicates false
-        thisStoreSupplier = buildWindowBytesStoreSupplier("in-memory-join-store", 150, 100, false);
-        otherStoreSupplier = buildWindowBytesStoreSupplier("in-memory-join-store-other", 150, 100, true);
+        final WindowBytesStoreSupplier thisStoreSupplier = buildWindowBytesStoreSupplier("in-memory-join-store", 150, 100, false);
+        final WindowBytesStoreSupplier otherStoreSupplier = buildWindowBytesStoreSupplier("in-memory-join-store-other", 150, 100, true);
 
         buildStreamsJoinThatShouldThrow(streamJoined.withThisStoreSupplier(thisStoreSupplier).withOtherStoreSupplier(otherStoreSupplier),
             joinWindows,
             "The StoreSupplier must set retainDuplicates=true, found retainDuplicates=false");
+    }
 
+    @Test
+    public void shouldThrowExceptionOtherStoreSupplierRetentionDoNotMatchWindowsSizeAndGrace() {
         //Case where retention size of otherJoinStore doesn't match JoinWindows
-        thisStoreSupplier = buildWindowBytesStoreSupplier("in-memory-join-store", 150, 100, true);
-        otherStoreSupplier = buildWindowBytesStoreSupplier("in-memory-join-store-other", 500, 100, true);
+        final WindowBytesStoreSupplier thisStoreSupplier = buildWindowBytesStoreSupplier("in-memory-join-store", 150, 100, true);
+        final WindowBytesStoreSupplier otherStoreSupplier = buildWindowBytesStoreSupplier("in-memory-join-store-other", 500, 100, true);
 
         buildStreamsJoinThatShouldThrow(streamJoined.withThisStoreSupplier(thisStoreSupplier).withOtherStoreSupplier(otherStoreSupplier),
             joinWindows,
             errorMessagePrefix);
+    }
 
+    @Test
+    public void shouldThrowExceptionOtherStoreSupplierWindowSizeDoesNotMatchJoinWindowsWindowSize() {
         //Case where window size of otherJoinStore doesn't match JoinWindows
-        thisStoreSupplier = buildWindowBytesStoreSupplier("in-memory-join-store", 150, 100, true);
-        otherStoreSupplier = buildWindowBytesStoreSupplier("in-memory-join-store-other", 150, 150, true);
+        final WindowBytesStoreSupplier thisStoreSupplier = buildWindowBytesStoreSupplier("in-memory-join-store", 150, 100, true);
+        final WindowBytesStoreSupplier otherStoreSupplier = buildWindowBytesStoreSupplier("in-memory-join-store-other", 150, 150, true);
 
         buildStreamsJoinThatShouldThrow(streamJoined.withThisStoreSupplier(thisStoreSupplier).withOtherStoreSupplier(otherStoreSupplier),
             joinWindows,
             errorMessagePrefix);
+    }
 
+    @Test
+    public void shouldThrowExceptionWhenOtherJoinStoreSetsRetainDuplicatesFalse() {
         //Case where otherJoinStore retain duplicates false
-        thisStoreSupplier = buildWindowBytesStoreSupplier("in-memory-join-store", 150, 100, true);
-        otherStoreSupplier = buildWindowBytesStoreSupplier("in-memory-join-store-other", 150, 100, false);
+        final WindowBytesStoreSupplier thisStoreSupplier = buildWindowBytesStoreSupplier("in-memory-join-store", 150, 100, true);
+        final WindowBytesStoreSupplier otherStoreSupplier = buildWindowBytesStoreSupplier("in-memory-join-store-other", 150, 100, false);
 
         buildStreamsJoinThatShouldThrow(streamJoined.withThisStoreSupplier(thisStoreSupplier).withOtherStoreSupplier(otherStoreSupplier),
             joinWindows,
-            errorMessagePrefix);
+            "The StoreSupplier must set retainDuplicates=true, found retainDuplicates=false");
+    }
+
+    @Test
+    public void shouldBuildJoinWithCustomStoresAndCorrectWindowSettings() {
+        //Case where everything matches up
+        final WindowBytesStoreSupplier thisStoreSupplier = buildWindowBytesStoreSupplier("in-memory-join-store", 150, 100, true);
+        final WindowBytesStoreSupplier otherStoreSupplier = buildWindowBytesStoreSupplier("in-memory-join-store-other", 150, 100, true);
+
+        final StreamsBuilder builder = new StreamsBuilder();
+        final KStream<String, Integer> left = builder.stream("left", Consumed.with(Serdes.String(), Serdes.Integer()));
+        final KStream<String, Integer> right = builder.stream("right", Consumed.with(Serdes.String(), Serdes.Integer()));
+
+        left.join(right,
+            (value1, value2) -> value1 + value2,
+            joinWindows,
+            streamJoined);
+
+        builder.build();
     }
 
     @Test
@@ -1460,16 +1493,13 @@ public class KStreamKStreamJoinTest {
         final KStream<String, Integer> left = builder.stream("left", Consumed.with(Serdes.String(), Serdes.Integer()));
         final KStream<String, Integer> right = builder.stream("right", Consumed.with(Serdes.String(), Serdes.Integer()));
 
-        try {
-            left.join(
-                right,
-                (value1, value2) -> value1 + value2,
-                joinWindows,
-                streamJoined);
-            fail("Should throw SteamsException");
-        } catch (final StreamsException se) {
-            assertTrue(se.getMessage().startsWith(expectedExceptionMessagePrefix));
-        }
+        final StreamsException streamsException = assertThrows(StreamsException.class, () -> left.join(
+            right,
+            (value1, value2) -> value1 + value2,
+            joinWindows,
+            streamJoined));
+
+        assertTrue(streamsException.getMessage().startsWith(expectedExceptionMessagePrefix));
     }
 
     private WindowBytesStoreSupplier buildWindowBytesStoreSupplier(final String name,

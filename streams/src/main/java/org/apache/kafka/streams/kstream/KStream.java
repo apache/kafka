@@ -2606,12 +2606,10 @@ public interface KStream<K, V> {
      * @deprecated since 2.4. Use {@link KStream#leftJoin(KStream, ValueJoiner, JoinWindows, StreamJoined)} instead.
      */
     @Deprecated
-    default <VO, VR> KStream<K, VR> leftJoin(final KStream<K, VO> otherStream,
-                                             final ValueJoiner<? super V, ? super VO, ? extends VR> joiner,
-                                             final JoinWindows windows,
-                                             final Joined<K, V, VO> joined) {
-        return null;
-    }
+    <VO, VR> KStream<K, VR> leftJoin(final KStream<K, VO> otherStream,
+                                     final ValueJoiner<? super V, ? super VO, ? extends VR> joiner,
+                                     final JoinWindows windows,
+                                     final Joined<K, V, VO> joined);
 
     /**
      * Join records of this stream with another {@code KStream}'s records using windowed left equi join using the

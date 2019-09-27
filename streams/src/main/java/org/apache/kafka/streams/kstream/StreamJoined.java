@@ -93,7 +93,8 @@ public class StreamJoined<K, V1, V2>
      * Creates a {@link StreamJoined} instance using the provided name for the state stores and hence the changelog
      * topics for the join stores.  The name for the stores will be ${applicationId}-&lt;storeName&gt;-this-join and ${applicationId}-&lt;storeName&gt;-other-join
      * or ${applicationId}-&lt;storeName&gt;-outer-this-join and ${applicationId}-&lt;storeName&gt;-outer-other-join depending if the join is an inner-join
-     * or an outer join. The changelog topics will have the -changelog suffix.
+     * or an outer join. The changelog topics will have the -changelog suffix.  The user should note that even though the join stores will have a
+     * specified name, the stores will remain unavailable for querying.
      *
      * @param storeName  The name to use for the store
      * @param <K>        The key type
@@ -162,7 +163,8 @@ public class StreamJoined<K, V1, V2>
      * Sets the base store name to use for both sides of the join. The name for the state stores and hence the changelog
      * topics for the join stores.  The name for the stores will be ${applicationId}-&lt;storeName&gt;-this-join and ${applicationId}-&lt;storeName&gt;-other-join
      * or ${applicationId}-&lt;storeName&gt;-outer-this-join and ${applicationId}-&lt;storeName&gt;-outer-other-join depending if the join is an inner-join
-     * or an outer join. The changelog topics will have the -changelog suffix.
+     * or an outer join. The changelog topics will have the -changelog suffix.  The user should note that even though the join stores will have a
+     * specified name, the stores will remain unavailable for querying.
      *
      * @param storeName the storeName to use
      * @return
@@ -180,7 +182,7 @@ public class StreamJoined<K, V1, V2>
     }
 
     /**
-     * Configure with the provided {@link Serde<K>} for the key
+     * Configure with the provided {@link Serde Serde<K>} for the key
      * @param keySerde  the serde to use for the key
      * @return          a new {@link StreamJoined} configured with the keySerde
      */
@@ -197,7 +199,7 @@ public class StreamJoined<K, V1, V2>
     }
 
     /**
-     * Configure with the provided {@link Serde<V1>} for this value
+     * Configure with the provided {@link Serde Serde<V1>} for this value
      * @param valueSerde  the serde to use for this value (calling or left side of the join)
      * @return            a new {@link StreamJoined} configured with the valueSerde
      */
@@ -214,7 +216,7 @@ public class StreamJoined<K, V1, V2>
     }
 
     /**
-     * Configure with the provided {@link Serde<V2>} for the other value
+     * Configure with the provided {@link Serde Serde<V2>} for the other value
      * @param otherValueSerde  the serde to use for the other value (other or right side of the join)
      * @return                 a new {@link StreamJoined} configured with the otherValueSerde
      */
@@ -233,7 +235,7 @@ public class StreamJoined<K, V1, V2>
     /**
      * Configure with the provided {@link WindowBytesStoreSupplier} for this store supplier.  Please note
      * this method only provides the store supplier for the left side of the join.  If you wish to also provide a
-     * store supplier for the "other" side you must use the {@link StreamJoined#withOtherStoreSupplier(WindowBytesStoreSupplier)}
+     * store supplier for the right (i.e., other) side you must use the {@link StreamJoined#withOtherStoreSupplier(WindowBytesStoreSupplier)}
      * method
      * @param thisStoreSupplier  the store supplier to use for this store supplier (calling or left side of the join)
      * @return            a new {@link StreamJoined} configured with thisStoreSupplier
@@ -253,7 +255,7 @@ public class StreamJoined<K, V1, V2>
     /**
      * Configure with the provided {@link WindowBytesStoreSupplier} for the other store supplier.  Please note
      * this method only provides the store supplier for the right side of the join.  If you wish to also provide a
-     * store supplier for the "left" side you must use the {@link StreamJoined#withThisStoreSupplier(WindowBytesStoreSupplier)}
+     * store supplier for the left side you must use the {@link StreamJoined#withThisStoreSupplier(WindowBytesStoreSupplier)}
      * method
      * @param otherStoreSupplier  the store supplier to use for the other store supplier (other or right side of the join)
      * @return            a new {@link StreamJoined} configured with otherStoreSupplier
