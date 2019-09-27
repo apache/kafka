@@ -750,6 +750,64 @@ public class StoreChangelogReaderTest {
         assertThat(callback.restored.size(), equalTo(10));
     }
 
+    @Test
+    public void shouldRestoreUpToOffsetLimit() {
+        setupConsumer(10, topicPartition);
+        changelogReader.register(new StateRestorer(
+            topicPartition,
+            restoreListener,
+            2L,
+            5,
+            true,
+            "storeName1",
+            identity()));
+        expect(active.restoringTaskFor(topicPartition)).andStubReturn(task);
+        replay(active, task);
+        changelogReader.restore(active);
+
+        assertThat(callback.restored.size(), equalTo(3));
+        assertAllCallbackStatesExecuted(callback, "storeName1");
+        assertCorrectOffsetsReportedByListener(callback, 2L, 4L, 3L);
+    }
+
+    @Test
+    public void shouldNotRestoreIfCheckpointIsEqualToOffsetLimit() {
+        setupConsumer(10, topicPartition);
+        changelogReader.register(new StateRestorer(
+            topicPartition,
+            restoreListener,
+            5L,
+            5,
+            true,
+            "storeName1",
+            identity()));
+        expect(active.restoringTaskFor(topicPartition)).andStubReturn(task);
+        replay(active, task);
+        changelogReader.restore(active);
+
+        assertThat(callback.storeNameCalledStates.size(), equalTo(0));
+        assertThat(callback.restored.size(), equalTo(0));
+    }
+
+    @Test
+    public void shouldNotRestoreIfCheckpointIsGreaterThanOffsetLimit() {
+        setupConsumer(10, topicPartition);
+        changelogReader.register(new StateRestorer(
+            topicPartition,
+            restoreListener,
+            10L,
+            5,
+            true,
+            "storeName1",
+            identity()));
+        expect(active.restoringTaskFor(topicPartition)).andStubReturn(task);
+        replay(active, task);
+        changelogReader.restore(active);
+
+        assertThat(callback.storeNameCalledStates.size(), equalTo(0));
+        assertThat(callback.restored.size(), equalTo(0));
+    }
+
     private void setupConsumer(final long messages,
                                final TopicPartition topicPartition) {
         assignPartition(messages, topicPartition);

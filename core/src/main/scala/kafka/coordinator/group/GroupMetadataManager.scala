@@ -36,8 +36,9 @@ import kafka.zk.KafkaZkClient
 import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.apache.kafka.common.internals.Topic
+import org.apache.kafka.common.metrics.stats.Meter
 import org.apache.kafka.common.metrics.stats.{Avg, Max}
-import org.apache.kafka.common.metrics.{MetricConfig, Metrics}
+import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.protocol.types.Type._
 import org.apache.kafka.common.protocol.types._
@@ -94,6 +95,26 @@ class GroupMetadataManager(brokerId: Int,
   partitionLoadSensor.add(metrics.metricName("partition-load-time-avg",
     "group-coordinator-metrics",
     "The avg time it took to load the partitions in the last 30sec"), new Avg())
+
+  val offsetCommitsSensor = metrics.sensor("OffsetCommits")
+
+  offsetCommitsSensor.add(new Meter(
+    metrics.metricName("offset-commit-rate",
+      "group-coordinator-metrics",
+      "The rate of committed offsets"),
+    metrics.metricName("offset-commit-count",
+      "group-coordinator-metrics",
+      "The total number of committed offsets")))
+
+  val offsetExpiredSensor = metrics.sensor("OffsetExpired")
+
+  offsetExpiredSensor.add(new Meter(
+    metrics.metricName("offset-expiration-rate",
+      "group-coordinator-metrics",
+      "The rate of expired offsets"),
+    metrics.metricName("offset-expiration-count",
+      "group-coordinator-metrics",
+      "The total number of expired offsets")))
 
   this.logIdent = s"[GroupMetadataManager brokerId=$brokerId] "
 
@@ -358,6 +379,9 @@ class GroupMetadataManager(brokerId: Int,
             if (responseStatus.size != 1 || !responseStatus.contains(offsetTopicPartition))
               throw new IllegalStateException("Append status %s should only have one partition %s"
                 .format(responseStatus, offsetTopicPartition))
+
+            // record the number of offsets committed to the log
+            offsetCommitsSensor.record(records.size)
 
             // construct the commit response status and insert
             // the offset and metadata to cache if the append status has no error
@@ -742,6 +766,7 @@ class GroupMetadataManager(brokerId: Int,
     val numOffsetsRemoved = cleanupGroupMetadata(groupMetadataCache.values, group => {
       group.removeExpiredOffsets(currentTimestamp, config.offsetsRetentionMs)
     })
+    offsetCommitsSensor.record(numOffsetsRemoved)
     info(s"Removed $numOffsetsRemoved expired offsets in ${time.milliseconds() - currentTimestamp} milliseconds.")
   }
 

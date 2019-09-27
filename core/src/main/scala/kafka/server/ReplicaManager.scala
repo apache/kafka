@@ -1085,8 +1085,8 @@ class ReplicaManager(val config: KafkaConfig,
             .map(replica => new DefaultReplicaView(
               replicaEndpoints.getOrElse(replica.brokerId, Node.noNode()),
               replica.logEndOffset,
-              currentTimeMs - replica.lastCaughtUpTimeMs
-            ))
+              currentTimeMs - replica.lastCaughtUpTimeMs))
+            .toSet
 
           if (partition.leaderReplicaIdOpt.isDefined) {
             val leaderReplica: ReplicaView = partition.leaderReplicaIdOpt

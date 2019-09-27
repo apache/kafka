@@ -53,8 +53,10 @@
     </ul>
 
     <p>
-        Note, that a brokers must be on version 0.10.1 or higher to run a Kafka Streams application version 0.10.1 or higher;
-        On-disk message format must be 0.10 or higher to run a Kafka Streams application version 1.0 or higher.
+        To run a Kafka Streams application version 2.2.1, 2.3.0, or higher a broker version 0.11.0 or higher is required
+        and the on-disk message format must be 0.11 or higher.
+        Brokers must be on version 0.10.1 or higher to run a Kafka Streams application version 0.10.1 to 2.2.0.
+        Additionally, on-disk message format must be 0.10 or higher to run a Kafka Streams application version 1.0 to 2.2.0.
         For Kafka Streams 0.10.0, broker version 0.10.0 or higher is required.
     </p>
 
@@ -137,6 +139,12 @@
         RocksDB dependency was updated to version <code>5.18.3</code>.
         The new version allows to specify more RocksDB configurations, including <code>WriteBufferManager</code> which helps to limit RocksDB off-heap memory usage.
         For more details please read <a href="https://issues.apache.org/jira/browse/KAFKA-8215">KAFKA-8215</a>.
+    </p>
+
+    <h3><a id="streams_notable_changes_221" href="#streams_api_changes_221">Notable changes in Kafka Streams 2.2.1</a></h3>
+    <p>
+        As of Kafka Streams 2.2.1 a message format 0.11 or higher is required;
+        this implies that brokers must be on version 0.11.0 or higher.
     </p>
 
     <h3><a id="streams_api_changes_220" href="#streams_api_changes_220">Streams API changes in 2.2.0</a></h3>

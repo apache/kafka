@@ -72,4 +72,5 @@ public interface Task {
 
     String toString(final String indent);
 
+    void initializeTaskTime();
 }

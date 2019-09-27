@@ -31,14 +31,22 @@ public abstract class AbstractResponse extends AbstractRequestResponse {
     public static final int DEFAULT_THROTTLE_TIME = 0;
 
     protected Send toSend(String destination, ResponseHeader header, short apiVersion) {
-        return new NetworkSend(destination, serialize(apiVersion, header));
+        return new NetworkSend(destination, serialize(header.toStruct(), toStruct(apiVersion)));
     }
 
     /**
      * Visible for testing, typically {@link #toSend(String, ResponseHeader, short)} should be used instead.
      */
-    public ByteBuffer serialize(short version, ResponseHeader responseHeader) {
-        return serialize(responseHeader.toStruct(), toStruct(version));
+    public ByteBuffer serialize(ApiKeys apiKey, int correlationId) {
+        return serialize(apiKey, apiKey.latestVersion(), correlationId);
+    }
+
+    /**
+     * Visible for testing, typically {@link #toSend(String, ResponseHeader, short)} should be used instead.
+     */
+    public ByteBuffer serialize(ApiKeys apiKey, short version, int correlationId) {
+        ResponseHeader header = new ResponseHeader(correlationId, apiKey.headerVersion(version));
+        return serialize(header.toStruct(), toStruct(version));
     }
 
     public abstract Map<Errors, Integer> errorCounts();
@@ -127,7 +135,7 @@ public abstract class AbstractResponse extends AbstractRequestResponse {
             case WRITE_TXN_MARKERS:
                 return new WriteTxnMarkersResponse(struct);
             case TXN_OFFSET_COMMIT:
-                return new TxnOffsetCommitResponse(struct);
+                return new TxnOffsetCommitResponse(struct, version);
             case DESCRIBE_ACLS:
                 return new DescribeAclsResponse(struct);
             case CREATE_ACLS:
@@ -164,6 +172,8 @@ public abstract class AbstractResponse extends AbstractRequestResponse {
                 return new AlterPartitionReassignmentsResponse(struct, version);
             case LIST_PARTITION_REASSIGNMENTS:
                 return new ListPartitionReassignmentsResponse(struct, version);
+            case OFFSET_DELETE:
+                return new OffsetDeleteResponse(struct, version);
             default:
                 throw new AssertionError(String.format("ApiKey %s is not currently handled in `parseResponse`, the " +
                         "code should be updated to do so.", apiKey));
