@@ -55,7 +55,9 @@ public class LeaderAndIsrRequestTest {
                     .setLeaderEpoch(10)
                     .setIsr(asList(0, 1))
                     .setZkVersion(10)
-                    .setReplicas(asList(0, 1, 2)),
+                    .setReplicas(asList(0, 1, 2))
+                    .setAddingReplicas(asList(3))
+                    .setRemovingReplicas(asList(2)),
                 new LeaderAndIsrPartitionState()
                     .setTopicName("topic0")
                     .setPartitionIndex(1)
