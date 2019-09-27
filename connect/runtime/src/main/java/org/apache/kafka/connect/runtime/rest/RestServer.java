@@ -350,6 +350,9 @@ public class RestServer {
         return builder.build();
     }
 
+    /**
+     * @return the admin url for this worker. can be null if admin endpoints are disabled.
+     */
     public URI adminUrl() {
         ServerConnector adminConnector = null;
         for (Connector connector : jettyServer.getConnectors()) {

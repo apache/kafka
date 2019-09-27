@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.connect.runtime.rest.admin;
 
-import com.fasterxml.jackson.annotation.JsonProperty;
 import org.apache.kafka.connect.errors.NotFoundException;
 import org.apache.log4j.Level;
 import org.apache.log4j.LogManager;
@@ -40,6 +39,9 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.TreeMap;
 
+/**
+ * A set of endpoints to adjust the log levels of runtime loggers.
+ */
 @Path("/admin/loggers")
 @Produces(MediaType.APPLICATION_JSON)
 @Consumes(MediaType.APPLICATION_JSON)
@@ -47,27 +49,38 @@ public class LoggingResource {
 
     private static final String ROOT_LOGGER_NAME = "@root";
 
+    /**
+     * List the current loggers that have their levels explicitly set and their log levels.
+     *
+     * @return a list of current loggers and their levels.
+     */
     @GET
     @Path("/")
     public Response listLoggers() {
         Enumeration en = LogManager.getCurrentLoggers();
-        Map<String, LogLevel> loggers = new TreeMap<>();
+        Map<String, Map<String, String>> loggers = new TreeMap<>();
         while (en.hasMoreElements()) {
             Logger current = (Logger) en.nextElement();
             // exclude loggers that do not have a specific level set
             if (current.getLevel() != null) {
-                loggers.put(current.getName(), new LogLevel(current.getLevel()));
+                loggers.put(current.getName(), levelToMap(current.getLevel()));
             }
         }
 
         Logger root = LogManager.getRootLogger();
         if (root.getLevel() != null) {
-            loggers.put(ROOT_LOGGER_NAME, new LogLevel(root.getLevel()));
+            loggers.put(ROOT_LOGGER_NAME, levelToMap(root.getLevel()));
         }
 
         return Response.ok(loggers).build();
     }
 
+    /**
+     * Get the log level of a named logger.
+     *
+     * @param namedLogger name of a logger
+     * @return level of the logger, effective level if the level was not explicitly set.
+     */
     @GET
     @Path("/{logger}")
     public Response getLogger(final @PathParam("logger") String namedLogger) {
@@ -99,12 +112,15 @@ public class LoggingResource {
         }
     }
 
-    @PUT
-    @Path("/")
-    public Response setLevel() {
-        return Response.ok(ROOT_LOGGER_NAME).build();
-    }
 
+    /**
+     * Adjust level of a named logger. if name corresponds to an ancestor, then the log level is applied to all child loggers.
+     *
+     * @param namedLogger name of the logger
+     * @param levelMap a map that is expected to contain one key 'level', and a value that is one of the log4j levels:
+     *                 DEBUG, ERROR, FATAL, INFO, TRACE, WARN
+     * @return names of loggers whose levels were modified
+     */
     @PUT
     @Path("/{logger}")
     @SuppressWarnings("unchecked")
@@ -151,20 +167,7 @@ public class LoggingResource {
         return Response.ok(modifiedLoggerNames).build();
     }
 
-    private static class LogLevel {
-        private final String level;
-
-        LogLevel(Level level) {
-            this(String.valueOf(level));
-        }
-
-        LogLevel(String level) {
-            this.level = level;
-        }
-
-        @JsonProperty("level")
-        public String level() {
-            return this.level;
-        }
+    private static Map<String, String> levelToMap(Level level) {
+        return Collections.singletonMap("level", String.valueOf(level));
     }
 }
