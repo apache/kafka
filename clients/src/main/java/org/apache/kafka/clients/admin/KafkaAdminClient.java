@@ -25,6 +25,7 @@ import org.apache.kafka.clients.ClientUtils;
 import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.clients.NetworkClient;
 import org.apache.kafka.clients.StaleMetadataException;
+import org.apache.kafka.clients.admin.CreateTopicsResult.TopicMetadataAndConfig;
 import org.apache.kafka.clients.admin.DeleteAclsResult.FilterResult;
 import org.apache.kafka.clients.admin.DeleteAclsResult.FilterResults;
 import org.apache.kafka.clients.admin.DescribeReplicaLogDirsResult.ReplicaLogDirInfo;
@@ -68,6 +69,7 @@ import org.apache.kafka.common.message.CreateDelegationTokenRequestData.Creatabl
 import org.apache.kafka.common.message.CreateDelegationTokenResponseData;
 import org.apache.kafka.common.message.CreateTopicsRequestData;
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopicCollection;
+import org.apache.kafka.common.message.CreateTopicsResponseData.CreatableTopicConfigs;
 import org.apache.kafka.common.message.CreateTopicsResponseData.CreatableTopicResult;
 import org.apache.kafka.common.message.DeleteGroupsRequestData;
 import org.apache.kafka.common.message.DeleteTopicsRequestData;
@@ -1309,11 +1311,11 @@ public class KafkaAdminClient extends AdminClient {
     @Override
     public CreateTopicsResult createTopics(final Collection<NewTopic> newTopics,
                                            final CreateTopicsOptions options) {
-        final Map<String, KafkaFutureImpl<Void>> topicFutures = new HashMap<>(newTopics.size());
+        final Map<String, KafkaFutureImpl<TopicMetadataAndConfig>> topicFutures = new HashMap<>(newTopics.size());
         final CreatableTopicCollection topics = new CreatableTopicCollection();
         for (NewTopic newTopic : newTopics) {
             if (topicNameIsUnrepresentable(newTopic.name())) {
-                KafkaFutureImpl<Void> future = new KafkaFutureImpl<>();
+                KafkaFutureImpl<TopicMetadataAndConfig> future = new KafkaFutureImpl<>();
                 future.completeExceptionally(new InvalidTopicException("The given topic name '" +
                     newTopic.name() + "' cannot be represented in a request."));
                 topicFutures.put(newTopic.name(), future);
@@ -1348,7 +1350,7 @@ public class KafkaAdminClient extends AdminClient {
                 }
                 // Handle server responses for particular topics.
                 for (CreatableTopicResult result : response.data().topics()) {
-                    KafkaFutureImpl<Void> future = topicFutures.get(result.name());
+                    KafkaFutureImpl<TopicMetadataAndConfig> future = topicFutures.get(result.name());
                     if (future == null) {
                         log.warn("Server response mentioned unknown topic {}", result.name());
                     } else {
@@ -1358,13 +1360,33 @@ public class KafkaAdminClient extends AdminClient {
                         if (exception != null) {
                             future.completeExceptionally(exception);
                         } else {
-                            future.complete(null);
+                            TopicMetadataAndConfig topicMetadataAndConfig;
+                            if (result.topicConfigErrorCode() != Errors.NONE.code()) {
+                                topicMetadataAndConfig = new TopicMetadataAndConfig(Errors.forCode(result.topicConfigErrorCode()).exception());
+                            } else if (result.numPartitions() == CreateTopicsResult.UNKNOWN) {
+                                topicMetadataAndConfig = new TopicMetadataAndConfig(new UnsupportedVersionException(
+                                        "Topic metadata and configs in CreateTopics response not supported"));
+                            } else {
+                                List<CreatableTopicConfigs> configs = result.configs();
+                                Config topicConfig = new Config(configs.stream()
+                                        .map(config -> new ConfigEntry(config.name(),
+                                                config.value(),
+                                                configSource(DescribeConfigsResponse.ConfigSource.forId(config.configSource())),
+                                                config.isSensitive(),
+                                                config.readOnly(),
+                                                Collections.emptyList()))
+                                        .collect(Collectors.toSet()));
+                                topicMetadataAndConfig = new TopicMetadataAndConfig(result.numPartitions(),
+                                        result.replicationFactor(),
+                                        topicConfig);
+                            }
+                            future.complete(topicMetadataAndConfig);
                         }
                     }
                 }
                 // The server should send back a response for every topic. But do a sanity check anyway.
-                for (Map.Entry<String, KafkaFutureImpl<Void>> entry : topicFutures.entrySet()) {
-                    KafkaFutureImpl<Void> future = entry.getValue();
+                for (Map.Entry<String, KafkaFutureImpl<TopicMetadataAndConfig>> entry : topicFutures.entrySet()) {
+                    KafkaFutureImpl<TopicMetadataAndConfig> future = entry.getValue();
                     if (!future.isDone()) {
                         future.completeExceptionally(new ApiException("The server response did not " +
                             "contain a reference to node " + entry.getKey()));
