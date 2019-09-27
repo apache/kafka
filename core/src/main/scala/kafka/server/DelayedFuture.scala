@@ -73,7 +73,9 @@ class DelayedFuturePurgatory(purgatoryName: String, brokerId: Int) {
   private val purgatory = DelayedOperationPurgatory[DelayedFuture[_]](purgatoryName, brokerId)
   private val executor = new ThreadPoolExecutor(1, 1, 0, TimeUnit.MILLISECONDS,
     new LinkedBlockingQueue[Runnable](),
-    runnable => new KafkaThread(s"DelayedExecutor-$purgatoryName", runnable, true))
+    new ThreadFactory {
+      override def newThread(r: Runnable): Thread = new KafkaThread(s"DelayedExecutor-$purgatoryName", r, true)
+    })
   val purgatoryKey = new Object
 
   def tryCompleteElseWatch[T](timeoutMs: Long,
@@ -82,7 +84,9 @@ class DelayedFuturePurgatory(purgatoryName: String, brokerId: Int) {
     val delayedFuture = new DelayedFuture[T](timeoutMs, futures, responseCallback)
     val done = purgatory.tryCompleteElseWatch(delayedFuture, Seq(purgatoryKey))
     if (!done) {
-      val callbackAction: BiConsumer[Void, Throwable] = (_, _) => delayedFuture.forceComplete()
+      val callbackAction = new BiConsumer[Void, Throwable]() {
+        override def accept(result: Void, exception: Throwable): Unit = delayedFuture.forceComplete()
+      }
       CompletableFuture.allOf(futures.toArray: _*).whenCompleteAsync(callbackAction, executor)
     }
     delayedFuture

@@ -16,6 +16,7 @@ import java.io.File
 import java.util
 import java.util.Collections
 import java.util.concurrent._
+import java.util.function.BiConsumer
 
 import com.yammer.metrics.Metrics
 import com.yammer.metrics.core.Gauge
@@ -59,19 +60,23 @@ object SslAdminClientIntegrationTest {
 
     private def execute[T](batchSize: Int, action: () => util.List[_ <: CompletionStage[T]]): util.List[CompletableFuture[T]] = {
       val futures = (0 until batchSize).map(_ => new CompletableFuture[T]).toList
-      val runnable: Runnable = ()  => {
-        semaphore.foreach(_.acquire())
-        try {
-          action.apply().asScala.zip(futures).foreach { case (baseFuture, resultFuture) =>
-            baseFuture.whenComplete((result, exception) => {
-              if (exception != null)
-                resultFuture.completeExceptionally(exception)
-              else
-                resultFuture.complete(result)
-            })
+      val runnable = new Runnable {
+        override def run(): Unit = {
+          semaphore.foreach(_.acquire())
+          try {
+            action.apply().asScala.zip(futures).foreach { case (baseFuture, resultFuture) =>
+              baseFuture.whenComplete(new BiConsumer[T, Throwable]() {
+                override def accept(result: T, exception: Throwable): Unit = {
+                  if (exception != null)
+                    resultFuture.completeExceptionally(exception)
+                  else
+                    resultFuture.complete(result)
+                }
+              })
+            }
+          } finally {
+            semaphore.foreach(_.release())
           }
-        } finally {
-          semaphore.foreach(_.release())
         }
       }
       executor match {
