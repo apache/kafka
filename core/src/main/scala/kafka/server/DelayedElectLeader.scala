@@ -50,10 +50,10 @@ class DelayedElectLeader(
   override def onComplete(): Unit = {
     // This could be called to force complete, so I need the full list of partitions, so I can time them all out.
     updateWaiting()
-    val timedout = waitingPartitions.map {
+    val timedOut = waitingPartitions.map {
       case (tp, _) => tp -> new ApiError(Errors.REQUEST_TIMED_OUT, null)
     }.toMap
-    responseCallback(timedout ++ fullResults)
+    responseCallback(timedOut ++ fullResults)
   }
 
   /**
@@ -70,13 +70,13 @@ class DelayedElectLeader(
   }
 
   private def updateWaiting(): Unit = {
-    waitingPartitions.foreach { case (tp, leader) =>
-      replicaManager.metadataCache.getPartitionInfo(tp.topic, tp.partition).foreach { partitionState =>
-        if (leader == partitionState.leader) {
-          waitingPartitions -= tp
-          fullResults += tp -> ApiError.NONE
-        }
-      }
+    val metadataCache = replicaManager.metadataCache
+    val completedPartitions = waitingPartitions.collect {
+      case (tp, leader) if metadataCache.getPartitionInfo(tp.topic, tp.partition).exists(_.leader == leader) => tp
+    }
+    completedPartitions.foreach  { tp =>
+      waitingPartitions -= tp
+      fullResults += tp -> ApiError.NONE
     }
   }
 

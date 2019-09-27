@@ -1147,10 +1147,12 @@ class ReplicaManager(val config: KafkaConfig,
   def becomeLeaderOrFollower(correlationId: Int,
                              leaderAndIsrRequest: LeaderAndIsrRequest,
                              onLeadershipChange: (Iterable[Partition], Iterable[Partition]) => Unit): LeaderAndIsrResponse = {
-    leaderAndIsrRequest.partitionStates.asScala.foreach { partitionState =>
-      stateChangeLogger.trace(s"Received LeaderAndIsr request $partitionState " +
-        s"correlation id $correlationId from controller ${leaderAndIsrRequest.controllerId} " +
-        s"epoch ${leaderAndIsrRequest.controllerEpoch}")
+    if (stateChangeLogger.isTraceEnabled) {
+      leaderAndIsrRequest.partitionStates.asScala.foreach { partitionState =>
+        stateChangeLogger.trace(s"Received LeaderAndIsr request $partitionState " +
+          s"correlation id $correlationId from controller ${leaderAndIsrRequest.controllerId} " +
+          s"epoch ${leaderAndIsrRequest.controllerEpoch}")
+      }
     }
     replicaStateChangeLock synchronized {
       if (leaderAndIsrRequest.controllerEpoch < controllerEpoch) {
