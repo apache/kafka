@@ -87,6 +87,35 @@ public class KerberosNameTest {
     }
 
     @Test
+    public void testToUpperCase() throws Exception {
+        List<String> rules = Arrays.asList(
+            "RULE:[1:$1]/U",
+            "RULE:[2:$1](Test.*)s/ABC///U",
+            "RULE:[2:$1](ABC.*)s/ABC/XYZ/g/U",
+            "RULE:[2:$1](App\\..*)s/App\\.(.*)/$1/g/U",
+            "RULE:[2:$1]/U",
+            "DEFAULT"
+        );
+
+        KerberosShortNamer shortNamer = KerberosShortNamer.fromUnparsedRules("REALM.COM", rules);
+
+        KerberosName name = KerberosName.parse("User@REALM.COM");
+        assertEquals("USER", shortNamer.shortName(name));
+
+        name = KerberosName.parse("TestABC/host@FOO.COM");
+        assertEquals("TEST", shortNamer.shortName(name));
+
+        name = KerberosName.parse("ABC_User_ABC/host@FOO.COM");
+        assertEquals("XYZ_USER_XYZ", shortNamer.shortName(name));
+
+        name = KerberosName.parse("App.SERVICE-name/example.com@REALM.COM");
+        assertEquals("SERVICE-NAME", shortNamer.shortName(name));
+
+        name = KerberosName.parse("User/root@REALM.COM");
+        assertEquals("USER", shortNamer.shortName(name));
+    }
+
+    @Test
     public void testInvalidRules() {
         testInvalidRule(Arrays.asList("default"));
         testInvalidRule(Arrays.asList("DEFAUL"));
@@ -94,6 +123,9 @@ public class KerberosNameTest {
         testInvalidRule(Arrays.asList("DEFAULT/g"));
 
         testInvalidRule(Arrays.asList("rule:[1:$1]"));
+        testInvalidRule(Arrays.asList("rule:[1:$1]/L/U"));
+        testInvalidRule(Arrays.asList("rule:[1:$1]/U/L"));
+        testInvalidRule(Arrays.asList("rule:[1:$1]/LU"));
         testInvalidRule(Arrays.asList("RULE:[1:$1/L"));
         testInvalidRule(Arrays.asList("RULE:[1:$1]/l"));
         testInvalidRule(Arrays.asList("RULE:[2:$1](ABC.*)s/ABC/XYZ/L/g"));
