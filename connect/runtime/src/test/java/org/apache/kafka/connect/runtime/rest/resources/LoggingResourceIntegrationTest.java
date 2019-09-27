@@ -19,9 +19,10 @@ package org.apache.kafka.connect.runtime.rest.resources;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.kafka.connect.util.clusters.EmbeddedConnectCluster;
+import org.apache.kafka.test.IntegrationTest;
 import org.junit.After;
 import org.junit.Test;
-import org.slf4j.Logger;
+import org.junit.experimental.categories.Category;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
@@ -35,9 +36,11 @@ import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
+/**
+ * Integration tests to test admin endpoints and {@link org.apache.kafka.connect.runtime.rest.admin.LoggingResource}.
+ */
+@Category(IntegrationTest.class)
 public class LoggingResourceIntegrationTest {
-
-    private static final Logger log = LoggerFactory.getLogger(LoggingResourceIntegrationTest.class);
 
     private EmbeddedConnectCluster connect;
 
@@ -130,12 +133,9 @@ public class LoggingResourceIntegrationTest {
 
         ObjectMapper mapper = new ObjectMapper();
 
-        log.info("Trying to hit endpoint..");
-        log.info("Content at / {}", connect.executeGet(connect.endpointForResource("")));
-
         String url = connect.adminEndpoint("admin/loggers");
         Map<String, ?> loggers = mapper.readValue(connect.executeGet(url), new TypeReference<Map<String, ?>>(){});
-        log.info("Found loggers {}", loggers);
+        assertNotNull("expected non null response for /admin/loggers" + prettyPrint(loggers), loggers);
 
         assertNotEquals("admin endpoints should be different from regular endpoints",
                 connect.adminEndpoint(""), connect.endpointForResource(""));
@@ -157,9 +157,7 @@ public class LoggingResourceIntegrationTest {
         // start the clusters
         connect.start();
 
-        log.info("Trying to hit endpoint..");
-        log.info("Content at / {}", connect.executeGet(connect.endpointForResource("")));
-
+        // attempt to get a non-null admin endpoint
         connect.adminEndpoint("admin/loggers");
     }
 

@@ -360,9 +360,9 @@ public class RestServer {
         if (adminConnector == null) {
             List<String> adminListeners = config.getList(WorkerConfig.ADMIN_LISTENERS_CONFIG);
             if (adminListeners == null) {
-                return null;
-            } else if (adminListeners.isEmpty()) {
                 return advertisedUrl();
+            } else if (adminListeners.isEmpty()) {
+                return null;
             } else {
                 log.error("No admin connector found for listeners {}", adminListeners);
                 return null;
