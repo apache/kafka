@@ -126,6 +126,10 @@ public class UpdateMetadataRequest extends AbstractControlRequest {
     }
 
     private void normalize() {
+        // Version 0 only supported a single host and port and the protocol was always plaintext
+        // Version 1 added support for multiple endpoints, each with its own security protocol
+        // Version 2 added support for rack
+        // Version 3 added support for listener name, which we can infer from the security protocol for older versions
         if (version() < 3) {
             for (UpdateMetadataBroker liveBroker : data.liveBrokers()) {
                 // Set endpoints so that callers can rely on it always being present

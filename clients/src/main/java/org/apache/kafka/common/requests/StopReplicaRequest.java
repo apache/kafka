@@ -137,10 +137,11 @@ public class StopReplicaRequest extends AbstractControlRequest {
     /**
      * Note that this method has allocation overhead per iterated element, so callers should copy the result into
      * another collection if they need to iterate more than once.
+     *
+     * Implementation note: we should strive to avoid allocation overhead per element, see
+     * `UpdateMetadataRequest.partitionStates()` for the preferred approach. That's not possible in this case and
+     * StopReplicaRequest should be relatively rare in comparison to other request types.
      */
-    // Implementation note: we should strive to avoid allocation overhead per element, see
-    // UpdateMetadataRequest.partitionStates() for the preferred approach. That's not possible in this case and
-    // StopReplicaRequest should be relatively rare in comparison to other request types.
     public Iterable<TopicPartition> partitions() {
         if (version() >= 1) {
             return () -> new FlattenedIterator<>(data.topics().iterator(), topic ->
