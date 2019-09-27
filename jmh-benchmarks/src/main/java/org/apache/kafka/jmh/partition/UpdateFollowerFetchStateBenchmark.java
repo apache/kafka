@@ -53,6 +53,7 @@ import scala.collection.JavaConverters;
 
 import java.io.File;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -102,10 +103,7 @@ public class UpdateFollowerFetchStateBenchmark {
         DelayedOperations delayedOperations = new DelayedOperationsMock();
 
         // one leader, plus two followers
-        List<Integer> replicas = new ArrayList<>();
-        replicas.add(0);
-        replicas.add(1);
-        replicas.add(2);
+        List<Integer> replicas = Arrays.asList(0, 1, 2);
         LeaderAndIsrRequest.PartitionState partitionState = new LeaderAndIsrRequest.PartitionState(
                 0, 0, 0, replicas, 1, replicas, true);
         PartitionStateStore partitionStateStore = Mockito.mock(PartitionStateStore.class);
