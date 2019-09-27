@@ -144,6 +144,7 @@ import java.util.Optional;
 import java.util.Set;
 
 import static java.util.Arrays.asList;
+import static org.apache.kafka.common.protocol.ApiKeys.FETCH;
 import static org.apache.kafka.common.requests.FetchMetadata.INVALID_SESSION_ID;
 import static org.apache.kafka.test.TestUtils.toBuffer;
 import static org.junit.Assert.assertEquals;
@@ -393,14 +394,14 @@ public class RequestResponseTest {
 
     @Test
     public void testResponseHeader() {
-        ResponseHeader header = createResponseHeader();
+        ResponseHeader header = createResponseHeader((short) 1);
         ByteBuffer buffer = toBuffer(header.toStruct());
-        ResponseHeader deserialized = ResponseHeader.parse(buffer);
+        ResponseHeader deserialized = ResponseHeader.parse(buffer, header.headerVersion());
         assertEquals(header.correlationId(), deserialized.correlationId());
     }
 
     private void checkOlderFetchVersions() throws Exception {
-        int latestVersion = ApiKeys.FETCH.latestVersion();
+        int latestVersion = FETCH.latestVersion();
         for (int i = 0; i < latestVersion; ++i) {
             checkErrorResponse(createFetchRequest(i), new UnknownServerException(), true);
             checkRequest(createFetchRequest(i), true);
@@ -547,11 +548,12 @@ public class RequestResponseTest {
 
         ProduceResponse v5Response = new ProduceResponse(responseData, 10);
         short version = 5;
+        short headerVersion = ApiKeys.PRODUCE.headerVersion(version);
 
-        ByteBuffer buffer = v5Response.serialize(version, new ResponseHeader(0));
+        ByteBuffer buffer = v5Response.serialize(ApiKeys.PRODUCE, version, 0);
         buffer.rewind();
 
-        ResponseHeader.parse(buffer); // throw away.
+        ResponseHeader.parse(buffer, headerVersion); // throw away.
 
         Struct deserializedStruct = ApiKeys.PRODUCE.parseResponse(version, buffer);
 
@@ -602,9 +604,9 @@ public class RequestResponseTest {
         FetchResponse<MemoryRecords> v1Response = new FetchResponse<>(Errors.NONE, responseData, 10, INVALID_SESSION_ID);
         assertEquals("Throttle time must be zero", 0, v0Response.throttleTimeMs());
         assertEquals("Throttle time must be 10", 10, v1Response.throttleTimeMs());
-        assertEquals("Should use schema version 0", ApiKeys.FETCH.responseSchema((short) 0),
+        assertEquals("Should use schema version 0", FETCH.responseSchema((short) 0),
                 v0Response.toStruct((short) 0).schema());
-        assertEquals("Should use schema version 1", ApiKeys.FETCH.responseSchema((short) 1),
+        assertEquals("Should use schema version 1", FETCH.responseSchema((short) 1),
                 v1Response.toStruct((short) 1).schema());
         assertEquals("Response data does not match", responseData, v0Response.responseData());
         assertEquals("Response data does not match", responseData, v1Response.responseData());
@@ -633,10 +635,10 @@ public class RequestResponseTest {
 
     @Test
     public void verifyFetchResponseFullWrites() throws Exception {
-        verifyFetchResponseFullWrite(ApiKeys.FETCH.latestVersion(), createFetchResponse(123));
-        verifyFetchResponseFullWrite(ApiKeys.FETCH.latestVersion(),
+        verifyFetchResponseFullWrite(FETCH.latestVersion(), createFetchResponse(123));
+        verifyFetchResponseFullWrite(FETCH.latestVersion(),
             createFetchResponse(Errors.FETCH_SESSION_ID_NOT_FOUND, 123));
-        for (short version = 0; version <= ApiKeys.FETCH.latestVersion(); version++) {
+        for (short version = 0; version <= FETCH.latestVersion(); version++) {
             verifyFetchResponseFullWrite(version, createFetchResponse());
         }
     }
@@ -644,7 +646,8 @@ public class RequestResponseTest {
     private void verifyFetchResponseFullWrite(short apiVersion, FetchResponse fetchResponse) throws Exception {
         int correlationId = 15;
 
-        Send send = fetchResponse.toSend("1", new ResponseHeader(correlationId), apiVersion);
+        short headerVersion = FETCH.headerVersion(apiVersion);
+        Send send = fetchResponse.toSend("1", new ResponseHeader(correlationId, headerVersion), apiVersion);
         ByteBufferChannel channel = new ByteBufferChannel(send.size());
         send.writeTo(channel);
         channel.close();
@@ -656,11 +659,11 @@ public class RequestResponseTest {
         assertTrue(size > 0);
 
         // read the header
-        ResponseHeader responseHeader = ResponseHeader.parse(channel.buffer());
+        ResponseHeader responseHeader = ResponseHeader.parse(channel.buffer(), headerVersion);
         assertEquals(correlationId, responseHeader.correlationId());
 
         // read the body
-        Struct responseBody = ApiKeys.FETCH.responseSchema(apiVersion).read(buf);
+        Struct responseBody = FETCH.responseSchema(apiVersion).read(buf);
         assertEquals(fetchResponse.toStruct(apiVersion), responseBody);
 
         assertEquals(size, responseHeader.sizeOf() + responseBody.sizeOf());
@@ -757,8 +760,8 @@ public class RequestResponseTest {
         assertTrue(string.contains("group1"));
     }
 
-    private ResponseHeader createResponseHeader() {
-        return new ResponseHeader(10);
+    private ResponseHeader createResponseHeader(short headerVersion) {
+        return new ResponseHeader(10, headerVersion);
     }
 
     private FindCoordinatorRequest createFindCoordinatorRequest(int version) {

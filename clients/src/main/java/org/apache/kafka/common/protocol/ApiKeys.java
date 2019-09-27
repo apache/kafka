@@ -335,6 +335,14 @@ public enum ApiKeys {
         return apiVersion >= oldestVersion() && apiVersion <= latestVersion();
     }
 
+    public short headerVersion(short apiVersion) {
+        if ((this == CONTROLLED_SHUTDOWN) && (apiVersion == 0)) {
+            return 0;
+        } else {
+            return 1;
+        }
+    }
+
     private static String toHtml() {
         final StringBuilder b = new StringBuilder();
         b.append("<table class=\"data-table\"><tbody>\n");

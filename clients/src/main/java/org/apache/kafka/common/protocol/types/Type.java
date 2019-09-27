@@ -23,6 +23,7 @@ import org.apache.kafka.common.utils.ByteUtils;
 import org.apache.kafka.common.utils.Utils;
 
 import java.nio.ByteBuffer;
+import java.util.Optional;
 import java.util.UUID;
 
 /**
@@ -62,6 +63,20 @@ public abstract class Type {
      */
     public boolean isNullable() {
         return false;
+    }
+
+    /**
+     * If the type is an array, return the type of the array elements.  Otherwise, return empty.
+     */
+    public Optional<Type> arrayElementType() {
+        return Optional.empty();
+    }
+
+    /**
+     * Returns true if the type is an array.
+     */
+    public final boolean isArray() {
+        return arrayElementType().isPresent();
     }
 
     /**
@@ -704,10 +719,9 @@ public abstract class Type {
     };
 
     private static String toHtml() {
-
         DocumentedType[] types = {
             BOOLEAN, INT8, INT16, INT32, INT64,
-            UNSIGNED_INT32, VARINT, VARLONG,
+            UNSIGNED_INT32, VARINT, VARLONG, UUID,
             STRING, NULLABLE_STRING, BYTES, NULLABLE_BYTES,
             RECORDS, new ArrayOf(STRING)};
         final StringBuilder b = new StringBuilder();

@@ -149,13 +149,13 @@ public class MockAdminClient extends AdminClient {
 
     @Override
     public CreateTopicsResult createTopics(Collection<NewTopic> newTopics, CreateTopicsOptions options) {
-        Map<String, KafkaFuture<Void>> createTopicResult = new HashMap<>();
+        Map<String, KafkaFuture<CreateTopicsResult.TopicMetadataAndConfig>> createTopicResult = new HashMap<>();
 
         if (timeoutNextRequests > 0) {
             for (final NewTopic newTopic : newTopics) {
                 String topicName = newTopic.name();
 
-                KafkaFutureImpl<Void> future = new KafkaFutureImpl<>();
+                KafkaFutureImpl<CreateTopicsResult.TopicMetadataAndConfig> future = new KafkaFutureImpl<>();
                 future.completeExceptionally(new TimeoutException());
                 createTopicResult.put(topicName, future);
             }
@@ -165,7 +165,7 @@ public class MockAdminClient extends AdminClient {
         }
 
         for (final NewTopic newTopic : newTopics) {
-            KafkaFutureImpl<Void> future = new KafkaFutureImpl<>();
+            KafkaFutureImpl<CreateTopicsResult.TopicMetadataAndConfig> future = new KafkaFutureImpl<>();
 
             String topicName = newTopic.name();
             if (allTopics.containsKey(topicName)) {

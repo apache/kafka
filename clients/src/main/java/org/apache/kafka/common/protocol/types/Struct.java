@@ -418,9 +418,8 @@ public class Struct {
         validateField(field);
         if (field.def.type instanceof Schema) {
             return new Struct((Schema) field.def.type);
-        } else if (field.def.type instanceof ArrayOf) {
-            ArrayOf array = (ArrayOf) field.def.type;
-            return new Struct((Schema) array.type());
+        } else if (field.def.type.isArray()) {
+            return new Struct((Schema) field.def.type.arrayElementType().get());
         } else {
             throw new SchemaException("Field '" + field.def.name + "' is not a container type, it is of type " + field.def.type);
         }
@@ -495,7 +494,7 @@ public class Struct {
             BoundField f = this.schema.get(i);
             b.append(f.def.name);
             b.append('=');
-            if (f.def.type instanceof ArrayOf && this.values[i] != null) {
+            if (f.def.type.isArray() && this.values[i] != null) {
                 Object[] arrayValue = (Object[]) this.values[i];
                 b.append('[');
                 for (int j = 0; j < arrayValue.length; j++) {
@@ -519,7 +518,7 @@ public class Struct {
         int result = 1;
         for (int i = 0; i < this.values.length; i++) {
             BoundField f = this.schema.get(i);
-            if (f.def.type instanceof ArrayOf) {
+            if (f.def.type.isArray()) {
                 if (this.get(f) != null) {
                     Object[] arrayObject = (Object[]) this.get(f);
                     for (Object arrayItem: arrayObject)
@@ -549,7 +548,7 @@ public class Struct {
         for (int i = 0; i < this.values.length; i++) {
             BoundField f = this.schema.get(i);
             boolean result;
-            if (f.def.type instanceof ArrayOf) {
+            if (f.def.type.isArray()) {
                 result = Arrays.equals((Object[]) this.get(f), (Object[]) other.get(f));
             } else {
                 Object thisField = this.get(f);

@@ -204,7 +204,7 @@ class SocketServerTest {
     testableServer.startup(startupProcessors = false)
     val updatedEndPoints = config.advertisedListeners.map { endpoint =>
       endpoint.copy(port = testableServer.boundPort(endpoint.listenerName))
-    }.map(_.asInstanceOf[Endpoint])
+    }.map(_.toJava)
 
     val externalReadyFuture = new CompletableFuture[Void]()
     val executor = Executors.newSingleThreadExecutor()
@@ -225,7 +225,7 @@ class SocketServerTest {
       sendAndReceiveControllerRequest(socket1, testableServer)
 
       val externalListener = new ListenerName("EXTERNAL")
-      val externalEndpoint = updatedEndPoints.find(e => e.listener() == externalListener.value).get
+      val externalEndpoint = updatedEndPoints.find(e => e.listenerName.get == externalListener.value).get
       val futures =  Map(externalEndpoint -> externalReadyFuture)
       val startFuture = executor.submit(CoreUtils.runnable(testableServer.startDataPlaneProcessors(futures)))
       TestUtils.waitUntilTrue(() => listenerStarted(config.interBrokerListenerName), "Inter-broker listener not started")

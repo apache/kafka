@@ -32,6 +32,7 @@ import org.apache.kafka.common.config.{AbstractConfig, ConfigDef, ConfigExceptio
 import org.apache.kafka.common.errors.{ApiException, InvalidConfigurationException, InvalidPartitionsException, InvalidReplicaAssignmentException, InvalidRequestException, ReassignmentInProgressException, TopicExistsException, UnknownTopicOrPartitionException}
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopic
+import org.apache.kafka.common.message.CreateTopicsResponseData.{CreatableTopicConfigs, CreatableTopicResult}
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.Errors
@@ -82,6 +83,7 @@ class AdminManager(val config: KafkaConfig,
   def createTopics(timeout: Int,
                    validateOnly: Boolean,
                    toCreate: Map[String, CreatableTopic],
+                   includeConfigsAndMetatadata: Map[String, CreatableTopicResult],
                    responseCallback: Map[String, ApiError] => Unit): Unit = {
 
     // 1. map over topics creating assignment and calling zookeeper
@@ -152,6 +154,27 @@ class AdminManager(val config: KafkaConfig,
               adminZkClient.validateTopicCreate(topic.name, assignments, configs)
             else
               adminZkClient.createTopicWithAssignment(topic.name, configs, assignments)
+        }
+
+        // For responses with DescribeConfigs permission, populate metadata and configs
+        includeConfigsAndMetatadata.get(topic.name).foreach { result =>
+          val logConfig = LogConfig.fromProps(KafkaServer.copyKafkaConfigToLog(config), configs)
+          val createEntry = createTopicConfigEntry(logConfig, configs, includeSynonyms = false)(_, _)
+          val topicConfigs = logConfig.values.asScala.map { case (k, v) =>
+            val entry = createEntry(k, v)
+            val source = ConfigSource.values.indices.map(_.toByte)
+              .find(i => ConfigSource.forId(i.toByte) == entry.source)
+              .getOrElse(0.toByte)
+            new CreatableTopicConfigs()
+                .setName(k)
+                .setValue(entry.value)
+                .setIsSensitive(entry.isSensitive)
+                .setReadOnly(entry.isReadOnly)
+                .setConfigSource(source)
+          }.toList.asJava
+          result.setConfigs(topicConfigs)
+          result.setNumPartitions(assignments.size)
+          result.setReplicationFactor(assignments(0).size.toShort)
         }
         CreatePartitionsMetadata(topic.name, assignments, ApiError.NONE)
       } catch {
