@@ -1591,7 +1591,6 @@ class ReplicaManager(val config: KafkaConfig,
               leaderEndOffset = readResult.leaderLogEndOffset)) {
               if (partition.isAddingReplica(followerId)) {
                 fetcherLagStats.updateLag(partition.topicPartition, Math.max(0L, readResult.highWatermark - readResult.info.fetchOffsetMetadata.messageOffset))
-//                println(s"lag: ${fetcherLagStats.maxLag}; HW: ${readResult.highWatermark}; leaderLOE: ${readResult.leaderLogEndOffset}; fetchOffset: ${readResult.info.fetchOffsetMetadata.messageOffset}; diff: ${readResult.leaderLogEndOffset - readResult.info.fetchOffsetMetadata.messageOffset}")
               }
               readResult
             } else {
