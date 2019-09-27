@@ -208,11 +208,12 @@ class TransactionCoordinator(brokerId: Int,
         (producerIdAndEpoch.producerId == txnMetadata.lastProducerId && TransactionMetadata.isEpochExhausted(producerIdAndEpoch.epoch))
     }
 
-    if (!expectedProducerIdAndEpoch.forall(isValidProducerId))
-      Left(Errors.INVALID_PRODUCER_EPOCH)
-    else if (txnMetadata.pendingTransitionInProgress) {
+    if (txnMetadata.pendingTransitionInProgress) {
       // return a retriable exception to let the client backoff and retry
       Left(Errors.CONCURRENT_TRANSACTIONS)
+    }
+    else if (!expectedProducerIdAndEpoch.forall(isValidProducerId)) {
+      Left(Errors.INVALID_PRODUCER_EPOCH)
     } else {
       // caller should have synchronized on txnMetadata already
       txnMetadata.state match {
