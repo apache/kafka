@@ -285,10 +285,7 @@ public class JsonConverter implements Converter, HeaderConverter {
     @Override
     public void configure(Map<String, ?> configs) {
         final JsonConverterConfig parsedConfigs = new JsonConverterConfig(configs);
-        config = new CachedConfigs(
-            parsedConfigs.type() == ConverterType.KEY,
-            parsedConfigs.schemasEnabled(),
-            parsedConfigs.decimalFormat());
+        config = new CachedConfigs(parsedConfigs);
 
         serializer.configure(configs, config.isKey);
         deserializer.configure(configs, config.isKey);
@@ -764,14 +761,15 @@ public class JsonConverter implements Converter, HeaderConverter {
     }
 
     private static final class CachedConfigs {
+
         final boolean isKey;
         final boolean enableSchemas;
         final DecimalFormat decimalFormat;
 
-        private CachedConfigs(final boolean isKey, final boolean enableSchemas, final DecimalFormat decimalFormat) {
-            this.isKey = isKey;
-            this.enableSchemas = enableSchemas;
-            this.decimalFormat = decimalFormat;
+        private CachedConfigs(final JsonConverterConfig config) {
+            this.isKey = config.type() == ConverterType.KEY;
+            this.enableSchemas = config.schemasEnabled();
+            this.decimalFormat = config.decimalFormat();
         }
     }
 }
