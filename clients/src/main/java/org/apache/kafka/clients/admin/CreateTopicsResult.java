@@ -48,7 +48,7 @@ public class CreateTopicsResult {
                 .collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue().thenApply(v -> (Void) null)));
     }
 
-    /**TOPIC
+    /**
      * Return a future which succeeds if all the topic creations succeed.
      */
     public KafkaFuture<Void> all() {
