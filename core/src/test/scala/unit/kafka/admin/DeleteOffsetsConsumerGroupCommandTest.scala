@@ -18,6 +18,7 @@
 package kafka.admin
 
 import java.util.Properties
+import java.util.concurrent.ExecutionException
 
 import kafka.server.Defaults
 import kafka.utils.TestUtils
@@ -37,7 +38,7 @@ import org.junit.Assert._
 class DeleteOffsetsConsumerGroupCommandTest extends ConsumerGroupCommandTest {
 
   @Test
-  def testDeletOffsetsNonExistingGroup(): Unit = {
+  def testDeleteOffsetsNonExistingGroup(): Unit = {
     val missingGroup = "missing.group"
 
     val cgcArgs = Array(
@@ -47,8 +48,14 @@ class DeleteOffsetsConsumerGroupCommandTest extends ConsumerGroupCommandTest {
       "--topic", "foo:1")
     val service = getConsumerGroupService(cgcArgs)
 
-    val (global, _) = service.deleteOffsets()
-    assertEquals(Errors.GROUP_ID_NOT_FOUND.exception, global.get.getCause)
+    try {
+      service.deleteOffsets()
+      fail("GroupIdNotFoundException should have been raised")
+    } catch {
+      case e: ExecutionException =>
+        if (e.getCause != Errors.GROUP_ID_NOT_FOUND.exception())
+          throw e
+    }
   }
 
   @Test
@@ -72,8 +79,7 @@ class DeleteOffsetsConsumerGroupCommandTest extends ConsumerGroupCommandTest {
         "--topic", topic + ":0")
       val service = getConsumerGroupService(cgcArgs)
 
-      val (global, partitions) = service.deleteOffsets()
-      assertEquals(None, global)
+      val partitions = service.deleteOffsets()
       // Unknown because the consumer has not committed any offsets yet.
       assertEquals(Errors.GROUP_SUBSCRIBED_TO_TOPIC.exception, partitions(new TopicPartition(topic, 0)).getCause)
     } finally {
@@ -102,8 +108,7 @@ class DeleteOffsetsConsumerGroupCommandTest extends ConsumerGroupCommandTest {
         "--topic", topic)
       val service = getConsumerGroupService(cgcArgs)
 
-      val (global, partitions) = service.deleteOffsets()
-      assertEquals(None, global)
+      val partitions = service.deleteOffsets()
       assertEquals(Errors.GROUP_SUBSCRIBED_TO_TOPIC.exception, partitions(new TopicPartition(topic, 0)).getCause)
     } finally {
       Utils.closeQuietly(consumer, "consumer")
@@ -134,8 +139,7 @@ class DeleteOffsetsConsumerGroupCommandTest extends ConsumerGroupCommandTest {
       "--topic", topic)
     val service = getConsumerGroupService(cgcArgs)
 
-    val (global, partitions) = service.deleteOffsets()
-    assertEquals(None, global)
+    val partitions = service.deleteOffsets()
     assertNull(partitions(new TopicPartition(topic, 0)))
   }
 
@@ -160,8 +164,7 @@ class DeleteOffsetsConsumerGroupCommandTest extends ConsumerGroupCommandTest {
         "--topic", "foobar")
       val service = getConsumerGroupService(cgcArgs)
 
-      val (global, partitions) = service.deleteOffsets()
-      assertEquals(None, global)
+      val partitions = service.deleteOffsets()
       assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION.exception, partitions(new TopicPartition("foobar", -1)).getCause)
     } finally {
       Utils.closeQuietly(consumer, "consumer")

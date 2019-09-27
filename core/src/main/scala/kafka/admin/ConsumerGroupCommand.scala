@@ -72,8 +72,7 @@ object ConsumerGroupCommand extends Logging {
           printOffsetsToReset(offsetsToReset)
       }
       else if (opts.options.has(opts.deleteOffsetsOpt)) {
-        val (error, result) = consumerGroupService.deleteOffsets()
-        printDeletedOffsets(error, result)
+        printDeletedOffsets(consumerGroupService.deleteOffsets())
       }
     } catch {
       case e: Throwable =>
@@ -118,18 +117,24 @@ object ConsumerGroupCommand extends Logging {
     }
   }
 
-  def printDeletedOffsets(error: Option[Throwable], result: Map[TopicPartition, Throwable]): Unit = {
-    if (error.isDefined)
-      printError(s"Deletion of offsets failed due to: ${error.get.getCause.getMessage}")
-
-    if (result.nonEmpty)
-      println("\n%-30s %-15s %-15s".format("TOPIC", "PARTITION", "STATUS"))
-
+  def printDeletedOffsets(result: Map[TopicPartition, Throwable]): Unit = {
+    println("\n%-30s %-15s %-15s".format("TOPIC", "PARTITION", "STATUS"))
     result.toList.sortBy(t => t._1.topic + t._1.partition.toString).foreach { case (tp, error) =>
       println("%-30s %-15s %-15s".format(
         tp.topic,
         if (tp.partition >= 0) tp.partition else "Not Provided",
-        if (error != null) s"Error: ${error.getCause.getMessage}" else "Successful"
+        if (error != null) s"Error: ${error.getMessage}" else "Successful"
+      ))
+    }
+  }
+
+  def printDeletedOffsets(result: Map[TopicPartition, Throwable]): Unit = {
+    println("\n%-30s %-15s %-15s".format("TOPIC", "PARTITION", "STATUS"))
+    result.toList.sortBy(t => t._1.topic + t._1.partition.toString).foreach { case (tp, error) =>
+      println("%-30s %-15s %-15s".format(
+        tp.topic,
+        if (tp.partition >= 0) tp.partition else "Not Provided",
+        if (error != null) s"Error: ${error.getMessage}" else "Successful"
       ))
     }
   }
@@ -415,9 +420,10 @@ object ConsumerGroupCommand extends Logging {
       result
     }
 
-    def deleteOffsets(): (Option[Throwable], Map[TopicPartition, Throwable]) = {
+    def deleteOffsets(): Map[TopicPartition, Throwable] = {
       val groupId = opts.options.valueOf(opts.groupOpt)
       val topics = opts.options.valuesOf(opts.topicOpt)
+      var result: Map[TopicPartition, Throwable] = mutable.HashMap()
 
       val (topicWithPartitions, topicWithoutPartitions) = topics.asScala.partition(_.contains(":"))
 
@@ -428,11 +434,10 @@ object ConsumerGroupCommand extends Logging {
         }
       }
 
+      // Get the partitions of topics that the user did not explicitly specify the partitions
       val describeTopicsResult = adminClient.describeTopics(
         topicWithoutPartitions.asJava,
         withTimeoutMs(new DescribeTopicsOptions))
-
-      var result: Map[TopicPartition, Throwable] = mutable.HashMap()
 
       val unknownPartitions = describeTopicsResult.values().asScala.flatMap { case (topic, future) =>
         Try(future.get()) match {
@@ -453,21 +458,16 @@ object ConsumerGroupCommand extends Logging {
         withTimeoutMs(new DeleteConsumerGroupOffsetsOptions)
       )
 
-      try {
-        deleteResult.all().get()
+      deleteResult.all().get()
 
-        partitions.foreach { partition =>
-          Try(deleteResult.partitionResult(partition).get()) match {
-            case Success(_) => result += partition -> null
-            case Failure(e) => result += partition -> e
-          }
+      partitions.foreach { partition =>
+        Try(deleteResult.partitionResult(partition).get()) match {
+          case Success(_) => result += partition -> null
+          case Failure(e) => result += partition -> e
         }
-
-        None -> result
-      } catch {
-        case e: Exception =>
-          Some(e) -> Map.empty
       }
+
+      result
     }
 
     private[admin] def describeConsumerGroups(groupIds: Seq[String]): mutable.Map[String, ConsumerGroupDescription] = {
