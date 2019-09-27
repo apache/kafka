@@ -1280,8 +1280,9 @@ public class RequestResponseTest {
             endpoints2.add(new UpdateMetadataEndpoint()
                 .setHost("host2")
                 .setPort(1334)
-                .setSecurityProtocol(ssl.id)
-                .setListener("CLIENT"));
+                .setSecurityProtocol(ssl.id));
+            if (version >= 3)
+                endpoints2.get(1).setListener("CLIENT");
         }
 
         List<UpdateMetadataBroker> liveBrokers = Arrays.asList(
