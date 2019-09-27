@@ -29,9 +29,9 @@ import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 
-import static junit.framework.TestCase.assertEquals;
 import static org.apache.kafka.connect.runtime.WorkerConfig.ADMIN_LISTENERS_CONFIG;
 import static org.apache.kafka.connect.runtime.WorkerConfig.OFFSET_COMMIT_INTERVAL_MS_CONFIG;
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
@@ -85,7 +85,8 @@ public class LoggingResourceIntegrationTest {
         assertEquals("bad response code found when setting log level of a.b.c.p.Z", 200, statusCode);
 
         String url = connect.endpointForResource("admin/loggers");
-        Map<String, Map<String, ?>> loggers = mapper.readValue(connect.executeGet(url), new TypeReference<Map<String, Map<String, ?>>>(){});
+        Map<String, Map<String, ?>> loggers = mapper.readValue(connect.executeGet(url), new TypeReference<Map<String, Map<String, ?>>>() {
+        });
         assertNotNull("expected non null response for /admin/loggers" + prettyPrint(loggers), loggers);
         assertTrue("expect at least 4 loggers. instead found " + prettyPrint(loggers), loggers.size() >= 4);
 
@@ -98,7 +99,8 @@ public class LoggingResourceIntegrationTest {
         statusCode = connect.executePut(connect.endpointForResource("admin/loggers/a.b.c.p"), "{\"level\": \"DEBUG\"}");
         assertEquals("bad response code found when setting log level of a.b.c.p to DEBUG", 200, statusCode);
 
-        loggers = mapper.readValue(connect.executeGet(url), new TypeReference<Map<String, ?>>(){});
+        loggers = mapper.readValue(connect.executeGet(url), new TypeReference<Map<String, ?>>() {
+        });
         assertEquals("expected to find logger a.b.c.s.W set to INFO level", loggers.get("a.b.c.s.W").get("level"), "INFO");
         assertEquals("expected to find logger a.b.c.p.X set to DEBUG level", loggers.get("a.b.c.p.X").get("level"), "DEBUG");
         assertEquals("expected to find logger a.b.c.p.Y set to DEBUG level", loggers.get("a.b.c.p.Y").get("level"), "DEBUG");
@@ -108,7 +110,8 @@ public class LoggingResourceIntegrationTest {
         connect.executePut(connect.endpointForResource("admin/loggers/a.b.c"), "{\"level\": \"ERROR\"}");
         assertEquals("bad response code found when setting log level of a.b.c to ERROR", 200, statusCode);
 
-        loggers = mapper.readValue(connect.executeGet(url), new TypeReference<Map<String, ?>>(){});
+        loggers = mapper.readValue(connect.executeGet(url), new TypeReference<Map<String, ?>>() {
+        });
         assertEquals("expected to find logger a.b.c.s.W set to ERROR level", loggers.get("a.b.c.s.W").get("level"), "ERROR");
         assertEquals("expected to find logger a.b.c.p.X set to ERROR level", loggers.get("a.b.c.p.X").get("level"), "ERROR");
         assertEquals("expected to find logger a.b.c.p.Y set to ERROR level", loggers.get("a.b.c.p.Y").get("level"), "ERROR");
@@ -134,7 +137,8 @@ public class LoggingResourceIntegrationTest {
         ObjectMapper mapper = new ObjectMapper();
 
         String url = connect.adminEndpoint("admin/loggers");
-        Map<String, ?> loggers = mapper.readValue(connect.executeGet(url), new TypeReference<Map<String, ?>>(){});
+        Map<String, ?> loggers = mapper.readValue(connect.executeGet(url), new TypeReference<Map<String, ?>>() {
+        });
         assertNotNull("expected non null response for /admin/loggers" + prettyPrint(loggers), loggers);
 
         assertNotEquals("admin endpoints should be different from regular endpoints",
