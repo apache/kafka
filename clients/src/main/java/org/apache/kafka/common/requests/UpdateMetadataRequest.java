@@ -22,6 +22,7 @@ import org.apache.kafka.common.message.UpdateMetadataRequestData.UpdateMetadataB
 import org.apache.kafka.common.message.UpdateMetadataRequestData.UpdateMetadataEndpoint;
 import org.apache.kafka.common.message.UpdateMetadataRequestData.UpdateMetadataPartitionState;
 import org.apache.kafka.common.message.UpdateMetadataRequestData.UpdateMetadataTopicState;
+import org.apache.kafka.common.message.UpdateMetadataResponseData;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
@@ -187,12 +188,12 @@ public class UpdateMetadataRequest extends AbstractControlRequest {
 
     @Override
     public AbstractResponse getErrorResponse(int throttleTimeMs, Throwable e) {
-        short versionId = version();
-        if (versionId <= 5)
-            return new UpdateMetadataResponse(Errors.forException(e));
+        short version = version();
+        if (version <= 5)
+            return new UpdateMetadataResponse(new UpdateMetadataResponseData().setErrorCode(Errors.forException(e).code()));
         else
             throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
-                versionId, this.getClass().getSimpleName(), ApiKeys.UPDATE_METADATA.latestVersion()));
+                version, this.getClass().getSimpleName(), ApiKeys.UPDATE_METADATA.latestVersion()));
     }
 
     public Iterable<UpdateMetadataPartitionState> partitionStates() {
