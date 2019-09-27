@@ -19,7 +19,6 @@ package org.apache.kafka.common.utils;
 import org.junit.Test;
 
 import java.util.ArrayList;
-import java.util.Iterator;
 import java.util.List;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -40,6 +39,11 @@ public class MappedIteratorTest {
         mappedIterable.forEach(mapped::add);
 
         assertEquals(list.stream().map(mapper).collect(Collectors.toList()), mapped);
+
+        // Ensure that we can iterate a second time
+        List<Integer> mapped2 = new ArrayList<>();
+        mappedIterable.forEach(mapped2::add);
+        assertEquals(mapped, mapped2);
     }
 
     @Test
