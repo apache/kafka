@@ -53,6 +53,7 @@ import static java.util.Arrays.asList;
 import static java.util.Collections.singletonList;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.is;
+import static org.hamcrest.Matchers.nullValue;
 import static org.junit.Assert.fail;
 
 @RunWith(Parameterized.class)
@@ -258,8 +259,10 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
         final TimeOrderedKeyValueBuffer<String, String> buffer = bufferSupplier.apply(testName);
         final MockInternalProcessorContext context = makeContext();
         buffer.init(context, buffer);
-        putRecord(buffer, context, 2L, 0L, "asdf", "2093j");
-        putRecord(buffer, context, 1L, 1L, "zxcv", "3gon4i");
+        final String value1 = "2093j";
+        final String value2 = "3gon4i";
+        putRecord(buffer, context, 2L, 0L, "asdf", value1);
+        putRecord(buffer, context, 1L, 1L, "zxcv", value2);
         putRecord(buffer, context, 0L, 2L, "deleteme", "deadbeef");
 
         // replace "deleteme" with a tombstone
@@ -272,20 +275,21 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
         // which we can't compare for equality using ProducerRecord.
         // As a workaround, I'm deserializing them and shoving them in a KeyValue, just for ease of testing.
 
-        final List<ProducerRecord<String, KeyValue<Long, ContextualRecord>>> collected =
+        final List<ProducerRecord<String, KeyValue<Long, String>>> collected =
             ((MockRecordCollector) context.recordCollector())
                 .collected()
                 .stream()
                 .map(pr -> {
-                    final KeyValue<Long, ContextualRecord> niceValue;
+                    final KeyValue<Long, String> niceValue;
                     if (pr.value() == null) {
                         niceValue = null;
                     } else {
                         final byte[] timestampAndValue = pr.value();
                         final ByteBuffer wrap = ByteBuffer.wrap(timestampAndValue);
                         final long timestamp = wrap.getLong();
-                        final ContextualRecord contextualRecord = ContextualRecord.deserialize(wrap);
-                        niceValue = new KeyValue<>(timestamp, contextualRecord);
+                        final byte[] value = new byte[pr.value().length - Long.BYTES];
+                        wrap.get(value);
+                        niceValue = new KeyValue<>(timestamp, new String(value, UTF_8));
                     }
 
                     return new ProducerRecord<>(pr.topic(),
@@ -303,21 +307,21 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
                                  null,
                                  "deleteme",
                                  null,
-                                 new RecordHeaders()
+                                 null
             ),
             new ProducerRecord<>(APP_ID + "-" + testName + "-changelog",
                                  0,
-                                 null,
+                                 1L,
                                  "zxcv",
-                                 new KeyValue<>(1L, getRecord("3gon4i", 1)),
-                                 V_1_CHANGELOG_HEADERS
+                                 new KeyValue<>(1L, value2),
+                                 null
             ),
             new ProducerRecord<>(APP_ID + "-" + testName + "-changelog",
                                  0,
-                                 null,
+                                 0L,
                                  "asdf",
-                                 new KeyValue<>(2L, getRecord("2093j", 0)),
-                                 V_1_CHANGELOG_HEADERS
+                                 new KeyValue<>(2L, value1),
+                                 null
             )
         )));
 
@@ -406,118 +410,18 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
             new Eviction<>(
                 "zxcv",
                 "3o4im",
-                new ProcessorRecordContext(2L, 2, 0, "changelog-topic", new RecordHeaders())),
+                new ProcessorRecordContext(2L, 2, 0, "changelog-topic", null)),
             new Eviction<>(
                 "asdf",
                 "qwer",
-                new ProcessorRecordContext(1L, 1, 0, "changelog-topic", new RecordHeaders()))
+                new ProcessorRecordContext(1L, 1, 0, "changelog-topic", null))
         )));
 
         cleanup(context, buffer);
     }
 
     @Test
-    public void shouldRestoreNewFormat() {
-        final TimeOrderedKeyValueBuffer<String, String> buffer = bufferSupplier.apply(testName);
-        final MockInternalProcessorContext context = makeContext();
-        buffer.init(context, buffer);
-
-        final RecordBatchingStateRestoreCallback stateRestoreCallback =
-            (RecordBatchingStateRestoreCallback) context.stateRestoreCallback(testName);
-
-        context.setRecordContext(new ProcessorRecordContext(0, 0, 0, "", null));
-
-        final RecordHeaders v1FlagHeaders = new RecordHeaders(new Header[] {new RecordHeader("v", new byte[] {(byte) 1})});
-
-        final byte[] todeleteValue = getRecord("doomed", 0).serialize();
-        final byte[] asdfValue = getRecord("qwer", 1).serialize();
-        final byte[] zxcvValue = getRecord("3o4im", 2).serialize();
-        stateRestoreCallback.restoreBatch(asList(
-            new ConsumerRecord<>("changelog-topic",
-                                 0,
-                                 0,
-                                 999,
-                                 TimestampType.CREATE_TIME,
-                                 -1L,
-                                 -1,
-                                 -1,
-                                 "todelete".getBytes(UTF_8),
-                                 ByteBuffer.allocate(Long.BYTES + todeleteValue.length).putLong(0L).put(todeleteValue).array(),
-                                 v1FlagHeaders),
-            new ConsumerRecord<>("changelog-topic",
-                                 0,
-                                 1,
-                                 9999,
-                                 TimestampType.CREATE_TIME,
-                                 -1L,
-                                 -1,
-                                 -1,
-                                 "asdf".getBytes(UTF_8),
-                                 ByteBuffer.allocate(Long.BYTES + asdfValue.length).putLong(2L).put(asdfValue).array(),
-                                 v1FlagHeaders),
-            new ConsumerRecord<>("changelog-topic",
-                                 0,
-                                 2,
-                                 99,
-                                 TimestampType.CREATE_TIME,
-                                 -1L,
-                                 -1,
-                                 -1,
-                                 "zxcv".getBytes(UTF_8),
-                                 ByteBuffer.allocate(Long.BYTES + zxcvValue.length).putLong(1L).put(zxcvValue).array(),
-                                 v1FlagHeaders)
-        ));
-
-        assertThat(buffer.numRecords(), is(3));
-        assertThat(buffer.minTimestamp(), is(0L));
-        assertThat(buffer.bufferSize(), is(130L));
-
-        stateRestoreCallback.restoreBatch(singletonList(
-            new ConsumerRecord<>("changelog-topic",
-                                 0,
-                                 3,
-                                 3,
-                                 TimestampType.CREATE_TIME,
-                                 -1L,
-                                 -1,
-                                 -1,
-                                 "todelete".getBytes(UTF_8),
-                                 null)
-        ));
-
-        assertThat(buffer.numRecords(), is(2));
-        assertThat(buffer.minTimestamp(), is(1L));
-        assertThat(buffer.bufferSize(), is(83L));
-
-        // flush the buffer into a list in buffer order so we can make assertions about the contents.
-
-        final List<Eviction<String, String>> evicted = new LinkedList<>();
-        buffer.evictWhile(() -> true, evicted::add);
-
-        // Several things to note:
-        // * The buffered records are ordered according to their buffer time (serialized in the value of the changelog)
-        // * The record timestamps are properly restored, and not conflated with the record's buffer time.
-        // * The keys and values are properly restored
-        // * The record topic is set to the original input topic, *not* the changelog topic
-        // * The record offset preserves the original input record's offset, *not* the offset of the changelog record
-
-
-        assertThat(evicted, is(asList(
-            new Eviction<>(
-                "zxcv",
-                "3o4im",
-                getContext(2L)),
-            new Eviction<>(
-                "asdf",
-                "qwer",
-                getContext(1L)
-            ))));
-
-        cleanup(context, buffer);
-    }
-
-    @Test
-    public void shouldNotRestoreUnrecognizedVersionRecord() {
+    public void shouldIgnoreHeadersOnRestore() {
         final TimeOrderedKeyValueBuffer<String, String> buffer = bufferSupplier.apply(testName);
         final MockInternalProcessorContext context = makeContext();
         buffer.init(context, buffer);
@@ -544,9 +448,12 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
                                      ByteBuffer.allocate(Long.BYTES + todeleteValue.length).putLong(0L).put(todeleteValue).array(),
                                      unknownFlagHeaders)
             ));
-            fail("expected an exception");
-        } catch (final IllegalArgumentException expected) {
-            // nothing to do.
+
+            final List<Eviction<String, String>> evicted = new LinkedList<>();
+            buffer.evictWhile(() -> buffer.numRecords() > 0, evicted::add);
+            assertThat(evicted.size(), is(1));
+            final Eviction<String, String> eviction = evicted.get(0);
+            assertThat(eviction.recordContext().headers(), nullValue());
         } finally {
             cleanup(context, buffer);
         }
