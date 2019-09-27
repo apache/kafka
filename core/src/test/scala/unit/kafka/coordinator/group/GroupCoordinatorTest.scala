@@ -2900,21 +2900,19 @@ class GroupCoordinatorTest {
     val syncGroupResult = syncGroupLeader(groupId, joinGroupResult.generationId, joinGroupResult.leaderId, Map.empty)
     assertEquals(Errors.NONE, syncGroupResult._2)
 
-    val t1p0 = new TopicPartition("foo", 0)
-    val t2p0 = new TopicPartition("bar", 0)
+    val tp = new TopicPartition("foo", 0)
     val offset = offsetAndMetadata(37)
 
     EasyMock.reset(replicaManager)
     val validOffsetCommitResult = commitOffsets(groupId, joinGroupResult.memberId, joinGroupResult.generationId,
-      Map(t1p0 -> offset))
-    assertEquals(Errors.NONE, validOffsetCommitResult(t1p0))
+      Map(tp -> offset))
+    assertEquals(Errors.NONE, validOffsetCommitResult(tp))
 
-    val (groupError, topics) = groupCoordinator.handleDeleteOffsets(groupId, Seq(t1p0, t2p0))
+    val (groupError, topics) = groupCoordinator.handleDeleteOffsets(groupId, Seq(tp))
 
     assertEquals(Errors.NONE, groupError)
-    assert(topics.size == 2)
-    assertEquals(Some(Errors.GROUP_SUBSCRIBED_TO_TOPIC), topics.get(t1p0))
-    assertEquals(Some(Errors.UNKNOWN_TOPIC_OR_PARTITION), topics.get(t2p0))
+    assert(topics.size == 1)
+    assertEquals(Some(Errors.GROUP_SUBSCRIBED_TO_TOPIC), topics.get(tp))
   }
 
   @Test
@@ -2927,7 +2925,7 @@ class GroupCoordinatorTest {
     val (groupError, topics) = groupCoordinator.handleDeleteOffsets(groupId, Seq(tp))
 
     assertEquals(Errors.GROUP_ID_NOT_FOUND, groupError)
-    assert(topics.size == 0)
+    assert(topics.isEmpty)
   }
 
   @Test
@@ -2943,7 +2941,6 @@ class GroupCoordinatorTest {
 
     val t1p0 = new TopicPartition("foo", 0)
     val t2p0 = new TopicPartition("bar", 0)
-    val t3p0 = new TopicPartition("unknown", 0)
     val offset = offsetAndMetadata(37)
 
     EasyMock.reset(replicaManager)
@@ -2968,12 +2965,11 @@ class GroupCoordinatorTest {
     EasyMock.expect(replicaManager.nonOfflinePartition(groupTopicPartition)).andStubReturn(Some(partition))
     EasyMock.replay(replicaManager, partition)
 
-    val (groupError, topics) = groupCoordinator.handleDeleteOffsets(groupId, Seq(t1p0, t3p0))
+    val (groupError, topics) = groupCoordinator.handleDeleteOffsets(groupId, Seq(t1p0))
 
     assertEquals(Errors.NONE, groupError)
-    assert(topics.size == 2)
+    assert(topics.size == 1)
     assertEquals(Some(Errors.NONE), topics.get(t1p0))
-    assertEquals(Some(Errors.UNKNOWN_TOPIC_OR_PARTITION), topics.get(t3p0))
 
     val cachedOffsets = groupCoordinator.groupManager.getOffsets(groupId, Some(Seq(t1p0, t2p0)))
 
@@ -2997,7 +2993,6 @@ class GroupCoordinatorTest {
 
     val t1p0 = new TopicPartition("foo", 0)
     val t2p0 = new TopicPartition("bar", 0)
-    val t3p0 = new TopicPartition("unknown", 0)
     val offset = offsetAndMetadata(37)
 
     EasyMock.reset(replicaManager)
@@ -3017,13 +3012,12 @@ class GroupCoordinatorTest {
     EasyMock.expect(replicaManager.nonOfflinePartition(groupTopicPartition)).andStubReturn(Some(partition))
     EasyMock.replay(replicaManager, partition)
 
-    val (groupError, topics) = groupCoordinator.handleDeleteOffsets(groupId, Seq(t1p0, t2p0, t3p0))
+    val (groupError, topics) = groupCoordinator.handleDeleteOffsets(groupId, Seq(t1p0, t2p0))
 
     assertEquals(Errors.NONE, groupError)
-    assert(topics.size == 3)
+    assert(topics.size == 2)
     assertEquals(Some(Errors.NONE), topics.get(t1p0))
     assertEquals(Some(Errors.GROUP_SUBSCRIBED_TO_TOPIC), topics.get(t2p0))
-    assertEquals(Some(Errors.UNKNOWN_TOPIC_OR_PARTITION), topics.get(t3p0))
 
     val cachedOffsets = groupCoordinator.groupManager.getOffsets(groupId, Some(Seq(t1p0, t2p0)))
 

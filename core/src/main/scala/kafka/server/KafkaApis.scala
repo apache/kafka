@@ -56,6 +56,7 @@ import org.apache.kafka.common.message.DeleteTopicsResponseData.{DeletableTopicR
 import org.apache.kafka.common.message.ElectLeadersResponseData.PartitionResult
 import org.apache.kafka.common.message.ElectLeadersResponseData.ReplicaElectionResult
 import org.apache.kafka.common.message.LeaveGroupResponseData.MemberResponse
+import org.apache.kafka.common.message.OffsetDeleteRequestData.OffsetDeleteRequestPartition
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.{ListenerName, Send}
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
@@ -2673,27 +2674,34 @@ class KafkaApis(val requestChannel: RequestChannel,
     val groupId = offsetDeleteRequest.data.groupId
 
     if (authorize(request, DELETE, GROUP, groupId)) {
-      val topicPartitions = offsetDeleteRequest.data.topics.asScala.flatMap { topic =>
-        topic.partitions.asScala.map { partition =>
-          new TopicPartition(topic.name, partition.partitionIndex)
-        }
-      }.toSeq
+      val topicPartitions = mutable.MutableList[TopicPartition]()
+      val unauthorizedOrUnknownTopicPartitionErrors = mutable.Map[TopicPartition, Errors]()
 
-      val authorizedTopics = filterAuthorized(request, READ, TOPIC, topicPartitions.map(_.topic))
-      val (authorizedTopicPartitions, unauthorizedTopicPartitions) = topicPartitions.partition { topicPartition =>
-        authorizedTopics.contains(topicPartition.topic)
+      val authorizedTopics = filterAuthorized(request, READ, TOPIC,
+        offsetDeleteRequest.data.topics.asScala.map(_.name).toSeq)
+
+      offsetDeleteRequest.data.topics.asScala.foreach { topic =>
+        topic.partitions.asScala.foreach { partition =>
+          val tp = new TopicPartition(topic.name, partition.partitionIndex)
+          if (!authorizedTopics.contains(topic.name))
+            unauthorizedOrUnknownTopicPartitionErrors += (tp -> Errors.TOPIC_AUTHORIZATION_FAILED)
+          else if (!metadataCache.contains(tp))
+            unauthorizedOrUnknownTopicPartitionErrors += (tp -> Errors.UNKNOWN_TOPIC_OR_PARTITION)
+          else
+            topicPartitions += tp
+        }
       }
 
-      val unauthorizedTopicPartitionsErrors = unauthorizedTopicPartitions.map(_ -> Errors.TOPIC_AUTHORIZATION_FAILED)
-      val (groupError, authorizedTopicPartitionsErrors) = groupCoordinator.handleDeleteOffsets(groupId, authorizedTopicPartitions)
-      val topicPartitionsErrors = unauthorizedTopicPartitionsErrors ++ authorizedTopicPartitionsErrors
+      val (groupError, authorizedTopicPartitionsErrors) = groupCoordinator.handleDeleteOffsets(groupId, topicPartitions)
+
+      val topicPartitionErrors = unauthorizedOrUnknownTopicPartitionErrors ++ authorizedTopicPartitionsErrors
 
       sendResponseMaybeThrottle(request, requestThrottleMs => {
         if (groupError != Errors.NONE)
           offsetDeleteRequest.getErrorResponse(requestThrottleMs, groupError)
         else {
           val topics = new OffsetDeleteResponseData.OffsetDeleteResponseTopicCollection
-          topicPartitionsErrors.groupBy(_._1.topic).map { case (topic, topicPartitions) =>
+          topicPartitionErrors.groupBy(_._1.topic).map { case (topic, topicPartitions) =>
             val partitions = new OffsetDeleteResponseData.OffsetDeleteResponsePartitionCollection
             topicPartitions.map { case (topicPartition, error) =>
               partitions.add(
