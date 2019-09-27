@@ -40,7 +40,6 @@ import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.internals.metrics.RocksDBMetricsRecordingTrigger;
-import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.MockClientSupplier;
 import org.apache.kafka.test.MockMetricsReporter;
 import org.apache.kafka.test.MockProcessorSupplier;
@@ -51,7 +50,6 @@ import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
-import org.junit.experimental.categories.Category;
 import org.junit.rules.TestName;
 import org.junit.runner.RunWith;
 import org.powermock.api.easymock.PowerMock;
@@ -84,7 +82,6 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
-@Category({IntegrationTest.class})
 @RunWith(PowerMockRunner.class)
 @PrepareForTest({KafkaStreams.class, StreamThread.class})
 public class KafkaStreamsTest {
@@ -653,8 +650,24 @@ public class KafkaStreamsTest {
 
     @Test
     public void shouldReturnFalseOnCloseWhenThreadsHaventTerminated() {
+        // do not use mock time so that it can really elapse
         try (final KafkaStreams streams = new KafkaStreams(new StreamsBuilder().build(), props, supplier)) {
             assertFalse(streams.close(Duration.ofMillis(10L)));
+        }
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void shouldThrowOnNegativeTimeoutForClose() {
+        try (final KafkaStreams streams = new KafkaStreams(new StreamsBuilder().build(), props, supplier, time)) {
+            streams.close(Duration.ofMillis(-1L));
+        }
+    }
+
+    @Test
+    public void shouldNotBlockInCloseForZeroDuration() {
+        try (final KafkaStreams streams = new KafkaStreams(new StreamsBuilder().build(), props, supplier, time)) {
+            // with mock time that does not elapse, close would not return if it ever waits on the state transition
+            assertFalse(streams.close(Duration.ZERO));
         }
     }
 
@@ -693,27 +706,6 @@ public class KafkaStreamsTest {
         }
 
         PowerMock.verifyAll();
-    }
-
-    @Test
-    public void shouldThrowOnNegativeTimeoutForClose() {
-        try (final KafkaStreams streams = new KafkaStreams(new StreamsBuilder().build(), props, supplier, time)) {
-            streams.close(Duration.ofMillis(-1L));
-            fail("should not accept negative close parameter");
-        } catch (final IllegalArgumentException e) {
-            // expected
-        }
-    }
-
-    @Test
-    public void shouldNotBlockInCloseForZeroDuration() throws InterruptedException {
-        try (final KafkaStreams streams = new KafkaStreams(new StreamsBuilder().build(), props, supplier, time)) {
-            final Thread th = new Thread(() -> streams.close(Duration.ofMillis(0L)));
-
-            th.start();
-            th.join(30_000L);
-            assertFalse(th.isAlive());
-        }
     }
 
     @Test
