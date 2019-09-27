@@ -33,7 +33,7 @@ import org.apache.kafka.streams.processor.MockProcessorContext;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.apache.kafka.streams.state.Stores;
-import org.apache.kafka.streams.test.ConsumerRecordFactory;
+import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.test.OutputVerifier;
 import org.apache.kafka.test.MockProcessor;
 import org.apache.kafka.test.MockProcessorSupplier;
@@ -42,6 +42,8 @@ import org.apache.kafka.test.MockValueJoiner;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.junit.Test;
 
+import java.time.Duration;
+import java.time.Instant;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashSet;
@@ -63,8 +65,6 @@ public class KTableKTableLeftJoinTest {
     private final String topic2 = "topic2";
     private final String output = "output";
     private final Consumed<Integer, String> consumed = Consumed.with(Serdes.Integer(), Serdes.String());
-    private final ConsumerRecordFactory<Integer, String> recordFactory =
-        new ConsumerRecordFactory<>(Serdes.Integer().serializer(), Serdes.String().serializer(), 0L);
     private final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.Integer(), Serdes.String());
 
     @Test
@@ -85,12 +85,16 @@ public class KTableKTableLeftJoinTest {
         assertEquals(new HashSet<>(Arrays.asList(topic1, topic2)), copartitionGroups.iterator().next());
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+            final TestInputTopic<Integer, String> inputTopic1 =
+                    driver.createInputTopic(topic1, Serdes.Integer().serializer(), Serdes.String().serializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
+            final TestInputTopic<Integer, String> inputTopic2 =
+                    driver.createInputTopic(topic2, Serdes.Integer().serializer(), Serdes.String().serializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             // push two items to the primary stream. the other table is empty
             for (int i = 0; i < 2; i++) {
-                driver.pipeInput(recordFactory.create(topic1, expectedKeys[i], "X" + expectedKeys[i], 5L + i));
+                inputTopic1.pipeInput(expectedKeys[i], "X" + expectedKeys[i], 5L + i);
             }
             // pass tuple with null key, it will be discarded in join process
-            driver.pipeInput(recordFactory.create(topic1, null, "SomeVal", 42L));
+            inputTopic1.pipeInput(null, "SomeVal", 42L);
             // left: X0:0 (ts: 5), X1:1 (ts: 6)
             // right:
             assertOutputKeyValueTimestamp(driver, 0, "X0+null", 5L);
@@ -99,10 +103,10 @@ public class KTableKTableLeftJoinTest {
 
             // push two items to the other stream. this should produce two items.
             for (int i = 0; i < 2; i++) {
-                driver.pipeInput(recordFactory.create(topic2, expectedKeys[i], "Y" + expectedKeys[i], 10L * i));
+                inputTopic2.pipeInput(expectedKeys[i], "Y" + expectedKeys[i], 10L * i);
             }
             // pass tuple with null key, it will be discarded in join process
-            driver.pipeInput(recordFactory.create(topic2, null, "AnotherVal", 73L));
+            inputTopic2.pipeInput(null, "AnotherVal", 73L);
             // left: X0:0 (ts: 5), X1:1 (ts: 6)
             // right: Y0:0 (ts: 0), Y1:1 (ts: 10)
             assertOutputKeyValueTimestamp(driver, 0, "X0+Y0", 5L);
@@ -111,7 +115,7 @@ public class KTableKTableLeftJoinTest {
 
             // push all four items to the primary stream. this should produce four items.
             for (final int expectedKey : expectedKeys) {
-                driver.pipeInput(recordFactory.create(topic1, expectedKey, "XX" + expectedKey, 7L));
+                inputTopic1.pipeInput(expectedKey, "XX" + expectedKey, 7L);
             }
             // left: XX0:0 (ts: 7), XX1:1 (ts: 7), XX2:2 (ts: 7), XX3:3 (ts: 7)
             // right: Y0:0 (ts: 0), Y1:1 (ts: 10)
@@ -123,7 +127,7 @@ public class KTableKTableLeftJoinTest {
 
             // push all items to the other stream. this should produce four items.
             for (final int expectedKey : expectedKeys) {
-                driver.pipeInput(recordFactory.create(topic2, expectedKey, "YY" + expectedKey, expectedKey * 5L));
+                inputTopic2.pipeInput(expectedKey, "YY" + expectedKey, expectedKey * 5L);
             }
             // left: XX0:0 (ts: 7), XX1:1 (ts: 7), XX2:2 (ts: 7), XX3:3 (ts: 7)
             // right: YY0:0 (ts: 0), YY1:1 (ts: 5), YY2:2 (ts: 10), YY3:3 (ts: 15)
@@ -135,7 +139,7 @@ public class KTableKTableLeftJoinTest {
 
             // push all four items to the primary stream. this should produce four items.
             for (final int expectedKey : expectedKeys) {
-                driver.pipeInput(recordFactory.create(topic1, expectedKey, "XXX" + expectedKey, 6L));
+                inputTopic1.pipeInput(expectedKey, "XXX" + expectedKey, 6L);
             }
             // left: XXX0:0 (ts: 6), XXX1:1 (ts: 6), XXX2:2 (ts: 6), XXX3:3 (ts: 6)
             // right: YY0:0 (ts: 0), YY1:1 (ts: 5), YY2:2 (ts: 10), YY3:3 (ts: 15)
@@ -146,8 +150,8 @@ public class KTableKTableLeftJoinTest {
             assertNull(driver.readOutput(output));
 
             // push two items with null to the other stream as deletes. this should produce two item.
-            driver.pipeInput(recordFactory.create(topic2, expectedKeys[0], null, 5L));
-            driver.pipeInput(recordFactory.create(topic2, expectedKeys[1], null, 7L));
+            inputTopic2.pipeInput(expectedKeys[0], null, 5L);
+            inputTopic2.pipeInput(expectedKeys[1], null, 7L);
             // left: XXX0:0 (ts: 6), XXX1:1 (ts: 6), XXX2:2 (ts: 6), XXX3:3 (ts: 6)
             // right: YY2:2 (ts: 10), YY3:3 (ts: 15)
             assertOutputKeyValueTimestamp(driver, 0, "XXX0+null", 6L);
@@ -156,7 +160,7 @@ public class KTableKTableLeftJoinTest {
 
             // push all four items to the primary stream. this should produce four items.
             for (final int expectedKey : expectedKeys) {
-                driver.pipeInput(recordFactory.create(topic1, expectedKey, "XXXX" + expectedKey, 13L));
+                inputTopic1.pipeInput(expectedKey, "XXXX" + expectedKey, 13L);
             }
             // left: XXXX0:0 (ts: 13), XXXX1:1 (ts: 13), XXXX2:2 (ts: 13), XXXX3:3 (ts: 13)
             // right: YY2:2 (ts: 10), YY3:3 (ts: 15)
@@ -167,10 +171,10 @@ public class KTableKTableLeftJoinTest {
             assertNull(driver.readOutput(output));
 
             // push three items to the primary stream with null. this should produce four items.
-            driver.pipeInput(recordFactory.create(topic1, expectedKeys[0], null, 0L));
-            driver.pipeInput(recordFactory.create(topic1, expectedKeys[1], null, 42L));
-            driver.pipeInput(recordFactory.create(topic1, expectedKeys[2], null, 5L));
-            driver.pipeInput(recordFactory.create(topic1, expectedKeys[3], null, 20L));
+            inputTopic1.pipeInput(expectedKeys[0], null, 0L);
+            inputTopic1.pipeInput(expectedKeys[1], null, 42L);
+            inputTopic1.pipeInput(expectedKeys[2], null, 5L);
+            inputTopic1.pipeInput(expectedKeys[3], null, 20L);
             // left:
             // right: YY2:2 (ts: 10), YY3:3 (ts: 15)
             assertOutputKeyValueTimestamp(driver, 0, null, 0L);
@@ -200,6 +204,10 @@ public class KTableKTableLeftJoinTest {
         final Topology topology = builder.build().addProcessor("proc", supplier, ((KTableImpl<?, ?, ?>) joined).name);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(topology, props)) {
+            final TestInputTopic<Integer, String> inputTopic1 =
+                    driver.createInputTopic(topic1, Serdes.Integer().serializer(), Serdes.String().serializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
+            final TestInputTopic<Integer, String> inputTopic2 =
+                    driver.createInputTopic(topic2, Serdes.Integer().serializer(), Serdes.String().serializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             final MockProcessor<Integer, String> proc = supplier.theCapturedProcessor();
 
             assertTrue(((KTableImpl<?, ?, ?>) table1).sendingOldValueEnabled());
@@ -208,10 +216,10 @@ public class KTableKTableLeftJoinTest {
 
             // push two items to the primary stream. the other table is empty
             for (int i = 0; i < 2; i++) {
-                driver.pipeInput(recordFactory.create(topic1, expectedKeys[i], "X" + expectedKeys[i], 5L + i));
+                inputTopic1.pipeInput(expectedKeys[i], "X" + expectedKeys[i], 5L + i);
             }
             // pass tuple with null key, it will be discarded in join process
-            driver.pipeInput(recordFactory.create(topic1, null, "SomeVal", 42L));
+            inputTopic1.pipeInput(null, "SomeVal", 42L);
             // left: X0:0 (ts: 5), X1:1 (ts: 6)
             // right:
             proc.checkAndClearProcessResult(new KeyValueTimestamp<>(0, new Change<>("X0+null", null), 5),
@@ -219,10 +227,10 @@ public class KTableKTableLeftJoinTest {
 
             // push two items to the other stream. this should produce two items.
             for (int i = 0; i < 2; i++) {
-                driver.pipeInput(recordFactory.create(topic2, expectedKeys[i], "Y" + expectedKeys[i], 10L * i));
+                inputTopic2.pipeInput(expectedKeys[i], "Y" + expectedKeys[i], 10L * i);
             }
             // pass tuple with null key, it will be discarded in join process
-            driver.pipeInput(recordFactory.create(topic2, null, "AnotherVal", 73L));
+            inputTopic2.pipeInput(null, "AnotherVal", 73L);
             // left: X0:0 (ts: 5), X1:1 (ts: 6)
             // right: Y0:0 (ts: 0), Y1:1 (ts: 10)
             proc.checkAndClearProcessResult(new KeyValueTimestamp<>(0, new Change<>("X0+Y0", null), 5),
@@ -230,7 +238,7 @@ public class KTableKTableLeftJoinTest {
 
             // push all four items to the primary stream. this should produce four items.
             for (final int expectedKey : expectedKeys) {
-                driver.pipeInput(recordFactory.create(topic1, expectedKey, "XX" + expectedKey, 7L));
+                inputTopic1.pipeInput(expectedKey, "XX" + expectedKey, 7L);
             }
             // left: XX0:0 (ts: 7), XX1:1 (ts: 7), XX2:2 (ts: 7), XX3:3 (ts: 7)
             // right: Y0:0 (ts: 0), Y1:1 (ts: 10)
@@ -241,7 +249,7 @@ public class KTableKTableLeftJoinTest {
 
             // push all items to the other stream. this should produce four items.
             for (final int expectedKey : expectedKeys) {
-                driver.pipeInput(recordFactory.create(topic2, expectedKey, "YY" + expectedKey, expectedKey * 5L));
+                inputTopic2.pipeInput(expectedKey, "YY" + expectedKey, expectedKey * 5L);
             }
             // left: XX0:0 (ts: 7), XX1:1 (ts: 7), XX2:2 (ts: 7), XX3:3 (ts: 7)
             // right: YY0:0 (ts: 0), YY1:1 (ts: 5), YY2:2 (ts: 10), YY3:3 (ts: 15)
@@ -252,7 +260,7 @@ public class KTableKTableLeftJoinTest {
 
             // push all four items to the primary stream. this should produce four items.
             for (final int expectedKey : expectedKeys) {
-                driver.pipeInput(recordFactory.create(topic1, expectedKey, "XXX" + expectedKey, 6L));
+                inputTopic1.pipeInput(expectedKey, "XXX" + expectedKey, 6L);
             }
             // left: XXX0:0 (ts: 6), XXX1:1 (ts: 6), XXX2:2 (ts: 6), XXX3:3 (ts: 6)
             // right: YY0:0 (ts: 0), YY1:1 (ts: 5), YY2:2 (ts: 10), YY3:3 (ts: 15)
@@ -262,8 +270,8 @@ public class KTableKTableLeftJoinTest {
                 new KeyValueTimestamp<>(3, new Change<>("XXX3+YY3", null), 15));
 
             // push two items with null to the other stream as deletes. this should produce two item.
-            driver.pipeInput(recordFactory.create(topic2, expectedKeys[0], null, 5L));
-            driver.pipeInput(recordFactory.create(topic2, expectedKeys[1], null, 7L));
+            inputTopic2.pipeInput(expectedKeys[0], null, 5L);
+            inputTopic2.pipeInput(expectedKeys[1], null, 7L);
             // left: XXX0:0 (ts: 6), XXX1:1 (ts: 6), XXX2:2 (ts: 6), XXX3:3 (ts: 6)
             // right: YY2:2 (ts: 10), YY3:3 (ts: 15)
             proc.checkAndClearProcessResult(new KeyValueTimestamp<>(0, new Change<>("XXX0+null", null), 6),
@@ -271,7 +279,7 @@ public class KTableKTableLeftJoinTest {
 
             // push all four items to the primary stream. this should produce four items.
             for (final int expectedKey : expectedKeys) {
-                driver.pipeInput(recordFactory.create(topic1, expectedKey, "XXXX" + expectedKey, 13L));
+                inputTopic1.pipeInput(expectedKey, "XXXX" + expectedKey, 13L);
             }
             // left: XXXX0:0 (ts: 13), XXXX1:1 (ts: 13), XXXX2:2 (ts: 13), XXXX3:3 (ts: 13)
             // right: YY2:2 (ts: 10), YY3:3 (ts: 15)
@@ -281,10 +289,10 @@ public class KTableKTableLeftJoinTest {
                 new KeyValueTimestamp<>(3, new Change<>("XXXX3+YY3", null), 15));
 
             // push four items to the primary stream with null. this should produce four items.
-            driver.pipeInput(recordFactory.create(topic1, expectedKeys[0], null, 0L));
-            driver.pipeInput(recordFactory.create(topic1, expectedKeys[1], null, 42L));
-            driver.pipeInput(recordFactory.create(topic1, expectedKeys[2], null, 5L));
-            driver.pipeInput(recordFactory.create(topic1, expectedKeys[3], null, 20L));
+            inputTopic1.pipeInput(expectedKeys[0], null, 0L);
+            inputTopic1.pipeInput(expectedKeys[1], null, 42L);
+            inputTopic1.pipeInput(expectedKeys[2], null, 5L);
+            inputTopic1.pipeInput(expectedKeys[3], null, 20L);
             // left:
             // right: YY2:2 (ts: 10), YY3:3 (ts: 15)
             proc.checkAndClearProcessResult(new KeyValueTimestamp<>(0, new Change<>(null, null), 0),
@@ -315,6 +323,10 @@ public class KTableKTableLeftJoinTest {
         final Topology topology = builder.build().addProcessor("proc", supplier, ((KTableImpl<?, ?, ?>) joined).name);
 
         try (final TopologyTestDriver driver = new TopologyTestDriverWrapper(topology, props)) {
+            final TestInputTopic<Integer, String> inputTopic1 =
+                    driver.createInputTopic(topic1, Serdes.Integer().serializer(), Serdes.String().serializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
+            final TestInputTopic<Integer, String> inputTopic2 =
+                    driver.createInputTopic(topic2, Serdes.Integer().serializer(), Serdes.String().serializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             final MockProcessor<Integer, String> proc = supplier.theCapturedProcessor();
 
             assertTrue(((KTableImpl<?, ?, ?>) table1).sendingOldValueEnabled());
@@ -323,10 +335,10 @@ public class KTableKTableLeftJoinTest {
 
             // push two items to the primary stream. the other table is empty
             for (int i = 0; i < 2; i++) {
-                driver.pipeInput(recordFactory.create(topic1, expectedKeys[i], "X" + expectedKeys[i], 5L + i));
+                inputTopic1.pipeInput(expectedKeys[i], "X" + expectedKeys[i], 5L + i);
             }
             // pass tuple with null key, it will be discarded in join process
-            driver.pipeInput(recordFactory.create(topic1, null, "SomeVal", 42L));
+            inputTopic1.pipeInput(null, "SomeVal", 42L);
             // left: X0:0 (ts: 5), X1:1 (ts: 6)
             // right:
             proc.checkAndClearProcessResult(new KeyValueTimestamp<>(0, new Change<>("X0+null", null), 5),
@@ -334,10 +346,10 @@ public class KTableKTableLeftJoinTest {
 
             // push two items to the other stream. this should produce two items.
             for (int i = 0; i < 2; i++) {
-                driver.pipeInput(recordFactory.create(topic2, expectedKeys[i], "Y" + expectedKeys[i], 10L * i));
+                inputTopic2.pipeInput(expectedKeys[i], "Y" + expectedKeys[i], 10L * i);
             }
             // pass tuple with null key, it will be discarded in join process
-            driver.pipeInput(recordFactory.create(topic2, null, "AnotherVal", 73L));
+            inputTopic2.pipeInput(null, "AnotherVal", 73L);
             // left: X0:0 (ts: 5), X1:1 (ts: 6)
             // right: Y0:0 (ts: 0), Y1:1 (ts: 10)
             proc.checkAndClearProcessResult(new KeyValueTimestamp<>(0, new Change<>("X0+Y0", "X0+null"), 5),
@@ -345,7 +357,7 @@ public class KTableKTableLeftJoinTest {
 
             // push all four items to the primary stream. this should produce four items.
             for (final int expectedKey : expectedKeys) {
-                driver.pipeInput(recordFactory.create(topic1, expectedKey, "XX" + expectedKey, 7L));
+                inputTopic1.pipeInput(expectedKey, "XX" + expectedKey, 7L);
             }
             // left: XX0:0 (ts: 7), XX1:1 (ts: 7), XX2:2 (ts: 7), XX3:3 (ts: 7)
             // right: Y0:0 (ts: 0), Y1:1 (ts: 10)
@@ -356,7 +368,7 @@ public class KTableKTableLeftJoinTest {
 
             // push all items to the other stream. this should produce four items.
             for (final int expectedKey : expectedKeys) {
-                driver.pipeInput(recordFactory.create(topic2, expectedKey, "YY" + expectedKey, expectedKey * 5L));
+                inputTopic2.pipeInput(expectedKey, "YY" + expectedKey, expectedKey * 5L);
             }
             // left: XX0:0 (ts: 7), XX1:1 (ts: 7), XX2:2 (ts: 7), XX3:3 (ts: 7)
             // right: YY0:0 (ts: 0), YY1:1 (ts: 5), YY2:2 (ts: 10), YY3:3 (ts: 15)
@@ -366,7 +378,7 @@ public class KTableKTableLeftJoinTest {
                 new KeyValueTimestamp<>(3, new Change<>("XX3+YY3", "XX3+null"), 15));
             // push all four items to the primary stream. this should produce four items.
             for (final int expectedKey : expectedKeys) {
-                driver.pipeInput(recordFactory.create(topic1, expectedKey, "XXX" + expectedKey, 6L));
+                inputTopic1.pipeInput(expectedKey, "XXX" + expectedKey, 6L);
             }
             // left: XXX0:0 (ts: 6), XXX1:1 (ts: 6), XXX2:2 (ts: 6), XXX3:3 (ts: 6)
             // right: YY0:0 (ts: 0), YY1:1 (ts: 5), YY2:2 (ts: 10), YY3:3 (ts: 15)
@@ -376,8 +388,8 @@ public class KTableKTableLeftJoinTest {
                 new KeyValueTimestamp<>(3, new Change<>("XXX3+YY3", "XX3+YY3"), 15));
 
             // push two items with null to the other stream as deletes. this should produce two item.
-            driver.pipeInput(recordFactory.create(topic2, expectedKeys[0], null, 5L));
-            driver.pipeInput(recordFactory.create(topic2, expectedKeys[1], null, 7L));
+            inputTopic2.pipeInput(expectedKeys[0], null, 5L);
+            inputTopic2.pipeInput(expectedKeys[1], null, 7L);
             // left: XXX0:0 (ts: 6), XXX1:1 (ts: 6), XXX2:2 (ts: 6), XXX3:3 (ts: 6)
             // right: YY2:2 (ts: 10), YY3:3 (ts: 15)
             proc.checkAndClearProcessResult(new KeyValueTimestamp<>(0, new Change<>("XXX0+null", "XXX0+YY0"), 6),
@@ -385,7 +397,7 @@ public class KTableKTableLeftJoinTest {
 
             // push all four items to the primary stream. this should produce four items.
             for (final int expectedKey : expectedKeys) {
-                driver.pipeInput(recordFactory.create(topic1, expectedKey, "XXXX" + expectedKey, 13L));
+                inputTopic1.pipeInput(expectedKey, "XXXX" + expectedKey, 13L);
             }
             // left: XXXX0:0 (ts: 13), XXXX1:1 (ts: 13), XXXX2:2 (ts: 13), XXXX3:3 (ts: 13)
             // right: YY2:2 (ts: 10), YY3:3 (ts: 15)
@@ -394,10 +406,10 @@ public class KTableKTableLeftJoinTest {
                 new KeyValueTimestamp<>(2, new Change<>("XXXX2+YY2", "XXX2+YY2"), 13),
                 new KeyValueTimestamp<>(3, new Change<>("XXXX3+YY3", "XXX3+YY3"), 15));
             // push four items to the primary stream with null. this should produce four items.
-            driver.pipeInput(recordFactory.create(topic1, expectedKeys[0], null, 0L));
-            driver.pipeInput(recordFactory.create(topic1, expectedKeys[1], null, 42L));
-            driver.pipeInput(recordFactory.create(topic1, expectedKeys[2], null, 5L));
-            driver.pipeInput(recordFactory.create(topic1, expectedKeys[3], null, 20L));
+            inputTopic1.pipeInput(expectedKeys[0], null, 0L);
+            inputTopic1.pipeInput(expectedKeys[1], null, 42L);
+            inputTopic1.pipeInput(expectedKeys[2], null, 5L);
+            inputTopic1.pipeInput(expectedKeys[3], null, 20L);
             // left:
             // right: YY2:2 (ts: 10), YY3:3 (ts: 15)
             proc.checkAndClearProcessResult(new KeyValueTimestamp<>(0, new Change<>(null, "XXXX0+null"), 0),
@@ -473,21 +485,21 @@ public class KTableKTableLeftJoinTest {
             .leftJoin(eight, MockValueJoiner.TOSTRING_JOINER)
             .mapValues(mapper);
 
-        final ConsumerRecordFactory<Long, String> factory = new ConsumerRecordFactory<>(Serdes.Long().serializer(), Serdes.String().serializer());
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
-
             final String[] values = {
                 "a", "AA", "BBB", "CCCC", "DD", "EEEEEEEE", "F", "GGGGGGGGGGGGGGG", "HHH", "IIIIIIIIII",
                 "J", "KK", "LLLL", "MMMMMMMMMMMMMMMMMMMMMM", "NNNNN", "O", "P", "QQQQQ", "R", "SSSS",
                 "T", "UU", "VVVVVVVVVVVVVVVVVVV"
             };
 
+            TestInputTopic<Long, String> inputTopic;
             final Random random = new Random();
             for (int i = 0; i < 1000; i++) {
                 for (final String input : inputs) {
                     final Long key = (long) random.nextInt(1000);
                     final String value = values[random.nextInt(values.length)];
-                    driver.pipeInput(factory.create(input, key, value));
+                    inputTopic = driver.createInputTopic(input, Serdes.Long().serializer(), Serdes.String().serializer());
+                    inputTopic.pipeInput(key, value);
                 }
             }
         }

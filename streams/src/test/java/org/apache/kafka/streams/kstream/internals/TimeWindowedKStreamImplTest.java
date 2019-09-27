@@ -33,7 +33,7 @@ import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.WindowStore;
-import org.apache.kafka.streams.test.ConsumerRecordFactory;
+import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.test.MockAggregator;
 import org.apache.kafka.test.MockInitializer;
 import org.apache.kafka.test.MockProcessorSupplier;
@@ -54,8 +54,6 @@ import static org.hamcrest.MatcherAssert.assertThat;
 public class TimeWindowedKStreamImplTest {
     private static final String TOPIC = "input";
     private final StreamsBuilder builder = new StreamsBuilder();
-    private final ConsumerRecordFactory<String, String> recordFactory =
-        new ConsumerRecordFactory<>(new StringSerializer(), new StringSerializer());
     private final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.String(), Serdes.String());
     private TimeWindowedKStream<String, String> windowedStream;
 
@@ -314,11 +312,13 @@ public class TimeWindowedKStreamImplTest {
     }
 
     private void processData(final TopologyTestDriver driver) {
-        driver.pipeInput(recordFactory.create(TOPIC, "1", "1", 10L));
-        driver.pipeInput(recordFactory.create(TOPIC, "1", "2", 15L));
-        driver.pipeInput(recordFactory.create(TOPIC, "1", "3", 500L));
-        driver.pipeInput(recordFactory.create(TOPIC, "2", "10", 550L));
-        driver.pipeInput(recordFactory.create(TOPIC, "2", "20", 500L));
+        final TestInputTopic<String, String> inputTopic =
+                driver.createInputTopic(TOPIC, new StringSerializer(), new StringSerializer());
+        inputTopic.pipeInput("1", "1", 10L);
+        inputTopic.pipeInput("1", "2", 15L);
+        inputTopic.pipeInput("1", "3", 500L);
+        inputTopic.pipeInput("2", "10", 550L);
+        inputTopic.pipeInput("2", "20", 500L);
     }
 
 }
