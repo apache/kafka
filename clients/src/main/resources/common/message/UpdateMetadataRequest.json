@@ -58,7 +58,7 @@
             "about": "The port of this endpoint" },
           { "name": "Host", "type": "string", "versions": "1+",
             "about": "The hostname of this endpoint" },
-          { "name": "Listener", "type": "string", "versions": "3+",
+          { "name": "Listener", "type": "string", "versions": "3+", "ignorable": true,
             "about": "The listener name." },
           { "name": "SecurityProtocol", "type": "int16", "versions": "1+",
             "about": "The security protocol type." }
@@ -85,7 +85,7 @@
         "about": "The Zookeeper version." },
       { "name": "Replicas", "type": "[]int32", "versions": "0+", "entityType": "brokerId",
         "about": "All the replicas of this partition." },
-      { "name": "OfflineReplicas", "type": "[]int32", "versions": "4+", "entityType": "brokerId",
+      { "name": "OfflineReplicas", "type": "[]int32", "versions": "4+", "entityType": "brokerId", "ignorable": true,
         "about": "The replicas of this partition which are offline." }
     ]}
   ]

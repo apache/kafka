@@ -24,6 +24,7 @@ import org.apache.kafka.common.message.UpdateMetadataRequestData.UpdateMetadataP
 import org.apache.kafka.common.message.UpdateMetadataRequestData.UpdateMetadataTopicState;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
@@ -53,15 +54,23 @@ public class UpdateMetadataRequest extends AbstractControlRequest {
 
         @Override
         public UpdateMetadataRequest build(short version) {
-            if (version == 0) {
+            if (version < 3) {
                 for (UpdateMetadataBroker broker : liveBrokers) {
-                    if (broker.endpoints().size() != 1 || broker.endpoints().get(0).securityProtocol() != SecurityProtocol.PLAINTEXT.id) {
-                        throw new UnsupportedVersionException("UpdateMetadataRequest v0 only handles PLAINTEXT endpoints");
+                    if (version == 0) {
+                        if (broker.endpoints().size() != 1 || broker.endpoints().get(0).securityProtocol() != SecurityProtocol.PLAINTEXT.id) {
+                            throw new UnsupportedVersionException("UpdateMetadataRequest v0 only handles PLAINTEXT endpoints");
+                        }
+                        // Don't null out `endpoints` since it's ignored by the generated code if version >= 1
+                        UpdateMetadataEndpoint endpoint = broker.endpoints().get(0);
+                        broker.setV0Host(endpoint.host());
+                        broker.setV0Port(endpoint.port());
+                    } else {
+                        if (broker.endpoints().stream().anyMatch(endpoint -> !endpoint.listener().isEmpty() &&
+                                !endpoint.listener().equals(listenerNameFromSecurityProtocol(endpoint)))) {
+                            throw new UnsupportedVersionException("UpdateMetadataRequest v0-v3 does not support custom " +
+                                "listeners, request version: " + version + ", endpoints: " + broker.endpoints());
+                        }
                     }
-                    // We don't null out `endpoints` since it's ignored by the generated code if version >= 1
-                    UpdateMetadataEndpoint endpoint = broker.endpoints().get(0);
-                    broker.setV0Host(endpoint.host());
-                    broker.setV0Port(endpoint.port());
                 }
             }
 
@@ -109,7 +118,7 @@ public class UpdateMetadataRequest extends AbstractControlRequest {
 
     private final UpdateMetadataRequestData data;
 
-    private UpdateMetadataRequest(UpdateMetadataRequestData data, short version) {
+    UpdateMetadataRequest(UpdateMetadataRequestData data, short version) {
         super(ApiKeys.UPDATE_METADATA, version);
         this.data = data;
         // Do this from the constructor to make it thread-safe (even though it's only needed when some methods are called)
@@ -117,16 +126,22 @@ public class UpdateMetadataRequest extends AbstractControlRequest {
     }
 
     private void normalize() {
-        if (version() == 0) {
+        if (version() < 3) {
             for (UpdateMetadataBroker liveBroker : data.liveBrokers()) {
                 // Set endpoints so that callers can rely on it always being present
-                if (liveBroker.endpoints().isEmpty()) {
+                if (version() == 0 && liveBroker.endpoints().isEmpty()) {
                     SecurityProtocol securityProtocol = SecurityProtocol.PLAINTEXT;
                     liveBroker.setEndpoints(singletonList(new UpdateMetadataEndpoint()
                             .setHost(liveBroker.v0Host())
                             .setPort(liveBroker.v0Port())
                             .setSecurityProtocol(securityProtocol.id)
                             .setListener(ListenerName.forSecurityProtocol(securityProtocol).value())));
+                } else {
+                    for (UpdateMetadataEndpoint endpoint : liveBroker.endpoints()) {
+                        // Set listener so that callers can rely on it always being present
+                        if (endpoint.listener().isEmpty())
+                            endpoint.setListener(listenerNameFromSecurityProtocol(endpoint));
+                    }
                 }
             }
         }
@@ -139,6 +154,11 @@ public class UpdateMetadataRequest extends AbstractControlRequest {
                 }
             }
         }
+    }
+
+    private static String listenerNameFromSecurityProtocol(UpdateMetadataEndpoint endpoint) {
+        SecurityProtocol securityProtocol = SecurityProtocol.forId(endpoint.securityProtocol());
+        return ListenerName.forSecurityProtocol(securityProtocol).value();
     }
 
     public UpdateMetadataRequest(Struct struct, short version) {
@@ -185,6 +205,13 @@ public class UpdateMetadataRequest extends AbstractControlRequest {
     @Override
     protected Struct toStruct() {
         return data.toStruct(version());
+    }
+
+    protected ByteBuffer toBytes() {
+        ByteBuffer bytes = ByteBuffer.allocate(size());
+        data.write(new ByteBufferAccessor(bytes), version());
+        bytes.flip();
+        return bytes;
     }
 
     protected int size() {

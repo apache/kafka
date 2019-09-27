@@ -16,5 +16,153 @@
  */
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.message.UpdateMetadataRequestData;
+import org.apache.kafka.common.message.UpdateMetadataRequestData.UpdateMetadataBroker;
+import org.apache.kafka.common.message.UpdateMetadataRequestData.UpdateMetadataEndpoint;
+import org.apache.kafka.common.message.UpdateMetadataRequestData.UpdateMetadataPartitionState;
+import org.apache.kafka.common.network.ListenerName;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
+import org.apache.kafka.common.security.auth.SecurityProtocol;
+import org.junit.Test;
+
+import java.nio.ByteBuffer;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
+import java.util.stream.StreamSupport;
+
+import static java.util.Arrays.asList;
+import static java.util.Collections.emptyList;
+import static org.apache.kafka.common.protocol.ApiKeys.UPDATE_METADATA;
+import static org.junit.Assert.assertEquals;
+
 public class UpdateMetadataRequestTest {
+
+    /**
+     * Verifies the logic we have in UpdateMetadataRequest to present a unified interface across the various versions
+     * works correctly. For example, `UpdateMetadataPartitionState.topicName` is not serialiazed/deserialized in
+     * recent versions, but we set it manually so that we can always present the ungrouped partition states
+     * independently of the version.
+     */
+    @Test
+    public void testVersionLogic() {
+        for (short version = UPDATE_METADATA.oldestVersion(); version <= UPDATE_METADATA.latestVersion(); version++) {
+            List<UpdateMetadataPartitionState> partitionStates = asList(
+                new UpdateMetadataPartitionState()
+                    .setTopicName("topic0")
+                    .setPartitionIndex(0)
+                    .setControllerEpoch(2)
+                    .setLeader(0)
+                    .setLeaderEpoch(10)
+                    .setIsr(asList(0, 1))
+                    .setZkVersion(10)
+                    .setReplicas(asList(0, 1, 2))
+                    .setOfflineReplicas(asList(2)),
+                new UpdateMetadataPartitionState()
+                    .setTopicName("topic0")
+                    .setPartitionIndex(1)
+                    .setControllerEpoch(2)
+                    .setLeader(1)
+                    .setLeaderEpoch(11)
+                    .setIsr(asList(1, 2, 3))
+                    .setZkVersion(11)
+                    .setReplicas(asList(1, 2, 3))
+                    .setOfflineReplicas(emptyList()),
+                new UpdateMetadataPartitionState()
+                    .setTopicName("topic1")
+                    .setPartitionIndex(0)
+                    .setControllerEpoch(2)
+                    .setLeader(2)
+                    .setLeaderEpoch(11)
+                    .setIsr(asList(2, 3))
+                    .setZkVersion(11)
+                    .setReplicas(asList(2, 3, 4))
+                    .setOfflineReplicas(emptyList())
+            );
+
+            List<UpdateMetadataEndpoint> broker0Endpoints = new ArrayList<>();
+            broker0Endpoints.add(
+                new UpdateMetadataEndpoint()
+                    .setHost("host0")
+                    .setPort(9090)
+                    .setSecurityProtocol(SecurityProtocol.PLAINTEXT.id));
+
+            // Non plaintext endpoints are only supported from version 1
+            if (version >= 1) {
+                broker0Endpoints.add(new UpdateMetadataEndpoint()
+                    .setHost("host0")
+                    .setPort(9091)
+                    .setSecurityProtocol(SecurityProtocol.SSL.id));
+            }
+
+            // Custom listeners are only supported from version 3
+            if (version >= 3) {
+                broker0Endpoints.get(0).setListener("listener0");
+                broker0Endpoints.get(1).setListener("listener1");
+            }
+
+            List<UpdateMetadataBroker> liveBrokers = asList(
+                new UpdateMetadataBroker()
+                    .setId(0)
+                    .setRack("rack0")
+                    .setEndpoints(broker0Endpoints),
+                new UpdateMetadataBroker()
+                    .setId(1)
+                    .setEndpoints(asList(
+                        new UpdateMetadataEndpoint()
+                            .setHost("host1")
+                            .setPort(9090)
+                            .setSecurityProtocol(SecurityProtocol.PLAINTEXT.id)
+                            .setListener("PLAINTEXT")
+                    ))
+            );
+
+            UpdateMetadataRequest request = new UpdateMetadataRequest.Builder(version, 1, 2, 3,
+                partitionStates, liveBrokers).build();
+
+            assertEquals(new HashSet<>(partitionStates), iterableToSet(request.partitionStates()));
+            assertEquals(liveBrokers, request.liveBrokers());
+            assertEquals(1, request.controllerId());
+            assertEquals(2, request.controllerEpoch());
+            assertEquals(3, request.brokerEpoch());
+
+            ByteBuffer byteBuffer = request.toBytes();
+            UpdateMetadataRequest deserializedRequest = new UpdateMetadataRequest(new UpdateMetadataRequestData(
+                    new ByteBufferAccessor(byteBuffer), version), version);
+
+            // Unset fields that are not supported in this version as the deserialized request won't have them
+
+            // Rack is only supported from version 2
+            if (version < 2) {
+                for (UpdateMetadataBroker liveBroker : liveBrokers)
+                    liveBroker.setRack("");
+            }
+
+            // Non plaintext listener name is only supported from version 3
+            if (version < 3) {
+                for (UpdateMetadataBroker liveBroker : liveBrokers) {
+                    for (UpdateMetadataEndpoint endpoint : liveBroker.endpoints()) {
+                        SecurityProtocol securityProtocol = SecurityProtocol.forId(endpoint.securityProtocol());
+                        endpoint.setListener(ListenerName.forSecurityProtocol(securityProtocol).value());
+                    }
+                }
+            }
+
+            // Offline replicas are only supported from version 4
+            if (version < 4)
+                partitionStates.get(0).setOfflineReplicas(emptyList());
+
+            assertEquals(new HashSet<>(partitionStates), iterableToSet(deserializedRequest.partitionStates()));
+            assertEquals(liveBrokers, deserializedRequest.liveBrokers());
+            assertEquals(1, request.controllerId());
+            assertEquals(2, request.controllerEpoch());
+            assertEquals(3, request.brokerEpoch());
+        }
+    }
+
+    private <T> Set<T> iterableToSet(Iterable<T> iterable) {
+        return StreamSupport.stream(iterable.spliterator(), false).collect(Collectors.toSet());
+    }
 }
