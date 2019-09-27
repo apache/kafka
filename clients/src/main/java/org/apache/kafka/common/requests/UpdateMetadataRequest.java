@@ -57,9 +57,10 @@ public class UpdateMetadataRequest extends AbstractControlRequest {
             if (version < 3) {
                 for (UpdateMetadataBroker broker : liveBrokers) {
                     if (version == 0) {
-                        if (broker.endpoints().size() != 1 || broker.endpoints().get(0).securityProtocol() != SecurityProtocol.PLAINTEXT.id) {
+                        if (broker.endpoints().size() != 1)
+                            throw new UnsupportedVersionException("UpdateMetadataRequest v0 requires a single endpoint");
+                        if (broker.endpoints().get(0).securityProtocol() != SecurityProtocol.PLAINTEXT.id)
                             throw new UnsupportedVersionException("UpdateMetadataRequest v0 only handles PLAINTEXT endpoints");
-                        }
                         // Don't null out `endpoints` since it's ignored by the generated code if version >= 1
                         UpdateMetadataEndpoint endpoint = broker.endpoints().get(0);
                         broker.setV0Host(endpoint.host());
