@@ -24,6 +24,7 @@ import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrParti
 import org.apache.kafka.common.message.LeaderAndIsrResponseData;
 import org.apache.kafka.common.message.LeaderAndIsrResponseData.LeaderAndIsrPartitionError;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.utils.FlattenedIterator;
@@ -31,10 +32,11 @@ import org.apache.kafka.common.utils.Utils;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.stream.Collectors;
 
 public class LeaderAndIsrRequest extends AbstractControlRequest {
@@ -42,10 +44,10 @@ public class LeaderAndIsrRequest extends AbstractControlRequest {
     public static class Builder extends AbstractControlRequest.Builder<LeaderAndIsrRequest> {
 
         private final List<LeaderAndIsrPartitionState> partitionStates;
-        private final Set<Node> liveLeaders;
+        private final Collection<Node> liveLeaders;
 
         public Builder(short version, int controllerId, int controllerEpoch, long brokerEpoch,
-                       List<LeaderAndIsrPartitionState> partitionStates, Set<Node> liveLeaders) {
+                       List<LeaderAndIsrPartitionState> partitionStates, Collection<Node> liveLeaders) {
             super(ApiKeys.LEADER_AND_ISR, version, controllerId, controllerEpoch, brokerEpoch);
             this.partitionStates = partitionStates;
             this.liveLeaders = liveLeaders;
@@ -104,7 +106,7 @@ public class LeaderAndIsrRequest extends AbstractControlRequest {
 
     private final LeaderAndIsrRequestData data;
 
-    private LeaderAndIsrRequest(LeaderAndIsrRequestData data, short version) {
+    LeaderAndIsrRequest(LeaderAndIsrRequestData data, short version) {
         super(ApiKeys.LEADER_AND_ISR, version);
         this.data = data;
         // Do this from the constructor to make it thread-safe (even though it's only needed when some methods are called)
@@ -129,6 +131,13 @@ public class LeaderAndIsrRequest extends AbstractControlRequest {
     @Override
     protected Struct toStruct() {
         return data.toStruct(version());
+    }
+
+    protected ByteBuffer toBytes() {
+        ByteBuffer bytes = ByteBuffer.allocate(size());
+        data.write(new ByteBufferAccessor(bytes), version());
+        bytes.flip();
+        return bytes;
     }
 
     @Override
@@ -179,6 +188,10 @@ public class LeaderAndIsrRequest extends AbstractControlRequest {
             return () -> new FlattenedIterator<>(data.topicStates().iterator(),
                 topicState -> topicState.partitionStates().iterator());
         return data.ungroupedPartitionStates();
+    }
+
+    public List<LeaderAndIsrLiveLeader> liveLeaders() {
+        return Collections.unmodifiableList(data.liveLeaders());
     }
 
     protected int size() {
