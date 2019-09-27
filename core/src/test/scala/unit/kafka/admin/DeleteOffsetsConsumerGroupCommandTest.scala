@@ -37,19 +37,24 @@ import org.junit.Assert._
 
 class DeleteOffsetsConsumerGroupCommandTest extends ConsumerGroupCommandTest {
 
-  @Test
-  def testDeleteOffsetsNonExistingGroup(): Unit = {
-    val missingGroup = "missing.group"
-
-    val cgcArgs = Array(
+  def getArgs(group: String, topic: String): Array[String] = {
+    Array(
       "--bootstrap-server", brokerList,
       "--delete-offsets",
-      "--group", missingGroup,
-      "--topic", "foo:1")
-    val service = getConsumerGroupService(cgcArgs)
+      "--group", group,
+      "--topic", topic
+    )
+  }
+
+  @Test
+  def testDeleteOffsetsNonExistingGroup(): Unit = {
+    val group = "missing.group"
+    val topic = "foo:1"
+
+    val service = getConsumerGroupService(getArgs(group, topic))
 
     try {
-      service.deleteOffsets()
+      service.deleteOffsets(group, List(topic))
       fail("GroupIdNotFoundException should have been raised")
     } catch {
       case e: ExecutionException =>
@@ -69,19 +74,16 @@ class DeleteOffsetsConsumerGroupCommandTest extends ConsumerGroupCommandTest {
 
     val consumer = createConsumer()
     try {
-      TestUtils.subscribeAndWaitForRecords(topic, consumer)
+      TestUtils.subscribeAndWaitForRecords(this.topic, consumer)
       consumer.commitSync()
 
-      val cgcArgs = Array(
-        "--bootstrap-server", brokerList,
-        "--delete-offsets",
-        "--group", group,
-        "--topic", topic + ":0")
-      val service = getConsumerGroupService(cgcArgs)
+      val topic = this.topic + ":0"
 
-      val partitions = service.deleteOffsets()
+      val service = getConsumerGroupService(getArgs(group, topic))
+
+      val partitions = service.deleteOffsets(group, List(topic))
       // Unknown because the consumer has not committed any offsets yet.
-      assertEquals(Errors.GROUP_SUBSCRIBED_TO_TOPIC.exception, partitions(new TopicPartition(topic, 0)).getCause)
+      assertEquals(Errors.GROUP_SUBSCRIBED_TO_TOPIC.exception, partitions(new TopicPartition(this.topic, 0)).getCause)
     } finally {
       Utils.closeQuietly(consumer, "consumer")
     }
@@ -101,14 +103,9 @@ class DeleteOffsetsConsumerGroupCommandTest extends ConsumerGroupCommandTest {
       TestUtils.subscribeAndWaitForRecords(topic, consumer)
       consumer.commitSync()
 
-      val cgcArgs = Array(
-        "--bootstrap-server", brokerList,
-        "--delete-offsets",
-        "--group", group,
-        "--topic", topic)
-      val service = getConsumerGroupService(cgcArgs)
+      val service = getConsumerGroupService(getArgs(group, topic))
 
-      val partitions = service.deleteOffsets()
+      val partitions = service.deleteOffsets(group, List(topic))
       assertEquals(Errors.GROUP_SUBSCRIBED_TO_TOPIC.exception, partitions(new TopicPartition(topic, 0)).getCause)
     } finally {
       Utils.closeQuietly(consumer, "consumer")
@@ -132,14 +129,9 @@ class DeleteOffsetsConsumerGroupCommandTest extends ConsumerGroupCommandTest {
       Utils.closeQuietly(consumer, "consumer")
     }
 
-    val cgcArgs = Array(
-      "--bootstrap-server", brokerList,
-      "--delete-offsets",
-      "--group", group,
-      "--topic", topic)
-    val service = getConsumerGroupService(cgcArgs)
+    val service = getConsumerGroupService(getArgs(group, topic))
 
-    val partitions = service.deleteOffsets()
+    val partitions = service.deleteOffsets(group, List(topic))
     assertNull(partitions(new TopicPartition(topic, 0)))
   }
 
@@ -154,18 +146,15 @@ class DeleteOffsetsConsumerGroupCommandTest extends ConsumerGroupCommandTest {
 
     val consumer = createConsumer()
     try {
-      TestUtils.subscribeAndWaitForRecords(topic, consumer)
+      TestUtils.subscribeAndWaitForRecords(this.topic, consumer)
       consumer.commitSync()
 
-      val cgcArgs = Array(
-        "--bootstrap-server", brokerList,
-        "--delete-offsets",
-        "--group", group,
-        "--topic", "foobar")
-      val service = getConsumerGroupService(cgcArgs)
+      val topic = "foobar"
 
-      val partitions = service.deleteOffsets()
-      assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION.exception, partitions(new TopicPartition("foobar", -1)).getCause)
+      val service = getConsumerGroupService(getArgs(group, topic))
+
+      val partitions = service.deleteOffsets(group, List(topic))
+      assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION.exception, partitions(new TopicPartition(topic, -1)).getCause)
     } finally {
       Utils.closeQuietly(consumer, "consumer")
     }

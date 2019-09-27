@@ -20,6 +20,7 @@ package kafka.admin
 import java.text.{ParseException, SimpleDateFormat}
 import java.time.{Duration, Instant}
 import java.util.Properties
+import java.util.concurrent.ExecutionException
 
 import com.fasterxml.jackson.dataformat.csv.CsvMapper
 import com.fasterxml.jackson.module.scala.DefaultScalaModule
@@ -34,9 +35,11 @@ import org.apache.kafka.common.{KafkaException, Node, TopicPartition}
 
 import scala.collection.JavaConverters._
 import scala.collection.mutable.ListBuffer
-import scala.collection.{immutable, Map, Seq, Set, mutable}
+import scala.collection.{Map, Seq, Set, immutable, mutable}
 import scala.util.{Failure, Success, Try}
 import joptsimple.OptionSpec
+import org.apache.kafka.common.protocol.Errors
+
 import scala.collection.immutable.TreeMap
 import scala.reflect.ClassTag
 
@@ -72,7 +75,7 @@ object ConsumerGroupCommand extends Logging {
           printOffsetsToReset(offsetsToReset)
       }
       else if (opts.options.has(opts.deleteOffsetsOpt)) {
-        printDeletedOffsets(consumerGroupService.deleteOffsets())
+        consumerGroupService.deleteOffsets()
       }
     } catch {
       case e: Throwable =>
@@ -114,28 +117,6 @@ object ConsumerGroupCommand extends Logging {
         consumerAssignment.topic,
         consumerAssignment.partition,
         offsetAndMetadata.offset))
-    }
-  }
-
-  def printDeletedOffsets(result: Map[TopicPartition, Throwable]): Unit = {
-    println("\n%-30s %-15s %-15s".format("TOPIC", "PARTITION", "STATUS"))
-    result.toList.sortBy(t => t._1.topic + t._1.partition.toString).foreach { case (tp, error) =>
-      println("%-30s %-15s %-15s".format(
-        tp.topic,
-        if (tp.partition >= 0) tp.partition else "Not Provided",
-        if (error != null) s"Error: ${error.getMessage}" else "Successful"
-      ))
-    }
-  }
-
-  def printDeletedOffsets(result: Map[TopicPartition, Throwable]): Unit = {
-    println("\n%-30s %-15s %-15s".format("TOPIC", "PARTITION", "STATUS"))
-    result.toList.sortBy(t => t._1.topic + t._1.partition.toString).foreach { case (tp, error) =>
-      println("%-30s %-15s %-15s".format(
-        tp.topic,
-        if (tp.partition >= 0) tp.partition else "Not Provided",
-        if (error != null) s"Error: ${error.getMessage}" else "Successful"
-      ))
     }
   }
 
@@ -420,12 +401,10 @@ object ConsumerGroupCommand extends Logging {
       result
     }
 
-    def deleteOffsets(): Map[TopicPartition, Throwable] = {
-      val groupId = opts.options.valueOf(opts.groupOpt)
-      val topics = opts.options.valuesOf(opts.topicOpt)
+    def deleteOffsets(groupId: String, topics: List[String]): Map[TopicPartition, Throwable] = {
       var result: Map[TopicPartition, Throwable] = mutable.HashMap()
 
-      val (topicWithPartitions, topicWithoutPartitions) = topics.asScala.partition(_.contains(":"))
+      val (topicWithPartitions, topicWithoutPartitions) = topics.partition(_.contains(":"))
 
       val knownPartitions = topicWithPartitions.flatMap { topicArg =>
         val split = topicArg.split(":")
@@ -468,6 +447,35 @@ object ConsumerGroupCommand extends Logging {
       }
 
       result
+    }
+
+    def deleteOffsets(): Unit = {
+      val groupId = opts.options.valueOf(opts.groupOpt)
+      val topics = opts.options.valuesOf(opts.topicOpt).asScala.toList
+
+      try {
+        val result = deleteOffsets(groupId, topics)
+
+        println("\n%-30s %-15s %-15s".format("TOPIC", "PARTITION", "STATUS"))
+        result.toList.sortBy(t => t._1.topic + t._1.partition.toString).foreach { case (tp, error) =>
+          println("%-30s %-15s %-15s".format(
+            tp.topic,
+            if (tp.partition >= 0) tp.partition else "Not Provided",
+            if (error != null) s"Error: ${error.getMessage}" else "Successful"
+          ))
+        }
+      } catch {
+        case e: ExecutionException =>
+          Errors.forException(e.getCause) match {
+            case Errors.INVALID_GROUP_ID | Errors.GROUP_ID_NOT_FOUND =>
+              printError(s"'$groupId' is not valid or does not exist.")
+            case Errors.GROUP_AUTHORIZATION_FAILED =>
+              printError(s"Access to '$groupId' is not authorized.")
+            case Errors.NON_EMPTY_GROUP =>
+              printError(s"Deleting offsets of a non consumer group '$groupId' is forbidden if the group is not empty.")
+            case _ => throw e
+          }
+      }
     }
 
     private[admin] def describeConsumerGroups(groupIds: Seq[String]): mutable.Map[String, ConsumerGroupDescription] = {
