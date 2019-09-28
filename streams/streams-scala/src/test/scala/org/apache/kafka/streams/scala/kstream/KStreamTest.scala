@@ -19,6 +19,7 @@
 package org.apache.kafka.streams.scala.kstream
 
 import java.time.Duration.ofSeconds
+import java.time.Instant
 
 import org.apache.kafka.streams.kstream.JoinWindows
 import org.apache.kafka.streams.scala.ImplicitConversions._
@@ -40,17 +41,19 @@ class KStreamTest extends FlatSpec with Matchers with TestDriver {
     builder.stream[String, String](sourceTopic).filter((_, value) => value != "value2").to(sinkTopic)
 
     val testDriver = createTestDriver(builder)
+    val testInput = testDriver.createInput[String, String](sourceTopic)
+    val testOutput = testDriver.createOutput[String, String](sinkTopic)
 
-    testDriver.pipeRecord(sourceTopic, ("1", "value1"))
-    testDriver.readRecord[String, String](sinkTopic).value shouldBe "value1"
+    testInput.pipeInput("1", "value1")
+    testOutput.readValue shouldBe "value1"
 
-    testDriver.pipeRecord(sourceTopic, ("2", "value2"))
-    testDriver.readRecord[String, String](sinkTopic) shouldBe null
+    testInput.pipeInput("2", "value2")
+    testOutput.isEmpty shouldBe true
 
-    testDriver.pipeRecord(sourceTopic, ("3", "value3"))
-    testDriver.readRecord[String, String](sinkTopic).value shouldBe "value3"
+    testInput.pipeInput("3", "value3")
+    testOutput.readValue shouldBe "value3"
 
-    testDriver.readRecord[String, String](sinkTopic) shouldBe null
+    testOutput.isEmpty shouldBe true
 
     testDriver.close()
   }
@@ -63,17 +66,19 @@ class KStreamTest extends FlatSpec with Matchers with TestDriver {
     builder.stream[String, String](sourceTopic).filterNot((_, value) => value == "value2").to(sinkTopic)
 
     val testDriver = createTestDriver(builder)
+    val testInput = testDriver.createInput[String, String](sourceTopic)
+    val testOutput = testDriver.createOutput[String, String](sinkTopic)
 
-    testDriver.pipeRecord(sourceTopic, ("1", "value1"))
-    testDriver.readRecord[String, String](sinkTopic).value shouldBe "value1"
+    testInput.pipeInput("1", "value1")
+    testOutput.readValue shouldBe "value1"
 
-    testDriver.pipeRecord(sourceTopic, ("2", "value2"))
-    testDriver.readRecord[String, String](sinkTopic) shouldBe null
+    testInput.pipeInput("2", "value2")
+    testOutput.isEmpty shouldBe true
 
-    testDriver.pipeRecord(sourceTopic, ("3", "value3"))
-    testDriver.readRecord[String, String](sinkTopic).value shouldBe "value3"
+    testInput.pipeInput("3", "value3")
+    testOutput.readValue shouldBe "value3"
 
-    testDriver.readRecord[String, String](sinkTopic) shouldBe null
+    testOutput.isEmpty shouldBe true
 
     testDriver.close()
   }
@@ -86,11 +91,12 @@ class KStreamTest extends FlatSpec with Matchers with TestDriver {
     builder.stream[String, String](sourceTopic).foreach((_, value) => acc += value)
 
     val testDriver = createTestDriver(builder)
+    val testInput = testDriver.createInput[String, String](sourceTopic)
 
-    testDriver.pipeRecord(sourceTopic, ("1", "value1"))
+    testInput.pipeInput("1", "value1")
     acc shouldBe "value1"
 
-    testDriver.pipeRecord(sourceTopic, ("2", "value2"))
+    testInput.pipeInput("2", "value2")
     acc shouldBe "value1value2"
 
     testDriver.close()
@@ -105,14 +111,16 @@ class KStreamTest extends FlatSpec with Matchers with TestDriver {
     builder.stream[String, String](sourceTopic).peek((_, v) => acc += v).to(sinkTopic)
 
     val testDriver = createTestDriver(builder)
+    val testInput = testDriver.createInput[String, String](sourceTopic)
+    val testOutput = testDriver.createOutput[String, String](sinkTopic)
 
-    testDriver.pipeRecord(sourceTopic, ("1", "value1"))
+    testInput.pipeInput("1", "value1")
     acc shouldBe "value1"
-    testDriver.readRecord[String, String](sinkTopic).value shouldBe "value1"
+    testOutput.readValue shouldBe "value1"
 
-    testDriver.pipeRecord(sourceTopic, ("2", "value2"))
+    testInput.pipeInput("2", "value2")
     acc shouldBe "value1value2"
-    testDriver.readRecord[String, String](sinkTopic).value shouldBe "value2"
+    testOutput.readValue shouldBe "value2"
 
     testDriver.close()
   }
@@ -125,14 +133,16 @@ class KStreamTest extends FlatSpec with Matchers with TestDriver {
     builder.stream[String, String](sourceTopic).selectKey((_, value) => value).to(sinkTopic)
 
     val testDriver = createTestDriver(builder)
+    val testInput = testDriver.createInput[String, String](sourceTopic)
+    val testOutput = testDriver.createOutput[String, String](sinkTopic)
 
-    testDriver.pipeRecord(sourceTopic, ("1", "value1"))
-    testDriver.readRecord[String, String](sinkTopic).key shouldBe "value1"
+    testInput.pipeInput("1", "value1")
+    testOutput.readKeyValue.key shouldBe "value1"
 
-    testDriver.pipeRecord(sourceTopic, ("1", "value2"))
-    testDriver.readRecord[String, String](sinkTopic).key shouldBe "value2"
+    testInput.pipeInput("1", "value2")
+    testOutput.readKeyValue.key shouldBe "value2"
 
-    testDriver.readRecord[String, String](sinkTopic) shouldBe null
+    testOutput.isEmpty shouldBe true
 
     testDriver.close()
   }
@@ -147,16 +157,19 @@ class KStreamTest extends FlatSpec with Matchers with TestDriver {
     val stream2 = builder.stream[String, String](sourceTopic2)
     stream1.join(stream2)((a, b) => s"$a-$b", JoinWindows.of(ofSeconds(1))).to(sinkTopic)
 
-    val now = System.currentTimeMillis()
+    val now = Instant.now()
 
     val testDriver = createTestDriver(builder, now)
+    val testInput1 = testDriver.createInput[String, String](sourceTopic1)
+    val testInput2 = testDriver.createInput[String, String](sourceTopic2)
+    val testOutput = testDriver.createOutput[String, String](sinkTopic)
 
-    testDriver.pipeRecord(sourceTopic1, ("1", "topic1value1"), now)
-    testDriver.pipeRecord(sourceTopic2, ("1", "topic2value1"), now)
+    testInput1.pipeInput("1", "topic1value1", now)
+    testInput2.pipeInput("1", "topic2value1", now)
 
-    testDriver.readRecord[String, String](sinkTopic).value shouldBe "topic1value1-topic2value1"
+    testOutput.readValue shouldBe "topic1value1-topic2value1"
 
-    testDriver.readRecord[String, String](sinkTopic) shouldBe null
+    testOutput.isEmpty shouldBe true
 
     testDriver.close()
   }
