@@ -68,7 +68,7 @@ class GroupedStreamAggregateBuilder<K, V> {
         this.userProvidedRepartitionTopicName = groupedInternal.name();
     }
 
-    <KR, VR> KTable<KR, VR> build(final String functionName,
+    <KR, VR> KTable<KR, VR> build(final NamedInternal functionName,
                                   final StoreBuilder<? extends StateStore> storeBuilder,
                                   final KStreamAggProcessorSupplier<K, KR, V, VR> aggregateSupplier,
                                   final String queryableStoreName,
@@ -76,7 +76,7 @@ class GroupedStreamAggregateBuilder<K, V> {
                                   final Serde<VR> valSerde) {
         assert queryableStoreName == null || queryableStoreName.equals(storeBuilder.name());
 
-        final String aggFunctionName = builder.newProcessorName(functionName);
+        final String aggFunctionName = functionName.name();
 
         String sourceName = this.name;
         StreamsGraphNode parentNode = streamsGraphNode;

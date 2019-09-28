@@ -17,7 +17,6 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.consumer.Consumer;
-import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.AuthorizationException;
@@ -35,7 +34,9 @@ import org.slf4j.Logger;
 import java.io.IOException;
 import java.util.Collection;
 import java.util.HashSet;
+import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 public abstract class AbstractTask implements Task {
 
@@ -250,16 +251,23 @@ public abstract class AbstractTask implements Task {
         return stateMgr.changelogPartitions();
     }
 
-    long committedOffsetForPartition(final TopicPartition partition) {
+    Map<TopicPartition, Long> committedOffsetForPartitions(final Set<TopicPartition> partitions) {
         try {
-            final OffsetAndMetadata metadata = consumer.committed(partition);
-            return metadata != null ? metadata.offset() : 0L;
+            final Map<TopicPartition, Long> results = consumer.committed(partitions)
+                .entrySet().stream().collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue().offset()));
+
+            // those do not have a committed offset would default to 0
+            for (final TopicPartition tp : partitions) {
+                results.putIfAbsent(tp, 0L);
+            }
+
+            return results;
         } catch (final AuthorizationException e) {
-            throw new ProcessorStateException(String.format("task [%s] AuthorizationException when initializing offsets for %s", id, partition), e);
+            throw new ProcessorStateException(String.format("task [%s] AuthorizationException when initializing offsets for %s", id, partitions), e);
         } catch (final WakeupException e) {
             throw e;
         } catch (final KafkaException e) {
-            throw new ProcessorStateException(String.format("task [%s] Failed to initialize offsets for %s", id, partition), e);
+            throw new ProcessorStateException(String.format("task [%s] Failed to initialize offsets for %s", id, partitions), e);
         }
     }
 

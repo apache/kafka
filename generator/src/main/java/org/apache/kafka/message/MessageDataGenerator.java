@@ -34,9 +34,9 @@ public final class MessageDataGenerator {
     private final SchemaGenerator schemaGenerator;
     private final CodeBuffer buffer;
 
-    MessageDataGenerator() {
+    MessageDataGenerator(String packageName) {
         this.structRegistry = new StructRegistry();
-        this.headerGenerator = new HeaderGenerator();
+        this.headerGenerator = new HeaderGenerator(packageName);
         this.schemaGenerator = new SchemaGenerator(headerGenerator, structRegistry);
         this.buffer = new CodeBuffer();
     }
@@ -757,7 +757,10 @@ public final class MessageDataGenerator {
                 " cannot be nullable.");
         }
         if ((field.type() instanceof FieldType.BoolFieldType) ||
-                (field.type().isInteger()) ||
+                (field.type() instanceof FieldType.Int8FieldType) ||
+                (field.type() instanceof FieldType.Int16FieldType) ||
+                (field.type() instanceof FieldType.Int32FieldType) ||
+                (field.type() instanceof FieldType.Int64FieldType) ||
                 (field.type() instanceof FieldType.UUIDFieldType) ||
                 (field.type() instanceof FieldType.StringFieldType)) {
             boolean maybeAbsent =

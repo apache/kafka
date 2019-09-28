@@ -209,10 +209,9 @@ public class Schema extends Type {
             visitor.visit(schema);
             for (BoundField f : schema.fields())
                 handleNode(f.def.type, visitor);
-        } else if (node instanceof ArrayOf) {
-            ArrayOf array = (ArrayOf) node;
-            visitor.visit(array);
-            handleNode(array.type(), visitor);
+        } else if (node.isArray()) {
+            visitor.visit(node);
+            handleNode(node.arrayElementType().get(), visitor);
         } else {
             visitor.visit(node);
         }
@@ -223,7 +222,6 @@ public class Schema extends Type {
      */
     public static abstract class Visitor {
         public void visit(Schema schema) {}
-        public void visit(ArrayOf array) {}
         public void visit(Type field) {}
     }
 }

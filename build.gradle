@@ -1012,7 +1012,9 @@ project(':clients') {
   task processMessages(type:JavaExec) {
     main = "org.apache.kafka.message.MessageGenerator"
     classpath = project(':generator').sourceSets.main.runtimeClasspath
-    args = [ "src/generated/java/org/apache/kafka/common/message", "src/main/resources/common/message" ]
+    args = [ "org.apache.kafka.common.message",
+             "src/generated/java/org/apache/kafka/common/message",
+             "src/main/resources/common/message" ]
     inputs.dir("src/main/resources/common/message")
     outputs.dir("src/generated/java/org/apache/kafka/common/message")
   }
@@ -1020,7 +1022,9 @@ project(':clients') {
   task processTestMessages(type:JavaExec) {
     main = "org.apache.kafka.message.MessageGenerator"
     classpath = project(':generator').sourceSets.main.runtimeClasspath
-    args = [ "src/generated-test/java/org/apache/kafka/common/message", "src/test/resources/common/message" ]
+    args = [ "org.apache.kafka.common.message",
+             "src/generated-test/java/org/apache/kafka/common/message",
+             "src/test/resources/common/message" ]
     inputs.dir("src/test/resources/common/message")
     outputs.dir("src/generated-test/java/org/apache/kafka/common/message")
   }
@@ -1119,6 +1123,7 @@ project(':tools') {
 
 project(':streams') {
   archivesBaseName = "kafka-streams"
+  ext.buildStreamsVersionFileName = "kafka-streams-version.properties"
 
   dependencies {
     compile project(':clients')
@@ -1166,7 +1171,46 @@ project(':streams') {
     duplicatesStrategy 'exclude'
   }
 
+  task determineCommitId {
+    def takeFromHash = 16
+    if (commitId) {
+      commitId = commitId.take(takeFromHash)
+    } else if (file("$rootDir/.git/HEAD").exists()) {
+      def headRef = file("$rootDir/.git/HEAD").text
+      if (headRef.contains('ref: ')) {
+        headRef = headRef.replaceAll('ref: ', '').trim()
+        if (file("$rootDir/.git/$headRef").exists()) {
+          commitId = file("$rootDir/.git/$headRef").text.trim().take(takeFromHash)
+        }
+      } else {
+        commitId = headRef.trim().take(takeFromHash)
+      }
+    } else {
+      commitId = "unknown"
+    }
+  }
+
+  task createStreamsVersionFile(dependsOn: determineCommitId) {
+    ext.receiptFile = file("$buildDir/kafka/$buildStreamsVersionFileName")
+    outputs.file receiptFile
+    outputs.upToDateWhen { false }
+    doLast {
+      def data = [
+              commitId: commitId,
+              version: version,
+      ]
+
+      receiptFile.parentFile.mkdirs()
+      def content = data.entrySet().collect { "$it.key=$it.value" }.sort().join("\n")
+      receiptFile.setText(content, "ISO-8859-1")
+    }
+  }
+
   jar {
+    dependsOn 'createStreamsVersionFile'
+    from("$buildDir") {
+      include "kafka/$buildStreamsVersionFileName"
+    }
     dependsOn 'copyDependantLibs'
   }
 
