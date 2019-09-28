@@ -40,15 +40,14 @@ import java.util.stream.Collectors;
 public class StopReplicaRequest extends AbstractControlRequest {
 
     public static class Builder extends AbstractControlRequest.Builder<StopReplicaRequest> {
-
-        private final Collection<TopicPartition> partitions;
         private final boolean deletePartitions;
+        private final Collection<TopicPartition> partitions;
 
         public Builder(short version, int controllerId, int controllerEpoch, long brokerEpoch, boolean deletePartitions,
                        Collection<TopicPartition> partitions) {
             super(ApiKeys.STOP_REPLICA, version, controllerId, controllerEpoch, brokerEpoch);
-            this.partitions = partitions;
             this.deletePartitions = deletePartitions;
+            this.partitions = partitions;
         }
 
         public StopReplicaRequest build(short version) {
@@ -58,14 +57,7 @@ public class StopReplicaRequest extends AbstractControlRequest {
                 .setBrokerEpoch(brokerEpoch)
                 .setDeletePartitions(deletePartitions);
 
-            if (version == 0) {
-                List<StopReplicaPartitionV0> requestPartitions = partitions.stream().map(tp ->
-                    new StopReplicaPartitionV0()
-                        .setTopicName(tp.topic())
-                        .setPartitionIndex(tp.partition())
-                ).collect(Collectors.toList());
-                data.setUngroupedPartitions(requestPartitions);
-            } else {
+            if (version >= 1) {
                 Map<String, List<Integer>> topicPartitionsMap = CollectionUtils.groupPartitionsByTopic(partitions);
                 List<StopReplicaTopic> topics = topicPartitionsMap.entrySet().stream().map(entry ->
                     new StopReplicaTopic()
@@ -73,6 +65,13 @@ public class StopReplicaRequest extends AbstractControlRequest {
                         .setPartitionIndexes(entry.getValue())
                 ).collect(Collectors.toList());
                 data.setTopics(topics);
+            } else {
+                List<StopReplicaPartitionV0> requestPartitions = partitions.stream().map(tp ->
+                    new StopReplicaPartitionV0()
+                        .setTopicName(tp.topic())
+                        .setPartitionIndex(tp.partition())
+                ).collect(Collectors.toList());
+                data.setUngroupedPartitions(requestPartitions);
             }
 
             return new StopReplicaRequest(data, version);
@@ -82,14 +81,13 @@ public class StopReplicaRequest extends AbstractControlRequest {
         public String toString() {
             StringBuilder bld = new StringBuilder();
             bld.append("(type=StopReplicaRequest").
-                    append(", controllerId=").append(controllerId).
-                    append(", controllerEpoch=").append(controllerEpoch).
-                    append(", deletePartitions=").append(deletePartitions).
-                    append(", brokerEpoch=").append(brokerEpoch).
-                    append(", partitions=").append(Utils.join(partitions, ",")).
-                    append(")");
+                append(", controllerId=").append(controllerId).
+                append(", controllerEpoch=").append(controllerEpoch).
+                append(", deletePartitions=").append(deletePartitions).
+                append(", brokerEpoch=").append(brokerEpoch).
+                append(", partitions=").append(Utils.join(partitions, ",")).
+                append(")");
             return bld.toString();
-
         }
     }
 
