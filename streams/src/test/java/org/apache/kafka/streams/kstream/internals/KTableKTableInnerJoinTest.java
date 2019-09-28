@@ -20,6 +20,7 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValueTimestamp;
 import org.apache.kafka.streams.StreamsBuilder;
+import org.apache.kafka.streams.TestOutputTopic;
 import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.TopologyWrapper;
 import org.apache.kafka.streams.kstream.Consumed;
@@ -30,7 +31,7 @@ import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.TestInputTopic;
-import org.apache.kafka.streams.test.OutputVerifier;
+import org.apache.kafka.streams.test.TestRecord;
 import org.apache.kafka.test.MockProcessor;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.MockValueJoiner;
@@ -46,11 +47,11 @@ import java.util.Properties;
 import java.util.Set;
 
 import static org.apache.kafka.test.StreamsTestUtils.getMetricByName;
+import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.hasItem;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 public class KTableKTableInnerJoinTest {
@@ -376,6 +377,9 @@ public class KTableKTableInnerJoinTest {
                     driver.createInputTopic(topic1, Serdes.Integer().serializer(), Serdes.String().serializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             final TestInputTopic<Integer, String> inputTopic2 =
                     driver.createInputTopic(topic2, Serdes.Integer().serializer(), Serdes.String().serializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
+            final TestOutputTopic<Integer, String> outputTopic =
+                    driver.createOutputTopic(output, Serdes.Integer().deserializer(), Serdes.String().deserializer());
+
             // push two items to the primary stream. the other table is empty
             for (int i = 0; i < 2; i++) {
                 inputTopic1.pipeInput(expectedKeys[i], "X" + expectedKeys[i], 5L + i);
@@ -384,7 +388,7 @@ public class KTableKTableInnerJoinTest {
             inputTopic1.pipeInput(null, "SomeVal", 42L);
             // left: X0:0 (ts: 5), X1:1 (ts: 6)
             // right:
-            assertNull(driver.readOutput(output));
+            assertTrue(outputTopic.isEmpty());
 
             // push two items to the other stream. this should produce two items.
             for (int i = 0; i < 2; i++) {
@@ -394,9 +398,9 @@ public class KTableKTableInnerJoinTest {
             inputTopic2.pipeInput(null, "AnotherVal", 73L);
             // left: X0:0 (ts: 5), X1:1 (ts: 6)
             // right: Y0:0 (ts: 0), Y1:1 (ts: 10)
-            assertOutputKeyValueTimestamp(driver, 0, "X0+Y0", 5L);
-            assertOutputKeyValueTimestamp(driver, 1, "X1+Y1", 10L);
-            assertNull(driver.readOutput(output));
+            assertOutputKeyValueTimestamp(outputTopic, 0, "X0+Y0", 5L);
+            assertOutputKeyValueTimestamp(outputTopic, 1, "X1+Y1", 10L);
+            assertTrue(outputTopic.isEmpty());
 
             // push all four items to the primary stream. this should produce two items.
             for (final int expectedKey : expectedKeys) {
@@ -404,9 +408,9 @@ public class KTableKTableInnerJoinTest {
             }
             // left: XX0:0 (ts: 7), XX1:1 (ts: 7), XX2:2 (ts: 7), XX3:3 (ts: 7)
             // right: Y0:0 (ts: 0), Y1:1 (ts: 10)
-            assertOutputKeyValueTimestamp(driver, 0, "XX0+Y0", 7L);
-            assertOutputKeyValueTimestamp(driver, 1, "XX1+Y1", 10L);
-            assertNull(driver.readOutput(output));
+            assertOutputKeyValueTimestamp(outputTopic, 0, "XX0+Y0", 7L);
+            assertOutputKeyValueTimestamp(outputTopic, 1, "XX1+Y1", 10L);
+            assertTrue(outputTopic.isEmpty());
 
             // push all items to the other stream. this should produce four items.
             for (final int expectedKey : expectedKeys) {
@@ -414,11 +418,11 @@ public class KTableKTableInnerJoinTest {
             }
             // left: XX0:0 (ts: 7), XX1:1 (ts: 7), XX2:2 (ts: 7), XX3:3 (ts: 7)
             // right: YY0:0 (ts: 0), YY1:1 (ts: 5), YY2:2 (ts: 10), YY3:3 (ts: 15)
-            assertOutputKeyValueTimestamp(driver, 0, "XX0+YY0", 7L);
-            assertOutputKeyValueTimestamp(driver, 1, "XX1+YY1", 7L);
-            assertOutputKeyValueTimestamp(driver, 2, "XX2+YY2", 10L);
-            assertOutputKeyValueTimestamp(driver, 3, "XX3+YY3", 15L);
-            assertNull(driver.readOutput(output));
+            assertOutputKeyValueTimestamp(outputTopic, 0, "XX0+YY0", 7L);
+            assertOutputKeyValueTimestamp(outputTopic, 1, "XX1+YY1", 7L);
+            assertOutputKeyValueTimestamp(outputTopic, 2, "XX2+YY2", 10L);
+            assertOutputKeyValueTimestamp(outputTopic, 3, "XX3+YY3", 15L);
+            assertTrue(outputTopic.isEmpty());
 
             // push all four items to the primary stream. this should produce four items.
             for (final int expectedKey : expectedKeys) {
@@ -426,20 +430,20 @@ public class KTableKTableInnerJoinTest {
             }
             // left: XXX0:0 (ts: 6), XXX1:1 (ts: 6), XXX2:2 (ts: 6), XXX3:3 (ts: 6)
             // right: YY0:0 (ts: 0), YY1:1 (ts: 5), YY2:2 (ts: 10), YY3:3 (ts: 15)
-            assertOutputKeyValueTimestamp(driver, 0, "XXX0+YY0", 6L);
-            assertOutputKeyValueTimestamp(driver, 1, "XXX1+YY1", 6L);
-            assertOutputKeyValueTimestamp(driver, 2, "XXX2+YY2", 10L);
-            assertOutputKeyValueTimestamp(driver, 3, "XXX3+YY3", 15L);
-            assertNull(driver.readOutput(output));
+            assertOutputKeyValueTimestamp(outputTopic, 0, "XXX0+YY0", 6L);
+            assertOutputKeyValueTimestamp(outputTopic, 1, "XXX1+YY1", 6L);
+            assertOutputKeyValueTimestamp(outputTopic, 2, "XXX2+YY2", 10L);
+            assertOutputKeyValueTimestamp(outputTopic, 3, "XXX3+YY3", 15L);
+            assertTrue(outputTopic.isEmpty());
 
             // push two items with null to the other stream as deletes. this should produce two item.
             inputTopic2.pipeInput(expectedKeys[0], null, 5L);
             inputTopic2.pipeInput(expectedKeys[1], null, 7L);
             // left: XXX0:0 (ts: 6), XXX1:1 (ts: 6), XXX2:2 (ts: 6), XXX3:3 (ts: 6)
             // right: YY2:2 (ts: 10), YY3:3 (ts: 15)
-            assertOutputKeyValueTimestamp(driver, 0, null, 6L);
-            assertOutputKeyValueTimestamp(driver, 1, null, 7L);
-            assertNull(driver.readOutput(output));
+            assertOutputKeyValueTimestamp(outputTopic, 0, null, 6L);
+            assertOutputKeyValueTimestamp(outputTopic, 1, null, 7L);
+            assertTrue(outputTopic.isEmpty());
 
             // push all four items to the primary stream. this should produce two items.
             for (final int expectedKey : expectedKeys) {
@@ -447,9 +451,9 @@ public class KTableKTableInnerJoinTest {
             }
             // left: XXXX0:0 (ts: 13), XXXX1:1 (ts: 13), XXXX2:2 (ts: 13), XXXX3:3 (ts: 13)
             // right: YY2:2 (ts: 10), YY3:3 (ts: 15)
-            assertOutputKeyValueTimestamp(driver, 2, "XXXX2+YY2", 13L);
-            assertOutputKeyValueTimestamp(driver, 3, "XXXX3+YY3", 15L);
-            assertNull(driver.readOutput(output));
+            assertOutputKeyValueTimestamp(outputTopic, 2, "XXXX2+YY2", 13L);
+            assertOutputKeyValueTimestamp(outputTopic, 3, "XXXX3+YY3", 15L);
+            assertTrue(outputTopic.isEmpty());
 
             // push fourt items to the primary stream with null. this should produce two items.
             inputTopic1.pipeInput(expectedKeys[0], null, 0L);
@@ -458,21 +462,17 @@ public class KTableKTableInnerJoinTest {
             inputTopic1.pipeInput(expectedKeys[3], null, 20L);
             // left:
             // right: YY2:2 (ts: 10), YY3:3 (ts: 15)
-            assertOutputKeyValueTimestamp(driver, 2, null, 10L);
-            assertOutputKeyValueTimestamp(driver, 3, null, 20L);
-            assertNull(driver.readOutput(output));
+            assertOutputKeyValueTimestamp(outputTopic, 2, null, 10L);
+            assertOutputKeyValueTimestamp(outputTopic, 3, null, 20L);
+            assertTrue(outputTopic.isEmpty());
         }
     }
 
-    private void assertOutputKeyValueTimestamp(final TopologyTestDriver driver,
+    private void assertOutputKeyValueTimestamp(final TestOutputTopic<Integer, String> outputTopic,
                                                final Integer expectedKey,
                                                final String expectedValue,
                                                final long expectedTimestamp) {
-        OutputVerifier.compareKeyValueTimestamp(
-            driver.readOutput(output, Serdes.Integer().deserializer(), Serdes.String().deserializer()),
-            expectedKey,
-            expectedValue,
-            expectedTimestamp);
+        assertThat(outputTopic.readRecord(), equalTo(new TestRecord<Integer, String>(expectedKey, expectedValue, null, expectedTimestamp)));
     }
 
 }

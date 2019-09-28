@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
-import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringDeserializer;
@@ -25,6 +24,7 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.KeyValueTimestamp;
 import org.apache.kafka.streams.StreamsBuilder;
+import org.apache.kafka.streams.TestOutputTopic;
 import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.Grouped;
@@ -36,7 +36,7 @@ import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.TestInputTopic;
-import org.apache.kafka.streams.test.OutputVerifier;
+import org.apache.kafka.streams.test.TestRecord;
 import org.apache.kafka.test.MockAggregator;
 import org.apache.kafka.test.MockInitializer;
 import org.apache.kafka.test.MockProcessor;
@@ -53,13 +53,14 @@ import static java.util.Arrays.asList;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.test.StreamsTestUtils.getMetricByName;
+import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.hasItem;
 import static org.hamcrest.CoreMatchers.hasItems;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.CoreMatchers.not;
-import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 
 public class KStreamWindowAggregateTest {
     private final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.String(), Serdes.String());
@@ -338,11 +339,14 @@ public class KStreamWindowAggregateTest {
                 "Skipping record for expired window. key=[k] topic=[topic] partition=[0] offset=[7] timestamp=[6] window=[0,10) expiration=[10] streamTime=[100]"
             ));
 
-            OutputVerifier.compareKeyValueTimestamp(getOutput(driver), "[k@95/105]", "+100", 100);
-            OutputVerifier.compareKeyValueTimestamp(getOutput(driver), "[k@100/110]", "+100", 100);
-            OutputVerifier.compareKeyValueTimestamp(getOutput(driver), "[k@5/15]", "+5", 5);
-            OutputVerifier.compareKeyValueTimestamp(getOutput(driver), "[k@5/15]", "+5+6", 6);
-            assertThat(driver.readOutput("output"), nullValue());
+            final TestOutputTopic<String, String> outputTopic =
+                    driver.createOutputTopic("output", new StringDeserializer(), new StringDeserializer());
+
+            assertThat(outputTopic.readRecord(), equalTo(new TestRecord<String, String>("[k@95/105]", "+100", null, 100L)));
+            assertThat(outputTopic.readRecord(), equalTo(new TestRecord<String, String>("[k@100/110]", "+100", null, 100L)));
+            assertThat(outputTopic.readRecord(), equalTo(new TestRecord<String, String>("[k@5/15]", "+5", null, 5L)));
+            assertThat(outputTopic.readRecord(), equalTo(new TestRecord<String, String>("[k@5/15]", "+5+6", null, 6L)));
+            assertTrue(outputTopic.isEmpty());
         }
     }
 
@@ -390,8 +394,10 @@ public class KStreamWindowAggregateTest {
                 "Skipping record for expired window. key=[k] topic=[topic] partition=[0] offset=[7] timestamp=[6] window=[0,10) expiration=[110] streamTime=[200]"
             ));
 
-            OutputVerifier.compareKeyValueTimestamp(getOutput(driver), "[k@200/210]", "+100", 200);
-            assertThat(driver.readOutput("output"), nullValue());
+            final TestOutputTopic<String, String> outputTopic =
+                    driver.createOutputTopic("output", new StringDeserializer(), new StringDeserializer());
+            assertThat(outputTopic.readRecord(), equalTo(new TestRecord<String, String>("[k@200/210]", "+100", null, 200L)));
+            assertTrue(outputTopic.isEmpty());
         }
     }
 
@@ -446,7 +452,4 @@ public class KStreamWindowAggregateTest {
         assertThat(driver.metrics().get(latenessAvgMetric).metricValue(), avgLateness);
     }
 
-    private ProducerRecord<String, String> getOutput(final TopologyTestDriver driver) {
-        return driver.readOutput("output", new StringDeserializer(), new StringDeserializer());
-    }
 }

@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
-import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.LongDeserializer;
 import org.apache.kafka.common.serialization.Serde;
@@ -43,13 +42,11 @@ import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.SessionStore;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.TestInputTopic;
-import org.apache.kafka.streams.test.OutputVerifier;
+import org.apache.kafka.streams.test.TestRecord;
 import org.apache.kafka.test.TestUtils;
 import org.junit.Test;
 
-import java.util.ArrayList;
 import java.util.Iterator;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Properties;
@@ -64,6 +61,8 @@ import static org.apache.kafka.streams.kstream.Suppressed.BufferConfig.maxRecord
 import static org.apache.kafka.streams.kstream.Suppressed.BufferConfig.unbounded;
 import static org.apache.kafka.streams.kstream.Suppressed.untilTimeLimit;
 import static org.apache.kafka.streams.kstream.Suppressed.untilWindowCloses;
+import static org.hamcrest.CoreMatchers.equalTo;
+import static org.hamcrest.MatcherAssert.assertThat;
 
 public class SuppressScenarioTest {
     private static final StringDeserializer STRING_DESERIALIZER = new StringDeserializer();
@@ -717,39 +716,33 @@ public class SuppressScenarioTest {
     }
 
 
-    private static <K, V> void verify(final List<ProducerRecord<K, V>> results,
+    private static <K, V> void verify(final List<TestRecord<K, V>> results,
                                       final List<KeyValueTimestamp<K, V>> expectedResults) {
         if (results.size() != expectedResults.size()) {
             throw new AssertionError(printRecords(results) + " != " + expectedResults);
         }
         final Iterator<KeyValueTimestamp<K, V>> expectedIterator = expectedResults.iterator();
-        for (final ProducerRecord<K, V> result : results) {
+        for (final TestRecord<K, V> result : results) {
             final KeyValueTimestamp<K, V> expected = expectedIterator.next();
             try {
-                OutputVerifier.compareKeyValueTimestamp(result, expected.key(), expected.value(), expected.timestamp());
+                assertThat(result, equalTo(new TestRecord<K, V>(expected.key(), expected.value(), null, expected.timestamp())));
             } catch (final AssertionError e) {
                 throw new AssertionError(printRecords(results) + " != " + expectedResults, e);
             }
         }
     }
 
-    private static <K, V> List<ProducerRecord<K, V>> drainProducerRecords(final TopologyTestDriver driver,
-                                                                          final String topic,
-                                                                          final Deserializer<K> keyDeserializer,
-                                                                          final Deserializer<V> valueDeserializer) {
-        final List<ProducerRecord<K, V>> result = new LinkedList<>();
-        for (ProducerRecord<K, V> next = driver.readOutput(topic, keyDeserializer, valueDeserializer);
-             next != null;
-             next = driver.readOutput(topic, keyDeserializer, valueDeserializer)) {
-            result.add(next);
-        }
-        return new ArrayList<>(result);
+    private static <K, V> List<TestRecord<K, V>> drainProducerRecords(final TopologyTestDriver driver,
+                                                                      final String topic,
+                                                                      final Deserializer<K> keyDeserializer,
+                                                                      final Deserializer<V> valueDeserializer) {
+        return driver.createOutputTopic(topic, keyDeserializer, valueDeserializer).readRecordsToList();
     }
 
-    private static <K, V> String printRecords(final List<ProducerRecord<K, V>> result) {
+    private static <K, V> String printRecords(final List<TestRecord<K, V>> result) {
         final StringBuilder resultStr = new StringBuilder();
         resultStr.append("[\n");
-        for (final ProducerRecord<?, ?> record : result) {
+        for (final TestRecord<?, ?> record : result) {
             resultStr.append("  ").append(record).append("\n");
         }
         resultStr.append("]");
